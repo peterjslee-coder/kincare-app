@@ -657,7 +657,7 @@ const FindWork = window.FindWork = () => {
                   <div key={a.id || a.care_recipient_id} className="card" style={{ padding: 16, borderLeft: isFav ? '4px solid #f59e0b' : '4px solid #42a5f5' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                       <div>
-                        <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--bg-card)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}>
                           {isFav && <span title="Favorite">⭐</span>}
                           {name}
                         </div>
@@ -837,7 +837,7 @@ const FindWork = window.FindWork = () => {
         {/* Open Care Requests */}
         <div style={{ marginBottom: 24 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <h2 style={{ margin: 0, fontSize: 17, color: 'var(--bg-card)', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <h2 style={{ margin: 0, fontSize: 17, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{
                 display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                 width: 28, height: 28, borderRadius: '50%', background: 'var(--color-error-bg)', fontSize: 14,
@@ -951,7 +951,7 @@ const FindWork = window.FindWork = () => {
 
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--bg-card)', marginBottom: 2 }}>
+                        <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--text-primary)', marginBottom: 2 }}>
                           {(service || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
                         </div>
                         <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 2 }}>
@@ -1067,7 +1067,7 @@ const FindWork = window.FindWork = () => {
 
         {/* Upcoming Booked Sessions */}
         <div>
-          <h2 style={{ margin: '0 0 12px', fontSize: 17, color: 'var(--bg-card)', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <h2 style={{ margin: '0 0 12px', fontSize: 17, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{
               display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
               width: 28, height: 28, borderRadius: '50%', background: 'var(--color-info-bg)', fontSize: 14,

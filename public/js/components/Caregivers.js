@@ -393,7 +393,7 @@ const Caregivers = window.Caregivers = () => {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div style={{ flex: 1 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: '20px', fontWeight: 700, color: 'var(--bg-card)' }}>{privacyName(cg, isAssigned)}</span>
+              <span style={{ fontSize: '20px', fontWeight: 700, color: 'var(--text-primary)' }}>{privacyName(cg, isAssigned)}</span>
               {isAssigned && (
                 <span style={{ padding: '2px 8px', background: 'var(--color-success-bg)', color: 'var(--color-success)', borderRadius: '10px', fontSize: '10px', fontWeight: 600 }}>Assigned</span>
               )}

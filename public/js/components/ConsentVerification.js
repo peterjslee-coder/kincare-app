@@ -331,7 +331,7 @@ const ConsentVerification = window.ConsentVerification = ({ recipientId, recipie
           <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '6px' }}>Type your full name as signature</label>
           <input type="text" value={signatureName} onChange={(e) => setSignatureName(e.target.value)}
             placeholder="Your full legal name"
-            style={{ width: '100%', padding: '12px 14px', borderRadius: '8px', border: '1px solid #bbb', fontSize: '20px', fontFamily: "'Brush Script MT', 'Segoe Script', 'Apple Chancery', cursive", letterSpacing: '0.5px', color: 'var(--bg-card)', boxSizing: 'border-box', background: '#fefefe' }} />
+            style={{ width: '100%', padding: '12px 14px', borderRadius: '8px', border: '1px solid #bbb', fontSize: '20px', fontFamily: "'Brush Script MT', 'Segoe Script', 'Apple Chancery', cursive", letterSpacing: '0.5px', color: 'var(--text-primary)', boxSizing: 'border-box', background: '#fefefe' }} />
           {signatureName.trim() && (
             <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 4, textAlign: 'right' }}>Electronic signature</div>
           )}

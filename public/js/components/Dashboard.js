@@ -1084,7 +1084,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
               </div>
             </div>
             {/* Session info */}
-            <div style={{ fontWeight: 700, fontSize: 17, color: 'var(--bg-card)', marginBottom: 4 }}>
+            <div style={{ fontWeight: 700, fontSize: 17, color: 'var(--text-primary)', marginBottom: 4 }}>
               {hero.recipientName || 'Care Visit'} with {hero.caregiverName}
             </div>
             <div style={{ fontSize: 14, color: 'var(--text-secondary)' }}>

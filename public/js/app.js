@@ -503,9 +503,9 @@ const App = () => {
   // Must be here (before any early returns) to satisfy Rules of Hooks
   useEffect(() => {
     const roleColors = {
-      family:    { main: 'var(--role-color)', light: 'var(--role-color-light)', dark: 'var(--role-color-dark)' },
+      family:    { main: '#1b6b5a', light: '#e0f2e9', dark: '#0f4238' },
       caregiver: { main: '#2e5984', light: '#dce8f3', dark: '#1a3a5c' },
-      care_for:  { main: '#7b5ea7', light: 'var(--color-purple-bg)', dark: '#4a2d7a' },
+      care_for:  { main: '#7b5ea7', light: '#f3e5f5', dark: '#4a2d7a' },
     };
     const rc = roleColors[activeRole] || roleColors.family;
     const root = document.documentElement;
@@ -1076,9 +1076,9 @@ const App = () => {
   // ─── Role-specific color theming ───
   // Changes sidebar active color, role switcher accent, and other themed elements per role
   const roleColors = {
-    family:    { main: 'var(--role-color)', light: 'var(--role-color-light)', dark: 'var(--role-color-dark)' },
+    family:    { main: '#1b6b5a', light: '#e0f2e9', dark: '#0f4238' },
     caregiver: { main: '#2e5984', light: '#dce8f3', dark: '#1a3a5c' },
-    care_for:  { main: '#7b5ea7', light: 'var(--color-purple-bg)', dark: '#4a2d7a' },
+    care_for:  { main: '#7b5ea7', light: '#f3e5f5', dark: '#4a2d7a' },
   };
   const currentRoleColor = roleColors[role] || roleColors.family;
 

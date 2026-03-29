@@ -664,7 +664,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
                         }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <div>
-                            <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--bg-card)' }}>{cg.name}</div>
+                            <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>{cg.name}</div>
                             <div style={{ fontSize: 12, color: 'var(--role-color)', fontWeight: 500, marginTop: 2 }}>{cg.rate}</div>
                           </div>
                           <div>

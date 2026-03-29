@@ -141,7 +141,7 @@ const CaregiverScheduleModal = window.CaregiverScheduleModal = ({ caregiver, onC
             {initials}
           </div>
           <div>
-            <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--bg-card)' }}>Schedule {displayName.split(' ')[0]}</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>Schedule {displayName.split(' ')[0]}</div>
             <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>${hourlyRate}/hr{specialtiesText ? ` • ${specialtiesText}` : ''}</div>
           </div>
         </div>
@@ -156,7 +156,7 @@ const CaregiverScheduleModal = window.CaregiverScheduleModal = ({ caregiver, onC
             ) : (
               <>
                 <div style={{ marginBottom: 16 }}>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--bg-card)', marginBottom: 10 }}>Select a day</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 10 }}>Select a day</div>
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                     {days.map(day => {
                       const daySlots = getSlotsForDay(day);
@@ -182,7 +182,7 @@ const CaregiverScheduleModal = window.CaregiverScheduleModal = ({ caregiver, onC
 
                 {selectedDay && (
                   <div style={{ marginBottom: 16 }}>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--bg-card)', marginBottom: 10 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 10 }}>
                       {selectedDaySlots.length > 0 ? `Available times — ${selectedDay.label} ${selectedDay.shortDate}` : `${selectedDay.label} ${selectedDay.shortDate}`}
                     </div>
                     {selectedDaySlots.length === 0 ? (() => {
@@ -206,7 +206,7 @@ const CaregiverScheduleModal = window.CaregiverScheduleModal = ({ caregiver, onC
                                     padding: '8px 4px', borderRadius: 8, fontSize: 12, fontWeight: 500, cursor: 'pointer',
                                     border: selectedSlot?.start === slot.start ? '2px solid #e8724a' : '1px solid #e0e0e0',
                                     background: selectedSlot?.start === slot.start ? 'var(--bg-warm)' : 'var(--text-on-primary)',
-                                    color: 'var(--bg-card)',
+                                    color: 'var(--text-primary)',
                                   }}>
                                   {formatTime(slot.start)}
                                 </button>
@@ -228,7 +228,7 @@ const CaregiverScheduleModal = window.CaregiverScheduleModal = ({ caregiver, onC
                               padding: '10px 6px', borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: 'pointer',
                               border: selectedSlot?.start === slot.start ? '2px solid #1b6b5a' : '1px solid #e0e0e0',
                               background: selectedSlot?.start === slot.start ? 'var(--color-success-bg)' : 'var(--text-on-primary)',
-                              color: 'var(--bg-card)',
+                              color: 'var(--text-primary)',
                             }}>
                             {formatTime(slot.start)}
                           </button>

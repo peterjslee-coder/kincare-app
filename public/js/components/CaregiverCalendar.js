@@ -272,7 +272,7 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <button onClick={() => setWeekOffset(w => w - 1)} style={{ background: 'none', border: '1px solid #e0e0e0', borderRadius: 8, padding: '6px 14px', cursor: 'pointer', fontSize: 14 }}>← Prev</button>
         <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--bg-card)' }}>{formatMonth()}</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>{formatMonth()}</div>
           {weekOffset !== 0 && (
             <button onClick={() => setWeekOffset(0)} style={{ background: 'none', border: 'none', color: 'var(--role-color)', fontSize: 12, cursor: 'pointer', fontWeight: 600, marginTop: 2 }}>Today</button>
           )}
@@ -611,7 +611,7 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
                   <div key={idx} style={{ padding: '10px 12px', background: 'var(--color-warning-bg)', borderRadius: 8, marginBottom: 8, borderLeft: '3px solid #fb8c00' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--bg-card)' }}>
+                        <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>
                           {s.recipientName || s.recipient_name || 'Client'}{estCost ? `, $${Math.round(parseFloat(estCost))}` : ''}
                           {shortNoticeSurcharge > 0 && (
                             <span style={{ marginLeft: 6, background: 'var(--accent-color)', color: 'var(--text-on-primary)', padding: '2px 6px', borderRadius: 10, fontSize: 10, fontWeight: 600 }}>
@@ -677,7 +677,7 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
                   <div key={idx} style={{ padding: '10px 12px', background: 'var(--color-info-bg)', borderRadius: 8, marginBottom: 8, borderLeft: '3px solid #42a5f5' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div>
-                        <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--bg-card)' }}>
+                        <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>
                           {name}{cost > 0 ? `, $${Math.round(cost)}` : ''}
                         </div>
                         <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>

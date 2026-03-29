@@ -726,7 +726,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
               </div>
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--bg-card)', lineHeight: 1.2 }}>
+              <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.2 }}>
                 {profile.first_name} {profile.last_name}
                 <span style={{ fontSize: 14, fontWeight: 400, color: 'var(--text-tertiary)', marginLeft: 8 }}>{profile.age} years old</span>
               </div>
@@ -1812,7 +1812,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
       {canEdit && (
         profile?.linked_user_id ? (
         <div className="card" style={{ marginBottom: 16, border: '1px solid #e0e0e0' }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--bg-card)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
             <span>{'\uD83D\uDD10'}</span> {profile.first_name}'s App Permissions
           </div>
           <p style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 14, lineHeight: 1.5 }}>
@@ -1898,7 +1898,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
         </div>
         ) : (
         <div className="card" style={{ marginBottom: 16, border: '1px solid #e0e0e0', opacity: 0.55 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--bg-card)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
             <span>{'\uD83D\uDD10'}</span> {profile.first_name}'s App Permissions
           </div>
           <p style={{ fontSize: 13, color: 'var(--text-tertiary)', margin: 0, lineHeight: 1.5 }}>

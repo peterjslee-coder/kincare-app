@@ -125,7 +125,7 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, 
               <div style={{ marginBottom: 16 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
                   <div>
-                    <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--bg-card)' }}>{svcLabel}</div>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>{svcLabel}</div>
                     <div style={{ fontSize: 14, color: 'var(--text-secondary)', marginTop: 2 }}>
                       for <strong>{s.recipient_name || 'Care Recipient'}</strong>
                     </div>

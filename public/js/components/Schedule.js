@@ -178,7 +178,7 @@ const Schedule = window.Schedule = () => {
       {sessions.length === 0 && (
         <div className="card" style={{ textAlign: 'center', padding: '48px 24px', marginBottom: 20 }}>
           <div style={{ fontSize: 48, marginBottom: 16 }}>📅</div>
-          <h3 style={{ margin: '0 0 8px', color: 'var(--bg-card)', fontSize: 18 }}>No care sessions scheduled yet</h3>
+          <h3 style={{ margin: '0 0 8px', color: 'var(--text-primary)', fontSize: 18 }}>No care sessions scheduled yet</h3>
           {getActiveRole() === 'caregiver' ? (
             <React.Fragment>
               <p style={{ color: 'var(--text-secondary)', fontSize: 14, maxWidth: 400, margin: '0 auto 20px' }}>

@@ -307,7 +307,7 @@ const CaredForView = window.CaredForView = () => {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
             <button onClick={() => { setMonthOffset(m => m - 1); setSelectedDay(null); }} style={{ background: 'none', border: '1px solid #e0e0e0', borderRadius: 8, padding: '6px 14px', cursor: 'pointer', fontSize: 14 }}>← Prev</button>
             <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--bg-card)' }}>{monthName}</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>{monthName}</div>
               {monthOffset !== 0 && (
                 <button onClick={() => { setMonthOffset(0); setSelectedDay(null); }} style={{ background: 'none', border: 'none', color: 'var(--role-color)', fontSize: 12, cursor: 'pointer', fontWeight: 600, marginTop: 2 }}>Today</button>
               )}
@@ -397,7 +397,7 @@ const CaredForView = window.CaredForView = () => {
           {selectedDay && (
             <div className="card" style={{ marginTop: 16 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--bg-card)' }}>
+                <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>
                   📋 {selectedDateLabel}
                 </div>
                 <button onClick={() => setSelectedDay(null)} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: 'var(--text-muted)' }}>✕</button>
@@ -418,7 +418,7 @@ const CaredForView = window.CaredForView = () => {
                       }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <div>
-                            <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--bg-card)' }}>
+                            <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>
                               {formatTime12(s.scheduled_time || s.time)} · {s.service_type || s.serviceType}
                             </div>
                             <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
@@ -527,7 +527,7 @@ const CaredForView = window.CaredForView = () => {
               {/* Health Conditions */}
               {canSee('healthConditions') && careProfile.healthConditions && careProfile.healthConditions.length > 0 && (
                 <div className="card" style={{ marginBottom: 12 }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--bg-card)', marginBottom: 10 }}>🩺 Health Conditions</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 10 }}>🩺 Health Conditions</div>
                   {careProfile.healthConditions.map((c, i) => (
                     <div key={i} style={{ padding: '6px 10px', background: 'var(--color-error-bg)', borderRadius: 6, marginBottom: 4, fontSize: 13, color: 'var(--text-primary)' }}>{c}</div>
                   ))}
@@ -537,7 +537,7 @@ const CaredForView = window.CaredForView = () => {
               {/* Medications */}
               {canSee('medications') && careProfile.medications && careProfile.medications.length > 0 && (
                 <div className="card" style={{ marginBottom: 12 }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--bg-card)', marginBottom: 10 }}>💊 Medications</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 10 }}>💊 Medications</div>
                   {careProfile.medications.map((m, i) => (
                     <div key={i} style={{ padding: '6px 10px', background: 'var(--color-info-bg)', borderRadius: 6, marginBottom: 4, fontSize: 13, color: 'var(--text-primary)' }}>{m}</div>
                   ))}
@@ -547,7 +547,7 @@ const CaredForView = window.CaredForView = () => {
               {/* Allergies */}
               {canSee('allergies') && careProfile.foodAllergies && careProfile.foodAllergies.length > 0 && (
                 <div className="card" style={{ marginBottom: 12 }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--bg-card)', marginBottom: 10 }}>⚠️ Food Allergies</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 10 }}>⚠️ Food Allergies</div>
                   {careProfile.foodAllergies.map((a, i) => (
                     <div key={i} style={{ padding: '6px 10px', background: 'var(--color-warning-bg)', borderRadius: 6, marginBottom: 4, fontSize: 13, color: 'var(--color-warning)' }}>{a}</div>
                   ))}
@@ -557,7 +557,7 @@ const CaredForView = window.CaredForView = () => {
               {/* Preferences */}
               {canSee('preferences') && careProfile.preferences && (
                 <div className="card" style={{ marginBottom: 12 }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--bg-card)', marginBottom: 10 }}>✨ Care Preferences</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 10 }}>✨ Care Preferences</div>
                   <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>{careProfile.preferences}</div>
                 </div>
               )}
@@ -565,7 +565,7 @@ const CaredForView = window.CaredForView = () => {
               {/* Pets */}
               {canSee('pets') && careProfile.pets && (
                 <div className="card" style={{ marginBottom: 12 }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--bg-card)', marginBottom: 10 }}>🐾 Pets at Home</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 10 }}>🐾 Pets at Home</div>
                   <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>{careProfile.pets}</div>
                 </div>
               )}
@@ -573,7 +573,7 @@ const CaredForView = window.CaredForView = () => {
               {/* Emergency Contact */}
               {canSee('emergencyContact') && careProfile.emergencyContactName && (
                 <div className="card" style={{ marginBottom: 12 }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--bg-card)', marginBottom: 10 }}>🆘 Emergency Contact</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 10 }}>🆘 Emergency Contact</div>
                   <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>{careProfile.emergencyContactName}</div>
                   {careProfile.emergencyContactPhone && (
                     <a href={'tel:' + careProfile.emergencyContactPhone} style={{ fontSize: 13, color: 'var(--role-color)', textDecoration: 'none' }}>
