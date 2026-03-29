@@ -186,13 +186,7 @@
     }
 
     /* Sidebar / navigation */
-    [data-theme="dark"] .sidebar {
-      background: var(--bg-surface) !important;
-      border-color: var(--border-color) !important;
-    }
-    [data-theme="dark"] .sidebar .nav-item {
-      color: var(--text-secondary) !important;
-    }
+    /* Sidebar is always dark (#1a1a2e) regardless of theme — no override needed */
 
     /* Main content area */
     [data-theme="dark"] .main-content {
@@ -1070,7 +1064,7 @@
 
     .sidebar {
       width: 280px;
-      background-color: var(--bg-card);
+      background-color: #1a1a2e;
       color: var(--text-on-primary);
       padding: 20px;
       overflow-y: auto;
