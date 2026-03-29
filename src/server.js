@@ -303,7 +303,7 @@ app.use("/api/referrals", require("./routes/referrals"));
 app.use("/api/kindred", require("./routes/kindred"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.56.2";
+const APP_VERSION = "1.56.3";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });
@@ -846,7 +846,8 @@ async function start() {
     try {
       const paymentRouter = require("./routes/payments");
       if (paymentRouter.processOverduePayments) {
-        await paymentRouter.processOverduePayments(pushToUser);
+        const { sendPushToUser } = require("./routes/push");
+        await paymentRouter.processOverduePayments(sendPushToUser);
       }
     } catch (err) {
       if (err.message && !err.message.includes("not configured")) {

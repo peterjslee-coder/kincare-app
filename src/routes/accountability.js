@@ -369,16 +369,16 @@ router.post("/family-no-show/:sessionId", async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════
 
 // GET /api/accountability/pending-reviews
-// Returns all sessions that need a review from this family user
+// Returns sessions that need review OR need payment (reviewed but unpaid)
 router.get("/pending-reviews", requireRole("family"), async (req, res) => {
   try {
     const db = await getDb();
-    const pending = await db.prepare(`
+    // Sessions needing review (not yet reviewed)
+    const needsReview = await db.prepare(`
       SELECT cs.id, cs.scheduled_date, cs.scheduled_time, cs.duration_hours,
         cs.caregiver_id, cs.status, cs.caregiver_no_show,
-        cs.checked_in_at, cs.checked_out_at,
         cs.payment_due_at, cs.payment_status, cs.estimated_cost, cs.short_notice_surcharge,
-        cs.service_type,
+        cs.service_type, cs.proposed_rate, cs.review_completed,
         u.first_name || ' ' || u.last_name AS caregiver_name,
         cr.first_name AS recipient_first_name,
         cs.review_reminded_at
@@ -393,7 +393,31 @@ router.get("/pending-reviews", requireRole("family"), async (req, res) => {
       ORDER BY cs.scheduled_date DESC
     `).all(req.user.id);
 
-    res.json({ pendingReviews: pending || [] });
+    // v1.56.3 — Sessions reviewed but NOT paid (payment fell through)
+    const reviewedUnpaid = await db.prepare(`
+      SELECT cs.id, cs.scheduled_date, cs.scheduled_time, cs.duration_hours,
+        cs.caregiver_id, cs.status, cs.caregiver_no_show,
+        cs.payment_due_at, cs.payment_status, cs.estimated_cost, cs.short_notice_surcharge,
+        cs.service_type, cs.proposed_rate, cs.review_completed,
+        u.first_name || ' ' || u.last_name AS caregiver_name,
+        cr.first_name AS recipient_first_name,
+        cs.review_reminded_at
+      FROM care_sessions cs
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      LEFT JOIN users u ON cp.user_id = u.id
+      LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+      WHERE cs.family_user_id = ?
+        AND cs.review_completed = 1
+        AND cs.status = 'completed'
+        AND cs.estimated_cost > 0
+        AND (cs.payment_status IS NULL OR cs.payment_status = 'pending')
+        AND NOT EXISTS (
+          SELECT 1 FROM payments p WHERE p.session_id = cs.id AND p.status IN ('completed', 'processing')
+        )
+      ORDER BY cs.scheduled_date DESC
+    `).all(req.user.id);
+
+    res.json({ pendingReviews: [...(needsReview || []), ...(reviewedUnpaid || [])] });
   } catch (err) {
     console.error("Pending reviews error:", err);
     res.status(500).json({ error: "Server error" });

@@ -851,13 +851,14 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
       {pendingReviews.length > 0 && (
         <div style={{ marginBottom: 16 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-error)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>
-            {'\u{1F6A8}'} Action Required — Review & Pay ({pendingReviews.length})
+            {'\u{1F6A8}'} Action Required ({pendingReviews.length})
           </div>
           {pendingReviews.map(pr => {
             const isNoShow = !!pr.caregiver_no_show;
             const isPaid = pr.payment_status === 'paid';
             const cost = parseFloat(pr.estimated_cost || 0);
             const hasCost = cost > 0 && !isNoShow;
+            const alreadyReviewed = !!pr.review_completed; // v1.56.3 — reviewed but payment failed
 
             const dueAt = pr.payment_due_at ? new Date(pr.payment_due_at) : null;
             const nowMs = Date.now();
@@ -866,8 +867,8 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
             const isOverdue = dueAt && msLeft <= 0;
             const isUrgent = dueAt && minsLeft <= 15 && !isOverdue;
 
-            const borderColor = isNoShow ? '#ef5350' : (isUrgent || isOverdue) ? '#ef5350' : 'var(--color-warning)';
-            const bgColor = isNoShow ? 'var(--bg-error-light)' : (isUrgent || isOverdue) ? 'var(--bg-error-light)' : 'var(--color-warning-bg)';
+            const borderColor = alreadyReviewed ? '#ef5350' : isNoShow ? '#ef5350' : (isUrgent || isOverdue) ? '#ef5350' : 'var(--color-warning)';
+            const bgColor = alreadyReviewed ? 'var(--bg-error-light)' : isNoShow ? 'var(--bg-error-light)' : (isUrgent || isOverdue) ? 'var(--bg-error-light)' : 'var(--color-warning-bg)';
             return (
               <div key={pr.id} style={{ padding: 14, marginBottom: 8, background: bgColor, border: `2px solid ${borderColor}`, borderRadius: 12 }}>
                 {isNoShow && (
@@ -881,9 +882,23 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                     </span>
                   </div>
                 )}
+
+                {/* v1.56.3 — Reviewed but payment didn't go through */}
+                {alreadyReviewed && hasCost && !isPaid && (
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8,
+                    padding: '6px 10px', background: 'rgba(239,83,80,0.12)', borderRadius: 8,
+                  }}>
+                    <span style={{ fontSize: 16 }}>{'\u{1F4B3}'}</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: '#ef5350' }}>
+                      Payment incomplete — {pr.caregiver_name?.split(' ')[0]} hasn't been paid yet
+                    </span>
+                  </div>
+                )}
+
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                   <span style={{ fontSize: 14, fontWeight: 700, color: isNoShow ? 'var(--color-error)' : 'var(--text-primary)' }}>
-                    {isNoShow ? '\u2716 No Show — ' : '\u2B50 '}{pr.caregiver_name} · {pr.recipient_first_name}
+                    {isNoShow ? '\u2716 No Show — ' : alreadyReviewed ? '\u{1F4B3} ' : '\u2B50 '}{pr.caregiver_name} · {pr.recipient_first_name}
                   </span>
                   {hasCost && !isPaid && (
                     <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)' }}>
@@ -892,7 +907,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                   )}
                 </div>
 
-                {hasCost && !isPaid && dueAt && !isOverdue && (
+                {hasCost && !isPaid && dueAt && !isOverdue && !alreadyReviewed && (
                   <div style={{
                     display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8,
                     padding: '6px 10px', background: isUrgent ? 'rgba(239,83,80,0.1)' : 'rgba(255,255,255,0.5)', borderRadius: 8,
@@ -917,24 +932,44 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                   {pr.service_type ? pr.service_type + ' session' : 'Session'} with {pr.recipient_first_name} on {pr.scheduled_date}.
                   {isNoShow
                     ? ` ${pr.caregiver_name?.split(' ')[0]} did not check in. No payment was charged.`
-                    : hasCost && !isPaid
-                      ? ` Review to add a tip, then pay.`
-                      : ` Please leave a review for ${pr.caregiver_name?.split(' ')[0]}.`}
+                    : alreadyReviewed && hasCost && !isPaid
+                      ? ` Your review was saved but payment didn't complete. Tap below to pay now.`
+                      : hasCost && !isPaid
+                        ? ` Review to add a tip, then pay.`
+                        : ` Please leave a review for ${pr.caregiver_name?.split(' ')[0]}.`}
                 </p>
-                {!isNoShow && pr.checked_in_at && (
-                  <div style={{ fontSize: 12, color: 'var(--color-success)', marginBottom: 6 }}>
-                    {'\u2705'} Caregiver checked in{pr.checked_out_at ? ' and checked out' : ''}
-                  </div>
-                )}
                 <button onClick={() => {
-                  setReviewSession(pr);
-                  setReviewRating(0);
-                  setReviewComment('');
-                  setTipAmount(0);
-                  setTipCustom('');
-                  setTipReason('');
-                }} style={{ padding: '8px 20px', background: isNoShow ? '#ef5350' : 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, cursor: 'pointer' }}>
-                  {isNoShow ? 'Leave Review' : isPaid ? 'Leave Review' : hasCost ? 'Review & Pay' : 'Leave Review'}
+                  if (alreadyReviewed && hasCost && !isPaid) {
+                    // Skip review modal — go straight to checkout
+                    (async () => {
+                      try {
+                        const checkoutRes = await apiFetch('/api/payments/checkout', {
+                          method: 'POST',
+                          body: JSON.stringify({ sessionId: pr.id, tipCents: 0 }),
+                        });
+                        if (checkoutRes?.ok) {
+                          const checkout = await checkoutRes.json();
+                          if (typeof showToast === 'function') showToast('Redirecting to payment...', 'success');
+                          window.location.href = checkout.checkoutUrl;
+                        } else {
+                          const err = await checkoutRes?.json().catch(() => ({}));
+                          if (typeof showToast === 'function') showToast(err?.error || 'Payment failed to start. Please try again.', 'error');
+                        }
+                      } catch (e) {
+                        console.error('Retry payment error:', e);
+                        if (typeof showToast === 'function') showToast('Payment failed. Please try again.', 'error');
+                      }
+                    })();
+                  } else {
+                    setReviewSession(pr);
+                    setReviewRating(0);
+                    setReviewComment('');
+                    setTipAmount(0);
+                    setTipCustom('');
+                    setTipReason('');
+                  }
+                }} style={{ padding: '8px 20px', background: alreadyReviewed ? '#ef5350' : isNoShow ? '#ef5350' : 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, cursor: 'pointer' }}>
+                  {alreadyReviewed && hasCost && !isPaid ? 'Pay Now' : isNoShow ? 'Leave Review' : isPaid ? 'Leave Review' : hasCost ? 'Review & Pay' : 'Leave Review'}
                 </button>
               </div>
             );

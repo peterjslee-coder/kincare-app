@@ -6798,6 +6798,9 @@ const Dashboard = window.Dashboard = ({
   const [pendingInvites, setPendingInvites] = useState([]);
   const [acceptingInviteId, setAcceptingInviteId] = useState(null);
   const [invitesChecked, setInvitesChecked] = useState(false);
+  // In-app notifications (v1.56.0)
+  const [notifications, setNotifications] = useState([]);
+  const [unreadNotifCount, setUnreadNotifCount] = useState(0);
 
   // Dismissible dashboard sections — stores a content fingerprint per tile.
   // Tile stays hidden until the content changes (new data arrives).
@@ -6874,6 +6877,34 @@ const Dashboard = window.Dashboard = ({
         const d = await res.json();
         setPendingReviews(d.pendingReviews || []);
       }
+    } catch {}
+  };
+  const fetchNotifications = async () => {
+    try {
+      const res = await apiFetch('/api/push/notifications?limit=10');
+      if (res !== null && res !== void 0 && res.ok) {
+        const d = await res.json();
+        setNotifications(d.notifications || []);
+        setUnreadNotifCount(d.unreadCount || 0);
+      }
+    } catch {}
+  };
+  const markNotificationsRead = async ids => {
+    try {
+      await apiFetch('/api/push/notifications/mark-read', {
+        method: 'POST',
+        body: JSON.stringify({
+          ids: ids || []
+        })
+      });
+      setNotifications(prev => prev.map(n => ids ? ids.includes(n.id) ? {
+        ...n,
+        read: 1
+      } : n : {
+        ...n,
+        read: 1
+      }));
+      setUnreadNotifCount(prev => ids ? Math.max(0, prev - ids.length) : 0);
     } catch {}
   };
   const fetchPendingInvites = async () => {
@@ -7043,10 +7074,12 @@ const Dashboard = window.Dashboard = ({
     fetchAnalytics();
     fetchPendingReviews();
     fetchPendingInvites();
+    fetchNotifications();
     // Re-fetch when a new session is created (e.g. from RequestCareModal)
     const onSessionsUpdated = () => {
       fetchDashboard();
       fetchPendingReviews();
+      fetchNotifications();
     };
     window.addEventListener('sessions-updated', onSessionsUpdated);
     return () => window.removeEventListener('sessions-updated', onSessionsUpdated);
@@ -8222,20 +8255,22 @@ const Dashboard = window.Dashboard = ({
       letterSpacing: '0.5px',
       marginBottom: 10
     }
-  }, '\u{1F6A8}', " Action Required \u2014 Review & Pay (", pendingReviews.length, ")"), pendingReviews.map(pr => {
-    var _pr$caregiver_name, _pr$caregiver_name2, _pr$caregiver_name3;
+  }, '\u{1F6A8}', " Action Required (", pendingReviews.length, ")"), pendingReviews.map(pr => {
+    var _pr$caregiver_name, _pr$caregiver_name2, _pr$caregiver_name3, _pr$caregiver_name4;
     const isNoShow = !!pr.caregiver_no_show;
     const isPaid = pr.payment_status === 'paid';
     const cost = parseFloat(pr.estimated_cost || 0);
     const hasCost = cost > 0 && !isNoShow;
+    const alreadyReviewed = !!pr.review_completed; // v1.56.3 — reviewed but payment failed
+
     const dueAt = pr.payment_due_at ? new Date(pr.payment_due_at) : null;
     const nowMs = Date.now();
     const msLeft = dueAt ? dueAt.getTime() - nowMs : 0;
     const minsLeft = Math.max(0, Math.ceil(msLeft / 60000));
     const isOverdue = dueAt && msLeft <= 0;
     const isUrgent = dueAt && minsLeft <= 15 && !isOverdue;
-    const borderColor = isNoShow ? '#ef5350' : isUrgent || isOverdue ? '#ef5350' : 'var(--color-warning)';
-    const bgColor = isNoShow ? 'var(--bg-error-light)' : isUrgent || isOverdue ? 'var(--bg-error-light)' : 'var(--color-warning-bg)';
+    const borderColor = alreadyReviewed ? '#ef5350' : isNoShow ? '#ef5350' : isUrgent || isOverdue ? '#ef5350' : 'var(--color-warning)';
+    const bgColor = alreadyReviewed ? 'var(--bg-error-light)' : isNoShow ? 'var(--bg-error-light)' : isUrgent || isOverdue ? 'var(--bg-error-light)' : 'var(--color-warning-bg)';
     return /*#__PURE__*/React.createElement("div", {
       key: pr.id,
       style: {
@@ -8265,7 +8300,27 @@ const Dashboard = window.Dashboard = ({
         fontWeight: 700,
         color: 'var(--color-error)'
       }
-    }, "Caregiver No-Show \u2014 ", (_pr$caregiver_name = pr.caregiver_name) === null || _pr$caregiver_name === void 0 ? void 0 : _pr$caregiver_name.split(' ')[0], " did not check in")), /*#__PURE__*/React.createElement("div", {
+    }, "Caregiver No-Show \u2014 ", (_pr$caregiver_name = pr.caregiver_name) === null || _pr$caregiver_name === void 0 ? void 0 : _pr$caregiver_name.split(' ')[0], " did not check in")), alreadyReviewed && hasCost && !isPaid && /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+        marginBottom: 8,
+        padding: '6px 10px',
+        background: 'rgba(239,83,80,0.12)',
+        borderRadius: 8
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 16
+      }
+    }, '\u{1F4B3}'), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 13,
+        fontWeight: 700,
+        color: '#ef5350'
+      }
+    }, "Payment incomplete \u2014 ", (_pr$caregiver_name2 = pr.caregiver_name) === null || _pr$caregiver_name2 === void 0 ? void 0 : _pr$caregiver_name2.split(' ')[0], " hasn't been paid yet")), /*#__PURE__*/React.createElement("div", {
       style: {
         display: 'flex',
         justifyContent: 'space-between',
@@ -8278,13 +8333,13 @@ const Dashboard = window.Dashboard = ({
         fontWeight: 700,
         color: isNoShow ? 'var(--color-error)' : 'var(--text-primary)'
       }
-    }, isNoShow ? '\u2716 No Show — ' : '\u2B50 ', pr.caregiver_name, " \xB7 ", pr.recipient_first_name), hasCost && !isPaid && /*#__PURE__*/React.createElement("span", {
+    }, isNoShow ? '\u2716 No Show — ' : alreadyReviewed ? '\u{1F4B3} ' : '\u2B50 ', pr.caregiver_name, " \xB7 ", pr.recipient_first_name), hasCost && !isPaid && /*#__PURE__*/React.createElement("span", {
       style: {
         fontSize: 15,
         fontWeight: 800,
         color: 'var(--text-primary)'
       }
-    }, "$", cost.toFixed(2))), hasCost && !isPaid && dueAt && !isOverdue && /*#__PURE__*/React.createElement("div", {
+    }, "$", cost.toFixed(2))), hasCost && !isPaid && dueAt && !isOverdue && !alreadyReviewed && /*#__PURE__*/React.createElement("div", {
       style: {
         display: 'flex',
         alignItems: 'center',
@@ -8330,31 +8385,51 @@ const Dashboard = window.Dashboard = ({
         color: 'var(--text-secondary)',
         margin: '0 0 4px'
       }
-    }, pr.service_type ? pr.service_type + ' session' : 'Session', " with ", pr.recipient_first_name, " on ", pr.scheduled_date, ".", isNoShow ? ` ${(_pr$caregiver_name2 = pr.caregiver_name) === null || _pr$caregiver_name2 === void 0 ? void 0 : _pr$caregiver_name2.split(' ')[0]} did not check in. No payment was charged.` : hasCost && !isPaid ? ` Review to add a tip, then pay.` : ` Please leave a review for ${(_pr$caregiver_name3 = pr.caregiver_name) === null || _pr$caregiver_name3 === void 0 ? void 0 : _pr$caregiver_name3.split(' ')[0]}.`), !isNoShow && pr.checked_in_at && /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontSize: 12,
-        color: 'var(--color-success)',
-        marginBottom: 6
-      }
-    }, '\u2705', " Caregiver checked in", pr.checked_out_at ? ' and checked out' : ''), /*#__PURE__*/React.createElement("button", {
+    }, pr.service_type ? pr.service_type + ' session' : 'Session', " with ", pr.recipient_first_name, " on ", pr.scheduled_date, ".", isNoShow ? ` ${(_pr$caregiver_name3 = pr.caregiver_name) === null || _pr$caregiver_name3 === void 0 ? void 0 : _pr$caregiver_name3.split(' ')[0]} did not check in. No payment was charged.` : alreadyReviewed && hasCost && !isPaid ? ` Your review was saved but payment didn't complete. Tap below to pay now.` : hasCost && !isPaid ? ` Review to add a tip, then pay.` : ` Please leave a review for ${(_pr$caregiver_name4 = pr.caregiver_name) === null || _pr$caregiver_name4 === void 0 ? void 0 : _pr$caregiver_name4.split(' ')[0]}.`), /*#__PURE__*/React.createElement("button", {
       onClick: () => {
-        setReviewSession(pr);
-        setReviewRating(0);
-        setReviewComment('');
-        setTipAmount(0);
-        setTipCustom('');
-        setTipReason('');
+        if (alreadyReviewed && hasCost && !isPaid) {
+          // Skip review modal — go straight to checkout
+          (async () => {
+            try {
+              const checkoutRes = await apiFetch('/api/payments/checkout', {
+                method: 'POST',
+                body: JSON.stringify({
+                  sessionId: pr.id,
+                  tipCents: 0
+                })
+              });
+              if (checkoutRes !== null && checkoutRes !== void 0 && checkoutRes.ok) {
+                const checkout = await checkoutRes.json();
+                if (typeof showToast === 'function') showToast('Redirecting to payment...', 'success');
+                window.location.href = checkout.checkoutUrl;
+              } else {
+                const err = await (checkoutRes === null || checkoutRes === void 0 ? void 0 : checkoutRes.json().catch(() => ({})));
+                if (typeof showToast === 'function') showToast((err === null || err === void 0 ? void 0 : err.error) || 'Payment failed to start. Please try again.', 'error');
+              }
+            } catch (e) {
+              console.error('Retry payment error:', e);
+              if (typeof showToast === 'function') showToast('Payment failed. Please try again.', 'error');
+            }
+          })();
+        } else {
+          setReviewSession(pr);
+          setReviewRating(0);
+          setReviewComment('');
+          setTipAmount(0);
+          setTipCustom('');
+          setTipReason('');
+        }
       },
       style: {
         padding: '8px 20px',
-        background: isNoShow ? '#ef5350' : 'var(--role-color)',
+        background: alreadyReviewed ? '#ef5350' : isNoShow ? '#ef5350' : 'var(--role-color)',
         color: 'var(--text-on-primary)',
         border: 'none',
         borderRadius: 8,
         fontWeight: 600,
         cursor: 'pointer'
       }
-    }, isNoShow ? 'Leave Review' : isPaid ? 'Leave Review' : hasCost ? 'Review & Pay' : 'Leave Review'));
+    }, alreadyReviewed && hasCost && !isPaid ? 'Pay Now' : isNoShow ? 'Leave Review' : isPaid ? 'Leave Review' : hasCost ? 'Review & Pay' : 'Leave Review'));
   })), (_upcoming$ => {
     const proposals = (data === null || data === void 0 ? void 0 : data.pendingProposals) || [];
     if (proposals.length === 0) return null;
@@ -8931,7 +9006,133 @@ const Dashboard = window.Dashboard = ({
         fontSize: 14
       }
     }, "\u2192"));
-  })()), ((_upcoming$4, _data$careRecipients, _data$careRecipients2) => {
+  })()), (() => {
+    const unread = notifications.filter(n => !n.read);
+    if (unread.length === 0) return null;
+    const typeIcons = {
+      care_request_accepted: '\u2705',
+      message: '\u{1F4AC}',
+      payment: '\u{1F4B3}',
+      manual_payment: '\u{1F4B5}',
+      time_proposal: '\u{1F552}',
+      proposal_accepted: '\u{1F91D}',
+      proposal_declined: '\u274C',
+      check_in: '\u{1F3E0}',
+      check_out: '\u{1F44B}',
+      missing_address: '\u{1F4CD}',
+      general: '\u{1F514}'
+    };
+    const getIcon = type => typeIcons[type] || typeIcons.general;
+    const timeAgo = dateStr => {
+      const diff = Date.now() - new Date(dateStr).getTime();
+      const mins = Math.floor(diff / 60000);
+      if (mins < 1) return 'Just now';
+      if (mins < 60) return `${mins}m ago`;
+      const hrs = Math.floor(mins / 60);
+      if (hrs < 24) return `${hrs}h ago`;
+      return `${Math.floor(hrs / 24)}d ago`;
+    };
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginBottom: 16
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 10
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 13,
+        fontWeight: 700,
+        color: '#4a90d9',
+        textTransform: 'uppercase',
+        letterSpacing: '0.5px'
+      }
+    }, '\u{1F514}', " Recent Activity (", unread.length, ")"), unread.length > 1 && /*#__PURE__*/React.createElement("button", {
+      onClick: () => markNotificationsRead(unread.map(n => n.id)),
+      style: {
+        padding: '4px 12px',
+        background: 'transparent',
+        color: 'var(--text-muted)',
+        border: '1px solid var(--border-color)',
+        borderRadius: 6,
+        fontSize: 11,
+        fontWeight: 600,
+        cursor: 'pointer'
+      }
+    }, "Mark all read")), unread.slice(0, 5).map(n => {
+      const nData = n.data ? typeof n.data === 'string' ? JSON.parse(n.data) : n.data : {};
+      return /*#__PURE__*/React.createElement("div", {
+        key: n.id,
+        className: "activity-new-shimmer",
+        onClick: () => {
+          markNotificationsRead([n.id]);
+          // Navigate based on notification type
+          if (nData.sessionId && typeof setVisitDetailSessionId === 'function') setVisitDetailSessionId(nData.sessionId);else if (nData.type === 'message' && onNavigate) onNavigate('messages');else if (['payment', 'manual_payment'].includes(nData.type) && onNavigate) onNavigate('payments');
+        },
+        style: {
+          marginBottom: 6,
+          padding: '12px 14px',
+          cursor: 'pointer',
+          borderRadius: 10,
+          border: '2px solid #4a90d9',
+          background: 'linear-gradient(135deg, rgba(74, 144, 217, 0.06) 0%, var(--bg-card) 100%)',
+          boxShadow: '0 1px 6px rgba(74, 144, 217, 0.10)',
+          position: 'relative',
+          overflow: 'hidden'
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          display: 'flex',
+          alignItems: 'flex-start',
+          gap: 10
+        }
+      }, /*#__PURE__*/React.createElement("span", {
+        style: {
+          fontSize: 18,
+          flexShrink: 0,
+          marginTop: 1
+        }
+      }, getIcon(n.type)), /*#__PURE__*/React.createElement("div", {
+        style: {
+          flex: 1,
+          minWidth: 0
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontWeight: 600,
+          fontSize: 14,
+          color: 'var(--text-primary)'
+        }
+      }, n.title), n.body && /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 13,
+          color: 'var(--text-secondary)',
+          marginTop: 2,
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis'
+        }
+      }, n.body)), /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 11,
+          color: 'var(--text-muted)',
+          flexShrink: 0,
+          marginTop: 2
+        }
+      }, timeAgo(n.created_at))));
+    }), unread.length > 5 && /*#__PURE__*/React.createElement("div", {
+      style: {
+        textAlign: 'center',
+        fontSize: 12,
+        color: 'var(--text-muted)',
+        marginTop: 4
+      }
+    }, "+ ", unread.length - 5, " more"));
+  })(), ((_upcoming$4, _data$careRecipients, _data$careRecipients2) => {
     const tz = ((_upcoming$4 = upcoming[0]) === null || _upcoming$4 === void 0 ? void 0 : _upcoming$4.timezone) || TimezoneHelper.DEFAULT_TZ;
     const nowMs = TimezoneHelper.realNowMs();
     const todayStr = TimezoneHelper.getToday(tz);
@@ -14368,11 +14569,12 @@ const Schedule = window.Schedule = () => {
     style: {
       padding: '8px 16px',
       background: 'var(--bg-surface)',
-      border: '1px solid #d0d0d0',
+      border: '1px solid var(--border-color)',
       borderRadius: 8,
       cursor: 'pointer',
       fontSize: 14,
-      fontWeight: 600
+      fontWeight: 600,
+      color: 'var(--text-primary)'
     }
   }, "\u2190 Prev"), /*#__PURE__*/React.createElement("h2", {
     style: {
@@ -14385,11 +14587,12 @@ const Schedule = window.Schedule = () => {
     style: {
       padding: '8px 16px',
       background: 'var(--bg-surface)',
-      border: '1px solid #d0d0d0',
+      border: '1px solid var(--border-color)',
       borderRadius: 8,
       cursor: 'pointer',
       fontSize: 14,
-      fontWeight: 600
+      fontWeight: 600,
+      color: 'var(--text-primary)'
     }
   }, "Next \u2192")), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -39066,6 +39269,11 @@ const CaretakerHub = window.CaretakerHub = ({
   // Earnings state
   const [completedSessions, setCompletedSessions] = useState([]);
   const [earningsLoading, setEarningsLoading] = useState(false);
+  // Manual payments received
+  const [manualPaymentsReceived, setManualPaymentsReceived] = useState([]);
+  // In-app notifications (v1.56.0)
+  const [notifications, setNotifications] = useState([]);
+  const [unreadNotifCount, setUnreadNotifCount] = useState(0);
   // Tips state
   const [tipsData, setTipsData] = useState(null);
   const [showTipsSection, setShowTipsSection] = useState(false);
@@ -39329,6 +39537,11 @@ const CaretakerHub = window.CaretakerHub = ({
             setMilestones(d.milestones || []);
             setUnackedMilestones(d.unacknowledged || []);
           })).catch(() => {});
+          // In-app notifications (v1.56.0)
+          apiFetch('/api/push/notifications?limit=10').then(r => (r === null || r === void 0 ? void 0 : r.ok) && r.json().then(d => {
+            setNotifications(d.notifications || []);
+            setUnreadNotifCount(d.unreadCount || 0);
+          })).catch(() => {});
         } else if ((res === null || res === void 0 ? void 0 : res.status) === 404) {
           setNoProfile(true);
         }
@@ -39410,6 +39623,18 @@ const CaretakerHub = window.CaretakerHub = ({
       } catch (err) {/* tips not available yet */}
     };
     fetchTips();
+
+    // Fetch manual payments received (bonuses, direct sends from families)
+    const fetchManualPayments = async () => {
+      try {
+        const res = await apiFetch('/api/payments/earnings');
+        if (res !== null && res !== void 0 && res.ok) {
+          const d = await res.json();
+          setManualPaymentsReceived(d.manualPayments || []);
+        }
+      } catch (err) {/* earnings endpoint not available yet */}
+    };
+    fetchManualPayments();
 
     // Also check Stripe Connect status
     const checkStripe = async () => {
@@ -42581,7 +42806,218 @@ const CaretakerHub = window.CaretakerHub = ({
     className: "lock-msg"
   }, "Complete your setup above to unlock your dashboard")), /*#__PURE__*/React.createElement("div", {
     className: shouldBlur ? 'lock-content' : ''
-  }, /*#__PURE__*/React.createElement("div", {
+  }, (() => {
+    const unread = notifications.filter(n => !n.read);
+    if (unread.length === 0) return null;
+    const typeIcons = {
+      care_request_accepted: '\u2705',
+      message: '\u{1F4AC}',
+      payment: '\u{1F4B3}',
+      manual_payment: '\u{1F4B5}',
+      time_proposal: '\u{1F552}',
+      general: '\u{1F514}'
+    };
+    const getIcon = type => typeIcons[type] || '\u{1F514}';
+    const timeAgo = dateStr => {
+      const d = Date.now() - new Date(dateStr).getTime(),
+        m = Math.floor(d / 60000);
+      return m < 1 ? 'Just now' : m < 60 ? `${m}m ago` : m < 1440 ? `${Math.floor(m / 60)}h ago` : `${Math.floor(m / 1440)}d ago`;
+    };
+    const markRead = async ids => {
+      try {
+        await apiFetch('/api/push/notifications/mark-read', {
+          method: 'POST',
+          body: JSON.stringify({
+            ids: ids || []
+          })
+        });
+        setNotifications(prev => prev.map(n => ids ? ids.includes(n.id) ? {
+          ...n,
+          read: 1
+        } : n : {
+          ...n,
+          read: 1
+        }));
+        setUnreadNotifCount(prev => ids ? Math.max(0, prev - ids.length) : 0);
+      } catch {}
+    };
+    return /*#__PURE__*/React.createElement("div", {
+      className: "card",
+      style: {
+        marginBottom: 16,
+        padding: '16px 18px'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 10
+      }
+    }, /*#__PURE__*/React.createElement("h3", {
+      style: {
+        margin: 0,
+        fontSize: 15,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8
+      }
+    }, '\u{1F514}', " Recent Activity (", unread.length, ")"), unread.length > 1 && /*#__PURE__*/React.createElement("button", {
+      onClick: () => markRead(unread.map(n => n.id)),
+      style: {
+        padding: '4px 10px',
+        background: 'transparent',
+        color: 'var(--text-muted)',
+        border: '1px solid var(--border-color)',
+        borderRadius: 6,
+        fontSize: 11,
+        fontWeight: 600,
+        cursor: 'pointer'
+      }
+    }, "Mark all read")), unread.slice(0, 5).map(n => /*#__PURE__*/React.createElement("div", {
+      key: n.id,
+      className: "activity-new-shimmer",
+      onClick: () => markRead([n.id]),
+      style: {
+        padding: '10px 12px',
+        marginBottom: 6,
+        borderRadius: 8,
+        cursor: 'pointer',
+        border: '1.5px solid #4a90d9',
+        background: 'rgba(74, 144, 217, 0.04)',
+        position: 'relative',
+        overflow: 'hidden'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: 8
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 16,
+        flexShrink: 0
+      }
+    }, getIcon(n.type)), /*#__PURE__*/React.createElement("div", {
+      style: {
+        flex: 1,
+        minWidth: 0
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontWeight: 600,
+        fontSize: 14
+      }
+    }, n.title), n.body && /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 13,
+        color: 'var(--text-secondary)',
+        marginTop: 1,
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis'
+      }
+    }, n.body)), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 11,
+        color: 'var(--text-muted)',
+        flexShrink: 0
+      }
+    }, timeAgo(n.created_at))))));
+  })(), manualPaymentsReceived.length > 0 && /*#__PURE__*/React.createElement("div", {
+    className: "card",
+    style: {
+      marginBottom: 16,
+      padding: '16px 18px'
+    }
+  }, /*#__PURE__*/React.createElement("h3", {
+    style: {
+      margin: '0 0 12px',
+      fontSize: '15px',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '8px'
+    }
+  }, '\uD83D\uDCB0', " Payments Received"), manualPaymentsReceived.map(p => {
+    const payoutDate = p.payoutExpectedDate ? new Date(p.payoutExpectedDate + 'T00:00:00') : null;
+    const now = new Date();
+    const isPaidOut = payoutDate && payoutDate <= now;
+    const payoutLabel = isPaidOut ? 'Deposited' : payoutDate ? `Bank deposit by ${payoutDate.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric'
+    })}` : 'Processing';
+    return /*#__PURE__*/React.createElement("div", {
+      key: p.id,
+      style: {
+        padding: '12px 0',
+        borderBottom: '1px solid #f0f0f0'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        flex: 1
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 14,
+        fontWeight: 600,
+        color: 'var(--text-primary)'
+      }
+    }, "$", p.amount.toFixed(2), " from ", p.fromName || 'Family'), p.note && /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 12,
+        color: 'var(--text-secondary)',
+        marginTop: 2,
+        fontStyle: 'italic'
+      }
+    }, "\"", p.note, "\""), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 11,
+        color: 'var(--text-muted)',
+        marginTop: 3
+      }
+    }, "Received ", new Date(p.createdAt).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    }))), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'flex-end',
+        gap: 4
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        padding: '3px 10px',
+        borderRadius: 10,
+        fontSize: 11,
+        fontWeight: 600,
+        background: 'var(--color-success-bg)',
+        color: 'var(--color-success)'
+      }
+    }, p.status === 'completed' ? '\u2713 Paid' : p.status), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 11,
+        color: isPaidOut ? 'var(--color-success)' : '#e8724a',
+        fontWeight: 500
+      }
+    }, isPaidOut ? '\uD83C\uDFE6' : '\u23F3', " ", payoutLabel))));
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: 'var(--text-muted)',
+      marginTop: 10,
+      padding: '8px 0 0',
+      borderTop: '1px solid #f0f0f0'
+    }
+  }, "Payments are deposited to your bank account on Stripe's payout schedule (typically 2-7 business days).")), /*#__PURE__*/React.createElement("div", {
     ref: tabContentRef,
     style: {
       borderRadius: highlightTab ? '12px' : undefined,
@@ -53302,7 +53738,91 @@ const FamilyPayments = window.FamilyPayments = () => {
       background: 'var(--bg-primary)',
       color: 'var(--text-primary)'
     }
-  })), /*#__PURE__*/React.createElement("button", {
+  })), (() => {
+    const amt = parseFloat(sendPaymentState.amount);
+    if (!amt || amt <= 0) return null;
+    const cardFee = Math.ceil((amt * 0.029 + 0.30) * 100) / 100;
+    const bankFee = Math.min(Math.ceil(amt * 0.008 * 100) / 100, 5.00);
+    const selectedCg = caregivers.find(c => c.id === sendPaymentState.caregiverId);
+    const cgName = selectedCg ? selectedCg.name.split(' ')[0] : 'caregiver';
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        background: 'var(--bg-primary)',
+        borderRadius: 8,
+        padding: '10px 12px',
+        fontSize: 13
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        marginBottom: 4
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: 'var(--text-secondary)'
+      }
+    }, cgName, " receives:"), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontWeight: 700,
+        color: 'var(--color-success)'
+      }
+    }, "$", amt.toFixed(2))), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        marginBottom: 4,
+        fontSize: 12
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: 'var(--text-muted)'
+      }
+    }, "Processing fee (card):"), /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: 'var(--text-muted)'
+      }
+    }, "~$", cardFee.toFixed(2))), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        marginBottom: 4,
+        fontSize: 12
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: 'var(--text-muted)'
+      }
+    }, "Processing fee (bank transfer):"), /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: 'var(--color-success)'
+      }
+    }, "~$", bankFee.toFixed(2))), /*#__PURE__*/React.createElement("div", {
+      style: {
+        borderTop: '1px solid #e5e7eb',
+        paddingTop: 6,
+        marginTop: 4,
+        display: 'flex',
+        justifyContent: 'space-between'
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontWeight: 600,
+        color: 'var(--text-primary)'
+      }
+    }, "You pay (card):"), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontWeight: 700,
+        color: 'var(--text-primary)'
+      }
+    }, "~$", (amt + cardFee).toFixed(2))), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 11,
+        color: 'var(--text-muted)',
+        marginTop: 4
+      }
+    }, "Fee depends on payment method chosen at checkout. InPlace takes no platform fee on direct payments."));
+  })(), /*#__PURE__*/React.createElement("button", {
     onClick: handleSendPayment,
     disabled: !paymentsEnabled || sendPaymentLoading || !sendPaymentState.caregiverId || !sendPaymentState.amount,
     style: {
@@ -53526,7 +54046,7 @@ const FamilyPayments = window.FamilyPayments = () => {
       padding: '10px 12px',
       textTransform: 'capitalize'
     }
-  }, (p.serviceType || '\u2014').replace(/_/g, ' ')), /*#__PURE__*/React.createElement("td", {
+  }, (p.serviceType || '\u2014').replace(/_/g, ' '), p.note ? ` — ${p.note}` : ''), /*#__PURE__*/React.createElement("td", {
     style: {
       padding: '10px 12px',
       textAlign: 'right',
@@ -67723,6 +68243,8 @@ const App = () => {
   // Admin alert count for nav badge
   const [adminAlertCount, setAdminAlertCount] = useState(0);
   const [adminAlertDetails, setAdminAlertDetails] = useState(null);
+  // In-app notification badge (v1.56.0)
+  const [unreadNotifCount, setUnreadNotifCount] = useState(0);
 
   // ─── In-app navigation history (prevents PWA back-swipe from closing app) ───
   const navHistoryRef = useRef(['dashboard']);
@@ -67852,6 +68374,23 @@ const App = () => {
     const interval = setInterval(fetchAlerts, 60000); // refresh every 60s
     return () => clearInterval(interval);
   }, [appState, currentUser === null || currentUser === void 0 ? void 0 : currentUser.id, currentUser === null || currentUser === void 0 ? void 0 : currentUser.isAdmin]);
+
+  // ─── In-app notification count polling (v1.56.0) ───
+  useEffect(() => {
+    if (appState !== 'app' || !currentUser) return;
+    const fetchNotifCount = async () => {
+      try {
+        const res = await apiFetch('/api/push/notifications?limit=1');
+        if (res !== null && res !== void 0 && res.ok) {
+          const data = await res.json();
+          setUnreadNotifCount(data.unreadCount || 0);
+        }
+      } catch {}
+    };
+    fetchNotifCount();
+    const interval = setInterval(fetchNotifCount, 30000);
+    return () => clearInterval(interval);
+  }, [appState, currentUser === null || currentUser === void 0 ? void 0 : currentUser.id]);
 
   // ─── Version heartbeat — auto-reload when a new deploy lands ───
   useEffect(() => {
@@ -69294,11 +69833,52 @@ const App = () => {
     }
   }, "v", window.APP_VERSION || '?')))), /*#__PURE__*/React.createElement("main", {
     className: "main-content"
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 4
+    }
   }, /*#__PURE__*/React.createElement("button", {
     className: "hamburger-btn",
     onClick: () => setSidebarOpen(true),
-    "aria-label": "Open menu"
-  }, /*#__PURE__*/React.createElement("span", null), /*#__PURE__*/React.createElement("span", null), /*#__PURE__*/React.createElement("span", null)), (currentUser === null || currentUser === void 0 || (_currentUser$roles2 = currentUser.roles) === null || _currentUser$roles2 === void 0 ? void 0 : _currentUser$roles2.length) > 1 && /*#__PURE__*/React.createElement("div", {
+    "aria-label": "Open menu",
+    style: {
+      position: 'relative',
+      zIndex: 1
+    }
+  }, /*#__PURE__*/React.createElement("span", null), /*#__PURE__*/React.createElement("span", null), /*#__PURE__*/React.createElement("span", null)), currentUser && /*#__PURE__*/React.createElement("button", {
+    onClick: () => setCurrentPage('dashboard'),
+    style: {
+      position: 'relative',
+      background: 'none',
+      border: 'none',
+      cursor: 'pointer',
+      padding: '6px 8px',
+      fontSize: 20
+    },
+    "aria-label": "Notifications"
+  }, '\u{1F514}', unreadNotifCount > 0 && /*#__PURE__*/React.createElement("span", {
+    className: "notification-dot",
+    style: {
+      position: 'absolute',
+      top: 2,
+      right: 2,
+      minWidth: 16,
+      height: 16,
+      borderRadius: 8,
+      background: '#ef5350',
+      color: 'white',
+      fontSize: 10,
+      fontWeight: 700,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '0 4px',
+      border: '2px solid var(--bg-primary)'
+    }
+  }, unreadNotifCount > 9 ? '9+' : unreadNotifCount))), (currentUser === null || currentUser === void 0 || (_currentUser$roles2 = currentUser.roles) === null || _currentUser$roles2 === void 0 ? void 0 : _currentUser$roles2.length) > 1 && /*#__PURE__*/React.createElement("div", {
     className: "role-switcher-bar",
     style: {
       display: 'flex',
