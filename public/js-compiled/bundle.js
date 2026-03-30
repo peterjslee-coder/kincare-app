@@ -6760,6 +6760,9 @@ const Dashboard = window.Dashboard = ({
   onNavigate,
   acceptingInvite
 }) => {
+  const {
+    showToast
+  } = useToast();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
@@ -68239,7 +68242,7 @@ const _DayIcon = () => {
 
 // Main App Component — role-aware routing & sidebar
 const App = () => {
-  var _currentUser$firstNam, _currentUser$roles2;
+  var _currentUser$firstNam;
   // Detect URL params at init — BEFORE any useEffect or auto-login can race
   // Capture verify token BEFORE any replaceState can strip the URL
   const [pendingVerifyToken] = useState(() => {
@@ -69873,78 +69876,7 @@ const App = () => {
       position: 'relative',
       zIndex: 1
     }
-  }, /*#__PURE__*/React.createElement("span", null), /*#__PURE__*/React.createElement("span", null), /*#__PURE__*/React.createElement("span", null)), currentUser && /*#__PURE__*/React.createElement("button", {
-    onClick: () => setCurrentPage('dashboard'),
-    style: {
-      position: 'relative',
-      background: 'none',
-      border: 'none',
-      cursor: 'pointer',
-      padding: '6px 8px',
-      fontSize: 20
-    },
-    "aria-label": "Notifications"
-  }, '\u{1F514}', unreadNotifCount > 0 && /*#__PURE__*/React.createElement("span", {
-    className: "notification-dot",
-    style: {
-      position: 'absolute',
-      top: 2,
-      right: 2,
-      minWidth: 16,
-      height: 16,
-      borderRadius: 8,
-      background: '#ef5350',
-      color: 'white',
-      fontSize: 10,
-      fontWeight: 700,
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: '0 4px',
-      border: '2px solid var(--bg-primary)'
-    }
-  }, unreadNotifCount > 9 ? '9+' : unreadNotifCount))), (currentUser === null || currentUser === void 0 || (_currentUser$roles2 = currentUser.roles) === null || _currentUser$roles2 === void 0 ? void 0 : _currentUser$roles2.length) > 1 && /*#__PURE__*/React.createElement("div", {
-    className: "role-switcher-bar",
-    style: {
-      display: 'flex',
-      gap: '4px',
-      padding: '6px 8px',
-      marginBottom: '12px',
-      background: 'var(--badge-muted-bg)',
-      borderRadius: '10px',
-      width: 'fit-content'
-    }
-  }, ['family', 'caregiver', 'care_for'].map(r => {
-    const labels = {
-      family: 'Family',
-      caregiver: 'Caregiver',
-      care_for: 'Recipient'
-    };
-    const icons = {
-      family: '👪',
-      caregiver: '💼',
-      care_for: '🏠'
-    };
-    const btnColor = (roleColors[r] || roleColors.family).main;
-    const isActive = r === role;
-    const hasRole = (currentUser.roles || []).includes(r);
-    return React.createElement('button', {
-      key: r,
-      onClick: hasRole ? () => handleSwitchRole(r) : undefined,
-      style: {
-        padding: '5px 13px',
-        borderRadius: '8px',
-        border: isActive ? '2px solid ' + btnColor : hasRole ? '2px solid #1b6b5a' : '2px solid transparent',
-        cursor: hasRole ? 'pointer' : 'default',
-        fontSize: '13px',
-        fontWeight: isActive ? 600 : 400,
-        background: isActive ? btnColor : 'transparent',
-        color: isActive ? 'white' : hasRole ? 'var(--text-secondary)' : 'var(--border-light)',
-        transition: 'all 0.2s',
-        opacity: hasRole ? 1 : 0.5
-      }
-    }, `${icons[r] || ''} ${labels[r] || r}`);
-  })), verifyMessage && /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("span", null), /*#__PURE__*/React.createElement("span", null), /*#__PURE__*/React.createElement("span", null))), verifyMessage && /*#__PURE__*/React.createElement("div", {
     style: {
       padding: '12px 16px',
       marginBottom: '16px',

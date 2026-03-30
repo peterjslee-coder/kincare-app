@@ -1,4 +1,5 @@
 const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
+  const { showToast } = useToast();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
