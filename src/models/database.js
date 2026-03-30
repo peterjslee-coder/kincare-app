@@ -1090,13 +1090,26 @@ async function initializeDatabase() {
     }
   } catch (e) { console.error("  Test session create error:", e.message); }
 
-  // ─── v1.56.17 — Waive ALL old test sessions, create fresh one for today ───
+  // ─── v1.56.18 — Kill ALL test/old sessions except today's fresh one ───
   try {
+    // Nuke by known IDs
     for (const oldId of ['test-webhook-1774827695917', 'test-webhook-1774829244377', 'test-webhook-today-20260329']) {
-      await db.prepare("UPDATE care_sessions SET payment_status = 'waived', review_required = 0 WHERE id = ? AND payment_status != 'waived'").run(oldId);
+      await db.prepare("UPDATE care_sessions SET payment_status = 'waived', review_required = 0 WHERE id = ?").run(oldId);
       await db.prepare("UPDATE payments SET status = 'failed' WHERE session_id = ? AND status IN ('processing','pending')").run(oldId);
     }
-  } catch (e) { /* already done */ }
+    // Also kill ANY session on March 30 that looks like a test (catch strays)
+    const strays = await db.prepare(`
+      SELECT id FROM care_sessions
+      WHERE scheduled_date = '2026-03-30'
+        AND review_required = 1 AND review_completed = 0
+        AND id != 'test-webhook-fresh-20260329'
+    `).all();
+    for (const s of (strays || [])) {
+      await db.prepare("UPDATE care_sessions SET payment_status = 'waived', review_required = 0 WHERE id = ?").run(s.id);
+      await db.prepare("UPDATE payments SET status = 'failed' WHERE session_id = ? AND status IN ('processing','pending')").run(s.id);
+      console.log(`  ✅ Killed stray March 30 session: ${s.id}`);
+    }
+  } catch (e) { console.error("  Kill stray error:", e.message); }
 
   // Create fresh test session for webhook testing
   try {
