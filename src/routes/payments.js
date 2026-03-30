@@ -76,6 +76,16 @@ router.post("/webhook", express.raw({ type: "application/json" }), async (req, r
 
   const db = await getDb();
 
+  // ─── Detailed webhook logging ───
+  console.log(`📨 Webhook received: ${event.type} (id: ${event.id})`);
+  if (event.type === 'checkout.session.completed') {
+    const obj = event.data?.object;
+    console.log(`  → session.id: ${obj?.id}`);
+    console.log(`  → metadata: ${JSON.stringify(obj?.metadata || {})}`);
+    console.log(`  → amount_total: ${obj?.amount_total}`);
+    console.log(`  → payment_intent: ${obj?.payment_intent}`);
+  }
+
   try {
     switch (event.type) {
       case "checkout.session.completed": {
@@ -163,7 +173,11 @@ router.post("/webhook", express.raw({ type: "application/json" }), async (req, r
 
         // Handle regular care session payment
         const sessionId = session.metadata?.inplace_session_id;
-        if (!sessionId) break;
+        if (!sessionId) {
+          console.warn(`⚠️  checkout.session.completed has NO inplace_session_id in metadata — skipping DB update. metadata keys: ${Object.keys(session.metadata || {}).join(', ')}`);
+          break;
+        }
+        console.log(`  → Processing care session payment for ${sessionId}`);
 
         // Update payment record
         await db.prepare(

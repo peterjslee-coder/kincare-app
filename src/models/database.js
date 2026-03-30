@@ -1090,6 +1090,17 @@ async function initializeDatabase() {
     }
   } catch (e) { console.error("  Test session create error:", e.message); }
 
+  // ─── v1.56.16 — Force-complete today's test session (Pete already paid $2.17 via Stripe) ───
+  try {
+    const testId = 'test-webhook-today-20260329';
+    const cs = await db.prepare("SELECT payment_status, review_completed FROM care_sessions WHERE id = ?").get(testId);
+    if (cs && cs.payment_status !== 'paid') {
+      await db.prepare("UPDATE care_sessions SET payment_status = 'paid', review_completed = 1, updated_at = NOW() WHERE id = ?").run(testId);
+      await db.prepare("UPDATE payments SET status = 'completed', updated_at = NOW() WHERE session_id = ? AND status != 'completed'").run(testId);
+      console.log(`  ✅ Force-completed test session ${testId} — Pete confirmed paid via Stripe`);
+    }
+  } catch (e) { /* already done */ }
+
   // ─── v1.56.12/15 — Waive all old test sessions (keep only today's fresh one) ───
   try {
     for (const oldId of ['test-webhook-1774827695917', 'test-webhook-1774829244377']) {
