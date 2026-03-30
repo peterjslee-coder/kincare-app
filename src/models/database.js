@@ -1134,6 +1134,26 @@ async function initializeDatabase() {
     }
   } catch (e) { console.error("  Fresh test session error:", e.message); }
 
+  // ─── v1.57.3 — Auto-pay test session: completed, payment_due_at ~6 min from now ───
+  try {
+    const autoPayTestId = 'test-autopay-20260329';
+    const exists = await db.prepare("SELECT id FROM care_sessions WHERE id = ?").get(autoPayTestId);
+    if (!exists) {
+      const pete = await db.prepare("SELECT id FROM users WHERE email = 'peterjslee@gmail.com'").get();
+      const cary = await db.prepare("SELECT cp.id FROM caregiver_profiles cp JOIN users u ON cp.user_id = u.id WHERE u.first_name = 'Cary'").get();
+      const betty = await db.prepare("SELECT id FROM care_recipients WHERE first_name = 'Betty' LIMIT 1").get();
+      if (pete && cary && betty) {
+        await db.prepare(`
+          INSERT INTO care_sessions (id, care_recipient_id, family_user_id, caregiver_id, service_type,
+            status, scheduled_date, scheduled_time, duration_hours, estimated_cost,
+            proposed_rate, review_required, review_completed, payment_due_at)
+          VALUES (?, ?, ?, ?, 'Companionship', 'completed', '2026-03-29', '18:00', 0.25, 0.25, 1.00, 0, 0, NOW() + INTERVAL '6 minutes')
+        `).run(autoPayTestId, betty.id, pete.id, cary.id);
+        console.log(`  ✅ Auto-pay test session ${autoPayTestId} — $1/hr × 15min = $0.25, payment_due_at = NOW()+6min`);
+      }
+    }
+  } catch (e) { console.error("  Auto-pay test session error:", e.message); }
+
   // ─── v1.50.55 — Rewrite FAQ articles with accurate content ───
   try {
     const faqVersion = await db.prepare("SELECT answer FROM help_articles WHERE question = 'Does InPlace cost anything?' AND is_published = 1").get();
