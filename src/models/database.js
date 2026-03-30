@@ -1181,6 +1181,26 @@ async function initializeDatabase() {
     }
   } catch (e) { console.error("  Force-complete error:", e.message); }
 
+  // ─── v1.56.20 — Fresh test session for webhook end-to-end test ───
+  try {
+    const testId = 'test-webhook-e2e-20260329';
+    const exists = await db.prepare("SELECT id FROM care_sessions WHERE id = ?").get(testId);
+    if (!exists) {
+      const pete = await db.prepare("SELECT id FROM users WHERE email = 'peterjslee@gmail.com'").get();
+      const cary = await db.prepare("SELECT cp.id FROM caregiver_profiles cp JOIN users u ON cp.user_id = u.id WHERE u.first_name = 'Cary'").get();
+      const betty = await db.prepare("SELECT id FROM care_recipients WHERE first_name = 'Betty' LIMIT 1").get();
+      if (pete && cary && betty) {
+        await db.prepare(`
+          INSERT INTO care_sessions (id, care_recipient_id, family_user_id, caregiver_id, service_type,
+            status, scheduled_date, scheduled_time, duration_hours, estimated_cost,
+            proposed_rate, review_required, review_completed, payment_status)
+          VALUES (?, ?, ?, ?, 'Companionship', 'completed', '2026-03-29', '18:00', 0.25, 0.25, 1.00, 1, 0, 'pending')
+        `).run(testId, betty.id, pete.id, cary.id);
+        console.log(`  ✅ Created e2e test session ${testId} — $1/hr × 15min = $0.25, needs review & payment`);
+      }
+    }
+  } catch (e) { console.error("  e2e test session error:", e.message); }
+
   console.log("  Database initialized successfully");
   return db;
 }
