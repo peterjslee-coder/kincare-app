@@ -1090,16 +1090,17 @@ async function initializeDatabase() {
     }
   } catch (e) { console.error("  Test session create error:", e.message); }
 
-  // ─── v1.56.12 — One-time: waive the March 29 test session (webhook failed on bad secret) ───
+  // ─── v1.56.12/15 — Waive all old test sessions (keep only today's fresh one) ───
   try {
-    await db.prepare(`
-      UPDATE care_sessions SET payment_status = 'waived', review_required = 0
-      WHERE id = 'test-webhook-1774827695917' AND (payment_status IS NULL OR payment_status = 'pending')
-    `).run();
-    // Also kill any stuck payment records for it
-    await db.prepare(`
-      UPDATE payments SET status = 'failed' WHERE session_id = 'test-webhook-1774827695917' AND status = 'processing'
-    `).run();
+    for (const oldId of ['test-webhook-1774827695917', 'test-webhook-1774829244377']) {
+      await db.prepare(`
+        UPDATE care_sessions SET payment_status = 'waived', review_required = 0
+        WHERE id = ? AND payment_status != 'waived'
+      `).run(oldId);
+      await db.prepare(`
+        UPDATE payments SET status = 'failed' WHERE session_id = ? AND status = 'processing'
+      `).run(oldId);
+    }
   } catch (e) { /* already done */ }
 
   // ─── v1.50.55 — Rewrite FAQ articles with accurate content ───
