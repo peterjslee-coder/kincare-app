@@ -1069,6 +1069,27 @@ async function initializeDatabase() {
     }
   } catch (e) { /* already done */ }
 
+  // ─── v1.56.13 — One-time: create a test session for today (March 29) to verify webhook payment flow ───
+  try {
+    const testId = 'test-webhook-today-20260329';
+    const exists = await db.prepare("SELECT id FROM care_sessions WHERE id = ?").get(testId);
+    if (!exists) {
+      // Look up Pete (family), Cary (caregiver), Betty (care recipient)
+      const pete = await db.prepare("SELECT id FROM users WHERE email = 'peterjslee@gmail.com'").get();
+      const cary = await db.prepare("SELECT cp.id FROM caregiver_profiles cp JOIN users u ON cp.user_id = u.id WHERE u.first_name = 'Cary'").get();
+      const betty = await db.prepare("SELECT id FROM care_recipients WHERE first_name = 'Betty' LIMIT 1").get();
+      if (pete && cary && betty) {
+        await db.prepare(`
+          INSERT INTO care_sessions (id, care_recipient_id, family_user_id, caregiver_id, service_type,
+            status, scheduled_date, scheduled_time, duration_hours, estimated_cost,
+            proposed_rate, review_required, review_completed, payment_status)
+          VALUES (?, ?, ?, ?, 'Companionship', 'completed', '2026-03-29', '14:00', 0.5, 0.50, 1.00, 1, 0, 'pending')
+        `).run(testId, betty.id, pete.id, cary.id);
+        console.log(`  ✅ Created test session ${testId} — $1/hr × 30min = $0.50, needs review & payment`);
+      }
+    }
+  } catch (e) { console.error("  Test session create error:", e.message); }
+
   // ─── v1.56.12 — One-time: waive the March 29 test session (webhook failed on bad secret) ───
   try {
     await db.prepare(`
