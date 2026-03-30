@@ -213,7 +213,7 @@ router.post("/webhook", express.raw({ type: "application/json" }), async (req, r
 
         // Update payment record
         await db.prepare(
-          "UPDATE payments SET status = 'completed', stripe_payment_intent = ?, updated_at = NOW() WHERE stripe_checkout_id = ?"
+          "UPDATE payments SET status = 'completed', stripe_payment_intent = ? WHERE stripe_checkout_id = ?"
         ).run(session.payment_intent, session.id);
 
         // Update care session payment status
@@ -249,7 +249,7 @@ router.post("/webhook", express.raw({ type: "application/json" }), async (req, r
         const session = event.data.object;
         // Mark payment as failed/expired
         await db.prepare(
-          "UPDATE payments SET status = 'failed', updated_at = NOW() WHERE stripe_checkout_id = ?"
+          "UPDATE payments SET status = 'failed' WHERE stripe_checkout_id = ?"
         ).run(session.id);
 
         console.log(`❌ Checkout expired for session ${session.metadata?.inplace_session_id}`);
@@ -259,7 +259,7 @@ router.post("/webhook", express.raw({ type: "application/json" }), async (req, r
       case "payment_intent.payment_failed": {
         const intent = event.data.object;
         await db.prepare(
-          "UPDATE payments SET status = 'failed', updated_at = NOW() WHERE stripe_payment_intent = ?"
+          "UPDATE payments SET status = 'failed' WHERE stripe_payment_intent = ?"
         ).run(intent.id);
 
         // Also check background check payments
