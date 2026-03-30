@@ -1090,29 +1090,33 @@ async function initializeDatabase() {
     }
   } catch (e) { console.error("  Test session create error:", e.message); }
 
-  // ─── v1.56.16 — Force-complete today's test session (Pete already paid $2.17 via Stripe) ───
+  // ─── v1.56.17 — Waive ALL old test sessions, create fresh one for today ───
   try {
-    const testId = 'test-webhook-today-20260329';
-    const cs = await db.prepare("SELECT payment_status, review_completed FROM care_sessions WHERE id = ?").get(testId);
-    if (cs && cs.payment_status !== 'paid') {
-      await db.prepare("UPDATE care_sessions SET payment_status = 'paid', review_completed = 1, updated_at = NOW() WHERE id = ?").run(testId);
-      await db.prepare("UPDATE payments SET status = 'completed', updated_at = NOW() WHERE session_id = ? AND status != 'completed'").run(testId);
-      console.log(`  ✅ Force-completed test session ${testId} — Pete confirmed paid via Stripe`);
+    for (const oldId of ['test-webhook-1774827695917', 'test-webhook-1774829244377', 'test-webhook-today-20260329']) {
+      await db.prepare("UPDATE care_sessions SET payment_status = 'waived', review_required = 0 WHERE id = ? AND payment_status != 'waived'").run(oldId);
+      await db.prepare("UPDATE payments SET status = 'failed' WHERE session_id = ? AND status IN ('processing','pending')").run(oldId);
     }
   } catch (e) { /* already done */ }
 
-  // ─── v1.56.12/15 — Waive all old test sessions (keep only today's fresh one) ───
+  // Create fresh test session for webhook testing
   try {
-    for (const oldId of ['test-webhook-1774827695917', 'test-webhook-1774829244377']) {
-      await db.prepare(`
-        UPDATE care_sessions SET payment_status = 'waived', review_required = 0
-        WHERE id = ? AND payment_status != 'waived'
-      `).run(oldId);
-      await db.prepare(`
-        UPDATE payments SET status = 'failed' WHERE session_id = ? AND status = 'processing'
-      `).run(oldId);
+    const freshId = 'test-webhook-fresh-20260329';
+    const exists = await db.prepare("SELECT id FROM care_sessions WHERE id = ?").get(freshId);
+    if (!exists) {
+      const pete = await db.prepare("SELECT id FROM users WHERE email = 'peterjslee@gmail.com'").get();
+      const cary = await db.prepare("SELECT cp.id FROM caregiver_profiles cp JOIN users u ON cp.user_id = u.id WHERE u.first_name = 'Cary'").get();
+      const betty = await db.prepare("SELECT id FROM care_recipients WHERE first_name = 'Betty' LIMIT 1").get();
+      if (pete && cary && betty) {
+        await db.prepare(`
+          INSERT INTO care_sessions (id, care_recipient_id, family_user_id, caregiver_id, service_type,
+            status, scheduled_date, scheduled_time, duration_hours, estimated_cost,
+            proposed_rate, review_required, review_completed, payment_status)
+          VALUES (?, ?, ?, ?, 'Companionship', 'completed', '2026-03-29', '16:00', 0.5, 0.50, 1.00, 1, 0, 'pending')
+        `).run(freshId, betty.id, pete.id, cary.id);
+        console.log(`  ✅ Created fresh test session ${freshId} — $1/hr × 30min, needs review & payment`);
+      }
     }
-  } catch (e) { /* already done */ }
+  } catch (e) { console.error("  Fresh test session error:", e.message); }
 
   // ─── v1.50.55 — Rewrite FAQ articles with accurate content ───
   try {
