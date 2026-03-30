@@ -32,6 +32,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
 
   // Review gating state
   const [pendingReviews, setPendingReviews] = useState([]);
+  const [paidSessionIds, setPaidSessionIds] = useState([]); // sessions just paid via Stripe — hide tile immediately
   const [lateCheckInAlert, setLateCheckInAlert] = useState(null);
   // Care team invite banner
   const [pendingInvites, setPendingInvites] = useState([]);
@@ -277,6 +278,30 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
 
   useEffect(() => {
     fetchDashboard(); fetchUser(); fetchCareTeams(); fetchAnalytics(); fetchPendingReviews(); fetchPendingInvites(); fetchNotifications();
+
+    // ─── Handle return from Stripe checkout ───
+    const hash = window.location.hash;
+    if (hash.startsWith('#payment-success')) {
+      const params = new URLSearchParams(hash.replace('#payment-success?', ''));
+      const sessionId = params.get('session');
+      if (sessionId) {
+        // Immediately hide the tile so user sees feedback
+        setPaidSessionIds(prev => [...prev, sessionId]);
+        if (typeof showToast === 'function') showToast('Payment received — thank you!', 'success');
+        // Poll for webhook to confirm, then re-fetch to clean up
+        let polls = 0;
+        const poller = setInterval(async () => {
+          polls++;
+          await fetchPendingReviews();
+          if (polls >= 6) clearInterval(poller); // stop after ~18s
+        }, 3000);
+      }
+      window.history.replaceState({}, '', window.location.pathname);
+    } else if (hash.startsWith('#payment-cancel')) {
+      if (typeof showToast === 'function') showToast('Payment cancelled. You can try again from the tile above.', 'warning');
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+
     // Re-fetch when a new session is created (e.g. from RequestCareModal)
     const onSessionsUpdated = () => { fetchDashboard(); fetchPendingReviews(); fetchNotifications(); };
     window.addEventListener('sessions-updated', onSessionsUpdated);
@@ -848,12 +873,12 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
       )}
 
       {/* Pending Reviews & Payment — stacked at top until completed */}
-      {pendingReviews.length > 0 && (
+      {pendingReviews.filter(pr => !paidSessionIds.includes(pr.id)).length > 0 && (
         <div style={{ marginBottom: 16 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-error)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>
-            {'\u{1F6A8}'} Action Required ({pendingReviews.length})
+            {'\u{1F6A8}'} Action Required ({pendingReviews.filter(pr => !paidSessionIds.includes(pr.id)).length})
           </div>
-          {pendingReviews.map(pr => {
+          {pendingReviews.filter(pr => !paidSessionIds.includes(pr.id)).map(pr => {
             const isNoShow = !!pr.caregiver_no_show;
             const isPaid = pr.payment_status === 'paid';
             const cost = parseFloat(pr.estimated_cost || 0);
