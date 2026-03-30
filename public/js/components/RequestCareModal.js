@@ -314,6 +314,16 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
           title: isOpenRequest ? 'Care request posted!' : 'Care request sent!',
           details,
         });
+      } else if (response?.status === 402) {
+        const err = await response.json().catch(() => ({}));
+        if (err.code === 'NO_PAYMENT_METHOD') {
+          setSubmitError('A payment method is required to book sessions. Please add a card in your Payment Settings first.');
+        } else if (err.code === 'UNPAID_SESSIONS') {
+          const count = err.unpaidCount || 'some';
+          setSubmitError(`You have ${count} unpaid session${count !== 1 ? 's' : ''}. Please complete payment before booking new sessions.`);
+        } else {
+          setSubmitError(err.error || 'Payment issue — please check your payment settings.');
+        }
       } else {
         const err = await response.json().catch(() => ({}));
         setSubmitError(err.error || 'Failed to submit care request. Please try again.');

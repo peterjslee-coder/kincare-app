@@ -1890,7 +1890,13 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                           whiteSpace: 'nowrap',
                         }}>Check in {Math.ceil(minsUntilCheckIn)} min</button>
                       )}
-                      {!isReady && !isActive && !isUpcoming && (
+                      {s.status === 'payment_hold' && (
+                        <span style={{
+                          padding: '5px 12px', borderRadius: 10, fontSize: 11, fontWeight: 600,
+                          background: '#fff3e0', color: '#e65100',
+                        }}>On Hold — Payment</span>
+                      )}
+                      {!isReady && !isActive && !isUpcoming && s.status !== 'payment_hold' && (
                         <span style={{
                           padding: '5px 12px', borderRadius: 10, fontSize: 11, fontWeight: 600,
                           background: s.status === 'confirmed' ? 'var(--color-success-bg)' : 'var(--color-warning-bg)',
@@ -2211,10 +2217,10 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                       )}
                       <span style={{
                         padding: '5px 12px', borderRadius: 10, fontSize: 11, fontWeight: 600,
-                        background: s.status === 'confirmed' ? 'var(--color-success-bg)' : 'var(--color-warning-bg)',
-                        color: s.status === 'confirmed' ? 'var(--color-success)' : 'var(--color-warning)',
+                        background: s.status === 'payment_hold' ? '#fff3e0' : s.status === 'confirmed' ? 'var(--color-success-bg)' : 'var(--color-warning-bg)',
+                        color: s.status === 'payment_hold' ? '#e65100' : s.status === 'confirmed' ? 'var(--color-success)' : 'var(--color-warning)',
                         textTransform: 'capitalize',
-                      }}>{s.status}</span>
+                      }}>{s.status === 'payment_hold' ? 'On Hold — Payment' : s.status}</span>
                     </div>
                   </div>
                   {/* Expanded details */}
@@ -3103,6 +3109,12 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                           const refreshRes = await apiFetch('/api/dashboard');
                           if (refreshRes?.ok) setData(await refreshRes.json());
                         } catch (e) { /* refresh is best-effort */ }
+                      } else if (res?.status === 402) {
+                        const err = await res?.json().catch(() => null);
+                        showToast(err?.code === 'FAMILY_UNPAID'
+                          ? 'Check-in blocked — the family has an unpaid balance. They\'ve been notified.'
+                          : (err?.message || 'Check-in blocked — payment issue'), 'error');
+                        setCheckInSession(null);
                       } else {
                         const err = await res?.json().catch(() => null);
                         showToast(err?.message || err?.error || 'Check-in failed', 'error');

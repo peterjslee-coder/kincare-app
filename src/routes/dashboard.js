@@ -155,7 +155,7 @@ async function familyDashboard(db, userId, res) {
         WHERE (cs.family_user_id = ? OR cs.care_recipient_id IN (${recipientPlaceholders}))
           AND cs.scheduled_date >= ?
           AND cs.scheduled_date <= ?
-          AND cs.status IN ('pending', 'confirmed', 'open', 'requested', 'in_progress')
+          AND cs.status IN ('pending', 'confirmed', 'open', 'requested', 'in_progress', 'payment_hold')
         ORDER BY cs.id
       ) sub
       ORDER BY sub.scheduled_date ASC, sub.scheduled_time ASC
@@ -486,7 +486,7 @@ async function caregiverDashboard(db, userId, res) {
     LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
     LEFT JOIN users fu ON cs.family_user_id = fu.id
     LEFT JOIN visit_logs vl ON vl.session_id = cs.id
-    WHERE cs.caregiver_id = ? AND cs.scheduled_date >= ? AND cs.status IN ('pending', 'confirmed', 'in_progress')
+    WHERE cs.caregiver_id = ? AND cs.scheduled_date >= ? AND cs.status IN ('pending', 'confirmed', 'in_progress', 'payment_hold')
     ORDER BY cs.scheduled_date ASC, cs.scheduled_time ASC
     LIMIT 20
   `).all(profile.id, today);

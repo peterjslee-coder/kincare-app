@@ -1639,10 +1639,10 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
                       <span style={{
                         padding: '4px 10px', borderRadius: 10, fontSize: 11, fontWeight: 600,
-                        background: isActive ? 'var(--color-warning-bg)' : isImminent ? 'var(--color-warning-bg)' : s.status === 'confirmed' ? 'var(--color-success-bg)' : 'var(--color-warning-bg)',
-                        color: isActive ? 'var(--color-warning)' : isImminent ? 'var(--accent-color)' : s.status === 'confirmed' ? 'var(--color-success)' : 'var(--color-warning)',
+                        background: s.status === 'payment_hold' ? '#fff3e0' : isActive ? 'var(--color-warning-bg)' : isImminent ? 'var(--color-warning-bg)' : s.status === 'confirmed' ? 'var(--color-success-bg)' : 'var(--color-warning-bg)',
+                        color: s.status === 'payment_hold' ? '#e65100' : isActive ? 'var(--color-warning)' : isImminent ? 'var(--accent-color)' : s.status === 'confirmed' ? 'var(--color-success)' : 'var(--color-warning)',
                         textTransform: 'capitalize', whiteSpace: 'nowrap',
-                      }}>{isActive ? 'In Progress' : s.status}</span>
+                      }}>{s.status === 'payment_hold' ? 'On Hold' : isActive ? 'In Progress' : s.status}</span>
                       {['confirmed', 'pending', 'open', 'requested'].includes(s.status) && (
                         <button onClick={(e) => { e.stopPropagation(); setCancellingId(s.id); }}
                           style={{ padding: '3px 8px', borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--bg-surface)', color: 'var(--color-error)', fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>

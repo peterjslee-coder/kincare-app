@@ -9722,12 +9722,12 @@ const Dashboard = window.Dashboard = ({
           borderRadius: 10,
           fontSize: 11,
           fontWeight: 600,
-          background: isActive ? 'var(--color-warning-bg)' : isImminent ? 'var(--color-warning-bg)' : s.status === 'confirmed' ? 'var(--color-success-bg)' : 'var(--color-warning-bg)',
-          color: isActive ? 'var(--color-warning)' : isImminent ? 'var(--accent-color)' : s.status === 'confirmed' ? 'var(--color-success)' : 'var(--color-warning)',
+          background: s.status === 'payment_hold' ? '#fff3e0' : isActive ? 'var(--color-warning-bg)' : isImminent ? 'var(--color-warning-bg)' : s.status === 'confirmed' ? 'var(--color-success-bg)' : 'var(--color-warning-bg)',
+          color: s.status === 'payment_hold' ? '#e65100' : isActive ? 'var(--color-warning)' : isImminent ? 'var(--accent-color)' : s.status === 'confirmed' ? 'var(--color-success)' : 'var(--color-warning)',
           textTransform: 'capitalize',
           whiteSpace: 'nowrap'
         }
-      }, isActive ? 'In Progress' : s.status), ['confirmed', 'pending', 'open', 'requested'].includes(s.status) && /*#__PURE__*/React.createElement("button", {
+      }, s.status === 'payment_hold' ? 'On Hold' : isActive ? 'In Progress' : s.status), ['confirmed', 'pending', 'open', 'requested'].includes(s.status) && /*#__PURE__*/React.createElement("button", {
         onClick: e => {
           e.stopPropagation();
           setCancellingId(s.id);
@@ -26811,6 +26811,16 @@ const RequestCareModal = window.RequestCareModal = ({
           title: isOpenRequest ? 'Care request posted!' : 'Care request sent!',
           details
         });
+      } else if ((response === null || response === void 0 ? void 0 : response.status) === 402) {
+        const err = await response.json().catch(() => ({}));
+        if (err.code === 'NO_PAYMENT_METHOD') {
+          setSubmitError('A payment method is required to book sessions. Please add a card in your Payment Settings first.');
+        } else if (err.code === 'UNPAID_SESSIONS') {
+          const count = err.unpaidCount || 'some';
+          setSubmitError(`You have ${count} unpaid session${count !== 1 ? 's' : ''}. Please complete payment before booking new sessions.`);
+        } else {
+          setSubmitError(err.error || 'Payment issue — please check your payment settings.');
+        }
       } else {
         const err = await response.json().catch(() => ({}));
         setSubmitError(err.error || 'Failed to submit care request. Please try again.');
@@ -42121,7 +42131,16 @@ const CaretakerHub = window.CaretakerHub = ({
           cursor: 'default',
           whiteSpace: 'nowrap'
         }
-      }, "Check in ", Math.ceil(minsUntilCheckIn), " min"), !isReady && !isActive && !isUpcoming && /*#__PURE__*/React.createElement("span", {
+      }, "Check in ", Math.ceil(minsUntilCheckIn), " min"), s.status === 'payment_hold' && /*#__PURE__*/React.createElement("span", {
+        style: {
+          padding: '5px 12px',
+          borderRadius: 10,
+          fontSize: 11,
+          fontWeight: 600,
+          background: '#fff3e0',
+          color: '#e65100'
+        }
+      }, "On Hold \u2014 Payment"), !isReady && !isActive && !isUpcoming && s.status !== 'payment_hold' && /*#__PURE__*/React.createElement("span", {
         style: {
           padding: '5px 12px',
           borderRadius: 10,
@@ -42754,11 +42773,11 @@ const CaretakerHub = window.CaretakerHub = ({
           borderRadius: 10,
           fontSize: 11,
           fontWeight: 600,
-          background: s.status === 'confirmed' ? 'var(--color-success-bg)' : 'var(--color-warning-bg)',
-          color: s.status === 'confirmed' ? 'var(--color-success)' : 'var(--color-warning)',
+          background: s.status === 'payment_hold' ? '#fff3e0' : s.status === 'confirmed' ? 'var(--color-success-bg)' : 'var(--color-warning-bg)',
+          color: s.status === 'payment_hold' ? '#e65100' : s.status === 'confirmed' ? 'var(--color-success)' : 'var(--color-warning)',
           textTransform: 'capitalize'
         }
-      }, s.status))), isSchedExpanded && /*#__PURE__*/React.createElement("div", {
+      }, s.status === 'payment_hold' ? 'On Hold — Payment' : s.status))), isSchedExpanded && /*#__PURE__*/React.createElement("div", {
         style: {
           marginTop: 12,
           paddingTop: 10,
@@ -44783,6 +44802,10 @@ const CaretakerHub = window.CaretakerHub = ({
             const refreshRes = await apiFetch('/api/dashboard');
             if (refreshRes !== null && refreshRes !== void 0 && refreshRes.ok) setData(await refreshRes.json());
           } catch (e) {/* refresh is best-effort */}
+        } else if ((res === null || res === void 0 ? void 0 : res.status) === 402) {
+          const err = await (res === null || res === void 0 ? void 0 : res.json().catch(() => null));
+          showToast((err === null || err === void 0 ? void 0 : err.code) === 'FAMILY_UNPAID' ? 'Check-in blocked — the family has an unpaid balance. They\'ve been notified.' : (err === null || err === void 0 ? void 0 : err.message) || 'Check-in blocked — payment issue', 'error');
+          setCheckInSession(null);
         } else {
           const err = await (res === null || res === void 0 ? void 0 : res.json().catch(() => null));
           showToast((err === null || err === void 0 ? void 0 : err.message) || (err === null || err === void 0 ? void 0 : err.error) || 'Check-in failed', 'error');

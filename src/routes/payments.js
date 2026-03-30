@@ -242,6 +242,12 @@ router.post("/webhook", express.raw({ type: "application/json" }), async (req, r
         }
 
         console.log(`✅ Payment completed for session ${sessionId}${tipCents > 0 ? ` (includes $${(tipCents/100).toFixed(2)} tip)` : ''}`);
+
+        // Restore held sessions if family's balance is now clear
+        const webhookFamilyUserId = session.metadata?.inplace_family_user_id || session.metadata?.inplace_paid_by_user_id;
+        if (webhookFamilyUserId) {
+          try { await restoreHeldSessions(webhookFamilyUserId, null); } catch (e) { console.error('[webhook] Restore held sessions error:', e.message); }
+        }
         break;
       }
 
@@ -1533,6 +1539,9 @@ async function processOverduePayments(pushFn) {
             data: { type: 'payment_auto_charged', sessionId: s.id, page: 'home' },
           }, 'payment_auto_charged').catch(() => {});
         }
+
+        // Check if family's held sessions can be restored
+        await restoreHeldSessions(s.family_user_id || s.billing_user_id, pushFn);
       } catch (err) {
         // STP "authentication_required" = card needs 3DS, can't auto-charge
         if (err.code === 'authentication_required') {
@@ -1551,6 +1560,70 @@ async function processOverduePayments(pushFn) {
     }
   } catch (err) {
     console.error("[auto-pay] Overdue payment processing error:", err.message);
+  }
+}
+
+// ─── Restore held sessions when family clears their balance ───
+async function restoreHeldSessions(familyUserId, pushFn) {
+  const db = await getDb();
+  try {
+    // Check if this family still has unpaid completed sessions
+    const remaining = await db.prepare(`
+      SELECT cs.id FROM care_sessions cs
+      WHERE cs.family_user_id = ? AND cs.status = 'completed'
+        AND (cs.payment_status IS NULL OR cs.payment_status IN ('pending', 'failed'))
+        AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.session_id = cs.id AND p.status IN ('completed', 'processing'))
+        AND cs.estimated_cost > 0
+      LIMIT 1
+    `).get(familyUserId);
+
+    if (remaining) return; // Still has unpaid sessions — keep holds
+
+    // All clear — restore payment_hold sessions back to confirmed
+    const held = await db.prepare(`
+      SELECT cs.id, cs.scheduled_date, cs.caregiver_id,
+        u.first_name AS cg_first_name,
+        fu.first_name AS family_first_name
+      FROM care_sessions cs
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      LEFT JOIN users u ON cp.user_id = u.id
+      LEFT JOIN users fu ON cs.family_user_id = fu.id
+      WHERE cs.family_user_id = ? AND cs.status = 'payment_hold'
+    `).all(familyUserId);
+
+    for (const s of held) {
+      await db.prepare("UPDATE care_sessions SET status = 'confirmed', updated_at = NOW() WHERE id = ?").run(s.id);
+      console.log(`✅ Restored session ${s.id} from payment_hold → confirmed`);
+
+      // Notify caregiver
+      if (pushFn && s.caregiver_id) {
+        try {
+          const cgUser = await db.prepare("SELECT user_id FROM caregiver_profiles WHERE id = ?").get(s.caregiver_id);
+          if (cgUser) {
+            pushFn(cgUser.user_id, {
+              title: 'Session restored',
+              body: `Your ${s.scheduled_date} session with ${s.family_first_name || 'a family'} is back on! Payment issue resolved.`,
+              data: { type: 'session_restored', sessionId: s.id, page: 'home' },
+            }, 'session_restored').catch(() => {});
+          }
+        } catch {}
+      }
+
+      // Notify family
+      if (pushFn) {
+        pushFn(familyUserId, {
+          title: 'Session restored',
+          body: `Your ${s.scheduled_date} session with ${s.cg_first_name || 'your caregiver'} is confirmed again. Thank you for paying!`,
+          data: { type: 'session_restored', sessionId: s.id, page: 'home' },
+        }, 'session_restored').catch(() => {});
+      }
+    }
+
+    if (held.length > 0) {
+      console.log(`✅ Restored ${held.length} held session(s) for family user ${familyUserId}`);
+    }
+  } catch (err) {
+    console.error(`[restore-holds] Error for family ${familyUserId}:`, err.message);
   }
 }
 
