@@ -61,7 +61,9 @@ router.post("/webhook", express.raw({ type: "application/json" }), async (req, r
       const stripe = getStripe();
       event = stripe.webhooks.constructEvent(req.body, sig, WEBHOOK_SECRET);
     } catch (err) {
-      console.error("Webhook signature verification failed:", err.message);
+      console.error("⚠️  Webhook signature verification failed:", err.message);
+      // Log the sig header prefix so we can identify which Stripe source sent this
+      console.error(`  → stripe-signature header starts with: ${(sig || '').substring(0, 30)}...`);
       return res.status(400).json({ error: "Webhook signature verification failed" });
     }
   } else {
@@ -172,9 +174,39 @@ router.post("/webhook", express.raw({ type: "application/json" }), async (req, r
         }
 
         // Handle regular care session payment
-        const sessionId = session.metadata?.inplace_session_id;
+        let sessionId = session.metadata?.inplace_session_id;
+        if (!sessionId && session.id) {
+          // Metadata missing — likely thin event or Event Destination format
+          // Fetch the full checkout session from Stripe to get metadata
+          console.warn(`⚠️  No inplace_session_id in event metadata — fetching full session from Stripe (id: ${session.id})`);
+          try {
+            const fullSession = await getStripe().checkout.sessions.retrieve(session.id);
+            sessionId = fullSession.metadata?.inplace_session_id;
+            if (sessionId) {
+              // Backfill the session object with full data so tip/payment processing works
+              Object.assign(session, fullSession);
+              console.log(`  → Fetched full session — found inplace_session_id: ${sessionId}`);
+            }
+          } catch (fetchErr) {
+            console.error(`  → Failed to fetch full session: ${fetchErr.message}`);
+          }
+        }
         if (!sessionId) {
-          console.warn(`⚠️  checkout.session.completed has NO inplace_session_id in metadata — skipping DB update. metadata keys: ${Object.keys(session.metadata || {}).join(', ')}`);
+          // Also try lookup by stripe_checkout_id in our payments table as last resort
+          if (session.id) {
+            try {
+              const paymentRow = await db.prepare("SELECT session_id FROM payments WHERE stripe_checkout_id = ?").get(session.id);
+              if (paymentRow?.session_id) {
+                sessionId = paymentRow.session_id;
+                console.log(`  → Found session_id via payments table lookup: ${sessionId}`);
+              }
+            } catch (lookupErr) {
+              console.error(`  → Payments table lookup failed: ${lookupErr.message}`);
+            }
+          }
+        }
+        if (!sessionId) {
+          console.warn(`⚠️  checkout.session.completed has NO inplace_session_id — all lookups failed. event metadata keys: ${Object.keys(session.metadata || {}).join(', ')}, session.id: ${session.id || 'missing'}`);
           break;
         }
         console.log(`  → Processing care session payment for ${sessionId}`);

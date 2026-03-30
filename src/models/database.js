@@ -1170,6 +1170,17 @@ async function initializeDatabase() {
     }
   } catch (faqErr) { console.error("  FAQ refresh error:", faqErr.message); }
 
+  // ─── v1.56.19 — Force-complete the test session Pete just paid ───
+  try {
+    const freshId = 'test-webhook-fresh-20260329';
+    const row = await db.prepare("SELECT payment_status FROM care_sessions WHERE id = ?").get(freshId);
+    if (row && row.payment_status !== 'paid') {
+      await db.prepare("UPDATE care_sessions SET payment_status = 'paid', updated_at = NOW() WHERE id = ?").run(freshId);
+      await db.prepare("UPDATE payments SET status = 'completed', updated_at = NOW() WHERE session_id = ? AND status IN ('processing','pending')").run(freshId);
+      console.log(`  ✅ Force-completed payment for ${freshId} (webhook was failing due to duplicate destinations)`);
+    }
+  } catch (e) { console.error("  Force-complete error:", e.message); }
+
   console.log("  Database initialized successfully");
   return db;
 }
