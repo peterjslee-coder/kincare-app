@@ -1767,12 +1767,10 @@ router.post("/manual", requireRole("family"), requirePaymentsEnabled, async (req
     const familyUser = await db.prepare("SELECT first_name, last_name, stripe_customer_id FROM users WHERE id = ?").get(req.user.id);
     const caregiverAmountCents = Math.round(amount * 100);
 
-    // Gross up to cover Stripe processing fees (card rate: 2.9% + $0.30)
-    // Formula: grossAmount = (caregiverAmount + 30) / (1 - 0.029), rounded up
-    // This way: Stripe fee ≈ 2.9% * grossAmount + $0.30 ≈ the difference
-    // Caregiver gets exactly what the family intended
-    const grossAmountCents = Math.ceil((caregiverAmountCents + 30) / (1 - 0.029));
-    const processingFeeCents = grossAmountCents - caregiverAmountCents;
+    // Same fee structure as session payments:
+    // 20% platform fee on caregiver amount, Stripe's 2.9%+30¢ comes out of InPlace's cut
+    const platformFeeCents = Math.round(caregiverAmountCents * PLATFORM_FEE_PERCENT / 100);
+    const grandTotalCents = caregiverAmountCents + platformFeeCents;
 
     // Create checkout session — attach customer so Stripe shows their saved payment methods
     const checkoutParams = {
@@ -1794,16 +1792,16 @@ router.post("/manual", requireRole("family"), requirePaymentsEnabled, async (req
           price_data: {
             currency: "usd",
             product_data: {
-              name: "Processing fee",
-              description: "Stripe payment processing — InPlace takes no platform fee",
+              name: "InPlace service fee",
+              description: "20% platform fee",
             },
-            unit_amount: processingFeeCents,
+            unit_amount: platformFeeCents,
           },
           quantity: 1,
         },
       ],
       payment_intent_data: {
-        application_fee_amount: processingFeeCents, // Covers Stripe fee, InPlace nets ~$0
+        application_fee_amount: platformFeeCents, // InPlace keeps this; Stripe fees come out of it
         transfer_data: {
           destination: caregiver.stripe_account_id,
         },
@@ -1816,7 +1814,7 @@ router.post("/manual", requireRole("family"), requirePaymentsEnabled, async (req
         from_user_id: req.user.id,
         note: note || "",
         caregiver_amount_cents: String(caregiverAmountCents),
-        processing_fee_cents: String(processingFeeCents),
+        platform_fee_cents: String(platformFeeCents),
       },
     };
 
