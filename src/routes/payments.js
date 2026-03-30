@@ -931,19 +931,12 @@ router.post("/checkout", requireRole("family"), requirePaymentsEnabled, async (r
     platformFeeCents += Math.round(surchargeCents * SURCHARGE_PLATFORM_SHARE);
   }
 
-  // Subtotal before Stripe = caregiver pay + surcharge + platform fee + tip
   // Caregiver receives: caregiverPayCents + surchargeCents + tipCents (all of it, no deductions)
   const caregiverTotalCents = caregiverPayCents + surchargeCents + tipCents;
-  const subtotalBeforeStripeCents = caregiverTotalCents + platformFeeCents;
 
-  // Gross up for Stripe processing fees (2.9% + $0.30) so platform balance stays neutral
-  // Formula: grossAmount = (subtotal + 30) / (1 - 0.029), rounded up
-  const grossedTotalCents = Math.ceil((subtotalBeforeStripeCents + 30) / (1 - 0.029));
-  const processingFeeCents = grossedTotalCents - subtotalBeforeStripeCents;
-
-  // Family pays grossedTotalCents. Caregiver gets caregiverTotalCents. Platform gets platformFeeCents.
-  // Stripe gets ~processingFeeCents (taken from application_fee_amount in destination charges).
-  const grandTotalCents = grossedTotalCents;
+  // Family pays: caregiver total + platform fee. That's it.
+  // Stripe's 2.9% + 30¢ comes out of InPlace's 20% cut — NOT added on top for the family.
+  const grandTotalCents = caregiverTotalCents + platformFeeCents;
 
   try {
     // If a billing contact is set for this care recipient's team, use their Stripe customer
@@ -977,22 +970,23 @@ router.post("/checkout", requireRole("family"), requirePaymentsEnabled, async (r
         quantity: 1,
       });
     }
-    // Platform fee + processing fee — both paid by family, on top of caregiver's pay
+    // Platform fee — 20% of caregiver compensation, paid by family on top
+    // Stripe's processing fee comes out of this (InPlace absorbs it)
     lineItems.push({
       price_data: {
         currency: "usd",
         product_data: {
-          name: "InPlace fee + payment processing",
-          description: `20% platform fee ($${(platformFeeCents / 100).toFixed(2)}) + Stripe processing ($${(processingFeeCents / 100).toFixed(2)})`,
+          name: "InPlace service fee",
+          description: `20% platform fee ($${(platformFeeCents / 100).toFixed(2)})`,
         },
-        unit_amount: platformFeeCents + processingFeeCents,
+        unit_amount: platformFeeCents,
       },
       quantity: 1,
     });
 
-    // application_fee_amount = platform fee + processing fee (Stripe takes their cut from this)
+    // application_fee_amount = platform fee (Stripe takes their 2.9%+30¢ from this)
     // Caregiver receives: grandTotalCents - application_fee_amount = caregiverTotalCents
-    const applicationFeeCents = platformFeeCents + processingFeeCents;
+    const applicationFeeCents = platformFeeCents;
 
     const checkoutParams = {
       mode: "payment",
@@ -1034,7 +1028,7 @@ router.post("/checkout", requireRole("family"), requirePaymentsEnabled, async (r
       checkoutSession.id, tipCents, tipReason || null
     );
 
-    console.log(`💳 Checkout created: session=${sessionId} caregiver=$${(caregiverTotalCents/100).toFixed(2)} platform=$${(platformFeeCents/100).toFixed(2)} processing=$${(processingFeeCents/100).toFixed(2)} total=$${(grandTotalCents/100).toFixed(2)}`);
+    console.log(`💳 Checkout created: session=${sessionId} caregiver=$${(caregiverTotalCents/100).toFixed(2)} platform=$${(platformFeeCents/100).toFixed(2)} total=$${(grandTotalCents/100).toFixed(2)}`);
 
     res.json({
       checkoutUrl: checkoutSession.url,
@@ -1043,7 +1037,6 @@ router.post("/checkout", requireRole("family"), requirePaymentsEnabled, async (r
       sessionCost: (caregiverPayCents + surchargeCents) / 100,
       tipAmount: tipCents / 100,
       platformFee: platformFeeCents / 100,
-      processingFee: processingFeeCents / 100,
       caregiverPayout: caregiverTotalCents / 100,
       achAvailable: true,
       billingContact: session.billing_user_id ? session.billing_contact_name : null,
@@ -1473,12 +1466,9 @@ async function processOverduePayments(pushFn) {
           platformFeeCents += Math.round(surchargeCents * SURCHARGE_PLATFORM_SHARE);
         }
 
-        // Gross up for Stripe fees so platform balance stays neutral
-        const subtotalCents = caregiverTotalCents + platformFeeCents;
-        const grossedTotalCents = Math.ceil((subtotalCents + 30) / (1 - 0.029));
-        const processingFeeCents = grossedTotalCents - subtotalCents;
-        const totalCents = grossedTotalCents;
-        const applicationFeeCents = platformFeeCents + processingFeeCents;
+        // Family pays caregiver + platform fee. Stripe's cut comes out of InPlace's 20%.
+        const totalCents = caregiverTotalCents + platformFeeCents;
+        const applicationFeeCents = platformFeeCents;
 
         if (totalCents < 50) continue; // Stripe minimum is $0.50
 
@@ -1529,7 +1519,7 @@ async function processOverduePayments(pushFn) {
         // Mark session as paid
         await db.prepare("UPDATE care_sessions SET payment_status = 'paid', updated_at = NOW() WHERE id = ?").run(s.id);
 
-        console.log(`💳 Auto-pay: session ${s.id} — caregiver=$${(caregiverTotalCents/100).toFixed(2)}${tipCents > 0 ? ` (includes $${(tipCents/100).toFixed(2)} tip)` : ''} platform=$${(platformFeeCents/100).toFixed(2)} processing=$${(processingFeeCents/100).toFixed(2)} total=$${(totalCents/100).toFixed(2)}`);
+        console.log(`💳 Auto-pay: session ${s.id} — caregiver=$${(caregiverTotalCents/100).toFixed(2)}${tipCents > 0 ? ` (includes $${(tipCents/100).toFixed(2)} tip)` : ''} platform=$${(platformFeeCents/100).toFixed(2)} total=$${(totalCents/100).toFixed(2)}`);
 
         // Notify family
         if (pushFn && s.family_user_id) {
