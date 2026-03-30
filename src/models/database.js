@@ -349,6 +349,7 @@ async function initializeDatabase() {
     `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMPTZ`,
     `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS late_cancel INTEGER DEFAULT 0`,
     `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS cancelled_caregiver_id TEXT`,
+    `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS cancel_reason TEXT`,
     // v1.21.7 — Reviews: allow review_type to track cancellation reviews
     `ALTER TABLE reviews ADD COLUMN IF NOT EXISTS review_type TEXT DEFAULT 'completion'`,
     // v1.21.9 — Onboarding event tracking (errors, completions, drop-offs)

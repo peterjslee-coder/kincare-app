@@ -303,7 +303,7 @@ app.use("/api/referrals", require("./routes/referrals"));
 app.use("/api/kindred", require("./routes/kindred"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.57.6";
+const APP_VERSION = "1.57.7";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });
@@ -774,7 +774,7 @@ async function start() {
       const dueReminders = await db.prepare(`
         SELECT vr.*, cr.first_name AS recipient_name, cr.id AS recipient_id
         FROM voice_reminders vr
-        LEFT JOIN care_recipients cr ON vr.care_recipient_id = cr.id
+        LEFT JOIN care_recipients cr ON vr.care_recipient_id::text = cr.id
         WHERE vr.status = 'pending'
           AND vr.scheduled_for <= ?
           AND vr.scheduled_for >= ?
@@ -820,7 +820,7 @@ async function start() {
         if (emitToUser) {
           // Find the family user associated with this care recipient
           try {
-            const family = await db.prepare("SELECT family_user_id FROM care_recipients WHERE id = ?").get(reminder.care_recipient_id);
+            const family = await db.prepare("SELECT family_user_id FROM care_recipients WHERE id = ?::text").get(reminder.care_recipient_id);
             if (family?.family_user_id) {
               emitToUser(family.family_user_id, "reminder_delivered", {
                 reminderId: reminder.id,
