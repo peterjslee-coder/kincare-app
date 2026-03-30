@@ -1181,9 +1181,13 @@ async function initializeDatabase() {
     }
   } catch (e) { console.error("  Force-complete error:", e.message); }
 
-  // ─── v1.56.20 — Fresh test session for webhook end-to-end test ───
+  // ─── v1.56.22 — Waive old e2e test, create fresh one ───
   try {
-    const testId = 'test-webhook-e2e-20260329';
+    await db.prepare("UPDATE care_sessions SET payment_status = 'waived', review_required = 0 WHERE id = 'test-webhook-e2e-20260329'").run();
+    await db.prepare("UPDATE payments SET status = 'failed' WHERE session_id = 'test-webhook-e2e-20260329' AND status IN ('processing','pending')").run();
+  } catch (e) { /* ignore */ }
+  try {
+    const testId = 'test-webhook-e2e2-20260329';
     const exists = await db.prepare("SELECT id FROM care_sessions WHERE id = ?").get(testId);
     if (!exists) {
       const pete = await db.prepare("SELECT id FROM users WHERE email = 'peterjslee@gmail.com'").get();
@@ -1194,7 +1198,7 @@ async function initializeDatabase() {
           INSERT INTO care_sessions (id, care_recipient_id, family_user_id, caregiver_id, service_type,
             status, scheduled_date, scheduled_time, duration_hours, estimated_cost,
             proposed_rate, review_required, review_completed, payment_status)
-          VALUES (?, ?, ?, ?, 'Companionship', 'completed', '2026-03-29', '18:00', 0.25, 0.25, 1.00, 1, 0, 'pending')
+          VALUES (?, ?, ?, ?, 'Companionship', 'completed', '2026-03-29', '19:00', 0.25, 0.25, 1.00, 1, 0, 'pending')
         `).run(testId, betty.id, pete.id, cary.id);
         console.log(`  ✅ Created e2e test session ${testId} — $1/hr × 15min = $0.25, needs review & payment`);
       }
