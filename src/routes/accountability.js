@@ -379,6 +379,7 @@ router.get("/pending-reviews", requireRole("family"), async (req, res) => {
         cs.caregiver_id, cs.status, cs.caregiver_no_show,
         cs.payment_due_at, cs.payment_status, cs.estimated_cost, cs.short_notice_surcharge,
         cs.service_type, cs.proposed_rate, cs.review_completed,
+        cs.pending_tip_cents, cs.pending_tip_reason,
         u.first_name || ' ' || u.last_name AS caregiver_name,
         cr.first_name AS recipient_first_name,
         cs.review_reminded_at
@@ -399,6 +400,7 @@ router.get("/pending-reviews", requireRole("family"), async (req, res) => {
         cs.caregiver_id, cs.status, cs.caregiver_no_show,
         cs.payment_due_at, cs.payment_status, cs.estimated_cost, cs.short_notice_surcharge,
         cs.service_type, cs.proposed_rate, cs.review_completed,
+        cs.pending_tip_cents, cs.pending_tip_reason,
         u.first_name || ' ' || u.last_name AS caregiver_name,
         cr.first_name AS recipient_first_name,
         cs.review_reminded_at

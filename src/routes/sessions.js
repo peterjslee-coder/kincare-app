@@ -1536,6 +1536,34 @@ router.post("/:id/check-out", async (req, res) => {
   }
 });
 
+// ─── POST /api/sessions/:id/pending-tip ───
+// Family sets a tip during the auto-pay grace period (before payment_due_at)
+// Stored on the session; included when auto-pay fires
+router.post("/:id/pending-tip", requireRole("family"), async (req, res) => {
+  try {
+    const db = await getDb();
+    const { tipCents, tipReason } = req.body;
+    const safeTipCents = Math.max(0, Math.min(50000, Math.round(tipCents || 0)));
+
+    const session = await db.prepare(
+      "SELECT id, family_user_id, status, payment_status FROM care_sessions WHERE id = ? AND family_user_id = ?"
+    ).get(req.params.id, req.user.id);
+
+    if (!session) return res.status(404).json({ error: "Session not found" });
+    if (session.payment_status === 'paid') return res.status(400).json({ error: "Session already paid" });
+
+    await db.prepare(
+      "UPDATE care_sessions SET pending_tip_cents = ?, pending_tip_reason = ?, updated_at = NOW() WHERE id = ?"
+    ).run(safeTipCents, tipReason || null, req.params.id);
+
+    console.log(`💛 Pending tip set: $${(safeTipCents/100).toFixed(2)} for session ${req.params.id}`);
+    res.json({ success: true, tipCents: safeTipCents });
+  } catch (err) {
+    console.error("Pending tip error:", err);
+    res.status(500).json({ error: "Failed to save tip" });
+  }
+});
+
 // ─── PUT /api/sessions/:id/cancel ───
 // Cancel a confirmed/pending session with late-cancel tracking
 router.put("/:id/cancel", async (req, res) => {

@@ -1021,6 +1021,9 @@ async function initializeDatabase() {
       created_at TIMESTAMPTZ DEFAULT NOW()
     )`,
     `CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id, read, created_at DESC)`,
+    // ─── v1.57.0 — Pre-set tip for auto-pay grace period ───
+    `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS pending_tip_cents INTEGER DEFAULT 0`,
+    `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS pending_tip_reason TEXT`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }

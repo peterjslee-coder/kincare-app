@@ -1390,7 +1390,7 @@ async function processOverduePayments(pushFn) {
     const overdue = await db.prepare(`
       SELECT cs.id, cs.family_user_id, cs.caregiver_id, cs.estimated_cost, cs.duration_hours,
         cs.short_notice_surcharge, cs.scheduled_date, cs.scheduled_time, cs.service_type,
-        cs.care_recipient_id,
+        cs.care_recipient_id, cs.pending_tip_cents, cs.pending_tip_reason,
         cp.stripe_account_id, cp.stripe_onboard_complete, cp.user_id AS caregiver_user_id,
         cp.hourly_rate,
         u.first_name || ' ' || u.last_name AS caregiver_name,
@@ -1448,8 +1448,9 @@ async function processOverduePayments(pushFn) {
           continue;
         }
 
-        // Calculate cost (no tip for auto-pay)
-        // CORE PRINCIPLE: Caregiver gets EXACTLY their pay. Fees go on top, charged to family.
+        // Calculate cost — include pending tip if family set one during grace period
+        // CORE PRINCIPLE: Caregiver gets EXACTLY their pay + tip. Fees go on top, charged to family.
+        const tipCents = Math.max(0, parseInt(s.pending_tip_cents) || 0);
         const rawDuration = s.duration_hours || 2;
         const roundedDuration = Math.ceil(rawDuration * 4) / 4; // 15-min increments
         const effectiveRate = (s.proposed_rate && parseFloat(s.proposed_rate) > 0)
@@ -1458,9 +1459,10 @@ async function processOverduePayments(pushFn) {
           ? Math.round(effectiveRate * roundedDuration * 100)
           : Math.round((s.estimated_cost || 0) * 100); // fallback to estimated_cost for tiered rates
         const surchargeCents = Math.round((s.short_notice_surcharge || 0) * 100);
-        const caregiverTotalCents = caregiverPayCents + surchargeCents; // no tip in auto-pay
+        const caregiverTotalCents = caregiverPayCents + surchargeCents + tipCents;
 
-        let platformFeeCents = Math.round(caregiverPayCents * PLATFORM_FEE_PERCENT / 100);
+        // Platform fee: 20% of caregiver pay + tip (tips are compensation), plus surcharge share
+        let platformFeeCents = Math.round((caregiverPayCents + tipCents) * PLATFORM_FEE_PERCENT / 100);
         if (surchargeCents > 0) {
           platformFeeCents += Math.round(surchargeCents * SURCHARGE_PLATFORM_SHARE);
         }
@@ -1489,25 +1491,39 @@ async function processOverduePayments(pushFn) {
             inplace_family_user_id: s.family_user_id,
             inplace_caregiver_id: s.caregiver_id,
             inplace_auto_charged: "true",
+            inplace_tip_cents: String(tipCents),
+            inplace_tip_reason: s.pending_tip_reason || "",
           },
-          description: `Auto-pay: ${s.service_type} on ${s.scheduled_date} with ${s.caregiver_name || 'Caregiver'}`,
+          description: `Auto-pay: ${s.service_type} on ${s.scheduled_date} with ${s.caregiver_name || 'Caregiver'}${tipCents > 0 ? ` (includes $${(tipCents/100).toFixed(2)} tip)` : ''}`,
         });
 
         // Record payment
         const paymentId = uuid();
         await db.prepare(`
-          INSERT INTO payments (id, session_id, family_user_id, caregiver_id, amount, platform_fee, caregiver_payout, status, payment_method, stripe_payment_intent, tip_cents, auto_charged, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, 'completed', 'stripe', ?, 0, 1, NOW())
+          INSERT INTO payments (id, session_id, family_user_id, caregiver_id, amount, platform_fee, caregiver_payout, status, payment_method, stripe_payment_intent, tip_cents, tip_reason, auto_charged, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, 'completed', 'stripe', ?, ?, ?, 1, NOW())
         `).run(
           paymentId, s.id, s.billing_user_id || s.family_user_id, s.caregiver_id,
           totalCents / 100, platformFeeCents / 100, caregiverTotalCents / 100,
-          intent.id
+          intent.id, tipCents, s.pending_tip_reason || null
         );
+
+        // Create tip record if tip was included (so it shows in caregiver dashboard)
+        if (tipCents > 0) {
+          try {
+            const existingTip = await db.prepare("SELECT id FROM tips WHERE session_id = ?").get(s.id);
+            if (!existingTip) {
+              await db.prepare(
+                "INSERT INTO tips (id, session_id, family_user_id, caregiver_id, amount_cents, reason_text) VALUES (?, ?, ?, ?, ?, ?)"
+              ).run(uuid(), s.id, s.billing_user_id || s.family_user_id, s.caregiver_id, tipCents, s.pending_tip_reason || null);
+            }
+          } catch (tipErr) { console.error("[auto-pay] Tip record error (non-blocking):", tipErr.message); }
+        }
 
         // Mark session as paid
         await db.prepare("UPDATE care_sessions SET payment_status = 'paid', updated_at = NOW() WHERE id = ?").run(s.id);
 
-        console.log(`💳 Auto-pay: session ${s.id} — caregiver=$${(caregiverTotalCents/100).toFixed(2)} platform=$${(platformFeeCents/100).toFixed(2)} processing=$${(processingFeeCents/100).toFixed(2)} total=$${(totalCents/100).toFixed(2)}`);
+        console.log(`💳 Auto-pay: session ${s.id} — caregiver=$${(caregiverTotalCents/100).toFixed(2)}${tipCents > 0 ? ` (includes $${(tipCents/100).toFixed(2)} tip)` : ''} platform=$${(platformFeeCents/100).toFixed(2)} processing=$${(processingFeeCents/100).toFixed(2)} total=$${(totalCents/100).toFixed(2)}`);
 
         // Notify family
         if (pushFn && s.family_user_id) {

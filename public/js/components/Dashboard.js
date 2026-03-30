@@ -35,6 +35,9 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
   const [pendingReviews, setPendingReviews] = useState([]);
   const [paidSessionIds, setPaidSessionIds] = useState([]); // sessions just paid via Stripe — hide tile immediately
   const [lateCheckInAlert, setLateCheckInAlert] = useState(null);
+  // Inline tip state for auto-pay tiles (keyed by session id)
+  const [pendingTips, setPendingTips] = useState({}); // { sessionId: { cents, reason, saving, saved } }
+  const [customTipInput, setCustomTipInput] = useState({}); // { sessionId: string }
   // Care team invite banner
   const [pendingInvites, setPendingInvites] = useState([]);
   const [acceptingInviteId, setAcceptingInviteId] = useState(null);
@@ -197,53 +200,9 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
         body: JSON.stringify({ rating: reviewRating, comment: reviewComment }),
       });
       if (res?.ok) {
-        const finalTipCents = tipAmount === 'custom' ? Math.round(parseFloat(tipCustom || '0') * 100) : (tipAmount || 0);
-        const sessionCost = parseFloat(reviewSession.estimated_cost || 0);
-        const isPaid = reviewSession.payment_status === 'paid';
-        const isNoShow = !!reviewSession.caregiver_no_show;
-
-        // If session has a cost and isn't paid yet, redirect to Stripe checkout (with tip bundled)
-        if (sessionCost > 0 && !isPaid && !isNoShow) {
-          try {
-            const checkoutRes = await apiFetch('/api/payments/checkout', {
-              method: 'POST',
-              body: JSON.stringify({
-                sessionId: reviewSession.id,
-                tipCents: finalTipCents >= 100 ? finalTipCents : 0,
-                tipReason: finalTipCents >= 100 ? (tipReason || null) : null,
-              }),
-            });
-            if (checkoutRes?.ok) {
-              const checkout = await checkoutRes.json();
-              if (typeof showToast === 'function') showToast('Review submitted! Redirecting to payment...', 'success');
-              // Redirect to Stripe Checkout
-              window.location.href = checkout.checkoutUrl;
-              return; // Don't reset state — page is navigating away
-            } else {
-              const checkoutErr = await checkoutRes?.json().catch(() => ({}));
-              // If payments disabled or caregiver not set up, still save the review
-              if (checkoutErr?.paymentsDisabled) {
-                if (typeof showToast === 'function') showToast('Review submitted! Payment is not enabled yet.', 'info');
-              } else {
-                if (typeof showToast === 'function') showToast(checkoutErr?.error || 'Review saved but payment failed to start. You can pay later.', 'warning');
-              }
-            }
-          } catch (payErr) {
-            console.error('Checkout error:', payErr);
-            if (typeof showToast === 'function') showToast('Review saved but payment failed to start.', 'warning');
-          }
-        } else {
-          // No payment needed (no-show, already paid, or $0 cost) — just record tip separately if any
-          if (finalTipCents >= 100) {
-            try {
-              await apiFetch(`/api/sessions/${reviewSession.id}/tip`, {
-                method: 'POST',
-                body: JSON.stringify({ amount_cents: finalTipCents, reason_text: tipReason || null }),
-              });
-            } catch (e) { console.error('Tip submission error:', e); }
-          }
-          if (typeof showToast === 'function') showToast(finalTipCents >= 100 ? 'Review & tip submitted! Thank you.' : 'Review submitted! Thank you.', 'success');
-        }
+        // v1.57.0 — Review is decoupled from payment. Auto-pay handles charges.
+        // Just save the review and show a thank you.
+        showToast('Review submitted! Thank you.', 'success');
 
         setReviewSession(null);
         setReviewRating(0);
@@ -873,130 +832,201 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
         </div>
       )}
 
-      {/* Pending Reviews & Payment — stacked at top until completed */}
+      {/* Session Complete — Auto-pay with optional tip & review */}
       {pendingReviews.filter(pr => !paidSessionIds.includes(pr.id)).length > 0 && (
         <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-error)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>
-            {'\u{1F6A8}'} Action Required ({pendingReviews.filter(pr => !paidSessionIds.includes(pr.id)).length})
-          </div>
           {pendingReviews.filter(pr => !paidSessionIds.includes(pr.id)).map(pr => {
             const isNoShow = !!pr.caregiver_no_show;
             const isPaid = pr.payment_status === 'paid';
             const cost = parseFloat(pr.estimated_cost || 0);
             const hasCost = cost > 0 && !isNoShow;
-            const alreadyReviewed = !!pr.review_completed; // v1.56.3 — reviewed but payment failed
+            const alreadyReviewed = !!pr.review_completed;
+            const firstName = pr.caregiver_name?.split(' ')[0] || 'Caregiver';
 
             const dueAt = pr.payment_due_at ? new Date(pr.payment_due_at) : null;
             const nowMs = Date.now();
             const msLeft = dueAt ? dueAt.getTime() - nowMs : 0;
             const minsLeft = Math.max(0, Math.ceil(msLeft / 60000));
             const isOverdue = dueAt && msLeft <= 0;
-            const isUrgent = dueAt && minsLeft <= 15 && !isOverdue;
 
-            const borderColor = alreadyReviewed ? '#ef5350' : isNoShow ? '#ef5350' : (isUrgent || isOverdue) ? '#ef5350' : 'var(--color-warning)';
-            const bgColor = alreadyReviewed ? 'var(--bg-error-light)' : isNoShow ? 'var(--bg-error-light)' : (isUrgent || isOverdue) ? 'var(--bg-error-light)' : 'var(--color-warning-bg)';
-            return (
-              <div key={pr.id} style={{ padding: 14, marginBottom: 8, background: bgColor, border: `2px solid ${borderColor}`, borderRadius: 12 }}>
-                {isNoShow && (
-                  <div style={{
-                    display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8,
-                    padding: '6px 10px', background: 'var(--color-error-bg)', borderRadius: 8,
-                  }}>
+            // Tip state for this session
+            const tipState = pendingTips[pr.id] || {};
+            const savedTipCents = parseInt(pr.pending_tip_cents) || 0;
+            const activeTipCents = tipState.cents != null ? tipState.cents : savedTipCents;
+            const costCents = Math.round(cost * 100);
+
+            // Tip presets based on session cost
+            const tipPresets = costCents > 0 ? [
+              { label: '15%', cents: Math.round(costCents * 0.15) },
+              { label: '20%', cents: Math.round(costCents * 0.20) },
+              { label: '25%', cents: Math.round(costCents * 0.25) },
+            ] : [];
+
+            const saveTip = async (cents, reason) => {
+              setPendingTips(prev => ({ ...prev, [pr.id]: { ...prev[pr.id], cents, reason, saving: true } }));
+              try {
+                await apiFetch(`/api/sessions/${pr.id}/pending-tip`, {
+                  method: 'POST',
+                  body: JSON.stringify({ tipCents: cents, tipReason: reason || null }),
+                });
+                setPendingTips(prev => ({ ...prev, [pr.id]: { cents, reason, saving: false, saved: true } }));
+                showToast(cents > 0 ? `$${(cents/100).toFixed(2)} tip set for ${firstName}` : 'Tip removed', cents > 0 ? 'success' : 'info');
+                // Clear "saved" indicator after 3s
+                setTimeout(() => setPendingTips(prev => ({ ...prev, [pr.id]: { ...prev[pr.id], saved: false } })), 3000);
+              } catch {
+                setPendingTips(prev => ({ ...prev, [pr.id]: { ...prev[pr.id], saving: false } }));
+                showToast('Failed to save tip', 'error');
+              }
+            };
+
+            // No-show tile (unchanged behavior)
+            if (isNoShow) {
+              return (
+                <div key={pr.id} style={{ padding: 14, marginBottom: 8, background: 'var(--bg-error-light)', border: '2px solid #ef5350', borderRadius: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
                     <span style={{ fontSize: 16 }}>{'\u{1F6A8}'}</span>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-error)' }}>
-                      Caregiver No-Show — {pr.caregiver_name?.split(' ')[0]} did not check in
+                    <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-error)' }}>
+                      No-Show — {firstName} did not check in
                     </span>
                   </div>
-                )}
+                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '0 0 10px' }}>
+                    {pr.service_type || 'Session'} with {pr.recipient_first_name} on {pr.scheduled_date}. No payment was charged.
+                  </p>
+                  <button onClick={() => { setReviewSession(pr); setReviewRating(0); setReviewComment(''); }} style={{ padding: '8px 20px', background: '#ef5350', color: 'white', border: 'none', borderRadius: 8, fontWeight: 600, cursor: 'pointer' }}>
+                    Leave Review
+                  </button>
+                </div>
+              );
+            }
 
-                {/* v1.56.3 — Reviewed but payment didn't go through */}
-                {alreadyReviewed && hasCost && !isPaid && (
-                  <div style={{
-                    display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8,
-                    padding: '6px 10px', background: 'rgba(239,83,80,0.12)', borderRadius: 8,
-                  }}>
-                    <span style={{ fontSize: 16 }}>{'\u{1F4B3}'}</span>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: '#ef5350' }}>
-                      Payment incomplete — {pr.caregiver_name?.split(' ')[0]} hasn't been paid yet
-                    </span>
-                  </div>
-                )}
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                  <span style={{ fontSize: 14, fontWeight: 700, color: isNoShow ? 'var(--color-error)' : 'var(--text-primary)' }}>
-                    {isNoShow ? '\u2716 No Show — ' : alreadyReviewed ? '\u{1F4B3} ' : '\u2B50 '}{pr.caregiver_name} · {pr.recipient_first_name}
+            return (
+              <div key={pr.id} style={{ padding: 14, marginBottom: 8, background: isPaid ? 'rgba(76,175,80,0.06)' : 'var(--bg-card)', border: `2px solid ${isPaid ? 'var(--color-success)' : 'var(--role-color)'}`, borderRadius: 12 }}>
+                {/* Header: caregiver name + cost */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
+                    {isPaid ? '\u2705 ' : '\u{1F4B3} '}{firstName} · {pr.recipient_first_name}
                   </span>
-                  {hasCost && !isPaid && (
+                  {hasCost && (
                     <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)' }}>
                       ${cost.toFixed(2)}
                     </span>
                   )}
                 </div>
 
-                {hasCost && !isPaid && dueAt && !isOverdue && !alreadyReviewed && (
-                  <div style={{
-                    display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8,
-                    padding: '6px 10px', background: isUrgent ? 'rgba(239,83,80,0.1)' : 'rgba(255,255,255,0.5)', borderRadius: 8,
-                  }}>
-                    <span style={{ fontSize: 14 }}>{'\u23F0'}</span>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: isUrgent ? '#ef5350' : 'var(--text-secondary)' }}>
-                      {minsLeft >= 60
-                        ? `${Math.floor(minsLeft / 60)}h ${minsLeft % 60}m to review & add a tip before auto-pay`
-                        : `${minsLeft}m left to review & tip before auto-pay`}
+                <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '0 0 8px' }}>
+                  {pr.service_type || 'Session'} with {pr.recipient_first_name} on {pr.scheduled_date} ({pr.duration_hours || '?'}h).
+                </p>
+
+                {/* Auto-pay status */}
+                {isPaid && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, padding: '6px 10px', background: 'rgba(76,175,80,0.1)', borderRadius: 8 }}>
+                    <span style={{ fontSize: 14 }}>{'\u2705'}</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-success)' }}>
+                      Payment complete{savedTipCents > 0 ? ` — includes $${(savedTipCents/100).toFixed(2)} tip` : ''}
                     </span>
                   </div>
                 )}
 
-                {hasCost && isPaid && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, padding: '6px 10px', background: 'rgba(76,175,80,0.1)', borderRadius: 8 }}>
-                    <span style={{ fontSize: 14 }}>{'\u2705'}</span>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-success)' }}>Payment processed — please leave a review</span>
+                {hasCost && !isPaid && dueAt && !isOverdue && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, padding: '6px 10px', background: 'rgba(255,255,255,0.5)', borderRadius: 8 }}>
+                    <span style={{ fontSize: 14 }}>{'\u23F0'}</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: minsLeft <= 15 ? '#ef5350' : 'var(--text-secondary)' }}>
+                      Auto-pay {minsLeft >= 60 ? `in ${Math.floor(minsLeft / 60)}h ${minsLeft % 60}m` : `in ${minsLeft}m`}
+                      {activeTipCents > 0 ? ` — $${(activeTipCents/100).toFixed(2)} tip included` : ' — add a tip?'}
+                    </span>
                   </div>
                 )}
 
-                <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '0 0 4px' }}>
-                  {pr.service_type ? pr.service_type + ' session' : 'Session'} with {pr.recipient_first_name} on {pr.scheduled_date}.
-                  {isNoShow
-                    ? ` ${pr.caregiver_name?.split(' ')[0]} did not check in. No payment was charged.`
-                    : alreadyReviewed && hasCost && !isPaid
-                      ? ` Your review was saved but payment didn't complete. Tap below to pay now.`
-                      : hasCost && !isPaid
-                        ? ` Review to add a tip, then pay.`
-                        : ` Please leave a review for ${pr.caregiver_name?.split(' ')[0]}.`}
-                </p>
-                <button onClick={() => {
-                  if (alreadyReviewed && hasCost && !isPaid) {
-                    // Skip review modal — go straight to checkout
-                    (async () => {
-                      try {
-                        const checkoutRes = await apiFetch('/api/payments/checkout', {
-                          method: 'POST',
-                          body: JSON.stringify({ sessionId: pr.id, tipCents: 0 }),
-                        });
-                        if (checkoutRes?.ok) {
-                          const checkout = await checkoutRes.json();
-                          if (typeof showToast === 'function') showToast('Redirecting to payment...', 'success');
-                          window.location.href = checkout.checkoutUrl;
+                {hasCost && !isPaid && isOverdue && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, padding: '6px 10px', background: 'rgba(255,152,0,0.1)', borderRadius: 8 }}>
+                    <span style={{ fontSize: 14 }}>{'\u{1F4B3}'}</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-warning)' }}>
+                      Processing payment...
+                    </span>
+                  </div>
+                )}
+
+                {/* Tip buttons — show when unpaid and not overdue */}
+                {hasCost && !isPaid && !isOverdue && (
+                  <div style={{ marginBottom: 10 }}>
+                    <div style={{ display: 'flex', gap: 6, marginBottom: 6, flexWrap: 'wrap' }}>
+                      {tipPresets.map(tp => (
+                        <button key={tp.label} onClick={() => saveTip(activeTipCents === tp.cents ? 0 : tp.cents)}
+                          disabled={tipState.saving}
+                          style={{
+                            padding: '6px 12px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                            border: activeTipCents === tp.cents ? '2px solid var(--role-color)' : '2px solid var(--border-color)',
+                            background: activeTipCents === tp.cents ? 'var(--role-color-light)' : 'var(--bg-card)',
+                            color: activeTipCents === tp.cents ? 'var(--role-color)' : 'var(--text-secondary)',
+                            opacity: tipState.saving ? 0.6 : 1,
+                          }}>
+                          {tp.label} (${(tp.cents / 100).toFixed(2)})
+                        </button>
+                      ))}
+                      <button onClick={() => {
+                        const existing = customTipInput[pr.id];
+                        if (existing != null) {
+                          // Submit custom tip
+                          const cents = Math.round(parseFloat(existing || '0') * 100);
+                          if (cents > 0) saveTip(cents);
+                          setCustomTipInput(prev => { const n = {...prev}; delete n[pr.id]; return n; });
                         } else {
-                          const err = await checkoutRes?.json().catch(() => ({}));
-                          if (typeof showToast === 'function') showToast(err?.error || 'Payment failed to start. Please try again.', 'error');
+                          setCustomTipInput(prev => ({ ...prev, [pr.id]: '' }));
                         }
-                      } catch (e) {
-                        console.error('Retry payment error:', e);
-                        if (typeof showToast === 'function') showToast('Payment failed. Please try again.', 'error');
-                      }
-                    })();
-                  } else {
-                    setReviewSession(pr);
-                    setReviewRating(0);
-                    setReviewComment('');
-                    setTipAmount(0);
-                    setTipCustom('');
-                    setTipReason('');
-                  }
-                }} style={{ padding: '8px 20px', background: alreadyReviewed ? '#ef5350' : isNoShow ? '#ef5350' : 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, cursor: 'pointer' }}>
-                  {alreadyReviewed && hasCost && !isPaid ? 'Pay Now' : isNoShow ? 'Leave Review' : isPaid ? 'Leave Review' : hasCost ? 'Review & Pay' : 'Leave Review'}
-                </button>
+                      }}
+                        disabled={tipState.saving}
+                        style={{
+                          padding: '6px 12px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                          border: (activeTipCents > 0 && !tipPresets.some(tp => tp.cents === activeTipCents)) ? '2px solid var(--role-color)' : '2px solid var(--border-color)',
+                          background: (activeTipCents > 0 && !tipPresets.some(tp => tp.cents === activeTipCents)) ? 'var(--role-color-light)' : 'var(--bg-card)',
+                          color: 'var(--text-secondary)',
+                        }}>
+                        Custom
+                      </button>
+                      {activeTipCents > 0 && (
+                        <button onClick={() => saveTip(0)} disabled={tipState.saving}
+                          style={{ padding: '6px 10px', borderRadius: 20, fontSize: 11, fontWeight: 500, cursor: 'pointer', border: '1px solid var(--border-color)', background: 'transparent', color: 'var(--text-tertiary)' }}>
+                          Remove tip
+                        </button>
+                      )}
+                    </div>
+                    {customTipInput[pr.id] != null && (
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                        <span style={{ fontSize: 14, color: 'var(--text-secondary)' }}>$</span>
+                        <input type="number" min="1" max="500" step="0.01" placeholder="0.00"
+                          value={customTipInput[pr.id]}
+                          onChange={e => setCustomTipInput(prev => ({ ...prev, [pr.id]: e.target.value }))}
+                          style={{ width: 80, padding: '6px 8px', borderRadius: 6, border: '1px solid var(--border-color)', fontSize: 14 }} />
+                        <button onClick={() => {
+                          const cents = Math.round(parseFloat(customTipInput[pr.id] || '0') * 100);
+                          if (cents > 0) saveTip(cents);
+                          setCustomTipInput(prev => { const n = {...prev}; delete n[pr.id]; return n; });
+                        }}
+                          style={{ padding: '6px 14px', borderRadius: 6, background: 'var(--role-color)', color: 'white', border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                          Set Tip
+                        </button>
+                        <button onClick={() => setCustomTipInput(prev => { const n = {...prev}; delete n[pr.id]; return n; })}
+                          style={{ padding: '6px 10px', borderRadius: 6, background: 'transparent', color: 'var(--text-tertiary)', border: '1px solid var(--border-color)', fontSize: 12, cursor: 'pointer' }}>
+                          Cancel
+                        </button>
+                      </div>
+                    )}
+                    {tipState.saved && <span style={{ fontSize: 11, color: 'var(--color-success)', fontWeight: 600 }}>{'\u2713'} Tip saved</span>}
+                  </div>
+                )}
+
+                {/* Action row: review link (always available if not reviewed) */}
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  {!alreadyReviewed && (
+                    <button onClick={() => { setReviewSession(pr); setReviewRating(0); setReviewComment(''); setTipAmount(0); setTipCustom(''); setTipReason(''); }}
+                      style={{ padding: '8px 20px', background: isPaid ? 'var(--role-color)' : 'transparent', color: isPaid ? 'white' : 'var(--role-color)', border: isPaid ? 'none' : '2px solid var(--role-color)', borderRadius: 8, fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>
+                      {'\u2B50'} Leave a Review
+                    </button>
+                  )}
+                  {alreadyReviewed && !isPaid && hasCost && (
+                    <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{'\u2713'} Reviewed</span>
+                  )}
+                </div>
               </div>
             );
           })}
@@ -1948,12 +1978,6 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                 {(reviewSession.date || reviewSession.scheduled_date) ? ` on ${reviewSession.date || reviewSession.scheduled_date}` : ''}
               </p>
             </div>
-            {parseFloat(reviewSession.estimated_cost || 0) > 0 && reviewSession.payment_status !== 'paid' && !reviewSession.caregiver_no_show && (
-              <div style={{ padding: '10px 14px', marginBottom: 16, background: 'var(--bg-card)', borderRadius: 10, border: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Session cost ({reviewSession.duration_hours || '?'}h)</span>
-                <span style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)' }}>${parseFloat(reviewSession.estimated_cost).toFixed(2)}</span>
-              </div>
-            )}
             <div style={{ display: 'flex', gap: 10, marginBottom: 16, justifyContent: 'center' }}>
               {[1, 2, 3, 4, 5].map(star => (
                 <button key={star} onClick={() => setReviewRating(star)}
@@ -1971,52 +1995,6 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
               placeholder="Tell us more about your experience (optional)..."
               style={{ width: '100%', padding: '10px 14px', borderRadius: 10, border: '1px solid var(--border-color)', fontSize: 14, minHeight: 80, resize: 'vertical', marginBottom: 16, fontFamily: 'inherit', boxSizing: 'border-box' }} />
 
-            {/* Say Thanks — Tip Section */}
-            {reviewRating >= 4 && (
-              <div style={{ marginBottom: 16, padding: '14px 16px', background: 'linear-gradient(135deg, #FFF8E1 0%, #FFF3E0 100%)', borderRadius: 12, border: '1px solid var(--border-color)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                  <span style={{ fontSize: 20 }}>{'\uD83D\uDC9B'}</span>
-                  <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-warning)' }}>Say Thanks with a Tip</span>
-                  <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 'auto' }}>optional</span>
-                </div>
-                <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
-                  {[500, 1000, 2000].map(cents => (
-                    <button key={cents} onClick={() => { setTipAmount(cents); setTipCustom(''); }}
-                      style={{
-                        flex: 1, padding: '10px 0', borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: 'pointer',
-                        border: tipAmount === cents ? '2px solid var(--color-warning)' : '1px solid var(--border-color)',
-                        background: tipAmount === cents ? 'var(--color-warning-bg)' : 'var(--bg-card)',
-                        color: tipAmount === cents ? 'var(--color-warning)' : 'var(--text-primary)',
-                      }}>
-                      ${cents / 100}
-                    </button>
-                  ))}
-                  <button onClick={() => { setTipAmount('custom'); setTipCustom(''); }}
-                    style={{
-                      flex: 1, padding: '10px 0', borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                      border: tipAmount === 'custom' ? '2px solid var(--color-warning)' : '1px solid var(--border-color)',
-                      background: tipAmount === 'custom' ? 'var(--color-warning-bg)' : 'var(--bg-card)',
-                      color: tipAmount === 'custom' ? 'var(--color-warning)' : 'var(--text-primary)',
-                    }}>
-                    Custom
-                  </button>
-                </div>
-                {tipAmount === 'custom' && (
-                  <div style={{ position: 'relative', marginBottom: 10 }}>
-                    <span style={{ position: 'absolute', left: 12, top: 10, color: 'var(--text-tertiary)', fontSize: 15, fontWeight: 600 }}>$</span>
-                    <input type="number" value={tipCustom} onChange={e => setTipCustom(e.target.value)}
-                      placeholder="0.00" min="1" max="500" step="0.01"
-                      style={{ width: '100%', padding: '10px 12px 10px 26px', borderRadius: 10, border: '1px solid var(--border-color)', fontSize: 15, fontWeight: 600, boxSizing: 'border-box' }} />
-                  </div>
-                )}
-                {tipAmount > 0 && (
-                  <input type="text" value={tipReason} onChange={e => setTipReason(e.target.value)}
-                    placeholder={'What made this visit special? (e.g., "So patient with Mom today")'}
-                    style={{ width: '100%', padding: '10px 14px', borderRadius: 10, border: '1px solid var(--border-color)', fontSize: 13, boxSizing: 'border-box' }} />
-                )}
-              </div>
-            )}
-
             <div style={{ display: 'flex', gap: 10 }}>
               <button onClick={() => { setReviewSession(null); setReviewRating(0); setReviewComment(''); setTipAmount(0); setTipCustom(''); setTipReason(''); }}
                 style={{ flex: 1, padding: '12px 16px', borderRadius: 10, border: '1px solid var(--border-color)', background: 'var(--bg-surface)', fontSize: 14, fontWeight: 600, cursor: 'pointer', color: 'var(--text-secondary)' }}>
@@ -2024,14 +2002,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
               </button>
               <button onClick={handleReview} disabled={!reviewRating || reviewLoading}
                 style={{ flex: 1, padding: '12px 16px', borderRadius: 10, border: 'none', background: (!reviewRating || reviewLoading) ? 'var(--border-light)' : 'var(--role-color)', color: 'var(--text-on-primary)', fontSize: 14, fontWeight: 700, cursor: (!reviewRating || reviewLoading) ? 'default' : 'pointer' }}>
-                {reviewLoading ? 'Processing...' : (() => {
-                  const hasTip = (tipAmount && tipAmount !== 'custom') || (tipAmount === 'custom' && parseFloat(tipCustom) >= 1);
-                  const needsPay = parseFloat(reviewSession?.estimated_cost || 0) > 0 && reviewSession?.payment_status !== 'paid' && !reviewSession?.caregiver_no_show;
-                  if (needsPay && hasTip) return 'Submit Review & Pay with Tip';
-                  if (needsPay) return 'Submit Review & Pay';
-                  if (hasTip) return 'Submit Review & Tip';
-                  return 'Submit Review';
-                })()}
+                {reviewLoading ? 'Submitting...' : 'Submit Review'}
               </button>
             </div>
           </div>
