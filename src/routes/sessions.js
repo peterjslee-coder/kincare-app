@@ -14,7 +14,8 @@ router.use(authenticate);
 
 // ─── Payment gates: check for unpaid sessions and saved payment method ───
 async function checkPaymentStanding(db, familyUserId) {
-  // Check for completed sessions that haven't been paid
+  // Only block families whose auto-pay has actually FAILED (card declined, auth required, etc.)
+  // Sessions still in the grace period (payment_status IS NULL) or processing should NOT block.
   const unpaid = await db.prepare(`
     SELECT cs.id, cs.scheduled_date, cs.caregiver_id,
       u.first_name || ' ' || u.last_name AS caregiver_name
@@ -23,7 +24,7 @@ async function checkPaymentStanding(db, familyUserId) {
     LEFT JOIN users u ON cp.user_id = u.id
     WHERE cs.family_user_id = ?
       AND cs.status = 'completed'
-      AND (cs.payment_status IS NULL OR cs.payment_status IN ('pending', 'failed'))
+      AND cs.payment_status = 'failed'
       AND NOT EXISTS (
         SELECT 1 FROM payments p WHERE p.session_id = cs.id AND p.status IN ('completed', 'processing')
       )

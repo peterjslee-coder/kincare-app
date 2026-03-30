@@ -1543,6 +1543,10 @@ async function processOverduePayments(pushFn) {
         // Check if family's held sessions can be restored
         await restoreHeldSessions(s.family_user_id || s.billing_user_id, pushFn);
       } catch (err) {
+        // Mark the session payment as failed so lockout logic can distinguish
+        // "hasn't been charged yet" from "charge was attempted and failed"
+        await db.prepare("UPDATE care_sessions SET payment_status = 'failed', updated_at = NOW() WHERE id = ?").run(s.id);
+
         // STP "authentication_required" = card needs 3DS, can't auto-charge
         if (err.code === 'authentication_required') {
           console.warn(`[auto-pay] Session ${s.id}: card requires authentication — sending manual pay notification`);
@@ -1555,6 +1559,13 @@ async function processOverduePayments(pushFn) {
           }
         } else {
           console.error(`[auto-pay] Session ${s.id} failed:`, err.message);
+          if (pushFn && s.family_user_id) {
+            pushFn(s.family_user_id, {
+              title: 'Payment failed',
+              body: `We couldn't charge your card for the ${s.service_type} session on ${s.scheduled_date}. Please update your payment method.`,
+              data: { type: 'payment_failed', sessionId: s.id, page: 'home' },
+            }, 'payment_failed').catch(() => {});
+          }
         }
       }
     }
@@ -1567,17 +1578,17 @@ async function processOverduePayments(pushFn) {
 async function restoreHeldSessions(familyUserId, pushFn) {
   const db = await getDb();
   try {
-    // Check if this family still has unpaid completed sessions
+    // Check if this family still has failed payments (not just pending/grace period)
     const remaining = await db.prepare(`
       SELECT cs.id FROM care_sessions cs
       WHERE cs.family_user_id = ? AND cs.status = 'completed'
-        AND (cs.payment_status IS NULL OR cs.payment_status IN ('pending', 'failed'))
+        AND cs.payment_status = 'failed'
         AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.session_id = cs.id AND p.status IN ('completed', 'processing'))
         AND cs.estimated_cost > 0
       LIMIT 1
     `).get(familyUserId);
 
-    if (remaining) return; // Still has unpaid sessions — keep holds
+    if (remaining) return; // Still has failed payments — keep holds
 
     // All clear — restore payment_hold sessions back to confirmed
     const held = await db.prepare(`
@@ -1633,15 +1644,14 @@ async function restoreHeldSessions(familyUserId, pushFn) {
 async function holdSessionsForUnpaidFamilies(pushFn) {
   const db = await getDb();
   try {
-    // Find families who have unpaid completed sessions (auto-pay failed or no card)
+    // Find families whose auto-pay has FAILED — only block after a real failure,
+    // not while payment is still pending or in the grace period
     const deadbeats = await db.prepare(`
       SELECT DISTINCT cs.family_user_id
       FROM care_sessions cs
       WHERE cs.status = 'completed'
         AND cs.estimated_cost > 0
-        AND (cs.payment_status IS NULL OR cs.payment_status IN ('pending', 'failed'))
-        AND cs.payment_due_at IS NOT NULL
-        AND cs.payment_due_at < NOW()
+        AND cs.payment_status = 'failed'
         AND NOT EXISTS (
           SELECT 1 FROM payments p WHERE p.session_id = cs.id AND p.status IN ('completed', 'processing')
         )
