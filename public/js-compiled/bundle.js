@@ -7751,7 +7751,96 @@ const Dashboard = window.Dashboard = ({
     className: "page-header"
   }, /*#__PURE__*/React.createElement("h1", {
     className: "greeting"
-  }, isNewUser ? `Welcome, ${firstName}!` : `Welcome back, ${firstName}!`)), pendingInvites.length > 0 && pendingInvites.map(invite => /*#__PURE__*/React.createElement("div", {
+  }, isNewUser ? `Welcome, ${firstName}!` : `Welcome back, ${firstName}!`)), (() => {
+    const overdue = pendingReviews.filter(pr => {
+      if (pr.payment_status === 'paid' || pr.caregiver_no_show) return false;
+      const cost = parseFloat(pr.estimated_cost || 0);
+      if (cost <= 0) return false;
+      const dueAt = pr.payment_due_at ? new Date(pr.payment_due_at) : null;
+      return dueAt && dueAt.getTime() < Date.now();
+    });
+    if (overdue.length === 0) return null;
+    const totalOwed = overdue.reduce((sum, pr) => sum + parseFloat(pr.estimated_cost || 0), 0);
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        background: '#FDE8E8',
+        border: '2px solid #ef5350',
+        borderRadius: 12,
+        padding: '16px 20px',
+        marginBottom: 16
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        marginBottom: 8
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 22
+      }
+    }, '\u{1F6D1}'), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontWeight: 700,
+        fontSize: 15,
+        color: '#c62828'
+      }
+    }, "Account on hold \u2014 payment overdue"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 13,
+        color: '#c62828',
+        marginTop: 2
+      }
+    }, "You have ", overdue.length, " unpaid session", overdue.length > 1 ? 's' : '', " totaling $", totalOwed.toFixed(2), ". New bookings and upcoming sessions are paused until payment is complete."))), overdue.map(pr => /*#__PURE__*/React.createElement("div", {
+      key: pr.id,
+      style: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: '8px 12px',
+        marginBottom: 4,
+        background: 'rgba(255,255,255,0.6)',
+        borderRadius: 8
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 13,
+        color: '#c62828'
+      }
+    }, pr.caregiver_name, " \xB7 ", pr.scheduled_date), /*#__PURE__*/React.createElement("button", {
+      onClick: async () => {
+        try {
+          const r = await apiFetch('/api/payments/checkout', {
+            method: 'POST',
+            body: JSON.stringify({
+              sessionId: pr.id,
+              tipCents: parseInt(pr.pending_tip_cents) || 0
+            })
+          });
+          if (r !== null && r !== void 0 && r.ok) {
+            const d = await r.json();
+            window.location.href = d.checkoutUrl;
+          } else {
+            const e = await (r === null || r === void 0 ? void 0 : r.json().catch(() => ({})));
+            showToast((e === null || e === void 0 ? void 0 : e.error) || 'Payment failed', 'error');
+          }
+        } catch {
+          showToast('Payment failed', 'error');
+        }
+      },
+      style: {
+        padding: '6px 14px',
+        background: '#ef5350',
+        color: 'white',
+        border: 'none',
+        borderRadius: 6,
+        fontWeight: 600,
+        fontSize: 12,
+        cursor: 'pointer'
+      }
+    }, "Pay $", parseFloat(pr.estimated_cost).toFixed(2)))));
+  })(), pendingInvites.length > 0 && pendingInvites.map(invite => /*#__PURE__*/React.createElement("div", {
     key: invite.id,
     style: {
       background: 'var(--color-success-bg)',
@@ -53632,11 +53721,17 @@ const FamilyPayments = window.FamilyPayments = () => {
     }
   }, removingMethodId === m.id ? 'Removing...' : 'Remove')))), /*#__PURE__*/React.createElement("p", {
     style: {
-      margin: '0 0 10px',
+      margin: '0 0 6px',
       fontSize: 14,
       color: 'var(--text-secondary)'
     }
-  }, "Your payment method is connected. You can pay caregivers securely through InPlace."), /*#__PURE__*/React.createElement("button", {
+  }, "Your payment method is connected. You can pay caregivers securely through InPlace."), /*#__PURE__*/React.createElement("p", {
+    style: {
+      margin: '0 0 10px',
+      fontSize: 12,
+      color: 'var(--text-tertiary)'
+    }
+  }, "Your card is automatically charged 1 hour after each session completes. You can add an optional tip before auto-pay processes."), /*#__PURE__*/React.createElement("button", {
     onClick: handleStripeSetup,
     disabled: setupLoading || !paymentsEnabled,
     style: {
@@ -53671,11 +53766,17 @@ const FamilyPayments = window.FamilyPayments = () => {
     }
   }, setupLoading ? 'Loading...' : paymentsEnabled ? 'Continue Stripe Setup' : 'Payments Paused')) : /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("p", {
     style: {
-      margin: '0 0 10px',
+      margin: '0 0 6px',
       fontSize: 14,
       color: 'var(--text-secondary)'
     }
-  }, "Add a payment method so you can pay caregivers directly through InPlace. Payments are processed securely by Stripe."), /*#__PURE__*/React.createElement("button", {
+  }, "Add a payment method to book care through InPlace. Payments are processed securely by Stripe."), /*#__PURE__*/React.createElement("p", {
+    style: {
+      margin: '0 0 10px',
+      fontSize: 12,
+      color: 'var(--text-tertiary)'
+    }
+  }, "Your card will be automatically charged 1 hour after each care session completes. You'll have a chance to add a tip before payment processes. A valid payment method is required to book sessions."), /*#__PURE__*/React.createElement("button", {
     onClick: handleStripeSetup,
     disabled: setupLoading || !paymentsEnabled,
     style: {

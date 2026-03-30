@@ -1554,7 +1554,76 @@ async function processOverduePayments(pushFn) {
   }
 }
 
+// ─── Hold future sessions for families with unpaid balance ───
+// After auto-pay fails, any upcoming confirmed sessions are put on hold
+// Both family and caregiver are notified
+async function holdSessionsForUnpaidFamilies(pushFn) {
+  const db = await getDb();
+  try {
+    // Find families who have unpaid completed sessions (auto-pay failed or no card)
+    const deadbeats = await db.prepare(`
+      SELECT DISTINCT cs.family_user_id
+      FROM care_sessions cs
+      WHERE cs.status = 'completed'
+        AND cs.estimated_cost > 0
+        AND (cs.payment_status IS NULL OR cs.payment_status IN ('pending', 'failed'))
+        AND cs.payment_due_at IS NOT NULL
+        AND cs.payment_due_at < NOW()
+        AND NOT EXISTS (
+          SELECT 1 FROM payments p WHERE p.session_id = cs.id AND p.status IN ('completed', 'processing')
+        )
+    `).all();
+
+    for (const { family_user_id } of deadbeats) {
+      // Find their upcoming confirmed sessions that aren't already on hold
+      const upcoming = await db.prepare(`
+        SELECT cs.id, cs.caregiver_id, cs.scheduled_date, cs.scheduled_time,
+          cp.user_id AS caregiver_user_id,
+          u.first_name AS cg_first_name,
+          fu.first_name AS family_first_name
+        FROM care_sessions cs
+        LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+        LEFT JOIN users u ON cp.user_id = u.id
+        LEFT JOIN users fu ON cs.family_user_id = fu.id
+        WHERE cs.family_user_id = ?
+          AND cs.status IN ('confirmed', 'pending')
+          AND cs.scheduled_date >= CURRENT_DATE
+      `).all(family_user_id);
+
+      for (const s of upcoming) {
+        // Put on hold
+        await db.prepare(
+          "UPDATE care_sessions SET status = 'payment_hold', updated_at = NOW() WHERE id = ? AND status IN ('confirmed', 'pending')"
+        ).run(s.id);
+
+        console.log(`🚫 Session ${s.id} on hold — family ${family_user_id} has unpaid sessions`);
+
+        // Notify caregiver
+        if (pushFn && s.caregiver_user_id) {
+          pushFn(s.caregiver_user_id, {
+            title: 'Session on hold',
+            body: `Your ${s.scheduled_date} session with ${s.family_first_name || 'a family'} is on hold due to a payment issue. We'll notify you when it's resolved.`,
+            data: { type: 'session_payment_hold', sessionId: s.id, page: 'home' },
+          }, 'session_payment_hold').catch(() => {});
+        }
+
+        // Notify family
+        if (pushFn) {
+          pushFn(family_user_id, {
+            title: 'Sessions on hold — payment needed',
+            body: `Your upcoming session on ${s.scheduled_date} with ${s.cg_first_name || 'your caregiver'} is on hold. Please complete your outstanding payment to resume.`,
+            data: { type: 'session_payment_hold', sessionId: s.id, page: 'home' },
+          }, 'session_payment_hold').catch(() => {});
+        }
+      }
+    }
+  } catch (err) {
+    console.error("[hold-sessions] Error:", err.message);
+  }
+}
+
 router.processOverduePayments = processOverduePayments;
+router.holdSessionsForUnpaidFamilies = holdSessionsForUnpaidFamilies;
 
 // ─── DELETE /api/payments/family/methods/:pmId ───
 // Remove a saved payment method from a family user's Stripe customer
@@ -1693,4 +1762,5 @@ router.post("/manual", requireRole("family"), requirePaymentsEnabled, async (req
   }
 });
 
+router.getStripe = getStripe;
 module.exports = router;

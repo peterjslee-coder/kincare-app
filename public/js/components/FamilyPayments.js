@@ -254,7 +254,8 @@ const FamilyPayments = window.FamilyPayments = () => {
                 ))}
               </div>
             )}
-            <p style={{ margin: '0 0 10px', fontSize: 14, color: 'var(--text-secondary)' }}>Your payment method is connected. You can pay caregivers securely through InPlace.</p>
+            <p style={{ margin: '0 0 6px', fontSize: 14, color: 'var(--text-secondary)' }}>Your payment method is connected. You can pay caregivers securely through InPlace.</p>
+            <p style={{ margin: '0 0 10px', fontSize: 12, color: 'var(--text-tertiary)' }}>Your card is automatically charged 1 hour after each session completes. You can add an optional tip before auto-pay processes.</p>
             <button onClick={handleStripeSetup} disabled={setupLoading || !paymentsEnabled}
               style={{ padding: '8px 16px', background: 'var(--bg-surface)', color: paymentsEnabled ? 'var(--role-color)' : 'var(--text-tertiary)', border: paymentsEnabled ? '1px solid #1b6b5a' : '1px solid #ccc', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: paymentsEnabled ? 'pointer' : 'not-allowed', opacity: paymentsEnabled ? 1 : 0.6 }}>
               {setupLoading ? 'Loading...' : 'Add Payment Method'}
@@ -270,7 +271,8 @@ const FamilyPayments = window.FamilyPayments = () => {
           </div>
         ) : (
           <div>
-            <p style={{ margin: '0 0 10px', fontSize: 14, color: 'var(--text-secondary)' }}>Add a payment method so you can pay caregivers directly through InPlace. Payments are processed securely by Stripe.</p>
+            <p style={{ margin: '0 0 6px', fontSize: 14, color: 'var(--text-secondary)' }}>Add a payment method to book care through InPlace. Payments are processed securely by Stripe.</p>
+            <p style={{ margin: '0 0 10px', fontSize: 12, color: 'var(--text-tertiary)' }}>Your card will be automatically charged 1 hour after each care session completes. You'll have a chance to add a tip before payment processes. A valid payment method is required to book sessions.</p>
             <button onClick={handleStripeSetup} disabled={setupLoading || !paymentsEnabled}
               style={{ padding: '8px 16px', background: paymentsEnabled ? '#635bff' : '#999', color: 'var(--text-on-primary)', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: paymentsEnabled ? 'pointer' : 'not-allowed' }}>
               {setupLoading ? 'Loading...' : paymentsEnabled ? 'Set Up Payments with Stripe' : 'Payments Paused'}

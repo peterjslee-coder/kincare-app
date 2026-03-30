@@ -12,6 +12,33 @@ const { MODEL_HAIKU } = require("../utils/aiModels");
 const router = express.Router();
 router.use(authenticate);
 
+// ─── Payment gates: check for unpaid sessions and saved payment method ───
+async function checkPaymentStanding(db, familyUserId) {
+  // Check for completed sessions that haven't been paid
+  const unpaid = await db.prepare(`
+    SELECT cs.id, cs.scheduled_date, cs.caregiver_id,
+      u.first_name || ' ' || u.last_name AS caregiver_name
+    FROM care_sessions cs
+    LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+    LEFT JOIN users u ON cp.user_id = u.id
+    WHERE cs.family_user_id = ?
+      AND cs.status = 'completed'
+      AND (cs.payment_status IS NULL OR cs.payment_status IN ('pending', 'failed'))
+      AND NOT EXISTS (
+        SELECT 1 FROM payments p WHERE p.session_id = cs.id AND p.status IN ('completed', 'processing')
+      )
+      AND cs.estimated_cost > 0
+    ORDER BY cs.scheduled_date DESC
+  `).all(familyUserId);
+
+  // Check if family has a saved payment method (Stripe customer with card on file)
+  const user = await db.prepare("SELECT stripe_customer_id FROM users WHERE id = ?").get(familyUserId);
+  const hasCustomer = !!user?.stripe_customer_id;
+
+  // We'll verify the card exists with Stripe at booking time (in the route handler)
+  return { unpaidSessions: unpaid || [], hasStripeCustomer: hasCustomer, stripeCustomerId: user?.stripe_customer_id || null };
+}
+
 // ─── Auto-expire stale time proposals (2-hour window) ───
 async function expireStaleProposals(db, emitToUser, sendPushToUserFn) {
   try {
@@ -574,6 +601,39 @@ router.post("/", requireRole("family"), validateSession, async (req, res) => {
         ? 'Please upload your POA or guardianship documents for review.'
         : 'Please complete the consent verification process.',
     });
+  }
+
+  // ─── Payment gate: block booking if unpaid sessions or no card on file ───
+  const standing = await checkPaymentStanding(db, req.user.id);
+  if (standing.unpaidSessions.length > 0) {
+    return res.status(402).json({
+      error: `You have ${standing.unpaidSessions.length} unpaid session${standing.unpaidSessions.length > 1 ? 's' : ''}. Please complete payment before booking new care.`,
+      code: 'UNPAID_SESSIONS',
+      unpaidCount: standing.unpaidSessions.length,
+      unpaidSessions: standing.unpaidSessions.map(s => ({ id: s.id, date: s.scheduled_date, caregiver: s.caregiver_name })),
+    });
+  }
+
+  // Verify card on file — Stripe customer must exist and have at least one saved payment method
+  if (!standing.hasStripeCustomer) {
+    return res.status(402).json({
+      error: 'A payment method is required to book care. Please set up your payment method first.',
+      code: 'NO_PAYMENT_METHOD',
+    });
+  }
+  try {
+    const { getStripe } = require("./payments");
+    const stripe = getStripe();
+    const methods = await stripe.paymentMethods.list({ customer: standing.stripeCustomerId, type: "card", limit: 1 });
+    if (!methods.data.length) {
+      return res.status(402).json({
+        error: 'No saved payment method found. Please add a card before booking care.',
+        code: 'NO_PAYMENT_METHOD',
+      });
+    }
+  } catch (stripeErr) {
+    // Non-blocking if Stripe is misconfigured — don't prevent booking
+    console.warn('[payment-gate] Stripe check failed (non-blocking):', stripeErr.message);
   }
 
   // Validate caregiver availability if a caregiver is specified (via matching or direct booking)
@@ -1181,6 +1241,26 @@ router.post("/:id/check-in", async (req, res) => {
     }
     if (session.status !== "confirmed") {
       return res.status(400).json({ error: `Cannot check in — session status is '${session.status}'` });
+    }
+
+    // ─── Payment gate: block check-in if family has unpaid sessions ───
+    if (session.family_user_id) {
+      const standing = await checkPaymentStanding(db, session.family_user_id);
+      if (standing.unpaidSessions.length > 0) {
+        // Notify the family that their session is blocked
+        try {
+          sendPushToUser(session.family_user_id, {
+            title: 'Session on hold — payment needed',
+            body: `Your caregiver tried to check in but you have ${standing.unpaidSessions.length} unpaid session${standing.unpaidSessions.length > 1 ? 's' : ''}. Please pay to resume care.`,
+            data: { type: 'payment_hold', page: 'home' },
+          }, 'payment_hold').catch(() => {});
+        } catch {}
+        return res.status(402).json({
+          error: `This session is on hold. The family has ${standing.unpaidSessions.length} unpaid session${standing.unpaidSessions.length > 1 ? 's' : ''}. They have been notified.`,
+          code: 'FAMILY_UNPAID',
+          unpaidCount: standing.unpaidSessions.length,
+        });
+      }
     }
 
     // ─── Timing gate: 15 min before session start ───

@@ -303,7 +303,7 @@ app.use("/api/referrals", require("./routes/referrals"));
 app.use("/api/kindred", require("./routes/kindred"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.57.0";
+const APP_VERSION = "1.57.1";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });
@@ -845,9 +845,14 @@ async function start() {
   setInterval(async () => {
     try {
       const paymentRouter = require("./routes/payments");
+      const { sendPushToUser } = require("./routes/push");
+      // 1) Auto-charge overdue sessions
       if (paymentRouter.processOverduePayments) {
-        const { sendPushToUser } = require("./routes/push");
         await paymentRouter.processOverduePayments(sendPushToUser);
+      }
+      // 2) Hold future sessions for families with unpaid balance (after auto-pay fails)
+      if (paymentRouter.holdSessionsForUnpaidFamilies) {
+        await paymentRouter.holdSessionsForUnpaidFamilies(sendPushToUser);
       }
     } catch (err) {
       if (err.message && !err.message.includes("not configured")) {
@@ -855,7 +860,7 @@ async function start() {
       }
     }
   }, 5 * 60000); // Every 5 minutes
-  console.log("  Auto-pay cron started (checks every 5 min for overdue session payments)");
+  console.log("  Auto-pay cron started (checks every 5 min for overdue payments + session holds)");
 
   // ─── Backfill missing caregiver coordinates from zip/city/state ───
   // One-time pass on startup: geocode caregivers who have zip but no lat/lng
