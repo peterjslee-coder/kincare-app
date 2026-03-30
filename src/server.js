@@ -904,22 +904,24 @@ async function start() {
     console.log(`  Stripe webhook: ${baseUrl}/api/payments/webhook ${webhookSecret ? "(secret configured ✓)" : "⚠️  NO WEBHOOK SECRET — configure STRIPE_WEBHOOK_SECRET in Railway"}`);
 
     // ─── Startup diagnostic: list ALL Stripe webhook endpoints ───
-    try {
-      const stripeKey = process.env.STRIPE_SECRET_KEY || process.env.stripe_secret_key;
-      if (stripeKey) {
-        const stripe = require("stripe")(stripeKey);
-        const endpoints = await stripe.webhookEndpoints.list({ limit: 20 });
-        console.log(`\n  🔍 Stripe webhook endpoints found: ${endpoints.data.length}`);
-        for (const ep of endpoints.data) {
-          console.log(`    → ${ep.id} | ${ep.url} | status: ${ep.status} | events: ${(ep.enabled_events || []).length}`);
+    (async () => {
+      try {
+        const stripeKey = process.env.STRIPE_SECRET_KEY || process.env.stripe_secret_key;
+        if (stripeKey) {
+          const stripe = require("stripe")(stripeKey);
+          const endpoints = await stripe.webhookEndpoints.list({ limit: 20 });
+          console.log(`\n  🔍 Stripe webhook endpoints found: ${endpoints.data.length}`);
+          for (const ep of endpoints.data) {
+            console.log(`    → ${ep.id} | ${ep.url} | status: ${ep.status} | events: ${(ep.enabled_events || []).length}`);
+          }
+          if (endpoints.data.length > 1) {
+            console.warn(`  ⚠️  MULTIPLE webhook endpoints detected — this causes duplicate events and signature mismatches!`);
+          }
         }
-        if (endpoints.data.length > 1) {
-          console.warn(`  ⚠️  MULTIPLE webhook endpoints detected — this causes duplicate events and signature mismatches!`);
-        }
+      } catch (diagErr) {
+        console.log(`  (webhook endpoint check skipped: ${diagErr.message})`);
       }
-    } catch (diagErr) {
-      console.log(`  (webhook endpoint check skipped: ${diagErr.message})`);
-    }
+    })();
   });
 }
 
