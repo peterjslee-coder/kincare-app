@@ -1237,12 +1237,15 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
 
         const dayLabel = TimezoneHelper.getDateLabel(sDate, tz);
         const timeLabel = TimezoneHelper.formatTime(hero.time);
-        const bgGradient = isActive
+        const hasPendingTC = !!hero.pendingTimeChangeId;
+        const bgGradient = hasPendingTC
+          ? 'linear-gradient(135deg, var(--color-purple-bg) 0%, var(--bg-card) 100%)'
+          : isActive
           ? 'linear-gradient(135deg, var(--color-warning-bg) 0%, var(--bg-card) 100%)'
           : msUntil <= 3600000
             ? 'linear-gradient(135deg, var(--bg-accent-light) 0%, var(--bg-card) 100%)'
             : 'linear-gradient(135deg, var(--bg-highlight) 0%, var(--bg-card) 100%)';
-        const borderColor = isActive ? 'var(--color-warning)' : msUntil <= 3600000 ? 'var(--accent-color)' : 'var(--role-color)';
+        const borderColor = hasPendingTC ? 'var(--color-purple)' : isActive ? 'var(--color-warning)' : msUntil <= 3600000 ? 'var(--accent-color)' : 'var(--role-color)';
         const shouldShimmer = !isActive && msUntil <= 24 * 3600000;
 
         return (
@@ -1255,8 +1258,8 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
           }}>
             {/* Top row: label + countdown */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: isActive ? 'var(--color-warning)' : 'var(--accent-color)' }}>
-                {isActive ? 'In Progress Now' : 'Coming Up'}
+              <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: hasPendingTC ? 'var(--color-purple)' : isActive ? 'var(--color-warning)' : 'var(--accent-color)' }}>
+                {hasPendingTC ? '⏰ Time Change Proposed' : isActive ? 'In Progress Now' : 'Coming Up'}
               </div>
               <div style={{
                 fontSize: 14, fontWeight: 700, color: countdownColor,
@@ -1271,11 +1274,31 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
             <div style={{ fontWeight: 700, fontSize: 17, color: 'var(--text-primary)', marginBottom: 4 }}>
               {hero.recipientName || 'Care Visit'} with {hero.caregiverName}
             </div>
-            <div style={{ fontSize: 14, color: 'var(--text-secondary)' }}>
-              {dayLabel}{timeLabel ? ` at ${timeLabel}` : ''}
-              {hero.durationHours ? ` \u2022 ${hero.durationHours}hr` : ''}
-              {hero.serviceType ? ` \u2022 ${formatServiceType(hero.serviceType)}` : ''}
-            </div>
+            {hasPendingTC && hero.tcProposedTime ? (
+              <div style={{ fontSize: 14, color: 'var(--text-secondary)' }}>
+                {dayLabel} at{' '}
+                <span style={{ textDecoration: 'line-through', opacity: 0.5 }}>{timeLabel}</span>
+                {' '}
+                <span style={{ color: 'var(--color-purple)', fontWeight: 700 }}>
+                  {TimezoneHelper.formatTime(hero.tcProposedTime)}
+                </span>
+                {hero.tcProposedDuration && hero.tcProposedDuration !== hero.durationHours ? (
+                  <>
+                    {' \u2022 '}
+                    <span style={{ textDecoration: 'line-through', opacity: 0.5 }}>{hero.durationHours}hr</span>
+                    {' '}
+                    <span style={{ color: 'var(--color-purple)', fontWeight: 700 }}>{hero.tcProposedDuration}hr</span>
+                  </>
+                ) : hero.durationHours ? ` \u2022 ${hero.durationHours}hr` : ''}
+                {hero.serviceType ? ` \u2022 ${formatServiceType(hero.serviceType)}` : ''}
+              </div>
+            ) : (
+              <div style={{ fontSize: 14, color: 'var(--text-secondary)' }}>
+                {dayLabel}{timeLabel ? ` at ${timeLabel}` : ''}
+                {hero.durationHours ? ` \u2022 ${hero.durationHours}hr` : ''}
+                {hero.serviceType ? ` \u2022 ${formatServiceType(hero.serviceType)}` : ''}
+              </div>
+            )}
             {/* Tap hint */}
             <div style={{ position: 'absolute', right: 16, top: '50%', transform: 'translateY(-50%)', color: borderColor, opacity: 0.3, fontSize: 20 }}>→</div>
           </div>
@@ -1638,11 +1661,24 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                         {s.recipientName || 'Care Visit'}
                         {s.caregiverName ? ` with ${s.caregiverName}` : ''}
                       </div>
-                      <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>
-                        {dayLabel}{timeLabel ? ` at ${timeLabel}` : ''}
-                        {s.durationHours ? ` \u2022 ${s.durationHours}hr` : ''}
-                        {s.serviceType ? ` \u2022 ${formatServiceType(s.serviceType)}` : ''}
-                      </div>
+                      {hasPendingTimeChange && s.tcProposedTime ? (
+                        <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>
+                          {dayLabel} at{' '}
+                          <span style={{ textDecoration: 'line-through', opacity: 0.5 }}>{timeLabel}</span>
+                          {' '}
+                          <span style={{ color: 'var(--color-purple)', fontWeight: 700 }}>{TimezoneHelper.formatTime(s.tcProposedTime)}</span>
+                          {s.tcProposedDuration && parseFloat(s.tcProposedDuration) !== parseFloat(s.durationHours) ? (
+                            <>{' \u2022 '}<span style={{ textDecoration: 'line-through', opacity: 0.5 }}>{s.durationHours}hr</span>{' '}<span style={{ color: 'var(--color-purple)', fontWeight: 700 }}>{s.tcProposedDuration}hr</span></>
+                          ) : s.durationHours ? ` \u2022 ${s.durationHours}hr` : ''}
+                          {s.serviceType ? ` \u2022 ${formatServiceType(s.serviceType)}` : ''}
+                        </div>
+                      ) : (
+                        <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>
+                          {dayLabel}{timeLabel ? ` at ${timeLabel}` : ''}
+                          {s.durationHours ? ` \u2022 ${s.durationHours}hr` : ''}
+                          {s.serviceType ? ` \u2022 ${formatServiceType(s.serviceType)}` : ''}
+                        </div>
+                      )}
                       {isSeekingCaregiver && !s.offeredToCaregiverId && <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent-color)', marginTop: 4 }}>Seeking caregiver</div>}
                       {s.offeredToCaregiverId && !s.caregiverName && (() => {
                         const exUntil = s.exclusiveUntil ? new Date(s.exclusiveUntil) : null;

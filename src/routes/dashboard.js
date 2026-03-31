@@ -143,7 +143,10 @@ async function familyDashboard(db, userId, res) {
           cp.rating_avg AS caregiver_rating,
           fu.first_name || ' ' || fu.last_name AS booked_by_name,
           vl.check_in_time,
-          ofu.first_name AS offered_caregiver_name
+          ofu.first_name AS offered_caregiver_name,
+          tcp.proposed_time AS tc_proposed_time,
+          tcp.proposed_duration AS tc_proposed_duration,
+          tcp.proposed_by AS tc_proposed_by
         FROM care_sessions cs
         LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
         LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
@@ -152,6 +155,7 @@ async function familyDashboard(db, userId, res) {
         LEFT JOIN visit_logs vl ON vl.session_id = cs.id
         LEFT JOIN caregiver_profiles ocp ON cs.offered_to_caregiver_id = ocp.id
         LEFT JOIN users ofu ON ocp.user_id = ofu.id
+        LEFT JOIN time_change_proposals tcp ON cs.pending_time_change_id = tcp.id
         WHERE (cs.family_user_id = ? OR cs.care_recipient_id IN (${recipientPlaceholders}))
           AND cs.scheduled_date >= ?
           AND cs.scheduled_date <= ?
@@ -328,6 +332,9 @@ async function familyDashboard(db, userId, res) {
           exclusiveUntil: s.exclusive_until || null,
           offeredCaregiverName: s.offered_caregiver_name || null,
           pendingTimeChangeId: s.pending_time_change_id || null,
+          tcProposedTime: s.tc_proposed_time || null,
+          tcProposedDuration: s.tc_proposed_duration || null,
+          tcProposedBy: s.tc_proposed_by || null,
         };
       }),
       recentActivity: recentActivity.map((a) => {
@@ -481,12 +488,16 @@ async function caregiverDashboard(db, userId, res) {
       fu.first_name || ' ' || fu.last_name AS family_name,
       cp.hourly_rate AS cg_hourly_rate, cp.rate_daytime AS cg_rate_daytime,
       cp.rate_nighttime AS cg_rate_nighttime, cp.rate_overnight AS cg_rate_overnight,
-      vl.check_in_time
+      vl.check_in_time,
+      tcp.proposed_time AS tc_proposed_time,
+      tcp.proposed_duration AS tc_proposed_duration,
+      tcp.proposed_by AS tc_proposed_by
     FROM care_sessions cs
     LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
     LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
     LEFT JOIN users fu ON cs.family_user_id = fu.id
     LEFT JOIN visit_logs vl ON vl.session_id = cs.id
+    LEFT JOIN time_change_proposals tcp ON cs.pending_time_change_id = tcp.id
     WHERE cs.caregiver_id = ? AND cs.scheduled_date >= ? AND cs.status IN ('pending', 'confirmed', 'in_progress', 'payment_hold')
     ORDER BY cs.scheduled_date ASC, cs.scheduled_time ASC
     LIMIT 20
@@ -744,6 +755,9 @@ async function caregiverDashboard(db, userId, res) {
         interviewStatus: s.interview_status || null,
         checkInTime: s.check_in_time || null,
         pendingTimeChangeId: s.pending_time_change_id || null,
+        tcProposedTime: s.tc_proposed_time || null,
+        tcProposedDuration: s.tc_proposed_duration || null,
+        tcProposedBy: s.tc_proposed_by || null,
       };
     }),
     reviews: reviews.map(r => ({

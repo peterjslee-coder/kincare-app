@@ -1803,9 +1803,22 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                         </div>
                       )}
                       <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)' }}>{recipName}</div>
-                      <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>
-                        {dayLabel}{timeLabel ? ` at ${timeLabel}` : ''}{duration ? ` \u2022 ${duration}hr` : ''}{svcType ? ` \u2022 ${formatServiceType(svcType)}` : ''}
-                      </div>
+                      {hasPendingTimeChange && s.tcProposedTime ? (
+                        <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>
+                          {dayLabel} at{' '}
+                          <span style={{ textDecoration: 'line-through', opacity: 0.5 }}>{timeLabel}</span>
+                          {' '}
+                          <span style={{ color: 'var(--color-purple)', fontWeight: 700 }}>{TimezoneHelper.formatTime(s.tcProposedTime)}</span>
+                          {s.tcProposedDuration && parseFloat(s.tcProposedDuration) !== parseFloat(duration) ? (
+                            <>{' \u2022 '}<span style={{ textDecoration: 'line-through', opacity: 0.5 }}>{duration}hr</span>{' '}<span style={{ color: 'var(--color-purple)', fontWeight: 700 }}>{s.tcProposedDuration}hr</span></>
+                          ) : duration ? ` \u2022 ${duration}hr` : ''}
+                          {svcType ? ` \u2022 ${formatServiceType(svcType)}` : ''}
+                        </div>
+                      ) : (
+                        <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>
+                          {dayLabel}{timeLabel ? ` at ${timeLabel}` : ''}{duration ? ` \u2022 ${duration}hr` : ''}{svcType ? ` \u2022 ${formatServiceType(svcType)}` : ''}
+                        </div>
+                      )}
                       {loc ? (
                         <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>{'\uD83D\uDCCD'} {loc}</div>
                       ) : noAddress ? (
