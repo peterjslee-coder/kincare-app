@@ -104,6 +104,48 @@
 - [x] **Offline check-in/check-out + notes (v1.57.8, Mar 30).** Caregivers can now check in, check out, and leave care notes when they have no internet. Actions are saved to IndexedDB and auto-sync when connectivity returns. Orange "pending sync" badge shows queued count, with manual "Sync Now" button. Server accepts `offlineTimestamp` so recorded times reflect when the action actually happened, not when it synced. *(Pete — Mar 30)*
 - [x] **Admin document viewer — unified across all 3 tables (v1.57.8, Mar 30).** Admin can now see all uploaded documents for any user in the user detail drawer. Searches `caregiver_documents` (DL, certs from onboarding), `verified_documents` (unified system with AI classification), and `authorization_documents` (legacy POA/guardianship). Each doc shows type label, category icon, file name, date, and status badge. Click to preview (images inline, PDFs in iframe). Admin preview endpoint now searches all 3 tables. *(Pete — Mar 30)*
 
+## iPAi Smart FAQ — Phased Roadmap
+
+> Self-updating help system powered by iPAi. FAQ content stays current with UI changes, iPAi detects user friction patterns, and proactively helps struggling users. *(Pete — Mar 31, 2026)*
+
+### Phase 1 — FAQ Page + Data Model
+
+> Goal: Ship a working FAQ page with structured content and visual walkthroughs that reference actual UI elements via CSS variables. Foundation everything else builds on.
+
+- [ ] **`faq_entries` table.** Schema: `id`, `slug`, `question`, `keywords` (text array for search), `category` (appointments, payments, caregivers, account, etc.), `body_md` (explanation text as markdown), `policy_text` (optional callout box), `walkthrough_steps` (JSONB — array of `{ step_num, label, mockup_type, caption }`), `role_visibility` (family, caregiver, both), `sort_order`, `is_published`, `created_at`, `updated_at`.
+- [ ] **FAQ admin tab.** Admin Panel → new "FAQ" tab. CRUD for FAQ entries — edit question, body, policy text, walkthrough steps. Toggle publish/unpublish. Reorder. Preview renders the entry as users will see it.
+- [ ] **FAQ page route.** `/faq` — accessible from Account tab or footer link. Search bar, category chips, expandable Q&A cards. Each answer has: explanation text, optional policy callout box, optional visual walkthrough (numbered steps with mini UI mockup panels). Uses app CSS variables so colors/styling auto-match theme.
+- [ ] **Walkthrough mockup component library.** Reusable mini-renderers: `hero-card`, `session-detail`, `button-bar`, `modal-dialog`, `time-picker`, `payment-card`, etc. Each renders a tiny static recreation of the real UI using the same CSS variables. A `mockup_type` in the walkthrough step JSON maps to the right renderer. When we change a button label or color in the real app, the FAQ mockups inherit the change via shared CSS vars.
+- [ ] **Seed initial 10-15 FAQ entries.** Priority entries: How do I change an appointment time? How do I cancel? How do I book a session? How does payment work? How do I set up passkeys? How do I leave a review? What's the short-notice surcharge? How do I add a care recipient? How do I invite family to the care team? What does the caregiver see?
+- [ ] **Deep-link support.** FAQ entries addressable by slug: `/faq#change-appointment-time`. iPAi and push notifications can link directly to the relevant FAQ.
+
+### Phase 2 — iPAi Behavioral Detection + Admin Alerts
+
+> Goal: iPAi watches user behavior and flags patterns that suggest confusion, friction, or missing FAQ coverage. Admin gets actionable alerts.
+
+- [ ] **`user_behavior_signals` table.** Schema: `id`, `user_id`, `signal_type` (enum: `workaround_detected`, `repeated_question`, `friction_pattern`, `feedback_complaint`), `description`, `related_faq_slug` (nullable — links to existing FAQ if relevant), `session_ids` (array), `metadata` (JSONB — details like "cancelled + rebooked same caregiver within 20 min"), `created_at`, `resolved_at`, `admin_dismissed`.
+- [ ] **Workaround detection rules.** iPAi backend cron or event hooks that catch patterns:
+  - Cancel + rebook same caregiver at different time within 30 min → "Could have used time change" signal.
+  - User asks iPAi "how do I [X]?" and X maps to an existing FAQ → "FAQ not discoverable" signal.
+  - User asks iPAi "how do I [X]?" and X has NO matching FAQ → "FAQ gap" signal.
+  - Multiple users give similar negative feedback keywords within a rolling window → "Friction cluster" signal.
+  - User spends >60s on the time picker or backs out of Request Care 3+ times → "UI friction" signal (requires lightweight client-side timing events).
+- [ ] **Admin "Help Insights" card on Overview dashboard.** Shows: count of unresolved signals this week, top 3 friction patterns, suggested new/expanded FAQs. Tapping a signal shows the details (which users, what they did, when). Admin can dismiss, create a FAQ from it, or flag for dev work.
+- [ ] **iPAi chat integration.** When a user asks iPAi a question that matches a FAQ entry, iPAi includes the FAQ deep-link in its response: "Here's a quick guide that might help: [How do I change an appointment time?](/faq#change-appointment-time)". iPAi also logs the question as a signal if it's asked frequently.
+- [ ] **Weekly FAQ health digest.** iPAi generates a weekly admin summary: "12 users asked about payments this week (FAQ exists, 8 found it). 3 users cancelled and rebooked instead of changing time (FAQ exists, none saw it). 2 new questions with no FAQ coverage: 'how do I tip?' and 'what if nobody shows up?'"
+
+### Phase 3 — Proactive User Messaging
+
+> Goal: iPAi reaches out to users in the moment when it detects they're struggling, before they get frustrated or give up.
+
+- [ ] **Contextual help nudges via push notification.** When iPAi detects a workaround pattern in real-time (e.g., user just cancelled a session and is now booking a new one with the same caregiver), send a gentle push: "Looks like you're rescheduling — next time you can change the time directly from the session detail! [See how →](/faq#change-appointment-time)". Nudge only once per pattern per user (don't nag).
+- [ ] **In-app contextual help tooltip.** On screens where iPAi knows users frequently struggle (based on signal data), show a small "💡 Need help?" floating pill. Tapping it opens the relevant FAQ entry inline as a bottom sheet — not a full page navigation. Dismissable, and remembers if user dismissed it.
+- [ ] **iPAi-initiated DM.** For higher-friction signals (user has been stuck for several minutes, or gave negative feedback), iPAi sends a conversational message in the Messages tab: "Hey! I noticed you might be having trouble with appointment times. Here's a quick walkthrough that should help — and if that doesn't cover it, just reply here and I'll sort it out." Natural, helpful, not robotic.
+- [ ] **Feedback loop — "Was this helpful?"** After iPAi sends a help nudge or FAQ link, track whether the user: (a) tapped the link, (b) completed the action they were stuck on, (c) gave a thumbs up/down. Feed this back into signal quality scoring so iPAi gets better at knowing when to intervene vs. when to stay quiet.
+- [ ] **Admin notification for intervention patterns.** When iPAi intervenes with a user, log it. Admin can see: "iPAi helped 5 users with time changes this week, 4 resolved, 1 still stuck (followed up)." This closes the loop — admin knows the FAQ system is working and where it isn't.
+
+---
+
 ## Features — Up Next
 
 > Ideas and features not yet batched. When enough accumulate, we'll group them into the next batch.
