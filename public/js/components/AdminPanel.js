@@ -1851,9 +1851,6 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
           {/* ── Compact Stat Tiles ── */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 10, marginBottom: 16 }}>
             {[
-              { label: 'Active Users', value: stats.totalUsers, icon: '👥', onClick: () => setActiveTab('people') },
-              { label: 'Caregivers', value: stats.totalCaregivers, icon: '🤝', onClick: () => setActiveTab('people') },
-              { label: 'Visits / Week', value: stats.visitsThisWeek || 0, icon: '📋', onClick: () => setActiveTab('sessions') },
               { label: 'Revenue MTD', value: `$${(stats.revenueMtd || 0).toLocaleString()}`, icon: '💰', onClick: () => setActiveTab('financials') },
               { label: 'Avg Rating', value: `${stats.avgRating || '—'} ⭐`, icon: '⭐', sub: `${stats.totalReviews || 0} reviews`, onClick: () => setActiveTab('customerservice') },
             ].map((s, i) => (

@@ -950,15 +950,25 @@ const AdminFinancials = window.AdminFinancials = () => {
                 const m = Math.round((hrs - h) * 60);
                 return h > 0 ? `${h}h ${m}m` : `${m}m`;
               };
+              const haversineDistFt = (lat1, lng1, lat2, lng2) => {
+                const toRad = x => x * Math.PI / 180;
+                const R = 20902231; // earth radius in feet
+                const dLat = toRad(lat2 - lat1);
+                const dLng = toRad(lng2 - lng1);
+                const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng/2)**2;
+                return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+              };
               const geoIcon = (geo) => {
                 if (!geo || (!geo.inLat && !geo.outLat)) return React.createElement('span', { style: { color: 'var(--text-muted)', fontSize: 11 } }, '—');
                 const hasIn = geo.inLat && geo.inLng;
                 const hasOut = geo.outLat && geo.outLng;
-                const distLabel = geo.distanceFt != null ? `${Math.round(geo.distanceFt)} ft` : '';
+                const sameSpot = hasIn && hasOut && haversineDistFt(geo.inLat, geo.inLng, geo.outLat, geo.outLng) < 500;
+                const icon = hasIn && hasOut ? (sameSpot ? '📍' : '📍📍') : hasIn ? '📍½' : '📍?';
+                const label = sameSpot ? 'Same location' : hasIn && hasOut ? 'Separate locations' : hasIn ? 'Check-in only' : 'Check-out only';
                 return React.createElement('span', {
-                  title: `Check-in: ${hasIn ? `${geo.inLat.toFixed(4)}, ${geo.inLng.toFixed(4)}` : 'none'}${distLabel ? ` (${distLabel} from address)` : ''}\nCheck-out: ${hasOut ? `${geo.outLat.toFixed(4)}, ${geo.outLng.toFixed(4)}` : 'none'}`,
-                  style: { cursor: 'help', fontSize: 13 },
-                }, hasIn && hasOut ? '📍✓' : hasIn ? '📍½' : '📍?');
+                  title: label,
+                  style: { cursor: 'pointer', fontSize: 13 },
+                }, icon);
               };
 
               if (rows.length === 0) {
@@ -1026,24 +1036,69 @@ const AdminFinancials = window.AdminFinancials = () => {
                                 React.createElement('strong', null, 'Service: '), r.serviceType,
                               ),
                               React.createElement('div', null,
-                                r.geo && r.geo.inLat ? React.createElement(React.Fragment, null,
-                                  React.createElement('strong', null, 'Check-in GPS: '),
-                                  React.createElement('a', {
-                                    href: `https://maps.google.com/?q=${r.geo.inLat},${r.geo.inLng}`,
-                                    target: '_blank', rel: 'noopener', style: { color: 'var(--role-color)' },
-                                  }, `${r.geo.inLat.toFixed(5)}, ${r.geo.inLng.toFixed(5)}`),
-                                  r.geo.distanceFt != null && React.createElement('span', { style: { color: 'var(--text-muted)', marginLeft: 6 } },
-                                    `(${Math.round(r.geo.distanceFt)} ft from address)`),
-                                  React.createElement('br'),
-                                ) : null,
-                                r.geo && r.geo.outLat ? React.createElement(React.Fragment, null,
-                                  React.createElement('strong', null, 'Check-out GPS: '),
-                                  React.createElement('a', {
-                                    href: `https://maps.google.com/?q=${r.geo.outLat},${r.geo.outLng}`,
-                                    target: '_blank', rel: 'noopener', style: { color: 'var(--role-color)' },
-                                  }, `${r.geo.outLat.toFixed(5)}, ${r.geo.outLng.toFixed(5)}`),
-                                  React.createElement('br'),
-                                ) : null,
+                                (() => {
+                                  if (!r.geo) return React.createElement(React.Fragment, null,
+                                    React.createElement('span', { style: { color: 'var(--text-muted)', fontStyle: 'italic' } }, 'No GPS data recorded'),
+                                    React.createElement('br'),
+                                  );
+                                  const hasIn = r.geo.inLat && r.geo.inLng;
+                                  const hasOut = r.geo.outLat && r.geo.outLng;
+                                  const sameSpot = hasIn && hasOut && haversineDistFt(r.geo.inLat, r.geo.inLng, r.geo.outLat, r.geo.outLng) < 500;
+                                  const ioDistFt = hasIn && hasOut ? Math.round(haversineDistFt(r.geo.inLat, r.geo.inLng, r.geo.outLat, r.geo.outLng)) : null;
+                                  if (sameSpot) {
+                                    // Combined pin — check-in and check-out were at the same place
+                                    const midLat = ((r.geo.inLat + r.geo.outLat) / 2).toFixed(5);
+                                    const midLng = ((r.geo.inLng + r.geo.outLng) / 2).toFixed(5);
+                                    return React.createElement(React.Fragment, null,
+                                      React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 } },
+                                        React.createElement('span', { style: { fontSize: 16 } }, '📍'),
+                                        React.createElement('div', null,
+                                          React.createElement('strong', { style: { color: '#2e7d32' } }, 'Same location '),
+                                          React.createElement('span', { style: { fontSize: 11, color: 'var(--text-muted)' } }, `(${ioDistFt} ft apart)`),
+                                        ),
+                                      ),
+                                      React.createElement('a', {
+                                        href: `https://maps.google.com/?q=${midLat},${midLng}`,
+                                        target: '_blank', rel: 'noopener',
+                                        style: { color: 'var(--role-color)', fontWeight: 600, fontSize: 12, display: 'inline-block', padding: '4px 10px', background: '#e8f5e9', borderRadius: 6 },
+                                      }, `View on Map (${midLat}, ${midLng})`),
+                                      r.geo.distanceFt != null && React.createElement('div', { style: { fontSize: 11, color: 'var(--text-muted)', marginTop: 4 } },
+                                        `${Math.round(r.geo.distanceFt)} ft from care recipient's address`),
+                                      React.createElement('br'),
+                                    );
+                                  }
+                                  // Separate pins for check-in and check-out
+                                  return React.createElement(React.Fragment, null,
+                                    hasIn && React.createElement('div', { style: { marginBottom: 6 } },
+                                      React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 6 } },
+                                        React.createElement('span', { style: { fontSize: 14 } }, '🟢'),
+                                        React.createElement('strong', null, 'Check-in: '),
+                                        React.createElement('a', {
+                                          href: `https://maps.google.com/?q=${r.geo.inLat},${r.geo.inLng}`,
+                                          target: '_blank', rel: 'noopener',
+                                          style: { color: 'var(--role-color)', fontWeight: 500, fontSize: 12 },
+                                        }, `${r.geo.inLat.toFixed(5)}, ${r.geo.inLng.toFixed(5)}`),
+                                      ),
+                                      r.geo.distanceFt != null && React.createElement('div', { style: { fontSize: 11, color: 'var(--text-muted)', marginLeft: 24 } },
+                                        `${Math.round(r.geo.distanceFt)} ft from care recipient's address`),
+                                    ),
+                                    hasOut && React.createElement('div', { style: { marginBottom: 6 } },
+                                      React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 6 } },
+                                        React.createElement('span', { style: { fontSize: 14 } }, '🔴'),
+                                        React.createElement('strong', null, 'Check-out: '),
+                                        React.createElement('a', {
+                                          href: `https://maps.google.com/?q=${r.geo.outLat},${r.geo.outLng}`,
+                                          target: '_blank', rel: 'noopener',
+                                          style: { color: 'var(--role-color)', fontWeight: 500, fontSize: 12 },
+                                        }, `${r.geo.outLat.toFixed(5)}, ${r.geo.outLng.toFixed(5)}`),
+                                      ),
+                                    ),
+                                    hasIn && hasOut && React.createElement('div', { style: { fontSize: 11, color: ioDistFt > 2000 ? '#c62828' : 'var(--text-muted)', fontWeight: ioDistFt > 2000 ? 600 : 400, marginBottom: 4 } },
+                                      `${ioDistFt.toLocaleString()} ft between check-in and check-out${ioDistFt > 2000 ? ' ⚠️ Large distance' : ''}`),
+                                    !hasIn && !hasOut && React.createElement('span', { style: { color: 'var(--text-muted)', fontStyle: 'italic' } }, 'No GPS data recorded'),
+                                    React.createElement('br'),
+                                  );
+                                })(),
                                 React.createElement('strong', null, 'Status: '), r.status,
                               ),
                             ),
