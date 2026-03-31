@@ -1783,11 +1783,18 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
           sub: `${safetyFlagCount} pending or escalated`,
           action: () => { setActiveTab('safety'); },
         });
-        // BG check alerts
-        if (checkrAlertCount > 0) attentionItems.push({
-          icon: '🔍', color: '#f57f17', pill: `${checkrAlertCount} alert${checkrAlertCount > 1 ? 's' : ''}`, pillBg: '#fff8e1', pillColor: '#f57f17',
-          title: `Background check alerts`,
-          sub: `${checkrAlertCount} need attention`,
+        // BG check action items (caregivers with results needing admin review)
+        bgCheckActionItems.forEach(item => attentionItems.push({
+          icon: '🔍', color: '#f57f17', pill: item.checkrStatus === 'consider' ? 'Review' : item.checkrStatus.replace(/_/g, ' '), pillBg: '#fff8e1', pillColor: '#f57f17',
+          title: `BG check — ${item.name}`,
+          sub: `Status: ${item.checkrStatus.replace(/_/g, ' ')} · needs admin decision`,
+          action: () => { setActiveTab('bgchecks'); },
+        }));
+        // Additional unread checkr alerts beyond the action items
+        if (checkrAlertCount > bgCheckActionItems.length) attentionItems.push({
+          icon: '🔍', color: '#f57f17', pill: `${checkrAlertCount - bgCheckActionItems.length} new`, pillBg: '#fff8e1', pillColor: '#f57f17',
+          title: `Background check updates`,
+          sub: `${checkrAlertCount - bgCheckActionItems.length} new notification${(checkrAlertCount - bgCheckActionItems.length) !== 1 ? 's' : ''}`,
           action: () => { setActiveTab('bgchecks'); },
         });
         // Open tickets
@@ -1861,14 +1868,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
             </div>
           )}
 
-          {/* ── All Clear state ── */}
-          {attentionItems.length === 0 && (
-            <div style={{ background: '#e8f5e9', borderRadius: 12, border: '1px solid #c8e6c9', padding: '20px 18px', marginBottom: 16, textAlign: 'center' }}>
-              <div style={{ fontSize: 28, marginBottom: 4 }}>✅</div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: '#2e7d32' }}>All clear</div>
-              <div style={{ fontSize: 12, color: '#388e3c', marginTop: 2 }}>No items need your attention right now</div>
-            </div>
-          )}
+          {/* No "All Clear" banner — if nothing needs attention, skip straight to Quick Actions */}
 
           {/* ── Quick Actions grid ── */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))', gap: 8, marginBottom: 16 }}>
