@@ -1142,19 +1142,37 @@ router.delete("/users/:id/nuke", async (req, res) => {
       // Consent audit log entries by this user
       await tx.prepare("DELETE FROM consent_audit_log WHERE actor_id = ?").run(id);
 
-      // Safety flags, tickets, referrals, milestones, reminders, manual payments
-      try { await tx.prepare("DELETE FROM safety_flags WHERE user_id = ?").run(id); } catch (e) { /* table may not exist */ }
+      // Safety flags & related sub-tables
+      try { await tx.prepare("DELETE FROM safety_flag_threads WHERE participant_user_id = ?").run(id); } catch (e) { /* */ }
+      try { await tx.prepare("UPDATE safety_flag_events SET actor_id = NULL WHERE actor_id = ?").run(id); } catch (e) { /* */ }
+      try { await tx.prepare("DELETE FROM safety_flags WHERE user_id = ?").run(id); } catch (e) { /* */ }
       try { await tx.prepare("UPDATE safety_flags SET reviewed_by = NULL WHERE reviewed_by = ?").run(id); } catch (e) { /* */ }
+
+      // Tickets
       try { await tx.prepare("DELETE FROM admin_ticket_comments WHERE author_id = ?").run(id); } catch (e) { /* */ }
       try { await tx.prepare("UPDATE admin_tickets SET assigned_to = NULL WHERE assigned_to = ?").run(id); } catch (e) { /* */ }
       try { await tx.prepare("DELETE FROM admin_tickets WHERE reporter_user_id = ?").run(id); } catch (e) { /* */ }
       try { await tx.prepare("UPDATE admin_tickets SET related_user_id = NULL WHERE related_user_id = ?").run(id); } catch (e) { /* */ }
+
+      // Interviews, disputes, time proposals, tips
+      try { await tx.prepare("DELETE FROM interviews WHERE requested_by = ? OR requested_of = ?").run(id, id); } catch (e) { /* */ }
+      try { await tx.prepare("DELETE FROM session_disputes WHERE filed_by = ?").run(id); } catch (e) { /* */ }
+      try { await tx.prepare("UPDATE session_disputes SET resolved_by = NULL WHERE resolved_by = ?").run(id); } catch (e) { /* */ }
+      try { await tx.prepare("DELETE FROM time_proposals WHERE caregiver_user_id = ?").run(id); } catch (e) { /* */ }
+      try { await tx.prepare("DELETE FROM tips WHERE family_user_id = ?").run(id); } catch (e) { /* */ }
+
+      // Referrals, milestones, reminders, manual payments
       try { await tx.prepare("DELETE FROM referrals WHERE referrer_user_id = ?").run(id); } catch (e) { /* */ }
       try { await tx.prepare("UPDATE referrals SET referred_user_id = NULL WHERE referred_user_id = ?").run(id); } catch (e) { /* */ }
       try { await tx.prepare("DELETE FROM milestones WHERE user_id = ?").run(id); } catch (e) { /* */ }
-      try { await tx.prepare("DELETE FROM manual_payments WHERE family_user_id = ?").run(id); } catch (e) { /* */ }
+      try { await tx.prepare("DELETE FROM manual_payments WHERE from_user_id = ?").run(id); } catch (e) { /* */ }
       try { await tx.prepare("DELETE FROM kindred_reminders WHERE from_user_id = ?").run(id); } catch (e) { /* */ }
       try { await tx.prepare("DELETE FROM consent_outreach WHERE initiated_by = ?").run(id); } catch (e) { /* */ }
+
+      // Nullify nullable FK refs on surviving rows
+      try { await tx.prepare("UPDATE care_teams SET billing_user_id = NULL WHERE billing_user_id = ?").run(id); } catch (e) { /* */ }
+      try { await tx.prepare("UPDATE care_recipients SET linked_user_id = NULL WHERE linked_user_id = ?").run(id); } catch (e) { /* */ }
+      try { await tx.prepare("UPDATE caregiver_assignments SET family_user_id = NULL WHERE family_user_id = ?").run(id); } catch (e) { /* */ }
 
       // Finally: DELETE the user row
       await tx.prepare("DELETE FROM users WHERE id = ?").run(id);

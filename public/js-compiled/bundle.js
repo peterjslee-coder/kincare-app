@@ -69684,6 +69684,8 @@ const App = () => {
             if (typeof disconnectSocket === 'function') disconnectSocket();
             return;
           }
+          // Apply user's saved theme now that we know they're authenticated
+          if (typeof window.__applyUserTheme === 'function') window.__applyUserTheme();
           const userRoles = data.user.roles || [data.user.role];
           setCurrentUser({
             id: data.user.id,

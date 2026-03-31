@@ -51,23 +51,30 @@
   <!-- Pre-compiled app bundle (built by scripts/build-client.js) -->
   <script>window.APP_VERSION = '1.57.8';</script>
   <script>
-    // ─── Theme initialization (before render to prevent flash) ───
+    // ─── Theme initialization ───
+    // Always start light (brand green). Unauthenticated visitors should never
+    // see dark mode — they haven't set a preference. The React app applies the
+    // user's saved theme after auth/me confirms a session (see app.js).
     (function() {
-      try {
-        var saved = localStorage.getItem('inplace-theme') || 'light';
-        if (saved === 'system') {
-          var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-          document.documentElement.setAttribute('data-theme', prefersDark ? 'dark' : 'light');
-          // Listen for OS theme changes
-          window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(e) {
-            if (localStorage.getItem('inplace-theme') === 'system') {
-              document.documentElement.setAttribute('data-theme', e.matches ? 'dark' : 'light');
-            }
-          });
-        } else {
-          document.documentElement.setAttribute('data-theme', saved);
-        }
-      } catch(e) {}
+      document.documentElement.setAttribute('data-theme', 'light');
+      // Helper the React app calls once the user is authenticated:
+      window.__applyUserTheme = function() {
+        try {
+          var saved = localStorage.getItem('inplace-theme') || 'light';
+          if (saved === 'system') {
+            var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            document.documentElement.setAttribute('data-theme', prefersDark ? 'dark' : 'light');
+            // Listen for OS theme changes while session is active
+            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(e) {
+              if (localStorage.getItem('inplace-theme') === 'system') {
+                document.documentElement.setAttribute('data-theme', e.matches ? 'dark' : 'light');
+              }
+            });
+          } else {
+            document.documentElement.setAttribute('data-theme', saved);
+          }
+        } catch(e) {}
+      };
     })();
   </script>
   <script src="/js-compiled/bundle.js?v=1.57.8"></script>
