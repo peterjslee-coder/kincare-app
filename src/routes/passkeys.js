@@ -298,13 +298,10 @@ router.post("/authenticate/verify", async (req, res) => {
     const refreshToken = await generateRefreshToken(passkey.uid);
     setRefreshCookie(res, refreshToken);
 
-    // Auto-register this IP as trusted for admin users (passkey = strongest verification)
-    if (passkey.role === 'admin' || passkey.is_admin) {
-      registerTrustedIp(passkey.uid, getClientIp(req), {
-        userAgent: (req.headers["user-agent"] || "").substring(0, 200),
-        verifiedVia: "passkey",
-      }).catch(() => {}); // fire-and-forget
-    }
+    // NOTE: Do NOT auto-trust admin IPs on passkey login.
+    // Unknown IPs should trigger a passkey challenge in the admin panel
+    // so new networks are always verified explicitly.
+    // The ip-verify/verify endpoint in admin.js is the ONLY path to trust a new IP.
 
     res.json({
       token,

@@ -383,13 +383,9 @@ router.post("/login", validateLogin, async (req, res) => {
     const refreshToken = await generateRefreshToken(user.id);
     setRefreshCookie(res, refreshToken);
 
-    // Auto-register this IP as trusted for admin users
-    if (user.role === 'admin') {
-      registerTrustedIp(user.id, getClientIp(req), {
-        userAgent: (req.headers["user-agent"] || "").substring(0, 200),
-        verifiedVia: "password_login",
-      }).catch(() => {}); // fire-and-forget
-    }
+    // NOTE: Do NOT auto-trust admin IPs on login.
+    // Unknown IPs should trigger a passkey challenge in the admin panel
+    // so new networks are always verified explicitly.
 
     res.json(responseData);
   } catch (err) {
