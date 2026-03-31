@@ -228,7 +228,7 @@ app.use("/api/", apiLimiter);
 // ─── Serve Frontend ───
 // Prevent browser from caching index.html so users always get fresh JS references
 app.use((req, res, next) => {
-  if (req.path === "/" || req.path === "/index.html") {
+  if (req.path === "/" || req.path === "/index.html" || req.path.endsWith(".js") || req.path.endsWith(".css")) {
     res.set("Cache-Control", "no-cache, no-store, must-revalidate");
     res.set("Pragma", "no-cache");
     res.set("Expires", "0");
