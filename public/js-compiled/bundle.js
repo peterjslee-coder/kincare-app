@@ -61467,7 +61467,7 @@ const AdminPanel = window.AdminPanel = ({
       if (d !== null && d !== void 0 && d.counts) {
         const cm = {};
         d.counts.forEach(c => {
-          cm[c.status] = c.count;
+          cm[c.status] = Number(c.count) || 0;
         });
         setTicketCounts(cm);
         setTicketCount((cm.open || 0) + (cm.in_progress || 0));

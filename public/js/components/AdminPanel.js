@@ -712,7 +712,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
     apiFetch('/api/admin/tickets?limit=1').then(r => r?.ok ? r.json() : null).then(d => {
       if (d?.counts) {
         const cm = {};
-        d.counts.forEach(c => { cm[c.status] = c.count; });
+        d.counts.forEach(c => { cm[c.status] = Number(c.count) || 0; });
         setTicketCounts(cm);
         setTicketCount((cm.open || 0) + (cm.in_progress || 0));
       }
