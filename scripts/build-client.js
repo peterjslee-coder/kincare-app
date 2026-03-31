@@ -111,4 +111,31 @@ fs.writeFileSync(outPath, result.code, "utf-8");
 
 const sizeKB = (Buffer.byteLength(result.code, "utf-8") / 1024).toFixed(1);
 console.log(`  Bundle written: ${outPath} (${sizeKB} KB)`);
+
+// ─── Auto-bump cache-buster in sw.js and index.html ───
+// Uses a content hash of the bundle so the version changes only when code changes
+const crypto = require("crypto");
+const bundleHash = crypto.createHash("md5").update(result.code).digest("hex").slice(0, 8);
+const buildVersion = `build-${bundleHash}`;
+
+// Update sw.js CACHE_NAME and SW_VERSION
+const swPath = path.join(PUBLIC, "sw.js");
+if (fs.existsSync(swPath)) {
+  let sw = fs.readFileSync(swPath, "utf-8");
+  sw = sw.replace(/const CACHE_NAME = '[^']+';/, `const CACHE_NAME = 'inplace-${buildVersion}';`);
+  sw = sw.replace(/const SW_VERSION = '[^']+';/, `const SW_VERSION = '${buildVersion}';`);
+  fs.writeFileSync(swPath, sw, "utf-8");
+  console.log(`  SW cache version: ${buildVersion}`);
+}
+
+// Update index.html bundle.js cache buster
+const indexPath = path.join(PUBLIC, "index.html");
+if (fs.existsSync(indexPath)) {
+  let html = fs.readFileSync(indexPath, "utf-8");
+  html = html.replace(/bundle\.js\?v=[^"]+/, `bundle.js?v=${buildVersion}`);
+  html = html.replace(/styles\.css\?v=[^"]+/, `styles.css?v=${buildVersion}`);
+  fs.writeFileSync(indexPath, html, "utf-8");
+  console.log(`  HTML cache busters updated`);
+}
+
 console.log("  Build complete.");

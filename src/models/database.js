@@ -1034,6 +1034,33 @@ async function initializeDatabase() {
     `ALTER TABLE verified_documents ADD COLUMN IF NOT EXISTS deleted_user_email TEXT`,
     `ALTER TABLE authorization_documents ADD COLUMN IF NOT EXISTS retained_from_deleted INTEGER DEFAULT 0`,
     `ALTER TABLE authorization_documents ADD COLUMN IF NOT EXISTS deleted_user_email TEXT`,
+
+    // ─── v1.58.0 — Versioned legal documents (terms, privacy, liability) ───
+    `CREATE TABLE IF NOT EXISTS legal_documents (
+      id TEXT PRIMARY KEY,
+      doc_type TEXT NOT NULL,
+      version TEXT NOT NULL,
+      title TEXT NOT NULL,
+      content TEXT NOT NULL,
+      change_summary TEXT,
+      previous_version TEXT,
+      published_by TEXT REFERENCES users(id),
+      published_at TIMESTAMPTZ DEFAULT NOW(),
+      is_active INTEGER DEFAULT 1,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`,
+    `CREATE TABLE IF NOT EXISTS user_legal_acceptances (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id),
+      document_id TEXT NOT NULL REFERENCES legal_documents(id),
+      doc_type TEXT NOT NULL,
+      version TEXT NOT NULL,
+      accepted_at TIMESTAMPTZ DEFAULT NOW(),
+      ip_address TEXT,
+      user_agent TEXT
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_legal_docs_type_active ON legal_documents(doc_type, is_active)`,
+    `CREATE INDEX IF NOT EXISTS idx_legal_acceptances_user ON user_legal_acceptances(user_id, doc_type)`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }

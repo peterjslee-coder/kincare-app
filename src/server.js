@@ -301,6 +301,7 @@ app.use("/api/scheduling", require("./routes/nlScheduling"));
 app.use("/api/ipai", require("./routes/ipaiChat"));
 app.use("/api/referrals", require("./routes/referrals"));
 app.use("/api/kindred", require("./routes/kindred"));
+app.use("/api/legal", require("./routes/legal"));
 
 // ─── App version check (lightweight, no auth) ───
 const APP_VERSION = "1.57.7";
