@@ -231,8 +231,11 @@ router.get("/stats", async (req, res) => {
     try {
       safetyFlags = await db.prepare("SELECT COUNT(*) as count FROM safety_flags WHERE status IN ('pending', 'open', 'investigating', 'escalated')").get() || { count: 0 };
     } catch (e) { /* */ }
+    let ratingDist = {};
     try {
-      avgRating = await db.prepare("SELECT ROUND(AVG(rating), 1) as avg, COUNT(*) as total FROM reviews").get() || { avg: 0, total: 0 };
+      avgRating = await db.prepare("SELECT ROUND(AVG(r.rating), 1) as avg, COUNT(*) as total FROM reviews r JOIN users fu ON r.family_user_id = fu.id WHERE COALESCE(fu.is_demo, 0) = 0").get() || { avg: 0, total: 0 };
+      const distRows = await db.prepare("SELECT r.rating, COUNT(*) as cnt FROM reviews r JOIN users fu ON r.family_user_id = fu.id WHERE COALESCE(fu.is_demo, 0) = 0 GROUP BY r.rating").all();
+      for (const d of distRows) ratingDist[d.rating] = d.cnt;
     } catch (e) { /* */ }
     try {
       revenueMtd = await db.prepare("SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE status = 'completed' AND created_at >= date_trunc('month', NOW())").get() || { total: 0 };
@@ -259,6 +262,7 @@ router.get("/stats", async (req, res) => {
       totalReviews: parseInt(avgRating.total || 0),
       revenueMtd: parseFloat(revenueMtd.total || 0),
       visitsThisWeek: parseInt(visitsThisWeek.count || 0),
+      ratingDistribution: ratingDist,
     });
   } catch (err) {
     console.error("Admin stats error:", err);
@@ -1273,7 +1277,7 @@ router.get("/reviews", requireAdmin, async (req, res) => {
     const { status, maxRating, limit: lim } = req.query;
     const maxR = parseInt(maxRating) || 3;
     const limitN = Math.min(parseInt(lim) || 50, 200);
-    let where = "WHERE r.rating < ?";
+    let where = "WHERE r.rating < ? AND COALESCE(fu.is_demo, 0) = 0";
     const params = [maxR];
 
     if (status && status !== 'all') {
@@ -1305,15 +1309,17 @@ router.get("/reviews", requireAdmin, async (req, res) => {
       LIMIT ?
     `).all(...params);
 
-    // Summary counts
+    // Summary counts (exclude demo users)
     const counts = await db.prepare(`
       SELECT
-        COUNT(*) FILTER (WHERE rating < 3) AS total_flagged,
-        COUNT(*) FILTER (WHERE rating < 3 AND COALESCE(admin_status, 'pending') = 'pending') AS pending,
-        COUNT(*) FILTER (WHERE rating < 3 AND admin_status = 'reviewed') AS reviewed,
-        COUNT(*) FILTER (WHERE rating < 3 AND admin_status = 'escalated') AS escalated,
-        COUNT(*) FILTER (WHERE rating < 3 AND admin_status = 'resolved') AS resolved
-      FROM reviews
+        COUNT(*) FILTER (WHERE r.rating < 3) AS total_flagged,
+        COUNT(*) FILTER (WHERE r.rating < 3 AND COALESCE(r.admin_status, 'pending') = 'pending') AS pending,
+        COUNT(*) FILTER (WHERE r.rating < 3 AND r.admin_status = 'reviewed') AS reviewed,
+        COUNT(*) FILTER (WHERE r.rating < 3 AND r.admin_status = 'escalated') AS escalated,
+        COUNT(*) FILTER (WHERE r.rating < 3 AND r.admin_status = 'resolved') AS resolved
+      FROM reviews r
+      JOIN users fu ON r.family_user_id = fu.id
+      WHERE COALESCE(fu.is_demo, 0) = 0
     `).get();
 
     res.json({ reviews: rows, counts });
@@ -1353,7 +1359,7 @@ router.get("/reviews/all", requireAdmin, async (req, res) => {
     const limitN = Math.min(parseInt(lim) || 50, 200);
     const offsetN = parseInt(off) || 0;
 
-    let where = "WHERE 1=1";
+    let where = "WHERE COALESCE(fu.is_demo, 0) = 0";
     const params = [];
     if (minRating) { where += " AND r.rating >= ?"; params.push(parseInt(minRating)); }
     if (maxRating) { where += " AND r.rating <= ?"; params.push(parseInt(maxRating)); }
@@ -1386,26 +1392,37 @@ router.get("/reviews/all", requireAdmin, async (req, res) => {
       LIMIT ? OFFSET ?
     `).all(...params);
 
-    // Total count
-    const countRow = await db.prepare(`SELECT COUNT(*) AS total FROM reviews r ${where.replace(/ LIMIT.*/, '')}`).get(...params.slice(0, -2));
+    // Total count (reuse same where + join to exclude demos)
+    const countRow = await db.prepare(`
+      SELECT COUNT(*) AS total FROM reviews r
+      JOIN users fu ON r.family_user_id = fu.id
+      ${where}
+    `).get(...params.slice(0, -2));
 
-    // Distribution: count per rating
+    // Distribution: count per rating (exclude demo)
     const dist = await db.prepare(`
-      SELECT rating, COUNT(*) AS cnt FROM reviews GROUP BY rating ORDER BY rating
+      SELECT r.rating, COUNT(*) AS cnt FROM reviews r
+      JOIN users fu ON r.family_user_id = fu.id
+      WHERE COALESCE(fu.is_demo, 0) = 0
+      GROUP BY r.rating ORDER BY r.rating
     `).all();
 
-    // Overall stats
+    // Overall stats (exclude demo)
     const overall = await db.prepare(`
-      SELECT COUNT(*) AS total, ROUND(AVG(rating), 2) AS avg_rating,
-        COUNT(*) FILTER (WHERE rating >= 4) AS positive,
-        COUNT(*) FILTER (WHERE rating <= 2) AS negative,
-        COUNT(*) FILTER (WHERE comment IS NOT NULL AND comment != '') AS with_comments
-      FROM reviews
+      SELECT COUNT(*) AS total, ROUND(AVG(r.rating), 2) AS avg_rating,
+        COUNT(*) FILTER (WHERE r.rating >= 4) AS positive,
+        COUNT(*) FILTER (WHERE r.rating <= 2) AS negative,
+        COUNT(*) FILTER (WHERE r.comment IS NOT NULL AND r.comment != '') AS with_comments
+      FROM reviews r
+      JOIN users fu ON r.family_user_id = fu.id
+      WHERE COALESCE(fu.is_demo, 0) = 0
     `).get();
 
-    // Flagged count (pending admin review)
+    // Flagged count (exclude demo)
     const flagged = await db.prepare(`
-      SELECT COUNT(*) AS cnt FROM reviews WHERE rating < 3 AND COALESCE(admin_status, 'pending') = 'pending'
+      SELECT COUNT(*) AS cnt FROM reviews r
+      JOIN users fu ON r.family_user_id = fu.id
+      WHERE COALESCE(fu.is_demo, 0) = 0 AND r.rating < 3 AND COALESCE(r.admin_status, 'pending') = 'pending'
     `).get();
 
     res.json({
@@ -1425,16 +1442,17 @@ router.get("/reviews/insights", requireAdmin, async (req, res) => {
   try {
     const db = await getDb();
 
-    // Get recent reviews with comments (last 90 days)
+    // Get recent reviews with comments (last 90 days, exclude demo)
     const recentReviews = await db.prepare(`
       SELECT r.rating, r.comment, r.review_type, r.created_at,
         cu.first_name || ' ' || cu.last_name AS caregiver_name,
         cs.service_type
       FROM reviews r
+      JOIN users fu ON r.family_user_id = fu.id
       JOIN caregiver_profiles cp ON r.caregiver_id = cp.id
       JOIN users cu ON cp.user_id = cu.id
       JOIN care_sessions cs ON r.session_id = cs.id
-      WHERE r.created_at > NOW() - INTERVAL '90 days'
+      WHERE r.created_at > NOW() - INTERVAL '90 days' AND COALESCE(fu.is_demo, 0) = 0
       ORDER BY r.created_at DESC
       LIMIT 100
     `).all();

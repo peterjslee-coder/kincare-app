@@ -60198,7 +60198,7 @@ const AdminPanel = window.AdminPanel = ({
     setCsLoading(false);
   };
   useEffect(() => {
-    if (activeTab === 'customerservice') loadCsReviews();
+    if (activeTab === 'customerservice' || activeTab === 'ratings') loadCsReviews();
   }, [csFilter]);
 
   // ─── All Ratings: load all reviews + insights ───
@@ -60227,7 +60227,10 @@ const AdminPanel = window.AdminPanel = ({
     setAllReviewsLoading(false);
   };
   useEffect(() => {
-    if (activeTab === 'ratings') loadAllReviews();
+    if (activeTab === 'ratings') {
+      loadAllReviews();
+      loadCsReviews(); // also load flagged reviews for bottom section
+    }
   }, [activeTab, reviewSort, reviewOrder, reviewRatingFilter]);
 
   // ─── Admin iPAi Briefing ───
@@ -60826,10 +60829,6 @@ const AdminPanel = window.AdminPanel = ({
       label: 'Tickets',
       icon: '🎫',
       badge: ticketCount || null
-    }, {
-      id: 'customerservice',
-      label: 'Support',
-      icon: '🛎️'
     }, {
       id: 'ratings',
       label: 'Ratings',
@@ -61910,7 +61909,7 @@ const AdminPanel = window.AdminPanel = ({
     onBlur: e => {
       e.target.style.borderColor = 'var(--border-color)';
     }
-  })), activeTab === 'overview' && stats && (_adminBriefing$items => {
+  })), activeTab === 'overview' && stats && ((_adminBriefing$items, _adminBriefing$review, _adminBriefing$review2) => {
     // Build attention items dynamically
     const attentionItems = [];
     // Pending user approvals
@@ -62254,7 +62253,7 @@ const AdminPanel = window.AdminPanel = ({
       value: `${stats.avgRating || '—'} ⭐`,
       icon: '⭐',
       sub: `${stats.totalReviews || 0} reviews`,
-      onClick: () => setActiveTab('customerservice')
+      onClick: () => setActiveTab('ratings')
     }].map((s, i) => /*#__PURE__*/React.createElement("div", {
       key: i,
       onClick: s.onClick,
@@ -62467,7 +62466,138 @@ const AdminPanel = window.AdminPanel = ({
         month: 'short',
         day: 'numeric'
       })));
-    }))))));
+    }))))), /*#__PURE__*/React.createElement("div", {
+      style: {
+        background: 'var(--bg-card)',
+        borderRadius: 12,
+        border: '1px solid var(--border-color)',
+        overflow: 'hidden',
+        marginTop: 14
+      },
+      onClick: () => setActiveTab('ratings')
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        padding: '14px 18px',
+        borderBottom: '1px solid var(--border-color)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        cursor: 'pointer'
+      }
+    }, /*#__PURE__*/React.createElement("h3", {
+      style: {
+        fontSize: 14,
+        fontWeight: 600,
+        margin: 0
+      }
+    }, "\u2B50 Ratings & Reviews"), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 11,
+        color: 'var(--role-color)',
+        fontWeight: 600
+      }
+    }, "View all \u2192")), /*#__PURE__*/React.createElement("div", {
+      style: {
+        padding: 16
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        gap: 16,
+        alignItems: 'center',
+        flexWrap: 'wrap'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        textAlign: 'center'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 28,
+        fontWeight: 700,
+        color: '#f59e0b'
+      }
+    }, stats.avgRating || '—', " ", /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 16
+      }
+    }, "\u2605")), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 10,
+        color: 'var(--text-muted)'
+      }
+    }, stats.totalReviews || 0, " reviews")), /*#__PURE__*/React.createElement("div", {
+      style: {
+        flex: 1,
+        minWidth: 120
+      }
+    }, [5, 4, 3, 2, 1].map(star => {
+      var _stats$ratingDistribu;
+      const pct = ((_stats$ratingDistribu = stats.ratingDistribution) === null || _stats$ratingDistribu === void 0 ? void 0 : _stats$ratingDistribu[star]) || 0;
+      const total = stats.totalReviews || 1;
+      const width = Math.max(pct / total * 100, 0);
+      return /*#__PURE__*/React.createElement("div", {
+        key: star,
+        style: {
+          display: 'flex',
+          alignItems: 'center',
+          gap: 4,
+          marginBottom: 2
+        }
+      }, /*#__PURE__*/React.createElement("span", {
+        style: {
+          fontSize: 10,
+          color: 'var(--text-muted)',
+          width: 16,
+          textAlign: 'right'
+        }
+      }, star, "\u2605"), /*#__PURE__*/React.createElement("div", {
+        style: {
+          flex: 1,
+          height: 8,
+          background: 'var(--bg-neutral)',
+          borderRadius: 4,
+          overflow: 'hidden'
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          width: `${width}%`,
+          height: '100%',
+          background: star >= 4 ? '#4caf50' : star === 3 ? '#ff9800' : '#e53935',
+          borderRadius: 4
+        }
+      })), /*#__PURE__*/React.createElement("span", {
+        style: {
+          fontSize: 9,
+          color: 'var(--text-muted)',
+          width: 16
+        }
+      }, pct));
+    })), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 4
+      }
+    }, (adminBriefing === null || adminBriefing === void 0 || (_adminBriefing$review = adminBriefing.reviews) === null || _adminBriefing$review === void 0 ? void 0 : _adminBriefing$review.reviews_7d) > 0 && /*#__PURE__*/React.createElement("div", {
+      style: {
+        padding: '4px 10px',
+        borderRadius: 8,
+        background: '#e3f2fd',
+        fontSize: 11,
+        color: '#1565c0',
+        fontWeight: 600
+      }
+    }, adminBriefing.reviews.reviews_7d, " this week"), (adminBriefing === null || adminBriefing === void 0 || (_adminBriefing$review2 = adminBriefing.reviews) === null || _adminBriefing$review2 === void 0 ? void 0 : _adminBriefing$review2.flagged_pending) > 0 && /*#__PURE__*/React.createElement("div", {
+      style: {
+        padding: '4px 10px',
+        borderRadius: 8,
+        background: '#ffebee',
+        fontSize: 11,
+        color: '#c62828',
+        fontWeight: 600
+      }
+    }, adminBriefing.reviews.flagged_pending, " flagged"))))));
   })(), activeTab === 'people' && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
@@ -66054,28 +66184,350 @@ const AdminPanel = window.AdminPanel = ({
         fontSize: 11,
         color: 'var(--text-muted)'
       }
-    }, "Reviewed by ", r.reviewed_by_name || 'admin', " on ", new Date(r.admin_reviewed_at).toLocaleString()), r.rating < 3 && /*#__PURE__*/React.createElement("div", {
+    }, "Reviewed by ", r.reviewed_by_name || 'admin', " on ", new Date(r.admin_reviewed_at).toLocaleString())));
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 24,
+      borderTop: '2px solid var(--border-color)',
+      paddingTop: 20
+    }
+  }, /*#__PURE__*/React.createElement("h3", {
+    style: {
+      fontSize: 16,
+      fontWeight: 700,
+      marginBottom: 8,
+      color: 'var(--text-primary)'
+    }
+  }, "\uD83D\uDEA9 Flagged Reviews (Below 3\u2605)"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontSize: 12,
+      color: 'var(--text-secondary)',
+      marginBottom: 12
+    }
+  }, "Reviews rated below 3 stars are automatically flagged. Triage each one, add notes, and update status."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 8,
+      flexWrap: 'wrap',
+      marginBottom: 12
+    }
+  }, [{
+    key: 'pending',
+    label: 'Pending',
+    color: 'var(--color-warning)',
+    bg: 'var(--color-warning-bg)'
+  }, {
+    key: 'reviewed',
+    label: 'Reviewed',
+    color: 'var(--color-info)',
+    bg: 'var(--color-info-bg)'
+  }, {
+    key: 'escalated',
+    label: 'Escalated',
+    color: 'var(--color-purple)',
+    bg: 'var(--color-purple-bg)'
+  }, {
+    key: 'resolved',
+    label: 'Resolved',
+    color: 'var(--color-success)',
+    bg: 'var(--color-success-bg)'
+  }].map(b => /*#__PURE__*/React.createElement("div", {
+    key: b.key,
+    onClick: () => setCsFilter(b.key),
+    style: {
+      padding: '5px 12px',
+      borderRadius: 20,
+      fontSize: 11,
+      fontWeight: 600,
+      cursor: 'pointer',
+      background: csFilter === b.key ? b.color : b.bg,
+      color: csFilter === b.key ? 'var(--text-on-primary)' : b.color,
+      border: `1px solid ${b.color}`,
+      transition: 'all 0.15s'
+    }
+  }, b.label, " ", csCounts[b.key] != null ? `(${csCounts[b.key]})` : '')), /*#__PURE__*/React.createElement("div", {
+    onClick: () => setCsFilter('all'),
+    style: {
+      padding: '5px 12px',
+      borderRadius: 20,
+      fontSize: 11,
+      fontWeight: 600,
+      cursor: 'pointer',
+      background: csFilter === 'all' ? 'var(--text-secondary)' : 'var(--bg-primary)',
+      color: csFilter === 'all' ? 'var(--text-on-primary)' : 'var(--text-secondary)',
+      border: '1px solid #ccc'
+    }
+  }, "All (", csCounts.total_flagged || 0, ")")), csLoading ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: 'center',
+      padding: 30,
+      color: 'var(--text-muted)'
+    }
+  }, "Loading flagged reviews...") : csReviews.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: 'center',
+      padding: 30,
+      color: 'var(--text-muted)',
+      background: 'var(--bg-neutral)',
+      borderRadius: 12,
+      fontSize: 13
+    }
+  }, "No ", csFilter !== 'all' ? csFilter : 'flagged', " reviews found.") : /*#__PURE__*/React.createElement("div", null, csReviews.map(r => {
+    const isExp = csExpanded === r.id;
+    const stars = '★'.repeat(r.rating) + '☆'.repeat(5 - r.rating);
+    const statusColors = {
+      pending: 'var(--color-warning)',
+      flagged: 'var(--color-error)',
+      reviewed: 'var(--color-info)',
+      escalated: 'var(--color-purple)',
+      resolved: 'var(--color-success)'
+    };
+    const st = r.admin_status || 'pending';
+    return /*#__PURE__*/React.createElement("div", {
+      key: r.id,
       style: {
-        marginTop: 8
+        marginBottom: 8,
+        borderRadius: 12,
+        border: '1px solid #e0e0e0',
+        background: st === 'pending' ? 'var(--bg-warm)' : 'var(--bg-card)',
+        overflow: 'hidden'
       }
-    }, /*#__PURE__*/React.createElement("button", {
+    }, /*#__PURE__*/React.createElement("div", {
       onClick: () => {
-        setCsExpanded(r.id);
-        setActiveTab('customerservice');
-        setCsFilter('all');
+        setCsExpanded(isExp ? null : r.id);
+        setCsNotes(r.admin_notes || '');
       },
       style: {
-        padding: '6px 14px',
+        padding: '12px 16px',
+        cursor: 'pointer',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        gap: 12
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        flex: 1
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        marginBottom: 3
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: '#e53935',
+        fontSize: 15,
+        letterSpacing: 1
+      }
+    }, stars), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 13,
+        fontWeight: 600
+      }
+    }, r.caregiver_name), /*#__PURE__*/React.createElement("span", {
+      style: {
+        padding: '1px 7px',
+        borderRadius: 10,
+        fontSize: 9,
+        fontWeight: 700,
+        background: statusColors[st] + '20',
+        color: statusColors[st],
+        textTransform: 'uppercase'
+      }
+    }, st)), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 11,
+        color: 'var(--text-secondary)'
+      }
+    }, "From ", r.family_name, " \u2022 ", r.recipient_name || 'Visit', " \u2022 ", new Date(r.created_at).toLocaleDateString()), r.comment && !isExp && /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 12,
+        color: 'var(--text-primary)',
+        marginTop: 4,
+        fontStyle: 'italic',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap'
+      }
+    }, "\"", r.comment.length > 100 ? r.comment.slice(0, 100) + '...' : r.comment, "\"")), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 11,
+        color: 'var(--text-muted)'
+      }
+    }, isExp ? '▲' : '▼')), isExp && /*#__PURE__*/React.createElement("div", {
+      style: {
+        padding: '0 16px 14px',
+        borderTop: '1px solid #f0f0f0'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        gap: 20,
+        flexWrap: 'wrap',
+        marginTop: 10,
+        marginBottom: 10
+      }
+    }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 10,
+        color: 'var(--text-muted)',
+        fontWeight: 700,
+        textTransform: 'uppercase',
+        marginBottom: 2
+      }
+    }, "Caregiver"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 13,
+        fontWeight: 600
+      }
+    }, r.caregiver_name), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 11,
+        color: 'var(--text-secondary)'
+      }
+    }, "Overall: ", r.caregiver_rating_avg || 'N/A', "\u2605 (", r.caregiver_rating_count || 0, " reviews)")), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 10,
+        color: 'var(--text-muted)',
+        fontWeight: 700,
+        textTransform: 'uppercase',
+        marginBottom: 2
+      }
+    }, "Family"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 13,
+        fontWeight: 600
+      }
+    }, r.family_name), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 11,
+        color: 'var(--text-secondary)'
+      }
+    }, r.family_email)), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 10,
+        color: 'var(--text-muted)',
+        fontWeight: 700,
+        textTransform: 'uppercase',
+        marginBottom: 2
+      }
+    }, "Session"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 13
+      }
+    }, r.scheduled_date ? new Date(r.scheduled_date).toLocaleDateString() : 'N/A', r.scheduled_time ? ` at ${r.scheduled_time}` : ''), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 11,
+        color: 'var(--text-secondary)'
+      }
+    }, r.review_type === 'late_cancellation' ? 'Late cancel' : r.review_type === 'no_show' ? 'No-show' : 'Session'))), r.comment && /*#__PURE__*/React.createElement("div", {
+      style: {
+        padding: '10px 14px',
+        background: 'var(--bg-neutral)',
+        borderRadius: 8,
+        marginBottom: 10,
+        fontSize: 13,
+        lineHeight: 1.6
+      }
+    }, r.comment), r.admin_reviewed_at && /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 11,
+        color: 'var(--text-muted)',
+        marginBottom: 8
+      }
+    }, "Reviewed by ", r.reviewed_by_name || 'admin', " on ", new Date(r.admin_reviewed_at).toLocaleString()), /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginBottom: 10
+      }
+    }, /*#__PURE__*/React.createElement("label", {
+      style: {
+        fontSize: 11,
+        fontWeight: 600,
+        color: 'var(--text-secondary)',
+        display: 'block',
+        marginBottom: 3
+      }
+    }, "Admin Notes"), /*#__PURE__*/React.createElement("textarea", {
+      value: csNotes,
+      onChange: e => setCsNotes(e.target.value),
+      placeholder: "Add internal notes...",
+      style: {
+        width: '100%',
+        minHeight: 50,
+        padding: '8px 10px',
+        borderRadius: 8,
+        border: '1px solid #ddd',
+        fontSize: 12,
+        resize: 'vertical',
+        boxSizing: 'border-box'
+      }
+    })), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        gap: 6,
+        flexWrap: 'wrap'
+      }
+    }, st !== 'reviewed' && /*#__PURE__*/React.createElement("button", {
+      disabled: csActionLoading === r.id,
+      onClick: () => handleCsAction(r.id, 'reviewed'),
+      style: {
+        padding: '7px 14px',
         borderRadius: 8,
         border: 'none',
         background: 'var(--color-info)',
         color: 'var(--text-on-primary)',
         fontSize: 11,
         fontWeight: 600,
-        cursor: 'pointer'
+        cursor: 'pointer',
+        opacity: csActionLoading === r.id ? 0.6 : 1
       }
-    }, "Manage in Support \u2192"))));
-  }))), activeTab === 'financials' && /*#__PURE__*/React.createElement(AdminFinancials, null), activeTab === 'help' && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    }, "Mark Reviewed"), st !== 'escalated' && /*#__PURE__*/React.createElement("button", {
+      disabled: csActionLoading === r.id,
+      onClick: () => handleCsAction(r.id, 'escalated'),
+      style: {
+        padding: '7px 14px',
+        borderRadius: 8,
+        border: 'none',
+        background: 'var(--color-purple)',
+        color: 'var(--text-on-primary)',
+        fontSize: 11,
+        fontWeight: 600,
+        cursor: 'pointer',
+        opacity: csActionLoading === r.id ? 0.6 : 1
+      }
+    }, "Escalate"), st !== 'resolved' && /*#__PURE__*/React.createElement("button", {
+      disabled: csActionLoading === r.id,
+      onClick: () => handleCsAction(r.id, 'resolved'),
+      style: {
+        padding: '7px 14px',
+        borderRadius: 8,
+        border: 'none',
+        background: 'var(--color-success)',
+        color: 'var(--text-on-primary)',
+        fontSize: 11,
+        fontWeight: 600,
+        cursor: 'pointer',
+        opacity: csActionLoading === r.id ? 0.6 : 1
+      }
+    }, "Resolve"), st !== 'pending' && /*#__PURE__*/React.createElement("button", {
+      disabled: csActionLoading === r.id,
+      onClick: () => handleCsAction(r.id, 'pending'),
+      style: {
+        padding: '7px 14px',
+        borderRadius: 8,
+        border: '1px solid #ccc',
+        background: 'var(--bg-surface)',
+        color: 'var(--text-secondary)',
+        fontSize: 11,
+        fontWeight: 600,
+        cursor: 'pointer',
+        opacity: csActionLoading === r.id ? 0.6 : 1
+      }
+    }, "Reset to Pending"))));
+  })))), activeTab === 'financials' && /*#__PURE__*/React.createElement(AdminFinancials, null), activeTab === 'help' && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       justifyContent: 'space-between',
