@@ -179,6 +179,79 @@ router.get("/summary", async (req, res) => {
   }
 });
 
+// ─── GET /api/admin/financials/daily-snapshot ───
+// Daily chart data (last 14 days) + today vs yesterday quick stats
+router.get("/daily-snapshot", async (req, res) => {
+  try {
+    const db = await getDb();
+
+    // Daily data for last 14 days
+    const dailyData = await db.prepare(`
+      SELECT DATE(created_at) AS day,
+             COALESCE(SUM(amount), 0) AS gross,
+             COALESCE(SUM(platform_fee), 0) AS fees,
+             COALESCE(SUM(amount) - SUM(platform_fee), 0) AS net,
+             COUNT(*) AS payment_count
+      FROM payments WHERE status = 'completed'
+        AND created_at >= CURRENT_DATE - INTERVAL '13 days'
+      GROUP BY DATE(created_at)
+      ORDER BY day ASC
+    `).all();
+
+    // Sessions per day (last 14 days)
+    const dailySessions = await db.prepare(`
+      SELECT DATE(scheduled_date) AS day, COUNT(*) AS cnt
+      FROM care_sessions
+      WHERE status IN ('completed', 'confirmed', 'checked_in', 'scheduled')
+        AND scheduled_date >= CURRENT_DATE - INTERVAL '13 days'
+      GROUP BY DATE(scheduled_date) ORDER BY day ASC
+    `).all();
+
+    // Fill in all 14 days (including zeros)
+    const days = [];
+    const now = new Date();
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+      const key = d.toISOString().split('T')[0];
+      const found = dailyData.find(r => r.day && r.day.toISOString ? r.day.toISOString().split('T')[0] === key : String(r.day).split('T')[0] === key);
+      const sess = dailySessions.find(r => r.day && r.day.toISOString ? r.day.toISOString().split('T')[0] === key : String(r.day).split('T')[0] === key);
+      const label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const shortLabel = d.toLocaleDateString('en-US', { weekday: 'short' });
+      days.push({
+        day: key, label, shortLabel,
+        gross: found ? Math.round(Number(found.gross) * 100) / 100 : 0,
+        fees: found ? Math.round(Number(found.fees) * 100) / 100 : 0,
+        net: found ? Math.round(Number(found.net) * 100) / 100 : 0,
+        payments: found ? Number(found.payment_count) : 0,
+        sessions: sess ? Number(sess.cnt) : 0,
+      });
+    }
+
+    // Today = last element, yesterday = second to last
+    const today = days[days.length - 1];
+    const yesterday = days[days.length - 2];
+    const pctChange = (curr, prev) => prev > 0 ? Math.round(((curr - prev) / prev) * 100) : (curr > 0 ? 100 : 0);
+
+    const quickStats = {
+      sessionsToday: today.sessions,
+      sessionsDelta: pctChange(today.sessions, yesterday.sessions),
+      grossToday: today.gross,
+      grossDelta: pctChange(today.gross, yesterday.gross),
+      feesToday: today.fees,
+      feesDelta: pctChange(today.fees, yesterday.fees),
+      netToday: today.net,
+      netDelta: pctChange(today.net, yesterday.net),
+      paymentsToday: today.payments,
+      paymentsDelta: pctChange(today.payments, yesterday.payments),
+    };
+
+    res.json({ days, quickStats });
+  } catch (err) {
+    console.error("Daily snapshot error:", err);
+    res.status(500).json({ error: "Failed to fetch daily snapshot" });
+  }
+});
+
 // ─── GET /api/admin/financials/breakdown ───
 // Revenue breakdown by service type, payout speed, top clients/caregivers
 router.get("/breakdown", async (req, res) => {

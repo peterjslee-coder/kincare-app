@@ -54687,6 +54687,8 @@ const AdminFinancials = window.AdminFinancials = () => {
   const [paymentsEnabled, setPaymentsEnabled] = useState(false);
   const [paymentToggleLoading, setPaymentToggleLoading] = useState(false);
   const [paymentToggleConfirm, setPaymentToggleConfirm] = useState(false);
+  // Daily snapshot (chart + quick stats)
+  const [dailySnapshot, setDailySnapshot] = useState(null);
   // Treasury (Mercury + Stripe)
   const [treasury, setTreasury] = useState(null);
   const [treasuryLoading, setTreasuryLoading] = useState(true);
@@ -54695,7 +54697,7 @@ const AdminFinancials = window.AdminFinancials = () => {
   const fetchAll = async showRefresh => {
     if (showRefresh) setRefreshing(true);
     try {
-      const [sumRes, brkRes, insRes, txRes, feeRes, payRes, trsRes, auditRes] = await Promise.all([apiFetch('/api/admin/financials/summary'), apiFetch('/api/admin/financials/breakdown'), apiFetch('/api/admin/financials/insights'), apiFetch(`/api/admin/financials/transactions?page=${txPage}&limit=25`), apiFetch('/api/admin/financials/platform-fee'), apiFetch('/api/admin/financials/payments-enabled'), apiFetch('/api/admin/treasury'), apiFetch('/api/admin/financials/time-audit')]);
+      const [sumRes, brkRes, insRes, txRes, feeRes, payRes, trsRes, auditRes, snapRes] = await Promise.all([apiFetch('/api/admin/financials/summary'), apiFetch('/api/admin/financials/breakdown'), apiFetch('/api/admin/financials/insights'), apiFetch(`/api/admin/financials/transactions?page=${txPage}&limit=25`), apiFetch('/api/admin/financials/platform-fee'), apiFetch('/api/admin/financials/payments-enabled'), apiFetch('/api/admin/treasury'), apiFetch('/api/admin/financials/time-audit'), apiFetch('/api/admin/financials/daily-snapshot')]);
       if (sumRes !== null && sumRes !== void 0 && sumRes.ok) setSummary(await sumRes.json());
       if (brkRes !== null && brkRes !== void 0 && brkRes.ok) setBreakdown(await brkRes.json());
       if (insRes !== null && insRes !== void 0 && insRes.ok) {
@@ -54704,6 +54706,7 @@ const AdminFinancials = window.AdminFinancials = () => {
       }
       if (txRes !== null && txRes !== void 0 && txRes.ok) setTransactions(await txRes.json());
       if (auditRes !== null && auditRes !== void 0 && auditRes.ok) setTimeAudit(await auditRes.json());
+      if (snapRes !== null && snapRes !== void 0 && snapRes.ok) setDailySnapshot(await snapRes.json());
       if (feeRes !== null && feeRes !== void 0 && feeRes.ok) {
         const fd = await feeRes.json();
         setFeePercent(fd.platformFeePercent);
@@ -55241,7 +55244,217 @@ const AdminFinancials = window.AdminFinancials = () => {
       fontWeight: 600,
       color: 'var(--text-secondary)'
     }
-  }, refreshing ? '↻ Refreshing...' : '↻ Refresh')), treasury && (((_treasury$connected = treasury.connected) === null || _treasury$connected === void 0 ? void 0 : _treasury$connected.mercury) || ((_treasury$connected2 = treasury.connected) === null || _treasury$connected2 === void 0 ? void 0 : _treasury$connected2.stripe)) && /*#__PURE__*/React.createElement("div", {
+  }, refreshing ? '↻ Refreshing...' : '↻ Refresh')), dailySnapshot && /*#__PURE__*/React.createElement("div", {
+    className: "card",
+    style: {
+      marginBottom: 16,
+      padding: 18
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 10,
+      flexWrap: 'wrap',
+      marginBottom: 16
+    }
+  }, [{
+    label: 'Sessions',
+    value: dailySnapshot.quickStats.sessionsToday,
+    delta: dailySnapshot.quickStats.sessionsDelta,
+    prefix: ''
+  }, {
+    label: 'Gross Rev',
+    value: dailySnapshot.quickStats.grossToday,
+    delta: dailySnapshot.quickStats.grossDelta,
+    prefix: '$'
+  }, {
+    label: 'Platform Fees',
+    value: dailySnapshot.quickStats.feesToday,
+    delta: dailySnapshot.quickStats.feesDelta,
+    prefix: '$'
+  }, {
+    label: 'Net to Caregivers',
+    value: dailySnapshot.quickStats.netToday,
+    delta: dailySnapshot.quickStats.netDelta,
+    prefix: '$'
+  }, {
+    label: 'Payments',
+    value: dailySnapshot.quickStats.paymentsToday,
+    delta: dailySnapshot.quickStats.paymentsDelta,
+    prefix: ''
+  }].map((s, i) => {
+    const isPos = s.delta > 0;
+    const isZero = s.delta === 0;
+    const displayVal = s.prefix === '$' ? `$${Number(s.value).toFixed(2)}` : s.value;
+    return /*#__PURE__*/React.createElement("div", {
+      key: i,
+      style: {
+        flex: '1 1 130px',
+        padding: '10px 14px',
+        borderRadius: 10,
+        background: 'var(--bg-surface)',
+        border: '1px solid var(--border-color)'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 10,
+        color: 'var(--text-muted)',
+        textTransform: 'uppercase',
+        letterSpacing: 0.4,
+        marginBottom: 2
+      }
+    }, s.label), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        alignItems: 'baseline',
+        gap: 6
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 20,
+        fontWeight: 700,
+        color: 'var(--text-primary)'
+      }
+    }, displayVal), !isZero && /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 11,
+        fontWeight: 600,
+        color: isPos ? '#2e7d32' : '#c62828'
+      }
+    }, isPos ? '▲' : '▼', " ", Math.abs(s.delta), "%"), isZero && /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 11,
+        color: 'var(--text-muted)'
+      }
+    }, "\u2014")), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 10,
+        color: 'var(--text-muted)'
+      }
+    }, "vs yesterday"));
+  })), (() => {
+    const days = dailySnapshot.days || [];
+    if (days.length === 0) return null;
+    const W = 620,
+      H = 180,
+      padL = 50,
+      padR = 12,
+      padT = 12,
+      padB = 32;
+    const plotW = W - padL - padR;
+    const plotH = H - padT - padB;
+    const maxVal = Math.max(...days.map(d => d.gross), 1);
+    const xStep = plotW / Math.max(days.length - 1, 1);
+    const scaleY = v => padT + plotH - v / maxVal * plotH;
+    const scaleX = i => padL + i * xStep;
+    const linePath = key => days.map((d, i) => `${i === 0 ? 'M' : 'L'}${scaleX(i).toFixed(1)},${scaleY(d[key]).toFixed(1)}`).join(' ');
+    const lines = [{
+      key: 'gross',
+      color: '#1565c0',
+      label: 'Gross'
+    }, {
+      key: 'net',
+      color: '#2e7d32',
+      label: 'Net to Caregiver'
+    }, {
+      key: 'fees',
+      color: '#e65100',
+      label: 'Platform Fees'
+    }];
+
+    // Y-axis grid values
+    const gridSteps = 4;
+    const gridVals = Array.from({
+      length: gridSteps + 1
+    }, (_, i) => Math.round(maxVal / gridSteps * i));
+    return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 8
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 13,
+        fontWeight: 700,
+        color: 'var(--text-primary)'
+      }
+    }, "14-Day Revenue Trend"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        gap: 12
+      }
+    }, lines.map(l => /*#__PURE__*/React.createElement("span", {
+      key: l.key,
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 4,
+        fontSize: 11,
+        color: l.color
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        width: 14,
+        height: 3,
+        borderRadius: 2,
+        background: l.color,
+        display: 'inline-block'
+      }
+    }), l.label)))), /*#__PURE__*/React.createElement("div", {
+      style: {
+        overflowX: 'auto'
+      }
+    }, /*#__PURE__*/React.createElement("svg", {
+      width: W,
+      height: H,
+      viewBox: `0 0 ${W} ${H}`,
+      style: {
+        width: '100%',
+        maxWidth: W
+      }
+    }, gridVals.map((v, i) => /*#__PURE__*/React.createElement("g", {
+      key: i
+    }, /*#__PURE__*/React.createElement("line", {
+      x1: padL,
+      y1: scaleY(v),
+      x2: W - padR,
+      y2: scaleY(v),
+      stroke: "#e0e0e0",
+      strokeDasharray: "3,3"
+    }), /*#__PURE__*/React.createElement("text", {
+      x: padL - 6,
+      y: scaleY(v) + 4,
+      textAnchor: "end",
+      fontSize: "10",
+      fill: "#999"
+    }, "$", v))), days.map((d, i) => i % 2 === 0 && /*#__PURE__*/React.createElement("text", {
+      key: i,
+      x: scaleX(i),
+      y: H - 4,
+      textAnchor: "middle",
+      fontSize: "9",
+      fill: "#999"
+    }, d.shortLabel)), lines.map(l => /*#__PURE__*/React.createElement("path", {
+      key: l.key,
+      d: linePath(l.key),
+      fill: "none",
+      stroke: l.color,
+      strokeWidth: "2.5",
+      strokeLinejoin: "round",
+      strokeLinecap: "round"
+    })), lines.map(l => {
+      const last = days[days.length - 1];
+      return /*#__PURE__*/React.createElement("circle", {
+        key: l.key + '-dot',
+        cx: scaleX(days.length - 1),
+        cy: scaleY(last[l.key]),
+        r: "4",
+        fill: l.color
+      });
+    }))));
+  })()), treasury && (((_treasury$connected = treasury.connected) === null || _treasury$connected === void 0 ? void 0 : _treasury$connected.mercury) || ((_treasury$connected2 = treasury.connected) === null || _treasury$connected2 === void 0 ? void 0 : _treasury$connected2.stripe)) && /*#__PURE__*/React.createElement("div", {
     className: "card",
     style: {
       marginBottom: 16,

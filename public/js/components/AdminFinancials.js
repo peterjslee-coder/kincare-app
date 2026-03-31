@@ -29,6 +29,8 @@ const AdminFinancials = window.AdminFinancials = () => {
   const [paymentsEnabled, setPaymentsEnabled] = useState(false);
   const [paymentToggleLoading, setPaymentToggleLoading] = useState(false);
   const [paymentToggleConfirm, setPaymentToggleConfirm] = useState(false);
+  // Daily snapshot (chart + quick stats)
+  const [dailySnapshot, setDailySnapshot] = useState(null);
   // Treasury (Mercury + Stripe)
   const [treasury, setTreasury] = useState(null);
   const [treasuryLoading, setTreasuryLoading] = useState(true);
@@ -37,7 +39,7 @@ const AdminFinancials = window.AdminFinancials = () => {
   const fetchAll = async (showRefresh) => {
     if (showRefresh) setRefreshing(true);
     try {
-      const [sumRes, brkRes, insRes, txRes, feeRes, payRes, trsRes, auditRes] = await Promise.all([
+      const [sumRes, brkRes, insRes, txRes, feeRes, payRes, trsRes, auditRes, snapRes] = await Promise.all([
         apiFetch('/api/admin/financials/summary'),
         apiFetch('/api/admin/financials/breakdown'),
         apiFetch('/api/admin/financials/insights'),
@@ -46,12 +48,14 @@ const AdminFinancials = window.AdminFinancials = () => {
         apiFetch('/api/admin/financials/payments-enabled'),
         apiFetch('/api/admin/treasury'),
         apiFetch('/api/admin/financials/time-audit'),
+        apiFetch('/api/admin/financials/daily-snapshot'),
       ]);
       if (sumRes?.ok) setSummary(await sumRes.json());
       if (brkRes?.ok) setBreakdown(await brkRes.json());
       if (insRes?.ok) { const d = await insRes.json(); setInsights(d.insights || []); }
       if (txRes?.ok) setTransactions(await txRes.json());
       if (auditRes?.ok) setTimeAudit(await auditRes.json());
+      if (snapRes?.ok) setDailySnapshot(await snapRes.json());
       if (feeRes?.ok) {
         const fd = await feeRes.json();
         setFeePercent(fd.platformFeePercent);
@@ -367,6 +371,108 @@ const AdminFinancials = window.AdminFinancials = () => {
           {refreshing ? '↻ Refreshing...' : '↻ Refresh'}
         </button>
       </div>
+
+      {/* ── Daily Snapshot: Quick Stats + Line Chart ── */}
+      {dailySnapshot && (
+        <div className="card" style={{ marginBottom: 16, padding: 18 }}>
+          {/* Quick stat pills */}
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
+            {[
+              { label: 'Sessions', value: dailySnapshot.quickStats.sessionsToday, delta: dailySnapshot.quickStats.sessionsDelta, prefix: '' },
+              { label: 'Gross Rev', value: dailySnapshot.quickStats.grossToday, delta: dailySnapshot.quickStats.grossDelta, prefix: '$' },
+              { label: 'Platform Fees', value: dailySnapshot.quickStats.feesToday, delta: dailySnapshot.quickStats.feesDelta, prefix: '$' },
+              { label: 'Net to Caregivers', value: dailySnapshot.quickStats.netToday, delta: dailySnapshot.quickStats.netDelta, prefix: '$' },
+              { label: 'Payments', value: dailySnapshot.quickStats.paymentsToday, delta: dailySnapshot.quickStats.paymentsDelta, prefix: '' },
+            ].map((s, i) => {
+              const isPos = s.delta > 0;
+              const isZero = s.delta === 0;
+              const displayVal = s.prefix === '$' ? `$${Number(s.value).toFixed(2)}` : s.value;
+              return (
+                <div key={i} style={{
+                  flex: '1 1 130px', padding: '10px 14px', borderRadius: 10,
+                  background: 'var(--bg-surface)', border: '1px solid var(--border-color)',
+                }}>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 2 }}>{s.label}</div>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                    <span style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)' }}>{displayVal}</span>
+                    {!isZero && (
+                      <span style={{ fontSize: 11, fontWeight: 600, color: isPos ? '#2e7d32' : '#c62828' }}>
+                        {isPos ? '▲' : '▼'} {Math.abs(s.delta)}%
+                      </span>
+                    )}
+                    {isZero && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>—</span>}
+                  </div>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>vs yesterday</div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Line chart: Gross / Net / Fees over 14 days */}
+          {(() => {
+            const days = dailySnapshot.days || [];
+            if (days.length === 0) return null;
+            const W = 620, H = 180, padL = 50, padR = 12, padT = 12, padB = 32;
+            const plotW = W - padL - padR;
+            const plotH = H - padT - padB;
+            const maxVal = Math.max(...days.map(d => d.gross), 1);
+            const xStep = plotW / Math.max(days.length - 1, 1);
+            const scaleY = (v) => padT + plotH - (v / maxVal) * plotH;
+            const scaleX = (i) => padL + i * xStep;
+            const linePath = (key) => days.map((d, i) => `${i === 0 ? 'M' : 'L'}${scaleX(i).toFixed(1)},${scaleY(d[key]).toFixed(1)}`).join(' ');
+
+            const lines = [
+              { key: 'gross', color: '#1565c0', label: 'Gross' },
+              { key: 'net', color: '#2e7d32', label: 'Net to Caregiver' },
+              { key: 'fees', color: '#e65100', label: 'Platform Fees' },
+            ];
+
+            // Y-axis grid values
+            const gridSteps = 4;
+            const gridVals = Array.from({ length: gridSteps + 1 }, (_, i) => Math.round((maxVal / gridSteps) * i));
+
+            return (
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>14-Day Revenue Trend</span>
+                  <div style={{ display: 'flex', gap: 12 }}>
+                    {lines.map(l => (
+                      <span key={l.key} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: l.color }}>
+                        <span style={{ width: 14, height: 3, borderRadius: 2, background: l.color, display: 'inline-block' }}></span>
+                        {l.label}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <div style={{ overflowX: 'auto' }}>
+                  <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', maxWidth: W }}>
+                    {/* Grid lines */}
+                    {gridVals.map((v, i) => (
+                      <g key={i}>
+                        <line x1={padL} y1={scaleY(v)} x2={W - padR} y2={scaleY(v)} stroke="#e0e0e0" strokeDasharray="3,3" />
+                        <text x={padL - 6} y={scaleY(v) + 4} textAnchor="end" fontSize="10" fill="#999">${v}</text>
+                      </g>
+                    ))}
+                    {/* X-axis labels */}
+                    {days.map((d, i) => (
+                      i % 2 === 0 && <text key={i} x={scaleX(i)} y={H - 4} textAnchor="middle" fontSize="9" fill="#999">{d.shortLabel}</text>
+                    ))}
+                    {/* Lines */}
+                    {lines.map(l => (
+                      <path key={l.key} d={linePath(l.key)} fill="none" stroke={l.color} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+                    ))}
+                    {/* Dots on last day */}
+                    {lines.map(l => {
+                      const last = days[days.length - 1];
+                      return <circle key={l.key + '-dot'} cx={scaleX(days.length - 1)} cy={scaleY(last[l.key])} r="4" fill={l.color} />;
+                    })}
+                  </svg>
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      )}
 
       {/* ── Treasury / Cash Position ── */}
       {treasury && (treasury.connected?.mercury || treasury.connected?.stripe) && (
