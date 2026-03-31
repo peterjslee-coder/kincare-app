@@ -1,6 +1,6 @@
-// InPlace Service Worker — v1.50.40
-const CACHE_NAME = 'inplace-v1.56.2';
-const SW_VERSION = '1.56.2';
+// InPlace Service Worker — v1.57.8
+const CACHE_NAME = 'inplace-v1.57.8';
+const SW_VERSION = '1.57.8';
 const STATIC_ASSETS = [
   '/',
   '/css/styles.css',
@@ -63,15 +63,33 @@ self.addEventListener('fetch', (event) => {
     return; // Don't call event.respondWith — browser fetches directly
   }
 
-  // API calls: always network
+  // API calls: network-first, with offline-queueable awareness
   if (url.pathname.startsWith('/api/')) {
+    // Check if this is an offline-queueable POST (check-in, check-out, notes)
+    const isQueueable = event.request.method === 'POST' && (
+      url.pathname.match(/\/api\/sessions\/[^/]+\/check-in$/) ||
+      url.pathname.match(/\/api\/sessions\/[^/]+\/check-out$/) ||
+      url.pathname === '/api/notes'
+    );
+
     event.respondWith(
-      fetch(event.request).catch(() =>
-        new Response(JSON.stringify({ error: 'You appear to be offline' }), {
+      fetch(event.request).catch(() => {
+        if (isQueueable) {
+          // Return a special 503 with queueable flag so the client knows to queue
+          return new Response(JSON.stringify({
+            error: 'You appear to be offline',
+            queueable: true,
+            offlineMessage: 'Your action has been saved and will sync when you reconnect.',
+          }), {
+            status: 503,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+        return new Response(JSON.stringify({ error: 'You appear to be offline' }), {
           status: 503,
           headers: { 'Content-Type': 'application/json' },
-        })
-      )
+        });
+      })
     );
     return;
   }
@@ -189,6 +207,19 @@ self.addEventListener('notificationclick', (event) => {
       return clients.openWindow(targetUrl);
     })
   );
+});
+
+// ─── Background Sync: replay queued offline actions ───
+self.addEventListener('sync', (event) => {
+  if (event.tag === 'offline-sync') {
+    event.waitUntil(
+      self.clients.matchAll({ type: 'window' }).then((clients) => {
+        for (const client of clients) {
+          client.postMessage({ type: 'OFFLINE_SYNC_TRIGGER' });
+        }
+      })
+    );
+  }
 });
 
 // ─── Message handler: version reporting + push health check ───

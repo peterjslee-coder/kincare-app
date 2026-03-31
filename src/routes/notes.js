@@ -26,16 +26,25 @@ router.get("/:careRecipientId", async (req, res) => {
 // POST /api/notes — create a note
 router.post("/", async (req, res) => {
   const db = await getDb();
-  const { careRecipientId, content, noteType = "general" } = req.body;
+  const { careRecipientId, content, noteType = "general", offlineTimestamp, offlineSync } = req.body;
 
   if (!careRecipientId || !content) {
     return res.status(400).json({ error: "careRecipientId and content required" });
   }
 
+  // Use offline timestamp if provided (caregiver was offline and recorded locally)
+  const isOfflineSync = !!offlineSync;
+  if (isOfflineSync) {
+    console.log(`[notes] Offline sync — original time: ${offlineTimestamp}, recipient ${careRecipientId.slice(0, 8)}`);
+  }
+
   const id = uuid();
+  const createdAtSQL = isOfflineSync && offlineTimestamp
+    ? `'${new Date(offlineTimestamp).toISOString()}'`
+    : 'NOW()';
   await db.prepare(`
-    INSERT INTO recipient_notes (id, care_recipient_id, author_id, content, note_type)
-    VALUES (?, ?, ?, ?, ?)
+    INSERT INTO recipient_notes (id, care_recipient_id, author_id, content, note_type, created_at)
+    VALUES (?, ?, ?, ?, ?, ${createdAtSQL})
   `).run(id, careRecipientId, req.user.id, content, noteType);
 
   const note = await db.prepare(`

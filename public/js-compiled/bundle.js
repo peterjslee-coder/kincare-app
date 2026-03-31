@@ -1,3 +1,325 @@
+// ─── InPlace Offline Queue ───
+// IndexedDB-based queue for storing check-in, check-out, and note actions
+// when the caregiver has no internet. Auto-syncs when connectivity returns.
+
+const OFFLINE_DB_NAME = 'inplace-offline';
+const OFFLINE_DB_VERSION = 1;
+const STORE_NAME = 'pendingActions';
+
+// ─── IndexedDB helpers ───
+
+function openOfflineDB() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(OFFLINE_DB_NAME, OFFLINE_DB_VERSION);
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => resolve(request.result);
+    request.onupgradeneeded = event => {
+      const db = event.target.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        const store = db.createObjectStore(STORE_NAME, {
+          keyPath: 'id',
+          autoIncrement: true
+        });
+        store.createIndex('type', 'type', {
+          unique: false
+        });
+        store.createIndex('status', 'status', {
+          unique: false
+        });
+        store.createIndex('createdAt', 'createdAt', {
+          unique: false
+        });
+      }
+    };
+  });
+}
+
+// Queue an action for later sync
+// action: { type: 'check-in'|'check-out'|'note', url, method, body, sessionId?, meta? }
+async function queueOfflineAction(action) {
+  const db = await openOfflineDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    const record = {
+      ...action,
+      status: 'pending',
+      // pending | syncing | synced | failed
+      createdAt: new Date().toISOString(),
+      offlineTimestamp: new Date().toISOString(),
+      // actual time of action
+      attempts: 0,
+      lastError: null
+    };
+    const req = store.add(record);
+    req.onsuccess = () => {
+      record.id = req.result;
+      resolve(record);
+      // Notify any listeners that pending count changed
+      _notifyPendingChange();
+    };
+    req.onerror = () => reject(req.error);
+    tx.oncomplete = () => db.close();
+  });
+}
+
+// Get all pending (un-synced) actions, ordered by creation time
+async function getPendingActions() {
+  const db = await openOfflineDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const store = tx.objectStore(STORE_NAME);
+    const req = store.getAll();
+    req.onsuccess = () => {
+      const pending = req.result.filter(a => a.status === 'pending' || a.status === 'failed').sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+      resolve(pending);
+    };
+    req.onerror = () => reject(req.error);
+    tx.oncomplete = () => db.close();
+  });
+}
+
+// Get count of pending actions
+async function getPendingCount() {
+  const actions = await getPendingActions();
+  return actions.length;
+}
+
+// Update an action's status
+async function updateActionStatus(id, status, error) {
+  const db = await openOfflineDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    const getReq = store.get(id);
+    getReq.onsuccess = () => {
+      const record = getReq.result;
+      if (!record) return resolve(null);
+      record.status = status;
+      record.attempts = (record.attempts || 0) + (status === 'failed' ? 1 : 0);
+      if (error) record.lastError = error;
+      if (status === 'synced') record.syncedAt = new Date().toISOString();
+      store.put(record);
+      resolve(record);
+      _notifyPendingChange();
+    };
+    getReq.onerror = () => reject(getReq.error);
+    tx.oncomplete = () => db.close();
+  });
+}
+
+// Remove a synced action
+async function removeAction(id) {
+  const db = await openOfflineDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    tx.objectStore(STORE_NAME).delete(id);
+    tx.oncomplete = () => {
+      db.close();
+      resolve();
+      _notifyPendingChange();
+    };
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+// Clear all synced actions (cleanup)
+async function clearSyncedActions() {
+  const db = await openOfflineDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    const req = store.getAll();
+    req.onsuccess = () => {
+      for (const record of req.result) {
+        if (record.status === 'synced') store.delete(record.id);
+      }
+      resolve();
+    };
+    req.onerror = () => reject(req.error);
+    tx.oncomplete = () => {
+      db.close();
+      _notifyPendingChange();
+    };
+  });
+}
+
+// ─── Sync engine ───
+
+let _syncing = false;
+async function syncOfflineActions() {
+  if (_syncing) return {
+    synced: 0,
+    failed: 0
+  };
+  if (!navigator.onLine) return {
+    synced: 0,
+    failed: 0,
+    offline: true
+  };
+  _syncing = true;
+  let synced = 0;
+  let failed = 0;
+  try {
+    const pending = await getPendingActions();
+    if (pending.length === 0) return {
+      synced: 0,
+      failed: 0
+    };
+    console.log(`[OfflineQueue] Syncing ${pending.length} pending action(s)...`);
+    for (const action of pending) {
+      // Skip actions that have failed too many times
+      if (action.attempts >= 5) {
+        console.warn(`[OfflineQueue] Skipping action ${action.id} — too many attempts`);
+        continue;
+      }
+      await updateActionStatus(action.id, 'syncing');
+      try {
+        // Inject offlineTimestamp into the body so the server knows the real time
+        const body = action.body ? JSON.parse(action.body) : {};
+        body.offlineTimestamp = action.offlineTimestamp;
+        body.offlineSync = true;
+        const response = await window.apiFetch(action.url, {
+          method: action.method || 'POST',
+          body: JSON.stringify(body),
+          // Tag this as a sync request so we don't re-queue it
+          headers: {
+            'X-Offline-Sync': 'true'
+          }
+        });
+        if (response && response.ok) {
+          await updateActionStatus(action.id, 'synced');
+          // Clean up immediately
+          await removeAction(action.id);
+          synced++;
+          console.log(`[OfflineQueue] Synced: ${action.type} (${action.url})`);
+        } else {
+          const errData = response ? await response.json().catch(() => ({})) : {};
+          const errMsg = errData.error || `HTTP ${response === null || response === void 0 ? void 0 : response.status}`;
+
+          // If session was cancelled or doesn't exist, discard the action
+          if ((response === null || response === void 0 ? void 0 : response.status) === 404 || (response === null || response === void 0 ? void 0 : response.status) === 400) {
+            console.warn(`[OfflineQueue] Discarding ${action.type} — ${errMsg}`);
+            await updateActionStatus(action.id, 'synced'); // mark done
+            await removeAction(action.id);
+            synced++; // count as resolved
+          } else {
+            await updateActionStatus(action.id, 'failed', errMsg);
+            failed++;
+          }
+        }
+      } catch (err) {
+        // Network error — stop syncing, we're probably offline again
+        await updateActionStatus(action.id, 'failed', err.message);
+        failed++;
+        if (!navigator.onLine) break;
+      }
+    }
+  } finally {
+    _syncing = false;
+    // Clean up old synced records
+    await clearSyncedActions().catch(() => {});
+  }
+  return {
+    synced,
+    failed
+  };
+}
+
+// ─── Connectivity listeners ───
+
+let _pendingChangeListeners = [];
+function onPendingChange(callback) {
+  _pendingChangeListeners.push(callback);
+  return () => {
+    _pendingChangeListeners = _pendingChangeListeners.filter(cb => cb !== callback);
+  };
+}
+function _notifyPendingChange() {
+  getPendingCount().then(count => {
+    for (const cb of _pendingChangeListeners) {
+      try {
+        cb(count);
+      } catch {}
+    }
+  }).catch(() => {});
+}
+
+// Auto-sync when device comes back online
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', () => {
+    console.log('[OfflineQueue] Back online — starting sync...');
+    // Small delay to let network stabilize
+    setTimeout(() => {
+      syncOfflineActions().then(result => {
+        if (result.synced > 0) {
+          console.log(`[OfflineQueue] Sync complete: ${result.synced} synced, ${result.failed} failed`);
+        }
+      });
+    }, 2000);
+  });
+}
+
+// ─── High-level helpers for specific action types ───
+
+// Queue a check-in action
+async function queueOfflineCheckIn(sessionId, data) {
+  return queueOfflineAction({
+    type: 'check-in',
+    url: `/api/sessions/${sessionId}/check-in`,
+    method: 'POST',
+    body: JSON.stringify(data),
+    sessionId,
+    meta: {
+      description: 'Check in to care session',
+      sessionId
+    }
+  });
+}
+
+// Queue a check-out action
+async function queueOfflineCheckOut(sessionId, data) {
+  return queueOfflineAction({
+    type: 'check-out',
+    url: `/api/sessions/${sessionId}/check-out`,
+    method: 'POST',
+    body: JSON.stringify(data),
+    sessionId,
+    meta: {
+      description: 'Check out of care session',
+      sessionId
+    }
+  });
+}
+
+// Queue a note creation
+async function queueOfflineNote(data) {
+  return queueOfflineAction({
+    type: 'note',
+    url: '/api/notes',
+    method: 'POST',
+    body: JSON.stringify(data),
+    meta: {
+      description: 'Create care note',
+      careRecipientId: data.careRecipientId
+    }
+  });
+}
+
+// Export to window for use by other modules
+window.OfflineQueue = {
+  queueAction: queueOfflineAction,
+  queueCheckIn: queueOfflineCheckIn,
+  queueCheckOut: queueOfflineCheckOut,
+  queueNote: queueOfflineNote,
+  getPending: getPendingActions,
+  getPendingCount,
+  sync: syncOfflineActions,
+  onPendingChange,
+  removeAction,
+  clearSynced: clearSyncedActions
+};
+;
 const {
   useState,
   useEffect,
@@ -11235,21 +11557,44 @@ const CareProfile = window.CareProfile = ({
     if (!newNote.trim() || !(profile !== null && profile !== void 0 && profile.id)) return;
     setAddingNote(true);
     try {
+      const notePayload = {
+        careRecipientId: profile.id,
+        content: newNote.trim(),
+        noteType: 'general'
+      };
       const res = await apiFetch('/api/notes', {
         method: 'POST',
-        body: JSON.stringify({
-          careRecipientId: profile.id,
-          content: newNote.trim(),
-          noteType: 'general'
-        })
+        body: JSON.stringify(notePayload)
       });
       if (res !== null && res !== void 0 && res.ok) {
         setNewNote('');
         showToast('Note added', 'success');
         fetchNotes(profile.id);
+      } else if ((res === null || res === void 0 ? void 0 : res.status) === 503 || !navigator.onLine) {
+        if (window.OfflineQueue) {
+          await window.OfflineQueue.queueNote(notePayload);
+          setNewNote('');
+          showToast('Note saved offline — will sync when reconnected', 'success');
+        } else {
+          showToast('You\'re offline — try again later', 'error');
+        }
       }
-    } catch {
-      showToast('Failed to add note', 'error');
+    } catch (err) {
+      if (!navigator.onLine && window.OfflineQueue) {
+        try {
+          await window.OfflineQueue.queueNote({
+            careRecipientId: profile.id,
+            content: newNote.trim(),
+            noteType: 'general'
+          });
+          setNewNote('');
+          showToast('Note saved offline — will sync when reconnected', 'success');
+        } catch {
+          showToast('Failed to add note', 'error');
+        }
+      } else {
+        showToast('Failed to add note', 'error');
+      }
     }
     setAddingNote(false);
   };
@@ -35070,19 +35415,35 @@ const CaredForView = window.CaredForView = () => {
     if (!newNote.trim() || !(data !== null && data !== void 0 && data.careRecipientId)) return;
     setSaving(true);
     try {
+      const notePayload = {
+        careRecipientId: data.careRecipientId,
+        content: newNote,
+        noteType: 'personal'
+      };
       const res = await apiFetch('/api/notes', {
         method: 'POST',
-        body: JSON.stringify({
-          careRecipientId: data.careRecipientId,
-          content: newNote,
-          noteType: 'personal'
-        })
+        body: JSON.stringify(notePayload)
       });
       if (res !== null && res !== void 0 && res.ok) {
         setNewNote('');
         await fetchData();
+      } else if ((res === null || res === void 0 ? void 0 : res.status) === 503 || !navigator.onLine) {
+        if (window.OfflineQueue) {
+          await window.OfflineQueue.queueNote(notePayload);
+          setNewNote('');
+        }
       }
     } catch (err) {
+      if (!navigator.onLine && window.OfflineQueue) {
+        try {
+          await window.OfflineQueue.queueNote({
+            careRecipientId: data.careRecipientId,
+            content: newNote,
+            noteType: 'personal'
+          });
+          setNewNote('');
+        } catch {}
+      }
       console.error('Add note error:', err);
     }
     setSaving(false);
@@ -40178,7 +40539,7 @@ const CaretakerHub = window.CaretakerHub = ({
       lineHeight: '1.6',
       margin: '0 0 24px'
     }
-  }, noProfile ? "It looks like your caregiver profile isn't set up yet. Complete your onboarding to start receiving care requests and connecting with families." : "We couldn't load your dashboard. Please try refreshing the page."), noProfile && onNeedsOnboarding && /*#__PURE__*/React.createElement("button", {
+  }, noProfile ? "Grab your driver's license and any copies of certifications or insurance info you may have — we'll walk you through everything step by step." : "We couldn't load your dashboard. Please try refreshing the page."), noProfile && onNeedsOnboarding && /*#__PURE__*/React.createElement("button", {
     onClick: onNeedsOnboarding,
     style: {
       padding: '14px 32px',
@@ -40190,7 +40551,7 @@ const CaretakerHub = window.CaretakerHub = ({
       fontWeight: 600,
       cursor: 'pointer'
     }
-  }, "Complete Your Profile"), !noProfile && /*#__PURE__*/React.createElement("button", {
+  }, "Let's Get Started"), !noProfile && /*#__PURE__*/React.createElement("button", {
     onClick: () => window.location.reload(),
     style: {
       padding: '12px 24px',
@@ -44784,15 +45145,16 @@ const CaretakerHub = window.CaretakerHub = ({
   }, '\u2190 Back'), React.createElement('button', {
     onClick: async () => {
       setCheckSubmitting(true);
+      const checkInData = {
+        arrivalMood: checkInMood.length > 0 ? checkInMood : null,
+        checkInLatitude: (checkInLocation === null || checkInLocation === void 0 ? void 0 : checkInLocation.lat) || null,
+        checkInLongitude: (checkInLocation === null || checkInLocation === void 0 ? void 0 : checkInLocation.lng) || null,
+        briefingAcknowledged: true
+      };
       try {
         const res = await apiFetch('/api/sessions/' + checkInSession.id + '/check-in', {
           method: 'POST',
-          body: JSON.stringify({
-            arrivalMood: checkInMood.length > 0 ? checkInMood : null,
-            checkInLatitude: (checkInLocation === null || checkInLocation === void 0 ? void 0 : checkInLocation.lat) || null,
-            checkInLongitude: (checkInLocation === null || checkInLocation === void 0 ? void 0 : checkInLocation.lng) || null,
-            briefingAcknowledged: true
-          })
+          body: JSON.stringify(checkInData)
         });
         if (res !== null && res !== void 0 && res.ok) {
           await res.json();
@@ -44802,6 +45164,15 @@ const CaretakerHub = window.CaretakerHub = ({
             const refreshRes = await apiFetch('/api/dashboard');
             if (refreshRes !== null && refreshRes !== void 0 && refreshRes.ok) setData(await refreshRes.json());
           } catch (e) {/* refresh is best-effort */}
+        } else if ((res === null || res === void 0 ? void 0 : res.status) === 503 || !navigator.onLine) {
+          // Offline — queue for later sync
+          if (window.OfflineQueue) {
+            await window.OfflineQueue.queueCheckIn(checkInSession.id, checkInData);
+            showToast('Saved offline — will sync when you reconnect', 'success');
+            setCheckInSession(null);
+          } else {
+            showToast('You\'re offline — please try again when connected', 'error');
+          }
         } else if ((res === null || res === void 0 ? void 0 : res.status) === 402) {
           const err = await (res === null || res === void 0 ? void 0 : res.json().catch(() => null));
           showToast((err === null || err === void 0 ? void 0 : err.code) === 'FAMILY_UNPAID' ? 'Check-in blocked — the family has an unpaid balance. They\'ve been notified.' : (err === null || err === void 0 ? void 0 : err.message) || 'Check-in blocked — payment issue', 'error');
@@ -44811,7 +45182,18 @@ const CaretakerHub = window.CaretakerHub = ({
           showToast((err === null || err === void 0 ? void 0 : err.message) || (err === null || err === void 0 ? void 0 : err.error) || 'Check-in failed', 'error');
         }
       } catch (e) {
-        showToast('Check-in failed', 'error');
+        // Network error — queue offline
+        if (window.OfflineQueue) {
+          try {
+            await window.OfflineQueue.queueCheckIn(checkInSession.id, checkInData);
+            showToast('Saved offline — will sync when you reconnect', 'success');
+            setCheckInSession(null);
+          } catch {
+            showToast('Check-in failed — could not save offline', 'error');
+          }
+        } else {
+          showToast('Check-in failed — no connection', 'error');
+        }
       }
       setCheckSubmitting(false);
     },
@@ -45250,6 +45632,14 @@ const CaretakerHub = window.CaretakerHub = ({
         }
       }
       setCheckSubmitting(true);
+      const checkOutPayload = {
+        departureMood: checkOutMood.length > 0 ? checkOutMood : null,
+        conditionTags: checkOutTags.length > 0 ? checkOutTags : null,
+        careFeedback: checkOutCareFeedback.trim() || null,
+        serviceFeedback: checkOutServiceFeedback.trim() || null,
+        summary: checkOutSummary.trim() || null,
+        earlyDepartureReason: earlyDepartureReason.trim() || null
+      };
       try {
         // Add 30-second timeout to prevent infinite hang
         const controller = new AbortController();
@@ -45257,14 +45647,7 @@ const CaretakerHub = window.CaretakerHub = ({
         const res = await apiFetch('/api/sessions/' + checkOutSession.id + '/check-out', {
           method: 'POST',
           signal: controller.signal,
-          body: JSON.stringify({
-            departureMood: checkOutMood.length > 0 ? checkOutMood : null,
-            conditionTags: checkOutTags.length > 0 ? checkOutTags : null,
-            careFeedback: checkOutCareFeedback.trim() || null,
-            serviceFeedback: checkOutServiceFeedback.trim() || null,
-            summary: checkOutSummary.trim() || null,
-            earlyDepartureReason: earlyDepartureReason.trim() || null
-          })
+          body: JSON.stringify(checkOutPayload)
         });
         clearTimeout(timeout);
         if (!res) {
@@ -45305,6 +45688,15 @@ const CaretakerHub = window.CaretakerHub = ({
           setCheckOutSession(null);
           const refreshRes = await apiFetch('/api/dashboard');
           if (refreshRes !== null && refreshRes !== void 0 && refreshRes.ok) setData(await refreshRes.json());
+        } else if ((res === null || res === void 0 ? void 0 : res.status) === 503 || !navigator.onLine) {
+          // Offline — queue for later sync
+          if (window.OfflineQueue) {
+            await window.OfflineQueue.queueCheckOut(checkOutSession.id, checkOutPayload);
+            showToast('Saved offline — will sync when you reconnect', 'success');
+            setCheckOutSession(null);
+          } else {
+            showToast('You\'re offline — please try again when connected', 'error');
+          }
         } else {
           const err = await res.json().catch(() => null);
           showToast((err === null || err === void 0 ? void 0 : err.error) || 'Check-out failed', 'error');
@@ -45312,6 +45704,15 @@ const CaretakerHub = window.CaretakerHub = ({
       } catch (e) {
         if (e.name === 'AbortError') {
           showToast('Check-out is taking too long — please try again', 'error');
+        } else if (!navigator.onLine && window.OfflineQueue) {
+          // Network error and offline — queue it
+          try {
+            await window.OfflineQueue.queueCheckOut(checkOutSession.id, checkOutPayload);
+            showToast('Saved offline — will sync when you reconnect', 'success');
+            setCheckOutSession(null);
+          } catch {
+            showToast('Check-out failed — could not save offline', 'error');
+          }
         } else {
           showToast('Check-out failed — ' + (e.message || 'network error'), 'error');
         }
@@ -57810,7 +58211,7 @@ const SafetyFlagsTab = window.SafetyFlagsTab = ({
 const AdminPanel = window.AdminPanel = ({
   currentUser
 }) => {
-  var _tabGroups$flatMap$fi, _secDashboard$activeT, _secDashboard$failedL, _secDashboard$adminAc, _secDashboard$critica, _onboardingModal$user, _onboardingModal$user2, _onboardingModal$user3, _onboardingModal$docu, _userDrawer$sessionSt, _userDrawer$sessionSt2, _userDrawer$reviewSta, _userDrawer$reviewSta2, _userDrawer$careTeams, _userDrawer$user2, _userDrawer$tickets, _userDrawer$safetyFla;
+  var _tabGroups$flatMap$fi, _secDashboard$activeT, _secDashboard$failedL, _secDashboard$adminAc, _secDashboard$critica, _onboardingModal$user, _onboardingModal$user2, _onboardingModal$user3, _onboardingModal$docu, _userDrawer$sessionSt, _userDrawer$sessionSt2, _userDrawer$reviewSta, _userDrawer$reviewSta2, _userDrawer$careTeams, _userDrawer$user4, _userDrawer$tickets, _userDrawer$safetyFla, _userDrawer$allDocume, _userDrawer$allDocume2, _userDrawer$user0, _userDrawer$user10, _userDrawer$user12, _userDrawer$user13, _userDrawer$user14;
   const {
     showToast
   } = useToast();
@@ -58541,7 +58942,8 @@ const AdminPanel = window.AdminPanel = ({
     apiFetch('/api/admin/alerts').then(r => r !== null && r !== void 0 && r.ok ? r.json() : null).then(d => {
       if (d) {
         setNewFeedbackCount(d.newFeedback || 0);
-        setSafetyFlagCount(d.safetyFlags || 0);
+        // Note: safetyFlagCount is set authoritatively by loadSafetyFlags() above
+        // (alerts endpoint returns deltas which can be 0 even when flags exist)
         setCheckrAlertCount(d.checkrAlerts || 0);
         setBgCheckActionItems(d.bgCheckActionItems || []);
       }
@@ -58925,8 +59327,11 @@ const AdminPanel = window.AdminPanel = ({
         method: 'DELETE'
       });
       if (res !== null && res !== void 0 && res.ok) {
+        var _userDrawer$user2;
         loadUsers();
         setDeleteConfirm(null);
+        // Close drawer if open for this user
+        if ((userDrawer === null || userDrawer === void 0 || (_userDrawer$user2 = userDrawer.user) === null || _userDrawer$user2 === void 0 ? void 0 : _userDrawer$user2.id) === userId) setUserDrawer(null);
       } else {
         const data = await res.json();
         alert((data === null || data === void 0 ? void 0 : data.error) || 'Failed to delete user');
@@ -58976,9 +59381,12 @@ const AdminPanel = window.AdminPanel = ({
         })
       });
       if (nukeRes !== null && nukeRes !== void 0 && nukeRes.ok) {
+        var _userDrawer$user3;
         const data = await nukeRes.json();
         loadUsers();
         setNukeConfirm(null);
+        // Close drawer if open for this user
+        if ((userDrawer === null || userDrawer === void 0 || (_userDrawer$user3 = userDrawer.user) === null || _userDrawer$user3 === void 0 ? void 0 : _userDrawer$user3.id) === userId) setUserDrawer(null);
         alert(data.message || 'User nuked successfully.');
       } else {
         const data = await nukeRes.json().catch(() => ({}));
@@ -61102,6 +61510,7 @@ const AdminPanel = window.AdminPanel = ({
         textTransform: 'capitalize'
       }
     }, u.role === 'care_for' ? 'Care Recipient' : u.role)), /*#__PURE__*/React.createElement("td", {
+      onClick: e => e.stopPropagation(),
       style: {
         padding: '10px 12px',
         textAlign: 'center'
@@ -61144,6 +61553,7 @@ const AdminPanel = window.AdminPanel = ({
       },
       title: u.email_verified ? 'Click to revoke email verification' : 'Click to manually verify email'
     }, u.email_verified ? '\u2705 Verified' : '\u26A0 Unverified')), /*#__PURE__*/React.createElement("td", {
+      onClick: e => e.stopPropagation(),
       style: {
         padding: '10px 12px',
         textAlign: 'center'
@@ -61177,6 +61587,7 @@ const AdminPanel = window.AdminPanel = ({
       },
       title: u.is_tester ? 'Click to remove tester access' : 'Click to grant tester access'
     }, u.is_tester ? '\u2713 Yes' : 'No')), /*#__PURE__*/React.createElement("td", {
+      onClick: e => e.stopPropagation(),
       style: {
         padding: '10px 12px',
         textAlign: 'center'
@@ -61216,6 +61627,7 @@ const AdminPanel = window.AdminPanel = ({
         fontSize: '12px'
       }
     }, formatDate(u.created_at)), /*#__PURE__*/React.createElement("td", {
+      onClick: e => e.stopPropagation(),
       style: {
         padding: '10px 12px',
         textAlign: 'center'
@@ -67271,19 +67683,23 @@ const AdminPanel = window.AdminPanel = ({
       color: 'var(--text-secondary)'
     }
   }, "Loading...")), /*#__PURE__*/React.createElement("button", {
-    onClick: () => {
+    onClick: e => {
+      e.stopPropagation();
       setUserDrawer(null);
       setUserDrawerLoading(false);
     },
     style: {
-      background: 'none',
-      border: 'none',
-      fontSize: 22,
+      background: 'var(--bg-surface)',
+      border: '1px solid var(--border-color)',
+      fontSize: 18,
       cursor: 'pointer',
       color: 'var(--text-secondary)',
-      padding: '2px 8px',
-      borderRadius: 6
-    }
+      padding: '4px 10px',
+      borderRadius: 8,
+      lineHeight: 1,
+      flexShrink: 0
+    },
+    title: "Close"
   }, "\u2715")), userDrawerLoading && !userDrawer && /*#__PURE__*/React.createElement("div", {
     style: {
       padding: 40,
@@ -67431,10 +67847,10 @@ const AdminPanel = window.AdminPanel = ({
       borderBottom: '1px solid var(--border-color)'
     }
   }, "Admin Notes"), /*#__PURE__*/React.createElement("textarea", {
-    defaultValue: ((_userDrawer$user2 = userDrawer.user) === null || _userDrawer$user2 === void 0 ? void 0 : _userDrawer$user2.admin_notes) || '',
+    defaultValue: ((_userDrawer$user4 = userDrawer.user) === null || _userDrawer$user4 === void 0 ? void 0 : _userDrawer$user4.admin_notes) || '',
     onBlur: e => {
-      var _userDrawer$user3;
-      if (e.target.value !== (((_userDrawer$user3 = userDrawer.user) === null || _userDrawer$user3 === void 0 ? void 0 : _userDrawer$user3.admin_notes) || '')) saveAdminNotes(userDrawer.user.id, e.target.value);
+      var _userDrawer$user5;
+      if (e.target.value !== (((_userDrawer$user5 = userDrawer.user) === null || _userDrawer$user5 === void 0 ? void 0 : _userDrawer$user5.admin_notes) || '')) saveAdminNotes(userDrawer.user.id, e.target.value);
     },
     placeholder: "Sticky notes about this user...",
     style: {
@@ -67540,16 +67956,176 @@ const AdminPanel = window.AdminPanel = ({
     }
   }, f.status, " \xB7 ", new Date(f.created_at).toLocaleDateString())))), /*#__PURE__*/React.createElement("div", {
     style: {
+      marginBottom: 22
+    }
+  }, /*#__PURE__*/React.createElement("h4", {
+    style: {
+      fontSize: 11,
+      fontWeight: 600,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+      color: 'var(--text-secondary)',
+      marginBottom: 8,
+      paddingBottom: 6,
+      borderBottom: '1px solid var(--border-color)'
+    }
+  }, "Documents (", ((_userDrawer$allDocume = userDrawer.allDocuments) === null || _userDrawer$allDocume === void 0 ? void 0 : _userDrawer$allDocume.length) || 0, ")"), ((_userDrawer$allDocume2 = userDrawer.allDocuments) === null || _userDrawer$allDocume2 === void 0 ? void 0 : _userDrawer$allDocume2.length) > 0 ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 6
+    }
+  }, userDrawer.allDocuments.map(doc => {
+    const typeLabels = {
+      DL_Front: 'DL (Front)',
+      DL_Back: 'DL (Back)',
+      Passport: 'Passport',
+      State_ID: 'State ID',
+      CNA: 'CNA Cert',
+      HHA: 'HHA Cert',
+      LPN: 'LPN Cert',
+      RN: 'RN Cert',
+      CPR: 'CPR Cert',
+      BLS: 'BLS Cert',
+      ACLS: 'ACLS Cert',
+      First_Aid: 'First Aid',
+      POA: 'Power of Attorney',
+      Healthcare_POA: 'Healthcare POA',
+      Court_Order: 'Court Order',
+      Living_Will: 'Living Will',
+      Legal_Guardianship: 'Legal Guardianship',
+      Liability_Insurance: 'Liability Insurance',
+      Auto_Insurance: 'Auto Insurance',
+      Health_Insurance: 'Health Insurance',
+      Other: 'Other',
+      Other_Cert: 'Other Cert',
+      Other_Legal: 'Other Legal'
+    };
+    const statusColors = {
+      approved: '#4caf50',
+      pending: '#ff9800',
+      ai_review: '#2196f3',
+      ai_flagged: '#ff5722',
+      rejected: '#c62828',
+      expired: '#9e9e9e',
+      uploaded: '#607d8b'
+    };
+    const categoryIcons = {
+      identity: '\u{1F4CB}',
+      certification: '\u{1F3C5}',
+      insurance: '\u{1F6E1}\uFE0F',
+      legal: '\u{2696}\uFE0F',
+      consent: '\u{1F4DD}'
+    };
+    const catIcon = categoryIcons[doc.category] || '\u{1F4C4}';
+    const label = typeLabels[doc.document_type] || doc.document_type || 'Unknown';
+    const statusColor = statusColors[doc.status] || '#9e9e9e';
+    return React.createElement('div', {
+      key: doc.id,
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        padding: '8px 10px',
+        background: 'var(--bg-surface)',
+        borderRadius: 8,
+        border: '1px solid var(--border-color)',
+        cursor: 'pointer',
+        transition: 'background 0.12s'
+      },
+      onClick: async () => {
+        try {
+          const source = doc.source_table || '';
+          const res = await apiFetch(`/api/admin/documents/${doc.id}?source=${source}`);
+          if (res !== null && res !== void 0 && res.ok) {
+            const data = await res.json();
+            const d = data.document;
+            if (d.file_data) {
+              // file_data is base64 data URI — open in new tab
+              const w = window.open('', '_blank');
+              if (w) {
+                if (d.file_data.startsWith('data:application/pdf') || (d.mime_type || '').includes('pdf')) {
+                  w.document.write(`<html><body style="margin:0"><iframe src="${d.file_data}" style="width:100%;height:100vh;border:none"></iframe></body></html>`);
+                } else {
+                  w.document.write(`<html><body style="margin:0;background:#111;display:flex;justify-content:center;align-items:center;min-height:100vh"><img src="${d.file_data}" style="max-width:100%;max-height:100vh;object-fit:contain" /></body></html>`);
+                }
+                w.document.title = label + ' — ' + (d.file_name || 'Document');
+              }
+            } else {
+              showToast('No file data stored for this document', 'error');
+            }
+          } else {
+            showToast('Failed to load document', 'error');
+          }
+        } catch (err) {
+          showToast('Error loading document: ' + err.message, 'error');
+        }
+      }
+    }, React.createElement('span', {
+      style: {
+        fontSize: 18,
+        flexShrink: 0
+      }
+    }, catIcon), React.createElement('div', {
+      style: {
+        flex: 1,
+        minWidth: 0
+      }
+    }, React.createElement('div', {
+      style: {
+        fontSize: 13,
+        fontWeight: 500,
+        color: 'var(--text-primary)',
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis'
+      }
+    }, label), React.createElement('div', {
+      style: {
+        fontSize: 11,
+        color: 'var(--text-secondary)',
+        marginTop: 1
+      }
+    }, doc.file_name || '—', doc.recipient_name ? ` · for ${doc.recipient_name}` : '', ' · ', new Date(doc.created_at).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    }))), React.createElement('span', {
+      style: {
+        padding: '2px 8px',
+        borderRadius: 8,
+        fontSize: 10,
+        fontWeight: 600,
+        color: '#fff',
+        background: statusColor,
+        flexShrink: 0,
+        textTransform: 'capitalize'
+      }
+    }, (doc.status || 'uploaded').replace('_', ' ')), React.createElement('span', {
+      style: {
+        fontSize: 11,
+        color: 'var(--text-muted)',
+        flexShrink: 0
+      }
+    }, '\u203A'));
+  })) : /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: 'var(--text-muted)',
+      fontSize: 13,
+      margin: '4px 0 0'
+    }
+  }, "No documents uploaded by this user.")), /*#__PURE__*/React.createElement("div", {
+    style: {
       display: 'flex',
       gap: 8,
       flexWrap: 'wrap'
     }
   }, /*#__PURE__*/React.createElement("button", {
     onClick: () => {
-      var _userDrawer$user4;
+      var _userDrawer$user6;
       setUserDrawer(null);
       setActiveTab('people');
-      setUserSearch((_userDrawer$user4 = userDrawer.user) === null || _userDrawer$user4 === void 0 ? void 0 : _userDrawer$user4.email);
+      setUserSearch((_userDrawer$user6 = userDrawer.user) === null || _userDrawer$user6 === void 0 ? void 0 : _userDrawer$user6.email);
     },
     style: {
       padding: '6px 12px',
@@ -67562,11 +68138,11 @@ const AdminPanel = window.AdminPanel = ({
     }
   }, "\uD83D\uDC64 View in People"), /*#__PURE__*/React.createElement("button", {
     onClick: () => {
-      var _userDrawer$user5, _userDrawer$user6, _userDrawer$user7;
+      var _userDrawer$user7, _userDrawer$user8, _userDrawer$user9;
       setAdminMsgTarget({
-        id: (_userDrawer$user5 = userDrawer.user) === null || _userDrawer$user5 === void 0 ? void 0 : _userDrawer$user5.id,
-        first_name: (_userDrawer$user6 = userDrawer.user) === null || _userDrawer$user6 === void 0 ? void 0 : _userDrawer$user6.first_name,
-        last_name: (_userDrawer$user7 = userDrawer.user) === null || _userDrawer$user7 === void 0 ? void 0 : _userDrawer$user7.last_name
+        id: (_userDrawer$user7 = userDrawer.user) === null || _userDrawer$user7 === void 0 ? void 0 : _userDrawer$user7.id,
+        first_name: (_userDrawer$user8 = userDrawer.user) === null || _userDrawer$user8 === void 0 ? void 0 : _userDrawer$user8.first_name,
+        last_name: (_userDrawer$user9 = userDrawer.user) === null || _userDrawer$user9 === void 0 ? void 0 : _userDrawer$user9.last_name
       });
     },
     style: {
@@ -67578,7 +68154,107 @@ const AdminPanel = window.AdminPanel = ({
       fontSize: 12,
       cursor: 'pointer'
     }
-  }, "\uD83D\uDCAC Message"))))));
+  }, "\uD83D\uDCAC Message")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 16,
+      paddingTop: 16,
+      borderTop: '1px solid var(--border-color)'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      fontWeight: 600,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+      color: 'var(--text-muted)',
+      marginBottom: 8
+    }
+  }, "Danger Zone"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 8,
+      flexWrap: 'wrap'
+    }
+  }, deleteConfirm === ((_userDrawer$user0 = userDrawer.user) === null || _userDrawer$user0 === void 0 ? void 0 : _userDrawer$user0.id) ? /*#__PURE__*/React.createElement("button", {
+    onClick: () => handleDeleteUser(userDrawer.user.id, userDrawer.user.email),
+    disabled: deleteLoading,
+    style: {
+      padding: '6px 14px',
+      background: '#c62828',
+      color: '#fff',
+      border: 'none',
+      borderRadius: 8,
+      fontSize: 12,
+      fontWeight: 600,
+      cursor: 'pointer'
+    }
+  }, "Confirm Soft Delete") : /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      var _userDrawer$user1;
+      setDeleteConfirm((_userDrawer$user1 = userDrawer.user) === null || _userDrawer$user1 === void 0 ? void 0 : _userDrawer$user1.id);
+      setNukeConfirm(null);
+    },
+    style: {
+      padding: '6px 14px',
+      background: 'var(--bg-surface)',
+      color: '#c62828',
+      border: '1px solid #ef9a9a',
+      borderRadius: 8,
+      fontSize: 12,
+      fontWeight: 600,
+      cursor: 'pointer'
+    }
+  }, "Soft Delete"), nukeConfirm === ((_userDrawer$user10 = userDrawer.user) === null || _userDrawer$user10 === void 0 ? void 0 : _userDrawer$user10.id) ? /*#__PURE__*/React.createElement("button", {
+    onClick: () => handleNukeUser(userDrawer.user.id, userDrawer.user.email),
+    disabled: nukeLoading,
+    style: {
+      padding: '6px 14px',
+      background: nukeLoading ? '#999' : '#b71c1c',
+      color: '#fff',
+      border: 'none',
+      borderRadius: 8,
+      fontSize: 12,
+      fontWeight: 600,
+      cursor: nukeLoading ? 'wait' : 'pointer'
+    }
+  }, nukeLoading ? 'Verifying...' : 'Confirm Nuke (Passkey)') : /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      var _userDrawer$user11;
+      setNukeConfirm((_userDrawer$user11 = userDrawer.user) === null || _userDrawer$user11 === void 0 ? void 0 : _userDrawer$user11.id);
+      setDeleteConfirm(null);
+    },
+    style: {
+      padding: '6px 14px',
+      background: 'var(--bg-surface)',
+      color: '#b71c1c',
+      border: '1px solid #ef9a9a',
+      borderRadius: 8,
+      fontSize: 12,
+      fontWeight: 700,
+      cursor: 'pointer'
+    }
+  }, "Nuke"), (deleteConfirm === ((_userDrawer$user12 = userDrawer.user) === null || _userDrawer$user12 === void 0 ? void 0 : _userDrawer$user12.id) || nukeConfirm === ((_userDrawer$user13 = userDrawer.user) === null || _userDrawer$user13 === void 0 ? void 0 : _userDrawer$user13.id)) && /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      setDeleteConfirm(null);
+      setNukeConfirm(null);
+      setNukeError(null);
+    },
+    style: {
+      padding: '6px 12px',
+      background: 'none',
+      color: 'var(--text-muted)',
+      border: '1px solid var(--border-color)',
+      borderRadius: 8,
+      fontSize: 12,
+      cursor: 'pointer'
+    }
+  }, "Cancel")), nukeError && nukeConfirm === ((_userDrawer$user14 = userDrawer.user) === null || _userDrawer$user14 === void 0 ? void 0 : _userDrawer$user14.id) && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: 'var(--color-error)',
+      marginTop: 6
+    }
+  }, nukeError))))));
 };
 ;
 const IPAiBadge = window.IPAiBadge = ({
@@ -68232,20 +68908,140 @@ const PWAInstallBanner = window.PWAInstallBanner = () => {
   }, "Got it"))));
 };
 
-// ─── Offline Indicator ───
+// ─── Offline Indicator + Sync Badge ───
 const OfflineIndicator = window.OfflineIndicator = () => {
   const [offline, setOffline] = useState(!navigator.onLine);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState(null);
   useEffect(() => {
+    var _navigator$serviceWor;
     const goOffline = () => setOffline(true);
-    const goOnline = () => setOffline(false);
+    const goOnline = () => {
+      setOffline(false);
+      // Auto-sync is handled by offlineQueue.js online listener
+    };
     window.addEventListener('offline', goOffline);
     window.addEventListener('online', goOnline);
+
+    // Listen for pending count changes from OfflineQueue
+    let unsub;
+    if (window.OfflineQueue) {
+      window.OfflineQueue.getPendingCount().then(setPendingCount).catch(() => {});
+      unsub = window.OfflineQueue.onPendingChange(setPendingCount);
+    }
+
+    // Listen for SW sync trigger
+    const handleSWMessage = event => {
+      var _event$data2;
+      if (((_event$data2 = event.data) === null || _event$data2 === void 0 ? void 0 : _event$data2.type) === 'OFFLINE_SYNC_TRIGGER' && window.OfflineQueue) {
+        window.OfflineQueue.sync();
+      }
+    };
+    (_navigator$serviceWor = navigator.serviceWorker) === null || _navigator$serviceWor === void 0 || _navigator$serviceWor.addEventListener('message', handleSWMessage);
     return () => {
+      var _navigator$serviceWor2;
       window.removeEventListener('offline', goOffline);
       window.removeEventListener('online', goOnline);
+      if (unsub) unsub();
+      (_navigator$serviceWor2 = navigator.serviceWorker) === null || _navigator$serviceWor2 === void 0 || _navigator$serviceWor2.removeEventListener('message', handleSWMessage);
     };
   }, []);
+
+  // Clear sync result toast after 4 seconds
+  useEffect(() => {
+    if (!syncResult) return;
+    const t = setTimeout(() => setSyncResult(null), 4000);
+    return () => clearTimeout(t);
+  }, [syncResult]);
+  const handleManualSync = async () => {
+    if (!window.OfflineQueue || syncing) return;
+    setSyncing(true);
+    try {
+      const result = await window.OfflineQueue.sync();
+      setSyncResult(result);
+    } catch {
+      setSyncResult({
+        synced: 0,
+        failed: 0,
+        error: true
+      });
+    }
+    setSyncing(false);
+  };
+
+  // Sync success toast
+  if (syncResult && syncResult.synced > 0 && !offline) {
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        zIndex: 9999,
+        background: '#16a34a',
+        color: '#fff',
+        textAlign: 'center',
+        padding: '8px 12px',
+        fontSize: '13px',
+        fontWeight: 600
+      }
+    }, "Synced ", syncResult.synced, " offline action", syncResult.synced !== 1 ? 's' : '', " successfully");
+  }
+
+  // Pending sync badge (online but have queued items)
+  if (!offline && pendingCount > 0) {
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        zIndex: 9999,
+        background: '#f59e0b',
+        color: '#fff',
+        textAlign: 'center',
+        padding: '6px 12px',
+        fontSize: '13px',
+        fontWeight: 600,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '8px'
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: '20px',
+        height: '20px',
+        borderRadius: '50%',
+        background: '#fff',
+        color: '#f59e0b',
+        fontSize: '11px',
+        fontWeight: 700
+      }
+    }, pendingCount), /*#__PURE__*/React.createElement("span", null, "offline action", pendingCount !== 1 ? 's' : '', " waiting to sync"), /*#__PURE__*/React.createElement("button", {
+      onClick: handleManualSync,
+      disabled: syncing,
+      style: {
+        marginLeft: '8px',
+        padding: '2px 10px',
+        borderRadius: '4px',
+        background: '#fff',
+        color: '#f59e0b',
+        border: 'none',
+        fontWeight: 700,
+        fontSize: '12px',
+        cursor: syncing ? 'wait' : 'pointer',
+        opacity: syncing ? 0.7 : 1
+      }
+    }, syncing ? 'Syncing...' : 'Sync Now'));
+  }
   if (!offline) return null;
+
+  // Offline banner — updated message when items are queued
   return /*#__PURE__*/React.createElement("div", {
     style: {
       position: 'fixed',
@@ -68260,7 +69056,7 @@ const OfflineIndicator = window.OfflineIndicator = () => {
       fontSize: '13px',
       fontWeight: 600
     }
-  }, "You're offline \u2014 some features may be unavailable");
+  }, pendingCount > 0 ? `You're offline — ${pendingCount} action${pendingCount !== 1 ? 's' : ''} saved, will sync when reconnected` : "You're offline — check-ins, check-outs & notes will be saved locally");
 };
 
 // ─── Demo Mode Banner ───
@@ -69007,8 +69803,8 @@ const App = () => {
     // Listen for push navigation messages from service worker
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.addEventListener('message', event => {
-        var _event$data2;
-        if (((_event$data2 = event.data) === null || _event$data2 === void 0 ? void 0 : _event$data2.type) === 'PUSH_NAVIGATE') {
+        var _event$data3;
+        if (((_event$data3 = event.data) === null || _event$data3 === void 0 ? void 0 : _event$data3.type) === 'PUSH_NAVIGATE') {
           const d = event.data.data || {};
           if (d.type === 'message' && d.conversationId) {
             window.__pendingConversation = d.conversationId;

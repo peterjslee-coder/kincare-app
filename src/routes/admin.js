@@ -75,7 +75,7 @@ router.get("/alerts", async (req, res) => {
       db.prepare(`SELECT COUNT(*) as count FROM caregiver_profiles WHERE account_paused = 1 AND COALESCE(checkr_status, 'pending') != 'rejected'`).get(),
       db.prepare(`SELECT COUNT(*) as count FROM care_recipients WHERE consent_status = 'pending' OR consent_status = 'attestation_pending'`).get(),
       db.prepare(`SELECT COUNT(*) as count FROM feedback WHERE status = 'new' AND created_at > NOW() - INTERVAL '30 days'`).get(),
-      db.prepare(`SELECT COUNT(*) as count FROM safety_flags WHERE status = 'pending'`).get().catch(() => ({ count: 0 })),
+      db.prepare(`SELECT COUNT(*) as count FROM safety_flags WHERE status IN ('pending', 'escalated')`).get().catch(() => ({ count: 0 })),
       // Unread Checkr webhook events in the last 7 days
       db.prepare(`SELECT COUNT(*) as count FROM activity_feed WHERE event_type IN ('checkr_submitted', 'checkr_cleared', 'checkr_flagged', 'checkr_expired', 'checkr_suspended', 'checkr_resumed', 'checkr_disputed') AND is_read = 0 AND created_at > NOW() - INTERVAL '7 days'`).get().catch(() => ({ count: 0 })),
       // Referral stats (last 7 days)
@@ -229,7 +229,7 @@ router.get("/stats", async (req, res) => {
       openTickets = await db.prepare("SELECT COUNT(*) as count FROM admin_tickets WHERE status IN ('open', 'in_progress')").get() || { count: 0 };
     } catch (e) { /* table may not exist yet */ }
     try {
-      safetyFlags = await db.prepare("SELECT COUNT(*) as count FROM safety_flags WHERE status IN ('pending', 'open', 'investigating')").get() || { count: 0 };
+      safetyFlags = await db.prepare("SELECT COUNT(*) as count FROM safety_flags WHERE status IN ('pending', 'open', 'investigating', 'escalated')").get() || { count: 0 };
     } catch (e) { /* */ }
     try {
       avgRating = await db.prepare("SELECT ROUND(AVG(rating), 1) as avg, COUNT(*) as total FROM reviews").get() || { avg: 0, total: 0 };
@@ -420,6 +420,42 @@ router.get("/users/:id/detail", async (req, res) => {
       `).all(userId, userId, userId);
     } catch (e) { /* */ }
 
+    // ─── All uploaded documents (unified across all 3 tables) ───
+    let allDocuments = [];
+    try {
+      // 1. caregiver_documents (legacy onboarding uploads — DL, certs)
+      const cgDocs = await db.prepare(`
+        SELECT id, 'caregiver_documents' AS source_table, document_type, file_name,
+          'uploaded' AS status, NULL AS category, NULL AS ai_classification,
+          NULL AS admin_notes, NULL AS expires_at, created_at
+        FROM caregiver_documents WHERE user_id = ?
+        ORDER BY created_at DESC
+      `).all(userId).catch(() => []);
+
+      // 2. verified_documents (unified system — DL, certs, insurance, consent, legal)
+      const vDocs = await db.prepare(`
+        SELECT id, 'verified_documents' AS source_table, document_type, file_name,
+          status, category, ai_classification, admin_notes, expires_at, created_at
+        FROM verified_documents WHERE uploaded_by = ? OR owner_id = ?
+        ORDER BY created_at DESC
+      `).all(userId, userId).catch(() => []);
+
+      // 3. authorization_documents (legacy POA/guardianship — tied to care recipients)
+      const authDocs = await db.prepare(`
+        SELECT ad.id, 'authorization_documents' AS source_table, ad.document_type, ad.file_name,
+          ad.upload_status AS status, 'legal' AS category, NULL AS ai_classification,
+          ad.admin_notes, NULL AS expires_at, ad.created_at,
+          cr.first_name || ' ' || cr.last_name AS recipient_name
+        FROM authorization_documents ad
+        LEFT JOIN care_recipients cr ON ad.care_recipient_id = cr.id
+        WHERE ad.submitted_by = ?
+        ORDER BY ad.created_at DESC
+      `).all(userId).catch(() => []);
+
+      allDocuments = [...cgDocs, ...vDocs, ...authDocs]
+        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    } catch (e) { console.error('Admin doc query error:', e); }
+
     // Last active (most recent activity_feed, message, or session)
     let lastActive = user.updated_at;
     try {
@@ -465,6 +501,7 @@ router.get("/users/:id/detail", async (req, res) => {
       careTeams,
       tickets,
       safetyFlags,
+      allDocuments,
       lastActive,
       journeyStage,
       journeySteps,
@@ -805,8 +842,10 @@ router.delete("/users/:id", async (req, res) => {
       await tx.prepare("DELETE FROM user_2fa WHERE user_id = ?").run(id);
       await tx.prepare("DELETE FROM trusted_devices WHERE user_id = ?").run(id);
 
-      // 3. Delete personal documents
-      await tx.prepare("DELETE FROM caregiver_documents WHERE user_id = ?").run(id);
+      // 3. RETAIN personal documents — mark as retained for legal/compliance
+      // Documents must survive account deletion for fraud/forgery protection
+      await tx.prepare("UPDATE caregiver_documents SET retained_from_deleted = 1, deleted_user_email = ? WHERE user_id = ?").run(anonEmail, id);
+      await tx.prepare("UPDATE verified_documents SET retained_from_deleted = 1, deleted_user_email = ? WHERE uploaded_by = ?").run(anonEmail, id);
 
       // 4. Remove from active teams & connections
       await tx.prepare("DELETE FROM care_team_members WHERE user_id = ?").run(id);
@@ -1003,8 +1042,9 @@ router.delete("/users/:id/nuke", async (req, res) => {
         await tx.prepare("DELETE FROM attestations WHERE care_recipient_id = ?").run(cr.id);
         await tx.prepare("DELETE FROM verification_attempts WHERE care_recipient_id = ?").run(cr.id);
         await tx.prepare("DELETE FROM first_visit_confirmations WHERE care_recipient_id = ?").run(cr.id);
-        await tx.prepare("DELETE FROM authorization_documents WHERE care_recipient_id = ?").run(cr.id);
-        await tx.prepare("DELETE FROM verified_documents WHERE owner_type = 'care_recipient' AND owner_id = ?").run(cr.id);
+        // RETAIN authorization documents — mark as retained for legal/compliance
+        await tx.prepare("UPDATE authorization_documents SET retained_from_deleted = 1 WHERE care_recipient_id = ?").run(cr.id);
+        await tx.prepare("UPDATE verified_documents SET retained_from_deleted = 1 WHERE owner_type = 'care_recipient' AND owner_id = ?").run(cr.id);
         await tx.prepare("DELETE FROM recipient_notes WHERE care_recipient_id = ?").run(cr.id);
         await tx.prepare("DELETE FROM caregiver_assignments WHERE care_recipient_id = ?").run(cr.id);
         await tx.prepare("DELETE FROM care_recipient_shares WHERE care_recipient_id = ?").run(cr.id);
@@ -1044,9 +1084,9 @@ router.delete("/users/:id/nuke", async (req, res) => {
       await tx.prepare("DELETE FROM trusted_devices WHERE user_id = ?").run(id);
       await tx.prepare("DELETE FROM user_passkeys WHERE user_id = ?").run(id);
 
-      // Documents & payments
-      await tx.prepare("DELETE FROM caregiver_documents WHERE user_id = ?").run(id);
-      await tx.prepare("DELETE FROM verified_documents WHERE uploaded_by = ?").run(id);
+      // RETAIN documents — mark as retained for legal/compliance
+      await tx.prepare("UPDATE caregiver_documents SET retained_from_deleted = 1, deleted_user_email = ? WHERE user_id = ?").run(anonEmail, id);
+      await tx.prepare("UPDATE verified_documents SET retained_from_deleted = 1, deleted_user_email = ? WHERE uploaded_by = ?").run(anonEmail, id);
       await tx.prepare("DELETE FROM background_check_payments WHERE user_id = ?").run(id);
       await tx.prepare("DELETE FROM payout_preferences WHERE user_id = ?").run(id);
 
@@ -2203,12 +2243,45 @@ router.get("/authorizations", requireAdmin, async (req, res) => {
 });
 
 // GET /api/admin/documents/:docId — get full document for admin preview
+// Searches all 3 document tables: verified_documents, authorization_documents, caregiver_documents
 router.get("/documents/:docId", requireAdmin, async (req, res) => {
   try {
     const db = await getDb();
-    const doc = await db.prepare(
-      "SELECT id, care_recipient_id, document_type, file_data, file_name, file_size, mime_type, upload_status, admin_notes, created_at FROM authorization_documents WHERE id = ?"
-    ).get(req.params.docId);
+    const docId = req.params.docId;
+    // Also accept ?source= query param to hint which table to check first
+    const sourceHint = req.query.source;
+
+    let doc = null;
+
+    // Try verified_documents first (the unified table)
+    if (!doc || sourceHint === 'verified_documents') {
+      doc = await db.prepare(`
+        SELECT id, owner_type, owner_id, uploaded_by, document_type, file_data, file_name, file_size, mime_type,
+          status, category, ai_classification, admin_notes, expires_at, created_at,
+          'verified_documents' AS source_table
+        FROM verified_documents WHERE id = ?
+      `).get(docId).catch(() => null);
+    }
+
+    // Try authorization_documents (legacy POA/guardianship)
+    if (!doc) {
+      doc = await db.prepare(`
+        SELECT id, care_recipient_id, document_type, file_data, file_name, file_size, mime_type,
+          upload_status AS status, admin_notes, created_at,
+          'authorization_documents' AS source_table
+        FROM authorization_documents WHERE id = ?
+      `).get(docId).catch(() => null);
+    }
+
+    // Try caregiver_documents (legacy onboarding DL/certs)
+    if (!doc) {
+      doc = await db.prepare(`
+        SELECT id, user_id, document_type, file_data, file_name, metadata, created_at,
+          'caregiver_documents' AS source_table
+        FROM caregiver_documents WHERE id = ?
+      `).get(docId).catch(() => null);
+    }
+
     if (!doc) return res.status(404).json({ error: "Document not found" });
     res.json({ document: doc });
   } catch (err) {

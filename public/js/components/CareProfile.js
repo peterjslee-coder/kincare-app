@@ -457,16 +457,31 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
     if (!newNote.trim() || !profile?.id) return;
     setAddingNote(true);
     try {
+      const notePayload = { careRecipientId: profile.id, content: newNote.trim(), noteType: 'general' };
       const res = await apiFetch('/api/notes', {
         method: 'POST',
-        body: JSON.stringify({ careRecipientId: profile.id, content: newNote.trim(), noteType: 'general' }),
+        body: JSON.stringify(notePayload),
       });
       if (res?.ok) {
         setNewNote('');
         showToast('Note added', 'success');
         fetchNotes(profile.id);
+      } else if (res?.status === 503 || !navigator.onLine) {
+        if (window.OfflineQueue) {
+          await window.OfflineQueue.queueNote(notePayload);
+          setNewNote('');
+          showToast('Note saved offline — will sync when reconnected', 'success');
+        } else { showToast('You\'re offline — try again later', 'error'); }
       }
-    } catch { showToast('Failed to add note', 'error'); }
+    } catch (err) {
+      if (!navigator.onLine && window.OfflineQueue) {
+        try {
+          await window.OfflineQueue.queueNote({ careRecipientId: profile.id, content: newNote.trim(), noteType: 'general' });
+          setNewNote('');
+          showToast('Note saved offline — will sync when reconnected', 'success');
+        } catch { showToast('Failed to add note', 'error'); }
+      } else { showToast('Failed to add note', 'error'); }
+    }
     setAddingNote(false);
   };
 

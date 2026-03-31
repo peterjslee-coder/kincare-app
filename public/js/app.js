@@ -123,30 +123,116 @@ const PWAInstallBanner = window.PWAInstallBanner = () => {
   );
 };
 
-// ─── Offline Indicator ───
+// ─── Offline Indicator + Sync Badge ───
 const OfflineIndicator = window.OfflineIndicator = () => {
   const [offline, setOffline] = useState(!navigator.onLine);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState(null);
 
   useEffect(() => {
     const goOffline = () => setOffline(true);
-    const goOnline = () => setOffline(false);
+    const goOnline = () => {
+      setOffline(false);
+      // Auto-sync is handled by offlineQueue.js online listener
+    };
     window.addEventListener('offline', goOffline);
     window.addEventListener('online', goOnline);
+
+    // Listen for pending count changes from OfflineQueue
+    let unsub;
+    if (window.OfflineQueue) {
+      window.OfflineQueue.getPendingCount().then(setPendingCount).catch(() => {});
+      unsub = window.OfflineQueue.onPendingChange(setPendingCount);
+    }
+
+    // Listen for SW sync trigger
+    const handleSWMessage = (event) => {
+      if (event.data?.type === 'OFFLINE_SYNC_TRIGGER' && window.OfflineQueue) {
+        window.OfflineQueue.sync();
+      }
+    };
+    navigator.serviceWorker?.addEventListener('message', handleSWMessage);
+
     return () => {
       window.removeEventListener('offline', goOffline);
       window.removeEventListener('online', goOnline);
+      if (unsub) unsub();
+      navigator.serviceWorker?.removeEventListener('message', handleSWMessage);
     };
   }, []);
 
+  // Clear sync result toast after 4 seconds
+  useEffect(() => {
+    if (!syncResult) return;
+    const t = setTimeout(() => setSyncResult(null), 4000);
+    return () => clearTimeout(t);
+  }, [syncResult]);
+
+  const handleManualSync = async () => {
+    if (!window.OfflineQueue || syncing) return;
+    setSyncing(true);
+    try {
+      const result = await window.OfflineQueue.sync();
+      setSyncResult(result);
+    } catch {
+      setSyncResult({ synced: 0, failed: 0, error: true });
+    }
+    setSyncing(false);
+  };
+
+  // Sync success toast
+  if (syncResult && syncResult.synced > 0 && !offline) {
+    return (
+      <div style={{
+        position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,
+        background: '#16a34a', color: '#fff', textAlign: 'center',
+        padding: '8px 12px', fontSize: '13px', fontWeight: 600,
+      }}>
+        Synced {syncResult.synced} offline action{syncResult.synced !== 1 ? 's' : ''} successfully
+      </div>
+    );
+  }
+
+  // Pending sync badge (online but have queued items)
+  if (!offline && pendingCount > 0) {
+    return (
+      <div style={{
+        position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,
+        background: '#f59e0b', color: '#fff', textAlign: 'center',
+        padding: '6px 12px', fontSize: '13px', fontWeight: 600,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+      }}>
+        <span style={{
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          width: '20px', height: '20px', borderRadius: '50%', background: '#fff', color: '#f59e0b',
+          fontSize: '11px', fontWeight: 700,
+        }}>{pendingCount}</span>
+        <span>offline action{pendingCount !== 1 ? 's' : ''} waiting to sync</span>
+        <button onClick={handleManualSync} disabled={syncing} style={{
+          marginLeft: '8px', padding: '2px 10px', borderRadius: '4px',
+          background: '#fff', color: '#f59e0b', border: 'none', fontWeight: 700,
+          fontSize: '12px', cursor: syncing ? 'wait' : 'pointer', opacity: syncing ? 0.7 : 1,
+        }}>
+          {syncing ? 'Syncing...' : 'Sync Now'}
+        </button>
+      </div>
+    );
+  }
+
   if (!offline) return null;
 
+  // Offline banner — updated message when items are queued
   return (
     <div style={{
       position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,
       background: 'var(--color-warning)', color: 'var(--text-on-primary)', textAlign: 'center',
       padding: '6px 12px', fontSize: '13px', fontWeight: 600,
     }}>
-      You're offline — some features may be unavailable
+      {pendingCount > 0
+        ? `You're offline — ${pendingCount} action${pendingCount !== 1 ? 's' : ''} saved, will sync when reconnected`
+        : "You're offline — check-ins, check-outs & notes will be saved locally"
+      }
     </div>
   );
 };

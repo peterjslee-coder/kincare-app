@@ -139,15 +139,27 @@ const CaredForView = window.CaredForView = () => {
     if (!newNote.trim() || !data?.careRecipientId) return;
     setSaving(true);
     try {
+      const notePayload = { careRecipientId: data.careRecipientId, content: newNote, noteType: 'personal' };
       const res = await apiFetch('/api/notes', {
         method: 'POST',
-        body: JSON.stringify({ careRecipientId: data.careRecipientId, content: newNote, noteType: 'personal' }),
+        body: JSON.stringify(notePayload),
       });
       if (res?.ok) {
         setNewNote('');
         await fetchData();
+      } else if (res?.status === 503 || !navigator.onLine) {
+        if (window.OfflineQueue) {
+          await window.OfflineQueue.queueNote(notePayload);
+          setNewNote('');
+        }
       }
     } catch (err) {
+      if (!navigator.onLine && window.OfflineQueue) {
+        try {
+          await window.OfflineQueue.queueNote({ careRecipientId: data.careRecipientId, content: newNote, noteType: 'personal' });
+          setNewNote('');
+        } catch {}
+      }
       console.error('Add note error:', err);
     }
     setSaving(false);

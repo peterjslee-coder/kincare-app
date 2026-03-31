@@ -14,6 +14,7 @@ const OUT_DIR = path.join(PUBLIC, "js-compiled");
 
 // Source files in dependency order (must match index.html script list)
 const scripts = [
+  "js/offlineQueue.js",
   "js/utils.js",
   "js/components/TimezoneHelper.js",
   "js/components/InPlaceIcon.js",

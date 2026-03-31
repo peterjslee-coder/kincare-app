@@ -759,14 +759,14 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       <h2 style={{ margin: '0 0 12px', color: 'var(--text-primary)', fontSize: '22px' }}>Welcome to InPlace!</h2>
       <p style={{ color: 'var(--text-secondary)', fontSize: '15px', lineHeight: '1.6', margin: '0 0 24px' }}>
         {noProfile
-          ? "It looks like your caregiver profile isn't set up yet. Complete your onboarding to start receiving care requests and connecting with families."
+          ? "Grab your driver's license and any copies of certifications or insurance info you may have — we'll walk you through everything step by step."
           : "We couldn't load your dashboard. Please try refreshing the page."}
       </p>
       {noProfile && onNeedsOnboarding && (
         <button onClick={onNeedsOnboarding} style={{
           padding: '14px 32px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
           borderRadius: '10px', fontSize: '16px', fontWeight: 600, cursor: 'pointer',
-        }}>Complete Your Profile</button>
+        }}>Let's Get Started</button>
       )}
       {!noProfile && (
         <button onClick={() => window.location.reload()} style={{
@@ -3091,15 +3091,16 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                 React.createElement('button', {
                   onClick: async () => {
                     setCheckSubmitting(true);
+                    const checkInData = {
+                      arrivalMood: checkInMood.length > 0 ? checkInMood : null,
+                      checkInLatitude: checkInLocation?.lat || null,
+                      checkInLongitude: checkInLocation?.lng || null,
+                      briefingAcknowledged: true,
+                    };
                     try {
                       const res = await apiFetch('/api/sessions/' + checkInSession.id + '/check-in', {
                         method: 'POST',
-                        body: JSON.stringify({
-                          arrivalMood: checkInMood.length > 0 ? checkInMood : null,
-                          checkInLatitude: checkInLocation?.lat || null,
-                          checkInLongitude: checkInLocation?.lng || null,
-                          briefingAcknowledged: true,
-                        }),
+                        body: JSON.stringify(checkInData),
                       });
                       if (res?.ok) {
                         await res.json();
@@ -3109,6 +3110,15 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                           const refreshRes = await apiFetch('/api/dashboard');
                           if (refreshRes?.ok) setData(await refreshRes.json());
                         } catch (e) { /* refresh is best-effort */ }
+                      } else if (res?.status === 503 || !navigator.onLine) {
+                        // Offline — queue for later sync
+                        if (window.OfflineQueue) {
+                          await window.OfflineQueue.queueCheckIn(checkInSession.id, checkInData);
+                          showToast('Saved offline — will sync when you reconnect', 'success');
+                          setCheckInSession(null);
+                        } else {
+                          showToast('You\'re offline — please try again when connected', 'error');
+                        }
                       } else if (res?.status === 402) {
                         const err = await res?.json().catch(() => null);
                         showToast(err?.code === 'FAMILY_UNPAID'
@@ -3119,7 +3129,18 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                         const err = await res?.json().catch(() => null);
                         showToast(err?.message || err?.error || 'Check-in failed', 'error');
                       }
-                    } catch (e) { showToast('Check-in failed', 'error'); }
+                    } catch (e) {
+                      // Network error — queue offline
+                      if (window.OfflineQueue) {
+                        try {
+                          await window.OfflineQueue.queueCheckIn(checkInSession.id, checkInData);
+                          showToast('Saved offline — will sync when you reconnect', 'success');
+                          setCheckInSession(null);
+                        } catch { showToast('Check-in failed — could not save offline', 'error'); }
+                      } else {
+                        showToast('Check-in failed — no connection', 'error');
+                      }
+                    }
                     setCheckSubmitting(false);
                   },
                   disabled: checkSubmitting,
@@ -3347,6 +3368,14 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                   }
                 }
                 setCheckSubmitting(true);
+                const checkOutPayload = {
+                  departureMood: checkOutMood.length > 0 ? checkOutMood : null,
+                  conditionTags: checkOutTags.length > 0 ? checkOutTags : null,
+                  careFeedback: checkOutCareFeedback.trim() || null,
+                  serviceFeedback: checkOutServiceFeedback.trim() || null,
+                  summary: checkOutSummary.trim() || null,
+                  earlyDepartureReason: earlyDepartureReason.trim() || null,
+                };
                 try {
                   // Add 30-second timeout to prevent infinite hang
                   const controller = new AbortController();
@@ -3354,14 +3383,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                   const res = await apiFetch('/api/sessions/' + checkOutSession.id + '/check-out', {
                     method: 'POST',
                     signal: controller.signal,
-                    body: JSON.stringify({
-                      departureMood: checkOutMood.length > 0 ? checkOutMood : null,
-                      conditionTags: checkOutTags.length > 0 ? checkOutTags : null,
-                      careFeedback: checkOutCareFeedback.trim() || null,
-                      serviceFeedback: checkOutServiceFeedback.trim() || null,
-                      summary: checkOutSummary.trim() || null,
-                      earlyDepartureReason: earlyDepartureReason.trim() || null,
-                    }),
+                    body: JSON.stringify(checkOutPayload),
                   });
                   clearTimeout(timeout);
                   if (!res) {
@@ -3398,6 +3420,15 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                     setCheckOutSession(null);
                     const refreshRes = await apiFetch('/api/dashboard');
                     if (refreshRes?.ok) setData(await refreshRes.json());
+                  } else if (res?.status === 503 || !navigator.onLine) {
+                    // Offline — queue for later sync
+                    if (window.OfflineQueue) {
+                      await window.OfflineQueue.queueCheckOut(checkOutSession.id, checkOutPayload);
+                      showToast('Saved offline — will sync when you reconnect', 'success');
+                      setCheckOutSession(null);
+                    } else {
+                      showToast('You\'re offline — please try again when connected', 'error');
+                    }
                   } else {
                     const err = await res.json().catch(() => null);
                     showToast(err?.error || 'Check-out failed', 'error');
@@ -3405,6 +3436,13 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                 } catch (e) {
                   if (e.name === 'AbortError') {
                     showToast('Check-out is taking too long — please try again', 'error');
+                  } else if (!navigator.onLine && window.OfflineQueue) {
+                    // Network error and offline — queue it
+                    try {
+                      await window.OfflineQueue.queueCheckOut(checkOutSession.id, checkOutPayload);
+                      showToast('Saved offline — will sync when you reconnect', 'success');
+                      setCheckOutSession(null);
+                    } catch { showToast('Check-out failed — could not save offline', 'error'); }
                   } else {
                     showToast('Check-out failed — ' + (e.message || 'network error'), 'error');
                   }

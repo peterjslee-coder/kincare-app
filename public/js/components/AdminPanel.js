@@ -630,7 +630,8 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
     apiFetch('/api/admin/alerts').then(r => r?.ok ? r.json() : null).then(d => {
       if (d) {
         setNewFeedbackCount(d.newFeedback || 0);
-        setSafetyFlagCount(d.safetyFlags || 0);
+        // Note: safetyFlagCount is set authoritatively by loadSafetyFlags() above
+        // (alerts endpoint returns deltas which can be 0 even when flags exist)
         setCheckrAlertCount(d.checkrAlerts || 0);
         setBgCheckActionItems(d.bgCheckActionItems || []);
       }
@@ -958,6 +959,8 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
       if (res?.ok) {
         loadUsers();
         setDeleteConfirm(null);
+        // Close drawer if open for this user
+        if (userDrawer?.user?.id === userId) setUserDrawer(null);
       } else {
         const data = await res.json();
         alert(data?.error || 'Failed to delete user');
@@ -1001,6 +1004,8 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
         const data = await nukeRes.json();
         loadUsers();
         setNukeConfirm(null);
+        // Close drawer if open for this user
+        if (userDrawer?.user?.id === userId) setUserDrawer(null);
         alert(data.message || 'User nuked successfully.');
       } else {
         const data = await nukeRes.json().catch(() => ({}));
@@ -1987,7 +1992,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                             textTransform: 'capitalize',
                           }}>{u.role === 'care_for' ? 'Care Recipient' : u.role}</span>
                         </td>
-                        <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                        <td onClick={e => e.stopPropagation()} style={{ padding: '10px 12px', textAlign: 'center' }}>
                           {isPending ? (
                             <span style={{ padding: '3px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: 'var(--color-warning-bg)', color: 'var(--color-warning)' }}>
                               {'\u23F3'} Pending
@@ -2010,7 +2015,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                             </button>
                           )}
                         </td>
-                        <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                        <td onClick={e => e.stopPropagation()} style={{ padding: '10px 12px', textAlign: 'center' }}>
                           <button onClick={async () => {
                             try {
                               const res = await apiFetch(`/api/admin/users/${u.id}/tester`, { method: 'PUT' });
@@ -2027,7 +2032,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                             {u.is_tester ? '\u2713 Yes' : 'No'}
                           </button>
                         </td>
-                        <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                        <td onClick={e => e.stopPropagation()} style={{ padding: '10px 12px', textAlign: 'center' }}>
                           <button onClick={async () => {
                             try {
                               const res = await apiFetch(`/api/admin/users/${u.id}/companion-access`, { method: 'PUT' });
@@ -2047,7 +2052,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                         <td style={{ padding: '10px 12px', color: 'var(--text-tertiary)', fontSize: '12px' }}>
                           {formatDate(u.created_at)}
                         </td>
-                        <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                        <td onClick={e => e.stopPropagation()} style={{ padding: '10px 12px', textAlign: 'center' }}>
                           {isPending ? (
                             <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
                               <button onClick={() => handleApprove(u.id)} disabled={approvalLoading === u.id}
@@ -4673,8 +4678,9 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                   <h3 style={{ margin: 0, fontSize: 18, color: 'var(--text-secondary)' }}>Loading...</h3>
                 )}
               </div>
-              <button onClick={() => { setUserDrawer(null); setUserDrawerLoading(false); }}
-                style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: 'var(--text-secondary)', padding: '2px 8px', borderRadius: 6 }}>✕</button>
+              <button onClick={(e) => { e.stopPropagation(); setUserDrawer(null); setUserDrawerLoading(false); }}
+                style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', fontSize: 18, cursor: 'pointer', color: 'var(--text-secondary)', padding: '4px 10px', borderRadius: 8, lineHeight: 1, flexShrink: 0 }}
+                title="Close">✕</button>
             </div>
 
             {userDrawerLoading && !userDrawer && (
@@ -4767,6 +4773,94 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                   </div>
                 )}
 
+                {/* ─── Documents ─── */}
+                <div style={{ marginBottom: 22 }}>
+                  <h4 style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--text-secondary)', marginBottom: 8, paddingBottom: 6, borderBottom: '1px solid var(--border-color)' }}>
+                    Documents ({userDrawer.allDocuments?.length || 0})
+                  </h4>
+                  {userDrawer.allDocuments?.length > 0 ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {userDrawer.allDocuments.map(doc => {
+                        const typeLabels = {
+                          DL_Front: 'DL (Front)', DL_Back: 'DL (Back)', Passport: 'Passport', State_ID: 'State ID',
+                          CNA: 'CNA Cert', HHA: 'HHA Cert', LPN: 'LPN Cert', RN: 'RN Cert',
+                          CPR: 'CPR Cert', BLS: 'BLS Cert', ACLS: 'ACLS Cert', First_Aid: 'First Aid',
+                          POA: 'Power of Attorney', Healthcare_POA: 'Healthcare POA', Court_Order: 'Court Order',
+                          Living_Will: 'Living Will', Legal_Guardianship: 'Legal Guardianship',
+                          Liability_Insurance: 'Liability Insurance', Auto_Insurance: 'Auto Insurance',
+                          Health_Insurance: 'Health Insurance', Other: 'Other', Other_Cert: 'Other Cert',
+                          Other_Legal: 'Other Legal',
+                        };
+                        const statusColors = {
+                          approved: '#4caf50', pending: '#ff9800', ai_review: '#2196f3',
+                          ai_flagged: '#ff5722', rejected: '#c62828', expired: '#9e9e9e', uploaded: '#607d8b',
+                        };
+                        const categoryIcons = {
+                          identity: '\u{1F4CB}', certification: '\u{1F3C5}', insurance: '\u{1F6E1}\uFE0F',
+                          legal: '\u{2696}\uFE0F', consent: '\u{1F4DD}',
+                        };
+                        const catIcon = categoryIcons[doc.category] || '\u{1F4C4}';
+                        const label = typeLabels[doc.document_type] || doc.document_type || 'Unknown';
+                        const statusColor = statusColors[doc.status] || '#9e9e9e';
+
+                        return React.createElement('div', {
+                          key: doc.id,
+                          style: {
+                            display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px',
+                            background: 'var(--bg-surface)', borderRadius: 8, border: '1px solid var(--border-color)',
+                            cursor: 'pointer', transition: 'background 0.12s',
+                          },
+                          onClick: async () => {
+                            try {
+                              const source = doc.source_table || '';
+                              const res = await apiFetch(`/api/admin/documents/${doc.id}?source=${source}`);
+                              if (res?.ok) {
+                                const data = await res.json();
+                                const d = data.document;
+                                if (d.file_data) {
+                                  // file_data is base64 data URI — open in new tab
+                                  const w = window.open('', '_blank');
+                                  if (w) {
+                                    if (d.file_data.startsWith('data:application/pdf') || (d.mime_type || '').includes('pdf')) {
+                                      w.document.write(`<html><body style="margin:0"><iframe src="${d.file_data}" style="width:100%;height:100vh;border:none"></iframe></body></html>`);
+                                    } else {
+                                      w.document.write(`<html><body style="margin:0;background:#111;display:flex;justify-content:center;align-items:center;min-height:100vh"><img src="${d.file_data}" style="max-width:100%;max-height:100vh;object-fit:contain" /></body></html>`);
+                                    }
+                                    w.document.title = label + ' — ' + (d.file_name || 'Document');
+                                  }
+                                } else {
+                                  showToast('No file data stored for this document', 'error');
+                                }
+                              } else {
+                                showToast('Failed to load document', 'error');
+                              }
+                            } catch (err) { showToast('Error loading document: ' + err.message, 'error'); }
+                          },
+                        },
+                          React.createElement('span', { style: { fontSize: 18, flexShrink: 0 } }, catIcon),
+                          React.createElement('div', { style: { flex: 1, minWidth: 0 } },
+                            React.createElement('div', { style: { fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } }, label),
+                            React.createElement('div', { style: { fontSize: 11, color: 'var(--text-secondary)', marginTop: 1 } },
+                              doc.file_name || '—',
+                              doc.recipient_name ? ` · for ${doc.recipient_name}` : '',
+                              ' · ', new Date(doc.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+                            ),
+                          ),
+                          React.createElement('span', {
+                            style: {
+                              padding: '2px 8px', borderRadius: 8, fontSize: 10, fontWeight: 600,
+                              color: '#fff', background: statusColor, flexShrink: 0, textTransform: 'capitalize',
+                            }
+                          }, (doc.status || 'uploaded').replace('_', ' ')),
+                          React.createElement('span', { style: { fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 } }, '\u203A'),
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p style={{ color: 'var(--text-muted)', fontSize: 13, margin: '4px 0 0' }}>No documents uploaded by this user.</p>
+                  )}
+                </div>
+
                 {/* Quick actions */}
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   <button onClick={() => { setUserDrawer(null); setActiveTab('people'); setUserSearch(userDrawer.user?.email); }}
@@ -4777,6 +4871,46 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                     style={{ padding: '6px 12px', background: 'var(--bg-surface)', color: 'var(--text-secondary)', border: '1px solid var(--border-color)', borderRadius: 8, fontSize: 12, cursor: 'pointer' }}>
                     💬 Message
                   </button>
+                </div>
+
+                {/* Danger zone — soft delete & nuke */}
+                <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--border-color)' }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--text-muted)', marginBottom: 8 }}>Danger Zone</div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {deleteConfirm === userDrawer.user?.id ? (
+                      <button onClick={() => handleDeleteUser(userDrawer.user.id, userDrawer.user.email)}
+                        disabled={deleteLoading}
+                        style={{ padding: '6px 14px', background: '#c62828', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                        Confirm Soft Delete
+                      </button>
+                    ) : (
+                      <button onClick={() => { setDeleteConfirm(userDrawer.user?.id); setNukeConfirm(null); }}
+                        style={{ padding: '6px 14px', background: 'var(--bg-surface)', color: '#c62828', border: '1px solid #ef9a9a', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                        Soft Delete
+                      </button>
+                    )}
+                    {nukeConfirm === userDrawer.user?.id ? (
+                      <button onClick={() => handleNukeUser(userDrawer.user.id, userDrawer.user.email)}
+                        disabled={nukeLoading}
+                        style={{ padding: '6px 14px', background: nukeLoading ? '#999' : '#b71c1c', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: nukeLoading ? 'wait' : 'pointer' }}>
+                        {nukeLoading ? 'Verifying...' : 'Confirm Nuke (Passkey)'}
+                      </button>
+                    ) : (
+                      <button onClick={() => { setNukeConfirm(userDrawer.user?.id); setDeleteConfirm(null); }}
+                        style={{ padding: '6px 14px', background: 'var(--bg-surface)', color: '#b71c1c', border: '1px solid #ef9a9a', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                        Nuke
+                      </button>
+                    )}
+                    {(deleteConfirm === userDrawer.user?.id || nukeConfirm === userDrawer.user?.id) && (
+                      <button onClick={() => { setDeleteConfirm(null); setNukeConfirm(null); setNukeError(null); }}
+                        style={{ padding: '6px 12px', background: 'none', color: 'var(--text-muted)', border: '1px solid var(--border-color)', borderRadius: 8, fontSize: 12, cursor: 'pointer' }}>
+                        Cancel
+                      </button>
+                    )}
+                  </div>
+                  {nukeError && nukeConfirm === userDrawer.user?.id && (
+                    <div style={{ fontSize: 11, color: 'var(--color-error)', marginTop: 6 }}>{nukeError}</div>
+                  )}
                 </div>
               </div>
             )}

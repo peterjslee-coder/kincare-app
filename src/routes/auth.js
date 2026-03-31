@@ -931,8 +931,10 @@ router.delete("/me", authenticate, async (req, res) => {
       await tx.prepare("DELETE FROM trusted_devices WHERE user_id = ?").run(userId);
       await tx.prepare("DELETE FROM user_passkeys WHERE user_id = ?").run(userId);
 
-      // 3. Delete personal documents (DL photos, etc.)
-      await tx.prepare("DELETE FROM caregiver_documents WHERE user_id = ?").run(userId);
+      // 3. Retain personal documents for fraud/audit protection (don't delete)
+      await tx.prepare("UPDATE caregiver_documents SET retained_from_deleted = 1, deleted_user_email = ? WHERE user_id = ?").run(user.email, userId);
+      await tx.prepare("UPDATE verified_documents SET retained_from_deleted = 1, deleted_user_email = ? WHERE user_id = ?").run(user.email, userId);
+      await tx.prepare("UPDATE authorization_documents SET retained_from_deleted = 1, deleted_user_email = ? WHERE uploaded_by_user_id = ?").run(user.email, userId);
 
       // 4. Remove from active teams & connections (but keep invite history)
       await tx.prepare("DELETE FROM care_team_members WHERE user_id = ?").run(userId);

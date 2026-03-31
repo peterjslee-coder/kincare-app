@@ -1224,7 +1224,7 @@ router.get("/:id/care-briefing", async (req, res) => {
 router.post("/:id/check-in", async (req, res) => {
   try {
     const db = await getDb();
-    const { arrivalMood, checkInLatitude, checkInLongitude, briefingAcknowledged } = req.body;
+    const { arrivalMood, checkInLatitude, checkInLongitude, briefingAcknowledged, offlineTimestamp, offlineSync } = req.body;
 
     const session = await db.prepare(`
       SELECT cs.*, cp.user_id AS caregiver_user_id, cp.early_check_in_allowed,
@@ -1240,8 +1240,19 @@ router.post("/:id/check-in", async (req, res) => {
     if (session.caregiver_user_id !== req.user.id) {
       return res.status(403).json({ error: "Only the assigned caregiver can check in" });
     }
+    // If this is an offline sync and session already in_progress, treat as success (duplicate)
+    if (offlineSync && session.status === "in_progress") {
+      return res.json({ duplicate: true, message: "Check-in already recorded" });
+    }
     if (session.status !== "confirmed") {
       return res.status(400).json({ error: `Cannot check in — session status is '${session.status}'` });
+    }
+
+    // Use offline timestamp if provided (caregiver was offline and recorded locally)
+    const effectiveCheckInTime = offlineTimestamp ? new Date(offlineTimestamp) : new Date();
+    const isOfflineSync = !!offlineSync;
+    if (isOfflineSync) {
+      console.log(`[check-in] Offline sync — original time: ${offlineTimestamp}, session ${req.params.id.slice(0, 8)}`);
     }
 
     // ─── Payment gate: block check-in if family has unpaid sessions ───
@@ -1287,13 +1298,14 @@ router.post("/:id/check-in", async (req, res) => {
 
     // ─── Detect late check-in (10+ minutes after scheduled start) ───
     // Use care recipient's timezone — not server or device timezone
+    // For offline syncs, use the offline timestamp for late detection
     let lateCheckIn = false;
     let lateMinutes = 0;
     if (session.scheduled_date && session.scheduled_time) {
       try {
-        const nowCare = getNowInZone(careTz);
+        const checkInMoment = isOfflineSync ? effectiveCheckInTime : getNowInZone(careTz);
         const scheduledStart = buildDateTimeInZone(session.scheduled_date.split('T')[0], session.scheduled_time, careTz);
-        lateMinutes = Math.floor((nowCare - scheduledStart) / 60000);
+        lateMinutes = Math.floor((checkInMoment - scheduledStart) / 60000);
         if (lateMinutes >= 10) {
           lateCheckIn = true;
           console.log(`[check-in] Late by ${lateMinutes} min (tz: ${careTz}) — session ${req.params.id.slice(0, 8)}`);
@@ -1307,11 +1319,13 @@ router.post("/:id/check-in", async (req, res) => {
     ).run(lateCheckIn ? 1 : 0, lateCheckIn ? lateMinutes : null, req.params.id);
 
     // Create visit_log with check-in data + location
+    // Use effective check-in time (offline timestamp if syncing, NOW() otherwise)
     const visitId = require("uuid").v4();
+    const checkInTimeSQL = isOfflineSync ? `'${effectiveCheckInTime.toISOString()}'` : 'NOW()';
     await db.prepare(`
-      INSERT INTO visit_logs (id, session_id, caregiver_id, check_in_time, arrival_mood, check_in_latitude, check_in_longitude, briefing_acknowledged_at, created_at)
-      VALUES (?, ?, ?, NOW(), ?, ?, ?, ${briefingAcknowledged ? 'NOW()' : 'NULL'}, NOW())
-    `).run(visitId, req.params.id, session.caregiver_id, arrivalMood ? (Array.isArray(arrivalMood) ? JSON.stringify(arrivalMood) : arrivalMood) : null, checkInLatitude || null, checkInLongitude || null);
+      INSERT INTO visit_logs (id, session_id, caregiver_id, check_in_time, arrival_mood, check_in_latitude, check_in_longitude, briefing_acknowledged_at, offline_sync, created_at)
+      VALUES (?, ?, ?, ${checkInTimeSQL}, ?, ?, ?, ${briefingAcknowledged ? 'NOW()' : 'NULL'}, ?, NOW())
+    `).run(visitId, req.params.id, session.caregiver_id, arrivalMood ? (Array.isArray(arrivalMood) ? JSON.stringify(arrivalMood) : arrivalMood) : null, checkInLatitude || null, checkInLongitude || null, isOfflineSync ? 1 : 0);
 
     // Get special instructions and recent notes for the caregiver
     const notes = await db.prepare(
@@ -1374,15 +1388,17 @@ router.post("/:id/check-in", async (req, res) => {
     res.json({
       visitLog: {
         id: visitId,
-        checkInTime: new Date().toISOString(),
+        checkInTime: effectiveCheckInTime.toISOString(),
         arrivalMood,
         checkInLatitude: checkInLatitude || null,
         checkInLongitude: checkInLongitude || null,
+        offlineSync: isOfflineSync,
       },
       specialInstructions: session.special_instructions,
       recentNotes: notes,
       lateCheckIn,
       lateMinutes: lateCheckIn ? lateMinutes : undefined,
+      offlineSync: isOfflineSync,
     });
   } catch (err) {
     console.error("Check-in error:", err);
@@ -1395,7 +1411,7 @@ router.post("/:id/check-in", async (req, res) => {
 router.post("/:id/check-out", async (req, res) => {
   try {
     const db = await getDb();
-    const { departureMood, conditionTags, careFeedback, serviceFeedback, summary, earlyDepartureReason } = req.body;
+    const { departureMood, conditionTags, careFeedback, serviceFeedback, summary, earlyDepartureReason, offlineTimestamp, offlineSync } = req.body;
 
     const session = await db.prepare(`
       SELECT cs.*, cp.user_id AS caregiver_user_id,
@@ -1411,8 +1427,19 @@ router.post("/:id/check-out", async (req, res) => {
     if (session.caregiver_user_id !== req.user.id) {
       return res.status(403).json({ error: "Only the assigned caregiver can check out" });
     }
+    // If this is an offline sync and session already completed, treat as success (duplicate)
+    const isOfflineSync = !!offlineSync;
+    if (isOfflineSync && session.status === "completed") {
+      return res.json({ duplicate: true, message: "Check-out already recorded" });
+    }
     if (session.status !== "in_progress") {
       return res.status(400).json({ error: `Cannot check out — session status is '${session.status}'` });
+    }
+
+    // Use offline timestamp if provided (caregiver was offline and recorded locally)
+    const effectiveCheckOutTime = offlineTimestamp ? new Date(offlineTimestamp) : new Date();
+    if (isOfflineSync) {
+      console.log(`[check-out] Offline sync — original time: ${offlineTimestamp}, session ${req.params.id.slice(0, 8)}`);
     }
 
     // All timing uses care recipient's timezone
@@ -1429,7 +1456,7 @@ router.post("/:id/check-out", async (req, res) => {
 
     if (visitLog && visitLog.check_in_time) {
       const checkInTime = new Date(visitLog.check_in_time);
-      const checkOutTime = new Date(); // now
+      const checkOutTime = effectiveCheckOutTime; // use offline timestamp if syncing
       const actualMinutes = Math.max(0, (checkOutTime - checkInTime) / 60000);
       const scheduledMinutes = scheduledDuration * 60;
 

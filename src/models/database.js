@@ -1025,6 +1025,15 @@ async function initializeDatabase() {
     // ─── v1.57.0 — Pre-set tip for auto-pay grace period ───
     `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS pending_tip_cents INTEGER DEFAULT 0`,
     `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS pending_tip_reason TEXT`,
+    // ─── v1.57.8 — Offline sync support for check-in/check-out ───
+    `ALTER TABLE visit_logs ADD COLUMN IF NOT EXISTS offline_sync INTEGER DEFAULT 0`,
+    // ─── v1.57.8 — Document retention on account deletion (fraud/audit protection) ───
+    `ALTER TABLE caregiver_documents ADD COLUMN IF NOT EXISTS retained_from_deleted INTEGER DEFAULT 0`,
+    `ALTER TABLE caregiver_documents ADD COLUMN IF NOT EXISTS deleted_user_email TEXT`,
+    `ALTER TABLE verified_documents ADD COLUMN IF NOT EXISTS retained_from_deleted INTEGER DEFAULT 0`,
+    `ALTER TABLE verified_documents ADD COLUMN IF NOT EXISTS deleted_user_email TEXT`,
+    `ALTER TABLE authorization_documents ADD COLUMN IF NOT EXISTS retained_from_deleted INTEGER DEFAULT 0`,
+    `ALTER TABLE authorization_documents ADD COLUMN IF NOT EXISTS deleted_user_email TEXT`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }
