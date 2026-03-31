@@ -1883,7 +1883,7 @@ router.get("/briefing", requireAdmin, async (req, res) => {
         COUNT(*) FILTER (WHERE status = 'open' OR status = 'in_progress') AS open_tickets,
         COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days') AS new_7d,
         COUNT(*) FILTER (WHERE status = 'resolved' AND updated_at > NOW() - INTERVAL '7 days') AS resolved_7d
-      FROM support_tickets
+      FROM admin_tickets
     `).get();
     briefing.tickets = ticketStats;
 
