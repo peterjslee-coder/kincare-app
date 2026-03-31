@@ -3034,6 +3034,17 @@
   30% { transform: translateY(-4px); opacity: 1; }
 }
 
+/* ═══ Check-In UX: Shake + Pulse ═══ */
+@keyframes checkInShake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-6px); }
+  75% { transform: translateX(6px); }
+}
+@keyframes incompleteCheckInPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
 /* ═══ Accessibility: Text Size ═══ */
 
 /* Large text (1.25x — 20px base) */

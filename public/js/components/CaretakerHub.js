@@ -45,6 +45,12 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const [firstVisitChoice, setFirstVisitChoice] = useState(''); // 'yes' | 'no' | 'unable'
   const [firstVisitNotes, setFirstVisitNotes] = useState('');
   const [firstVisitSubmitting, setFirstVisitSubmitting] = useState(false);
+  // Check-in UX improvement state
+  const [exitWarningOpen, setExitWarningOpen] = useState(false);
+  const [continueHintVisible, setContinueHintVisible] = useState(false);
+  const [continueShaking, setContinueShaking] = useState(false);
+  const [incompleteCheckIn, setIncompleteCheckIn] = useState(null); // { sessionId, session, startedAt }
+  const incompleteTimerRef = useRef(null);
   // Expandable care profile state (Up Next cards)
   const [expandedProfileId, setExpandedProfileId] = useState(null);
   const [profileBriefings, setProfileBriefings] = useState({}); // sessionId -> briefing data
@@ -1712,6 +1718,44 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         );
       })()}
 
+      {/* ── INCOMPLETE CHECK-IN BANNER ── */}
+      {incompleteCheckIn && (() => {
+        const elapsed = Math.floor((Date.now() - incompleteCheckIn.startedAt) / 60000);
+        const remaining = Math.max(0, 30 - elapsed);
+        const sess = incompleteCheckIn.session;
+        const recipName = (sess.recipientName || sess.recipient_name || 'Care Session');
+        return (
+          <div onClick={() => {
+            // Resume the check-in flow
+            setCheckInSession(incompleteCheckIn.session);
+            setIncompleteCheckIn(null);
+          }} style={{
+            margin: '0 0 12px 0', padding: '14px 16px', borderRadius: 12, cursor: 'pointer',
+            background: 'linear-gradient(135deg, rgba(239,68,68,0.08), rgba(234,179,8,0.06))',
+            border: '1px solid rgba(239,68,68,0.25)',
+            display: 'flex', alignItems: 'center', gap: 12,
+          }}>
+            <span style={{ fontSize: 24, flexShrink: 0 }}>🚨</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-error)', marginBottom: 2 }}>
+                Check-in incomplete for {recipName}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                You haven't finished checking in
+                <span style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 6px',
+                  borderRadius: 6, fontSize: 11, fontWeight: 700,
+                  background: remaining <= 10 ? 'rgba(239,68,68,0.15)' : 'rgba(234,179,8,0.15)',
+                  color: remaining <= 10 ? 'var(--color-error)' : 'var(--color-warning)',
+                  animation: remaining <= 10 ? 'incompleteCheckInPulse 2s infinite' : 'none',
+                }}>⏱ No-show in {remaining} min</span>
+              </div>
+            </div>
+            <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-success)', whiteSpace: 'nowrap' }}>Finish →</span>
+          </div>
+        );
+      })()}
+
       {/* UP NEXT — any session <24 hours away + in_progress, with check-in/out */}
       {/* Filter out sessions that have a pending OR expired counter-proposal — family never accepted the time change */}
       {(() => {
@@ -2856,16 +2900,58 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         </div>
       )}
 
-      {/* ─── CHECK-IN MODAL (2-step: Care Briefing → Check In) ─── */}
+      {/* ─── CHECK-IN FULL-SCREEN FLOW (stepper: Briefing → Check In) ─── */}
       {checkInSession && (
         <div style={{
-          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex',
-          alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+          position: 'fixed', inset: 0, background: 'var(--bg-surface)', zIndex: 1000,
+          display: 'flex', flexDirection: 'column',
         }}>
+          {/* ── STEPPER BAR ── */}
           <div style={{
-            background: 'var(--bg-surface)', borderRadius: '16px', padding: '28px', width: '480px', maxWidth: '94vw',
-            maxHeight: '90vh', overflow: 'auto',
+            display: 'flex', alignItems: 'center', padding: '14px 20px',
+            background: 'var(--bg-primary)', borderBottom: '1px solid var(--border-light)',
           }}>
+            {[
+              { key: 'briefing', label: 'Briefing', num: 1 },
+              ...(firstVisitNeeded ? [{ key: 'first-visit', label: 'Confirm', num: 2 }] : []),
+              { key: 'checkin', label: 'Check In', num: firstVisitNeeded ? 3 : 2 },
+            ].map((step, i, arr) => {
+              const steps = ['briefing', ...(firstVisitNeeded ? ['first-visit'] : []), 'checkin'];
+              const currentIdx = steps.indexOf(checkInStep);
+              const stepIdx = steps.indexOf(step.key);
+              const isDone = stepIdx < currentIdx;
+              const isActive = stepIdx === currentIdx;
+              return React.createElement(React.Fragment, { key: step.key },
+                React.createElement('div', { style: { display: 'flex', flexDirection: 'column', alignItems: 'center' } },
+                  React.createElement('div', { style: {
+                    width: 32, height: 32, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 13, fontWeight: 700, transition: 'all 0.3s',
+                    background: isDone ? 'var(--color-success)' : isActive ? 'var(--role-color)' : 'var(--bg-primary)',
+                    color: isDone || isActive ? 'var(--text-on-primary)' : 'var(--text-muted)',
+                    border: isDone ? 'none' : isActive ? 'none' : '2px solid var(--border-light)',
+                    boxShadow: isActive ? '0 0 10px rgba(27,107,90,0.3)' : 'none',
+                  }}, isDone ? '✓' : step.num),
+                  React.createElement('div', { style: {
+                    fontSize: 9, marginTop: 3, fontWeight: isActive ? 700 : 500,
+                    color: isDone ? 'var(--color-success)' : isActive ? 'var(--role-color)' : 'var(--text-muted)',
+                  }}, step.label)
+                ),
+                i < arr.length - 1 ? React.createElement('div', { style: {
+                  flex: 1, height: 2, margin: '0 8px', marginBottom: 14,
+                  background: isDone ? 'var(--color-success)' : 'var(--border-light)',
+                }}) : null
+              );
+            })}
+            <div style={{ flex: 1 }}></div>
+            <button onClick={() => setExitWarningOpen(true)} style={{
+              background: 'var(--bg-primary)', border: '1px solid var(--border-light)', borderRadius: '50%',
+              width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer', color: 'var(--text-muted)', fontSize: 16, marginBottom: 14,
+            }}>✕</button>
+          </div>
+
+          {/* ── Step content area ── */}
+          <div style={{ flex: 1, overflowY: 'auto', padding: '20px 16px', maxWidth: 520, width: '100%', margin: '0 auto' }}>
 
             {/* ── STEP 1: Care Briefing ── */}
             {checkInStep === 'briefing' && (() => {
@@ -2882,7 +2968,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                   ),
                   React.createElement('div', { style: { flex: 1 } }),
                   React.createElement('button', {
-                    onClick: () => setCheckInSession(null),
+                    onClick: () => setExitWarningOpen(true),
                     style: { background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }
                   }, '×')
                 ),
@@ -2997,14 +3083,18 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                       )
                     ),
 
-                // ── Buttons ──
-                React.createElement('div', { style: { display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 20 } },
-                  React.createElement('button', {
-                    onClick: () => setCheckInSession(null),
-                    style: { padding: '10px 20px', border: '1px solid #ddd', background: 'var(--bg-surface)', borderRadius: 8, cursor: 'pointer', fontSize: 13 }
-                  }, 'Cancel'),
+                // ── Continue button with shake feedback ──
+                React.createElement('div', { style: { marginTop: 20 } },
                   React.createElement('button', {
                     onClick: async () => {
+                      if (!briefingAcked) {
+                        // Shake + show hint
+                        setContinueShaking(true);
+                        setContinueHintVisible(true);
+                        setTimeout(() => setContinueShaking(false), 400);
+                        return;
+                      }
+                      setContinueHintVisible(false);
                       // Check if first-visit confirmation is needed
                       try {
                         const fvRes = await apiFetch('/api/sessions/' + checkInSession.id + '/first-visit-check');
@@ -3022,13 +3112,24 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                       } catch (e) { console.error('First-visit check failed:', e); }
                       setCheckInStep('checkin');
                     },
-                    disabled: !briefingAcked,
                     style: {
-                      padding: '10px 24px', background: briefingAcked ? 'var(--role-color)' : 'var(--border-light)', color: 'var(--text-on-primary)', border: 'none',
-                      borderRadius: 8, cursor: briefingAcked ? 'pointer' : 'not-allowed', fontSize: 14, fontWeight: 700,
-                      transition: 'background 0.2s',
+                      width: '100%', padding: '16px', border: 'none', borderRadius: 14,
+                      fontSize: 16, fontWeight: 700, cursor: 'pointer',
+                      background: briefingAcked
+                        ? 'linear-gradient(135deg, var(--role-color), var(--color-success))'
+                        : 'var(--bg-primary)',
+                      color: briefingAcked ? 'var(--text-on-primary)' : 'var(--text-muted)',
+                      transition: 'all 0.2s',
+                      animation: continueShaking ? 'checkInShake 0.4s ease-in-out' : 'none',
+                      border: briefingAcked ? 'none' : '1px solid var(--border-light)',
                     }
-                  }, 'Continue to Check In →')
+                  }, briefingAcked ? 'Continue to Check In →' : 'Continue to Check In →'),
+                  continueHintVisible && !briefingAcked
+                    ? React.createElement('div', { style: {
+                        textAlign: 'center', fontSize: 13, color: 'var(--color-warning)', marginTop: 8,
+                        fontWeight: 500, animation: 'fadeIn 0.3s ease',
+                      }}, '☝️ Please acknowledge the care briefing first')
+                    : null
                 )
               );
             })()}
@@ -3110,18 +3211,14 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
             {/* ── STEP 2: Check In (mood, location, confirm) ── */}
             {checkInStep === 'checkin' && React.createElement('div', null,
               React.createElement('div', { style: { textAlign: 'center', marginBottom: 20 } },
-                React.createElement('div', { style: { fontSize: 40, marginBottom: 8 } }, '👋'),
-                React.createElement('h3', { style: { marginTop: 0, marginBottom: 4, fontSize: 20 } }, 'Check In'),
+                React.createElement('h3', { style: { marginTop: 0, marginBottom: 4, fontSize: 22 } }, 'Almost there!'),
                 React.createElement('p', { style: { fontSize: 13, color: 'var(--text-secondary)', margin: 0 } },
-                  (checkInSession.recipientName || checkInSession.recipient_name || 'Care Session') + ' · ' + (checkInSession.date || checkInSession.scheduled_date) + ' at ' + (checkInSession.time || checkInSession.scheduled_time)
+                  'How is ' + ((checkInSession.recipientName || checkInSession.recipient_name || '').split(' ')[0] || 'the care recipient') + ' right now?'
                 )
               ),
 
               React.createElement('div', { style: { marginBottom: 20 } },
-                React.createElement('label', { style: { display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 8 } },
-                  'How is ' + ((checkInSession.recipientName || checkInSession.recipient_name || '').split(' ')[0] || 'the care recipient') + ' right now? (tap all that apply)'
-                ),
-                React.createElement('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 8 } },
+                React.createElement('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 } },
                   [
                     { key: 'happy', emoji: '😊', label: 'Happy' },
                     { key: 'surprised', emoji: '😮', label: 'Surprised' },
@@ -3130,100 +3227,163 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                     { key: 'neutral', emoji: '😐', label: 'Neutral' },
                     { key: 'sad', emoji: '😢', label: 'Sad' },
                     { key: 'upset', emoji: '😠', label: 'Upset' },
+                    { key: 'warm', emoji: '🥰', label: 'Warm' },
                   ].map(m =>
                     React.createElement('button', {
                       key: m.key, onClick: () => setCheckInMood(prev => prev.includes(m.key) ? prev.filter(k => k !== m.key) : [...prev, m.key]),
                       style: {
-                        padding: '8px 14px', borderRadius: 20,
-                        border: checkInMood.includes(m.key) ? '2px solid #e8724a' : '2px solid #eee',
-                        background: checkInMood.includes(m.key) ? '#fff3ed' : 'var(--bg-primary)', cursor: 'pointer', fontSize: 13,
-                        fontWeight: checkInMood.includes(m.key) ? 700 : 400, display: 'flex', alignItems: 'center', gap: 6,
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+                        padding: '14px 8px', borderRadius: 12,
+                        border: checkInMood.includes(m.key) ? '2px solid var(--color-success)' : '2px solid var(--border-light)',
+                        background: checkInMood.includes(m.key) ? 'var(--color-success-bg)' : 'var(--bg-primary)',
+                        cursor: 'pointer', transition: 'all 0.15s',
                       }
-                    }, React.createElement('span', { style: { fontSize: 18 } }, m.emoji), ' ' + m.label)
+                    },
+                      React.createElement('span', { style: { fontSize: 28 } }, m.emoji),
+                      React.createElement('span', { style: { fontSize: 10, fontWeight: 500, color: checkInMood.includes(m.key) ? 'var(--color-success)' : 'var(--text-muted)' } }, m.label)
+                    )
                   )
                 )
               ),
 
               checkInLocation
-                ? React.createElement('div', { style: { marginBottom: 12, padding: 10, background: 'var(--color-info-bg)', borderRadius: 8, border: '1px solid #90caf9', fontSize: 12, color: 'var(--color-info)', display: 'flex', alignItems: 'center', gap: 6 } },
-                    React.createElement('span', { style: { fontSize: 14 } }, '📍'), ' Location captured (' + Math.round(checkInLocation.accuracy || 0) + 'm accuracy)')
+                ? React.createElement('div', { style: { marginBottom: 16, padding: 12, background: 'var(--color-success-bg)', borderRadius: 10, border: '1px solid var(--color-success)', fontSize: 13, color: 'var(--color-success)', display: 'flex', alignItems: 'center', gap: 8 } },
+                    React.createElement('span', { style: { fontSize: 16 } }, '📍'), 'Location captured · ' + Math.round(checkInLocation.accuracy || 0) + 'm accuracy')
                 : null,
               locationError && !checkInLocation
-                ? React.createElement('div', { style: { marginBottom: 12, padding: 10, background: 'var(--color-warning-bg)', borderRadius: 8, border: '1px solid #ffb74d', fontSize: 12, color: 'var(--color-warning)', display: 'flex', alignItems: 'center', gap: 6 } },
-                    React.createElement('span', { style: { fontSize: 14 } }, '⚠️'), ' Location unavailable — you can still check in')
+                ? React.createElement('div', { style: { marginBottom: 16, padding: 12, background: 'var(--color-warning-bg)', borderRadius: 10, border: '1px solid var(--color-warning)', fontSize: 13, color: 'var(--color-warning)', display: 'flex', alignItems: 'center', gap: 8 } },
+                    React.createElement('span', { style: { fontSize: 16 } }, '⚠️'), 'Location unavailable — you can still check in')
                 : null,
 
-              React.createElement('div', { style: { display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 20 } },
-                React.createElement('button', {
-                  onClick: () => setCheckInStep(firstVisitNeeded ? 'first-visit' : 'briefing'),
-                  style: { padding: '10px 20px', border: '1px solid #ddd', background: 'var(--bg-surface)', borderRadius: 8, cursor: 'pointer', fontSize: 13 }
-                }, '\u2190 Back'),
-                React.createElement('button', {
-                  onClick: async () => {
-                    setCheckSubmitting(true);
-                    const checkInData = {
-                      arrivalMood: checkInMood.length > 0 ? checkInMood : null,
-                      checkInLatitude: checkInLocation?.lat || null,
-                      checkInLongitude: checkInLocation?.lng || null,
-                      briefingAcknowledged: true,
-                    };
-                    try {
-                      const res = await apiFetch('/api/sessions/' + checkInSession.id + '/check-in', {
-                        method: 'POST',
-                        body: JSON.stringify(checkInData),
-                      });
-                      if (res?.ok) {
-                        await res.json();
-                        showToast('Checked in! Session started.', 'success');
-                        setCheckInSession(null);
-                        try {
-                          const refreshRes = await apiFetch('/api/dashboard');
-                          if (refreshRes?.ok) setData(await refreshRes.json());
-                        } catch (e) { /* refresh is best-effort */ }
-                      } else if (res?.status === 503 || !navigator.onLine) {
-                        // Offline — queue for later sync
-                        if (window.OfflineQueue) {
-                          await window.OfflineQueue.queueCheckIn(checkInSession.id, checkInData);
-                          showToast('Saved offline — will sync when you reconnect', 'success');
-                          setCheckInSession(null);
-                        } else {
-                          showToast('You\'re offline — please try again when connected', 'error');
-                        }
-                      } else if (res?.status === 402) {
-                        const err = await res?.json().catch(() => null);
-                        showToast(err?.code === 'FAMILY_UNPAID'
-                          ? 'Check-in blocked — the family has an unpaid balance. They\'ve been notified.'
-                          : (err?.message || 'Check-in blocked — payment issue'), 'error');
-                        setCheckInSession(null);
-                      } else {
-                        const err = await res?.json().catch(() => null);
-                        showToast(err?.message || err?.error || 'Check-in failed', 'error');
-                      }
-                    } catch (e) {
-                      // Network error — queue offline
+              // Back link
+              React.createElement('button', {
+                onClick: () => setCheckInStep(firstVisitNeeded ? 'first-visit' : 'briefing'),
+                style: { background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: 'var(--text-muted)', padding: '8px 0', marginBottom: 8 }
+              }, '\u2190 Back to briefing'),
+
+              // Big final check-in button
+              React.createElement('button', {
+                onClick: async () => {
+                  setCheckSubmitting(true);
+                  setIncompleteCheckIn(null); // Clear incomplete state on successful attempt
+                  const checkInData = {
+                    arrivalMood: checkInMood.length > 0 ? checkInMood : null,
+                    checkInLatitude: checkInLocation?.lat || null,
+                    checkInLongitude: checkInLocation?.lng || null,
+                    briefingAcknowledged: true,
+                  };
+                  try {
+                    const res = await apiFetch('/api/sessions/' + checkInSession.id + '/check-in', {
+                      method: 'POST',
+                      body: JSON.stringify(checkInData),
+                    });
+                    if (res?.ok) {
+                      await res.json();
+                      showToast('Checked in! Session started.', 'success');
+                      setCheckInSession(null);
+                      setIncompleteCheckIn(null);
+                      if (incompleteTimerRef.current) { clearTimeout(incompleteTimerRef.current); incompleteTimerRef.current = null; }
+                      try {
+                        const refreshRes = await apiFetch('/api/dashboard');
+                        if (refreshRes?.ok) setData(await refreshRes.json());
+                      } catch (e) { /* refresh is best-effort */ }
+                    } else if (res?.status === 503 || !navigator.onLine) {
                       if (window.OfflineQueue) {
-                        try {
-                          await window.OfflineQueue.queueCheckIn(checkInSession.id, checkInData);
-                          showToast('Saved offline — will sync when you reconnect', 'success');
-                          setCheckInSession(null);
-                        } catch { showToast('Check-in failed — could not save offline', 'error'); }
+                        await window.OfflineQueue.queueCheckIn(checkInSession.id, checkInData);
+                        showToast('Saved offline — will sync when you reconnect', 'success');
+                        setCheckInSession(null);
+                        setIncompleteCheckIn(null);
                       } else {
-                        showToast('Check-in failed — no connection', 'error');
+                        showToast('You\'re offline — please try again when connected', 'error');
                       }
+                    } else if (res?.status === 402) {
+                      const err = await res?.json().catch(() => null);
+                      showToast(err?.code === 'FAMILY_UNPAID'
+                        ? 'Check-in blocked — the family has an unpaid balance. They\'ve been notified.'
+                        : (err?.message || 'Check-in blocked — payment issue'), 'error');
+                      setCheckInSession(null);
+                    } else {
+                      const err = await res?.json().catch(() => null);
+                      showToast(err?.message || err?.error || 'Check-in failed', 'error');
                     }
-                    setCheckSubmitting(false);
-                  },
-                  disabled: checkSubmitting,
-                  style: {
-                    padding: '10px 24px', background: 'var(--accent-color)', color: 'var(--text-on-primary)', border: 'none',
-                    borderRadius: 8, cursor: 'pointer', fontSize: 14, fontWeight: 700,
-                    opacity: checkSubmitting ? 0.6 : 1,
+                  } catch (e) {
+                    if (window.OfflineQueue) {
+                      try {
+                        await window.OfflineQueue.queueCheckIn(checkInSession.id, checkInData);
+                        showToast('Saved offline — will sync when you reconnect', 'success');
+                        setCheckInSession(null);
+                        setIncompleteCheckIn(null);
+                      } catch { showToast('Check-in failed — could not save offline', 'error'); }
+                    } else {
+                      showToast('Check-in failed — no connection', 'error');
+                    }
                   }
-                }, checkSubmitting ? 'Checking in...' : "I'm Here ✓")
-              )
+                  setCheckSubmitting(false);
+                },
+                disabled: checkSubmitting,
+                style: {
+                  width: '100%', padding: 22, border: 'none', borderRadius: 16,
+                  fontSize: 20, fontWeight: 800, cursor: 'pointer', letterSpacing: 0.5,
+                  background: 'linear-gradient(135deg, var(--color-success), #16a34a)',
+                  color: '#fff', boxShadow: '0 6px 24px rgba(34, 197, 94, 0.4)',
+                  transition: 'all 0.15s',
+                  opacity: checkSubmitting ? 0.6 : 1,
+                }
+              }, checkSubmitting ? 'Checking in...' : "I'm Here \u2713"),
+              React.createElement('p', { style: { textAlign: 'center', fontSize: 11, color: 'var(--text-muted)', marginTop: 8 } },
+                'This will start your session timer')
             )}
 
-          </div>
+          </div>{/* end step content area */}
+
+          {/* ── EXIT WARNING OVERLAY ── */}
+          {exitWarningOpen && React.createElement('div', {
+            style: {
+              position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              zIndex: 10, padding: 24,
+            }
+          },
+            React.createElement('div', {
+              style: {
+                background: 'var(--bg-surface)', borderRadius: 20, padding: '28px 24px',
+                textAlign: 'center', maxWidth: 360, width: '100%',
+                border: '1px solid var(--border-light)', boxShadow: '0 8px 30px rgba(0,0,0,0.3)',
+              }
+            },
+              React.createElement('div', { style: { fontSize: 48, marginBottom: 12 } }, '⚠️'),
+              React.createElement('h3', { style: { fontSize: 18, fontWeight: 700, marginBottom: 8 } }, "You Haven't Checked In Yet"),
+              React.createElement('p', { style: { fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: 20 } },
+                'If you leave now, you won\'t be checked in and may be flagged as a no-show after 30 minutes.'),
+              React.createElement('div', { style: { display: 'flex', gap: 10 } },
+                React.createElement('button', {
+                  onClick: () => {
+                    setExitWarningOpen(false);
+                    // Track incomplete check-in so banner shows on dashboard
+                    setIncompleteCheckIn({
+                      sessionId: checkInSession.id,
+                      session: checkInSession,
+                      startedAt: Date.now(),
+                    });
+                    setCheckInSession(null);
+                  },
+                  style: {
+                    flex: 1, padding: 14, borderRadius: 12, fontSize: 14, fontWeight: 700,
+                    cursor: 'pointer', border: '1px solid var(--border-light)',
+                    background: 'var(--bg-primary)', color: 'var(--text-muted)',
+                  }
+                }, 'Leave Anyway'),
+                React.createElement('button', {
+                  onClick: () => setExitWarningOpen(false),
+                  style: {
+                    flex: 1, padding: 14, borderRadius: 12, fontSize: 14, fontWeight: 700,
+                    cursor: 'pointer', border: 'none',
+                    background: 'var(--color-success)', color: '#fff',
+                  }
+                }, 'Finish Check-In')
+              )
+            )
+          )}
         </div>
       )}
 

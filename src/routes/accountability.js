@@ -761,7 +761,30 @@ async function pollCaregiverNoShows() {
         // We use 10 min grace after SCHEDULED END as the no-show window
         // Actually per Pete: "the time passes, then there's no payment" — so after scheduled end + grace
         // But for immediate flagging, we can flag as potential no-show earlier and let admin/family act
-        // Let's flag after session start + 30 min (generous window) if still not checked in
+        // ── 20-min warning: push nudge to caregiver to finish check-in ──
+        if (minutesPastStart >= 20 && minutesPastStart < 30
+            && !(s.notifications_sent || '').includes('checkin_nudge')
+            && s.caregiver_user_id) {
+          const nudgeRecipName = s.recipient_name || 'your client';
+          sendPushToUser(s.caregiver_user_id, {
+            title: "Finish Checking In",
+            body: `You started checking in for ${nudgeRecipName} but didn't finish. Tap to complete — you'll be marked as a no-show in 10 minutes.`,
+            data: { type: "checkin_nudge", sessionId: s.id },
+          }, "checkin_nudge").catch(() => {});
+          if (_emitToUser) {
+            _emitToUser(s.caregiver_user_id, "checkin_nudge", {
+              sessionId: s.id,
+              message: `Complete your check-in for ${nudgeRecipName} — no-show in 10 minutes.`,
+            });
+          }
+          await db.prepare(`
+            UPDATE care_sessions SET notifications_sent = COALESCE(notifications_sent, '') || ',checkin_nudge'
+            WHERE id = ?
+          `).run(s.id);
+          console.log(`[accountability] Check-in nudge sent to caregiver for session ${s.id.slice(0, 8)}`);
+        }
+
+        // Flag after session start + 30 min if still not checked in
         if (minutesPastStart >= 30) {
           await db.prepare(`
             UPDATE care_sessions SET
