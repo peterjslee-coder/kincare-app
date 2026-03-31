@@ -2203,7 +2203,20 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
 
       {/* Visit Detail Modal */}
       {visitDetailSessionId && (
-        <VisitDetailModal sessionId={visitDetailSessionId} role="family" onClose={() => setVisitDetailSessionId(null)} onRefresh={() => fetchDashboard()} />
+        <VisitDetailModal sessionId={visitDetailSessionId} role="family" onClose={() => setVisitDetailSessionId(null)} onRefresh={() => fetchDashboard()} onTimeChange={(session, isReview) => {
+          if (isReview) {
+            // Fetch and show the pending proposal
+            apiFetch(`/api/sessions/${session.id}/time-change`).then(r => r?.ok && r.json().then(d => {
+              setTimeChangeProposal({ ...d.proposal, session: { id: session.id, recipientName: session.recipient_name, caregiverName: session.caregiver_name, durationHours: session.duration_hours, time: session.scheduled_time, date: session.scheduled_date } });
+            })).catch(() => {});
+          } else {
+            const s = { id: session.id, recipientName: session.recipient_name, caregiverName: session.caregiver_name, durationHours: session.duration_hours, time: session.scheduled_time, date: session.scheduled_date, status: session.status };
+            setTimeChangeModal({ sessionId: session.id, session: s });
+            setTcNewTime(session.scheduled_time || '');
+            setTcNewDuration(String(session.duration_hours || 2));
+            setTcReason('');
+          }
+        }} />
       )}
 
       {/* Review Modal — works for both post-session and late-cancel reviews */}

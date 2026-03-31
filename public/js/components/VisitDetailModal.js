@@ -1,4 +1,4 @@
-const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, onRefresh }) => {
+const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, onRefresh, onTimeChange }) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -415,7 +415,20 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, 
           );
         })()}
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, flexWrap: 'wrap', gap: 6 }}>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {data && data.session && data.session.status === 'confirmed' && data.session.caregiver_id && !data.session.pending_time_change_id && onTimeChange && (
+            <button onClick={() => { onTimeChange(data.session); onClose(); }}
+              style={{ padding: '8px 16px', background: 'var(--color-purple-bg)', color: 'var(--color-purple)', border: '1px solid var(--color-purple)', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+              Change Time
+            </button>
+          )}
+          {data && data.session && data.session.pending_time_change_id && onTimeChange && (
+            <button onClick={() => { onTimeChange(data.session, true); onClose(); }}
+              style={{ padding: '8px 16px', background: 'var(--color-purple)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', animation: 'pulse 2s infinite' }}>
+              ⏰ Review Change
+            </button>
+          )}
           {data && data.session && ['confirmed', 'pending', 'open', 'requested'].includes(data.session.status) && (
             <button disabled={cancelling} onClick={async () => {
               const ss = data.session;
@@ -444,7 +457,8 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, 
               borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: cancelling ? 'not-allowed' : 'pointer',
             }}>{cancelling ? 'Cancelling...' : 'Cancel Session'}</button>
           )}
-          {!(data && data.session && ['confirmed', 'pending', 'open', 'requested'].includes(data.session.status)) && <div />}
+          </div>
+          {!(data && data.session && ['confirmed', 'pending', 'open', 'requested'].includes(data.session.status)) && !onTimeChange && <div />}
           <button className="btn btn-outline" onClick={onClose}>Close</button>
         </div>
       </div>

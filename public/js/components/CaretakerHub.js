@@ -3689,6 +3689,18 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         <VisitDetailModal sessionId={visitDetailSessionId} role="caregiver" onClose={() => setVisitDetailSessionId(null)} onRefresh={async () => {
           const dashRes = await apiFetch('/api/dashboard');
           if (dashRes?.ok) setData(await dashRes.json());
+        }} onTimeChange={(session, isReview) => {
+          if (isReview) {
+            apiFetch(`/api/sessions/${session.id}/time-change`).then(r => r?.ok && r.json().then(d => {
+              setTimeChangeProposal({ ...d.proposal, session: { id: session.id, recipientName: session.recipient_name, caregiverName: session.caregiver_name, durationHours: session.duration_hours, time: session.scheduled_time, date: session.scheduled_date, caregiverPayout: session.caregiver_payout || 0 } });
+            })).catch(() => {});
+          } else {
+            const s = { id: session.id, recipientName: session.recipient_name, recipientname: session.recipient_name, durationHours: session.duration_hours, time: session.scheduled_time, scheduled_time: session.scheduled_time, date: session.scheduled_date, status: session.status };
+            setTimeChangeModal({ sessionId: session.id, session: s });
+            setTcNewTime(session.scheduled_time || '');
+            setTcNewDuration(String(session.duration_hours || 2));
+            setTcReason('');
+          }
         }} />
       )}
 
