@@ -932,45 +932,54 @@ router.post("/users/:id/nuke/challenge", async (req, res) => {
 // ─── DELETE /api/admin/users/:id/nuke — HARD DELETE all user data (requires passkey) ───
 router.delete("/users/:id/nuke", async (req, res) => {
   try {
-    const { _challengeKey, ...authResponse } = req.body;
-
-    // 1. Verify passkey challenge
-    const stored = getNukeChallenge(_challengeKey);
-    if (!stored) {
-      return res.status(401).json({ error: "Passkey challenge expired. Please try again." });
-    }
-    if (stored.adminId !== req.user.id || stored.targetUserId !== req.params.id) {
-      return res.status(401).json({ error: "Challenge mismatch." });
-    }
-
+    const { _challengeKey, _passwordAuth, password, ...authResponse } = req.body;
     const db = await getDb();
-    const passkey = await db.prepare(
-      "SELECT pk.*, u.id as uid FROM user_passkeys pk JOIN users u ON pk.user_id = u.id WHERE pk.credential_id = ?"
-    ).get(authResponse.id);
-    if (!passkey || passkey.uid !== req.user.id) {
-      return res.status(401).json({ error: "Passkey not recognized or doesn't belong to you." });
+
+    // Password-based fallback for admin verification
+    if (_passwordAuth && password) {
+      const bcrypt = require("bcryptjs");
+      const adminUser = await db.prepare("SELECT password_hash, is_admin FROM users WHERE id = ?").get(req.user.id);
+      if (!adminUser?.is_admin) return res.status(403).json({ error: "Admin access required." });
+      const match = await bcrypt.compare(password, adminUser.password_hash);
+      if (!match) return res.status(401).json({ error: "Incorrect password." });
+    } else {
+      // Passkey-based verification
+      const stored = getNukeChallenge(_challengeKey);
+      if (!stored) {
+        return res.status(401).json({ error: "Passkey challenge expired. Please try again." });
+      }
+      if (stored.adminId !== req.user.id || stored.targetUserId !== req.params.id) {
+        return res.status(401).json({ error: "Challenge mismatch." });
+      }
+
+      const passkey = await db.prepare(
+        "SELECT pk.*, u.id as uid FROM user_passkeys pk JOIN users u ON pk.user_id = u.id WHERE pk.credential_id = ?"
+      ).get(authResponse.id);
+      if (!passkey || passkey.uid !== req.user.id) {
+        return res.status(401).json({ error: "Passkey not recognized or doesn't belong to you." });
+      }
+
+      const verification = await verifyAuthenticationResponse({
+        response: authResponse,
+        expectedChallenge: stored.challenge,
+        expectedOrigin: ORIGIN,
+        expectedRPID: RP_ID,
+        credential: {
+          id: passkey.credential_id,
+          publicKey: Buffer.from(passkey.public_key, "base64"),
+          counter: Number(passkey.counter),
+        },
+        requireUserVerification: true,
+      });
+
+      if (!verification.verified) {
+        return res.status(401).json({ error: "Passkey verification failed." });
+      }
+
+      // Update passkey counter
+      await db.prepare("UPDATE user_passkeys SET counter = ?, last_used = NOW() WHERE id = ?")
+        .run(verification.authenticationInfo.newCounter, passkey.id);
     }
-
-    const verification = await verifyAuthenticationResponse({
-      response: authResponse,
-      expectedChallenge: stored.challenge,
-      expectedOrigin: ORIGIN,
-      expectedRPID: RP_ID,
-      credential: {
-        id: passkey.credential_id,
-        publicKey: Buffer.from(passkey.public_key, "base64"),
-        counter: Number(passkey.counter),
-      },
-      requireUserVerification: true,
-    });
-
-    if (!verification.verified) {
-      return res.status(401).json({ error: "Passkey verification failed." });
-    }
-
-    // Update passkey counter
-    await db.prepare("UPDATE user_passkeys SET counter = ?, last_used = NOW() WHERE id = ?")
-      .run(verification.authenticationInfo.newCounter, passkey.id);
 
     // 2. Get user info before nuking
     const { id } = req.params;

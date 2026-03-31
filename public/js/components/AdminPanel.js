@@ -969,21 +969,55 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
     setDeleteLoading(false);
   };
 
-  // ─── Nuke: passkey-verified permanent deletion ───
+  // ─── Nuke: passkey-verified permanent deletion (password fallback) ───
+  const [nukePasswordMode, setNukePasswordMode] = useState(false);
+  const [nukePassword, setNukePassword] = useState('');
   const handleNukeUser = async (userId, email) => {
     if (nukeConfirm !== userId) {
       setNukeConfirm(userId);
       setNukeError(null);
+      setNukePasswordMode(false);
+      setNukePassword('');
       return; // First click — show confirm
     }
-    // Second click — trigger passkey challenge
+
+    // Password fallback mode
+    if (nukePasswordMode) {
+      if (!nukePassword) { setNukeError('Enter your password to confirm.'); return; }
+      setNukeLoading(true);
+      setNukeError(null);
+      try {
+        const nukeRes = await apiFetch(`/api/admin/users/${userId}/nuke`, {
+          method: 'DELETE',
+          body: JSON.stringify({ _passwordAuth: true, password: nukePassword }),
+        });
+        if (nukeRes?.ok) {
+          const data = await nukeRes.json();
+          loadUsers();
+          setNukeConfirm(null);
+          setNukePasswordMode(false);
+          setNukePassword('');
+          if (userDrawer?.user?.id === userId) setUserDrawer(null);
+          alert(data.message || 'User nuked successfully.');
+        } else {
+          const data = await nukeRes.json().catch(() => ({}));
+          throw new Error(data.error || 'Nuke failed');
+        }
+      } catch (err) {
+        setNukeError(err.message || 'Nuke failed');
+        console.error('Nuke error:', err);
+      }
+      setNukeLoading(false);
+      return;
+    }
+
+    // Passkey mode (default) — falls back to password on failure
     setNukeLoading(true);
     setNukeError(null);
     try {
       const SimpleWebAuthnBrowser = window.SimpleWebAuthnBrowser;
-      if (!SimpleWebAuthnBrowser) throw new Error('Passkey library not loaded. Refresh the page.');
+      if (!SimpleWebAuthnBrowser) throw new Error('passkey_unavailable');
 
-      // 1. Get challenge from server
       const challengeRes = await apiFetch(`/api/admin/users/${userId}/nuke/challenge`, { method: 'POST' });
       if (!challengeRes?.ok) {
         const err = await challengeRes.json().catch(() => ({}));
@@ -991,11 +1025,8 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
       }
       const options = await challengeRes.json();
       const challengeKey = options._challengeKey;
-
-      // 2. Trigger biometric/passkey prompt
       const authResp = await SimpleWebAuthnBrowser.startAuthentication({ optionsJSON: options });
 
-      // 3. Send verified response to nuke endpoint
       const nukeRes = await apiFetch(`/api/admin/users/${userId}/nuke`, {
         method: 'DELETE',
         body: JSON.stringify({ ...authResp, _challengeKey: challengeKey }),
@@ -1004,7 +1035,6 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
         const data = await nukeRes.json();
         loadUsers();
         setNukeConfirm(null);
-        // Close drawer if open for this user
         if (userDrawer?.user?.id === userId) setUserDrawer(null);
         alert(data.message || 'User nuked successfully.');
       } else {
@@ -1012,8 +1042,10 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
         throw new Error(data.error || 'Nuke failed');
       }
     } catch (err) {
-      if (err.name === 'NotAllowedError') {
-        setNukeError('Passkey prompt cancelled.');
+      if (err.name === 'NotAllowedError' || err.message === 'passkey_unavailable' || err.message?.includes('unexpected') || err.message?.includes('authentication')) {
+        // Fall back to password mode
+        setNukePasswordMode(true);
+        setNukeError('Passkey unavailable — enter your admin password instead.');
       } else {
         setNukeError(err.message || 'Nuke failed');
       }
@@ -4890,11 +4922,25 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                       </button>
                     )}
                     {nukeConfirm === userDrawer.user?.id ? (
-                      <button onClick={() => handleNukeUser(userDrawer.user.id, userDrawer.user.email)}
-                        disabled={nukeLoading}
-                        style={{ padding: '6px 14px', background: nukeLoading ? '#999' : '#b71c1c', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: nukeLoading ? 'wait' : 'pointer' }}>
-                        {nukeLoading ? 'Verifying...' : 'Confirm Nuke (Passkey)'}
-                      </button>
+                      nukePasswordMode ? (
+                        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                          <input type="password" placeholder="Admin password" value={nukePassword}
+                            onChange={e => setNukePassword(e.target.value)}
+                            onKeyDown={e => e.key === 'Enter' && handleNukeUser(userDrawer.user.id, userDrawer.user.email)}
+                            style={{ padding: '6px 10px', border: '1px solid #ef9a9a', borderRadius: 6, fontSize: 12, width: 140 }} />
+                          <button onClick={() => handleNukeUser(userDrawer.user.id, userDrawer.user.email)}
+                            disabled={nukeLoading}
+                            style={{ padding: '6px 14px', background: nukeLoading ? '#999' : '#b71c1c', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: nukeLoading ? 'wait' : 'pointer' }}>
+                            {nukeLoading ? 'Nuking...' : 'Nuke'}
+                          </button>
+                        </div>
+                      ) : (
+                        <button onClick={() => handleNukeUser(userDrawer.user.id, userDrawer.user.email)}
+                          disabled={nukeLoading}
+                          style={{ padding: '6px 14px', background: nukeLoading ? '#999' : '#b71c1c', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: nukeLoading ? 'wait' : 'pointer' }}>
+                          {nukeLoading ? 'Verifying...' : 'Confirm Nuke (Passkey)'}
+                        </button>
+                      )
                     ) : (
                       <button onClick={() => { setNukeConfirm(userDrawer.user?.id); setDeleteConfirm(null); }}
                         style={{ padding: '6px 14px', background: 'var(--bg-surface)', color: '#b71c1c', border: '1px solid #ef9a9a', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
@@ -4902,7 +4948,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                       </button>
                     )}
                     {(deleteConfirm === userDrawer.user?.id || nukeConfirm === userDrawer.user?.id) && (
-                      <button onClick={() => { setDeleteConfirm(null); setNukeConfirm(null); setNukeError(null); }}
+                      <button onClick={() => { setDeleteConfirm(null); setNukeConfirm(null); setNukeError(null); setNukePasswordMode(false); setNukePassword(''); }}
                         style={{ padding: '6px 12px', background: 'none', color: 'var(--text-muted)', border: '1px solid var(--border-color)', borderRadius: 8, fontSize: 12, cursor: 'pointer' }}>
                         Cancel
                       </button>

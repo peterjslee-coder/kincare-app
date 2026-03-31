@@ -58211,7 +58211,7 @@ const SafetyFlagsTab = window.SafetyFlagsTab = ({
 const AdminPanel = window.AdminPanel = ({
   currentUser
 }) => {
-  var _tabGroups$flatMap$fi, _secDashboard$activeT, _secDashboard$failedL, _secDashboard$adminAc, _secDashboard$critica, _onboardingModal$user, _onboardingModal$user2, _onboardingModal$user3, _onboardingModal$docu, _userDrawer$sessionSt, _userDrawer$sessionSt2, _userDrawer$reviewSta, _userDrawer$reviewSta2, _userDrawer$careTeams, _userDrawer$user4, _userDrawer$tickets, _userDrawer$safetyFla, _userDrawer$allDocume, _userDrawer$allDocume2, _userDrawer$user0, _userDrawer$user10, _userDrawer$user12, _userDrawer$user13, _userDrawer$user14;
+  var _tabGroups$flatMap$fi, _secDashboard$activeT, _secDashboard$failedL, _secDashboard$adminAc, _secDashboard$critica, _onboardingModal$user, _onboardingModal$user2, _onboardingModal$user3, _onboardingModal$docu, _userDrawer$sessionSt, _userDrawer$sessionSt2, _userDrawer$reviewSta, _userDrawer$reviewSta2, _userDrawer$careTeams, _userDrawer$user5, _userDrawer$tickets, _userDrawer$safetyFla, _userDrawer$allDocume, _userDrawer$allDocume2, _userDrawer$user1, _userDrawer$user11, _userDrawer$user13, _userDrawer$user14, _userDrawer$user15;
   const {
     showToast
   } = useToast();
@@ -59342,21 +59342,61 @@ const AdminPanel = window.AdminPanel = ({
     setDeleteLoading(false);
   };
 
-  // ─── Nuke: passkey-verified permanent deletion ───
+  // ─── Nuke: passkey-verified permanent deletion (password fallback) ───
+  const [nukePasswordMode, setNukePasswordMode] = useState(false);
+  const [nukePassword, setNukePassword] = useState('');
   const handleNukeUser = async (userId, email) => {
     if (nukeConfirm !== userId) {
       setNukeConfirm(userId);
       setNukeError(null);
+      setNukePasswordMode(false);
+      setNukePassword('');
       return; // First click — show confirm
     }
-    // Second click — trigger passkey challenge
+
+    // Password fallback mode
+    if (nukePasswordMode) {
+      if (!nukePassword) {
+        setNukeError('Enter your password to confirm.');
+        return;
+      }
+      setNukeLoading(true);
+      setNukeError(null);
+      try {
+        const nukeRes = await apiFetch(`/api/admin/users/${userId}/nuke`, {
+          method: 'DELETE',
+          body: JSON.stringify({
+            _passwordAuth: true,
+            password: nukePassword
+          })
+        });
+        if (nukeRes !== null && nukeRes !== void 0 && nukeRes.ok) {
+          var _userDrawer$user3;
+          const data = await nukeRes.json();
+          loadUsers();
+          setNukeConfirm(null);
+          setNukePasswordMode(false);
+          setNukePassword('');
+          if ((userDrawer === null || userDrawer === void 0 || (_userDrawer$user3 = userDrawer.user) === null || _userDrawer$user3 === void 0 ? void 0 : _userDrawer$user3.id) === userId) setUserDrawer(null);
+          alert(data.message || 'User nuked successfully.');
+        } else {
+          const data = await nukeRes.json().catch(() => ({}));
+          throw new Error(data.error || 'Nuke failed');
+        }
+      } catch (err) {
+        setNukeError(err.message || 'Nuke failed');
+        console.error('Nuke error:', err);
+      }
+      setNukeLoading(false);
+      return;
+    }
+
+    // Passkey mode (default) — falls back to password on failure
     setNukeLoading(true);
     setNukeError(null);
     try {
       const SimpleWebAuthnBrowser = window.SimpleWebAuthnBrowser;
-      if (!SimpleWebAuthnBrowser) throw new Error('Passkey library not loaded. Refresh the page.');
-
-      // 1. Get challenge from server
+      if (!SimpleWebAuthnBrowser) throw new Error('passkey_unavailable');
       const challengeRes = await apiFetch(`/api/admin/users/${userId}/nuke/challenge`, {
         method: 'POST'
       });
@@ -59366,13 +59406,9 @@ const AdminPanel = window.AdminPanel = ({
       }
       const options = await challengeRes.json();
       const challengeKey = options._challengeKey;
-
-      // 2. Trigger biometric/passkey prompt
       const authResp = await SimpleWebAuthnBrowser.startAuthentication({
         optionsJSON: options
       });
-
-      // 3. Send verified response to nuke endpoint
       const nukeRes = await apiFetch(`/api/admin/users/${userId}/nuke`, {
         method: 'DELETE',
         body: JSON.stringify({
@@ -59381,20 +59417,22 @@ const AdminPanel = window.AdminPanel = ({
         })
       });
       if (nukeRes !== null && nukeRes !== void 0 && nukeRes.ok) {
-        var _userDrawer$user3;
+        var _userDrawer$user4;
         const data = await nukeRes.json();
         loadUsers();
         setNukeConfirm(null);
-        // Close drawer if open for this user
-        if ((userDrawer === null || userDrawer === void 0 || (_userDrawer$user3 = userDrawer.user) === null || _userDrawer$user3 === void 0 ? void 0 : _userDrawer$user3.id) === userId) setUserDrawer(null);
+        if ((userDrawer === null || userDrawer === void 0 || (_userDrawer$user4 = userDrawer.user) === null || _userDrawer$user4 === void 0 ? void 0 : _userDrawer$user4.id) === userId) setUserDrawer(null);
         alert(data.message || 'User nuked successfully.');
       } else {
         const data = await nukeRes.json().catch(() => ({}));
         throw new Error(data.error || 'Nuke failed');
       }
     } catch (err) {
-      if (err.name === 'NotAllowedError') {
-        setNukeError('Passkey prompt cancelled.');
+      var _err$message, _err$message2;
+      if (err.name === 'NotAllowedError' || err.message === 'passkey_unavailable' || (_err$message = err.message) !== null && _err$message !== void 0 && _err$message.includes('unexpected') || (_err$message2 = err.message) !== null && _err$message2 !== void 0 && _err$message2.includes('authentication')) {
+        // Fall back to password mode
+        setNukePasswordMode(true);
+        setNukeError('Passkey unavailable — enter your admin password instead.');
       } else {
         setNukeError(err.message || 'Nuke failed');
       }
@@ -67847,10 +67885,10 @@ const AdminPanel = window.AdminPanel = ({
       borderBottom: '1px solid var(--border-color)'
     }
   }, "Admin Notes"), /*#__PURE__*/React.createElement("textarea", {
-    defaultValue: ((_userDrawer$user4 = userDrawer.user) === null || _userDrawer$user4 === void 0 ? void 0 : _userDrawer$user4.admin_notes) || '',
+    defaultValue: ((_userDrawer$user5 = userDrawer.user) === null || _userDrawer$user5 === void 0 ? void 0 : _userDrawer$user5.admin_notes) || '',
     onBlur: e => {
-      var _userDrawer$user5;
-      if (e.target.value !== (((_userDrawer$user5 = userDrawer.user) === null || _userDrawer$user5 === void 0 ? void 0 : _userDrawer$user5.admin_notes) || '')) saveAdminNotes(userDrawer.user.id, e.target.value);
+      var _userDrawer$user6;
+      if (e.target.value !== (((_userDrawer$user6 = userDrawer.user) === null || _userDrawer$user6 === void 0 ? void 0 : _userDrawer$user6.admin_notes) || '')) saveAdminNotes(userDrawer.user.id, e.target.value);
     },
     placeholder: "Sticky notes about this user...",
     style: {
@@ -68122,10 +68160,10 @@ const AdminPanel = window.AdminPanel = ({
     }
   }, /*#__PURE__*/React.createElement("button", {
     onClick: () => {
-      var _userDrawer$user6;
+      var _userDrawer$user7;
       setUserDrawer(null);
       setActiveTab('people');
-      setUserSearch((_userDrawer$user6 = userDrawer.user) === null || _userDrawer$user6 === void 0 ? void 0 : _userDrawer$user6.email);
+      setUserSearch((_userDrawer$user7 = userDrawer.user) === null || _userDrawer$user7 === void 0 ? void 0 : _userDrawer$user7.email);
     },
     style: {
       padding: '6px 12px',
@@ -68138,11 +68176,11 @@ const AdminPanel = window.AdminPanel = ({
     }
   }, "\uD83D\uDC64 View in People"), /*#__PURE__*/React.createElement("button", {
     onClick: () => {
-      var _userDrawer$user7, _userDrawer$user8, _userDrawer$user9;
+      var _userDrawer$user8, _userDrawer$user9, _userDrawer$user0;
       setAdminMsgTarget({
-        id: (_userDrawer$user7 = userDrawer.user) === null || _userDrawer$user7 === void 0 ? void 0 : _userDrawer$user7.id,
-        first_name: (_userDrawer$user8 = userDrawer.user) === null || _userDrawer$user8 === void 0 ? void 0 : _userDrawer$user8.first_name,
-        last_name: (_userDrawer$user9 = userDrawer.user) === null || _userDrawer$user9 === void 0 ? void 0 : _userDrawer$user9.last_name
+        id: (_userDrawer$user8 = userDrawer.user) === null || _userDrawer$user8 === void 0 ? void 0 : _userDrawer$user8.id,
+        first_name: (_userDrawer$user9 = userDrawer.user) === null || _userDrawer$user9 === void 0 ? void 0 : _userDrawer$user9.first_name,
+        last_name: (_userDrawer$user0 = userDrawer.user) === null || _userDrawer$user0 === void 0 ? void 0 : _userDrawer$user0.last_name
       });
     },
     style: {
@@ -68175,7 +68213,7 @@ const AdminPanel = window.AdminPanel = ({
       gap: 8,
       flexWrap: 'wrap'
     }
-  }, deleteConfirm === ((_userDrawer$user0 = userDrawer.user) === null || _userDrawer$user0 === void 0 ? void 0 : _userDrawer$user0.id) ? /*#__PURE__*/React.createElement("button", {
+  }, deleteConfirm === ((_userDrawer$user1 = userDrawer.user) === null || _userDrawer$user1 === void 0 ? void 0 : _userDrawer$user1.id) ? /*#__PURE__*/React.createElement("button", {
     onClick: () => handleDeleteUser(userDrawer.user.id, userDrawer.user.email),
     disabled: deleteLoading,
     style: {
@@ -68190,8 +68228,8 @@ const AdminPanel = window.AdminPanel = ({
     }
   }, "Confirm Soft Delete") : /*#__PURE__*/React.createElement("button", {
     onClick: () => {
-      var _userDrawer$user1;
-      setDeleteConfirm((_userDrawer$user1 = userDrawer.user) === null || _userDrawer$user1 === void 0 ? void 0 : _userDrawer$user1.id);
+      var _userDrawer$user10;
+      setDeleteConfirm((_userDrawer$user10 = userDrawer.user) === null || _userDrawer$user10 === void 0 ? void 0 : _userDrawer$user10.id);
       setNukeConfirm(null);
     },
     style: {
@@ -68204,7 +68242,40 @@ const AdminPanel = window.AdminPanel = ({
       fontWeight: 600,
       cursor: 'pointer'
     }
-  }, "Soft Delete"), nukeConfirm === ((_userDrawer$user10 = userDrawer.user) === null || _userDrawer$user10 === void 0 ? void 0 : _userDrawer$user10.id) ? /*#__PURE__*/React.createElement("button", {
+  }, "Soft Delete"), nukeConfirm === ((_userDrawer$user11 = userDrawer.user) === null || _userDrawer$user11 === void 0 ? void 0 : _userDrawer$user11.id) ? nukePasswordMode ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 6,
+      alignItems: 'center',
+      flexWrap: 'wrap'
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "password",
+    placeholder: "Admin password",
+    value: nukePassword,
+    onChange: e => setNukePassword(e.target.value),
+    onKeyDown: e => e.key === 'Enter' && handleNukeUser(userDrawer.user.id, userDrawer.user.email),
+    style: {
+      padding: '6px 10px',
+      border: '1px solid #ef9a9a',
+      borderRadius: 6,
+      fontSize: 12,
+      width: 140
+    }
+  }), /*#__PURE__*/React.createElement("button", {
+    onClick: () => handleNukeUser(userDrawer.user.id, userDrawer.user.email),
+    disabled: nukeLoading,
+    style: {
+      padding: '6px 14px',
+      background: nukeLoading ? '#999' : '#b71c1c',
+      color: '#fff',
+      border: 'none',
+      borderRadius: 8,
+      fontSize: 12,
+      fontWeight: 600,
+      cursor: nukeLoading ? 'wait' : 'pointer'
+    }
+  }, nukeLoading ? 'Nuking...' : 'Nuke')) : /*#__PURE__*/React.createElement("button", {
     onClick: () => handleNukeUser(userDrawer.user.id, userDrawer.user.email),
     disabled: nukeLoading,
     style: {
@@ -68219,8 +68290,8 @@ const AdminPanel = window.AdminPanel = ({
     }
   }, nukeLoading ? 'Verifying...' : 'Confirm Nuke (Passkey)') : /*#__PURE__*/React.createElement("button", {
     onClick: () => {
-      var _userDrawer$user11;
-      setNukeConfirm((_userDrawer$user11 = userDrawer.user) === null || _userDrawer$user11 === void 0 ? void 0 : _userDrawer$user11.id);
+      var _userDrawer$user12;
+      setNukeConfirm((_userDrawer$user12 = userDrawer.user) === null || _userDrawer$user12 === void 0 ? void 0 : _userDrawer$user12.id);
       setDeleteConfirm(null);
     },
     style: {
@@ -68233,11 +68304,13 @@ const AdminPanel = window.AdminPanel = ({
       fontWeight: 700,
       cursor: 'pointer'
     }
-  }, "Nuke"), (deleteConfirm === ((_userDrawer$user12 = userDrawer.user) === null || _userDrawer$user12 === void 0 ? void 0 : _userDrawer$user12.id) || nukeConfirm === ((_userDrawer$user13 = userDrawer.user) === null || _userDrawer$user13 === void 0 ? void 0 : _userDrawer$user13.id)) && /*#__PURE__*/React.createElement("button", {
+  }, "Nuke"), (deleteConfirm === ((_userDrawer$user13 = userDrawer.user) === null || _userDrawer$user13 === void 0 ? void 0 : _userDrawer$user13.id) || nukeConfirm === ((_userDrawer$user14 = userDrawer.user) === null || _userDrawer$user14 === void 0 ? void 0 : _userDrawer$user14.id)) && /*#__PURE__*/React.createElement("button", {
     onClick: () => {
       setDeleteConfirm(null);
       setNukeConfirm(null);
       setNukeError(null);
+      setNukePasswordMode(false);
+      setNukePassword('');
     },
     style: {
       padding: '6px 12px',
@@ -68248,7 +68321,7 @@ const AdminPanel = window.AdminPanel = ({
       fontSize: 12,
       cursor: 'pointer'
     }
-  }, "Cancel")), nukeError && nukeConfirm === ((_userDrawer$user14 = userDrawer.user) === null || _userDrawer$user14 === void 0 ? void 0 : _userDrawer$user14.id) && /*#__PURE__*/React.createElement("div", {
+  }, "Cancel")), nukeError && nukeConfirm === ((_userDrawer$user15 = userDrawer.user) === null || _userDrawer$user15 === void 0 ? void 0 : _userDrawer$user15.id) && /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 11,
       color: 'var(--color-error)',
