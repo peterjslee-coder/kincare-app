@@ -902,6 +902,8 @@ const App = () => {
       if (r?.ok) {
         const data = await r.json();
         if (data.user) {
+          // Apply user's saved theme now that we know they're authenticated
+          if (typeof window.__applyUserTheme === 'function') window.__applyUserTheme();
           let userRoles;
           try { userRoles = data.user.roles ? (typeof data.user.roles === 'string' ? JSON.parse(data.user.roles) : data.user.roles) : [data.user.role]; }
           catch { userRoles = [data.user.role]; }

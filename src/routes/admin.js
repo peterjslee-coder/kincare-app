@@ -993,7 +993,22 @@ router.delete("/users/:id/nuke", async (req, res) => {
 
     // 3. HARD DELETE everything in a transaction
     // IMPORTANT: Order matters — delete child rows before parent rows to avoid FK violations.
+    // In PostgreSQL, a failed statement poisons the entire transaction (even if caught by JS try/catch).
+    // We use SAVEPOINT/ROLLBACK TO for any statement that might fail (table may not exist, column missing, etc.)
     await db.transaction(async (tx) => {
+      // Safe-run helper: wraps risky SQL in a savepoint so a failure doesn't poison the whole PG transaction
+      const safeRun = async (sql, params = [], label = '') => {
+        const sp = 'sp_' + Math.random().toString(36).slice(2, 10);
+        try {
+          await tx.prepare(`SAVEPOINT ${sp}`).run();
+          await tx.prepare(sql).run(...params);
+          await tx.prepare(`RELEASE SAVEPOINT ${sp}`).run();
+        } catch (e) {
+          await tx.prepare(`ROLLBACK TO SAVEPOINT ${sp}`).run();
+          if (label) console.log(`  [NUKE] ${label} skip: ${e.message}`);
+        }
+      };
+
       const cgProfile = await tx.prepare("SELECT * FROM caregiver_profiles WHERE user_id = ?").get(id);
       const cgId = cgProfile?.id;
 
@@ -1030,7 +1045,7 @@ router.delete("/users/:id/nuke", async (req, res) => {
         await tx.prepare("DELETE FROM availability WHERE caregiver_id = ?").run(cgId);
         await tx.prepare("DELETE FROM reviews WHERE caregiver_id = ?").run(cgId);
         await tx.prepare("DELETE FROM payments WHERE caregiver_id = ?").run(cgId);
-        await tx.prepare("DELETE FROM first_visit_confirmations WHERE caregiver_id = ?").run(cgId);
+        await safeRun("DELETE FROM first_visit_confirmations WHERE caregiver_id = ?", [cgId], 'first_visit_confirmations(cg)');
         // Sessions: delete offers first, then sessions
         const cgSessions = await tx.prepare("SELECT id FROM care_sessions WHERE caregiver_id = ?").all(cgId);
         for (const cs of cgSessions) {
@@ -1045,19 +1060,17 @@ router.delete("/users/:id/nuke", async (req, res) => {
       // Family-specific: care recipients + their cascading data
       const crs = await tx.prepare("SELECT id FROM care_recipients WHERE family_user_id = ?").all(id);
       for (const cr of crs) {
-        // Consent & authorization tables (must delete before care_recipients)
-        await tx.prepare("DELETE FROM consent_outreach WHERE care_recipient_id = ?").run(cr.id);
-        await tx.prepare("DELETE FROM consent_audit_log WHERE care_recipient_id = ?").run(cr.id);
-        await tx.prepare("DELETE FROM attestations WHERE care_recipient_id = ?").run(cr.id);
-        await tx.prepare("DELETE FROM verification_attempts WHERE care_recipient_id = ?").run(cr.id);
-        await tx.prepare("DELETE FROM first_visit_confirmations WHERE care_recipient_id = ?").run(cr.id);
+        await safeRun("DELETE FROM consent_outreach WHERE care_recipient_id = ?", [cr.id], 'consent_outreach(cr)');
+        await safeRun("DELETE FROM consent_audit_log WHERE care_recipient_id = ?", [cr.id], 'consent_audit_log(cr)');
+        await safeRun("DELETE FROM attestations WHERE care_recipient_id = ?", [cr.id], 'attestations');
+        await safeRun("DELETE FROM verification_attempts WHERE care_recipient_id = ?", [cr.id], 'verification_attempts');
+        await safeRun("DELETE FROM first_visit_confirmations WHERE care_recipient_id = ?", [cr.id], 'first_visit_confirmations(cr)');
         // RETAIN authorization documents — mark as retained for legal/compliance
-        try { await tx.prepare("UPDATE authorization_documents SET retained_from_deleted = 1 WHERE care_recipient_id = ?").run(cr.id); } catch (e) { console.log('[NUKE] auth_docs retain skip:', e.message); }
-        try { await tx.prepare("UPDATE verified_documents SET retained_from_deleted = 1 WHERE owner_type = 'care_recipient' AND owner_id = ?").run(cr.id); } catch (e) { console.log('[NUKE] verified_docs retain skip:', e.message); }
-        await tx.prepare("DELETE FROM recipient_notes WHERE care_recipient_id = ?").run(cr.id);
+        await safeRun("UPDATE authorization_documents SET retained_from_deleted = 1 WHERE care_recipient_id = ?", [cr.id], 'auth_docs retain');
+        await safeRun("UPDATE verified_documents SET retained_from_deleted = 1 WHERE owner_type = 'care_recipient' AND owner_id = ?", [cr.id], 'verified_docs retain');
+        await safeRun("DELETE FROM recipient_notes WHERE care_recipient_id = ?", [cr.id], 'recipient_notes(cr)');
         await tx.prepare("DELETE FROM caregiver_assignments WHERE care_recipient_id = ?").run(cr.id);
         await tx.prepare("DELETE FROM care_recipient_shares WHERE care_recipient_id = ?").run(cr.id);
-        // Activity feed referencing this care recipient
         await tx.prepare("DELETE FROM activity_feed WHERE care_recipient_id = ?").run(cr.id);
         // Sessions under this care recipient
         const crSessions = await tx.prepare("SELECT id FROM care_sessions WHERE care_recipient_id = ?").all(cr.id);
@@ -1068,8 +1081,8 @@ router.delete("/users/:id/nuke", async (req, res) => {
             await tx.prepare("DELETE FROM visit_photos WHERE visit_log_id = ?").run(vl.id);
           }
           await tx.prepare("DELETE FROM visit_logs WHERE session_id = ?").run(cs.id);
-          await tx.prepare("DELETE FROM reviews WHERE session_id = ?").run(cs.id);
-          await tx.prepare("DELETE FROM payments WHERE session_id = ?").run(cs.id);
+          await safeRun("DELETE FROM reviews WHERE session_id = ?", [cs.id], 'reviews(session)');
+          await safeRun("DELETE FROM payments WHERE session_id = ?", [cs.id], 'payments(session)');
         }
         await tx.prepare("DELETE FROM care_sessions WHERE care_recipient_id = ?").run(cr.id);
         // Care teams linked to this care recipient
@@ -1085,44 +1098,40 @@ router.delete("/users/:id/nuke", async (req, res) => {
 
       // Auth & security
       await tx.prepare("DELETE FROM refresh_tokens WHERE user_id = ?").run(id);
-      await tx.prepare("DELETE FROM password_reset_tokens WHERE user_id = ?").run(id);
-      await tx.prepare("DELETE FROM email_verification_tokens WHERE user_id = ?").run(id);
+      await safeRun("DELETE FROM password_reset_tokens WHERE user_id = ?", [id], 'password_reset_tokens');
+      await safeRun("DELETE FROM email_verification_tokens WHERE user_id = ?", [id], 'email_verification_tokens');
       await tx.prepare("DELETE FROM push_subscriptions WHERE user_id = ?").run(id);
-      await tx.prepare("DELETE FROM oauth_accounts WHERE user_id = ?").run(id);
-      await tx.prepare("DELETE FROM user_2fa WHERE user_id = ?").run(id);
-      await tx.prepare("DELETE FROM trusted_devices WHERE user_id = ?").run(id);
+      await safeRun("DELETE FROM oauth_accounts WHERE user_id = ?", [id], 'oauth_accounts');
+      await safeRun("DELETE FROM user_2fa WHERE user_id = ?", [id], 'user_2fa');
+      await safeRun("DELETE FROM trusted_devices WHERE user_id = ?", [id], 'trusted_devices');
       await tx.prepare("DELETE FROM user_passkeys WHERE user_id = ?").run(id);
 
       // RETAIN documents — mark as retained for legal/compliance
-      try { await tx.prepare("UPDATE caregiver_documents SET retained_from_deleted = 1, deleted_user_email = ? WHERE user_id = ?").run(user.email, id); } catch (e) { console.log('[NUKE] caregiver_documents retain skip:', e.message); }
-      try { await tx.prepare("UPDATE verified_documents SET retained_from_deleted = 1, deleted_user_email = ? WHERE uploaded_by = ?").run(user.email, id); } catch (e) { console.log('[NUKE] verified_documents retain skip:', e.message); }
-      try { await tx.prepare("DELETE FROM background_check_payments WHERE user_id = ?").run(id); } catch (e) { /* table may not exist */ }
-      try { await tx.prepare("DELETE FROM payout_preferences WHERE user_id = ?").run(id); } catch (e) { /* table may not exist */ }
+      await safeRun("UPDATE caregiver_documents SET retained_from_deleted = 1, deleted_user_email = ? WHERE user_id = ?", [user.email, id], 'caregiver_documents retain');
+      await safeRun("UPDATE verified_documents SET retained_from_deleted = 1, deleted_user_email = ? WHERE uploaded_by = ?", [user.email, id], 'verified_documents retain');
+      await safeRun("DELETE FROM background_check_payments WHERE user_id = ?", [id], 'bg_check_payments');
+      await safeRun("DELETE FROM payout_preferences WHERE user_id = ?", [id], 'payout_preferences');
 
       // Social & messaging — must handle ALL FK references to users(id)
       await tx.prepare("DELETE FROM care_team_members WHERE user_id = ?").run(id);
-      await tx.prepare("DELETE FROM care_team_invites WHERE invited_by = ?").run(id);
-      await tx.prepare("DELETE FROM platform_invites WHERE invited_by = ?").run(id);
-      await tx.prepare("DELETE FROM connections WHERE requester_id = ? OR recipient_id = ?").run(id, id);
+      await safeRun("DELETE FROM care_team_invites WHERE invited_by = ?", [id], 'care_team_invites');
+      await safeRun("DELETE FROM platform_invites WHERE invited_by = ?", [id], 'platform_invites');
+      await safeRun("DELETE FROM connections WHERE requester_id = ? OR recipient_id = ?", [id, id], 'connections');
       await tx.prepare("DELETE FROM conversation_members WHERE user_id = ?").run(id);
-      await tx.prepare("DELETE FROM message_reactions WHERE user_id = ?").run(id);
-      // Messages: delete where sender OR recipient (both columns REFERENCE users)
+      await safeRun("DELETE FROM message_reactions WHERE user_id = ?", [id], 'message_reactions');
       await tx.prepare("DELETE FROM messages WHERE sender_id = ? OR recipient_id = ?").run(id, id);
-      // Session offers: delete any offers FROM or TO this user (both REFERENCE users)
       await tx.prepare("DELETE FROM session_offers WHERE from_user_id = ? OR to_user_id = ?").run(id, id);
-      // Conversations: nullify created_by (REFERENCES users, nullable in practice)
       await tx.prepare("UPDATE conversations SET created_by = NULL WHERE created_by = ?").run(id);
-      // Blocked emails: nullify blocked_by (REFERENCES users, nullable)
-      await tx.prepare("UPDATE blocked_emails SET blocked_by = NULL WHERE blocked_by = ?").run(id);
+      await safeRun("UPDATE blocked_emails SET blocked_by = NULL WHERE blocked_by = ?", [id], 'blocked_emails');
 
       // Activity & feedback
       await tx.prepare("DELETE FROM activity_feed WHERE family_user_id = ?").run(id);
       await tx.prepare("DELETE FROM feedback WHERE user_id = ?").run(id);
-      await tx.prepare("DELETE FROM onboarding_events WHERE user_id = ?").run(id);
+      await safeRun("DELETE FROM onboarding_events WHERE user_id = ?", [id], 'onboarding_events');
 
       // Sessions owned by this family user
-      await tx.prepare("DELETE FROM reviews WHERE family_user_id = ?").run(id);
-      await tx.prepare("DELETE FROM payments WHERE family_user_id = ?").run(id);
+      await safeRun("DELETE FROM reviews WHERE family_user_id = ?", [id], 'reviews(family)');
+      await safeRun("DELETE FROM payments WHERE family_user_id = ?", [id], 'payments(family)');
       const familySessions = await tx.prepare("SELECT id FROM care_sessions WHERE family_user_id = ?").all(id);
       for (const cs of familySessions) {
         await tx.prepare("DELETE FROM session_offers WHERE session_id = ?").run(cs.id);
@@ -1135,44 +1144,60 @@ router.delete("/users/:id/nuke", async (req, res) => {
       await tx.prepare("DELETE FROM care_sessions WHERE family_user_id = ?").run(id);
 
       // Recipient notes authored by this user
-      await tx.prepare("DELETE FROM recipient_notes WHERE author_id = ?").run(id);
+      await safeRun("DELETE FROM recipient_notes WHERE author_id = ?", [id], 'recipient_notes(author)');
       // Care recipient shares
-      await tx.prepare("DELETE FROM care_recipient_shares WHERE shared_with_user_id = ? OR shared_by_user_id = ?").run(id, id);
+      await safeRun("DELETE FROM care_recipient_shares WHERE shared_with_user_id = ? OR shared_by_user_id = ?", [id, id], 'care_recipient_shares');
 
       // Consent audit log entries by this user
-      await tx.prepare("DELETE FROM consent_audit_log WHERE actor_id = ?").run(id);
+      await safeRun("DELETE FROM consent_audit_log WHERE actor_id = ?", [id], 'consent_audit_log(actor)');
 
       // Safety flags & related sub-tables
-      try { await tx.prepare("DELETE FROM safety_flag_threads WHERE participant_user_id = ?").run(id); } catch (e) { /* */ }
-      try { await tx.prepare("UPDATE safety_flag_events SET actor_id = NULL WHERE actor_id = ?").run(id); } catch (e) { /* */ }
-      try { await tx.prepare("DELETE FROM safety_flags WHERE user_id = ?").run(id); } catch (e) { /* */ }
-      try { await tx.prepare("UPDATE safety_flags SET reviewed_by = NULL WHERE reviewed_by = ?").run(id); } catch (e) { /* */ }
+      await safeRun("DELETE FROM safety_flag_threads WHERE participant_user_id = ?", [id], 'safety_flag_threads');
+      await safeRun("UPDATE safety_flag_events SET actor_id = NULL WHERE actor_id = ?", [id], 'safety_flag_events');
+      await safeRun("DELETE FROM safety_flags WHERE user_id = ?", [id], 'safety_flags');
+      await safeRun("UPDATE safety_flags SET reviewed_by = NULL WHERE reviewed_by = ?", [id], 'safety_flags(reviewed_by)');
 
       // Tickets
-      try { await tx.prepare("DELETE FROM admin_ticket_comments WHERE author_id = ?").run(id); } catch (e) { /* */ }
-      try { await tx.prepare("UPDATE admin_tickets SET assigned_to = NULL WHERE assigned_to = ?").run(id); } catch (e) { /* */ }
-      try { await tx.prepare("DELETE FROM admin_tickets WHERE reporter_user_id = ?").run(id); } catch (e) { /* */ }
-      try { await tx.prepare("UPDATE admin_tickets SET related_user_id = NULL WHERE related_user_id = ?").run(id); } catch (e) { /* */ }
+      await safeRun("DELETE FROM admin_ticket_comments WHERE author_id = ?", [id], 'admin_ticket_comments');
+      await safeRun("UPDATE admin_tickets SET assigned_to = NULL WHERE assigned_to = ?", [id], 'admin_tickets(assigned)');
+      await safeRun("DELETE FROM admin_tickets WHERE reporter_user_id = ?", [id], 'admin_tickets(reporter)');
+      await safeRun("UPDATE admin_tickets SET related_user_id = NULL WHERE related_user_id = ?", [id], 'admin_tickets(related)');
 
       // Interviews, disputes, time proposals, tips
-      try { await tx.prepare("DELETE FROM interviews WHERE requested_by = ? OR requested_of = ?").run(id, id); } catch (e) { /* */ }
-      try { await tx.prepare("DELETE FROM session_disputes WHERE filed_by = ?").run(id); } catch (e) { /* */ }
-      try { await tx.prepare("UPDATE session_disputes SET resolved_by = NULL WHERE resolved_by = ?").run(id); } catch (e) { /* */ }
-      try { await tx.prepare("DELETE FROM time_proposals WHERE caregiver_user_id = ?").run(id); } catch (e) { /* */ }
-      try { await tx.prepare("DELETE FROM tips WHERE family_user_id = ?").run(id); } catch (e) { /* */ }
+      await safeRun("DELETE FROM interviews WHERE requested_by = ? OR requested_of = ?", [id, id], 'interviews');
+      await safeRun("DELETE FROM session_disputes WHERE filed_by = ?", [id], 'session_disputes');
+      await safeRun("UPDATE session_disputes SET resolved_by = NULL WHERE resolved_by = ?", [id], 'session_disputes(resolved)');
+      await safeRun("DELETE FROM time_proposals WHERE caregiver_user_id = ?", [id], 'time_proposals');
+      await safeRun("DELETE FROM tips WHERE family_user_id = ?", [id], 'tips');
 
       // Referrals, milestones, reminders, manual payments
-      try { await tx.prepare("DELETE FROM referrals WHERE referrer_user_id = ?").run(id); } catch (e) { /* */ }
-      try { await tx.prepare("UPDATE referrals SET referred_user_id = NULL WHERE referred_user_id = ?").run(id); } catch (e) { /* */ }
-      try { await tx.prepare("DELETE FROM milestones WHERE user_id = ?").run(id); } catch (e) { /* */ }
-      try { await tx.prepare("DELETE FROM manual_payments WHERE from_user_id = ?").run(id); } catch (e) { /* */ }
-      try { await tx.prepare("DELETE FROM kindred_reminders WHERE from_user_id = ?").run(id); } catch (e) { /* */ }
-      try { await tx.prepare("DELETE FROM consent_outreach WHERE initiated_by = ?").run(id); } catch (e) { /* */ }
+      await safeRun("DELETE FROM referrals WHERE referrer_user_id = ?", [id], 'referrals');
+      await safeRun("UPDATE referrals SET referred_user_id = NULL WHERE referred_user_id = ?", [id], 'referrals(referred)');
+      await safeRun("DELETE FROM milestones WHERE user_id = ?", [id], 'milestones');
+      await safeRun("DELETE FROM manual_payments WHERE from_user_id = ?", [id], 'manual_payments');
+      await safeRun("DELETE FROM kindred_reminders WHERE from_user_id = ?", [id], 'kindred_reminders');
+      await safeRun("DELETE FROM consent_outreach WHERE initiated_by = ?", [id], 'consent_outreach(initiated)');
 
       // Nullify nullable FK refs on surviving rows
-      try { await tx.prepare("UPDATE care_teams SET billing_user_id = NULL WHERE billing_user_id = ?").run(id); } catch (e) { /* */ }
-      try { await tx.prepare("UPDATE care_recipients SET linked_user_id = NULL WHERE linked_user_id = ?").run(id); } catch (e) { /* */ }
-      try { await tx.prepare("UPDATE caregiver_assignments SET family_user_id = NULL WHERE family_user_id = ?").run(id); } catch (e) { /* */ }
+      await safeRun("UPDATE care_teams SET billing_user_id = NULL WHERE billing_user_id = ?", [id], 'care_teams(billing)');
+      await safeRun("UPDATE care_recipients SET linked_user_id = NULL WHERE linked_user_id = ?", [id], 'care_recipients(linked)');
+      await safeRun("UPDATE caregiver_assignments SET family_user_id = NULL WHERE family_user_id = ?", [id], 'caregiver_assignments(family)');
+
+      // Catch-all: try to nuke any remaining FK references we might have missed
+      // Query PG catalog for all FK constraints pointing to users(id) and clean them
+      const fkRefs = await tx.prepare(`
+        SELECT tc.table_name, kcu.column_name
+        FROM information_schema.table_constraints tc
+        JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name
+        JOIN information_schema.constraint_column_usage ccu ON tc.constraint_name = ccu.constraint_name
+        WHERE tc.constraint_type = 'FOREIGN KEY'
+          AND ccu.table_name = 'users' AND ccu.column_name = 'id'
+          AND tc.table_name != 'users'
+      `).all();
+      for (const fk of fkRefs) {
+        // Skip tables we already handled above
+        await safeRun(`DELETE FROM "${fk.table_name}" WHERE "${fk.column_name}" = ?`, [id], `catch-all: ${fk.table_name}.${fk.column_name}`);
+      }
 
       // Finally: DELETE the user row
       await tx.prepare("DELETE FROM users WHERE id = ?").run(id);
