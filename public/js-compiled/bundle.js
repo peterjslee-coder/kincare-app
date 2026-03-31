@@ -49023,12 +49023,42 @@ const EmailVerificationBanner = window.EmailVerificationBanner = ({
   }, sending ? 'Sending…' : cooldown > 0 ? `Resend (${cooldown}s)` : 'Resend Email'));
 };
 ;
+// ─── Legal Document Agreement Modal ───
+// Shows when users need to accept new/updated terms, privacy, or liability docs.
+// Blocks the app until all pending docs are accepted.
+// Supports: scroll-to-bottom requirement, change summary, sequential doc review.
+
 const DisclaimerModal = window.DisclaimerModal = ({
-  onAccept
+  onAccept,
+  pendingDocs
 }) => {
   const [scrolledToBottom, setScrolledToBottom] = useState(false);
+  const [checked, setChecked] = useState(false);
   const [accepting, setAccepting] = useState(false);
+  const [currentIdx, setCurrentIdx] = useState(0);
   const contentRef = useRef(null);
+
+  // If no pendingDocs provided, fall back to legacy disclaimer
+  const docs = pendingDocs && pendingDocs.length > 0 ? pendingDocs : null;
+  const currentDoc = docs ? docs[currentIdx] : null;
+  const isLegacy = !docs;
+  const totalDocs = docs ? docs.length : 1;
+
+  // Reset scroll/check state when moving to next doc
+  useEffect(() => {
+    setScrolledToBottom(false);
+    setChecked(false);
+    if (contentRef.current) {
+      contentRef.current.scrollTop = 0;
+      // If content fits without scrolling, enable immediately
+      requestAnimationFrame(() => {
+        const el = contentRef.current;
+        if (el && el.scrollHeight <= el.clientHeight + 20) {
+          setScrolledToBottom(true);
+        }
+      });
+    }
+  }, [currentIdx]);
   const handleScroll = () => {
     const el = contentRef.current;
     if (!el) return;
@@ -49037,7 +49067,6 @@ const DisclaimerModal = window.DisclaimerModal = ({
   };
   useEffect(() => {
     const el = contentRef.current;
-    // If content fits without scrolling, enable immediately
     if (el && el.scrollHeight <= el.clientHeight + 20) {
       setScrolledToBottom(true);
     }
@@ -49045,17 +49074,51 @@ const DisclaimerModal = window.DisclaimerModal = ({
   const handleAccept = async () => {
     setAccepting(true);
     try {
-      const res = await apiFetch('/api/auth/me/disclaimer', {
-        method: 'PUT'
-      });
-      if (res !== null && res !== void 0 && res.ok) {
-        onAccept();
+      if (currentDoc) {
+        // New versioned legal doc system
+        const res = await apiFetch('/api/legal/accept', {
+          method: 'POST',
+          body: JSON.stringify({
+            documentId: currentDoc.id
+          })
+        });
+        if (res !== null && res !== void 0 && res.ok) {
+          if (currentIdx < totalDocs - 1) {
+            // More docs to review
+            setCurrentIdx(currentIdx + 1);
+            setAccepting(false);
+            return;
+          } else {
+            onAccept();
+          }
+        }
+      } else {
+        // Legacy disclaimer fallback
+        const res = await apiFetch('/api/auth/me/disclaimer', {
+          method: 'PUT'
+        });
+        if (res !== null && res !== void 0 && res.ok) onAccept();
       }
     } catch (err) {
-      console.error('Disclaimer accept error:', err);
+      console.error('Legal accept error:', err);
     }
     setAccepting(false);
   };
+  const docTypeLabels = {
+    terms: 'Terms of Service',
+    privacy: 'Privacy Policy',
+    liability: 'Liability Disclaimer',
+    disclaimer: 'Platform Disclaimer'
+  };
+  const docTypeIcons = {
+    terms: '📜',
+    privacy: '🔒',
+    liability: '⚖️',
+    disclaimer: '📋'
+  };
+  const title = currentDoc ? currentDoc.title || docTypeLabels[currentDoc.doc_type] || 'Legal Document' : 'Important Notice';
+  const icon = currentDoc ? docTypeIcons[currentDoc.doc_type] || '📄' : '📋';
+  const isUpdate = (currentDoc === null || currentDoc === void 0 ? void 0 : currentDoc.previous_version) != null;
   return /*#__PURE__*/React.createElement("div", {
     style: {
       position: 'fixed',
@@ -49077,22 +49140,41 @@ const DisclaimerModal = window.DisclaimerModal = ({
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
-      maxWidth: '560px',
+      maxWidth: '600px',
       margin: '0 auto'
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
-      fontSize: '20px',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between'
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 20,
       fontWeight: 700,
       color: 'var(--text-primary)',
-      marginBottom: '2px'
+      display: 'flex',
+      alignItems: 'center',
+      gap: 8
     }
-  }, "Important Notice"), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("span", null, icon), " ", title), /*#__PURE__*/React.createElement("div", {
     style: {
-      fontSize: '13px',
-      color: 'var(--text-muted)'
+      fontSize: 13,
+      color: 'var(--text-muted)',
+      marginTop: 2
     }
-  }, "Please read and scroll to the bottom to continue"))), /*#__PURE__*/React.createElement("div", {
+  }, isUpdate ? 'Updated — please review the changes and agree to continue' : 'Please read and scroll to the bottom to continue')), totalDocs > 1 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: '4px 12px',
+      borderRadius: 20,
+      background: 'var(--role-color)',
+      color: 'var(--text-on-primary)',
+      fontSize: 12,
+      fontWeight: 700,
+      whiteSpace: 'nowrap'
+    }
+  }, currentIdx + 1, " / ", totalDocs)))), /*#__PURE__*/React.createElement("div", {
     ref: contentRef,
     onScroll: handleScroll,
     style: {
@@ -49102,14 +49184,45 @@ const DisclaimerModal = window.DisclaimerModal = ({
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
-      maxWidth: '560px',
+      maxWidth: '600px',
       margin: '0 auto',
       padding: '20px',
-      fontSize: '14px',
-      lineHeight: '1.7',
+      fontSize: 14,
+      lineHeight: 1.7,
       color: 'var(--text-primary)'
     }
-  }, /*#__PURE__*/React.createElement("p", {
+  }, isUpdate && currentDoc.change_summary && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: '#e3f2fd',
+      border: '2px solid #1565c0',
+      borderRadius: 12,
+      padding: '14px 18px',
+      marginBottom: 18
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      fontWeight: 700,
+      color: '#1565c0',
+      marginBottom: 6,
+      display: 'flex',
+      alignItems: 'center',
+      gap: 6
+    }
+  }, /*#__PURE__*/React.createElement("span", null, "\uD83E\uDD16"), " What Changed (v", currentDoc.previous_version, " \u2192 v", currentDoc.version, ")"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      color: '#0d47a1',
+      lineHeight: 1.6
+    }
+  }, currentDoc.change_summary)), currentDoc ? /*#__PURE__*/React.createElement("div", {
+    dangerouslySetInnerHTML: {
+      __html: formatLegalContent(currentDoc.content)
+    }
+  }) :
+  /*#__PURE__*/
+  // Legacy disclaimer content
+  React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("p", {
     style: {
       margin: '0 0 16px'
     }
@@ -49117,56 +49230,63 @@ const DisclaimerModal = window.DisclaimerModal = ({
     style: {
       background: 'var(--color-warning-bg)',
       border: '2px solid #E65100',
-      borderRadius: '10px',
+      borderRadius: 10,
       padding: '16px 18px',
-      marginBottom: '16px'
+      marginBottom: 16
     }
   }, /*#__PURE__*/React.createElement("p", {
     style: {
       margin: 0,
       fontWeight: 700,
-      fontSize: '15px',
+      fontSize: 15,
       color: '#BF360C'
     }
   }, "InPlace does not provide at-home medical care in accordance with Virginia state law.")), /*#__PURE__*/React.createElement("div", {
     style: {
       background: '#FFEBEE',
       border: '2px solid #C62828',
-      borderRadius: '10px',
+      borderRadius: 10,
       padding: '16px 18px',
-      marginBottom: '16px'
+      marginBottom: 16
     }
   }, /*#__PURE__*/React.createElement("p", {
     style: {
       margin: 0,
       fontWeight: 700,
-      fontSize: '15px',
+      fontSize: 15,
       color: '#B71C1C'
     }
   }, "You are personally liable for any medical care you provide beyond calling professional medical attention when warranted.")), /*#__PURE__*/React.createElement("p", {
     style: {
       margin: '0 0 12px'
     }
-  }, "InPlace is a care coordination platform that connects families with professional caregivers for non-medical companion care, personal assistance, and daily living support. Our services include companionship, meal preparation, light housekeeping, transportation, medication reminders, and similar non-medical support."), /*#__PURE__*/React.createElement("p", {
+  }, "InPlace is a care coordination platform that connects families with professional caregivers for non-medical companion care, personal assistance, and daily living support."), /*#__PURE__*/React.createElement("p", {
     style: {
       margin: '0 0 12px'
     }
-  }, "InPlace caregivers are independent contractors, not medical professionals. They are not licensed, certified, or authorized to provide medical diagnosis, treatment, nursing care, physical therapy, or any form of medical intervention."), /*#__PURE__*/React.createElement("p", {
+  }, "InPlace caregivers are independent contractors, not medical professionals. They are not licensed, certified, or authorized to provide medical diagnosis, treatment, nursing care, or any form of medical intervention."), /*#__PURE__*/React.createElement("p", {
     style: {
       margin: '0 0 12px'
     }
-  }, "If a medical emergency occurs, caregivers and family members should immediately call 911 or the appropriate emergency services. Caregivers are expected to contact professional medical help whenever a situation exceeds the scope of non-medical companion care."), /*#__PURE__*/React.createElement("p", {
+  }, "If a medical emergency occurs, caregivers and family members should immediately call 911 or the appropriate emergency services."), /*#__PURE__*/React.createElement("p", {
     style: {
       margin: '0 0 12px'
     }
   }, "By using InPlace, you acknowledge that you understand these limitations and agree to use the platform solely for non-medical care coordination purposes."), /*#__PURE__*/React.createElement("p", {
     style: {
-      margin: '0',
-      fontSize: '12px',
+      margin: 0,
+      fontSize: 12,
       color: 'var(--text-muted)',
       fontStyle: 'italic'
     }
-  }, "Disclaimer version 1.0 \u2014 Last updated February 2026"))), /*#__PURE__*/React.createElement("div", {
+  }, "Disclaimer version 1.0 \u2014 Last updated February 2026")), currentDoc && /*#__PURE__*/React.createElement("p", {
+    style: {
+      margin: '20px 0 0',
+      fontSize: 12,
+      color: 'var(--text-muted)',
+      fontStyle: 'italic'
+    }
+  }, docTypeLabels[currentDoc.doc_type] || currentDoc.doc_type, " v", currentDoc.version))), /*#__PURE__*/React.createElement("div", {
     style: {
       padding: '14px 20px',
       background: 'var(--bg-surface)',
@@ -49176,37 +49296,83 @@ const DisclaimerModal = window.DisclaimerModal = ({
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
-      maxWidth: '560px',
+      maxWidth: '600px',
       margin: '0 auto',
       display: 'flex',
       flexDirection: 'column',
-      gap: '6px'
+      gap: 8
     }
   }, !scrolledToBottom && /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: 'center',
-      fontSize: '12px',
+      fontSize: 12,
       color: 'var(--text-muted)',
       fontStyle: 'italic'
     }
-  }, "\u2193 Scroll down to read the full notice \u2193"), /*#__PURE__*/React.createElement("button", {
+  }, "\u2193 Scroll down to read the full document \u2193"), scrolledToBottom && /*#__PURE__*/React.createElement("label", {
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 10,
+      cursor: 'pointer',
+      padding: '6px 0'
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "checkbox",
+    checked: checked,
+    onChange: e => setChecked(e.target.checked),
+    style: {
+      width: 20,
+      height: 20,
+      accentColor: 'var(--role-color)',
+      flexShrink: 0
+    }
+  }), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 13,
+      color: 'var(--text-secondary)',
+      lineHeight: 1.4
+    }
+  }, "I have read and agree to the ", title.toLowerCase(), isUpdate ? ' (updated)' : '')), /*#__PURE__*/React.createElement("button", {
     onClick: handleAccept,
-    disabled: !scrolledToBottom || accepting,
+    disabled: !scrolledToBottom || !checked || accepting,
     style: {
       width: '100%',
       padding: '14px',
-      background: scrolledToBottom ? 'var(--role-color)' : 'var(--border-light)',
+      background: scrolledToBottom && checked ? 'var(--role-color)' : 'var(--border-light)',
       color: 'var(--text-on-primary)',
       border: 'none',
-      borderRadius: '10px',
-      fontSize: '15px',
+      borderRadius: 10,
+      fontSize: 15,
       fontWeight: 600,
-      cursor: scrolledToBottom ? 'pointer' : 'not-allowed',
+      cursor: scrolledToBottom && checked ? 'pointer' : 'not-allowed',
       opacity: accepting ? 0.7 : 1,
       transition: 'background 0.2s'
     }
-  }, accepting ? 'Acknowledging...' : 'I Acknowledge and Agree'))));
+  }, accepting ? 'Processing...' : currentIdx < totalDocs - 1 ? 'Agree & Continue to Next' : 'I Agree'))));
 };
+
+// Simple HTML formatter for legal content stored as plain text
+function formatLegalContent(text) {
+  if (!text) return '';
+  // If it's already HTML, return as-is
+  if (text.trim().startsWith('<')) return text;
+  // Convert plain text to simple HTML
+  return text.split('\n\n').map(para => {
+    const trimmed = para.trim();
+    if (!trimmed) return '';
+    // Detect headings (all caps or starts with #)
+    if (trimmed.startsWith('#')) {
+      const level = trimmed.match(/^#+/)[0].length;
+      const headText = trimmed.replace(/^#+\s*/, '');
+      return `<h${Math.min(level + 1, 4)} style="margin: 16px 0 8px; color: var(--text-primary)">${headText}</h${Math.min(level + 1, 4)}>`;
+    }
+    if (trimmed === trimmed.toUpperCase() && trimmed.length < 100) {
+      return `<h3 style="margin: 16px 0 8px; font-size: 15px; color: var(--text-primary)">${trimmed}</h3>`;
+    }
+    return `<p style="margin: 0 0 12px">${trimmed}</p>`;
+  }).join('');
+}
 ;
 // ─── Floating Feedback Button ───
 // Persistent FAB on every screen, opens feedback submission modal.
@@ -59354,6 +59520,18 @@ const AdminPanel = window.AdminPanel = ({
   // Account approvals state
   const [pendingApprovals, setPendingApprovals] = useState([]);
   const [approvalLoading, setApprovalLoading] = useState(null);
+  // Legal docs management
+  const [legalDocs, setLegalDocs] = useState([]);
+  const [legalAcceptances, setLegalAcceptances] = useState(null);
+  const [legalPublishing, setLegalPublishing] = useState(false);
+  const [legalDraft, setLegalDraft] = useState({
+    docType: 'terms',
+    version: '',
+    title: '',
+    content: '',
+    changeSummary: ''
+  });
+  const [legalMsg, setLegalMsg] = useState('');
   // Consent alerts state (tier3 needing review or flagged responses)
   const [consentAlerts, setConsentAlerts] = useState([]);
 
@@ -59393,6 +59571,56 @@ const AdminPanel = window.AdminPanel = ({
   const [editCostData, setEditCostData] = useState({}); // holds edited values
 
   const costCategories = ['Claude API', 'Railway', 'Twilio', 'Stripe Fees', 'Stripe Identity', 'Checkr', 'Cloudflare', 'Resend', 'Domain', 'Insurance', 'Google Play', 'Apple Developer', 'Other'];
+  const loadLegalDocs = async () => {
+    try {
+      const [docsRes, accRes] = await Promise.all([apiFetch('/api/legal/admin/documents'), apiFetch('/api/legal/admin/acceptances')]);
+      if (docsRes !== null && docsRes !== void 0 && docsRes.ok) {
+        const d = await docsRes.json();
+        setLegalDocs(d.documents || []);
+      }
+      if (accRes !== null && accRes !== void 0 && accRes.ok) setLegalAcceptances(await accRes.json());
+    } catch (err) {
+      console.error('Legal docs load error:', err);
+    }
+  };
+  const publishLegalDoc = async () => {
+    if (!legalDraft.version || !legalDraft.title || !legalDraft.content) {
+      setLegalMsg('Version, title, and content are required');
+      return;
+    }
+    setLegalPublishing(true);
+    setLegalMsg('');
+    try {
+      const res = await apiFetch('/api/legal/admin/publish', {
+        method: 'POST',
+        body: JSON.stringify({
+          docType: legalDraft.docType,
+          version: legalDraft.version,
+          title: legalDraft.title,
+          content: legalDraft.content,
+          changeSummary: legalDraft.changeSummary || undefined
+        })
+      });
+      if (res !== null && res !== void 0 && res.ok) {
+        const d = await res.json();
+        setLegalMsg(d.message || 'Published!');
+        setLegalDraft({
+          docType: 'terms',
+          version: '',
+          title: '',
+          content: '',
+          changeSummary: ''
+        });
+        loadLegalDocs();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setLegalMsg(err.error || 'Failed to publish');
+      }
+    } catch {
+      setLegalMsg('Network error');
+    }
+    setLegalPublishing(false);
+  };
   const loadCosts = async () => {
     setCostLoading(true);
     try {
@@ -59764,6 +59992,7 @@ const AdminPanel = window.AdminPanel = ({
       }
     }
     if (activeTab === 'costs') loadCosts();
+    if (activeTab === 'legal') loadLegalDocs();
   }, [activeTab]);
 
   // Auto-reload users when filters change
@@ -60588,6 +60817,10 @@ const AdminPanel = window.AdminPanel = ({
       id: 'costs',
       label: 'Costs',
       icon: '💵'
+    }, {
+      id: 'legal',
+      label: 'Legal Docs',
+      icon: '📜'
     }, {
       id: 'activity',
       label: 'Activity',
@@ -66970,7 +67203,364 @@ const AdminPanel = window.AdminPanel = ({
       cursor: 'pointer',
       opacity: reinstateLoading === cg.user_id ? 0.5 : 1
     }
-  }, reinstateLoading === cg.user_id ? 'Reinstating...' : 'Reinstate')))))), activeTab === 'settings' && (() => {
+  }, reinstateLoading === cg.user_id ? 'Reinstating...' : 'Reinstate')))))), activeTab === 'legal' && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h2", {
+    style: {
+      fontSize: 18,
+      fontWeight: 700,
+      marginBottom: 16
+    }
+  }, "Legal Document Management"), /*#__PURE__*/React.createElement("div", {
+    className: "card",
+    style: {
+      marginBottom: 16,
+      padding: 18
+    }
+  }, /*#__PURE__*/React.createElement("h3", {
+    style: {
+      margin: '0 0 12px',
+      fontSize: 15,
+      fontWeight: 700
+    }
+  }, "Publish New Version"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontSize: 12,
+      color: 'var(--text-muted)',
+      margin: '0 0 12px'
+    }
+  }, "Publishing a new version deactivates the previous one. All users will see the updated document and must re-agree before using the app."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'grid',
+      gridTemplateColumns: '1fr 1fr 1fr',
+      gap: 10,
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    style: {
+      fontSize: 11,
+      fontWeight: 600,
+      color: 'var(--text-secondary)',
+      display: 'block',
+      marginBottom: 3
+    }
+  }, "Document Type"), /*#__PURE__*/React.createElement("select", {
+    value: legalDraft.docType,
+    onChange: e => setLegalDraft({
+      ...legalDraft,
+      docType: e.target.value
+    }),
+    style: {
+      width: '100%',
+      padding: '8px 10px',
+      borderRadius: 8,
+      border: '1px solid #ddd',
+      fontSize: 13
+    }
+  }, /*#__PURE__*/React.createElement("option", {
+    value: "terms"
+  }, "Terms of Service"), /*#__PURE__*/React.createElement("option", {
+    value: "privacy"
+  }, "Privacy Policy"), /*#__PURE__*/React.createElement("option", {
+    value: "liability"
+  }, "Liability Disclaimer"), /*#__PURE__*/React.createElement("option", {
+    value: "disclaimer"
+  }, "Platform Disclaimer"))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    style: {
+      fontSize: 11,
+      fontWeight: 600,
+      color: 'var(--text-secondary)',
+      display: 'block',
+      marginBottom: 3
+    }
+  }, "Version"), /*#__PURE__*/React.createElement("input", {
+    value: legalDraft.version,
+    onChange: e => setLegalDraft({
+      ...legalDraft,
+      version: e.target.value
+    }),
+    placeholder: "e.g. 2.0",
+    style: {
+      width: '100%',
+      padding: '8px 10px',
+      borderRadius: 8,
+      border: '1px solid #ddd',
+      fontSize: 13,
+      boxSizing: 'border-box'
+    }
+  })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    style: {
+      fontSize: 11,
+      fontWeight: 600,
+      color: 'var(--text-secondary)',
+      display: 'block',
+      marginBottom: 3
+    }
+  }, "Title"), /*#__PURE__*/React.createElement("input", {
+    value: legalDraft.title,
+    onChange: e => setLegalDraft({
+      ...legalDraft,
+      title: e.target.value
+    }),
+    placeholder: "e.g. Terms of Service",
+    style: {
+      width: '100%',
+      padding: '8px 10px',
+      borderRadius: 8,
+      border: '1px solid #ddd',
+      fontSize: 13,
+      boxSizing: 'border-box'
+    }
+  }))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement("label", {
+    style: {
+      fontSize: 11,
+      fontWeight: 600,
+      color: 'var(--text-secondary)',
+      display: 'block',
+      marginBottom: 3
+    }
+  }, "Content (plain text or HTML)"), /*#__PURE__*/React.createElement("textarea", {
+    value: legalDraft.content,
+    onChange: e => setLegalDraft({
+      ...legalDraft,
+      content: e.target.value
+    }),
+    rows: 10,
+    placeholder: "Paste your legal document content here...",
+    style: {
+      width: '100%',
+      padding: '10px',
+      borderRadius: 8,
+      border: '1px solid #ddd',
+      fontSize: 13,
+      fontFamily: 'inherit',
+      lineHeight: 1.5,
+      resize: 'vertical',
+      boxSizing: 'border-box'
+    }
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("label", {
+    style: {
+      fontSize: 11,
+      fontWeight: 600,
+      color: 'var(--text-secondary)',
+      display: 'block',
+      marginBottom: 3
+    }
+  }, "Change Summary (optional \u2014 auto-generated if left blank)"), /*#__PURE__*/React.createElement("textarea", {
+    value: legalDraft.changeSummary,
+    onChange: e => setLegalDraft({
+      ...legalDraft,
+      changeSummary: e.target.value
+    }),
+    rows: 3,
+    placeholder: "Brief summary of what changed for users...",
+    style: {
+      width: '100%',
+      padding: '10px',
+      borderRadius: 8,
+      border: '1px solid #ddd',
+      fontSize: 13,
+      fontFamily: 'inherit',
+      lineHeight: 1.5,
+      resize: 'vertical',
+      boxSizing: 'border-box'
+    }
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 12
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: publishLegalDoc,
+    disabled: legalPublishing,
+    style: {
+      padding: '10px 24px',
+      borderRadius: 8,
+      background: 'var(--role-color)',
+      color: 'var(--text-on-primary)',
+      border: 'none',
+      fontWeight: 600,
+      fontSize: 14,
+      cursor: 'pointer',
+      opacity: legalPublishing ? 0.7 : 1
+    }
+  }, legalPublishing ? 'Publishing...' : 'Publish & Require Re-Agreement'), legalMsg && /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 13,
+      color: legalMsg.includes('Failed') || legalMsg.includes('required') ? '#c62828' : '#2e7d32',
+      fontWeight: 500
+    }
+  }, legalMsg))), /*#__PURE__*/React.createElement("div", {
+    className: "card",
+    style: {
+      marginBottom: 16,
+      padding: 18
+    }
+  }, /*#__PURE__*/React.createElement("h3", {
+    style: {
+      margin: '0 0 12px',
+      fontSize: 15,
+      fontWeight: 700
+    }
+  }, "Active Documents"), legalDocs.filter(d => d.is_active).length === 0 ? /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: 'var(--text-muted)',
+      fontSize: 13
+    }
+  }, "No legal documents published yet. The legacy disclaimer is active by default.") : /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'grid',
+      gap: 10
+    }
+  }, legalDocs.filter(d => d.is_active).map(d => /*#__PURE__*/React.createElement("div", {
+    key: d.id,
+    style: {
+      padding: '12px 16px',
+      background: 'var(--bg-surface)',
+      border: '1px solid var(--border-color)',
+      borderRadius: 10
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center'
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontWeight: 700,
+      fontSize: 14
+    }
+  }, d.title), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 11,
+      color: 'var(--text-muted)',
+      marginLeft: 8
+    }
+  }, "v", d.version), /*#__PURE__*/React.createElement("span", {
+    style: {
+      marginLeft: 8,
+      fontSize: 10,
+      fontWeight: 600,
+      padding: '2px 8px',
+      borderRadius: 10,
+      background: '#e8f5e9',
+      color: '#2e7d32'
+    }
+  }, "ACTIVE")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: 'var(--text-muted)'
+    }
+  }, d.acceptance_count || 0, " accepted")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: 'var(--text-secondary)',
+      marginTop: 4
+    }
+  }, "Type: ", d.doc_type, " \xB7 Published ", d.published_at ? new Date(d.published_at).toLocaleDateString() : '—', d.published_by_name && /*#__PURE__*/React.createElement("span", null, " by ", d.published_by_name)), d.change_summary && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: '#1565c0',
+      marginTop: 6,
+      padding: '6px 10px',
+      background: '#e3f2fd',
+      borderRadius: 6
+    }
+  }, "Changes: ", d.change_summary))))), (legalAcceptances === null || legalAcceptances === void 0 ? void 0 : legalAcceptances.stats) && legalAcceptances.stats.length > 0 && /*#__PURE__*/React.createElement("div", {
+    className: "card",
+    style: {
+      marginBottom: 16,
+      padding: 18
+    }
+  }, /*#__PURE__*/React.createElement("h3", {
+    style: {
+      margin: '0 0 12px',
+      fontSize: 15,
+      fontWeight: 700
+    }
+  }, "Acceptance Stats"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+      gap: 10
+    }
+  }, legalAcceptances.stats.map((s, i) => {
+    const pct = s.total_users > 0 ? Math.round(s.accepted_count / s.total_users * 100) : 0;
+    return /*#__PURE__*/React.createElement("div", {
+      key: i,
+      style: {
+        padding: '14px 16px',
+        borderRadius: 10,
+        background: 'var(--bg-surface)',
+        border: '1px solid var(--border-color)',
+        textAlign: 'center'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 10,
+        color: 'var(--text-muted)',
+        textTransform: 'uppercase',
+        letterSpacing: 0.4
+      }
+    }, s.doc_type, " v", s.version), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 24,
+        fontWeight: 700,
+        color: pct >= 90 ? '#2e7d32' : pct >= 50 ? '#e65100' : '#c62828',
+        marginTop: 4
+      }
+    }, pct, "%"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 11,
+        color: 'var(--text-muted)'
+      }
+    }, s.accepted_count, " / ", s.total_users, " users"));
+  }))), legalDocs.filter(d => !d.is_active).length > 0 && /*#__PURE__*/React.createElement("div", {
+    className: "card",
+    style: {
+      padding: 18
+    }
+  }, /*#__PURE__*/React.createElement("h3", {
+    style: {
+      margin: '0 0 12px',
+      fontSize: 15,
+      fontWeight: 700,
+      color: 'var(--text-secondary)'
+    }
+  }, "Version History"), legalDocs.filter(d => !d.is_active).map(d => /*#__PURE__*/React.createElement("div", {
+    key: d.id,
+    style: {
+      padding: '8px 12px',
+      borderBottom: '1px solid var(--border-color)',
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center'
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 13,
+      fontWeight: 500
+    }
+  }, d.title, " v", d.version), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 11,
+      color: 'var(--text-muted)',
+      marginLeft: 8
+    }
+  }, "(", d.doc_type, ")")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: 'var(--text-muted)'
+    }
+  }, d.acceptance_count || 0, " accepted \xB7 ", d.published_at ? new Date(d.published_at).toLocaleDateString() : '—'))))), activeTab === 'settings' && (() => {
     const prefs = user !== null && user !== void 0 && user.notification_prefs ? typeof user.notification_prefs === 'string' ? JSON.parse(user.notification_prefs) : user.notification_prefs : {};
     const togglePref = async (key, value) => {
       const newPrefs = {
@@ -70140,6 +70730,7 @@ const App = () => {
   const [showRequestCareModal, setShowRequestCareModal] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showDisclaimer, setShowDisclaimer] = useState(false);
+  const [pendingLegalDocs, setPendingLegalDocs] = useState([]);
   // Dual-role: active role for users with multiple roles
   const [activeRole, setActiveRoleState] = useState(getActiveRole());
   // Unread message count for nav badge
@@ -70563,9 +71154,14 @@ const App = () => {
           const validRole = saved && userRoles.includes(saved) ? saved : userRoles[0];
           setActiveRoleState(validRole);
           window.setActiveRole(validRole);
-          // Check if disclaimer needs to be accepted (skip if account not yet approved)
-          if (data.user.account_approved && (!data.user.disclaimer_accepted_at || data.user.disclaimer_version !== '1.0')) {
-            setShowDisclaimer(true);
+          // Check if legal documents need to be accepted (skip if account not yet approved)
+          if (data.user.account_approved) {
+            if (data.user.pendingLegalDocs && data.user.pendingLegalDocs.length > 0) {
+              setPendingLegalDocs(data.user.pendingLegalDocs);
+              setShowDisclaimer(true);
+            } else if (!data.user.disclaimer_accepted_at || data.user.disclaimer_version !== '1.0') {
+              setShowDisclaimer(true);
+            }
           }
           // Apply accessibility text size from user prefs
           try {
@@ -70799,9 +71395,14 @@ const App = () => {
             window.setActiveRole(userRoles[0]);
             setActiveRoleState(userRoles[0]);
           }
-          // Check if disclaimer needs to be accepted (skip if not yet approved)
-          if (data.user.account_approved && (!data.user.disclaimer_accepted_at || data.user.disclaimer_version !== '1.0')) {
-            setShowDisclaimer(true);
+          // Check if legal documents need to be accepted (skip if not yet approved)
+          if (data.user.account_approved) {
+            if (data.user.pendingLegalDocs && data.user.pendingLegalDocs.length > 0) {
+              setPendingLegalDocs(data.user.pendingLegalDocs);
+              setShowDisclaimer(true);
+            } else if (!data.user.disclaimer_accepted_at || data.user.disclaimer_version !== '1.0') {
+              setShowDisclaimer(true);
+            }
           }
           // Apply accessibility text size
           try {
@@ -70993,8 +71594,10 @@ const App = () => {
                   is_tester: !!data.user.is_tester,
                   companionAccess: !!data.user.companion_access
                 });
-                // Check if disclaimer needs to be accepted
-                if (!data.user.disclaimer_accepted_at || data.user.disclaimer_version !== '1.0') {
+                if (data.user.pendingLegalDocs && data.user.pendingLegalDocs.length > 0) {
+                  setPendingLegalDocs(data.user.pendingLegalDocs);
+                  setShowDisclaimer(true);
+                } else if (!data.user.disclaimer_accepted_at || data.user.disclaimer_version !== '1.0') {
                   setShowDisclaimer(true);
                 }
                 try {
@@ -71067,8 +71670,10 @@ const App = () => {
                   is_tester: !!data.user.is_tester,
                   companionAccess: !!data.user.companion_access
                 });
-                // Check if disclaimer needs to be accepted
-                if (!data.user.disclaimer_accepted_at || data.user.disclaimer_version !== '1.0') {
+                if (data.user.pendingLegalDocs && data.user.pendingLegalDocs.length > 0) {
+                  setPendingLegalDocs(data.user.pendingLegalDocs);
+                  setShowDisclaimer(true);
+                } else if (!data.user.disclaimer_accepted_at || data.user.disclaimer_version !== '1.0') {
                   setShowDisclaimer(true);
                 }
                 try {
@@ -71478,8 +72083,10 @@ const App = () => {
   };
   const isDemo = currentUser === null || currentUser === void 0 ? void 0 : currentUser.isDemo;
   const appContent = /*#__PURE__*/React.createElement(React.Fragment, null, showDisclaimer && /*#__PURE__*/React.createElement(DisclaimerModal, {
+    pendingDocs: pendingLegalDocs,
     onAccept: () => {
       setShowDisclaimer(false);
+      setPendingLegalDocs([]);
       setVerifyMessage({
         type: 'success',
         text: 'Welcome to InPlace!'

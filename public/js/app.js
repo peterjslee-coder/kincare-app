@@ -345,6 +345,7 @@ const App = () => {
   const [showRequestCareModal, setShowRequestCareModal] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showDisclaimer, setShowDisclaimer] = useState(false);
+  const [pendingLegalDocs, setPendingLegalDocs] = useState([]);
   // Dual-role: active role for users with multiple roles
   const [activeRole, setActiveRoleState] = useState(getActiveRole());
   // Unread message count for nav badge
@@ -723,9 +724,14 @@ const App = () => {
             const validRole = saved && userRoles.includes(saved) ? saved : userRoles[0];
             setActiveRoleState(validRole);
             window.setActiveRole(validRole);
-            // Check if disclaimer needs to be accepted (skip if account not yet approved)
-            if (data.user.account_approved && (!data.user.disclaimer_accepted_at || data.user.disclaimer_version !== '1.0')) {
-              setShowDisclaimer(true);
+            // Check if legal documents need to be accepted (skip if account not yet approved)
+            if (data.user.account_approved) {
+              if (data.user.pendingLegalDocs && data.user.pendingLegalDocs.length > 0) {
+                setPendingLegalDocs(data.user.pendingLegalDocs);
+                setShowDisclaimer(true);
+              } else if (!data.user.disclaimer_accepted_at || data.user.disclaimer_version !== '1.0') {
+                setShowDisclaimer(true);
+              }
             }
             // Apply accessibility text size from user prefs
             try {
@@ -922,9 +928,14 @@ const App = () => {
             window.setActiveRole(userRoles[0]);
             setActiveRoleState(userRoles[0]);
           }
-          // Check if disclaimer needs to be accepted (skip if not yet approved)
-          if (data.user.account_approved && (!data.user.disclaimer_accepted_at || data.user.disclaimer_version !== '1.0')) {
-            setShowDisclaimer(true);
+          // Check if legal documents need to be accepted (skip if not yet approved)
+          if (data.user.account_approved) {
+            if (data.user.pendingLegalDocs && data.user.pendingLegalDocs.length > 0) {
+              setPendingLegalDocs(data.user.pendingLegalDocs);
+              setShowDisclaimer(true);
+            } else if (!data.user.disclaimer_accepted_at || data.user.disclaimer_version !== '1.0') {
+              setShowDisclaimer(true);
+            }
           }
           // Apply accessibility text size
           try {
@@ -1085,8 +1096,10 @@ const App = () => {
                 emailVerified: !!data.user.email_verified, isDemo: false,
                 isAdmin: !!data.user.is_admin, is_tester: !!data.user.is_tester, companionAccess: !!data.user.companion_access,
               });
-              // Check if disclaimer needs to be accepted
-              if (!data.user.disclaimer_accepted_at || data.user.disclaimer_version !== '1.0') {
+              if (data.user.pendingLegalDocs && data.user.pendingLegalDocs.length > 0) {
+                setPendingLegalDocs(data.user.pendingLegalDocs);
+                setShowDisclaimer(true);
+              } else if (!data.user.disclaimer_accepted_at || data.user.disclaimer_version !== '1.0') {
                 setShowDisclaimer(true);
               }
               try { const a11y = data.user.accessibility_prefs ? JSON.parse(data.user.accessibility_prefs) : {}; if (a11y.textSize && typeof applyTextSize === 'function') applyTextSize(a11y.textSize); } catch {}
@@ -1138,8 +1151,10 @@ const App = () => {
                 emailVerified: !!data.user.email_verified, isDemo: false,
                 isAdmin: !!data.user.is_admin, is_tester: !!data.user.is_tester, companionAccess: !!data.user.companion_access,
               });
-              // Check if disclaimer needs to be accepted
-              if (!data.user.disclaimer_accepted_at || data.user.disclaimer_version !== '1.0') {
+              if (data.user.pendingLegalDocs && data.user.pendingLegalDocs.length > 0) {
+                setPendingLegalDocs(data.user.pendingLegalDocs);
+                setShowDisclaimer(true);
+              } else if (!data.user.disclaimer_accepted_at || data.user.disclaimer_version !== '1.0') {
                 setShowDisclaimer(true);
               }
               try { const a11y = data.user.accessibility_prefs ? JSON.parse(data.user.accessibility_prefs) : {}; if (a11y.textSize && typeof applyTextSize === 'function') applyTextSize(a11y.textSize); } catch {}
@@ -1321,10 +1336,14 @@ const App = () => {
 
   const appContent = (
     <React.Fragment>
-      {showDisclaimer && <DisclaimerModal onAccept={() => {
-        setShowDisclaimer(false);
-        setVerifyMessage({ type: 'success', text: 'Welcome to InPlace!' });
-      }} />}
+      {showDisclaimer && <DisclaimerModal
+        pendingDocs={pendingLegalDocs}
+        onAccept={() => {
+          setShowDisclaimer(false);
+          setPendingLegalDocs([]);
+          setVerifyMessage({ type: 'success', text: 'Welcome to InPlace!' });
+        }}
+      />}
       {sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
       <aside className={`sidebar ${sidebarOpen ? 'sidebar-open' : ''}`}>
         <div className="sidebar-logo">

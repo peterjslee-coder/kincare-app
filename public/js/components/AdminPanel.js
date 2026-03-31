@@ -320,6 +320,12 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
   // Account approvals state
   const [pendingApprovals, setPendingApprovals] = useState([]);
   const [approvalLoading, setApprovalLoading] = useState(null);
+  // Legal docs management
+  const [legalDocs, setLegalDocs] = useState([]);
+  const [legalAcceptances, setLegalAcceptances] = useState(null);
+  const [legalPublishing, setLegalPublishing] = useState(false);
+  const [legalDraft, setLegalDraft] = useState({ docType: 'terms', version: '', title: '', content: '', changeSummary: '' });
+  const [legalMsg, setLegalMsg] = useState('');
   // Consent alerts state (tier3 needing review or flagged responses)
   const [consentAlerts, setConsentAlerts] = useState([]);
 
@@ -348,6 +354,47 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
   const [editCostData, setEditCostData] = useState({}); // holds edited values
 
   const costCategories = ['Claude API', 'Railway', 'Twilio', 'Stripe Fees', 'Stripe Identity', 'Checkr', 'Cloudflare', 'Resend', 'Domain', 'Insurance', 'Google Play', 'Apple Developer', 'Other'];
+
+  const loadLegalDocs = async () => {
+    try {
+      const [docsRes, accRes] = await Promise.all([
+        apiFetch('/api/legal/admin/documents'),
+        apiFetch('/api/legal/admin/acceptances'),
+      ]);
+      if (docsRes?.ok) { const d = await docsRes.json(); setLegalDocs(d.documents || []); }
+      if (accRes?.ok) setLegalAcceptances(await accRes.json());
+    } catch (err) { console.error('Legal docs load error:', err); }
+  };
+
+  const publishLegalDoc = async () => {
+    if (!legalDraft.version || !legalDraft.title || !legalDraft.content) {
+      setLegalMsg('Version, title, and content are required');
+      return;
+    }
+    setLegalPublishing(true); setLegalMsg('');
+    try {
+      const res = await apiFetch('/api/legal/admin/publish', {
+        method: 'POST',
+        body: JSON.stringify({
+          docType: legalDraft.docType,
+          version: legalDraft.version,
+          title: legalDraft.title,
+          content: legalDraft.content,
+          changeSummary: legalDraft.changeSummary || undefined,
+        }),
+      });
+      if (res?.ok) {
+        const d = await res.json();
+        setLegalMsg(d.message || 'Published!');
+        setLegalDraft({ docType: 'terms', version: '', title: '', content: '', changeSummary: '' });
+        loadLegalDocs();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setLegalMsg(err.error || 'Failed to publish');
+      }
+    } catch { setLegalMsg('Network error'); }
+    setLegalPublishing(false);
+  };
 
   const loadCosts = async () => {
     setCostLoading(true);
@@ -675,6 +722,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
       }
     }
     if (activeTab === 'costs') loadCosts();
+    if (activeTab === 'legal') loadLegalDocs();
   }, [activeTab]);
 
   // Auto-reload users when filters change
@@ -1307,6 +1355,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
       { id: 'help', label: 'Help/FAQ', icon: '❓' },
       { id: 'financials', label: 'Financials', icon: '💰' },
       { id: 'costs', label: 'Costs', icon: '💵' },
+      { id: 'legal', label: 'Legal Docs', icon: '📜' },
       { id: 'activity', label: 'Activity', icon: '⚡' },
       { id: 'onboarding', label: 'Events', icon: '🚦' },
       { id: 'settings', label: 'Settings', icon: '⚙️' },
@@ -4044,6 +4093,138 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* ─── Legal Docs Tab ─── */}
+      {activeTab === 'legal' && (
+        <div>
+          <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>Legal Document Management</h2>
+
+          {/* Publish new version */}
+          <div className="card" style={{ marginBottom: 16, padding: 18 }}>
+            <h3 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 700 }}>Publish New Version</h3>
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 12px' }}>
+              Publishing a new version deactivates the previous one. All users will see the updated document and must re-agree before using the app.
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 10 }}>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>Document Type</label>
+                <select value={legalDraft.docType} onChange={e => setLegalDraft({ ...legalDraft, docType: e.target.value })}
+                  style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid #ddd', fontSize: 13 }}>
+                  <option value="terms">Terms of Service</option>
+                  <option value="privacy">Privacy Policy</option>
+                  <option value="liability">Liability Disclaimer</option>
+                  <option value="disclaimer">Platform Disclaimer</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>Version</label>
+                <input value={legalDraft.version} onChange={e => setLegalDraft({ ...legalDraft, version: e.target.value })}
+                  placeholder="e.g. 2.0" style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid #ddd', fontSize: 13, boxSizing: 'border-box' }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>Title</label>
+                <input value={legalDraft.title} onChange={e => setLegalDraft({ ...legalDraft, title: e.target.value })}
+                  placeholder="e.g. Terms of Service" style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid #ddd', fontSize: 13, boxSizing: 'border-box' }} />
+              </div>
+            </div>
+            <div style={{ marginBottom: 10 }}>
+              <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>Content (plain text or HTML)</label>
+              <textarea value={legalDraft.content} onChange={e => setLegalDraft({ ...legalDraft, content: e.target.value })}
+                rows={10} placeholder="Paste your legal document content here..."
+                style={{ width: '100%', padding: '10px', borderRadius: 8, border: '1px solid #ddd', fontSize: 13, fontFamily: 'inherit', lineHeight: 1.5, resize: 'vertical', boxSizing: 'border-box' }} />
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>
+                Change Summary (optional — auto-generated if left blank)
+              </label>
+              <textarea value={legalDraft.changeSummary} onChange={e => setLegalDraft({ ...legalDraft, changeSummary: e.target.value })}
+                rows={3} placeholder="Brief summary of what changed for users..."
+                style={{ width: '100%', padding: '10px', borderRadius: 8, border: '1px solid #ddd', fontSize: 13, fontFamily: 'inherit', lineHeight: 1.5, resize: 'vertical', boxSizing: 'border-box' }} />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <button onClick={publishLegalDoc} disabled={legalPublishing}
+                style={{ padding: '10px 24px', borderRadius: 8, background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', fontWeight: 600, fontSize: 14, cursor: 'pointer', opacity: legalPublishing ? 0.7 : 1 }}>
+                {legalPublishing ? 'Publishing...' : 'Publish & Require Re-Agreement'}
+              </button>
+              {legalMsg && <span style={{ fontSize: 13, color: legalMsg.includes('Failed') || legalMsg.includes('required') ? '#c62828' : '#2e7d32', fontWeight: 500 }}>{legalMsg}</span>}
+            </div>
+          </div>
+
+          {/* Current active documents */}
+          <div className="card" style={{ marginBottom: 16, padding: 18 }}>
+            <h3 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 700 }}>Active Documents</h3>
+            {legalDocs.filter(d => d.is_active).length === 0 ? (
+              <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>No legal documents published yet. The legacy disclaimer is active by default.</p>
+            ) : (
+              <div style={{ display: 'grid', gap: 10 }}>
+                {legalDocs.filter(d => d.is_active).map(d => (
+                  <div key={d.id} style={{ padding: '12px 16px', background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 10 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <span style={{ fontWeight: 700, fontSize: 14 }}>{d.title}</span>
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 8 }}>v{d.version}</span>
+                        <span style={{
+                          marginLeft: 8, fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 10,
+                          background: '#e8f5e9', color: '#2e7d32',
+                        }}>ACTIVE</span>
+                      </div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                        {d.acceptance_count || 0} accepted
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>
+                      Type: {d.doc_type} · Published {d.published_at ? new Date(d.published_at).toLocaleDateString() : '—'}
+                      {d.published_by_name && <span> by {d.published_by_name}</span>}
+                    </div>
+                    {d.change_summary && (
+                      <div style={{ fontSize: 12, color: '#1565c0', marginTop: 6, padding: '6px 10px', background: '#e3f2fd', borderRadius: 6 }}>
+                        Changes: {d.change_summary}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Acceptance stats */}
+          {legalAcceptances?.stats && legalAcceptances.stats.length > 0 && (
+            <div className="card" style={{ marginBottom: 16, padding: 18 }}>
+              <h3 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 700 }}>Acceptance Stats</h3>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10 }}>
+                {legalAcceptances.stats.map((s, i) => {
+                  const pct = s.total_users > 0 ? Math.round((s.accepted_count / s.total_users) * 100) : 0;
+                  return (
+                    <div key={i} style={{ padding: '14px 16px', borderRadius: 10, background: 'var(--bg-surface)', border: '1px solid var(--border-color)', textAlign: 'center' }}>
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.4 }}>{s.doc_type} v{s.version}</div>
+                      <div style={{ fontSize: 24, fontWeight: 700, color: pct >= 90 ? '#2e7d32' : pct >= 50 ? '#e65100' : '#c62828', marginTop: 4 }}>{pct}%</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{s.accepted_count} / {s.total_users} users</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Version history */}
+          {legalDocs.filter(d => !d.is_active).length > 0 && (
+            <div className="card" style={{ padding: 18 }}>
+              <h3 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 700, color: 'var(--text-secondary)' }}>Version History</h3>
+              {legalDocs.filter(d => !d.is_active).map(d => (
+                <div key={d.id} style={{ padding: '8px 12px', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <span style={{ fontSize: 13, fontWeight: 500 }}>{d.title} v{d.version}</span>
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 8 }}>({d.doc_type})</span>
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                    {d.acceptance_count || 0} accepted · {d.published_at ? new Date(d.published_at).toLocaleDateString() : '—'}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

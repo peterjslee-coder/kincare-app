@@ -559,6 +559,20 @@ router.get("/me", authenticate, async (req, res) => {
     onboardingComplete = cgProfile ? !!cgProfile.onboarding_complete : false;
   }
 
+  // Check for pending legal documents that need acceptance
+  let pendingLegalDocs = [];
+  try {
+    const activeDocs = await db.prepare(
+      "SELECT id, doc_type, version, title, change_summary, previous_version FROM legal_documents WHERE is_active = 1"
+    ).all();
+    const acceptances = await db.prepare(
+      "SELECT DISTINCT ON (doc_type) doc_type, version FROM user_legal_acceptances WHERE user_id = ? ORDER BY doc_type, accepted_at DESC"
+    ).all(req.user.id);
+    const acceptMap = {};
+    for (const a of acceptances) acceptMap[a.doc_type] = a.version;
+    pendingLegalDocs = activeDocs.filter(d => acceptMap[d.doc_type] !== d.version);
+  } catch (e) { /* legal docs table may not exist yet */ }
+
   // Include token for in-memory use (WebSocket auth) — cookie handles persistence
   const token = generateToken(user);
   setAuthCookie(res, token);
@@ -576,6 +590,7 @@ router.get("/me", authenticate, async (req, res) => {
       twoFactorEnabled: !!(twoFa?.is_enabled),
       linkedAccounts: oauthAccounts || [],
       onboarding_complete: onboardingComplete,
+      pendingLegalDocs,
     },
     token,
   });
