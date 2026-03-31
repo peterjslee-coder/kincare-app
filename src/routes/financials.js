@@ -683,4 +683,153 @@ router.put("/payments-enabled", async (req, res) => {
   }
 });
 
+// ─── GET /api/admin/financials/time-audit ───
+// Time Record Audit: surfaces sessions needing review per the caregiver agreement
+// Three confirmation layers: (1) Platform Time Records (check-in/out), (2) Client Confirmation (review), (3) Geotag
+router.get("/time-audit", async (req, res) => {
+  try {
+    const db = await getDb();
+
+    // 1. Unconfirmed visits: completed sessions with visit log but no family review
+    const unconfirmed = await db.prepare(`
+      SELECT cs.id, cs.scheduled_date, cs.scheduled_time, cs.duration_hours, cs.service_type,
+        cs.status, cs.completed_at, cs.review_completed,
+        vl.check_in_time, vl.check_out_time,
+        vl.check_in_lat, vl.check_in_lng, vl.check_out_lat, vl.check_out_lng,
+        vl.check_in_distance_ft,
+        u_fam.first_name AS family_first, u_fam.last_name AS family_last,
+        u_cg.first_name AS cg_first, u_cg.last_name AS cg_last,
+        cp.id AS cg_profile_id
+      FROM care_sessions cs
+      JOIN visit_logs vl ON vl.session_id = cs.id
+      JOIN users u_fam ON cs.family_user_id = u_fam.id
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      LEFT JOIN users u_cg ON cp.user_id = u_cg.id
+      WHERE cs.status = 'completed'
+        AND COALESCE(cs.review_completed, 0) = 0
+        AND vl.check_in_time IS NOT NULL
+        AND vl.check_out_time IS NOT NULL
+        AND COALESCE(u_fam.is_demo, 0) = 0
+      ORDER BY cs.completed_at DESC NULLS LAST
+      LIMIT 50
+    `).all();
+
+    // 2. Time discrepancies: actual duration differs from scheduled by > 15 min
+    const discrepancies = await db.prepare(`
+      SELECT cs.id, cs.scheduled_date, cs.scheduled_time, cs.duration_hours, cs.service_type,
+        cs.status, cs.completed_at, cs.review_completed, cs.late_check_in,
+        vl.check_in_time, vl.check_out_time,
+        vl.check_in_lat, vl.check_in_lng, vl.check_out_lat, vl.check_out_lng,
+        vl.check_in_distance_ft,
+        u_fam.first_name AS family_first, u_fam.last_name AS family_last,
+        u_cg.first_name AS cg_first, u_cg.last_name AS cg_last,
+        EXTRACT(EPOCH FROM (vl.check_out_time - vl.check_in_time)) / 3600.0 AS actual_hours
+      FROM care_sessions cs
+      JOIN visit_logs vl ON vl.session_id = cs.id
+      JOIN users u_fam ON cs.family_user_id = u_fam.id
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      LEFT JOIN users u_cg ON cp.user_id = u_cg.id
+      WHERE cs.status IN ('completed', 'paid')
+        AND vl.check_in_time IS NOT NULL
+        AND vl.check_out_time IS NOT NULL
+        AND COALESCE(u_fam.is_demo, 0) = 0
+        AND ABS(EXTRACT(EPOCH FROM (vl.check_out_time - vl.check_in_time)) / 3600.0 - cs.duration_hours) > 0.25
+      ORDER BY cs.completed_at DESC NULLS LAST
+      LIMIT 50
+    `).all();
+
+    // 3. Missing time records: completed/paid sessions with no visit log or no check-in/out
+    const missingRecords = await db.prepare(`
+      SELECT cs.id, cs.scheduled_date, cs.scheduled_time, cs.duration_hours, cs.service_type,
+        cs.status, cs.completed_at,
+        u_fam.first_name AS family_first, u_fam.last_name AS family_last,
+        u_cg.first_name AS cg_first, u_cg.last_name AS cg_last,
+        vl.id AS visit_log_id, vl.check_in_time, vl.check_out_time
+      FROM care_sessions cs
+      JOIN users u_fam ON cs.family_user_id = u_fam.id
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      LEFT JOIN users u_cg ON cp.user_id = u_cg.id
+      LEFT JOIN visit_logs vl ON vl.session_id = cs.id
+      WHERE cs.status IN ('completed', 'paid')
+        AND COALESCE(u_fam.is_demo, 0) = 0
+        AND (vl.id IS NULL OR vl.check_in_time IS NULL OR vl.check_out_time IS NULL)
+      ORDER BY cs.completed_at DESC NULLS LAST
+      LIMIT 50
+    `).all();
+
+    // 4. Summary counts
+    const countUnconfirmed = await db.prepare(`
+      SELECT COUNT(*) AS count FROM care_sessions cs
+      JOIN visit_logs vl ON vl.session_id = cs.id
+      JOIN users u ON cs.family_user_id = u.id
+      WHERE cs.status = 'completed' AND COALESCE(cs.review_completed, 0) = 0
+        AND vl.check_in_time IS NOT NULL AND vl.check_out_time IS NOT NULL
+        AND COALESCE(u.is_demo, 0) = 0
+    `).get();
+
+    const countDiscrepancies = await db.prepare(`
+      SELECT COUNT(*) AS count FROM care_sessions cs
+      JOIN visit_logs vl ON vl.session_id = cs.id
+      JOIN users u ON cs.family_user_id = u.id
+      WHERE cs.status IN ('completed', 'paid')
+        AND vl.check_in_time IS NOT NULL AND vl.check_out_time IS NOT NULL
+        AND COALESCE(u.is_demo, 0) = 0
+        AND ABS(EXTRACT(EPOCH FROM (vl.check_out_time - vl.check_in_time)) / 3600.0 - cs.duration_hours) > 0.25
+    `).get();
+
+    const countMissing = await db.prepare(`
+      SELECT COUNT(*) AS count FROM care_sessions cs
+      JOIN users u ON cs.family_user_id = u.id
+      LEFT JOIN visit_logs vl ON vl.session_id = cs.id
+      WHERE cs.status IN ('completed', 'paid')
+        AND COALESCE(u.is_demo, 0) = 0
+        AND (vl.id IS NULL OR vl.check_in_time IS NULL OR vl.check_out_time IS NULL)
+    `).get();
+
+    const countLateCheckins = await db.prepare(`
+      SELECT COUNT(*) AS count FROM care_sessions cs
+      JOIN users u ON cs.family_user_id = u.id
+      WHERE cs.late_check_in = 1 AND cs.status IN ('completed', 'paid', 'in_progress')
+        AND COALESCE(u.is_demo, 0) = 0
+    `).get();
+
+    res.json({
+      counts: {
+        unconfirmed: parseInt(countUnconfirmed.count) || 0,
+        discrepancies: parseInt(countDiscrepancies.count) || 0,
+        missingRecords: parseInt(countMissing.count) || 0,
+        lateCheckins: parseInt(countLateCheckins.count) || 0,
+      },
+      unconfirmed: unconfirmed.map(r => ({
+        sessionId: r.id, scheduledDate: r.scheduled_date, scheduledTime: r.scheduled_time,
+        durationHours: r.duration_hours, serviceType: r.service_type, status: r.status,
+        completedAt: r.completed_at, reviewCompleted: !!r.review_completed,
+        checkIn: r.check_in_time, checkOut: r.check_out_time,
+        geo: { inLat: r.check_in_lat, inLng: r.check_in_lng, outLat: r.check_out_lat, outLng: r.check_out_lng, distanceFt: r.check_in_distance_ft },
+        family: `${r.family_first} ${r.family_last}`, caregiver: r.cg_first ? `${r.cg_first} ${r.cg_last}` : '—',
+      })),
+      discrepancies: discrepancies.map(r => ({
+        sessionId: r.id, scheduledDate: r.scheduled_date, scheduledTime: r.scheduled_time,
+        durationHours: r.duration_hours, actualHours: parseFloat(r.actual_hours) || 0,
+        serviceType: r.service_type, status: r.status, completedAt: r.completed_at,
+        reviewCompleted: !!r.review_completed, lateCheckIn: !!r.late_check_in,
+        checkIn: r.check_in_time, checkOut: r.check_out_time,
+        geo: { inLat: r.check_in_lat, inLng: r.check_in_lng, outLat: r.check_out_lat, outLng: r.check_out_lng, distanceFt: r.check_in_distance_ft },
+        family: `${r.family_first} ${r.family_last}`, caregiver: r.cg_first ? `${r.cg_first} ${r.cg_last}` : '—',
+        deltaMinutes: Math.round((parseFloat(r.actual_hours) - r.duration_hours) * 60),
+      })),
+      missingRecords: missingRecords.map(r => ({
+        sessionId: r.id, scheduledDate: r.scheduled_date, scheduledTime: r.scheduled_time,
+        durationHours: r.duration_hours, serviceType: r.service_type, status: r.status,
+        completedAt: r.completed_at, hasVisitLog: !!r.visit_log_id,
+        hasCheckIn: !!r.check_in_time, hasCheckOut: !!r.check_out_time,
+        family: `${r.family_first} ${r.family_last}`, caregiver: r.cg_first ? `${r.cg_first} ${r.cg_last}` : '—',
+      })),
+    });
+  } catch (err) {
+    console.error("Time audit error:", err);
+    res.status(500).json({ error: "Failed to load time audit data" });
+  }
+});
+
 module.exports = router;

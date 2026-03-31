@@ -13,6 +13,12 @@ const AdminFinancials = window.AdminFinancials = () => {
   const [showAllInsights, setShowAllInsights] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  // Time Record Audit
+  const [timeAudit, setTimeAudit] = useState(null);
+  const [timeAuditLoading, setTimeAuditLoading] = useState(false);
+  const [auditView, setAuditView] = useState('unconfirmed'); // 'unconfirmed' | 'discrepancies' | 'missing' | 'late'
+  const [auditExpanded, setAuditExpanded] = useState(null); // session ID of expanded row
+
   // Platform fee settings
   const [feePercent, setFeePercent] = useState(20);
   const [feeInput, setFeeInput] = useState('20');
@@ -30,7 +36,7 @@ const AdminFinancials = window.AdminFinancials = () => {
   const fetchAll = async (showRefresh) => {
     if (showRefresh) setRefreshing(true);
     try {
-      const [sumRes, brkRes, insRes, txRes, feeRes, payRes, trsRes] = await Promise.all([
+      const [sumRes, brkRes, insRes, txRes, feeRes, payRes, trsRes, auditRes] = await Promise.all([
         apiFetch('/api/admin/financials/summary'),
         apiFetch('/api/admin/financials/breakdown'),
         apiFetch('/api/admin/financials/insights'),
@@ -38,11 +44,13 @@ const AdminFinancials = window.AdminFinancials = () => {
         apiFetch('/api/admin/financials/platform-fee'),
         apiFetch('/api/admin/financials/payments-enabled'),
         apiFetch('/api/admin/treasury'),
+        apiFetch('/api/admin/financials/time-audit'),
       ]);
       if (sumRes?.ok) setSummary(await sumRes.json());
       if (brkRes?.ok) setBreakdown(await brkRes.json());
       if (insRes?.ok) { const d = await insRes.json(); setInsights(d.insights || []); }
       if (txRes?.ok) setTransactions(await txRes.json());
+      if (auditRes?.ok) setTimeAudit(await auditRes.json());
       if (feeRes?.ok) {
         const fd = await feeRes.json();
         setFeePercent(fd.platformFeePercent);
@@ -845,6 +853,165 @@ const AdminFinancials = window.AdminFinancials = () => {
             {txFilter ? 'No transactions match your search.' : 'No transactions yet. They\'ll appear here once payments are processed through Stripe.'}
           </p>
         )}
+      </div>
+
+      {/* ─── Time Record Audit ─── */}
+      <div className="card" style={{ marginTop: 20, padding: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>Time Record Audit</h3>
+          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Per Caregiver Agreement §3</span>
+        </div>
+
+        {/* Audit metric cards */}
+        {timeAudit && (
+          <>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, marginBottom: 16 }}>
+              {[
+                { key: 'unconfirmed', icon: '⏳', label: 'Unconfirmed', count: timeAudit.counts.unconfirmed, color: '#e65100', bg: '#fff3e0', desc: 'No family review' },
+                { key: 'discrepancies', icon: '⚠️', label: 'Time Gaps', count: timeAudit.counts.discrepancies, color: '#c62828', bg: '#ffebee', desc: 'Actual ≠ scheduled' },
+                { key: 'missing', icon: '❌', label: 'No Records', count: timeAudit.counts.missingRecords, color: '#4a148c', bg: '#f3e5f5', desc: 'Missing clock data' },
+                { key: 'late', icon: '🕐', label: 'Late Check-in', count: timeAudit.counts.lateCheckins, color: '#1565c0', bg: '#e3f2fd', desc: 'Arrived late' },
+              ].map(m => (
+                <div key={m.key} onClick={() => setAuditView(m.key)} style={{
+                  padding: '14px 12px', borderRadius: 10, cursor: 'pointer', textAlign: 'center',
+                  border: auditView === m.key ? `2px solid ${m.color}` : '1px solid var(--border-color)',
+                  background: auditView === m.key ? m.bg : 'var(--bg-surface)',
+                  transition: 'all 0.15s',
+                }}>
+                  <div style={{ fontSize: 22 }}>{m.icon}</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: m.count > 0 ? m.color : 'var(--text-muted)', marginTop: 2 }}>{m.count}</div>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', marginTop: 2 }}>{m.label}</div>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{m.desc}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Drill-down table */}
+            {(() => {
+              const rows = auditView === 'unconfirmed' ? timeAudit.unconfirmed
+                : auditView === 'discrepancies' ? timeAudit.discrepancies
+                : auditView === 'missing' ? timeAudit.missingRecords
+                : []; // late checkins come from discrepancies filtered
+
+              const fmtTime = (iso) => {
+                if (!iso) return '—';
+                const d = new Date(iso);
+                return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+              };
+              const fmtDuration = (hrs) => {
+                if (!hrs && hrs !== 0) return '—';
+                const h = Math.floor(hrs);
+                const m = Math.round((hrs - h) * 60);
+                return h > 0 ? `${h}h ${m}m` : `${m}m`;
+              };
+              const geoIcon = (geo) => {
+                if (!geo || (!geo.inLat && !geo.outLat)) return React.createElement('span', { style: { color: 'var(--text-muted)', fontSize: 11 } }, '—');
+                const hasIn = geo.inLat && geo.inLng;
+                const hasOut = geo.outLat && geo.outLng;
+                const distLabel = geo.distanceFt != null ? `${Math.round(geo.distanceFt)} ft` : '';
+                return React.createElement('span', {
+                  title: `Check-in: ${hasIn ? `${geo.inLat.toFixed(4)}, ${geo.inLng.toFixed(4)}` : 'none'}${distLabel ? ` (${distLabel} from address)` : ''}\nCheck-out: ${hasOut ? `${geo.outLat.toFixed(4)}, ${geo.outLng.toFixed(4)}` : 'none'}`,
+                  style: { cursor: 'help', fontSize: 13 },
+                }, hasIn && hasOut ? '📍✓' : hasIn ? '📍½' : '📍?');
+              };
+
+              if (rows.length === 0) {
+                return React.createElement('p', { style: { color: 'var(--text-muted)', fontSize: 13, textAlign: 'center', padding: '12px 0' } },
+                  auditView === 'late' ? 'Late check-in data is included in the Time Gaps view above.' : 'No records in this category.'
+                );
+              }
+
+              return React.createElement('div', { style: { overflowX: 'auto' } },
+                React.createElement('table', { style: { width: '100%', borderCollapse: 'collapse', fontSize: 12 } },
+                  React.createElement('thead', null,
+                    React.createElement('tr', { style: { borderBottom: '2px solid var(--border-color)', textAlign: 'left' } },
+                      React.createElement('th', { style: { padding: '8px 6px', fontWeight: 600, color: 'var(--text-secondary)' } }, 'Date'),
+                      React.createElement('th', { style: { padding: '8px 6px', fontWeight: 600, color: 'var(--text-secondary)' } }, 'Caregiver'),
+                      React.createElement('th', { style: { padding: '8px 6px', fontWeight: 600, color: 'var(--text-secondary)' } }, 'Family'),
+                      React.createElement('th', { style: { padding: '8px 6px', fontWeight: 600, color: 'var(--text-secondary)' } }, 'Scheduled'),
+                      auditView === 'discrepancies'
+                        ? React.createElement('th', { style: { padding: '8px 6px', fontWeight: 600, color: 'var(--text-secondary)' } }, 'Actual')
+                        : null,
+                      auditView === 'discrepancies'
+                        ? React.createElement('th', { style: { padding: '8px 6px', fontWeight: 600, color: 'var(--text-secondary)' } }, 'Delta')
+                        : null,
+                      React.createElement('th', { style: { padding: '8px 6px', fontWeight: 600, color: 'var(--text-secondary)', textAlign: 'center' } }, 'Confirmed'),
+                      React.createElement('th', { style: { padding: '8px 6px', fontWeight: 600, color: 'var(--text-secondary)', textAlign: 'center' } }, 'Geo'),
+                      auditView === 'missing'
+                        ? React.createElement('th', { style: { padding: '8px 6px', fontWeight: 600, color: 'var(--text-secondary)' } }, 'Missing')
+                        : null,
+                    )
+                  ),
+                  React.createElement('tbody', null,
+                    rows.map(r => {
+                      const expanded = auditExpanded === r.sessionId;
+                      return React.createElement(React.Fragment, { key: r.sessionId },
+                        React.createElement('tr', {
+                          onClick: () => setAuditExpanded(expanded ? null : r.sessionId),
+                          style: { borderBottom: '1px solid var(--border-color)', cursor: 'pointer', background: expanded ? 'var(--bg-surface)' : 'transparent' },
+                        },
+                          React.createElement('td', { style: { padding: '8px 6px', whiteSpace: 'nowrap' } }, r.scheduledDate),
+                          React.createElement('td', { style: { padding: '8px 6px', fontWeight: 500 } }, r.caregiver),
+                          React.createElement('td', { style: { padding: '8px 6px' } }, r.family),
+                          React.createElement('td', { style: { padding: '8px 6px' } }, fmtDuration(r.durationHours)),
+                          auditView === 'discrepancies'
+                            ? React.createElement('td', { style: { padding: '8px 6px', fontWeight: 600 } }, fmtDuration(r.actualHours))
+                            : null,
+                          auditView === 'discrepancies'
+                            ? React.createElement('td', { style: { padding: '8px 6px', fontWeight: 700, color: r.deltaMinutes > 0 ? '#c62828' : '#2e7d32' } },
+                                `${r.deltaMinutes > 0 ? '+' : ''}${r.deltaMinutes}m`)
+                            : null,
+                          React.createElement('td', { style: { padding: '8px 6px', textAlign: 'center' } },
+                            r.reviewCompleted ? '✅' : '⏳'),
+                          React.createElement('td', { style: { padding: '8px 6px', textAlign: 'center' } },
+                            r.geo ? geoIcon(r.geo) : '—'),
+                          auditView === 'missing'
+                            ? React.createElement('td', { style: { padding: '8px 6px', fontSize: 11, color: '#c62828' } },
+                                !r.hasVisitLog ? 'No visit log' : !r.hasCheckIn ? 'No check-in' : 'No check-out')
+                            : null,
+                        ),
+                        // Expanded detail row
+                        expanded && React.createElement('tr', { key: r.sessionId + '-detail' },
+                          React.createElement('td', { colSpan: 99, style: { padding: '10px 16px', background: 'var(--bg-surface)', fontSize: 12, lineHeight: 1.6 } },
+                            React.createElement('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 } },
+                              React.createElement('div', null,
+                                React.createElement('strong', null, 'Clock In: '), fmtTime(r.checkIn), React.createElement('br'),
+                                React.createElement('strong', null, 'Clock Out: '), fmtTime(r.checkOut), React.createElement('br'),
+                                React.createElement('strong', null, 'Service: '), r.serviceType,
+                              ),
+                              React.createElement('div', null,
+                                r.geo && r.geo.inLat ? React.createElement(React.Fragment, null,
+                                  React.createElement('strong', null, 'Check-in GPS: '),
+                                  React.createElement('a', {
+                                    href: `https://maps.google.com/?q=${r.geo.inLat},${r.geo.inLng}`,
+                                    target: '_blank', rel: 'noopener', style: { color: 'var(--role-color)' },
+                                  }, `${r.geo.inLat.toFixed(5)}, ${r.geo.inLng.toFixed(5)}`),
+                                  r.geo.distanceFt != null && React.createElement('span', { style: { color: 'var(--text-muted)', marginLeft: 6 } },
+                                    `(${Math.round(r.geo.distanceFt)} ft from address)`),
+                                  React.createElement('br'),
+                                ) : null,
+                                r.geo && r.geo.outLat ? React.createElement(React.Fragment, null,
+                                  React.createElement('strong', null, 'Check-out GPS: '),
+                                  React.createElement('a', {
+                                    href: `https://maps.google.com/?q=${r.geo.outLat},${r.geo.outLng}`,
+                                    target: '_blank', rel: 'noopener', style: { color: 'var(--role-color)' },
+                                  }, `${r.geo.outLat.toFixed(5)}, ${r.geo.outLng.toFixed(5)}`),
+                                  React.createElement('br'),
+                                ) : null,
+                                React.createElement('strong', null, 'Status: '), r.status,
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    }),
+                  ),
+                ),
+              );
+            })()}
+          </>
+        )}
+        {!timeAudit && React.createElement('p', { style: { color: 'var(--text-muted)', fontSize: 13 } }, 'Loading audit data...')}
       </div>
     </>
   );
