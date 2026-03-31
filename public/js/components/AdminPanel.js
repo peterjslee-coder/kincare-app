@@ -316,6 +316,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
   const [secLogFilter, setSecLogFilter] = useState({ severity: 'all', action: 'all' });
   const [secLogPage, setSecLogPage] = useState(0);
   const [secView, setSecView] = useState('dashboard'); // 'dashboard' or 'audit-log'
+  const [secInsights, setSecInsights] = useState(null);
   // Account approvals state
   const [pendingApprovals, setPendingApprovals] = useState([]);
   const [approvalLoading, setApprovalLoading] = useState(null);
@@ -865,8 +866,12 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
   const loadSecDashboard = async () => {
     setSecLoading(true);
     try {
-      const res = await apiFetch('/api/admin/security/dashboard');
-      if (res?.ok) setSecDashboard(await res.json());
+      const [dashRes, insightRes] = await Promise.all([
+        apiFetch('/api/admin/security/dashboard'),
+        apiFetch('/api/admin/security/insights'),
+      ]);
+      if (dashRes?.ok) setSecDashboard(await dashRes.json());
+      if (insightRes?.ok) setSecInsights(await insightRes.json());
     } catch (err) { console.error('Security dashboard error:', err); }
     setSecLoading(false);
   };
@@ -3423,6 +3428,60 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                       IP {t.ip}: {t.failedCount} failed login attempts since {new Date(t.since).toLocaleTimeString()}
                     </div>
                   ))}
+                </div>
+              )}
+
+              {/* AI Security Insights */}
+              {secInsights && (
+                <div style={{ marginBottom: 20, background: 'var(--bg-surface)', border: '1px solid #e0e0e0', borderRadius: 14, overflow: 'hidden' }}>
+                  {/* Header with health score */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 18px', borderBottom: '1px solid #f0f0f0', background: 'var(--bg-card)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <span style={{ fontSize: 16 }}>🤖</span>
+                      <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>AI Security Insights</span>
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                        {secInsights.generatedAt ? `Updated ${new Date(secInsights.generatedAt).toLocaleTimeString()}` : ''}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{
+                        width: 38, height: 38, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        border: `3px solid ${secInsights.health.color}`, fontWeight: 700, fontSize: 13, color: secInsights.health.color,
+                      }}>
+                        {secInsights.health.score}
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontWeight: 700, fontSize: 13, color: secInsights.health.color }}>{secInsights.health.label}</div>
+                        <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>Health Score</div>
+                      </div>
+                    </div>
+                  </div>
+                  {/* Insight cards */}
+                  <div style={{ padding: '10px 14px' }}>
+                    {secInsights.insights.length === 0 ? (
+                      <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)', fontSize: 13 }}>Not enough data yet for analysis. Insights will appear once the system collects more activity.</div>
+                    ) : secInsights.insights.map((ins, i) => {
+                      const typeStyles = {
+                        critical: { border: '#c62828', bg: '#ffebee', accent: '#c62828' },
+                        warning: { border: '#e65100', bg: '#fff3e0', accent: '#e65100' },
+                        info: { border: '#1565c0', bg: '#e3f2fd', accent: '#1565c0' },
+                        positive: { border: '#2e7d32', bg: '#e8f5e9', accent: '#2e7d32' },
+                      };
+                      const ts = typeStyles[ins.type] || typeStyles.info;
+                      return (
+                        <div key={i} style={{
+                          padding: '10px 14px', marginBottom: i < secInsights.insights.length - 1 ? 8 : 0,
+                          borderRadius: 10, background: ts.bg, borderLeft: `4px solid ${ts.border}`,
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                            <span style={{ fontSize: 14 }}>{ins.icon}</span>
+                            <span style={{ fontWeight: 700, fontSize: 13, color: ts.accent }}>{ins.title}</span>
+                          </div>
+                          <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>{ins.detail}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
 

@@ -1464,6 +1464,186 @@ router.get("/security/dashboard", requireAdmin, async (req, res) => {
   }
 });
 
+// ─── GET /api/admin/security/insights ─── AI-powered trend analysis
+router.get("/security/insights", requireAdmin, async (req, res) => {
+  try {
+    const db = await getDb();
+    const insights = [];
+
+    // ── 1. Compare last 24h vs prior 24h (volume trend) ──
+    const volNow = await db.prepare(`
+      SELECT COUNT(*) as cnt FROM audit_log WHERE created_at > NOW() - INTERVAL '24 hours'
+    `).get();
+    const volPrev = await db.prepare(`
+      SELECT COUNT(*) as cnt FROM audit_log
+      WHERE created_at BETWEEN NOW() - INTERVAL '48 hours' AND NOW() - INTERVAL '24 hours'
+    `).get();
+    const now24 = Number(volNow?.cnt || 0);
+    const prev24 = Number(volPrev?.cnt || 0);
+    if (prev24 > 0) {
+      const pctChange = Math.round(((now24 - prev24) / prev24) * 100);
+      if (Math.abs(pctChange) >= 15) {
+        insights.push({
+          type: pctChange > 0 ? 'warning' : 'positive',
+          icon: pctChange > 0 ? '📈' : '📉',
+          title: `Activity ${pctChange > 0 ? 'up' : 'down'} ${Math.abs(pctChange)}% vs yesterday`,
+          detail: `${now24.toLocaleString()} events in the last 24h compared to ${prev24.toLocaleString()} the prior day.${pctChange > 50 ? ' A spike this large could indicate automated scanning or a configuration change.' : ''}`,
+        });
+      }
+    } else if (now24 > 0) {
+      insights.push({ type: 'info', icon: '🆕', title: 'First day of security data', detail: `${now24} events recorded in the last 24h. Need at least 2 days of data for trend comparisons.` });
+    }
+
+    // ── 2. Failed login trend (7-day rolling) ──
+    const failedWeek = await db.prepare(`
+      SELECT DATE(created_at) as day, COUNT(*) as cnt
+      FROM audit_log
+      WHERE action = 'login_attempt' AND severity IN ('warn', 'critical')
+        AND created_at > NOW() - INTERVAL '7 days'
+      GROUP BY DATE(created_at) ORDER BY day
+    `).all();
+    const totalFailed7d = failedWeek.reduce((s, r) => s + Number(r.cnt), 0);
+    if (totalFailed7d > 0) {
+      const todayFailed = failedWeek.length > 0 ? Number(failedWeek[failedWeek.length - 1].cnt) : 0;
+      const avgFailed = Math.round(totalFailed7d / Math.max(failedWeek.length, 1));
+      if (todayFailed > avgFailed * 2 && todayFailed >= 5) {
+        insights.push({
+          type: 'critical',
+          icon: '🚨',
+          title: `Failed logins spike: ${todayFailed} today (avg ${avgFailed}/day)`,
+          detail: `Today's failed login count is ${Math.round(todayFailed / Math.max(avgFailed, 1))}x the 7-day average. This could indicate a brute force attempt or credential stuffing attack. Check the Failed Logins section for specific IPs.`,
+        });
+      } else if (totalFailed7d > 20) {
+        insights.push({
+          type: 'warning',
+          icon: '🔐',
+          title: `${totalFailed7d} failed logins this week`,
+          detail: `Averaging ${avgFailed} failed attempts per day over 7 days. ${totalFailed7d > 50 ? 'Consider reviewing whether rate limiting is sufficient.' : 'Within normal range for a public-facing app.'}`,
+        });
+      }
+    }
+
+    // ── 3. Unique IPs accessing the system ──
+    const ipsNow = await db.prepare(`
+      SELECT COUNT(DISTINCT ip_address) as cnt FROM audit_log WHERE created_at > NOW() - INTERVAL '24 hours'
+    `).get();
+    const ipsPrev = await db.prepare(`
+      SELECT COUNT(DISTINCT ip_address) as cnt FROM audit_log
+      WHERE created_at BETWEEN NOW() - INTERVAL '48 hours' AND NOW() - INTERVAL '24 hours'
+    `).get();
+    const ips24 = Number(ipsNow?.cnt || 0);
+    const ipsPrev24 = Number(ipsPrev?.cnt || 0);
+    if (ipsPrev24 > 0 && ips24 > ipsPrev24 * 2 && ips24 >= 5) {
+      insights.push({
+        type: 'warning',
+        icon: '🌐',
+        title: `New IP surge: ${ips24} unique IPs (was ${ipsPrev24})`,
+        detail: `Unique IP addresses doubled vs yesterday. Could be organic growth or automated scanning from distributed sources.`,
+      });
+    }
+
+    // ── 4. Off-hours admin activity ──
+    const offHoursAdmin = await db.prepare(`
+      SELECT user_email, COUNT(*) as cnt, MIN(created_at) as earliest, MAX(created_at) as latest
+      FROM audit_log
+      WHERE action = 'admin_access'
+        AND created_at > NOW() - INTERVAL '24 hours'
+        AND (EXTRACT(HOUR FROM created_at) < 6 OR EXTRACT(HOUR FROM created_at) > 22)
+      GROUP BY user_email
+    `).all();
+    if (offHoursAdmin.length > 0) {
+      const names = offHoursAdmin.map(a => a.user_email.split('@')[0]).join(', ');
+      insights.push({
+        type: 'info',
+        icon: '🌙',
+        title: `Off-hours admin activity detected`,
+        detail: `${names} accessed admin panel between 10PM–6AM. ${offHoursAdmin.length > 1 ? 'Multiple admin accounts active outside business hours may warrant review.' : 'Single admin session — likely routine maintenance.'}`,
+      });
+    }
+
+    // ── 5. Critical/error event trend ──
+    const critWeek = await db.prepare(`
+      SELECT DATE(created_at) as day, COUNT(*) as cnt
+      FROM audit_log
+      WHERE severity IN ('critical', 'error') AND created_at > NOW() - INTERVAL '7 days'
+      GROUP BY DATE(created_at) ORDER BY day
+    `).all();
+    const totalCrit7d = critWeek.reduce((s, r) => s + Number(r.cnt), 0);
+    if (totalCrit7d === 0) {
+      insights.push({ type: 'positive', icon: '✅', title: 'Clean week: zero critical/error events', detail: 'No critical or error severity events in the past 7 days. System is running cleanly.' });
+    } else {
+      const todayCrit = critWeek.length > 0 ? Number(critWeek[critWeek.length - 1].cnt) : 0;
+      const avgCrit = Math.round(totalCrit7d / Math.max(critWeek.length, 1));
+      if (todayCrit > avgCrit * 2 && todayCrit >= 3) {
+        insights.push({
+          type: 'critical',
+          icon: '🔴',
+          title: `Critical events spiking: ${todayCrit} today (avg ${avgCrit}/day)`,
+          detail: `Today's critical+error events are well above the 7-day average. Check the Critical Events section below for specifics.`,
+        });
+      } else if (totalCrit7d <= 5) {
+        insights.push({ type: 'positive', icon: '🟢', title: `Only ${totalCrit7d} critical/error events this week`, detail: 'Low error rate. System health looks good.' });
+      }
+    }
+
+    // ── 6. Most active endpoints (anomaly detection) ──
+    const hotEndpoints = await db.prepare(`
+      SELECT endpoint, COUNT(*) as cnt, COUNT(DISTINCT ip_address) as ips
+      FROM audit_log
+      WHERE created_at > NOW() - INTERVAL '24 hours' AND endpoint IS NOT NULL
+      GROUP BY endpoint ORDER BY cnt DESC LIMIT 5
+    `).all();
+    const endpointTotal = hotEndpoints.reduce((s, r) => s + Number(r.cnt), 0);
+    if (hotEndpoints.length > 0 && endpointTotal > 0) {
+      const top = hotEndpoints[0];
+      const topPct = Math.round((Number(top.cnt) / endpointTotal) * 100);
+      if (topPct > 60 && Number(top.cnt) > 20) {
+        insights.push({
+          type: 'info',
+          icon: '🎯',
+          title: `${top.endpoint} is ${topPct}% of all traffic`,
+          detail: `One endpoint dominates traffic (${top.cnt} hits from ${top.ips} IPs). ${Number(top.ips) === 1 ? 'All from a single IP — could be automated.' : 'Multiple IPs — likely normal usage pattern.'}`,
+        });
+      }
+    }
+
+    // ── 7. Repeat offender IPs ──
+    const repeatIPs = await db.prepare(`
+      SELECT ip_address, COUNT(*) as fail_count
+      FROM audit_log
+      WHERE action = 'login_attempt' AND severity IN ('warn', 'critical')
+        AND created_at > NOW() - INTERVAL '7 days'
+      GROUP BY ip_address HAVING COUNT(*) >= 10
+      ORDER BY fail_count DESC LIMIT 5
+    `).all();
+    if (repeatIPs.length > 0) {
+      const ipList = repeatIPs.map(r => `${r.ip_address} (${r.fail_count}x)`).join(', ');
+      insights.push({
+        type: 'warning',
+        icon: '🏴',
+        title: `${repeatIPs.length} repeat-offender IP${repeatIPs.length > 1 ? 's' : ''} this week`,
+        detail: `IPs with 10+ failed logins in 7 days: ${ipList}. Consider blocking these at the firewall level.`,
+      });
+    }
+
+    // ── 8. Overall health score ──
+    const critCount = insights.filter(i => i.type === 'critical').length;
+    const warnCount = insights.filter(i => i.type === 'warning').length;
+    const posCount = insights.filter(i => i.type === 'positive').length;
+    let healthScore, healthLabel, healthColor;
+    if (critCount > 0) { healthScore = Math.max(20, 50 - critCount * 15 - warnCount * 5); healthLabel = 'Needs Attention'; healthColor = '#c62828'; }
+    else if (warnCount > 2) { healthScore = 65 - warnCount * 3; healthLabel = 'Fair'; healthColor = '#e65100'; }
+    else if (warnCount > 0) { healthScore = 80 - warnCount * 5; healthLabel = 'Good'; healthColor = '#2e7d32'; }
+    else { healthScore = 90 + posCount * 2; healthLabel = 'Excellent'; healthColor = '#1b6b5a'; }
+    healthScore = Math.min(100, Math.max(0, healthScore));
+
+    res.json({ insights, health: { score: healthScore, label: healthLabel, color: healthColor }, generatedAt: new Date().toISOString() });
+  } catch (err) {
+    console.error("Security insights error:", err);
+    res.status(500).json({ error: "Failed to generate security insights" });
+  }
+});
+
 // ─── GET /api/admin/blocked-emails ─── List all blocked emails
 router.get("/blocked-emails", authenticate, checkAdmin, requireAdmin, async (req, res) => {
   try {
