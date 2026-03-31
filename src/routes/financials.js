@@ -364,7 +364,7 @@ router.get("/transactions", async (req, res) => {
         cs.status AS session_status, cs.completed_at, cs.review_completed, cs.late_check_in,
         cs.special_instructions,
         vl.check_in_time, vl.check_out_time,
-        vl.check_in_lat, vl.check_in_lng, vl.check_out_lat, vl.check_out_lng,
+        vl.check_in_latitude, vl.check_in_longitude, vl.check_out_lat, vl.check_out_lng,
         cr.first_name AS cr_first_name, cr.last_name AS cr_last_name
       FROM payments p
       LEFT JOIN users fu ON p.family_user_id = fu.id
@@ -405,8 +405,8 @@ router.get("/transactions", async (req, res) => {
         lateCheckIn: !!t.late_check_in,
         checkIn: t.check_in_time,
         checkOut: t.check_out_time,
-        geo: (t.check_in_lat || t.check_out_lat) ? {
-          inLat: t.check_in_lat, inLng: t.check_in_lng,
+        geo: (t.check_in_latitude || t.check_out_lat) ? {
+          inLat: t.check_in_latitude, inLng: t.check_in_longitude,
           outLat: t.check_out_lat, outLng: t.check_out_lng,
         } : null,
         amount: t.amount,
@@ -793,7 +793,7 @@ router.get("/time-audit", async (req, res) => {
       SELECT cs.id, cs.scheduled_date, cs.scheduled_time, cs.duration_hours, cs.service_type,
         cs.status, cs.completed_at, cs.review_completed,
         vl.check_in_time, vl.check_out_time,
-        vl.check_in_lat, vl.check_in_lng, vl.check_out_lat, vl.check_out_lng,
+        vl.check_in_latitude, vl.check_in_longitude, vl.check_out_lat, vl.check_out_lng,
         vl.check_in_distance_ft,
         u_fam.first_name AS family_first, u_fam.last_name AS family_last,
         u_cg.first_name AS cg_first, u_cg.last_name AS cg_last,
@@ -817,7 +817,7 @@ router.get("/time-audit", async (req, res) => {
       SELECT cs.id, cs.scheduled_date, cs.scheduled_time, cs.duration_hours, cs.service_type,
         cs.status, cs.completed_at, cs.review_completed, cs.late_check_in,
         vl.check_in_time, vl.check_out_time,
-        vl.check_in_lat, vl.check_in_lng, vl.check_out_lat, vl.check_out_lng,
+        vl.check_in_latitude, vl.check_in_longitude, vl.check_out_lat, vl.check_out_lng,
         vl.check_in_distance_ft,
         u_fam.first_name AS family_first, u_fam.last_name AS family_last,
         u_cg.first_name AS cg_first, u_cg.last_name AS cg_last,
@@ -903,7 +903,7 @@ router.get("/time-audit", async (req, res) => {
         durationHours: r.duration_hours, serviceType: r.service_type, status: r.status,
         completedAt: r.completed_at, reviewCompleted: !!r.review_completed,
         checkIn: r.check_in_time, checkOut: r.check_out_time,
-        geo: { inLat: r.check_in_lat, inLng: r.check_in_lng, outLat: r.check_out_lat, outLng: r.check_out_lng, distanceFt: r.check_in_distance_ft },
+        geo: { inLat: r.check_in_latitude, inLng: r.check_in_longitude, outLat: r.check_out_lat, outLng: r.check_out_lng, distanceFt: r.check_in_distance_ft },
         family: `${r.family_first} ${r.family_last}`, caregiver: r.cg_first ? `${r.cg_first} ${r.cg_last}` : '—',
       })),
       discrepancies: discrepancies.map(r => ({
@@ -912,7 +912,7 @@ router.get("/time-audit", async (req, res) => {
         serviceType: r.service_type, status: r.status, completedAt: r.completed_at,
         reviewCompleted: !!r.review_completed, lateCheckIn: !!r.late_check_in,
         checkIn: r.check_in_time, checkOut: r.check_out_time,
-        geo: { inLat: r.check_in_lat, inLng: r.check_in_lng, outLat: r.check_out_lat, outLng: r.check_out_lng, distanceFt: r.check_in_distance_ft },
+        geo: { inLat: r.check_in_latitude, inLng: r.check_in_longitude, outLat: r.check_out_lat, outLng: r.check_out_lng, distanceFt: r.check_in_distance_ft },
         family: `${r.family_first} ${r.family_last}`, caregiver: r.cg_first ? `${r.cg_first} ${r.cg_last}` : '—',
         deltaMinutes: Math.round((parseFloat(r.actual_hours) - r.duration_hours) * 60),
       })),

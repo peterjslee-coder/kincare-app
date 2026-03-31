@@ -39732,6 +39732,7 @@ const CaretakerHub = window.CaretakerHub = ({
   const [earlyDepartureAcked, setEarlyDepartureAcked] = useState(false);
   const [checkInLocation, setCheckInLocation] = useState(null);
   const [locationError, setLocationError] = useState(null);
+  const [checkOutLocation, setCheckOutLocation] = useState(null);
   // Live countdown tick state — interval set up later after sessions are derived
   const [countdownTick, setCountdownTick] = useState(0);
 
@@ -44256,6 +44257,18 @@ const CaretakerHub = window.CaretakerHub = ({
         });
         setEarlyDepartureReason('');
         setEarlyDepartureAcked(false);
+        setCheckOutLocation(null);
+        // Capture GPS at check-out
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(pos => setCheckOutLocation({
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+            accuracy: pos.coords.accuracy
+          }), () => {}, {
+            timeout: 8000,
+            enableHighAccuracy: false
+          });
+        }
         setCheckOutSession(s);
       } else {
         setVisitLogSession(s);
@@ -45638,7 +45651,9 @@ const CaretakerHub = window.CaretakerHub = ({
         careFeedback: checkOutCareFeedback.trim() || null,
         serviceFeedback: checkOutServiceFeedback.trim() || null,
         summary: checkOutSummary.trim() || null,
-        earlyDepartureReason: earlyDepartureReason.trim() || null
+        earlyDepartureReason: earlyDepartureReason.trim() || null,
+        checkOutLatitude: (checkOutLocation === null || checkOutLocation === void 0 ? void 0 : checkOutLocation.lat) || null,
+        checkOutLongitude: (checkOutLocation === null || checkOutLocation === void 0 ? void 0 : checkOutLocation.lng) || null
       };
       try {
         // Add 30-second timeout to prevent infinite hang

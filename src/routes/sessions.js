@@ -1411,7 +1411,7 @@ router.post("/:id/check-in", async (req, res) => {
 router.post("/:id/check-out", async (req, res) => {
   try {
     const db = await getDb();
-    const { departureMood, conditionTags, careFeedback, serviceFeedback, summary, earlyDepartureReason, offlineTimestamp, offlineSync } = req.body;
+    const { departureMood, conditionTags, careFeedback, serviceFeedback, summary, earlyDepartureReason, checkOutLatitude, checkOutLongitude, offlineTimestamp, offlineSync } = req.body;
 
     const session = await db.prepare(`
       SELECT cs.*, cp.user_id AS caregiver_user_id,
@@ -1519,7 +1519,9 @@ router.post("/:id/check-out", async (req, res) => {
           summary = ?,
           mood_rating = ?,
           early_departure_reason = ?,
-          early_departure_minutes = ?
+          early_departure_minutes = ?,
+          check_out_lat = ?,
+          check_out_lng = ?
         WHERE id = ?
       `).run(
         departureMood ? (Array.isArray(departureMood) ? JSON.stringify(departureMood) : departureMood) : null,
@@ -1530,6 +1532,8 @@ router.post("/:id/check-out", async (req, res) => {
         departureMood ? (Array.isArray(departureMood) ? JSON.stringify(departureMood) : departureMood) : null,
         earlyMinutes > 15 ? (earlyDepartureReason || null) : null,
         earlyMinutes > 15 ? Math.round(earlyMinutes) : null,
+        checkOutLatitude || null,
+        checkOutLongitude || null,
         visitLog.id
       );
     }
