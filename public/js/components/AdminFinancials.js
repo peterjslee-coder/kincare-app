@@ -13,6 +13,7 @@ const AdminFinancials = window.AdminFinancials = () => {
   const [showAllInsights, setShowAllInsights] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [expandedTx, setExpandedTx] = useState(null); // expanded transaction ID
   // Time Record Audit
   const [timeAudit, setTimeAudit] = useState(null);
   const [timeAuditLoading, setTimeAuditLoading] = useState(false);
@@ -807,23 +808,68 @@ const AdminFinancials = window.AdminFinancials = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredTx.map(t => (
-                    <tr key={t.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
-                      <td style={{ padding: '8px 6px', whiteSpace: 'nowrap', color: 'var(--text-secondary)' }}>{(parseTimestamp(t.date) || new Date()).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</td>
-                      <td style={{ padding: '8px 6px', fontWeight: 500 }}>{t.familyName || '—'}</td>
-                      <td style={{ padding: '8px 6px' }}>{t.caregiverName || '—'}</td>
-                      <td style={{ padding: '8px 6px', color: 'var(--text-secondary)' }}>{serviceLabels[t.serviceType] || t.serviceType}</td>
-                      <td style={{ padding: '8px 6px', textAlign: 'right', fontWeight: 600 }}>{fmt(t.amount)}</td>
-                      <td style={{ padding: '8px 6px', textAlign: 'right', color: 'var(--role-color)' }}>{fmt(t.platformFee)}</td>
-                      <td style={{ padding: '8px 6px', textAlign: 'right', color: 'var(--text-secondary)' }}>{fmt(t.caregiverPayout)}</td>
-                      <td style={{ padding: '8px 6px', textAlign: 'right' }}>
-                        <span style={{ fontSize: 11, padding: '2px 6px', borderRadius: 8, background: t.payoutSpeed === 'instant' ? 'var(--color-warning-bg)' : 'var(--bg-primary)', color: t.payoutSpeed === 'instant' ? 'var(--color-warning)' : 'var(--text-tertiary)' }}>
-                          {t.payoutSpeed === 'instant' ? '⚡ Instant' : 'Standard'}
-                        </span>
-                      </td>
-                      <td style={{ padding: '8px 6px', textAlign: 'right' }}><StatusBadge status={t.status} /></td>
-                    </tr>
-                  ))}
+                  {filteredTx.map(t => {
+                    const isExpanded = expandedTx === t.id;
+                    const fmtTs = (iso) => { if (!iso) return '—'; const d = new Date(iso); return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); };
+                    return (
+                      <React.Fragment key={t.id}>
+                        <tr onClick={() => setExpandedTx(isExpanded ? null : t.id)} style={{ borderBottom: '1px solid #f0f0f0', cursor: 'pointer', background: isExpanded ? 'var(--bg-surface)' : 'transparent', transition: 'background 0.1s' }}
+                          onMouseEnter={e => { if (!isExpanded) e.currentTarget.style.background = 'var(--bg-surface)'; }}
+                          onMouseLeave={e => { if (!isExpanded) e.currentTarget.style.background = 'transparent'; }}>
+                          <td style={{ padding: '8px 6px', whiteSpace: 'nowrap', color: 'var(--text-secondary)' }}>{(parseTimestamp(t.date) || new Date()).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</td>
+                          <td style={{ padding: '8px 6px', fontWeight: 500 }}>{t.familyName || '—'}</td>
+                          <td style={{ padding: '8px 6px' }}>{t.caregiverName || '—'}</td>
+                          <td style={{ padding: '8px 6px', color: 'var(--text-secondary)' }}>{serviceLabels[t.serviceType] || t.serviceType}</td>
+                          <td style={{ padding: '8px 6px', textAlign: 'right', fontWeight: 600 }}>{fmt(t.amount)}</td>
+                          <td style={{ padding: '8px 6px', textAlign: 'right', color: 'var(--role-color)' }}>{fmt(t.platformFee)}</td>
+                          <td style={{ padding: '8px 6px', textAlign: 'right', color: 'var(--text-secondary)' }}>{fmt(t.caregiverPayout)}</td>
+                          <td style={{ padding: '8px 6px', textAlign: 'right' }}>
+                            <span style={{ fontSize: 11, padding: '2px 6px', borderRadius: 8, background: t.payoutSpeed === 'instant' ? 'var(--color-warning-bg)' : 'var(--bg-primary)', color: t.payoutSpeed === 'instant' ? 'var(--color-warning)' : 'var(--text-tertiary)' }}>
+                              {t.payoutSpeed === 'instant' ? '⚡ Instant' : 'Standard'}
+                            </span>
+                          </td>
+                          <td style={{ padding: '8px 6px', textAlign: 'right' }}><StatusBadge status={t.status} /></td>
+                        </tr>
+                        {isExpanded && (
+                          <tr>
+                            <td colSpan={9} style={{ padding: '12px 16px', background: 'var(--bg-surface)', borderBottom: '2px solid var(--border-color)' }}>
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, fontSize: 12, lineHeight: 1.7 }}>
+                                <div>
+                                  <div style={{ fontWeight: 700, fontSize: 11, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 4, letterSpacing: 0.4 }}>Session</div>
+                                  <div><strong>Scheduled:</strong> {t.scheduledDate} {t.scheduledTime || ''}</div>
+                                  <div><strong>Duration:</strong> {t.durationHours ? `${t.durationHours}h` : '—'}</div>
+                                  <div><strong>Session Status:</strong> {t.sessionStatus || '—'}</div>
+                                  {t.careRecipient && <div><strong>Care Recipient:</strong> {t.careRecipient}</div>}
+                                  {t.lateCheckIn && <div style={{ color: '#c62828' }}>Late check-in</div>}
+                                </div>
+                                <div>
+                                  <div style={{ fontWeight: 700, fontSize: 11, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 4, letterSpacing: 0.4 }}>Time Records</div>
+                                  <div><strong>Clock In:</strong> {fmtTs(t.checkIn)}</div>
+                                  <div><strong>Clock Out:</strong> {fmtTs(t.checkOut)}</div>
+                                  <div><strong>Confirmed:</strong> {t.reviewCompleted ? '✅ Family reviewed' : '⏳ Pending'}</div>
+                                  {t.tipCents > 0 && <div><strong>Tip:</strong> ${(t.tipCents / 100).toFixed(2)}</div>}
+                                  {t.autoCharged && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Auto-charged</div>}
+                                </div>
+                                <div>
+                                  <div style={{ fontWeight: 700, fontSize: 11, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 4, letterSpacing: 0.4 }}>Geotag</div>
+                                  {t.geo ? (
+                                    <>
+                                      {t.geo.inLat && <div><strong>Check-in:</strong> <a href={`https://maps.google.com/?q=${t.geo.inLat},${t.geo.inLng}`} target="_blank" rel="noopener" style={{ color: 'var(--role-color)' }}>{t.geo.inLat.toFixed(5)}, {t.geo.inLng.toFixed(5)}</a></div>}
+                                      {t.geo.outLat && <div><strong>Check-out:</strong> <a href={`https://maps.google.com/?q=${t.geo.outLat},${t.geo.outLng}`} target="_blank" rel="noopener" style={{ color: 'var(--role-color)' }}>{t.geo.outLat.toFixed(5)}, {t.geo.outLng.toFixed(5)}</a></div>}
+                                    </>
+                                  ) : <div style={{ color: 'var(--text-muted)' }}>No GPS data</div>}
+                                  <div style={{ marginTop: 6 }}>
+                                    <strong>Family:</strong> {t.familyEmail || '—'}<br />
+                                    <strong>Caregiver:</strong> {t.caregiverEmail || '—'}
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

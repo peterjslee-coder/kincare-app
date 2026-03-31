@@ -285,14 +285,21 @@ router.get("/transactions", async (req, res) => {
     // For simplicity, fetch all then filter (transaction volumes are low for admin)
     const allTransactions = await db.prepare(`
       SELECT p.*,
-        fu.first_name AS family_first_name, fu.last_name AS family_last_name,
-        cu.first_name AS caregiver_first_name, cu.last_name AS caregiver_last_name,
-        cs.service_type, cs.scheduled_date
+        fu.first_name AS family_first_name, fu.last_name AS family_last_name, fu.email AS family_email,
+        cu.first_name AS caregiver_first_name, cu.last_name AS caregiver_last_name, cu.email AS caregiver_email,
+        cs.service_type, cs.scheduled_date, cs.scheduled_time, cs.duration_hours,
+        cs.status AS session_status, cs.completed_at, cs.review_completed, cs.late_check_in,
+        cs.special_instructions,
+        vl.check_in_time, vl.check_out_time,
+        vl.check_in_lat, vl.check_in_lng, vl.check_out_lat, vl.check_out_lng,
+        cr.first_name AS cr_first_name, cr.last_name AS cr_last_name
       FROM payments p
       LEFT JOIN users fu ON p.family_user_id = fu.id
       LEFT JOIN caregiver_profiles cp ON p.caregiver_id = cp.id
       LEFT JOIN users cu ON cp.user_id = cu.id
       LEFT JOIN care_sessions cs ON p.session_id = cs.id
+      LEFT JOIN visit_logs vl ON vl.session_id = cs.id
+      LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
       ORDER BY p.created_at DESC
     `).all();
 
@@ -308,17 +315,35 @@ router.get("/transactions", async (req, res) => {
     res.json({
       transactions: paged.map(t => ({
         id: t.id,
+        sessionId: t.session_id,
         date: t.created_at,
         familyName: `${t.family_first_name || ''} ${t.family_last_name || ''}`.trim(),
+        familyEmail: t.family_email,
         caregiverName: `${t.caregiver_first_name || ''} ${t.caregiver_last_name || ''}`.trim(),
+        caregiverEmail: t.caregiver_email,
+        careRecipient: t.cr_first_name ? `${t.cr_first_name} ${t.cr_last_name || ''}`.trim() : null,
         serviceType: t.service_type || 'N/A',
         scheduledDate: t.scheduled_date,
+        scheduledTime: t.scheduled_time,
+        durationHours: t.duration_hours,
+        sessionStatus: t.session_status,
+        completedAt: t.completed_at,
+        reviewCompleted: !!t.review_completed,
+        lateCheckIn: !!t.late_check_in,
+        checkIn: t.check_in_time,
+        checkOut: t.check_out_time,
+        geo: (t.check_in_lat || t.check_out_lat) ? {
+          inLat: t.check_in_lat, inLng: t.check_in_lng,
+          outLat: t.check_out_lat, outLng: t.check_out_lng,
+        } : null,
         amount: t.amount,
         platformFee: t.platform_fee,
         caregiverPayout: t.caregiver_payout,
         payoutSpeed: t.payout_speed || 'standard',
         status: t.status,
         stripeCheckoutId: t.stripe_checkout_id,
+        tipCents: t.tip_cents || 0,
+        autoCharged: !!t.auto_charged,
       })),
       total,
       page,

@@ -54671,6 +54671,7 @@ const AdminFinancials = window.AdminFinancials = () => {
   const [showAllInsights, setShowAllInsights] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [expandedTx, setExpandedTx] = useState(null); // expanded transaction ID
   // Time Record Audit
   const [timeAudit, setTimeAudit] = useState(null);
   const [timeAuditLoading, setTimeAuditLoading] = useState(false);
@@ -56284,73 +56285,170 @@ const AdminFinancials = window.AdminFinancials = () => {
       fontWeight: 600,
       whiteSpace: 'nowrap'
     }
-  }, h)))), /*#__PURE__*/React.createElement("tbody", null, filteredTx.map(t => /*#__PURE__*/React.createElement("tr", {
-    key: t.id,
-    style: {
-      borderBottom: '1px solid #f0f0f0'
-    }
-  }, /*#__PURE__*/React.createElement("td", {
-    style: {
-      padding: '8px 6px',
-      whiteSpace: 'nowrap',
-      color: 'var(--text-secondary)'
-    }
-  }, (parseTimestamp(t.date) || new Date()).toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric'
-  })), /*#__PURE__*/React.createElement("td", {
-    style: {
-      padding: '8px 6px',
-      fontWeight: 500
-    }
-  }, t.familyName || '—'), /*#__PURE__*/React.createElement("td", {
-    style: {
-      padding: '8px 6px'
-    }
-  }, t.caregiverName || '—'), /*#__PURE__*/React.createElement("td", {
-    style: {
-      padding: '8px 6px',
-      color: 'var(--text-secondary)'
-    }
-  }, serviceLabels[t.serviceType] || t.serviceType), /*#__PURE__*/React.createElement("td", {
-    style: {
-      padding: '8px 6px',
-      textAlign: 'right',
-      fontWeight: 600
-    }
-  }, fmt(t.amount)), /*#__PURE__*/React.createElement("td", {
-    style: {
-      padding: '8px 6px',
-      textAlign: 'right',
-      color: 'var(--role-color)'
-    }
-  }, fmt(t.platformFee)), /*#__PURE__*/React.createElement("td", {
-    style: {
-      padding: '8px 6px',
-      textAlign: 'right',
-      color: 'var(--text-secondary)'
-    }
-  }, fmt(t.caregiverPayout)), /*#__PURE__*/React.createElement("td", {
-    style: {
-      padding: '8px 6px',
-      textAlign: 'right'
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 11,
-      padding: '2px 6px',
-      borderRadius: 8,
-      background: t.payoutSpeed === 'instant' ? 'var(--color-warning-bg)' : 'var(--bg-primary)',
-      color: t.payoutSpeed === 'instant' ? 'var(--color-warning)' : 'var(--text-tertiary)'
-    }
-  }, t.payoutSpeed === 'instant' ? '⚡ Instant' : 'Standard')), /*#__PURE__*/React.createElement("td", {
-    style: {
-      padding: '8px 6px',
-      textAlign: 'right'
-    }
-  }, /*#__PURE__*/React.createElement(StatusBadge, {
-    status: t.status
-  }))))))), transactions.totalPages > 1 && /*#__PURE__*/React.createElement("div", {
+  }, h)))), /*#__PURE__*/React.createElement("tbody", null, filteredTx.map(t => {
+    const isExpanded = expandedTx === t.id;
+    const fmtTs = iso => {
+      if (!iso) return '—';
+      const d = new Date(iso);
+      return d.toLocaleString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit'
+      });
+    };
+    return /*#__PURE__*/React.createElement(React.Fragment, {
+      key: t.id
+    }, /*#__PURE__*/React.createElement("tr", {
+      onClick: () => setExpandedTx(isExpanded ? null : t.id),
+      style: {
+        borderBottom: '1px solid #f0f0f0',
+        cursor: 'pointer',
+        background: isExpanded ? 'var(--bg-surface)' : 'transparent',
+        transition: 'background 0.1s'
+      },
+      onMouseEnter: e => {
+        if (!isExpanded) e.currentTarget.style.background = 'var(--bg-surface)';
+      },
+      onMouseLeave: e => {
+        if (!isExpanded) e.currentTarget.style.background = 'transparent';
+      }
+    }, /*#__PURE__*/React.createElement("td", {
+      style: {
+        padding: '8px 6px',
+        whiteSpace: 'nowrap',
+        color: 'var(--text-secondary)'
+      }
+    }, (parseTimestamp(t.date) || new Date()).toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric'
+    })), /*#__PURE__*/React.createElement("td", {
+      style: {
+        padding: '8px 6px',
+        fontWeight: 500
+      }
+    }, t.familyName || '—'), /*#__PURE__*/React.createElement("td", {
+      style: {
+        padding: '8px 6px'
+      }
+    }, t.caregiverName || '—'), /*#__PURE__*/React.createElement("td", {
+      style: {
+        padding: '8px 6px',
+        color: 'var(--text-secondary)'
+      }
+    }, serviceLabels[t.serviceType] || t.serviceType), /*#__PURE__*/React.createElement("td", {
+      style: {
+        padding: '8px 6px',
+        textAlign: 'right',
+        fontWeight: 600
+      }
+    }, fmt(t.amount)), /*#__PURE__*/React.createElement("td", {
+      style: {
+        padding: '8px 6px',
+        textAlign: 'right',
+        color: 'var(--role-color)'
+      }
+    }, fmt(t.platformFee)), /*#__PURE__*/React.createElement("td", {
+      style: {
+        padding: '8px 6px',
+        textAlign: 'right',
+        color: 'var(--text-secondary)'
+      }
+    }, fmt(t.caregiverPayout)), /*#__PURE__*/React.createElement("td", {
+      style: {
+        padding: '8px 6px',
+        textAlign: 'right'
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 11,
+        padding: '2px 6px',
+        borderRadius: 8,
+        background: t.payoutSpeed === 'instant' ? 'var(--color-warning-bg)' : 'var(--bg-primary)',
+        color: t.payoutSpeed === 'instant' ? 'var(--color-warning)' : 'var(--text-tertiary)'
+      }
+    }, t.payoutSpeed === 'instant' ? '⚡ Instant' : 'Standard')), /*#__PURE__*/React.createElement("td", {
+      style: {
+        padding: '8px 6px',
+        textAlign: 'right'
+      }
+    }, /*#__PURE__*/React.createElement(StatusBadge, {
+      status: t.status
+    }))), isExpanded && /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("td", {
+      colSpan: 9,
+      style: {
+        padding: '12px 16px',
+        background: 'var(--bg-surface)',
+        borderBottom: '2px solid var(--border-color)'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'grid',
+        gridTemplateColumns: '1fr 1fr 1fr',
+        gap: 16,
+        fontSize: 12,
+        lineHeight: 1.7
+      }
+    }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontWeight: 700,
+        fontSize: 11,
+        textTransform: 'uppercase',
+        color: 'var(--text-muted)',
+        marginBottom: 4,
+        letterSpacing: 0.4
+      }
+    }, "Session"), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, "Scheduled:"), " ", t.scheduledDate, " ", t.scheduledTime || ''), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, "Duration:"), " ", t.durationHours ? `${t.durationHours}h` : '—'), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, "Session Status:"), " ", t.sessionStatus || '—'), t.careRecipient && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, "Care Recipient:"), " ", t.careRecipient), t.lateCheckIn && /*#__PURE__*/React.createElement("div", {
+      style: {
+        color: '#c62828'
+      }
+    }, "Late check-in")), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontWeight: 700,
+        fontSize: 11,
+        textTransform: 'uppercase',
+        color: 'var(--text-muted)',
+        marginBottom: 4,
+        letterSpacing: 0.4
+      }
+    }, "Time Records"), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, "Clock In:"), " ", fmtTs(t.checkIn)), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, "Clock Out:"), " ", fmtTs(t.checkOut)), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, "Confirmed:"), " ", t.reviewCompleted ? '✅ Family reviewed' : '⏳ Pending'), t.tipCents > 0 && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, "Tip:"), " $", (t.tipCents / 100).toFixed(2)), t.autoCharged && /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 11,
+        color: 'var(--text-muted)'
+      }
+    }, "Auto-charged")), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontWeight: 700,
+        fontSize: 11,
+        textTransform: 'uppercase',
+        color: 'var(--text-muted)',
+        marginBottom: 4,
+        letterSpacing: 0.4
+      }
+    }, "Geotag"), t.geo ? /*#__PURE__*/React.createElement(React.Fragment, null, t.geo.inLat && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, "Check-in:"), " ", /*#__PURE__*/React.createElement("a", {
+      href: `https://maps.google.com/?q=${t.geo.inLat},${t.geo.inLng}`,
+      target: "_blank",
+      rel: "noopener",
+      style: {
+        color: 'var(--role-color)'
+      }
+    }, t.geo.inLat.toFixed(5), ", ", t.geo.inLng.toFixed(5))), t.geo.outLat && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, "Check-out:"), " ", /*#__PURE__*/React.createElement("a", {
+      href: `https://maps.google.com/?q=${t.geo.outLat},${t.geo.outLng}`,
+      target: "_blank",
+      rel: "noopener",
+      style: {
+        color: 'var(--role-color)'
+      }
+    }, t.geo.outLat.toFixed(5), ", ", t.geo.outLng.toFixed(5)))) : /*#__PURE__*/React.createElement("div", {
+      style: {
+        color: 'var(--text-muted)'
+      }
+    }, "No GPS data"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginTop: 6
+      }
+    }, /*#__PURE__*/React.createElement("strong", null, "Family:"), " ", t.familyEmail || '—', /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("strong", null, "Caregiver:"), " ", t.caregiverEmail || '—'))))));
+  })))), transactions.totalPages > 1 && /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       justifyContent: 'center',
@@ -61280,98 +61378,7 @@ const AdminPanel = window.AdminPanel = ({
         setActiveTab('feedback');
       }
     });
-    return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
-        gap: 10,
-        marginBottom: 16
-      }
-    }, [{
-      label: 'Active Users',
-      value: stats.totalUsers,
-      icon: '👥',
-      change: null,
-      onClick: () => setActiveTab('people')
-    }, {
-      label: 'Visits / Week',
-      value: stats.visitsThisWeek || 0,
-      icon: '📋',
-      change: null,
-      onClick: () => setActiveTab('sessions')
-    }, {
-      label: 'Open Tickets',
-      value: stats.openTickets || 0,
-      icon: '🎫',
-      color: (stats.openTickets || 0) > 0 ? '#e8724a' : null,
-      onClick: () => setActiveTab('tickets')
-    }, {
-      label: 'Revenue MTD',
-      value: `$${(stats.revenueMtd || 0).toLocaleString()}`,
-      icon: '💰',
-      onClick: () => setActiveTab('financials')
-    }, {
-      label: 'Safety Flags',
-      value: stats.safetyFlags || 0,
-      icon: '🚨',
-      color: (stats.safetyFlags || 0) > 0 ? '#c62828' : null,
-      onClick: () => setActiveTab('safety')
-    }, {
-      label: 'Avg Rating',
-      value: `${stats.avgRating || '—'} ⭐`,
-      icon: '⭐',
-      sub: `${stats.totalReviews || 0} reviews`,
-      onClick: () => setActiveTab('customerservice')
-    }, {
-      label: 'Caregivers',
-      value: stats.totalCaregivers,
-      icon: '🤝',
-      onClick: () => setActiveTab('people')
-    }, {
-      label: 'Waitlist',
-      value: stats.totalWaitlist,
-      icon: '📋',
-      onClick: () => setActiveTab('people')
-    }].map((s, i) => /*#__PURE__*/React.createElement("div", {
-      key: i,
-      onClick: s.onClick,
-      style: {
-        background: 'var(--bg-card)',
-        borderRadius: 10,
-        border: '1px solid var(--border-color)',
-        padding: '12px 14px',
-        cursor: 'pointer',
-        transition: 'all 0.12s'
-      },
-      onMouseEnter: e => {
-        e.currentTarget.style.borderColor = 'var(--role-color)';
-        e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.06)';
-      },
-      onMouseLeave: e => {
-        e.currentTarget.style.borderColor = 'var(--border-color)';
-        e.currentTarget.style.boxShadow = 'none';
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontSize: 10,
-        color: 'var(--text-muted)',
-        textTransform: 'uppercase',
-        letterSpacing: 0.4
-      }
-    }, s.label), /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontSize: 20,
-        fontWeight: 700,
-        marginTop: 2,
-        color: s.color || 'var(--text-primary)'
-      }
-    }, s.value), s.sub && /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontSize: 10,
-        color: 'var(--text-muted)',
-        marginTop: 2
-      }
-    }, s.sub)))), attentionItems.length > 0 && /*#__PURE__*/React.createElement("div", {
+    return /*#__PURE__*/React.createElement("div", null, attentionItems.length > 0 && /*#__PURE__*/React.createElement("div", {
       style: {
         background: 'var(--bg-card)',
         borderRadius: 12,
@@ -61394,12 +61401,16 @@ const AdminPanel = window.AdminPanel = ({
         margin: 0,
         color: 'var(--text-primary)'
       }
-    }, "\uD83D\uDD25 Needs Attention"), /*#__PURE__*/React.createElement("span", {
+    }, "Needs Attention"), /*#__PURE__*/React.createElement("span", {
       style: {
+        padding: '2px 10px',
+        borderRadius: 20,
         fontSize: 11,
-        color: 'var(--text-muted)'
+        fontWeight: 700,
+        background: '#ffebee',
+        color: '#c62828'
       }
-    }, attentionItems.length, " item", attentionItems.length !== 1 ? 's' : '')), /*#__PURE__*/React.createElement("div", null, attentionItems.map((item, i) => /*#__PURE__*/React.createElement("div", {
+    }, attentionItems.length)), /*#__PURE__*/React.createElement("div", null, attentionItems.map((item, i) => /*#__PURE__*/React.createElement("div", {
       key: i,
       onClick: item.action,
       style: {
@@ -61457,42 +61468,106 @@ const AdminPanel = window.AdminPanel = ({
     }, "\u203A"))))), /*#__PURE__*/React.createElement("div", {
       style: {
         display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
+        gap: 10,
+        marginBottom: 16
+      }
+    }, [{
+      label: 'Active Users',
+      value: stats.totalUsers,
+      icon: '👥',
+      onClick: () => setActiveTab('people')
+    }, {
+      label: 'Caregivers',
+      value: stats.totalCaregivers,
+      icon: '🤝',
+      onClick: () => setActiveTab('people')
+    }, {
+      label: 'Visits / Week',
+      value: stats.visitsThisWeek || 0,
+      icon: '📋',
+      onClick: () => setActiveTab('sessions')
+    }, {
+      label: 'Revenue MTD',
+      value: `$${(stats.revenueMtd || 0).toLocaleString()}`,
+      icon: '💰',
+      onClick: () => setActiveTab('financials')
+    }, {
+      label: 'Avg Rating',
+      value: `${stats.avgRating || '—'} ⭐`,
+      icon: '⭐',
+      sub: `${stats.totalReviews || 0} reviews`,
+      onClick: () => setActiveTab('customerservice')
+    }].map((s, i) => /*#__PURE__*/React.createElement("div", {
+      key: i,
+      onClick: s.onClick,
+      style: {
+        background: 'var(--bg-card)',
+        borderRadius: 10,
+        border: '1px solid var(--border-color)',
+        padding: '12px 14px',
+        cursor: 'pointer',
+        transition: 'all 0.12s'
+      },
+      onMouseEnter: e => {
+        e.currentTarget.style.borderColor = 'var(--role-color)';
+        e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.06)';
+      },
+      onMouseLeave: e => {
+        e.currentTarget.style.borderColor = 'var(--border-color)';
+        e.currentTarget.style.boxShadow = 'none';
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 10,
+        color: 'var(--text-muted)',
+        textTransform: 'uppercase',
+        letterSpacing: 0.4
+      }
+    }, s.label), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 20,
+        fontWeight: 700,
+        marginTop: 2,
+        color: s.color || 'var(--text-primary)'
+      }
+    }, s.value), s.sub && /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 10,
+        color: 'var(--text-muted)',
+        marginTop: 2
+      }
+    }, s.sub)))), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'grid',
         gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))',
         gap: 8,
         marginBottom: 16
       }
     }, [{
-      icon: '👤',
-      label: 'Find Person',
+      icon: '👥',
+      label: 'People',
       action: () => setActiveTab('people')
-    }, {
-      icon: '🎫',
-      label: 'Tickets',
-      action: () => setActiveTab('tickets')
     }, {
       icon: '📋',
       label: 'Visits',
       action: () => setActiveTab('sessions')
     }, {
-      icon: '💬',
-      label: 'Feedback',
-      action: () => setActiveTab('feedback')
-    }, {
-      icon: '🛡️',
-      label: 'Safety',
-      action: () => setActiveTab('safety')
+      icon: '🎫',
+      label: 'Tickets',
+      action: () => setActiveTab('tickets')
     }, {
       icon: '💰',
       label: 'Financials',
       action: () => setActiveTab('financials')
     }, {
+      icon: '🛡️',
+      label: 'Safety',
+      action: () => setActiveTab('safety')
+    }, {
       icon: '⚙️',
       label: 'Settings',
       action: () => setActiveTab('settings')
-    }, {
-      icon: '🌐',
-      label: 'Analytics',
-      action: () => window.open('https://plausible.io/yourinplace.com', '_blank')
     }].map((q, i) => /*#__PURE__*/React.createElement("div", {
       key: i,
       onClick: q.action,

@@ -1814,37 +1814,12 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
 
         return (
         <div>
-          {/* ── Compact Stat Tiles ── */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 10, marginBottom: 16 }}>
-            {[
-              { label: 'Active Users', value: stats.totalUsers, icon: '👥', change: null, onClick: () => setActiveTab('people') },
-              { label: 'Visits / Week', value: stats.visitsThisWeek || 0, icon: '📋', change: null, onClick: () => setActiveTab('sessions') },
-              { label: 'Open Tickets', value: stats.openTickets || 0, icon: '🎫', color: (stats.openTickets || 0) > 0 ? '#e8724a' : null, onClick: () => setActiveTab('tickets') },
-              { label: 'Revenue MTD', value: `$${(stats.revenueMtd || 0).toLocaleString()}`, icon: '💰', onClick: () => setActiveTab('financials') },
-              { label: 'Safety Flags', value: stats.safetyFlags || 0, icon: '🚨', color: (stats.safetyFlags || 0) > 0 ? '#c62828' : null, onClick: () => setActiveTab('safety') },
-              { label: 'Avg Rating', value: `${stats.avgRating || '—'} ⭐`, icon: '⭐', sub: `${stats.totalReviews || 0} reviews`, onClick: () => setActiveTab('customerservice') },
-              { label: 'Caregivers', value: stats.totalCaregivers, icon: '🤝', onClick: () => setActiveTab('people') },
-              { label: 'Waitlist', value: stats.totalWaitlist, icon: '📋', onClick: () => setActiveTab('people') },
-            ].map((s, i) => (
-              <div key={i} onClick={s.onClick} style={{
-                background: 'var(--bg-card)', borderRadius: 10, border: '1px solid var(--border-color)',
-                padding: '12px 14px', cursor: 'pointer', transition: 'all 0.12s',
-              }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--role-color)'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.06)'; }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-color)'; e.currentTarget.style.boxShadow = 'none'; }}>
-                <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.4 }}>{s.label}</div>
-                <div style={{ fontSize: 20, fontWeight: 700, marginTop: 2, color: s.color || 'var(--text-primary)' }}>{s.value}</div>
-                {s.sub && <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>{s.sub}</div>}
-              </div>
-            ))}
-          </div>
-
-          {/* ── Needs Attention ── */}
+          {/* ── Alerts — FIRST thing admin sees ── */}
           {attentionItems.length > 0 && (
             <div style={{ background: 'var(--bg-card)', borderRadius: 12, border: '1px solid var(--border-color)', marginBottom: 16, overflow: 'hidden' }}>
               <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <h3 style={{ fontSize: 14, fontWeight: 600, margin: 0, color: 'var(--text-primary)' }}>🔥 Needs Attention</h3>
-                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{attentionItems.length} item{attentionItems.length !== 1 ? 's' : ''}</span>
+                <h3 style={{ fontSize: 14, fontWeight: 600, margin: 0, color: 'var(--text-primary)' }}>Needs Attention</h3>
+                <span style={{ padding: '2px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: '#ffebee', color: '#c62828' }}>{attentionItems.length}</span>
               </div>
               <div>
                 {attentionItems.map((item, i) => (
@@ -1868,19 +1843,37 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
             </div>
           )}
 
-          {/* No "All Clear" banner — if nothing needs attention, skip straight to Quick Actions */}
+          {/* ── Compact Stat Tiles ── */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 10, marginBottom: 16 }}>
+            {[
+              { label: 'Active Users', value: stats.totalUsers, icon: '👥', onClick: () => setActiveTab('people') },
+              { label: 'Caregivers', value: stats.totalCaregivers, icon: '🤝', onClick: () => setActiveTab('people') },
+              { label: 'Visits / Week', value: stats.visitsThisWeek || 0, icon: '📋', onClick: () => setActiveTab('sessions') },
+              { label: 'Revenue MTD', value: `$${(stats.revenueMtd || 0).toLocaleString()}`, icon: '💰', onClick: () => setActiveTab('financials') },
+              { label: 'Avg Rating', value: `${stats.avgRating || '—'} ⭐`, icon: '⭐', sub: `${stats.totalReviews || 0} reviews`, onClick: () => setActiveTab('customerservice') },
+            ].map((s, i) => (
+              <div key={i} onClick={s.onClick} style={{
+                background: 'var(--bg-card)', borderRadius: 10, border: '1px solid var(--border-color)',
+                padding: '12px 14px', cursor: 'pointer', transition: 'all 0.12s',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--role-color)'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.06)'; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-color)'; e.currentTarget.style.boxShadow = 'none'; }}>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.4 }}>{s.label}</div>
+                <div style={{ fontSize: 20, fontWeight: 700, marginTop: 2, color: s.color || 'var(--text-primary)' }}>{s.value}</div>
+                {s.sub && <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>{s.sub}</div>}
+              </div>
+            ))}
+          </div>
 
-          {/* ── Quick Actions grid ── */}
+          {/* ── Quick Actions — deduplicated ── */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))', gap: 8, marginBottom: 16 }}>
             {[
-              { icon: '👤', label: 'Find Person', action: () => setActiveTab('people') },
-              { icon: '🎫', label: 'Tickets', action: () => setActiveTab('tickets') },
+              { icon: '👥', label: 'People', action: () => setActiveTab('people') },
               { icon: '📋', label: 'Visits', action: () => setActiveTab('sessions') },
-              { icon: '💬', label: 'Feedback', action: () => setActiveTab('feedback') },
-              { icon: '🛡️', label: 'Safety', action: () => setActiveTab('safety') },
+              { icon: '🎫', label: 'Tickets', action: () => setActiveTab('tickets') },
               { icon: '💰', label: 'Financials', action: () => setActiveTab('financials') },
+              { icon: '🛡️', label: 'Safety', action: () => setActiveTab('safety') },
               { icon: '⚙️', label: 'Settings', action: () => setActiveTab('settings') },
-              { icon: '🌐', label: 'Analytics', action: () => window.open('https://plausible.io/yourinplace.com', '_blank') },
             ].map((q, i) => (
               <div key={i} onClick={q.action} style={{
                 display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
