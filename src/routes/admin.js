@@ -3857,30 +3857,61 @@ router.get("/sessions/no-show-cancelled", async (req, res) => {
 });
 
 // ─── POST /api/admin/sessions/:id/restore — Restore a wrongly-cancelled no-show session ───
+// Optional body: { checkInTime: "2026-03-31T14:00:00", setInProgress: true }
+// If checkInTime is provided, also creates/updates the visit_log with the corrected check-in time.
 router.post("/sessions/:id/restore", async (req, res) => {
   try {
     const db = await getDb();
-    const session = await db.prepare("SELECT * FROM care_sessions WHERE id = ?").get(req.params.id);
+    const session = await db.prepare(`
+      SELECT cs.*, cp.user_id AS caregiver_user_id, cp.id AS caregiver_profile_id
+      FROM care_sessions cs
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      WHERE cs.id = ?
+    `).get(req.params.id);
     if (!session) return res.status(404).json({ error: "Session not found" });
     if (session.cancelled_by !== 'system' || !session.caregiver_no_show) {
       return res.status(400).json({ error: "This session was not cancelled by the no-show system" });
     }
 
+    const { checkInTime, setInProgress } = req.body || {};
+    const restoreStatus = (setInProgress || checkInTime) ? 'in_progress' : 'confirmed';
+
     await db.prepare(`
       UPDATE care_sessions SET
-        status = 'confirmed',
+        status = ?,
         caregiver_no_show = 0,
         caregiver_no_show_at = NULL,
         cancelled_at = NULL,
         cancelled_by = NULL,
+        cancel_reason = NULL,
         review_required = 0,
         notifications_sent = REPLACE(COALESCE(notifications_sent, ''), ',no_show_flagged', ''),
         updated_at = NOW()
       WHERE id = ?
-    `).run(req.params.id);
+    `).run(restoreStatus, req.params.id);
 
-    console.log(`[admin] Restored no-show session ${req.params.id.slice(0, 8)} by ${req.user.email}`);
-    res.json({ success: true, message: "Session restored to confirmed status" });
+    // If check-in time provided, create or update the visit_log
+    if (checkInTime && session.caregiver_profile_id) {
+      const existingLog = await db.prepare("SELECT id FROM visit_logs WHERE session_id = ?").get(req.params.id);
+      if (existingLog) {
+        await db.prepare("UPDATE visit_logs SET check_in_time = ?, updated_at = NOW() WHERE session_id = ?")
+          .run(checkInTime, req.params.id);
+      } else {
+        const { v4: uuidv4 } = require("uuid");
+        await db.prepare(`
+          INSERT INTO visit_logs (id, session_id, caregiver_id, check_in_time, created_at)
+          VALUES (?, ?, ?, ?, NOW())
+        `).run(uuidv4(), req.params.id, session.caregiver_profile_id, checkInTime);
+      }
+    }
+
+    await logAdminAction(req, "restore_session", "care_session", req.params.id, {
+      restoredTo: restoreStatus,
+      checkInTime: checkInTime || null,
+    });
+
+    console.log(`[admin] Restored no-show session ${req.params.id.slice(0, 8)} → ${restoreStatus}${checkInTime ? ` (check-in: ${checkInTime})` : ''} by ${req.user.email}`);
+    res.json({ success: true, message: `Session restored to ${restoreStatus}${checkInTime ? ` with check-in at ${checkInTime}` : ''}` });
   } catch (err) {
     console.error("Restore session error:", err);
     res.status(500).json({ error: "Failed to restore session" });
