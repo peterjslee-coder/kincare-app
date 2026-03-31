@@ -7127,6 +7127,15 @@ const Dashboard = window.Dashboard = ({
   const [pendingInvites, setPendingInvites] = useState([]);
   const [acceptingInviteId, setAcceptingInviteId] = useState(null);
   const [invitesChecked, setInvitesChecked] = useState(false);
+  // Time change proposal state
+  const [timeChangeModal, setTimeChangeModal] = useState(null); // { sessionId, session } for proposing
+  const [timeChangeProposal, setTimeChangeProposal] = useState(null); // fetched pending proposal for acknowledge
+  const [tcNewTime, setTcNewTime] = useState('');
+  const [tcNewDuration, setTcNewDuration] = useState('');
+  const [tcReason, setTcReason] = useState('');
+  const [tcLoading, setTcLoading] = useState(false);
+  const [tcRespondLoading, setTcRespondLoading] = useState(false);
+
   // In-app notifications (v1.56.0)
   const [notifications, setNotifications] = useState([]);
   const [unreadNotifCount, setUnreadNotifCount] = useState(0);
@@ -7400,12 +7409,18 @@ const Dashboard = window.Dashboard = ({
     const c3 = onSocketEvent('visit_photos', () => fetchDashboard());
     const c4 = onSocketEvent('late_check_in', data => setLateCheckInAlert(data));
     const c5 = onSocketEvent('care_team_invite', () => fetchPendingInvites());
+    const c6 = onSocketEvent('time_change_proposed', () => fetchDashboard());
+    const c7 = onSocketEvent('time_change_accepted', () => fetchDashboard());
+    const c8 = onSocketEvent('time_change_rejected', () => fetchDashboard());
     return () => {
       c1();
       c2();
       c3();
       c4();
       c5();
+      c6();
+      c7();
+      c8();
     };
   }, []);
 
@@ -9920,11 +9935,12 @@ const Dashboard = window.Dashboard = ({
       const isSoon = !isActive && !isImminent && s.status === 'confirmed' && minsUntil <= 180; // within 3 hours
       const isSeekingCaregiver = !s.caregiverName;
       const isToday = sDate === todayStr && !isActive;
+      const hasPendingTimeChange = !!s.pendingTimeChangeId;
 
-      // Border & background based on urgency
-      const borderColor = isActive ? 'var(--color-warning)' : isImminent ? 'var(--accent-color)' : isSoon ? 'var(--accent-color)' : isSeekingCaregiver ? 'var(--accent-color)' : 'var(--role-color)';
-      const bgColor = isActive ? 'linear-gradient(135deg, var(--color-warning-bg) 0%, var(--bg-card) 100%)' : isImminent ? 'linear-gradient(135deg, var(--bg-accent-light) 0%, var(--bg-card) 100%)' : 'var(--bg-card)';
-      const borderWidth = isActive || isImminent ? 3 : 2;
+      // Border & background based on urgency — purple for pending time change
+      const borderColor = hasPendingTimeChange ? 'var(--color-purple)' : isActive ? 'var(--color-warning)' : isImminent ? 'var(--accent-color)' : isSoon ? 'var(--accent-color)' : isSeekingCaregiver ? 'var(--accent-color)' : 'var(--role-color)';
+      const bgColor = hasPendingTimeChange ? 'linear-gradient(135deg, var(--color-purple-bg) 0%, var(--bg-card) 100%)' : isActive ? 'linear-gradient(135deg, var(--color-warning-bg) 0%, var(--bg-card) 100%)' : isImminent ? 'linear-gradient(135deg, var(--bg-accent-light) 0%, var(--bg-card) 100%)' : 'var(--bg-card)';
+      const borderWidth = hasPendingTimeChange ? 3 : isActive || isImminent ? 3 : 2;
       return /*#__PURE__*/React.createElement("div", {
         key: s.id || idx,
         className: isToday ? 'next-up-today-shimmer' : '',
@@ -9993,7 +10009,16 @@ const Dashboard = window.Dashboard = ({
           color: 'var(--accent-color)',
           marginBottom: 2
         }
-      }, "Coming up in ", minsUntil <= 120 ? `${Math.ceil(minsUntil)} min` : `${Math.round(minsUntil / 60)}h`), /*#__PURE__*/React.createElement("div", {
+      }, "Coming up in ", minsUntil <= 120 ? `${Math.ceil(minsUntil)} min` : `${Math.round(minsUntil / 60)}h`), hasPendingTimeChange && /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 11,
+          fontWeight: 700,
+          color: 'var(--color-purple)',
+          textTransform: 'uppercase',
+          letterSpacing: '0.5px',
+          marginBottom: 2
+        }
+      }, "\u23F0 Time Change Requested"), /*#__PURE__*/React.createElement("div", {
         style: {
           fontWeight: 600,
           fontSize: 15,
@@ -10049,7 +10074,53 @@ const Dashboard = window.Dashboard = ({
           textTransform: 'capitalize',
           whiteSpace: 'nowrap'
         }
-      }, s.status === 'payment_hold' ? 'On Hold' : isActive ? 'In Progress' : s.status), ['confirmed', 'pending', 'open', 'requested'].includes(s.status) && /*#__PURE__*/React.createElement("button", {
+      }, s.status === 'payment_hold' ? 'On Hold' : isActive ? 'In Progress' : s.status), s.status === 'confirmed' && s.caregiverName && !hasPendingTimeChange && /*#__PURE__*/React.createElement("button", {
+        onClick: e => {
+          e.stopPropagation();
+          setTimeChangeModal({
+            sessionId: s.id,
+            session: s
+          });
+          setTcNewTime(s.time || '');
+          setTcNewDuration(String(s.durationHours || 2));
+          setTcReason('');
+        },
+        style: {
+          padding: '3px 8px',
+          borderRadius: 6,
+          border: '1px solid var(--color-purple)',
+          background: 'var(--color-purple-bg)',
+          color: 'var(--color-purple)',
+          fontSize: 10,
+          fontWeight: 600,
+          cursor: 'pointer'
+        }
+      }, "Change Time"), hasPendingTimeChange && /*#__PURE__*/React.createElement("button", {
+        onClick: async e => {
+          e.stopPropagation();
+          try {
+            const r = await apiFetch(`/api/sessions/${s.id}/time-change`);
+            if (r !== null && r !== void 0 && r.ok) {
+              const d = await r.json();
+              setTimeChangeProposal({
+                ...d.proposal,
+                session: s
+              });
+            }
+          } catch {}
+        },
+        style: {
+          padding: '3px 8px',
+          borderRadius: 6,
+          border: 'none',
+          background: 'var(--color-purple)',
+          color: 'var(--text-on-primary)',
+          fontSize: 10,
+          fontWeight: 700,
+          cursor: 'pointer',
+          animation: 'pulse 2s infinite'
+        }
+      }, "Review Change"), ['confirmed', 'pending', 'open', 'requested'].includes(s.status) && /*#__PURE__*/React.createElement("button", {
         onClick: e => {
           e.stopPropagation();
           setCancellingId(s.id);
@@ -10809,7 +10880,443 @@ const Dashboard = window.Dashboard = ({
         cursor: cancelLoading ? 'wait' : 'pointer'
       }
     }, cancelLoading ? 'Cancelling...' : 'Cancel Session')));
-  })())), visitDetailSessionId && /*#__PURE__*/React.createElement(VisitDetailModal, {
+  })())), timeChangeModal && (() => {
+    const s = timeChangeModal.session;
+    const formatT = t => {
+      if (!t) return '';
+      const [h, m] = t.split(':').map(Number);
+      return `${h === 0 ? 12 : h > 12 ? h - 12 : h}:${String(m || 0).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
+    };
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0,0,0,0.5)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1000
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        background: 'var(--bg-surface)',
+        borderRadius: 14,
+        padding: 24,
+        width: 420,
+        maxWidth: '90vw'
+      }
+    }, /*#__PURE__*/React.createElement("h3", {
+      style: {
+        margin: '0 0 4px',
+        fontSize: 17,
+        color: 'var(--color-purple)'
+      }
+    }, "\u23F0 Propose Time Change"), /*#__PURE__*/React.createElement("p", {
+      style: {
+        fontSize: 12,
+        color: 'var(--text-secondary)',
+        margin: '0 0 16px'
+      }
+    }, s.recipientName, " with ", s.caregiverName, " \u2014 currently ", formatT(s.time), " for ", s.durationHours, "hr"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        gap: 12,
+        marginBottom: 12
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        flex: 1
+      }
+    }, /*#__PURE__*/React.createElement("label", {
+      style: {
+        fontSize: 11,
+        fontWeight: 600,
+        color: 'var(--text-secondary)',
+        display: 'block',
+        marginBottom: 4
+      }
+    }, "New Start Time"), /*#__PURE__*/React.createElement("input", {
+      type: "time",
+      value: tcNewTime,
+      onChange: e => setTcNewTime(e.target.value),
+      style: {
+        width: '100%',
+        padding: '8px 10px',
+        borderRadius: 8,
+        border: '1px solid var(--border-color)',
+        fontSize: 14,
+        boxSizing: 'border-box'
+      }
+    })), /*#__PURE__*/React.createElement("div", {
+      style: {
+        flex: 1
+      }
+    }, /*#__PURE__*/React.createElement("label", {
+      style: {
+        fontSize: 11,
+        fontWeight: 600,
+        color: 'var(--text-secondary)',
+        display: 'block',
+        marginBottom: 4
+      }
+    }, "Duration (hours)"), /*#__PURE__*/React.createElement("select", {
+      value: tcNewDuration,
+      onChange: e => setTcNewDuration(e.target.value),
+      style: {
+        width: '100%',
+        padding: '8px 10px',
+        borderRadius: 8,
+        border: '1px solid var(--border-color)',
+        fontSize: 14,
+        boxSizing: 'border-box'
+      }
+    }, [1, 1.5, 2, 2.5, 3, 3.5, 4, 5, 6, 8].map(h => /*#__PURE__*/React.createElement("option", {
+      key: h,
+      value: h
+    }, h, " hr", h !== 1 ? 's' : ''))))), /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginBottom: 12
+      }
+    }, /*#__PURE__*/React.createElement("label", {
+      style: {
+        fontSize: 11,
+        fontWeight: 600,
+        color: 'var(--text-secondary)',
+        display: 'block',
+        marginBottom: 4
+      }
+    }, "Reason (optional)"), /*#__PURE__*/React.createElement("textarea", {
+      value: tcReason,
+      onChange: e => setTcReason(e.target.value),
+      placeholder: "Why the time change?",
+      style: {
+        width: '100%',
+        minHeight: 50,
+        padding: '8px 10px',
+        borderRadius: 8,
+        border: '1px solid var(--border-color)',
+        fontSize: 13,
+        resize: 'vertical',
+        boxSizing: 'border-box'
+      }
+    })), /*#__PURE__*/React.createElement("div", {
+      style: {
+        padding: '8px 10px',
+        background: 'var(--color-purple-bg)',
+        borderRadius: 8,
+        marginBottom: 14,
+        fontSize: 11,
+        color: 'var(--text-secondary)',
+        lineHeight: 1.5
+      }
+    }, /*#__PURE__*/React.createElement("strong", {
+      style: {
+        color: 'var(--color-purple)'
+      }
+    }, "Time change policy:"), " The caregiver will be notified and must acknowledge the new time. If this change is within 24 hours of the session, the caregiver may decline and cancel, and may be entitled to partial compensation for time outside the original window."), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        gap: 8,
+        justifyContent: 'flex-end'
+      }
+    }, /*#__PURE__*/React.createElement("button", {
+      onClick: () => setTimeChangeModal(null),
+      style: {
+        padding: '8px 16px',
+        borderRadius: 8,
+        border: '1px solid var(--border-color)',
+        background: 'var(--bg-surface)',
+        color: 'var(--text-secondary)',
+        fontSize: 13,
+        fontWeight: 600,
+        cursor: 'pointer'
+      }
+    }, "Cancel"), /*#__PURE__*/React.createElement("button", {
+      disabled: tcLoading || !tcNewTime || tcNewTime === s.time && parseFloat(tcNewDuration) === s.durationHours,
+      onClick: async () => {
+        setTcLoading(true);
+        try {
+          const r = await apiFetch(`/api/sessions/${s.id}/propose-time-change`, {
+            method: 'POST',
+            body: JSON.stringify({
+              proposedTime: tcNewTime,
+              proposedDuration: parseFloat(tcNewDuration),
+              reason: tcReason || null
+            })
+          });
+          if (r !== null && r !== void 0 && r.ok) {
+            showToast('Time change proposed — caregiver notified', 'success');
+            setTimeChangeModal(null);
+            fetchDashboard();
+          } else {
+            const d = await (r === null || r === void 0 ? void 0 : r.json().catch(() => ({})));
+            showToast(d.error || 'Failed to propose time change', 'error');
+          }
+        } catch {
+          showToast('Network error', 'error');
+        }
+        setTcLoading(false);
+      },
+      style: {
+        padding: '8px 16px',
+        borderRadius: 8,
+        border: 'none',
+        background: tcLoading ? 'var(--text-muted)' : 'var(--color-purple)',
+        color: 'var(--text-on-primary)',
+        fontSize: 13,
+        fontWeight: 600,
+        cursor: tcLoading ? 'wait' : 'pointer'
+      }
+    }, tcLoading ? 'Sending...' : 'Propose Change'))));
+  })(), timeChangeProposal && (() => {
+    const p = timeChangeProposal;
+    const s = p.session;
+    const formatT = t => {
+      if (!t) return '';
+      const [h, m] = t.split(':').map(Number);
+      return `${h === 0 ? 12 : h > 12 ? h - 12 : h}:${String(m || 0).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
+    };
+    const proposedByCaregiver = p.proposed_by === 'caregiver';
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0,0,0,0.5)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1000
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        background: 'var(--bg-surface)',
+        borderRadius: 14,
+        padding: 24,
+        width: 420,
+        maxWidth: '90vw'
+      }
+    }, /*#__PURE__*/React.createElement("h3", {
+      style: {
+        margin: '0 0 8px',
+        fontSize: 17,
+        color: 'var(--color-purple)'
+      }
+    }, "\u23F0 Time Change Request"), /*#__PURE__*/React.createElement("p", {
+      style: {
+        fontSize: 13,
+        color: 'var(--text-secondary)',
+        margin: '0 0 14px'
+      }
+    }, p.proposer_name, " wants to change the session time:"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        gap: 12,
+        marginBottom: 14
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        flex: 1,
+        padding: '10px 14px',
+        background: 'var(--bg-neutral)',
+        borderRadius: 10,
+        textAlign: 'center'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 10,
+        color: 'var(--text-muted)',
+        fontWeight: 700,
+        textTransform: 'uppercase',
+        marginBottom: 4
+      }
+    }, "Current"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 16,
+        fontWeight: 700,
+        color: 'var(--text-primary)'
+      }
+    }, formatT(p.original_time)), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 12,
+        color: 'var(--text-secondary)'
+      }
+    }, p.original_duration, "hr")), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        fontSize: 18,
+        color: 'var(--color-purple)'
+      }
+    }, "\u2192"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        flex: 1,
+        padding: '10px 14px',
+        background: 'var(--color-purple-bg)',
+        borderRadius: 10,
+        textAlign: 'center',
+        border: '2px solid var(--color-purple)'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 10,
+        color: 'var(--color-purple)',
+        fontWeight: 700,
+        textTransform: 'uppercase',
+        marginBottom: 4
+      }
+    }, "Proposed"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 16,
+        fontWeight: 700,
+        color: 'var(--color-purple)'
+      }
+    }, formatT(p.proposed_time)), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 12,
+        color: 'var(--text-secondary)'
+      }
+    }, p.proposed_duration, "hr"))), p.reason && /*#__PURE__*/React.createElement("div", {
+      style: {
+        padding: '8px 10px',
+        background: 'var(--bg-neutral)',
+        borderRadius: 8,
+        marginBottom: 12,
+        fontSize: 12,
+        color: 'var(--text-primary)',
+        fontStyle: 'italic'
+      }
+    }, "\"", p.reason, "\""), proposedByCaregiver && p.is_within_24h === 1 && /*#__PURE__*/React.createElement("div", {
+      style: {
+        padding: '8px 10px',
+        background: 'var(--color-purple-bg)',
+        borderRadius: 8,
+        marginBottom: 14,
+        fontSize: 11,
+        color: 'var(--text-secondary)',
+        lineHeight: 1.5
+      }
+    }, /*#__PURE__*/React.createElement("strong", {
+      style: {
+        color: 'var(--color-purple)'
+      }
+    }, "Late change policy:"), " This change was requested within 24 hours of the session. You may cancel at no charge and leave a review if you prefer to decline."), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        gap: 8,
+        justifyContent: 'flex-end',
+        flexWrap: 'wrap'
+      }
+    }, /*#__PURE__*/React.createElement("button", {
+      onClick: () => setTimeChangeProposal(null),
+      style: {
+        padding: '8px 14px',
+        borderRadius: 8,
+        border: '1px solid var(--border-color)',
+        background: 'var(--bg-surface)',
+        color: 'var(--text-secondary)',
+        fontSize: 12,
+        fontWeight: 600,
+        cursor: 'pointer'
+      }
+    }, "Close"), /*#__PURE__*/React.createElement("button", {
+      disabled: tcRespondLoading,
+      onClick: async () => {
+        setTcRespondLoading(true);
+        try {
+          const r = await apiFetch(`/api/sessions/${s.id}/time-change/${p.id}/respond`, {
+            method: 'PUT',
+            body: JSON.stringify({
+              action: 'reject'
+            })
+          });
+          if (r !== null && r !== void 0 && r.ok) {
+            showToast('Time change declined — keeping original time', 'info');
+            setTimeChangeProposal(null);
+            fetchDashboard();
+          }
+        } catch {}
+        setTcRespondLoading(false);
+      },
+      style: {
+        padding: '8px 14px',
+        borderRadius: 8,
+        border: '1px solid var(--color-error)',
+        background: 'var(--bg-surface)',
+        color: 'var(--color-error)',
+        fontSize: 12,
+        fontWeight: 600,
+        cursor: 'pointer'
+      }
+    }, "Decline"), proposedByCaregiver && p.is_within_24h === 1 && /*#__PURE__*/React.createElement("button", {
+      disabled: tcRespondLoading,
+      onClick: async () => {
+        setTcRespondLoading(true);
+        try {
+          const r = await apiFetch(`/api/sessions/${s.id}/time-change/${p.id}/respond`, {
+            method: 'PUT',
+            body: JSON.stringify({
+              action: 'cancel_with_review'
+            })
+          });
+          if (r !== null && r !== void 0 && r.ok) {
+            const d = await r.json();
+            showToast('Session cancelled — no charge', 'info');
+            setTimeChangeProposal(null);
+            if (d.canReview && d.cancelledCaregiverId) {
+              setReviewSession({
+                id: s.id,
+                caregiverId: d.cancelledCaregiverId,
+                caregiverName: s.caregiverName,
+                recipientName: s.recipientName,
+                date: s.date
+              });
+            }
+            fetchDashboard();
+          }
+        } catch {}
+        setTcRespondLoading(false);
+      },
+      style: {
+        padding: '8px 14px',
+        borderRadius: 8,
+        border: 'none',
+        background: 'var(--color-error)',
+        color: 'var(--text-on-primary)',
+        fontSize: 12,
+        fontWeight: 600,
+        cursor: 'pointer'
+      }
+    }, "Cancel + Review"), /*#__PURE__*/React.createElement("button", {
+      disabled: tcRespondLoading,
+      onClick: async () => {
+        setTcRespondLoading(true);
+        try {
+          const r = await apiFetch(`/api/sessions/${s.id}/time-change/${p.id}/respond`, {
+            method: 'PUT',
+            body: JSON.stringify({
+              action: 'accept'
+            })
+          });
+          if (r !== null && r !== void 0 && r.ok) {
+            showToast('New time accepted!', 'success');
+            setTimeChangeProposal(null);
+            fetchDashboard();
+          }
+        } catch {}
+        setTcRespondLoading(false);
+      },
+      style: {
+        padding: '8px 14px',
+        borderRadius: 8,
+        border: 'none',
+        background: 'var(--color-purple)',
+        color: 'var(--text-on-primary)',
+        fontSize: 12,
+        fontWeight: 700,
+        cursor: 'pointer'
+      }
+    }, "Accept New Time"))));
+  })(), visitDetailSessionId && /*#__PURE__*/React.createElement(VisitDetailModal, {
     sessionId: visitDetailSessionId,
     role: "family",
     onClose: () => setVisitDetailSessionId(null),
@@ -39754,6 +40261,14 @@ const CaretakerHub = window.CaretakerHub = ({
   const avatarInputRef = useRef(null);
   const tabContentRef = useRef(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  // Time change proposal state
+  const [timeChangeModal, setTimeChangeModal] = useState(null); // { sessionId, session }
+  const [timeChangeProposal, setTimeChangeProposal] = useState(null); // fetched pending proposal for acknowledge
+  const [tcNewTime, setTcNewTime] = useState('');
+  const [tcNewDuration, setTcNewDuration] = useState('');
+  const [tcReason, setTcReason] = useState('');
+  const [tcLoading, setTcLoading] = useState(false);
+  const [tcRespondLoading, setTcRespondLoading] = useState(false);
   const [highlightTab, setHighlightTab] = useState(false);
   const [jobSort, setJobSort] = useState('best_match');
   const [exclusiveTick, setExclusiveTick] = useState(0);
@@ -40102,6 +40617,25 @@ const CaretakerHub = window.CaretakerHub = ({
       });
       return cleanup;
     }
+  }, []);
+
+  // Listen for time change WebSocket events — refresh dashboard
+  useEffect(() => {
+    if (typeof onSocketEvent !== 'function') return;
+    const c1 = onSocketEvent('time_change_proposed', () => {
+      apiFetch('/api/dashboard').then(res => (res === null || res === void 0 ? void 0 : res.ok) && res.json().then(d => setData(d))).catch(() => {});
+    });
+    const c2 = onSocketEvent('time_change_accepted', () => {
+      apiFetch('/api/dashboard').then(res => (res === null || res === void 0 ? void 0 : res.ok) && res.json().then(d => setData(d))).catch(() => {});
+    });
+    const c3 = onSocketEvent('time_change_rejected', () => {
+      apiFetch('/api/dashboard').then(res => (res === null || res === void 0 ? void 0 : res.ok) && res.json().then(d => setData(d))).catch(() => {});
+    });
+    return () => {
+      if (c1) c1();
+      if (c2) c2();
+      if (c3) c3();
+    };
   }, []);
 
   // Mark availability as visited when the tab is opened
@@ -42215,10 +42749,11 @@ const CaretakerHub = window.CaretakerHub = ({
       })();
 
       // Styling
-      const borderColor = isActive ? 'var(--color-warning)' : isReady ? 'var(--accent-color)' : isUpcoming ? 'var(--accent-color)' : noAddress ? 'var(--color-error)' : 'var(--role-color)';
-      const borderWidth = isActive || isReady ? 3 : isUpcoming ? 2 : 2;
-      const bgStyle = isActive ? 'linear-gradient(135deg, #fffde7 0%, #fff 100%)' : isReady ? 'linear-gradient(135deg, #fff3e0 0%, #fff 100%)' : 'var(--text-on-primary)';
-      const shadow = isReady || isActive ? '0 2px 12px rgba(232, 114, 74, 0.15)' : '0 1px 4px rgba(0,0,0,0.06)';
+      const hasPendingTimeChange = !!s.pendingTimeChangeId;
+      const borderColor = hasPendingTimeChange ? 'var(--color-purple)' : isActive ? 'var(--color-warning)' : isReady ? 'var(--accent-color)' : isUpcoming ? 'var(--accent-color)' : noAddress ? 'var(--color-error)' : 'var(--role-color)';
+      const borderWidth = hasPendingTimeChange ? 3 : isActive || isReady ? 3 : isUpcoming ? 2 : 2;
+      const bgStyle = hasPendingTimeChange ? 'linear-gradient(135deg, var(--color-purple-bg) 0%, var(--bg-card) 100%)' : isActive ? 'linear-gradient(135deg, #fffde7 0%, #fff 100%)' : isReady ? 'linear-gradient(135deg, #fff3e0 0%, #fff 100%)' : 'var(--text-on-primary)';
+      const shadow = hasPendingTimeChange ? '0 2px 12px rgba(123, 31, 162, 0.15)' : isReady || isActive ? '0 2px 12px rgba(232, 114, 74, 0.15)' : '0 1px 4px rgba(0,0,0,0.06)';
       return /*#__PURE__*/React.createElement("div", {
         key: s.id,
         className: "card",
@@ -42294,7 +42829,16 @@ const CaretakerHub = window.CaretakerHub = ({
           color: 'var(--accent-color)',
           marginBottom: 3
         }
-      }, countdownLabel), /*#__PURE__*/React.createElement("div", {
+      }, countdownLabel), hasPendingTimeChange && /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 11,
+          fontWeight: 700,
+          color: 'var(--color-purple)',
+          textTransform: 'uppercase',
+          letterSpacing: '0.5px',
+          marginBottom: 2
+        }
+      }, "\u23F0 Time Change Requested"), /*#__PURE__*/React.createElement("div", {
         style: {
           fontSize: 15,
           fontWeight: 600,
@@ -42493,7 +43037,53 @@ const CaretakerHub = window.CaretakerHub = ({
           cursor: 'default',
           whiteSpace: 'nowrap'
         }
-      }, "Check in ", Math.ceil(minsUntilCheckIn), " min"), s.status === 'payment_hold' && /*#__PURE__*/React.createElement("span", {
+      }, "Check in ", Math.ceil(minsUntilCheckIn), " min"), s.status === 'confirmed' && !hasPendingTimeChange && !isReady && !isActive && /*#__PURE__*/React.createElement("button", {
+        onClick: e => {
+          e.stopPropagation();
+          setTimeChangeModal({
+            sessionId: s.id,
+            session: s
+          });
+          setTcNewTime(s.scheduled_time || '');
+          setTcNewDuration(String(duration || 2));
+          setTcReason('');
+        },
+        style: {
+          padding: '3px 8px',
+          borderRadius: 6,
+          border: '1px solid var(--color-purple)',
+          background: 'var(--color-purple-bg)',
+          color: 'var(--color-purple)',
+          fontSize: 10,
+          fontWeight: 600,
+          cursor: 'pointer'
+        }
+      }, "Change Time"), hasPendingTimeChange && /*#__PURE__*/React.createElement("button", {
+        onClick: async e => {
+          e.stopPropagation();
+          try {
+            const r = await apiFetch(`/api/sessions/${s.id}/time-change`);
+            if (r !== null && r !== void 0 && r.ok) {
+              const d = await r.json();
+              setTimeChangeProposal({
+                ...d.proposal,
+                session: s
+              });
+            }
+          } catch {}
+        },
+        style: {
+          padding: '3px 8px',
+          borderRadius: 6,
+          border: 'none',
+          background: 'var(--color-purple)',
+          color: 'var(--text-on-primary)',
+          fontSize: 10,
+          fontWeight: 700,
+          cursor: 'pointer',
+          animation: 'pulse 2s infinite'
+        }
+      }, "Review Change"), s.status === 'payment_hold' && /*#__PURE__*/React.createElement("span", {
         style: {
           padding: '5px 12px',
           borderRadius: 10,
@@ -45746,7 +46336,451 @@ const CaretakerHub = window.CaretakerHub = ({
       fontWeight: 700,
       opacity: checkSubmitting ? 0.6 : 1
     }
-  }, checkSubmitting ? 'Submitting...' : 'Complete Session ✓')))), visitDetailSessionId && /*#__PURE__*/React.createElement(VisitDetailModal, {
+  }, checkSubmitting ? 'Submitting...' : 'Complete Session ✓')))), timeChangeModal && (() => {
+    const s = timeChangeModal.session;
+    const formatT = t => {
+      if (!t) return '';
+      const [h, m] = t.split(':').map(Number);
+      return `${h === 0 ? 12 : h > 12 ? h - 12 : h}:${String(m || 0).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
+    };
+    const recipName = s.recipientName || s.recipient_name || 'Session';
+    const dur = s.durationHours || s.duration_hours || 2;
+    const sTime = s.time || s.scheduled_time || '';
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0,0,0,0.5)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1000
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        background: 'var(--bg-surface)',
+        borderRadius: 14,
+        padding: 24,
+        width: 420,
+        maxWidth: '90vw'
+      }
+    }, /*#__PURE__*/React.createElement("h3", {
+      style: {
+        margin: '0 0 4px',
+        fontSize: 17,
+        color: 'var(--color-purple)'
+      }
+    }, "\u23F0 Propose Time Change"), /*#__PURE__*/React.createElement("p", {
+      style: {
+        fontSize: 12,
+        color: 'var(--text-secondary)',
+        margin: '0 0 16px'
+      }
+    }, recipName, " \u2014 currently ", formatT(sTime), " for ", dur, "hr"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        gap: 12,
+        marginBottom: 12
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        flex: 1
+      }
+    }, /*#__PURE__*/React.createElement("label", {
+      style: {
+        fontSize: 11,
+        fontWeight: 600,
+        color: 'var(--text-secondary)',
+        display: 'block',
+        marginBottom: 4
+      }
+    }, "New Start Time"), /*#__PURE__*/React.createElement("input", {
+      type: "time",
+      value: tcNewTime,
+      onChange: e => setTcNewTime(e.target.value),
+      style: {
+        width: '100%',
+        padding: '8px 10px',
+        borderRadius: 8,
+        border: '1px solid var(--border-color)',
+        fontSize: 14,
+        boxSizing: 'border-box'
+      }
+    })), /*#__PURE__*/React.createElement("div", {
+      style: {
+        flex: 1
+      }
+    }, /*#__PURE__*/React.createElement("label", {
+      style: {
+        fontSize: 11,
+        fontWeight: 600,
+        color: 'var(--text-secondary)',
+        display: 'block',
+        marginBottom: 4
+      }
+    }, "Duration (hours)"), /*#__PURE__*/React.createElement("select", {
+      value: tcNewDuration,
+      onChange: e => setTcNewDuration(e.target.value),
+      style: {
+        width: '100%',
+        padding: '8px 10px',
+        borderRadius: 8,
+        border: '1px solid var(--border-color)',
+        fontSize: 14,
+        boxSizing: 'border-box'
+      }
+    }, [1, 1.5, 2, 2.5, 3, 3.5, 4, 5, 6, 8].map(h => /*#__PURE__*/React.createElement("option", {
+      key: h,
+      value: h
+    }, h, " hr", h !== 1 ? 's' : ''))))), /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginBottom: 12
+      }
+    }, /*#__PURE__*/React.createElement("label", {
+      style: {
+        fontSize: 11,
+        fontWeight: 600,
+        color: 'var(--text-secondary)',
+        display: 'block',
+        marginBottom: 4
+      }
+    }, "Reason (optional)"), /*#__PURE__*/React.createElement("textarea", {
+      value: tcReason,
+      onChange: e => setTcReason(e.target.value),
+      placeholder: "Why the time change?",
+      style: {
+        width: '100%',
+        minHeight: 50,
+        padding: '8px 10px',
+        borderRadius: 8,
+        border: '1px solid var(--border-color)',
+        fontSize: 13,
+        resize: 'vertical',
+        boxSizing: 'border-box'
+      }
+    })), /*#__PURE__*/React.createElement("div", {
+      style: {
+        padding: '8px 10px',
+        background: 'var(--color-purple-bg)',
+        borderRadius: 8,
+        marginBottom: 14,
+        fontSize: 11,
+        color: 'var(--text-secondary)',
+        lineHeight: 1.5
+      }
+    }, /*#__PURE__*/React.createElement("strong", {
+      style: {
+        color: 'var(--color-purple)'
+      }
+    }, "Time change policy:"), " The family will be notified and must acknowledge the new time. If this change is within 24 hours of the session, the family may cancel at no charge and leave a review."), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        gap: 8,
+        justifyContent: 'flex-end'
+      }
+    }, /*#__PURE__*/React.createElement("button", {
+      onClick: () => setTimeChangeModal(null),
+      style: {
+        padding: '8px 16px',
+        borderRadius: 8,
+        border: '1px solid var(--border-color)',
+        background: 'var(--bg-surface)',
+        color: 'var(--text-secondary)',
+        fontSize: 13,
+        fontWeight: 600,
+        cursor: 'pointer'
+      }
+    }, "Cancel"), /*#__PURE__*/React.createElement("button", {
+      disabled: tcLoading || !tcNewTime || tcNewTime === sTime && parseFloat(tcNewDuration) === dur,
+      onClick: async () => {
+        setTcLoading(true);
+        try {
+          const r = await apiFetch(`/api/sessions/${s.id}/propose-time-change`, {
+            method: 'POST',
+            body: JSON.stringify({
+              proposedTime: tcNewTime,
+              proposedDuration: parseFloat(tcNewDuration),
+              reason: tcReason || null
+            })
+          });
+          if (r !== null && r !== void 0 && r.ok) {
+            showToast('Time change proposed — family notified', 'success');
+            setTimeChangeModal(null);
+            try {
+              const dr = await apiFetch('/api/dashboard');
+              if (dr !== null && dr !== void 0 && dr.ok) setData(await dr.json());
+            } catch {}
+          } else {
+            const d = await (r === null || r === void 0 ? void 0 : r.json().catch(() => ({})));
+            showToast(d.error || 'Failed to propose time change', 'error');
+          }
+        } catch {
+          showToast('Network error', 'error');
+        }
+        setTcLoading(false);
+      },
+      style: {
+        padding: '8px 16px',
+        borderRadius: 8,
+        border: 'none',
+        background: tcLoading ? 'var(--text-muted)' : 'var(--color-purple)',
+        color: 'var(--text-on-primary)',
+        fontSize: 13,
+        fontWeight: 600,
+        cursor: tcLoading ? 'wait' : 'pointer'
+      }
+    }, tcLoading ? 'Sending...' : 'Propose Change'))));
+  })(), timeChangeProposal && (() => {
+    const p = timeChangeProposal;
+    const s = p.session;
+    const formatT = t => {
+      if (!t) return '';
+      const [h, m] = t.split(':').map(Number);
+      return `${h === 0 ? 12 : h > 12 ? h - 12 : h}:${String(m || 0).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
+    };
+    const proposedByFamily = p.proposed_by === 'family';
+    const dur = s.durationHours || s.duration_hours || 2;
+    const hourlyRate = dur > 0 && s.caregiverPayout > 0 ? s.caregiverPayout / dur : 28;
+    const feeAmount = p.cancel_fee_hours ? (p.cancel_fee_hours * hourlyRate).toFixed(2) : null;
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0,0,0,0.5)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1000
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        background: 'var(--bg-surface)',
+        borderRadius: 14,
+        padding: 24,
+        width: 420,
+        maxWidth: '90vw'
+      }
+    }, /*#__PURE__*/React.createElement("h3", {
+      style: {
+        margin: '0 0 8px',
+        fontSize: 17,
+        color: 'var(--color-purple)'
+      }
+    }, "\u23F0 Time Change Request"), /*#__PURE__*/React.createElement("p", {
+      style: {
+        fontSize: 13,
+        color: 'var(--text-secondary)',
+        margin: '0 0 14px'
+      }
+    }, p.proposer_name || 'The family', " wants to change the session time:"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        gap: 12,
+        marginBottom: 14
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        flex: 1,
+        padding: '10px 14px',
+        background: 'var(--bg-neutral)',
+        borderRadius: 10,
+        textAlign: 'center'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 10,
+        color: 'var(--text-muted)',
+        fontWeight: 700,
+        textTransform: 'uppercase',
+        marginBottom: 4
+      }
+    }, "Current"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 16,
+        fontWeight: 700,
+        color: 'var(--text-primary)'
+      }
+    }, formatT(p.original_time)), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 12,
+        color: 'var(--text-secondary)'
+      }
+    }, p.original_duration, "hr")), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        fontSize: 18,
+        color: 'var(--color-purple)'
+      }
+    }, "\u2192"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        flex: 1,
+        padding: '10px 14px',
+        background: 'var(--color-purple-bg)',
+        borderRadius: 10,
+        textAlign: 'center',
+        border: '2px solid var(--color-purple)'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 10,
+        color: 'var(--color-purple)',
+        fontWeight: 700,
+        textTransform: 'uppercase',
+        marginBottom: 4
+      }
+    }, "Proposed"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 16,
+        fontWeight: 700,
+        color: 'var(--color-purple)'
+      }
+    }, formatT(p.proposed_time)), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 12,
+        color: 'var(--text-secondary)'
+      }
+    }, p.proposed_duration, "hr"))), p.reason && /*#__PURE__*/React.createElement("div", {
+      style: {
+        padding: '8px 10px',
+        background: 'var(--bg-neutral)',
+        borderRadius: 8,
+        marginBottom: 12,
+        fontSize: 12,
+        color: 'var(--text-primary)',
+        fontStyle: 'italic'
+      }
+    }, "\"", p.reason, "\""), proposedByFamily && p.is_within_24h === 1 && /*#__PURE__*/React.createElement("div", {
+      style: {
+        padding: '8px 10px',
+        background: 'var(--color-purple-bg)',
+        borderRadius: 8,
+        marginBottom: 14,
+        fontSize: 11,
+        color: 'var(--text-secondary)',
+        lineHeight: 1.5
+      }
+    }, /*#__PURE__*/React.createElement("strong", {
+      style: {
+        color: 'var(--color-purple)'
+      }
+    }, "Late change policy:"), " This change was requested within 24 hours of the session. You may decline and cancel, and you'll be compensated for ", p.cancel_fee_hours ? `${p.cancel_fee_hours} hour${p.cancel_fee_hours !== 1 ? 's' : ''}` : 'time', " outside the original window", feeAmount ? ` ($${feeAmount})` : '', "."), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        gap: 8,
+        justifyContent: 'flex-end',
+        flexWrap: 'wrap'
+      }
+    }, /*#__PURE__*/React.createElement("button", {
+      onClick: () => setTimeChangeProposal(null),
+      style: {
+        padding: '8px 14px',
+        borderRadius: 8,
+        border: '1px solid var(--border-color)',
+        background: 'var(--bg-surface)',
+        color: 'var(--text-secondary)',
+        fontSize: 12,
+        fontWeight: 600,
+        cursor: 'pointer'
+      }
+    }, "Close"), /*#__PURE__*/React.createElement("button", {
+      disabled: tcRespondLoading,
+      onClick: async () => {
+        setTcRespondLoading(true);
+        try {
+          const r = await apiFetch(`/api/sessions/${s.id}/time-change/${p.id}/respond`, {
+            method: 'PUT',
+            body: JSON.stringify({
+              action: 'reject'
+            })
+          });
+          if (r !== null && r !== void 0 && r.ok) {
+            showToast('Time change declined — keeping original time', 'info');
+            setTimeChangeProposal(null);
+            try {
+              const dr = await apiFetch('/api/dashboard');
+              if (dr !== null && dr !== void 0 && dr.ok) setData(await dr.json());
+            } catch {}
+          }
+        } catch {}
+        setTcRespondLoading(false);
+      },
+      style: {
+        padding: '8px 14px',
+        borderRadius: 8,
+        border: '1px solid var(--color-error)',
+        background: 'var(--bg-surface)',
+        color: 'var(--color-error)',
+        fontSize: 12,
+        fontWeight: 600,
+        cursor: 'pointer'
+      }
+    }, "Decline"), proposedByFamily && p.is_within_24h === 1 && p.cancel_fee_hours > 0 && /*#__PURE__*/React.createElement("button", {
+      disabled: tcRespondLoading,
+      onClick: async () => {
+        setTcRespondLoading(true);
+        try {
+          const r = await apiFetch(`/api/sessions/${s.id}/time-change/${p.id}/respond`, {
+            method: 'PUT',
+            body: JSON.stringify({
+              action: 'cancel_with_review'
+            })
+          });
+          if (r !== null && r !== void 0 && r.ok) {
+            showToast(`Session cancelled — you'll receive ${feeAmount ? '$' + feeAmount : 'partial'} compensation`, 'info');
+            setTimeChangeProposal(null);
+            try {
+              const dr = await apiFetch('/api/dashboard');
+              if (dr !== null && dr !== void 0 && dr.ok) setData(await dr.json());
+            } catch {}
+          }
+        } catch {}
+        setTcRespondLoading(false);
+      },
+      style: {
+        padding: '8px 14px',
+        borderRadius: 8,
+        border: 'none',
+        background: 'var(--color-error)',
+        color: 'var(--text-on-primary)',
+        fontSize: 12,
+        fontWeight: 600,
+        cursor: 'pointer'
+      }
+    }, "Cancel + Collect Fee"), /*#__PURE__*/React.createElement("button", {
+      disabled: tcRespondLoading,
+      onClick: async () => {
+        setTcRespondLoading(true);
+        try {
+          const r = await apiFetch(`/api/sessions/${s.id}/time-change/${p.id}/respond`, {
+            method: 'PUT',
+            body: JSON.stringify({
+              action: 'accept'
+            })
+          });
+          if (r !== null && r !== void 0 && r.ok) {
+            showToast('New time accepted!', 'success');
+            setTimeChangeProposal(null);
+            try {
+              const dr = await apiFetch('/api/dashboard');
+              if (dr !== null && dr !== void 0 && dr.ok) setData(await dr.json());
+            } catch {}
+          }
+        } catch {}
+        setTcRespondLoading(false);
+      },
+      style: {
+        padding: '8px 14px',
+        borderRadius: 8,
+        border: 'none',
+        background: 'var(--color-purple)',
+        color: 'var(--text-on-primary)',
+        fontSize: 12,
+        fontWeight: 700,
+        cursor: 'pointer'
+      }
+    }, "Accept New Time"))));
+  })(), visitDetailSessionId && /*#__PURE__*/React.createElement(VisitDetailModal, {
     sessionId: visitDetailSessionId,
     role: "caregiver",
     onClose: () => setVisitDetailSessionId(null),

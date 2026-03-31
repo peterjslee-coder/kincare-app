@@ -52,6 +52,14 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const avatarInputRef = useRef(null);
   const tabContentRef = useRef(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  // Time change proposal state
+  const [timeChangeModal, setTimeChangeModal] = useState(null); // { sessionId, session }
+  const [timeChangeProposal, setTimeChangeProposal] = useState(null); // fetched pending proposal for acknowledge
+  const [tcNewTime, setTcNewTime] = useState('');
+  const [tcNewDuration, setTcNewDuration] = useState('');
+  const [tcReason, setTcReason] = useState('');
+  const [tcLoading, setTcLoading] = useState(false);
+  const [tcRespondLoading, setTcRespondLoading] = useState(false);
   const [highlightTab, setHighlightTab] = useState(false);
   const [jobSort, setJobSort] = useState('best_match');
   const [exclusiveTick, setExclusiveTick] = useState(0);
@@ -347,6 +355,21 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       });
       return cleanup;
     }
+  }, []);
+
+  // Listen for time change WebSocket events — refresh dashboard
+  useEffect(() => {
+    if (typeof onSocketEvent !== 'function') return;
+    const c1 = onSocketEvent('time_change_proposed', () => {
+      apiFetch('/api/dashboard').then(res => res?.ok && res.json().then(d => setData(d))).catch(() => {});
+    });
+    const c2 = onSocketEvent('time_change_accepted', () => {
+      apiFetch('/api/dashboard').then(res => res?.ok && res.json().then(d => setData(d))).catch(() => {});
+    });
+    const c3 = onSocketEvent('time_change_rejected', () => {
+      apiFetch('/api/dashboard').then(res => res?.ok && res.json().then(d => setData(d))).catch(() => {});
+    });
+    return () => { if (c1) c1(); if (c2) c2(); if (c3) c3(); };
   }, []);
 
   // Mark availability as visited when the tab is opened
@@ -1735,10 +1758,11 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               })();
 
               // Styling
-              const borderColor = isActive ? 'var(--color-warning)' : isReady ? 'var(--accent-color)' : isUpcoming ? 'var(--accent-color)' : noAddress ? 'var(--color-error)' : 'var(--role-color)';
-              const borderWidth = isActive || isReady ? 3 : isUpcoming ? 2 : 2;
-              const bgStyle = isActive ? 'linear-gradient(135deg, #fffde7 0%, #fff 100%)' : isReady ? 'linear-gradient(135deg, #fff3e0 0%, #fff 100%)' : 'var(--text-on-primary)';
-              const shadow = (isReady || isActive) ? '0 2px 12px rgba(232, 114, 74, 0.15)' : '0 1px 4px rgba(0,0,0,0.06)';
+              const hasPendingTimeChange = !!s.pendingTimeChangeId;
+              const borderColor = hasPendingTimeChange ? 'var(--color-purple)' : isActive ? 'var(--color-warning)' : isReady ? 'var(--accent-color)' : isUpcoming ? 'var(--accent-color)' : noAddress ? 'var(--color-error)' : 'var(--role-color)';
+              const borderWidth = hasPendingTimeChange ? 3 : isActive || isReady ? 3 : isUpcoming ? 2 : 2;
+              const bgStyle = hasPendingTimeChange ? 'linear-gradient(135deg, var(--color-purple-bg) 0%, var(--bg-card) 100%)' : isActive ? 'linear-gradient(135deg, #fffde7 0%, #fff 100%)' : isReady ? 'linear-gradient(135deg, #fff3e0 0%, #fff 100%)' : 'var(--text-on-primary)';
+              const shadow = hasPendingTimeChange ? '0 2px 12px rgba(123, 31, 162, 0.15)' : (isReady || isActive) ? '0 2px 12px rgba(232, 114, 74, 0.15)' : '0 1px 4px rgba(0,0,0,0.06)';
 
               return (
                 <div key={s.id} className="card" onClick={(e) => {
@@ -1773,6 +1797,11 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                       })()}
                       {isReady && !isActive && <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent-color)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 3 }}>Ready to Check In</div>}
                       {countdownLabel && <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--accent-color)', marginBottom: 3 }}>{countdownLabel}</div>}
+                      {hasPendingTimeChange && (
+                        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-purple)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 2 }}>
+                          ⏰ Time Change Requested
+                        </div>
+                      )}
                       <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)' }}>{recipName}</div>
                       <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>
                         {dayLabel}{timeLabel ? ` at ${timeLabel}` : ''}{duration ? ` \u2022 ${duration}hr` : ''}{svcType ? ` \u2022 ${formatServiceType(svcType)}` : ''}
@@ -1890,6 +1919,24 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                           borderRadius: '10px', fontSize: '14px', fontWeight: 600, cursor: 'default',
                           whiteSpace: 'nowrap',
                         }}>Check in {Math.ceil(minsUntilCheckIn)} min</button>
+                      )}
+                      {s.status === 'confirmed' && !hasPendingTimeChange && !isReady && !isActive && (
+                        <button onClick={(e) => { e.stopPropagation(); setTimeChangeModal({ sessionId: s.id, session: s }); setTcNewTime(s.scheduled_time || ''); setTcNewDuration(String(duration || 2)); setTcReason(''); }}
+                          style={{ padding: '3px 8px', borderRadius: 6, border: '1px solid var(--color-purple)', background: 'var(--color-purple-bg)', color: 'var(--color-purple)', fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>
+                          Change Time
+                        </button>
+                      )}
+                      {hasPendingTimeChange && (
+                        <button onClick={async (e) => {
+                          e.stopPropagation();
+                          try {
+                            const r = await apiFetch(`/api/sessions/${s.id}/time-change`);
+                            if (r?.ok) { const d = await r.json(); setTimeChangeProposal({ ...d.proposal, session: s }); }
+                          } catch {}
+                        }}
+                          style={{ padding: '3px 8px', borderRadius: 6, border: 'none', background: 'var(--color-purple)', color: 'var(--text-on-primary)', fontSize: 10, fontWeight: 700, cursor: 'pointer', animation: 'pulse 2s infinite' }}>
+                          Review Change
+                        </button>
                       )}
                       {s.status === 'payment_hold' && (
                         <span style={{
@@ -3469,6 +3516,173 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
           </div>
         </div>
       )}
+
+      {/* ─── Propose Time Change Modal (caregiver proposing) ─── */}
+      {timeChangeModal && (() => {
+        const s = timeChangeModal.session;
+        const formatT = (t) => { if (!t) return ''; const [h,m] = t.split(':').map(Number); return `${h === 0 ? 12 : h > 12 ? h-12 : h}:${String(m||0).padStart(2,'0')} ${h >= 12 ? 'PM' : 'AM'}`; };
+        const recipName = s.recipientName || s.recipient_name || 'Session';
+        const dur = s.durationHours || s.duration_hours || 2;
+        const sTime = s.time || s.scheduled_time || '';
+        return (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+            <div style={{ background: 'var(--bg-surface)', borderRadius: 14, padding: 24, width: 420, maxWidth: '90vw' }}>
+              <h3 style={{ margin: '0 0 4px', fontSize: 17, color: 'var(--color-purple)' }}>⏰ Propose Time Change</h3>
+              <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '0 0 16px' }}>
+                {recipName} — currently {formatT(sTime)} for {dur}hr
+              </p>
+              <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>New Start Time</label>
+                  <input type="time" value={tcNewTime} onChange={e => setTcNewTime(e.target.value)}
+                    style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border-color)', fontSize: 14, boxSizing: 'border-box' }} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Duration (hours)</label>
+                  <select value={tcNewDuration} onChange={e => setTcNewDuration(e.target.value)}
+                    style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border-color)', fontSize: 14, boxSizing: 'border-box' }}>
+                    {[1, 1.5, 2, 2.5, 3, 3.5, 4, 5, 6, 8].map(h => <option key={h} value={h}>{h} hr{h !== 1 ? 's' : ''}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Reason (optional)</label>
+                <textarea value={tcReason} onChange={e => setTcReason(e.target.value)} placeholder="Why the time change?"
+                  style={{ width: '100%', minHeight: 50, padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border-color)', fontSize: 13, resize: 'vertical', boxSizing: 'border-box' }} />
+              </div>
+              {/* Disclosure */}
+              <div style={{ padding: '8px 10px', background: 'var(--color-purple-bg)', borderRadius: 8, marginBottom: 14, fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                <strong style={{ color: 'var(--color-purple)' }}>Time change policy:</strong> The family will be notified and must acknowledge the new time. If this change is within 24 hours of the session, the family may cancel at no charge and leave a review.
+              </div>
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <button onClick={() => setTimeChangeModal(null)}
+                  style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid var(--border-color)', background: 'var(--bg-surface)', color: 'var(--text-secondary)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                  Cancel
+                </button>
+                <button disabled={tcLoading || !tcNewTime || (tcNewTime === sTime && parseFloat(tcNewDuration) === dur)} onClick={async () => {
+                  setTcLoading(true);
+                  try {
+                    const r = await apiFetch(`/api/sessions/${s.id}/propose-time-change`, {
+                      method: 'POST', body: JSON.stringify({ proposedTime: tcNewTime, proposedDuration: parseFloat(tcNewDuration), reason: tcReason || null }),
+                    });
+                    if (r?.ok) {
+                      showToast('Time change proposed — family notified', 'success');
+                      setTimeChangeModal(null);
+                      try { const dr = await apiFetch('/api/dashboard'); if (dr?.ok) setData(await dr.json()); } catch {}
+                    } else {
+                      const d = await r?.json().catch(() => ({}));
+                      showToast(d.error || 'Failed to propose time change', 'error');
+                    }
+                  } catch { showToast('Network error', 'error'); }
+                  setTcLoading(false);
+                }}
+                  style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: tcLoading ? 'var(--text-muted)' : 'var(--color-purple)', color: 'var(--text-on-primary)', fontSize: 13, fontWeight: 600, cursor: tcLoading ? 'wait' : 'pointer' }}>
+                  {tcLoading ? 'Sending...' : 'Propose Change'}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ─── Acknowledge Time Change Modal (reviewing family's proposal) ─── */}
+      {timeChangeProposal && (() => {
+        const p = timeChangeProposal;
+        const s = p.session;
+        const formatT = (t) => { if (!t) return ''; const [h,m] = t.split(':').map(Number); return `${h === 0 ? 12 : h > 12 ? h-12 : h}:${String(m||0).padStart(2,'0')} ${h >= 12 ? 'PM' : 'AM'}`; };
+        const proposedByFamily = p.proposed_by === 'family';
+        const dur = s.durationHours || s.duration_hours || 2;
+        const hourlyRate = dur > 0 && s.caregiverPayout > 0 ? (s.caregiverPayout / dur) : 28;
+        const feeAmount = p.cancel_fee_hours ? (p.cancel_fee_hours * hourlyRate).toFixed(2) : null;
+        return (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+            <div style={{ background: 'var(--bg-surface)', borderRadius: 14, padding: 24, width: 420, maxWidth: '90vw' }}>
+              <h3 style={{ margin: '0 0 8px', fontSize: 17, color: 'var(--color-purple)' }}>⏰ Time Change Request</h3>
+              <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '0 0 14px' }}>
+                {p.proposer_name || 'The family'} wants to change the session time:
+              </p>
+              <div style={{ display: 'flex', gap: 12, marginBottom: 14 }}>
+                <div style={{ flex: 1, padding: '10px 14px', background: 'var(--bg-neutral)', borderRadius: 10, textAlign: 'center' }}>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>Current</div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>{formatT(p.original_time)}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{p.original_duration}hr</div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', fontSize: 18, color: 'var(--color-purple)' }}>→</div>
+                <div style={{ flex: 1, padding: '10px 14px', background: 'var(--color-purple-bg)', borderRadius: 10, textAlign: 'center', border: '2px solid var(--color-purple)' }}>
+                  <div style={{ fontSize: 10, color: 'var(--color-purple)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>Proposed</div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--color-purple)' }}>{formatT(p.proposed_time)}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{p.proposed_duration}hr</div>
+                </div>
+              </div>
+              {p.reason && (
+                <div style={{ padding: '8px 10px', background: 'var(--bg-neutral)', borderRadius: 8, marginBottom: 12, fontSize: 12, color: 'var(--text-primary)', fontStyle: 'italic' }}>
+                  "{p.reason}"
+                </div>
+              )}
+              {/* Policy disclosure for caregiver reviewing family's late proposal */}
+              {proposedByFamily && p.is_within_24h === 1 && (
+                <div style={{ padding: '8px 10px', background: 'var(--color-purple-bg)', borderRadius: 8, marginBottom: 14, fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                  <strong style={{ color: 'var(--color-purple)' }}>Late change policy:</strong> This change was requested within 24 hours of the session. You may decline and cancel, and you'll be compensated for {p.cancel_fee_hours ? `${p.cancel_fee_hours} hour${p.cancel_fee_hours !== 1 ? 's' : ''}` : 'time'} outside the original window{feeAmount ? ` ($${feeAmount})` : ''}.
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                <button onClick={() => setTimeChangeProposal(null)}
+                  style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid var(--border-color)', background: 'var(--bg-surface)', color: 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                  Close
+                </button>
+                {/* Reject — keep original time */}
+                <button disabled={tcRespondLoading} onClick={async () => {
+                  setTcRespondLoading(true);
+                  try {
+                    const r = await apiFetch(`/api/sessions/${s.id}/time-change/${p.id}/respond`, {
+                      method: 'PUT', body: JSON.stringify({ action: 'reject' }),
+                    });
+                    if (r?.ok) { showToast('Time change declined — keeping original time', 'info'); setTimeChangeProposal(null); try { const dr = await apiFetch('/api/dashboard'); if (dr?.ok) setData(await dr.json()); } catch {} }
+                  } catch {}
+                  setTcRespondLoading(false);
+                }}
+                  style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid var(--color-error)', background: 'var(--bg-surface)', color: 'var(--color-error)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                  Decline
+                </button>
+                {/* Cancel + collect fee (only if family proposed within 24h) */}
+                {proposedByFamily && p.is_within_24h === 1 && p.cancel_fee_hours > 0 && (
+                  <button disabled={tcRespondLoading} onClick={async () => {
+                    setTcRespondLoading(true);
+                    try {
+                      const r = await apiFetch(`/api/sessions/${s.id}/time-change/${p.id}/respond`, {
+                        method: 'PUT', body: JSON.stringify({ action: 'cancel_with_review' }),
+                      });
+                      if (r?.ok) {
+                        showToast(`Session cancelled — you'll receive ${feeAmount ? '$' + feeAmount : 'partial'} compensation`, 'info');
+                        setTimeChangeProposal(null);
+                        try { const dr = await apiFetch('/api/dashboard'); if (dr?.ok) setData(await dr.json()); } catch {}
+                      }
+                    } catch {}
+                    setTcRespondLoading(false);
+                  }}
+                    style={{ padding: '8px 14px', borderRadius: 8, border: 'none', background: 'var(--color-error)', color: 'var(--text-on-primary)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                    Cancel + Collect Fee
+                  </button>
+                )}
+                {/* Accept the new time */}
+                <button disabled={tcRespondLoading} onClick={async () => {
+                  setTcRespondLoading(true);
+                  try {
+                    const r = await apiFetch(`/api/sessions/${s.id}/time-change/${p.id}/respond`, {
+                      method: 'PUT', body: JSON.stringify({ action: 'accept' }),
+                    });
+                    if (r?.ok) { showToast('New time accepted!', 'success'); setTimeChangeProposal(null); try { const dr = await apiFetch('/api/dashboard'); if (dr?.ok) setData(await dr.json()); } catch {} }
+                  } catch {}
+                  setTcRespondLoading(false);
+                }}
+                  style={{ padding: '8px 14px', borderRadius: 8, border: 'none', background: 'var(--color-purple)', color: 'var(--text-on-primary)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                  Accept New Time
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Visit Detail Modal */}
       {visitDetailSessionId && (

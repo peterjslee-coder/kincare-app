@@ -327,6 +327,7 @@ async function familyDashboard(db, userId, res) {
           offeredToCaregiverId: s.offered_to_caregiver_id || null,
           exclusiveUntil: s.exclusive_until || null,
           offeredCaregiverName: s.offered_caregiver_name || null,
+          pendingTimeChangeId: s.pending_time_change_id || null,
         };
       }),
       recentActivity: recentActivity.map((a) => {
@@ -742,6 +743,7 @@ async function caregiverDashboard(db, userId, res) {
         interviewType: s.interview_type || null,
         interviewStatus: s.interview_status || null,
         checkInTime: s.check_in_time || null,
+        pendingTimeChangeId: s.pending_time_change_id || null,
       };
     }),
     reviews: reviews.map(r => ({

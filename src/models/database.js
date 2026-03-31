@@ -1061,6 +1061,26 @@ async function initializeDatabase() {
     )`,
     `CREATE INDEX IF NOT EXISTS idx_legal_docs_type_active ON legal_documents(doc_type, is_active)`,
     `CREATE INDEX IF NOT EXISTS idx_legal_acceptances_user ON user_legal_acceptances(user_id, doc_type)`,
+    // ─── v1.58.1 — Time change proposals for confirmed sessions ───
+    `CREATE TABLE IF NOT EXISTS time_change_proposals (
+      id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL REFERENCES care_sessions(id),
+      proposed_by TEXT NOT NULL,
+      proposed_by_user_id TEXT NOT NULL REFERENCES users(id),
+      original_time TEXT NOT NULL,
+      original_duration REAL NOT NULL,
+      proposed_time TEXT NOT NULL,
+      proposed_duration REAL NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      acknowledged_by_user_id TEXT REFERENCES users(id),
+      acknowledged_at TIMESTAMPTZ,
+      cancel_fee_hours REAL,
+      reason TEXT,
+      is_within_24h INTEGER DEFAULT 0,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_time_change_session ON time_change_proposals(session_id, status)`,
+    `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS pending_time_change_id TEXT`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }

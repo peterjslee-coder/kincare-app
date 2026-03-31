@@ -1676,6 +1676,322 @@ router.post("/:id/pending-tip", requireRole("family"), async (req, res) => {
   }
 });
 
+// ─── POST /api/sessions/:id/propose-time-change ───
+// Caregiver or family proposes new start/end time for a confirmed session
+router.post("/:id/propose-time-change", async (req, res) => {
+  try {
+    const db = await getDb();
+    const { proposedTime, proposedDuration, reason } = req.body;
+    const userId = req.user.id;
+    const activeRole = req.user.activeRole || req.user.role;
+
+    if (!proposedTime || !proposedDuration) {
+      return res.status(400).json({ error: "proposedTime and proposedDuration are required" });
+    }
+
+    const session = await db.prepare(`
+      SELECT cs.*, cp.user_id AS caregiver_user_id,
+        cr.timezone AS care_timezone,
+        cu.first_name || ' ' || cu.last_name AS caregiver_name,
+        fu.first_name || ' ' || fu.last_name AS family_name,
+        cr.first_name || ' ' || cr.last_name AS recipient_name
+      FROM care_sessions cs
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      LEFT JOIN users cu ON cp.user_id = cu.id
+      LEFT JOIN users fu ON cs.family_user_id = fu.id
+      LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+      WHERE cs.id = ?
+    `).get(req.params.id);
+
+    if (!session) return res.status(404).json({ error: "Session not found" });
+    if (session.status !== "confirmed") {
+      return res.status(400).json({ error: "Can only change time on confirmed sessions" });
+    }
+    if (session.pending_time_change_id) {
+      return res.status(400).json({ error: "A time change is already pending for this session" });
+    }
+
+    // Determine who is proposing
+    let proposedBy;
+    if (activeRole === "caregiver" || userId === session.caregiver_user_id) {
+      proposedBy = "caregiver";
+    } else if (userId === session.family_user_id) {
+      proposedBy = "family";
+    } else {
+      return res.status(403).json({ error: "You are not part of this session" });
+    }
+
+    // Check if within 24 hours
+    const careTz = session.care_timezone || "America/New_York";
+    const sessionDateTime = buildDateTimeInZone(
+      session.scheduled_date.split("T")[0],
+      session.scheduled_time || "00:00",
+      careTz
+    );
+    const hoursUntil = (sessionDateTime - getNowInZone(careTz)) / (1000 * 60 * 60);
+    const isWithin24h = hoursUntil < 24;
+
+    // Calculate overlap for cancellation fee reference
+    const origStartMin = parseTimeToMinutes(session.scheduled_time);
+    const origEndMin = origStartMin + session.duration_hours * 60;
+    const propStartMin = parseTimeToMinutes(proposedTime);
+    const propEndMin = propStartMin + proposedDuration * 60;
+    const overlapStart = Math.max(origStartMin, propStartMin);
+    const overlapEnd = Math.min(origEndMin, propEndMin);
+    const overlapMinutes = Math.max(0, overlapEnd - overlapStart);
+    const feeHours = session.duration_hours - (overlapMinutes / 60);
+
+    const proposalId = uuid();
+    await db.prepare(`
+      INSERT INTO time_change_proposals (id, session_id, proposed_by, proposed_by_user_id,
+        original_time, original_duration, proposed_time, proposed_duration,
+        status, is_within_24h, cancel_fee_hours, reason, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, NOW())
+    `).run(
+      proposalId, req.params.id, proposedBy, userId,
+      session.scheduled_time, session.duration_hours,
+      proposedTime, proposedDuration,
+      isWithin24h ? 1 : 0, feeHours > 0 ? feeHours : 0, reason || null
+    );
+
+    // Mark session as having a pending time change
+    await db.prepare(
+      "UPDATE care_sessions SET pending_time_change_id = ?, updated_at = NOW() WHERE id = ?"
+    ).run(proposalId, req.params.id);
+
+    // Notify the other party
+    const emitToUser = req.app.get("emitToUser");
+    const notifyUserId = proposedBy === "caregiver" ? session.family_user_id : session.caregiver_user_id;
+    const proposerName = proposedBy === "caregiver" ? session.caregiver_name : session.family_name;
+    const friendlyTime = formatTime12h(proposedTime);
+    const origFriendlyTime = formatTime12h(session.scheduled_time);
+
+    if (emitToUser) {
+      emitToUser(notifyUserId, "time_change_proposed", {
+        sessionId: req.params.id,
+        proposalId,
+        proposedBy,
+        proposerName,
+        proposedTime,
+        proposedDuration,
+        originalTime: session.scheduled_time,
+        originalDuration: session.duration_hours,
+        isWithin24h,
+        feeHours,
+        recipientName: session.recipient_name,
+      });
+    }
+
+    // Push notification
+    if (sendPushToUser) {
+      await sendPushToUser(notifyUserId, {
+        title: "⏰ Time Change Request",
+        body: `${proposerName} wants to change ${session.recipient_name}'s session from ${origFriendlyTime} to ${friendlyTime}. Tap to review.`,
+        data: { type: "time_change", sessionId: req.params.id, proposalId },
+      }, "time_change");
+    }
+
+    res.json({
+      proposal: { id: proposalId, proposedBy, proposedTime, proposedDuration, isWithin24h, feeHours, status: "pending" },
+    });
+  } catch (err) {
+    console.error("Time change proposal error:", err);
+    res.status(500).json({ error: "Failed to propose time change" });
+  }
+});
+
+// ─── PUT /api/sessions/:id/time-change/:proposalId/respond ───
+// Accept, reject, or cancel-with-fee a time change proposal
+router.put("/:id/time-change/:proposalId/respond", async (req, res) => {
+  try {
+    const db = await getDb();
+    const { action, cancelReason } = req.body; // action: 'accept', 'reject', 'cancel_with_review'
+    const userId = req.user.id;
+    const activeRole = req.user.activeRole || req.user.role;
+
+    if (!["accept", "reject", "cancel_with_review"].includes(action)) {
+      return res.status(400).json({ error: "Invalid action. Use accept, reject, or cancel_with_review." });
+    }
+
+    const proposal = await db.prepare("SELECT * FROM time_change_proposals WHERE id = ? AND session_id = ?")
+      .get(req.params.proposalId, req.params.id);
+    if (!proposal) return res.status(404).json({ error: "Proposal not found" });
+    if (proposal.status !== "pending") return res.status(400).json({ error: "Proposal already responded to" });
+
+    const session = await db.prepare(`
+      SELECT cs.*, cp.user_id AS caregiver_user_id, cp.hourly_rate,
+        cr.timezone AS care_timezone,
+        cu.first_name || ' ' || cu.last_name AS caregiver_name,
+        fu.first_name || ' ' || fu.last_name AS family_name,
+        cr.first_name || ' ' || cr.last_name AS recipient_name
+      FROM care_sessions cs
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      LEFT JOIN users cu ON cp.user_id = cu.id
+      LEFT JOIN users fu ON cs.family_user_id = fu.id
+      LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+      WHERE cs.id = ?
+    `).get(req.params.id);
+
+    if (!session) return res.status(404).json({ error: "Session not found" });
+
+    const emitToUser = req.app.get("emitToUser");
+    const isResponderCaregiver = activeRole === "caregiver" || userId === session.caregiver_user_id;
+    const isResponderFamily = userId === session.family_user_id;
+    const notifyUserId = isResponderCaregiver ? session.family_user_id : session.caregiver_user_id;
+    const responderName = isResponderCaregiver ? session.caregiver_name : session.family_name;
+
+    if (action === "accept") {
+      // Update proposal status
+      await db.prepare(
+        "UPDATE time_change_proposals SET status = 'accepted', acknowledged_by_user_id = ?, acknowledged_at = NOW() WHERE id = ?"
+      ).run(userId, proposal.id);
+
+      // Apply the time change to the session
+      await db.prepare(
+        "UPDATE care_sessions SET scheduled_time = ?, duration_hours = ?, pending_time_change_id = NULL, updated_at = NOW() WHERE id = ?"
+      ).run(proposal.proposed_time, proposal.proposed_duration, req.params.id);
+
+      // Notify proposer
+      if (emitToUser) {
+        emitToUser(proposal.proposed_by_user_id === session.caregiver_user_id ? session.caregiver_user_id : session.family_user_id, "time_change_accepted", {
+          sessionId: req.params.id, proposalId: proposal.id, acceptedBy: responderName,
+          newTime: proposal.proposed_time, newDuration: proposal.proposed_duration,
+        });
+      }
+      if (sendPushToUser) {
+        const pushTarget = proposal.proposed_by === "caregiver" ? session.caregiver_user_id : session.family_user_id;
+        await sendPushToUser(pushTarget, {
+          title: "✅ Time Change Accepted",
+          body: `${responderName} accepted the new time: ${formatTime12h(proposal.proposed_time)} for ${proposal.proposed_duration}hr.`,
+          data: { type: "time_change_accepted", sessionId: req.params.id },
+        }, "time_change");
+      }
+
+      res.json({ ok: true, action: "accepted", newTime: proposal.proposed_time, newDuration: proposal.proposed_duration });
+
+    } else if (action === "reject") {
+      // Simply reject — keep original time
+      await db.prepare(
+        "UPDATE time_change_proposals SET status = 'rejected', acknowledged_by_user_id = ?, acknowledged_at = NOW() WHERE id = ?"
+      ).run(userId, proposal.id);
+      await db.prepare(
+        "UPDATE care_sessions SET pending_time_change_id = NULL, updated_at = NOW() WHERE id = ?"
+      ).run(req.params.id);
+
+      if (emitToUser) {
+        emitToUser(proposal.proposed_by_user_id === session.caregiver_user_id ? session.caregiver_user_id : session.family_user_id, "time_change_rejected", {
+          sessionId: req.params.id, proposalId: proposal.id, rejectedBy: responderName,
+        });
+      }
+
+      res.json({ ok: true, action: "rejected" });
+
+    } else if (action === "cancel_with_review") {
+      // Cancel the session due to time change + fee logic
+      const isWithin24h = proposal.is_within_24h === 1;
+
+      if (proposal.proposed_by === "caregiver" && isResponderFamily) {
+        // Caregiver proposed, family cancels → no charge + can review caregiver
+        await db.prepare(
+          "UPDATE time_change_proposals SET status = 'cancelled_no_fee', acknowledged_by_user_id = ?, acknowledged_at = NOW() WHERE id = ?"
+        ).run(userId, proposal.id);
+        await db.prepare(`
+          UPDATE care_sessions SET status = 'cancelled', pending_time_change_id = NULL,
+            cancellation_reason = ?, cancelled_by = 'family', cancelled_at = NOW(),
+            late_cancel = ?, cancelled_caregiver_id = caregiver_id,
+            updated_at = NOW()
+          WHERE id = ?
+        `).run(cancelReason || "Cancelled due to caregiver time change", isWithin24h ? 1 : 0, req.params.id);
+
+        if (emitToUser) {
+          emitToUser(session.caregiver_user_id, "session_update", {
+            sessionId: req.params.id, status: "cancelled", cancelledBy: "family",
+            reason: "Family cancelled after your time change proposal",
+          });
+        }
+
+        res.json({
+          ok: true, action: "cancelled", cancelledBy: "family",
+          chargeApplies: false, canReview: true,
+          cancelledCaregiverId: session.caregiver_id,
+        });
+
+      } else if (proposal.proposed_by === "family" && isResponderCaregiver) {
+        // Family proposed, caregiver cancels → caregiver gets partial/full fee
+        const feeHours = proposal.cancel_fee_hours || 0;
+        const hourlyRate = session.hourly_rate || 28;
+        const feeCents = Math.round(feeHours * hourlyRate * 100);
+
+        await db.prepare(
+          "UPDATE time_change_proposals SET status = 'cancelled_with_fee', acknowledged_by_user_id = ?, acknowledged_at = NOW() WHERE id = ?"
+        ).run(userId, proposal.id);
+        await db.prepare(`
+          UPDATE care_sessions SET status = 'open', pending_time_change_id = NULL,
+            cancellation_reason = ?, cancelled_by = 'caregiver', cancelled_at = NOW(),
+            cancelled_caregiver_id = caregiver_id, caregiver_id = NULL,
+            late_cancel = ?, updated_at = NOW()
+          WHERE id = ?
+        `).run(cancelReason || "Cancelled due to family time change", isWithin24h ? 1 : 0, req.params.id);
+
+        if (emitToUser) {
+          emitToUser(session.family_user_id, "session_update", {
+            sessionId: req.params.id, status: "open", cancelledBy: "caregiver",
+            reason: "Caregiver declined your time change",
+            feeHours, feeCents,
+          });
+        }
+
+        res.json({
+          ok: true, action: "cancelled", cancelledBy: "caregiver",
+          feeHours, feeCents, hourlyRate,
+          chargeApplies: feeHours > 0,
+        });
+
+      } else {
+        return res.status(400).json({ error: "Invalid cancel scenario" });
+      }
+    }
+  } catch (err) {
+    console.error("Time change response error:", err);
+    res.status(500).json({ error: "Failed to respond to time change" });
+  }
+});
+
+// ─── GET /api/sessions/:id/time-change ───
+// Get pending time change proposal for a session
+router.get("/:id/time-change", async (req, res) => {
+  try {
+    const db = await getDb();
+    const proposal = await db.prepare(`
+      SELECT tcp.*, u.first_name || ' ' || u.last_name AS proposer_name
+      FROM time_change_proposals tcp
+      JOIN users u ON tcp.proposed_by_user_id = u.id
+      WHERE tcp.session_id = ? AND tcp.status = 'pending'
+      ORDER BY tcp.created_at DESC LIMIT 1
+    `).get(req.params.id);
+    res.json({ proposal: proposal || null });
+  } catch (err) {
+    console.error("Time change fetch error:", err);
+    res.status(500).json({ error: "Failed to fetch time change" });
+  }
+});
+
+// Helper: parse "HH:MM" to minutes since midnight
+function parseTimeToMinutes(timeStr) {
+  if (!timeStr) return 0;
+  const [h, m] = timeStr.split(":").map(Number);
+  return h * 60 + (m || 0);
+}
+
+// Helper: format "14:00" → "2:00 PM"
+function formatTime12h(timeStr) {
+  if (!timeStr) return "";
+  const [h, m] = timeStr.split(":").map(Number);
+  const ampm = h >= 12 ? "PM" : "AM";
+  const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+  return `${h12}:${String(m || 0).padStart(2, "0")} ${ampm}`;
+}
+
 // ─── PUT /api/sessions/:id/cancel ───
 // Cancel a confirmed/pending session with late-cancel tracking
 router.put("/:id/cancel", async (req, res) => {
