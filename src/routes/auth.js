@@ -933,7 +933,7 @@ router.delete("/me", authenticate, async (req, res) => {
 
       // 3. Retain personal documents for fraud/audit protection (don't delete)
       await tx.prepare("UPDATE caregiver_documents SET retained_from_deleted = 1, deleted_user_email = ? WHERE user_id = ?").run(user.email, userId);
-      await tx.prepare("UPDATE verified_documents SET retained_from_deleted = 1, deleted_user_email = ? WHERE user_id = ?").run(user.email, userId);
+      await tx.prepare("UPDATE verified_documents SET retained_from_deleted = 1, deleted_user_email = ? WHERE uploaded_by = ?").run(user.email, userId);
       await tx.prepare("UPDATE authorization_documents SET retained_from_deleted = 1, deleted_user_email = ? WHERE uploaded_by_user_id = ?").run(user.email, userId);
 
       // 4. Remove from active teams & connections (but keep invite history)

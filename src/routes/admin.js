@@ -844,8 +844,8 @@ router.delete("/users/:id", async (req, res) => {
 
       // 3. RETAIN personal documents — mark as retained for legal/compliance
       // Documents must survive account deletion for fraud/forgery protection
-      await tx.prepare("UPDATE caregiver_documents SET retained_from_deleted = 1, deleted_user_email = ? WHERE user_id = ?").run(anonEmail, id);
-      await tx.prepare("UPDATE verified_documents SET retained_from_deleted = 1, deleted_user_email = ? WHERE uploaded_by = ?").run(anonEmail, id);
+      await tx.prepare("UPDATE caregiver_documents SET retained_from_deleted = 1, deleted_user_email = ? WHERE user_id = ?").run(user.email, id);
+      await tx.prepare("UPDATE verified_documents SET retained_from_deleted = 1, deleted_user_email = ? WHERE uploaded_by = ?").run(user.email, id);
 
       // 4. Remove from active teams & connections
       await tx.prepare("DELETE FROM care_team_members WHERE user_id = ?").run(id);
@@ -974,7 +974,7 @@ router.delete("/users/:id/nuke", async (req, res) => {
 
     // 2. Get user info before nuking
     const { id } = req.params;
-    const user = await db.prepare("SELECT id, email, role, is_admin FROM users WHERE id = ?").get(id);
+    const user = await db.prepare("SELECT id, email, role, is_admin, first_name, last_name FROM users WHERE id = ?").get(id);
     if (!user) return res.status(404).json({ error: "User not found" });
 
     // Safety: never nuke yourself
@@ -1085,8 +1085,8 @@ router.delete("/users/:id/nuke", async (req, res) => {
       await tx.prepare("DELETE FROM user_passkeys WHERE user_id = ?").run(id);
 
       // RETAIN documents — mark as retained for legal/compliance
-      await tx.prepare("UPDATE caregiver_documents SET retained_from_deleted = 1, deleted_user_email = ? WHERE user_id = ?").run(anonEmail, id);
-      await tx.prepare("UPDATE verified_documents SET retained_from_deleted = 1, deleted_user_email = ? WHERE uploaded_by = ?").run(anonEmail, id);
+      await tx.prepare("UPDATE caregiver_documents SET retained_from_deleted = 1, deleted_user_email = ? WHERE user_id = ?").run(user.email, id);
+      await tx.prepare("UPDATE verified_documents SET retained_from_deleted = 1, deleted_user_email = ? WHERE uploaded_by = ?").run(user.email, id);
       await tx.prepare("DELETE FROM background_check_payments WHERE user_id = ?").run(id);
       await tx.prepare("DELETE FROM payout_preferences WHERE user_id = ?").run(id);
 
