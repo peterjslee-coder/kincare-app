@@ -1043,8 +1043,8 @@ router.delete("/users/:id/nuke", async (req, res) => {
         await tx.prepare("DELETE FROM verification_attempts WHERE care_recipient_id = ?").run(cr.id);
         await tx.prepare("DELETE FROM first_visit_confirmations WHERE care_recipient_id = ?").run(cr.id);
         // RETAIN authorization documents — mark as retained for legal/compliance
-        await tx.prepare("UPDATE authorization_documents SET retained_from_deleted = 1 WHERE care_recipient_id = ?").run(cr.id);
-        await tx.prepare("UPDATE verified_documents SET retained_from_deleted = 1 WHERE owner_type = 'care_recipient' AND owner_id = ?").run(cr.id);
+        try { await tx.prepare("UPDATE authorization_documents SET retained_from_deleted = 1 WHERE care_recipient_id = ?").run(cr.id); } catch (e) { console.log('[NUKE] auth_docs retain skip:', e.message); }
+        try { await tx.prepare("UPDATE verified_documents SET retained_from_deleted = 1 WHERE owner_type = 'care_recipient' AND owner_id = ?").run(cr.id); } catch (e) { console.log('[NUKE] verified_docs retain skip:', e.message); }
         await tx.prepare("DELETE FROM recipient_notes WHERE care_recipient_id = ?").run(cr.id);
         await tx.prepare("DELETE FROM caregiver_assignments WHERE care_recipient_id = ?").run(cr.id);
         await tx.prepare("DELETE FROM care_recipient_shares WHERE care_recipient_id = ?").run(cr.id);
@@ -1085,10 +1085,10 @@ router.delete("/users/:id/nuke", async (req, res) => {
       await tx.prepare("DELETE FROM user_passkeys WHERE user_id = ?").run(id);
 
       // RETAIN documents — mark as retained for legal/compliance
-      await tx.prepare("UPDATE caregiver_documents SET retained_from_deleted = 1, deleted_user_email = ? WHERE user_id = ?").run(user.email, id);
-      await tx.prepare("UPDATE verified_documents SET retained_from_deleted = 1, deleted_user_email = ? WHERE uploaded_by = ?").run(user.email, id);
-      await tx.prepare("DELETE FROM background_check_payments WHERE user_id = ?").run(id);
-      await tx.prepare("DELETE FROM payout_preferences WHERE user_id = ?").run(id);
+      try { await tx.prepare("UPDATE caregiver_documents SET retained_from_deleted = 1, deleted_user_email = ? WHERE user_id = ?").run(user.email, id); } catch (e) { console.log('[NUKE] caregiver_documents retain skip:', e.message); }
+      try { await tx.prepare("UPDATE verified_documents SET retained_from_deleted = 1, deleted_user_email = ? WHERE uploaded_by = ?").run(user.email, id); } catch (e) { console.log('[NUKE] verified_documents retain skip:', e.message); }
+      try { await tx.prepare("DELETE FROM background_check_payments WHERE user_id = ?").run(id); } catch (e) { /* table may not exist */ }
+      try { await tx.prepare("DELETE FROM payout_preferences WHERE user_id = ?").run(id); } catch (e) { /* table may not exist */ }
 
       // Social & messaging — must handle ALL FK references to users(id)
       await tx.prepare("DELETE FROM care_team_members WHERE user_id = ?").run(id);
@@ -1133,6 +1133,20 @@ router.delete("/users/:id/nuke", async (req, res) => {
       // Consent audit log entries by this user
       await tx.prepare("DELETE FROM consent_audit_log WHERE actor_id = ?").run(id);
 
+      // Safety flags, tickets, referrals, milestones, reminders, manual payments
+      try { await tx.prepare("DELETE FROM safety_flags WHERE user_id = ?").run(id); } catch (e) { /* table may not exist */ }
+      try { await tx.prepare("UPDATE safety_flags SET reviewed_by = NULL WHERE reviewed_by = ?").run(id); } catch (e) { /* */ }
+      try { await tx.prepare("DELETE FROM admin_ticket_comments WHERE author_id = ?").run(id); } catch (e) { /* */ }
+      try { await tx.prepare("UPDATE admin_tickets SET assigned_to = NULL WHERE assigned_to = ?").run(id); } catch (e) { /* */ }
+      try { await tx.prepare("DELETE FROM admin_tickets WHERE reporter_user_id = ?").run(id); } catch (e) { /* */ }
+      try { await tx.prepare("UPDATE admin_tickets SET related_user_id = NULL WHERE related_user_id = ?").run(id); } catch (e) { /* */ }
+      try { await tx.prepare("DELETE FROM referrals WHERE referrer_user_id = ?").run(id); } catch (e) { /* */ }
+      try { await tx.prepare("UPDATE referrals SET referred_user_id = NULL WHERE referred_user_id = ?").run(id); } catch (e) { /* */ }
+      try { await tx.prepare("DELETE FROM milestones WHERE user_id = ?").run(id); } catch (e) { /* */ }
+      try { await tx.prepare("DELETE FROM manual_payments WHERE family_user_id = ?").run(id); } catch (e) { /* */ }
+      try { await tx.prepare("DELETE FROM kindred_reminders WHERE from_user_id = ?").run(id); } catch (e) { /* */ }
+      try { await tx.prepare("DELETE FROM consent_outreach WHERE initiated_by = ?").run(id); } catch (e) { /* */ }
+
       // Finally: DELETE the user row
       await tx.prepare("DELETE FROM users WHERE id = ?").run(id);
     }); // end transaction
@@ -1142,7 +1156,8 @@ router.delete("/users/:id/nuke", async (req, res) => {
     res.json({ success: true, message: `☢️ Permanently deleted ${user.email} and all associated data.` });
   } catch (err) {
     console.error("Nuke user error:", err);
-    console.error("Nuke error:", err.message); res.status(500).json({ error: "Operation failed" });
+    console.error("Nuke error stack:", err.stack);
+    res.status(500).json({ error: `Operation failed: ${err.message}` });
   }
 });
 
