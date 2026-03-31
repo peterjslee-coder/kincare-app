@@ -83,19 +83,39 @@ router.use(async (req, res, next) => {
   // Skip IP check for exempt endpoints
   if (IP_CHECK_EXEMPT.some(p => path === p || path.startsWith(p))) return next();
 
-  const ip = getClientIp(req);
-  const trusted = await isTrustedIp(req.user.id, ip);
-  if (trusted) {
-    req.trustedIp = true;
+  try {
+    const ip = getClientIp(req);
+    const trusted = await isTrustedIp(req.user.id, ip);
+    if (trusted) {
+      req.trustedIp = true;
+      return next();
+    }
+
+    // Bootstrap: if NO admin has ANY trusted IPs yet, auto-trust this admin
+    // (fresh deploy / empty table — can't lock everyone out)
+    const db = await getDb();
+    const anyTrusted = await db.prepare("SELECT COUNT(*) as cnt FROM trusted_admin_ips").get();
+    if (!anyTrusted || Number(anyTrusted.cnt) === 0) {
+      await registerTrustedIp(req.user.id, ip, {
+        userAgent: (req.headers["user-agent"] || "").substring(0, 200),
+        verifiedVia: "bootstrap_first_admin",
+      });
+      console.log(`  [ip-trust] Bootstrap: auto-trusted ${req.user.email} at ${ip} (empty trusted_admin_ips table)`);
+      req.trustedIp = true;
+      return next();
+    }
+
+    // Unknown IP — require passkey verification
+    return res.status(403).json({
+      error: "Admin access from an unrecognized network. Please verify your identity with a passkey.",
+      code: "IP_VERIFICATION_REQUIRED",
+      ip: ip,
+    });
+  } catch (err) {
+    // If IP check itself fails (DB error, table missing, etc.), don't lock out admin
+    console.error("IP trust check error (allowing through):", err.message);
     return next();
   }
-
-  // Unknown IP — require passkey verification
-  return res.status(403).json({
-    error: "Admin access from an unrecognized network. Please verify your identity with a passkey.",
-    code: "IP_VERIFICATION_REQUIRED",
-    ip: ip,
-  });
 });
 
 // ─── POST /api/admin/ip-verify/challenge — Generate passkey challenge for IP verification ───
