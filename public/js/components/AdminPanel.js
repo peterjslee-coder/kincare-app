@@ -4005,10 +4005,25 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                             <span style={{ fontWeight: 700, fontSize: 13, color: ts.accent }}>{ins.title}</span>
                           </div>
                           <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>{ins.detail}</div>
+                          {ins.recommendation && (
+                            <div style={{
+                              fontSize: 12, color: ts.accent, lineHeight: 1.5, marginTop: 6,
+                              padding: '6px 10px', background: 'rgba(255,255,255,0.6)', borderRadius: 6,
+                              fontWeight: 500,
+                            }}>
+                              💡 {ins.recommendation}
+                            </div>
+                          )}
                         </div>
                       );
                     })}
                   </div>
+                  {/* Trusted context footer */}
+                  {secInsights.trustedContext && secInsights.trustedContext.filteredNoiseCount > 0 && (
+                    <div style={{ padding: '8px 18px 10px', borderTop: '1px solid #f0f0f0', fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                      {secInsights.trustedContext.filteredNoiseCount} event{secInsights.trustedContext.filteredNoiseCount > 1 ? 's' : ''} from known admin IPs filtered from severity counts
+                    </div>
+                  )}
                 </div>
               )}
 

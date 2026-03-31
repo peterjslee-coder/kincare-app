@@ -9279,8 +9279,9 @@ const Dashboard = window.Dashboard = ({
     }
     const dayLabel = TimezoneHelper.getDateLabel(sDate, tz);
     const timeLabel = TimezoneHelper.formatTime(hero.time);
-    const bgGradient = isActive ? 'linear-gradient(135deg, var(--color-warning-bg) 0%, var(--bg-card) 100%)' : msUntil <= 3600000 ? 'linear-gradient(135deg, var(--bg-accent-light) 0%, var(--bg-card) 100%)' : 'linear-gradient(135deg, var(--bg-highlight) 0%, var(--bg-card) 100%)';
-    const borderColor = isActive ? 'var(--color-warning)' : msUntil <= 3600000 ? 'var(--accent-color)' : 'var(--role-color)';
+    const hasPendingTC = !!hero.pendingTimeChangeId;
+    const bgGradient = hasPendingTC ? 'linear-gradient(135deg, var(--color-purple-bg) 0%, var(--bg-card) 100%)' : isActive ? 'linear-gradient(135deg, var(--color-warning-bg) 0%, var(--bg-card) 100%)' : msUntil <= 3600000 ? 'linear-gradient(135deg, var(--bg-accent-light) 0%, var(--bg-card) 100%)' : 'linear-gradient(135deg, var(--bg-highlight) 0%, var(--bg-card) 100%)';
+    const borderColor = hasPendingTC ? 'var(--color-purple)' : isActive ? 'var(--color-warning)' : msUntil <= 3600000 ? 'var(--accent-color)' : 'var(--role-color)';
     const shouldShimmer = !isActive && msUntil <= 24 * 3600000;
     return /*#__PURE__*/React.createElement("div", {
       className: shouldShimmer ? 'next-up-hero-shimmer' : '',
@@ -9309,9 +9310,9 @@ const Dashboard = window.Dashboard = ({
         fontWeight: 700,
         textTransform: 'uppercase',
         letterSpacing: '0.5px',
-        color: isActive ? 'var(--color-warning)' : 'var(--accent-color)'
+        color: hasPendingTC ? 'var(--color-purple)' : isActive ? 'var(--color-warning)' : 'var(--accent-color)'
       }
-    }, isActive ? 'In Progress Now' : 'Coming Up'), /*#__PURE__*/React.createElement("div", {
+    }, hasPendingTC ? '⏰ Time Change Proposed' : isActive ? 'In Progress Now' : 'Coming Up'), /*#__PURE__*/React.createElement("div", {
       style: {
         fontSize: 14,
         fontWeight: 700,
@@ -9328,7 +9329,32 @@ const Dashboard = window.Dashboard = ({
         color: 'var(--text-primary)',
         marginBottom: 4
       }
-    }, hero.recipientName || 'Care Visit', " with ", hero.caregiverName), /*#__PURE__*/React.createElement("div", {
+    }, hero.recipientName || 'Care Visit', " with ", hero.caregiverName), hasPendingTC && hero.tcProposedTime ? /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 14,
+        color: 'var(--text-secondary)'
+      }
+    }, dayLabel, " at", ' ', /*#__PURE__*/React.createElement("span", {
+      style: {
+        textDecoration: 'line-through',
+        opacity: 0.5
+      }
+    }, timeLabel), ' ', /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: 'var(--color-purple)',
+        fontWeight: 700
+      }
+    }, TimezoneHelper.formatTime(hero.tcProposedTime)), hero.tcProposedDuration && hero.tcProposedDuration !== hero.durationHours ? /*#__PURE__*/React.createElement(React.Fragment, null, ' \u2022 ', /*#__PURE__*/React.createElement("span", {
+      style: {
+        textDecoration: 'line-through',
+        opacity: 0.5
+      }
+    }, hero.durationHours, "hr"), ' ', /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: 'var(--color-purple)',
+        fontWeight: 700
+      }
+    }, hero.tcProposedDuration, "hr")) : hero.durationHours ? ` \u2022 ${hero.durationHours}hr` : '', hero.serviceType ? ` \u2022 ${formatServiceType(hero.serviceType)}` : '') : /*#__PURE__*/React.createElement("div", {
       style: {
         fontSize: 14,
         color: 'var(--text-secondary)'
@@ -10024,7 +10050,33 @@ const Dashboard = window.Dashboard = ({
           fontSize: 15,
           color: 'var(--text-primary)'
         }
-      }, s.recipientName || 'Care Visit', s.caregiverName ? ` with ${s.caregiverName}` : ''), /*#__PURE__*/React.createElement("div", {
+      }, s.recipientName || 'Care Visit', s.caregiverName ? ` with ${s.caregiverName}` : ''), hasPendingTimeChange && s.tcProposedTime ? /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 13,
+          color: 'var(--text-secondary)',
+          marginTop: 2
+        }
+      }, dayLabel, " at", ' ', /*#__PURE__*/React.createElement("span", {
+        style: {
+          textDecoration: 'line-through',
+          opacity: 0.5
+        }
+      }, timeLabel), ' ', /*#__PURE__*/React.createElement("span", {
+        style: {
+          color: 'var(--color-purple)',
+          fontWeight: 700
+        }
+      }, TimezoneHelper.formatTime(s.tcProposedTime)), s.tcProposedDuration && parseFloat(s.tcProposedDuration) !== parseFloat(s.durationHours) ? /*#__PURE__*/React.createElement(React.Fragment, null, ' \u2022 ', /*#__PURE__*/React.createElement("span", {
+        style: {
+          textDecoration: 'line-through',
+          opacity: 0.5
+        }
+      }, s.durationHours, "hr"), ' ', /*#__PURE__*/React.createElement("span", {
+        style: {
+          color: 'var(--color-purple)',
+          fontWeight: 700
+        }
+      }, s.tcProposedDuration, "hr")) : s.durationHours ? ` \u2022 ${s.durationHours}hr` : '', s.serviceType ? ` \u2022 ${formatServiceType(s.serviceType)}` : '') : /*#__PURE__*/React.createElement("div", {
         style: {
           fontSize: 13,
           color: 'var(--text-secondary)',
@@ -11320,7 +11372,42 @@ const Dashboard = window.Dashboard = ({
     sessionId: visitDetailSessionId,
     role: "family",
     onClose: () => setVisitDetailSessionId(null),
-    onRefresh: () => fetchDashboard()
+    onRefresh: () => fetchDashboard(),
+    onTimeChange: (session, isReview) => {
+      if (isReview) {
+        // Fetch and show the pending proposal
+        apiFetch(`/api/sessions/${session.id}/time-change`).then(r => (r === null || r === void 0 ? void 0 : r.ok) && r.json().then(d => {
+          setTimeChangeProposal({
+            ...d.proposal,
+            session: {
+              id: session.id,
+              recipientName: session.recipient_name,
+              caregiverName: session.caregiver_name,
+              durationHours: session.duration_hours,
+              time: session.scheduled_time,
+              date: session.scheduled_date
+            }
+          });
+        })).catch(() => {});
+      } else {
+        const s = {
+          id: session.id,
+          recipientName: session.recipient_name,
+          caregiverName: session.caregiver_name,
+          durationHours: session.duration_hours,
+          time: session.scheduled_time,
+          date: session.scheduled_date,
+          status: session.status
+        };
+        setTimeChangeModal({
+          sessionId: session.id,
+          session: s
+        });
+        setTcNewTime(session.scheduled_time || '');
+        setTcNewDuration(String(session.duration_hours || 2));
+        setTcReason('');
+      }
+    }
   }), reviewSession && /*#__PURE__*/React.createElement("div", {
     style: {
       position: 'fixed',
@@ -29054,7 +29141,8 @@ const VisitDetailModal = window.VisitDetailModal = ({
   sessionId,
   role,
   onClose,
-  onRefresh
+  onRefresh,
+  onTimeChange
 }) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -29913,9 +30001,48 @@ const VisitDetailModal = window.VisitDetailModal = ({
       display: 'flex',
       justifyContent: 'space-between',
       alignItems: 'center',
-      marginTop: 12
+      marginTop: 12,
+      flexWrap: 'wrap',
+      gap: 6
     }
-  }, data && data.session && ['confirmed', 'pending', 'open', 'requested'].includes(data.session.status) && /*#__PURE__*/React.createElement("button", {
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 6,
+      flexWrap: 'wrap'
+    }
+  }, data && data.session && data.session.status === 'confirmed' && data.session.caregiver_id && !data.session.pending_time_change_id && onTimeChange && /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      onTimeChange(data.session);
+      onClose();
+    },
+    style: {
+      padding: '8px 16px',
+      background: 'var(--color-purple-bg)',
+      color: 'var(--color-purple)',
+      border: '1px solid var(--color-purple)',
+      borderRadius: 8,
+      fontSize: 13,
+      fontWeight: 600,
+      cursor: 'pointer'
+    }
+  }, "Change Time"), data && data.session && data.session.pending_time_change_id && onTimeChange && /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      onTimeChange(data.session, true);
+      onClose();
+    },
+    style: {
+      padding: '8px 16px',
+      background: 'var(--color-purple)',
+      color: 'var(--text-on-primary)',
+      border: 'none',
+      borderRadius: 8,
+      fontSize: 13,
+      fontWeight: 700,
+      cursor: 'pointer',
+      animation: 'pulse 2s infinite'
+    }
+  }, "\u23F0 Review Change"), data && data.session && ['confirmed', 'pending', 'open', 'requested'].includes(data.session.status) && /*#__PURE__*/React.createElement("button", {
     disabled: cancelling,
     onClick: async () => {
       const ss = data.session;
@@ -29952,7 +30079,7 @@ const VisitDetailModal = window.VisitDetailModal = ({
       fontWeight: 600,
       cursor: cancelling ? 'not-allowed' : 'pointer'
     }
-  }, cancelling ? 'Cancelling...' : 'Cancel Session'), !(data && data.session && ['confirmed', 'pending', 'open', 'requested'].includes(data.session.status)) && /*#__PURE__*/React.createElement("div", null), /*#__PURE__*/React.createElement("button", {
+  }, cancelling ? 'Cancelling...' : 'Cancel Session')), !(data && data.session && ['confirmed', 'pending', 'open', 'requested'].includes(data.session.status)) && !onTimeChange && /*#__PURE__*/React.createElement("div", null), /*#__PURE__*/React.createElement("button", {
     className: "btn btn-outline",
     onClick: onClose
   }, "Close"))));
@@ -42844,7 +42971,33 @@ const CaretakerHub = window.CaretakerHub = ({
           fontWeight: 600,
           color: 'var(--text-primary)'
         }
-      }, recipName), /*#__PURE__*/React.createElement("div", {
+      }, recipName), hasPendingTimeChange && s.tcProposedTime ? /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 13,
+          color: 'var(--text-secondary)',
+          marginTop: 2
+        }
+      }, dayLabel, " at", ' ', /*#__PURE__*/React.createElement("span", {
+        style: {
+          textDecoration: 'line-through',
+          opacity: 0.5
+        }
+      }, timeLabel), ' ', /*#__PURE__*/React.createElement("span", {
+        style: {
+          color: 'var(--color-purple)',
+          fontWeight: 700
+        }
+      }, TimezoneHelper.formatTime(s.tcProposedTime)), s.tcProposedDuration && parseFloat(s.tcProposedDuration) !== parseFloat(duration) ? /*#__PURE__*/React.createElement(React.Fragment, null, ' \u2022 ', /*#__PURE__*/React.createElement("span", {
+        style: {
+          textDecoration: 'line-through',
+          opacity: 0.5
+        }
+      }, duration, "hr"), ' ', /*#__PURE__*/React.createElement("span", {
+        style: {
+          color: 'var(--color-purple)',
+          fontWeight: 700
+        }
+      }, s.tcProposedDuration, "hr")) : duration ? ` \u2022 ${duration}hr` : '', svcType ? ` \u2022 ${formatServiceType(svcType)}` : '') : /*#__PURE__*/React.createElement("div", {
         style: {
           fontSize: 13,
           color: 'var(--text-secondary)',
@@ -46787,6 +46940,42 @@ const CaretakerHub = window.CaretakerHub = ({
     onRefresh: async () => {
       const dashRes = await apiFetch('/api/dashboard');
       if (dashRes !== null && dashRes !== void 0 && dashRes.ok) setData(await dashRes.json());
+    },
+    onTimeChange: (session, isReview) => {
+      if (isReview) {
+        apiFetch(`/api/sessions/${session.id}/time-change`).then(r => (r === null || r === void 0 ? void 0 : r.ok) && r.json().then(d => {
+          setTimeChangeProposal({
+            ...d.proposal,
+            session: {
+              id: session.id,
+              recipientName: session.recipient_name,
+              caregiverName: session.caregiver_name,
+              durationHours: session.duration_hours,
+              time: session.scheduled_time,
+              date: session.scheduled_date,
+              caregiverPayout: session.caregiver_payout || 0
+            }
+          });
+        })).catch(() => {});
+      } else {
+        const s = {
+          id: session.id,
+          recipientName: session.recipient_name,
+          recipientname: session.recipient_name,
+          durationHours: session.duration_hours,
+          time: session.scheduled_time,
+          scheduled_time: session.scheduled_time,
+          date: session.scheduled_date,
+          status: session.status
+        };
+        setTimeChangeModal({
+          sessionId: session.id,
+          session: s
+        });
+        setTcNewTime(session.scheduled_time || '');
+        setTcNewDuration(String(session.duration_hours || 2));
+        setTcReason('');
+      }
     }
   }), showReviews && /*#__PURE__*/React.createElement("div", {
     style: {
@@ -68127,8 +68316,27 @@ const AdminPanel = window.AdminPanel = ({
         color: 'var(--text-secondary)',
         lineHeight: 1.5
       }
-    }, ins.detail));
-  }))), /*#__PURE__*/React.createElement("div", {
+    }, ins.detail), ins.recommendation && /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 12,
+        color: ts.accent,
+        lineHeight: 1.5,
+        marginTop: 6,
+        padding: '6px 10px',
+        background: 'rgba(255,255,255,0.6)',
+        borderRadius: 6,
+        fontWeight: 500
+      }
+    }, "\uD83D\uDCA1 ", ins.recommendation));
+  })), secInsights.trustedContext && secInsights.trustedContext.filteredNoiseCount > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: '8px 18px 10px',
+      borderTop: '1px solid #f0f0f0',
+      fontSize: 11,
+      color: 'var(--text-muted)',
+      fontStyle: 'italic'
+    }
+  }, secInsights.trustedContext.filteredNoiseCount, " event", secInsights.trustedContext.filteredNoiseCount > 1 ? 's' : '', " from known admin IPs filtered from severity counts")), /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'grid',
       gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
