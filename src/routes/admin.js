@@ -62,8 +62,209 @@ async function checkAdmin(req, res, next) {
   }
 }
 
+const { isTrustedIp, registerTrustedIp, getTrustedIps, removeTrustedIp } = require("../utils/trustedIps");
+const { getClientIp, writeAuditLog } = require("../middleware/auditLog");
+
 // All admin routes require auth + admin check + admin flag
 router.use(authenticate, checkAdmin, requireAdmin);
+
+// ─── IP Trust Verification Middleware ───
+// Checks if admin is on a trusted IP. If not, requires passkey re-verification.
+// Exempts the IP-verification challenge/verify endpoints themselves.
+const IP_CHECK_EXEMPT = [
+  "/ip-verify/challenge",
+  "/ip-verify/verify",
+  "/ip-verify/status",
+  "/security/trusted-ips",
+];
+
+router.use(async (req, res, next) => {
+  const path = req.path;
+  // Skip IP check for exempt endpoints
+  if (IP_CHECK_EXEMPT.some(p => path === p || path.startsWith(p))) return next();
+
+  const ip = getClientIp(req);
+  const trusted = await isTrustedIp(req.user.id, ip);
+  if (trusted) {
+    req.trustedIp = true;
+    return next();
+  }
+
+  // Unknown IP — require passkey verification
+  return res.status(403).json({
+    error: "Admin access from an unrecognized network. Please verify your identity with a passkey.",
+    code: "IP_VERIFICATION_REQUIRED",
+    ip: ip,
+  });
+});
+
+// ─── POST /api/admin/ip-verify/challenge — Generate passkey challenge for IP verification ───
+router.post("/ip-verify/challenge", async (req, res) => {
+  try {
+    const db = await getDb();
+    const passkeys = await db.prepare(
+      "SELECT credential_id, transports FROM user_passkeys WHERE user_id = ?"
+    ).get(req.user.id);
+    // Get all passkeys (not just first)
+    const allPasskeys = await db.prepare(
+      "SELECT credential_id, transports FROM user_passkeys WHERE user_id = ?"
+    ).all(req.user.id);
+
+    if (allPasskeys.length === 0) {
+      // No passkeys registered — auto-trust this IP (fallback for password-only admins)
+      const ip = getClientIp(req);
+      await registerTrustedIp(req.user.id, ip, {
+        userAgent: (req.headers["user-agent"] || "").substring(0, 200),
+        verifiedVia: "auto_no_passkey",
+      });
+      return res.json({ autoTrusted: true, message: "IP trusted (no passkey on file — set one up for stronger security)." });
+    }
+
+    const allowCredentials = allPasskeys.map(pk => ({
+      id: pk.credential_id,
+      transports: pk.transports ? JSON.parse(pk.transports) : undefined,
+    }));
+
+    const { generateAuthenticationOptions } = require("@simplewebauthn/server");
+    const options = await generateAuthenticationOptions({
+      rpID: RP_ID,
+      allowCredentials,
+      userVerification: "required",
+    });
+
+    setPasskeyChallenge(`ip_verify_${req.user.id}`, {
+      challenge: options.challenge,
+      ip: getClientIp(req),
+    });
+
+    res.json(options);
+  } catch (err) {
+    console.error("IP verify challenge error:", err);
+    res.status(500).json({ error: "Failed to generate verification challenge" });
+  }
+});
+
+// ─── POST /api/admin/ip-verify/verify — Verify passkey response for IP trust ───
+router.post("/ip-verify/verify", async (req, res) => {
+  try {
+    const stored = getPasskeyChallenge(`ip_verify_${req.user.id}`);
+    if (!stored) {
+      return res.status(400).json({ error: "Verification challenge expired. Please try again." });
+    }
+
+    const db = await getDb();
+    const credentialIdB64 = req.body.id;
+    const passkey = await db.prepare(
+      "SELECT * FROM user_passkeys WHERE credential_id = ? AND user_id = ?"
+    ).get(credentialIdB64, req.user.id);
+
+    if (!passkey) {
+      // Failed — flag this in audit log
+      const ip = getClientIp(req);
+      writeAuditLog({
+        userId: req.user.id,
+        userEmail: req.user.email,
+        userRole: 'admin',
+        action: 'ip_verify_failed',
+        endpoint: '/api/admin/ip-verify/verify',
+        method: 'POST',
+        ipAddress: ip,
+        userAgent: (req.headers["user-agent"] || "").substring(0, 200),
+        details: { anomaly: 'ip_verify_passkey_not_found', ip },
+        severity: 'critical',
+      });
+      return res.status(401).json({ error: "Passkey not recognized." });
+    }
+
+    const EXPECTED_ORIGINS = [
+      ORIGIN,
+      `android:apk-key-hash:${process.env.ANDROID_CERT_HASH || ""}`,
+    ].filter(Boolean);
+
+    const verification = await verifyAuthenticationResponse({
+      response: req.body,
+      expectedChallenge: stored.challenge,
+      expectedOrigin: EXPECTED_ORIGINS,
+      expectedRPID: RP_ID,
+      credential: {
+        id: passkey.credential_id,
+        publicKey: Buffer.from(passkey.public_key, "base64url"),
+        counter: passkey.counter,
+        transports: passkey.transports ? JSON.parse(passkey.transports) : [],
+      },
+    });
+
+    if (!verification.verified) {
+      // Failed verification — flag it
+      const ip = getClientIp(req);
+      writeAuditLog({
+        userId: req.user.id,
+        userEmail: req.user.email,
+        userRole: 'admin',
+        action: 'ip_verify_failed',
+        endpoint: '/api/admin/ip-verify/verify',
+        method: 'POST',
+        ipAddress: ip,
+        userAgent: (req.headers["user-agent"] || "").substring(0, 200),
+        details: { anomaly: 'ip_verify_passkey_failed', ip },
+        severity: 'critical',
+      });
+      return res.status(401).json({ error: "Passkey verification failed. This attempt has been logged." });
+    }
+
+    // Update passkey counter
+    await db.prepare(
+      "UPDATE user_passkeys SET counter = ?, last_used = NOW() WHERE id = ?"
+    ).run(verification.authenticationInfo.newCounter, passkey.id);
+
+    // Register this IP as trusted
+    const ip = getClientIp(req);
+    await registerTrustedIp(req.user.id, ip, {
+      userAgent: (req.headers["user-agent"] || "").substring(0, 200),
+      verifiedVia: "passkey_ip_verify",
+    });
+
+    // Log success
+    writeAuditLog({
+      userId: req.user.id,
+      userEmail: req.user.email,
+      userRole: 'admin',
+      action: 'ip_verified',
+      endpoint: '/api/admin/ip-verify/verify',
+      method: 'POST',
+      ipAddress: ip,
+      userAgent: (req.headers["user-agent"] || "").substring(0, 200),
+      details: { ip, verified_via: 'passkey' },
+      severity: 'info',
+    });
+
+    console.log(`  [ip-verify] Admin ${req.user.email} verified IP ${ip} via passkey`);
+    res.json({ verified: true, ip, message: "IP verified and trusted for 90 days." });
+  } catch (err) {
+    console.error("IP verify error:", err);
+    res.status(500).json({ error: "Verification failed" });
+  }
+});
+
+// ─── GET /api/admin/ip-verify/status — Check if current IP is trusted ───
+router.get("/ip-verify/status", async (req, res) => {
+  const ip = getClientIp(req);
+  const trusted = await isTrustedIp(req.user.id, ip);
+  res.json({ trusted: !!trusted, ip, expiresAt: trusted?.expires_at || null });
+});
+
+// ─── GET /api/admin/security/trusted-ips — List all trusted IPs for this admin ───
+router.get("/security/trusted-ips", async (req, res) => {
+  const ips = await getTrustedIps(req.user.id);
+  res.json({ trustedIps: ips });
+});
+
+// ─── DELETE /api/admin/security/trusted-ips/:id — Revoke a trusted IP ───
+router.delete("/security/trusted-ips/:id", async (req, res) => {
+  const removed = await removeTrustedIp(req.user.id, req.params.id);
+  if (!removed) return res.status(404).json({ error: "Trusted IP not found" });
+  res.json({ removed: true });
+});
 
 // ─── GET /api/admin/alerts — Lightweight count of items needing admin attention ───
 // Returns raw counts + a "seen" snapshot so the client only badges NEW items
@@ -1904,15 +2105,13 @@ router.get("/security/insights", requireAdmin, async (req, res) => {
     const db = await getDb();
     const insights = [];
 
-    // ── Build trusted-user context ──
-    // An IP is "known" for a user if they've had a successful login from it in the last 30 days
+    // ── Build trusted-user context from trusted_admin_ips table ──
+    // Uses the persisted, passkey-verified trusted IP list (not audit log heuristics)
     const trustedRows = await db.prepare(`
-      SELECT DISTINCT user_id, user_email, ip_address
-      FROM audit_log
-      WHERE action IN ('login_attempt', 'passkey_auth')
-        AND severity = 'info'
-        AND user_id IS NOT NULL
-        AND created_at > NOW() - INTERVAL '30 days'
+      SELECT tai.user_id, u.email as user_email, tai.ip_address
+      FROM trusted_admin_ips tai
+      JOIN users u ON tai.user_id = u.id
+      WHERE tai.expires_at > NOW()
     `).all();
     // Build a Set of "userId:ip" pairs that are trusted
     const trustedPairs = new Set(trustedRows.map(r => `${r.user_id}:${r.ip_address}`));
@@ -2219,7 +2418,7 @@ router.get("/security/insights", requireAdmin, async (req, res) => {
       insights,
       health: { score: healthScore, label: healthLabel, color: healthColor },
       trustedContext: {
-        trustedAdminIPs: trustedRows.filter(r => adminIds.has(r.user_id)).map(r => ({ email: r.user_email, ip: r.ip_address })),
+        trustedAdminIPs: trustedRows.map(r => ({ email: r.user_email, ip: r.ip_address })),
         filteredNoiseCount: trustedAdminNoise.length,
       },
       generatedAt: new Date().toISOString(),

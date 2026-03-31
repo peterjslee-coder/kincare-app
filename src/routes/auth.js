@@ -7,6 +7,8 @@ const { generateToken, authenticate, setAuthCookie, clearAuthCookie, generateRef
 const { validateRegister, validateLogin, validateProfileUpdate } = require("../middleware/validate");
 const { sendEmail, brandedHtml } = require("../utils/email");
 const { sendPushToAdmins, notifyAdmins } = require("./push");
+const { registerTrustedIp } = require("../utils/trustedIps");
+const { getClientIp } = require("../middleware/auditLog");
 
 const router = express.Router();
 
@@ -380,6 +382,15 @@ router.post("/login", validateLogin, async (req, res) => {
     setCsrfCookie(res);
     const refreshToken = await generateRefreshToken(user.id);
     setRefreshCookie(res, refreshToken);
+
+    // Auto-register this IP as trusted for admin users
+    if (user.role === 'admin') {
+      registerTrustedIp(user.id, getClientIp(req), {
+        userAgent: (req.headers["user-agent"] || "").substring(0, 200),
+        verifiedVia: "password_login",
+      }).catch(() => {}); // fire-and-forget
+    }
+
     res.json(responseData);
   } catch (err) {
     console.error("Login error:", err);

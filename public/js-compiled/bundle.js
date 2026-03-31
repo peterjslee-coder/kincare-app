@@ -472,6 +472,25 @@ const apiFetch = window.apiFetch = async (url, options = {}) => {
     headers,
     credentials: 'same-origin'
   });
+
+  // ─── IP Verification Challenge ───
+  // If admin endpoint returns 403 with IP_VERIFICATION_REQUIRED, trigger passkey re-auth
+  if (response.status === 403 && url.startsWith('/api/admin')) {
+    try {
+      const errBody = await response.clone().json();
+      if (errBody.code === 'IP_VERIFICATION_REQUIRED') {
+        // Dispatch event so AdminPanel can show the verification modal
+        window.dispatchEvent(new CustomEvent('ip-verification-required', {
+          detail: {
+            ip: errBody.ip,
+            originalUrl: url,
+            originalOptions: options
+          }
+        }));
+        return null; // Return null so callers handle gracefully
+      }
+    } catch (e) {/* not JSON, fall through */}
+  }
   if (response.status === 401 && url !== '/api/auth/refresh') {
     // Attempt silent token refresh before logging out
     try {
@@ -60755,6 +60774,11 @@ const AdminPanel = window.AdminPanel = ({
   const [secLogPage, setSecLogPage] = useState(0);
   const [secView, setSecView] = useState('dashboard'); // 'dashboard' or 'audit-log'
   const [secInsights, setSecInsights] = useState(null);
+  // IP verification state
+  const [ipVerifyModal, setIpVerifyModal] = useState(null); // { ip }
+  const [ipVerifyLoading, setIpVerifyLoading] = useState(false);
+  const [ipVerifyError, setIpVerifyError] = useState(null);
+  const [trustedIps, setTrustedIps] = useState([]);
   // Account approvals state
   const [pendingApprovals, setPendingApprovals] = useState([]);
   const [approvalLoading, setApprovalLoading] = useState(null);
@@ -61196,6 +61220,122 @@ const AdminPanel = window.AdminPanel = ({
     // Fetch current user for settings tab
     apiFetch('/api/auth/me').then(r => r.json()).then(data => setUser(data)).catch(() => {});
   }, []);
+
+  // ─── IP Verification Listener ───
+  useEffect(() => {
+    const handler = e => {
+      setIpVerifyModal({
+        ip: e.detail.ip
+      });
+      setIpVerifyError(null);
+    };
+    window.addEventListener('ip-verification-required', handler);
+    return () => window.removeEventListener('ip-verification-required', handler);
+  }, []);
+  const handleIpVerify = async () => {
+    setIpVerifyLoading(true);
+    setIpVerifyError(null);
+    try {
+      // Step 1: Get passkey challenge
+      const challengeRes = await apiFetch('/api/admin/ip-verify/challenge', {
+        method: 'POST'
+      });
+      if (!(challengeRes !== null && challengeRes !== void 0 && challengeRes.ok)) {
+        const err = await (challengeRes === null || challengeRes === void 0 ? void 0 : challengeRes.json().catch(() => ({})));
+        throw new Error(err.error || 'Failed to get challenge');
+      }
+      const challengeData = await challengeRes.json();
+
+      // If auto-trusted (no passkey on file), just reload
+      if (challengeData.autoTrusted) {
+        setIpVerifyModal(null);
+        showToast(challengeData.message, 'success');
+        window.location.reload();
+        return;
+      }
+
+      // Step 2: Trigger browser passkey prompt
+      const {
+        startAuthentication
+      } = await import('/js/passkey-helpers.js').catch(() => {
+        // Fallback: use @simplewebauthn/browser if bundled
+        return window.SimpleWebAuthnBrowser || {};
+      });
+
+      // Use native WebAuthn API directly as fallback
+      const publicKey = {
+        challenge: Uint8Array.from(atob(challengeData.challenge.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0)),
+        rpId: challengeData.rpId || window.location.hostname,
+        allowCredentials: (challengeData.allowCredentials || []).map(c => ({
+          id: Uint8Array.from(atob(c.id.replace(/-/g, '+').replace(/_/g, '/')), ch => ch.charCodeAt(0)),
+          type: 'public-key',
+          transports: c.transports
+        })),
+        userVerification: challengeData.userVerification || 'required',
+        timeout: 60000
+      };
+      const assertion = await navigator.credentials.get({
+        publicKey
+      });
+
+      // Encode response for server
+      const toB64url = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+      const verifyBody = {
+        id: toB64url(assertion.rawId),
+        rawId: toB64url(assertion.rawId),
+        response: {
+          authenticatorData: toB64url(assertion.response.authenticatorData),
+          clientDataJSON: toB64url(assertion.response.clientDataJSON),
+          signature: toB64url(assertion.response.signature),
+          userHandle: assertion.response.userHandle ? toB64url(assertion.response.userHandle) : undefined
+        },
+        type: assertion.type,
+        clientExtensionResults: assertion.getClientExtensionResults(),
+        authenticatorAttachment: assertion.authenticatorAttachment
+      };
+
+      // Step 3: Verify with server
+      const verifyRes = await apiFetch('/api/admin/ip-verify/verify', {
+        method: 'POST',
+        body: JSON.stringify(verifyBody)
+      });
+      if (!(verifyRes !== null && verifyRes !== void 0 && verifyRes.ok)) {
+        const err = await (verifyRes === null || verifyRes === void 0 ? void 0 : verifyRes.json().catch(() => ({})));
+        throw new Error(err.error || 'Verification failed');
+      }
+      const result = await verifyRes.json();
+      setIpVerifyModal(null);
+      showToast(result.message || 'IP verified!', 'success');
+      window.location.reload(); // Reload to retry all admin requests
+    } catch (err) {
+      console.error('IP verification error:', err);
+      setIpVerifyError(err.name === 'NotAllowedError' ? 'Passkey verification was cancelled. Try again.' : err.message || 'Verification failed');
+    }
+    setIpVerifyLoading(false);
+  };
+
+  // Load trusted IPs for security tab
+  const loadTrustedIps = async () => {
+    try {
+      const res = await apiFetch('/api/admin/security/trusted-ips');
+      if (res !== null && res !== void 0 && res.ok) setTrustedIps((await res.json()).trustedIps || []);
+    } catch (err) {
+      console.error('Trusted IPs load error:', err);
+    }
+  };
+  const revokeIp = async ipId => {
+    try {
+      const res = await apiFetch(`/api/admin/security/trusted-ips/${ipId}`, {
+        method: 'DELETE'
+      });
+      if (res !== null && res !== void 0 && res.ok) {
+        showToast('IP removed from trusted list', 'success');
+        loadTrustedIps();
+      }
+    } catch (err) {
+      showToast('Failed to revoke IP', 'error');
+    }
+  };
   useEffect(() => {
     if (activeTab === 'people') {
       loadUsers();
@@ -61214,6 +61354,7 @@ const AdminPanel = window.AdminPanel = ({
     if (activeTab === 'security') {
       loadSecDashboard();
       loadSecAuditLog();
+      loadTrustedIps();
     }
     if (activeTab === 'sessions') {
       loadNoShowSessions();
@@ -62129,7 +62270,93 @@ const AdminPanel = window.AdminPanel = ({
       margin: '-16px -16px 0',
       position: 'relative'
     }
-  }, sidebarOpen && /*#__PURE__*/React.createElement("div", {
+  }, ipVerifyModal && /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: 'fixed',
+      inset: 0,
+      background: 'rgba(0,0,0,0.6)',
+      zIndex: 9999,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: 'var(--bg-card)',
+      borderRadius: 16,
+      padding: '32px 28px',
+      maxWidth: 420,
+      width: '90%',
+      textAlign: 'center',
+      boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 40,
+      marginBottom: 12
+    }
+  }, "\uD83D\uDD10"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 18,
+      fontWeight: 700,
+      color: 'var(--text-primary)',
+      marginBottom: 8
+    }
+  }, "New Network Detected"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 14,
+      color: 'var(--text-secondary)',
+      marginBottom: 6
+    }
+  }, "You're accessing admin from an unrecognized IP address:"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      fontWeight: 600,
+      color: 'var(--color-warning)',
+      background: 'var(--color-warning-bg)',
+      padding: '6px 12px',
+      borderRadius: 8,
+      display: 'inline-block',
+      marginBottom: 16
+    }
+  }, ipVerifyModal.ip), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      color: 'var(--text-secondary)',
+      marginBottom: 20,
+      lineHeight: 1.5
+    }
+  }, "Verify your identity with a passkey to continue. This IP will be trusted for 90 days."), ipVerifyError && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      color: 'var(--color-error)',
+      marginBottom: 14,
+      padding: '8px 12px',
+      background: 'var(--color-error-bg)',
+      borderRadius: 8
+    }
+  }, ipVerifyError), /*#__PURE__*/React.createElement("button", {
+    onClick: handleIpVerify,
+    disabled: ipVerifyLoading,
+    style: {
+      width: '100%',
+      padding: '12px 20px',
+      borderRadius: 10,
+      border: 'none',
+      background: 'var(--primary)',
+      color: '#fff',
+      fontWeight: 700,
+      fontSize: 15,
+      cursor: ipVerifyLoading ? 'wait' : 'pointer',
+      opacity: ipVerifyLoading ? 0.7 : 1
+    }
+  }, ipVerifyLoading ? 'Verifying...' : '🔑  Verify with Passkey'), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 12,
+      fontSize: 11,
+      color: 'var(--text-muted)'
+    }
+  }, "If verification fails, this attempt will be flagged as suspicious."))), sidebarOpen && /*#__PURE__*/React.createElement("div", {
     onClick: () => setSidebarOpen(false),
     style: {
       position: 'fixed',
@@ -68628,7 +68855,100 @@ const AdminPanel = window.AdminPanel = ({
         marginLeft: 8
       }
     }, "HTTP ", det.statusCode)));
-  })))) : secView === 'audit-log' ? /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+  }))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 16
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 14,
+      fontWeight: 700,
+      color: 'var(--text-primary)',
+      marginBottom: 8,
+      display: 'flex',
+      alignItems: 'center',
+      gap: 6
+    }
+  }, "\uD83D\uDD11 Trusted Admin IPs", /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 11,
+      fontWeight: 400,
+      color: 'var(--text-muted)'
+    }
+  }, "\u2014 IPs verified by passkey (auto-expire after 90 days)")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: 'var(--bg-surface)',
+      border: '1px solid #e0e0e0',
+      borderRadius: 12,
+      overflow: 'hidden'
+    }
+  }, trustedIps.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: 16,
+      textAlign: 'center',
+      color: 'var(--text-muted)',
+      fontSize: 13
+    }
+  }, "No trusted IPs yet. Your IP will be automatically trusted on your next login.") : trustedIps.map((ip, i) => /*#__PURE__*/React.createElement("div", {
+    key: ip.id,
+    style: {
+      padding: '10px 14px',
+      borderBottom: i < trustedIps.length - 1 ? '1px solid #f0f0f0' : 'none',
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center'
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontWeight: 600,
+      fontSize: 13,
+      fontFamily: 'monospace'
+    }
+  }, ip.ip_address), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 11,
+      color: 'var(--text-muted)',
+      marginLeft: 8
+    }
+  }, "via ", (ip.verified_via || 'login').replace(/_/g, ' ')), ip.label && /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 11,
+      color: 'var(--text-tertiary)',
+      marginLeft: 8
+    }
+  }, ip.label)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 10
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: 'right'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: 'var(--text-muted)'
+    }
+  }, "Last seen: ", new Date(ip.last_seen_at).toLocaleDateString()), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 10,
+      color: 'var(--text-muted)'
+    }
+  }, "Expires: ", new Date(ip.expires_at).toLocaleDateString())), /*#__PURE__*/React.createElement("button", {
+    onClick: () => revokeIp(ip.id),
+    style: {
+      padding: '4px 10px',
+      borderRadius: 6,
+      border: '1px solid #e0e0e0',
+      background: 'var(--bg-surface)',
+      fontSize: 11,
+      color: 'var(--color-error)',
+      cursor: 'pointer',
+      fontWeight: 600
+    }
+  }, "Revoke"))))))) : secView === 'audit-log' ? /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       gap: 10,

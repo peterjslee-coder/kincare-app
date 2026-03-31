@@ -1081,6 +1081,22 @@ async function initializeDatabase() {
     )`,
     `CREATE INDEX IF NOT EXISTS idx_time_change_session ON time_change_proposals(session_id, status)`,
     `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS pending_time_change_id TEXT`,
+
+    // v1.57.14 — Trusted admin IPs (passkey-verified)
+    `CREATE TABLE IF NOT EXISTS trusted_admin_ips (
+      id SERIAL PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id),
+      ip_address TEXT NOT NULL,
+      user_agent TEXT,
+      label TEXT,
+      verified_via TEXT DEFAULT 'login',
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      last_seen_at TIMESTAMPTZ DEFAULT NOW(),
+      expires_at TIMESTAMPTZ DEFAULT (NOW() + INTERVAL '90 days'),
+      UNIQUE(user_id, ip_address)
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_trusted_ips_user ON trusted_admin_ips(user_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_trusted_ips_lookup ON trusted_admin_ips(user_id, ip_address)`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }

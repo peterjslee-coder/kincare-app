@@ -2,6 +2,8 @@ const express = require("express");
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { generateToken, authenticate, setAuthCookie, setCsrfCookie, generateRefreshToken, setRefreshCookie } = require("../middleware/auth");
+const { registerTrustedIp } = require("../utils/trustedIps");
+const { getClientIp } = require("../middleware/auditLog");
 const {
   generateRegistrationOptions,
   verifyRegistrationResponse,
@@ -295,6 +297,15 @@ router.post("/authenticate/verify", async (req, res) => {
     setCsrfCookie(res);
     const refreshToken = await generateRefreshToken(passkey.uid);
     setRefreshCookie(res, refreshToken);
+
+    // Auto-register this IP as trusted for admin users (passkey = strongest verification)
+    if (passkey.role === 'admin' || passkey.is_admin) {
+      registerTrustedIp(passkey.uid, getClientIp(req), {
+        userAgent: (req.headers["user-agent"] || "").substring(0, 200),
+        verifiedVia: "passkey",
+      }).catch(() => {}); // fire-and-forget
+    }
+
     res.json({
       token,
       user: {

@@ -126,6 +126,20 @@ const apiFetch = window.apiFetch = async (url, options = {}) => {
   const csrf = getCsrfToken();
   if (csrf) headers['X-CSRF-Token'] = csrf;
   const response = await fetch(API_BASE + url, { ...options, headers, credentials: 'same-origin' });
+
+  // ─── IP Verification Challenge ───
+  // If admin endpoint returns 403 with IP_VERIFICATION_REQUIRED, trigger passkey re-auth
+  if (response.status === 403 && url.startsWith('/api/admin')) {
+    try {
+      const errBody = await response.clone().json();
+      if (errBody.code === 'IP_VERIFICATION_REQUIRED') {
+        // Dispatch event so AdminPanel can show the verification modal
+        window.dispatchEvent(new CustomEvent('ip-verification-required', { detail: { ip: errBody.ip, originalUrl: url, originalOptions: options } }));
+        return null; // Return null so callers handle gracefully
+      }
+    } catch (e) { /* not JSON, fall through */ }
+  }
+
   if (response.status === 401 && url !== '/api/auth/refresh') {
     // Attempt silent token refresh before logging out
     try {
