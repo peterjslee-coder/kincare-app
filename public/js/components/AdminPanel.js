@@ -308,6 +308,21 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
   const [csExpanded, setCsExpanded] = useState(null);
   const [csNotes, setCsNotes] = useState('');
   const [csActionLoading, setCsActionLoading] = useState(null);
+  // All Ratings tab state
+  const [allReviews, setAllReviews] = useState([]);
+  const [allReviewsTotal, setAllReviewsTotal] = useState(0);
+  const [allReviewsStats, setAllReviewsStats] = useState(null);
+  const [allReviewsDist, setAllReviewsDist] = useState([]);
+  const [reviewInsights, setReviewInsights] = useState(null);
+  const [reviewSort, setReviewSort] = useState('date');
+  const [reviewOrder, setReviewOrder] = useState('desc');
+  const [reviewRatingFilter, setReviewRatingFilter] = useState(null); // null = all
+  const [allReviewsLoading, setAllReviewsLoading] = useState(false);
+  const [allReviewsExpanded, setAllReviewsExpanded] = useState(null);
+  // Admin iPAi briefing
+  const [adminBriefing, setAdminBriefing] = useState(null);
+  const [briefingLoading, setBriefingLoading] = useState(false);
+  const [briefingDismissed, setBriefingDismissed] = useState(false);
   // Security tab state
   const [secDashboard, setSecDashboard] = useState(null);
   const [secAuditLog, setSecAuditLog] = useState([]);
@@ -894,6 +909,47 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
     if (activeTab === 'customerservice') loadCsReviews();
   }, [csFilter]);
 
+  // ─── All Ratings: load all reviews + insights ───
+  const loadAllReviews = async () => {
+    setAllReviewsLoading(true);
+    try {
+      const params = new URLSearchParams({ sort: reviewSort, order: reviewOrder, limit: '100' });
+      if (reviewRatingFilter) params.set('maxRating', reviewRatingFilter);
+      if (reviewRatingFilter) params.set('minRating', reviewRatingFilter);
+      const [revRes, insRes] = await Promise.all([
+        apiFetch(`/api/admin/reviews/all?${params}`),
+        apiFetch('/api/admin/reviews/insights'),
+      ]);
+      if (revRes?.ok) {
+        const d = await revRes.json();
+        setAllReviews(d.reviews || []);
+        setAllReviewsTotal(d.total || 0);
+        setAllReviewsStats(d.stats || null);
+        setAllReviewsDist(d.distribution || []);
+      }
+      if (insRes?.ok) setReviewInsights(await insRes.json());
+    } catch (err) { console.error('All reviews load error:', err); }
+    setAllReviewsLoading(false);
+  };
+
+  useEffect(() => {
+    if (activeTab === 'ratings') loadAllReviews();
+  }, [activeTab, reviewSort, reviewOrder, reviewRatingFilter]);
+
+  // ─── Admin iPAi Briefing ───
+  const loadBriefing = async () => {
+    setBriefingLoading(true);
+    try {
+      const res = await apiFetch('/api/admin/briefing');
+      if (res?.ok) setAdminBriefing(await res.json());
+    } catch (err) { console.error('Briefing load error:', err); }
+    setBriefingLoading(false);
+  };
+
+  useEffect(() => {
+    if (activeTab === 'overview' && !adminBriefing && !briefingDismissed) loadBriefing();
+  }, [activeTab]);
+
   const handleCsAction = async (reviewId, newStatus) => {
     setCsActionLoading(reviewId);
     try {
@@ -1342,6 +1398,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
     { label: 'Customer Service', tabs: [
       { id: 'tickets', label: 'Tickets', icon: '🎫', badge: ticketCount || null },
       { id: 'customerservice', label: 'Support', icon: '🛎️' },
+      { id: 'ratings', label: 'Ratings', icon: '⭐' },
       { id: 'feedback', label: 'Feedback', icon: '💬', badge: newFeedbackCount || null },
     ]},
     { label: 'Trust & Safety', tabs: [
@@ -1868,6 +1925,51 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
 
         return (
         <div>
+          {/* ── iPAi Admin Briefing ── */}
+          {!briefingDismissed && (
+            <div style={{ background: 'linear-gradient(135deg, #e8f0fe 0%, #f3e8ff 100%)', borderRadius: 14, border: '1px solid #c5cae9', marginBottom: 16, overflow: 'hidden' }}>
+              <div style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontSize: 22 }}>🤖</span>
+                  <div>
+                    <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0, color: '#1a237e' }}>iPAi Admin Brief</h3>
+                    <div style={{ fontSize: 11, color: '#5c6bc0' }}>{adminBriefing ? 'Updated just now' : 'Loading...'}</div>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <button onClick={() => { setAdminBriefing(null); loadBriefing(); }} style={{ padding: '4px 10px', borderRadius: 8, border: '1px solid #c5cae9', background: 'white', fontSize: 11, cursor: 'pointer', color: '#5c6bc0' }}>↻ Refresh</button>
+                  <button onClick={() => setBriefingDismissed(true)} style={{ padding: '4px 10px', borderRadius: 8, border: '1px solid #c5cae9', background: 'white', fontSize: 11, cursor: 'pointer', color: '#999' }}>✕</button>
+                </div>
+              </div>
+              {briefingLoading && !adminBriefing ? (
+                <div style={{ padding: '16px 18px', textAlign: 'center', color: '#5c6bc0', fontSize: 13 }}>Analyzing your platform...</div>
+              ) : adminBriefing?.items?.length > 0 ? (
+                <div style={{ padding: '0 18px 14px' }}>
+                  {adminBriefing.items.map((item, i) => {
+                    const sentColors = { up: '#2e7d32', down: '#c62828', neutral: '#5c6bc0' };
+                    const sentBgs = { up: '#e8f5e9', down: '#ffebee', neutral: '#f5f5f5' };
+                    return (
+                      <div key={i} style={{ display: 'flex', gap: 10, padding: '8px 0', borderTop: i > 0 ? '1px solid rgba(0,0,0,0.06)' : 'none' }}>
+                        <span style={{ fontSize: 16, flexShrink: 0, marginTop: 1 }}>{item.icon}</span>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: '#1a237e', marginBottom: 2 }}>{item.title}</div>
+                          <div style={{ fontSize: 12, color: '#37474f', lineHeight: 1.5 }}>{item.detail}</div>
+                        </div>
+                        <span style={{
+                          padding: '2px 8px', borderRadius: 8, fontSize: 10, fontWeight: 700, height: 'fit-content', marginTop: 2,
+                          background: sentBgs[item.sentiment] || sentBgs.neutral,
+                          color: sentColors[item.sentiment] || sentColors.neutral,
+                        }}>
+                          {item.sentiment === 'up' ? '↑' : item.sentiment === 'down' ? '↓' : '→'}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : null}
+            </div>
+          )}
+
           {/* ── Alerts — FIRST thing admin sees ── */}
           {attentionItems.length > 0 && (
             <div style={{ background: 'var(--bg-card)', borderRadius: 12, border: '1px solid var(--border-color)', marginBottom: 16, overflow: 'hidden' }}>
@@ -3304,6 +3406,209 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                             </button>
                           )}
                         </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ─── Ratings Tab ─── */}
+      {activeTab === 'ratings' && (
+        <div>
+          <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>Ratings & Reviews</h2>
+
+          {/* AI Insights Panel */}
+          {reviewInsights?.insights?.length > 0 && (
+            <div style={{ background: 'linear-gradient(135deg, #e8f0fe 0%, #f3e8ff 100%)', borderRadius: 14, border: '1px solid #c5cae9', padding: '16px 18px', marginBottom: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                <span style={{ fontSize: 18 }}>🤖</span>
+                <span style={{ fontSize: 14, fontWeight: 700, color: '#1a237e' }}>iPAi Review Insights</span>
+                <span style={{ fontSize: 11, color: '#7986cb' }}>Last 90 days</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {reviewInsights.insights.map((ins, i) => {
+                  const typeColors = { positive: '#2e7d32', warning: '#e65100', neutral: '#5c6bc0', info: '#1565c0' };
+                  const typeBgs = { positive: '#e8f5e9', warning: '#fff3e0', neutral: '#f5f5f5', info: '#e3f2fd' };
+                  return (
+                    <div key={i} style={{ display: 'flex', gap: 10, padding: '8px 12px', background: typeBgs[ins.type] || '#f5f5f5', borderRadius: 10, border: `1px solid ${typeColors[ins.type] || '#ccc'}20` }}>
+                      <span style={{ fontSize: 16, flexShrink: 0 }}>{ins.icon}</span>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: typeColors[ins.type] || '#333' }}>{ins.title}</div>
+                        <div style={{ fontSize: 12, color: '#37474f', lineHeight: 1.5, marginTop: 2 }}>{ins.detail}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Stats bar + distribution */}
+          {allReviewsStats && (
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
+              <div style={{ background: 'var(--bg-card)', borderRadius: 10, border: '1px solid var(--border-color)', padding: '12px 16px', flex: 1, minWidth: 120 }}>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>Total Reviews</div>
+                <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-primary)' }}>{allReviewsStats.total}</div>
+              </div>
+              <div style={{ background: 'var(--bg-card)', borderRadius: 10, border: '1px solid var(--border-color)', padding: '12px 16px', flex: 1, minWidth: 120 }}>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>Avg Rating</div>
+                <div style={{ fontSize: 22, fontWeight: 700, color: '#f59e0b' }}>{allReviewsStats.avg_rating || '—'} ★</div>
+              </div>
+              <div style={{ background: 'var(--bg-card)', borderRadius: 10, border: '1px solid var(--border-color)', padding: '12px 16px', flex: 1, minWidth: 120 }}>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>Positive (4-5★)</div>
+                <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--color-success)' }}>{allReviewsStats.positive}</div>
+              </div>
+              <div style={{ background: 'var(--bg-card)', borderRadius: 10, border: '1px solid var(--border-color)', padding: '12px 16px', flex: 1, minWidth: 120 }}>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>Negative (1-2★)</div>
+                <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--color-error)' }}>{allReviewsStats.negative}</div>
+              </div>
+              <div style={{ background: 'var(--bg-card)', borderRadius: 10, border: '1px solid var(--border-color)', padding: '12px 16px', flex: 1, minWidth: 120 }}>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>Flagged Pending</div>
+                <div style={{ fontSize: 22, fontWeight: 700, color: allReviewsStats.flagged_pending > 0 ? 'var(--color-warning)' : 'var(--text-muted)' }}>{allReviewsStats.flagged_pending}</div>
+              </div>
+            </div>
+          )}
+
+          {/* Distribution bar */}
+          {allReviewsDist.length > 0 && (() => {
+            const maxCnt = Math.max(...allReviewsDist.map(d => d.cnt), 1);
+            return (
+              <div style={{ background: 'var(--bg-card)', borderRadius: 12, border: '1px solid var(--border-color)', padding: '14px 18px', marginBottom: 16 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 10 }}>Rating Distribution</div>
+                {[5, 4, 3, 2, 1].map(star => {
+                  const d = allReviewsDist.find(x => x.rating === star);
+                  const cnt = d?.cnt || 0;
+                  const pct = maxCnt > 0 ? (cnt / maxCnt * 100) : 0;
+                  const active = reviewRatingFilter === String(star);
+                  return (
+                    <div key={star} onClick={() => setReviewRatingFilter(active ? null : String(star))}
+                      style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, cursor: 'pointer', opacity: reviewRatingFilter && !active ? 0.4 : 1, transition: 'opacity 0.15s' }}>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', width: 30, textAlign: 'right' }}>{star}★</span>
+                      <div style={{ flex: 1, height: 14, background: 'var(--bg-neutral)', borderRadius: 7, overflow: 'hidden' }}>
+                        <div style={{ width: `${pct}%`, height: '100%', background: star >= 4 ? '#4caf50' : star === 3 ? '#ff9800' : '#e53935', borderRadius: 7, transition: 'width 0.3s' }} />
+                      </div>
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)', width: 28, textAlign: 'right' }}>{cnt}</span>
+                    </div>
+                  );
+                })}
+                {reviewRatingFilter && (
+                  <div style={{ marginTop: 6, textAlign: 'center' }}>
+                    <button onClick={() => setReviewRatingFilter(null)} style={{ fontSize: 11, color: 'var(--role-color)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>Clear filter</button>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* Sort controls */}
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Sort by:</span>
+            {[
+              { key: 'date', label: 'Date' },
+              { key: 'rating', label: 'Rating' },
+              { key: 'caregiver', label: 'Caregiver' },
+            ].map(s => (
+              <button key={s.key} onClick={() => {
+                if (reviewSort === s.key) setReviewOrder(reviewOrder === 'desc' ? 'asc' : 'desc');
+                else { setReviewSort(s.key); setReviewOrder(s.key === 'rating' ? 'asc' : 'desc'); }
+              }} style={{
+                padding: '4px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                background: reviewSort === s.key ? 'var(--role-color)' : 'var(--bg-surface)',
+                color: reviewSort === s.key ? 'var(--text-on-primary)' : 'var(--text-secondary)',
+                border: reviewSort === s.key ? 'none' : '1px solid var(--border-color)',
+              }}>
+                {s.label} {reviewSort === s.key ? (reviewOrder === 'asc' ? '↑' : '↓') : ''}
+              </button>
+            ))}
+            <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 'auto' }}>{allReviewsTotal} reviews</span>
+          </div>
+
+          {/* Review list */}
+          {allReviewsLoading ? (
+            <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>Loading reviews...</div>
+          ) : allReviews.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)', background: 'var(--bg-neutral)', borderRadius: 12 }}>
+              No reviews found{reviewRatingFilter ? ` for ${reviewRatingFilter}★` : ''}.
+            </div>
+          ) : (
+            <div>
+              {allReviews.map((r) => {
+                const isExpanded = allReviewsExpanded === r.id;
+                const stars = '★'.repeat(r.rating) + '☆'.repeat(5 - r.rating);
+                const starColor = r.rating >= 4 ? '#4caf50' : r.rating === 3 ? '#ff9800' : '#e53935';
+                const st = r.admin_status || (r.rating < 3 ? 'flagged' : 'ok');
+                const statusColors = { pending: '#ff9800', flagged: '#e53935', reviewed: '#1976d2', escalated: '#7b1fa2', resolved: '#4caf50', ok: '#bbb' };
+                return (
+                  <div key={r.id} style={{
+                    marginBottom: 8, borderRadius: 12, border: '1px solid var(--border-color)',
+                    background: r.rating < 3 ? 'var(--bg-warm)' : 'var(--bg-card)',
+                    overflow: 'hidden',
+                  }}>
+                    <div onClick={() => setAllReviewsExpanded(isExpanded ? null : r.id)}
+                      style={{ padding: '12px 16px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                          <span style={{ color: starColor, fontSize: 15, letterSpacing: 1 }}>{stars}</span>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{r.caregiver_name}</span>
+                          {st !== 'ok' && (
+                            <span style={{ padding: '1px 7px', borderRadius: 10, fontSize: 9, fontWeight: 700, background: statusColors[st] + '20', color: statusColors[st], textTransform: 'uppercase' }}>{st}</span>
+                          )}
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+                          By {r.family_name} {r.recipient_name ? `for ${r.recipient_name}` : ''} • {new Date(r.created_at).toLocaleDateString()}
+                        </div>
+                        {r.comment && !isExpanded && (
+                          <div style={{ fontSize: 12, color: 'var(--text-primary)', marginTop: 4, fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            "{r.comment.length > 100 ? r.comment.slice(0, 100) + '...' : r.comment}"
+                          </div>
+                        )}
+                      </div>
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{isExpanded ? '▲' : '▼'}</span>
+                    </div>
+                    {isExpanded && (
+                      <div style={{ padding: '0 16px 14px', borderTop: '1px solid var(--border-color)' }}>
+                        <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', marginTop: 10, marginBottom: 10 }}>
+                          <div>
+                            <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 2 }}>Caregiver</div>
+                            <div style={{ fontSize: 13, fontWeight: 600 }}>{r.caregiver_name}</div>
+                            <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Overall: {r.caregiver_rating_avg || 'N/A'}★ ({r.caregiver_rating_count || 0} reviews)</div>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 2 }}>Family</div>
+                            <div style={{ fontSize: 13, fontWeight: 600 }}>{r.family_name}</div>
+                            <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{r.family_email}</div>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 2 }}>Session</div>
+                            <div style={{ fontSize: 13 }}>{r.scheduled_date ? new Date(r.scheduled_date).toLocaleDateString() : 'N/A'}{r.scheduled_time ? ` at ${r.scheduled_time}` : ''}</div>
+                            <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{r.service_type || 'N/A'} {r.review_type === 'late_cancellation' ? '(Late cancel)' : r.review_type === 'no_show' ? '(No-show)' : ''}</div>
+                          </div>
+                        </div>
+                        {r.comment && (
+                          <div style={{ padding: '10px 14px', background: 'var(--bg-neutral)', borderRadius: 8, marginBottom: 10, fontSize: 13, lineHeight: 1.6, color: 'var(--text-primary)' }}>
+                            {r.comment}
+                          </div>
+                        )}
+                        {r.admin_notes && (
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic' }}>Admin notes: {r.admin_notes}</div>
+                        )}
+                        {r.admin_reviewed_at && (
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                            Reviewed by {r.reviewed_by_name || 'admin'} on {new Date(r.admin_reviewed_at).toLocaleString()}
+                          </div>
+                        )}
+                        {r.rating < 3 && (
+                          <div style={{ marginTop: 8 }}>
+                            <button onClick={() => { setCsExpanded(r.id); setActiveTab('customerservice'); setCsFilter('all'); }}
+                              style={{ padding: '6px 14px', borderRadius: 8, border: 'none', background: 'var(--color-info)', color: 'var(--text-on-primary)', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+                              Manage in Support →
+                            </button>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
