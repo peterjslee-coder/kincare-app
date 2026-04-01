@@ -129,12 +129,24 @@ if (fs.existsSync(swPath)) {
   console.log(`  SW cache version: ${buildVersion}`);
 }
 
-// Update index.html bundle.js cache buster
+// Update index.html bundle.js cache buster + sync APP_VERSION from server.js
 const indexPath = path.join(PUBLIC, "index.html");
 if (fs.existsSync(indexPath)) {
   let html = fs.readFileSync(indexPath, "utf-8");
   html = html.replace(/bundle\.js\?v=[^"]+/, `bundle.js?v=${buildVersion}`);
   html = html.replace(/styles\.css\?v=[^"]+/, `styles.css?v=${buildVersion}`);
+
+  // Auto-sync APP_VERSION from server.js so it never goes stale
+  const serverPath = path.join(__dirname, "..", "src", "server.js");
+  if (fs.existsSync(serverPath)) {
+    const serverSrc = fs.readFileSync(serverPath, "utf-8");
+    const vMatch = serverSrc.match(/const APP_VERSION\s*=\s*"([^"]+)"/);
+    if (vMatch) {
+      html = html.replace(/window\.APP_VERSION\s*=\s*'[^']*'/, `window.APP_VERSION = '${vMatch[1]}'`);
+      console.log(`  APP_VERSION synced: ${vMatch[1]}`);
+    }
+  }
+
   fs.writeFileSync(indexPath, html, "utf-8");
   console.log(`  HTML cache busters updated`);
 }
