@@ -298,6 +298,98 @@ router.get("/owner/:ownerType/:ownerId", authenticate, async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════
+// GET /api/documents/admin/pending — List documents needing admin review
+// ═══════════════════════════════════════════════════════════
+router.get("/admin/pending", authenticate, requireAdmin, async (req, res) => {
+  try {
+    const db = await getDb();
+    const docs = await db.prepare(`
+      SELECT vd.id, vd.owner_type, vd.owner_id, vd.uploaded_by, vd.category, vd.document_type,
+             vd.file_name, vd.file_size, vd.mime_type, vd.status, vd.ai_classification,
+             vd.ai_reviewed_at, vd.admin_reviewed_by, vd.admin_reviewed_at, vd.admin_notes,
+             vd.expires_at, vd.created_at, vd.updated_at,
+             u.first_name AS uploader_first, u.last_name AS uploader_last,
+             cr.first_name AS recipient_first, cr.last_name AS recipient_last, cr.called_by AS recipient_called_by
+      FROM verified_documents vd
+      LEFT JOIN users u ON u.id = vd.uploaded_by
+      LEFT JOIN care_recipients cr ON cr.id = vd.owner_id AND vd.owner_type = 'care_recipient'
+      WHERE vd.status IN ('ai_review', 'pending', 'ai_flagged')
+      ORDER BY
+        CASE vd.status WHEN 'ai_flagged' THEN 1 WHEN 'pending' THEN 2 WHEN 'ai_review' THEN 3 END,
+        vd.created_at DESC
+    `).all();
+
+    const parsed = docs.map(d => ({
+      ...d,
+      ai_classification: d.ai_classification ? JSON.parse(d.ai_classification) : null,
+      uploaderName: [d.uploader_first, d.uploader_last].filter(Boolean).join(' ') || 'Unknown',
+      recipientName: d.recipient_called_by || [d.recipient_first, d.recipient_last].filter(Boolean).join(' ') || null,
+    }));
+
+    res.json({ documents: parsed, count: parsed.length });
+  } catch (err) {
+    console.error("Admin pending docs error:", err);
+    res.status(500).json({ error: "Failed to load pending documents" });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════
+// POST /api/documents/admin/:docId/review — Admin approve or reject a document
+// ═══════════════════════════════════════════════════════════
+router.post("/admin/:docId/review", authenticate, requireAdmin, async (req, res) => {
+  try {
+    const db = await getDb();
+    const { action, notes } = req.body; // action: 'approve' or 'reject'
+    if (!['approve', 'reject'].includes(action)) {
+      return res.status(400).json({ error: "Action must be 'approve' or 'reject'" });
+    }
+
+    const doc = await db.prepare("SELECT * FROM verified_documents WHERE id = ?").get(req.params.docId);
+    if (!doc) return res.status(404).json({ error: "Document not found" });
+
+    const newStatus = action === 'approve' ? 'approved' : 'rejected';
+
+    await db.prepare(`
+      UPDATE verified_documents
+      SET status = ?, admin_reviewed_by = ?, admin_reviewed_at = NOW(), admin_notes = ?, updated_at = NOW()
+      WHERE id = ?
+    `).run(newStatus, req.user.id, notes || null, doc.id);
+
+    // Audit log for consent/legal documents
+    if ((doc.category === 'consent' || doc.category === 'legal') && doc.owner_type === 'care_recipient') {
+      await logConsentAudit(db, {
+        recipientId: doc.owner_id,
+        actorId: req.user.id,
+        actorRole: 'admin',
+        eventType: action === 'approve' ? 'document_approved' : 'document_rejected',
+        description: `Admin ${action}d ${doc.document_type.replace(/_/g, ' ')} document${notes ? ': ' + notes : ''}`,
+        metadata: { documentId: doc.id, previousStatus: doc.status, newStatus, notes },
+      });
+    }
+
+    res.json({ document: { id: doc.id, status: newStatus, admin_reviewed_at: new Date().toISOString() } });
+  } catch (err) {
+    console.error("Admin document review error:", err);
+    res.status(500).json({ error: "Failed to review document" });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════
+// GET /api/documents/admin/count — Count of docs needing review (for badge)
+// ═══════════════════════════════════════════════════════════
+router.get("/admin/count", authenticate, requireAdmin, async (req, res) => {
+  try {
+    const db = await getDb();
+    const row = await db.prepare(`
+      SELECT COUNT(*) AS cnt FROM verified_documents WHERE status IN ('ai_review', 'pending', 'ai_flagged')
+    `).get();
+    res.json({ count: row.cnt });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to count pending documents" });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════
 // GET /api/documents/:docId — Get document metadata + AI classification
 // ═══════════════════════════════════════════════════════════
 router.get("/:docId", authenticate, async (req, res) => {
@@ -432,98 +524,6 @@ router.post("/:docId/re-verify", authenticate, requireAdmin, async (req, res) =>
   } catch (err) {
     console.error("Document re-verify error:", err);
     res.status(500).json({ error: "Failed to re-verify document" });
-  }
-});
-
-// ═══════════════════════════════════════════════════════════
-// GET /api/documents/admin/pending — List documents needing admin review
-// ═══════════════════════════════════════════════════════════
-router.get("/admin/pending", authenticate, requireAdmin, async (req, res) => {
-  try {
-    const db = await getDb();
-    const docs = await db.prepare(`
-      SELECT vd.id, vd.owner_type, vd.owner_id, vd.uploaded_by, vd.category, vd.document_type,
-             vd.file_name, vd.file_size, vd.mime_type, vd.status, vd.ai_classification,
-             vd.ai_reviewed_at, vd.admin_reviewed_by, vd.admin_reviewed_at, vd.admin_notes,
-             vd.expires_at, vd.created_at, vd.updated_at,
-             u.first_name AS uploader_first, u.last_name AS uploader_last,
-             cr.first_name AS recipient_first, cr.last_name AS recipient_last, cr.called_by AS recipient_called_by
-      FROM verified_documents vd
-      LEFT JOIN users u ON u.id = vd.uploaded_by
-      LEFT JOIN care_recipients cr ON cr.id = vd.owner_id AND vd.owner_type = 'care_recipient'
-      WHERE vd.status IN ('ai_review', 'pending', 'ai_flagged')
-      ORDER BY
-        CASE vd.status WHEN 'ai_flagged' THEN 1 WHEN 'pending' THEN 2 WHEN 'ai_review' THEN 3 END,
-        vd.created_at DESC
-    `).all();
-
-    const parsed = docs.map(d => ({
-      ...d,
-      ai_classification: d.ai_classification ? JSON.parse(d.ai_classification) : null,
-      uploaderName: [d.uploader_first, d.uploader_last].filter(Boolean).join(' ') || 'Unknown',
-      recipientName: d.recipient_called_by || [d.recipient_first, d.recipient_last].filter(Boolean).join(' ') || null,
-    }));
-
-    res.json({ documents: parsed, count: parsed.length });
-  } catch (err) {
-    console.error("Admin pending docs error:", err);
-    res.status(500).json({ error: "Failed to load pending documents" });
-  }
-});
-
-// ═══════════════════════════════════════════════════════════
-// POST /api/documents/admin/:docId/review — Admin approve or reject a document
-// ═══════════════════════════════════════════════════════════
-router.post("/admin/:docId/review", authenticate, requireAdmin, async (req, res) => {
-  try {
-    const db = await getDb();
-    const { action, notes } = req.body; // action: 'approve' or 'reject'
-    if (!['approve', 'reject'].includes(action)) {
-      return res.status(400).json({ error: "Action must be 'approve' or 'reject'" });
-    }
-
-    const doc = await db.prepare("SELECT * FROM verified_documents WHERE id = ?").get(req.params.docId);
-    if (!doc) return res.status(404).json({ error: "Document not found" });
-
-    const newStatus = action === 'approve' ? 'approved' : 'rejected';
-
-    await db.prepare(`
-      UPDATE verified_documents
-      SET status = ?, admin_reviewed_by = ?, admin_reviewed_at = NOW(), admin_notes = ?, updated_at = NOW()
-      WHERE id = ?
-    `).run(newStatus, req.user.id, notes || null, doc.id);
-
-    // Audit log for consent/legal documents
-    if ((doc.category === 'consent' || doc.category === 'legal') && doc.owner_type === 'care_recipient') {
-      await logConsentAudit(db, {
-        recipientId: doc.owner_id,
-        actorId: req.user.id,
-        actorRole: 'admin',
-        eventType: action === 'approve' ? 'document_approved' : 'document_rejected',
-        description: `Admin ${action}d ${doc.document_type.replace(/_/g, ' ')} document${notes ? ': ' + notes : ''}`,
-        metadata: { documentId: doc.id, previousStatus: doc.status, newStatus, notes },
-      });
-    }
-
-    res.json({ document: { id: doc.id, status: newStatus, admin_reviewed_at: new Date().toISOString() } });
-  } catch (err) {
-    console.error("Admin document review error:", err);
-    res.status(500).json({ error: "Failed to review document" });
-  }
-});
-
-// ═══════════════════════════════════════════════════════════
-// GET /api/documents/admin/count — Count of docs needing review (for badge)
-// ═══════════════════════════════════════════════════════════
-router.get("/admin/count", authenticate, requireAdmin, async (req, res) => {
-  try {
-    const db = await getDb();
-    const row = await db.prepare(`
-      SELECT COUNT(*) AS cnt FROM verified_documents WHERE status IN ('ai_review', 'pending', 'ai_flagged')
-    `).get();
-    res.json({ count: row.cnt });
-  } catch (err) {
-    res.status(500).json({ error: "Failed to count pending documents" });
   }
 });
 
