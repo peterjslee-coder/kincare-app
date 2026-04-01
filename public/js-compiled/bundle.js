@@ -9677,7 +9677,7 @@ const Dashboard = window.Dashboard = ({
       }
     }, "\u2192"));
   })()), (() => {
-    const unread = notifications.filter(n => !n.read);
+    const unread = notifications.filter(n => !n.read && n.type !== 'message');
     if (unread.length === 0) return null;
     const typeIcons = {
       care_request_accepted: '\u2705',
@@ -22062,9 +22062,10 @@ const Documents = window.Documents = ({
   const humanizeDocType = type => {
     return type.replace(/_/g, ' ');
   };
+  const displayName = r => r.name || r.called_by || [r.first_name, r.last_name].filter(Boolean).join(' ') || 'Unknown';
   const getRecipientName = recipientId => {
     const recipient = careRecipients.find(r => r.id === recipientId);
-    return recipient ? recipient.name : 'Unknown';
+    return recipient ? displayName(recipient) : 'Unknown';
   };
 
   // DOCUMENTS TAB
@@ -22124,7 +22125,7 @@ const Documents = window.Documents = ({
   }, "All Recipients"), careRecipients.map(r => /*#__PURE__*/React.createElement("option", {
     key: r.id,
     value: r.id
-  }, r.name))), /*#__PURE__*/React.createElement("select", {
+  }, displayName(r)))), /*#__PURE__*/React.createElement("select", {
     value: selectedCategoryFilter,
     onChange: e => setSelectedCategoryFilter(e.target.value),
     style: {
@@ -22424,7 +22425,7 @@ const Documents = window.Documents = ({
         fontSize: '16px',
         fontWeight: '600'
       }
-    }, recipient.name), consent.authorization_tier && /*#__PURE__*/React.createElement("div", {
+    }, displayName(recipient)), consent.authorization_tier && /*#__PURE__*/React.createElement("div", {
       style: {
         fontSize: '12px',
         color: 'var(--text-secondary)',
@@ -22529,7 +22530,7 @@ const Documents = window.Documents = ({
       onChange: e => setParticipationConfirm({
         recipientId: recipient.id,
         newTier: e.target.value,
-        recipientName: recipient.name
+        recipientName: displayName(recipient)
       }),
       disabled: participationSaving === recipient.id,
       style: {
@@ -22786,7 +22787,7 @@ const Documents = window.Documents = ({
   }, "All Recipients"), careRecipients.map(r => /*#__PURE__*/React.createElement("option", {
     key: r.id,
     value: r.id
-  }, r.name))), /*#__PURE__*/React.createElement("select", {
+  }, displayName(r)))), /*#__PURE__*/React.createElement("select", {
     value: auditEventFilter,
     onChange: e => setAuditEventFilter(e.target.value),
     style: {
@@ -23052,7 +23053,7 @@ const Documents = window.Documents = ({
   }, "Select a care recipient"), careRecipients.map(r => /*#__PURE__*/React.createElement("option", {
     key: r.id,
     value: r.id
-  }, r.name)))), /*#__PURE__*/React.createElement("div", {
+  }, displayName(r))))), /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: '16px'
     }

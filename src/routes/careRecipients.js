@@ -50,9 +50,10 @@ router.get("/", requireRole("family", "admin"), async (req, res) => {
   const teamFiltered = teamRecipients.filter(r => !seenIds.has(r.id));
   const all = [...owned, ...sharedFiltered, ...teamFiltered];
 
-  // Parse JSON fields
+  // Parse JSON fields + compute display name
   const parsed = all.map((r) => ({
     ...r,
+    name: r.called_by || [r.first_name, r.last_name].filter(Boolean).join(' ') || 'Unknown',
     healthConditions: JSON.parse(r.health_conditions || "[]"),
     medications: JSON.parse(r.medications || "[]"),
   }));

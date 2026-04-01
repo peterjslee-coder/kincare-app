@@ -448,9 +448,11 @@ const Documents = window.Documents = ({ onNavigate }) => {
     return type.replace(/_/g, ' ');
   };
 
+  const displayName = (r) => r.name || r.called_by || [r.first_name, r.last_name].filter(Boolean).join(' ') || 'Unknown';
+
   const getRecipientName = (recipientId) => {
     const recipient = careRecipients.find(r => r.id === recipientId);
-    return recipient ? recipient.name : 'Unknown';
+    return recipient ? displayName(recipient) : 'Unknown';
   };
 
   // DOCUMENTS TAB
@@ -495,7 +497,7 @@ const Documents = window.Documents = ({ onNavigate }) => {
         >
           <option value="all">All Recipients</option>
           {careRecipients.map(r => (
-            <option key={r.id} value={r.id}>{r.name}</option>
+            <option key={r.id} value={r.id}>{displayName(r)}</option>
           ))}
         </select>
 
@@ -765,7 +767,7 @@ const Documents = window.Documents = ({ onNavigate }) => {
                   </div>
                   <div>
                     <h3 style={{ margin: '0', fontSize: '16px', fontWeight: '600' }}>
-                      {recipient.name}
+                      {displayName(recipient)}
                     </h3>
                     {consent.authorization_tier && (
                       <div style={{
@@ -852,7 +854,7 @@ const Documents = window.Documents = ({ onNavigate }) => {
                         onChange={(e) => setParticipationConfirm({
                           recipientId: recipient.id,
                           newTier: e.target.value,
-                          recipientName: recipient.name,
+                          recipientName: displayName(recipient),
                         })}
                         disabled={participationSaving === recipient.id}
                         style={{
@@ -1044,7 +1046,7 @@ const Documents = window.Documents = ({ onNavigate }) => {
         >
           <option value="all">All Recipients</option>
           {careRecipients.map(r => (
-            <option key={r.id} value={r.id}>{r.name}</option>
+            <option key={r.id} value={r.id}>{displayName(r)}</option>
           ))}
         </select>
 
@@ -1292,7 +1294,7 @@ const Documents = window.Documents = ({ onNavigate }) => {
                   >
                     <option value="">Select a care recipient</option>
                     {careRecipients.map(r => (
-                      <option key={r.id} value={r.id}>{r.name}</option>
+                      <option key={r.id} value={r.id}>{displayName(r)}</option>
                     ))}
                   </select>
                 </div>
