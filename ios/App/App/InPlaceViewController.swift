@@ -18,7 +18,12 @@ class InPlaceViewController: CAPBridgeViewController {
         webView?.frame = view.bounds
     }
 
-    // Prevent the toolbar from ever showing
+    // Dark text/icons for the status bar (time, battery, signal) — readable on light backgrounds
+    override var preferredStatusBarStyle: UIStatusBarStyle {
+        return .darkContent
+    }
+
+    // Status bar is always visible so users can check the time
     override var prefersStatusBarHidden: Bool {
         return false
     }

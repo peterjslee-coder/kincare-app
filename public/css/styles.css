@@ -319,7 +319,8 @@
       min-height: 100vh;
       display: flex;
       flex-direction: column;
-      padding-top: env(safe-area-inset-top, 0px);
+      /* safe-area-inset-top is handled by .splash-nav-bar and .mobile-header
+         so we don't double-pad here */
     }
 
     .splash-nav {
@@ -2472,7 +2473,7 @@
     @media (max-width: 768px) {
       /* Nav: tighter padding, smaller gap */
       .splash-nav-bar {
-        padding: 10px 12px !important;
+        padding: calc(env(safe-area-inset-top, 0px) + 10px) 12px 10px 12px !important;
       }
       .splash-nav-actions {
         gap: 4px !important;
@@ -2757,9 +2758,13 @@
 
     /* ===== Safe area insets: PWA standalone + Capacitor native ===== */
     /* env(safe-area-inset-*) resolves to 0px in normal browsers,
-       so these rules are safe to apply unconditionally. */
+       so these rules are safe to apply unconditionally.
+       Status bar / Dynamic Island / notch: content must start BELOW the
+       safe-area-inset-top so the clock, battery, and signal indicators
+       are always readable and never overlap app UI. */
     .splash-nav-bar {
-      padding: 14px 32px !important;
+      padding: calc(env(safe-area-inset-top, 0px) + 14px) 32px 14px 32px !important;
+      background-color: var(--bg-surface);
     }
 
     .main-content {

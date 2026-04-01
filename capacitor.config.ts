@@ -21,8 +21,11 @@ const config: CapacitorConfig = {
       presentationOptions: ['badge', 'sound', 'alert'],
     },
     StatusBar: {
-      style: 'DARK',
-      backgroundColor: '#1b6b5a',
+      // 'LIGHT' = light background / dark text — matches InPlace's white header
+      // ('DARK' was showing invisible white text on white background)
+      style: 'LIGHT',
+      backgroundColor: '#ffffff',
+      overlaysWebView: true,
     },
   },
   ios: {
@@ -31,7 +34,7 @@ const config: CapacitorConfig = {
     scheme: 'InPlace',
   },
   android: {
-    backgroundColor: '#1b6b5a',
+    backgroundColor: '#ffffff',
   },
 };
 
