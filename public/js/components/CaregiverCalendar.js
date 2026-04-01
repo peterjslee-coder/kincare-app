@@ -270,14 +270,14 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
     <div>
       {/* Week navigation */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <button onClick={() => setWeekOffset(w => w - 1)} style={{ background: 'none', border: '1px solid #e0e0e0', borderRadius: 8, padding: '6px 14px', cursor: 'pointer', fontSize: 14 }}>← Prev</button>
+        <button onClick={() => setWeekOffset(w => w - 1)} style={{ background: 'none', border: '1px solid var(--border-light)', borderRadius: 8, padding: '6px 14px', cursor: 'pointer', fontSize: 14, color: 'var(--text-primary)' }}>← Prev</button>
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>{formatMonth()}</div>
           {weekOffset !== 0 && (
             <button onClick={() => setWeekOffset(0)} style={{ background: 'none', border: 'none', color: 'var(--role-color)', fontSize: 12, cursor: 'pointer', fontWeight: 600, marginTop: 2 }}>Today</button>
           )}
         </div>
-        <button onClick={() => setWeekOffset(w => w + 1)} style={{ background: 'none', border: '1px solid #e0e0e0', borderRadius: 8, padding: '6px 14px', cursor: 'pointer', fontSize: 14 }}>Next →</button>
+        <button onClick={() => setWeekOffset(w => w + 1)} style={{ background: 'none', border: '1px solid var(--border-light)', borderRadius: 8, padding: '6px 14px', cursor: 'pointer', fontSize: 14, color: 'var(--text-primary)' }}>Next →</button>
       </div>
 
       {/* Care request alert banner with previews */}
@@ -416,7 +416,7 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, tableLayout: 'fixed' }}>
           <thead>
             <tr>
-              <th style={{ width: 44, padding: '8px 4px', borderBottom: '2px solid #e0e0e0', background: 'var(--bg-primary)', position: 'sticky', left: 0, zIndex: 1 }}></th>
+              <th style={{ width: 44, padding: '8px 4px', borderBottom: '2px solid var(--border-light)', background: 'var(--bg-primary)', position: 'sticky', left: 0, zIndex: 1 }}></th>
               {weekDates.map((d, i) => {
                 const today = isToday(d);
                 const dateStr = toLocalDateStr(d);
@@ -428,7 +428,7 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
                 const hasBlocked = dayBlocked.length > 0;
                 return (
                   <th key={i} onClick={() => setSelectedDay(d)}
-                    style={{ padding: '8px 2px', borderBottom: '2px solid #e0e0e0', textAlign: 'center', cursor: 'pointer', background: today ? 'var(--color-success-bg)' : selectedDay && d.toDateString() === selectedDay.toDateString() ? '#f0f4ff' : 'var(--bg-primary)' }}>
+                    style={{ padding: '8px 2px', borderBottom: '2px solid var(--border-light)', textAlign: 'center', cursor: 'pointer', background: today ? 'var(--color-success-bg)' : selectedDay && d.toDateString() === selectedDay.toDateString() ? '#f0f4ff' : 'var(--bg-primary)' }}>
                     <div style={{ fontWeight: 600, color: today ? 'var(--role-color)' : 'var(--text-secondary)' }}>{dayNames[d.getDay()]}</div>
                     <div style={{ fontSize: 13, fontWeight: today ? 800 : 600, color: today ? 'var(--text-on-primary)' : 'var(--text-primary)', background: today ? 'var(--role-color)' : 'transparent', borderRadius: '50%', width: 24, height: 24, lineHeight: '24px', margin: '2px auto 0', display: 'inline-block' }}>{d.getDate()}</div>
                     {(hasBooked || hasRequests || hasBlocked) && (

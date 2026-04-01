@@ -27173,18 +27173,31 @@ const Messages = window.Messages = () => {
       }
     }, "\xD7")), /*#__PURE__*/React.createElement("div", {
       className: "msg-input-area"
-    }, /*#__PURE__*/React.createElement("input", {
+    }, /*#__PURE__*/React.createElement("textarea", {
       ref: inputRef,
-      type: "text",
       className: "msg-input",
       placeholder: replyTo ? "Type your reply..." : "Type a message...",
       value: inputText,
+      rows: 1,
       onChange: e => {
         setInputText(e.target.value);
         if (e.target.value) emitTyping();
+        // Auto-grow: reset height then set to scrollHeight (max 3 lines ~72px)
+        e.target.style.height = 'auto';
+        e.target.style.height = Math.min(e.target.scrollHeight, 72) + 'px';
       },
-      onKeyPress: e => e.key === 'Enter' && handleSendMessage(),
-      disabled: sending
+      onKeyDown: e => {
+        // Enter sends message, Shift+Enter inserts newline
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          handleSendMessage();
+        }
+      },
+      disabled: sending,
+      style: {
+        resize: 'none',
+        overflow: 'hidden'
+      }
     }), /*#__PURE__*/React.createElement("button", {
       className: "msg-send-btn",
       onClick: handleSendMessage,
@@ -38915,11 +38928,12 @@ const CaregiverCalendar = window.CaregiverCalendar = ({
     onClick: () => setWeekOffset(w => w - 1),
     style: {
       background: 'none',
-      border: '1px solid #e0e0e0',
+      border: '1px solid var(--border-light)',
       borderRadius: 8,
       padding: '6px 14px',
       cursor: 'pointer',
-      fontSize: 14
+      fontSize: 14,
+      color: 'var(--text-primary)'
     }
   }, "\u2190 Prev"), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -38946,11 +38960,12 @@ const CaregiverCalendar = window.CaregiverCalendar = ({
     onClick: () => setWeekOffset(w => w + 1),
     style: {
       background: 'none',
-      border: '1px solid #e0e0e0',
+      border: '1px solid var(--border-light)',
       borderRadius: 8,
       padding: '6px 14px',
       cursor: 'pointer',
-      fontSize: 14
+      fontSize: 14,
+      color: 'var(--text-primary)'
     }
   }, "Next \u2192")), careRequests.length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
@@ -39227,7 +39242,7 @@ const CaregiverCalendar = window.CaregiverCalendar = ({
     style: {
       width: 44,
       padding: '8px 4px',
-      borderBottom: '2px solid #e0e0e0',
+      borderBottom: '2px solid var(--border-light)',
       background: 'var(--bg-primary)',
       position: 'sticky',
       left: 0,
@@ -39249,7 +39264,7 @@ const CaregiverCalendar = window.CaregiverCalendar = ({
       onClick: () => setSelectedDay(d),
       style: {
         padding: '8px 2px',
-        borderBottom: '2px solid #e0e0e0',
+        borderBottom: '2px solid var(--border-light)',
         textAlign: 'center',
         cursor: 'pointer',
         background: today ? 'var(--color-success-bg)' : selectedDay && d.toDateString() === selectedDay.toDateString() ? '#f0f4ff' : 'var(--bg-primary)'

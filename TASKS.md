@@ -15,8 +15,8 @@
 
 ### P1
 
-- [ ] **No-show poller duplicate guard.** Edwina's session was restored but the poller re-paused her account because there's no guard against re-flagging already-restored sessions. Need a check in `pollCaregiverNoShows()` to skip sessions that were previously restored (check admin_audit_log for restore_session action on that session_id). *(Pete — Mar 31)*
-- [ ] **Notes endpoint lacks access control.** GET /api/notes/:careRecipientId has NO authorization check — any authenticated user can read any care recipient's notes. Should use the same hasAccess() pattern as careRecipients.js. *(Found during care team access audit — Mar 31)*
+- [x] **No-show poller duplicate guard.** ✅ Fixed v1.57.18 — Added `NOT EXISTS (SELECT 1 FROM admin_audit_log WHERE target_id = cs.id AND action = 'restore_session')` guard to `pollCaregiverNoShows()` query. Restored sessions are now skipped by the poller. *(Pete — Mar 31)*
+- [x] **Notes endpoint lacks access control.** ✅ Fixed v1.57.18 — Added `hasAccess()` function to notes.js (same pattern as careRecipients.js). Checks owner, shared, care team membership, and assigned caregiver. GET and POST both gated. *(Found during care team access audit — Mar 31)*
 - [ ] **No thumbnail photos on any demo profile.** None of the demo users (Pete, Maria, Betty, other caregivers) have real profile photos — just emoji placeholders or SVG initials. Need: seed realistic avatar images for all demo users so the app looks polished during demos. Consider using generated placeholder headshots or styled SVG avatars with distinct colors per person.
 - [x] **Real users can see/message other users without an accepted connection.** ✅ Fixed v1.51.10 — Added connection validation to POST /conversations (checks care team membership, caregiver assignment, or accepted connection). Also added legacy message filtering to skip conversations with unconnected users. Admins bypass all checks.
 - [ ] **Push notifications still not working on iOS.** Pete allowed notifications in settings but nothing comes through. Has been an ongoing issue for weeks. Needs end-to-end debug of SW registration + push subscription flow. *(Feedback — Feb 22, #26)*
@@ -36,6 +36,7 @@
 - [ ] **Kindred button doesn't work on Android app.** `window.open('/kindred?token=...', '_blank')` in CareProfile.js fails silently in Capacitor WebView — Android doesn't support opening new windows. Fix: use `window.location.href` for mobile (detect Capacitor), add a back button to `kindred/index.html` so user can return to main app. *(Found — Pete, Mar 29)* **P2**
 - [ ] **Overlapping caregiver map pins.** When caregivers are at similar locations (Cary and Pete), pins overlap so you can't tell there are two. Need clustered pins with "2 Caregivers" label that expands on tap. *(Feedback #14 — Son Tester, Mar 5)* **P2**
 - [ ] **Overdue session — no popup to call caretaker.** If a session runs 15+ minutes past end time, show a popup giving the family option to call the caregiver directly. Safety feature. *(Feedback #20 — Son Tester, Mar 5)* **P1**
+- [x] **Bottom nav hides buttons on Schedule page (Android).** ✅ Fixed v1.57.18 — Increased `.main-content` mobile bottom padding from 90px to 120px (covers Android gesture bar which doesn't report safe-area-inset-bottom). Also added `padding-bottom: calc(env(safe-area-inset-bottom) + 40px)` to `.modal-content` on mobile. *(Feedback `8faa1cc3` — Pete, Apr 1)* **P1**
 
 - [x] **Paused caregiver can still see and accept jobs.** Cary's account is paused (no-show) but the Find Work section still shows "Accept Job" buttons. A paused caregiver should not be able to accept new work. Need to gate job acceptance behind `account_paused` check on both client and server. *(Found — Mar 17, v1.46.6)* **P1** ✅ Fixed Mar 19
 - [x] **"Set Up Payments" card showing for previously-connected caregiver.** Cary was connected to Stripe but her dashboard still shows the "Set Up Payments" onboarding card. May be caused by Stripe account reset during testing, or the status check is broken. *(Found — Mar 17, v1.46.6)* **P1** ✅ Fixed Mar 19
@@ -84,6 +85,8 @@
 
 - [ ] **Caregiver referral bonus program.** Add referral mechanism: caregiver gets a bonus when they refer a new caregiver who completes X sessions. Show on splash page as recruiting incentive. Needs: referral code/link system, tracking referral source on signup, bonus payout trigger after threshold, splash page callout. *(Feedback — Cary Taker, Mar 18)* **P2**
 - [ ] **My Account page overflows container on mobile.** Content doesn't fit inside the container on mobile view. Seen from admin page on v1.51.29. *(Feedback — Pete, Mar 23)* **P2**
+- [x] **Messages input scrolls right instead of wrapping.** ✅ Fixed v1.57.18 — Replaced `<input type="text">` with auto-growing `<textarea>`. Grows from 1 line to max 3 lines (72px), then scrolls vertically. Enter sends, Shift+Enter inserts newline. CSS updated with line-height, max-height, and overflow-y. *(Feedback `4126e671` — Pete, Apr 1)* **P2**
+- [ ] **Admin Sessions tab — rethink as analytics dashboard.** Currently just shows missed sessions. Pete wants: tiles ranking care types by popularity, avg session duration, repeat caregiver rate, and an AI-generated insight summary that refreshes on tab open with KPI recommendations (retention, usage patterns, growth levers). *(Feedback `eff71717` — Pete, Mar 31)* **P2**
 - [x] **Kindred reminder announcements tied to calendar.** ✅ Done v1.51.42 — Added Reminders tab to Kindred admin panel in CareProfile.js. Family can create voice reminders with message, time picker, recurrence (one-time/daily/weekdays/weekends/custom days), and labels. Backend: new columns on voice_reminders (recurrence, recurrence_time, recurrence_days, label, source), GET/POST/PUT/DELETE endpoints. Delivery poller in server.js checks every 60s, delivers due reminders, auto-schedules next occurrence for recurring. Calendar auto-reminders added v1.51.48 — POST /api/kindred/reminders/sync-calendar creates reminders 30 min before upcoming sessions, "Sync Calendar" button in Reminders tab. *(Feedback — Pete, Mar 25)* **P2**
 
 ### P3
@@ -92,6 +95,7 @@
 - [ ] **Swipe to reply and long-press for emojis in messages.** Mobile UX enhancement — swipe right on a message to reply, long-press to react with emoji. Standard messaging app pattern. *(Feedback — Pete, Feb 25)* **P3**
 - [ ] **Checkout feedback flows into care record with care team comments.** After session checkout, caregiver feedback should go into the care record. Care team members can comment on it (e.g., "oh yeah, we can unlock the door for you"). AI reads all comments for care profile insights. Ties into check-in/check-out feature spec. *(Feedback — Pete, Feb 27)* **P3**
 - [ ] **Caregiver tardiness feedback mechanism.** After a caregiver is late (detected by overdue check-in), send a supportive follow-up: "You were late today — is there anything we could do to help?" Collect reasons (traffic, car trouble, personal, etc.) to improve scheduling and support. Ties into overdue_check_in notification system (v1.34.46). *(Feedback — Cary Taker, Mar 1)* **P2**
+- [x] **Remove messages from Recent Activity on dashboard.** ✅ Fixed v1.57.18 — Filtered `type !== 'message'` from the in-app notifications "Recent Activity" card on the dashboard. Messages still appear in the Messages tab and push notification inbox. *(Feedback `34aef48c` — Pete, Apr 1)* **P3**
 - [ ] **No consent summary page for family members.** After a family member completes the consent/attestation flow, there's no page showing what they signed up for or what the care recipient consented to. Need a "what was agreed" summary view in the care team or documents section. *(Feedback — Consent Tester, Mar 4)* **P2**
 - [ ] **Doctor prep report management — keep/discard.** Allow users to keep or discard previously generated doctor prep reports in CareProfile. Currently no way to manage old reports. *(Feedback — Pete, Mar 23)* **P3**
 
@@ -106,6 +110,14 @@
 *(empty)*
 
 ## Recently Completed
+
+- [x] **v1.57.18 batch fix (Apr 1).** Six fixes in one push:
+  - **P1:** Bottom nav hides buttons systemically — increased mobile `.main-content` bottom padding from 90px to 120px, added modal bottom padding. Covers Android gesture bar. (`8faa1cc3`, `62edcf0f`, `f844a5e5`)
+  - **P1:** Notes endpoint access control — added `hasAccess()` to GET/POST `/api/notes/:careRecipientId`. Checks owner, shared, care team, assigned caregiver, admin.
+  - **P1:** No-show poller duplicate guard — `NOT EXISTS` check against `admin_audit_log` for `restore_session` action. Restored sessions won't be re-flagged.
+  - **P1:** Checkout notes not visible to family (`d0042e0d`) — dashboard query now selects `vl.care_feedback` and prefers it over `vl.summary` for the `visitSummary` field. Both family and caregiver dashboards fixed.
+  - **P2:** Messages input scrolls right (`4126e671`) — replaced `<input>` with auto-growing `<textarea>`. 1→3 lines, Enter sends, Shift+Enter for newlines.
+  - **P2:** Dark mode calendar arrows unreadable (`e9f593b0`) — replaced hardcoded `#e0e0e0` border and missing text color with `var(--border-light)` and `var(--text-primary)` in CaregiverCalendar.js.
 
 - [x] **Flex timing / overtime policy (v1.57.12, Mar 31).** Family selects overtime flexibility at booking: Strict (no overtime), Flexible (+30 min), Open-ended (+2 hrs). Overtime billed in 5-min increments at same rate. DB columns: `flex_timing`, `overtime_minutes`, `overtime_cost` on care_sessions, `default_flex_timing` on users. Booking UI pill selector in RequestCareModal. Check-out handler enforces flex caps, calculates overtime, includes in Stripe capture. Session detail shows overtime in cost breakdown for both family (amber box with platform fee) and caregiver. Schedule list shows overtime indicator. *(Pete — Mar 31)*
 

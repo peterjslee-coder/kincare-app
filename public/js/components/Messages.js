@@ -1873,15 +1873,28 @@ const Messages = window.Messages = () => {
           </div>
         )}
         <div className="msg-input-area">
-          <input
+          <textarea
             ref={inputRef}
-            type="text"
             className="msg-input"
             placeholder={replyTo ? "Type your reply..." : "Type a message..."}
             value={inputText}
-            onChange={(e) => { setInputText(e.target.value); if (e.target.value) emitTyping(); }}
-            onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+            rows={1}
+            onChange={(e) => {
+              setInputText(e.target.value);
+              if (e.target.value) emitTyping();
+              // Auto-grow: reset height then set to scrollHeight (max 3 lines ~72px)
+              e.target.style.height = 'auto';
+              e.target.style.height = Math.min(e.target.scrollHeight, 72) + 'px';
+            }}
+            onKeyDown={(e) => {
+              // Enter sends message, Shift+Enter inserts newline
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSendMessage();
+              }
+            }}
             disabled={sending}
+            style={{ resize: 'none', overflow: 'hidden' }}
           />
           <button className="msg-send-btn" onClick={handleSendMessage} disabled={sending || !inputText.trim()}>
             {sending ? (

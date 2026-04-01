@@ -172,6 +172,7 @@ async function familyDashboard(db, userId, res) {
           cr.first_name || ' ' || cr.last_name AS recipient_name,
           u.first_name || ' ' || u.last_name AS caregiver_name,
           vl.summary AS visit_summary,
+          vl.care_feedback,
           vl.departure_mood,
           vl.condition_tags
         FROM care_sessions cs
@@ -389,7 +390,7 @@ async function familyDashboard(db, userId, res) {
           caregiverName: s.caregiver_name,
           caregiverId: s.caregiver_id,
           recipientName: s.recipient_name,
-          visitSummary: s.visit_summary,
+          visitSummary: s.care_feedback || s.visit_summary,
           departureMood: s.departure_mood,
           conditionTags: condTags,
           hasReview: !!existingReview,
@@ -577,6 +578,7 @@ async function caregiverDashboard(db, userId, res) {
         cr.location_city,
         cr.timezone AS care_timezone,
         vl.summary AS visit_summary,
+        vl.care_feedback,
         vl.departure_mood,
         cp.hourly_rate AS cg_hourly_rate, cp.rate_daytime AS cg_rate_daytime,
         cp.rate_nighttime AS cg_rate_nighttime, cp.rate_overnight AS cg_rate_overnight
@@ -857,7 +859,7 @@ async function caregiverDashboard(db, userId, res) {
         durationHours: s.duration_hours,
         recipientName: s.recipient_name,
         locationCity: s.location_city,
-        visitSummary: s.visit_summary,
+        visitSummary: s.care_feedback || s.visit_summary,
         departureMood: s.departure_mood,
         estimatedCost: s.estimated_cost,
         caregiverPayout: caregiverPayout,

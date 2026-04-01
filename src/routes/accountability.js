@@ -745,6 +745,10 @@ async function pollCaregiverNoShows() {
         AND cs.scheduled_date IS NOT NULL
         AND cs.scheduled_time IS NOT NULL
         AND cs.notifications_sent NOT LIKE '%no_show_flagged%'
+        AND NOT EXISTS (
+          SELECT 1 FROM admin_audit_log
+          WHERE target_id = cs.id::text AND action = 'restore_session'
+        )
     `).all();
 
     if (!sessions || sessions.length === 0) return;

@@ -976,6 +976,12 @@
       font-family: inherit;
       outline: none;
       transition: border-color 0.2s;
+      /* Textarea auto-grow: start at 1 line, expand to ~3 lines */
+      line-height: 1.4;
+      max-height: 72px;
+      overflow-y: auto;
+      background-color: var(--bg-surface);
+      color: var(--text-primary);
     }
 
     .msg-input:focus {
@@ -2127,9 +2133,13 @@
         white-space: nowrap;
       }
 
-      /* Main content padding for bottom nav — extra space so content isn't hidden */
+      /* Main content padding for bottom nav — extra space so content isn't hidden.
+         Bottom padding = nav height (~60px) + safe area + generous buffer.
+         120px ensures buttons at the very bottom of scrollable pages are always
+         reachable on both iOS and Android (Android doesn't report safe-area
+         for its gesture bar, so we pad more generously). */
       .main-content {
-        padding: 16px 12px calc(env(safe-area-inset-bottom, 0px) + 90px);
+        padding: 16px 12px calc(env(safe-area-inset-bottom, 0px) + 120px);
         width: 100%;
         box-sizing: border-box;
         overflow-x: hidden;
@@ -2259,6 +2269,11 @@
 
       .session-item, .activity-item, .caregiver-item {
         padding: 14px 16px;
+      }
+
+      /* Modal bottom padding on mobile so action buttons aren't hidden by bottom nav */
+      .modal-content {
+        padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 40px);
       }
 
       .msg-input {

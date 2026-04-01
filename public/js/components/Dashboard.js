@@ -1441,8 +1441,9 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
       )}
 
       {/* Recent Activity — unread in-app notifications (v1.56.0) */}
+      {/* Filter out 'message' type — messages already have their own tab in bottom nav */}
       {(() => {
-        const unread = notifications.filter(n => !n.read);
+        const unread = notifications.filter(n => !n.read && n.type !== 'message');
         if (unread.length === 0) return null;
         const typeIcons = {
           care_request_accepted: '\u2705',

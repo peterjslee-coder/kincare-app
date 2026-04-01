@@ -6,11 +6,50 @@ const { authenticate } = require("../middleware/auth");
 const router = express.Router();
 router.use(authenticate);
 
+// ─── Access control (same pattern as careRecipients.js) ───
+async function hasAccess(db, recipientId, userId) {
+  // Admin bypasses all checks
+  const user = await db.prepare("SELECT is_admin FROM users WHERE id = ?").get(userId);
+  if (user?.is_admin) return "admin";
+  // Owner
+  const owned = await db.prepare(
+    "SELECT id FROM care_recipients WHERE id = ? AND family_user_id = ?"
+  ).get(recipientId, userId);
+  if (owned) return "owner";
+  // Shared
+  const shared = await db.prepare(
+    "SELECT permission FROM care_recipient_shares WHERE care_recipient_id = ? AND shared_with_user_id = ?"
+  ).get(recipientId, userId);
+  if (shared) return shared.permission;
+  // Care team membership
+  const teamMember = await db.prepare(`
+    SELECT ctm.role FROM care_team_members ctm
+    JOIN care_teams ct ON ctm.care_team_id = ct.id
+    WHERE ct.care_recipient_id = ? AND ctm.user_id = ?
+  `).get(recipientId, userId);
+  if (teamMember) return teamMember.role === 'leader' ? 'edit' : 'view';
+  // Assigned caregiver (has an active/confirmed session)
+  const assignedCg = await db.prepare(`
+    SELECT cs.id FROM care_sessions cs
+    JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+    WHERE cs.care_recipient_id = ? AND cp.user_id = ?
+      AND cs.status IN ('confirmed', 'in_progress')
+    LIMIT 1
+  `).get(recipientId, userId);
+  if (assignedCg) return "view";
+  return null;
+}
+
 // GET /api/notes/:careRecipientId — get notes for a care recipient
-// Accessible by: family (owner), caregiver (assigned), care_for (self)
+// Accessible by: family (owner), shared users, care team members, assigned caregivers, admins
 router.get("/:careRecipientId", async (req, res) => {
   const db = await getDb();
   const recipientId = req.params.careRecipientId;
+
+  const access = await hasAccess(db, recipientId, req.user.id);
+  if (!access) {
+    return res.status(403).json({ error: "Not authorized to view notes for this care recipient" });
+  }
 
   const notes = await db.prepare(`
     SELECT rn.*, u.first_name AS author_first_name, u.last_name AS author_last_name, u.role AS author_role
@@ -30,6 +69,12 @@ router.post("/", async (req, res) => {
 
   if (!careRecipientId || !content) {
     return res.status(400).json({ error: "careRecipientId and content required" });
+  }
+
+  // Access check — must have at least view access to add notes
+  const access = await hasAccess(db, careRecipientId, req.user.id);
+  if (!access) {
+    return res.status(403).json({ error: "Not authorized to add notes for this care recipient" });
   }
 
   // Use offline timestamp if provided (caregiver was offline and recorded locally)
