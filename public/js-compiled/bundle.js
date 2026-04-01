@@ -21948,13 +21948,19 @@ const Documents = window.Documents = ({
       formData.append('document_type', uploadDocType);
       formData.append('owner_type', 'care_recipient');
       formData.append('owner_id', uploadRecipientId);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 30000);
+      const csrfToken = window.getCsrfToken ? window.getCsrfToken() : '';
       const response = await fetch('/api/documents/upload', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('authToken')}`
-        },
-        body: formData
+        credentials: 'include',
+        headers: csrfToken ? {
+          'X-CSRF-Token': csrfToken
+        } : {},
+        body: formData,
+        signal: controller.signal
       });
+      clearTimeout(timeout);
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.message || 'Upload failed');
@@ -21975,7 +21981,11 @@ const Documents = window.Documents = ({
         loadDocuments();
       }, 2000);
     } catch (error) {
-      setUploadError(error.message || 'Upload failed');
+      if (error.name === 'AbortError') {
+        setUploadError('Upload timed out. Please try again.');
+      } else {
+        setUploadError(error.message || 'Upload failed');
+      }
     } finally {
       setUploadLoading(false);
     }
@@ -21984,9 +21994,7 @@ const Documents = window.Documents = ({
     setPreviewDocument(document);
     try {
       const response = await fetch(`/api/documents/${document.id}/download`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('authToken')}`
-        }
+        credentials: 'include'
       });
       if (response.ok) {
         const blob = await response.blob();
@@ -22014,9 +22022,7 @@ const Documents = window.Documents = ({
   const handleDownload = async document => {
     try {
       const response = await fetch(`/api/documents/${document.id}/download`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('authToken')}`
-        }
+        credentials: 'include'
       });
       if (response.ok) {
         const blob = await response.blob();

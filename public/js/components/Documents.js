@@ -327,9 +327,11 @@ const Documents = window.Documents = ({ onNavigate }) => {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 30000);
 
+      const csrfToken = window.getCsrfToken ? window.getCsrfToken() : '';
       const response = await fetch('/api/documents/upload', {
         method: 'POST',
         credentials: 'include',
+        headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {},
         body: formData,
         signal: controller.signal,
       });
