@@ -1111,6 +1111,19 @@ async function initializeDatabase() {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }
   }
 
+  // ─── v1.57.14 — Restore private-only sessions that were wrongly auto-cancelled by 1-hour timer ───
+  try {
+    const restored = await db.prepare(`
+      UPDATE care_sessions
+      SET status = 'pending', cancelled_at = NULL, cancel_reason = NULL
+      WHERE COALESCE(private_only, 0) = 1
+        AND status = 'cancelled'
+        AND cancel_reason LIKE '%Private request expired%'
+        AND scheduled_date >= CURRENT_DATE
+    `).run();
+    if (restored.changes > 0) console.log(`[migration] Restored ${restored.changes} private-only sessions that were wrongly cancelled`);
+  } catch (e) { /* ignore */ }
+
   // ─── v1.56.3 — One-time: clear old test sessions stuck in pending review/payment ───
   try {
     const cleared = await db.prepare(`

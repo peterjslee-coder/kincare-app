@@ -757,6 +757,10 @@ router.post("/", requireRole("family"), validateSession, async (req, res) => {
       const finalCost = estimatedCost;
 
       const isExclusive = directOffer && bookCaregiverId;
+      const isPrivateOnly = isExclusive && privateOnly;
+      // Private-only = no timer, stays pending until scheduled date passes
+      // Non-private exclusive = 1-hour timer, then opens to all caregivers
+      const exclusiveUntilSql = isExclusive && !isPrivateOnly ? "NOW() + INTERVAL '1 hour'" : 'NULL';
       await tx.prepare(`
         INSERT INTO care_sessions
         (id, care_recipient_id, family_user_id, service_type, status,
@@ -764,7 +768,7 @@ router.post("/", requireRole("family"), validateSession, async (req, res) => {
          special_instructions, estimated_cost, recurrence_rule, recurrence_group_id,
          short_notice_surcharge, rate_tier, proposed_rate, offered_to_caregiver_id,
          exclusive_until, private_only, interview_required, interview_type, flex_timing)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${isExclusive ? "NOW() + INTERVAL '1 hour'" : 'NULL'}, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${exclusiveUntilSql}, ?, ?, ?, ?)
       `).run(
         id, careRecipientId, req.user.id, serviceType, sessionStatus,
         sessionDate, scheduledTime, durationHours,
@@ -775,7 +779,7 @@ router.post("/", requireRole("family"), validateSession, async (req, res) => {
         JSON.stringify(costResult.tierBreakdown),
         proposedRate ? parseFloat(proposedRate) : null,
         isExclusive ? bookCaregiverId : null,
-        isExclusive && privateOnly ? 1 : 0,
+        isPrivateOnly ? 1 : 0,
         interviewRequired ? 1 : 0,
         interviewRequired ? (interviewType || 'video') : null,
         flexTiming

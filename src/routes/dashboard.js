@@ -43,21 +43,18 @@ async function familyDashboard(db, userId, res) {
     // Expire time proposals that have passed their 2-hour response window
     await expireStaleProposals(db, null, null).catch(() => {});
 
-    // Expire exclusive direct offers that have passed their 1-hour window
-    // Private-only requests get cancelled instead of opened to everyone
+    // Private-only requests: only cancel once the scheduled date has passed (not on a timer)
     try {
       await db.exec(`
         UPDATE care_sessions
-        SET status = 'cancelled', cancelled_at = NOW(), cancel_reason = 'Private request expired - caregiver did not respond'
+        SET status = 'cancelled', cancelled_at = NOW(), cancel_reason = 'Private request expired - scheduled date passed'
         WHERE offered_to_caregiver_id IS NOT NULL
-          AND exclusive_until IS NOT NULL
-          AND exclusive_until < NOW()
           AND COALESCE(private_only, 0) = 1
+          AND scheduled_date < CURRENT_DATE
           AND status IN ('pending', 'open', 'requested')
       `);
     } catch (e) {
-      // Fallback if private_only column doesn't exist yet
-      console.warn('Private-only expiry query failed (column may not exist yet):', e.message);
+      console.warn('Private-only expiry query failed:', e.message);
     }
     // Non-private exclusive offers open to all caregivers
     try {
