@@ -4769,4 +4769,62 @@ router.post("/safety-flags/:id/note", authenticate, checkAdmin, requireAdmin, as
   }
 });
 
+// ═══════════════════════════════════════════════════════════
+// GET /api/admin/backup — Download full database backup as SQL
+// Admin-only. Returns a .sql file with all table data.
+// ═══════════════════════════════════════════════════════════
+router.get("/backup", authenticate, requireAdmin, async (req, res) => {
+  try {
+    const db = await getDb();
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    const filename = `inplace-backup-${timestamp}.sql`;
+
+    // Get all table names
+    const tables = await db.prepare(`
+      SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename
+    `).all();
+
+    let sql = `-- InPlace Database Backup\n-- Generated: ${new Date().toISOString()}\n-- Tables: ${tables.length}\n\n`;
+
+    for (const { tablename } of tables) {
+      // Get column info
+      const cols = await db.prepare(`
+        SELECT column_name, data_type FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = ?
+        ORDER BY ordinal_position
+      `).all(tablename);
+
+      const colNames = cols.map(c => c.column_name);
+
+      // Get all rows
+      const rows = await db.prepare(`SELECT * FROM "${tablename}"`).all();
+
+      sql += `-- Table: ${tablename} (${rows.length} rows)\n`;
+
+      if (rows.length > 0) {
+        for (const row of rows) {
+          const values = colNames.map(col => {
+            const val = row[col];
+            if (val === null || val === undefined) return "NULL";
+            if (typeof val === "boolean") return val ? "TRUE" : "FALSE";
+            if (typeof val === "number") return String(val);
+            if (val instanceof Date) return `'${val.toISOString()}'`;
+            // Escape single quotes in strings
+            return `'${String(val).replace(/'/g, "''")}'`;
+          });
+          sql += `INSERT INTO "${tablename}" (${colNames.map(c => `"${c}"`).join(", ")}) VALUES (${values.join(", ")});\n`;
+        }
+      }
+      sql += "\n";
+    }
+
+    res.setHeader("Content-Type", "application/sql");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(sql);
+  } catch (err) {
+    console.error("Backup error:", err);
+    res.status(500).json({ error: "Backup failed: " + err.message });
+  }
+});
+
 module.exports = router;
