@@ -41,7 +41,7 @@ async function gatherVisitData(careRecipientId) {
 
   // Get care recipient profile
   const recipient = await db.prepare(`
-    SELECT cr.*, u.first_name, u.last_name
+    SELECT cr.*, u.first_name AS linked_first_name, u.last_name AS linked_last_name
     FROM care_recipients cr
     LEFT JOIN users u ON cr.linked_user_id = u.id
     WHERE cr.id = ?
@@ -261,21 +261,41 @@ IMPORTANT: Return ONLY the JSON object, no markdown formatting or code blocks.`;
   try {
     const text = await callClaude(apiKey, "claude-haiku-4-5-20251001", 2500, [{ role: "user", content: prompt }]);
 
-    // Parse JSON response
+    // Parse JSON response — robust extraction handles code fences, leading text, etc.
     let intelligence;
     try {
-      const cleaned = text.replace(/^```json?\n?/, "").replace(/\n?```$/, "").trim();
+      // Strategy 1: strip markdown code fences (common pattern)
+      let cleaned = text.replace(/^[\s\S]*?```json?\s*\n?/i, "").replace(/\n?\s*```[\s\S]*$/, "").trim();
+      // Strategy 2: if that didn't produce valid JSON, find first { to last }
+      if (!cleaned.startsWith("{")) {
+        const firstBrace = text.indexOf("{");
+        const lastBrace = text.lastIndexOf("}");
+        if (firstBrace !== -1 && lastBrace > firstBrace) {
+          cleaned = text.substring(firstBrace, lastBrace + 1);
+        }
+      }
       intelligence = JSON.parse(cleaned);
     } catch (parseErr) {
-      console.error("[iPAi] Failed to parse AI response:", parseErr.message);
-      // Return the raw text as a fallback
-      intelligence = {
-        headline: "Care intelligence generated",
-        insights: [{ title: "AI Analysis", observation: text, explanation: "", recommendation: "", priority: "medium" }],
-        caregiverGuidance: "",
-        schedulingAdvice: "",
-        watchList: [],
-      };
+      // Strategy 3: try extracting JSON with a more aggressive regex
+      let parsed = false;
+      try {
+        const jsonMatch = text.match(/\{[\s\S]*"headline"[\s\S]*"insights"[\s\S]*\}/);
+        if (jsonMatch) {
+          intelligence = JSON.parse(jsonMatch[0]);
+          parsed = true;
+        }
+      } catch {}
+      if (!parsed) {
+        console.error("[iPAi] Failed to parse AI response:", parseErr.message, "| Raw text starts:", text.substring(0, 200));
+        // Fallback: try to extract meaningful content from the raw response
+        intelligence = {
+          headline: "Care intelligence generated — display issue detected",
+          insights: [{ title: "AI Analysis", observation: "The AI generated a response but it couldn't be parsed into structured format. Please try regenerating.", explanation: "", recommendation: "Tap 'Regenerate' below to try again.", priority: "medium" }],
+          caregiverGuidance: "",
+          schedulingAdvice: "",
+          watchList: [],
+        };
+      }
     }
 
     return {
@@ -465,7 +485,12 @@ CRITICAL: Return ONLY the JSON object, no markdown formatting or code blocks. Be
 
     let carePlan;
     try {
-      const cleaned = text.replace(/^```json?\n?/, "").replace(/\n?```$/, "").trim();
+      let cleaned = text.replace(/^[\s\S]*?```json?\s*\n?/i, "").replace(/\n?\s*```[\s\S]*$/, "").trim();
+      if (!cleaned.startsWith("{")) {
+        const firstBrace = text.indexOf("{");
+        const lastBrace = text.lastIndexOf("}");
+        if (firstBrace !== -1 && lastBrace > firstBrace) cleaned = text.substring(firstBrace, lastBrace + 1);
+      }
       carePlan = JSON.parse(cleaned);
     } catch (parseErr) {
       console.error("[iPAi] Failed to parse care plan:", parseErr.message);

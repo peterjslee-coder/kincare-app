@@ -359,6 +359,14 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
   const [pausedLoading, setPausedLoading] = useState(false);
   const [reinstateLoading, setReinstateLoading] = useState(null);
 
+  // Sessions tab — all sessions browser + detail drill-down
+  const [allSessions, setAllSessions] = useState([]);
+  const [allSessionsLoading, setAllSessionsLoading] = useState(false);
+  const [sessionStatusFilter, setSessionStatusFilter] = useState('all');
+  const [sessionDaysFilter, setSessionDaysFilter] = useState(30);
+  const [sessionDetail, setSessionDetail] = useState(null);
+  const [sessionDetailLoading, setSessionDetailLoading] = useState(false);
+
   // Costs tab
   const [costSummary, setCostSummary] = useState([]);
   const [costEntries, setCostEntries] = useState([]);
@@ -656,6 +664,30 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
     setReinstateLoading(null);
   };
 
+  // ─── All Sessions browser ───
+  const loadAllSessions = async (status, days) => {
+    setAllSessionsLoading(true);
+    try {
+      const s = status || sessionStatusFilter;
+      const d = days || sessionDaysFilter;
+      const res = await apiFetch(`/api/admin/sessions/all?status=${s}&days=${d}`);
+      if (res?.ok) { const data = await res.json(); setAllSessions(data.sessions || []); }
+    } catch {}
+    setAllSessionsLoading(false);
+  };
+
+  const loadSessionDetail = async (sessionId) => {
+    setSessionDetailLoading(true);
+    try {
+      const res = await apiFetch(`/api/admin/sessions/${sessionId}/detail`);
+      if (res?.ok) {
+        const data = await res.json();
+        setSessionDetail(data);
+      }
+    } catch (err) { console.error('Session detail load error:', err); }
+    setSessionDetailLoading(false);
+  };
+
   const fetchPendingApprovals = async () => {
     try {
       const res = await apiFetch('/api/admin/pending-approvals');
@@ -839,7 +871,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
     if (activeTab === 'customerservice') loadCsReviews();
     if (activeTab === 'tickets') loadTickets();
     if (activeTab === 'security') { loadSecDashboard(); loadSecAuditLog(); loadTrustedIps(); }
-    if (activeTab === 'sessions') { loadNoShowSessions(); loadPausedCaregivers(); }
+    if (activeTab === 'sessions') { loadNoShowSessions(); loadPausedCaregivers(); loadAllSessions(); }
     if (activeTab === 'safety') loadSafetyFlags();
     if (activeTab === 'bgchecks') {
       loadBgChecks();
@@ -4671,6 +4703,237 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
       {/* ─── Sessions Tab ─── */}
       {activeTab === 'sessions' && (
         <div>
+          {/* ── Session Detail Drawer ── */}
+          {sessionDetail && (
+            <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', justifyContent: 'flex-end' }}
+              onClick={e => { if (e.target === e.currentTarget) setSessionDetail(null); }}>
+              <div style={{ width: '100%', maxWidth: 520, background: 'var(--bg-surface)', height: '100%', overflowY: 'auto', padding: '20px', boxShadow: '-4px 0 20px rgba(0,0,0,0.15)' }}>
+                {/* Drawer header */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>Session Detail</h3>
+                  <button onClick={() => setSessionDetail(null)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--text-muted)', padding: '4px 8px' }}>{'\u2715'}</button>
+                </div>
+
+                {/* Session header card */}
+                <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 10, padding: 14, marginBottom: 14 }}>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>
+                    {sessionDetail.recipient?.name || 'Unknown'}
+                    {sessionDetail.recipient?.age ? `, ${sessionDetail.recipient.age}` : ''}
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>
+                    {sessionDetail.session?.scheduled_date} at {sessionDetail.session?.scheduled_time} {'\u00B7'} {sessionDetail.session?.duration_hours}h {sessionDetail.session?.service_type}
+                  </div>
+                  <div style={{ display: 'flex', gap: 12, fontSize: 12, color: 'var(--text-secondary)', flexWrap: 'wrap' }}>
+                    <span>Family: {sessionDetail.family?.name}</span>
+                    {sessionDetail.caregiver && <span>Caregiver: {sessionDetail.caregiver?.name}</span>}
+                  </div>
+                  <div style={{ marginTop: 8, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {(() => {
+                      const st = sessionDetail.session?.status;
+                      const colors = { completed: '#16a34a', in_progress: '#2563eb', confirmed: '#7c3aed', cancelled: '#dc2626', requested: '#d97706', open: '#d97706', pending: '#d97706' };
+                      return React.createElement('span', { style: { fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: (colors[st] || '#888') + '20', color: colors[st] || '#888' }}, (st || '').replace(/_/g, ' ').toUpperCase());
+                    })()}
+                    {sessionDetail.session?.payment_status && React.createElement('span', { style: { fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 6, background: '#e0f2fe', color: '#0369a1' }}, 'Pay: ' + sessionDetail.session.payment_status)}
+                    {sessionDetail.session?.review_required ? React.createElement('span', { style: { fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 6, background: '#fef3c7', color: '#92400e' }}, 'Review needed') : null}
+                    {sessionDetail.session?.late_check_in ? React.createElement('span', { style: { fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 6, background: '#fff1f2', color: '#be123c' }}, 'Late ' + (sessionDetail.session.late_minutes || '') + 'min') : null}
+                  </div>
+                  {sessionDetail.session?.special_instructions && (
+                    <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text-secondary)', fontStyle: 'italic', padding: '6px 8px', background: 'var(--bg-neutral)', borderRadius: 6 }}>
+                      {sessionDetail.session.special_instructions}
+                    </div>
+                  )}
+                </div>
+
+                {/* GPS data from visit log */}
+                {sessionDetail.visitLog?.some(vl => vl.check_in_lat && vl.check_in_lng) && (
+                  <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10, padding: 12, marginBottom: 14 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: '#166534', marginBottom: 6 }}>Check-In Location</div>
+                    {sessionDetail.visitLog.filter(vl => vl.check_in_lat).map((vl, i) => (
+                      <div key={i} style={{ fontSize: 12, color: '#15803d' }}>
+                        {vl.check_in_lat.toFixed(5)}, {vl.check_in_lng.toFixed(5)}
+                        {vl.check_in_distance_ft != null && ` \u00B7 ${Math.round(vl.check_in_distance_ft)} ft from home`}
+                        {vl.check_out_lat && vl.check_out_lng && (
+                          <div style={{ marginTop: 4, color: '#166534' }}>
+                            Check-out: {vl.check_out_lat.toFixed(5)}, {vl.check_out_lng.toFixed(5)}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Timeline */}
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 10 }}>Session Timeline</div>
+                {(sessionDetail.timeline || []).length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)', fontSize: 13 }}>No timeline events</div>
+                ) : (
+                  <div style={{ position: 'relative', paddingLeft: 20 }}>
+                    {/* Vertical line */}
+                    <div style={{ position: 'absolute', left: 7, top: 4, bottom: 4, width: 2, background: '#e5e7eb' }} />
+                    {sessionDetail.timeline.map((ev, i) => {
+                      const icons = { booking: '\u{1F4C5}', confirmed: '\u2705', check_in: '\u{1F4CD}', visit_notes: '\u{1F4DD}', check_out: '\u{1F3C1}', no_show: '\u26A0\uFE0F', cancelled: '\u274C', completed: '\u2705', payment: '\u{1F4B3}', payment_auth: '\u{1F512}', payment_capture: '\u{1F4B0}', admin_action: '\u{1F6E0}\uFE0F' };
+                      const dotColors = { booking: '#d97706', confirmed: '#7c3aed', check_in: '#16a34a', check_out: '#0369a1', no_show: '#dc2626', cancelled: '#dc2626', completed: '#16a34a', payment: '#0369a1', payment_auth: '#7c3aed', payment_capture: '#16a34a', admin_action: '#6b7280', visit_notes: '#d97706' };
+                      return (
+                        <div key={i} style={{ position: 'relative', marginBottom: 14, paddingLeft: 14 }}>
+                          {/* Dot */}
+                          <div style={{ position: 'absolute', left: -17, top: 3, width: 12, height: 12, borderRadius: '50%', background: dotColors[ev.type] || '#888', border: '2px solid var(--bg-surface)', zIndex: 1 }} />
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 2 }}>
+                            {ev.time ? new Date(ev.time).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : ''}
+                          </div>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
+                            {icons[ev.type] || '\u25CF'} {ev.label}
+                          </div>
+                          {ev.detail && (
+                            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2, lineHeight: 1.5 }}>
+                              {ev.detail}
+                            </div>
+                          )}
+                          {/* Moods */}
+                          {ev.moods && Object.keys(ev.moods).length > 0 && (
+                            <div style={{ display: 'flex', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
+                              {Object.entries(ev.moods).map(([key, val]) => val && (
+                                <span key={key} style={{ fontSize: 11, padding: '2px 6px', background: 'var(--bg-highlight)', borderRadius: 4 }}>
+                                  {key}: {Array.isArray(val) ? val.join(', ') : val}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                          {/* Condition tags */}
+                          {ev.tags?.length > 0 && (
+                            <div style={{ display: 'flex', gap: 4, marginTop: 4, flexWrap: 'wrap' }}>
+                              {ev.tags.map((t, ti) => (
+                                <span key={ti} style={{ fontSize: 10, padding: '1px 6px', background: '#fef3c7', color: '#92400e', borderRadius: 4, fontWeight: 600 }}>{t}</span>
+                              ))}
+                            </div>
+                          )}
+                          {/* GPS on check-in events */}
+                          {ev.gps && (
+                            <div style={{ fontSize: 11, color: '#15803d', marginTop: 3 }}>
+                              GPS: {ev.gps.lat?.toFixed(5)}, {ev.gps.lng?.toFixed(5)}
+                              {ev.gps.distance_ft != null && ` (${Math.round(ev.gps.distance_ft)} ft)`}
+                            </div>
+                          )}
+                          {/* Admin action details */}
+                          {ev.adminDetails && Object.keys(ev.adminDetails).length > 0 && (
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3, fontFamily: 'monospace', background: 'var(--bg-neutral)', padding: '4px 6px', borderRadius: 4 }}>
+                              {JSON.stringify(ev.adminDetails, null, 0).substring(0, 200)}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Visit log details */}
+                {sessionDetail.visitLog?.length > 0 && sessionDetail.visitLog.some(vl => vl.ai_summary) && (
+                  <div style={{ marginTop: 14 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>AI Visit Summary</div>
+                    {sessionDetail.visitLog.filter(vl => vl.ai_summary).map((vl, i) => (
+                      <div key={i} style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6, padding: '8px 10px', background: '#f0fdf4', borderRadius: 8, border: '1px solid #bbf7d0' }}>
+                        {vl.ai_summary}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Payment details */}
+                {sessionDetail.payments?.length > 0 && (
+                  <div style={{ marginTop: 14 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>Payment Records</div>
+                    {sessionDetail.payments.map((p, i) => (
+                      <div key={i} style={{ fontSize: 12, padding: '8px 10px', background: '#eff6ff', borderRadius: 8, border: '1px solid #bfdbfe', marginBottom: 6 }}>
+                        <div style={{ fontWeight: 600, color: '#1e40af' }}>
+                          ${((p.amount || 0) / 100).toFixed(2)} — {p.status}
+                          {p.auto_charged ? ' (auto)' : ''}
+                          {p.tip_cents > 0 ? ` + $${(p.tip_cents / 100).toFixed(2)} tip` : ''}
+                        </div>
+                        <div style={{ color: '#3b82f6', marginTop: 2 }}>
+                          Caregiver: ${((p.caregiver_payout || 0) / 100).toFixed(2)} | Platform: ${((p.platform_fee || 0) / 100).toFixed(2)}
+                        </div>
+                        {p.stripe_payment_intent && (
+                          <div style={{ color: '#64748b', marginTop: 2, fontFamily: 'monospace', fontSize: 10 }}>
+                            PI: {p.stripe_payment_intent}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ── All Sessions Browser ── */}
+          <div className="card" style={{ marginBottom: 20 }}>
+            <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+              <span>All Sessions</span>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {['all', 'completed', 'in_progress', 'confirmed', 'cancelled', 'requested'].map(st => (
+                  <button key={st} onClick={() => { setSessionStatusFilter(st); loadAllSessions(st); }}
+                    style={{
+                      padding: '3px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                      border: sessionStatusFilter === st ? '2px solid var(--role-color)' : '1px solid #ddd',
+                      background: sessionStatusFilter === st ? 'var(--role-color)' : 'var(--bg-surface)',
+                      color: sessionStatusFilter === st ? 'var(--text-on-primary)' : 'var(--text-secondary)',
+                    }}>
+                    {st === 'all' ? 'All' : st === 'in_progress' ? 'In Progress' : st.charAt(0).toUpperCase() + st.slice(1)}
+                  </button>
+                ))}
+                <select value={sessionDaysFilter} onChange={e => { const d = Number(e.target.value); setSessionDaysFilter(d); loadAllSessions(null, d); }}
+                  style={{ padding: '3px 8px', borderRadius: 6, fontSize: 11, border: '1px solid #ddd', background: 'var(--bg-surface)' }}>
+                  <option value={7}>7 days</option>
+                  <option value={14}>14 days</option>
+                  <option value={30}>30 days</option>
+                  <option value={60}>60 days</option>
+                  <option value={90}>90 days</option>
+                </select>
+              </div>
+            </div>
+            {allSessionsLoading ? (
+              <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)' }}>Loading...</div>
+            ) : allSessions.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)' }}>No sessions found</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {allSessions.map(s => {
+                  const statusColors = { completed: '#16a34a', in_progress: '#2563eb', confirmed: '#7c3aed', cancelled: '#dc2626', requested: '#d97706', open: '#d97706', pending: '#d97706', matching: '#6b7280', negotiating: '#6b7280' };
+                  const flags = [];
+                  if (s.caregiver_no_show) flags.push('NO-SHOW');
+                  if (s.review_required) flags.push('REVIEW');
+                  if (s.cancelled_by === 'system') flags.push('SYS-CANCEL');
+                  return (
+                    <div key={s.id} onClick={() => loadSessionDetail(s.id)} style={{
+                      padding: '10px 14px', borderRadius: 8, cursor: 'pointer',
+                      border: '1px solid var(--border-default)', background: 'var(--bg-card)',
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8,
+                      transition: 'background 0.15s',
+                    }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-highlight)'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'var(--bg-card)'}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                          {s.recipient_name || 'Unknown'}
+                          <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: (statusColors[s.status] || '#888') + '18', color: statusColors[s.status] || '#888' }}>
+                            {(s.status || '').replace(/_/g, ' ')}
+                          </span>
+                          {flags.map((f, fi) => (
+                            <span key={fi} style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: '#fef2f2', color: '#dc2626' }}>{f}</span>
+                          ))}
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>
+                          {s.scheduled_date} {s.scheduled_time} {'\u00B7'} {s.service_type || ''} {'\u00B7'} CG: {s.caregiver_name || 'unassigned'}
+                        </div>
+                      </div>
+                      <span style={{ fontSize: 16, color: 'var(--text-muted)' }}>{'\u203A'}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* ── No-Show Cancelled Sessions ── */}
           <h3 style={{ margin: '0 0 16px', fontSize: '16px', fontWeight: 700, color: 'var(--role-color)' }}>
             No-Show Cancelled Sessions
           </h3>

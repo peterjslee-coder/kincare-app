@@ -60638,7 +60638,7 @@ const SafetyFlagsTab = window.SafetyFlagsTab = ({
 const AdminPanel = window.AdminPanel = ({
   currentUser
 }) => {
-  var _tabGroups$flatMap$fi, _reviewInsights$insig, _secDashboard$activeT, _secDashboard$failedL, _secDashboard$adminAc, _secDashboard$critica, _onboardingModal$user, _onboardingModal$user2, _onboardingModal$user3, _onboardingModal$docu, _userDrawer$sessionSt, _userDrawer$sessionSt2, _userDrawer$reviewSta, _userDrawer$reviewSta2, _userDrawer$careTeams, _userDrawer$user5, _userDrawer$tickets, _userDrawer$safetyFla, _userDrawer$allDocume, _userDrawer$allDocume2, _userDrawer$user1, _userDrawer$user11, _userDrawer$user13, _userDrawer$user14, _userDrawer$user15;
+  var _tabGroups$flatMap$fi, _reviewInsights$insig, _secDashboard$activeT, _secDashboard$failedL, _secDashboard$adminAc, _secDashboard$critica, _sessionDetail$recipi, _sessionDetail$recipi2, _sessionDetail$sessio, _sessionDetail$sessio2, _sessionDetail$sessio3, _sessionDetail$sessio4, _sessionDetail$family, _sessionDetail$caregi, _sessionDetail$sessio6, _sessionDetail$sessio7, _sessionDetail$sessio8, _sessionDetail$sessio9, _sessionDetail$visitL, _sessionDetail$visitL2, _sessionDetail$paymen, _onboardingModal$user, _onboardingModal$user2, _onboardingModal$user3, _onboardingModal$docu, _userDrawer$sessionSt, _userDrawer$sessionSt2, _userDrawer$reviewSta, _userDrawer$reviewSta2, _userDrawer$careTeams, _userDrawer$user5, _userDrawer$tickets, _userDrawer$safetyFla, _userDrawer$allDocume, _userDrawer$allDocume2, _userDrawer$user1, _userDrawer$user11, _userDrawer$user13, _userDrawer$user14, _userDrawer$user15;
   const {
     showToast
   } = useToast();
@@ -61063,6 +61063,14 @@ const AdminPanel = window.AdminPanel = ({
   const [pausedLoading, setPausedLoading] = useState(false);
   const [reinstateLoading, setReinstateLoading] = useState(null);
 
+  // Sessions tab — all sessions browser + detail drill-down
+  const [allSessions, setAllSessions] = useState([]);
+  const [allSessionsLoading, setAllSessionsLoading] = useState(false);
+  const [sessionStatusFilter, setSessionStatusFilter] = useState('all');
+  const [sessionDaysFilter, setSessionDaysFilter] = useState(30);
+  const [sessionDetail, setSessionDetail] = useState(null);
+  const [sessionDetailLoading, setSessionDetailLoading] = useState(false);
+
   // Costs tab
   const [costSummary, setCostSummary] = useState([]);
   const [costEntries, setCostEntries] = useState([]);
@@ -61402,6 +61410,34 @@ const AdminPanel = window.AdminPanel = ({
     } catch {}
     setReinstateLoading(null);
   };
+
+  // ─── All Sessions browser ───
+  const loadAllSessions = async (status, days) => {
+    setAllSessionsLoading(true);
+    try {
+      const s = status || sessionStatusFilter;
+      const d = days || sessionDaysFilter;
+      const res = await apiFetch(`/api/admin/sessions/all?status=${s}&days=${d}`);
+      if (res !== null && res !== void 0 && res.ok) {
+        const data = await res.json();
+        setAllSessions(data.sessions || []);
+      }
+    } catch {}
+    setAllSessionsLoading(false);
+  };
+  const loadSessionDetail = async sessionId => {
+    setSessionDetailLoading(true);
+    try {
+      const res = await apiFetch(`/api/admin/sessions/${sessionId}/detail`);
+      if (res !== null && res !== void 0 && res.ok) {
+        const data = await res.json();
+        setSessionDetail(data);
+      }
+    } catch (err) {
+      console.error('Session detail load error:', err);
+    }
+    setSessionDetailLoading(false);
+  };
   const fetchPendingApprovals = async () => {
     try {
       const res = await apiFetch('/api/admin/pending-approvals');
@@ -61615,6 +61651,7 @@ const AdminPanel = window.AdminPanel = ({
     if (activeTab === 'sessions') {
       loadNoShowSessions();
       loadPausedCaregivers();
+      loadAllSessions();
     }
     if (activeTab === 'safety') loadSafetyFlags();
     if (activeTab === 'bgchecks') {
@@ -70025,7 +70062,538 @@ const AdminPanel = window.AdminPanel = ({
       fontWeight: 600,
       cursor: 'pointer'
     }
-  }, "Reject Authorization"))))), activeTab === 'sessions' && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h3", {
+  }, "Reject Authorization"))))), activeTab === 'sessions' && /*#__PURE__*/React.createElement("div", null, sessionDetail && /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: 'fixed',
+      inset: 0,
+      background: 'rgba(0,0,0,0.5)',
+      zIndex: 1000,
+      display: 'flex',
+      justifyContent: 'flex-end'
+    },
+    onClick: e => {
+      if (e.target === e.currentTarget) setSessionDetail(null);
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: '100%',
+      maxWidth: 520,
+      background: 'var(--bg-surface)',
+      height: '100%',
+      overflowY: 'auto',
+      padding: '20px',
+      boxShadow: '-4px 0 20px rgba(0,0,0,0.15)'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 16
+    }
+  }, /*#__PURE__*/React.createElement("h3", {
+    style: {
+      margin: 0,
+      fontSize: 16,
+      fontWeight: 700
+    }
+  }, "Session Detail"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setSessionDetail(null),
+    style: {
+      background: 'none',
+      border: 'none',
+      fontSize: 20,
+      cursor: 'pointer',
+      color: 'var(--text-muted)',
+      padding: '4px 8px'
+    }
+  }, '\u2715')), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: 'var(--bg-card)',
+      border: '1px solid var(--border-default)',
+      borderRadius: 10,
+      padding: 14,
+      marginBottom: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 15,
+      fontWeight: 700,
+      color: 'var(--text-primary)',
+      marginBottom: 6
+    }
+  }, ((_sessionDetail$recipi = sessionDetail.recipient) === null || _sessionDetail$recipi === void 0 ? void 0 : _sessionDetail$recipi.name) || 'Unknown', (_sessionDetail$recipi2 = sessionDetail.recipient) !== null && _sessionDetail$recipi2 !== void 0 && _sessionDetail$recipi2.age ? `, ${sessionDetail.recipient.age}` : ''), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: 'var(--text-secondary)',
+      marginBottom: 4
+    }
+  }, (_sessionDetail$sessio = sessionDetail.session) === null || _sessionDetail$sessio === void 0 ? void 0 : _sessionDetail$sessio.scheduled_date, " at ", (_sessionDetail$sessio2 = sessionDetail.session) === null || _sessionDetail$sessio2 === void 0 ? void 0 : _sessionDetail$sessio2.scheduled_time, " ", '\u00B7', " ", (_sessionDetail$sessio3 = sessionDetail.session) === null || _sessionDetail$sessio3 === void 0 ? void 0 : _sessionDetail$sessio3.duration_hours, "h ", (_sessionDetail$sessio4 = sessionDetail.session) === null || _sessionDetail$sessio4 === void 0 ? void 0 : _sessionDetail$sessio4.service_type), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 12,
+      fontSize: 12,
+      color: 'var(--text-secondary)',
+      flexWrap: 'wrap'
+    }
+  }, /*#__PURE__*/React.createElement("span", null, "Family: ", (_sessionDetail$family = sessionDetail.family) === null || _sessionDetail$family === void 0 ? void 0 : _sessionDetail$family.name), sessionDetail.caregiver && /*#__PURE__*/React.createElement("span", null, "Caregiver: ", (_sessionDetail$caregi = sessionDetail.caregiver) === null || _sessionDetail$caregi === void 0 ? void 0 : _sessionDetail$caregi.name)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 8,
+      display: 'flex',
+      gap: 8,
+      flexWrap: 'wrap'
+    }
+  }, (_sessionDetail$sessio5 => {
+    const st = (_sessionDetail$sessio5 = sessionDetail.session) === null || _sessionDetail$sessio5 === void 0 ? void 0 : _sessionDetail$sessio5.status;
+    const colors = {
+      completed: '#16a34a',
+      in_progress: '#2563eb',
+      confirmed: '#7c3aed',
+      cancelled: '#dc2626',
+      requested: '#d97706',
+      open: '#d97706',
+      pending: '#d97706'
+    };
+    return React.createElement('span', {
+      style: {
+        fontSize: 11,
+        fontWeight: 700,
+        padding: '2px 8px',
+        borderRadius: 6,
+        background: (colors[st] || '#888') + '20',
+        color: colors[st] || '#888'
+      }
+    }, (st || '').replace(/_/g, ' ').toUpperCase());
+  })(), ((_sessionDetail$sessio6 = sessionDetail.session) === null || _sessionDetail$sessio6 === void 0 ? void 0 : _sessionDetail$sessio6.payment_status) && React.createElement('span', {
+    style: {
+      fontSize: 11,
+      fontWeight: 600,
+      padding: '2px 8px',
+      borderRadius: 6,
+      background: '#e0f2fe',
+      color: '#0369a1'
+    }
+  }, 'Pay: ' + sessionDetail.session.payment_status), (_sessionDetail$sessio7 = sessionDetail.session) !== null && _sessionDetail$sessio7 !== void 0 && _sessionDetail$sessio7.review_required ? React.createElement('span', {
+    style: {
+      fontSize: 11,
+      fontWeight: 600,
+      padding: '2px 8px',
+      borderRadius: 6,
+      background: '#fef3c7',
+      color: '#92400e'
+    }
+  }, 'Review needed') : null, (_sessionDetail$sessio8 = sessionDetail.session) !== null && _sessionDetail$sessio8 !== void 0 && _sessionDetail$sessio8.late_check_in ? React.createElement('span', {
+    style: {
+      fontSize: 11,
+      fontWeight: 600,
+      padding: '2px 8px',
+      borderRadius: 6,
+      background: '#fff1f2',
+      color: '#be123c'
+    }
+  }, 'Late ' + (sessionDetail.session.late_minutes || '') + 'min') : null), ((_sessionDetail$sessio9 = sessionDetail.session) === null || _sessionDetail$sessio9 === void 0 ? void 0 : _sessionDetail$sessio9.special_instructions) && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 8,
+      fontSize: 12,
+      color: 'var(--text-secondary)',
+      fontStyle: 'italic',
+      padding: '6px 8px',
+      background: 'var(--bg-neutral)',
+      borderRadius: 6
+    }
+  }, sessionDetail.session.special_instructions)), ((_sessionDetail$visitL = sessionDetail.visitLog) === null || _sessionDetail$visitL === void 0 ? void 0 : _sessionDetail$visitL.some(vl => vl.check_in_lat && vl.check_in_lng)) && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: '#f0fdf4',
+      border: '1px solid #bbf7d0',
+      borderRadius: 10,
+      padding: 12,
+      marginBottom: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      fontWeight: 700,
+      color: '#166534',
+      marginBottom: 6
+    }
+  }, "Check-In Location"), sessionDetail.visitLog.filter(vl => vl.check_in_lat).map((vl, i) => /*#__PURE__*/React.createElement("div", {
+    key: i,
+    style: {
+      fontSize: 12,
+      color: '#15803d'
+    }
+  }, vl.check_in_lat.toFixed(5), ", ", vl.check_in_lng.toFixed(5), vl.check_in_distance_ft != null && ` \u00B7 ${Math.round(vl.check_in_distance_ft)} ft from home`, vl.check_out_lat && vl.check_out_lng && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 4,
+      color: '#166534'
+    }
+  }, "Check-out: ", vl.check_out_lat.toFixed(5), ", ", vl.check_out_lng.toFixed(5))))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      fontWeight: 700,
+      color: 'var(--text-primary)',
+      marginBottom: 10
+    }
+  }, "Session Timeline"), (sessionDetail.timeline || []).length === 0 ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: 'center',
+      padding: 20,
+      color: 'var(--text-muted)',
+      fontSize: 13
+    }
+  }, "No timeline events") : /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: 'relative',
+      paddingLeft: 20
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: 'absolute',
+      left: 7,
+      top: 4,
+      bottom: 4,
+      width: 2,
+      background: '#e5e7eb'
+    }
+  }), sessionDetail.timeline.map((ev, i) => {
+    var _ev$tags, _ev$gps$lat, _ev$gps$lng;
+    const icons = {
+      booking: '\u{1F4C5}',
+      confirmed: '\u2705',
+      check_in: '\u{1F4CD}',
+      visit_notes: '\u{1F4DD}',
+      check_out: '\u{1F3C1}',
+      no_show: '\u26A0\uFE0F',
+      cancelled: '\u274C',
+      completed: '\u2705',
+      payment: '\u{1F4B3}',
+      payment_auth: '\u{1F512}',
+      payment_capture: '\u{1F4B0}',
+      admin_action: '\u{1F6E0}\uFE0F'
+    };
+    const dotColors = {
+      booking: '#d97706',
+      confirmed: '#7c3aed',
+      check_in: '#16a34a',
+      check_out: '#0369a1',
+      no_show: '#dc2626',
+      cancelled: '#dc2626',
+      completed: '#16a34a',
+      payment: '#0369a1',
+      payment_auth: '#7c3aed',
+      payment_capture: '#16a34a',
+      admin_action: '#6b7280',
+      visit_notes: '#d97706'
+    };
+    return /*#__PURE__*/React.createElement("div", {
+      key: i,
+      style: {
+        position: 'relative',
+        marginBottom: 14,
+        paddingLeft: 14
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        position: 'absolute',
+        left: -17,
+        top: 3,
+        width: 12,
+        height: 12,
+        borderRadius: '50%',
+        background: dotColors[ev.type] || '#888',
+        border: '2px solid var(--bg-surface)',
+        zIndex: 1
+      }
+    }), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 11,
+        color: 'var(--text-muted)',
+        marginBottom: 2
+      }
+    }, ev.time ? new Date(ev.time).toLocaleString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit'
+    }) : ''), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 13,
+        fontWeight: 600,
+        color: 'var(--text-primary)'
+      }
+    }, icons[ev.type] || '\u25CF', " ", ev.label), ev.detail && /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 12,
+        color: 'var(--text-secondary)',
+        marginTop: 2,
+        lineHeight: 1.5
+      }
+    }, ev.detail), ev.moods && Object.keys(ev.moods).length > 0 && /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        gap: 8,
+        marginTop: 4,
+        flexWrap: 'wrap'
+      }
+    }, Object.entries(ev.moods).map(([key, val]) => val && /*#__PURE__*/React.createElement("span", {
+      key: key,
+      style: {
+        fontSize: 11,
+        padding: '2px 6px',
+        background: 'var(--bg-highlight)',
+        borderRadius: 4
+      }
+    }, key, ": ", Array.isArray(val) ? val.join(', ') : val))), ((_ev$tags = ev.tags) === null || _ev$tags === void 0 ? void 0 : _ev$tags.length) > 0 && /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        gap: 4,
+        marginTop: 4,
+        flexWrap: 'wrap'
+      }
+    }, ev.tags.map((t, ti) => /*#__PURE__*/React.createElement("span", {
+      key: ti,
+      style: {
+        fontSize: 10,
+        padding: '1px 6px',
+        background: '#fef3c7',
+        color: '#92400e',
+        borderRadius: 4,
+        fontWeight: 600
+      }
+    }, t))), ev.gps && /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 11,
+        color: '#15803d',
+        marginTop: 3
+      }
+    }, "GPS: ", (_ev$gps$lat = ev.gps.lat) === null || _ev$gps$lat === void 0 ? void 0 : _ev$gps$lat.toFixed(5), ", ", (_ev$gps$lng = ev.gps.lng) === null || _ev$gps$lng === void 0 ? void 0 : _ev$gps$lng.toFixed(5), ev.gps.distance_ft != null && ` (${Math.round(ev.gps.distance_ft)} ft)`), ev.adminDetails && Object.keys(ev.adminDetails).length > 0 && /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 11,
+        color: 'var(--text-muted)',
+        marginTop: 3,
+        fontFamily: 'monospace',
+        background: 'var(--bg-neutral)',
+        padding: '4px 6px',
+        borderRadius: 4
+      }
+    }, JSON.stringify(ev.adminDetails, null, 0).substring(0, 200)));
+  })), ((_sessionDetail$visitL2 = sessionDetail.visitLog) === null || _sessionDetail$visitL2 === void 0 ? void 0 : _sessionDetail$visitL2.length) > 0 && sessionDetail.visitLog.some(vl => vl.ai_summary) && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      fontWeight: 700,
+      color: 'var(--text-primary)',
+      marginBottom: 8
+    }
+  }, "AI Visit Summary"), sessionDetail.visitLog.filter(vl => vl.ai_summary).map((vl, i) => /*#__PURE__*/React.createElement("div", {
+    key: i,
+    style: {
+      fontSize: 12,
+      color: 'var(--text-secondary)',
+      lineHeight: 1.6,
+      padding: '8px 10px',
+      background: '#f0fdf4',
+      borderRadius: 8,
+      border: '1px solid #bbf7d0'
+    }
+  }, vl.ai_summary))), ((_sessionDetail$paymen = sessionDetail.payments) === null || _sessionDetail$paymen === void 0 ? void 0 : _sessionDetail$paymen.length) > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      fontWeight: 700,
+      color: 'var(--text-primary)',
+      marginBottom: 8
+    }
+  }, "Payment Records"), sessionDetail.payments.map((p, i) => /*#__PURE__*/React.createElement("div", {
+    key: i,
+    style: {
+      fontSize: 12,
+      padding: '8px 10px',
+      background: '#eff6ff',
+      borderRadius: 8,
+      border: '1px solid #bfdbfe',
+      marginBottom: 6
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontWeight: 600,
+      color: '#1e40af'
+    }
+  }, "$", ((p.amount || 0) / 100).toFixed(2), " \u2014 ", p.status, p.auto_charged ? ' (auto)' : '', p.tip_cents > 0 ? ` + $${(p.tip_cents / 100).toFixed(2)} tip` : ''), /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: '#3b82f6',
+      marginTop: 2
+    }
+  }, "Caregiver: $", ((p.caregiver_payout || 0) / 100).toFixed(2), " | Platform: $", ((p.platform_fee || 0) / 100).toFixed(2)), p.stripe_payment_intent && /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: '#64748b',
+      marginTop: 2,
+      fontFamily: 'monospace',
+      fontSize: 10
+    }
+  }, "PI: ", p.stripe_payment_intent)))))), /*#__PURE__*/React.createElement("div", {
+    className: "card",
+    style: {
+      marginBottom: 20
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "card-header",
+    style: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      flexWrap: 'wrap',
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement("span", null, "All Sessions"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 6,
+      flexWrap: 'wrap'
+    }
+  }, ['all', 'completed', 'in_progress', 'confirmed', 'cancelled', 'requested'].map(st => /*#__PURE__*/React.createElement("button", {
+    key: st,
+    onClick: () => {
+      setSessionStatusFilter(st);
+      loadAllSessions(st);
+    },
+    style: {
+      padding: '3px 10px',
+      borderRadius: 6,
+      fontSize: 11,
+      fontWeight: 600,
+      cursor: 'pointer',
+      border: sessionStatusFilter === st ? '2px solid var(--role-color)' : '1px solid #ddd',
+      background: sessionStatusFilter === st ? 'var(--role-color)' : 'var(--bg-surface)',
+      color: sessionStatusFilter === st ? 'var(--text-on-primary)' : 'var(--text-secondary)'
+    }
+  }, st === 'all' ? 'All' : st === 'in_progress' ? 'In Progress' : st.charAt(0).toUpperCase() + st.slice(1))), /*#__PURE__*/React.createElement("select", {
+    value: sessionDaysFilter,
+    onChange: e => {
+      const d = Number(e.target.value);
+      setSessionDaysFilter(d);
+      loadAllSessions(null, d);
+    },
+    style: {
+      padding: '3px 8px',
+      borderRadius: 6,
+      fontSize: 11,
+      border: '1px solid #ddd',
+      background: 'var(--bg-surface)'
+    }
+  }, /*#__PURE__*/React.createElement("option", {
+    value: 7
+  }, "7 days"), /*#__PURE__*/React.createElement("option", {
+    value: 14
+  }, "14 days"), /*#__PURE__*/React.createElement("option", {
+    value: 30
+  }, "30 days"), /*#__PURE__*/React.createElement("option", {
+    value: 60
+  }, "60 days"), /*#__PURE__*/React.createElement("option", {
+    value: 90
+  }, "90 days")))), allSessionsLoading ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: 'center',
+      padding: 20,
+      color: 'var(--text-muted)'
+    }
+  }, "Loading...") : allSessions.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: 'center',
+      padding: 20,
+      color: 'var(--text-muted)'
+    }
+  }, "No sessions found") : /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 6
+    }
+  }, allSessions.map(s => {
+    const statusColors = {
+      completed: '#16a34a',
+      in_progress: '#2563eb',
+      confirmed: '#7c3aed',
+      cancelled: '#dc2626',
+      requested: '#d97706',
+      open: '#d97706',
+      pending: '#d97706',
+      matching: '#6b7280',
+      negotiating: '#6b7280'
+    };
+    const flags = [];
+    if (s.caregiver_no_show) flags.push('NO-SHOW');
+    if (s.review_required) flags.push('REVIEW');
+    if (s.cancelled_by === 'system') flags.push('SYS-CANCEL');
+    return /*#__PURE__*/React.createElement("div", {
+      key: s.id,
+      onClick: () => loadSessionDetail(s.id),
+      style: {
+        padding: '10px 14px',
+        borderRadius: 8,
+        cursor: 'pointer',
+        border: '1px solid var(--border-default)',
+        background: 'var(--bg-card)',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        gap: 8,
+        transition: 'background 0.15s'
+      },
+      onMouseEnter: e => e.currentTarget.style.background = 'var(--bg-highlight)',
+      onMouseLeave: e => e.currentTarget.style.background = 'var(--bg-card)'
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        flex: 1,
+        minWidth: 0
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 13,
+        fontWeight: 600,
+        color: 'var(--text-primary)',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6
+      }
+    }, s.recipient_name || 'Unknown', /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 10,
+        fontWeight: 700,
+        padding: '1px 6px',
+        borderRadius: 4,
+        background: (statusColors[s.status] || '#888') + '18',
+        color: statusColors[s.status] || '#888'
+      }
+    }, (s.status || '').replace(/_/g, ' ')), flags.map((f, fi) => /*#__PURE__*/React.createElement("span", {
+      key: fi,
+      style: {
+        fontSize: 9,
+        fontWeight: 700,
+        padding: '1px 5px',
+        borderRadius: 3,
+        background: '#fef2f2',
+        color: '#dc2626'
+      }
+    }, f))), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 11,
+        color: 'var(--text-secondary)',
+        marginTop: 2
+      }
+    }, s.scheduled_date, " ", s.scheduled_time, " ", '\u00B7', " ", s.service_type || '', " ", '\u00B7', " CG: ", s.caregiver_name || 'unassigned')), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 16,
+        color: 'var(--text-muted)'
+      }
+    }, '\u203A'));
+  }))), /*#__PURE__*/React.createElement("h3", {
     style: {
       margin: '0 0 16px',
       fontSize: '16px',

@@ -3139,6 +3139,51 @@ router.get("/sessions/open", async (req, res) => {
   }
 });
 
+// ─── GET /api/admin/sessions/all ───
+// List all sessions (any status) for admin drill-down. Supports ?status= and ?days= filters.
+router.get("/sessions/all", authenticate, requireAdmin, async (req, res) => {
+  try {
+    const db = await getDb();
+    const statusFilter = req.query.status;
+    const days = parseInt(req.query.days) || 30;
+
+    let where = `cs.scheduled_date >= date('now', '-${days} days')`;
+    const params = [];
+    if (statusFilter && statusFilter !== 'all') {
+      where += ` AND cs.status = ?`;
+      params.push(statusFilter);
+    }
+
+    const rows = await db.prepare(`
+      SELECT cs.id, cs.status, cs.scheduled_date, cs.scheduled_time, cs.service_type,
+        cs.duration_hours, cs.payment_status, cs.caregiver_no_show,
+        cs.cancelled_by, cs.review_required,
+        cr.first_name || ' ' || cr.last_name AS recipient_name,
+        cu.first_name || ' ' || cu.last_name AS caregiver_name,
+        fu.first_name || ' ' || fu.last_name AS family_name
+      FROM care_sessions cs
+      LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      LEFT JOIN users cu ON cp.user_id = cu.id
+      LEFT JOIN users fu ON cs.family_user_id = fu.id
+      WHERE ${where}
+      ORDER BY cs.scheduled_date DESC, cs.scheduled_time DESC
+      LIMIT 100
+    `).all(...params);
+
+    // Quick counts by status
+    const counts = {};
+    for (const r of rows) {
+      counts[r.status] = (counts[r.status] || 0) + 1;
+    }
+
+    res.json({ sessions: rows, counts, days });
+  } catch (err) {
+    console.error("Admin all sessions error:", err);
+    res.status(500).json({ error: "Failed to fetch sessions" });
+  }
+});
+
 // ─── GET /api/admin/feedback/triage — One-call feedback summary for fast triage ───
 // Returns: counts by status, all new items with full detail, recently reviewed items
 router.get("/feedback/triage", async (req, res) => {
@@ -3915,6 +3960,236 @@ router.post("/sessions/:id/restore", async (req, res) => {
   } catch (err) {
     console.error("Restore session error:", err);
     res.status(500).json({ error: "Failed to restore session" });
+  }
+});
+
+// ─── GET /api/admin/sessions/:id/detail ───
+// Full session lifecycle drill-down for admin audit view
+// Returns: booking info, confirmation, check-in (GPS, mood), visit log,
+// check-out, payment trail, no-show flags/restores, audit history
+router.get("/sessions/:id/detail", authenticate, requireAdmin, async (req, res) => {
+  try {
+    const db = await getDb();
+    const sid = req.params.id;
+
+    // 1. Core session data with all participants
+    const session = await db.prepare(`
+      SELECT cs.*,
+        cr.first_name AS recipient_first, cr.last_name AS recipient_last,
+        cr.age AS recipient_age, cr.health_conditions,
+        cr.location_city, cr.location_state,
+        fu.first_name AS family_first, fu.last_name AS family_last, fu.email AS family_email,
+        cu.first_name AS caregiver_first, cu.last_name AS caregiver_last, cu.email AS caregiver_email,
+        cp.hourly_rate AS caregiver_rate
+      FROM care_sessions cs
+      LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+      LEFT JOIN users fu ON cs.family_user_id = fu.id
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      LEFT JOIN users cu ON cp.user_id = cu.id
+      WHERE cs.id = ?
+    `).get(sid);
+
+    if (!session) return res.status(404).json({ error: "Session not found" });
+
+    // 2. Visit log (check-in, check-out, GPS, moods, notes)
+    const visitLog = await db.prepare(`
+      SELECT vl.*,
+        vu.first_name AS vl_caregiver_first
+      FROM visit_logs vl
+      LEFT JOIN caregiver_profiles vcp ON vl.caregiver_id = vcp.id
+      LEFT JOIN users vu ON vcp.user_id = vu.id
+      WHERE vl.session_id = ?
+      ORDER BY vl.created_at ASC
+    `).all(sid);
+
+    // 3. Payment records (session auto-pay + manual)
+    let sessionPayments = [];
+    try {
+      sessionPayments = await db.prepare(`
+        SELECT p.*, 'session' AS payment_type
+        FROM payments p WHERE p.session_id = ?
+        ORDER BY p.created_at ASC
+      `).all(sid);
+    } catch {}
+
+    // 4. Activity feed entries for this session
+    let activities = [];
+    try {
+      activities = await db.prepare(`
+        SELECT af.event_type, af.title, af.message, af.metadata, af.created_at
+        FROM activity_feed af
+        WHERE af.metadata LIKE ?
+        ORDER BY af.created_at ASC
+      `).all(`%${sid}%`);
+    } catch {}
+
+    // 5. Admin audit log entries for this session
+    let auditLog = [];
+    try {
+      auditLog = await db.prepare(`
+        SELECT aal.action, aal.details, aal.ip_address, aal.created_at,
+          u.first_name AS admin_first, u.last_name AS admin_last, u.email AS admin_email
+        FROM admin_audit_log aal
+        LEFT JOIN users u ON aal.admin_user_id = u.id
+        WHERE aal.target_id = ? AND aal.target_type = 'care_session'
+        ORDER BY aal.created_at ASC
+      `).all(sid);
+    } catch {}
+
+    // 6. Build a unified timeline
+    const timeline = [];
+
+    // Session created
+    if (session.created_at) {
+      timeline.push({ time: session.created_at, type: 'booking', label: 'Session Requested',
+        detail: `${session.service_type}, ${session.duration_hours}h on ${session.scheduled_date} at ${session.scheduled_time}` });
+    }
+
+    // Confirmation (if caregiver assigned)
+    if (session.caregiver_id && session.offered_to_caregiver_id) {
+      timeline.push({ time: session.updated_at || session.created_at, type: 'confirmed', label: 'Caregiver Confirmed',
+        detail: `${session.caregiver_first || ''} ${session.caregiver_last || ''}`.trim() });
+    }
+
+    // Check-in
+    for (const vl of visitLog) {
+      if (vl.check_in_time) {
+        const gps = (vl.check_in_lat && vl.check_in_lng)
+          ? { lat: vl.check_in_lat, lng: vl.check_in_lng, distance_ft: vl.check_in_distance_ft }
+          : (vl.check_in_latitude && vl.check_in_longitude)
+            ? { lat: vl.check_in_latitude, lng: vl.check_in_longitude }
+            : null;
+        let moods = {};
+        try { moods.arrival = JSON.parse(vl.arrival_mood); } catch { moods.arrival = vl.arrival_mood; }
+        timeline.push({ time: vl.check_in_time, type: 'check_in', label: 'Checked In',
+          detail: `by ${vl.vl_caregiver_first || 'caregiver'}`, gps, moods,
+          briefingAcked: !!vl.briefing_acknowledged_at });
+      }
+
+      // Visit notes
+      if (vl.care_feedback || vl.summary) {
+        let tags = [];
+        try { tags = JSON.parse(vl.condition_tags || '[]'); } catch {}
+        timeline.push({ time: vl.check_out_time || vl.check_in_time || vl.created_at, type: 'visit_notes', label: 'Visit Notes',
+          detail: vl.care_feedback || vl.summary, tags,
+          serviceFeedback: vl.service_feedback || null });
+      }
+
+      // Check-out
+      if (vl.check_out_time) {
+        let departureMoods = {};
+        try { departureMoods.departure = JSON.parse(vl.departure_mood); } catch { departureMoods.departure = vl.departure_mood; }
+        const checkOutGps = (vl.check_out_lat && vl.check_out_lng)
+          ? { lat: vl.check_out_lat, lng: vl.check_out_lng } : null;
+        timeline.push({ time: vl.check_out_time, type: 'check_out', label: 'Checked Out',
+          detail: vl.early_departure_reason ? `Early departure: ${vl.early_departure_reason}` : null,
+          moods: departureMoods, gps: checkOutGps });
+      }
+    }
+
+    // No-show flag
+    if (session.caregiver_no_show && session.caregiver_no_show_at) {
+      timeline.push({ time: session.caregiver_no_show_at, type: 'no_show', label: 'No-Show Flagged',
+        detail: 'Caregiver did not check in within 30 minutes' });
+    }
+
+    // Cancellation
+    if (session.cancelled_at) {
+      timeline.push({ time: session.cancelled_at, type: 'cancelled', label: 'Session Cancelled',
+        detail: `By ${session.cancelled_by || 'unknown'}${session.cancel_reason ? ': ' + session.cancel_reason : ''}` });
+    }
+
+    // Completion
+    if (session.completed_at) {
+      timeline.push({ time: session.completed_at, type: 'completed', label: 'Session Completed' });
+    }
+
+    // Payments
+    for (const p of sessionPayments) {
+      timeline.push({ time: p.created_at, type: 'payment', label: `Payment ${p.status}`,
+        detail: `$${(p.amount / 100).toFixed(2)} total — $${(p.caregiver_payout / 100).toFixed(2)} to caregiver, $${(p.platform_fee / 100).toFixed(2)} platform fee`,
+        paymentId: p.id, stripeIntent: p.stripe_payment_intent, autoCharged: !!p.auto_charged,
+        tipCents: p.tip_cents || 0 });
+    }
+
+    // Payment authorization/capture from session fields
+    if (session.payment_authorized_at) {
+      timeline.push({ time: session.payment_authorized_at, type: 'payment_auth', label: 'Payment Authorized',
+        detail: `$${((session.authorized_amount || 0) / 100).toFixed(2)} authorized` });
+    }
+    if (session.payment_captured_at) {
+      timeline.push({ time: session.payment_captured_at, type: 'payment_capture', label: 'Payment Captured',
+        detail: `Stripe PI: ${session.stripe_payment_intent_id || 'N/A'}` });
+    }
+
+    // Admin actions
+    for (const a of auditLog) {
+      let details = {};
+      try { details = JSON.parse(a.details || '{}'); } catch {}
+      timeline.push({ time: a.created_at, type: 'admin_action', label: `Admin: ${a.action.replace(/_/g, ' ')}`,
+        detail: `by ${a.admin_first || ''} ${a.admin_last || ''}`.trim() + (a.admin_email ? ` (${a.admin_email})` : ''),
+        adminDetails: details });
+    }
+
+    // Sort timeline chronologically
+    timeline.sort((a, b) => new Date(a.time) - new Date(b.time));
+
+    res.json({
+      session: {
+        id: session.id,
+        status: session.status,
+        service_type: session.service_type,
+        scheduled_date: session.scheduled_date,
+        scheduled_time: session.scheduled_time,
+        duration_hours: session.duration_hours,
+        agreed_rate: session.agreed_rate,
+        estimated_cost: session.estimated_cost,
+        actual_cost: session.actual_cost,
+        special_instructions: session.special_instructions,
+        private_only: session.private_only,
+        payment_status: session.payment_status,
+        late_check_in: session.late_check_in,
+        late_minutes: session.late_minutes,
+        review_required: session.review_required,
+        created_at: session.created_at,
+      },
+      recipient: {
+        name: `${session.recipient_first || ''} ${session.recipient_last || ''}`.trim(),
+        age: session.recipient_age,
+        location: [session.location_city, session.location_state].filter(Boolean).join(', '),
+      },
+      family: {
+        name: `${session.family_first || ''} ${session.family_last || ''}`.trim(),
+        email: session.family_email,
+      },
+      caregiver: session.caregiver_id ? {
+        name: `${session.caregiver_first || ''} ${session.caregiver_last || ''}`.trim(),
+        email: session.caregiver_email,
+        rate: session.caregiver_rate,
+      } : null,
+      visitLog: visitLog.map(vl => ({
+        check_in_time: vl.check_in_time,
+        check_out_time: vl.check_out_time,
+        arrival_mood: vl.arrival_mood,
+        departure_mood: vl.departure_mood,
+        condition_tags: vl.condition_tags,
+        care_feedback: vl.care_feedback,
+        service_feedback: vl.service_feedback,
+        check_in_lat: vl.check_in_lat || vl.check_in_latitude,
+        check_in_lng: vl.check_in_lng || vl.check_in_longitude,
+        check_in_distance_ft: vl.check_in_distance_ft,
+        check_out_lat: vl.check_out_lat,
+        check_out_lng: vl.check_out_lng,
+        briefing_acknowledged_at: vl.briefing_acknowledged_at,
+        early_departure_reason: vl.early_departure_reason,
+        ai_summary: vl.ai_summary,
+      })),
+      payments: sessionPayments,
+      timeline,
+    });
+  } catch (err) {
+    console.error("Session detail error:", err);
+    res.status(500).json({ error: "Failed to load session details" });
   }
 });
 
