@@ -417,18 +417,9 @@ async function caregiverDashboard(db, userId, res) {
   // Expire time proposals that have passed their 2-hour response window
   await expireStaleProposals(db, null, null).catch(() => {});
 
-  // Expire exclusive direct offers that have passed their 1-hour window
-  try {
-    await db.exec(`
-      UPDATE care_sessions
-      SET status = 'cancelled', cancelled_at = NOW(), cancel_reason = 'Private request expired - caregiver did not respond'
-      WHERE offered_to_caregiver_id IS NOT NULL
-        AND exclusive_until IS NOT NULL
-        AND exclusive_until < NOW()
-        AND COALESCE(private_only, 0) = 1
-        AND status IN ('pending', 'open', 'requested')
-    `);
-  } catch (e) { console.warn('Private-only expiry (cg dash):', e.message); }
+  // Private-only sessions: NO timer-based expiry here. They persist until scheduled_date passes.
+  // (Family dashboard handles date-based expiry for private-only sessions.)
+  // Non-private exclusive offers: open to all caregivers after 1-hour window
   try {
     await db.exec(`
       UPDATE care_sessions

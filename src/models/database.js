@@ -1111,7 +1111,17 @@ async function initializeDatabase() {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }
   }
 
-  // ─── v1.57.14 — Restore private-only sessions that were wrongly auto-cancelled by 1-hour timer ───
+  // ─── v1.57.15 — Restore private-only sessions + clear stale exclusive_until ───
+  // First: clear exclusive_until on ALL private-only sessions (they should never have a timer)
+  try {
+    await db.prepare(`
+      UPDATE care_sessions
+      SET exclusive_until = NULL
+      WHERE COALESCE(private_only, 0) = 1
+        AND exclusive_until IS NOT NULL
+    `).run();
+  } catch (e) { /* ignore */ }
+  // Then: restore private-only sessions that were wrongly auto-cancelled
   try {
     const restored = await db.prepare(`
       UPDATE care_sessions
