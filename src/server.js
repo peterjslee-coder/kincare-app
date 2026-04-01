@@ -304,7 +304,7 @@ app.use("/api/kindred", require("./routes/kindred"));
 app.use("/api/legal", require("./routes/legal"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.57.26";
+const APP_VERSION = "1.57.27";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });
@@ -365,7 +365,7 @@ app.get("/api", (req, res) => {
 // ─── Kindred PWA (separate app for care recipients) ───
 // Auth-gated: requires valid JWT + companion_access flag (admins always pass)
 app.get("/kindred", async (req, res) => {
-  const token = req.cookies?.token || req.query.token;
+  const token = req.cookies?.auth_token || req.query.token;
   if (!token) {
     return res.redirect("/?redirect=kindred");
   }

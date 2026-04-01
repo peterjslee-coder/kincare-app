@@ -1807,8 +1807,14 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
               <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid #f0f0f0', display: 'flex', gap: 10, alignItems: 'center' }}>
                 <button onClick={(e) => {
                   e.stopPropagation();
-                  const token = window.AUTH_TOKEN || '';
-                  window.open(`/kindred?token=${encodeURIComponent(token)}`, '_blank');
+                  // Cookie-based auth — no token param needed, cookie travels with request
+                  // Use location.href for Capacitor compatibility (window.open fails in WebView)
+                  const isCapacitor = window.Capacitor?.isNativePlatform?.();
+                  if (isCapacitor) {
+                    window.location.href = '/kindred';
+                  } else {
+                    window.open('/kindred', '_blank');
+                  }
                 }} style={{
                   padding: '8px 16px', borderRadius: 8, border: '2px solid #1A5276',
                   background: 'var(--bg-surface)', color: 'var(--color-info)', fontWeight: 700, fontSize: 13, cursor: 'pointer',
@@ -1816,7 +1822,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                 }}>
                   {'\uD83C\uDFA4'} Open Kindred
                 </button>
-                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Opens {profile?.first_name}'s Kindred in a new tab</span>
+                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Opens {profile?.first_name}'s Kindred{window.Capacitor?.isNativePlatform?.() ? '' : ' in a new tab'}</span>
               </div>
             </div>
           )}
