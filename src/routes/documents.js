@@ -8,6 +8,21 @@ const { validateMagicBytes } = require("../utils/fileValidation");
 
 const router = express.Router();
 
+// Admin check middleware for document routes (mirrors admin.js checkAdmin)
+// Required because requireAdmin expects req.isAdmin, which is only set by
+// the admin router's own checkAdmin — doesn't run for /api/documents routes.
+async function checkDocAdmin(req, res, next) {
+  try {
+    const db = await getDb();
+    const user = await db.prepare("SELECT is_admin FROM users WHERE id = ?").get(req.user.id);
+    req.isAdmin = !!(user && user.is_admin);
+    next();
+  } catch (err) {
+    console.error("Doc admin check error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+}
+
 // ─── Constants ───
 const VALID_OWNER_TYPES = ["care_recipient", "caregiver", "user"];
 const VALID_CATEGORIES = ["consent", "identity", "certification", "insurance", "legal"];
@@ -300,7 +315,7 @@ router.get("/owner/:ownerType/:ownerId", authenticate, async (req, res) => {
 // ═══════════════════════════════════════════════════════════
 // GET /api/documents/admin/pending — List documents needing admin review
 // ═══════════════════════════════════════════════════════════
-router.get("/admin/pending", authenticate, requireAdmin, async (req, res) => {
+router.get("/admin/pending", authenticate, checkDocAdmin, requireAdmin, async (req, res) => {
   try {
     const db = await getDb();
     const docs = await db.prepare(`
@@ -336,7 +351,7 @@ router.get("/admin/pending", authenticate, requireAdmin, async (req, res) => {
 // ═══════════════════════════════════════════════════════════
 // POST /api/documents/admin/:docId/review — Admin approve or reject a document
 // ═══════════════════════════════════════════════════════════
-router.post("/admin/:docId/review", authenticate, requireAdmin, async (req, res) => {
+router.post("/admin/:docId/review", authenticate, checkDocAdmin, requireAdmin, async (req, res) => {
   try {
     const db = await getDb();
     const { action, notes } = req.body; // action: 'approve' or 'reject'
@@ -377,7 +392,7 @@ router.post("/admin/:docId/review", authenticate, requireAdmin, async (req, res)
 // ═══════════════════════════════════════════════════════════
 // GET /api/documents/admin/count — Count of docs needing review (for badge)
 // ═══════════════════════════════════════════════════════════
-router.get("/admin/count", authenticate, requireAdmin, async (req, res) => {
+router.get("/admin/count", authenticate, checkDocAdmin, requireAdmin, async (req, res) => {
   try {
     const db = await getDb();
     const row = await db.prepare(`
@@ -494,7 +509,7 @@ router.delete("/:docId", authenticate, async (req, res) => {
 // ═══════════════════════════════════════════════════════════
 // POST /api/documents/:docId/re-verify — Re-run AI classification (admin only)
 // ═══════════════════════════════════════════════════════════
-router.post("/:docId/re-verify", authenticate, requireAdmin, async (req, res) => {
+router.post("/:docId/re-verify", authenticate, checkDocAdmin, requireAdmin, async (req, res) => {
   try {
     const db = await getDb();
     const doc = await db.prepare("SELECT * FROM verified_documents WHERE id = ?").get(req.params.docId);
