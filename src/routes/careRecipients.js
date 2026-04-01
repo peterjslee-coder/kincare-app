@@ -29,9 +29,26 @@ router.get("/", requireRole("family", "admin"), async (req, res) => {
     ORDER BY cr.created_at DESC
   `).all(req.user.id);
 
-  // Merge and deduplicate (owner takes precedence)
+  // Care team recipients
+  let teamRecipients = [];
+  try {
+    teamRecipients = await db.prepare(`
+      SELECT cr.*, ctm.role AS team_role,
+        CASE WHEN ctm.role = 'leader' THEN 'edit' ELSE 'view' END AS access_level
+      FROM care_team_members ctm
+      JOIN care_teams ct ON ctm.care_team_id = ct.id
+      JOIN care_recipients cr ON ct.care_recipient_id = cr.id
+      WHERE ctm.user_id = ?
+      ORDER BY cr.created_at DESC
+    `).all(req.user.id);
+  } catch {}
+
+  // Merge and deduplicate (owner takes precedence, then shared, then team)
   const ownedIds = new Set(owned.map(r => r.id));
-  const all = [...owned, ...shared.filter(r => !ownedIds.has(r.id))];
+  const sharedFiltered = shared.filter(r => !ownedIds.has(r.id));
+  const seenIds = new Set([...ownedIds, ...sharedFiltered.map(r => r.id)]);
+  const teamFiltered = teamRecipients.filter(r => !seenIds.has(r.id));
+  const all = [...owned, ...sharedFiltered, ...teamFiltered];
 
   // Parse JSON fields
   const parsed = all.map((r) => ({
@@ -134,7 +151,15 @@ async function hasAccess(db, recipientId, userId) {
   const shared = await db.prepare(
     "SELECT permission FROM care_recipient_shares WHERE care_recipient_id = ? AND shared_with_user_id = ?"
   ).get(recipientId, userId);
-  return shared ? shared.permission : null;
+  if (shared) return shared.permission;
+  // Check care team membership
+  const teamMember = await db.prepare(`
+    SELECT ctm.role FROM care_team_members ctm
+    JOIN care_teams ct ON ctm.care_team_id = ct.id
+    WHERE ct.care_recipient_id = ? AND ctm.user_id = ?
+  `).get(recipientId, userId);
+  if (teamMember) return teamMember.role === 'leader' ? 'edit' : 'view';
+  return null;
 }
 
 // ─── GET /api/care-recipients/:id ───

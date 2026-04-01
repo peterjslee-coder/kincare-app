@@ -105,14 +105,20 @@ router.get("/", async (req, res) => {
 
   const activeRole = req.user.activeRole || req.user.role;
   if (activeRole === "family") {
-    // Include sessions for shared care recipients (care team access)
+    // Include sessions for shared care recipients AND care team recipients
     const sharedRecipients = await db.prepare(`
       SELECT cr.id FROM care_recipient_shares crs
       JOIN care_recipients cr ON crs.care_recipient_id = cr.id
       WHERE crs.shared_with_user_id = ?
     `).all(req.user.id);
-    const sharedIds = sharedRecipients.map(r => r.id);
-    const allIds = sharedIds.length > 0 ? sharedIds.map(() => '?').join(',') : "'__none__'";
+    const teamRecipients = await db.prepare(`
+      SELECT cr.id FROM care_team_members ctm
+      JOIN care_teams ct ON ctm.care_team_id = ct.id
+      JOIN care_recipients cr ON ct.care_recipient_id = cr.id
+      WHERE ctm.user_id = ?
+    `).all(req.user.id);
+    const extraIds = [...new Set([...sharedRecipients.map(r => r.id), ...teamRecipients.map(r => r.id)])];
+    const allIds = extraIds.length > 0 ? extraIds.map(() => '?').join(',') : "'__none__'";
     query = `
       SELECT cs.*,
         cr.first_name || ' ' || cr.last_name AS recipient_name,
@@ -124,7 +130,7 @@ router.get("/", async (req, res) => {
       LEFT JOIN users u ON cp.user_id = u.id
       WHERE (cs.family_user_id = ? OR cs.care_recipient_id IN (${allIds}))
     `;
-    params = [req.user.id, ...sharedIds];
+    params = [req.user.id, ...extraIds];
   } else if (activeRole === "care_for") {
     // Care recipient view — find their care_recipient record via linked_user_id (falls back to name match)
     const recipient = await db.prepare(`

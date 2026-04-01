@@ -8,6 +8,17 @@ const { validateMagicBytes } = require("../utils/fileValidation");
 const router = express.Router();
 router.use(authenticate);
 
+// Check if user is on the care team for a given care recipient
+async function isCareTeamMember(db, careRecipientId, userId) {
+  if (!careRecipientId || !userId) return false;
+  const row = await db.prepare(`
+    SELECT 1 FROM care_team_members ctm
+    JOIN care_teams ct ON ctm.care_team_id = ct.id
+    WHERE ct.care_recipient_id = ? AND ctm.user_id = ?
+  `).get(careRecipientId, userId);
+  return !!row;
+}
+
 // Store uploads in memory (convert to base64 for DB storage)
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -107,15 +118,17 @@ router.post(
 );
 
 // ─── GET /api/photos/visit/:visitLogId ───
-// Get photos for a visit log (only if user is involved in the session)
+// Get photos for a visit log (if user is session participant, care team member, or admin)
 router.get("/visit/:visitLogId", async (req, res) => {
   const db = await getDb();
   // Verify user is involved in the session this visit log belongs to
   const visitLog = await db.prepare(
-    "SELECT vl.id, cs.family_user_id, cs.caregiver_id FROM visit_logs vl JOIN care_sessions cs ON vl.session_id = cs.id WHERE vl.id = ?"
+    "SELECT vl.id, cs.family_user_id, cs.caregiver_id, cs.care_recipient_id FROM visit_logs vl JOIN care_sessions cs ON vl.session_id = cs.id WHERE vl.id = ?"
   ).get(req.params.visitLogId);
   if (!visitLog) return res.json({ photos: [] });
-  if (visitLog.family_user_id !== req.user.id && visitLog.caregiver_id !== req.user.id && !req.user.isAdmin) {
+  const isParticipant = visitLog.family_user_id === req.user.id || visitLog.caregiver_id === req.user.id;
+  const isAdmin = req.user.isAdmin || req.user.is_admin;
+  if (!isParticipant && !isAdmin && !(await isCareTeamMember(db, visitLog.care_recipient_id, req.user.id))) {
     return res.status(403).json({ error: "Not authorized to view these photos" });
   }
   const photos = await db
@@ -194,15 +207,17 @@ router.post(
 );
 
 // ─── GET /api/photos/session/:sessionId ───
-// Get all photos for a care session (only if user is involved)
+// Get all photos for a care session (if user is participant, care team member, or admin)
 router.get("/session/:sessionId", async (req, res) => {
   const db = await getDb();
   // Verify user is involved in this session
   const session = await db.prepare(
-    "SELECT id, family_user_id, caregiver_id FROM care_sessions WHERE id = ?"
+    "SELECT id, family_user_id, caregiver_id, care_recipient_id FROM care_sessions WHERE id = ?"
   ).get(req.params.sessionId);
   if (!session) return res.json({ photos: [] });
-  if (session.family_user_id !== req.user.id && session.caregiver_id !== req.user.id && !req.user.isAdmin) {
+  const isParticipant = session.family_user_id === req.user.id || session.caregiver_id === req.user.id;
+  const isAdmin = req.user.isAdmin || req.user.is_admin;
+  if (!isParticipant && !isAdmin && !(await isCareTeamMember(db, session.care_recipient_id, req.user.id))) {
     return res.status(403).json({ error: "Not authorized to view these photos" });
   }
 
