@@ -1082,6 +1082,15 @@ async function initializeDatabase() {
     `CREATE INDEX IF NOT EXISTS idx_time_change_session ON time_change_proposals(session_id, status)`,
     `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS pending_time_change_id TEXT`,
 
+    // v1.57.12 — Flex timing policy for overtime
+    `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS flex_timing TEXT DEFAULT 'strict'`,
+    // flex_timing values: 'strict' (no overtime), 'flexible' (30 min max), 'open' (2 hr max)
+    `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS overtime_minutes INTEGER DEFAULT 0`,
+    `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS overtime_cost REAL DEFAULT 0`,
+
+    // Family-level default flex preference (so they don't re-pick every booking)
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS default_flex_timing TEXT DEFAULT 'flexible'`,
+
     // v1.57.14 — Trusted admin IPs (passkey-verified)
     `CREATE TABLE IF NOT EXISTS trusted_admin_ips (
       id SERIAL PRIMARY KEY,

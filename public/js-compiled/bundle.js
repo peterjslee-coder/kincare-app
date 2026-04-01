@@ -15961,7 +15961,13 @@ const Schedule = window.Schedule = () => {
     style: {
       color: 'var(--text-tertiary)'
     }
-  }, "Cost:"), " ", /*#__PURE__*/React.createElement("strong", null, s.estimated_cost ? `$${s.estimated_cost}` : s.actual_cost ? `$${s.actual_cost}` : '—')), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
+  }, "Cost:"), " ", /*#__PURE__*/React.createElement("strong", null, s.estimated_cost ? `$${s.estimated_cost}` : s.actual_cost ? `$${s.actual_cost}` : '—'), s.overtime_minutes > 0 && /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 11,
+      color: '#b45309',
+      marginLeft: 4
+    }
+  }, "(+", s.overtime_minutes, "min OT)")), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
     style: {
       color: 'var(--text-tertiary)'
     }
@@ -27433,6 +27439,7 @@ const RequestCareModal = window.RequestCareModal = ({
   const [careHistory, setCareHistory] = useState(null); // { visits, totalCount } for selected caregiver
   const [showCareHistory, setShowCareHistory] = useState(false);
   const [privateOnly, setPrivateOnly] = useState(false); // don't open to others if caregiver declines
+  const [flexTiming, setFlexTiming] = useState('flexible'); // 'strict' | 'flexible' | 'open'
 
   // Short-notice detection
   const shortNotice = (() => {
@@ -27744,6 +27751,7 @@ const RequestCareModal = window.RequestCareModal = ({
       privateOnly: selectedCaregiver && privateOnly ? true : undefined
     };
     if (proposedRate && parseFloat(proposedRate) > 0) body.proposedRate = parseFloat(proposedRate);
+    if (flexTiming && flexTiming !== 'flexible') body.flexTiming = flexTiming; // default is flexible, only send if different
     if (interviewRequired) {
       body.interviewRequired = true;
       body.interviewType = interviewType;
@@ -28971,6 +28979,69 @@ const RequestCareModal = window.RequestCareModal = ({
       padding: '10px 12px',
       background: 'var(--bg-surface)',
       borderRadius: 8,
+      border: '1px solid #e0e0e0'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      fontWeight: 600,
+      color: 'var(--text-secondary)',
+      marginBottom: 6
+    }
+  }, "Overtime Flexibility"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 6
+    }
+  }, [{
+    id: 'strict',
+    label: 'Strict',
+    desc: 'End on time'
+  }, {
+    id: 'flexible',
+    label: 'Flexible',
+    desc: 'Up to +30 min'
+  }, {
+    id: 'open',
+    label: 'Open-ended',
+    desc: 'Up to +2 hrs'
+  }].map(opt => /*#__PURE__*/React.createElement("div", {
+    key: opt.id,
+    onClick: () => setFlexTiming(opt.id),
+    style: {
+      flex: 1,
+      padding: '8px 6px',
+      borderRadius: 8,
+      cursor: 'pointer',
+      textAlign: 'center',
+      border: flexTiming === opt.id ? '2px solid #1b6b5a' : '1px solid #ddd',
+      background: flexTiming === opt.id ? 'rgba(27, 107, 90, 0.06)' : 'transparent',
+      transition: 'all 0.15s'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      fontWeight: 700,
+      color: flexTiming === opt.id ? '#1b6b5a' : 'var(--text-primary)'
+    }
+  }, opt.label), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 10,
+      color: 'var(--text-muted)',
+      marginTop: 2
+    }
+  }, opt.desc)))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 10,
+      color: 'var(--text-muted)',
+      marginTop: 6
+    }
+  }, flexTiming === 'strict' ? 'Caregiver checks out at the scheduled end time. No overtime charges.' : flexTiming === 'flexible' ? 'Caregiver can stay up to 30 extra minutes if needed. Overtime billed in 5-min increments at the same rate.' : 'Caregiver can stay up to 2 extra hours. Great for unpredictable days. Overtime billed in 5-min increments.')), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 12,
+      padding: '10px 12px',
+      background: 'var(--bg-surface)',
+      borderRadius: 8,
       border: selectedCaregiver && !selectedCaregiver.available ? '2px solid #e8724a' : '1px solid #e0e0e0'
     }
   }, /*#__PURE__*/React.createElement("div", {
@@ -29435,7 +29506,24 @@ const VisitDetailModal = window.VisitDetailModal = ({
       style: {
         fontSize: 13
       }
-    }, s.special_instructions)))), v && /*#__PURE__*/React.createElement("div", {
+    }, s.special_instructions)), s.flex_timing && s.flex_timing !== 'strict' && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: 'var(--text-tertiary)'
+      }
+    }, "Overtime"), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 13
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        background: s.flex_timing === 'open' ? '#dbeafe' : '#fef3c7',
+        color: s.flex_timing === 'open' ? '#1e40af' : '#92400e',
+        padding: '2px 8px',
+        borderRadius: 12,
+        fontSize: 11,
+        fontWeight: 600
+      }
+    }, s.flex_timing === 'flexible' ? 'Flexible (+30 min)' : 'Open-ended (+2 hrs)'))))), v && /*#__PURE__*/React.createElement("div", {
       style: {
         background: 'var(--bg-surface)',
         border: '1px solid #e0e0e0',
@@ -29929,7 +30017,16 @@ const VisitDetailModal = window.VisitDetailModal = ({
         fontWeight: 600,
         marginBottom: 3
       }
-    }, /*#__PURE__*/React.createElement("span", null, "Short notice bonus"), /*#__PURE__*/React.createElement("span", null, "+$", cost.caregiverSurchargeShare.toFixed(2))), /*#__PURE__*/React.createElement("div", {
+    }, /*#__PURE__*/React.createElement("span", null, "Short notice bonus"), /*#__PURE__*/React.createElement("span", null, "+$", cost.caregiverSurchargeShare.toFixed(2))), cost.overtimeMinutes > 0 && /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        fontSize: 13,
+        color: '#b45309',
+        fontWeight: 600,
+        marginBottom: 3
+      }
+    }, /*#__PURE__*/React.createElement("span", null, "Overtime (", cost.overtimeMinutes, " min)"), /*#__PURE__*/React.createElement("span", null, "+$", cost.overtimeCost.toFixed(2))), /*#__PURE__*/React.createElement("div", {
       style: {
         display: 'flex',
         justifyContent: 'space-between',
@@ -30003,7 +30100,31 @@ const VisitDetailModal = window.VisitDetailModal = ({
         color: 'var(--text-secondary)',
         marginBottom: 3
       }
-    }, /*#__PURE__*/React.createElement("span", null, "InPlace fee (", cost.platformFeePercent || 20, "%)"), /*#__PURE__*/React.createElement("span", null, "+$", cost.platformFee.toFixed(2))), /*#__PURE__*/React.createElement("div", {
+    }, /*#__PURE__*/React.createElement("span", null, "InPlace fee (", cost.platformFeePercent || 20, "%)"), /*#__PURE__*/React.createElement("span", null, "+$", cost.platformFee.toFixed(2))), cost.overtimeMinutes > 0 && /*#__PURE__*/React.createElement("div", {
+      style: {
+        background: '#fef3c7',
+        borderRadius: 6,
+        padding: '6px 8px',
+        marginBottom: 4,
+        marginTop: 4
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        fontSize: 13,
+        color: '#b45309',
+        fontWeight: 600,
+        marginBottom: 2
+      }
+    }, /*#__PURE__*/React.createElement("span", null, "Overtime (", cost.overtimeMinutes, " min)"), /*#__PURE__*/React.createElement("span", null, "+$", cost.overtimeCost.toFixed(2))), cost.overtimePlatformFee > 0 && /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        fontSize: 12,
+        color: '#92400e'
+      }
+    }, /*#__PURE__*/React.createElement("span", null, "Overtime fee (", cost.platformFeePercent || 20, "%)"), /*#__PURE__*/React.createElement("span", null, "+$", cost.overtimePlatformFee.toFixed(2)))), /*#__PURE__*/React.createElement("div", {
       style: {
         display: 'flex',
         justifyContent: 'space-between',

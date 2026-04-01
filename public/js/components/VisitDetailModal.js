@@ -173,6 +173,16 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, 
                       <span style={{ fontSize: 13 }}>{s.special_instructions}</span>
                     </>
                   )}
+                  {s.flex_timing && s.flex_timing !== 'strict' && (
+                    <>
+                      <span style={{ color: 'var(--text-tertiary)' }}>Overtime</span>
+                      <span style={{ fontSize: 13 }}>
+                        <span style={{ background: s.flex_timing === 'open' ? '#dbeafe' : '#fef3c7', color: s.flex_timing === 'open' ? '#1e40af' : '#92400e', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600 }}>
+                          {s.flex_timing === 'flexible' ? 'Flexible (+30 min)' : 'Open-ended (+2 hrs)'}
+                        </span>
+                      </span>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -374,6 +384,12 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, 
                       <span>+${cost.caregiverSurchargeShare.toFixed(2)}</span>
                     </div>
                   )}
+                  {cost.overtimeMinutes > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#b45309', fontWeight: 600, marginBottom: 3 }}>
+                      <span>Overtime ({cost.overtimeMinutes} min)</span>
+                      <span>+${cost.overtimeCost.toFixed(2)}</span>
+                    </div>
+                  )}
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, color: 'var(--role-color)', fontWeight: 700, borderTop: '1px solid #f0f0f0', paddingTop: 4, marginTop: 4 }}>
                     <span>Your total</span>
                     <span>${(cost.caregiverPayout || cost.total).toFixed(2)}</span>
@@ -403,6 +419,20 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, 
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--text-secondary)', marginBottom: 3 }}>
                       <span>InPlace fee ({cost.platformFeePercent || 20}%)</span>
                       <span>+${cost.platformFee.toFixed(2)}</span>
+                    </div>
+                  )}
+                  {cost.overtimeMinutes > 0 && (
+                    <div style={{ background: '#fef3c7', borderRadius: 6, padding: '6px 8px', marginBottom: 4, marginTop: 4 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#b45309', fontWeight: 600, marginBottom: 2 }}>
+                        <span>Overtime ({cost.overtimeMinutes} min)</span>
+                        <span>+${cost.overtimeCost.toFixed(2)}</span>
+                      </div>
+                      {cost.overtimePlatformFee > 0 && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#92400e' }}>
+                          <span>Overtime fee ({cost.platformFeePercent || 20}%)</span>
+                          <span>+${cost.overtimePlatformFee.toFixed(2)}</span>
+                        </div>
+                      )}
                     </div>
                   )}
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 16, fontWeight: 800, color: 'var(--role-color)', borderTop: '1px solid #f0f0f0', paddingTop: 6, marginTop: 4 }}>

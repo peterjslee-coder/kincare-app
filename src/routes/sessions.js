@@ -544,7 +544,9 @@ router.post("/", requireRole("family"), validateSession, async (req, res) => {
     proposedRate,
     interviewRequired,
     interviewType,
+    flexTiming: rawFlexTiming,
   } = req.body;
+  const flexTiming = ['strict', 'flexible', 'open'].includes(rawFlexTiming) ? rawFlexTiming : 'flexible';
 
   if (!careRecipientId || !serviceType || !scheduledDate || !scheduledTime) {
     return res.status(400).json({
@@ -761,8 +763,8 @@ router.post("/", requireRole("family"), validateSession, async (req, res) => {
          scheduled_date, scheduled_time, duration_hours,
          special_instructions, estimated_cost, recurrence_rule, recurrence_group_id,
          short_notice_surcharge, rate_tier, proposed_rate, offered_to_caregiver_id,
-         exclusive_until, private_only, interview_required, interview_type)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${isExclusive ? "NOW() + INTERVAL '1 hour'" : 'NULL'}, ?, ?, ?)
+         exclusive_until, private_only, interview_required, interview_type, flex_timing)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${isExclusive ? "NOW() + INTERVAL '1 hour'" : 'NULL'}, ?, ?, ?, ?)
       `).run(
         id, careRecipientId, req.user.id, serviceType, sessionStatus,
         sessionDate, scheduledTime, durationHours,
@@ -775,7 +777,8 @@ router.post("/", requireRole("family"), validateSession, async (req, res) => {
         isExclusive ? bookCaregiverId : null,
         isExclusive && privateOnly ? 1 : 0,
         interviewRequired ? 1 : 0,
-        interviewRequired ? (interviewType || 'video') : null
+        interviewRequired ? (interviewType || 'video') : null,
+        flexTiming
       );
       createdSessions.push(id);
     }
@@ -1451,7 +1454,7 @@ router.post("/:id/check-out", async (req, res) => {
     // All timing uses care recipient's timezone
     const careTz = session.care_timezone || 'America/New_York';
 
-    // Calculate actual duration and adjust pay if checked out early
+    // Calculate actual duration, overtime, and adjust pay
     const visitLog = await db.prepare(
       "SELECT * FROM visit_logs WHERE session_id = ? ORDER BY created_at DESC LIMIT 1"
     ).get(req.params.id);
@@ -1459,6 +1462,12 @@ router.post("/:id/check-out", async (req, res) => {
     let actualDurationHours = parseFloat(session.duration_hours) || 2;
     let adjustedCost = parseFloat(session.estimated_cost) || 0;
     const scheduledDuration = parseFloat(session.duration_hours) || 2;
+    let overtimeMinutes = 0;
+    let overtimeCost = 0;
+
+    // Flex timing caps: strict = 0 min, flexible = 30 min, open = 120 min
+    const flexPolicy = session.flex_timing || 'strict';
+    const flexCapMinutes = flexPolicy === 'open' ? 120 : flexPolicy === 'flexible' ? 30 : 0;
 
     if (visitLog && visitLog.check_in_time) {
       const checkInTime = new Date(visitLog.check_in_time);
@@ -1466,13 +1475,35 @@ router.post("/:id/check-out", async (req, res) => {
       const actualMinutes = Math.max(0, (checkOutTime - checkInTime) / 60000);
       const scheduledMinutes = scheduledDuration * 60;
 
-      // If within 15 min of scheduled end → full pay
-      if (actualMinutes >= (scheduledMinutes - 15)) {
+      if (actualMinutes >= (scheduledMinutes - 15) && actualMinutes <= (scheduledMinutes + 15)) {
+        // Within 15 min of scheduled end → full scheduled pay, no overtime
         actualDurationHours = scheduledDuration;
         adjustedCost = parseFloat(session.estimated_cost) || 0;
+      } else if (actualMinutes > (scheduledMinutes + 15)) {
+        // ─── Overtime ───
+        // Minutes past scheduled end (subtract the 15-min grace)
+        const rawOvertimeMinutes = actualMinutes - scheduledMinutes;
+        // Cap overtime at flex policy limit
+        const cappedOvertimeMinutes = Math.min(rawOvertimeMinutes, flexCapMinutes);
+        // Round overtime UP to nearest 5-min increment
+        overtimeMinutes = Math.ceil(cappedOvertimeMinutes / 5) * 5;
+
+        // Calculate overtime cost at the same hourly rate
+        const hourlyRate = scheduledDuration > 0
+          ? (parseFloat(session.estimated_cost) || 0) / scheduledDuration
+          : 0;
+        overtimeCost = Math.round((overtimeMinutes / 60) * hourlyRate * 100) / 100;
+
+        // Total = scheduled pay + overtime
+        actualDurationHours = scheduledDuration + (overtimeMinutes / 60);
+        adjustedCost = (parseFloat(session.estimated_cost) || 0) + overtimeCost;
+
+        if (cappedOvertimeMinutes < rawOvertimeMinutes) {
+          console.log(`[check-out] Overtime capped by ${flexPolicy} policy: ${Math.round(rawOvertimeMinutes)} raw → ${overtimeMinutes} billed (cap ${flexCapMinutes} min)`);
+        }
       } else {
-        // Round UP to nearest 15-min increment
-        const roundedMinutes = Math.ceil(actualMinutes / 15) * 15;
+        // Checked out early — round UP to nearest 5-min increment
+        const roundedMinutes = Math.ceil(actualMinutes / 5) * 5;
         actualDurationHours = Math.round(roundedMinutes / 60 * 100) / 100;
         // Pro-rate the pay: (actual hours / scheduled hours) × estimated_cost
         if (scheduledDuration > 0) {
@@ -1481,11 +1512,21 @@ router.post("/:id/check-out", async (req, res) => {
       }
     }
 
-    // Transition to completed with adjusted cost, actual duration, and mark review required
+    // Transition to completed with adjusted cost, actual duration, overtime, and mark review required
     // payment_due_at = 1 hour from now — family has that long to review+tip before auto-pay
-    await db.prepare(
-      "UPDATE care_sessions SET status = 'completed', estimated_cost = ?, duration_hours = ?, review_required = 1, completed_at = NOW(), payment_due_at = NOW() + INTERVAL '1 hour', updated_at = NOW() WHERE id = ?"
-    ).run(adjustedCost, actualDurationHours, req.params.id);
+    await db.prepare(`
+      UPDATE care_sessions SET
+        status = 'completed',
+        estimated_cost = ?,
+        duration_hours = ?,
+        overtime_minutes = ?,
+        overtime_cost = ?,
+        review_required = 1,
+        completed_at = NOW(),
+        payment_due_at = NOW() + INTERVAL '1 hour',
+        updated_at = NOW()
+      WHERE id = ?
+    `).run(adjustedCost, actualDurationHours, overtimeMinutes, overtimeCost, req.params.id);
 
     // ─── Capture payment (Stripe auth → charge) ───
     // If payment was pre-authorized, capture the appropriate amount now
@@ -1570,6 +1611,9 @@ router.post("/:id/check-out", async (req, res) => {
     const earlyNote = earlyMinutes > 15
       ? ` Left ${Math.round(earlyMinutes)} min early.${earlyDepartureReason ? ` Reason: ${earlyDepartureReason}` : ""}`
       : "";
+    const overtimeNote = overtimeMinutes > 0
+      ? ` Overtime: ${overtimeMinutes} min (+$${overtimeCost.toFixed(2)}).`
+      : "";
 
     await db.prepare(
       "INSERT INTO activity_feed (id, family_user_id, care_recipient_id, event_type, title, message, metadata) VALUES (?, ?, ?, 'session_checkout', ?, ?, ?)"
@@ -1577,9 +1621,9 @@ router.post("/:id/check-out", async (req, res) => {
       require("uuid").v4(),
       session.family_user_id,
       session.care_recipient_id,
-      `${caregiverName} has checked out${earlyMinutes > 15 ? " early" : ""}`,
-      `Care session with ${session.recipient_first_name} is complete.${earlyNote} ${departureMood ? `Mood at departure: ${departureMood}.` : ""}${tagSummary}`,
-      JSON.stringify({ sessionId: req.params.id, earlyDeparture: earlyMinutes > 15, earlyMinutes: earlyMinutes > 15 ? Math.round(earlyMinutes) : 0 })
+      `${caregiverName} has checked out${earlyMinutes > 15 ? " early" : ""}${overtimeMinutes > 0 ? " (overtime)" : ""}`,
+      `Care session with ${session.recipient_first_name} is complete.${earlyNote}${overtimeNote} ${departureMood ? `Mood at departure: ${departureMood}.` : ""}${tagSummary}`,
+      JSON.stringify({ sessionId: req.params.id, earlyDeparture: earlyMinutes > 15, earlyMinutes: earlyMinutes > 15 ? Math.round(earlyMinutes) : 0, overtimeMinutes, overtimeCost })
     );
 
     if (emitToUser) {
@@ -1589,6 +1633,8 @@ router.post("/:id/check-out", async (req, res) => {
         checkOut: true,
         departureMood,
         conditionTags,
+        overtimeMinutes,
+        overtimeCost,
       });
       emitToUser(session.family_user_id, "activity_update", {});
     }
@@ -1645,7 +1691,12 @@ router.post("/:id/check-out", async (req, res) => {
     } catch {}
 
     res.json({
-      session: { id: req.params.id, status: "completed", actualDurationHours: actualDurationHours, adjustedCost: adjustedCost },
+      session: {
+        id: req.params.id, status: "completed",
+        actualDurationHours, adjustedCost,
+        overtimeMinutes, overtimeCost,
+        flexPolicy,
+      },
       visitLog: visitLog ? { id: visitLog.id } : null,
     });
   } catch (err) {
@@ -2345,6 +2396,20 @@ router.get("/:id", async (req, res) => {
     // Family sees: InPlace fee = 20% of subtotal (surcharge split is internal)
     costBreakdown.platformFee = Math.round(costBreakdown.subtotal * (feePercent / 100) * 100) / 100;
     costBreakdown.familyTotal = Math.round((costBreakdown.total + costBreakdown.platformFee) * 100) / 100;
+
+    // Overtime info (from completed sessions)
+    const otMinutes = parseInt(session.overtime_minutes) || 0;
+    const otCost = parseFloat(session.overtime_cost) || 0;
+    if (otMinutes > 0) {
+      costBreakdown.overtimeMinutes = otMinutes;
+      costBreakdown.overtimeCost = otCost;
+      // Add overtime platform fee
+      const otPlatformFee = Math.round(otCost * (feePercent / 100) * 100) / 100;
+      costBreakdown.overtimePlatformFee = otPlatformFee;
+      costBreakdown.familyTotal = Math.round((costBreakdown.familyTotal + otCost + otPlatformFee) * 100) / 100;
+      costBreakdown.caregiverPayout = Math.round((costBreakdown.caregiverPayout + otCost) * 100) / 100;
+    }
+    costBreakdown.flexPolicy = session.flex_timing || 'strict';
   }
 
   res.json({ session, visitLog, photos, costBreakdown });

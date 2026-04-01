@@ -336,7 +336,7 @@ const Schedule = window.Schedule = () => {
                     <div style={{ marginTop: 12, padding: '12px', background: 'var(--bg-neutral)', borderRadius: 8, fontSize: 13 }}>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 24px' }}>
                         <div><span style={{ color: 'var(--text-tertiary)' }}>Duration:</span> <strong>{s.duration_hours || 2} hours</strong></div>
-                        <div><span style={{ color: 'var(--text-tertiary)' }}>Cost:</span> <strong>{s.estimated_cost ? `$${s.estimated_cost}` : s.actual_cost ? `$${s.actual_cost}` : '—'}</strong></div>
+                        <div><span style={{ color: 'var(--text-tertiary)' }}>Cost:</span> <strong>{s.estimated_cost ? `$${s.estimated_cost}` : s.actual_cost ? `$${s.actual_cost}` : '—'}</strong>{s.overtime_minutes > 0 && <span style={{ fontSize: 11, color: '#b45309', marginLeft: 4 }}>(+{s.overtime_minutes}min OT)</span>}</div>
                         <div><span style={{ color: 'var(--text-tertiary)' }}>Service:</span> <strong>{formatServiceType(s.service_type)}</strong></div>
                         <div><span style={{ color: 'var(--text-tertiary)' }}>Caregiver:</span> <strong>{s.caregiver_name || 'Pending match'}</strong></div>
                       </div>

@@ -42,6 +42,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
   const [careHistory, setCareHistory] = useState(null); // { visits, totalCount } for selected caregiver
   const [showCareHistory, setShowCareHistory] = useState(false);
   const [privateOnly, setPrivateOnly] = useState(false); // don't open to others if caregiver declines
+  const [flexTiming, setFlexTiming] = useState('flexible'); // 'strict' | 'flexible' | 'open'
 
   // Short-notice detection
   const shortNotice = (() => {
@@ -295,6 +296,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
       privateOnly: selectedCaregiver && privateOnly ? true : undefined,
     };
     if (proposedRate && parseFloat(proposedRate) > 0) body.proposedRate = parseFloat(proposedRate);
+    if (flexTiming && flexTiming !== 'flexible') body.flexTiming = flexTiming; // default is flexible, only send if different
     if (interviewRequired) { body.interviewRequired = true; body.interviewType = interviewType; }
     try {
       const response = await apiFetch('/api/sessions', { method: 'POST', body: JSON.stringify(body) });
@@ -897,6 +899,33 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
                 </div>
               </div>
             )}
+
+            {/* Flex timing policy */}
+            <div style={{ marginBottom: 12, padding: '10px 12px', background: 'var(--bg-surface)', borderRadius: 8, border: '1px solid #e0e0e0' }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>Overtime Flexibility</div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                {[
+                  { id: 'strict', label: 'Strict', desc: 'End on time' },
+                  { id: 'flexible', label: 'Flexible', desc: 'Up to +30 min' },
+                  { id: 'open', label: 'Open-ended', desc: 'Up to +2 hrs' },
+                ].map(opt => (
+                  <div key={opt.id} onClick={() => setFlexTiming(opt.id)} style={{
+                    flex: 1, padding: '8px 6px', borderRadius: 8, cursor: 'pointer', textAlign: 'center',
+                    border: flexTiming === opt.id ? '2px solid #1b6b5a' : '1px solid #ddd',
+                    background: flexTiming === opt.id ? 'rgba(27, 107, 90, 0.06)' : 'transparent',
+                    transition: 'all 0.15s',
+                  }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: flexTiming === opt.id ? '#1b6b5a' : 'var(--text-primary)' }}>{opt.label}</div>
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>{opt.desc}</div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 6 }}>
+                {flexTiming === 'strict' ? 'Caregiver checks out at the scheduled end time. No overtime charges.' :
+                 flexTiming === 'flexible' ? 'Caregiver can stay up to 30 extra minutes if needed. Overtime billed in 5-min increments at the same rate.' :
+                 'Caregiver can stay up to 2 extra hours. Great for unpredictable days. Overtime billed in 5-min increments.'}
+              </div>
+            </div>
 
             {/* Offered rate */}
             <div style={{ marginBottom: 12, padding: '10px 12px', background: 'var(--bg-surface)', borderRadius: 8, border: selectedCaregiver && !selectedCaregiver.available ? '2px solid #e8724a' : '1px solid #e0e0e0' }}>
