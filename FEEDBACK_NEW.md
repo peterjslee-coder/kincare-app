@@ -5,20 +5,21 @@
 ## Summary
 
 - **Total items:** 187
-- **By status:** 4 new → reviewed (this run), 15 reviewed, 0 planned, 172 done, 0 dismissed
-- **Items moved to "done" this run:** 0
+- **By status:** 4 new → reviewed (this run), 9 reviewed, 0 planned, 178 done, 0 dismissed
+- **Items moved to "done" this run:** 6 (v1.57.18 batch)
 - **Items promoted to "planned" this run:** 0
 
 ## Action Items for Pete
 
-1. **`8faa1cc3` — Bottom nav hides buttons on Schedule page — Android (P1).** Same systemic issue as checkout buttons and version number. Needs consistent bottom padding on all scrollable containers.
-2. **`62edcf0f` — Cary can't check out on mobile (P1).** Bottom nav bar hides checkout buttons. Cary reported this — it's blocking her from completing sessions cleanly. Fix the mobile layout overlap.
-3. **`d0042e0d` — Checkout notes not visible to family (P1).** Edwina left checkout notes but Pete can't see them on the visit summary. The caregiver-to-family feedback loop is broken.
+1. ~~**`8faa1cc3` — Bottom nav hides buttons on Schedule page — Android (P1).**~~ ✅ Fixed v1.57.18 — increased mobile bottom padding from 90px→120px, added modal padding.
+2. ~~**`62edcf0f` — Cary can't check out on mobile (P1).**~~ ✅ Fixed v1.57.18 — same systemic bottom padding fix covers checkout buttons.
+3. ~~**`d0042e0d` — Checkout notes not visible to family (P1).**~~ ✅ Fixed v1.57.18 — dashboard query now includes vl.care_feedback, prefers it over vl.summary.
 4. **`77f89256` — Session countdown shows wrong time remaining (P1).** Appointment supposed to end at noon Eastern but countdown shows "1 hour plus remaining." May be a frontend countdown bug — device time vs care timezone.
 5. **`3373060b` — Auto-pay vs 2FA conflict (P1).** 2FA requirement blocks automated post-session payments. Families can't have payments fire automatically if they have to manually approve every time.
-6. **`4126e671` — Messages input scrolls right instead of wrapping (P2).** Single-line text input — should be a multi-line textarea that auto-grows to ~3 lines.
-7. **`e9f593b0` — Dark mode calendar unreadable (P2).** Black arrows on dark background after dark mode was added. Quick CSS fix needed.
-8. **`eff71717` — Admin Sessions tab rethink (P2).** Not useful as-is. Pete wants care type rankings, avg duration, repeat caregiver rate, and AI-generated KPI insights.
+6. ~~**`4126e671` — Messages input scrolls right instead of wrapping (P2).**~~ ✅ Fixed v1.57.18 — replaced input with auto-growing textarea (1-3 lines).
+7. ~~**`e9f593b0` — Dark mode calendar unreadable (P2).**~~ ✅ Fixed v1.57.18 — replaced hardcoded #e0e0e0 with var(--border-light) + var(--text-primary).
+8. ~~**`34aef48c` — Messages redundant in Recent Activity (P3).**~~ ✅ Fixed v1.57.18 — filtered message notifications from Recent Activity card.
+9. **`eff71717` — Admin Sessions tab rethink (P2).** Not useful as-is. Pete wants care type rankings, avg duration, repeat caregiver rate, and AI-generated KPI insights.
 
 ## P0 — Critical
 
@@ -28,22 +29,22 @@ None — all clear.
 
 | ID | Date | User | Description |
 |---|---|---|---|
-| `8faa1cc3` | Apr 1 | Pete (family) | Bottom nav hides buttons on Schedule page (Android native). Can barely see OK button top. Same systemic issue as `62edcf0f`. |
+| ~~`8faa1cc3`~~ | Apr 1 | Pete (family) | ~~Bottom nav hides buttons on Schedule page (Android native). Can barely see OK button top. Same systemic issue as `62edcf0f`.~~ ✅ Fixed v1.57.18 |
 | `3373060b` | Mar 30 | Pete (family) | Auto-pay blocked by 2FA — can't automate post-session payments if family has to manually approve every time. Need auth bypass for pre-authorized recurring payments. |
-| `d0042e0d` | Mar 29 | Pete (family) | Caregiver checkout notes (from Edwina) not visible on family's "just finished" visit summary. Core feedback loop broken. |
-| `62edcf0f` | Mar 28 | Cary (caregiver) | Mobile bottom nav hides checkout buttons. Can't complete checkout clearly. Layout collision on mobile. |
+| ~~`d0042e0d`~~ | Mar 29 | Pete (family) | ~~Caregiver checkout notes (from Edwina) not visible on family's "just finished" visit summary. Core feedback loop broken.~~ ✅ Fixed v1.57.18 |
+| ~~`62edcf0f`~~ | Mar 28 | Cary (caregiver) | ~~Mobile bottom nav hides checkout buttons. Can't complete checkout clearly. Layout collision on mobile.~~ ✅ Fixed v1.57.18 |
 | `77f89256` | Mar 28 | Pete (family) | Session countdown shows "1 hour plus remaining" when appointment should end at noon Eastern. Possible frontend countdown using device time instead of care timezone. |
 
 ## P2 — Moderate
 
 | ID | Date | User | Description |
 |---|---|---|---|
-| `4126e671` | Apr 1 | Pete (family) | Messages input scrolls right instead of wrapping. Should be multi-line textarea, auto-grow to ~3 lines. iOS native. |
+| ~~`4126e671`~~ | Apr 1 | Pete (family) | ~~Messages input scrolls right instead of wrapping. Should be multi-line textarea, auto-grow to ~3 lines. iOS native.~~ ✅ Fixed v1.57.18 |
 | `eff71717` | Mar 31 | Pete (family) | Admin Sessions tab not useful — wants care type rankings, avg duration, repeat caregiver rate, AI-generated KPI insights. |
 | `81cb9e47` | Mar 29 | Pete (family) | Notification bell takes too much space on mobile. Should only appear when notifications exist, and be smaller. |
 | `ab7fea88` | Mar 29 | Pete (family) | Cancelling an open request with no caregiver shouldn't require a reason. Just confirm and do it. |
 | `3fdfdc1d` | Mar 29 | Pete (family) | Want to cancel care requests from the Schedule page (booked or not). Currently only possible from dashboard. |
-| `e9f593b0` | Mar 29 | Pete (family) | Dark mode calendar unreadable — black arrows on dark background for month scroll. |
+| ~~`e9f593b0`~~ | Mar 29 | Pete (family) | ~~Dark mode calendar unreadable — black arrows on dark background for month scroll.~~ ✅ Fixed v1.57.18 |
 | `6706317b` | Mar 28 | Pete (family) | Passkey create/cancel buttons cut off right side of screen on mobile. Unusable. |
 | `56386949` | Mar 28 | Pete (family) | Admin search box text garbled and overlapping. |
 
@@ -51,7 +52,7 @@ None — all clear.
 
 | ID | Date | User | Description |
 |---|---|---|---|
-| `34aef48c` | Apr 1 | Pete (family) | Messages in Recent Activity redundant — already have Messages tab in bottom nav. Remove from activity feed. |
+| ~~`34aef48c`~~ | Apr 1 | Pete (family) | ~~Messages in Recent Activity redundant — already have Messages tab in bottom nav. Remove from activity feed.~~ ✅ Fixed v1.57.18 |
 | `f844a5e5` | Mar 28 | Pete (family) | Version number at bottom of My Account hidden behind mobile bottom nav bar. Can't scroll to see it. |
 
 ## P4 — Aspirational
@@ -85,9 +86,12 @@ None this run.
 ## Status Changes This Run (April 1, 2026)
 
 ```
-8faa1cc3: new -> reviewed (P1 — bottom nav hides buttons on Schedule, Android)
-4126e671: new -> reviewed (P2 — messages input scrolls instead of wrapping)
-34aef48c: new -> reviewed (P3 — messages redundant in recent activity)
+8faa1cc3: reviewed -> done (P1 — bottom nav hides buttons on Schedule, Android) ✅ v1.57.18
+62edcf0f: reviewed -> done (P1 — caregiver checkout buttons hidden on mobile) ✅ v1.57.18
+d0042e0d: reviewed -> done (P1 — checkout notes not visible to family) ✅ v1.57.18
+4126e671: reviewed -> done (P2 — messages input scrolls instead of wrapping) ✅ v1.57.18
+e9f593b0: reviewed -> done (P2 — dark mode calendar arrows) ✅ v1.57.18
+34aef48c: reviewed -> done (P3 — messages redundant in recent activity) ✅ v1.57.18
 eff71717: new -> reviewed (P2 — admin sessions tab rethink as analytics)
 ```
 
