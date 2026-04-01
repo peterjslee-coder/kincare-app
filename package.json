@@ -49,18 +49,18 @@
     "stripe": "^20.3.1",
     "twilio": "^5.12.2",
     "uuid": "^9.0.0",
-    "web-push": "^3.6.7"
+    "web-push": "^3.6.7",
+    "@babel/cli": "^7.28.6",
+    "@babel/core": "^7.29.0",
+    "@babel/plugin-transform-optional-chaining": "^7.28.6",
+    "@babel/preset-env": "^7.29.0",
+    "@babel/preset-react": "^7.28.5"
   },
   "overrides": {
     "@scure/base": "1.2.6",
     "@noble/hashes": "1.8.0"
   },
   "devDependencies": {
-    "@babel/cli": "^7.28.6",
-    "@babel/core": "^7.29.0",
-    "@babel/plugin-transform-optional-chaining": "^7.28.6",
-    "@babel/preset-env": "^7.29.0",
-    "@babel/preset-react": "^7.28.5",
     "jest": "^30.2.0",
     "supertest": "^7.2.2",
     "typescript": "^6.0.2"
