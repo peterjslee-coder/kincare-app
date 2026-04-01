@@ -37,23 +37,29 @@ router.get("/summary", async (req, res) => {
     const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString();
     const lastMonthEnd = thisMonthStart;
 
-    // KPI: current month
+    // KPI: current month — use completed sessions as source of truth for revenue
+    // (payments table only has rows when Stripe checkout completes, which may not cover all sessions)
     const currentMonth = await db.prepare(`
-      SELECT COALESCE(SUM(amount), 0) AS gross_revenue,
-             COALESCE(SUM(platform_fee), 0) AS platform_revenue,
+      SELECT COALESCE(SUM(estimated_cost), 0) AS gross_revenue,
+             COALESCE(SUM(estimated_cost * 0.2), 0) AS platform_revenue,
              COUNT(*) AS payment_count
-      FROM payments WHERE status = 'completed' AND created_at >= ?
+      FROM care_sessions
+      WHERE status = 'completed' AND estimated_cost > 0
+        AND COALESCE(completed_at, updated_at, created_at) >= ?
     `).get(thisMonthStart);
 
     // KPI: previous month
     const prevMonth = await db.prepare(`
-      SELECT COALESCE(SUM(amount), 0) AS gross_revenue,
-             COALESCE(SUM(platform_fee), 0) AS platform_revenue,
+      SELECT COALESCE(SUM(estimated_cost), 0) AS gross_revenue,
+             COALESCE(SUM(estimated_cost * 0.2), 0) AS platform_revenue,
              COUNT(*) AS payment_count
-      FROM payments WHERE status = 'completed' AND created_at >= ? AND created_at < ?
+      FROM care_sessions
+      WHERE status = 'completed' AND estimated_cost > 0
+        AND COALESCE(completed_at, updated_at, created_at) >= ?
+        AND COALESCE(completed_at, updated_at, created_at) < ?
     `).get(lastMonthStart, lastMonthEnd);
 
-    // Current month sessions
+    // Current month sessions (completed + confirmed)
     const currentSessions = await db.prepare(`
       SELECT COUNT(*) AS count FROM care_sessions
       WHERE status IN ('completed', 'confirmed') AND created_at >= ?
@@ -89,16 +95,17 @@ router.get("/summary", async (req, res) => {
     const prevAvgSession = prevMonth.payment_count > 0
       ? Math.round(prevMonth.gross_revenue / prevMonth.payment_count * 100) / 100 : 0;
 
-    // 12-month time series
+    // 12-month time series — from completed sessions (with Stripe overlay when available)
     const monthlyData = await db.prepare(`
-      SELECT TO_CHAR(DATE_TRUNC('month', created_at), 'YYYY-MM') AS month,
-             COALESCE(SUM(amount), 0) AS gross_revenue,
-             COALESCE(SUM(platform_fee), 0) AS platform_fee,
-             COALESCE(SUM(caregiver_payout), 0) AS caregiver_payout,
+      SELECT TO_CHAR(DATE_TRUNC('month', COALESCE(cs.completed_at, cs.updated_at, cs.created_at)), 'YYYY-MM') AS month,
+             COALESCE(SUM(cs.estimated_cost), 0) AS gross_revenue,
+             COALESCE(SUM(cs.estimated_cost * 0.2), 0) AS platform_fee,
+             COALESCE(SUM(cs.estimated_cost * 0.8), 0) AS caregiver_payout,
              COUNT(*) AS payment_count
-      FROM payments WHERE status = 'completed'
-        AND created_at >= DATE_TRUNC('month', NOW()) - INTERVAL '11 months'
-      GROUP BY DATE_TRUNC('month', created_at)
+      FROM care_sessions cs
+      WHERE cs.status = 'completed' AND cs.estimated_cost > 0
+        AND COALESCE(cs.completed_at, cs.updated_at, cs.created_at) >= DATE_TRUNC('month', NOW()) - INTERVAL '11 months'
+      GROUP BY DATE_TRUNC('month', COALESCE(cs.completed_at, cs.updated_at, cs.created_at))
       ORDER BY month ASC
     `).all();
 
@@ -149,12 +156,12 @@ router.get("/summary", async (req, res) => {
       m.newUsers = growth ? parseInt(growth.total_new) : 0;
     }
 
-    // All-time totals
+    // All-time totals — from completed sessions
     const allTime = await db.prepare(`
-      SELECT COALESCE(SUM(amount), 0) AS gross_revenue,
-             COALESCE(SUM(platform_fee), 0) AS platform_revenue,
+      SELECT COALESCE(SUM(estimated_cost), 0) AS gross_revenue,
+             COALESCE(SUM(estimated_cost * 0.2), 0) AS platform_revenue,
              COUNT(*) AS payment_count
-      FROM payments WHERE status = 'completed'
+      FROM care_sessions WHERE status = 'completed' AND estimated_cost > 0
     `).get();
 
     res.json({
@@ -185,16 +192,16 @@ router.get("/daily-snapshot", async (req, res) => {
   try {
     const db = await getDb();
 
-    // Daily data for last 14 days
+    // Daily data for last 14 days — from completed sessions
     const dailyData = await db.prepare(`
-      SELECT DATE(created_at) AS day,
-             COALESCE(SUM(amount), 0) AS gross,
-             COALESCE(SUM(platform_fee), 0) AS fees,
-             COALESCE(SUM(amount) - SUM(platform_fee), 0) AS net,
+      SELECT DATE(COALESCE(completed_at, updated_at, created_at)) AS day,
+             COALESCE(SUM(estimated_cost), 0) AS gross,
+             COALESCE(SUM(estimated_cost * 0.2), 0) AS fees,
+             COALESCE(SUM(estimated_cost * 0.8), 0) AS net,
              COUNT(*) AS payment_count
-      FROM payments WHERE status = 'completed'
-        AND created_at >= CURRENT_DATE - INTERVAL '13 days'
-      GROUP BY DATE(created_at)
+      FROM care_sessions WHERE status = 'completed' AND estimated_cost > 0
+        AND COALESCE(completed_at, updated_at, created_at) >= CURRENT_DATE - INTERVAL '13 days'
+      GROUP BY DATE(COALESCE(completed_at, updated_at, created_at))
       ORDER BY day ASC
     `).all();
 
@@ -258,20 +265,19 @@ router.get("/breakdown", async (req, res) => {
   try {
     const db = await getDb();
 
-    // By service type
+    // By service type — from completed sessions
     const byServiceType = await db.prepare(`
       SELECT cs.service_type,
              COUNT(*) AS session_count,
-             COALESCE(SUM(p.amount), 0) AS revenue,
-             COALESCE(SUM(p.platform_fee), 0) AS platform_fee
-      FROM payments p
-      JOIN care_sessions cs ON p.session_id = cs.id
-      WHERE p.status = 'completed'
+             COALESCE(SUM(cs.estimated_cost), 0) AS revenue,
+             COALESCE(SUM(cs.estimated_cost * 0.2), 0) AS platform_fee
+      FROM care_sessions cs
+      WHERE cs.status = 'completed' AND cs.estimated_cost > 0
       GROUP BY cs.service_type
       ORDER BY revenue DESC
     `).all();
 
-    // By payout speed
+    // By payout speed — keep from payments table (only relevant for actual Stripe payments)
     const byPayoutSpeed = await db.prepare(`
       SELECT COALESCE(payout_speed, 'standard') AS speed,
              COUNT(*) AS count,
@@ -281,31 +287,31 @@ router.get("/breakdown", async (req, res) => {
       GROUP BY COALESCE(payout_speed, 'standard')
     `).all();
 
-    // Top 5 families by spend
+    // Top 5 families by spend — from completed sessions
     const topFamilies = await db.prepare(`
       SELECT u.id, u.first_name, u.last_name, u.email,
              COUNT(*) AS session_count,
-             COALESCE(SUM(p.amount), 0) AS total_spent,
-             ROUND(COALESCE(AVG(p.amount), 0)::numeric, 2) AS avg_session
-      FROM payments p
-      JOIN users u ON p.family_user_id = u.id
-      WHERE p.status = 'completed'
+             COALESCE(SUM(cs.estimated_cost), 0) AS total_spent,
+             ROUND(COALESCE(AVG(cs.estimated_cost), 0)::numeric, 2) AS avg_session
+      FROM care_sessions cs
+      JOIN users u ON cs.family_user_id = u.id
+      WHERE cs.status = 'completed' AND cs.estimated_cost > 0
       GROUP BY u.id, u.first_name, u.last_name, u.email
       ORDER BY total_spent DESC
       LIMIT 5
     `).all();
 
-    // Top 5 caregivers by earnings
+    // Top 5 caregivers by earnings — from completed sessions
     const topCaregivers = await db.prepare(`
       SELECT u.id, u.first_name, u.last_name, u.email,
              cp.rating_avg,
              COUNT(*) AS session_count,
-             COALESCE(SUM(p.caregiver_payout), 0) AS total_earned,
-             ROUND(COALESCE(AVG(p.caregiver_payout), 0)::numeric, 2) AS avg_payout
-      FROM payments p
-      JOIN caregiver_profiles cp ON p.caregiver_id = cp.id
+             COALESCE(SUM(cs.estimated_cost * 0.8), 0) AS total_earned,
+             ROUND(COALESCE(AVG(cs.estimated_cost * 0.8), 0)::numeric, 2) AS avg_payout
+      FROM care_sessions cs
+      JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
       JOIN users u ON cp.user_id = u.id
-      WHERE p.status = 'completed'
+      WHERE cs.status = 'completed' AND cs.estimated_cost > 0
       GROUP BY u.id, u.first_name, u.last_name, u.email, cp.rating_avg
       ORDER BY total_earned DESC
       LIMIT 5
