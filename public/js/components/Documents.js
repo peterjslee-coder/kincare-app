@@ -324,13 +324,16 @@ const Documents = window.Documents = ({ onNavigate }) => {
       formData.append('owner_type', 'care_recipient');
       formData.append('owner_id', uploadRecipientId);
 
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 30000);
+
       const response = await fetch('/api/documents/upload', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
-        },
+        credentials: 'include',
         body: formData,
+        signal: controller.signal,
       });
+      clearTimeout(timeout);
 
       if (!response.ok) {
         const error = await response.json();
@@ -353,7 +356,11 @@ const Documents = window.Documents = ({ onNavigate }) => {
         loadDocuments();
       }, 2000);
     } catch (error) {
-      setUploadError(error.message || 'Upload failed');
+      if (error.name === 'AbortError') {
+        setUploadError('Upload timed out. Please try again.');
+      } else {
+        setUploadError(error.message || 'Upload failed');
+      }
     } finally {
       setUploadLoading(false);
     }
@@ -363,9 +370,7 @@ const Documents = window.Documents = ({ onNavigate }) => {
     setPreviewDocument(document);
     try {
       const response = await fetch(`/api/documents/${document.id}/download`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
-        },
+        credentials: 'include',
       });
       if (response.ok) {
         const blob = await response.blob();
@@ -396,9 +401,7 @@ const Documents = window.Documents = ({ onNavigate }) => {
   const handleDownload = async (document) => {
     try {
       const response = await fetch(`/api/documents/${document.id}/download`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
-        },
+        credentials: 'include',
       });
       if (response.ok) {
         const blob = await response.blob();
