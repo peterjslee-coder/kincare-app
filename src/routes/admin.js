@@ -2147,6 +2147,16 @@ router.get("/security/insights", requireAdmin, async (req, res) => {
       return trustedPairs.has(`${row.user_id}:${row.ip_address}`);
     }
 
+    // Helper: is this a self-inflicted auth/CSRF error from an admin user?
+    // These are app bugs or stale sessions, not security threats
+    function isAdminAuthNoise(row) {
+      if (!row.user_id || !adminIds.has(row.user_id)) return false;
+      const det = typeof row.details === 'string' ? JSON.parse(row.details || '{}') : (row.details || {});
+      const statusCode = det.statusCode || 0;
+      // 401 (expired session) or 403 (CSRF/auth) from a known admin user — not a threat
+      return statusCode === 401 || statusCode === 403;
+    }
+
     // ── 1. Critical/error events — with root cause breakdown ──
     const critEvents24h = await db.prepare(`
       SELECT id, user_id, user_email, ip_address, action, endpoint, severity, details, created_at
@@ -2159,7 +2169,7 @@ router.get("/security/insights", requireAdmin, async (req, res) => {
     const genuineCritical = [];
     const trustedAdminNoise = [];
     for (const evt of critEvents24h) {
-      if (isTrustedAdmin(evt)) {
+      if (isTrustedAdmin(evt) || isAdminAuthNoise(evt)) {
         trustedAdminNoise.push(evt);
       } else {
         genuineCritical.push(evt);

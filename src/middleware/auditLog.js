@@ -6,8 +6,10 @@ const { getDb } = require("../models/database");
 
 // Endpoints that should be audit-logged, with severity and action labels
 const SENSITIVE_PATTERNS = [
-  // Admin endpoints — highest sensitivity
-  { pattern: /^\/api\/admin/, action: "admin_access", severity: "warn" },
+  // Admin write operations — higher sensitivity
+  { pattern: /^\/api\/admin/, method: "POST|PUT|PATCH|DELETE", action: "admin_write", severity: "warn" },
+  // Admin reads — normal info (loading dashboard, stats, etc.)
+  { pattern: /^\/api\/admin/, action: "admin_access", severity: "info" },
   // Auth events
   { pattern: /^\/api\/auth\/login/, action: "login_attempt", severity: "info" },
   { pattern: /^\/api\/auth\/register/, action: "registration", severity: "info" },
@@ -17,7 +19,10 @@ const SENSITIVE_PATTERNS = [
   { pattern: /^\/api\/caregivers\/.*\/profile/, action: "caregiver_profile_access", severity: "info" },
   { pattern: /^\/api\/care-recipients/, action: "care_recipient_access", severity: "info" },
   { pattern: /^\/api\/sessions\/.*\/(cancel|claim|checkout|review)/, action: "session_action", severity: "info" },
-  { pattern: /^\/api\/documents/, action: "document_access", severity: "warn" },
+  // Document writes (upload, delete, review) — higher sensitivity
+  { pattern: /^\/api\/documents/, method: "POST|PUT|DELETE", action: "document_write", severity: "warn" },
+  // Document reads — normal info
+  { pattern: /^\/api\/documents/, action: "document_access", severity: "info" },
   { pattern: /^\/api\/onboarding/, action: "onboarding_data", severity: "info" },
 ];
 
@@ -69,8 +74,12 @@ function auditLogMiddleware(req, res, next) {
   const endpoint = req.originalUrl || req.url;
   const method = req.method;
 
-  // Check if this endpoint matches a sensitive pattern
-  const match = SENSITIVE_PATTERNS.find(p => p.pattern.test(endpoint));
+  // Check if this endpoint matches a sensitive pattern (first match wins; method-specific patterns come first)
+  const match = SENSITIVE_PATTERNS.find(p => {
+    if (!p.pattern.test(endpoint)) return false;
+    if (p.method && !p.method.split('|').includes(method)) return false;
+    return true;
+  });
   if (!match) return next();
 
   // Capture response status to log after response completes
