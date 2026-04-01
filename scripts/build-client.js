@@ -113,10 +113,11 @@ const sizeKB = (Buffer.byteLength(result.code, "utf-8") / 1024).toFixed(1);
 console.log(`  Bundle written: ${outPath} (${sizeKB} KB)`);
 
 // ─── Auto-bump cache-buster in sw.js and index.html ───
-// Uses a content hash of the bundle so the version changes only when code changes
+// Uses content hash + timestamp so SW always updates on every deploy
 const crypto = require("crypto");
 const bundleHash = crypto.createHash("md5").update(result.code).digest("hex").slice(0, 8);
-const buildVersion = `build-${bundleHash}`;
+const buildTs = Date.now().toString(36);
+const buildVersion = `build-${bundleHash}-${buildTs}`;
 
 // Update sw.js CACHE_NAME and SW_VERSION
 const swPath = path.join(PUBLIC, "sw.js");
