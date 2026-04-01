@@ -383,6 +383,57 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
 
   const costCategories = ['Claude API', 'Railway', 'Twilio', 'Stripe Fees', 'Stripe Identity', 'Checkr', 'Cloudflare', 'Resend', 'Domain', 'Insurance', 'Google Play', 'Apple Developer', 'Other'];
 
+  // Document Review tab
+  const [pendingDocs, setPendingDocs] = useState([]);
+  const [pendingDocsCount, setPendingDocsCount] = useState(0);
+  const [pendingDocsLoading, setPendingDocsLoading] = useState(false);
+  const [reviewingDocId, setReviewingDocId] = useState(null);
+  const [reviewNotes, setReviewNotes] = useState('');
+  const [expandedDocId, setExpandedDocId] = useState(null);
+
+  const loadPendingDocs = async () => {
+    setPendingDocsLoading(true);
+    try {
+      const res = await apiFetch('/api/documents/admin/pending');
+      if (res?.ok) {
+        const data = await res.json();
+        setPendingDocs(data.documents || []);
+        setPendingDocsCount(data.count || 0);
+      }
+    } catch (err) { console.error('Pending docs load error:', err); }
+    setPendingDocsLoading(false);
+  };
+
+  const loadPendingDocsCount = async () => {
+    try {
+      const res = await apiFetch('/api/documents/admin/count');
+      if (res?.ok) {
+        const data = await res.json();
+        setPendingDocsCount(data.count || 0);
+      }
+    } catch (err) { /* silent */ }
+  };
+
+  const handleDocReview = async (docId, action) => {
+    setReviewingDocId(docId);
+    try {
+      const res = await apiFetch(`/api/documents/admin/${docId}/review`, {
+        method: 'POST',
+        body: JSON.stringify({ action, notes: reviewNotes }),
+      });
+      if (res?.ok) {
+        showToast(`Document ${action}d`, 'success');
+        setReviewNotes('');
+        setExpandedDocId(null);
+        loadPendingDocs();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        showToast(err.error || `Failed to ${action}`, 'error');
+      }
+    } catch (err) { showToast('Network error', 'error'); }
+    setReviewingDocId(null);
+  };
+
   const loadLegalDocs = async () => {
     try {
       const [docsRes, accRes] = await Promise.all([
@@ -726,6 +777,8 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
     fetchPendingApprovals();
     loadPausedCaregivers();
     loadSafetyFlags();
+    // Fetch pending doc review count for badge
+    loadPendingDocsCount();
     // Fetch new feedback count for tab badge
     apiFetch('/api/admin/alerts').then(r => r?.ok ? r.json() : null).then(d => {
       if (d) {
@@ -882,6 +935,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
     }
     if (activeTab === 'costs') loadCosts();
     if (activeTab === 'legal') loadLegalDocs();
+    if (activeTab === 'docreview') loadPendingDocs();
   }, [activeTab]);
 
   // Auto-reload users when filters change
@@ -1548,6 +1602,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
       { id: 'feedback', label: 'Feedback', icon: '💬', badge: newFeedbackCount || null },
     ]},
     { label: 'Trust & Safety', tabs: [
+      { id: 'docreview', label: 'Doc Review', icon: '📄', badge: pendingDocsCount || null },
       { id: 'authorizations', label: 'Auth', icon: '\u{1F512}', badge: consentAlerts.length || null },
       { id: 'bgchecks', label: 'BG Checks', icon: '🔍', badge: checkrAlertCount || null },
       { id: 'safety', label: 'Safety Flags', icon: '🚨', badge: safetyFlagCount || null },
@@ -4504,6 +4559,132 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
               <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)' }}>No blocked emails</div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* ─── Document Review Tab ─── */}
+      {activeTab === 'docreview' && (
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Document Review</h3>
+            <button onClick={loadPendingDocs} style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid var(--border-color)', background: 'var(--bg-card)', fontSize: 12, cursor: 'pointer', color: 'var(--text-secondary)' }}>Refresh</button>
+          </div>
+          {pendingDocsLoading ? <LoadingSpinner text="Loading documents..." /> : pendingDocs.length === 0 ? (
+            <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-secondary)', fontSize: 14 }}>
+              <div style={{ fontSize: 40, marginBottom: 12 }}>✅</div>
+              No documents waiting for review
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {pendingDocs.map(doc => {
+                const ai = doc.ai_classification;
+                const isExpanded = expandedDocId === doc.id;
+                const statusColors = { ai_flagged: '#e74c3c', pending: '#f39c12', ai_review: '#3498db' };
+                const statusLabels = { ai_flagged: 'AI Flagged', pending: 'AI Reviewed — Pending Approval', ai_review: 'AI Processing...' };
+                return (
+                  <div key={doc.id} style={{ background: 'var(--bg-card)', borderRadius: 12, border: `1px solid ${doc.status === 'ai_flagged' ? 'rgba(231,76,60,0.3)' : 'var(--border-color)'}`, overflow: 'hidden' }}>
+                    {/* Header row */}
+                    <div onClick={() => setExpandedDocId(isExpanded ? null : doc.id)} style={{ padding: '14px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <div style={{ width: 10, height: 10, borderRadius: '50%', background: statusColors[doc.status] || '#999', flexShrink: 0 }} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>
+                          {doc.document_type?.replace(/_/g, ' ').toUpperCase()} — {doc.recipientName || 'Unknown recipient'}
+                        </div>
+                        <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
+                          Uploaded by {doc.uploaderName} · {formatDateTime(doc.created_at)} · {(doc.file_size / 1024).toFixed(0)} KB
+                        </div>
+                      </div>
+                      <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, color: 'white', background: statusColors[doc.status] || '#999' }}>
+                        {statusLabels[doc.status] || doc.status}
+                      </span>
+                      <span style={{ fontSize: 16, color: 'var(--text-secondary)', transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>▼</span>
+                    </div>
+
+                    {/* Expanded detail */}
+                    {isExpanded && (
+                      <div style={{ padding: '0 16px 16px', borderTop: '1px solid var(--border-color)' }}>
+                        {/* AI Classification Results */}
+                        {ai ? (
+                          <div style={{ marginTop: 12 }}>
+                            <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8, color: 'var(--text-primary)' }}>AI Analysis</div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px', fontSize: 13 }}>
+                              <div><span style={{ color: 'var(--text-secondary)' }}>Classification:</span> <strong>{ai.classification?.replace(/_/g, ' ')}</strong></div>
+                              <div><span style={{ color: 'var(--text-secondary)' }}>Confidence:</span> <strong style={{ color: ai.confidence >= 0.8 ? '#27ae60' : ai.confidence >= 0.5 ? '#f39c12' : '#e74c3c' }}>{Math.round((ai.confidence || 0) * 100)}%</strong></div>
+                              <div><span style={{ color: 'var(--text-secondary)' }}>Valid document:</span> <strong style={{ color: ai.isValid ? '#27ae60' : '#e74c3c' }}>{ai.isValid ? 'Yes' : 'No'}</strong></div>
+                              <div><span style={{ color: 'var(--text-secondary)' }}>Matches claimed type:</span> <strong style={{ color: ai.matchesClaimed ? '#27ae60' : '#e74c3c' }}>{ai.matchesClaimed ? 'Yes' : 'No'}</strong></div>
+                            </div>
+                            {ai.summary && <div style={{ marginTop: 8, fontSize: 13, fontStyle: 'italic', color: 'var(--text-secondary)' }}>{ai.summary}</div>}
+
+                            {/* Extracted Fields */}
+                            {ai.extractedFields && Object.keys(ai.extractedFields).some(k => ai.extractedFields[k]) && (
+                              <div style={{ marginTop: 12 }}>
+                                <div style={{ fontWeight: 600, fontSize: 12, marginBottom: 6, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: 0.5 }}>Extracted Fields</div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px', fontSize: 12, background: 'var(--bg-secondary)', padding: 10, borderRadius: 8 }}>
+                                  {Object.entries(ai.extractedFields).filter(([, v]) => v).map(([k, v]) => (
+                                    <div key={k}><span style={{ color: 'var(--text-secondary)' }}>{k.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase())}:</span> <strong>{v}</strong></div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Concerns */}
+                            {ai.concerns && ai.concerns.length > 0 && (
+                              <div style={{ marginTop: 12, padding: 10, borderRadius: 8, background: 'rgba(231,76,60,0.08)', border: '1px solid rgba(231,76,60,0.2)' }}>
+                                <div style={{ fontWeight: 600, fontSize: 12, marginBottom: 4, color: '#e74c3c' }}>Concerns</div>
+                                {ai.concerns.map((c, i) => <div key={i} style={{ fontSize: 12, color: 'var(--text-primary)', marginTop: 2 }}>• {c}</div>)}
+                              </div>
+                            )}
+                          </div>
+                        ) : doc.status === 'ai_review' ? (
+                          <div style={{ padding: 16, textAlign: 'center', color: 'var(--text-secondary)', fontSize: 13 }}>AI classification is still processing...</div>
+                        ) : null}
+
+                        {/* Preview link */}
+                        <div style={{ marginTop: 12 }}>
+                          <button onClick={async () => {
+                            try {
+                              const res = await fetch(`/api/documents/${doc.id}/download`, { credentials: 'include', headers: window.getCsrfToken ? { 'X-CSRF-Token': window.getCsrfToken() } : {} });
+                              if (res.ok) { const blob = await res.blob(); window.open(URL.createObjectURL(blob), '_blank'); }
+                            } catch (e) { showToast('Failed to load preview', 'error'); }
+                          }} style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', fontSize: 12, cursor: 'pointer', color: 'var(--text-primary)' }}>
+                            View Document
+                          </button>
+                        </div>
+
+                        {/* Admin action: notes + approve/reject */}
+                        {doc.status !== 'ai_review' && (
+                          <div style={{ marginTop: 16, borderTop: '1px solid var(--border-color)', paddingTop: 12 }}>
+                            <textarea
+                              value={reviewNotes}
+                              onChange={e => setReviewNotes(e.target.value)}
+                              placeholder="Optional notes (reason for rejection, observations, etc.)"
+                              style={{ width: '100%', minHeight: 48, padding: 10, borderRadius: 8, border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: 13, resize: 'vertical', boxSizing: 'border-box' }}
+                            />
+                            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                              <button
+                                onClick={() => handleDocReview(doc.id, 'approve')}
+                                disabled={reviewingDocId === doc.id}
+                                style={{ flex: 1, padding: '10px 16px', borderRadius: 8, border: 'none', background: '#27ae60', color: 'white', fontWeight: 600, fontSize: 13, cursor: 'pointer', opacity: reviewingDocId === doc.id ? 0.6 : 1 }}
+                              >
+                                {reviewingDocId === doc.id ? '...' : 'Approve'}
+                              </button>
+                              <button
+                                onClick={() => handleDocReview(doc.id, 'reject')}
+                                disabled={reviewingDocId === doc.id}
+                                style={{ flex: 1, padding: '10px 16px', borderRadius: 8, border: 'none', background: '#e74c3c', color: 'white', fontWeight: 600, fontSize: 13, cursor: 'pointer', opacity: reviewingDocId === doc.id ? 0.6 : 1 }}
+                              >
+                                {reviewingDocId === doc.id ? '...' : 'Reject'}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
