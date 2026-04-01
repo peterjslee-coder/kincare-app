@@ -1840,7 +1840,7 @@ router.get("/briefing", requireAdmin, async (req, res) => {
         COUNT(*) FILTER (WHERE status = 'expired' AND created_at > NOW() - INTERVAL '7 days') AS expired_7d,
         COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '14 days' AND created_at <= NOW() - INTERVAL '7 days') AS offers_prior_7d,
         COUNT(*) FILTER (WHERE status = 'accepted' AND created_at > NOW() - INTERVAL '14 days' AND created_at <= NOW() - INTERVAL '7 days') AS accepted_prior_7d
-      FROM care_session_offers
+      FROM session_offers
     `).get();
     briefing.offers = offerStats;
 
