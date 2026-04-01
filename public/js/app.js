@@ -497,7 +497,8 @@ const App = () => {
     return () => clearInterval(interval);
   }, [appState, currentUser?.id]);
 
-  // ─── Version heartbeat — auto-reload when a new deploy lands ───
+  // ─── Version heartbeat — notify (not auto-reload) when a new deploy lands ───
+  const [updateAvailable, setUpdateAvailable] = useState(null);
   useEffect(() => {
     const checkVersion = async () => {
       try {
@@ -505,33 +506,26 @@ const App = () => {
         if (!res.ok) return;
         const data = await res.json();
         if (data.version && data.version !== window.APP_VERSION) {
-          // Guard: don't reload if we already tried recently (prevents infinite loops if HTML is cached)
-          const lastReload = sessionStorage.getItem('_versionReloadAt');
-          const now = Date.now();
-          if (lastReload && (now - parseInt(lastReload, 10)) < 60000) {
-            console.log(`[version] Mismatch (server=${data.version} local=${window.APP_VERSION}) but skipping — reloaded <60s ago`);
-            return;
-          }
-          sessionStorage.setItem('_versionReloadAt', String(now));
-          console.log(`[version] Server=${data.version} Local=${window.APP_VERSION} — reloading`);
-          if (window.caches) {
-            const keys = await caches.keys();
-            await Promise.all(keys.map(k => caches.delete(k)));
-          }
-          window.location.reload();
+          console.log(`[version] New version available: ${data.version} (current: ${window.APP_VERSION})`);
+          setUpdateAvailable(data.version);
         }
       } catch {}
     };
-    // Check on tab focus (user switches back to app)
-    const onFocus = () => checkVersion();
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') onFocus();
-    });
-    // Also check every 5 minutes while tab is open
-    const interval = setInterval(checkVersion, 5 * 60 * 1000);
-    // Initial check after 10s (let the app finish loading first)
-    const initTimeout = setTimeout(checkVersion, 10000);
+    // Check on tab focus (but only once per 5 min to avoid spam during active dev)
+    let lastCheck = 0;
+    const onVisChange = () => {
+      if (document.visibilityState === 'visible' && Date.now() - lastCheck > 5 * 60 * 1000) {
+        lastCheck = Date.now();
+        checkVersion();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisChange);
+    // Also check every 10 minutes while tab is open
+    const interval = setInterval(checkVersion, 10 * 60 * 1000);
+    // Initial check after 30s (let the app finish loading first)
+    const initTimeout = setTimeout(() => { lastCheck = Date.now(); checkVersion(); }, 30000);
     return () => {
+      document.removeEventListener('visibilitychange', onVisChange);
       clearInterval(interval);
       clearTimeout(initTimeout);
     };
@@ -1497,6 +1491,19 @@ const App = () => {
           }}>
             <span>{verifyMessage.type === 'success' ? '✅ ' : '⚠️ '}{verifyMessage.text}</span>
             <button onClick={() => setVerifyMessage(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px', color: 'inherit' }}>&times;</button>
+          </div>
+        )}
+        {updateAvailable && (
+          <div style={{
+            padding: '8px 16px', marginBottom: '12px', borderRadius: '8px', fontSize: '13px',
+            background: 'var(--color-info-bg)', color: 'var(--color-info)',
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          }}>
+            <span>v{updateAvailable} available</span>
+            <button onClick={() => {
+              if (window.caches) { caches.keys().then(keys => Promise.all(keys.map(k => caches.delete(k)))).then(() => window.location.reload()); }
+              else { window.location.reload(); }
+            }} style={{ background: 'var(--color-info)', color: 'white', border: 'none', borderRadius: 6, padding: '4px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Update</button>
           </div>
         )}
         {currentUser && currentUser.emailVerified === false && !currentUser.isDemo && !verifyMessage && currentUser.account_approved && (
