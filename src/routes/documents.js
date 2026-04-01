@@ -137,40 +137,7 @@ router.post("/upload", authenticate, uploadDoc.single("document"), async (req, r
     `).run(docId, owner_type, owner_id, req.user.id, category, document_type,
       base64, req.file.originalname, req.file.size, req.file.mimetype);
 
-    // Run AI classification asynchronously (don't block the response)
-    // But for now, run it synchronously so the user sees immediate results
-    const aiResult = await classifyDocument(base64, req.file.mimetype, document_type);
-
-    // Determine status based on AI result
-    let newStatus = "pending"; // default: needs admin review
-    if (aiResult.skipped || aiResult.error) {
-      newStatus = "pending";
-    } else if (!aiResult.isValid || !aiResult.matchesClaimed || aiResult.confidence < 0.5) {
-      newStatus = "ai_flagged";
-    } else if (aiResult.confidence >= 0.85 && aiResult.isValid && aiResult.matchesClaimed) {
-      // High confidence + valid + matches claim → pending admin review (not auto-approved for consent)
-      newStatus = category === "consent" || category === "legal" ? "pending" : "pending";
-      // Identity/cert docs with very high confidence could be auto-approved in future
-    }
-
-    // Extract expiration from AI if found
-    let expiresAt = null;
-    if (aiResult.extractedFields?.expirationDate) {
-      try {
-        const parsed = new Date(aiResult.extractedFields.expirationDate);
-        if (!isNaN(parsed.getTime())) expiresAt = parsed.toISOString();
-      } catch (e) { /* ignore parse errors */ }
-    }
-
-    // Update document with AI results
-    await db.prepare(`
-      UPDATE verified_documents
-      SET status = ?, ai_classification = ?, ai_reviewed_at = NOW(),
-          expires_at = COALESCE(?, expires_at), updated_at = NOW()
-      WHERE id = ?
-    `).run(newStatus, JSON.stringify(aiResult), expiresAt, docId);
-
-    // Log to consent audit trail if this is a consent/legal document
+    // Log upload audit entry immediately (before AI, so user sees it)
     if ((category === "consent" || category === "legal") && owner_type === "care_recipient") {
       const uploaderName = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(req.user.id);
       const recipientName = await db.prepare("SELECT first_name, last_name FROM care_recipients WHERE id = ?").get(owner_id);
@@ -183,32 +150,11 @@ router.post("/upload", authenticate, uploadDoc.single("document"), async (req, r
         actorRole: "family",
         eventType: "document_uploaded",
         description: `${uName} uploaded ${document_type.replace(/_/g, " ")} document for ${rName}`,
-        metadata: { documentId: docId, documentType: document_type, aiConfidence: aiResult.confidence, aiStatus: newStatus },
+        metadata: { documentId: docId, documentType: document_type },
       });
-
-      // AI classification audit entry
-      if (aiResult.error) {
-        await logConsentAudit(db, {
-          careRecipientId: owner_id,
-          actorId: "system",
-          actorRole: "ai",
-          eventType: "document_classified",
-          description: `AI classification failed for ${document_type.replace(/_/g, " ")} document: ${aiResult.error}`,
-          metadata: { documentId: docId, error: aiResult.error },
-        });
-      } else if (!aiResult.skipped) {
-        await logConsentAudit(db, {
-          careRecipientId: owner_id,
-          actorId: "system",
-          actorRole: "ai",
-          eventType: "document_classified",
-          description: `AI classified document as "${aiResult.classification}" (${Math.round(aiResult.confidence * 100)}% confidence). ${aiResult.summary}`,
-          metadata: { documentId: docId, classification: aiResult.classification, confidence: aiResult.confidence, concerns: aiResult.concerns },
-        });
-      }
     }
 
-    // Return document metadata (no file_data)
+    // Return immediately — document saved, AI runs in background
     res.status(201).json({
       document: {
         id: docId,
@@ -217,11 +163,72 @@ router.post("/upload", authenticate, uploadDoc.single("document"), async (req, r
         file_name: req.file.originalname,
         file_size: req.file.size,
         mime_type: req.file.mimetype,
-        status: newStatus,
-        ai_classification: aiResult,
-        expires_at: expiresAt,
+        status: "ai_review",
+        ai_classification: null,
+        expires_at: null,
         created_at: new Date().toISOString(),
       },
+    });
+
+    // ── Background AI classification (non-blocking) ──
+    classifyDocument(base64, req.file.mimetype, document_type).then(async (aiResult) => {
+      try {
+        const bgDb = await getDb();
+
+        // Determine status based on AI result
+        let newStatus = "pending";
+        if (aiResult.skipped || aiResult.error) {
+          newStatus = "pending";
+        } else if (!aiResult.isValid || !aiResult.matchesClaimed || aiResult.confidence < 0.5) {
+          newStatus = "ai_flagged";
+        }
+
+        // Extract expiration from AI if found
+        let expiresAt = null;
+        if (aiResult.extractedFields?.expirationDate) {
+          try {
+            const parsed = new Date(aiResult.extractedFields.expirationDate);
+            if (!isNaN(parsed.getTime())) expiresAt = parsed.toISOString();
+          } catch (e) { /* ignore parse errors */ }
+        }
+
+        // Update document with AI results
+        await bgDb.prepare(`
+          UPDATE verified_documents
+          SET status = ?, ai_classification = ?, ai_reviewed_at = NOW(),
+              expires_at = COALESCE(?, expires_at), updated_at = NOW()
+          WHERE id = ?
+        `).run(newStatus, JSON.stringify(aiResult), expiresAt, docId);
+
+        // AI classification audit entry
+        if ((category === "consent" || category === "legal") && owner_type === "care_recipient") {
+          if (aiResult.error) {
+            await logConsentAudit(bgDb, {
+              careRecipientId: owner_id,
+              actorId: "system",
+              actorRole: "ai",
+              eventType: "document_classified",
+              description: `AI classification failed for ${document_type.replace(/_/g, " ")} document`,
+              metadata: { documentId: docId, error: true },
+            });
+          } else if (!aiResult.skipped) {
+            await logConsentAudit(bgDb, {
+              careRecipientId: owner_id,
+              actorId: "system",
+              actorRole: "ai",
+              eventType: "document_classified",
+              description: `AI classified document as "${aiResult.classification}" (${Math.round(aiResult.confidence * 100)}% confidence). ${aiResult.summary}`,
+              metadata: { documentId: docId, classification: aiResult.classification, confidence: aiResult.confidence, concerns: aiResult.concerns },
+            });
+          }
+        }
+
+        console.log(`[DocumentAI] Classified ${docId}: ${aiResult.classification} (${Math.round(aiResult.confidence * 100)}%) → ${newStatus}`);
+      } catch (bgErr) {
+        console.error("[DocumentAI] Background classification update failed:", bgErr.message);
+      }
+    }).catch(err => {
+      console.error("[DocumentAI] Classification failed for", docId, err.message);
     });
   } catch (err) {
     console.error("Document upload error:", err);
