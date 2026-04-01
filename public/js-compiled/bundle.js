@@ -11556,7 +11556,7 @@ const Dashboard = window.Dashboard = ({
 const CareProfile = window.CareProfile = ({
   onNavigate
 }) => {
-  var _profile$first_name, _profile$last_name, _kindredSummary$abuse, _kindredSummary$medic, _kindredSummary$care_, _companionUsage$summa, _companionUsage$summa2, _companionUsage$summa3, _companionUsage$summa4, _companionUsage$summa5;
+  var _profile$first_name, _profile$last_name, _kindredSummary$abuse, _kindredSummary$medic, _kindredSummary$care_, _companionUsage$summa, _companionUsage$summa2, _companionUsage$summa3, _companionUsage$summa4, _companionUsage$summa5, _window$Capacitor5, _window$Capacitor5$is;
   const [profile, setProfile] = useState(null);
   const [allRecipients, setAllRecipients] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -13501,7 +13501,11 @@ const CareProfile = window.CareProfile = ({
       marginBottom: 16,
       padding: 4,
       background: 'var(--bg-elevated)',
-      borderRadius: 10
+      borderRadius: 10,
+      overflowX: 'auto',
+      WebkitOverflowScrolling: 'touch',
+      scrollbarWidth: 'none',
+      msOverflowStyle: 'none'
     }
   }, [{
     id: 'reminders',
@@ -13511,10 +13515,10 @@ const CareProfile = window.CareProfile = ({
     label: '\uD83D\uDCAC Conversations'
   }, {
     id: 'voice-routing',
-    label: '\uD83D\uDD0A Voice Routing'
+    label: '\uD83D\uDD0A Routing'
   }, {
     id: 'voice-settings',
-    label: '\uD83C\uDF9B\uFE0F Voice Settings'
+    label: '\uD83C\uDF9B\uFE0F Settings'
   }, {
     id: 'usage',
     label: '\uD83D\uDCCA Usage'
@@ -13525,13 +13529,14 @@ const CareProfile = window.CareProfile = ({
       setCompanionTab(tab.id);
     },
     style: {
-      flex: 1,
-      padding: '8px 12px',
+      flex: '0 0 auto',
+      padding: '8px 14px',
       borderRadius: 8,
       border: 'none',
-      fontSize: 13,
+      fontSize: 12,
       fontWeight: 600,
       cursor: 'pointer',
+      whiteSpace: 'nowrap',
       background: companionTab === tab.id ? 'var(--bg-card)' : 'transparent',
       color: companionTab === tab.id ? 'var(--color-info)' : 'var(--text-tertiary)',
       boxShadow: companionTab === tab.id ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
@@ -13542,7 +13547,9 @@ const CareProfile = window.CareProfile = ({
       display: 'flex',
       justifyContent: 'space-between',
       alignItems: 'center',
-      marginBottom: 12
+      marginBottom: 12,
+      flexWrap: 'wrap',
+      gap: 8
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -13573,31 +13580,31 @@ const CareProfile = window.CareProfile = ({
       } catch {}
     },
     style: {
-      padding: '6px 12px',
+      padding: '6px 10px',
       borderRadius: 8,
       border: '1px solid var(--border-teal-light)',
       background: 'var(--bg-surface)',
       color: 'var(--color-info)',
-      fontSize: 12,
+      fontSize: 11,
       fontWeight: 600,
       cursor: 'pointer'
     }
-  }, '\uD83D\uDCC5', " Sync Calendar"), /*#__PURE__*/React.createElement("button", {
+  }, '\uD83D\uDCC5', " Sync"), /*#__PURE__*/React.createElement("button", {
     onClick: e => {
       e.stopPropagation();
       setShowAddReminder(!showAddReminder);
     },
     style: {
-      padding: '6px 14px',
+      padding: '6px 12px',
       borderRadius: 8,
       border: 'none',
       background: showAddReminder ? '#E8EEF2' : 'var(--color-info)',
       color: showAddReminder ? 'var(--text-secondary)' : 'var(--bg-card)',
-      fontSize: 13,
+      fontSize: 12,
       fontWeight: 600,
       cursor: 'pointer'
     }
-  }, showAddReminder ? 'Cancel' : '+ Add Reminder'))), showAddReminder && /*#__PURE__*/React.createElement("div", {
+  }, showAddReminder ? 'Cancel' : '+ Add'))), showAddReminder && /*#__PURE__*/React.createElement("div", {
     style: {
       padding: 16,
       background: 'var(--bg-highlight)',
@@ -14473,38 +14480,39 @@ const CareProfile = window.CareProfile = ({
     }, "Choose which voice speaks for each message type. Pete's cloned voice uses more credits; pre-made voices are lower cost."), /*#__PURE__*/React.createElement("div", {
       style: {
         display: 'flex',
-        gap: 8,
+        gap: 6,
         alignItems: 'center',
-        padding: '8px 12px',
+        padding: '8px 10px',
         background: '#EBF5FB',
         borderRadius: 8,
-        marginBottom: 12
+        marginBottom: 12,
+        flexWrap: 'wrap'
       }
     }, /*#__PURE__*/React.createElement("span", {
       style: {
-        fontSize: 11,
+        fontSize: 10,
         fontWeight: 600,
         color: 'var(--color-info)',
         background: 'var(--color-info-bg)',
-        padding: '2px 8px',
+        padding: '2px 6px',
         borderRadius: 10
       }
-    }, peteCount, " use Pete's voice"), /*#__PURE__*/React.createElement("span", {
+    }, peteCount, " Pete's voice"), /*#__PURE__*/React.createElement("span", {
       style: {
-        fontSize: 11,
+        fontSize: 10,
         fontWeight: 600,
         color: 'var(--text-secondary)',
         background: '#F4F6F7',
-        padding: '2px 8px',
+        padding: '2px 6px',
         borderRadius: 10
       }
-    }, otherCount, " use pre-made voice"), otherCount > 0 && /*#__PURE__*/React.createElement("span", {
+    }, otherCount, " pre-made"), otherCount > 0 && /*#__PURE__*/React.createElement("span", {
       style: {
-        fontSize: 11,
+        fontSize: 10,
         color: 'var(--text-tertiary)',
         marginLeft: 'auto'
       }
-    }, "~", Math.round(otherCount / MESSAGE_TYPES.length * 100), "% credit savings")), /*#__PURE__*/React.createElement("div", {
+    }, "~", Math.round(otherCount / MESSAGE_TYPES.length * 100), "% savings")), /*#__PURE__*/React.createElement("div", {
       style: {
         border: '1px solid #E8EEF2',
         borderRadius: 10,
@@ -14516,41 +14524,46 @@ const CareProfile = window.CareProfile = ({
       return /*#__PURE__*/React.createElement("div", {
         key: mt.id,
         style: {
-          padding: '12px 14px',
+          padding: '10px 12px',
           display: 'flex',
+          flexWrap: 'wrap',
           alignItems: 'center',
-          gap: 10,
+          gap: 8,
           borderBottom: i < MESSAGE_TYPES.length - 1 ? '1px solid #f0f0f0' : 'none',
           background: i % 2 === 0 ? 'var(--bg-card)' : '#FAFCFE'
         }
       }, /*#__PURE__*/React.createElement("div", {
         style: {
-          flex: 1,
+          flex: '1 1 140px',
           minWidth: 0
         }
       }, /*#__PURE__*/React.createElement("div", {
         style: {
-          fontSize: 13,
+          fontSize: 12,
           fontWeight: 600,
-          color: 'var(--color-navy)'
+          color: 'var(--color-navy)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6
         }
-      }, mt.label), /*#__PURE__*/React.createElement("div", {
-        style: {
-          fontSize: 11,
-          color: 'var(--text-tertiary)'
-        }
-      }, mt.desc)), /*#__PURE__*/React.createElement("span", {
+      }, mt.label, /*#__PURE__*/React.createElement("span", {
         style: {
           fontSize: 10,
           fontWeight: 600,
-          padding: '2px 8px',
+          padding: '1px 6px',
           borderRadius: 10,
           background: mt.priority === 'high' ? '#E8F8F0' : '#FEF3E2',
           color: mt.priority === 'high' ? '#27AE60' : '#E67E22'
         }
-      }, mt.priority), /*#__PURE__*/React.createElement("div", {
+      }, mt.priority)), /*#__PURE__*/React.createElement("div", {
         style: {
-          position: 'relative'
+          fontSize: 11,
+          color: 'var(--text-tertiary)'
+        }
+      }, mt.desc)), /*#__PURE__*/React.createElement("div", {
+        style: {
+          position: 'relative',
+          flex: '0 0 auto'
         }
       }, /*#__PURE__*/React.createElement("button", {
         onClick: e => {
@@ -14560,22 +14573,17 @@ const CareProfile = window.CareProfile = ({
         style: {
           display: 'flex',
           alignItems: 'center',
-          gap: 6,
-          padding: '6px 12px',
+          gap: 4,
+          padding: '5px 10px',
           borderRadius: 8,
           border: '1px solid #E8EEF2',
-          fontSize: 12,
+          fontSize: 11,
           cursor: 'pointer',
-          minWidth: 170,
           background: assigned.name.includes('Pete') ? '#EBF5FB' : '#F4F6F7',
-          color: 'var(--color-navy)'
+          color: 'var(--color-navy)',
+          whiteSpace: 'nowrap'
         }
-      }, /*#__PURE__*/React.createElement("span", null, assigned.icon), /*#__PURE__*/React.createElement("span", {
-        style: {
-          flex: 1,
-          textAlign: 'left'
-        }
-      }, assigned.name), /*#__PURE__*/React.createElement("span", {
+      }, /*#__PURE__*/React.createElement("span", null, assigned.icon), /*#__PURE__*/React.createElement("span", null, assigned.name), /*#__PURE__*/React.createElement("span", {
         style: {
           fontSize: 10,
           color: 'var(--text-muted)'
@@ -14922,12 +14930,12 @@ const CareProfile = window.CareProfile = ({
   }, "No usage data yet") : /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
-      gap: 10,
+      gridTemplateColumns: 'repeat(2, 1fr)',
+      gap: 8,
       marginBottom: 16
     }
   }, [{
-    label: 'Total Messages',
+    label: 'Messages',
     value: ((_companionUsage$summa = companionUsage.summary) === null || _companionUsage$summa === void 0 ? void 0 : _companionUsage$summa.total_messages) || 0,
     icon: '\uD83D\uDCAC',
     color: 'var(--color-info)'
@@ -14950,24 +14958,24 @@ const CareProfile = window.CareProfile = ({
     key: i,
     style: {
       textAlign: 'center',
-      padding: 14,
+      padding: 10,
       background: '#F4F6F7',
       borderRadius: 10
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
-      fontSize: 20,
-      marginBottom: 4
+      fontSize: 16,
+      marginBottom: 2
     }
   }, stat.icon), /*#__PURE__*/React.createElement("div", {
     style: {
-      fontSize: 20,
+      fontSize: 17,
       fontWeight: 700,
       color: stat.color
     }
   }, typeof stat.value === 'number' ? stat.value.toLocaleString() : stat.value), /*#__PURE__*/React.createElement("div", {
     style: {
-      fontSize: 11,
+      fontSize: 10,
       color: 'var(--text-tertiary)',
       marginTop: 2
     }
@@ -14989,17 +14997,18 @@ const CareProfile = window.CareProfile = ({
     style: {
       display: 'flex',
       alignItems: 'center',
-      padding: '10px 14px',
-      gap: 12,
+      padding: '8px 10px',
+      gap: 8,
+      flexWrap: 'wrap',
       borderBottom: i < companionUsage.daily_breakdown.length - 1 ? '1px solid #f0f0f0' : 'none',
       background: i % 2 === 0 ? 'var(--bg-card)' : '#FAFCFE'
     }
   }, /*#__PURE__*/React.createElement("span", {
     style: {
-      fontSize: 13,
+      fontSize: 11,
       color: 'var(--color-navy)',
       fontWeight: 500,
-      width: 90
+      minWidth: 70
     }
   }, new Date(day.day).toLocaleDateString(undefined, {
     weekday: 'short',
@@ -15007,8 +15016,8 @@ const CareProfile = window.CareProfile = ({
     day: 'numeric'
   })), /*#__PURE__*/React.createElement("div", {
     style: {
-      flex: 1,
-      height: 8,
+      flex: '1 1 60px',
+      height: 6,
       background: '#F4F6F7',
       borderRadius: 4,
       overflow: 'hidden'
@@ -15022,19 +15031,11 @@ const CareProfile = window.CareProfile = ({
     }
   })), /*#__PURE__*/React.createElement("span", {
     style: {
-      fontSize: 11,
+      fontSize: 10,
       color: 'var(--text-tertiary)',
-      width: 60,
-      textAlign: 'right'
+      whiteSpace: 'nowrap'
     }
-  }, (day.credits_used || 0).toLocaleString(), " cr"), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 11,
-      color: 'var(--text-tertiary)',
-      width: 50,
-      textAlign: 'right'
-    }
-  }, day.message_count, " msg"))))), /*#__PURE__*/React.createElement("div", {
+  }, (day.credits_used || 0).toLocaleString(), " cr \xB7 ", day.message_count, " msg"))))), /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 16,
       padding: 14,
@@ -15064,9 +15065,16 @@ const CareProfile = window.CareProfile = ({
     }
   }, /*#__PURE__*/React.createElement("button", {
     onClick: e => {
+      var _window$Capacitor4, _window$Capacitor4$is;
       e.stopPropagation();
-      const token = window.AUTH_TOKEN || '';
-      window.open(`/kindred?token=${encodeURIComponent(token)}`, '_blank');
+      // Cookie-based auth — no token param needed, cookie travels with request
+      // Use location.href for Capacitor compatibility (window.open fails in WebView)
+      const isCapacitor = (_window$Capacitor4 = window.Capacitor) === null || _window$Capacitor4 === void 0 || (_window$Capacitor4$is = _window$Capacitor4.isNativePlatform) === null || _window$Capacitor4$is === void 0 ? void 0 : _window$Capacitor4$is.call(_window$Capacitor4);
+      if (isCapacitor) {
+        window.location.href = '/kindred';
+      } else {
+        window.open('/kindred', '_blank');
+      }
     },
     style: {
       padding: '8px 16px',
@@ -15086,7 +15094,7 @@ const CareProfile = window.CareProfile = ({
       fontSize: 12,
       color: 'var(--text-muted)'
     }
-  }, "Opens ", profile === null || profile === void 0 ? void 0 : profile.first_name, "'s Kindred in a new tab")))), canEdit && (profile !== null && profile !== void 0 && profile.linked_user_id ? /*#__PURE__*/React.createElement("div", {
+  }, "Opens ", profile === null || profile === void 0 ? void 0 : profile.first_name, "'s Kindred", (_window$Capacitor5 = window.Capacitor) !== null && _window$Capacitor5 !== void 0 && (_window$Capacitor5$is = _window$Capacitor5.isNativePlatform) !== null && _window$Capacitor5$is !== void 0 && _window$Capacitor5$is.call(_window$Capacitor5) ? '' : ' in a new tab')))), canEdit && (profile !== null && profile !== void 0 && profile.linked_user_id ? /*#__PURE__*/React.createElement("div", {
     className: "card",
     style: {
       marginBottom: 16,
@@ -51177,7 +51185,7 @@ const FeedbackButton = window.FeedbackButton = ({
 
   // Build rich pageContext with device/browser info
   const buildPageContext = () => {
-    var _navigator$connection, _window$Capacitor4, _window$Capacitor4$is, _window$Capacitor$get, _window$Capacitor5;
+    var _navigator$connection, _window$Capacitor6, _window$Capacitor6$is, _window$Capacitor$get, _window$Capacitor7;
     const ua = navigator.userAgent;
     const {
       browserName,
@@ -51206,7 +51214,7 @@ const FeedbackButton = window.FeedbackButton = ({
       connectionType: ((_navigator$connection = navigator.connection) === null || _navigator$connection === void 0 ? void 0 : _navigator$connection.effectiveType) || 'unknown',
       language: navigator.language || 'unknown',
       isPWA: window.navigator.standalone === true ? 'yes' : 'no',
-      platform: (_window$Capacitor4 = window.Capacitor) !== null && _window$Capacitor4 !== void 0 && (_window$Capacitor4$is = _window$Capacitor4.isNativePlatform) !== null && _window$Capacitor4$is !== void 0 && _window$Capacitor4$is.call(_window$Capacitor4) ? ((_window$Capacitor$get = (_window$Capacitor5 = window.Capacitor).getPlatform) === null || _window$Capacitor$get === void 0 ? void 0 : _window$Capacitor$get.call(_window$Capacitor5)) === 'ios' ? 'ios-native' : 'android-native' : window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches ? 'pwa' : 'web',
+      platform: (_window$Capacitor6 = window.Capacitor) !== null && _window$Capacitor6 !== void 0 && (_window$Capacitor6$is = _window$Capacitor6.isNativePlatform) !== null && _window$Capacitor6$is !== void 0 && _window$Capacitor6$is.call(_window$Capacitor6) ? ((_window$Capacitor$get = (_window$Capacitor7 = window.Capacitor).getPlatform) === null || _window$Capacitor$get === void 0 ? void 0 : _window$Capacitor$get.call(_window$Capacitor7)) === 'ios' ? 'ios-native' : 'android-native' : window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches ? 'pwa' : 'web',
       recentErrors: recentErrorsRef.current.length > 0 ? recentErrorsRef.current : null,
       // Flow context — what was open when user tapped feedback
       openModals: snapshot.openModals || null,
@@ -61240,6 +61248,61 @@ const AdminPanel = window.AdminPanel = ({
   const [editCostData, setEditCostData] = useState({}); // holds edited values
 
   const costCategories = ['Claude API', 'Railway', 'Twilio', 'Stripe Fees', 'Stripe Identity', 'Checkr', 'Cloudflare', 'Resend', 'Domain', 'Insurance', 'Google Play', 'Apple Developer', 'Other'];
+
+  // Document Review tab
+  const [pendingDocs, setPendingDocs] = useState([]);
+  const [pendingDocsCount, setPendingDocsCount] = useState(0);
+  const [pendingDocsLoading, setPendingDocsLoading] = useState(false);
+  const [reviewingDocId, setReviewingDocId] = useState(null);
+  const [reviewNotes, setReviewNotes] = useState('');
+  const [expandedDocId, setExpandedDocId] = useState(null);
+  const loadPendingDocs = async () => {
+    setPendingDocsLoading(true);
+    try {
+      const res = await apiFetch('/api/documents/admin/pending');
+      if (res !== null && res !== void 0 && res.ok) {
+        const data = await res.json();
+        setPendingDocs(data.documents || []);
+        setPendingDocsCount(data.count || 0);
+      }
+    } catch (err) {
+      console.error('Pending docs load error:', err);
+    }
+    setPendingDocsLoading(false);
+  };
+  const loadPendingDocsCount = async () => {
+    try {
+      const res = await apiFetch('/api/documents/admin/count');
+      if (res !== null && res !== void 0 && res.ok) {
+        const data = await res.json();
+        setPendingDocsCount(data.count || 0);
+      }
+    } catch (err) {/* silent */}
+  };
+  const handleDocReview = async (docId, action) => {
+    setReviewingDocId(docId);
+    try {
+      const res = await apiFetch(`/api/documents/admin/${docId}/review`, {
+        method: 'POST',
+        body: JSON.stringify({
+          action,
+          notes: reviewNotes
+        })
+      });
+      if (res !== null && res !== void 0 && res.ok) {
+        showToast(`Document ${action}d`, 'success');
+        setReviewNotes('');
+        setExpandedDocId(null);
+        loadPendingDocs();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        showToast(err.error || `Failed to ${action}`, 'error');
+      }
+    } catch (err) {
+      showToast('Network error', 'error');
+    }
+    setReviewingDocId(null);
+  };
   const loadLegalDocs = async () => {
     try {
       const [docsRes, accRes] = await Promise.all([apiFetch('/api/legal/admin/documents'), apiFetch('/api/legal/admin/acceptances')]);
@@ -61627,6 +61690,8 @@ const AdminPanel = window.AdminPanel = ({
     fetchPendingApprovals();
     loadPausedCaregivers();
     loadSafetyFlags();
+    // Fetch pending doc review count for badge
+    loadPendingDocsCount();
     // Fetch new feedback count for tab badge
     apiFetch('/api/admin/alerts').then(r => r !== null && r !== void 0 && r.ok ? r.json() : null).then(d => {
       if (d) {
@@ -61808,6 +61873,7 @@ const AdminPanel = window.AdminPanel = ({
     }
     if (activeTab === 'costs') loadCosts();
     if (activeTab === 'legal') loadLegalDocs();
+    if (activeTab === 'docreview') loadPendingDocs();
   }, [activeTab]);
 
   // Auto-reload users when filters change
@@ -62642,6 +62708,11 @@ const AdminPanel = window.AdminPanel = ({
   }, {
     label: 'Trust & Safety',
     tabs: [{
+      id: 'docreview',
+      label: 'Doc Review',
+      icon: '📄',
+      badge: pendingDocsCount || null
+    }, {
       id: 'authorizations',
       label: 'Auth',
       icon: '\u{1F512}',
@@ -69767,7 +69838,328 @@ const AdminPanel = window.AdminPanel = ({
       textAlign: 'center',
       color: 'var(--text-muted)'
     }
-  }, "No blocked emails"))), activeTab === 'authorizations' && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+  }, "No blocked emails"))), activeTab === 'docreview' && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 16
+    }
+  }, /*#__PURE__*/React.createElement("h3", {
+    style: {
+      margin: 0,
+      fontSize: 18,
+      fontWeight: 700
+    }
+  }, "Document Review"), /*#__PURE__*/React.createElement("button", {
+    onClick: loadPendingDocs,
+    style: {
+      padding: '6px 14px',
+      borderRadius: 8,
+      border: '1px solid var(--border-color)',
+      background: 'var(--bg-card)',
+      fontSize: 12,
+      cursor: 'pointer',
+      color: 'var(--text-secondary)'
+    }
+  }, "Refresh")), pendingDocsLoading ? /*#__PURE__*/React.createElement(LoadingSpinner, {
+    text: "Loading documents..."
+  }) : pendingDocs.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: 40,
+      textAlign: 'center',
+      color: 'var(--text-secondary)',
+      fontSize: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 40,
+      marginBottom: 12
+    }
+  }, "\u2705"), "No documents waiting for review") : /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 12
+    }
+  }, pendingDocs.map(doc => {
+    var _doc$document_type, _ai$classification;
+    const ai = doc.ai_classification;
+    const isExpanded = expandedDocId === doc.id;
+    const statusColors = {
+      ai_flagged: '#e74c3c',
+      pending: '#f39c12',
+      ai_review: '#3498db'
+    };
+    const statusLabels = {
+      ai_flagged: 'AI Flagged',
+      pending: 'AI Reviewed — Pending Approval',
+      ai_review: 'AI Processing...'
+    };
+    return /*#__PURE__*/React.createElement("div", {
+      key: doc.id,
+      style: {
+        background: 'var(--bg-card)',
+        borderRadius: 12,
+        border: `1px solid ${doc.status === 'ai_flagged' ? 'rgba(231,76,60,0.3)' : 'var(--border-color)'}`,
+        overflow: 'hidden'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      onClick: () => setExpandedDocId(isExpanded ? null : doc.id),
+      style: {
+        padding: '14px 16px',
+        cursor: 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        width: 10,
+        height: 10,
+        borderRadius: '50%',
+        background: statusColors[doc.status] || '#999',
+        flexShrink: 0
+      }
+    }), /*#__PURE__*/React.createElement("div", {
+      style: {
+        flex: 1,
+        minWidth: 0
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontWeight: 600,
+        fontSize: 14,
+        color: 'var(--text-primary)'
+      }
+    }, (_doc$document_type = doc.document_type) === null || _doc$document_type === void 0 ? void 0 : _doc$document_type.replace(/_/g, ' ').toUpperCase(), " \u2014 ", doc.recipientName || 'Unknown recipient'), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 12,
+        color: 'var(--text-secondary)',
+        marginTop: 2
+      }
+    }, "Uploaded by ", doc.uploaderName, " \xB7 ", formatDateTime(doc.created_at), " \xB7 ", (doc.file_size / 1024).toFixed(0), " KB")), /*#__PURE__*/React.createElement("span", {
+      style: {
+        padding: '3px 10px',
+        borderRadius: 20,
+        fontSize: 11,
+        fontWeight: 600,
+        color: 'white',
+        background: statusColors[doc.status] || '#999'
+      }
+    }, statusLabels[doc.status] || doc.status), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 16,
+        color: 'var(--text-secondary)',
+        transform: isExpanded ? 'rotate(180deg)' : 'none',
+        transition: 'transform 0.2s'
+      }
+    }, "\u25BC")), isExpanded && /*#__PURE__*/React.createElement("div", {
+      style: {
+        padding: '0 16px 16px',
+        borderTop: '1px solid var(--border-color)'
+      }
+    }, ai ? /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginTop: 12
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontWeight: 600,
+        fontSize: 13,
+        marginBottom: 8,
+        color: 'var(--text-primary)'
+      }
+    }, "AI Analysis"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'grid',
+        gridTemplateColumns: '1fr 1fr',
+        gap: '8px 16px',
+        fontSize: 13
+      }
+    }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: 'var(--text-secondary)'
+      }
+    }, "Classification:"), " ", /*#__PURE__*/React.createElement("strong", null, (_ai$classification = ai.classification) === null || _ai$classification === void 0 ? void 0 : _ai$classification.replace(/_/g, ' '))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: 'var(--text-secondary)'
+      }
+    }, "Confidence:"), " ", /*#__PURE__*/React.createElement("strong", {
+      style: {
+        color: ai.confidence >= 0.8 ? '#27ae60' : ai.confidence >= 0.5 ? '#f39c12' : '#e74c3c'
+      }
+    }, Math.round((ai.confidence || 0) * 100), "%")), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: 'var(--text-secondary)'
+      }
+    }, "Valid document:"), " ", /*#__PURE__*/React.createElement("strong", {
+      style: {
+        color: ai.isValid ? '#27ae60' : '#e74c3c'
+      }
+    }, ai.isValid ? 'Yes' : 'No')), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: 'var(--text-secondary)'
+      }
+    }, "Matches claimed type:"), " ", /*#__PURE__*/React.createElement("strong", {
+      style: {
+        color: ai.matchesClaimed ? '#27ae60' : '#e74c3c'
+      }
+    }, ai.matchesClaimed ? 'Yes' : 'No'))), ai.summary && /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginTop: 8,
+        fontSize: 13,
+        fontStyle: 'italic',
+        color: 'var(--text-secondary)'
+      }
+    }, ai.summary), ai.extractedFields && Object.keys(ai.extractedFields).some(k => ai.extractedFields[k]) && /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginTop: 12
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontWeight: 600,
+        fontSize: 12,
+        marginBottom: 6,
+        color: 'var(--text-secondary)',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5
+      }
+    }, "Extracted Fields"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'grid',
+        gridTemplateColumns: '1fr 1fr',
+        gap: '4px 16px',
+        fontSize: 12,
+        background: 'var(--bg-secondary)',
+        padding: 10,
+        borderRadius: 8
+      }
+    }, Object.entries(ai.extractedFields).filter(([, v]) => v).map(([k, v]) => /*#__PURE__*/React.createElement("div", {
+      key: k
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: 'var(--text-secondary)'
+      }
+    }, k.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase()), ":"), " ", /*#__PURE__*/React.createElement("strong", null, v))))), ai.concerns && ai.concerns.length > 0 && /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginTop: 12,
+        padding: 10,
+        borderRadius: 8,
+        background: 'rgba(231,76,60,0.08)',
+        border: '1px solid rgba(231,76,60,0.2)'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontWeight: 600,
+        fontSize: 12,
+        marginBottom: 4,
+        color: '#e74c3c'
+      }
+    }, "Concerns"), ai.concerns.map((c, i) => /*#__PURE__*/React.createElement("div", {
+      key: i,
+      style: {
+        fontSize: 12,
+        color: 'var(--text-primary)',
+        marginTop: 2
+      }
+    }, "\u2022 ", c)))) : doc.status === 'ai_review' ? /*#__PURE__*/React.createElement("div", {
+      style: {
+        padding: 16,
+        textAlign: 'center',
+        color: 'var(--text-secondary)',
+        fontSize: 13
+      }
+    }, "AI classification is still processing...") : null, /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginTop: 12
+      }
+    }, /*#__PURE__*/React.createElement("button", {
+      onClick: async () => {
+        try {
+          const res = await fetch(`/api/documents/${doc.id}/download`, {
+            credentials: 'include',
+            headers: window.getCsrfToken ? {
+              'X-CSRF-Token': window.getCsrfToken()
+            } : {}
+          });
+          if (res.ok) {
+            const blob = await res.blob();
+            window.open(URL.createObjectURL(blob), '_blank');
+          }
+        } catch (e) {
+          showToast('Failed to load preview', 'error');
+        }
+      },
+      style: {
+        padding: '6px 14px',
+        borderRadius: 8,
+        border: '1px solid var(--border-color)',
+        background: 'var(--bg-secondary)',
+        fontSize: 12,
+        cursor: 'pointer',
+        color: 'var(--text-primary)'
+      }
+    }, "View Document")), doc.status !== 'ai_review' && /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginTop: 16,
+        borderTop: '1px solid var(--border-color)',
+        paddingTop: 12
+      }
+    }, /*#__PURE__*/React.createElement("textarea", {
+      value: reviewNotes,
+      onChange: e => setReviewNotes(e.target.value),
+      placeholder: "Optional notes (reason for rejection, observations, etc.)",
+      style: {
+        width: '100%',
+        minHeight: 48,
+        padding: 10,
+        borderRadius: 8,
+        border: '1px solid var(--border-color)',
+        background: 'var(--bg-secondary)',
+        color: 'var(--text-primary)',
+        fontSize: 13,
+        resize: 'vertical',
+        boxSizing: 'border-box'
+      }
+    }), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        gap: 8,
+        marginTop: 8
+      }
+    }, /*#__PURE__*/React.createElement("button", {
+      onClick: () => handleDocReview(doc.id, 'approve'),
+      disabled: reviewingDocId === doc.id,
+      style: {
+        flex: 1,
+        padding: '10px 16px',
+        borderRadius: 8,
+        border: 'none',
+        background: '#27ae60',
+        color: 'white',
+        fontWeight: 600,
+        fontSize: 13,
+        cursor: 'pointer',
+        opacity: reviewingDocId === doc.id ? 0.6 : 1
+      }
+    }, reviewingDocId === doc.id ? '...' : 'Approve'), /*#__PURE__*/React.createElement("button", {
+      onClick: () => handleDocReview(doc.id, 'reject'),
+      disabled: reviewingDocId === doc.id,
+      style: {
+        flex: 1,
+        padding: '10px 16px',
+        borderRadius: 8,
+        border: 'none',
+        background: '#e74c3c',
+        color: 'white',
+        fontWeight: 600,
+        fontSize: 13,
+        cursor: 'pointer',
+        opacity: reviewingDocId === doc.id ? 0.6 : 1
+      }
+    }, reviewingDocId === doc.id ? '...' : 'Reject')))));
+  }))), activeTab === 'authorizations' && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       justifyContent: 'space-between',
@@ -74601,7 +74993,8 @@ const App = () => {
     return () => clearInterval(interval);
   }, [appState, currentUser === null || currentUser === void 0 ? void 0 : currentUser.id]);
 
-  // ─── Version heartbeat — auto-reload when a new deploy lands ───
+  // ─── Version heartbeat — notify (not auto-reload) when a new deploy lands ───
+  const [updateAvailable, setUpdateAvailable] = useState(null);
   useEffect(() => {
     const checkVersion = async () => {
       try {
@@ -74611,33 +75004,29 @@ const App = () => {
         if (!res.ok) return;
         const data = await res.json();
         if (data.version && data.version !== window.APP_VERSION) {
-          // Guard: don't reload if we already tried recently (prevents infinite loops if HTML is cached)
-          const lastReload = sessionStorage.getItem('_versionReloadAt');
-          const now = Date.now();
-          if (lastReload && now - parseInt(lastReload, 10) < 60000) {
-            console.log(`[version] Mismatch (server=${data.version} local=${window.APP_VERSION}) but skipping — reloaded <60s ago`);
-            return;
-          }
-          sessionStorage.setItem('_versionReloadAt', String(now));
-          console.log(`[version] Server=${data.version} Local=${window.APP_VERSION} — reloading`);
-          if (window.caches) {
-            const keys = await caches.keys();
-            await Promise.all(keys.map(k => caches.delete(k)));
-          }
-          window.location.reload();
+          console.log(`[version] New version available: ${data.version} (current: ${window.APP_VERSION})`);
+          setUpdateAvailable(data.version);
         }
       } catch {}
     };
-    // Check on tab focus (user switches back to app)
-    const onFocus = () => checkVersion();
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') onFocus();
-    });
-    // Also check every 5 minutes while tab is open
-    const interval = setInterval(checkVersion, 5 * 60 * 1000);
-    // Initial check after 10s (let the app finish loading first)
-    const initTimeout = setTimeout(checkVersion, 10000);
+    // Check on tab focus (but only once per 5 min to avoid spam during active dev)
+    let lastCheck = 0;
+    const onVisChange = () => {
+      if (document.visibilityState === 'visible' && Date.now() - lastCheck > 5 * 60 * 1000) {
+        lastCheck = Date.now();
+        checkVersion();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisChange);
+    // Also check every 10 minutes while tab is open
+    const interval = setInterval(checkVersion, 10 * 60 * 1000);
+    // Initial check after 30s (let the app finish loading first)
+    const initTimeout = setTimeout(() => {
+      lastCheck = Date.now();
+      checkVersion();
+    }, 30000);
     return () => {
+      document.removeEventListener('visibilitychange', onVisChange);
       clearInterval(interval);
       clearTimeout(initTimeout);
     };
@@ -75068,7 +75457,7 @@ const App = () => {
     }
   }, []);
   const handleLogin = user => {
-    var _window$Capacitor6, _window$Capacitor6$is;
+    var _window$Capacitor8, _window$Capacitor8$is;
     // Mark this tab as having an active session so refreshes auto-restore,
     // but closing the browser requires re-authentication.
     sessionStorage.setItem('inplace_session_active', '1');
@@ -75135,7 +75524,7 @@ const App = () => {
       subscribeToPush().catch(() => {});
     }
     // Initialize native push token refresh listener (catches FCM/APNS token rotation)
-    if (typeof initNativeTokenRefresh === 'function' && (_window$Capacitor6 = window.Capacitor) !== null && _window$Capacitor6 !== void 0 && (_window$Capacitor6$is = _window$Capacitor6.isNativePlatform) !== null && _window$Capacitor6$is !== void 0 && _window$Capacitor6$is.call(_window$Capacitor6)) {
+    if (typeof initNativeTokenRefresh === 'function' && (_window$Capacitor8 = window.Capacitor) !== null && _window$Capacitor8 !== void 0 && (_window$Capacitor8$is = _window$Capacitor8.isNativePlatform) !== null && _window$Capacitor8$is !== void 0 && _window$Capacitor8$is.call(_window$Capacitor8)) {
       initNativeTokenRefresh();
     }
     // Start periodic push health check (every 30 min) to keep subscriptions fresh
@@ -76099,7 +76488,37 @@ const App = () => {
       fontSize: '16px',
       color: 'inherit'
     }
-  }, "\xD7")), currentUser && currentUser.emailVerified === false && !currentUser.isDemo && !verifyMessage && currentUser.account_approved && /*#__PURE__*/React.createElement(EmailVerificationBanner, {
+  }, "\xD7")), updateAvailable && /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: '8px 16px',
+      marginBottom: '12px',
+      borderRadius: '8px',
+      fontSize: '13px',
+      background: 'var(--color-info-bg)',
+      color: 'var(--color-info)',
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center'
+    }
+  }, /*#__PURE__*/React.createElement("span", null, "v", updateAvailable, " available"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      if (window.caches) {
+        caches.keys().then(keys => Promise.all(keys.map(k => caches.delete(k)))).then(() => window.location.reload());
+      } else {
+        window.location.reload();
+      }
+    },
+    style: {
+      background: 'var(--color-info)',
+      color: 'white',
+      border: 'none',
+      borderRadius: 6,
+      padding: '4px 12px',
+      fontSize: 12,
+      fontWeight: 600,
+      cursor: 'pointer'
+    }
+  }, "Update")), currentUser && currentUser.emailVerified === false && !currentUser.isDemo && !verifyMessage && currentUser.account_approved && /*#__PURE__*/React.createElement(EmailVerificationBanner, {
     userId: currentUser.id
   }), currentUser && !currentUser.account_approved && !currentUser.isDemo && !currentUser.is_admin ? /*#__PURE__*/React.createElement("div", {
     style: {

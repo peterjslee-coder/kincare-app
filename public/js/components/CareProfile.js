@@ -1095,18 +1095,19 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
 
           {companionOpen && (
             <div style={{ marginTop: 16 }}>
-              {/* Tabs */}
-              <div style={{ display: 'flex', gap: 4, marginBottom: 16, padding: 4, background: 'var(--bg-elevated)', borderRadius: 10 }}>
+              {/* Tabs — horizontally scrollable on mobile */}
+              <div style={{ display: 'flex', gap: 4, marginBottom: 16, padding: 4, background: 'var(--bg-elevated)', borderRadius: 10, overflowX: 'auto', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
                 {[
                   { id: 'reminders', label: '\u23F0 Reminders' },
                   { id: 'conversations', label: '\uD83D\uDCAC Conversations' },
-                  { id: 'voice-routing', label: '\uD83D\uDD0A Voice Routing' },
-                  { id: 'voice-settings', label: '\uD83C\uDF9B\uFE0F Voice Settings' },
+                  { id: 'voice-routing', label: '\uD83D\uDD0A Routing' },
+                  { id: 'voice-settings', label: '\uD83C\uDF9B\uFE0F Settings' },
                   { id: 'usage', label: '\uD83D\uDCCA Usage' },
                 ].map(tab => (
                   <button key={tab.id} onClick={(e) => { e.stopPropagation(); setCompanionTab(tab.id); }}
                     style={{
-                      flex: 1, padding: '8px 12px', borderRadius: 8, border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                      flex: '0 0 auto', padding: '8px 14px', borderRadius: 8, border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                      whiteSpace: 'nowrap',
                       background: companionTab === tab.id ? 'var(--bg-card)' : 'transparent',
                       color: companionTab === tab.id ? 'var(--color-info)' : 'var(--text-tertiary)',
                       boxShadow: companionTab === tab.id ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
@@ -1121,7 +1122,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
               {companionTab === 'reminders' && (
                 <div>
                   {/* Header + buttons */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
                     <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-info)' }}>
                       {'\u23F0'} Scheduled Reminders
                     </div>
@@ -1136,12 +1137,12 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                             fetchKindredReminders(profile.id);
                           }
                         } catch {}
-                      }} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid var(--border-teal-light)', background: 'var(--bg-surface)', color: 'var(--color-info)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-                        {'\uD83D\uDCC5'} Sync Calendar
+                      }} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--border-teal-light)', background: 'var(--bg-surface)', color: 'var(--color-info)', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+                        {'\uD83D\uDCC5'} Sync
                       </button>
                       <button onClick={(e) => { e.stopPropagation(); setShowAddReminder(!showAddReminder); }}
-                        style={{ padding: '6px 14px', borderRadius: 8, border: 'none', background: showAddReminder ? '#E8EEF2' : 'var(--color-info)', color: showAddReminder ? 'var(--text-secondary)' : 'var(--bg-card)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-                        {showAddReminder ? 'Cancel' : '+ Add Reminder'}
+                        style={{ padding: '6px 12px', borderRadius: 8, border: 'none', background: showAddReminder ? '#E8EEF2' : 'var(--color-info)', color: showAddReminder ? 'var(--text-secondary)' : 'var(--bg-card)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                        {showAddReminder ? 'Cancel' : '+ Add'}
                       </button>
                     </div>
                   </div>
@@ -1526,16 +1527,16 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                     </p>
 
                     {/* Summary bar */}
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '8px 12px', background: '#EBF5FB', borderRadius: 8, marginBottom: 12 }}>
-                      <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-info)', background: 'var(--color-info-bg)', padding: '2px 8px', borderRadius: 10 }}>
-                        {peteCount} use Pete's voice
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '8px 10px', background: '#EBF5FB', borderRadius: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--color-info)', background: 'var(--color-info-bg)', padding: '2px 6px', borderRadius: 10 }}>
+                        {peteCount} Pete's voice
                       </span>
-                      <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', background: '#F4F6F7', padding: '2px 8px', borderRadius: 10 }}>
-                        {otherCount} use pre-made voice
+                      <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', background: '#F4F6F7', padding: '2px 6px', borderRadius: 10 }}>
+                        {otherCount} pre-made
                       </span>
                       {otherCount > 0 && (
-                        <span style={{ fontSize: 11, color: 'var(--text-tertiary)', marginLeft: 'auto' }}>
-                          ~{Math.round(otherCount / MESSAGE_TYPES.length * 100)}% credit savings
+                        <span style={{ fontSize: 10, color: 'var(--text-tertiary)', marginLeft: 'auto' }}>
+                          ~{Math.round(otherCount / MESSAGE_TYPES.length * 100)}% savings
                         </span>
                       )}
                     </div>
@@ -1547,36 +1548,36 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                         const isOpen = routeDropdown === mt.id;
                         return (
                           <div key={mt.id} style={{
-                            padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10,
+                            padding: '10px 12px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8,
                             borderBottom: i < MESSAGE_TYPES.length - 1 ? '1px solid #f0f0f0' : 'none',
                             background: i % 2 === 0 ? 'var(--bg-card)' : '#FAFCFE',
                           }}>
                             {/* Message type info */}
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-navy)' }}>{mt.label}</div>
+                            <div style={{ flex: '1 1 140px', minWidth: 0 }}>
+                              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-navy)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                {mt.label}
+                                <span style={{
+                                  fontSize: 10, fontWeight: 600, padding: '1px 6px', borderRadius: 10,
+                                  background: mt.priority === 'high' ? '#E8F8F0' : '#FEF3E2',
+                                  color: mt.priority === 'high' ? '#27AE60' : '#E67E22',
+                                }}>
+                                  {mt.priority}
+                                </span>
+                              </div>
                               <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{mt.desc}</div>
                             </div>
 
-                            {/* Priority badge */}
-                            <span style={{
-                              fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 10,
-                              background: mt.priority === 'high' ? '#E8F8F0' : '#FEF3E2',
-                              color: mt.priority === 'high' ? '#27AE60' : '#E67E22',
-                            }}>
-                              {mt.priority}
-                            </span>
-
                             {/* Voice selector */}
-                            <div style={{ position: 'relative' }}>
+                            <div style={{ position: 'relative', flex: '0 0 auto' }}>
                               <button onClick={(e) => { e.stopPropagation(); setRouteDropdown(isOpen ? null : mt.id); }}
                                 style={{
-                                  display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8,
-                                  border: '1px solid #E8EEF2', fontSize: 12, cursor: 'pointer', minWidth: 170,
+                                  display: 'flex', alignItems: 'center', gap: 4, padding: '5px 10px', borderRadius: 8,
+                                  border: '1px solid #E8EEF2', fontSize: 11, cursor: 'pointer',
                                   background: assigned.name.includes('Pete') ? '#EBF5FB' : '#F4F6F7',
-                                  color: 'var(--color-navy)',
+                                  color: 'var(--color-navy)', whiteSpace: 'nowrap',
                                 }}>
                                 <span>{assigned.icon}</span>
-                                <span style={{ flex: 1, textAlign: 'left' }}>{assigned.name}</span>
+                                <span>{assigned.name}</span>
                                 <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{'\u25BC'}</span>
                               </button>
 
@@ -1743,17 +1744,17 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                   ) : (
                     <div>
                       {/* Summary cards */}
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10, marginBottom: 16 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8, marginBottom: 16 }}>
                         {[
-                          { label: 'Total Messages', value: companionUsage.summary?.total_messages || 0, icon: '\uD83D\uDCAC', color: 'var(--color-info)' },
+                          { label: 'Messages', value: companionUsage.summary?.total_messages || 0, icon: '\uD83D\uDCAC', color: 'var(--color-info)' },
                           { label: 'Conversations', value: companionUsage.summary?.conversation_count || 0, icon: '\uD83D\uDDE3\uFE0F', color: '#27AE60' },
                           { label: 'Credits Used', value: companionUsage.summary?.total_credits_used || 0, icon: '\uD83D\uDCB0', color: '#E67E22' },
                           { label: 'Proj. Monthly', value: companionUsage.summary?.projected_monthly_credits || 0, icon: '\uD83D\uDCC8', color: '#8E44AD' },
                         ].map((stat, i) => (
-                          <div key={i} style={{ textAlign: 'center', padding: 14, background: '#F4F6F7', borderRadius: 10 }}>
-                            <div style={{ fontSize: 20, marginBottom: 4 }}>{stat.icon}</div>
-                            <div style={{ fontSize: 20, fontWeight: 700, color: stat.color }}>{typeof stat.value === 'number' ? stat.value.toLocaleString() : stat.value}</div>
-                            <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>{stat.label}</div>
+                          <div key={i} style={{ textAlign: 'center', padding: 10, background: '#F4F6F7', borderRadius: 10 }}>
+                            <div style={{ fontSize: 16, marginBottom: 2 }}>{stat.icon}</div>
+                            <div style={{ fontSize: 17, fontWeight: 700, color: stat.color }}>{typeof stat.value === 'number' ? stat.value.toLocaleString() : stat.value}</div>
+                            <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 2 }}>{stat.label}</div>
                           </div>
                         ))}
                       </div>
@@ -1765,21 +1766,18 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                           <div style={{ border: '1px solid #E8EEF2', borderRadius: 10, overflow: 'hidden' }}>
                             {companionUsage.daily_breakdown.map((day, i) => (
                               <div key={i} style={{
-                                display: 'flex', alignItems: 'center', padding: '10px 14px', gap: 12,
+                                display: 'flex', alignItems: 'center', padding: '8px 10px', gap: 8, flexWrap: 'wrap',
                                 borderBottom: i < companionUsage.daily_breakdown.length - 1 ? '1px solid #f0f0f0' : 'none',
                                 background: i % 2 === 0 ? 'var(--bg-card)' : '#FAFCFE',
                               }}>
-                                <span style={{ fontSize: 13, color: 'var(--color-navy)', fontWeight: 500, width: 90 }}>
+                                <span style={{ fontSize: 11, color: 'var(--color-navy)', fontWeight: 500, minWidth: 70 }}>
                                   {new Date(day.day).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
                                 </span>
-                                <div style={{ flex: 1, height: 8, background: '#F4F6F7', borderRadius: 4, overflow: 'hidden' }}>
+                                <div style={{ flex: '1 1 60px', height: 6, background: '#F4F6F7', borderRadius: 4, overflow: 'hidden' }}>
                                   <div style={{ height: '100%', background: 'var(--color-info)', borderRadius: 4, width: `${Math.min(100, (day.credits_used / Math.max(1, ...companionUsage.daily_breakdown.map(d => d.credits_used))) * 100)}%` }} />
                                 </div>
-                                <span style={{ fontSize: 11, color: 'var(--text-tertiary)', width: 60, textAlign: 'right' }}>
-                                  {(day.credits_used || 0).toLocaleString()} cr
-                                </span>
-                                <span style={{ fontSize: 11, color: 'var(--text-tertiary)', width: 50, textAlign: 'right' }}>
-                                  {day.message_count} msg
+                                <span style={{ fontSize: 10, color: 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>
+                                  {(day.credits_used || 0).toLocaleString()} cr · {day.message_count} msg
                                 </span>
                               </div>
                             ))}
