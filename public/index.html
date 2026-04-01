@@ -6,9 +6,9 @@
   <title>InPlace - On-Demand Care for Your Loved Ones</title>
 
   <!-- PWA Meta Tags -->
-  <meta name="theme-color" content="#1b6b5a">
+  <meta name="theme-color" content="#ffffff">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="InPlace">
   <meta name="description" content="On-demand care coordination for your loved ones">
 
@@ -20,7 +20,7 @@
   <!-- PWA Manifest -->
   <link rel="manifest" href="/manifest.json">
 
-  <link rel="stylesheet" href="/css/styles.css?v=build-7c61e130-mnfvkfqu">
+  <link rel="stylesheet" href="/css/styles.css?v=build-7c61e130-mnfxowcz">
 
   <!-- Leaflet CSS for maps (self-hosted — no CDN dependency) -->
   <link rel="stylesheet" href="/vendor/leaflet.css">
@@ -49,7 +49,7 @@
   <script src="/vendor/twilio-video.min.js"></script>
 
   <!-- Pre-compiled app bundle (built by scripts/build-client.js) -->
-  <script>window.APP_VERSION = '1.57.16';</script>
+  <script>window.APP_VERSION = '1.57.17';</script>
   <script>
     // ─── Theme initialization ───
     // Always start light (brand green). Unauthenticated visitors should never
@@ -75,9 +75,32 @@
           }
         } catch(e) {}
       };
+
+      // ─── Native status bar sync ───
+      // When running inside Capacitor (iOS/Android), keep the status bar
+      // text color in sync with the current theme so it stays readable.
+      // Light theme → dark text; dark theme → light text.
+      function syncNativeStatusBar() {
+        if (!window.Capacitor?.isNativePlatform?.()) return;
+        var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+        var StatusBar = window.Capacitor?.Plugins?.StatusBar;
+        if (StatusBar) {
+          StatusBar.setStyle({ style: isDark ? 'DARK' : 'LIGHT' });
+          // Update theme-color meta tag to match the background
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute('content', isDark ? '#121218' : '#ffffff');
+        }
+      }
+      // Watch for data-theme attribute changes
+      new MutationObserver(function() { syncNativeStatusBar(); })
+        .observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+      // Initial sync after Capacitor plugins load
+      document.addEventListener('DOMContentLoaded', function() {
+        setTimeout(syncNativeStatusBar, 500);
+      });
     })();
   </script>
-  <script src="/js-compiled/bundle.js?v=build-7c61e130-mnfvkfqu"></script>
+  <script src="/js-compiled/bundle.js?v=build-7c61e130-mnfxowcz"></script>
 
   <script>
     // Service worker: register/update and auto-reload on new version
