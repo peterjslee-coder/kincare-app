@@ -1631,42 +1631,35 @@
      * Initialize the app
      */
     async function initialize() {
-      // ALWAYS set up event listeners first — button must respond to taps
-      // even if auth or speech aren't ready yet. A dead button in Pete's
-      // voice companion feels like Pete ignoring Mom.
+      // 1. Event listeners — button must always respond to taps
       setupEventListeners();
 
-      // Time-aware greeting (no auth needed)
+      // 2. Speech recognition — browser API, no auth needed, must be ready
+      //    before user taps the button
+      if (!initializeSpeechRecognition()) {
+        showError('Speech recognition not available. Please use Chrome or Safari.');
+      }
+
+      // 3. Greeting + initial UI (no auth needed)
       const hour = new Date().getHours();
       const greetEl = document.getElementById('greeting');
       if (greetEl) {
         greetEl.textContent = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
       }
-
-      // Set initial button UI
       updateButtonUI();
 
+      // 4. Auth — async, may take a moment. Everything above works without it.
       try {
-        // Check auth
         if (!(await initializeAuth())) {
           return;
         }
 
-        // Setup speech recognition
-        if (!initializeSpeechRecognition()) {
-          showError('Speech recognition not available. Please use a supported browser.');
-        }
-
-        // Update recipient display
+        // Update recipient display now that we know who they are
         dom.recipientAvatar.textContent = app.recipientName.charAt(0).toUpperCase();
-
-        // Update status
         updateStatusCard();
-
-        // Refresh button UI now that auth is ready
         updateButtonUI();
       } catch (err) {
-        console.error('[Kindred] Initialization error:', err);
+        console.error('[Kindred] Auth error:', err);
         showError('Having trouble connecting. Please try refreshing.');
       }
     }
