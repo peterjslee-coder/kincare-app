@@ -746,6 +746,9 @@
         </button>
       </div>
 
+      <!-- Error toast — showError() populates this -->
+      <div class="error-message" id="errorMessage" style="display:none;"></div>
+
       <div class="bottom-bar">
         <div class="bottom-bar-text">iPAi Kindred · Set up by Pete</div>
       </div>
@@ -1075,10 +1078,14 @@
      * Show error message to user
      */
     function showError(message) {
-      console.error('Error:', message);
-      // In production, show a friendly toast or dialog
-      if (document.querySelector('.error-message')) {
-        document.querySelector('.error-message').textContent = message;
+      console.error('[Kindred Error]:', message);
+      const el = document.getElementById('errorMessage');
+      if (el) {
+        el.textContent = message;
+        el.style.display = 'block';
+        // Auto-hide after 6 seconds
+        clearTimeout(el._hideTimer);
+        el._hideTimer = setTimeout(() => { el.style.display = 'none'; }, 6000);
       }
     }
 
@@ -1256,14 +1263,32 @@
         return;
       }
 
+      // No speech recognition (e.g. Android WebView) — fall back to text input
       if (!app.recognition) {
-        showError('Speech recognition not available. Please use Chrome or Safari.');
+        promptTextInput();
         return;
       }
 
-      app.transcript = '';
-      app.interimTranscript = '';
-      app.recognition.start();
+      try {
+        app.transcript = '';
+        app.interimTranscript = '';
+        app.recognition.start();
+      } catch (err) {
+        console.error('[Kindred] recognition.start() failed:', err);
+        // If recognition fails (already started, permission denied, etc.), fall back to text
+        promptTextInput();
+      }
+    }
+
+    /**
+     * Text input fallback when speech recognition isn't available.
+     * Shows a simple prompt dialog so the button always does something.
+     */
+    function promptTextInput() {
+      const text = prompt('Type your message:');
+      if (text && text.trim()) {
+        sendMessage(text.trim());
+      }
     }
 
     /**
