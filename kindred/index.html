@@ -1235,9 +1235,11 @@
       };
 
       app.recognition.onerror = (event) => {
-        if (event.error !== 'no-speech' && event.error !== 'network') {
-          showError(`Speech error: ${event.error}`);
+        if (event.error === 'no-speech') {
+          // Normal — user didn't say anything, just reset
+          return;
         }
+        showError(`Speech error: ${event.error}`);
       };
 
       app.recognition.onend = () => {
@@ -1269,7 +1271,7 @@
         app.recognition.start();
       } catch (err) {
         console.error('[Kindred] recognition.start() failed:', err);
-        showError('Microphone error. Try tapping again.');
+        showError('Mic error: ' + (err.message || err) + '. Try tapping again.');
       }
     }
 
