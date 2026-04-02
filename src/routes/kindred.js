@@ -603,7 +603,7 @@ router.get("/reminders/all", async (req, res) => {
         u.first_name || ' ' || u.last_name as created_by_name
       FROM voice_reminders vr
       LEFT JOIN voice_profiles vp ON vr.voice_profile_id = vp.id
-      LEFT JOIN users u ON vr.created_by = u.id
+      LEFT JOIN users u ON vr.created_by::text = u.id
       WHERE vr.care_recipient_id = ?::uuid
         AND vr.status != 'cancelled'
       ORDER BY

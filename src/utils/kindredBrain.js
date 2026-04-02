@@ -93,7 +93,7 @@ async function loadCareContext(careRecipientId) {
         .prepare(
           `SELECT id, message_text as reminder_text, scheduled_for
            FROM voice_reminders
-           WHERE care_recipient_id = ? AND scheduled_for > NOW() AND status = 'pending'
+           WHERE care_recipient_id = ?::uuid AND scheduled_for > NOW() AND status = 'pending'
            ORDER BY scheduled_for ASC LIMIT 3`
         )
         .all(careRecipientId);
@@ -108,7 +108,7 @@ async function loadCareContext(careRecipientId) {
         .prepare(
           `SELECT speed, stability, similarity_boost, app_volume_gain, last_adjusted_at, adjustment_log
            FROM voice_preferences
-           WHERE care_recipient_id = ? LIMIT 1`
+           WHERE care_recipient_id = ?::uuid LIMIT 1`
         )
         .get(careRecipientId);
     } catch (e) {
@@ -119,7 +119,7 @@ async function loadCareContext(careRecipientId) {
     let careTeamInstructions = "";
     try {
       const instrRow = await db
-        .prepare("SELECT instructions FROM kindred_instructions WHERE care_recipient_id = ? LIMIT 1")
+        .prepare("SELECT instructions FROM kindred_instructions WHERE care_recipient_id = ?::uuid LIMIT 1")
         .get(careRecipientId);
       careTeamInstructions = instrRow?.instructions || "";
     } catch (e) {
@@ -349,7 +349,7 @@ async function saveVoicePreferences(careRecipientId, preferences) {
 
   try {
     const existing = await db
-      .prepare("SELECT id FROM voice_preferences WHERE care_recipient_id = ?")
+      .prepare("SELECT id FROM voice_preferences WHERE care_recipient_id = ?::uuid")
       .get(careRecipientId);
 
     if (existing) {
@@ -359,7 +359,7 @@ async function saveVoicePreferences(careRecipientId, preferences) {
         UPDATE voice_preferences
         SET speed = ?, stability = ?, similarity_boost = ?, volume_offset = ?,
             adjusted_at = NOW(), adjustment_reason = ?
-        WHERE care_recipient_id = ?
+        WHERE care_recipient_id = ?::uuid
       `
         )
         .run(
