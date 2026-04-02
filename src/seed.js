@@ -10,7 +10,7 @@ const { v4: uuid } = require("uuid");
 const { initializeDatabase, getDb } = require("./models/database");
 
 // Bump this whenever seed data changes — triggers auto-reseed on deploy
-const DEMO_SEED_VERSION = '1.21.0';
+const DEMO_SEED_VERSION = '1.57.33';
 
 async function seed({ force = false, demoOnly = false } = {}) {
   console.log("🌱 Seeding InPlace database...\n");
@@ -1250,6 +1250,78 @@ async function seed({ force = false, demoOnly = false } = {}) {
   }
 
   console.log("✅ Care team conversation created (Barbara's team with 11 group messages)");
+
+  // ─── AI Care Summaries (pre-generated for demo) ───
+  console.log("🤖 Creating AI care summaries...");
+
+  const barbaraSummary = `Barbara is doing well overall. She's in good spirits and enjoys her regular routine of meals, photo albums, and light gardening. Her dementia symptoms remain stable — she occasionally forgets recent conversations but long-term memory is strong. She recognized all family members on the last video call and was animated and laughing.
+
+Key observations from recent visits:
+• Appetite is healthy — she's eating full meals and enjoying Maria's cooking
+• Knee pain is manageable with Ibuprofen PRN; ice after walks helps
+• Sleep has been mostly good, though she occasionally wakes early (5-6am)
+• She's been asking about planting tomatoes this spring — a positive sign of forward-thinking engagement
+• Medication adherence is good with caregiver reminders; Donepezil supply needs regular monitoring
+
+Care team coordination is strong. Maria handles most weekday visits, James covers companionship sessions, and the family stays connected through group messages. Dr. Patel follow-up is scheduled for next week — bring medication list and discuss knee pain and sleep patterns.`;
+
+  const dorothySummary = `Dorothy continues to manage her diabetes well with consistent meal prep support. Her blood sugar readings have been stable, and she's following her dietary guidelines. Hearing loss is the primary daily challenge — caregivers should face her directly when speaking and minimize background noise.
+
+Recent highlights:
+• Enjoying weekly card game sessions — good for cognitive stimulation
+• Baking has become a favorite activity (diabetic-friendly recipes)
+• Social engagement is positive; she looks forward to caregiver visits
+• Mobility is good for her age; no falls or balance concerns recently`;
+
+  const arunSummary = `Arun's Parkinson's symptoms are progressing slowly. Hand tremors are more noticeable in the mornings before medication takes effect. He remains fiercely independent and prefers to attempt tasks himself before accepting help — caregivers should respect this while staying nearby for safety.
+
+Key notes:
+• Chess remains his favorite activity and helps with cognitive engagement
+• Fine motor tasks (buttoning shirts, writing) are becoming harder — occupational therapy may help
+• Mood has improved since starting regular caregiver visits; less isolated
+• Enjoys classical music during meals — calming effect on tremors
+• Dog (Kavi) is a great companion; walks with Kavi are good exercise`;
+
+  const carlosSummary = `Carlos is making excellent progress in his TBI recovery. Word recall has improved noticeably over the past month — he won at Scrabble recently and was able to complete a full grocery shopping trip independently (with caregiver accompaniment). His therapy dog Biscuit continues to provide emotional support.
+
+Recovery milestones:
+• Grocery shopping milestone achieved — first time since accident
+• Word recall improving; conversational fluency much better
+• Physical stamina increasing; can handle 2-3 hour outings
+• Emotional regulation improved; fewer frustration episodes
+• Next goal: resume light cooking with caregiver supervision`;
+
+  await db.prepare("UPDATE care_recipients SET ai_care_summary = ?, ai_care_summary_updated_at = NOW() - INTERVAL '2 days' WHERE id = ?").run(barbaraSummary, bettyId);
+  await db.prepare("UPDATE care_recipients SET ai_care_summary = ?, ai_care_summary_updated_at = NOW() - INTERVAL '5 days' WHERE id = ?").run(dorothySummary, dorothyId);
+  await db.prepare("UPDATE care_recipients SET ai_care_summary = ?, ai_care_summary_updated_at = NOW() - INTERVAL '3 days' WHERE id = ?").run(arunSummary, arunId);
+  await db.prepare("UPDATE care_recipients SET ai_care_summary = ?, ai_care_summary_updated_at = NOW() - INTERVAL '1 day' WHERE id = ?").run(carlosSummary, carlosId);
+
+  console.log("✅ AI care summaries set for all 4 care recipients");
+
+  // ─── User Feedback (demo entries) ───
+  console.log("💬 Creating demo feedback entries...");
+
+  const feedbackEntries = [
+    [uuid(), peteId, "feature", "It would be great to have a shared calendar view where all family members can see upcoming care sessions at a glance — like a family-wide schedule.", "positive", null, "dashboard", null, "resolved"],
+    [uuid(), mariaUserId, "praise", "The check-in/check-out flow is really smooth. I love that families get notified automatically when I arrive. Makes everything feel professional.", "positive", null, "caregiver-dashboard", null, "acknowledged"],
+    [uuid(), jamesUserId, "bug", "The notification sound doesn't play when I get a new care request. I have to keep checking the app manually.", "neutral", null, "notifications", null, "in_progress"],
+    [uuid(), peteId, "feature", "Can you add medication reminders that sync with care sessions? So when Maria arrives, she gets a reminder about which meds are due.", "positive", null, "care-profile", null, "planned"],
+    [uuid(), hendersonFamilyId, "praise", "Thank you for building this. Coordinating care for Mom used to mean 50 text messages a day between family members. Now everything is in one place.", "positive", null, "care-team", null, "acknowledged"],
+    [uuid(), mariaUserId, "feature", "Would love to see my earnings broken down by family/care recipient. Right now I can see the total but not which families contributed what.", "neutral", null, "payments", null, "planned"],
+    [uuid(), sarahUserId, "bug", "When I try to set my availability for a specific date, it sometimes shows the wrong time zone. I'm in Eastern but it shows Pacific.", "negative", null, "availability", null, "in_progress"],
+    [uuid(), patelFamilyId, "praise", "The AI care summary is incredibly helpful. It's like having a care coordinator who reads all the visit notes and gives you the highlights.", "positive", null, "care-profile", null, "acknowledged"],
+  ];
+
+  for (const [id, userId, category, description, mood, screenshot, pageCtx, tags, status] of feedbackEntries) {
+    try {
+      await db.prepare(`
+        INSERT INTO feedback (id, user_id, category, description, mood, screenshot, page_context, tags, status, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW() - (random() * INTERVAL '14 days'))
+      `).run(id, userId, category, description, mood, screenshot, pageCtx, tags, status);
+    } catch (e) { /* skip if user doesn't exist */ }
+  }
+
+  console.log("✅ Feedback entries created (8 demo entries)");
 
   // ─── Seed Version Marker ───
   // Store version in waitlist with special internal email so server.js can detect stale demo data
