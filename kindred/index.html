@@ -1258,14 +1258,8 @@
      * Start listening
      */
     function startListening() {
-      if (!app.token) {
-        showError('Still connecting... please try again in a moment.');
-        return;
-      }
-
-      // No speech recognition (e.g. Android WebView) — fall back to text input
       if (!app.recognition) {
-        promptTextInput();
+        showError('Speech recognition not initialized. Try refreshing.');
         return;
       }
 
@@ -1275,19 +1269,7 @@
         app.recognition.start();
       } catch (err) {
         console.error('[Kindred] recognition.start() failed:', err);
-        // If recognition fails (already started, permission denied, etc.), fall back to text
-        promptTextInput();
-      }
-    }
-
-    /**
-     * Text input fallback when speech recognition isn't available.
-     * Shows a simple prompt dialog so the button always does something.
-     */
-    function promptTextInput() {
-      const text = prompt('Type your message:');
-      if (text && text.trim()) {
-        sendMessage(text.trim());
+        showError('Microphone error. Try tapping again.');
       }
     }
 
@@ -1631,36 +1613,42 @@
      * Initialize the app
      */
     async function initialize() {
-      // 1. Event listeners — button must always respond to taps
-      setupEventListeners();
+      // Restore exact working order from v1.57.36:
+      // Auth first, then speech, then listeners.
+      // Only addition: try/catch so errors are visible instead of silent.
 
-      // 2. Speech recognition — browser API, no auth needed, must be ready
-      //    before user taps the button
-      if (!initializeSpeechRecognition()) {
-        showError('Speech recognition not available. Please use Chrome or Safari.');
-      }
-
-      // 3. Greeting + initial UI (no auth needed)
-      const hour = new Date().getHours();
-      const greetEl = document.getElementById('greeting');
-      if (greetEl) {
-        greetEl.textContent = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
-      }
-      updateButtonUI();
-
-      // 4. Auth — async, may take a moment. Everything above works without it.
       try {
+        // Check auth
         if (!(await initializeAuth())) {
           return;
         }
 
-        // Update recipient display now that we know who they are
+        // Setup speech recognition
+        if (!initializeSpeechRecognition()) {
+          showError('Speech recognition not available. Please use a supported browser.');
+        }
+
+        // Setup event listeners
+        setupEventListeners();
+
+        // Time-aware greeting
+        const hour = new Date().getHours();
+        const greetEl = document.getElementById('greeting');
+        if (greetEl) {
+          greetEl.textContent = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+        }
+
+        // Update recipient display
         dom.recipientAvatar.textContent = app.recipientName.charAt(0).toUpperCase();
+
+        // Update status
         updateStatusCard();
+
+        // Set initial button UI
         updateButtonUI();
       } catch (err) {
-        console.error('[Kindred] Auth error:', err);
-        showError('Having trouble connecting. Please try refreshing.');
+        console.error('[Kindred] Initialization error:', err);
+        showError('Having trouble starting up. Please try refreshing.');
       }
     }
 
