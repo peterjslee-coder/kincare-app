@@ -33861,7 +33861,15 @@ const MyAccount = window.MyAccount = ({
       fontWeight: 800,
       color: 'var(--role-color)'
     }
-  }, "75%"), " of the surcharge goes to you as an incentive."))), /*#__PURE__*/React.createElement("div", {
+  }, "75%"), " of the surcharge goes to you as an incentive."), /*#__PURE__*/React.createElement("p", null, /*#__PURE__*/React.createElement("strong", null, "Payout Timing:"), " Your first bank deposit from Stripe takes ", /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontWeight: 700
+    }
+  }, "7\u201314 business days"), ". After that, payouts arrive in ", /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontWeight: 700
+    }
+  }, "2\u20133 business days"), " on a rolling basis."))), /*#__PURE__*/React.createElement("div", {
     style: {
       borderTop: '2px solid var(--border-color)',
       paddingTop: 20,
@@ -40606,6 +40614,7 @@ const CaretakerHub = window.CaretakerHub = ({
   const [earningsLoading, setEarningsLoading] = useState(false);
   // Manual payments received
   const [manualPaymentsReceived, setManualPaymentsReceived] = useState([]);
+  const [completedPaymentCount, setCompletedPaymentCount] = useState(null);
   // In-app notifications (v1.56.0)
   const [notifications, setNotifications] = useState([]);
   const [unreadNotifCount, setUnreadNotifCount] = useState(0);
@@ -40985,6 +40994,7 @@ const CaretakerHub = window.CaretakerHub = ({
         if (res !== null && res !== void 0 && res.ok) {
           const d = await res.json();
           setManualPaymentsReceived(d.manualPayments || []);
+          setCompletedPaymentCount((d.totalSessions || 0) + (d.manualPayments || []).length);
         }
       } catch (err) {/* earnings endpoint not available yet */}
     };
@@ -44451,7 +44461,18 @@ const CaretakerHub = window.CaretakerHub = ({
       alignItems: 'center',
       gap: '8px'
     }
-  }, '\uD83D\uDCB0', " Payments Received"), manualPaymentsReceived.map(p => {
+  }, '\uD83D\uDCB0', " Payments Received"), completedPaymentCount !== null && completedPaymentCount <= 1 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: '10px 14px',
+      background: '#FEF9E7',
+      border: '1px solid #F9E79F',
+      borderRadius: 10,
+      marginBottom: 14,
+      fontSize: 12,
+      color: '#7D6608',
+      lineHeight: 1.5
+    }
+  }, '\u23F3', " ", /*#__PURE__*/React.createElement("strong", null, "First payout:"), " Your first bank deposit from Stripe typically takes 7\u201314 business days. After that, payouts arrive in 2\u20133 business days."), manualPaymentsReceived.map(p => {
     const payoutDate = p.payoutExpectedDate ? new Date(p.payoutExpectedDate + 'T00:00:00') : null;
     const now = new Date();
     const isPaidOut = payoutDate && payoutDate <= now;
@@ -44529,7 +44550,7 @@ const CaretakerHub = window.CaretakerHub = ({
       padding: '8px 0 0',
       borderTop: '1px solid #f0f0f0'
     }
-  }, "Payments are deposited to your bank account on Stripe's payout schedule (typically 2-7 business days).")), /*#__PURE__*/React.createElement("div", {
+  }, "Payments are deposited to your bank account automatically. First payout takes 7\u201314 days; after that, 2\u20133 business days.")), /*#__PURE__*/React.createElement("div", {
     ref: tabContentRef,
     style: {
       borderRadius: highlightTab ? '12px' : undefined,

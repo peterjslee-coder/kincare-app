@@ -92,6 +92,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const [earningsLoading, setEarningsLoading] = useState(false);
   // Manual payments received
   const [manualPaymentsReceived, setManualPaymentsReceived] = useState([]);
+  const [completedPaymentCount, setCompletedPaymentCount] = useState(null);
   // In-app notifications (v1.56.0)
   const [notifications, setNotifications] = useState([]);
   const [unreadNotifCount, setUnreadNotifCount] = useState(0);
@@ -420,6 +421,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         if (res?.ok) {
           const d = await res.json();
           setManualPaymentsReceived(d.manualPayments || []);
+          setCompletedPaymentCount((d.totalSessions || 0) + (d.manualPayments || []).length);
         }
       } catch (err) { /* earnings endpoint not available yet */ }
     };
@@ -2469,6 +2471,11 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
           <h3 style={{ margin: '0 0 12px', fontSize: '15px', display: 'flex', alignItems: 'center', gap: '8px' }}>
             {'\uD83D\uDCB0'} Payments Received
           </h3>
+          {completedPaymentCount !== null && completedPaymentCount <= 1 && (
+            <div style={{ padding: '10px 14px', background: '#FEF9E7', border: '1px solid #F9E79F', borderRadius: 10, marginBottom: 14, fontSize: 12, color: '#7D6608', lineHeight: 1.5 }}>
+              {'\u23F3'} <strong>First payout:</strong> Your first bank deposit from Stripe typically takes 7–14 business days. After that, payouts arrive in 2–3 business days.
+            </div>
+          )}
           {manualPaymentsReceived.map(p => {
             const payoutDate = p.payoutExpectedDate ? new Date(p.payoutExpectedDate + 'T00:00:00') : null;
             const now = new Date();
@@ -2499,7 +2506,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
             );
           })}
           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 10, padding: '8px 0 0', borderTop: '1px solid #f0f0f0' }}>
-            Payments are deposited to your bank account on Stripe's payout schedule (typically 2-7 business days).
+            Payments are deposited to your bank account automatically. First payout takes 7–14 days; after that, 2–3 business days.
           </div>
         </div>
       )}

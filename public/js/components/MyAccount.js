@@ -1787,6 +1787,9 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
               <p>
                 <strong>Rush Surcharge:</strong> Short-notice bookings (less than 24 hours) include a <span style={{ fontSize: 18, fontWeight: 800, color: 'var(--role-color)' }}>20%</span> rush surcharge. <span style={{ fontSize: 18, fontWeight: 800, color: 'var(--role-color)' }}>75%</span> of the surcharge goes to you as an incentive.
               </p>
+              <p>
+                <strong>Payout Timing:</strong> Your first bank deposit from Stripe takes <span style={{ fontWeight: 700 }}>7–14 business days</span>. After that, payouts arrive in <span style={{ fontWeight: 700 }}>2–3 business days</span> on a rolling basis.
+              </p>
             </div>
           </div>
 
