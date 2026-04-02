@@ -1805,13 +1805,17 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
               <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid #f0f0f0', display: 'flex', gap: 10, alignItems: 'center' }}>
                 <button onClick={(e) => {
                   e.stopPropagation();
-                  // Cookie-based auth — no token param needed, cookie travels with request
-                  // Use location.href for Capacitor compatibility (window.open fails in WebView)
+                  // Pass token so kindred/index.html can authenticate
+                  // Capacitor: location.href (window.open fails in WebView)
+                  // Web: window.open in new tab
                   const isCapacitor = window.Capacitor?.isNativePlatform?.();
+                  const kindredUrl = AUTH_TOKEN
+                    ? `/kindred?token=${encodeURIComponent(AUTH_TOKEN)}`
+                    : '/kindred';
                   if (isCapacitor) {
-                    window.location.href = '/kindred';
+                    window.location.href = kindredUrl;
                   } else {
-                    window.open('/kindred', '_blank');
+                    window.open(kindredUrl, '_blank');
                   }
                 }} style={{
                   padding: '8px 16px', borderRadius: 8, border: '2px solid #1A5276',

@@ -907,7 +907,16 @@
     async function initializeAuth() {
       const params = new URLSearchParams(window.location.search);
       // Try URL params first, fall back to sessionStorage (survives refresh)
-      const token = params.get('token') || sessionStorage.getItem('kindredToken');
+      let token = params.get('token') || sessionStorage.getItem('kindredToken');
+
+      // If no token from URL/sessionStorage, try cookie-based refresh
+      // (covers Capacitor WebView and direct /kindred navigation)
+      if (!token) {
+        const refreshed = await refreshToken();
+        if (refreshed) {
+          token = app.token; // refreshToken() sets app.token
+        }
+      }
 
       if (!token) {
         window.location.href = '/?redirect=kindred';
