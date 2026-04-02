@@ -631,7 +631,7 @@ async function caregiverDashboard(db, userId, res) {
       WHERE cs.caregiver_id = ?
         AND cs.caregiver_no_show = 1
         AND cs.cancelled_by = 'system'
-        AND cs.scheduled_date >= NOW() - INTERVAL '30 days'
+        AND cs.scheduled_date::date >= CURRENT_DATE - INTERVAL '30 days'
       ORDER BY cs.caregiver_no_show_at DESC
       LIMIT 5
     `).all(profile.id);

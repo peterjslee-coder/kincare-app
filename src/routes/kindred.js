@@ -688,8 +688,8 @@ router.post("/reminders/sync-calendar", async (req, res) => {
       LEFT JOIN users u ON cp.user_id = u.id
       WHERE cs.care_recipient_id = ?::uuid
         AND cs.status IN ('confirmed', 'requested')
-        AND cs.scheduled_date >= DATE('now')
-        AND cs.scheduled_date <= DATE('now', '+7 days')
+        AND cs.scheduled_date::date >= CURRENT_DATE
+        AND cs.scheduled_date::date <= CURRENT_DATE + INTERVAL '7 days'
       ORDER BY cs.scheduled_date, cs.scheduled_time
     `).all(care_recipient_id);
 

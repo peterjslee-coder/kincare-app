@@ -3157,7 +3157,7 @@ router.get("/sessions/all", authenticate, requireAdmin, async (req, res) => {
     const statusFilter = req.query.status;
     const days = parseInt(req.query.days) || 30;
 
-    let where = `cs.scheduled_date >= date('now', '-${days} days')`;
+    let where = `cs.scheduled_date::date >= CURRENT_DATE - INTERVAL '${days} days'`;
     const params = [];
     if (statusFilter && statusFilter !== 'all') {
       where += ` AND cs.status = ?`;
