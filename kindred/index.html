@@ -1251,8 +1251,13 @@
      * Start listening
      */
     function startListening() {
+      if (!app.token) {
+        showError('Still connecting... please try again in a moment.');
+        return;
+      }
+
       if (!app.recognition) {
-        showError('Speech recognition not initialized');
+        showError('Speech recognition not available. Please use Chrome or Safari.');
         return;
       }
 
@@ -1601,34 +1606,44 @@
      * Initialize the app
      */
     async function initialize() {
-      // Check auth
-      if (!(await initializeAuth())) {
-        return;
-      }
-
-      // Setup speech recognition
-      if (!initializeSpeechRecognition()) {
-        showError('Speech recognition not available. Please use a supported browser.');
-      }
-
-      // Setup event listeners
+      // ALWAYS set up event listeners first — button must respond to taps
+      // even if auth or speech aren't ready yet. A dead button in Pete's
+      // voice companion feels like Pete ignoring Mom.
       setupEventListeners();
 
-      // Time-aware greeting
+      // Time-aware greeting (no auth needed)
       const hour = new Date().getHours();
       const greetEl = document.getElementById('greeting');
       if (greetEl) {
         greetEl.textContent = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
       }
 
-      // Update recipient display
-      dom.recipientAvatar.textContent = app.recipientName.charAt(0).toUpperCase();
-
-      // Update status
-      updateStatusCard();
-
       // Set initial button UI
       updateButtonUI();
+
+      try {
+        // Check auth
+        if (!(await initializeAuth())) {
+          return;
+        }
+
+        // Setup speech recognition
+        if (!initializeSpeechRecognition()) {
+          showError('Speech recognition not available. Please use a supported browser.');
+        }
+
+        // Update recipient display
+        dom.recipientAvatar.textContent = app.recipientName.charAt(0).toUpperCase();
+
+        // Update status
+        updateStatusCard();
+
+        // Refresh button UI now that auth is ready
+        updateButtonUI();
+      } catch (err) {
+        console.error('[Kindred] Initialization error:', err);
+        showError('Having trouble connecting. Please try refreshing.');
+      }
     }
 
     /**
