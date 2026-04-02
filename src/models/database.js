@@ -1129,7 +1129,7 @@ async function initializeDatabase() {
       WHERE COALESCE(private_only, 0) = 1
         AND status = 'cancelled'
         AND cancel_reason LIKE '%Private request expired%'
-        AND scheduled_date >= CURRENT_DATE
+        AND scheduled_date::date >= CURRENT_DATE
     `).run();
     if (restored.changes > 0) console.log(`[migration] Restored ${restored.changes} private-only sessions that were wrongly cancelled`);
   } catch (e) { /* ignore */ }

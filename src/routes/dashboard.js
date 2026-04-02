@@ -50,7 +50,7 @@ async function familyDashboard(db, userId, res) {
         SET status = 'cancelled', cancelled_at = NOW(), cancel_reason = 'Private request expired - scheduled date passed'
         WHERE offered_to_caregiver_id IS NOT NULL
           AND COALESCE(private_only, 0) = 1
-          AND scheduled_date < CURRENT_DATE
+          AND scheduled_date::date < CURRENT_DATE
           AND status IN ('pending', 'open', 'requested')
       `);
     } catch (e) {

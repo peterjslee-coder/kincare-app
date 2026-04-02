@@ -210,7 +210,7 @@ router.get("/daily-snapshot", async (req, res) => {
       SELECT DATE(scheduled_date) AS day, COUNT(*) AS cnt
       FROM care_sessions
       WHERE status IN ('completed', 'confirmed', 'checked_in', 'scheduled')
-        AND scheduled_date >= CURRENT_DATE - INTERVAL '13 days'
+        AND scheduled_date::date >= CURRENT_DATE - INTERVAL '13 days'
       GROUP BY DATE(scheduled_date) ORDER BY day ASC
     `).all();
 

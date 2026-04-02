@@ -1660,7 +1660,7 @@ async function holdSessionsForUnpaidFamilies(pushFn) {
         LEFT JOIN users fu ON cs.family_user_id = fu.id
         WHERE cs.family_user_id = ?
           AND cs.status IN ('confirmed', 'pending')
-          AND cs.scheduled_date >= CURRENT_DATE
+          AND cs.scheduled_date::date >= CURRENT_DATE
       `).all(family_user_id);
 
       for (const s of upcoming) {
