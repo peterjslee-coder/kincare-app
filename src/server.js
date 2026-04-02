@@ -385,6 +385,11 @@ app.get("/kindred", async (req, res) => {
   }
 });
 
+// ─── Privacy policy (required by Google Play for RECORD_AUDIO permission) ───
+app.get("/privacy", (req, res) => {
+  res.sendFile(path.join(__dirname, "../public/privacy.html"));
+});
+
 // ─── Catch-all: serve frontend for any non-API route ───
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "../public/index.html"));
