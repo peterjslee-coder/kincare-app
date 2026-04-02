@@ -231,7 +231,7 @@ async function getVoiceForMessage(db, careRecipientId, messageType = "conversati
   // Look up voice routing config for this care recipient + message type
   try {
     const routing = await db.prepare(
-      "SELECT voice_profile_id FROM voice_routing WHERE care_recipient_id = ? AND message_type = ? LIMIT 1"
+      "SELECT voice_profile_id FROM voice_routing WHERE care_recipient_id = ?::uuid AND message_type = ? LIMIT 1"
     ).get(careRecipientId, messageType);
 
     if (routing?.voice_profile_id) {
@@ -273,7 +273,7 @@ async function getVoiceForMessage(db, careRecipientId, messageType = "conversati
   // Conversation type: fall back to care recipient's primary voice (Pete's clone)
   try {
     const defaultProfile = await db.prepare(
-      "SELECT * FROM voice_profiles WHERE care_recipient_id = ? AND is_active = true ORDER BY created_at ASC LIMIT 1"
+      "SELECT * FROM voice_profiles WHERE care_recipient_id = ?::uuid AND is_active = true ORDER BY created_at ASC LIMIT 1"
     ).get(careRecipientId);
     if (defaultProfile) return defaultProfile;
   } catch (err) {
@@ -290,7 +290,7 @@ async function getVoicePreferences(db, careRecipientId) {
   const defaults = { speed: 0.75, stability: 0.65, similarity_boost: 0.85 };
   try {
     let prefs = await db.prepare(
-      "SELECT * FROM voice_preferences WHERE care_recipient_id = ?"
+      "SELECT * FROM voice_preferences WHERE care_recipient_id = ?::uuid"
     ).get(careRecipientId);
 
     if (!prefs) {
@@ -298,10 +298,10 @@ async function getVoicePreferences(db, careRecipientId) {
       try {
         const id = uuid();
         await db.prepare(`
-          INSERT INTO voice_preferences (id, care_recipient_id) VALUES (?, ?)
+          INSERT INTO voice_preferences (id, care_recipient_id) VALUES (?, ?::uuid)
         `).run(id, careRecipientId);
         prefs = await db.prepare(
-          "SELECT * FROM voice_preferences WHERE care_recipient_id = ?"
+          "SELECT * FROM voice_preferences WHERE care_recipient_id = ?::uuid"
         ).get(careRecipientId);
       } catch (insertErr) {
         console.error("[Kindred] Could not insert voice prefs:", insertErr.message);
@@ -415,7 +415,7 @@ router.post("/chat", async (req, res) => {
           targetUsers = await db.prepare(`
             SELECT DISTINCT u.id, u.first_name FROM users u
             JOIN caregiver_assignments ca ON ca.caregiver_profile_id = (SELECT id FROM caregiver_profiles WHERE user_id = u.id)
-            WHERE ca.care_recipient_id = ? AND LOWER(u.first_name) = ?
+            WHERE ca.care_recipient_id = ?::uuid AND LOWER(u.first_name) = ?
             UNION
             SELECT DISTINCT u.id, u.first_name FROM users u
             WHERE u.is_admin = true AND LOWER(u.first_name) = ?
@@ -539,7 +539,7 @@ router.get("/reminders", async (req, res) => {
       SELECT vr.*, vp.display_name as voice_display_name
       FROM voice_reminders vr
       LEFT JOIN voice_profiles vp ON vr.voice_profile_id = vp.id
-      WHERE vr.care_recipient_id = ?
+      WHERE vr.care_recipient_id = ?::uuid
         AND DATE(vr.scheduled_for) = ?
         AND vr.status IN ('pending', 'delivered')
       ORDER BY vr.scheduled_for ASC
@@ -604,7 +604,7 @@ router.get("/reminders/all", async (req, res) => {
       FROM voice_reminders vr
       LEFT JOIN voice_profiles vp ON vr.voice_profile_id = vp.id
       LEFT JOIN users u ON vr.created_by = u.id
-      WHERE vr.care_recipient_id = ?
+      WHERE vr.care_recipient_id = ?::uuid
         AND vr.status != 'cancelled'
       ORDER BY
         CASE WHEN vr.recurrence != 'none' AND vr.recurrence IS NOT NULL THEN 0 ELSE 1 END,
@@ -686,7 +686,7 @@ router.post("/reminders/sync-calendar", async (req, res) => {
       FROM care_sessions cs
       LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
       LEFT JOIN users u ON cp.user_id = u.id
-      WHERE cs.care_recipient_id = ?
+      WHERE cs.care_recipient_id = ?::uuid
         AND cs.status IN ('confirmed', 'requested')
         AND cs.scheduled_date >= DATE('now')
         AND cs.scheduled_date <= DATE('now', '+7 days')
@@ -698,7 +698,7 @@ router.post("/reminders/sync-calendar", async (req, res) => {
       // Check if a calendar reminder already exists for this session
       const exists = await db.prepare(`
         SELECT id FROM voice_reminders
-        WHERE care_recipient_id = ? AND source = 'calendar'
+        WHERE care_recipient_id = ?::uuid AND source = 'calendar'
           AND label LIKE ? AND status != 'cancelled'
       `).get(care_recipient_id, `%${session.id.substring(0, 8)}%`);
 
@@ -743,7 +743,7 @@ router.get("/profile", async (req, res) => {
 
   try {
     const profile = await db.prepare(
-      "SELECT * FROM voice_profiles WHERE care_recipient_id = ? AND is_active = true ORDER BY created_at ASC LIMIT 1"
+      "SELECT * FROM voice_profiles WHERE care_recipient_id = ?::uuid AND is_active = true ORDER BY created_at ASC LIMIT 1"
     ).get(care_recipient_id);
 
     if (!profile) {
@@ -844,7 +844,7 @@ router.get("/conversations", async (req, res) => {
         MAX(created_at) as updated_at,
         COUNT(*) as message_count
       FROM companion_messages
-      WHERE care_recipient_id = ?
+      WHERE care_recipient_id = ?::uuid
       GROUP BY conversation_id
       ORDER BY updated_at DESC
       LIMIT ? OFFSET ?
@@ -898,7 +898,7 @@ router.delete("/conversations", async (req, res) => {
 
     const placeholders = conversation_ids.map(() => '?').join(', ');
     const result = await db.prepare(
-      `DELETE FROM companion_messages WHERE conversation_id IN (${placeholders}) AND care_recipient_id = ?`
+      `DELETE FROM companion_messages WHERE conversation_id IN (${placeholders}) AND care_recipient_id = ?::uuid`
     ).run(...conversation_ids, care_recipient_id);
 
     console.log(`[Kindred] Deleted ${result.changes || 0} messages from ${conversation_ids.length} conversations`);
@@ -934,7 +934,7 @@ router.post("/admin/summarize", async (req, res) => {
     const messages = await db.prepare(`
       SELECT role, content, created_at
       FROM companion_messages
-      WHERE care_recipient_id = ?
+      WHERE care_recipient_id = ?::uuid
       ORDER BY created_at ASC
     `).all(care_recipient_id);
 
@@ -1030,7 +1030,7 @@ router.get("/admin/instructions", async (req, res) => {
 
   try {
     const row = await db.prepare(
-      "SELECT * FROM kindred_instructions WHERE care_recipient_id = ? LIMIT 1"
+      "SELECT * FROM kindred_instructions WHERE care_recipient_id = ?::uuid LIMIT 1"
     ).get(care_recipient_id);
 
     return res.json({
@@ -1069,19 +1069,19 @@ router.put("/admin/instructions", async (req, res) => {
 
     // Upsert — one row per care recipient
     const existing = await db.prepare(
-      "SELECT id FROM kindred_instructions WHERE care_recipient_id = ? LIMIT 1"
+      "SELECT id FROM kindred_instructions WHERE care_recipient_id = ?::uuid LIMIT 1"
     ).get(care_recipient_id);
 
     if (existing) {
       await db.prepare(`
         UPDATE kindred_instructions
         SET instructions = ?, updated_by = ?, updated_by_name = ?, updated_at = NOW()
-        WHERE care_recipient_id = ?
+        WHERE care_recipient_id = ?::uuid
       `).run(instructions, req.user.id, updaterName, care_recipient_id);
     } else {
       await db.prepare(`
         INSERT INTO kindred_instructions (id, care_recipient_id, instructions, updated_by, updated_by_name, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, NOW(), NOW())
+        VALUES (?, ?::uuid, ?, ?, ?, NOW(), NOW())
       `).run(uuid(), care_recipient_id, instructions, req.user.id, updaterName);
     }
 
@@ -1138,7 +1138,7 @@ router.get("/admin/voice-routing", requireAdmin, async (req, res) => {
       SELECT vr.*, vp.display_name
       FROM voice_routing vr
       LEFT JOIN voice_profiles vp ON vr.voice_profile_id = vp.id
-      WHERE vr.care_recipient_id = ?
+      WHERE vr.care_recipient_id = ?::uuid
       ORDER BY vr.message_type ASC
     `).all(care_recipient_id);
 
@@ -1188,18 +1188,18 @@ router.put("/admin/voice-routing", requireAdmin, async (req, res) => {
 
         // Upsert routing entry
         const existing = await tx.prepare(
-          "SELECT id FROM voice_routing WHERE care_recipient_id = ? AND message_type = ?"
+          "SELECT id FROM voice_routing WHERE care_recipient_id = ?::uuid AND message_type = ?"
         ).get(care_recipient_id, message_type);
 
         if (existing) {
           await tx.prepare(`
             UPDATE voice_routing SET voice_profile_id = ?, priority = ?, updated_at = NOW()
-            WHERE care_recipient_id = ? AND message_type = ?
+            WHERE care_recipient_id = ?::uuid AND message_type = ?
           `).run(resolvedProfileId, priority, care_recipient_id, message_type);
         } else {
           await tx.prepare(`
             INSERT INTO voice_routing (id, care_recipient_id, message_type, voice_profile_id, priority, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, NOW(), NOW())
+            VALUES (?, ?::uuid, ?, ?, ?, NOW(), NOW())
           `).run(uuid(), care_recipient_id, message_type, resolvedProfileId, priority);
         }
       }
@@ -1209,7 +1209,7 @@ router.put("/admin/voice-routing", requireAdmin, async (req, res) => {
       SELECT vr.*, vp.display_name
       FROM voice_routing vr
       LEFT JOIN voice_profiles vp ON vr.voice_profile_id = vp.id
-      WHERE vr.care_recipient_id = ?
+      WHERE vr.care_recipient_id = ?::uuid
       ORDER BY vr.message_type ASC
     `).all(care_recipient_id);
 
@@ -1277,11 +1277,11 @@ router.put("/admin/voice-preferences", requireAdmin, async (req, res) => {
         baseline_similarity_boost = ?,
         last_adjusted_at = NOW(),
         updated_at = NOW()
-      WHERE care_recipient_id = ?
+      WHERE care_recipient_id = ?::uuid
     `).run(newSpeed, newStability, newSimilarity, newSpeed, newStability, newSimilarity, care_recipient_id);
 
     const updated = await db.prepare(
-      "SELECT * FROM voice_preferences WHERE care_recipient_id = ?"
+      "SELECT * FROM voice_preferences WHERE care_recipient_id = ?::uuid"
     ).get(care_recipient_id);
 
     return res.json(updated);
@@ -1307,7 +1307,7 @@ router.get("/admin/usage", requireAdmin, async (req, res) => {
         SUM(credits_used) as total_credits,
         COUNT(*) as total_messages
       FROM companion_messages
-      WHERE care_recipient_id = ?
+      WHERE care_recipient_id = ?::uuid
     `).get(care_recipient_id);
 
     // Daily breakdown for past 7 days
@@ -1317,7 +1317,7 @@ router.get("/admin/usage", requireAdmin, async (req, res) => {
         SUM(credits_used) as credits_used,
         COUNT(*) as message_count
       FROM companion_messages
-      WHERE care_recipient_id = ? AND created_at > NOW() - INTERVAL '7 days'
+      WHERE care_recipient_id = ?::uuid AND created_at > NOW() - INTERVAL '7 days'
       GROUP BY DATE(created_at)
       ORDER BY day DESC
     `).all(care_recipient_id);
@@ -1326,14 +1326,14 @@ router.get("/admin/usage", requireAdmin, async (req, res) => {
     const remindersResult = await db.prepare(`
       SELECT COUNT(*) as delivered_count
       FROM voice_reminders
-      WHERE care_recipient_id = ? AND status = 'delivered'
+      WHERE care_recipient_id = ?::uuid AND status = 'delivered'
     `).get(care_recipient_id);
 
     // Conversations
     const conversationsResult = await db.prepare(`
       SELECT COUNT(DISTINCT conversation_id) as conversation_count
       FROM companion_messages
-      WHERE care_recipient_id = ?
+      WHERE care_recipient_id = ?::uuid
     `).get(care_recipient_id);
 
     const avgDailyCredits = dailyResult.length > 0
