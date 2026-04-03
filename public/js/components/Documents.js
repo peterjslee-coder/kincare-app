@@ -203,6 +203,11 @@ const Documents = window.Documents = ({ onNavigate }) => {
             const statusData = await statusRes.json();
             data[recipient.id] = {
               ...(data[recipient.id] || {}),
+              // Map camelCase API fields to snake_case for UI (fallback when audit endpoint fails)
+              consent_status: data[recipient.id]?.consent_status || statusData.consentStatus || null,
+              authorization_tier: data[recipient.id]?.authorization_tier || statusData.authorizationTier || null,
+              consent_method: data[recipient.id]?.consent_method || statusData.consentMethod || null,
+              consent_verified_at: data[recipient.id]?.consent_verified_at || statusData.consentVerifiedAt || null,
               attestation: statusData.attestation || null,
               outreach: statusData.outreach || null,
               bookingsPaused: statusData.bookingsPaused,
@@ -795,9 +800,9 @@ const Documents = window.Documents = ({ onNavigate }) => {
                         marginLeft: '8px',
                         fontSize: '13px',
                         fontWeight: '600',
-                        color: consent.consent_status === 'granted' ? '#38a169' : '#ed8936',
+                        color: (consent.consent_status === 'granted' || consent.consent_status === 'verified') ? '#38a169' : '#ed8936',
                       }}>
-                        {consent.consent_status === 'granted' ? '✓ Granted' : '⏳ Pending'}
+                        {consent.consent_status === 'granted' || consent.consent_status === 'verified' ? '✓ Verified' : consent.consent_status === 'attested' ? '📋 Attested' : '⏳ Pending'}
                       </span>
                     </div>
                   )}
@@ -806,7 +811,7 @@ const Documents = window.Documents = ({ onNavigate }) => {
                     <div style={{ marginBottom: '8px' }}>
                       <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Method:</span>
                       <span style={{ marginLeft: '8px', fontSize: '13px', fontWeight: '500' }}>
-                        {consent.consent_method}
+                        {consent.consent_method === 'self_signup' ? 'Self Sign-Up' : consent.consent_method === 'family_attestation' ? 'Family Attestation' : consent.consent_method || '—'}
                       </span>
                     </div>
                   )}

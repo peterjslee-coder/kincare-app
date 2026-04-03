@@ -21862,9 +21862,15 @@ const Documents = window.Documents = ({
           // Also fetch detailed consent status — outreach email + attestation details
           const statusRes = await apiFetch(`/api/consent/${recipient.id}/status`);
           if (statusRes !== null && statusRes !== void 0 && statusRes.ok) {
+            var _data$recipient$id, _data$recipient$id2, _data$recipient$id3, _data$recipient$id4;
             const statusData = await statusRes.json();
             data[recipient.id] = {
               ...(data[recipient.id] || {}),
+              // Map camelCase API fields to snake_case for UI (fallback when audit endpoint fails)
+              consent_status: ((_data$recipient$id = data[recipient.id]) === null || _data$recipient$id === void 0 ? void 0 : _data$recipient$id.consent_status) || statusData.consentStatus || null,
+              authorization_tier: ((_data$recipient$id2 = data[recipient.id]) === null || _data$recipient$id2 === void 0 ? void 0 : _data$recipient$id2.authorization_tier) || statusData.authorizationTier || null,
+              consent_method: ((_data$recipient$id3 = data[recipient.id]) === null || _data$recipient$id3 === void 0 ? void 0 : _data$recipient$id3.consent_method) || statusData.consentMethod || null,
+              consent_verified_at: ((_data$recipient$id4 = data[recipient.id]) === null || _data$recipient$id4 === void 0 ? void 0 : _data$recipient$id4.consent_verified_at) || statusData.consentVerifiedAt || null,
               attestation: statusData.attestation || null,
               outreach: statusData.outreach || null,
               bookingsPaused: statusData.bookingsPaused
@@ -22490,9 +22496,9 @@ const Documents = window.Documents = ({
         marginLeft: '8px',
         fontSize: '13px',
         fontWeight: '600',
-        color: consent.consent_status === 'granted' ? '#38a169' : '#ed8936'
+        color: consent.consent_status === 'granted' || consent.consent_status === 'verified' ? '#38a169' : '#ed8936'
       }
-    }, consent.consent_status === 'granted' ? '✓ Granted' : '⏳ Pending')), consent.consent_method && /*#__PURE__*/React.createElement("div", {
+    }, consent.consent_status === 'granted' || consent.consent_status === 'verified' ? '✓ Verified' : consent.consent_status === 'attested' ? '📋 Attested' : '⏳ Pending')), consent.consent_method && /*#__PURE__*/React.createElement("div", {
       style: {
         marginBottom: '8px'
       }
@@ -22507,7 +22513,7 @@ const Documents = window.Documents = ({
         fontSize: '13px',
         fontWeight: '500'
       }
-    }, consent.consent_method)), consent.consent_verified_at && /*#__PURE__*/React.createElement("div", {
+    }, consent.consent_method === 'self_signup' ? 'Self Sign-Up' : consent.consent_method === 'family_attestation' ? 'Family Attestation' : consent.consent_method || '—')), consent.consent_verified_at && /*#__PURE__*/React.createElement("div", {
       style: {
         marginBottom: '8px'
       }
