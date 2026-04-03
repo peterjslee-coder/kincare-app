@@ -37715,9 +37715,24 @@ const SelfOnboardingWizard = window.SelfOnboardingWizard = ({
         style: {
           color: 'var(--text-secondary)',
           fontSize: '14px',
-          marginBottom: '24px'
+          marginBottom: '16px'
         }
       }, "We need to verify who you are to set up your care profile."), /*#__PURE__*/React.createElement("div", {
+        style: {
+          padding: '12px 16px',
+          borderRadius: '8px',
+          background: 'var(--color-info-bg, rgba(52,152,219,0.08))',
+          border: '1px solid rgba(52,152,219,0.2)',
+          marginBottom: '24px',
+          fontSize: '13px',
+          color: 'var(--text-secondary)',
+          lineHeight: 1.5
+        }
+      }, /*#__PURE__*/React.createElement("strong", {
+        style: {
+          color: 'var(--text-primary)'
+        }
+      }, "Have ready:"), " a government-issued photo ID and be prepared to take a selfie to verify your identity."), /*#__PURE__*/React.createElement("div", {
         style: {
           marginBottom: '24px'
         }
@@ -77708,7 +77723,34 @@ const App = () => {
             user: currentUser,
             careRecipientId: currentUser === null || currentUser === void 0 ? void 0 : currentUser.careRecipientId,
             onComplete: () => {
-              fetchUser();
+              apiFetch('/api/auth/me').then(async r => {
+                if (r !== null && r !== void 0 && r.ok) {
+                  const data = await r.json();
+                  if (data.user) {
+                    const userRoles = data.user.roles || [data.user.role];
+                    setCurrentUser({
+                      id: data.user.id,
+                      email: data.user.email,
+                      role: data.user.role,
+                      roles: userRoles,
+                      firstName: data.user.first_name,
+                      lastName: data.user.last_name,
+                      first_name: data.user.first_name,
+                      last_name: data.user.last_name,
+                      profilePhoto: data.user.profile_photo || null,
+                      emailVerified: !!data.user.email_verified,
+                      isDemo: !!data.user.is_demo,
+                      isAdmin: !!data.user.is_admin,
+                      is_tester: !!data.user.is_tester,
+                      account_approved: !!data.user.account_approved,
+                      companionAccess: !!data.user.companion_access,
+                      onboardingComplete: data.user.onboarding_complete,
+                      selfOnboardingComplete: data.user.selfOnboardingComplete,
+                      careRecipientId: data.user.careRecipientId
+                    });
+                  }
+                }
+              });
             }
           });
         }

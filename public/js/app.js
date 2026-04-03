@@ -1280,7 +1280,29 @@ const App = () => {
         // Check if self-onboarding is complete
         const selfOnboardingDone = currentUser?.selfOnboardingComplete || currentUser?.self_onboarding_complete;
         if (!selfOnboardingDone) {
-          return <SelfOnboardingWizard key={pageKey} user={currentUser} careRecipientId={currentUser?.careRecipientId} onComplete={() => { fetchUser(); }} />;
+          return <SelfOnboardingWizard key={pageKey} user={currentUser} careRecipientId={currentUser?.careRecipientId} onComplete={() => {
+                    apiFetch('/api/auth/me').then(async r => {
+                      if (r?.ok) {
+                        const data = await r.json();
+                        if (data.user) {
+                          const userRoles = data.user.roles || [data.user.role];
+                          setCurrentUser({
+                            id: data.user.id, email: data.user.email, role: data.user.role,
+                            roles: userRoles,
+                            firstName: data.user.first_name, lastName: data.user.last_name,
+                            first_name: data.user.first_name, last_name: data.user.last_name,
+                            profilePhoto: data.user.profile_photo || null,
+                            emailVerified: !!data.user.email_verified, isDemo: !!data.user.is_demo,
+                            isAdmin: !!data.user.is_admin, is_tester: !!data.user.is_tester,
+                            account_approved: !!data.user.account_approved, companionAccess: !!data.user.companion_access,
+                            onboardingComplete: data.user.onboarding_complete,
+                            selfOnboardingComplete: data.user.selfOnboardingComplete,
+                            careRecipientId: data.user.careRecipientId,
+                          });
+                        }
+                      }
+                    });
+                  }} />;
         }
         return <CaredForView key={pageKey} />;
       }

@@ -370,9 +370,12 @@ const SelfOnboardingWizard = window.SelfOnboardingWizard = ({ user, careRecipien
         <div className="card" style={{ ...cardStyle, marginTop: '0' }}>
           <WizardProgressBar />
           <h2 style={{ marginTop: 0, marginBottom: '8px', color: 'var(--role-color)' }}>Confirm Your Identity</h2>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '14px', marginBottom: '24px' }}>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '14px', marginBottom: '16px' }}>
             We need to verify who you are to set up your care profile.
           </p>
+          <div style={{ padding: '12px 16px', borderRadius: '8px', background: 'var(--color-info-bg, rgba(52,152,219,0.08))', border: '1px solid rgba(52,152,219,0.2)', marginBottom: '24px', fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+            <strong style={{ color: 'var(--text-primary)' }}>Have ready:</strong> a government-issued photo ID and be prepared to take a selfie to verify your identity.
+          </div>
 
           <div style={{ marginBottom: '24px' }}>
             <label style={labelStyle}>Your Name</label>
