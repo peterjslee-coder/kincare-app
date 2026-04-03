@@ -1341,6 +1341,20 @@ async function initializeDatabase() {
     if (updated.changes > 0) console.log("  ✅ Marked Cary Taker (peter@yourinplace.com) as is_demo=1");
   } catch (e) { /* already done */ }
 
+  // ─── v1.57.49 — Clear phantom unread from old Kindred self-echo ───
+  try {
+    await db.prepare(`
+      UPDATE conversation_members SET last_read_at = NOW()
+      WHERE user_id IN (SELECT id FROM users WHERE email = 'peterjslee@gmail.com')
+        AND last_read_at < NOW() - INTERVAL '1 second'
+        AND conversation_id IN (
+          SELECT DISTINCT m.conversation_id FROM messages m
+          JOIN users ku ON m.sender_id = ku.id
+          WHERE ku.email = 'kindred@yourinplace.com'
+        )
+    `).run();
+  } catch (e) { /* already done */ }
+
   console.log("  Database initialized successfully");
   return db;
 }
