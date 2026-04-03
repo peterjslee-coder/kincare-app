@@ -892,6 +892,7 @@ async function caregiverDashboard(db, userId, res) {
 
 // ─── Cared-For Dashboard (Granny's view — full-featured, same power as family) ───
 async function careForDashboard(db, userId, res) {
+  try {
   const user = await db.prepare("SELECT first_name, last_name, stripe_customer_id FROM users WHERE id = ?").get(userId);
 
   // Find care recipient linked to this user account
@@ -1000,13 +1001,14 @@ async function careForDashboard(db, userId, res) {
 
     // Recent completed (for review/tips)
     db.prepare(`
-      SELECT cs.*,
+      SELECT cs.id, cs.scheduled_date, cs.scheduled_time, cs.service_type, cs.duration_hours,
         u.first_name || ' ' || u.last_name AS caregiver_name,
         cp.rating_avg AS caregiver_rating,
-        cs.family_rating, cs.family_review
+        r.rating AS review_rating
       FROM care_sessions cs
       LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
       LEFT JOIN users u ON cp.user_id = u.id
+      LEFT JOIN reviews r ON r.session_id = cs.id
       WHERE cs.care_recipient_id = ?
         AND cs.status = 'completed'
         AND cs.scheduled_date >= ?
@@ -1092,8 +1094,8 @@ async function careForDashboard(db, userId, res) {
       serviceType: s.service_type,
       durationHours: s.duration_hours,
       caregiverName: s.caregiver_name,
-      hasReview: !!s.family_rating,
-      rating: s.family_rating,
+      hasReview: !!s.review_rating,
+      rating: s.review_rating,
     })),
     assignedCaregivers: assignedCaregivers.map(a => ({
       assignmentId: a.id,
@@ -1120,6 +1122,10 @@ async function careForDashboard(db, userId, res) {
       updatedAt: n.updated_at,
     })),
   });
+  } catch (err) {
+    console.error('careForDashboard error:', err);
+    res.status(500).json({ error: 'Dashboard error', detail: err.message });
+  }
 }
 
 module.exports = router;

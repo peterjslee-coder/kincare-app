@@ -57972,7 +57972,7 @@ const FamilyPayments = window.FamilyPayments = () => {
       fontSize: 12,
       color: 'var(--text-tertiary)'
     }
-  }, "Your card is automatically charged 1 hour after each session completes. You can add an optional tip before auto-pay processes."), /*#__PURE__*/React.createElement("button", {
+  }, "Your payment method is automatically charged 1 hour after each session completes. You can add an optional tip before auto-pay processes."), /*#__PURE__*/React.createElement("button", {
     onClick: handleStripeSetup,
     disabled: setupLoading || !paymentsEnabled,
     style: {
@@ -58011,13 +58011,13 @@ const FamilyPayments = window.FamilyPayments = () => {
       fontSize: 14,
       color: 'var(--text-secondary)'
     }
-  }, "Add a payment method to book care through InPlace. Payments are processed securely by Stripe."), /*#__PURE__*/React.createElement("p", {
+  }, "Add a payment method to book care through InPlace. We accept cards and bank accounts, processed securely by Stripe."), /*#__PURE__*/React.createElement("p", {
     style: {
       margin: '0 0 10px',
       fontSize: 12,
       color: 'var(--text-tertiary)'
     }
-  }, "Your card will be automatically charged 1 hour after each care session completes. You'll have a chance to add a tip before payment processes. A valid payment method is required to book sessions."), /*#__PURE__*/React.createElement("button", {
+  }, "Your payment method is automatically charged 1 hour after each care session completes. You'll have a chance to add a tip before payment processes. A valid payment method is required to book sessions."), /*#__PURE__*/React.createElement("button", {
     onClick: handleStripeSetup,
     disabled: setupLoading || !paymentsEnabled,
     style: {
@@ -58234,80 +58234,6 @@ const FamilyPayments = window.FamilyPayments = () => {
       cursor: paymentsEnabled && sendPaymentState.caregiverId && sendPaymentState.amount ? 'pointer' : 'not-allowed'
     }
   }, sendPaymentLoading ? 'Processing...' : 'Send Payment'))), /*#__PURE__*/React.createElement("div", {
-    className: "card",
-    style: {
-      background: 'linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%)',
-      border: '1px solid #a5d6a7',
-      marginBottom: '20px'
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      alignItems: 'flex-start',
-      gap: '14px'
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: '32px',
-      lineHeight: 1
-    }
-  }, '\uD83C\uDFE6'), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h3", {
-    style: {
-      margin: '0 0 8px',
-      color: '#1b5e20',
-      fontSize: '16px'
-    }
-  }, "Save with Bank Transfer (ACH)"), /*#__PURE__*/React.createElement("p", {
-    style: {
-      margin: '0 0 12px',
-      color: 'var(--color-success)',
-      fontSize: '14px',
-      lineHeight: 1.5
-    }
-  }, "Pay via bank transfer at checkout and save up to ", /*#__PURE__*/React.createElement("strong", null, "70%"), " on processing fees compared to credit card."), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'grid',
-      gridTemplateColumns: '1fr 1fr',
-      gap: '10px',
-      background: 'rgba(255,255,255,0.7)',
-      borderRadius: '8px',
-      padding: '12px'
-    }
-  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: '12px',
-      color: 'var(--text-secondary)',
-      marginBottom: '2px'
-    }
-  }, "Credit Card"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: '14px',
-      fontWeight: 600,
-      color: 'var(--color-error)'
-    }
-  }, "2.9% + $0.30"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: '12px',
-      color: 'var(--text-muted)'
-    }
-  }, "e.g. $6.10 on a $200 session")), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: '12px',
-      color: 'var(--text-secondary)',
-      marginBottom: '2px'
-    }
-  }, "Bank Transfer"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: '14px',
-      fontWeight: 600,
-      color: 'var(--color-success)'
-    }
-  }, "0.8% (max $5)"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: '12px',
-      color: 'var(--text-muted)'
-    }
-  }, "e.g. $1.60 on a $200 session")))))), /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'grid',
       gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
@@ -58455,16 +58381,7 @@ const FamilyPayments = window.FamilyPayments = () => {
       padding: '10px 12px',
       textAlign: 'center'
     }
-  }, statusBadge(p.status)))))))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginTop: '16px',
-      padding: '14px 16px',
-      background: 'var(--bg-primary)',
-      borderRadius: '8px',
-      fontSize: '13px',
-      color: 'var(--text-secondary)'
-    }
-  }, /*#__PURE__*/React.createElement("strong", null, "Tip:"), " Your payment method is selected at checkout time. Choose \"Bank Transfer\" when prompted to save on fees. ACH transfers typically take 3-5 business days to settle."));
+  }, statusBadge(p.status)))))))));
 };
 ;
 // ─── Admin Financials Dashboard ───
