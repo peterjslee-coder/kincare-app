@@ -1106,6 +1106,36 @@ async function initializeDatabase() {
     )`,
     `CREATE INDEX IF NOT EXISTS idx_trusted_ips_user ON trusted_admin_ips(user_id)`,
     `CREATE INDEX IF NOT EXISTS idx_trusted_ips_lookup ON trusted_admin_ips(user_id, ip_address)`,
+
+    // v1.57.47 — Self-onboarding for care_for role users
+    `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS self_onboarding_complete INTEGER DEFAULT 0`,
+    `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS date_of_birth DATE`,
+    `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS preferred_name TEXT`,
+    `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS emergency_contact_phone TEXT`,
+    `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS emergency_contact_relationship TEXT`,
+    `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS terms_accepted_at TIMESTAMPTZ`,
+    `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS terms_version TEXT`,
+    `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS non_medical_acknowledged INTEGER DEFAULT 0`,
+
+    // Verified documents table for ID verification
+    `CREATE TABLE IF NOT EXISTS verified_documents (
+      id TEXT PRIMARY KEY,
+      owner_id TEXT NOT NULL,
+      owner_type TEXT NOT NULL DEFAULT 'care_recipient',
+      category TEXT NOT NULL,
+      doc_type TEXT,
+      file_path TEXT,
+      extracted_data TEXT,
+      ai_confidence REAL DEFAULT 0,
+      ai_concerns TEXT,
+      is_verified INTEGER DEFAULT 0,
+      verified_by TEXT REFERENCES users(id),
+      verified_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_verified_docs_owner ON verified_documents(owner_id, owner_type)`,
+    `CREATE INDEX IF NOT EXISTS idx_verified_docs_category ON verified_documents(category)`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }

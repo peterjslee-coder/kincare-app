@@ -1273,7 +1273,14 @@ const App = () => {
 
     if (currentPage === 'dashboard') {
       if (role === 'caregiver') return <CaretakerHub key={pageKey} onNeedsOnboarding={() => setAppState('resume-onboarding')} />;
-      if (role === 'care_for') return <CaredForView key={pageKey} />;
+      if (role === 'care_for') {
+        // Check if self-onboarding is complete
+        const selfOnboardingDone = currentUser?.selfOnboardingComplete || currentUser?.self_onboarding_complete;
+        if (!selfOnboardingDone) {
+          return <SelfOnboardingWizard key={pageKey} user={currentUser} careRecipientId={currentUser?.careRecipientId} onComplete={() => { fetchUser(); }} />;
+        }
+        return <CaredForView key={pageKey} />;
+      }
       return <Dashboard key={pageKey} onNavigate={setCurrentPage} acceptingInvite={acceptingInvite} />;
     }
     if (currentPage === 'care-profile') return <CareProfile key={pageKey} onNavigate={setCurrentPage} />;

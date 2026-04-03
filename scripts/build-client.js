@@ -44,6 +44,7 @@ const scripts = [
   "js/components/CareTeamManage.js",
   "js/components/CareTeamPage.js",
   "js/components/CaredForView.js",
+  "js/components/SelfOnboardingWizard.js",
   "js/components/AvailabilityTab.js",
   "js/components/OfferNegotiationPanel.js",
   "js/components/CaregiverCalendar.js",

@@ -287,6 +287,7 @@ app.use("/api/caregiver-onboarding", require("./routes/caregiveronboarding"));
 app.use("/api/onboarding-events", require("./routes/onboardingEvents"));
 app.use("/api/feedback", require("./routes/feedback"));
 app.use("/api/payments", require("./routes/payments"));
+app.use("/api/self-onboarding", require("./routes/selfOnboarding"));
 app.use("/api/connections", require("./routes/connections"));
 app.use("/api/help", require("./routes/help"));
 app.use("/api/reports", require("./routes/reports"));

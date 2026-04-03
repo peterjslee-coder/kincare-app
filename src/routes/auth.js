@@ -566,6 +566,17 @@ router.get("/me", authenticate, async (req, res) => {
     onboardingComplete = cgProfile ? !!cgProfile.onboarding_complete : false;
   }
 
+  // Check care_for (self-onboarding) status
+  let selfOnboardingComplete = null;
+  let careRecipientId = null;
+  if (userRoles.includes('care_for')) {
+    const cr = await db.prepare("SELECT id, self_onboarding_complete FROM care_recipients WHERE linked_user_id = ?").get(req.user.id);
+    if (cr) {
+      selfOnboardingComplete = !!cr.self_onboarding_complete;
+      careRecipientId = cr.id;
+    }
+  }
+
   // Check for pending legal documents that need acceptance
   let pendingLegalDocs = [];
   try {
@@ -597,6 +608,8 @@ router.get("/me", authenticate, async (req, res) => {
       twoFactorEnabled: !!(twoFa?.is_enabled),
       linkedAccounts: oauthAccounts || [],
       onboarding_complete: onboardingComplete,
+      selfOnboardingComplete,
+      careRecipientId,
       pendingLegalDocs,
     },
     token,
