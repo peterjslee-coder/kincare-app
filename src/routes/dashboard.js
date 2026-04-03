@@ -40,63 +40,51 @@ router.get("/", async (req, res) => {
 // ─── Family Dashboard (Pete's view) ───
 async function familyDashboard(db, userId, res) {
   try {
-    // Expire time proposals that have passed their 2-hour response window
-    await expireStaleProposals(db, null, null).catch(() => {});
-
-    // Private-only requests: only cancel once the scheduled date has passed (not on a timer)
-    try {
-      await db.exec(`
-        UPDATE care_sessions
-        SET status = 'cancelled', cancelled_at = NOW(), cancel_reason = 'Private request expired - scheduled date passed'
-        WHERE offered_to_caregiver_id IS NOT NULL
-          AND COALESCE(private_only, 0) = 1
-          AND scheduled_date::date < CURRENT_DATE
-          AND status IN ('pending', 'open', 'requested')
-      `);
-    } catch (e) {
-      console.warn('Private-only expiry query failed:', e.message);
-    }
-    // Non-private exclusive offers open to all caregivers
-    try {
-      await db.exec(`
-        UPDATE care_sessions
-        SET offered_to_caregiver_id = NULL, exclusive_until = NULL, status = 'open'
-        WHERE offered_to_caregiver_id IS NOT NULL
-          AND exclusive_until IS NOT NULL
-          AND exclusive_until < NOW()
-          AND COALESCE(private_only, 0) = 0
-          AND status IN ('pending', 'open', 'requested')
-      `);
-    } catch (e) {
-      // Fallback: run original query without private_only filter
-      await db.exec(`
+    // Fire-and-forget: housekeeping writes run in background, don't block dashboard load
+    expireStaleProposals(db, null, null).catch(() => {});
+    db.exec(`
+      UPDATE care_sessions
+      SET status = 'cancelled', cancelled_at = NOW(), cancel_reason = 'Private request expired - scheduled date passed'
+      WHERE offered_to_caregiver_id IS NOT NULL
+        AND COALESCE(private_only, 0) = 1
+        AND scheduled_date::date < CURRENT_DATE
+        AND status IN ('pending', 'open', 'requested')
+    `).catch(e => console.warn('Private-only expiry query failed:', e.message));
+    db.exec(`
+      UPDATE care_sessions
+      SET offered_to_caregiver_id = NULL, exclusive_until = NULL, status = 'open'
+      WHERE offered_to_caregiver_id IS NOT NULL
+        AND exclusive_until IS NOT NULL
+        AND exclusive_until < NOW()
+        AND COALESCE(private_only, 0) = 0
+        AND status IN ('pending', 'open', 'requested')
+    `).catch(() => {
+      db.exec(`
         UPDATE care_sessions
         SET offered_to_caregiver_id = NULL, exclusive_until = NULL, status = 'open'
         WHERE offered_to_caregiver_id IS NOT NULL
           AND exclusive_until IS NOT NULL
           AND exclusive_until < NOW()
           AND status IN ('pending', 'open', 'requested')
-      `);
-    }
+      `).catch(() => {});
+    });
 
-    const feePercent = await getPlatformFeePercent(db);
-
-    // Get owned + shared + care-team recipients
-    const ownedRecipients = await db.prepare(
-      "SELECT * FROM care_recipients WHERE family_user_id = ?"
-    ).all(userId);
-    const sharedRecipients = await db.prepare(`
-      SELECT cr.* FROM care_recipient_shares crs
-      JOIN care_recipients cr ON crs.care_recipient_id = cr.id
-      WHERE crs.shared_with_user_id = ?
-    `).all(userId);
-    // Also find recipients via care team membership (in case care_recipient_shares wasn't created)
-    const teamRecipients = await db.prepare(`
-      SELECT cr.* FROM care_team_members ctm
-      JOIN care_teams ct ON ctm.care_team_id = ct.id
-      JOIN care_recipients cr ON ct.care_recipient_id = cr.id
-      WHERE ctm.user_id = ?
-    `).all(userId);
+    // Parallel batch 1: fee + all three recipient sources at once
+    const [feePercent, ownedRecipients, sharedRecipients, teamRecipients] = await Promise.all([
+      getPlatformFeePercent(db),
+      db.prepare("SELECT * FROM care_recipients WHERE family_user_id = ?").all(userId),
+      db.prepare(`
+        SELECT cr.* FROM care_recipient_shares crs
+        JOIN care_recipients cr ON crs.care_recipient_id = cr.id
+        WHERE crs.shared_with_user_id = ?
+      `).all(userId),
+      db.prepare(`
+        SELECT cr.* FROM care_team_members ctm
+        JOIN care_teams ct ON ctm.care_team_id = ct.id
+        JOIN care_recipients cr ON ct.care_recipient_id = cr.id
+        WHERE ctm.user_id = ?
+      `).all(userId),
+    ]);
     const ownedIds = new Set(ownedRecipients.map(r => r.id));
     const sharedIds = new Set(sharedRecipients.map(r => r.id));
     const recipients = [
@@ -113,98 +101,102 @@ async function familyDashboard(db, userId, res) {
     const allRecipientIds = recipients.map(r => r.id);
     const recipientPlaceholders = allRecipientIds.length > 0 ? allRecipientIds.map(() => '?').join(',') : "'__none__'";
 
-    const monthlyStats = await db.prepare(`
-      SELECT
-        COUNT(*) as total_sessions,
-        SUM(duration_hours) as total_hours,
-        SUM(COALESCE(actual_cost, estimated_cost)) as total_spend
-      FROM care_sessions cs
-      WHERE (cs.family_user_id = ? OR cs.care_recipient_id IN (${recipientPlaceholders}))
-        AND cs.scheduled_date >= ?
-        AND cs.status IN ('confirmed', 'completed', 'in_progress')
-    `).get(userId, ...allRecipientIds, monthStr);
-
     // Use care-location timezone for "today" — all times are care-location times
     const today = getTodayStringInZone();
     const etNow = getNowInZone();
     const next30Date = new Date(etNow); next30Date.setDate(next30Date.getDate() + 30);
     const next30 = next30Date.getFullYear() + '-' + String(next30Date.getMonth() + 1).padStart(2, '0') + '-' + String(next30Date.getDate()).padStart(2, '0');
-
-    const upcoming = await db.prepare(`
-      SELECT * FROM (
-        SELECT DISTINCT ON (cs.id) cs.*,
-          cr.first_name || ' ' || cr.last_name AS recipient_name,
-          cr.timezone AS care_timezone,
-          u.first_name || ' ' || u.last_name AS caregiver_name,
-          u.phone AS caregiver_phone,
-          cp.rating_avg AS caregiver_rating,
-          fu.first_name || ' ' || fu.last_name AS booked_by_name,
-          vl.check_in_time,
-          ofu.first_name AS offered_caregiver_name,
-          tcp.proposed_time AS tc_proposed_time,
-          tcp.proposed_duration AS tc_proposed_duration,
-          tcp.proposed_by AS tc_proposed_by
-        FROM care_sessions cs
-        LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
-        LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
-        LEFT JOIN users u ON cp.user_id = u.id
-        LEFT JOIN users fu ON cs.family_user_id = fu.id
-        LEFT JOIN visit_logs vl ON vl.session_id = cs.id
-        LEFT JOIN caregiver_profiles ocp ON cs.offered_to_caregiver_id = ocp.id
-        LEFT JOIN users ofu ON ocp.user_id = ofu.id
-        LEFT JOIN time_change_proposals tcp ON cs.pending_time_change_id = tcp.id
-        WHERE (cs.family_user_id = ? OR cs.care_recipient_id IN (${recipientPlaceholders}))
-          AND cs.scheduled_date >= ?
-          AND cs.scheduled_date <= ?
-          AND cs.status IN ('pending', 'confirmed', 'open', 'requested', 'in_progress', 'payment_hold')
-        ORDER BY cs.id
-      ) sub
-      ORDER BY sub.scheduled_date ASC, sub.scheduled_time ASC
-      LIMIT 15
-    `).all(userId, ...allRecipientIds, today, next30);
-
-    // Recently completed sessions (last 7 days)
     const sevenDaysAgo = new Date(etNow); sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
     const sevenDaysAgoStr = sevenDaysAgo.getFullYear() + '-' + String(sevenDaysAgo.getMonth() + 1).padStart(2, '0') + '-' + String(sevenDaysAgo.getDate()).padStart(2, '0');
-    const recentCompleted = await db.prepare(`
-      SELECT * FROM (
-        SELECT DISTINCT ON (cs.id) cs.*,
-          cr.first_name || ' ' || cr.last_name AS recipient_name,
-          u.first_name || ' ' || u.last_name AS caregiver_name,
-          vl.summary AS visit_summary,
-          vl.care_feedback,
-          vl.departure_mood,
-          vl.condition_tags
+
+    // Parallel batch 2: ALL read queries at once (none depend on each other)
+    const [monthlyStats, upcoming, recentCompleted, recentActivity, unreadCount, recentPhotos, pendingProposals, avgRating, assignedCount] = await Promise.all([
+      // Monthly stats
+      db.prepare(`
+        SELECT
+          COUNT(*) as total_sessions,
+          SUM(duration_hours) as total_hours,
+          SUM(COALESCE(actual_cost, estimated_cost)) as total_spend
         FROM care_sessions cs
-        LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
-        LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
-        LEFT JOIN users u ON cp.user_id = u.id
-        LEFT JOIN visit_logs vl ON vl.session_id = cs.id
         WHERE (cs.family_user_id = ? OR cs.care_recipient_id IN (${recipientPlaceholders}))
-          AND cs.status = 'completed'
-          AND cs.cancelled_by IS NULL
-          AND cs.caregiver_no_show = 0
           AND cs.scheduled_date >= ?
-        ORDER BY cs.id
-      ) sub
-      ORDER BY sub.scheduled_date DESC, sub.scheduled_time DESC
-      LIMIT 5
-    `).all(userId, ...allRecipientIds, sevenDaysAgoStr);
+          AND cs.status IN ('confirmed', 'completed', 'in_progress')
+      `).get(userId, ...allRecipientIds, monthStr),
 
-    const recentActivity = await db.prepare(`
-      SELECT * FROM activity_feed
-      WHERE family_user_id = ? OR care_recipient_id IN (${recipientPlaceholders})
-      ORDER BY created_at DESC LIMIT 5
-    `).all(userId, ...allRecipientIds);
+      // Upcoming sessions
+      db.prepare(`
+        SELECT * FROM (
+          SELECT DISTINCT ON (cs.id) cs.*,
+            cr.first_name || ' ' || cr.last_name AS recipient_name,
+            cr.timezone AS care_timezone,
+            u.first_name || ' ' || u.last_name AS caregiver_name,
+            u.phone AS caregiver_phone,
+            cp.rating_avg AS caregiver_rating,
+            fu.first_name || ' ' || fu.last_name AS booked_by_name,
+            vl.check_in_time,
+            ofu.first_name AS offered_caregiver_name,
+            tcp.proposed_time AS tc_proposed_time,
+            tcp.proposed_duration AS tc_proposed_duration,
+            tcp.proposed_by AS tc_proposed_by
+          FROM care_sessions cs
+          LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+          LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+          LEFT JOIN users u ON cp.user_id = u.id
+          LEFT JOIN users fu ON cs.family_user_id = fu.id
+          LEFT JOIN visit_logs vl ON vl.session_id = cs.id
+          LEFT JOIN caregiver_profiles ocp ON cs.offered_to_caregiver_id = ocp.id
+          LEFT JOIN users ofu ON ocp.user_id = ofu.id
+          LEFT JOIN time_change_proposals tcp ON cs.pending_time_change_id = tcp.id
+          WHERE (cs.family_user_id = ? OR cs.care_recipient_id IN (${recipientPlaceholders}))
+            AND cs.scheduled_date >= ?
+            AND cs.scheduled_date <= ?
+            AND cs.status IN ('pending', 'confirmed', 'open', 'requested', 'in_progress', 'payment_hold')
+          ORDER BY cs.id
+        ) sub
+        ORDER BY sub.scheduled_date ASC, sub.scheduled_time ASC
+        LIMIT 15
+      `).all(userId, ...allRecipientIds, today, next30),
 
-    const unreadCount = await db.prepare(
-      `SELECT COUNT(*) as count FROM activity_feed WHERE (family_user_id = ? OR care_recipient_id IN (${recipientPlaceholders})) AND is_read = 0`
-    ).get(userId, ...allRecipientIds);
+      // Recently completed sessions (last 7 days)
+      db.prepare(`
+        SELECT * FROM (
+          SELECT DISTINCT ON (cs.id) cs.*,
+            cr.first_name || ' ' || cr.last_name AS recipient_name,
+            u.first_name || ' ' || u.last_name AS caregiver_name,
+            vl.summary AS visit_summary,
+            vl.care_feedback,
+            vl.departure_mood,
+            vl.condition_tags
+          FROM care_sessions cs
+          LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+          LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+          LEFT JOIN users u ON cp.user_id = u.id
+          LEFT JOIN visit_logs vl ON vl.session_id = cs.id
+          WHERE (cs.family_user_id = ? OR cs.care_recipient_id IN (${recipientPlaceholders}))
+            AND cs.status = 'completed'
+            AND cs.cancelled_by IS NULL
+            AND cs.caregiver_no_show = 0
+            AND cs.scheduled_date >= ?
+          ORDER BY cs.id
+        ) sub
+        ORDER BY sub.scheduled_date DESC, sub.scheduled_time DESC
+        LIMIT 5
+      `).all(userId, ...allRecipientIds, sevenDaysAgoStr),
 
-    // Recent visit photos (last 14 days) — for the dashboard "Recent Photos" section
-    let recentPhotos = [];
-    try {
-      recentPhotos = await db.prepare(`
+      // Recent activity
+      db.prepare(`
+        SELECT * FROM activity_feed
+        WHERE family_user_id = ? OR care_recipient_id IN (${recipientPlaceholders})
+        ORDER BY created_at DESC LIMIT 5
+      `).all(userId, ...allRecipientIds),
+
+      // Unread count
+      db.prepare(
+        `SELECT COUNT(*) as count FROM activity_feed WHERE (family_user_id = ? OR care_recipient_id IN (${recipientPlaceholders})) AND is_read = 0`
+      ).get(userId, ...allRecipientIds),
+
+      // Recent visit photos
+      db.prepare(`
         SELECT vp.id, vp.photo_url, vp.caption, vp.created_at,
           u.first_name || ' ' || u.last_name AS caregiver_name,
           cr.first_name || ' ' || cr.last_name AS recipient_name,
@@ -218,15 +210,10 @@ async function familyDashboard(db, userId, res) {
         WHERE (cs.family_user_id = ? OR cs.care_recipient_id IN (${recipientPlaceholders}))
         ORDER BY vp.created_at DESC
         LIMIT 12
-      `).all(userId, ...allRecipientIds);
-    } catch (e) {
-      console.log('Recent photos query skipped:', e.message);
-    }
+      `).all(userId, ...allRecipientIds).catch(() => []),
 
-    // Pending time proposals from caregivers for this family's sessions
-    let pendingProposals = [];
-    try {
-      pendingProposals = await db.prepare(`
+      // Pending time proposals
+      db.prepare(`
         SELECT tp.*,
           u.first_name || ' ' || u.last_name AS caregiver_name,
           cp.rating_avg AS caregiver_rating,
@@ -244,26 +231,24 @@ async function familyDashboard(db, userId, res) {
           AND tp.status = 'pending'
         ORDER BY tp.created_at DESC
         LIMIT 20
-      `).all(userId, ...allRecipientIds);
-    } catch (e) {
-      // time_proposals table may not exist yet if migration hasn't run
-      console.log('Proposals query skipped (table may not exist yet):', e.message);
-    }
+      `).all(userId, ...allRecipientIds).catch(() => []),
 
-    const avgRating = await db.prepare(`
-      SELECT AVG(cp.rating_avg) as avg
-      FROM care_sessions cs
-      JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
-      WHERE (cs.family_user_id = ? OR cs.care_recipient_id IN (${recipientPlaceholders})) AND cs.status = 'completed'
-    `).get(userId, ...allRecipientIds);
+      // Average caregiver rating
+      db.prepare(`
+        SELECT AVG(cp.rating_avg) as avg
+        FROM care_sessions cs
+        JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+        WHERE (cs.family_user_id = ? OR cs.care_recipient_id IN (${recipientPlaceholders})) AND cs.status = 'completed'
+      `).get(userId, ...allRecipientIds),
 
-    // Assigned caregiver count — include caregivers assigned by any family member for shared recipients
-    const assignedCount = await db.prepare(`
-      SELECT COUNT(DISTINCT ca.caregiver_profile_id) as count
-      FROM caregiver_assignments ca
-      LEFT JOIN care_recipients cr ON ca.care_recipient_id = cr.id
-      WHERE (ca.family_user_id = ? OR ca.care_recipient_id IN (${recipientPlaceholders})) AND ca.is_active = 1
-    `).get(userId, ...allRecipientIds);
+      // Assigned caregiver count
+      db.prepare(`
+        SELECT COUNT(DISTINCT ca.caregiver_profile_id) as count
+        FROM caregiver_assignments ca
+        LEFT JOIN care_recipients cr ON ca.care_recipient_id = cr.id
+        WHERE (ca.family_user_id = ? OR ca.care_recipient_id IN (${recipientPlaceholders})) AND ca.is_active = 1
+      `).get(userId, ...allRecipientIds),
+    ]);
 
     const primary = recipients[0];
     const parent = primary

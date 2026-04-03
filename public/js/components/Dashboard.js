@@ -79,16 +79,29 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
     localStorage.removeItem('dash_dismissed');
   };
 
-  const fetchDashboard = async () => {
+  const fetchDashboard = async (retryCount = 0) => {
     try {
-      const res = await apiFetch('/api/dashboard');
+      // 12-second timeout so Android WebView doesn't hang forever
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 12000);
+      const res = await apiFetch('/api/dashboard', { signal: controller.signal });
+      clearTimeout(timeout);
       if (res?.ok) {
         const d = await res.json();
         setData(d);
+        setError(false);
+      } else if (retryCount < 1) {
+        // One silent retry before showing error
+        console.warn('Dashboard fetch returned non-OK, retrying...');
+        return fetchDashboard(retryCount + 1);
       } else {
         setError(true);
       }
     } catch (err) {
+      if (err.name === 'AbortError' && retryCount < 1) {
+        console.warn('Dashboard fetch timed out, retrying...');
+        return fetchDashboard(retryCount + 1);
+      }
       console.error('Dashboard fetch error:', err);
       setError(true);
     }
