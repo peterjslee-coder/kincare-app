@@ -1,6 +1,6 @@
 // InPlace Service Worker — v1.57.14
-const CACHE_NAME = 'inplace-build-6dfb88fc-mnicb97p';
-const SW_VERSION = 'build-6dfb88fc-mnicb97p';
+const CACHE_NAME = 'inplace-build-6dfb88fc-mnickvdc';
+const SW_VERSION = 'build-6dfb88fc-mnickvdc';
 const STATIC_ASSETS = [
   '/',
   '/css/styles.css',
@@ -17,7 +17,8 @@ const STATIC_ASSETS = [
   '/manifest.json',
 ];
 
-// Install: cache static assets, skip waiting immediately
+// Install: cache static assets, then wait for activation (no skipWaiting — avoids
+// killing in-flight fetches during SW transition, which caused dashboard load failures)
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
@@ -27,10 +28,11 @@ self.addEventListener('install', (event) => {
       return Promise.all(promises);
     })
   );
-  self.skipWaiting();
+  // NOT calling self.skipWaiting() — new SW activates on next navigation,
+  // preventing TypeError: Failed to fetch on dashboard load after deploys
 });
 
-// Activate: delete ALL old caches aggressively, then claim clients
+// Activate: delete old caches, notify clients of new version
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
@@ -41,10 +43,10 @@ self.addEventListener('activate', (event) => {
         })
       )
     ).then(() => {
-      // Force all open tabs to use this new SW immediately
+      // Claim uncontrolled clients (first visit or hard refresh)
       return self.clients.claim();
     }).then(() => {
-      // Notify all clients to reload for the new version
+      // Notify all clients about the new version
       return self.clients.matchAll({ type: 'window' }).then((clients) => {
         for (const client of clients) {
           client.postMessage({ type: 'SW_UPDATED', version: SW_VERSION });
@@ -98,7 +100,7 @@ self.addEventListener('fetch', (event) => {
   if (event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request).then((response) => {
-        if (response.ok) {
+        if (response.ok && event.request.method === 'GET') {
           const clone = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
         }
@@ -135,7 +137,7 @@ self.addEventListener('fetch', (event) => {
   // The ?v= query string busts browser cache, but SW also always tries network first
   event.respondWith(
     fetch(event.request).then((response) => {
-      if (response.ok && url.origin === self.location.origin) {
+      if (response.ok && url.origin === self.location.origin && event.request.method === 'GET') {
         const clone = response.clone();
         caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
       }
