@@ -1333,10 +1333,6 @@ async function initializeDatabase() {
     }
   } catch (e) { console.error("  e2e test session error:", e.message); }
 
-  console.log("  Database initialized successfully");
-  return db;
-}
-
   // ─── v1.57.47 — Mark Cary Taker (test caregiver) as demo so her sessions are excluded from financials ───
   try {
     const updated = await db.prepare(
@@ -1344,6 +1340,10 @@ async function initializeDatabase() {
     ).run();
     if (updated.changes > 0) console.log("  ✅ Marked Cary Taker (peter@yourinplace.com) as is_demo=1");
   } catch (e) { /* already done */ }
+
+  console.log("  Database initialized successfully");
+  return db;
+}
 
 function resetDb() {
   // No-op for PostgreSQL — pool always queries live database
