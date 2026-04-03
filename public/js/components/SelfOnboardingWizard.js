@@ -281,7 +281,7 @@ const SelfOnboardingWizard = window.SelfOnboardingWizard = ({ user, careRecipien
 
   // ─── Progress Bar ───
   const WizardProgressBar = () => {
-    const steps = ['Identity', 'Selfie', 'Verify ID', 'Address', 'Health & Safety', 'Terms'];
+    const steps = ['Identity', 'Selfie', 'Verify ID', 'Address', 'Health', 'Terms'];
     return (
       <div style={{ marginBottom: '32px', position: 'relative' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'relative' }}>
@@ -1015,23 +1015,29 @@ const SelfOnboardingWizard = window.SelfOnboardingWizard = ({ user, careRecipien
       return (
         <div className="card" style={{ ...cardStyle, marginTop: '0' }}>
           <WizardProgressBar />
-          <h2 style={{ marginTop: 0, marginBottom: '8px', color: 'var(--role-color)' }}>Review & Complete</h2>
+          <h2 style={{ marginTop: 0, marginBottom: '8px', color: 'var(--role-color)' }}>Almost There</h2>
           <p style={{ color: 'var(--text-secondary)', fontSize: '14px', marginBottom: '24px' }}>
-            Please review and accept our agreements to get started.
+            Here's what to know about using InPlace:
           </p>
 
-          <div style={{ padding: '16px', background: 'var(--bg-muted)', borderRadius: '6px', marginBottom: '24px' }}>
-            <h4 style={{ margin: '0 0 12px', color: 'var(--text-primary)', fontSize: '14px' }}>By continuing, you agree to:</h4>
-            <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '14px', lineHeight: '1.6', color: 'var(--text-secondary)' }}>
-              <li style={{ marginBottom: '8px' }}>
-                <a href="/terms" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--role-color)', textDecoration: 'none' }}>InPlace Terms of Service</a>
-              </li>
-              <li>
-                <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--role-color)', textDecoration: 'none' }}>Privacy Policy</a>
-              </li>
-            </ul>
+          {/* Key highlights — plain language */}
+          <div style={{ marginBottom: '24px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {[
+              { icon: '📅', text: 'You\'ll use InPlace to schedule care visits and manage payments' },
+              { icon: '🤖', text: 'Our AI assistant (iPAi) helps arrange and coordinate your care' },
+              { icon: '🏥', text: 'Some health and safety info you shared will be visible to your caregivers so they can provide the best care' },
+              { icon: '🔒', text: 'Your personal information will never be sold to third parties' },
+              { icon: '👨‍👩‍👧', text: 'You can invite family or others to help arrange your care — they\'ll have access to your schedule, payments, and care notes' },
+              { icon: '💜', text: 'InPlace provides non-medical companion care — not nursing or medical services' },
+            ].map((item, idx) => (
+              <div key={idx} style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', padding: '10px 12px', background: 'var(--bg-muted)', borderRadius: '8px' }}>
+                <span style={{ fontSize: '16px', flexShrink: 0, marginTop: '1px' }}>{item.icon}</span>
+                <span style={{ fontSize: '14px', color: 'var(--text-primary)', lineHeight: '1.5' }}>{item.text}</span>
+              </div>
+            ))}
           </div>
 
+          {/* Agree checkboxes */}
           <div style={{ marginBottom: '16px', padding: '12px', background: 'var(--bg-card)', borderRadius: '6px', border: '1px solid var(--border-light)' }}>
             <label style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', cursor: 'pointer', fontWeight: 'normal' }}>
               <input
@@ -1041,7 +1047,10 @@ const SelfOnboardingWizard = window.SelfOnboardingWizard = ({ user, careRecipien
                 style={{ marginTop: '4px', cursor: 'pointer', flexShrink: 0 }}
               />
               <span style={{ fontSize: '14px', color: 'var(--text-primary)' }}>
-                I have read and agree to the Terms of Service and Privacy Policy
+                I agree to the{' '}
+                <a href="/terms" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--role-color)' }}>Terms of Service</a>
+                {' '}and{' '}
+                <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--role-color)' }}>Privacy Policy</a>
               </span>
             </label>
           </div>
@@ -1055,7 +1064,7 @@ const SelfOnboardingWizard = window.SelfOnboardingWizard = ({ user, careRecipien
                 style={{ marginTop: '4px', cursor: 'pointer', flexShrink: 0 }}
               />
               <span style={{ fontSize: '14px', color: 'var(--text-primary)' }}>
-                I understand that InPlace provides non-medical companion care only
+                I understand InPlace provides non-medical companion care only
               </span>
             </label>
           </div>
