@@ -143,19 +143,32 @@ const SelfOnboardingWizard = window.SelfOnboardingWizard = ({ user, careRecipien
     setIdVerifying(true);
     setError('');
     try {
+      // Helper: convert base64 data URI to Blob
+      const dataURItoBlob = (dataURI) => {
+        const byteString = atob(dataURI.split(',')[1]);
+        const mimeString = dataURI.split(',')[0].split(':')[1].split(';')[0];
+        const ab = new ArrayBuffer(byteString.length);
+        const ia = new Uint8Array(ab);
+        for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
+        return new Blob([ab], { type: mimeString });
+      };
+
       const formData = new FormData();
-      // Convert base64 to blob if needed
       if (selfie && !selfieSkipped) {
-        const selfieBlob = await fetch(selfie).then(r => r.blob());
-        formData.append('selfie', selfieBlob, 'selfie.jpg');
+        formData.append('selfie', dataURItoBlob(selfie), 'selfie.jpg');
       }
-      const idBlob = await fetch(idPhoto).then(r => r.blob());
-      formData.append('idPhoto', idBlob, 'id.jpg');
+      formData.append('idPhoto', dataURItoBlob(idPhoto), 'id.jpg');
+
+      // Must use raw fetch (not apiFetch) for FormData — but need auth headers
+      const verifyHeaders = { 'X-CSRF-Token': getCsrfToken() };
+      if (window.AUTH_TOKEN) verifyHeaders['Authorization'] = `Bearer ${window.AUTH_TOKEN}`;
+      if (window.ACTIVE_ROLE) verifyHeaders['X-Active-Role'] = window.ACTIVE_ROLE;
 
       const res = await fetch('/api/self-onboarding/verify-id', {
         method: 'POST',
         body: formData,
-        headers: { 'X-CSRF-Token': getCsrfToken() },
+        headers: verifyHeaders,
+        credentials: 'same-origin',
       });
 
       if (res.ok) {
