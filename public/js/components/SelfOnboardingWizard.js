@@ -520,7 +520,7 @@ const SelfOnboardingWizard = window.SelfOnboardingWizard = ({ user, careRecipien
             marginBottom: '24px',
             lineHeight: '1.5',
           }}>
-            <strong>Privacy Notice:</strong> This photo is used only to verify your identity and will NOT be stored after verification. It is discarded immediately after matching with your ID.
+            <strong>Privacy Notice:</strong> Your selfie is stored securely and used only to verify your identity against your ID photo. It may be reviewed by an administrator if verification requires manual review.
           </div>
 
           {error && <div style={{ color: 'var(--color-error)', fontSize: '14px', marginBottom: '16px', padding: '12px', background: 'var(--color-error-bg)', borderRadius: '6px' }}>{error}</div>}
@@ -597,13 +597,29 @@ const SelfOnboardingWizard = window.SelfOnboardingWizard = ({ user, careRecipien
                         </div>
                       )}
 
+                      {/* Face comparison */}
+                      {idVerificationResult.faceComparison && !idVerificationResult.faceComparison.skipped && (
+                        <div style={{ marginTop: '10px', padding: '8px 10px', borderRadius: '6px', background: idVerificationResult.faceComparison.similar ? 'rgba(39,174,96,0.08)' : 'rgba(231,76,60,0.08)', fontSize: '13px' }}>
+                          <div>
+                            <strong>Face match:</strong>{' '}
+                            <span style={{ color: idVerificationResult.faceComparison.similar ? 'var(--color-success)' : 'var(--color-error)' }}>
+                              {idVerificationResult.faceComparison.similar ? 'Appears to match' : 'Possible mismatch'}
+                            </span>
+                            {' · '}{Math.round(idVerificationResult.faceComparison.confidence * 100)}% confidence
+                          </div>
+                          {idVerificationResult.faceComparison.explanation && (
+                            <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>{idVerificationResult.faceComparison.explanation}</div>
+                          )}
+                        </div>
+                      )}
+
                       {/* Confidence */}
                       {idVerificationResult.confidence != null && (
                         <div style={{ marginTop: '8px', fontSize: '12px', color: 'var(--text-secondary)' }}>
-                          AI confidence: <strong style={{ color: idVerificationResult.confidence >= 0.8 ? 'var(--color-success)' : idVerificationResult.confidence >= 0.5 ? 'var(--color-warning)' : 'var(--color-error)' }}>
+                          Document confidence: <strong style={{ color: idVerificationResult.confidence >= 0.8 ? 'var(--color-success)' : idVerificationResult.confidence >= 0.5 ? 'var(--color-warning)' : 'var(--color-error)' }}>
                             {Math.round(idVerificationResult.confidence * 100)}%
                           </strong>
-                          {' · '}Document type: {idVerificationResult.classification?.replace(/_/g, ' ') || 'unknown'}
+                          {' · '}Type: {idVerificationResult.classification?.replace(/_/g, ' ') || 'unknown'}
                         </div>
                       )}
 
@@ -713,7 +729,7 @@ const SelfOnboardingWizard = window.SelfOnboardingWizard = ({ user, careRecipien
             marginBottom: '24px',
             lineHeight: '1.5',
           }}>
-            <strong>Privacy Notice:</strong> Your ID photo is stored securely for verification records. Your selfie has been discarded.
+            <strong>Privacy Notice:</strong> Your ID photo and selfie are stored securely for verification records and may be reviewed by an administrator.
           </div>
 
           {error && <div style={{ color: 'var(--color-error)', fontSize: '14px', marginBottom: '16px', padding: '12px', background: 'var(--color-error-bg)', borderRadius: '6px' }}>{error}</div>}

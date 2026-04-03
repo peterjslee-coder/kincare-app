@@ -9,7 +9,63 @@ const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { authenticate } = require("../middleware/auth");
 const { classifyDocument } = require("../utils/documentAI");
+const { MODEL_SONNET } = require("../utils/aiModels");
 const router = express.Router();
+
+/**
+ * Compare a selfie to the photo on an ID using Claude vision.
+ * Returns { similar: boolean, confidence: 0-1, explanation: string }
+ */
+async function compareFaces(selfieBase64, idPhotoBase64) {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    return { similar: false, confidence: 0, explanation: "AI comparison unavailable", skipped: true };
+  }
+
+  try {
+    const Anthropic = require("@anthropic-ai/sdk");
+    const client = new Anthropic({ apiKey });
+
+    const stripDataUri = (d) => d.replace(/^data:[^;]+;base64,/, "");
+    const getMime = (d) => { const m = d.match(/^data:([^;]+);/); return m ? m[1] : "image/jpeg"; };
+
+    const response = await client.messages.create({
+      model: MODEL_SONNET,
+      max_tokens: 512,
+      system: `You are a visual verification assistant for a care coordination platform. You will be shown two images: a selfie and a government ID photo. Your task is to assess whether they appear to be the same person.
+
+Consider: general facial structure, approximate age range, and overall appearance. You are NOT performing biometric identification — just a basic visual plausibility check. Err on the side of caution: if it's ambiguous, say so.
+
+Respond with ONLY a JSON object (no markdown, no code fences):
+{
+  "similar": true or false,
+  "confidence": 0.0 to 1.0,
+  "explanation": "Brief reason for your assessment"
+}`,
+      messages: [{
+        role: "user",
+        content: [
+          { type: "image", source: { type: "base64", media_type: getMime(selfieBase64), data: stripDataUri(selfieBase64) } },
+          { type: "image", source: { type: "base64", media_type: getMime(idPhotoBase64), data: stripDataUri(idPhotoBase64) } },
+          { type: "text", text: "Image 1 is the selfie taken just now. Image 2 is the government ID. Do these appear to be the same person?" },
+        ],
+      }],
+    });
+
+    const text = response.content.filter(b => b.type === "text").map(b => b.text).join("");
+    const cleaned = text.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+    const result = JSON.parse(cleaned);
+
+    return {
+      similar: !!result.similar,
+      confidence: typeof result.confidence === "number" ? result.confidence : 0,
+      explanation: result.explanation || "",
+    };
+  } catch (err) {
+    console.error("Face comparison error:", err.message);
+    return { similar: false, confidence: 0, explanation: `Comparison failed: ${err.message}`, error: true };
+  }
+}
 
 // ─── POST /api/self-onboarding/verify-id ───
 // Verify identity by comparing selfie to government ID
@@ -86,9 +142,25 @@ router.post("/verify-id", authenticate, async (req, res) => {
       }
     }
 
-    // Determine if this needs human review
-    const isVerified = nameMatched && classifyResult.isValid && dobMatched;
-    const needsHumanReview = !isVerified || (classifyResult.confidence || 0) < 0.8;
+    // ─── Face comparison (selfie vs ID photo) ───
+    let faceComparison = { similar: false, confidence: 0, explanation: "No selfie provided", skipped: true };
+    if (selfieBase64) {
+      faceComparison = await compareFaces(selfieBase64, idPhotoBase64);
+      if (!faceComparison.similar && !faceComparison.skipped) {
+        allConcerns.unshift(`Face comparison: ${faceComparison.explanation} (confidence: ${Math.round(faceComparison.confidence * 100)}%)`);
+      }
+    } else {
+      allConcerns.push("Selfie was skipped — face comparison not performed");
+    }
+
+    // ─── Decision logic ───
+    // Auto-approve: name matches + valid doc + DOB matches + faces similar enough
+    const facePassed = faceComparison.skipped || faceComparison.similar || faceComparison.confidence >= 0.5;
+    const isVerified = nameMatched && classifyResult.isValid && dobMatched && facePassed;
+    // Human review: anything questionable at all
+    const needsHumanReview = !isVerified ||
+      (classifyResult.confidence || 0) < 0.8 ||
+      (!faceComparison.skipped && faceComparison.confidence < 0.7);
 
     // Build ai_classification JSON for admin panel compatibility (matches format from classifyDocument)
     const aiClassificationForAdmin = {
@@ -103,6 +175,12 @@ router.post("/verify-id", authenticate, async (req, res) => {
       dobMatched,
       registeredName,
       extractedName,
+      faceComparison: {
+        similar: faceComparison.similar,
+        confidence: faceComparison.confidence,
+        explanation: faceComparison.explanation,
+        skipped: !!faceComparison.skipped,
+      },
     };
 
     // Store the ID verification in verified_documents table
@@ -135,6 +213,22 @@ router.post("/verify-id", authenticate, async (req, res) => {
       new Date().toISOString()
     );
 
+    // Store selfie as a separate verified_document (for admin face comparison review)
+    if (selfieBase64) {
+      const selfieDocId = uuid();
+      const selfieMime = (selfieBase64.match(/^data:([^;]+);/) || [])[1] || 'image/jpeg';
+      await db.prepare(
+        `INSERT INTO verified_documents (id, owner_id, owner_type, uploaded_by, category, document_type, file_data, mime_type, status, ai_classification, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(
+        selfieDocId, careRecipient.id, 'care_recipient', req.user.id,
+        'identity', 'selfie', selfieBase64, selfieMime,
+        'approved',  // selfie itself doesn't need review — it's supporting evidence
+        JSON.stringify({ linkedIdDocId: docId, faceComparison }),
+        new Date().toISOString()
+      );
+    }
+
     // Return verification result
     res.json({
       matched: isVerified,
@@ -150,6 +244,12 @@ router.post("/verify-id", authenticate, async (req, res) => {
       dobMatched,
       needsHumanReview,
       classification: classifyResult.classification,
+      faceComparison: {
+        similar: faceComparison.similar,
+        confidence: faceComparison.confidence,
+        explanation: faceComparison.explanation,
+        skipped: !!faceComparison.skipped,
+      },
     });
   } catch (err) {
     console.error('Verify ID error:', err);
