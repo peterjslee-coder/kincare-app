@@ -41,10 +41,14 @@ router.post("/verify-id", authenticate, async (req, res) => {
       return res.status(404).json({ error: "Care recipient record not found" });
     }
 
+    // Extract mimetype from data URI (e.g. "data:image/jpeg;base64,..." → "image/jpeg")
+    const mimeMatch = idPhotoBase64.match(/^data:([^;]+);/);
+    const mimetype = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+
     // Classify the ID document using Claude
     const classifyResult = await classifyDocument(
       idPhotoBase64,
-      idPhotoFile.mimetype,
+      mimetype,
       "Identity"
     );
 
