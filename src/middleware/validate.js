@@ -236,6 +236,8 @@ function limitBodySize(maxBytes = 50000) {
     // Skip for photo upload endpoints — they have their own express.json limit (5mb)
     if (req.path === "/me/photo" || req.originalUrl?.includes("/api/auth/me/photo")) return next();
     if (req.originalUrl?.includes("/photo") && req.method === "PUT") return next();
+    // Skip for self-onboarding (ID verification sends base64 images)
+    if (req.originalUrl?.startsWith("/api/self-onboarding")) return next();
     const contentLength = parseInt(req.headers["content-length"] || "0");
     if (contentLength > maxBytes) {
       return res.status(413).json({ error: "Request body too large" });
