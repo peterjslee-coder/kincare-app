@@ -707,11 +707,14 @@ const App = () => {
               id: data.user.id, email: data.user.email, role: data.user.role,
               roles: userRoles,
               firstName: data.user.first_name, lastName: data.user.last_name,
+              first_name: data.user.first_name, last_name: data.user.last_name,
               profilePhoto: data.user.profile_photo || null,
               emailVerified: !!data.user.email_verified, isDemo: !!data.user.is_demo,
               isAdmin: !!data.user.is_admin, is_tester: !!data.user.is_tester,
               account_approved: !!data.user.account_approved, companionAccess: !!data.user.companion_access,
               onboardingComplete: data.user.onboarding_complete,
+              selfOnboardingComplete: data.user.selfOnboardingComplete,
+              careRecipientId: data.user.careRecipientId,
             });
             // Sync active role: use saved preference if valid, else default to first role
             const saved = getActiveRole();
