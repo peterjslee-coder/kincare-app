@@ -77526,6 +77526,8 @@ const App = () => {
             roles: userRoles,
             firstName: data.user.first_name,
             lastName: data.user.last_name,
+            first_name: data.user.first_name,
+            last_name: data.user.last_name,
             profilePhoto: data.user.profile_photo || null,
             emailVerified: !!data.user.email_verified,
             isDemo: !!data.user.is_demo,
@@ -77533,7 +77535,9 @@ const App = () => {
             is_tester: !!data.user.is_tester,
             account_approved: !!data.user.account_approved,
             companionAccess: !!data.user.companion_access,
-            onboardingComplete: data.user.onboarding_complete
+            onboardingComplete: data.user.onboarding_complete,
+            selfOnboardingComplete: data.user.selfOnboardingComplete,
+            careRecipientId: data.user.careRecipientId
           });
           // Sync activeRole to new user's primary role
           if (userRoles.length === 1) {
