@@ -63,20 +63,22 @@ router.post("/verify-id", authenticate, async (req, res) => {
     const nameMatched = extractedLastName === userLastName ||
                         extractedName.toLowerCase().includes(userLastName);
 
-    // Store the ID photo in verified_documents table
-    // Note: table was created in v1.36.0 with uploaded_by NOT NULL — must provide it
+    // Store the ID verification in verified_documents table
+    // Original v1.36.0 schema has these NOT NULL columns: id, owner_type, owner_id, uploaded_by, category, document_type, file_data
     const docId = uuid();
     await db.prepare(
-      `INSERT INTO verified_documents (id, owner_id, owner_type, uploaded_by, category, doc_type, file_path, extracted_data, ai_confidence, ai_concerns, is_verified, status, verified_at, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO verified_documents (id, owner_id, owner_type, uploaded_by, category, document_type, file_data, mime_type, status, extracted_data, ai_confidence, ai_concerns, is_verified, verified_at, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       docId,
       careRecipient.id,
       'care_recipient',
-      req.user.id,                                  // uploaded_by (NOT NULL in original schema)
+      req.user.id,
       'identity',
-      classifyResult.classification || 'other_legal',
-      `identity/${careRecipient.id}/${docId}.jpg`,
+      classifyResult.classification || 'drivers_license',  // document_type (NOT NULL in original schema)
+      idPhotoBase64,                                        // file_data (NOT NULL in original schema) — store the base64
+      mimetype,                                             // mime_type
+      nameMatched && classifyResult.isValid ? 'approved' : 'pending',
       JSON.stringify({
         extractedName,
         issuingAuthority,
@@ -86,7 +88,6 @@ router.post("/verify-id", authenticate, async (req, res) => {
       classifyResult.confidence || 0,
       JSON.stringify(classifyResult.concerns || []),
       nameMatched && classifyResult.isValid ? 1 : 0,
-      nameMatched && classifyResult.isValid ? 'approved' : 'pending',  // status column from original schema
       new Date().toISOString(),
       new Date().toISOString()
     );
