@@ -36104,27 +36104,20 @@ const CareTeamPage = window.CareTeamPage = ({
   }, "\u2192"))))));
 };
 ;
-// ─── CaredForView — Month calendar for care recipients (Betty's view) ───
-// Pink = seeking help (requested), Blue = confirmed/booked
+// ─── CaredForView — Full-featured dashboard for care_for users ───
+// Same power as family dashboard: upcoming sessions, care team, activity, calendar, notes
 const CaredForView = window.CaredForView = () => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [sessions, setSessions] = useState([]);
-  const [activeTab, setActiveTab] = useState('calendar');
+  const [activeTab, setActiveTab] = useState('home');
   const [newNote, setNewNote] = useState('');
   const [editingNote, setEditingNote] = useState(null);
   const [editContent, setEditContent] = useState('');
   const [saving, setSaving] = useState(false);
   const [monthOffset, setMonthOffset] = useState(0);
   const [selectedDay, setSelectedDay] = useState(null);
-  const [showRequestForm, setShowRequestForm] = useState(false);
-  const [requestForm, setRequestForm] = useState({
-    serviceType: 'companion',
-    hours: 2,
-    time: '10:00',
-    note: ''
-  });
-  const [submitting, setSubmitting] = useState(false);
+  const [expandedCaregiverCard, setExpandedCaregiverCard] = useState(null);
   const today = new Date();
   const viewYear = new Date(today.getFullYear(), today.getMonth() + monthOffset, 1).getFullYear();
   const viewMonth = new Date(today.getFullYear(), today.getMonth() + monthOffset, 1).getMonth();
@@ -36140,11 +36133,7 @@ const CaredForView = window.CaredForView = () => {
   const calendarCells = [];
   for (let i = 0; i < totalCells; i++) {
     const dayNum = i - firstDay + 1;
-    if (dayNum < 1 || dayNum > daysInMonth) {
-      calendarCells.push(null);
-    } else {
-      calendarCells.push(dayNum);
-    }
+    calendarCells.push(dayNum >= 1 && dayNum <= daysInMonth ? dayNum : null);
   }
   const fetchData = async () => {
     try {
@@ -36158,8 +36147,6 @@ const CaredForView = window.CaredForView = () => {
     }
     setLoading(false);
   };
-
-  // Fetch sessions for the visible month
   const fetchSessions = async () => {
     try {
       const from = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-01`;
@@ -36185,12 +36172,13 @@ const CaredForView = window.CaredForView = () => {
   useEffect(() => {
     const handler = () => {
       fetchSessions();
+      fetchData();
     };
     window.addEventListener('sessions-updated', handler);
     return () => window.removeEventListener('sessions-updated', handler);
   }, []);
 
-  // Group sessions by date
+  // Group sessions by date for calendar
   const sessionsByDate = {};
   sessions.forEach(s => {
     const d = s.scheduled_date || s.date;
@@ -36199,68 +36187,75 @@ const CaredForView = window.CaredForView = () => {
     if (!sessionsByDate[dateKey]) sessionsByDate[dateKey] = [];
     sessionsByDate[dateKey].push(s);
   });
-  const getDateStr = day => {
-    return `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-  };
-  const isToday = day => {
-    return day && viewYear === today.getFullYear() && viewMonth === today.getMonth() && day === today.getDate();
-  };
-  const getDaySessions = day => {
-    if (!day) return [];
-    return sessionsByDate[getDateStr(day)] || [];
-  };
-
-  // Count by status for badge display
+  const getDateStr = day => `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  const isToday = day => day && viewYear === today.getFullYear() && viewMonth === today.getMonth() && day === today.getDate();
+  const getDaySessions = day => day ? sessionsByDate[getDateStr(day)] || [] : [];
   const getDayCounts = day => {
     const ds = getDaySessions(day);
     let requested = 0,
       confirmed = 0;
     ds.forEach(s => {
-      if (s.status === 'requested') requested++;else if (s.status === 'confirmed' || s.status === 'completed') confirmed++;
+      if (['requested', 'open'].includes(s.status)) requested++;else if (['confirmed', 'in_progress', 'completed'].includes(s.status)) confirmed++;
     });
     return {
       requested,
       confirmed
     };
   };
-
-  // Care request submission
-  const handleRequestCare = async () => {
-    if (!selectedDay) return;
-    setSubmitting(true);
-    try {
-      const dateStr = getDateStr(selectedDay);
-      const res = await apiFetch('/api/sessions/request', {
-        method: 'POST',
-        body: JSON.stringify({
-          scheduledDate: dateStr,
-          scheduledTime: requestForm.time,
-          serviceType: requestForm.serviceType,
-          durationHours: parseFloat(requestForm.hours),
-          specialInstructions: requestForm.note || ''
-        })
-      });
-      if (res !== null && res !== void 0 && res.ok) {
-        setShowRequestForm(false);
-        setRequestForm({
-          serviceType: 'companion',
-          hours: 2,
-          time: '10:00',
-          note: ''
-        });
-        await fetchSessions();
-      } else {
-        const err = await res.json().catch(() => ({}));
-        alert(err.error || 'Failed to create care request');
-      }
-    } catch (err) {
-      console.error('Request care error:', err);
-      alert('Failed to create care request');
-    }
-    setSubmitting(false);
+  const formatTime12 = t => {
+    if (!t) return '';
+    const [h, m] = t.split(':').map(Number);
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    const dh = h > 12 ? h - 12 : h === 0 ? 12 : h;
+    return `${dh}:${String(m || 0).padStart(2, '0')} ${ampm}`;
+  };
+  const serviceLabel = type => {
+    const labels = {
+      meals: 'Meals & Groceries',
+      rides: 'Rides & Errands',
+      companion: 'Companionship',
+      companionship: 'Companionship',
+      personal_care: 'Personal Care',
+      housekeeping: 'Light Housekeeping',
+      meal_prep: 'Meal Prep',
+      transportation: 'Transportation',
+      health_wellness: 'Health & Wellness',
+      full_day: 'Full Day Care',
+      medication: 'Medication Reminder',
+      light_housekeeping: 'Light Housekeeping',
+      errands: 'Errands'
+    };
+    return labels[type] || (type || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  };
+  const timeAgo = dateStr => {
+    if (!dateStr) return '';
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'Just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    return `${Math.floor(hrs / 24)}d ago`;
+  };
+  const friendlyDate = dateStr => {
+    if (!dateStr) return '';
+    const d = new Date(dateStr + 'T12:00:00');
+    const t = new Date();
+    t.setHours(12, 0, 0, 0);
+    const diff = Math.round((d - t) / 86400000);
+    if (diff === 0) return 'Today';
+    if (diff === 1) return 'Tomorrow';
+    if (diff > 1 && diff < 7) return d.toLocaleDateString('en-US', {
+      weekday: 'long'
+    });
+    return d.toLocaleDateString('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric'
+    });
   };
 
-  // Notes handlers (preserved from original)
+  // Notes handlers
   const handleAddNote = async () => {
     if (!newNote.trim() || !(data !== null && data !== void 0 && data.careRecipientId)) return;
     setSaving(true);
@@ -36277,11 +36272,9 @@ const CaredForView = window.CaredForView = () => {
       if (res !== null && res !== void 0 && res.ok) {
         setNewNote('');
         await fetchData();
-      } else if ((res === null || res === void 0 ? void 0 : res.status) === 503 || !navigator.onLine) {
-        if (window.OfflineQueue) {
-          await window.OfflineQueue.queueNote(notePayload);
-          setNewNote('');
-        }
+      } else if (((res === null || res === void 0 ? void 0 : res.status) === 503 || !navigator.onLine) && window.OfflineQueue) {
+        await window.OfflineQueue.queueNote(notePayload);
+        setNewNote('');
       }
     } catch (err) {
       if (!navigator.onLine && window.OfflineQueue) {
@@ -36294,7 +36287,6 @@ const CaredForView = window.CaredForView = () => {
           setNewNote('');
         } catch {}
       }
-      console.error('Add note error:', err);
     }
     setSaving(false);
   };
@@ -36329,29 +36321,30 @@ const CaredForView = window.CaredForView = () => {
     }
   };
   if (loading) return /*#__PURE__*/React.createElement(LoadingSpinner, {
-    text: "Loading your view..."
+    text: "Loading your dashboard..."
   });
   if (!data) return /*#__PURE__*/React.createElement(EmptyState, {
-    icon: "\u26A0\uFE0F",
-    title: "Couldn't load your page",
+    icon: "\\u26A0\\uFE0F",
+    title: "Couldn't load your dashboard",
     text: "Please try refreshing."
   });
   const notes = data.notes || [];
-  const userName = data.userName || 'Guest';
+  const userName = (data.userName || 'Guest').split(' ')[0]; // First name only
   const careProfile = data.careProfile || null;
   const permissionTier = data.permissionTier || 'full';
   const managedByName = data.managedByName || null;
   const managedReason = data.managedReason || null;
   const visSettings = data.visibilitySettings || null;
-
-  // Visibility helper: in "full" mode everything is visible; in collaborative/managed, check visSettings
+  const upcomingSessions = data.upcomingSessions || [];
+  const recentActivity = data.recentActivity || [];
+  const assignedCaregivers = data.assignedCaregivers || [];
+  const stats = data.stats || {};
+  const recentCompleted = data.recentCompleted || [];
   const canSee = section => {
     if (permissionTier === 'full') return true;
-    if (!visSettings) return true; // no settings = show all (backward compat)
+    if (!visSettings) return true;
     return !!visSettings[section];
   };
-
-  // Determine if the care recipient can edit (full = yes, collaborative = request-only, managed = no)
   const canEdit = permissionTier === 'full';
   const canRequest = permissionTier === 'full' || permissionTier === 'collaborative';
   const canAddNotes = permissionTier === 'full' || permissionTier === 'collaborative';
@@ -36361,28 +36354,6 @@ const CaredForView = window.CaredForView = () => {
     month: 'long',
     day: 'numeric'
   }) : '';
-  const serviceTypes = [{
-    value: 'companion',
-    label: 'Companionship'
-  }, {
-    value: 'meals',
-    label: 'Meal Prep'
-  }, {
-    value: 'rides',
-    label: 'Rides / Transport'
-  }, {
-    value: 'errands',
-    label: 'Errands'
-  }, {
-    value: 'personal_care',
-    label: 'Personal Care'
-  }, {
-    value: 'medication',
-    label: 'Medication Reminder'
-  }, {
-    value: 'light_housekeeping',
-    label: 'Light Housekeeping'
-  }];
   const noteTypeColors = {
     personal: {
       bg: 'var(--color-info-bg)',
@@ -36405,13 +36376,141 @@ const CaredForView = window.CaredForView = () => {
       label: 'Family'
     }
   };
-  const formatTime12 = t => {
-    if (!t) return '';
-    const [h, m] = t.split(':').map(Number);
-    const ampm = h >= 12 ? 'PM' : 'AM';
-    const dh = h > 12 ? h - 12 : h === 0 ? 12 : h;
-    return `${dh}:${String(m || 0).padStart(2, '0')} ${ampm}`;
+
+  // ─── Render helpers ───
+
+  const renderSessionCard = (s, compact) => {
+    const statusColors = {
+      requested: {
+        bg: '#fff3e0',
+        border: '#ffb74d',
+        label: 'Looking for Caregiver',
+        color: '#e65100'
+      },
+      open: {
+        bg: '#fff3e0',
+        border: '#ffb74d',
+        label: 'Open',
+        color: '#e65100'
+      },
+      confirmed: {
+        bg: '#e8f5e9',
+        border: '#66bb6a',
+        label: 'Confirmed',
+        color: '#2e7d32'
+      },
+      in_progress: {
+        bg: '#e3f2fd',
+        border: '#42a5f5',
+        label: 'In Progress',
+        color: '#1565c0'
+      },
+      pending: {
+        bg: '#f3e5f5',
+        border: '#ab47bc',
+        label: 'Pending',
+        color: '#7b1fa2'
+      }
+    };
+    const sc = statusColors[s.status] || statusColors.pending;
+    return /*#__PURE__*/React.createElement("div", {
+      key: s.id,
+      className: "card",
+      style: {
+        marginBottom: 10,
+        borderLeft: `4px solid ${sc.border}`,
+        padding: compact ? '12px 14px' : '14px 16px'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        flex: 1
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        marginBottom: 4
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 15,
+        fontWeight: 700,
+        color: 'var(--text-primary)'
+      }
+    }, friendlyDate(s.date)), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 13,
+        color: 'var(--text-secondary)'
+      }
+    }, formatTime12(s.time))), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 14,
+        fontWeight: 600,
+        color: 'var(--text-primary)',
+        marginBottom: 2
+      }
+    }, serviceLabel(s.serviceType), " \xB7 ", s.durationHours || 2, "h"), s.caregiverName && /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 13,
+        color: 'var(--text-secondary)'
+      }
+    }, "with ", s.caregiverName, s.caregiverRating ? ` \u2B50 ${Number(s.caregiverRating).toFixed(1)}` : ''), !s.caregiverName && s.status === 'requested' && /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 12,
+        color: '#e65100',
+        fontStyle: 'italic'
+      }
+    }, "Matching you with a caregiver...")), /*#__PURE__*/React.createElement("span", {
+      style: {
+        padding: '4px 10px',
+        borderRadius: 12,
+        fontSize: 11,
+        fontWeight: 600,
+        background: sc.bg,
+        color: sc.color,
+        whiteSpace: 'nowrap'
+      }
+    }, sc.label)), s.specialInstructions && /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 12,
+        color: 'var(--text-tertiary)',
+        fontStyle: 'italic',
+        marginTop: 6,
+        paddingTop: 6,
+        borderTop: '1px solid var(--border-color)'
+      }
+    }, s.specialInstructions));
   };
+
+  // ─── TABS ───
+  const tabs = [{
+    id: 'home',
+    label: 'Home',
+    icon: '\uD83C\uDFE0'
+  }, {
+    id: 'calendar',
+    label: 'Calendar',
+    icon: '\uD83D\uDCC5'
+  }, {
+    id: 'team',
+    label: 'My Care Team',
+    icon: '\uD83E\uDDD1\u200D\u2695\uFE0F'
+  }, {
+    id: 'profile',
+    label: 'My Info',
+    icon: '\uD83D\uDC8A'
+  }, ...(canSee('notes') ? [{
+    id: 'notes',
+    label: 'Notes',
+    icon: '\uD83D\uDCDD'
+  }] : [])];
   return /*#__PURE__*/React.createElement("div", null, typeof NotificationPrompt !== 'undefined' && React.createElement(NotificationPrompt, null), /*#__PURE__*/React.createElement("h1", {
     className: "greeting",
     style: {
@@ -36421,12 +36520,12 @@ const CaredForView = window.CaredForView = () => {
     style: {
       color: 'var(--text-secondary)',
       fontSize: '14px',
-      marginBottom: permissionTier !== 'full' ? '12px' : '20px'
+      marginBottom: permissionTier !== 'full' ? '12px' : '16px'
     }
-  }, "Here's what's coming up for you"), permissionTier === 'managed' && /*#__PURE__*/React.createElement("div", {
+  }, activeTab === 'home' ? "Here's your care at a glance" : '', activeTab === 'calendar' ? 'Your care calendar' : '', activeTab === 'team' ? 'Your care team' : '', activeTab === 'profile' ? 'Your care information' : '', activeTab === 'notes' ? 'Your personal notes' : ''), permissionTier === 'managed' && /*#__PURE__*/React.createElement("div", {
     style: {
       padding: '12px 16px',
-      marginBottom: '20px',
+      marginBottom: '16px',
       borderRadius: '10px',
       background: 'var(--color-warning-bg)',
       border: '1px solid #ffe082',
@@ -36438,7 +36537,7 @@ const CaredForView = window.CaredForView = () => {
     style: {
       fontSize: '20px'
     }
-  }, "\uD83D\uDD12"), /*#__PURE__*/React.createElement("div", {
+  }, "\\uD83D\\uDD12"), /*#__PURE__*/React.createElement("div", {
     style: {
       flex: 1
     }
@@ -36457,7 +36556,7 @@ const CaredForView = window.CaredForView = () => {
   }, "Your care is being managed by ", managedByName || 'your care team', ".", managedReason ? ` (${managedReason})` : '', " Contact them to request changes."))), permissionTier === 'collaborative' && /*#__PURE__*/React.createElement("div", {
     style: {
       padding: '12px 16px',
-      marginBottom: '20px',
+      marginBottom: '16px',
       borderRadius: '10px',
       background: 'var(--color-info-bg)',
       border: '1px solid #90caf9',
@@ -36469,7 +36568,7 @@ const CaredForView = window.CaredForView = () => {
     style: {
       fontSize: '20px'
     }
-  }, "\uD83E\uDD1D"), /*#__PURE__*/React.createElement("div", {
+  }, "\\uD83E\\uDD1D"), /*#__PURE__*/React.createElement("div", {
     style: {
       flex: 1
     }
@@ -36485,59 +36584,358 @@ const CaredForView = window.CaredForView = () => {
       color: '#37474f',
       marginTop: '2px'
     }
-  }, "Your care is co-managed with ", managedByName || 'your care team', ". You can request care sessions \u2014 your care team will review and approve them."))), (() => {
+  }, "Your care is co-managed with ", managedByName || 'your care team', ". You can request sessions \u2014 they'll review and approve."))), (() => {
     const rc = window.ROLE_COLOR || 'var(--role-color)';
     return /*#__PURE__*/React.createElement("div", {
       style: {
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))',
-        gap: '8px',
-        marginBottom: '20px'
+        display: 'flex',
+        gap: '6px',
+        marginBottom: '16px',
+        overflowX: 'auto',
+        paddingBottom: '4px',
+        WebkitOverflowScrolling: 'touch'
       }
-    }, [...(canSee('calendar') ? [{
-      id: 'calendar',
-      label: 'My Calendar',
-      icon: '📅'
-    }] : []), {
-      id: 'profile',
-      label: 'My Care Info',
-      icon: '💊'
-    }, ...(canSee('notes') ? [{
-      id: 'notes',
-      label: 'My Notes',
-      icon: '📝'
-    }] : [])].map(tab => /*#__PURE__*/React.createElement("button", {
+    }, tabs.map(tab => /*#__PURE__*/React.createElement("button", {
       key: tab.id,
       onClick: () => setActiveTab(tab.id),
       style: {
         display: 'flex',
-        flexDirection: 'column',
         alignItems: 'center',
-        justifyContent: 'center',
-        gap: '4px',
-        padding: '14px 8px',
+        gap: '6px',
+        padding: '8px 14px',
         border: 'none',
-        borderRadius: '12px',
+        borderRadius: '20px',
         cursor: 'pointer',
-        background: activeTab === tab.id ? rc : 'var(--bg-primary)',
+        background: activeTab === tab.id ? rc : 'var(--bg-surface)',
         color: activeTab === tab.id ? 'var(--text-on-primary)' : 'var(--text-secondary)',
+        fontSize: '13px',
+        fontWeight: activeTab === tab.id ? 700 : 500,
+        whiteSpace: 'nowrap',
+        flexShrink: 0,
         transition: 'all 0.15s',
-        minHeight: '72px',
         boxShadow: activeTab === tab.id ? `0 2px 8px ${rc}4d` : 'none'
       }
     }, /*#__PURE__*/React.createElement("span", {
       style: {
-        fontSize: '24px',
-        lineHeight: 1
+        fontSize: '16px'
       }
-    }, tab.icon), /*#__PURE__*/React.createElement("span", {
-      style: {
-        fontSize: '11px',
-        fontWeight: activeTab === tab.id ? 700 : 600,
-        letterSpacing: '0.3px'
-      }
-    }, tab.label))));
-  })(), activeTab === 'calendar' && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    }, tab.icon), tab.label)));
+  })(), activeTab === 'home' && /*#__PURE__*/React.createElement("div", null, canRequest && /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      if (window.__openRequestCareModal) window.__openRequestCareModal();
+    },
+    style: {
+      width: '100%',
+      padding: '16px',
+      marginBottom: '16px',
+      background: 'linear-gradient(135deg, var(--role-color), #9b59b6)',
+      color: '#fff',
+      border: 'none',
+      borderRadius: '12px',
+      cursor: 'pointer',
+      fontSize: '16px',
+      fontWeight: 700,
+      boxShadow: '0 4px 12px rgba(123, 94, 167, 0.3)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: '8px'
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: '20px'
+    }
+  }, "+"), permissionTier === 'collaborative' ? 'Request Care (requires approval)' : 'Request Care'), (stats.sessionsThisMonth > 0 || assignedCaregivers.length > 0) && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'grid',
+      gridTemplateColumns: 'repeat(3, 1fr)',
+      gap: '8px',
+      marginBottom: '16px'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "card",
+    style: {
+      textAlign: 'center',
+      padding: '12px 8px'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '22px',
+      fontWeight: 700,
+      color: 'var(--role-color)'
+    }
+  }, upcomingSessions.length), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '11px',
+      color: 'var(--text-secondary)',
+      marginTop: '2px'
+    }
+  }, "Upcoming")), /*#__PURE__*/React.createElement("div", {
+    className: "card",
+    style: {
+      textAlign: 'center',
+      padding: '12px 8px'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '22px',
+      fontWeight: 700,
+      color: 'var(--role-color)'
+    }
+  }, assignedCaregivers.length), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '11px',
+      color: 'var(--text-secondary)',
+      marginTop: '2px'
+    }
+  }, "Caregivers")), /*#__PURE__*/React.createElement("div", {
+    className: "card",
+    style: {
+      textAlign: 'center',
+      padding: '12px 8px'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '22px',
+      fontWeight: 700,
+      color: 'var(--role-color)'
+    }
+  }, stats.sessionsThisMonth || 0), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '11px',
+      color: 'var(--text-secondary)',
+      marginTop: '2px'
+    }
+  }, "This Month"))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: '20px'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 14,
+      fontWeight: 700,
+      color: 'var(--text-primary)',
+      marginBottom: 10,
+      textTransform: 'uppercase',
+      letterSpacing: '0.5px'
+    }
+  }, "Upcoming Care"), upcomingSessions.length > 0 ? upcomingSessions.slice(0, 5).map(s => renderSessionCard(s, false)) : /*#__PURE__*/React.createElement("div", {
+    className: "card",
+    style: {
+      textAlign: 'center',
+      padding: '28px 20px'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '32px',
+      marginBottom: '8px'
+    }
+  }, "\\uD83D\\uDCC5"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 14,
+      color: 'var(--text-secondary)',
+      marginBottom: 12
+    }
+  }, "No upcoming sessions"), canRequest && /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      if (window.__openRequestCareModal) window.__openRequestCareModal();
+    },
+    style: {
+      padding: '10px 24px',
+      background: 'var(--role-color)',
+      color: '#fff',
+      border: 'none',
+      borderRadius: 8,
+      fontSize: 13,
+      fontWeight: 600,
+      cursor: 'pointer'
+    }
+  }, "Request Your First Session")), upcomingSessions.length > 5 && /*#__PURE__*/React.createElement("button", {
+    onClick: () => setActiveTab('calendar'),
+    style: {
+      width: '100%',
+      padding: '10px',
+      background: 'none',
+      border: '1px solid var(--border-color)',
+      borderRadius: 8,
+      fontSize: 13,
+      color: 'var(--role-color)',
+      cursor: 'pointer',
+      fontWeight: 600,
+      marginTop: 4
+    }
+  }, "View all on Calendar \\u2192")), assignedCaregivers.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: '20px'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 14,
+      fontWeight: 700,
+      color: 'var(--text-primary)',
+      textTransform: 'uppercase',
+      letterSpacing: '0.5px'
+    }
+  }, "My Care Team"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setActiveTab('team'),
+    style: {
+      background: 'none',
+      border: 'none',
+      color: 'var(--role-color)',
+      fontSize: 12,
+      fontWeight: 600,
+      cursor: 'pointer'
+    }
+  }, "View All \\u2192")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 10,
+      overflowX: 'auto',
+      paddingBottom: 4
+    }
+  }, assignedCaregivers.slice(0, 4).map(cg => /*#__PURE__*/React.createElement("div", {
+    key: cg.assignmentId,
+    onClick: () => setActiveTab('team'),
+    className: "card",
+    style: {
+      minWidth: 120,
+      textAlign: 'center',
+      padding: '14px 10px',
+      cursor: 'pointer',
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 48,
+      height: 48,
+      borderRadius: '50%',
+      margin: '0 auto 8px',
+      background: 'var(--role-color)',
+      color: '#fff',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      fontSize: 20,
+      fontWeight: 700
+    }
+  }, (cg.firstName || '?')[0]), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      fontWeight: 600,
+      color: 'var(--text-primary)'
+    }
+  }, cg.firstName), cg.rating && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: 'var(--text-secondary)',
+      marginTop: 2
+    }
+  }, "\\u2B50 ", Number(cg.rating).toFixed(1)))))), recentActivity.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: '20px'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 14,
+      fontWeight: 700,
+      color: 'var(--text-primary)',
+      marginBottom: 10,
+      textTransform: 'uppercase',
+      letterSpacing: '0.5px'
+    }
+  }, "Recent Activity"), recentActivity.slice(0, 5).map(a => /*#__PURE__*/React.createElement("div", {
+    key: a.id,
+    className: "card",
+    style: {
+      marginBottom: 6,
+      padding: '10px 14px'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      fontWeight: 600,
+      color: 'var(--text-primary)'
+    }
+  }, a.title), a.message && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: 'var(--text-secondary)',
+      marginTop: 2
+    }
+  }, a.message)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: 'var(--text-muted)',
+      flexShrink: 0,
+      marginLeft: 8
+    }
+  }, timeAgo(a.timestamp)))))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'grid',
+      gridTemplateColumns: '1fr 1fr',
+      gap: 8,
+      marginBottom: 20
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => setActiveTab('profile'),
+    className: "card",
+    style: {
+      padding: '16px',
+      textAlign: 'center',
+      border: 'none',
+      cursor: 'pointer',
+      background: 'var(--bg-card)'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 24,
+      marginBottom: 4
+    }
+  }, "\\uD83D\\uDC8A"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      fontWeight: 600,
+      color: 'var(--text-primary)'
+    }
+  }, "My Care Info")), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setActiveTab('notes'),
+    className: "card",
+    style: {
+      padding: '16px',
+      textAlign: 'center',
+      border: 'none',
+      cursor: 'pointer',
+      background: 'var(--bg-card)'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 24,
+      marginBottom: 4
+    }
+  }, "\\uD83D\\uDCDD"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      fontWeight: 600,
+      color: 'var(--text-primary)'
+    }
+  }, "My Notes")))), activeTab === 'calendar' && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       justifyContent: 'space-between',
@@ -36551,13 +36949,13 @@ const CaredForView = window.CaredForView = () => {
     },
     style: {
       background: 'none',
-      border: '1px solid #e0e0e0',
+      border: '1px solid var(--border-color)',
       borderRadius: 8,
       padding: '6px 14px',
       cursor: 'pointer',
       fontSize: 14
     }
-  }, "\u2190 Prev"), /*#__PURE__*/React.createElement("div", {
+  }, "\\u2190 Prev"), /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: 'center'
     }
@@ -36588,13 +36986,13 @@ const CaredForView = window.CaredForView = () => {
     },
     style: {
       background: 'none',
-      border: '1px solid #e0e0e0',
+      border: '1px solid var(--border-color)',
       borderRadius: 8,
       padding: '6px 14px',
       cursor: 'pointer',
       fontSize: 14
     }
-  }, "Next \u2192")), /*#__PURE__*/React.createElement("div", {
+  }, "Next \\u2192")), /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       gap: 16,
@@ -36613,8 +37011,8 @@ const CaredForView = window.CaredForView = () => {
       width: 12,
       height: 12,
       borderRadius: 3,
-      background: 'var(--color-error-bg)',
-      border: '1px solid #f48fb1',
+      background: '#fff3e0',
+      border: '1px solid #ffb74d',
       display: 'inline-block'
     }
   }), " Seeking Help"), /*#__PURE__*/React.createElement("span", {
@@ -36628,8 +37026,8 @@ const CaredForView = window.CaredForView = () => {
       width: 12,
       height: 12,
       borderRadius: 3,
-      background: 'var(--color-info-bg)',
-      border: '1px solid #90caf9',
+      background: '#e8f5e9',
+      border: '1px solid #66bb6a',
       display: 'inline-block'
     }
   }), " Confirmed")), /*#__PURE__*/React.createElement("div", {
@@ -36660,30 +37058,25 @@ const CaredForView = window.CaredForView = () => {
       gap: 2
     }
   }, calendarCells.map((day, i) => {
-    if (day === null) {
-      return /*#__PURE__*/React.createElement("div", {
-        key: i,
-        style: {
-          minHeight: 60,
-          background: 'var(--bg-primary)',
-          borderRadius: 4
-        }
-      });
-    }
+    if (day === null) return /*#__PURE__*/React.createElement("div", {
+      key: i,
+      style: {
+        minHeight: 60,
+        background: 'var(--bg-primary)',
+        borderRadius: 4
+      }
+    });
     const counts = getDayCounts(day);
     const isTodayCell = isToday(day);
     const isSelected = selectedDay === day;
     const hasRequested = counts.requested > 0;
     const hasConfirmed = counts.confirmed > 0;
-
-    // Determine cell background
     let cellBg = 'var(--bg-card)';
-    if (hasRequested && hasConfirmed) cellBg = 'linear-gradient(135deg, #fce4ec 50%, #e3f2fd 50%)';else if (hasRequested) cellBg = 'var(--color-error-bg)';else if (hasConfirmed) cellBg = 'var(--color-info-bg)';
+    if (hasRequested && hasConfirmed) cellBg = 'linear-gradient(135deg, #fff3e0 50%, #e8f5e9 50%)';else if (hasRequested) cellBg = '#fff3e0';else if (hasConfirmed) cellBg = '#e8f5e9';
     return /*#__PURE__*/React.createElement("div", {
       key: i,
       onClick: () => {
         setSelectedDay(day);
-        setShowRequestForm(false);
       },
       style: {
         minHeight: 60,
@@ -36692,7 +37085,7 @@ const CaredForView = window.CaredForView = () => {
         borderRadius: 6,
         padding: '4px 6px',
         cursor: 'pointer',
-        border: isSelected ? '2px solid #1b6b5a' : isTodayCell ? '2px solid #e8724a' : '1px solid #f0f0f0',
+        border: isSelected ? '2px solid var(--role-color)' : isTodayCell ? '2px solid #e8724a' : '1px solid #f0f0f0',
         position: 'relative',
         transition: 'border 0.15s'
       }
@@ -36700,7 +37093,7 @@ const CaredForView = window.CaredForView = () => {
       style: {
         fontSize: 13,
         fontWeight: isTodayCell ? 800 : 600,
-        color: isTodayCell ? 'var(--accent-color)' : 'var(--text-primary)',
+        color: isTodayCell ? '#e8724a' : 'var(--text-primary)',
         marginBottom: 2
       }
     }, day), /*#__PURE__*/React.createElement("div", {
@@ -36713,22 +37106,20 @@ const CaredForView = window.CaredForView = () => {
       style: {
         fontSize: 9,
         fontWeight: 600,
-        color: 'var(--color-error)',
+        color: '#e65100',
         background: 'var(--bg-surface)',
         borderRadius: 8,
         padding: '1px 5px',
-        display: 'inline-block',
         width: 'fit-content'
       }
-    }, counts.requested, " request", counts.requested > 1 ? 's' : ''), hasConfirmed && /*#__PURE__*/React.createElement("div", {
+    }, counts.requested, " req"), hasConfirmed && /*#__PURE__*/React.createElement("div", {
       style: {
         fontSize: 9,
         fontWeight: 600,
-        color: 'var(--color-info)',
+        color: '#2e7d32',
         background: 'var(--bg-surface)',
         borderRadius: 8,
         padding: '1px 5px',
-        display: 'inline-block',
         width: 'fit-content'
       }
     }, counts.confirmed, " booked")));
@@ -36750,7 +37141,7 @@ const CaredForView = window.CaredForView = () => {
       fontWeight: 700,
       color: 'var(--text-primary)'
     }
-  }, "\uD83D\uDCCB ", selectedDateLabel), /*#__PURE__*/React.createElement("button", {
+  }, selectedDateLabel), /*#__PURE__*/React.createElement("button", {
     onClick: () => setSelectedDay(null),
     style: {
       background: 'none',
@@ -36759,58 +37150,30 @@ const CaredForView = window.CaredForView = () => {
       cursor: 'pointer',
       color: 'var(--text-muted)'
     }
-  }, "\u2715")), selectedDaySessions.length > 0 ? /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginBottom: 16
-    }
-  }, selectedDaySessions.map((s, idx) => {
-    const isRequested = s.status === 'requested';
+  }, "\\u2715")), selectedDaySessions.length > 0 ? selectedDaySessions.map((s, idx) => {
+    const isRequested = ['requested', 'open'].includes(s.status);
     return /*#__PURE__*/React.createElement("div", {
       key: idx,
       style: {
         padding: '10px 12px',
-        background: isRequested ? 'var(--color-error-bg)' : 'var(--color-info-bg)',
+        background: isRequested ? '#fff3e0' : '#e8f5e9',
         borderRadius: 8,
         marginBottom: 8,
-        borderLeft: `3px solid ${isRequested ? '#f48fb1' : '#42a5f5'}`
+        borderLeft: `3px solid ${isRequested ? '#ffb74d' : '#66bb6a'}`
       }
     }, /*#__PURE__*/React.createElement("div", {
       style: {
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center'
-      }
-    }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
-      style: {
         fontWeight: 600,
-        fontSize: 14,
-        color: 'var(--text-primary)'
+        fontSize: 14
       }
-    }, formatTime12(s.scheduled_time || s.time), " \xB7 ", s.service_type || s.serviceType), /*#__PURE__*/React.createElement("div", {
+    }, formatTime12(s.scheduled_time || s.time), " \\u00B7 ", serviceLabel(s.service_type || s.serviceType)), /*#__PURE__*/React.createElement("div", {
       style: {
         fontSize: 12,
         color: 'var(--text-secondary)',
         marginTop: 2
       }
-    }, s.duration_hours || s.durationHours || 1, "h", s.caregiver_name || s.caregiverName ? ` · with ${s.caregiver_name || s.caregiverName}` : ''), (s.special_instructions || s.specialInstructions) && /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontSize: 11,
-        color: 'var(--text-tertiary)',
-        fontStyle: 'italic',
-        marginTop: 4
-      }
-    }, s.special_instructions || s.specialInstructions)), /*#__PURE__*/React.createElement("span", {
-      style: {
-        padding: '3px 10px',
-        borderRadius: 10,
-        fontSize: 10,
-        fontWeight: 600,
-        background: isRequested ? 'var(--bg-card)' : 'var(--color-success-bg)',
-        color: isRequested ? 'var(--color-error)' : 'var(--color-success)',
-        textTransform: 'capitalize'
-      }
-    }, isRequested ? 'Seeking Help' : s.status)));
-  })) : /*#__PURE__*/React.createElement("div", {
+    }, s.duration_hours || s.durationHours || 2, "h", s.caregiver_name || s.caregiverName ? ` \u00B7 with ${s.caregiver_name || s.caregiverName}` : ''));
+  }) : /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 13,
       color: 'var(--text-muted)',
@@ -36819,25 +37182,244 @@ const CaredForView = window.CaredForView = () => {
   }, "No sessions on this day"), canRequest && /*#__PURE__*/React.createElement("button", {
     onClick: () => {
       const prefillDate = getDateStr(selectedDay);
-      if (window.__openRequestCareModal) {
-        window.__openRequestCareModal(prefillDate);
-      }
+      if (window.__openRequestCareModal) window.__openRequestCareModal(prefillDate);
     },
     style: {
       width: '100%',
       padding: '12px',
-      background: 'var(--color-error-bg)',
-      color: 'var(--color-error)',
-      border: '1px dashed #f48fb1',
+      background: 'var(--role-color)',
+      color: '#fff',
+      border: 'none',
       borderRadius: 8,
       cursor: 'pointer',
       fontSize: 13,
       fontWeight: 600
     }
-  }, permissionTier === 'collaborative' ? '📋 Request Care (requires approval)' : '+ Request Care', " for ", new Date(viewYear, viewMonth, selectedDay).toLocaleDateString('en-US', {
+  }, "+ Request Care for ", new Date(viewYear, viewMonth, selectedDay).toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric'
-  })))), activeTab === 'profile' && /*#__PURE__*/React.createElement("div", null, careProfile ? /*#__PURE__*/React.createElement(React.Fragment, null, canSee('healthConditions') && careProfile.healthConditions && careProfile.healthConditions.length > 0 && /*#__PURE__*/React.createElement("div", {
+  })))), activeTab === 'team' && /*#__PURE__*/React.createElement("div", null, assignedCaregivers.length > 0 ? assignedCaregivers.map(cg => {
+    const isExpanded = expandedCaregiverCard === cg.assignmentId;
+    return /*#__PURE__*/React.createElement("div", {
+      key: cg.assignmentId,
+      className: "card",
+      style: {
+        marginBottom: 12,
+        overflow: 'hidden'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      onClick: () => setExpandedCaregiverCard(isExpanded ? null : cg.assignmentId),
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 14,
+        cursor: 'pointer',
+        padding: '4px 0'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        width: 56,
+        height: 56,
+        borderRadius: '50%',
+        background: 'linear-gradient(135deg, var(--role-color), #9b59b6)',
+        color: '#fff',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontSize: 22,
+        fontWeight: 700,
+        flexShrink: 0
+      }
+    }, (cg.firstName || '?')[0], (cg.lastName || '?')[0]), /*#__PURE__*/React.createElement("div", {
+      style: {
+        flex: 1
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 16,
+        fontWeight: 700,
+        color: 'var(--text-primary)'
+      }
+    }, cg.firstName, " ", cg.lastName, cg.isFavorite ? ' \u2764\uFE0F' : ''), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 13,
+        color: 'var(--text-secondary)',
+        marginTop: 2
+      }
+    }, cg.rating ? `\u2B50 ${Number(cg.rating).toFixed(1)}` : 'New Caregiver', cg.hourlyRate ? ` \u00B7 $${cg.hourlyRate}/hr` : ''), cg.specialties && cg.specialties.length > 0 && /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        gap: 4,
+        flexWrap: 'wrap',
+        marginTop: 6
+      }
+    }, cg.specialties.slice(0, 3).map((s, i) => /*#__PURE__*/React.createElement("span", {
+      key: i,
+      style: {
+        padding: '2px 8px',
+        borderRadius: 10,
+        fontSize: 10,
+        fontWeight: 600,
+        background: 'var(--color-info-bg)',
+        color: 'var(--color-info)'
+      }
+    }, s)))), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 18,
+        color: 'var(--text-muted)',
+        transform: isExpanded ? 'rotate(180deg)' : 'none',
+        transition: 'transform 0.2s'
+      }
+    }, "\\u25BC")), isExpanded && /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginTop: 14,
+        paddingTop: 14,
+        borderTop: '1px solid var(--border-color)'
+      }
+    }, cg.bio && /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 13,
+        color: 'var(--text-secondary)',
+        marginBottom: 12,
+        lineHeight: 1.5
+      }
+    }, cg.bio), cg.certifications && cg.certifications.length > 0 && /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginBottom: 12
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 12,
+        fontWeight: 600,
+        color: 'var(--text-primary)',
+        marginBottom: 4
+      }
+    }, "Certifications"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        gap: 4,
+        flexWrap: 'wrap'
+      }
+    }, cg.certifications.map((c, i) => /*#__PURE__*/React.createElement("span", {
+      key: i,
+      style: {
+        padding: '3px 10px',
+        borderRadius: 10,
+        fontSize: 11,
+        background: '#e8f5e9',
+        color: '#2e7d32',
+        fontWeight: 500
+      }
+    }, c)))), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        gap: 8,
+        flexWrap: 'wrap'
+      }
+    }, cg.phone && /*#__PURE__*/React.createElement("a", {
+      href: `tel:${cg.phone}`,
+      style: {
+        padding: '8px 16px',
+        background: 'var(--color-success-bg)',
+        color: 'var(--color-success)',
+        border: 'none',
+        borderRadius: 8,
+        fontSize: 13,
+        fontWeight: 600,
+        textDecoration: 'none',
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 6
+      }
+    }, "\\uD83D\\uDCDE Call"), /*#__PURE__*/React.createElement("button", {
+      onClick: () => {
+        if (window.__openRequestCareModal) window.__openRequestCareModal(null, cg.caregiverProfileId);
+      },
+      style: {
+        padding: '8px 16px',
+        background: 'var(--role-color)',
+        color: '#fff',
+        border: 'none',
+        borderRadius: 8,
+        fontSize: 13,
+        fontWeight: 600,
+        cursor: 'pointer'
+      }
+    }, "Book ", cg.firstName))));
+  }) : /*#__PURE__*/React.createElement("div", {
+    className: "card",
+    style: {
+      textAlign: 'center',
+      padding: '32px 20px'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '40px',
+      marginBottom: '10px'
+    }
+  }, "\\uD83E\\uDDD1\\u200D\\u2695\\uFE0F"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 15,
+      fontWeight: 600,
+      color: 'var(--text-primary)',
+      marginBottom: 6
+    }
+  }, "No caregivers assigned yet"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      color: 'var(--text-secondary)',
+      marginBottom: 16
+    }
+  }, "When you request care, we'll match you with qualified caregivers in your area."), canRequest && /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      if (window.__openRequestCareModal) window.__openRequestCareModal();
+    },
+    style: {
+      padding: '10px 24px',
+      background: 'var(--role-color)',
+      color: '#fff',
+      border: 'none',
+      borderRadius: 8,
+      fontSize: 13,
+      fontWeight: 600,
+      cursor: 'pointer'
+    }
+  }, "Find Caregivers")), careProfile && careProfile.preferences && /*#__PURE__*/React.createElement("div", {
+    className: "card",
+    style: {
+      marginTop: 16
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 14,
+      fontWeight: 700,
+      color: 'var(--text-primary)',
+      marginBottom: 8
+    }
+  }, "\\u2728 My Care Preferences"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      color: 'var(--text-secondary)',
+      lineHeight: 1.6
+    }
+  }, careProfile.preferences)), careProfile && (careProfile.locationCity || careProfile.locationState) && /*#__PURE__*/React.createElement("div", {
+    className: "card",
+    style: {
+      marginTop: 8
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 14,
+      fontWeight: 700,
+      color: 'var(--text-primary)',
+      marginBottom: 4
+    }
+  }, "\\uD83D\\uDCCD Care Location"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      color: 'var(--text-secondary)'
+    }
+  }, [careProfile.locationCity, careProfile.locationState].filter(Boolean).join(', ')))), activeTab === 'profile' && /*#__PURE__*/React.createElement("div", null, careProfile ? /*#__PURE__*/React.createElement(React.Fragment, null, canSee('healthConditions') && careProfile.healthConditions && careProfile.healthConditions.length > 0 && /*#__PURE__*/React.createElement("div", {
     className: "card",
     style: {
       marginBottom: 12
@@ -36849,7 +37431,7 @@ const CaredForView = window.CaredForView = () => {
       color: 'var(--text-primary)',
       marginBottom: 10
     }
-  }, "\uD83E\uDE7A Health Conditions"), careProfile.healthConditions.map((c, i) => /*#__PURE__*/React.createElement("div", {
+  }, "\\uD83E\\uDE7A Health Conditions"), careProfile.healthConditions.map((c, i) => /*#__PURE__*/React.createElement("div", {
     key: i,
     style: {
       padding: '6px 10px',
@@ -36871,7 +37453,7 @@ const CaredForView = window.CaredForView = () => {
       color: 'var(--text-primary)',
       marginBottom: 10
     }
-  }, "\uD83D\uDC8A Medications"), careProfile.medications.map((m, i) => /*#__PURE__*/React.createElement("div", {
+  }, "\\uD83D\\uDC8A Medications"), careProfile.medications.map((m, i) => /*#__PURE__*/React.createElement("div", {
     key: i,
     style: {
       padding: '6px 10px',
@@ -36893,7 +37475,7 @@ const CaredForView = window.CaredForView = () => {
       color: 'var(--text-primary)',
       marginBottom: 10
     }
-  }, "\u26A0\uFE0F Food Allergies"), careProfile.foodAllergies.map((a, i) => /*#__PURE__*/React.createElement("div", {
+  }, "\\u26A0\\uFE0F Food Allergies"), careProfile.foodAllergies.map((a, i) => /*#__PURE__*/React.createElement("div", {
     key: i,
     style: {
       padding: '6px 10px',
@@ -36915,7 +37497,7 @@ const CaredForView = window.CaredForView = () => {
       color: 'var(--text-primary)',
       marginBottom: 10
     }
-  }, "\u2728 Care Preferences"), /*#__PURE__*/React.createElement("div", {
+  }, "\\u2728 Care Preferences"), /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 13,
       color: 'var(--text-secondary)',
@@ -36933,7 +37515,7 @@ const CaredForView = window.CaredForView = () => {
       color: 'var(--text-primary)',
       marginBottom: 10
     }
-  }, "\uD83D\uDC3E Pets at Home"), /*#__PURE__*/React.createElement("div", {
+  }, "\\uD83D\\uDC3E Pets at Home"), /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 13,
       color: 'var(--text-secondary)',
@@ -36951,7 +37533,7 @@ const CaredForView = window.CaredForView = () => {
       color: 'var(--text-primary)',
       marginBottom: 10
     }
-  }, "\uD83C\uDD98 Emergency Contact"), /*#__PURE__*/React.createElement("div", {
+  }, "\\uD83C\\uDD98 Emergency Contact"), /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 14,
       fontWeight: 600,
@@ -36964,7 +37546,7 @@ const CaredForView = window.CaredForView = () => {
       color: 'var(--role-color)',
       textDecoration: 'none'
     }
-  }, "\uD83D\uDCDE ", formatPhone(careProfile.emergencyContactPhone))), (permissionTier === 'managed' || permissionTier === 'collaborative') && /*#__PURE__*/React.createElement("div", {
+  }, "\\uD83D\\uDCDE ", typeof formatPhone === 'function' ? formatPhone(careProfile.emergencyContactPhone) : careProfile.emergencyContactPhone)), (permissionTier === 'managed' || permissionTier === 'collaborative') && /*#__PURE__*/React.createElement("div", {
     style: {
       padding: '10px 14px',
       background: 'var(--color-warning-bg)',
@@ -36986,7 +37568,7 @@ const CaredForView = window.CaredForView = () => {
       fontSize: '40px',
       marginBottom: '12px'
     }
-  }, "\uD83D\uDC8A"), /*#__PURE__*/React.createElement("div", null, "No care profile linked yet. Ask your care team to connect your profile."))), activeTab === 'notes' && /*#__PURE__*/React.createElement("div", null, canAddNotes && /*#__PURE__*/React.createElement("div", {
+  }, "\\uD83D\\uDC8A"), /*#__PURE__*/React.createElement("div", null, "Your care profile hasn't been filled in yet. You can update it in your Account settings."))), activeTab === 'notes' && /*#__PURE__*/React.createElement("div", null, canAddNotes && /*#__PURE__*/React.createElement("div", {
     className: "card",
     style: {
       marginBottom: '16px'
@@ -37006,10 +37588,12 @@ const CaredForView = window.CaredForView = () => {
       minHeight: '80px',
       padding: '10px',
       borderRadius: '6px',
-      border: '1px solid #ddd',
+      border: '1px solid var(--border-color)',
       fontSize: '14px',
       resize: 'vertical',
-      marginBottom: '8px'
+      marginBottom: '8px',
+      background: 'var(--bg-surface)',
+      color: 'var(--text-primary)'
     }
   }), /*#__PURE__*/React.createElement("button", {
     onClick: handleAddNote,
@@ -37017,7 +37601,7 @@ const CaredForView = window.CaredForView = () => {
     style: {
       padding: '8px 20px',
       background: 'var(--role-color)',
-      color: 'var(--text-on-primary)',
+      color: '#fff',
       border: 'none',
       borderRadius: '6px',
       cursor: 'pointer',
@@ -37042,10 +37626,12 @@ const CaredForView = window.CaredForView = () => {
         minHeight: '60px',
         padding: '10px',
         borderRadius: '6px',
-        border: '1px solid #ddd',
+        border: '1px solid var(--border-color)',
         fontSize: '14px',
         resize: 'vertical',
-        marginBottom: '8px'
+        marginBottom: '8px',
+        background: 'var(--bg-surface)',
+        color: 'var(--text-primary)'
       }
     }), /*#__PURE__*/React.createElement("div", {
       style: {
@@ -37058,7 +37644,7 @@ const CaredForView = window.CaredForView = () => {
       style: {
         padding: '6px 14px',
         background: 'var(--role-color)',
-        color: 'var(--text-on-primary)',
+        color: '#fff',
         border: 'none',
         borderRadius: '6px',
         cursor: 'pointer',
@@ -37069,10 +37655,11 @@ const CaredForView = window.CaredForView = () => {
       style: {
         padding: '6px 14px',
         background: 'var(--bg-surface)',
-        border: '1px solid #ddd',
+        border: '1px solid var(--border-color)',
         borderRadius: '6px',
         cursor: 'pointer',
-        fontSize: '12px'
+        fontSize: '12px',
+        color: 'var(--text-primary)'
       }
     }, "Cancel"))) : /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
       style: {
@@ -37114,7 +37701,7 @@ const CaredForView = window.CaredForView = () => {
       style: {
         padding: '3px 8px',
         background: 'none',
-        border: '1px solid #ddd',
+        border: '1px solid var(--border-color)',
         borderRadius: '4px',
         cursor: 'pointer',
         fontSize: '11px',
@@ -37162,7 +37749,7 @@ const CaredForView = window.CaredForView = () => {
       fontSize: '40px',
       marginBottom: '12px'
     }
-  }, "\uD83D\uDCDD"), /*#__PURE__*/React.createElement("div", null, "No notes yet \u2014 write your first one above!"))));
+  }, "\\uD83D\\uDCDD"), /*#__PURE__*/React.createElement("div", null, "No notes yet \u2014 write your first one above!"))));
 };
 ;
 // ─── Self-Onboarding Wizard for Care Recipients (Tier 1 users) ───
@@ -77726,6 +78313,11 @@ const App = () => {
         id: 'messages',
         icon: '💬',
         label: 'Messages'
+      }, {
+        id: 'kindred',
+        icon: '💜',
+        label: 'Kindred',
+        isKindred: true
       }, {
         id: 'account',
         icon: '👤',

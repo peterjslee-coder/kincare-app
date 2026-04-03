@@ -354,10 +354,28 @@ router.get("/contacts", async (req, res) => {
     WHERE (requester_id = ? OR recipient_id = ?) AND status = 'accepted'
   `).all(userId, userId, userId);
 
+  // 4. For care_for users: caregivers assigned to their linked care_recipient + the family contact
+  const activeRole = req.user.activeRole || req.user.role;
+  let careForContacts = [];
+  if (activeRole === 'care_for' || (req.user.roles || []).includes('care_for')) {
+    careForContacts = await db.prepare(`
+      SELECT DISTINCT cp.user_id
+      FROM care_recipients cr
+      JOIN caregiver_assignments ca ON ca.care_recipient_id = cr.id AND ca.is_active = 1
+      JOIN caregiver_profiles cp ON ca.caregiver_profile_id = cp.id
+      WHERE cr.linked_user_id = ?
+      UNION
+      SELECT cr.family_user_id AS user_id
+      FROM care_recipients cr
+      WHERE cr.linked_user_id = ? AND cr.family_user_id IS NOT NULL AND cr.family_user_id != ?
+    `).all(userId, userId, userId).catch(() => []);
+  }
+
   const connectedIds = new Set([
     ...teamMembers.map(r => r.user_id),
     ...assignmentContacts.map(r => r.user_id),
     ...connectionContacts.map(r => r.user_id),
+    ...careForContacts.map(r => r.user_id),
   ]);
 
   if (connectedIds.size === 0) {

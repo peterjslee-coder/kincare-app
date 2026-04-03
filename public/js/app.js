@@ -1342,6 +1342,7 @@ const App = () => {
       return [
         { id: 'dashboard', icon: '🏠', label: 'Home' },
         { id: 'messages', icon: '💬', label: 'Messages' },
+        { id: 'kindred', icon: '💜', label: 'Kindred', isKindred: true },
         { id: 'account', icon: '👤', label: 'Account' },
       ];
     }

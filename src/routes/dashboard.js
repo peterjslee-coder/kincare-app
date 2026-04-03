@@ -890,9 +890,9 @@ async function caregiverDashboard(db, userId, res) {
 
 // (interview data is fetched client-side via /api/interviews/* endpoints)
 
-// ─── Cared-For Dashboard (Betty's view) ───
+// ─── Cared-For Dashboard (Granny's view — full-featured, same power as family) ───
 async function careForDashboard(db, userId, res) {
-  const user = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(userId);
+  const user = await db.prepare("SELECT first_name, last_name, stripe_customer_id FROM users WHERE id = ?").get(userId);
 
   // Find care recipient linked to this user account
   const recipient = await db.prepare(`
@@ -902,7 +902,7 @@ async function careForDashboard(db, userId, res) {
   `).get(userId);
 
   if (!recipient) {
-    return res.json({ role: "care_for", userName: `${user.first_name} ${user.last_name}`, sessions: [], notes: [] });
+    return res.json({ role: "care_for", userName: `${user.first_name} ${user.last_name}`, sessions: [], notes: [], upcomingSessions: [], recentActivity: [], assignedCaregivers: [], stats: {} });
   }
 
   // Resolve managed-by user name if present
@@ -912,29 +912,109 @@ async function careForDashboard(db, userId, res) {
     if (mgr) managedByName = `${mgr.first_name} ${mgr.last_name}`;
   }
 
-  // All future sessions (calendar data) — use care-location timezone
   const today = getTodayStringInZone();
-  const sessions = await db.prepare(`
-    SELECT cs.*,
-      u.first_name || ' ' || u.last_name AS caregiver_name
-    FROM care_sessions cs
-    LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
-    LEFT JOIN users u ON cp.user_id = u.id
-    WHERE cs.care_recipient_id = ? AND cs.scheduled_date >= ?
-      AND cs.status IN ('pending', 'confirmed')
-    ORDER BY cs.scheduled_date ASC, cs.scheduled_time ASC
-  `).all(recipient.id, today);
+  const etNow = getNowInZone();
+  const monthStart = new Date(etNow); monthStart.setDate(1);
+  const monthStr = monthStart.getFullYear() + '-' + String(monthStart.getMonth() + 1).padStart(2, '0') + '-01';
+  const sevenDaysAgo = new Date(etNow); sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  const sevenDaysAgoStr = sevenDaysAgo.getFullYear() + '-' + String(sevenDaysAgo.getMonth() + 1).padStart(2, '0') + '-' + String(sevenDaysAgo.getDate()).padStart(2, '0');
 
-  // Notes
-  const notes = await db.prepare(`
-    SELECT rn.*, u.first_name AS author_first_name, u.last_name AS author_last_name, u.role AS author_role
-    FROM recipient_notes rn
-    JOIN users u ON rn.author_id = u.id
-    WHERE rn.care_recipient_id = ?
-    ORDER BY rn.created_at DESC
-  `).all(recipient.id);
+  // Parallel batch: sessions, activity, caregivers, stats, notes — all at once
+  const [upcomingSessions, allSessions, recentActivity, unreadCount, assignedCaregivers, monthlyStats, notes, recentCompleted] = await Promise.all([
+    // Upcoming sessions (next 30 days, pending/confirmed/in_progress)
+    db.prepare(`
+      SELECT cs.*,
+        u.first_name || ' ' || u.last_name AS caregiver_name,
+        u.phone AS caregiver_phone,
+        cp.rating_avg AS caregiver_rating,
+        cp.id AS caregiver_profile_id
+      FROM care_sessions cs
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      LEFT JOIN users u ON cp.user_id = u.id
+      WHERE cs.care_recipient_id = ? AND cs.scheduled_date >= ?
+        AND cs.status IN ('requested', 'pending', 'confirmed', 'open', 'in_progress')
+      ORDER BY cs.scheduled_date ASC, cs.scheduled_time ASC
+      LIMIT 20
+    `).all(recipient.id, today),
 
-  // Parse JSON fields safely
+    // All future sessions for calendar
+    db.prepare(`
+      SELECT cs.id, cs.scheduled_date, cs.scheduled_time, cs.service_type, cs.status,
+        cs.duration_hours, cs.special_instructions,
+        u.first_name || ' ' || u.last_name AS caregiver_name
+      FROM care_sessions cs
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      LEFT JOIN users u ON cp.user_id = u.id
+      WHERE cs.care_recipient_id = ? AND cs.scheduled_date >= ?
+        AND cs.status NOT IN ('cancelled')
+      ORDER BY cs.scheduled_date ASC, cs.scheduled_time ASC
+    `).all(recipient.id, today),
+
+    // Recent activity feed
+    db.prepare(`
+      SELECT * FROM activity_feed
+      WHERE care_recipient_id = ? OR family_user_id = ?
+      ORDER BY created_at DESC LIMIT 10
+    `).all(recipient.id, userId),
+
+    // Unread notification count
+    db.prepare(`
+      SELECT COUNT(*) as count FROM activity_feed
+      WHERE (care_recipient_id = ? OR family_user_id = ?) AND is_read = 0
+    `).get(recipient.id, userId),
+
+    // Assigned caregivers (My Care Team)
+    db.prepare(`
+      SELECT ca.*, cp.user_id AS caregiver_user_id,
+        u.first_name, u.last_name, u.phone, u.email,
+        cp.rating_avg, cp.hourly_rate, cp.bio,
+        cp.rate_daytime, cp.rate_nighttime, cp.rate_overnight,
+        cp.specialties, cp.certifications, cp.care_preferences,
+        cp.id AS caregiver_profile_id
+      FROM caregiver_assignments ca
+      JOIN caregiver_profiles cp ON ca.caregiver_profile_id = cp.id
+      JOIN users u ON cp.user_id = u.id
+      WHERE ca.care_recipient_id = ? AND ca.is_active = 1
+    `).all(recipient.id),
+
+    // Monthly stats
+    db.prepare(`
+      SELECT
+        COUNT(*) as total_sessions,
+        SUM(duration_hours) as total_hours,
+        SUM(COALESCE(actual_cost, estimated_cost)) as total_spend
+      FROM care_sessions cs
+      WHERE cs.care_recipient_id = ?
+        AND cs.scheduled_date >= ?
+        AND cs.status IN ('confirmed', 'completed', 'in_progress')
+    `).get(recipient.id, monthStr),
+
+    // Notes
+    db.prepare(`
+      SELECT rn.*, u.first_name AS author_first_name, u.last_name AS author_last_name, u.role AS author_role
+      FROM recipient_notes rn
+      JOIN users u ON rn.author_id = u.id
+      WHERE rn.care_recipient_id = ?
+      ORDER BY rn.created_at DESC
+    `).all(recipient.id),
+
+    // Recent completed (for review/tips)
+    db.prepare(`
+      SELECT cs.*,
+        u.first_name || ' ' || u.last_name AS caregiver_name,
+        cp.rating_avg AS caregiver_rating,
+        cs.family_rating, cs.family_review
+      FROM care_sessions cs
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      LEFT JOIN users u ON cp.user_id = u.id
+      WHERE cs.care_recipient_id = ?
+        AND cs.status = 'completed'
+        AND cs.scheduled_date >= ?
+      ORDER BY cs.scheduled_date DESC
+      LIMIT 5
+    `).all(recipient.id, sevenDaysAgoStr),
+  ]);
+
   const parseJson = (str) => { try { return JSON.parse(str); } catch { return []; } };
 
   res.json({
@@ -942,9 +1022,10 @@ async function careForDashboard(db, userId, res) {
     userName: `${user.first_name} ${user.last_name}`,
     careRecipientId: recipient.id,
     permissionTier: recipient.permission_tier || "full",
-    managedByName: managedByName,
+    managedByName,
     managedReason: recipient.managed_reason || null,
     visibilitySettings: parseJson(recipient.visibility_settings) || null,
+    hasPaymentMethod: !!user.stripe_customer_id,
     careProfile: {
       healthConditions: parseJson(recipient.health_conditions),
       medications: parseJson(recipient.medications),
@@ -956,9 +1037,32 @@ async function careForDashboard(db, userId, res) {
       medicalConditions: recipient.medical_conditions,
       photo: recipient.photo,
       emoji: recipient.emoji,
+      locationCity: recipient.location_city,
+      locationState: recipient.location_state,
     },
     timezone: recipient.timezone || "America/New_York",
-    sessions: sessions.map(s => ({
+    stats: {
+      sessionsThisMonth: monthlyStats?.total_sessions || 0,
+      totalHours: Math.round((monthlyStats?.total_hours || 0) * 10) / 10,
+      monthlySpend: Math.round((monthlyStats?.total_spend || 0) * 100) / 100,
+      unreadNotifications: unreadCount?.count || 0,
+      assignedCaregivers: assignedCaregivers.length,
+    },
+    upcomingSessions: upcomingSessions.map(s => ({
+      id: s.id,
+      date: s.scheduled_date,
+      time: s.scheduled_time,
+      serviceType: s.service_type,
+      status: s.status,
+      durationHours: s.duration_hours,
+      caregiverName: s.caregiver_name,
+      caregiverPhone: s.caregiver_phone,
+      caregiverRating: s.caregiver_rating,
+      caregiverProfileId: s.caregiver_profile_id,
+      specialInstructions: s.special_instructions,
+      privateOnly: s.private_only,
+    })),
+    sessions: allSessions.map(s => ({
       id: s.id,
       date: s.scheduled_date,
       time: s.scheduled_time,
@@ -967,6 +1071,44 @@ async function careForDashboard(db, userId, res) {
       durationHours: s.duration_hours,
       caregiverName: s.caregiver_name,
       specialInstructions: s.special_instructions,
+    })),
+    recentActivity: recentActivity.map(a => {
+      let meta = {};
+      try { meta = a.metadata ? JSON.parse(a.metadata) : {}; } catch(e) {}
+      return {
+        id: a.id,
+        eventType: a.event_type,
+        title: a.title,
+        message: a.message,
+        isRead: a.is_read,
+        timestamp: a.created_at,
+        sessionId: meta.sessionId || null,
+      };
+    }),
+    recentCompleted: recentCompleted.map(s => ({
+      id: s.id,
+      date: s.scheduled_date,
+      time: s.scheduled_time,
+      serviceType: s.service_type,
+      durationHours: s.duration_hours,
+      caregiverName: s.caregiver_name,
+      hasReview: !!s.family_rating,
+      rating: s.family_rating,
+    })),
+    assignedCaregivers: assignedCaregivers.map(a => ({
+      assignmentId: a.id,
+      caregiverProfileId: a.caregiver_profile_id,
+      userId: a.caregiver_user_id,
+      firstName: a.first_name,
+      lastName: a.last_name,
+      phone: a.phone,
+      email: a.email,
+      rating: a.rating_avg,
+      hourlyRate: a.hourly_rate,
+      bio: a.bio,
+      specialties: parseJson(a.specialties),
+      certifications: parseJson(a.certifications),
+      isFavorite: a.is_favorite,
     })),
     notes: notes.map(n => ({
       id: n.id,
