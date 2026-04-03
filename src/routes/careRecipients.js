@@ -12,8 +12,24 @@ router.use(authenticate);
 
 // ─── GET /api/care-recipients ───
 // List care recipients for the logged-in family user (owned + shared)
-router.get("/", requireRole("family", "admin"), async (req, res) => {
+// care_for users get their own linked record only
+router.get("/", requireRole("family", "admin", "care_for"), async (req, res) => {
   const db = await getDb();
+  const activeRole = req.user.activeRole || req.user.role;
+
+  // care_for users: return their own linked care_recipient
+  if (activeRole === "care_for") {
+    const self = await db.prepare(
+      "SELECT *, 'self' AS access_level FROM care_recipients WHERE linked_user_id = ?"
+    ).get(req.user.id);
+    const parsed = self ? [{
+      ...self,
+      name: self.called_by || [self.first_name, self.last_name].filter(Boolean).join(' ') || 'Unknown',
+      healthConditions: JSON.parse(self.health_conditions || "[]"),
+      medications: JSON.parse(self.medications || "[]"),
+    }] : [];
+    return res.json({ careRecipients: parsed });
+  }
 
   // Own recipients
   const owned = await db.prepare(

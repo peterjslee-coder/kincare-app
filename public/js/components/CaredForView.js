@@ -69,6 +69,13 @@ const CaredForView = window.CaredForView = () => {
   useEffect(() => { fetchData(); }, []);
   useEffect(() => { fetchSessions(); }, [monthOffset]);
 
+  // Refresh when RequestCareModal creates a new session
+  useEffect(() => {
+    const handler = () => { fetchSessions(); };
+    window.addEventListener('sessions-updated', handler);
+    return () => window.removeEventListener('sessions-updated', handler);
+  }, []);
+
   // Group sessions by date
   const sessionsByDate = {};
   sessions.forEach(s => {
@@ -460,71 +467,20 @@ const CaredForView = window.CaredForView = () => {
                 <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>No sessions on this day</div>
               )}
 
-              {/* Request Care button / form (hidden in managed mode) */}
-              {canRequest && !showRequestForm && (
-                <button onClick={() => setShowRequestForm(true)} style={{
-                  width: '100%', padding: '10px', background: 'var(--color-error-bg)', color: 'var(--color-error)',
+              {/* Request Care button — opens full RequestCareModal with caregiver matching */}
+              {canRequest && (
+                <button onClick={() => {
+                  const prefillDate = getDateStr(selectedDay);
+                  if (window.__openRequestCareModal) {
+                    window.__openRequestCareModal(prefillDate);
+                  }
+                }} style={{
+                  width: '100%', padding: '12px', background: 'var(--color-error-bg)', color: 'var(--color-error)',
                   border: '1px dashed #f48fb1', borderRadius: 8, cursor: 'pointer',
                   fontSize: 13, fontWeight: 600,
                 }}>
                   {permissionTier === 'collaborative' ? '📋 Request Care (requires approval)' : '+ Request Care'} for {new Date(viewYear, viewMonth, selectedDay).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                 </button>
-              )}
-              {canRequest && showRequestForm && (
-                <div style={{ background: '#fef7f9', borderRadius: 8, padding: 16, border: '1px solid #f8bbd0' }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-error)', marginBottom: 12 }}>Request Care</div>
-                  {permissionTier === 'collaborative' && (
-                    <div style={{
-                      padding: '8px 12px', background: 'var(--color-info-bg)', borderRadius: 6,
-                      fontSize: 12, color: 'var(--color-info)', marginBottom: 12,
-                      borderLeft: '3px solid #42a5f5',
-                    }}>
-                      This request will be sent to your care team for approval before a caregiver is matched.
-                    </div>
-                  )}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
-                    <div>
-                      <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Service Type</label>
-                      <select value={requestForm.serviceType} onChange={e => setRequestForm(f => ({ ...f, serviceType: e.target.value }))}
-                        style={{ width: '100%', padding: '8px', borderRadius: 6, border: '1px solid #ddd', fontSize: 13 }}>
-                        {serviceTypes.map(st => (
-                          <option key={st.value} value={st.value}>{st.label}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Time</label>
-                      <input type="time" value={requestForm.time} onChange={e => setRequestForm(f => ({ ...f, time: e.target.value }))}
-                        style={{ width: '100%', padding: '8px', borderRadius: 6, border: '1px solid #ddd', fontSize: 13 }} />
-                    </div>
-                    <div>
-                      <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Hours</label>
-                      <select value={requestForm.hours} onChange={e => setRequestForm(f => ({ ...f, hours: e.target.value }))}
-                        style={{ width: '100%', padding: '8px', borderRadius: 6, border: '1px solid #ddd', fontSize: 13 }}>
-                        {[1, 1.5, 2, 2.5, 3, 4, 5, 6].map(h => (
-                          <option key={h} value={h}>{h} hour{h > 1 ? 's' : ''}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                  <div style={{ marginBottom: 10 }}>
-                    <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Note (optional)</label>
-                    <textarea value={requestForm.note} onChange={e => setRequestForm(f => ({ ...f, note: e.target.value }))}
-                      placeholder="Any details about what you need help with..."
-                      style={{ width: '100%', minHeight: 60, padding: 8, borderRadius: 6, border: '1px solid #ddd', fontSize: 13, resize: 'vertical' }} />
-                  </div>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button onClick={handleRequestCare} disabled={submitting} style={{
-                      padding: '8px 20px', background: 'var(--color-error)', color: 'var(--text-on-primary)', border: 'none',
-                      borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600,
-                      opacity: submitting ? 0.5 : 1,
-                    }}>{submitting ? 'Submitting...' : 'Request Help'}</button>
-                    <button onClick={() => setShowRequestForm(false)} style={{
-                      padding: '8px 20px', background: 'var(--bg-surface)', border: '1px solid #ddd',
-                      borderRadius: 6, cursor: 'pointer', fontSize: 13,
-                    }}>Cancel</button>
-                  </div>
-                </div>
               )}
             </div>
           )}

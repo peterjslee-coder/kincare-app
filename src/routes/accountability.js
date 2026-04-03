@@ -428,7 +428,7 @@ router.get("/pending-reviews", requireRole("family"), async (req, res) => {
 
 // GET /api/accountability/can-book/:caregiverId
 // Check if family can book this caregiver (no outstanding reviews for them)
-router.get("/can-book/:caregiverId", requireRole("family"), async (req, res) => {
+router.get("/can-book/:caregiverId", requireRole("family", "care_for"), async (req, res) => {
   try {
     const db = await getDb();
     // Only block rebooking for completed sessions — no-show reviews are optional (shown on dashboard but don't gate booking)

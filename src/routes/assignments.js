@@ -31,6 +31,25 @@ router.get("/", async (req, res) => {
       query += " AND ca.care_recipient_id = ?";
       params.push(careRecipientId);
     }
+  } else if (activeRole === "care_for") {
+    // care_for users see assignments for their own linked care_recipient
+    const recipient = await db.prepare(
+      "SELECT id FROM care_recipients WHERE linked_user_id = ? LIMIT 1"
+    ).get(req.user.id);
+    if (!recipient) return res.json({ assignments: [] });
+    query = `
+      SELECT ca.*, cp.user_id AS caregiver_user_id,
+        u.first_name, u.last_name, cp.rating_avg, cp.hourly_rate,
+        cp.rate_daytime, cp.rate_nighttime, cp.rate_overnight,
+        cp.specialties, cp.certifications, cp.open_to_interview,
+        cr.first_name AS recipient_first_name, cr.last_name AS recipient_last_name
+      FROM caregiver_assignments ca
+      JOIN caregiver_profiles cp ON ca.caregiver_profile_id = cp.id
+      JOIN users u ON cp.user_id = u.id
+      JOIN care_recipients cr ON ca.care_recipient_id = cr.id
+      WHERE ca.care_recipient_id = ? AND ca.is_active = 1
+    `;
+    params = [recipient.id];
   } else if (activeRole === "caregiver") {
     const profile = await db.prepare("SELECT id FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
     if (!profile) return res.status(404).json({ error: "Caregiver profile not found" });

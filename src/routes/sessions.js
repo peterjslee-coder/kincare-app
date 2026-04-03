@@ -535,7 +535,7 @@ router.put("/:id/claim", async (req, res) => {
 
 // ─── POST /api/sessions ───
 // Create a new care request (single or recurring)
-router.post("/", requireRole("family"), validateSession, async (req, res) => {
+router.post("/", requireRole("family", "care_for"), validateSession, async (req, res) => {
   const {
     careRecipientId, serviceType, scheduledDate, scheduledTime,
     durationHours = 2, specialInstructions,
@@ -568,10 +568,18 @@ router.post("/", requireRole("family"), validateSession, async (req, res) => {
 
   const db = await getDb();
 
-  // Verify the care recipient belongs to this family (direct owner, shared, or care team)
+  // Verify the care recipient belongs to this user (direct owner, care_for linked, shared, or care team)
+  const activeRole = req.user.activeRole || req.user.role;
   let recipient = await db.prepare(
     "SELECT * FROM care_recipients WHERE id = ? AND family_user_id = ?"
   ).get(careRecipientId, req.user.id);
+
+  // care_for users: check linked_user_id instead of family_user_id
+  if (!recipient && activeRole === 'care_for') {
+    recipient = await db.prepare(
+      "SELECT * FROM care_recipients WHERE id = ? AND linked_user_id = ?"
+    ).get(careRecipientId, req.user.id);
+  }
 
   if (!recipient) {
     // Check care_recipient_shares
@@ -587,7 +595,7 @@ router.post("/", requireRole("family"), validateSession, async (req, res) => {
         SELECT cr.* FROM care_recipients cr
         JOIN care_teams ct ON ct.care_recipient_id = cr.id
         JOIN care_team_members ctm ON ctm.care_team_id = ct.id
-        WHERE cr.id = ? AND ctm.user_id = ? AND ctm.status = 'active'
+        WHERE cr.id = ? AND ctm.user_id = ?
       `).get(careRecipientId, req.user.id);
       if (teamMember) recipient = teamMember;
     }
