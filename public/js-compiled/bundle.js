@@ -7097,6 +7097,14 @@ const ResetPasswordPage = window.ResetPasswordPage = ({
   }, resetting ? 'Saving...' : 'Save New Password'))));
 };
 ;
+// Module-level cache: survives component remounts (nav away and back)
+// Shows stale data instantly while fresh fetch runs in background
+const _dashCache = {
+  data: null,
+  user: null,
+  careTeams: null,
+  ts: 0
+};
 const Dashboard = window.Dashboard = ({
   onNavigate,
   acceptingInvite
@@ -7104,10 +7112,10 @@ const Dashboard = window.Dashboard = ({
   const {
     showToast
   } = useToast();
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState(null);
-  const [careTeams, setCareTeams] = useState([]);
+  const [data, setData] = useState(_dashCache.data);
+  const [loading, setLoading] = useState(!_dashCache.data);
+  const [user, setUser] = useState(_dashCache.user);
+  const [careTeams, setCareTeams] = useState(_dashCache.careTeams || []);
   const [error, setError] = useState(false);
   const [analyticsData, setAnalyticsData] = useState(null);
   const [analyticsOpen, setAnalyticsOpen] = useState(false);
@@ -7193,6 +7201,8 @@ const Dashboard = window.Dashboard = ({
       const res = await apiFetch('/api/dashboard');
       if (res !== null && res !== void 0 && res.ok) {
         const d = await res.json();
+        _dashCache.data = d;
+        _dashCache.ts = Date.now();
         setData(d);
         setError(false);
       } else if (retryCount < 2) {
@@ -7219,6 +7229,7 @@ const Dashboard = window.Dashboard = ({
       const res = await apiFetch('/api/auth/me');
       if (res !== null && res !== void 0 && res.ok) {
         const d = await res.json();
+        _dashCache.user = d.user;
         setUser(d.user);
       }
     } catch {}
@@ -7228,6 +7239,7 @@ const Dashboard = window.Dashboard = ({
       const res = await apiFetch('/api/care-teams');
       if (res !== null && res !== void 0 && res.ok) {
         const d = await res.json();
+        _dashCache.careTeams = d.careTeams || [];
         setCareTeams(d.careTeams || []);
       }
     } catch {}
