@@ -1125,6 +1125,8 @@ async function initializeDatabase() {
     `ALTER TABLE verified_documents ADD COLUMN IF NOT EXISTS ai_confidence REAL DEFAULT 0`,
     `ALTER TABLE verified_documents ADD COLUMN IF NOT EXISTS ai_concerns TEXT`,
     `ALTER TABLE verified_documents ADD COLUMN IF NOT EXISTS is_verified INTEGER DEFAULT 0`,
+    `ALTER TABLE verified_documents ADD COLUMN IF NOT EXISTS verified_at TIMESTAMPTZ`,
+    `ALTER TABLE verified_documents ADD COLUMN IF NOT EXISTS verified_by TEXT`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }
