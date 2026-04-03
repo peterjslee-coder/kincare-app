@@ -37348,7 +37348,7 @@ const SelfOnboardingWizard = window.SelfOnboardingWizard = ({
     line1: '',
     line2: '',
     city: '',
-    state: '',
+    state: 'VA',
     zip: ''
   });
 
@@ -37523,6 +37523,10 @@ const SelfOnboardingWizard = window.SelfOnboardingWizard = ({
           setError('Please complete your care address');
           return false;
         }
+        if (address.state !== 'VA') {
+          setError('InPlace is currently only licensed to operate in Virginia. Please select VA if care will take place in Virginia.');
+          return false;
+        }
         return true;
       case 4:
         // Health & Safety
@@ -37595,7 +37599,7 @@ const SelfOnboardingWizard = window.SelfOnboardingWizard = ({
 
   // ─── Progress Bar ───
   const WizardProgressBar = () => {
-    const steps = ['Identity', 'Selfie', 'Verify ID', 'Address', 'Health & Safety', 'Terms'];
+    const steps = ['Identity', 'Selfie', 'Verify ID', 'Address', 'Health', 'Terms'];
     return /*#__PURE__*/React.createElement("div", {
       style: {
         marginBottom: '32px',
@@ -37942,7 +37946,7 @@ const SelfOnboardingWizard = window.SelfOnboardingWizard = ({
           marginBottom: '24px',
           lineHeight: '1.5'
         }
-      }, /*#__PURE__*/React.createElement("strong", null, "Privacy Notice:"), " This photo is used only to verify your identity and will NOT be stored after verification. It is discarded immediately after matching with your ID."), error && /*#__PURE__*/React.createElement("div", {
+      }, /*#__PURE__*/React.createElement("strong", null, "Privacy Notice:"), " Your selfie is stored securely and used only to verify your identity against your ID photo. It may be reviewed by an administrator if verification requires manual review."), error && /*#__PURE__*/React.createElement("div", {
         style: {
           color: 'var(--color-error)',
           fontSize: '14px',
@@ -37973,7 +37977,6 @@ const SelfOnboardingWizard = window.SelfOnboardingWizard = ({
       }, "Back")));
     }
     if (currentStep === 2) {
-      var _idVerificationResult;
       // Step 3: Verify ID
       return /*#__PURE__*/React.createElement("div", {
         className: "card",
@@ -38029,21 +38032,54 @@ const SelfOnboardingWizard = window.SelfOnboardingWizard = ({
         style: {
           fontSize: '18px'
         }
-      }, idVerificationResult.matched ? '✓' : '⚠️'), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("p", {
+      }, idVerificationResult.matched ? '✓' : '⚠️'), /*#__PURE__*/React.createElement("div", {
+        style: {
+          flex: 1
+        }
+      }, idVerificationResult.matched ?
+      /*#__PURE__*/
+      /* ─── All clear ─── */
+      React.createElement("div", null, /*#__PURE__*/React.createElement("p", {
         style: {
           margin: 0,
           fontWeight: 600,
-          color: idVerificationResult.matched ? 'var(--color-success)' : 'var(--color-warning)'
+          color: 'var(--color-success)'
         }
-      }, idVerificationResult.matched ? 'Identity Verified' : 'Verification Alert'), ((_idVerificationResult = idVerificationResult.concerns) === null || _idVerificationResult === void 0 ? void 0 : _idVerificationResult.length) > 0 && /*#__PURE__*/React.createElement("ul", {
+      }, "Identity Verified"), idVerificationResult.faceComparison && !idVerificationResult.faceComparison.skipped && /*#__PURE__*/React.createElement("p", {
         style: {
-          margin: '8px 0 0',
-          paddingLeft: '20px',
+          margin: '6px 0 0',
+          fontSize: '13px',
+          color: 'var(--text-secondary)'
+        }
+      }, "\u2713 Face match ", Math.round(idVerificationResult.faceComparison.confidence * 100), "%")) :
+      /*#__PURE__*/
+      /* ─── Needs review ─── */
+      React.createElement("div", null, /*#__PURE__*/React.createElement("p", {
+        style: {
+          margin: 0,
+          fontWeight: 600,
+          color: 'var(--color-warning)'
+        }
+      }, !idVerificationResult.nameMatched ? 'Name Mismatch — Requires Review' : idVerificationResult.faceComparison && !idVerificationResult.faceComparison.similar && !idVerificationResult.faceComparison.skipped ? 'Photo Mismatch — Requires Review' : 'Document Under Review'), /*#__PURE__*/React.createElement("p", {
+        style: {
+          margin: '6px 0 0',
+          fontSize: '13px',
+          color: 'var(--text-secondary)'
+        }
+      }, "We'll review your document. You can continue setting up your account."), idVerificationResult.extractedName && !idVerificationResult.nameMatched && /*#__PURE__*/React.createElement("div", {
+        style: {
+          marginTop: '10px',
+          padding: '8px 10px',
+          borderRadius: '6px',
+          background: 'rgba(231,76,60,0.08)',
           fontSize: '13px'
         }
-      }, idVerificationResult.concerns.map((concern, idx) => /*#__PURE__*/React.createElement("li", {
-        key: idx
-      }, concern)))))), /*#__PURE__*/React.createElement("div", {
+      }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, "Registered name:"), " ", idVerificationResult.registeredName), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, "Name on ID:"), " ", idVerificationResult.extractedName)), idVerificationResult.faceComparison && !idVerificationResult.faceComparison.skipped && /*#__PURE__*/React.createElement("p", {
+        style: {
+          margin: '8px 0 0',
+          fontSize: '13px'
+        }
+      }, idVerificationResult.faceComparison.similar ? '✓' : '⚠️', ' ', "Face match ", Math.round(idVerificationResult.faceComparison.confidence * 100), "%"))))), /*#__PURE__*/React.createElement("div", {
         style: {
           display: 'flex',
           gap: '12px'
@@ -38147,7 +38183,7 @@ const SelfOnboardingWizard = window.SelfOnboardingWizard = ({
           marginBottom: '24px',
           lineHeight: '1.5'
         }
-      }, /*#__PURE__*/React.createElement("strong", null, "Privacy Notice:"), " Your ID photo is stored securely for verification records. Your selfie has been discarded."), error && /*#__PURE__*/React.createElement("div", {
+      }, /*#__PURE__*/React.createElement("strong", null, "Privacy Notice:"), " Your ID photo and selfie are stored securely for verification records and may be reviewed by an administrator."), error && /*#__PURE__*/React.createElement("div", {
         style: {
           color: 'var(--color-error)',
           fontSize: '14px',
@@ -38281,7 +38317,28 @@ const SelfOnboardingWizard = window.SelfOnboardingWizard = ({
           zip: e.target.value
         }),
         style: inputStyle
-      }))), /*#__PURE__*/React.createElement("div", {
+      }))), address.state && address.state !== 'VA' && /*#__PURE__*/React.createElement("div", {
+        style: {
+          marginBottom: '20px',
+          padding: '12px 16px',
+          borderRadius: '6px',
+          background: 'rgba(231,76,60,0.08)',
+          border: '1px solid rgba(231,76,60,0.3)'
+        }
+      }, /*#__PURE__*/React.createElement("p", {
+        style: {
+          margin: 0,
+          fontWeight: 600,
+          color: 'var(--color-error)',
+          fontSize: '14px'
+        }
+      }, "InPlace is currently only licensed to operate in Virginia"), /*#__PURE__*/React.createElement("p", {
+        style: {
+          margin: '6px 0 0',
+          fontSize: '13px',
+          color: 'var(--text-secondary)'
+        }
+      }, "We're working on expanding to other states. Please select Virginia if that's where care will take place, or contact us if you'd like to be notified when we're available in your area.")), /*#__PURE__*/React.createElement("div", {
         style: {
           marginBottom: '24px',
           padding: '12px',
@@ -38494,10 +38551,16 @@ const SelfOnboardingWizard = window.SelfOnboardingWizard = ({
         type: "tel",
         placeholder: "(123) 456-7890",
         value: emergencyContact.phone,
-        onChange: e => setEmergencyContact({
-          ...emergencyContact,
-          phone: e.target.value
-        }),
+        onChange: e => {
+          // Format as (AAA) BBB-CCCC
+          const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
+          let formatted = digits;
+          if (digits.length > 6) formatted = `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;else if (digits.length > 3) formatted = `(${digits.slice(0, 3)}) ${digits.slice(3)}`;else if (digits.length > 0) formatted = `(${digits}`;
+          setEmergencyContact({
+            ...emergencyContact,
+            phone: formatted
+          });
+        },
         style: inputStyle
       })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
         style: {
@@ -38553,54 +38616,60 @@ const SelfOnboardingWizard = window.SelfOnboardingWizard = ({
           marginBottom: '8px',
           color: 'var(--role-color)'
         }
-      }, "Review & Complete"), /*#__PURE__*/React.createElement("p", {
+      }, "Almost There"), /*#__PURE__*/React.createElement("p", {
         style: {
           color: 'var(--text-secondary)',
           fontSize: '14px',
           marginBottom: '24px'
         }
-      }, "Please review and accept our agreements to get started."), /*#__PURE__*/React.createElement("div", {
+      }, "Here's what to know about using InPlace:"), /*#__PURE__*/React.createElement("div", {
         style: {
-          padding: '16px',
+          marginBottom: '24px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '12px'
+        }
+      }, [{
+        icon: '📅',
+        text: 'You\'ll use InPlace to schedule care visits and manage payments'
+      }, {
+        icon: '🤖',
+        text: 'Our AI assistant (iPAi) helps arrange and coordinate your care'
+      }, {
+        icon: '🏥',
+        text: 'Some health and safety info you shared will be visible to your caregivers so they can provide the best care'
+      }, {
+        icon: '🔒',
+        text: 'Your personal information will never be sold to third parties'
+      }, {
+        icon: '👨‍👩‍👧',
+        text: 'You can invite family or others to help arrange your care — they\'ll have access to your schedule, payments, and care notes'
+      }, {
+        icon: '💜',
+        text: 'InPlace provides non-medical companion care — not nursing or medical services'
+      }].map((item, idx) => /*#__PURE__*/React.createElement("div", {
+        key: idx,
+        style: {
+          display: 'flex',
+          gap: '10px',
+          alignItems: 'flex-start',
+          padding: '10px 12px',
           background: 'var(--bg-muted)',
-          borderRadius: '6px',
-          marginBottom: '24px'
+          borderRadius: '8px'
         }
-      }, /*#__PURE__*/React.createElement("h4", {
+      }, /*#__PURE__*/React.createElement("span", {
         style: {
-          margin: '0 0 12px',
-          color: 'var(--text-primary)',
-          fontSize: '14px'
+          fontSize: '16px',
+          flexShrink: 0,
+          marginTop: '1px'
         }
-      }, "By continuing, you agree to:"), /*#__PURE__*/React.createElement("ul", {
+      }, item.icon), /*#__PURE__*/React.createElement("span", {
         style: {
-          margin: 0,
-          paddingLeft: '20px',
           fontSize: '14px',
-          lineHeight: '1.6',
-          color: 'var(--text-secondary)'
+          color: 'var(--text-primary)',
+          lineHeight: '1.5'
         }
-      }, /*#__PURE__*/React.createElement("li", {
-        style: {
-          marginBottom: '8px'
-        }
-      }, /*#__PURE__*/React.createElement("a", {
-        href: "/terms",
-        target: "_blank",
-        rel: "noopener noreferrer",
-        style: {
-          color: 'var(--role-color)',
-          textDecoration: 'none'
-        }
-      }, "InPlace Terms of Service")), /*#__PURE__*/React.createElement("li", null, /*#__PURE__*/React.createElement("a", {
-        href: "/privacy",
-        target: "_blank",
-        rel: "noopener noreferrer",
-        style: {
-          color: 'var(--role-color)',
-          textDecoration: 'none'
-        }
-      }, "Privacy Policy")))), /*#__PURE__*/React.createElement("div", {
+      }, item.text)))), /*#__PURE__*/React.createElement("div", {
         style: {
           marginBottom: '16px',
           padding: '12px',
@@ -38630,7 +38699,21 @@ const SelfOnboardingWizard = window.SelfOnboardingWizard = ({
           fontSize: '14px',
           color: 'var(--text-primary)'
         }
-      }, "I have read and agree to the Terms of Service and Privacy Policy"))), /*#__PURE__*/React.createElement("div", {
+      }, "I agree to the", ' ', /*#__PURE__*/React.createElement("a", {
+        href: "/terms",
+        target: "_blank",
+        rel: "noopener noreferrer",
+        style: {
+          color: 'var(--role-color)'
+        }
+      }, "Terms of Service"), ' ', "and", ' ', /*#__PURE__*/React.createElement("a", {
+        href: "/privacy",
+        target: "_blank",
+        rel: "noopener noreferrer",
+        style: {
+          color: 'var(--role-color)'
+        }
+      }, "Privacy Policy")))), /*#__PURE__*/React.createElement("div", {
         style: {
           marginBottom: '24px',
           padding: '12px',
@@ -38660,7 +38743,7 @@ const SelfOnboardingWizard = window.SelfOnboardingWizard = ({
           fontSize: '14px',
           color: 'var(--text-primary)'
         }
-      }, "I understand that InPlace provides non-medical companion care only"))), error && /*#__PURE__*/React.createElement("div", {
+      }, "I understand InPlace provides non-medical companion care only"))), error && /*#__PURE__*/React.createElement("div", {
         style: {
           color: 'var(--color-error)',
           fontSize: '14px',
@@ -62230,6 +62313,111 @@ const SafetyFlagsTab = window.SafetyFlagsTab = ({
   }));
 };
 ;
+// ─── DocThumbnail — fetch doc image with auth, render as thumbnail ───
+const DocThumbnail = ({
+  docId,
+  label
+}) => {
+  const [src, setSrc] = React.useState(null);
+  const [error, setError] = React.useState(false);
+  const [fullView, setFullView] = React.useState(false);
+  React.useEffect(() => {
+    if (!docId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await apiFetch(`/api/documents/${docId}/download`);
+        if (!res.ok) {
+          setError(true);
+          return;
+        }
+        const blob = await res.blob();
+        if (!cancelled) setSrc(URL.createObjectURL(blob));
+      } catch (e) {
+        console.error('DocThumbnail fetch error:', e);
+        if (!cancelled) setError(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [docId]);
+  if (error) return React.createElement('div', {
+    style: {
+      width: 120,
+      minHeight: 90,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      background: 'var(--bg-secondary)',
+      borderRadius: 8,
+      border: '1px solid var(--border-color)',
+      fontSize: 11,
+      color: 'var(--text-muted)'
+    }
+  }, label + ' unavailable');
+  if (!src) return React.createElement('div', {
+    style: {
+      width: 120,
+      minHeight: 90,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      background: 'var(--bg-secondary)',
+      borderRadius: 8,
+      border: '1px solid var(--border-color)',
+      fontSize: 11,
+      color: 'var(--text-muted)'
+    }
+  }, 'Loading ' + label + '...');
+  return React.createElement(React.Fragment, null, React.createElement('div', {
+    style: {
+      textAlign: 'center',
+      cursor: 'pointer'
+    },
+    onClick: () => setFullView(true)
+  }, React.createElement('img', {
+    src,
+    alt: label,
+    style: {
+      width: 120,
+      height: 90,
+      objectFit: 'cover',
+      borderRadius: 8,
+      border: '1px solid var(--border-color)'
+    }
+  }), React.createElement('div', {
+    style: {
+      fontSize: 11,
+      color: 'var(--text-secondary)',
+      marginTop: 4
+    }
+  }, label)), fullView && React.createElement('div', {
+    onClick: () => setFullView(false),
+    style: {
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      width: '100vw',
+      height: '100vh',
+      background: 'rgba(0,0,0,0.85)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 10000,
+      cursor: 'zoom-out'
+    }
+  }, React.createElement('img', {
+    src,
+    alt: label,
+    style: {
+      maxWidth: '90vw',
+      maxHeight: '90vh',
+      borderRadius: 8
+    }
+  })));
+};
+
 // ─── Admin / Superuser Dashboard ───
 // Only visible to users with is_admin = 1. Layered on top of normal family account.
 const AdminPanel = window.AdminPanel = ({
@@ -71492,7 +71680,49 @@ const AdminPanel = window.AdminPanel = ({
       style: {
         color: 'var(--text-secondary)'
       }
-    }, k.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase()), ":"), " ", /*#__PURE__*/React.createElement("strong", null, v))))), ai.concerns && ai.concerns.length > 0 && /*#__PURE__*/React.createElement("div", {
+    }, k.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase()), ":"), " ", /*#__PURE__*/React.createElement("strong", null, v))))), ai.faceComparison && !ai.faceComparison.skipped && /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginTop: 12,
+        padding: 10,
+        borderRadius: 8,
+        background: ai.faceComparison.similar ? 'rgba(39,174,96,0.08)' : 'rgba(231,76,60,0.08)',
+        border: `1px solid ${ai.faceComparison.similar ? 'rgba(39,174,96,0.2)' : 'rgba(231,76,60,0.2)'}`
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontWeight: 600,
+        fontSize: 12,
+        marginBottom: 4,
+        color: ai.faceComparison.similar ? '#27ae60' : '#e74c3c'
+      }
+    }, "Face Comparison: ", ai.faceComparison.similar ? 'Match' : 'Mismatch', " \u2014 ", Math.round((ai.faceComparison.confidence || 0) * 100), "%"), ai.faceComparison.explanation && /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 12,
+        color: 'var(--text-primary)',
+        marginTop: 4,
+        lineHeight: 1.5
+      }
+    }, ai.faceComparison.explanation)), ai.registeredName && ai.extractedName && /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginTop: 12,
+        padding: 10,
+        borderRadius: 8,
+        background: ai.nameMatched ? 'rgba(39,174,96,0.08)' : 'rgba(231,76,60,0.08)',
+        border: `1px solid ${ai.nameMatched ? 'rgba(39,174,96,0.2)' : 'rgba(231,76,60,0.2)'}`
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontWeight: 600,
+        fontSize: 12,
+        marginBottom: 4,
+        color: ai.nameMatched ? '#27ae60' : '#e74c3c'
+      }
+    }, "Name: ", ai.nameMatched ? 'Match' : 'Mismatch'), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 12,
+        color: 'var(--text-primary)'
+      }
+    }, "Registered: ", /*#__PURE__*/React.createElement("strong", null, ai.registeredName), " \xB7 ID: ", /*#__PURE__*/React.createElement("strong", null, ai.extractedName))), ai.concerns && ai.concerns.length > 0 && /*#__PURE__*/React.createElement("div", {
       style: {
         marginTop: 12,
         padding: 10,
@@ -71523,35 +71753,17 @@ const AdminPanel = window.AdminPanel = ({
       }
     }, "AI classification is still processing...") : null, /*#__PURE__*/React.createElement("div", {
       style: {
-        marginTop: 12
+        marginTop: 12,
+        display: 'flex',
+        gap: 12
       }
-    }, /*#__PURE__*/React.createElement("button", {
-      onClick: async () => {
-        try {
-          const res = await fetch(`/api/documents/${doc.id}/download`, {
-            credentials: 'include',
-            headers: window.getCsrfToken ? {
-              'X-CSRF-Token': window.getCsrfToken()
-            } : {}
-          });
-          if (res.ok) {
-            const blob = await res.blob();
-            window.open(URL.createObjectURL(blob), '_blank');
-          }
-        } catch (e) {
-          showToast('Failed to load preview', 'error');
-        }
-      },
-      style: {
-        padding: '6px 14px',
-        borderRadius: 8,
-        border: '1px solid var(--border-color)',
-        background: 'var(--bg-secondary)',
-        fontSize: 12,
-        cursor: 'pointer',
-        color: 'var(--text-primary)'
-      }
-    }, "View Document")), doc.status !== 'ai_review' && /*#__PURE__*/React.createElement("div", {
+    }, /*#__PURE__*/React.createElement(DocThumbnail, {
+      docId: doc.id,
+      label: "ID Photo"
+    }), doc.linkedSelfieId && /*#__PURE__*/React.createElement(DocThumbnail, {
+      docId: doc.linkedSelfieId,
+      label: "Selfie"
+    })), doc.status !== 'ai_review' && /*#__PURE__*/React.createElement("div", {
       style: {
         marginTop: 16,
         borderTop: '1px solid var(--border-color)',

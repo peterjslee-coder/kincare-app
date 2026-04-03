@@ -1,3 +1,43 @@
+// ─── DocThumbnail — fetch doc image with auth, render as thumbnail ───
+const DocThumbnail = ({ docId, label }) => {
+  const [src, setSrc] = React.useState(null);
+  const [error, setError] = React.useState(false);
+  const [fullView, setFullView] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!docId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await apiFetch(`/api/documents/${docId}/download`);
+        if (!res.ok) { setError(true); return; }
+        const blob = await res.blob();
+        if (!cancelled) setSrc(URL.createObjectURL(blob));
+      } catch (e) {
+        console.error('DocThumbnail fetch error:', e);
+        if (!cancelled) setError(true);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [docId]);
+
+  if (error) return React.createElement('div', { style: { width: 120, minHeight: 90, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-secondary)', borderRadius: 8, border: '1px solid var(--border-color)', fontSize: 11, color: 'var(--text-muted)' } }, label + ' unavailable');
+  if (!src) return React.createElement('div', { style: { width: 120, minHeight: 90, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-secondary)', borderRadius: 8, border: '1px solid var(--border-color)', fontSize: 11, color: 'var(--text-muted)' } }, 'Loading ' + label + '...');
+
+  return React.createElement(React.Fragment, null,
+    React.createElement('div', { style: { textAlign: 'center', cursor: 'pointer' }, onClick: () => setFullView(true) },
+      React.createElement('img', { src, alt: label, style: { width: 120, height: 90, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--border-color)' } }),
+      React.createElement('div', { style: { fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 } }, label)
+    ),
+    fullView && React.createElement('div', {
+      onClick: () => setFullView(false),
+      style: { position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000, cursor: 'zoom-out' }
+    },
+      React.createElement('img', { src, alt: label, style: { maxWidth: '90vw', maxHeight: '90vh', borderRadius: 8 } })
+    )
+  );
+};
+
 // ─── Admin / Superuser Dashboard ───
 // Only visible to users with is_admin = 1. Layered on top of normal family account.
 const AdminPanel = window.AdminPanel = ({ currentUser }) => {
@@ -4662,29 +4702,11 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                           <div style={{ padding: 16, textAlign: 'center', color: 'var(--text-secondary)', fontSize: 13 }}>AI classification is still processing...</div>
                         ) : null}
 
-                        {/* ID Photo + Selfie side by side */}
+                        {/* ID Photo + Selfie side by side — fetch with auth */}
                         <div style={{ marginTop: 12, display: 'flex', gap: 12 }}>
-                          <div style={{ flex: 1 }}>
-                            <div style={{ fontWeight: 600, fontSize: 11, color: 'var(--text-secondary)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>ID Photo</div>
-                            <img
-                              src={`/api/documents/${doc.id}/download`}
-                              alt="ID document"
-                              style={{ width: '100%', borderRadius: 8, border: '1px solid var(--border-color)', cursor: 'pointer' }}
-                              onClick={() => window.open(`/api/documents/${doc.id}/download`, '_blank')}
-                              onError={(e) => { e.target.style.display = 'none'; }}
-                            />
-                          </div>
+                          <DocThumbnail docId={doc.id} label="ID Photo" />
                           {doc.linkedSelfieId && (
-                            <div style={{ flex: 1 }}>
-                              <div style={{ fontWeight: 600, fontSize: 11, color: 'var(--text-secondary)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>Selfie</div>
-                              <img
-                                src={`/api/documents/${doc.linkedSelfieId}/download`}
-                                alt="Selfie"
-                                style={{ width: '100%', borderRadius: 8, border: '1px solid var(--border-color)', cursor: 'pointer' }}
-                                onClick={() => window.open(`/api/documents/${doc.linkedSelfieId}/download`, '_blank')}
-                                onError={(e) => { e.target.style.display = 'none'; }}
-                              />
-                            </div>
+                            <DocThumbnail docId={doc.linkedSelfieId} label="Selfie" />
                           )}
                         </div>
 
