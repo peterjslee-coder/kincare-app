@@ -391,7 +391,7 @@ router.post("/family/setup", requireRole("family"), requirePaymentsEnabled, asyn
     const session = await stripe.checkout.sessions.create({
       mode: "setup",
       customer: customerId,
-      payment_method_types: ["card"],
+      payment_method_types: ["card", "us_bank_account"],
       success_url: `${returnUrl || BASE_URL + '/#my-account'}?stripe_setup=success`,
       cancel_url: `${returnUrl || BASE_URL + '/#my-account'}?stripe_setup=cancel`,
       metadata: {
@@ -1434,10 +1434,13 @@ async function processOverduePayments(pushFn) {
           continue;
         }
 
-        // Get default payment method for this customer
-        const paymentMethods = await stripe.paymentMethods.list({ customer: customerId, type: "card", limit: 1 });
+        // Get default payment method — prefer bank account (ACH: 0.8% capped $5) over card (2.9% + 30¢)
+        let paymentMethods = await stripe.paymentMethods.list({ customer: customerId, type: "us_bank_account", limit: 1 });
         if (!paymentMethods.data.length) {
-          console.warn(`[auto-pay] Session ${s.id}: customer ${customerId} has no saved cards — skipping`);
+          paymentMethods = await stripe.paymentMethods.list({ customer: customerId, type: "card", limit: 1 });
+        }
+        if (!paymentMethods.data.length) {
+          console.warn(`[auto-pay] Session ${s.id}: customer ${customerId} has no saved payment methods — skipping`);
           if (pushFn && s.family_user_id) {
             pushFn(s.family_user_id, {
               title: 'Payment needed',
@@ -1447,6 +1450,10 @@ async function processOverduePayments(pushFn) {
           }
           continue;
         }
+
+        const chosenPM = paymentMethods.data[0];
+        const pmType = chosenPM.type === 'us_bank_account' ? 'ACH bank' : 'card';
+        console.log(`[auto-pay] Session ${s.id}: using ${pmType} (${chosenPM.type}) ending ${chosenPM[chosenPM.type]?.last4 || '????'}`);
 
         // Calculate cost — include pending tip if family set one during grace period
         // CORE PRINCIPLE: Caregiver gets EXACTLY their pay + tip. Fees go on top, charged to family.
@@ -1478,7 +1485,8 @@ async function processOverduePayments(pushFn) {
           amount: totalCents,
           currency: "usd",
           customer: customerId,
-          payment_method: paymentMethods.data[0].id,
+          payment_method: chosenPM.id,
+          payment_method_types: [chosenPM.type],
           off_session: true,
           confirm: true,
           application_fee_amount: applicationFeeCents,
