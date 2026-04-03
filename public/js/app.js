@@ -914,11 +914,14 @@ const App = () => {
             id: data.user.id, email: data.user.email, role: data.user.role,
             roles: userRoles,
             firstName: data.user.first_name, lastName: data.user.last_name,
+            first_name: data.user.first_name, last_name: data.user.last_name,
             profilePhoto: data.user.profile_photo || null,
             emailVerified: !!data.user.email_verified, isDemo: !!data.user.is_demo,
             isAdmin: !!data.user.is_admin, is_tester: !!data.user.is_tester,
             account_approved: !!data.user.account_approved, companionAccess: !!data.user.companion_access,
             onboardingComplete: data.user.onboarding_complete,
+            selfOnboardingComplete: data.user.selfOnboardingComplete,
+            careRecipientId: data.user.careRecipientId,
           });
           // Sync activeRole to new user's primary role
           if (userRoles.length === 1) {
@@ -946,13 +949,22 @@ const App = () => {
     setAppState('app');
     // Start proactive auth token refresh (keeps user logged in across app restarts)
     if (typeof startProactiveRefresh === 'function') startProactiveRefresh();
-    // Re-sync push subscription if already granted (doesn't prompt — needs user gesture for new)
-    if (typeof subscribeToPush === 'function' && 'Notification' in window && Notification.permission === 'granted') {
+    // Re-sync push subscription on login
+    if (window.Capacitor?.isNativePlatform?.()) {
+      // Native app: register FCM token with server on every login
+      // (ensures token is always fresh — previous registration may have failed or token rotated)
+      if (typeof subscribeNativePush === 'function') {
+        subscribeNativePush().then(r => {
+          if (r) localStorage.setItem('native_push_registered', '1');
+        }).catch(() => {});
+      }
+      // Also set up token refresh listener
+      if (typeof initNativeTokenRefresh === 'function') {
+        initNativeTokenRefresh();
+      }
+    } else if (typeof subscribeToPush === 'function' && 'Notification' in window && Notification.permission === 'granted') {
+      // Web: re-sync VAPID subscription if already granted
       subscribeToPush().catch(() => {});
-    }
-    // Initialize native push token refresh listener (catches FCM/APNS token rotation)
-    if (typeof initNativeTokenRefresh === 'function' && window.Capacitor?.isNativePlatform?.()) {
-      initNativeTokenRefresh();
     }
     // Start periodic push health check (every 30 min) to keep subscriptions fresh
     if (typeof checkPushHealth === 'function') {

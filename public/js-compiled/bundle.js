@@ -77565,13 +77565,22 @@ const App = () => {
     setAppState('app');
     // Start proactive auth token refresh (keeps user logged in across app restarts)
     if (typeof startProactiveRefresh === 'function') startProactiveRefresh();
-    // Re-sync push subscription if already granted (doesn't prompt — needs user gesture for new)
-    if (typeof subscribeToPush === 'function' && 'Notification' in window && Notification.permission === 'granted') {
+    // Re-sync push subscription on login
+    if ((_window$Capacitor8 = window.Capacitor) !== null && _window$Capacitor8 !== void 0 && (_window$Capacitor8$is = _window$Capacitor8.isNativePlatform) !== null && _window$Capacitor8$is !== void 0 && _window$Capacitor8$is.call(_window$Capacitor8)) {
+      // Native app: register FCM token with server on every login
+      // (ensures token is always fresh — previous registration may have failed or token rotated)
+      if (typeof subscribeNativePush === 'function') {
+        subscribeNativePush().then(r => {
+          if (r) localStorage.setItem('native_push_registered', '1');
+        }).catch(() => {});
+      }
+      // Also set up token refresh listener
+      if (typeof initNativeTokenRefresh === 'function') {
+        initNativeTokenRefresh();
+      }
+    } else if (typeof subscribeToPush === 'function' && 'Notification' in window && Notification.permission === 'granted') {
+      // Web: re-sync VAPID subscription if already granted
       subscribeToPush().catch(() => {});
-    }
-    // Initialize native push token refresh listener (catches FCM/APNS token rotation)
-    if (typeof initNativeTokenRefresh === 'function' && (_window$Capacitor8 = window.Capacitor) !== null && _window$Capacitor8 !== void 0 && (_window$Capacitor8$is = _window$Capacitor8.isNativePlatform) !== null && _window$Capacitor8$is !== void 0 && _window$Capacitor8$is.call(_window$Capacitor8)) {
-      initNativeTokenRefresh();
     }
     // Start periodic push health check (every 30 min) to keep subscriptions fresh
     if (typeof checkPushHealth === 'function') {
