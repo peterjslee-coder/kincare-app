@@ -4628,6 +4628,28 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                               </div>
                             )}
 
+                            {/* Face Comparison (from self-onboarding) */}
+                            {ai.faceComparison && !ai.faceComparison.skipped && (
+                              <div style={{ marginTop: 12, padding: 10, borderRadius: 8, background: ai.faceComparison.similar ? 'rgba(39,174,96,0.08)' : 'rgba(231,76,60,0.08)', border: `1px solid ${ai.faceComparison.similar ? 'rgba(39,174,96,0.2)' : 'rgba(231,76,60,0.2)'}` }}>
+                                <div style={{ fontWeight: 600, fontSize: 12, marginBottom: 4, color: ai.faceComparison.similar ? '#27ae60' : '#e74c3c' }}>
+                                  Face Comparison: {ai.faceComparison.similar ? 'Match' : 'Mismatch'} — {Math.round((ai.faceComparison.confidence || 0) * 100)}%
+                                </div>
+                                {ai.faceComparison.explanation && (
+                                  <div style={{ fontSize: 12, color: 'var(--text-primary)', marginTop: 4, lineHeight: 1.5 }}>{ai.faceComparison.explanation}</div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Name match status (from self-onboarding) */}
+                            {ai.registeredName && ai.extractedName && (
+                              <div style={{ marginTop: 12, padding: 10, borderRadius: 8, background: ai.nameMatched ? 'rgba(39,174,96,0.08)' : 'rgba(231,76,60,0.08)', border: `1px solid ${ai.nameMatched ? 'rgba(39,174,96,0.2)' : 'rgba(231,76,60,0.2)'}` }}>
+                                <div style={{ fontWeight: 600, fontSize: 12, marginBottom: 4, color: ai.nameMatched ? '#27ae60' : '#e74c3c' }}>
+                                  Name: {ai.nameMatched ? 'Match' : 'Mismatch'}
+                                </div>
+                                <div style={{ fontSize: 12, color: 'var(--text-primary)' }}>Registered: <strong>{ai.registeredName}</strong> · ID: <strong>{ai.extractedName}</strong></div>
+                              </div>
+                            )}
+
                             {/* Concerns */}
                             {ai.concerns && ai.concerns.length > 0 && (
                               <div style={{ marginTop: 12, padding: 10, borderRadius: 8, background: 'rgba(231,76,60,0.08)', border: '1px solid rgba(231,76,60,0.2)' }}>
@@ -4640,16 +4662,30 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                           <div style={{ padding: 16, textAlign: 'center', color: 'var(--text-secondary)', fontSize: 13 }}>AI classification is still processing...</div>
                         ) : null}
 
-                        {/* Preview link */}
-                        <div style={{ marginTop: 12 }}>
-                          <button onClick={async () => {
-                            try {
-                              const res = await fetch(`/api/documents/${doc.id}/download`, { credentials: 'include', headers: window.getCsrfToken ? { 'X-CSRF-Token': window.getCsrfToken() } : {} });
-                              if (res.ok) { const blob = await res.blob(); window.open(URL.createObjectURL(blob), '_blank'); }
-                            } catch (e) { showToast('Failed to load preview', 'error'); }
-                          }} style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', fontSize: 12, cursor: 'pointer', color: 'var(--text-primary)' }}>
-                            View Document
-                          </button>
+                        {/* ID Photo + Selfie side by side */}
+                        <div style={{ marginTop: 12, display: 'flex', gap: 12 }}>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontWeight: 600, fontSize: 11, color: 'var(--text-secondary)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>ID Photo</div>
+                            <img
+                              src={`/api/documents/${doc.id}/download`}
+                              alt="ID document"
+                              style={{ width: '100%', borderRadius: 8, border: '1px solid var(--border-color)', cursor: 'pointer' }}
+                              onClick={() => window.open(`/api/documents/${doc.id}/download`, '_blank')}
+                              onError={(e) => { e.target.style.display = 'none'; }}
+                            />
+                          </div>
+                          {doc.linkedSelfieId && (
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontWeight: 600, fontSize: 11, color: 'var(--text-secondary)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>Selfie</div>
+                              <img
+                                src={`/api/documents/${doc.linkedSelfieId}/download`}
+                                alt="Selfie"
+                                style={{ width: '100%', borderRadius: 8, border: '1px solid var(--border-color)', cursor: 'pointer' }}
+                                onClick={() => window.open(`/api/documents/${doc.linkedSelfieId}/download`, '_blank')}
+                                onError={(e) => { e.target.style.display = 'none'; }}
+                              />
+                            </div>
+                          )}
                         </div>
 
                         {/* Admin action: notes + approve/reject */}

@@ -321,6 +321,7 @@ router.get("/admin/pending", authenticate, checkDocAdmin, requireAdmin, async (r
     const docs = await db.prepare(`
       SELECT vd.id, vd.owner_type, vd.owner_id, vd.uploaded_by, vd.category, vd.document_type,
              vd.file_name, vd.file_size, vd.mime_type, vd.status, vd.ai_classification,
+             vd.extracted_data, vd.ai_confidence, vd.ai_concerns,
              vd.ai_reviewed_at, vd.admin_reviewed_by, vd.admin_reviewed_at, vd.admin_notes,
              vd.expires_at, vd.created_at, vd.updated_at,
              u.first_name AS uploader_first, u.last_name AS uploader_last,
@@ -334,11 +335,29 @@ router.get("/admin/pending", authenticate, checkDocAdmin, requireAdmin, async (r
         vd.created_at DESC
     `).all();
 
+    // For identity docs, find linked selfies (stored with ai_classification.linkedIdDocId)
+    const identityDocIds = docs.filter(d => d.category === 'identity' && d.document_type !== 'selfie').map(d => d.id);
+    let selfieMap = {};
+    if (identityDocIds.length > 0) {
+      const selfies = await db.prepare(
+        `SELECT id, ai_classification FROM verified_documents WHERE document_type = 'selfie' AND owner_id IN (${identityDocIds.map(() => '?').join(',')}) AND category = 'identity'`
+      ).all(...docs.filter(d => d.category === 'identity' && d.document_type !== 'selfie').map(d => d.owner_id));
+      for (const s of selfies) {
+        try {
+          const sData = JSON.parse(s.ai_classification || '{}');
+          if (sData.linkedIdDocId) selfieMap[sData.linkedIdDocId] = s.id;
+        } catch (e) { /* ignore */ }
+      }
+    }
+
     const parsed = docs.map(d => ({
       ...d,
       ai_classification: d.ai_classification ? JSON.parse(d.ai_classification) : null,
+      extracted_data: d.extracted_data ? JSON.parse(d.extracted_data) : null,
+      ai_concerns: d.ai_concerns ? JSON.parse(d.ai_concerns) : null,
       uploaderName: [d.uploader_first, d.uploader_last].filter(Boolean).join(' ') || 'Unknown',
       recipientName: d.recipient_called_by || [d.recipient_first, d.recipient_last].filter(Boolean).join(' ') || null,
+      linkedSelfieId: selfieMap[d.id] || null,
     }));
 
     res.json({ documents: parsed, count: parsed.length });
