@@ -57,8 +57,9 @@ const uploadDoc = multer({
 });
 
 // ─── Authorization helper: verify user can access documents for an entity ───
-async function canAccessOwner(db, userId, userRole, ownerType, ownerId) {
-  if (userRole === "admin") return true;
+async function canAccessOwner(db, userId, userRole, ownerType, ownerId, userRoles) {
+  // Check admin in both role and roles array (dual-role users may have admin as non-primary role)
+  if (userRole === "admin" || (userRoles && userRoles.includes("admin"))) return true;
 
   if (ownerType === "care_recipient") {
     // Direct owner?
@@ -73,7 +74,7 @@ async function canAccessOwner(db, userId, userRole, ownerType, ownerId) {
     const teamMember = await db.prepare(`
       SELECT ctm.id FROM care_team_members ctm
       JOIN care_teams ct ON ct.id = ctm.care_team_id
-      WHERE ct.care_recipient_id = ? AND ctm.user_id = ? AND ctm.status = 'active'
+      WHERE ct.care_recipient_id = ? AND ctm.user_id = ?
     `).get(ownerId, userId);
     if (teamMember) return true;
     return false;
@@ -127,7 +128,7 @@ router.post("/upload", authenticate, uploadDoc.single("document"), async (req, r
     const db = await getDb();
 
     // Verify ownership: user must have access to the entity they're uploading for
-    if (!(await canAccessOwner(db, req.user.id, req.user.role, owner_type, owner_id))) {
+    if (!(await canAccessOwner(db, req.user.id, req.user.role, owner_type, owner_id, req.user.roles))) {
       return res.status(403).json({ error: "You do not have access to upload documents for this entity" });
     }
 
@@ -264,7 +265,7 @@ router.get("/owner/:ownerType/:ownerId", authenticate, async (req, res) => {
     const db = await getDb();
 
     // Authorization check
-    if (!(await canAccessOwner(db, req.user.id, req.user.role, ownerType, ownerId))) {
+    if (!(await canAccessOwner(db, req.user.id, req.user.role, ownerType, ownerId, req.user.roles))) {
       return res.status(403).json({ error: "You do not have access to these documents" });
     }
 
@@ -440,7 +441,7 @@ router.get("/:docId", authenticate, async (req, res) => {
     if (!doc) return res.status(404).json({ error: "Document not found" });
 
     // Authorization check
-    if (!(await canAccessOwner(db, req.user.id, req.user.role, doc.owner_type, doc.owner_id))) {
+    if (!(await canAccessOwner(db, req.user.id, req.user.role, doc.owner_type, doc.owner_id, req.user.roles))) {
       return res.status(403).json({ error: "You do not have access to this document" });
     }
 
@@ -467,7 +468,7 @@ router.get("/:docId/download", authenticate, async (req, res) => {
     if (!doc) return res.status(404).json({ error: "Document not found" });
 
     // Authorization check
-    if (!(await canAccessOwner(db, req.user.id, req.user.role, doc.owner_type, doc.owner_id))) {
+    if (!(await canAccessOwner(db, req.user.id, req.user.role, doc.owner_type, doc.owner_id, req.user.roles))) {
       return res.status(403).json({ error: "You do not have access to this document" });
     }
 
@@ -571,7 +572,7 @@ router.get("/audit/:recipientId", authenticate, async (req, res) => {
     const recipientId = req.params.recipientId;
 
     // Authorization check — must have access to this care recipient
-    if (!(await canAccessOwner(db, req.user.id, req.user.role, "care_recipient", recipientId))) {
+    if (!(await canAccessOwner(db, req.user.id, req.user.role, "care_recipient", recipientId, req.user.roles))) {
       return res.status(403).json({ error: "You do not have access to this care recipient's audit trail" });
     }
 
