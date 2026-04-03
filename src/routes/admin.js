@@ -470,6 +470,18 @@ router.get("/stats", async (req, res) => {
           AND COALESCE(cs.completed_at, cs.updated_at, cs.created_at) >= date_trunc('month', NOW())
       `).get() || { total: 0 };
     } catch (e) { /* */ }
+    let revenueYtd = { total: 0 };
+    try {
+      revenueYtd = await db.prepare(`
+        SELECT COALESCE(SUM(cs.estimated_cost), 0) as total
+        FROM care_sessions cs
+        JOIN users u ON cs.family_user_id = u.id
+        WHERE cs.status = 'completed' AND cs.estimated_cost > 0
+          AND COALESCE(u.is_demo, 0) = 0
+          AND NOT EXISTS (SELECT 1 FROM caregiver_profiles _cp JOIN users _cu ON _cp.user_id = _cu.id WHERE _cp.id = cs.caregiver_id AND _cu.is_demo = 1)
+          AND COALESCE(cs.completed_at, cs.updated_at, cs.created_at) >= date_trunc('year', NOW())
+      `).get() || { total: 0 };
+    } catch (e) { /* */ }
 
     // Visits this week
     let visitsThisWeek = { count: 0 };
@@ -491,6 +503,7 @@ router.get("/stats", async (req, res) => {
       avgRating: parseFloat(avgRating.avg || 0),
       totalReviews: parseInt(avgRating.total || 0),
       revenueMtd: parseFloat(revenueMtd.total || 0),
+      revenueYtd: parseFloat(revenueYtd.total || 0),
       visitsThisWeek: parseInt(visitsThisWeek.count || 0),
       ratingDistribution: ratingDist,
     });

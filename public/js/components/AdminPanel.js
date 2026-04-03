@@ -2243,6 +2243,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 10, marginBottom: 16 }}>
             {[
               { label: 'Revenue MTD', value: `$${(stats.revenueMtd || 0).toLocaleString()}`, icon: '💰', onClick: () => setActiveTab('financials') },
+              { label: 'Revenue YTD', value: `$${(stats.revenueYtd || 0).toLocaleString()}`, icon: '📊', onClick: () => setActiveTab('financials') },
               { label: 'Avg Rating', value: `${stats.avgRating || '—'} ⭐`, icon: '⭐', sub: `${stats.totalReviews || 0} reviews`, onClick: () => setActiveTab('ratings') },
             ].map((s, i) => (
               <div key={i} onClick={s.onClick} style={{

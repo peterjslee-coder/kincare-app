@@ -64252,6 +64252,11 @@ const AdminPanel = window.AdminPanel = ({
       icon: '💰',
       onClick: () => setActiveTab('financials')
     }, {
+      label: 'Revenue YTD',
+      value: `$${(stats.revenueYtd || 0).toLocaleString()}`,
+      icon: '📊',
+      onClick: () => setActiveTab('financials')
+    }, {
       label: 'Avg Rating',
       value: `${stats.avgRating || '—'} ⭐`,
       icon: '⭐',
