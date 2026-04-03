@@ -868,6 +868,7 @@
         app_volume_gain: 1.0,
       },
       recognition: null,
+      _startingRecognition: false,
       audioContext: null,
     };
 
@@ -1215,6 +1216,7 @@
 
       app.recognition.onstart = () => {
         app.isListening = true;
+        app._startingRecognition = false;
         app.transcript = '';
         app.interimTranscript = '';
         setState(STATES.LISTENING);
@@ -1244,6 +1246,7 @@
 
       app.recognition.onend = () => {
         app.isListening = false;
+        app._startingRecognition = false;
 
         // If we got a transcript, send it to the backend
         if (app.transcript.trim()) {
@@ -1265,13 +1268,22 @@
         return;
       }
 
+      // Synchronous guard: on mobile, touchstart AND mousedown both fire,
+      // calling startListening() twice before recognition.onstart sets
+      // app.isListening. This flag prevents the double-start.
+      if (app.isListening || app._startingRecognition) {
+        return;
+      }
+
       try {
+        app._startingRecognition = true;
         app.transcript = '';
         app.interimTranscript = '';
         app.recognition.start();
       } catch (err) {
+        app._startingRecognition = false;
         console.error('[Kindred] recognition.start() failed:', err);
-        showError('Mic error: ' + (err.message || err) + '. Try tapping again.');
+        showError('Mic error: ' + (err.message || err));
       }
     }
 
