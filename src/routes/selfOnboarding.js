@@ -6,33 +6,22 @@
 
 const express = require("express");
 const { v4: uuid } = require("uuid");
-const multer = require("multer");
 const { getDb } = require("../models/database");
 const { authenticate } = require("../middleware/auth");
 const { classifyDocument } = require("../utils/documentAI");
 const router = express.Router();
 
-// Configure multer for image uploads (memory storage, max 10MB per file)
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith('image/')) {
-      cb(null, true);
-    } else {
-      cb(new Error('Only image files are allowed'));
-    }
-  },
-});
-
 // ─── POST /api/self-onboarding/verify-id ───
 // Verify identity by comparing selfie to government ID
-router.post("/verify-id", authenticate, upload.fields([
-  { name: 'selfie', maxCount: 1 },
-  { name: 'idPhoto', maxCount: 1 },
-]), async (req, res) => {
+// Accepts JSON body with base64 data URIs: { idPhoto: "data:image/jpeg;base64,...", selfie?: "data:..." }
+router.post("/verify-id", authenticate, async (req, res) => {
   try {
     const db = await getDb();
+    const { idPhoto: idPhotoBase64, selfie: selfieBase64 } = req.body;
+
+    if (!idPhotoBase64) {
+      return res.status(400).json({ error: "ID photo is required" });
+    }
 
     // Get the user's name from registration
     const user = await db.prepare(
@@ -51,14 +40,6 @@ router.post("/verify-id", authenticate, upload.fields([
     if (!careRecipient) {
       return res.status(404).json({ error: "Care recipient record not found" });
     }
-
-    const idPhotoFile = req.files?.idPhoto?.[0];
-    if (!idPhotoFile) {
-      return res.status(400).json({ error: "ID photo is required" });
-    }
-
-    // Convert image buffer to base64 data URI
-    const idPhotoBase64 = `data:${idPhotoFile.mimetype};base64,${idPhotoFile.buffer.toString('base64')}`;
 
     // Classify the ID document using Claude
     const classifyResult = await classifyDocument(

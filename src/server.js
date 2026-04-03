@@ -193,6 +193,7 @@ app.use(cors({
 app.use(require("cookie-parser")());
 app.use("/api/auth/me/photo", express.json({ limit: "5mb" }));
 app.use("/api/care-recipients", express.json({ limit: "5mb" }));
+app.use("/api/self-onboarding", express.json({ limit: "10mb" }));
 // Skip JSON parsing for webhooks that need raw body for signature verification
 app.use((req, res, next) => {
   if (req.originalUrl === '/api/payments/webhook' || req.originalUrl === '/api/checkr/webhook') return next();
@@ -306,7 +307,7 @@ app.use("/api/kindred", require("./routes/kindred"));
 app.use("/api/legal", require("./routes/legal"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.57.46";
+const APP_VERSION = "1.57.50";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });

@@ -37458,34 +37458,14 @@ const SelfOnboardingWizard = window.SelfOnboardingWizard = ({
     setIdVerifying(true);
     setError('');
     try {
-      // Helper: convert base64 data URI to Blob
-      const dataURItoBlob = dataURI => {
-        const byteString = atob(dataURI.split(',')[1]);
-        const mimeString = dataURI.split(',')[0].split(':')[1].split(';')[0];
-        const ab = new ArrayBuffer(byteString.length);
-        const ia = new Uint8Array(ab);
-        for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
-        return new Blob([ab], {
-          type: mimeString
-        });
+      // Send base64 images as JSON — avoids FormData/multipart issues with service worker
+      const payload = {
+        idPhoto
       };
-      const formData = new FormData();
-      if (selfie && !selfieSkipped) {
-        formData.append('selfie', dataURItoBlob(selfie), 'selfie.jpg');
-      }
-      formData.append('idPhoto', dataURItoBlob(idPhoto), 'id.jpg');
-
-      // Must use raw fetch (not apiFetch) for FormData — but need auth headers
-      const verifyHeaders = {
-        'X-CSRF-Token': getCsrfToken()
-      };
-      if (window.AUTH_TOKEN) verifyHeaders['Authorization'] = `Bearer ${window.AUTH_TOKEN}`;
-      if (window.ACTIVE_ROLE) verifyHeaders['X-Active-Role'] = window.ACTIVE_ROLE;
-      const res = await fetch('/api/self-onboarding/verify-id', {
+      if (selfie && !selfieSkipped) payload.selfie = selfie;
+      const res = await apiFetch('/api/self-onboarding/verify-id', {
         method: 'POST',
-        body: formData,
-        headers: verifyHeaders,
-        credentials: 'same-origin'
+        body: JSON.stringify(payload)
       });
       if (res.ok) {
         const result = await res.json();
