@@ -9,9 +9,6 @@ const config: CapacitorConfig = {
     // Comment this out to use local bundled assets instead
     url: 'https://yourinplace.com',
     cleartext: false,
-    // Show a branded "Connecting..." page that auto-retries instead of
-    // Android's ugly "something went wrong" when the first load fails
-    errorPath: 'error.html',
   },
   plugins: {
     SplashScreen: {
