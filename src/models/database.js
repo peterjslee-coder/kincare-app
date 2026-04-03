@@ -1337,6 +1337,14 @@ async function initializeDatabase() {
   return db;
 }
 
+  // ─── v1.57.47 — Mark Cary Taker (test caregiver) as demo so her sessions are excluded from financials ───
+  try {
+    const updated = await db.prepare(
+      "UPDATE users SET is_demo = 1 WHERE email = 'peter@yourinplace.com' AND COALESCE(is_demo, 0) = 0"
+    ).run();
+    if (updated.changes > 0) console.log("  ✅ Marked Cary Taker (peter@yourinplace.com) as is_demo=1");
+  } catch (e) { /* already done */ }
+
 function resetDb() {
   // No-op for PostgreSQL — pool always queries live database
 }

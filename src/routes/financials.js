@@ -25,6 +25,9 @@ function estimateStripeFees(amount) {
   return Math.round((amount * 0.029 + 0.30) * 100) / 100;
 }
 
+// ─── Helper: SQL fragment to exclude sessions where the caregiver is a demo user ───
+const NO_DEMO_CAREGIVER = `AND NOT EXISTS (SELECT 1 FROM caregiver_profiles _cp JOIN users _cu ON _cp.user_id = _cu.id WHERE _cp.id = cs.caregiver_id AND _cu.is_demo = 1)`;
+
 // ─── GET /api/admin/financials/summary ───
 // KPI snapshot + 12-month time series
 router.get("/summary", async (req, res) => {
@@ -47,7 +50,7 @@ router.get("/summary", async (req, res) => {
       FROM care_sessions cs
       JOIN users u ON cs.family_user_id = u.id
       WHERE cs.status = 'completed' AND cs.estimated_cost > 0
-        AND COALESCE(u.is_demo, 0) = 0
+        AND COALESCE(u.is_demo, 0) = 0 ${NO_DEMO_CAREGIVER}
         AND COALESCE(cs.completed_at, cs.updated_at, cs.created_at) >= ?
     `).get(thisMonthStart);
 
@@ -59,7 +62,7 @@ router.get("/summary", async (req, res) => {
       FROM care_sessions cs
       JOIN users u ON cs.family_user_id = u.id
       WHERE cs.status = 'completed' AND cs.estimated_cost > 0
-        AND COALESCE(u.is_demo, 0) = 0
+        AND COALESCE(u.is_demo, 0) = 0 ${NO_DEMO_CAREGIVER}
         AND COALESCE(cs.completed_at, cs.updated_at, cs.created_at) >= ?
         AND COALESCE(cs.completed_at, cs.updated_at, cs.created_at) < ?
     `).get(lastMonthStart, lastMonthEnd);
@@ -69,14 +72,14 @@ router.get("/summary", async (req, res) => {
       SELECT COUNT(*) AS count FROM care_sessions cs
       JOIN users u ON cs.family_user_id = u.id
       WHERE cs.status IN ('completed', 'confirmed') AND cs.created_at >= ?
-        AND COALESCE(u.is_demo, 0) = 0
+        AND COALESCE(u.is_demo, 0) = 0 ${NO_DEMO_CAREGIVER}
     `).get(thisMonthStart);
 
     const prevSessions = await db.prepare(`
       SELECT COUNT(*) AS count FROM care_sessions cs
       JOIN users u ON cs.family_user_id = u.id
       WHERE cs.status IN ('completed', 'confirmed') AND cs.created_at >= ? AND cs.created_at < ?
-        AND COALESCE(u.is_demo, 0) = 0
+        AND COALESCE(u.is_demo, 0) = 0 ${NO_DEMO_CAREGIVER}
     `).get(lastMonthStart, lastMonthEnd);
 
     // Background check revenue
@@ -114,7 +117,7 @@ router.get("/summary", async (req, res) => {
       FROM care_sessions cs
       JOIN users u ON cs.family_user_id = u.id
       WHERE cs.status = 'completed' AND cs.estimated_cost > 0
-        AND COALESCE(u.is_demo, 0) = 0
+        AND COALESCE(u.is_demo, 0) = 0 ${NO_DEMO_CAREGIVER}
         AND COALESCE(cs.completed_at, cs.updated_at, cs.created_at) >= DATE_TRUNC('month', NOW()) - INTERVAL '11 months'
       GROUP BY DATE_TRUNC('month', COALESCE(cs.completed_at, cs.updated_at, cs.created_at))
       ORDER BY month ASC
@@ -175,7 +178,7 @@ router.get("/summary", async (req, res) => {
       FROM care_sessions cs
       JOIN users u ON cs.family_user_id = u.id
       WHERE cs.status = 'completed' AND cs.estimated_cost > 0
-        AND COALESCE(u.is_demo, 0) = 0
+        AND COALESCE(u.is_demo, 0) = 0 ${NO_DEMO_CAREGIVER}
     `).get();
 
     res.json({
@@ -216,7 +219,7 @@ router.get("/daily-snapshot", async (req, res) => {
       FROM care_sessions cs
       JOIN users u ON cs.family_user_id = u.id
       WHERE cs.status = 'completed' AND cs.estimated_cost > 0
-        AND COALESCE(u.is_demo, 0) = 0
+        AND COALESCE(u.is_demo, 0) = 0 ${NO_DEMO_CAREGIVER}
         AND COALESCE(cs.completed_at, cs.updated_at, cs.created_at) >= CURRENT_DATE - INTERVAL '13 days'
       GROUP BY DATE(COALESCE(cs.completed_at, cs.updated_at, cs.created_at))
       ORDER BY day ASC
@@ -229,7 +232,7 @@ router.get("/daily-snapshot", async (req, res) => {
       JOIN users u ON cs.family_user_id = u.id
       WHERE cs.status IN ('completed', 'confirmed', 'checked_in', 'scheduled')
         AND cs.scheduled_date::date >= CURRENT_DATE - INTERVAL '13 days'
-        AND COALESCE(u.is_demo, 0) = 0
+        AND COALESCE(u.is_demo, 0) = 0 ${NO_DEMO_CAREGIVER}
       GROUP BY DATE(cs.scheduled_date) ORDER BY day ASC
     `).all();
 
@@ -293,7 +296,7 @@ router.get("/breakdown", async (req, res) => {
       FROM care_sessions cs
       JOIN users u ON cs.family_user_id = u.id
       WHERE cs.status = 'completed' AND cs.estimated_cost > 0
-        AND COALESCE(u.is_demo, 0) = 0
+        AND COALESCE(u.is_demo, 0) = 0 ${NO_DEMO_CAREGIVER}
       GROUP BY cs.service_type
       ORDER BY revenue DESC
     `).all();
@@ -317,7 +320,7 @@ router.get("/breakdown", async (req, res) => {
       FROM care_sessions cs
       JOIN users u ON cs.family_user_id = u.id
       WHERE cs.status = 'completed' AND cs.estimated_cost > 0
-        AND COALESCE(u.is_demo, 0) = 0
+        AND COALESCE(u.is_demo, 0) = 0 ${NO_DEMO_CAREGIVER}
       GROUP BY u.id, u.first_name, u.last_name, u.email
       ORDER BY total_spent DESC
       LIMIT 5
@@ -404,7 +407,7 @@ router.get("/transactions", async (req, res) => {
       LEFT JOIN care_sessions cs ON p.session_id = cs.id
       LEFT JOIN visit_logs vl ON vl.session_id = cs.id
       LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
-      WHERE COALESCE(fu.is_demo, 0) = 0
+      WHERE COALESCE(fu.is_demo, 0) = 0 AND COALESCE(cu.is_demo, 0) = 0
       ORDER BY p.created_at DESC
     `).all();
 
@@ -529,10 +532,10 @@ router.get("/insights", async (req, res) => {
 
     // 2. Session Volume Trend — exclude demo
     const recentSessions = await db.prepare(
-      "SELECT COUNT(*) AS count FROM care_sessions cs JOIN users u ON cs.family_user_id = u.id WHERE cs.created_at >= ? AND COALESCE(u.is_demo, 0) = 0"
+      `SELECT COUNT(*) AS count FROM care_sessions cs JOIN users u ON cs.family_user_id = u.id WHERE cs.created_at >= ? AND COALESCE(u.is_demo, 0) = 0 ${NO_DEMO_CAREGIVER}`
     ).get(thirtyDaysAgo);
     const priorSessions = await db.prepare(
-      "SELECT COUNT(*) AS count FROM care_sessions cs JOIN users u ON cs.family_user_id = u.id WHERE cs.created_at >= ? AND cs.created_at < ? AND COALESCE(u.is_demo, 0) = 0"
+      `SELECT COUNT(*) AS count FROM care_sessions cs JOIN users u ON cs.family_user_id = u.id WHERE cs.created_at >= ? AND cs.created_at < ? AND COALESCE(u.is_demo, 0) = 0 ${NO_DEMO_CAREGIVER}`
     ).get(sixtyDaysAgo, thirtyDaysAgo);
 
     if (priorSessions.count > 0) {
