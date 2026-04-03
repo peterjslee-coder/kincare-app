@@ -579,10 +579,35 @@ const SelfOnboardingWizard = window.SelfOnboardingWizard = ({ user, careRecipien
                 }}>
                   <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
                     <span style={{ fontSize: '18px' }}>{idVerificationResult.matched ? '✓' : '⚠️'}</span>
-                    <div>
+                    <div style={{ flex: 1 }}>
                       <p style={{ margin: 0, fontWeight: 600, color: idVerificationResult.matched ? 'var(--color-success)' : 'var(--color-warning)' }}>
-                        {idVerificationResult.matched ? 'Identity Verified' : 'Verification Alert'}
+                        {idVerificationResult.matched ? 'Identity Verified' : 'Document Under Review'}
                       </p>
+                      {!idVerificationResult.matched && (
+                        <p style={{ margin: '6px 0 0', fontSize: '13px', color: 'var(--text-secondary)' }}>
+                          We need to review the document you've provided. You can continue setting up your account while we review.
+                        </p>
+                      )}
+
+                      {/* Name comparison */}
+                      {idVerificationResult.extractedName && !idVerificationResult.nameMatched && (
+                        <div style={{ marginTop: '10px', padding: '8px 10px', borderRadius: '6px', background: 'rgba(231,76,60,0.08)', fontSize: '13px' }}>
+                          <div><strong>Registered name:</strong> {idVerificationResult.registeredName}</div>
+                          <div><strong>Name on ID:</strong> {idVerificationResult.extractedName}</div>
+                        </div>
+                      )}
+
+                      {/* Confidence */}
+                      {idVerificationResult.confidence != null && (
+                        <div style={{ marginTop: '8px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                          AI confidence: <strong style={{ color: idVerificationResult.confidence >= 0.8 ? 'var(--color-success)' : idVerificationResult.confidence >= 0.5 ? 'var(--color-warning)' : 'var(--color-error)' }}>
+                            {Math.round(idVerificationResult.confidence * 100)}%
+                          </strong>
+                          {' · '}Document type: {idVerificationResult.classification?.replace(/_/g, ' ') || 'unknown'}
+                        </div>
+                      )}
+
+                      {/* Concerns list */}
                       {idVerificationResult.concerns?.length > 0 && (
                         <ul style={{ margin: '8px 0 0', paddingLeft: '20px', fontSize: '13px' }}>
                           {idVerificationResult.concerns.map((concern, idx) => (

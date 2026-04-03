@@ -52,55 +52,104 @@ router.post("/verify-id", authenticate, async (req, res) => {
       "Identity"
     );
 
-    // Extract verification data
+    // Extract verification data from AI classification
     const extractedName = classifyResult.extractedFields?.name || '';
+    const extractedDOB = classifyResult.extractedFields?.dateOfBirth || '';
     const expiryDate = classifyResult.extractedFields?.expirationDate || '';
     const issuingAuthority = classifyResult.extractedFields?.issuingAuthority || '';
 
-    // Check if name matches (basic fuzzy matching — last name must match)
+    // Build merged concerns list: AI concerns + our own checks
+    const allConcerns = [...(classifyResult.concerns || [])];
+
+    // Check if name matches (fuzzy: last name must appear somewhere)
+    const registeredName = `${user.first_name || ''} ${user.last_name || ''}`.trim();
     const userLastName = (user.last_name || '').toLowerCase().trim();
     const extractedLastName = extractedName.split(' ').pop().toLowerCase().trim();
     const nameMatched = extractedLastName === userLastName ||
                         extractedName.toLowerCase().includes(userLastName);
 
+    if (!nameMatched && extractedName) {
+      allConcerns.unshift(`Name mismatch: account registered as "${registeredName}" but ID shows "${extractedName}"`);
+    }
+
+    // Check DOB match if we have both
+    const careRecipientFull = await db.prepare(
+      "SELECT date_of_birth FROM care_recipients WHERE id = ?"
+    ).get(careRecipient.id);
+    let dobMatched = true;
+    if (extractedDOB && careRecipientFull?.date_of_birth) {
+      const registeredDOB = new Date(careRecipientFull.date_of_birth).toLocaleDateString('en-US');
+      dobMatched = extractedDOB.includes(registeredDOB) || registeredDOB.includes(extractedDOB) ||
+                   careRecipientFull.date_of_birth === extractedDOB;
+      if (!dobMatched) {
+        allConcerns.unshift(`Date of birth mismatch: registered "${registeredDOB}" but ID shows "${extractedDOB}"`);
+      }
+    }
+
+    // Determine if this needs human review
+    const isVerified = nameMatched && classifyResult.isValid && dobMatched;
+    const needsHumanReview = !isVerified || (classifyResult.confidence || 0) < 0.8;
+
+    // Build ai_classification JSON for admin panel compatibility (matches format from classifyDocument)
+    const aiClassificationForAdmin = {
+      classification: classifyResult.classification,
+      confidence: classifyResult.confidence,
+      isValid: classifyResult.isValid,
+      matchesClaimed: classifyResult.matchesClaimed,
+      extractedFields: classifyResult.extractedFields || {},
+      concerns: allConcerns,
+      summary: classifyResult.summary || '',
+      nameMatched,
+      dobMatched,
+      registeredName,
+      extractedName,
+    };
+
     // Store the ID verification in verified_documents table
-    // Original v1.36.0 schema has these NOT NULL columns: id, owner_type, owner_id, uploaded_by, category, document_type, file_data
+    // Original v1.36.0 schema NOT NULL columns: id, owner_type, owner_id, uploaded_by, category, document_type, file_data
     const docId = uuid();
     await db.prepare(
-      `INSERT INTO verified_documents (id, owner_id, owner_type, uploaded_by, category, document_type, file_data, mime_type, status, extracted_data, ai_confidence, ai_concerns, is_verified, verified_at, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO verified_documents (id, owner_id, owner_type, uploaded_by, category, document_type, file_data, mime_type, status, ai_classification, extracted_data, ai_confidence, ai_concerns, is_verified, verified_at, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       docId,
       careRecipient.id,
       'care_recipient',
       req.user.id,
       'identity',
-      classifyResult.classification || 'drivers_license',  // document_type (NOT NULL in original schema)
-      idPhotoBase64,                                        // file_data (NOT NULL in original schema) — store the base64
-      mimetype,                                             // mime_type
-      nameMatched && classifyResult.isValid ? 'approved' : 'pending',
+      classifyResult.classification || 'drivers_license',
+      idPhotoBase64,
+      mimetype,
+      needsHumanReview ? 'pending' : 'approved',
+      JSON.stringify(aiClassificationForAdmin),                // ai_classification — for admin panel
       JSON.stringify({
-        extractedName,
-        issuingAuthority,
-        expiryDate,
+        extractedName, registeredName, extractedDOB,
+        issuingAuthority, expiryDate,
         confidence: classifyResult.confidence,
+        nameMatched, dobMatched,
       }),
       classifyResult.confidence || 0,
-      JSON.stringify(classifyResult.concerns || []),
-      nameMatched && classifyResult.isValid ? 1 : 0,
+      JSON.stringify(allConcerns),
+      isVerified ? 1 : 0,
       new Date().toISOString(),
       new Date().toISOString()
     );
 
     // Return verification result
     res.json({
-      matched: nameMatched && classifyResult.isValid,
+      matched: isVerified,
       extractedName,
+      registeredName,
+      extractedDOB,
       expiryDate,
       confidence: classifyResult.confidence,
-      concerns: classifyResult.concerns || [],
+      concerns: allConcerns,
       documentId: docId,
       issuingAuthority,
+      nameMatched,
+      dobMatched,
+      needsHumanReview,
+      classification: classifyResult.classification,
     });
   } catch (err) {
     console.error('Verify ID error:', err);
