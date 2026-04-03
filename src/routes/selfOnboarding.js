@@ -64,17 +64,19 @@ router.post("/verify-id", authenticate, async (req, res) => {
                         extractedName.toLowerCase().includes(userLastName);
 
     // Store the ID photo in verified_documents table
+    // Note: table was created in v1.36.0 with uploaded_by NOT NULL — must provide it
     const docId = uuid();
     await db.prepare(
-      `INSERT INTO verified_documents (id, owner_id, owner_type, category, doc_type, file_path, extracted_data, ai_confidence, ai_concerns, is_verified, verified_at, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO verified_documents (id, owner_id, owner_type, uploaded_by, category, doc_type, file_path, extracted_data, ai_confidence, ai_concerns, is_verified, status, verified_at, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       docId,
       careRecipient.id,
       'care_recipient',
+      req.user.id,                                  // uploaded_by (NOT NULL in original schema)
       'identity',
       classifyResult.classification || 'other_legal',
-      `identity/${careRecipient.id}/${docId}.jpg`, // Logical path (actual storage handled elsewhere)
+      `identity/${careRecipient.id}/${docId}.jpg`,
       JSON.stringify({
         extractedName,
         issuingAuthority,
@@ -84,6 +86,7 @@ router.post("/verify-id", authenticate, async (req, res) => {
       classifyResult.confidence || 0,
       JSON.stringify(classifyResult.concerns || []),
       nameMatched && classifyResult.isValid ? 1 : 0,
+      nameMatched && classifyResult.isValid ? 'approved' : 'pending',  // status column from original schema
       new Date().toISOString(),
       new Date().toISOString()
     );

@@ -1117,25 +1117,14 @@ async function initializeDatabase() {
     `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS terms_version TEXT`,
     `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS non_medical_acknowledged INTEGER DEFAULT 0`,
 
-    // Verified documents table for ID verification
-    `CREATE TABLE IF NOT EXISTS verified_documents (
-      id TEXT PRIMARY KEY,
-      owner_id TEXT NOT NULL,
-      owner_type TEXT NOT NULL DEFAULT 'care_recipient',
-      category TEXT NOT NULL,
-      doc_type TEXT,
-      file_path TEXT,
-      extracted_data TEXT,
-      ai_confidence REAL DEFAULT 0,
-      ai_concerns TEXT,
-      is_verified INTEGER DEFAULT 0,
-      verified_by TEXT REFERENCES users(id),
-      verified_at TIMESTAMPTZ,
-      created_at TIMESTAMPTZ DEFAULT NOW(),
-      updated_at TIMESTAMPTZ DEFAULT NOW()
-    )`,
-    `CREATE INDEX IF NOT EXISTS idx_verified_docs_owner ON verified_documents(owner_id, owner_type)`,
-    `CREATE INDEX IF NOT EXISTS idx_verified_docs_category ON verified_documents(category)`,
+    // v1.57.53 — Add self-onboarding ID verification columns to existing verified_documents table
+    // (Table was created in v1.36.0 with different schema; CREATE TABLE IF NOT EXISTS was a no-op)
+    `ALTER TABLE verified_documents ADD COLUMN IF NOT EXISTS doc_type TEXT`,
+    `ALTER TABLE verified_documents ADD COLUMN IF NOT EXISTS file_path TEXT`,
+    `ALTER TABLE verified_documents ADD COLUMN IF NOT EXISTS extracted_data TEXT`,
+    `ALTER TABLE verified_documents ADD COLUMN IF NOT EXISTS ai_confidence REAL DEFAULT 0`,
+    `ALTER TABLE verified_documents ADD COLUMN IF NOT EXISTS ai_concerns TEXT`,
+    `ALTER TABLE verified_documents ADD COLUMN IF NOT EXISTS is_verified INTEGER DEFAULT 0`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }
