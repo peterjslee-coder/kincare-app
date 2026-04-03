@@ -29,7 +29,7 @@ const SelfOnboardingWizard = window.SelfOnboardingWizard = ({ user, careRecipien
     line1: '',
     line2: '',
     city: '',
-    state: '',
+    state: 'VA',
     zip: '',
   });
 
@@ -202,6 +202,10 @@ const SelfOnboardingWizard = window.SelfOnboardingWizard = ({ user, careRecipien
       case 3: // Care Address
         if (!address.line1.trim() || !address.city.trim() || !address.state || !address.zip.trim()) {
           setError('Please complete your care address');
+          return false;
+        }
+        if (address.state !== 'VA') {
+          setError('InPlace is currently only licensed to operate in Virginia. Please select VA if care will take place in Virginia.');
           return false;
         }
         return true;
@@ -820,6 +824,18 @@ const SelfOnboardingWizard = window.SelfOnboardingWizard = ({ user, careRecipien
             </div>
           </div>
 
+          {/* VA-only licensing warning */}
+          {address.state && address.state !== 'VA' && (
+            <div style={{ marginBottom: '20px', padding: '12px 16px', borderRadius: '6px', background: 'rgba(231,76,60,0.08)', border: '1px solid rgba(231,76,60,0.3)' }}>
+              <p style={{ margin: 0, fontWeight: 600, color: 'var(--color-error)', fontSize: '14px' }}>
+                InPlace is currently only licensed to operate in Virginia
+              </p>
+              <p style={{ margin: '6px 0 0', fontSize: '13px', color: 'var(--text-secondary)' }}>
+                We're working on expanding to other states. Please select Virginia if that's where care will take place, or contact us if you'd like to be notified when we're available in your area.
+              </p>
+            </div>
+          )}
+
           <div style={{ marginBottom: '24px', padding: '12px', background: 'var(--bg-muted)', borderRadius: '6px' }}>
             <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: 'normal' }}>
               <input
@@ -947,7 +963,15 @@ const SelfOnboardingWizard = window.SelfOnboardingWizard = ({ user, careRecipien
                 type="tel"
                 placeholder="(123) 456-7890"
                 value={emergencyContact.phone}
-                onChange={(e) => setEmergencyContact({ ...emergencyContact, phone: e.target.value })}
+                onChange={(e) => {
+                  // Format as (AAA) BBB-CCCC
+                  const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
+                  let formatted = digits;
+                  if (digits.length > 6) formatted = `(${digits.slice(0,3)}) ${digits.slice(3,6)}-${digits.slice(6)}`;
+                  else if (digits.length > 3) formatted = `(${digits.slice(0,3)}) ${digits.slice(3)}`;
+                  else if (digits.length > 0) formatted = `(${digits}`;
+                  setEmergencyContact({ ...emergencyContact, phone: formatted });
+                }}
                 style={inputStyle}
               />
             </div>
