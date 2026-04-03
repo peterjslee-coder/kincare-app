@@ -580,56 +580,46 @@ const SelfOnboardingWizard = window.SelfOnboardingWizard = ({ user, careRecipien
                   <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
                     <span style={{ fontSize: '18px' }}>{idVerificationResult.matched ? '✓' : '⚠️'}</span>
                     <div style={{ flex: 1 }}>
-                      <p style={{ margin: 0, fontWeight: 600, color: idVerificationResult.matched ? 'var(--color-success)' : 'var(--color-warning)' }}>
-                        {idVerificationResult.matched ? 'Identity Verified' : 'Document Under Review'}
-                      </p>
-                      {!idVerificationResult.matched && (
-                        <p style={{ margin: '6px 0 0', fontSize: '13px', color: 'var(--text-secondary)' }}>
-                          We need to review the document you've provided. You can continue setting up your account while we review.
-                        </p>
-                      )}
-
-                      {/* Name comparison */}
-                      {idVerificationResult.extractedName && !idVerificationResult.nameMatched && (
-                        <div style={{ marginTop: '10px', padding: '8px 10px', borderRadius: '6px', background: 'rgba(231,76,60,0.08)', fontSize: '13px' }}>
-                          <div><strong>Registered name:</strong> {idVerificationResult.registeredName}</div>
-                          <div><strong>Name on ID:</strong> {idVerificationResult.extractedName}</div>
-                        </div>
-                      )}
-
-                      {/* Face comparison */}
-                      {idVerificationResult.faceComparison && !idVerificationResult.faceComparison.skipped && (
-                        <div style={{ marginTop: '10px', padding: '8px 10px', borderRadius: '6px', background: idVerificationResult.faceComparison.similar ? 'rgba(39,174,96,0.08)' : 'rgba(231,76,60,0.08)', fontSize: '13px' }}>
-                          <div>
-                            <strong>Face match:</strong>{' '}
-                            <span style={{ color: idVerificationResult.faceComparison.similar ? 'var(--color-success)' : 'var(--color-error)' }}>
-                              {idVerificationResult.faceComparison.similar ? 'Appears to match' : 'Possible mismatch'}
-                            </span>
-                            {' · '}{Math.round(idVerificationResult.faceComparison.confidence * 100)}% confidence
-                          </div>
-                          {idVerificationResult.faceComparison.explanation && (
-                            <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>{idVerificationResult.faceComparison.explanation}</div>
+                      {idVerificationResult.matched ? (
+                        /* ─── All clear ─── */
+                        <div>
+                          <p style={{ margin: 0, fontWeight: 600, color: 'var(--color-success)' }}>Identity Verified</p>
+                          {/* Face match line */}
+                          {idVerificationResult.faceComparison && !idVerificationResult.faceComparison.skipped && (
+                            <p style={{ margin: '6px 0 0', fontSize: '13px', color: 'var(--text-secondary)' }}>
+                              ✓ Face match {Math.round(idVerificationResult.faceComparison.confidence * 100)}%
+                            </p>
                           )}
                         </div>
-                      )}
+                      ) : (
+                        /* ─── Needs review ─── */
+                        <div>
+                          {/* Primary status line — what's wrong */}
+                          <p style={{ margin: 0, fontWeight: 600, color: 'var(--color-warning)' }}>
+                            {!idVerificationResult.nameMatched ? 'Name Mismatch — Requires Review' :
+                             idVerificationResult.faceComparison && !idVerificationResult.faceComparison.similar && !idVerificationResult.faceComparison.skipped ? 'Photo Mismatch — Requires Review' :
+                             'Document Under Review'}
+                          </p>
+                          <p style={{ margin: '6px 0 0', fontSize: '13px', color: 'var(--text-secondary)' }}>
+                            We'll review your document. You can continue setting up your account.
+                          </p>
 
-                      {/* Confidence */}
-                      {idVerificationResult.confidence != null && (
-                        <div style={{ marginTop: '8px', fontSize: '12px', color: 'var(--text-secondary)' }}>
-                          Document confidence: <strong style={{ color: idVerificationResult.confidence >= 0.8 ? 'var(--color-success)' : idVerificationResult.confidence >= 0.5 ? 'var(--color-warning)' : 'var(--color-error)' }}>
-                            {Math.round(idVerificationResult.confidence * 100)}%
-                          </strong>
-                          {' · '}Type: {idVerificationResult.classification?.replace(/_/g, ' ') || 'unknown'}
+                          {/* Name mismatch detail */}
+                          {idVerificationResult.extractedName && !idVerificationResult.nameMatched && (
+                            <div style={{ marginTop: '10px', padding: '8px 10px', borderRadius: '6px', background: 'rgba(231,76,60,0.08)', fontSize: '13px' }}>
+                              <div><strong>Registered name:</strong> {idVerificationResult.registeredName}</div>
+                              <div><strong>Name on ID:</strong> {idVerificationResult.extractedName}</div>
+                            </div>
+                          )}
+
+                          {/* Face match — just score + icon, no explanation */}
+                          {idVerificationResult.faceComparison && !idVerificationResult.faceComparison.skipped && (
+                            <p style={{ margin: '8px 0 0', fontSize: '13px' }}>
+                              {idVerificationResult.faceComparison.similar ? '✓' : '⚠️'}{' '}
+                              Face match {Math.round(idVerificationResult.faceComparison.confidence * 100)}%
+                            </p>
+                          )}
                         </div>
-                      )}
-
-                      {/* Concerns list */}
-                      {idVerificationResult.concerns?.length > 0 && (
-                        <ul style={{ margin: '8px 0 0', paddingLeft: '20px', fontSize: '13px' }}>
-                          {idVerificationResult.concerns.map((concern, idx) => (
-                            <li key={idx}>{concern}</li>
-                          ))}
-                        </ul>
                       )}
                     </div>
                   </div>
