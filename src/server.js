@@ -168,6 +168,7 @@ app.use(helmet({
         "https://cdnjs.cloudflare.com", "https://unpkg.com", "https://cdn.socket.io",
         "https://js.stripe.com", "https://connect-js.stripe.com",
         "https://sdk.twilio.com", "https://plausible.io",
+        "https://static.cloudflareinsights.com",
       ],
       styleSrc: ["'self'", "'unsafe-inline'", "https://unpkg.com", "https://fonts.googleapis.com"],
       imgSrc: ["'self'", "data:", "blob:", "https:"],
@@ -304,7 +305,7 @@ app.use("/api/kindred", require("./routes/kindred"));
 app.use("/api/legal", require("./routes/legal"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.57.42";
+const APP_VERSION = "1.57.43";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });

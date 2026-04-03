@@ -7190,27 +7190,23 @@ const Dashboard = window.Dashboard = ({
   };
   const fetchDashboard = async (retryCount = 0) => {
     try {
-      // 12-second timeout so Android WebView doesn't hang forever
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 12000);
-      const res = await apiFetch('/api/dashboard', {
-        signal: controller.signal
-      });
-      clearTimeout(timeout);
+      const res = await apiFetch('/api/dashboard');
       if (res !== null && res !== void 0 && res.ok) {
         const d = await res.json();
         setData(d);
         setError(false);
-      } else if (retryCount < 1) {
-        // One silent retry before showing error
-        console.warn('Dashboard fetch returned non-OK, retrying...');
+      } else if (retryCount < 2) {
+        // Silent retry — Android WebView often fails the first fetch after SW update
+        console.warn('Dashboard fetch non-OK, retry', retryCount + 1);
+        await new Promise(r => setTimeout(r, 1500));
         return fetchDashboard(retryCount + 1);
       } else {
         setError(true);
       }
     } catch (err) {
-      if (err.name === 'AbortError' && retryCount < 1) {
-        console.warn('Dashboard fetch timed out, retrying...');
+      if (retryCount < 2) {
+        console.warn('Dashboard fetch error, retry', retryCount + 1, err.message);
+        await new Promise(r => setTimeout(r, 1500));
         return fetchDashboard(retryCount + 1);
       }
       console.error('Dashboard fetch error:', err);
