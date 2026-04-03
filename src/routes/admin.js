@@ -1842,81 +1842,92 @@ router.get("/briefing", requireAdmin, async (req, res) => {
     const briefing = {};
 
     // 1. Session activity (last 7 days vs prior 7)
-    const sessionStats = await db.prepare(`
-      SELECT
-        COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days') AS sessions_7d,
-        COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '14 days' AND created_at <= NOW() - INTERVAL '7 days') AS sessions_prior_7d,
-        COUNT(*) FILTER (WHERE status = 'completed' AND created_at > NOW() - INTERVAL '7 days') AS completed_7d,
-        COUNT(*) FILTER (WHERE status = 'cancelled' AND created_at > NOW() - INTERVAL '7 days') AS cancelled_7d,
-        COUNT(*) FILTER (WHERE status = 'pending' OR status = 'confirmed') AS upcoming
-      FROM care_sessions
-    `).get();
-    briefing.sessions = sessionStats;
+    try {
+      briefing.sessions = await db.prepare(`
+        SELECT
+          COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days') AS sessions_7d,
+          COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '14 days' AND created_at <= NOW() - INTERVAL '7 days') AS sessions_prior_7d,
+          COUNT(*) FILTER (WHERE status = 'completed' AND created_at > NOW() - INTERVAL '7 days') AS completed_7d,
+          COUNT(*) FILTER (WHERE status = 'cancelled' AND created_at > NOW() - INTERVAL '7 days') AS cancelled_7d,
+          COUNT(*) FILTER (WHERE status = 'pending' OR status = 'confirmed') AS upcoming
+        FROM care_sessions
+      `).get();
+    } catch (e) { console.error("Briefing sessions:", e.message); briefing.sessions = {}; }
 
     // 2. Caregiver engagement: offer acceptance rate
-    const offerStats = await db.prepare(`
-      SELECT
-        COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days') AS offers_7d,
-        COUNT(*) FILTER (WHERE status = 'accepted' AND created_at > NOW() - INTERVAL '7 days') AS accepted_7d,
-        COUNT(*) FILTER (WHERE status = 'declined' AND created_at > NOW() - INTERVAL '7 days') AS declined_7d,
-        COUNT(*) FILTER (WHERE status = 'expired' AND created_at > NOW() - INTERVAL '7 days') AS expired_7d,
-        COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '14 days' AND created_at <= NOW() - INTERVAL '7 days') AS offers_prior_7d,
-        COUNT(*) FILTER (WHERE status = 'accepted' AND created_at > NOW() - INTERVAL '14 days' AND created_at <= NOW() - INTERVAL '7 days') AS accepted_prior_7d
-      FROM session_offers
-    `).get();
-    briefing.offers = offerStats;
+    try {
+      briefing.offers = await db.prepare(`
+        SELECT
+          COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days') AS offers_7d,
+          COUNT(*) FILTER (WHERE status = 'accepted' AND created_at > NOW() - INTERVAL '7 days') AS accepted_7d,
+          COUNT(*) FILTER (WHERE status = 'declined' AND created_at > NOW() - INTERVAL '7 days') AS declined_7d,
+          COUNT(*) FILTER (WHERE status = 'expired' AND created_at > NOW() - INTERVAL '7 days') AS expired_7d,
+          COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '14 days' AND created_at <= NOW() - INTERVAL '7 days') AS offers_prior_7d,
+          COUNT(*) FILTER (WHERE status = 'accepted' AND created_at > NOW() - INTERVAL '14 days' AND created_at <= NOW() - INTERVAL '7 days') AS accepted_prior_7d
+        FROM session_offers
+      `).get();
+    } catch (e) { console.error("Briefing offers:", e.message); briefing.offers = {}; }
 
-    // 3. Revenue snapshot
-    const revenueStats = await db.prepare(`
-      SELECT
-        COALESCE(SUM(amount_cents) FILTER (WHERE created_at > NOW() - INTERVAL '7 days'), 0) AS revenue_7d,
-        COALESCE(SUM(amount_cents) FILTER (WHERE created_at > NOW() - INTERVAL '14 days' AND created_at <= NOW() - INTERVAL '7 days'), 0) AS revenue_prior_7d,
-        COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days') AS payments_7d,
-        COUNT(*) FILTER (WHERE status = 'failed' AND created_at > NOW() - INTERVAL '7 days') AS failed_7d
-      FROM payments
-    `).get();
-    briefing.revenue = revenueStats;
+    // 3. Revenue snapshot — use care_sessions estimated_cost (source of truth)
+    try {
+      briefing.revenue = await db.prepare(`
+        SELECT
+          COALESCE(SUM(cs.estimated_cost * 100) FILTER (WHERE cs.completed_at > NOW() - INTERVAL '7 days' OR (cs.completed_at IS NULL AND cs.updated_at > NOW() - INTERVAL '7 days')), 0) AS revenue_7d,
+          COALESCE(SUM(cs.estimated_cost * 100) FILTER (WHERE COALESCE(cs.completed_at, cs.updated_at) > NOW() - INTERVAL '14 days' AND COALESCE(cs.completed_at, cs.updated_at) <= NOW() - INTERVAL '7 days'), 0) AS revenue_prior_7d,
+          COUNT(*) FILTER (WHERE COALESCE(cs.completed_at, cs.updated_at) > NOW() - INTERVAL '7 days') AS payments_7d,
+          0 AS failed_7d
+        FROM care_sessions cs
+        JOIN users u ON cs.family_user_id = u.id
+        WHERE cs.status = 'completed' AND cs.estimated_cost > 0
+          AND COALESCE(u.is_demo, 0) = 0
+          AND NOT EXISTS (SELECT 1 FROM caregiver_profiles _cp JOIN users _cu ON _cp.user_id = _cu.id WHERE _cp.id = cs.caregiver_id AND _cu.is_demo = 1)
+      `).get();
+    } catch (e) { console.error("Briefing revenue:", e.message); briefing.revenue = {}; }
 
     // 4. User growth
-    const userStats = await db.prepare(`
-      SELECT
-        COUNT(*) AS total_users,
-        COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days') AS new_7d,
-        COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '14 days' AND created_at <= NOW() - INTERVAL '7 days') AS new_prior_7d,
-        COUNT(*) FILTER (WHERE last_active_at > NOW() - INTERVAL '7 days') AS active_7d
-      FROM users WHERE is_demo = 0
-    `).get();
-    briefing.users = userStats;
+    try {
+      briefing.users = await db.prepare(`
+        SELECT
+          COUNT(*) AS total_users,
+          COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days') AS new_7d,
+          COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '14 days' AND created_at <= NOW() - INTERVAL '7 days') AS new_prior_7d,
+          0 AS active_7d
+        FROM users WHERE COALESCE(is_demo, 0) = 0
+      `).get();
+    } catch (e) { console.error("Briefing users:", e.message); briefing.users = {}; }
 
     // 5. Review summary
-    const reviewStats = await db.prepare(`
-      SELECT
-        COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days') AS reviews_7d,
-        ROUND(AVG(rating) FILTER (WHERE created_at > NOW() - INTERVAL '7 days'), 2) AS avg_rating_7d,
-        ROUND(AVG(rating) FILTER (WHERE created_at > NOW() - INTERVAL '14 days' AND created_at <= NOW() - INTERVAL '7 days'), 2) AS avg_rating_prior_7d,
-        COUNT(*) FILTER (WHERE rating < 3 AND COALESCE(admin_status, 'pending') = 'pending') AS flagged_pending
-      FROM reviews
-    `).get();
-    briefing.reviews = reviewStats;
+    try {
+      briefing.reviews = await db.prepare(`
+        SELECT
+          COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days') AS reviews_7d,
+          ROUND(AVG(rating) FILTER (WHERE created_at > NOW() - INTERVAL '7 days'), 2) AS avg_rating_7d,
+          ROUND(AVG(rating) FILTER (WHERE created_at > NOW() - INTERVAL '14 days' AND created_at <= NOW() - INTERVAL '7 days'), 2) AS avg_rating_prior_7d,
+          0 AS flagged_pending
+        FROM reviews
+      `).get();
+    } catch (e) { console.error("Briefing reviews:", e.message); briefing.reviews = {}; }
 
     // 6. Support tickets
-    const ticketStats = await db.prepare(`
-      SELECT
-        COUNT(*) FILTER (WHERE status = 'open' OR status = 'in_progress') AS open_tickets,
-        COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days') AS new_7d,
-        COUNT(*) FILTER (WHERE status = 'resolved' AND updated_at > NOW() - INTERVAL '7 days') AS resolved_7d
-      FROM admin_tickets
-    `).get();
-    briefing.tickets = ticketStats;
+    try {
+      briefing.tickets = await db.prepare(`
+        SELECT
+          COUNT(*) FILTER (WHERE status = 'open' OR status = 'in_progress') AS open_tickets,
+          COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days') AS new_7d,
+          COUNT(*) FILTER (WHERE status = 'resolved' AND updated_at > NOW() - INTERVAL '7 days') AS resolved_7d
+        FROM admin_tickets
+      `).get();
+    } catch (e) { console.error("Briefing tickets:", e.message); briefing.tickets = {}; }
 
     // 7. Security: recent failed logins
-    const secStats = await db.prepare(`
-      SELECT
-        COUNT(*) FILTER (WHERE action = 'login_failed' AND created_at > NOW() - INTERVAL '24 hours') AS failed_logins_24h,
-        COUNT(*) FILTER (WHERE severity IN ('critical', 'error') AND created_at > NOW() - INTERVAL '24 hours') AS critical_events_24h
-      FROM audit_log
-    `).get();
-    briefing.security = secStats;
+    try {
+      briefing.security = await db.prepare(`
+        SELECT
+          COUNT(*) FILTER (WHERE action = 'login_failed' AND created_at > NOW() - INTERVAL '24 hours') AS failed_logins_24h,
+          COUNT(*) FILTER (WHERE severity IN ('critical', 'error') AND created_at > NOW() - INTERVAL '24 hours') AS critical_events_24h
+        FROM audit_log
+      `).get();
+    } catch (e) { console.error("Briefing security:", e.message); briefing.security = {}; }
 
     // 8. Generate natural-language briefing items
     const items = [];
