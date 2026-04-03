@@ -459,7 +459,16 @@ router.get("/stats", async (req, res) => {
       for (const d of distRows) ratingDist[d.rating] = d.cnt;
     } catch (e) { /* */ }
     try {
-      revenueMtd = await db.prepare("SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE status = 'completed' AND created_at >= date_trunc('month', NOW())").get() || { total: 0 };
+      // Use care_sessions.estimated_cost (source of truth), exclude demo users on both sides
+      revenueMtd = await db.prepare(`
+        SELECT COALESCE(SUM(cs.estimated_cost), 0) as total
+        FROM care_sessions cs
+        JOIN users u ON cs.family_user_id = u.id
+        WHERE cs.status = 'completed' AND cs.estimated_cost > 0
+          AND COALESCE(u.is_demo, 0) = 0
+          AND NOT EXISTS (SELECT 1 FROM caregiver_profiles _cp JOIN users _cu ON _cp.user_id = _cu.id WHERE _cp.id = cs.caregiver_id AND _cu.is_demo = 1)
+          AND COALESCE(cs.completed_at, cs.updated_at, cs.created_at) >= date_trunc('month', NOW())
+      `).get() || { total: 0 };
     } catch (e) { /* */ }
 
     // Visits this week
