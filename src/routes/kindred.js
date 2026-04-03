@@ -437,6 +437,9 @@ router.post("/chat", async (req, res) => {
           }
         }
 
+        // Don't relay messages back to the person who initiated the Kindred chat
+        targetUsers = targetUsers.filter(u => u.id !== req.user.id);
+
         // Get or create a Kindred system user (like iPAi has one)
         let kindredUser = await db.prepare("SELECT id FROM users WHERE email = 'kindred@yourinplace.com'").get();
         if (!kindredUser) {

@@ -398,7 +398,7 @@ router.get("/admin/count", authenticate, checkDocAdmin, requireAdmin, async (req
     const row = await db.prepare(`
       SELECT COUNT(*) AS cnt FROM verified_documents WHERE status IN ('ai_review', 'pending', 'ai_flagged')
     `).get();
-    res.json({ count: row.cnt });
+    res.json({ count: parseInt(row.cnt) || 0 });
   } catch (err) {
     res.status(500).json({ error: "Failed to count pending documents" });
   }

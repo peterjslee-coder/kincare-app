@@ -39,35 +39,44 @@ router.get("/summary", async (req, res) => {
 
     // KPI: current month — use completed sessions as source of truth for revenue
     // (payments table only has rows when Stripe checkout completes, which may not cover all sessions)
+    // Exclude demo users to avoid inflated numbers
     const currentMonth = await db.prepare(`
-      SELECT COALESCE(SUM(estimated_cost), 0) AS gross_revenue,
-             COALESCE(SUM(estimated_cost * 0.2), 0) AS platform_revenue,
+      SELECT COALESCE(SUM(cs.estimated_cost), 0) AS gross_revenue,
+             COALESCE(SUM(cs.estimated_cost * 0.2), 0) AS platform_revenue,
              COUNT(*) AS payment_count
-      FROM care_sessions
-      WHERE status = 'completed' AND estimated_cost > 0
-        AND COALESCE(completed_at, updated_at, created_at) >= ?
+      FROM care_sessions cs
+      JOIN users u ON cs.family_user_id = u.id
+      WHERE cs.status = 'completed' AND cs.estimated_cost > 0
+        AND COALESCE(u.is_demo, 0) = 0
+        AND COALESCE(cs.completed_at, cs.updated_at, cs.created_at) >= ?
     `).get(thisMonthStart);
 
     // KPI: previous month
     const prevMonth = await db.prepare(`
-      SELECT COALESCE(SUM(estimated_cost), 0) AS gross_revenue,
-             COALESCE(SUM(estimated_cost * 0.2), 0) AS platform_revenue,
+      SELECT COALESCE(SUM(cs.estimated_cost), 0) AS gross_revenue,
+             COALESCE(SUM(cs.estimated_cost * 0.2), 0) AS platform_revenue,
              COUNT(*) AS payment_count
-      FROM care_sessions
-      WHERE status = 'completed' AND estimated_cost > 0
-        AND COALESCE(completed_at, updated_at, created_at) >= ?
-        AND COALESCE(completed_at, updated_at, created_at) < ?
+      FROM care_sessions cs
+      JOIN users u ON cs.family_user_id = u.id
+      WHERE cs.status = 'completed' AND cs.estimated_cost > 0
+        AND COALESCE(u.is_demo, 0) = 0
+        AND COALESCE(cs.completed_at, cs.updated_at, cs.created_at) >= ?
+        AND COALESCE(cs.completed_at, cs.updated_at, cs.created_at) < ?
     `).get(lastMonthStart, lastMonthEnd);
 
-    // Current month sessions (completed + confirmed)
+    // Current month sessions (completed + confirmed) — exclude demo
     const currentSessions = await db.prepare(`
-      SELECT COUNT(*) AS count FROM care_sessions
-      WHERE status IN ('completed', 'confirmed') AND created_at >= ?
+      SELECT COUNT(*) AS count FROM care_sessions cs
+      JOIN users u ON cs.family_user_id = u.id
+      WHERE cs.status IN ('completed', 'confirmed') AND cs.created_at >= ?
+        AND COALESCE(u.is_demo, 0) = 0
     `).get(thisMonthStart);
 
     const prevSessions = await db.prepare(`
-      SELECT COUNT(*) AS count FROM care_sessions
-      WHERE status IN ('completed', 'confirmed') AND created_at >= ? AND created_at < ?
+      SELECT COUNT(*) AS count FROM care_sessions cs
+      JOIN users u ON cs.family_user_id = u.id
+      WHERE cs.status IN ('completed', 'confirmed') AND cs.created_at >= ? AND cs.created_at < ?
+        AND COALESCE(u.is_demo, 0) = 0
     `).get(lastMonthStart, lastMonthEnd);
 
     // Background check revenue
@@ -95,7 +104,7 @@ router.get("/summary", async (req, res) => {
     const prevAvgSession = prevMonth.payment_count > 0
       ? Math.round(prevMonth.gross_revenue / prevMonth.payment_count * 100) / 100 : 0;
 
-    // 12-month time series — from completed sessions (with Stripe overlay when available)
+    // 12-month time series — from completed sessions, exclude demo
     const monthlyData = await db.prepare(`
       SELECT TO_CHAR(DATE_TRUNC('month', COALESCE(cs.completed_at, cs.updated_at, cs.created_at)), 'YYYY-MM') AS month,
              COALESCE(SUM(cs.estimated_cost), 0) AS gross_revenue,
@@ -103,7 +112,9 @@ router.get("/summary", async (req, res) => {
              COALESCE(SUM(cs.estimated_cost * 0.8), 0) AS caregiver_payout,
              COUNT(*) AS payment_count
       FROM care_sessions cs
+      JOIN users u ON cs.family_user_id = u.id
       WHERE cs.status = 'completed' AND cs.estimated_cost > 0
+        AND COALESCE(u.is_demo, 0) = 0
         AND COALESCE(cs.completed_at, cs.updated_at, cs.created_at) >= DATE_TRUNC('month', NOW()) - INTERVAL '11 months'
       GROUP BY DATE_TRUNC('month', COALESCE(cs.completed_at, cs.updated_at, cs.created_at))
       ORDER BY month ASC
@@ -156,12 +167,15 @@ router.get("/summary", async (req, res) => {
       m.newUsers = growth ? parseInt(growth.total_new) : 0;
     }
 
-    // All-time totals — from completed sessions
+    // All-time totals — from completed sessions, exclude demo
     const allTime = await db.prepare(`
-      SELECT COALESCE(SUM(estimated_cost), 0) AS gross_revenue,
-             COALESCE(SUM(estimated_cost * 0.2), 0) AS platform_revenue,
+      SELECT COALESCE(SUM(cs.estimated_cost), 0) AS gross_revenue,
+             COALESCE(SUM(cs.estimated_cost * 0.2), 0) AS platform_revenue,
              COUNT(*) AS payment_count
-      FROM care_sessions WHERE status = 'completed' AND estimated_cost > 0
+      FROM care_sessions cs
+      JOIN users u ON cs.family_user_id = u.id
+      WHERE cs.status = 'completed' AND cs.estimated_cost > 0
+        AND COALESCE(u.is_demo, 0) = 0
     `).get();
 
     res.json({
@@ -192,26 +206,31 @@ router.get("/daily-snapshot", async (req, res) => {
   try {
     const db = await getDb();
 
-    // Daily data for last 14 days — from completed sessions
+    // Daily data for last 14 days — from completed sessions, exclude demo
     const dailyData = await db.prepare(`
-      SELECT DATE(COALESCE(completed_at, updated_at, created_at)) AS day,
-             COALESCE(SUM(estimated_cost), 0) AS gross,
-             COALESCE(SUM(estimated_cost * 0.2), 0) AS fees,
-             COALESCE(SUM(estimated_cost * 0.8), 0) AS net,
+      SELECT DATE(COALESCE(cs.completed_at, cs.updated_at, cs.created_at)) AS day,
+             COALESCE(SUM(cs.estimated_cost), 0) AS gross,
+             COALESCE(SUM(cs.estimated_cost * 0.2), 0) AS fees,
+             COALESCE(SUM(cs.estimated_cost * 0.8), 0) AS net,
              COUNT(*) AS payment_count
-      FROM care_sessions WHERE status = 'completed' AND estimated_cost > 0
-        AND COALESCE(completed_at, updated_at, created_at) >= CURRENT_DATE - INTERVAL '13 days'
-      GROUP BY DATE(COALESCE(completed_at, updated_at, created_at))
+      FROM care_sessions cs
+      JOIN users u ON cs.family_user_id = u.id
+      WHERE cs.status = 'completed' AND cs.estimated_cost > 0
+        AND COALESCE(u.is_demo, 0) = 0
+        AND COALESCE(cs.completed_at, cs.updated_at, cs.created_at) >= CURRENT_DATE - INTERVAL '13 days'
+      GROUP BY DATE(COALESCE(cs.completed_at, cs.updated_at, cs.created_at))
       ORDER BY day ASC
     `).all();
 
-    // Sessions per day (last 14 days)
+    // Sessions per day (last 14 days) — exclude demo
     const dailySessions = await db.prepare(`
-      SELECT DATE(scheduled_date) AS day, COUNT(*) AS cnt
-      FROM care_sessions
-      WHERE status IN ('completed', 'confirmed', 'checked_in', 'scheduled')
-        AND scheduled_date::date >= CURRENT_DATE - INTERVAL '13 days'
-      GROUP BY DATE(scheduled_date) ORDER BY day ASC
+      SELECT DATE(cs.scheduled_date) AS day, COUNT(*) AS cnt
+      FROM care_sessions cs
+      JOIN users u ON cs.family_user_id = u.id
+      WHERE cs.status IN ('completed', 'confirmed', 'checked_in', 'scheduled')
+        AND cs.scheduled_date::date >= CURRENT_DATE - INTERVAL '13 days'
+        AND COALESCE(u.is_demo, 0) = 0
+      GROUP BY DATE(cs.scheduled_date) ORDER BY day ASC
     `).all();
 
     // Fill in all 14 days (including zeros)
@@ -265,14 +284,16 @@ router.get("/breakdown", async (req, res) => {
   try {
     const db = await getDb();
 
-    // By service type — from completed sessions
+    // By service type — from completed sessions, exclude demo
     const byServiceType = await db.prepare(`
       SELECT cs.service_type,
              COUNT(*) AS session_count,
              COALESCE(SUM(cs.estimated_cost), 0) AS revenue,
              COALESCE(SUM(cs.estimated_cost * 0.2), 0) AS platform_fee
       FROM care_sessions cs
+      JOIN users u ON cs.family_user_id = u.id
       WHERE cs.status = 'completed' AND cs.estimated_cost > 0
+        AND COALESCE(u.is_demo, 0) = 0
       GROUP BY cs.service_type
       ORDER BY revenue DESC
     `).all();
@@ -287,7 +308,7 @@ router.get("/breakdown", async (req, res) => {
       GROUP BY COALESCE(payout_speed, 'standard')
     `).all();
 
-    // Top 5 families by spend — from completed sessions
+    // Top 5 families by spend — from completed sessions, exclude demo
     const topFamilies = await db.prepare(`
       SELECT u.id, u.first_name, u.last_name, u.email,
              COUNT(*) AS session_count,
@@ -296,12 +317,13 @@ router.get("/breakdown", async (req, res) => {
       FROM care_sessions cs
       JOIN users u ON cs.family_user_id = u.id
       WHERE cs.status = 'completed' AND cs.estimated_cost > 0
+        AND COALESCE(u.is_demo, 0) = 0
       GROUP BY u.id, u.first_name, u.last_name, u.email
       ORDER BY total_spent DESC
       LIMIT 5
     `).all();
 
-    // Top 5 caregivers by earnings — from completed sessions
+    // Top 5 caregivers by earnings — from completed sessions, exclude demo
     const topCaregivers = await db.prepare(`
       SELECT u.id, u.first_name, u.last_name, u.email,
              cp.rating_avg,
@@ -311,7 +333,10 @@ router.get("/breakdown", async (req, res) => {
       FROM care_sessions cs
       JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
       JOIN users u ON cp.user_id = u.id
+      JOIN users fu ON cs.family_user_id = fu.id
       WHERE cs.status = 'completed' AND cs.estimated_cost > 0
+        AND COALESCE(u.is_demo, 0) = 0
+        AND COALESCE(fu.is_demo, 0) = 0
       GROUP BY u.id, u.first_name, u.last_name, u.email, cp.rating_avg
       ORDER BY total_earned DESC
       LIMIT 5
@@ -379,6 +404,7 @@ router.get("/transactions", async (req, res) => {
       LEFT JOIN care_sessions cs ON p.session_id = cs.id
       LEFT JOIN visit_logs vl ON vl.session_id = cs.id
       LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+      WHERE COALESCE(fu.is_demo, 0) = 0
       ORDER BY p.created_at DESC
     `).all();
 
@@ -501,12 +527,12 @@ router.get("/insights", async (req, res) => {
       });
     }
 
-    // 2. Session Volume Trend
+    // 2. Session Volume Trend — exclude demo
     const recentSessions = await db.prepare(
-      "SELECT COUNT(*) AS count FROM care_sessions WHERE created_at >= ?"
+      "SELECT COUNT(*) AS count FROM care_sessions cs JOIN users u ON cs.family_user_id = u.id WHERE cs.created_at >= ? AND COALESCE(u.is_demo, 0) = 0"
     ).get(thirtyDaysAgo);
     const priorSessions = await db.prepare(
-      "SELECT COUNT(*) AS count FROM care_sessions WHERE created_at >= ? AND created_at < ?"
+      "SELECT COUNT(*) AS count FROM care_sessions cs JOIN users u ON cs.family_user_id = u.id WHERE cs.created_at >= ? AND cs.created_at < ? AND COALESCE(u.is_demo, 0) = 0"
     ).get(sixtyDaysAgo, thirtyDaysAgo);
 
     if (priorSessions.count > 0) {

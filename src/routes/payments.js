@@ -1414,6 +1414,7 @@ async function processOverduePayments(pushFn) {
         AND NOT EXISTS (
           SELECT 1 FROM payments p WHERE p.session_id = cs.id AND p.status IN ('completed', 'processing')
         )
+        AND COALESCE(fu.is_demo, 0) = 0
     `).all();
 
     for (const s of overdue) {

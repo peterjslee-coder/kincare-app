@@ -61309,7 +61309,7 @@ const AdminPanel = window.AdminPanel = ({
       if (res !== null && res !== void 0 && res.ok) {
         const data = await res.json();
         setPendingDocs(data.documents || []);
-        setPendingDocsCount(data.count || 0);
+        setPendingDocsCount(Number(data.count) || 0);
       }
     } catch (err) {
       console.error('Pending docs load error:', err);
@@ -61321,7 +61321,7 @@ const AdminPanel = window.AdminPanel = ({
       const res = await apiFetch('/api/documents/admin/count');
       if (res !== null && res !== void 0 && res.ok) {
         const data = await res.json();
-        setPendingDocsCount(data.count || 0);
+        setPendingDocsCount(Number(data.count) || 0);
       }
     } catch (err) {/* silent */}
   };

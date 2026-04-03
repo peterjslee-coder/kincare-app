@@ -398,7 +398,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
       if (res?.ok) {
         const data = await res.json();
         setPendingDocs(data.documents || []);
-        setPendingDocsCount(data.count || 0);
+        setPendingDocsCount(Number(data.count) || 0);
       }
     } catch (err) { console.error('Pending docs load error:', err); }
     setPendingDocsLoading(false);
@@ -409,7 +409,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
       const res = await apiFetch('/api/documents/admin/count');
       if (res?.ok) {
         const data = await res.json();
-        setPendingDocsCount(data.count || 0);
+        setPendingDocsCount(Number(data.count) || 0);
       }
     } catch (err) { /* silent */ }
   };
