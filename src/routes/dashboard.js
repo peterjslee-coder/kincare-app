@@ -39,6 +39,7 @@ router.get("/", async (req, res) => {
 
 // ─── Family Dashboard (Pete's view) ───
 async function familyDashboard(db, userId, res) {
+  const t0 = Date.now();
   try {
     // Fire-and-forget: housekeeping writes run in background, don't block dashboard load
     expireStaleProposals(db, null, null).catch(() => {});
@@ -85,6 +86,7 @@ async function familyDashboard(db, userId, res) {
         WHERE ctm.user_id = ?
       `).all(userId),
     ]);
+    console.log(`[dashboard] batch1 (recipients) ${Date.now() - t0}ms`);
     const ownedIds = new Set(ownedRecipients.map(r => r.id));
     const sharedIds = new Set(sharedRecipients.map(r => r.id));
     const recipients = [
@@ -249,6 +251,7 @@ async function familyDashboard(db, userId, res) {
         WHERE (ca.family_user_id = ? OR ca.care_recipient_id IN (${recipientPlaceholders})) AND ca.is_active = 1
       `).get(userId, ...allRecipientIds),
     ]);
+    console.log(`[dashboard] batch2 (9 queries) ${Date.now() - t0}ms`);
 
     const primary = recipients[0];
     const parent = primary
@@ -271,6 +274,7 @@ async function familyDashboard(db, userId, res) {
         }
       : null;
 
+    console.log(`[dashboard] family ${Date.now() - t0}ms`);
     res.json({
       role: "family",
       parent,

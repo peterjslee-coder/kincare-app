@@ -8,97 +8,102 @@ router.use(authenticate);
 // ─── GET /api/analytics ───
 // Returns monthly care data for the past 6 months (family users only)
 router.get("/", requireRole("family"), async (req, res) => {
+  const t0 = Date.now();
   const db = await getDb();
   const userId = req.user.id;
 
-  // Get data for the past 6 months
-  const months = [];
+  // Build month boundaries for the past 6 months
   const now = new Date();
+  const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+  const sixMonthsAgoStr = `${sixMonthsAgo.getFullYear()}-${String(sixMonthsAgo.getMonth() + 1).padStart(2, "0")}-01`;
+
+  const monthLabels = [];
   for (let i = 5; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    months.push({
+    monthLabels.push({
       year: d.getFullYear(),
       month: d.getMonth() + 1,
       label: d.toLocaleString("en-US", { month: "short" }),
-      start: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`,
-      end: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()}`,
     });
   }
 
-  const monthlyData = [];
-  for (const m of months) {
-    const stats = await db.prepare(`
+  // Single query replaces 12 sequential queries — GROUP BY month
+  const [monthlyRaw, serviceBreakdown, caregiverStats, totals] = await Promise.all([
+    db.prepare(`
       SELECT
-        COUNT(*) as sessions,
-        COALESCE(SUM(duration_hours), 0) as hours,
-        COALESCE(SUM(COALESCE(actual_cost, estimated_cost)), 0) as spend
+        EXTRACT(YEAR FROM scheduled_date) AS yr,
+        EXTRACT(MONTH FROM scheduled_date) AS mo,
+        COUNT(*) AS sessions,
+        COALESCE(SUM(duration_hours), 0) AS hours,
+        COALESCE(SUM(COALESCE(actual_cost, estimated_cost)), 0) AS spend,
+        COUNT(*) FILTER (WHERE status = 'completed') AS completed
       FROM care_sessions
       WHERE family_user_id = ?
         AND scheduled_date >= ?
-        AND scheduled_date <= ?
         AND status IN ('confirmed', 'completed')
-    `).get(userId, m.start, m.end);
+      GROUP BY yr, mo
+      ORDER BY yr, mo
+    `).all(userId, sixMonthsAgoStr),
 
-    const completed = await db.prepare(`
-      SELECT COUNT(*) as count
+    db.prepare(`
+      SELECT service_type, COUNT(*) as count,
+        COALESCE(SUM(duration_hours), 0) as total_hours,
+        COALESCE(SUM(COALESCE(actual_cost, estimated_cost)), 0) as total_spend
       FROM care_sessions
       WHERE family_user_id = ?
-        AND scheduled_date >= ?
-        AND scheduled_date <= ?
-        AND status = 'completed'
-    `).get(userId, m.start, m.end);
+        AND status IN ('confirmed', 'completed')
+      GROUP BY service_type
+      ORDER BY count DESC
+    `).all(userId),
 
-    monthlyData.push({
+    db.prepare(`
+      SELECT
+        u.first_name || ' ' || u.last_name AS name,
+        COUNT(*) as sessions,
+        COALESCE(SUM(cs.duration_hours), 0) as hours,
+        cp.rating_avg as rating
+      FROM care_sessions cs
+      JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      JOIN users u ON cp.user_id = u.id
+      WHERE cs.family_user_id = ?
+        AND cs.caregiver_id IS NOT NULL
+        AND cs.status IN ('confirmed', 'completed')
+      GROUP BY cp.id, u.first_name, u.last_name, cp.rating_avg
+      ORDER BY sessions DESC
+      LIMIT 5
+    `).all(userId),
+
+    db.prepare(`
+      SELECT
+        COUNT(*) as total_sessions,
+        COALESCE(SUM(duration_hours), 0) as total_hours,
+        COALESCE(SUM(COALESCE(actual_cost, estimated_cost)), 0) as total_spend
+      FROM care_sessions
+      WHERE family_user_id = ?
+        AND status IN ('confirmed', 'completed')
+    `).get(userId),
+  ]);
+
+  // Map grouped results back to month labels
+  const monthMap = {};
+  for (const row of monthlyRaw) {
+    monthMap[`${parseInt(row.yr)}-${parseInt(row.mo)}`] = row;
+  }
+
+  const monthlyData = monthLabels.map(m => {
+    const row = monthMap[`${m.year}-${m.month}`];
+    return {
       label: m.label,
       year: m.year,
       month: m.month,
-      sessions: parseInt(stats.sessions) || 0,
-      hours: Math.round((parseFloat(stats.hours) || 0) * 10) / 10,
-      spend: Math.round((parseFloat(stats.spend) || 0) * 100) / 100,
-      completed: parseInt(completed.count) || 0,
-    });
-  }
+      sessions: row ? parseInt(row.sessions) || 0 : 0,
+      hours: row ? Math.round((parseFloat(row.hours) || 0) * 10) / 10 : 0,
+      spend: row ? Math.round((parseFloat(row.spend) || 0) * 100) / 100 : 0,
+      completed: row ? parseInt(row.completed) || 0 : 0,
+    };
+  });
 
-  // Service type breakdown (all time)
-  const serviceBreakdown = await db.prepare(`
-    SELECT service_type, COUNT(*) as count,
-      COALESCE(SUM(duration_hours), 0) as total_hours,
-      COALESCE(SUM(COALESCE(actual_cost, estimated_cost)), 0) as total_spend
-    FROM care_sessions
-    WHERE family_user_id = ?
-      AND status IN ('confirmed', 'completed')
-    GROUP BY service_type
-    ORDER BY count DESC
-  `).all(userId);
-
-  // Caregiver utilization (who's been booked most)
-  const caregiverStats = await db.prepare(`
-    SELECT
-      u.first_name || ' ' || u.last_name AS name,
-      COUNT(*) as sessions,
-      COALESCE(SUM(cs.duration_hours), 0) as hours,
-      cp.rating_avg as rating
-    FROM care_sessions cs
-    JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
-    JOIN users u ON cp.user_id = u.id
-    WHERE cs.family_user_id = ?
-      AND cs.caregiver_id IS NOT NULL
-      AND cs.status IN ('confirmed', 'completed')
-    GROUP BY cp.id, u.first_name, u.last_name, cp.rating_avg
-    ORDER BY sessions DESC
-    LIMIT 5
-  `).all(userId);
-
-  // Overall totals
-  const totals = await db.prepare(`
-    SELECT
-      COUNT(*) as total_sessions,
-      COALESCE(SUM(duration_hours), 0) as total_hours,
-      COALESCE(SUM(COALESCE(actual_cost, estimated_cost)), 0) as total_spend
-    FROM care_sessions
-    WHERE family_user_id = ?
-      AND status IN ('confirmed', 'completed')
-  `).get(userId);
+  console.log(`[analytics] ${Date.now() - t0}ms (4 parallel queries instead of 15 sequential)`);
 
   res.json({
     monthly: monthlyData,
