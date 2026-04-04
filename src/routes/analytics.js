@@ -31,8 +31,8 @@ router.get("/", requireRole("family"), async (req, res) => {
   const [monthlyRaw, serviceBreakdown, caregiverStats, totals] = await Promise.all([
     db.prepare(`
       SELECT
-        EXTRACT(YEAR FROM scheduled_date) AS yr,
-        EXTRACT(MONTH FROM scheduled_date) AS mo,
+        EXTRACT(YEAR FROM scheduled_date::date) AS yr,
+        EXTRACT(MONTH FROM scheduled_date::date) AS mo,
         COUNT(*) AS sessions,
         COALESCE(SUM(duration_hours), 0) AS hours,
         COALESCE(SUM(COALESCE(actual_cost, estimated_cost)), 0) AS spend,
