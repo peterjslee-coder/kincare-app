@@ -85,6 +85,28 @@ async function loadCareContext(careRecipientId) {
       console.error("[Kindred] careTeam query failed (non-fatal):", e.message);
     }
 
+    // Load upcoming scheduled care sessions (so Kindred can answer "when is X coming?")
+    let upcomingVisits = [];
+    try {
+      upcomingVisits = await db
+        .prepare(
+          `SELECT cs.id, cs.caregiver_id, u.first_name, u.last_name, cs.scheduled_date,
+                  cs.scheduled_time, cs.duration_hours, cs.status, cs.special_instructions,
+                  cs.care_type
+           FROM care_sessions cs
+           LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+           LEFT JOIN users u ON cp.user_id = u.id
+           WHERE cs.care_recipient_id = ?
+             AND cs.scheduled_date::date >= CURRENT_DATE
+             AND cs.status NOT IN ('completed', 'cancelled')
+           ORDER BY cs.scheduled_date ASC, cs.scheduled_time ASC
+           LIMIT 10`
+        )
+        .all(careRecipientId);
+    } catch (e) {
+      console.error("[Kindred] upcomingVisits query failed (non-fatal):", e.message);
+    }
+
     // Load pending reminders
     // Load reminders (table may not exist yet — non-fatal)
     let upcomingReminders = [];
@@ -129,6 +151,7 @@ async function loadCareContext(careRecipientId) {
     return {
       recipient,
       recentVisits,
+      upcomingVisits,
       careTeam,
       upcomingReminders,
       careTeamInstructions,
@@ -167,6 +190,7 @@ function buildKindredPrompt(careContext, voiceOwnerName, careRecipientName, care
   const {
     recipient,
     recentVisits,
+    upcomingVisits,
     careTeam,
     upcomingReminders,
     careTeamInstructions,
@@ -182,6 +206,26 @@ function buildKindredPrompt(careContext, voiceOwnerName, careRecipientName, care
         day: "numeric",
       });
       return `- ${v.first_name} on ${date}: ${v.summary || "visited"} (mood: ${v.mood_rating || "not recorded"})`;
+    })
+    .join("\n");
+
+  // Format upcoming visits (so Kindred can answer "when is X coming?")
+  const upcomingVisitsSummary = (upcomingVisits || [])
+    .map(v => {
+      const date = new Date(v.scheduled_date).toLocaleDateString("en-US", {
+        weekday: "long",
+        month: "long",
+        day: "numeric",
+      });
+      const time = v.scheduled_time
+        ? new Date(`2000-01-01T${v.scheduled_time}`).toLocaleTimeString("en-US", {
+            hour: "numeric",
+            minute: "2-digit",
+          })
+        : "time TBD";
+      const status = v.status === "confirmed" ? "" : ` (${v.status} — not yet confirmed)`;
+      const careType = v.care_type ? ` [${v.care_type}]` : "";
+      return `- ${v.first_name || "Caregiver TBD"} on ${date} at ${time}${careType}${status}`;
     })
     .join("\n");
 
@@ -276,10 +320,30 @@ You are from ${voiceOwnerName}. He set you up because he loves ${careRecipientNa
 - Say "${voiceOwnerName} was asking about you" not "I was thinking about you"
 - Gently encourage real connection: "${voiceOwnerName}'s going to call you later" or "Isn't someone coming to visit today?"
 
+ANSWERING QUESTIONS — JUST AS IMPORTANT AS LISTENING:
+Receive mode is for when ${careRecipientName} is sharing something — a feeling, an experience, a thought. But when she asks a QUESTION, she wants an ANSWER. Don't reflect a question back at her. That sounds like ${voiceOwnerName} isn't paying attention.
+
+If she asks something you KNOW (from the schedule, care team, or context below) — answer it directly, warmly, simply.
+If she asks something you DON'T know — be honest: "I'm not sure about that, ${careRecipientName}. Want me to ask ${voiceOwnerName} to find out?"
+If the question has a feeling underneath it — answer the question FIRST, then gently check the feeling.
+
+  ${careRecipientName}: "When is Edwina coming over?"
+  BAD (reflects it back): "You're wondering when Edwina is coming? Do you know when she might visit?"
+  GOOD (answers + connects): "Edwina is scheduled for Monday at 11. Are you looking forward to seeing her?"
+  GOOD (if you don't know): "I don't see a visit from Edwina on the schedule right now. Want me to let ${voiceOwnerName} know you'd like to see her?"
+
+  ${careRecipientName}: "Did anybody call for me?"
+  GOOD (honest): "I don't know about calls, ${careRecipientName}. Want me to ask ${voiceOwnerName} to check?"
+
+  ${careRecipientName}: "What time is my appointment?"
+  GOOD (if you know): "Your appointment is at 2 o'clock this afternoon."
+  GOOD (if you don't): "I'm not sure about that one. Let me ask ${voiceOwnerName} to call you about it."
+
 ABOUT ${careRecipientName} (real name: ${careRecipientFormalName || careRecipientName}):
 ${recipient.health_conditions ? `Health: ${recipient.health_conditions}` : ""}
 ${recipient.medications ? `Medications: ${recipient.medications}` : ""}
 ${careTeamList ? `People who help: ${careTeamList}` : ""}
+${upcomingVisitsSummary ? `\nUpcoming visits:\n${upcomingVisitsSummary}` : "\nNo upcoming visits scheduled."}
 ${visitsSummary ? `\nRecent visits:\n${visitsSummary}` : ""}
 ${remindersSummary ? `\nReminders for today:\n${remindersSummary}` : ""}
 ${careTeamInstructions ? `
