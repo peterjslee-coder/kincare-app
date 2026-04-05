@@ -919,6 +919,130 @@ async function pollLateResolutionDefaults() {
 }
 
 
+// ─── POST /api/accountability/incident — Report a safety incident ───
+router.post("/incident", async (req, res) => {
+  try {
+    const db = getDb();
+    const userId = req.user.id;
+    const { incidentType, sessionId, involvedPersonName, description, severity } = req.body;
+
+    if (!incidentType || !description || description.trim().length < 10) {
+      return res.status(400).json({ error: "Incident type and description (min 10 chars) are required" });
+    }
+
+    const flagId = uuid();
+    const severityLevel = severity || (
+      ['abuse', 'neglect', 'theft', 'threat'].some(t => incidentType.includes(t)) ? 'high' : 'medium'
+    );
+
+    // Build the message that admin will see
+    const sessionInfo = sessionId ? await db.prepare(
+      `SELECT cs.scheduled_date, cs.scheduled_time, cs.service_type,
+              cr.first_name || ' ' || cr.last_name AS recipient_name,
+              u2.first_name || ' ' || u2.last_name AS caregiver_name
+       FROM care_sessions cs
+       LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+       LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+       LEFT JOIN users u2 ON cp.user_id = u2.id
+       WHERE cs.id = ?`
+    ).get(sessionId) : null;
+
+    let fullMessage = `[INCIDENT REPORT — ${incidentType.replace(/_/g, ' ').toUpperCase()}]\n`;
+    if (involvedPersonName) fullMessage += `Person involved: ${involvedPersonName}\n`;
+    if (sessionInfo) fullMessage += `Session: ${sessionInfo.scheduled_date} ${sessionInfo.scheduled_time} — ${sessionInfo.recipient_name} w/ ${sessionInfo.caregiver_name || 'unassigned'}\n`;
+    fullMessage += `\n${description.trim()}`;
+
+    await db.prepare(`
+      INSERT INTO safety_flags (id, user_id, flag_type, user_message, status, severity, created_at)
+      VALUES (?, ?, ?, ?, 'pending', ?, NOW())
+    `).run(flagId, userId, 'incident_report', fullMessage.substring(0, 2000), severityLevel);
+
+    // Log the event
+    await db.prepare(`
+      INSERT INTO safety_flag_events (id, safety_flag_id, event_type, actor_id, actor_label, content, created_at)
+      VALUES (?, ?, 'created', ?, ?, ?, NOW())
+    `).run(uuid(), flagId, userId, req.user.first_name || 'User', `Incident reported: ${incidentType}`);
+
+    // Notify all admins via push
+    const admins = await db.prepare("SELECT id FROM users WHERE is_admin = 1 AND COALESCE(is_demo, 0) = 0").all();
+    const reporter = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(userId);
+    const reporterName = reporter ? `${reporter.first_name} ${reporter.last_name}` : 'A user';
+    for (const admin of admins) {
+      try {
+        await sendPushToUser(admin.id, {
+          title: '🚨 Incident Report Filed',
+          body: `${reporterName} reported: ${incidentType.replace(/_/g, ' ')}`,
+          data: { url: '/admin?tab=safety' },
+        });
+      } catch (e) { /* best-effort push */ }
+      // Also create in-app notification
+      try {
+        await db.prepare(
+          "INSERT INTO notifications (id, user_id, type, title, body, data, created_at) VALUES (?, ?, 'safety_flag', ?, ?, ?::jsonb, NOW())"
+        ).run(uuid(), admin.id, 'Incident Report Filed',
+          `${reporterName} reported: ${incidentType.replace(/_/g, ' ')}`,
+          JSON.stringify({ flagId, incidentType }));
+      } catch (e) { /* best-effort */ }
+    }
+
+    res.json({ success: true, flagId });
+  } catch (err) {
+    console.error("Incident report error:", err);
+    res.status(500).json({ error: "Failed to submit incident report" });
+  }
+});
+
+// ─── GET /api/accountability/incident-context — Get sessions & people for incident form ───
+router.get("/incident-context", async (req, res) => {
+  try {
+    const db = getDb();
+    const userId = req.user.id;
+
+    // Get recent sessions (last 30 days) where this user is involved
+    const sessions = await db.prepare(`
+      SELECT cs.id, cs.scheduled_date, cs.scheduled_time, cs.service_type, cs.status,
+             cr.first_name || ' ' || cr.last_name AS recipient_name,
+             u2.first_name || ' ' || u2.last_name AS caregiver_name
+      FROM care_sessions cs
+      LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      LEFT JOIN users u2 ON cp.user_id = u2.id
+      WHERE (cs.family_user_id = ? OR cp.user_id = ?)
+        AND cs.scheduled_date >= (CURRENT_DATE - INTERVAL '30 days')::text
+      ORDER BY cs.scheduled_date DESC, cs.scheduled_time DESC
+      LIMIT 20
+    `).all(userId, userId);
+
+    // Get people the user works with (care team + assigned caregivers)
+    const people = await db.prepare(`
+      SELECT DISTINCT u.first_name || ' ' || u.last_name AS name, u.id AS user_id
+      FROM care_team_members ctm
+      JOIN care_teams ct ON ctm.care_team_id = ct.id
+      JOIN care_team_members ctm2 ON ctm2.care_team_id = ct.id
+      JOIN users u ON ctm2.user_id = u.id
+      WHERE ctm.user_id = ? AND ctm2.user_id != ?
+      UNION
+      SELECT DISTINCT u.first_name || ' ' || u.last_name AS name, u.id AS user_id
+      FROM caregiver_assignments ca
+      JOIN caregiver_profiles cp ON ca.caregiver_profile_id = cp.id
+      JOIN users u ON cp.user_id = u.id
+      WHERE ca.family_user_id = ? AND ca.is_active = 1
+      UNION
+      SELECT DISTINCT cr.first_name || ' ' || cr.last_name AS name, NULL AS user_id
+      FROM care_recipients cr
+      JOIN care_sessions cs ON cs.care_recipient_id = cr.id
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      WHERE cp.user_id = ? OR cs.family_user_id = ?
+      ORDER BY name
+    `).all(userId, userId, userId, userId, userId);
+
+    res.json({ sessions, people });
+  } catch (err) {
+    console.error("Incident context error:", err);
+    res.status(500).json({ error: "Failed to load context" });
+  }
+});
+
 module.exports = router;
 module.exports.authorizeSessionPayment = authorizeSessionPayment;
 module.exports.captureSessionPayment = captureSessionPayment;

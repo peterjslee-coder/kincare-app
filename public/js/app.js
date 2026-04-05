@@ -1238,6 +1238,7 @@ const App = () => {
       return [
         { id: 'dashboard', icon: '🏠', label: 'My Home' },
         { id: 'messages', icon: '💬', label: 'Messages' },
+        { id: 'kindred', icon: '💜', label: 'Kindred', isKindred: true },
       ];
     }
     // family (default)

@@ -344,7 +344,7 @@ const AdminFinancials = window.AdminFinancials = () => {
   const payoutData = breakdown?.byPayoutSpeed || [];
   const standardPayout = payoutData.find(p => p.speed === 'standard') || { count: 0, revenue: 0, platformFee: 0 };
   const instantPayout = payoutData.find(p => p.speed === 'instant') || { count: 0, revenue: 0, platformFee: 0 };
-  const instantSurchargeRevenue = instantPayout.count > 0 ? Math.round(instantPayout.revenue * 0.02 * 100) / 100 : 0;
+  // Instant payout fees are Stripe's (1%, min $0.50) — no platform surcharge revenue
 
   const visibleInsights = showAllInsights ? insights : insights.slice(0, 5);
 
@@ -813,8 +813,8 @@ const AdminFinancials = window.AdminFinancials = () => {
                 <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{fmt(instantPayout.revenue)}</div>
               </div>
             </div>
-            <div style={{ padding: '10px 12px', borderRadius: 8, background: 'var(--color-success-bg)', fontSize: 12, color: 'var(--color-success)', fontWeight: 500 }}>
-              💰 Estimated instant payout surcharge revenue: <strong>{fmt(instantSurchargeRevenue)}</strong> (2% of instant volume)
+            <div style={{ padding: '10px 12px', borderRadius: 8, background: 'var(--bg-secondary)', fontSize: 12, color: 'var(--text-secondary)' }}>
+              ℹ️ Instant payout fees (1%, min $0.50) are charged by Stripe directly — no platform cost or revenue.
             </div>
           </div>
         </div>

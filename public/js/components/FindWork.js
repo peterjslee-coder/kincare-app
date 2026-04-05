@@ -634,7 +634,7 @@ const FindWork = window.FindWork = () => {
             <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7 }}>
               <p style={{ margin: '0 0 10px' }}><strong>Platform fee (20%)</strong> — added to the family's cost, not deducted from your earnings. If your rate is $30/hr, you receive $30/hr.</p>
               <p style={{ margin: '0 0 10px' }}><strong>Short-notice bookings (&lt;24 hours)</strong> — a 20% rush surcharge is added. 75% of the surcharge goes to you as an incentive for taking last-minute work.</p>
-              <p style={{ margin: 0 }}><strong>Instant payouts</strong> — choose instant payouts in Account → Payments for same-day deposits (+2% processing fee), or keep standard free payouts (1–2 business days).</p>
+              <p style={{ margin: 0 }}><strong>Instant payouts</strong> — enable instant payouts in your Stripe dashboard for same-day deposits. Stripe charges 1% (min $0.50) — this fee comes from Stripe, not InPlace. Standard payouts are free (1–2 business days).</p>
             </div>
           </div>
         </div>

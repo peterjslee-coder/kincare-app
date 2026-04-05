@@ -2041,7 +2041,8 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
             <>
               <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-tertiary)', marginBottom: 6, marginTop: (pendingApprovals.length > 0 || consentAlerts.length > 0 || pausedCaregivers.length > 0 || checkrAlertCount > 0) ? 12 : 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Safety Flags</div>
               {safetyFlags.filter(f => f.status === 'pending' || f.status === 'escalated').map(flag => {
-                const isSevere = flag.flag_type?.includes('abuse') || flag.flag_type?.includes('neglect') || flag.flag_type?.includes('threat');
+                const isIncident = flag.flag_type === 'incident_report';
+                const isSevere = isIncident || flag.flag_type?.includes('abuse') || flag.flag_type?.includes('neglect') || flag.flag_type?.includes('threat') || flag.flag_type?.includes('theft');
                 const isEscalated = flag.status === 'escalated';
                 return (
                 <div key={flag.id} style={{

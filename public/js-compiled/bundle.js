@@ -31058,8 +31058,7 @@ const MyAccount = window.MyAccount = ({
 
   // Caregiver - Payments state
   const [stripeStatus, setStripeStatus] = useState(null);
-  const [payoutPref, setPayoutPref] = useState('standard');
-  const [savingPayout, setSavingPayout] = useState(false);
+  // payoutPref/savingPayout removed — payout speed managed via Stripe dashboard
   const [bgCheckPaid, setBgCheckPaid] = useState(false);
 
   // Caregiver - Checkr Background Check state
@@ -31385,12 +31384,7 @@ const MyAccount = window.MyAccount = ({
           setStripeStatus(d);
         }
       }).catch(() => {});
-      apiFetch('/api/payments/payout-preference').then(async r => {
-        if (r !== null && r !== void 0 && r.ok) {
-          const d = await r.json();
-          setPayoutPref(d.preference || 'standard');
-        }
-      }).catch(() => {});
+      // Payout speed is managed directly through Stripe dashboard — no platform endpoint needed
       apiFetch('/api/dashboard').then(async r => {
         if (r !== null && r !== void 0 && r.ok) {
           const d = await r.json();
@@ -31665,23 +31659,8 @@ const MyAccount = window.MyAccount = ({
       showToast('Failed to open Stripe dashboard', 'error');
     }
   };
-  const handleSavePayoutPref = async () => {
-    setSavingPayout(true);
-    try {
-      const res = await apiFetch('/api/payments/payout-preference', {
-        method: 'POST',
-        body: JSON.stringify({
-          preference: payoutPref
-        })
-      });
-      if (res !== null && res !== void 0 && res.ok) {
-        showToast('Payout preference saved', 'success');
-      }
-    } catch (err) {
-      showToast('Failed to save payout preference', 'error');
-    }
-    setSavingPayout(false);
-  };
+
+  // Payout speed is managed directly through Stripe Express dashboard
 
   // Caregiver - Documents handlers
   const handleDocumentUpload = async docType => {
@@ -33449,68 +33428,74 @@ const MyAccount = window.MyAccount = ({
     className: "card-header"
   }, "Payout Speed"), /*#__PURE__*/React.createElement("div", {
     style: {
-      display: 'grid',
-      gap: 12,
-      marginBottom: 16
+      fontSize: 13,
+      color: 'var(--text-secondary)',
+      lineHeight: 1.7
     }
-  }, /*#__PURE__*/React.createElement("label", {
+  }, /*#__PURE__*/React.createElement("p", {
+    style: {
+      margin: '0 0 10px'
+    }
+  }, "You can choose your payout speed in your Stripe dashboard:"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'grid',
+      gap: 8,
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       alignItems: 'center',
-      gap: 12,
-      cursor: 'pointer'
+      gap: 10
     }
-  }, /*#__PURE__*/React.createElement("input", {
-    type: "radio",
-    name: "payout",
-    value: "standard",
-    checked: payoutPref === 'standard',
-    onChange: e => setPayoutPref(e.target.value),
+  }, /*#__PURE__*/React.createElement("span", {
     style: {
-      margin: 0
+      fontSize: 16
     }
-  }), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+  }, "\uD83C\uDFE6"), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     style: {
       fontWeight: 600,
-      fontSize: 14
+      fontSize: 14,
+      color: 'var(--text-primary)'
     }
   }, "Standard (Free)"), /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 12,
       color: 'var(--text-tertiary)'
     }
-  }, "1-2 business days"))), /*#__PURE__*/React.createElement("label", {
+  }, "1\u20132 business days"))), /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       alignItems: 'center',
-      gap: 12,
-      cursor: 'pointer'
+      gap: 10
     }
-  }, /*#__PURE__*/React.createElement("input", {
-    type: "radio",
-    name: "payout",
-    value: "instant",
-    checked: payoutPref === 'instant',
-    onChange: e => setPayoutPref(e.target.value),
+  }, /*#__PURE__*/React.createElement("span", {
     style: {
-      margin: 0
+      fontSize: 16
     }
-  }), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+  }, "\u26A1"), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     style: {
       fontWeight: 600,
-      fontSize: 14
+      fontSize: 14,
+      color: 'var(--text-primary)'
     }
-  }, "Instant (+2% fee)"), /*#__PURE__*/React.createElement("div", {
+  }, "Instant"), /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 12,
       color: 'var(--text-tertiary)'
     }
-  }, "Same day")))), /*#__PURE__*/React.createElement("button", {
-    onClick: handleSavePayoutPref,
-    disabled: savingPayout,
+  }, "Same day \u2014 Stripe charges 1% (min $0.50)")))), /*#__PURE__*/React.createElement("p", {
     style: {
+      margin: 0,
+      fontSize: 12,
+      color: 'var(--text-muted)'
+    }
+  }, "Instant payout fees are charged by Stripe, not InPlace. Manage your payout speed in Stripe.")), /*#__PURE__*/React.createElement("button", {
+    onClick: handleOpenStripeDashboard,
+    style: {
+      marginTop: 12,
       padding: '8px 20px',
-      background: savingPayout ? 'var(--text-muted)' : 'var(--role-color)',
+      background: 'var(--role-color)',
       color: 'var(--text-on-primary)',
       border: 'none',
       borderRadius: 8,
@@ -33518,7 +33503,7 @@ const MyAccount = window.MyAccount = ({
       fontWeight: 600,
       cursor: 'pointer'
     }
-  }, savingPayout ? 'Saving...' : 'Save Preference')), /*#__PURE__*/React.createElement("div", {
+  }, "Open Stripe Dashboard")), /*#__PURE__*/React.createElement("div", {
     className: "card"
   }, /*#__PURE__*/React.createElement("div", {
     className: "card-header"
@@ -50873,7 +50858,7 @@ const FindWork = window.FindWork = () => {
     style: {
       margin: 0
     }
-  }, /*#__PURE__*/React.createElement("strong", null, "Instant payouts"), " \u2014 choose instant payouts in Account \u2192 Payments for same-day deposits (+2% processing fee), or keep standard free payouts (1\u20132 business days).")))), subTab === 'families' && /*#__PURE__*/React.createElement("div", null, loadingAssignments ? /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("strong", null, "Instant payouts"), " \u2014 enable instant payouts in your Stripe dashboard for same-day deposits. Stripe charges 1% (min $0.50) \u2014 this fee comes from Stripe, not InPlace. Standard payouts are free (1\u20132 business days).")))), subTab === 'families' && /*#__PURE__*/React.createElement("div", null, loadingAssignments ? /*#__PURE__*/React.createElement("div", {
     className: "card",
     style: {
       padding: 24,
@@ -58942,7 +58927,8 @@ const AdminFinancials = window.AdminFinancials = () => {
     revenue: 0,
     platformFee: 0
   };
-  const instantSurchargeRevenue = instantPayout.count > 0 ? Math.round(instantPayout.revenue * 0.02 * 100) / 100 : 0;
+  // Instant payout fees are Stripe's (1%, min $0.50) — no platform surcharge revenue
+
   const visibleInsights = showAllInsights ? insights : insights.slice(0, 5);
   return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -59979,12 +59965,11 @@ const AdminFinancials = window.AdminFinancials = () => {
     style: {
       padding: '10px 12px',
       borderRadius: 8,
-      background: 'var(--color-success-bg)',
+      background: 'var(--bg-secondary)',
       fontSize: 12,
-      color: 'var(--color-success)',
-      fontWeight: 500
+      color: 'var(--text-secondary)'
     }
-  }, "\uD83D\uDCB0 Estimated instant payout surcharge revenue: ", /*#__PURE__*/React.createElement("strong", null, fmt(instantSurchargeRevenue)), " (2% of instant volume)")))), /*#__PURE__*/React.createElement("div", {
+  }, "\u2139\uFE0F Instant payout fees (1%, min $0.50) are charged by Stripe directly \u2014 no platform cost or revenue.")))), /*#__PURE__*/React.createElement("div", {
     className: "card"
   }, /*#__PURE__*/React.createElement("div", {
     className: "card-header"
@@ -60892,6 +60877,19 @@ const HelpPage = window.HelpPage = ({
   const [fbSubmitting, setFbSubmitting] = React.useState(false);
   const [fbSubmitted, setFbSubmitted] = React.useState(false);
   const [fbError, setFbError] = React.useState(null);
+  // Incident report state
+  const [showIncident, setShowIncident] = React.useState(false);
+  const [incidentType, setIncidentType] = React.useState('');
+  const [incidentSessionId, setIncidentSessionId] = React.useState('');
+  const [incidentPerson, setIncidentPerson] = React.useState('');
+  const [incidentDesc, setIncidentDesc] = React.useState('');
+  const [incidentSubmitting, setIncidentSubmitting] = React.useState(false);
+  const [incidentSubmitted, setIncidentSubmitted] = React.useState(false);
+  const [incidentError, setIncidentError] = React.useState(null);
+  const [incidentContext, setIncidentContext] = React.useState({
+    sessions: [],
+    people: []
+  });
   // Dispute state
   const [showDispute, setShowDispute] = React.useState(false);
   const [disputeSessionId, setDisputeSessionId] = React.useState('');
@@ -61092,6 +61090,51 @@ const HelpPage = window.HelpPage = ({
       setFbError('Something went wrong. Please try again.');
     }
     setFbSubmitting(false);
+  };
+
+  // Load incident context when form opens
+  React.useEffect(() => {
+    if (showIncident && currentUser) {
+      apiFetch('/api/accountability/incident-context').then(async r => {
+        if (r !== null && r !== void 0 && r.ok) {
+          const d = await r.json();
+          setIncidentContext(d);
+        }
+      }).catch(() => {});
+    }
+  }, [showIncident]);
+  const handleIncidentSubmit = async () => {
+    if (!incidentType || incidentDesc.trim().length < 10) return;
+    setIncidentSubmitting(true);
+    setIncidentError(null);
+    try {
+      const res = await apiFetch('/api/accountability/incident', {
+        method: 'POST',
+        body: JSON.stringify({
+          incidentType,
+          sessionId: incidentSessionId || null,
+          involvedPersonName: incidentPerson || null,
+          description: incidentDesc.trim()
+        })
+      });
+      if (res !== null && res !== void 0 && res.ok) {
+        setIncidentSubmitted(true);
+        setTimeout(() => {
+          setIncidentSubmitted(false);
+          setShowIncident(false);
+          setIncidentType('');
+          setIncidentSessionId('');
+          setIncidentPerson('');
+          setIncidentDesc('');
+        }, 3000);
+      } else {
+        const data = await (res === null || res === void 0 ? void 0 : res.json().catch(() => ({})));
+        setIncidentError((data === null || data === void 0 ? void 0 : data.error) || 'Failed to submit incident report');
+      }
+    } catch {
+      setIncidentError('Something went wrong. Please try again.');
+    }
+    setIncidentSubmitting(false);
   };
   const handleDisputeSubmit = async () => {
     if (!disputeSessionId || !disputeReason) return;
@@ -61824,6 +61867,269 @@ const HelpPage = window.HelpPage = ({
       borderRadius: 8
     }
   }, React.createElement('strong', null, 'Admin: '), d.admin_notes))))),
+  // ─── Report an Incident ───
+  currentUser && React.createElement('div', {
+    style: {
+      marginTop: 32,
+      padding: 24,
+      background: '#fff5f5',
+      borderRadius: 14,
+      boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+      border: '1px solid #ffcdd2'
+    }
+  }, React.createElement('h3', {
+    style: {
+      margin: '0 0 8px',
+      fontSize: 18,
+      fontWeight: 700,
+      color: '#c62828'
+    }
+  }, '\uD83D\uDEA8 Report an Incident'), React.createElement('p', {
+    style: {
+      fontSize: 14,
+      color: 'var(--text-secondary)',
+      margin: '0 0 16px',
+      lineHeight: 1.5
+    }
+  }, 'Report a safety concern, theft, abuse, neglect, or any serious incident. This will be immediately flagged for admin review.'), !showIncident ? React.createElement('button', {
+    onClick: () => setShowIncident(true),
+    style: {
+      padding: '10px 20px',
+      background: '#c62828',
+      color: '#fff',
+      border: 'none',
+      borderRadius: 8,
+      fontSize: 14,
+      fontWeight: 600,
+      cursor: 'pointer'
+    }
+  }, 'Report an Incident') : React.createElement('div', {
+    style: {
+      marginTop: 8
+    }
+  }, incidentSubmitted ? React.createElement('div', {
+    style: {
+      padding: 16,
+      background: 'var(--role-color-light)',
+      borderRadius: 10,
+      textAlign: 'center',
+      color: 'var(--role-color)',
+      fontWeight: 600
+    }
+  }, '\u2705 Incident reported. An admin will review this immediately.') : React.createElement(React.Fragment, null,
+  // Incident type
+  React.createElement('div', {
+    style: {
+      marginBottom: 12
+    }
+  }, React.createElement('label', {
+    style: {
+      display: 'block',
+      fontSize: 13,
+      fontWeight: 600,
+      color: 'var(--text-secondary)',
+      marginBottom: 4
+    }
+  }, 'Type of Incident *'), React.createElement('select', {
+    value: incidentType,
+    onChange: e => setIncidentType(e.target.value),
+    style: {
+      width: '100%',
+      padding: '10px 12px',
+      borderRadius: 8,
+      border: '1px solid #ddd',
+      fontSize: 14,
+      background: 'var(--bg-surface)',
+      boxSizing: 'border-box'
+    }
+  }, React.createElement('option', {
+    value: ''
+  }, 'Select type...'), React.createElement('option', {
+    value: 'theft'
+  }, 'Theft or Stolen Property'), React.createElement('option', {
+    value: 'abuse'
+  }, 'Abuse (Physical, Emotional, or Verbal)'), React.createElement('option', {
+    value: 'neglect'
+  }, 'Neglect or Inadequate Care'), React.createElement('option', {
+    value: 'threat'
+  }, 'Threats or Intimidation'), React.createElement('option', {
+    value: 'medication_error'
+  }, 'Medication Error'), React.createElement('option', {
+    value: 'injury'
+  }, 'Injury During Care'), React.createElement('option', {
+    value: 'property_damage'
+  }, 'Property Damage'), React.createElement('option', {
+    value: 'boundary_violation'
+  }, 'Boundary Violation'), React.createElement('option', {
+    value: 'other_safety'
+  }, 'Other Safety Concern'))),
+  // Person involved
+  React.createElement('div', {
+    style: {
+      marginBottom: 12
+    }
+  }, React.createElement('label', {
+    style: {
+      display: 'block',
+      fontSize: 13,
+      fontWeight: 600,
+      color: 'var(--text-secondary)',
+      marginBottom: 4
+    }
+  }, 'Person Involved (optional)'), incidentContext.people.length > 0 ? React.createElement('select', {
+    value: incidentPerson,
+    onChange: e => setIncidentPerson(e.target.value),
+    style: {
+      width: '100%',
+      padding: '10px 12px',
+      borderRadius: 8,
+      border: '1px solid #ddd',
+      fontSize: 14,
+      background: 'var(--bg-surface)',
+      boxSizing: 'border-box'
+    }
+  }, React.createElement('option', {
+    value: ''
+  }, 'Select a person...'), ...incidentContext.people.map(p => React.createElement('option', {
+    key: p.user_id || p.name,
+    value: p.name
+  }, p.name))) : React.createElement('input', {
+    type: 'text',
+    value: incidentPerson,
+    onChange: e => setIncidentPerson(e.target.value),
+    placeholder: 'Enter name...',
+    style: {
+      width: '100%',
+      padding: '10px 12px',
+      borderRadius: 8,
+      border: '1px solid #ddd',
+      fontSize: 14,
+      boxSizing: 'border-box'
+    }
+  })),
+  // Related session
+  React.createElement('div', {
+    style: {
+      marginBottom: 12
+    }
+  }, React.createElement('label', {
+    style: {
+      display: 'block',
+      fontSize: 13,
+      fontWeight: 600,
+      color: 'var(--text-secondary)',
+      marginBottom: 4
+    }
+  }, 'Related Session (optional)'), React.createElement('select', {
+    value: incidentSessionId,
+    onChange: e => setIncidentSessionId(e.target.value),
+    style: {
+      width: '100%',
+      padding: '10px 12px',
+      borderRadius: 8,
+      border: '1px solid #ddd',
+      fontSize: 14,
+      background: 'var(--bg-surface)',
+      boxSizing: 'border-box'
+    }
+  }, React.createElement('option', {
+    value: ''
+  }, 'Select a session...'), ...(incidentContext.sessions || []).map(s => React.createElement('option', {
+    key: s.id,
+    value: s.id
+  }, `${s.scheduled_date} — ${s.caregiver_name || s.recipient_name || s.service_type} (${s.status})`)))),
+  // Description
+  React.createElement('div', {
+    style: {
+      marginBottom: 12
+    }
+  }, React.createElement('label', {
+    style: {
+      display: 'block',
+      fontSize: 13,
+      fontWeight: 600,
+      color: 'var(--text-secondary)',
+      marginBottom: 4
+    }
+  }, 'What happened? *'), React.createElement('textarea', {
+    value: incidentDesc,
+    onChange: e => setIncidentDesc(e.target.value),
+    placeholder: 'Describe the incident in detail. Include dates, times, and any evidence you have...',
+    rows: 5,
+    style: {
+      width: '100%',
+      padding: '10px 12px',
+      borderRadius: 8,
+      border: '1px solid #ddd',
+      fontSize: 14,
+      fontFamily: 'inherit',
+      resize: 'vertical',
+      boxSizing: 'border-box'
+    }
+  }), incidentDesc.length > 0 && incidentDesc.trim().length < 10 && React.createElement('div', {
+    style: {
+      fontSize: 11,
+      color: '#c62828',
+      marginTop: 4
+    }
+  }, 'Please provide at least 10 characters')),
+  // Error
+  incidentError && React.createElement('div', {
+    style: {
+      padding: '8px 12px',
+      background: 'var(--color-error-bg)',
+      color: 'var(--color-error)',
+      borderRadius: 8,
+      fontSize: 13,
+      marginBottom: 12
+    }
+  }, incidentError),
+  // Confidentiality note
+  React.createElement('div', {
+    style: {
+      padding: '10px 12px',
+      background: '#fff8e1',
+      borderRadius: 8,
+      fontSize: 12,
+      color: '#795548',
+      marginBottom: 12,
+      lineHeight: 1.5
+    }
+  }, '\uD83D\uDD12 Your report is confidential. Only InPlace administrators will see the details. If anyone is in immediate danger, please call 911.'),
+  // Buttons
+  React.createElement('div', {
+    style: {
+      display: 'flex',
+      gap: 10
+    }
+  }, React.createElement('button', {
+    onClick: () => {
+      setShowIncident(false);
+      setIncidentError(null);
+    },
+    style: {
+      padding: '10px 16px',
+      background: 'var(--badge-muted-bg)',
+      color: 'var(--text-secondary)',
+      border: '1px solid #ddd',
+      borderRadius: 8,
+      fontSize: 14,
+      cursor: 'pointer'
+    }
+  }, 'Cancel'), React.createElement('button', {
+    onClick: handleIncidentSubmit,
+    disabled: !incidentType || incidentDesc.trim().length < 10 || incidentSubmitting,
+    style: {
+      padding: '10px 20px',
+      background: incidentType && incidentDesc.trim().length >= 10 && !incidentSubmitting ? '#c62828' : 'var(--border-light)',
+      color: '#fff',
+      border: 'none',
+      borderRadius: 8,
+      fontSize: 14,
+      fontWeight: 600,
+      cursor: incidentType && incidentDesc.trim().length >= 10 && !incidentSubmitting ? 'pointer' : 'not-allowed'
+    }
+  }, incidentSubmitting ? 'Submitting...' : 'Submit Incident Report'))))),
   // ─── My Support Requests (tickets) ───
   currentUser && React.createElement(MyTickets, {
     currentUser
@@ -65658,8 +65964,9 @@ const AdminPanel = window.AdminPanel = ({
       letterSpacing: '0.5px'
     }
   }, "Safety Flags"), safetyFlags.filter(f => f.status === 'pending' || f.status === 'escalated').map(flag => {
-    var _flag$flag_type, _flag$flag_type2, _flag$flag_type3, _flag$flag_type4;
-    const isSevere = ((_flag$flag_type = flag.flag_type) === null || _flag$flag_type === void 0 ? void 0 : _flag$flag_type.includes('abuse')) || ((_flag$flag_type2 = flag.flag_type) === null || _flag$flag_type2 === void 0 ? void 0 : _flag$flag_type2.includes('neglect')) || ((_flag$flag_type3 = flag.flag_type) === null || _flag$flag_type3 === void 0 ? void 0 : _flag$flag_type3.includes('threat'));
+    var _flag$flag_type, _flag$flag_type2, _flag$flag_type3, _flag$flag_type4, _flag$flag_type5;
+    const isIncident = flag.flag_type === 'incident_report';
+    const isSevere = isIncident || ((_flag$flag_type = flag.flag_type) === null || _flag$flag_type === void 0 ? void 0 : _flag$flag_type.includes('abuse')) || ((_flag$flag_type2 = flag.flag_type) === null || _flag$flag_type2 === void 0 ? void 0 : _flag$flag_type2.includes('neglect')) || ((_flag$flag_type3 = flag.flag_type) === null || _flag$flag_type3 === void 0 ? void 0 : _flag$flag_type3.includes('threat')) || ((_flag$flag_type4 = flag.flag_type) === null || _flag$flag_type4 === void 0 ? void 0 : _flag$flag_type4.includes('theft'));
     const isEscalated = flag.status === 'escalated';
     return /*#__PURE__*/React.createElement("div", {
       key: flag.id,
@@ -65699,7 +66006,7 @@ const AdminPanel = window.AdminPanel = ({
         color: 'var(--text-tertiary)',
         marginLeft: 6
       }
-    }, "(", ((_flag$flag_type4 = flag.flag_type) === null || _flag$flag_type4 === void 0 ? void 0 : _flag$flag_type4.replace(/_/g, ' ')) || 'flagged', ")"), isEscalated && /*#__PURE__*/React.createElement("span", {
+    }, "(", ((_flag$flag_type5 = flag.flag_type) === null || _flag$flag_type5 === void 0 ? void 0 : _flag$flag_type5.replace(/_/g, ' ')) || 'flagged', ")"), isEscalated && /*#__PURE__*/React.createElement("span", {
       style: {
         marginLeft: 6,
         padding: '1px 8px',
@@ -77997,6 +78304,11 @@ const App = () => {
         id: 'messages',
         icon: '💬',
         label: 'Messages'
+      }, {
+        id: 'kindred',
+        icon: '💜',
+        label: 'Kindred',
+        isKindred: true
       }];
     }
     // family (default)

@@ -16,6 +16,16 @@ const HelpPage = window.HelpPage = ({ currentUser, onNavigate }) => {
   const [fbSubmitting, setFbSubmitting] = React.useState(false);
   const [fbSubmitted, setFbSubmitted] = React.useState(false);
   const [fbError, setFbError] = React.useState(null);
+  // Incident report state
+  const [showIncident, setShowIncident] = React.useState(false);
+  const [incidentType, setIncidentType] = React.useState('');
+  const [incidentSessionId, setIncidentSessionId] = React.useState('');
+  const [incidentPerson, setIncidentPerson] = React.useState('');
+  const [incidentDesc, setIncidentDesc] = React.useState('');
+  const [incidentSubmitting, setIncidentSubmitting] = React.useState(false);
+  const [incidentSubmitted, setIncidentSubmitted] = React.useState(false);
+  const [incidentError, setIncidentError] = React.useState(null);
+  const [incidentContext, setIncidentContext] = React.useState({ sessions: [], people: [] });
   // Dispute state
   const [showDispute, setShowDispute] = React.useState(false);
   const [disputeSessionId, setDisputeSessionId] = React.useState('');
@@ -176,6 +186,43 @@ const HelpPage = window.HelpPage = ({ currentUser, onNavigate }) => {
       setFbError('Something went wrong. Please try again.');
     }
     setFbSubmitting(false);
+  };
+
+  // Load incident context when form opens
+  React.useEffect(() => {
+    if (showIncident && currentUser) {
+      apiFetch('/api/accountability/incident-context').then(async r => {
+        if (r?.ok) { const d = await r.json(); setIncidentContext(d); }
+      }).catch(() => {});
+    }
+  }, [showIncident]);
+
+  const handleIncidentSubmit = async () => {
+    if (!incidentType || incidentDesc.trim().length < 10) return;
+    setIncidentSubmitting(true);
+    setIncidentError(null);
+    try {
+      const res = await apiFetch('/api/accountability/incident', {
+        method: 'POST',
+        body: JSON.stringify({
+          incidentType,
+          sessionId: incidentSessionId || null,
+          involvedPersonName: incidentPerson || null,
+          description: incidentDesc.trim(),
+        }),
+      });
+      if (res?.ok) {
+        setIncidentSubmitted(true);
+        setTimeout(() => {
+          setIncidentSubmitted(false); setShowIncident(false);
+          setIncidentType(''); setIncidentSessionId(''); setIncidentPerson(''); setIncidentDesc('');
+        }, 3000);
+      } else {
+        const data = await res?.json().catch(() => ({}));
+        setIncidentError(data?.error || 'Failed to submit incident report');
+      }
+    } catch { setIncidentError('Something went wrong. Please try again.'); }
+    setIncidentSubmitting(false);
   };
 
   const handleDisputeSubmit = async () => {
@@ -609,6 +656,115 @@ const HelpPage = window.HelpPage = ({ currentUser, onNavigate }) => {
           )
         ))
       )
+    ),
+
+    // ─── Report an Incident ───
+    currentUser && React.createElement('div', {
+      style: { marginTop: 32, padding: 24, background: '#fff5f5', borderRadius: 14, boxShadow: '0 1px 4px rgba(0,0,0,0.06)', border: '1px solid #ffcdd2' }
+    },
+      React.createElement('h3', { style: { margin: '0 0 8px', fontSize: 18, fontWeight: 700, color: '#c62828' } }, '\uD83D\uDEA8 Report an Incident'),
+      React.createElement('p', { style: { fontSize: 14, color: 'var(--text-secondary)', margin: '0 0 16px', lineHeight: 1.5 } },
+        'Report a safety concern, theft, abuse, neglect, or any serious incident. This will be immediately flagged for admin review.'
+      ),
+
+      !showIncident
+        ? React.createElement('button', {
+            onClick: () => setShowIncident(true),
+            style: { padding: '10px 20px', background: '#c62828', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }
+          }, 'Report an Incident')
+        : React.createElement('div', { style: { marginTop: 8 } },
+            incidentSubmitted
+              ? React.createElement('div', { style: { padding: 16, background: 'var(--role-color-light)', borderRadius: 10, textAlign: 'center', color: 'var(--role-color)', fontWeight: 600 } },
+                  '\u2705 Incident reported. An admin will review this immediately.'
+                )
+              : React.createElement(React.Fragment, null,
+                  // Incident type
+                  React.createElement('div', { style: { marginBottom: 12 } },
+                    React.createElement('label', { style: { display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 } }, 'Type of Incident *'),
+                    React.createElement('select', {
+                      value: incidentType, onChange: (e) => setIncidentType(e.target.value),
+                      style: { width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #ddd', fontSize: 14, background: 'var(--bg-surface)', boxSizing: 'border-box' }
+                    },
+                      React.createElement('option', { value: '' }, 'Select type...'),
+                      React.createElement('option', { value: 'theft' }, 'Theft or Stolen Property'),
+                      React.createElement('option', { value: 'abuse' }, 'Abuse (Physical, Emotional, or Verbal)'),
+                      React.createElement('option', { value: 'neglect' }, 'Neglect or Inadequate Care'),
+                      React.createElement('option', { value: 'threat' }, 'Threats or Intimidation'),
+                      React.createElement('option', { value: 'medication_error' }, 'Medication Error'),
+                      React.createElement('option', { value: 'injury' }, 'Injury During Care'),
+                      React.createElement('option', { value: 'property_damage' }, 'Property Damage'),
+                      React.createElement('option', { value: 'boundary_violation' }, 'Boundary Violation'),
+                      React.createElement('option', { value: 'other_safety' }, 'Other Safety Concern')
+                    )
+                  ),
+                  // Person involved
+                  React.createElement('div', { style: { marginBottom: 12 } },
+                    React.createElement('label', { style: { display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 } }, 'Person Involved (optional)'),
+                    incidentContext.people.length > 0
+                      ? React.createElement('select', {
+                          value: incidentPerson, onChange: (e) => setIncidentPerson(e.target.value),
+                          style: { width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #ddd', fontSize: 14, background: 'var(--bg-surface)', boxSizing: 'border-box' }
+                        },
+                          React.createElement('option', { value: '' }, 'Select a person...'),
+                          ...incidentContext.people.map(p => React.createElement('option', { key: p.user_id || p.name, value: p.name }, p.name))
+                        )
+                      : React.createElement('input', {
+                          type: 'text', value: incidentPerson, onChange: (e) => setIncidentPerson(e.target.value),
+                          placeholder: 'Enter name...',
+                          style: { width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #ddd', fontSize: 14, boxSizing: 'border-box' }
+                        })
+                  ),
+                  // Related session
+                  React.createElement('div', { style: { marginBottom: 12 } },
+                    React.createElement('label', { style: { display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 } }, 'Related Session (optional)'),
+                    React.createElement('select', {
+                      value: incidentSessionId, onChange: (e) => setIncidentSessionId(e.target.value),
+                      style: { width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #ddd', fontSize: 14, background: 'var(--bg-surface)', boxSizing: 'border-box' }
+                    },
+                      React.createElement('option', { value: '' }, 'Select a session...'),
+                      ...(incidentContext.sessions || []).map(s => React.createElement('option', { key: s.id, value: s.id },
+                        `${s.scheduled_date} — ${s.caregiver_name || s.recipient_name || s.service_type} (${s.status})`
+                      ))
+                    )
+                  ),
+                  // Description
+                  React.createElement('div', { style: { marginBottom: 12 } },
+                    React.createElement('label', { style: { display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 } }, 'What happened? *'),
+                    React.createElement('textarea', {
+                      value: incidentDesc, onChange: (e) => setIncidentDesc(e.target.value),
+                      placeholder: 'Describe the incident in detail. Include dates, times, and any evidence you have...',
+                      rows: 5,
+                      style: { width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #ddd', fontSize: 14, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }
+                    }),
+                    incidentDesc.length > 0 && incidentDesc.trim().length < 10 && React.createElement('div', {
+                      style: { fontSize: 11, color: '#c62828', marginTop: 4 }
+                    }, 'Please provide at least 10 characters')
+                  ),
+                  // Error
+                  incidentError && React.createElement('div', { style: { padding: '8px 12px', background: 'var(--color-error-bg)', color: 'var(--color-error)', borderRadius: 8, fontSize: 13, marginBottom: 12 } }, incidentError),
+                  // Confidentiality note
+                  React.createElement('div', { style: { padding: '10px 12px', background: '#fff8e1', borderRadius: 8, fontSize: 12, color: '#795548', marginBottom: 12, lineHeight: 1.5 } },
+                    '\uD83D\uDD12 Your report is confidential. Only InPlace administrators will see the details. If anyone is in immediate danger, please call 911.'
+                  ),
+                  // Buttons
+                  React.createElement('div', { style: { display: 'flex', gap: 10 } },
+                    React.createElement('button', {
+                      onClick: () => { setShowIncident(false); setIncidentError(null); },
+                      style: { padding: '10px 16px', background: 'var(--badge-muted-bg)', color: 'var(--text-secondary)', border: '1px solid #ddd', borderRadius: 8, fontSize: 14, cursor: 'pointer' }
+                    }, 'Cancel'),
+                    React.createElement('button', {
+                      onClick: handleIncidentSubmit,
+                      disabled: !incidentType || incidentDesc.trim().length < 10 || incidentSubmitting,
+                      style: {
+                        padding: '10px 20px',
+                        background: incidentType && incidentDesc.trim().length >= 10 && !incidentSubmitting ? '#c62828' : 'var(--border-light)',
+                        color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600,
+                        cursor: incidentType && incidentDesc.trim().length >= 10 && !incidentSubmitting ? 'pointer' : 'not-allowed',
+                      }
+                    }, incidentSubmitting ? 'Submitting...' : 'Submit Incident Report')
+                  )
+                )
+          )
     ),
 
     // ─── My Support Requests (tickets) ───

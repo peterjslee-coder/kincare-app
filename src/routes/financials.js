@@ -590,17 +590,17 @@ router.get("/insights", async (req, res) => {
         insights.push({
           id: 'instant_payout_low', type: 'payouts', severity: 'neutral',
           title: 'Instant Payout Adoption Low',
-          description: `Only ${instantPct}% of caregivers use instant payouts. Each instant payout generates 2% additional platform revenue.`,
+          description: `Only ${instantPct}% of caregivers use instant payouts. Instant payouts are handled by Stripe (1% fee, min $0.50 — paid by caregiver, not the platform).`,
           metric: `${instantPct}%`,
-          recommendation: 'Promote instant payouts to caregivers — highlight same-day access to earnings. This is free incremental revenue for the platform.',
+          recommendation: 'Promote instant payouts to caregivers — highlight same-day access to earnings. This is a caregiver perk at no cost to the platform.',
         });
       } else if (instantPct > 50) {
         insights.push({
           id: 'instant_payout_high', type: 'payouts', severity: 'positive',
           title: 'Strong Instant Payout Adoption',
-          description: `${instantPct}% of payments use instant payouts, generating meaningful surcharge revenue.`,
+          description: `${instantPct}% of payments use instant payouts. Stripe handles the fee (1%, min $0.50) — no platform cost.`,
           metric: `${instantPct}%`,
-          recommendation: 'Great adoption! The 2% surcharge is a strong revenue driver. Monitor caregiver satisfaction to ensure the fee feels fair.',
+          recommendation: 'Great adoption! Caregivers value fast access to earnings. This is a retention driver at zero cost to the platform.',
         });
       }
     }

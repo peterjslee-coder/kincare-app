@@ -207,8 +207,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
 
   // Caregiver - Payments state
   const [stripeStatus, setStripeStatus] = useState(null);
-  const [payoutPref, setPayoutPref] = useState('standard');
-  const [savingPayout, setSavingPayout] = useState(false);
+  // payoutPref/savingPayout removed — payout speed managed via Stripe dashboard
   const [bgCheckPaid, setBgCheckPaid] = useState(false);
 
   // Caregiver - Checkr Background Check state
@@ -485,9 +484,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
       apiFetch('/api/payments/connect/status').then(async r => {
         if (r?.ok) { const d = await r.json(); setStripeStatus(d); }
       }).catch(() => {});
-      apiFetch('/api/payments/payout-preference').then(async r => {
-        if (r?.ok) { const d = await r.json(); setPayoutPref(d.preference || 'standard'); }
-      }).catch(() => {});
+      // Payout speed is managed directly through Stripe dashboard — no platform endpoint needed
       apiFetch('/api/dashboard').then(async r => {
         if (r?.ok) { const d = await r.json(); setBgCheckPaid(!!d.backgroundCheckPaid); }
       }).catch(() => {});
@@ -706,21 +703,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
     }
   };
 
-  const handleSavePayoutPref = async () => {
-    setSavingPayout(true);
-    try {
-      const res = await apiFetch('/api/payments/payout-preference', {
-        method: 'POST',
-        body: JSON.stringify({ preference: payoutPref })
-      });
-      if (res?.ok) {
-        showToast('Payout preference saved', 'success');
-      }
-    } catch (err) {
-      showToast('Failed to save payout preference', 'error');
-    }
-    setSavingPayout(false);
-  };
+  // Payout speed is managed directly through Stripe Express dashboard
 
   // Caregiver - Documents handlers
   const handleDocumentUpload = async (docType) => {
@@ -1580,27 +1563,29 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
           {/* Payout Speed Card */}
           <div className="card">
             <div className="card-header">Payout Speed</div>
-            <div style={{ display: 'grid', gap: 12, marginBottom: 16 }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
-                <input type="radio" name="payout" value="standard" checked={payoutPref === 'standard'}
-                  onChange={(e) => setPayoutPref(e.target.value)} style={{ margin: 0 }} />
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: 14 }}>Standard (Free)</div>
-                  <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>1-2 business days</div>
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7 }}>
+              <p style={{ margin: '0 0 10px' }}>You can choose your payout speed in your Stripe dashboard:</p>
+              <div style={{ display: 'grid', gap: 8, marginBottom: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontSize: 16 }}>🏦</span>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>Standard (Free)</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>1–2 business days</div>
+                  </div>
                 </div>
-              </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
-                <input type="radio" name="payout" value="instant" checked={payoutPref === 'instant'}
-                  onChange={(e) => setPayoutPref(e.target.value)} style={{ margin: 0 }} />
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: 14 }}>Instant (+2% fee)</div>
-                  <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>Same day</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontSize: 16 }}>⚡</span>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>Instant</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>Same day — Stripe charges 1% (min $0.50)</div>
+                  </div>
                 </div>
-              </label>
+              </div>
+              <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>Instant payout fees are charged by Stripe, not InPlace. Manage your payout speed in Stripe.</p>
             </div>
-            <button onClick={handleSavePayoutPref} disabled={savingPayout}
-              style={{ padding: '8px 20px', background: savingPayout ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
-              {savingPayout ? 'Saving...' : 'Save Preference'}
+            <button onClick={handleOpenStripeDashboard}
+              style={{ marginTop: 12, padding: '8px 20px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+              Open Stripe Dashboard
             </button>
           </div>
 
