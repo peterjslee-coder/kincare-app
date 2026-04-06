@@ -54699,6 +54699,15 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({
   const [errors, setErrors] = useState({});
   const [intlPhone, setIntlPhone] = useState(false);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  // Identity verification state (selfie + ID)
+  const [idSelfie, setIdSelfie] = useState(null);
+  const [idPhoto, setIdPhoto] = useState(null);
+  const [idVerifying, setIdVerifying] = useState(false);
+  const [idVerifyResult, setIdVerifyResult] = useState(null);
+  const [cameraStream, setCameraStream] = useState(null);
+  const [cameraMode, setCameraMode] = useState(null); // 'selfie' | 'id' | null
+  const idVideoRef = useRef(null);
+  const idCanvasRef = useRef(null);
 
   // ─── Scroll to top on step change ───
   useEffect(() => {
@@ -54802,7 +54811,8 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({
     6: 'Academic Program',
     7: 'Background Check Payment',
     8: 'Document Upload',
-    9: 'Review & Complete'
+    9: 'Identity Verification',
+    10: 'Review & Complete'
   };
   const trackEvent = (eventType, stepNum, extra = {}) => {
     try {
@@ -54969,7 +54979,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({
       localStorage.removeItem(STORAGE_KEY);
     } catch (e) {/* ignore */}
   };
-  const TOTAL_STEPS = 8; // Step 7 (BG check payment) removed — handled in First Steps
+  const TOTAL_STEPS = 9; // Step 8 = Identity Verification (selfie+ID), Step 9 = Review
   const US_STATES = ['AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA', 'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD', 'MA', 'MI', 'MN', 'MS', 'MO', 'MT', 'NE', 'NV', 'NH', 'NJ', 'NM', 'NY', 'NC', 'ND', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC', 'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY'];
   const CERT_TYPES = ['CNA', 'HHA', 'LPN', 'RN', 'CPR/First Aid', 'BLS', 'ACLS', 'Other'];
   const RADIUS_OPTIONS = ['5', '10', '15', '25', '50'];
@@ -55415,6 +55425,133 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({
     setSaving(false);
   };
 
+  // ─── Identity Verification (selfie + ID) helpers ───
+  const startIdCamera = async mode => {
+    try {
+      setCameraMode(mode);
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: mode === 'selfie' ? 'user' : 'environment',
+          width: {
+            ideal: 1280
+          },
+          height: {
+            ideal: 720
+          }
+        }
+      });
+      setCameraStream(stream);
+      // Attach to video element after render
+      setTimeout(() => {
+        if (idVideoRef.current) {
+          idVideoRef.current.srcObject = stream;
+          idVideoRef.current.play().catch(() => {});
+        }
+      }, 100);
+    } catch (err) {
+      setErrors(e => ({
+        ...e,
+        identity: 'Camera access denied. Please allow camera access or upload a photo instead.'
+      }));
+    }
+  };
+  const captureIdPhoto = () => {
+    if (!idVideoRef.current || !idCanvasRef.current) return;
+    const video = idVideoRef.current;
+    const canvas = idCanvasRef.current;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    if (cameraMode === 'selfie') {
+      ctx.translate(canvas.width, 0);
+      ctx.scale(-1, 1);
+    }
+    ctx.drawImage(video, 0, 0);
+    const base64 = canvas.toDataURL('image/jpeg', 0.85);
+    if (cameraMode === 'selfie') setIdSelfie(base64);else setIdPhoto(base64);
+    stopIdCamera();
+  };
+  const stopIdCamera = () => {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(t => t.stop());
+      setCameraStream(null);
+    }
+    setCameraMode(null);
+  };
+
+  // Clean up camera on unmount
+  useEffect(() => {
+    return () => {
+      if (cameraStream) cameraStream.getTracks().forEach(t => t.stop());
+    };
+  }, [cameraStream]);
+  const handleIdFileUpload = (type, e) => {
+    var _e$target$files5;
+    const file = (_e$target$files5 = e.target.files) === null || _e$target$files5 === void 0 ? void 0 : _e$target$files5[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      if (type === 'selfie') setIdSelfie(ev.target.result);else setIdPhoto(ev.target.result);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+  const handleVerifyIdentity = async () => {
+    if (!idSelfie || !idPhoto) {
+      setErrors({
+        identity: 'Both a selfie and an ID photo are required'
+      });
+      return;
+    }
+    setIdVerifying(true);
+    setErrors({});
+    try {
+      const token = authToken || window.AUTH_TOKEN;
+      const res = await resilientFetch('/api/caregiver-onboarding/verify-id', {
+        method: 'POST',
+        headers: {
+          ...authHeaders({
+            'Content-Type': 'application/json'
+          })
+        },
+        body: JSON.stringify({
+          idPhoto: idPhoto,
+          selfie: idSelfie
+        })
+      }, 1);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        trackEvent('error', 8, {
+          error: data.error || 'verify-id failed',
+          source: 'api'
+        });
+        setErrors({
+          identity: data.error || 'Verification failed. Please try again.'
+        });
+        setIdVerifying(false);
+        return;
+      }
+      const result = await res.json();
+      setIdVerifyResult(result);
+      trackEvent('step_complete', 8, {
+        matched: result.matched,
+        needsReview: result.needsHumanReview
+      });
+      // Move to review step after short delay so user can see result
+      setTimeout(() => setStep(9), 1500);
+    } catch (err) {
+      const msg = networkErrorMsg(err);
+      trackEvent('error', 8, {
+        error: msg,
+        source: 'network'
+      });
+      setErrors({
+        identity: msg
+      });
+    }
+    setIdVerifying(false);
+  };
+
   // Document handling — resize large images client-side before storing
   const resizeImage = (file, maxDimension = 1600) => {
     return new Promise((resolve, reject) => {
@@ -55619,7 +55756,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({
 
   // Handle complete
   const handleComplete = () => {
-    trackEvent('onboarding_complete', 9);
+    trackEvent('onboarding_complete', 10);
     clearSavedProgress();
     if (typeof onComplete === 'function') onComplete(authToken || window.AUTH_TOKEN);
   };
@@ -57252,6 +57389,322 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({
     style: {
       padding: '24px'
     }
+  }, /*#__PURE__*/React.createElement("h2", {
+    style: {
+      fontSize: '18px',
+      color: 'var(--text-primary)',
+      marginTop: 0,
+      marginBottom: '4px'
+    }
+  }, "\uD83D\uDCF7 Identity Verification"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: 'var(--text-tertiary)',
+      fontSize: '13px',
+      marginTop: 0,
+      marginBottom: '12px'
+    }
+  }, "Take a selfie and a photo of your government-issued ID. This helps us verify your identity and keep everyone safe."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: '10px 14px',
+      background: '#fff8e1',
+      borderRadius: '8px',
+      marginBottom: '20px',
+      border: '1px solid #ffe0b2'
+    }
+  }, /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontSize: '12px',
+      color: '#795548',
+      margin: 0,
+      lineHeight: '1.5'
+    }
+  }, "\uD83D\uDD12 Your photos are stored securely and only visible to InPlace administrators for verification purposes.")), errors.identity && /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: '8px 12px',
+      background: 'var(--color-error-bg)',
+      color: 'var(--color-error)',
+      borderRadius: 8,
+      fontSize: 13,
+      marginBottom: 12
+    }
+  }, errors.identity), cameraStream && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 16,
+      textAlign: 'center'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: 'relative',
+      display: 'inline-block',
+      borderRadius: 12,
+      overflow: 'hidden',
+      border: '3px solid var(--role-color)'
+    }
+  }, /*#__PURE__*/React.createElement("video", {
+    ref: idVideoRef,
+    autoPlay: true,
+    playsInline: true,
+    muted: true,
+    style: {
+      width: '100%',
+      maxWidth: 400,
+      transform: cameraMode === 'selfie' ? 'scaleX(-1)' : 'none'
+    }
+  })), /*#__PURE__*/React.createElement("canvas", {
+    ref: idCanvasRef,
+    style: {
+      display: 'none'
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 10,
+      display: 'flex',
+      gap: 10,
+      justifyContent: 'center'
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: captureIdPhoto,
+    style: {
+      padding: '12px 24px',
+      background: 'var(--role-color)',
+      color: 'var(--text-on-primary)',
+      border: 'none',
+      borderRadius: 8,
+      fontSize: 15,
+      fontWeight: 600,
+      cursor: 'pointer'
+    }
+  }, "\uD83D\uDCF8 Capture"), /*#__PURE__*/React.createElement("button", {
+    onClick: stopIdCamera,
+    style: {
+      padding: '12px 18px',
+      background: 'var(--badge-muted-bg)',
+      color: 'var(--text-secondary)',
+      border: '1px solid #ddd',
+      borderRadius: 8,
+      fontSize: 14,
+      cursor: 'pointer'
+    }
+  }, "Cancel"))), !cameraStream && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 20
+    }
+  }, /*#__PURE__*/React.createElement("label", {
+    style: {
+      display: 'block',
+      fontSize: 13,
+      fontWeight: 600,
+      color: 'var(--text-secondary)',
+      marginBottom: 6
+    }
+  }, "Selfie *"), idSelfie ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 12,
+      padding: 10,
+      background: 'var(--bg-primary)',
+      borderRadius: 8
+    }
+  }, /*#__PURE__*/React.createElement("img", {
+    src: idSelfie,
+    style: {
+      width: 80,
+      height: 80,
+      objectFit: 'cover',
+      borderRadius: '50%'
+    }
+  }), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 13,
+      color: 'var(--color-success)',
+      fontWeight: 600,
+      flex: 1
+    }
+  }, "\u2705 Selfie captured"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setIdSelfie(null),
+    style: {
+      background: 'var(--bg-error-light)',
+      border: '1px solid #fdd',
+      borderRadius: 6,
+      padding: '4px 10px',
+      fontSize: 12,
+      cursor: 'pointer',
+      color: 'var(--color-red-strong)'
+    }
+  }, "Retake")) : /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 10
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => startIdCamera('selfie'),
+    style: {
+      flex: 1,
+      padding: '14px 12px',
+      background: 'var(--role-color)',
+      color: 'var(--text-on-primary)',
+      border: 'none',
+      borderRadius: 8,
+      fontSize: 14,
+      fontWeight: 600,
+      cursor: 'pointer'
+    }
+  }, "\uD83D\uDCF7 Take Selfie"), /*#__PURE__*/React.createElement("label", {
+    style: {
+      flex: 1,
+      padding: '14px 12px',
+      background: 'var(--bg-surface)',
+      color: 'var(--role-color)',
+      border: '2px solid #1b6b5a',
+      borderRadius: 8,
+      fontSize: 14,
+      fontWeight: 600,
+      cursor: 'pointer',
+      textAlign: 'center'
+    }
+  }, "\uD83D\uDCC4 Upload Photo", /*#__PURE__*/React.createElement("input", {
+    type: "file",
+    accept: "image/*",
+    style: {
+      display: 'none'
+    },
+    onChange: e => handleIdFileUpload('selfie', e)
+  })))), !cameraStream && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 20
+    }
+  }, /*#__PURE__*/React.createElement("label", {
+    style: {
+      display: 'block',
+      fontSize: 13,
+      fontWeight: 600,
+      color: 'var(--text-secondary)',
+      marginBottom: 6
+    }
+  }, "Government ID Photo *"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontSize: 12,
+      color: 'var(--text-muted)',
+      margin: '0 0 8px'
+    }
+  }, "Driver's license, state ID, or passport \u2014 make sure the photo and text are clearly readable."), idPhoto ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 12,
+      padding: 10,
+      background: 'var(--bg-primary)',
+      borderRadius: 8
+    }
+  }, /*#__PURE__*/React.createElement("img", {
+    src: idPhoto,
+    style: {
+      width: 100,
+      height: 65,
+      objectFit: 'cover',
+      borderRadius: 6
+    }
+  }), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 13,
+      color: 'var(--color-success)',
+      fontWeight: 600,
+      flex: 1
+    }
+  }, "\u2705 ID photo captured"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setIdPhoto(null),
+    style: {
+      background: 'var(--bg-error-light)',
+      border: '1px solid #fdd',
+      borderRadius: 6,
+      padding: '4px 10px',
+      fontSize: 12,
+      cursor: 'pointer',
+      color: 'var(--color-red-strong)'
+    }
+  }, "Retake")) : /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 10
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => startIdCamera('id'),
+    style: {
+      flex: 1,
+      padding: '14px 12px',
+      background: 'var(--role-color)',
+      color: 'var(--text-on-primary)',
+      border: 'none',
+      borderRadius: 8,
+      fontSize: 14,
+      fontWeight: 600,
+      cursor: 'pointer'
+    }
+  }, "\uD83D\uDCF7 Take Photo"), /*#__PURE__*/React.createElement("label", {
+    style: {
+      flex: 1,
+      padding: '14px 12px',
+      background: 'var(--bg-surface)',
+      color: 'var(--role-color)',
+      border: '2px solid #1b6b5a',
+      borderRadius: 8,
+      fontSize: 14,
+      fontWeight: 600,
+      cursor: 'pointer',
+      textAlign: 'center'
+    }
+  }, "\uD83D\uDCC4 Upload Photo", /*#__PURE__*/React.createElement("input", {
+    type: "file",
+    accept: "image/*",
+    style: {
+      display: 'none'
+    },
+    onChange: e => handleIdFileUpload('id', e)
+  })))), idVerifyResult && /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: 14,
+      borderRadius: 8,
+      marginBottom: 16,
+      background: idVerifyResult.matched ? 'var(--color-success-bg)' : '#fff8e1',
+      border: idVerifyResult.matched ? '1px solid #c8e6c9' : '1px solid #ffe0b2'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontWeight: 600,
+      fontSize: 14,
+      color: idVerifyResult.matched ? 'var(--color-success)' : '#e65100',
+      marginBottom: 4
+    }
+  }, idVerifyResult.matched ? '&#9989; Identity verified!' : '&#9203; Submitted for admin review'), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: 'var(--text-secondary)'
+    }
+  }, idVerifyResult.matched ? 'Your selfie matches your ID. Moving to the final step...' : 'Your documents have been submitted. An admin will review and approve your identity.')), !cameraStream && !idVerifyResult && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 10
+    }
+  }, backBtn(7), /*#__PURE__*/React.createElement("button", {
+    onClick: handleVerifyIdentity,
+    disabled: !idSelfie || !idPhoto || idVerifying,
+    style: {
+      flex: 1,
+      padding: '14px',
+      border: 'none',
+      borderRadius: '8px',
+      fontSize: '16px',
+      fontWeight: 600,
+      cursor: idSelfie && idPhoto && !idVerifying ? 'pointer' : 'not-allowed',
+      background: idSelfie && idPhoto && !idVerifying ? 'var(--role-color)' : 'var(--border-light)',
+      color: 'var(--text-on-primary)'
+    }
+  }, idVerifying ? '&#9203; Verifying...' : 'Verify & Continue'))), step === 9 && /*#__PURE__*/React.createElement("div", {
+    className: "card",
+    style: {
+      padding: '24px'
+    }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: 'center',
@@ -57274,7 +57727,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({
       fontSize: '15px',
       margin: 0
     }
-  }, "Your profile has been created and your documents are uploaded.")), /*#__PURE__*/React.createElement("div", {
+  }, "Your profile has been created, documents uploaded, and identity verified.")), /*#__PURE__*/React.createElement("div", {
     style: {
       background: 'var(--bg-primary)',
       borderRadius: '8px',
@@ -57325,6 +57778,10 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({
       color: 'var(--text-tertiary)'
     }
   }, "Documents:"), " ", form.documents.length, " uploaded"), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: 'var(--text-tertiary)'
+    }
+  }, "Identity:"), " ", idVerifyResult !== null && idVerifyResult !== void 0 && idVerifyResult.matched ? 'Verified' : 'Pending admin review'), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
     style: {
       color: 'var(--text-tertiary)'
     }
@@ -63104,7 +63561,7 @@ const DocThumbnail = ({
 const AdminPanel = window.AdminPanel = ({
   currentUser
 }) => {
-  var _tabGroups$flatMap$fi, _reviewInsights$insig, _secDashboard$activeT, _secDashboard$failedL, _secDashboard$adminAc, _secDashboard$critica, _sessionDetail$recipi, _sessionDetail$recipi2, _sessionDetail$sessio, _sessionDetail$sessio2, _sessionDetail$sessio3, _sessionDetail$sessio4, _sessionDetail$family, _sessionDetail$caregi, _sessionDetail$sessio6, _sessionDetail$sessio7, _sessionDetail$sessio8, _sessionDetail$sessio9, _sessionDetail$visitL, _sessionDetail$visitL2, _sessionDetail$paymen, _onboardingModal$user, _onboardingModal$user2, _onboardingModal$user3, _onboardingModal$docu, _userDrawer$sessionSt, _userDrawer$sessionSt2, _userDrawer$reviewSta, _userDrawer$reviewSta2, _userDrawer$careTeams, _userDrawer$user5, _userDrawer$tickets, _userDrawer$safetyFla, _userDrawer$allDocume, _userDrawer$allDocume2, _userDrawer$user1, _userDrawer$user11, _userDrawer$user13, _userDrawer$user14, _userDrawer$user15;
+  var _tabGroups$flatMap$fi, _reviewInsights$insig, _secDashboard$activeT, _secDashboard$failedL, _secDashboard$adminAc, _secDashboard$critica, _sessionDetail$recipi, _sessionDetail$recipi2, _sessionDetail$sessio, _sessionDetail$sessio2, _sessionDetail$sessio3, _sessionDetail$sessio4, _sessionDetail$family, _sessionDetail$caregi, _sessionDetail$sessio6, _sessionDetail$sessio7, _sessionDetail$sessio8, _sessionDetail$sessio9, _sessionDetail$visitL, _sessionDetail$visitL2, _sessionDetail$paymen, _onboardingModal$user, _onboardingModal$user2, _onboardingModal$user3, _onboardingModal$flag, _onboardingModal$docu, _userDrawer$sessionSt, _userDrawer$sessionSt2, _userDrawer$reviewSta, _userDrawer$reviewSta2, _userDrawer$careTeams, _userDrawer$user5, _userDrawer$tickets, _userDrawer$safetyFla, _userDrawer$allDocume, _userDrawer$allDocume2, _userDrawer$user1, _userDrawer$user11, _userDrawer$user13, _userDrawer$user14, _userDrawer$user15;
   const {
     showToast
   } = useToast();
@@ -74215,6 +74672,10 @@ const AdminPanel = window.AdminPanel = ({
       gap: '10px'
     }
   }, [{
+    key: 'identityVerified',
+    label: 'Identity Verified',
+    desc: `Selfie + ID photo (${((_onboardingModal$flag = onboardingModal.flags) === null || _onboardingModal$flag === void 0 ? void 0 : _onboardingModal$flag.identityStatus) || 'not submitted'})`
+  }, {
     key: 'stripeOnboardComplete',
     label: 'Stripe Connected',
     desc: 'Bank account linked via Stripe Connect'

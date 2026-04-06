@@ -2568,6 +2568,21 @@ router.get("/users/:id/onboarding", async (req, res) => {
     // Check photo from users table (profile_photo or avatar_url)
     const hasPhoto = !!(user.profile_photo || user.avatar_url);
 
+    // Check identity verification status (selfie + ID)
+    let identityVerified = false;
+    let identityStatus = null;
+    if (profile) {
+      const idDoc = await db.prepare(
+        `SELECT status, is_verified FROM verified_documents
+         WHERE owner_id = ? AND owner_type = 'caregiver' AND category = 'identity' AND document_type != 'selfie'
+         ORDER BY created_at DESC LIMIT 1`
+      ).get(profile.id);
+      if (idDoc) {
+        identityVerified = idDoc.status === 'approved';
+        identityStatus = idDoc.status; // 'pending', 'approved', 'rejected'
+      }
+    }
+
     res.json({
       user: { id: user.id, email: user.email, role: user.role, name: `${user.first_name || ''} ${user.last_name || ''}`.trim() },
       profile: profile || null,
@@ -2581,6 +2596,8 @@ router.get("/users/:id/onboarding", async (req, res) => {
         isAvailable: !!profile.is_available,
         hasPhoto,
         hasDriversLicense: !!(profile.dl_number && profile.dl_state),
+        identityVerified,
+        identityStatus,
         needsHourReports: !!profile.needs_hour_reports,
         academicProgram: profile.academic_program || null,
         academicProgramYear: profile.academic_program_year || null,
@@ -2602,9 +2619,29 @@ router.put("/users/:id/onboarding", async (req, res) => {
     const profile = await db.prepare("SELECT id FROM caregiver_profiles WHERE user_id = ?").get(req.params.id);
     if (!profile) return res.status(404).json({ error: "No caregiver profile found for this user" });
 
-    const { backgroundCheckCleared, backgroundCheckPaid, stripeOnboardComplete, onboardingComplete, isAvailable } = req.body;
+    const { backgroundCheckCleared, backgroundCheckPaid, stripeOnboardComplete, onboardingComplete, isAvailable, identityVerified } = req.body;
     // Each flag is now independent — no cascading. Admin picks exactly which steps to skip.
     const colMap = new Map(); // column -> { sql, param? }
+
+    // Identity verification is stored in verified_documents, not caregiver_profiles
+    if (identityVerified !== undefined) {
+      const idDoc = await db.prepare(
+        `SELECT id FROM verified_documents WHERE owner_id = ? AND owner_type = 'caregiver' AND category = 'identity' AND document_type != 'selfie' ORDER BY created_at DESC LIMIT 1`
+      ).get(profile.id);
+      if (idDoc) {
+        await db.prepare(
+          "UPDATE verified_documents SET status = ?, is_verified = ?, admin_reviewed_by = ?, admin_reviewed_at = NOW() WHERE id = ?"
+        ).run(identityVerified ? 'approved' : 'rejected', identityVerified ? 1 : 0, req.user.id, idDoc.id);
+      } else if (identityVerified) {
+        // Admin manually approving without a submitted doc — create a placeholder
+        await db.prepare(
+          `INSERT INTO verified_documents (id, owner_id, owner_type, uploaded_by, category, document_type, file_data, status, is_verified, admin_reviewed_by, admin_reviewed_at, created_at)
+           VALUES (?, ?, 'caregiver', ?, 'identity', 'admin_override', '', 'approved', 1, ?, NOW(), NOW())`
+        ).run(uuid(), profile.id, req.user.id, req.user.id);
+      }
+      // If this is the only flag being toggled and no caregiver_profiles columns to update, return early
+      if (Object.keys(req.body).length === 1) return res.json({ updated: true, identityVerified });
+    }
 
     if (backgroundCheckCleared !== undefined) {
       colMap.set("is_background_checked", { sql: "is_background_checked = ?", param: backgroundCheckCleared ? 1 : 0 });

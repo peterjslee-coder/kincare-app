@@ -5513,6 +5513,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
             {onboardingModal.flags ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 {[
+                  { key: 'identityVerified', label: 'Identity Verified', desc: `Selfie + ID photo (${onboardingModal.flags?.identityStatus || 'not submitted'})` },
                   { key: 'stripeOnboardComplete', label: 'Stripe Connected', desc: 'Bank account linked via Stripe Connect' },
                   { key: 'backgroundCheckPaid', label: 'Background Check Paid', desc: 'Paid $30 fee for background check' },
                   { key: 'backgroundCheckCleared', label: 'Background Check Cleared', desc: 'Checkr returned OK (or admin override)' },

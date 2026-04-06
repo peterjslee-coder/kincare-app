@@ -3,6 +3,8 @@ const multer = require("multer");
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { authenticate } = require("../middleware/auth");
+const { classifyDocument } = require("../utils/documentAI");
+const { MODEL_SONNET } = require("../utils/aiModels");
 
 const router = express.Router();
 
@@ -138,6 +140,169 @@ router.delete("/documents/:id", async (req, res) => {
   } catch (err) {
     console.error("Delete document error:", err);
     res.status(500).json({ error: "Failed to delete document" });
+  }
+});
+
+// ─── Face comparison helper (same as selfOnboarding.js) ───
+async function compareFaces(selfieBase64, idPhotoBase64) {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return { similar: false, confidence: 0, explanation: "AI comparison unavailable", skipped: true };
+  try {
+    const Anthropic = require("@anthropic-ai/sdk");
+    const client = new Anthropic({ apiKey });
+    const stripDataUri = (d) => d.replace(/^data:[^;]+;base64,/, "");
+    const getMime = (d) => { const m = d.match(/^data:([^;]+);/); return m ? m[1] : "image/jpeg"; };
+    const response = await client.messages.create({
+      model: MODEL_SONNET, max_tokens: 512,
+      system: `You are a visual verification assistant for a care coordination platform. Compare a selfie to a government ID photo. Assess whether they appear to be the same person based on general facial structure, approximate age range, and overall appearance. This is a basic visual plausibility check, not biometric identification. Err on the side of caution.
+Respond with ONLY a JSON object (no markdown): { "similar": true/false, "confidence": 0.0-1.0, "explanation": "Brief reason" }`,
+      messages: [{ role: "user", content: [
+        { type: "image", source: { type: "base64", media_type: getMime(selfieBase64), data: stripDataUri(selfieBase64) } },
+        { type: "image", source: { type: "base64", media_type: getMime(idPhotoBase64), data: stripDataUri(idPhotoBase64) } },
+        { type: "text", text: "Image 1 is the selfie. Image 2 is the government ID. Do these appear to be the same person?" },
+      ] }],
+    });
+    const text = response.content.filter(b => b.type === "text").map(b => b.text).join("");
+    const cleaned = text.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+    const result = JSON.parse(cleaned);
+    return { similar: !!result.similar, confidence: typeof result.confidence === "number" ? result.confidence : 0, explanation: result.explanation || "" };
+  } catch (err) {
+    console.error("Face comparison error:", err.message);
+    return { similar: false, confidence: 0, explanation: `Comparison failed: ${err.message}`, error: true };
+  }
+}
+
+// ─── POST /api/caregiver-onboarding/verify-id ───
+// Caregiver identity verification: selfie + government ID
+router.post("/verify-id", async (req, res) => {
+  try {
+    const db = await getDb();
+    const { idPhoto: idPhotoBase64, selfie: selfieBase64 } = req.body;
+
+    if (!idPhotoBase64) return res.status(400).json({ error: "ID photo is required" });
+    if (!selfieBase64) return res.status(400).json({ error: "Selfie is required" });
+
+    const user = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(req.user.id);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    const profile = await db.prepare("SELECT id FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
+    if (!profile) return res.status(404).json({ error: "Caregiver profile not found" });
+
+    const mimeMatch = idPhotoBase64.match(/^data:([^;]+);/);
+    const mimetype = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+
+    // Classify the ID document using Claude
+    const classifyResult = await classifyDocument(idPhotoBase64, mimetype, "Identity");
+
+    const extractedName = classifyResult.extractedFields?.name || '';
+    const extractedDOB = classifyResult.extractedFields?.dateOfBirth || '';
+    const expiryDate = classifyResult.extractedFields?.expirationDate || '';
+    const issuingAuthority = classifyResult.extractedFields?.issuingAuthority || '';
+
+    const allConcerns = [...(classifyResult.concerns || [])];
+
+    // Name match
+    const registeredName = `${user.first_name || ''} ${user.last_name || ''}`.trim();
+    const userLastName = (user.last_name || '').toLowerCase().trim();
+    const extractedLastName = extractedName.split(' ').pop().toLowerCase().trim();
+    const nameMatched = extractedLastName === userLastName || extractedName.toLowerCase().includes(userLastName);
+    if (!nameMatched && extractedName) {
+      allConcerns.unshift(`Name mismatch: account registered as "${registeredName}" but ID shows "${extractedName}"`);
+    }
+
+    // DOB match (use form-provided DOB from step 4 if available)
+    let dobMatched = true;
+    const profileFull = await db.prepare("SELECT date_of_birth FROM caregiver_profiles WHERE id = ?").get(profile.id);
+    if (extractedDOB && profileFull?.date_of_birth) {
+      const registeredDOB = new Date(profileFull.date_of_birth).toLocaleDateString('en-US');
+      dobMatched = extractedDOB.includes(registeredDOB) || registeredDOB.includes(extractedDOB) || profileFull.date_of_birth === extractedDOB;
+      if (!dobMatched) allConcerns.unshift(`DOB mismatch: registered "${registeredDOB}" but ID shows "${extractedDOB}"`);
+    }
+
+    // Face comparison
+    const faceComparison = await compareFaces(selfieBase64, idPhotoBase64);
+    if (!faceComparison.similar && !faceComparison.skipped) {
+      allConcerns.unshift(`Face comparison: ${faceComparison.explanation} (confidence: ${Math.round(faceComparison.confidence * 100)}%)`);
+    }
+
+    // Decision
+    const facePassed = faceComparison.skipped || faceComparison.similar || faceComparison.confidence >= 0.5;
+    const isVerified = nameMatched && classifyResult.isValid && dobMatched && facePassed;
+    const needsHumanReview = !isVerified || (classifyResult.confidence || 0) < 0.8 || (!faceComparison.skipped && faceComparison.confidence < 0.7);
+
+    const aiClassification = {
+      classification: classifyResult.classification, confidence: classifyResult.confidence,
+      isValid: classifyResult.isValid, matchesClaimed: classifyResult.matchesClaimed,
+      extractedFields: classifyResult.extractedFields || {}, concerns: allConcerns,
+      summary: classifyResult.summary || '', nameMatched, dobMatched, registeredName, extractedName,
+      faceComparison: { similar: faceComparison.similar, confidence: faceComparison.confidence, explanation: faceComparison.explanation, skipped: !!faceComparison.skipped },
+    };
+
+    // Store ID document
+    const docId = uuid();
+    await db.prepare(
+      `INSERT INTO verified_documents (id, owner_id, owner_type, uploaded_by, category, document_type, file_data, mime_type, status, ai_classification, extracted_data, ai_confidence, ai_concerns, is_verified, verified_at, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      docId, profile.id, 'caregiver', req.user.id, 'identity',
+      classifyResult.classification || 'drivers_license',
+      idPhotoBase64, mimetype,
+      needsHumanReview ? 'pending' : 'approved',
+      JSON.stringify(aiClassification),
+      JSON.stringify({ extractedName, registeredName, extractedDOB, issuingAuthority, expiryDate, confidence: classifyResult.confidence, nameMatched, dobMatched }),
+      classifyResult.confidence || 0,
+      JSON.stringify(allConcerns),
+      isVerified ? 1 : 0,
+      new Date().toISOString(),
+      new Date().toISOString()
+    );
+
+    // Store selfie
+    const selfieDocId = uuid();
+    const selfieMime = (selfieBase64.match(/^data:([^;]+);/) || [])[1] || 'image/jpeg';
+    await db.prepare(
+      `INSERT INTO verified_documents (id, owner_id, owner_type, uploaded_by, category, document_type, file_data, mime_type, status, ai_classification, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      selfieDocId, profile.id, 'caregiver', req.user.id,
+      'identity', 'selfie', selfieBase64, selfieMime,
+      'approved', JSON.stringify({ linkedIdDocId: docId, faceComparison }),
+      new Date().toISOString()
+    );
+
+    res.json({
+      matched: isVerified, needsHumanReview,
+      extractedName, registeredName, extractedDOB, expiryDate,
+      confidence: classifyResult.confidence, concerns: allConcerns,
+      documentId: docId, issuingAuthority, nameMatched, dobMatched,
+      classification: classifyResult.classification,
+      faceComparison: { similar: faceComparison.similar, confidence: faceComparison.confidence, explanation: faceComparison.explanation, skipped: !!faceComparison.skipped },
+    });
+  } catch (err) {
+    console.error('Caregiver verify-id error:', err);
+    res.status(500).json({ error: 'Error verifying ID. Please try again.' });
+  }
+});
+
+// ─── GET /api/caregiver-onboarding/identity-status ───
+// Check if caregiver has completed identity verification
+router.get("/identity-status", async (req, res) => {
+  try {
+    const db = await getDb();
+    const profile = await db.prepare("SELECT id FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
+    if (!profile) return res.json({ submitted: false, status: null });
+
+    const idDoc = await db.prepare(
+      `SELECT id, status, is_verified, ai_confidence, created_at FROM verified_documents
+       WHERE owner_id = ? AND owner_type = 'caregiver' AND category = 'identity' AND document_type != 'selfie'
+       ORDER BY created_at DESC LIMIT 1`
+    ).get(profile.id);
+
+    if (!idDoc) return res.json({ submitted: false, status: null });
+    res.json({ submitted: true, status: idDoc.status, isVerified: !!idDoc.is_verified, confidence: idDoc.ai_confidence, documentId: idDoc.id });
+  } catch (err) {
+    console.error("Identity status error:", err);
+    res.status(500).json({ error: "Failed to check identity status" });
   }
 });
 

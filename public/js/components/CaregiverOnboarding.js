@@ -14,6 +14,15 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
   const [errors, setErrors] = useState({});
   const [intlPhone, setIntlPhone] = useState(false);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  // Identity verification state (selfie + ID)
+  const [idSelfie, setIdSelfie] = useState(null);
+  const [idPhoto, setIdPhoto] = useState(null);
+  const [idVerifying, setIdVerifying] = useState(false);
+  const [idVerifyResult, setIdVerifyResult] = useState(null);
+  const [cameraStream, setCameraStream] = useState(null);
+  const [cameraMode, setCameraMode] = useState(null); // 'selfie' | 'id' | null
+  const idVideoRef = useRef(null);
+  const idCanvasRef = useRef(null);
 
   // ─── Scroll to top on step change ───
   useEffect(() => { window.scrollTo(0, 0); }, [step]);
@@ -102,7 +111,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
   const stepNames = {
     1: 'Create Account', 2: 'Disclosures & Terms', 3: 'Personal Info',
     4: 'Background Check Info', 5: 'Certifications', 6: 'Academic Program',
-    7: 'Background Check Payment', 8: 'Document Upload', 9: 'Review & Complete',
+    7: 'Background Check Payment', 8: 'Document Upload', 9: 'Identity Verification', 10: 'Review & Complete',
   };
   const trackEvent = (eventType, stepNum, extra = {}) => {
     try {
@@ -221,7 +230,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
     try { localStorage.removeItem(STORAGE_KEY); } catch (e) { /* ignore */ }
   };
 
-  const TOTAL_STEPS = 8; // Step 7 (BG check payment) removed — handled in First Steps
+  const TOTAL_STEPS = 9; // Step 8 = Identity Verification (selfie+ID), Step 9 = Review
   const US_STATES = [
     'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS',
     'KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY',
@@ -561,6 +570,89 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
     setSaving(false);
   };
 
+  // ─── Identity Verification (selfie + ID) helpers ───
+  const startIdCamera = async (mode) => {
+    try {
+      setCameraMode(mode);
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: mode === 'selfie' ? 'user' : 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+      });
+      setCameraStream(stream);
+      // Attach to video element after render
+      setTimeout(() => {
+        if (idVideoRef.current) { idVideoRef.current.srcObject = stream; idVideoRef.current.play().catch(() => {}); }
+      }, 100);
+    } catch (err) {
+      setErrors(e => ({ ...e, identity: 'Camera access denied. Please allow camera access or upload a photo instead.' }));
+    }
+  };
+
+  const captureIdPhoto = () => {
+    if (!idVideoRef.current || !idCanvasRef.current) return;
+    const video = idVideoRef.current;
+    const canvas = idCanvasRef.current;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    if (cameraMode === 'selfie') { ctx.translate(canvas.width, 0); ctx.scale(-1, 1); }
+    ctx.drawImage(video, 0, 0);
+    const base64 = canvas.toDataURL('image/jpeg', 0.85);
+    if (cameraMode === 'selfie') setIdSelfie(base64);
+    else setIdPhoto(base64);
+    stopIdCamera();
+  };
+
+  const stopIdCamera = () => {
+    if (cameraStream) { cameraStream.getTracks().forEach(t => t.stop()); setCameraStream(null); }
+    setCameraMode(null);
+  };
+
+  // Clean up camera on unmount
+  useEffect(() => { return () => { if (cameraStream) cameraStream.getTracks().forEach(t => t.stop()); }; }, [cameraStream]);
+
+  const handleIdFileUpload = (type, e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      if (type === 'selfie') setIdSelfie(ev.target.result);
+      else setIdPhoto(ev.target.result);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const handleVerifyIdentity = async () => {
+    if (!idSelfie || !idPhoto) { setErrors({ identity: 'Both a selfie and an ID photo are required' }); return; }
+    setIdVerifying(true);
+    setErrors({});
+    try {
+      const token = authToken || window.AUTH_TOKEN;
+      const res = await resilientFetch('/api/caregiver-onboarding/verify-id', {
+        method: 'POST',
+        headers: { ...authHeaders({ 'Content-Type': 'application/json' }) },
+        body: JSON.stringify({ idPhoto: idPhoto, selfie: idSelfie }),
+      }, 1);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        trackEvent('error', 8, { error: data.error || 'verify-id failed', source: 'api' });
+        setErrors({ identity: data.error || 'Verification failed. Please try again.' });
+        setIdVerifying(false);
+        return;
+      }
+      const result = await res.json();
+      setIdVerifyResult(result);
+      trackEvent('step_complete', 8, { matched: result.matched, needsReview: result.needsHumanReview });
+      // Move to review step after short delay so user can see result
+      setTimeout(() => setStep(9), 1500);
+    } catch (err) {
+      const msg = networkErrorMsg(err);
+      trackEvent('error', 8, { error: msg, source: 'network' });
+      setErrors({ identity: msg });
+    }
+    setIdVerifying(false);
+  };
+
   // Document handling — resize large images client-side before storing
   const resizeImage = (file, maxDimension = 1600) => {
     return new Promise((resolve, reject) => {
@@ -684,7 +776,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
 
   // Handle complete
   const handleComplete = () => {
-    trackEvent('onboarding_complete', 9);
+    trackEvent('onboarding_complete', 10);
     clearSavedProgress();
     if (typeof onComplete === 'function') onComplete(authToken || window.AUTH_TOKEN);
   };
@@ -1530,14 +1622,128 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
           </div>
         )}
 
-        {/* ─── Step 8: Review & Complete ─── */}
+        {/* ─── Step 8: Identity Verification (Selfie + ID) ─── */}
         {step === 8 && (
+          <div className="card" style={{ padding: '24px' }}>
+            <h2 style={{ fontSize: '18px', color: 'var(--text-primary)', marginTop: 0, marginBottom: '4px' }}>&#128247; Identity Verification</h2>
+            <p style={{ color: 'var(--text-tertiary)', fontSize: '13px', marginTop: 0, marginBottom: '12px' }}>
+              Take a selfie and a photo of your government-issued ID. This helps us verify your identity and keep everyone safe.
+            </p>
+            <div style={{ padding: '10px 14px', background: '#fff8e1', borderRadius: '8px', marginBottom: '20px', border: '1px solid #ffe0b2' }}>
+              <p style={{ fontSize: '12px', color: '#795548', margin: 0, lineHeight: '1.5' }}>
+                &#128274; Your photos are stored securely and only visible to InPlace administrators for verification purposes.
+              </p>
+            </div>
+
+            {errors.identity && <div style={{ padding: '8px 12px', background: 'var(--color-error-bg)', color: 'var(--color-error)', borderRadius: 8, fontSize: 13, marginBottom: 12 }}>{errors.identity}</div>}
+
+            {/* Camera viewfinder (shared for selfie and ID) */}
+            {cameraStream && (
+              <div style={{ marginBottom: 16, textAlign: 'center' }}>
+                <div style={{ position: 'relative', display: 'inline-block', borderRadius: 12, overflow: 'hidden', border: '3px solid var(--role-color)' }}>
+                  <video ref={idVideoRef} autoPlay playsInline muted style={{ width: '100%', maxWidth: 400, transform: cameraMode === 'selfie' ? 'scaleX(-1)' : 'none' }} />
+                </div>
+                <canvas ref={idCanvasRef} style={{ display: 'none' }} />
+                <div style={{ marginTop: 10, display: 'flex', gap: 10, justifyContent: 'center' }}>
+                  <button onClick={captureIdPhoto} style={{ padding: '12px 24px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 15, fontWeight: 600, cursor: 'pointer' }}>
+                    &#128248; Capture
+                  </button>
+                  <button onClick={stopIdCamera} style={{ padding: '12px 18px', background: 'var(--badge-muted-bg)', color: 'var(--text-secondary)', border: '1px solid #ddd', borderRadius: 8, fontSize: 14, cursor: 'pointer' }}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Selfie Section */}
+            {!cameraStream && (
+              <div style={{ marginBottom: 20 }}>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>Selfie *</label>
+                {idSelfie ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 10, background: 'var(--bg-primary)', borderRadius: 8 }}>
+                    <img src={idSelfie} style={{ width: 80, height: 80, objectFit: 'cover', borderRadius: '50%' }} />
+                    <span style={{ fontSize: 13, color: 'var(--color-success)', fontWeight: 600, flex: 1 }}>&#9989; Selfie captured</span>
+                    <button onClick={() => setIdSelfie(null)} style={{ background: 'var(--bg-error-light)', border: '1px solid #fdd', borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: 'pointer', color: 'var(--color-red-strong)' }}>Retake</button>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', gap: 10 }}>
+                    <button onClick={() => startIdCamera('selfie')} style={{ flex: 1, padding: '14px 12px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+                      &#128247; Take Selfie
+                    </button>
+                    <label style={{ flex: 1, padding: '14px 12px', background: 'var(--bg-surface)', color: 'var(--role-color)', border: '2px solid #1b6b5a', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer', textAlign: 'center' }}>
+                      &#128196; Upload Photo
+                      <input type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => handleIdFileUpload('selfie', e)} />
+                    </label>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ID Photo Section */}
+            {!cameraStream && (
+              <div style={{ marginBottom: 20 }}>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>Government ID Photo *</label>
+                <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 8px' }}>Driver's license, state ID, or passport — make sure the photo and text are clearly readable.</p>
+                {idPhoto ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 10, background: 'var(--bg-primary)', borderRadius: 8 }}>
+                    <img src={idPhoto} style={{ width: 100, height: 65, objectFit: 'cover', borderRadius: 6 }} />
+                    <span style={{ fontSize: 13, color: 'var(--color-success)', fontWeight: 600, flex: 1 }}>&#9989; ID photo captured</span>
+                    <button onClick={() => setIdPhoto(null)} style={{ background: 'var(--bg-error-light)', border: '1px solid #fdd', borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: 'pointer', color: 'var(--color-red-strong)' }}>Retake</button>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', gap: 10 }}>
+                    <button onClick={() => startIdCamera('id')} style={{ flex: 1, padding: '14px 12px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+                      &#128247; Take Photo
+                    </button>
+                    <label style={{ flex: 1, padding: '14px 12px', background: 'var(--bg-surface)', color: 'var(--role-color)', border: '2px solid #1b6b5a', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer', textAlign: 'center' }}>
+                      &#128196; Upload Photo
+                      <input type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => handleIdFileUpload('id', e)} />
+                    </label>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Verify Result */}
+            {idVerifyResult && (
+              <div style={{ padding: 14, borderRadius: 8, marginBottom: 16, background: idVerifyResult.matched ? 'var(--color-success-bg)' : '#fff8e1', border: idVerifyResult.matched ? '1px solid #c8e6c9' : '1px solid #ffe0b2' }}>
+                <div style={{ fontWeight: 600, fontSize: 14, color: idVerifyResult.matched ? 'var(--color-success)' : '#e65100', marginBottom: 4 }}>
+                  {idVerifyResult.matched ? '&#9989; Identity verified!' : '&#9203; Submitted for admin review'}
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                  {idVerifyResult.matched
+                    ? 'Your selfie matches your ID. Moving to the final step...'
+                    : 'Your documents have been submitted. An admin will review and approve your identity.'}
+                </div>
+              </div>
+            )}
+
+            {/* Buttons */}
+            {!cameraStream && !idVerifyResult && (
+              <div style={{ display: 'flex', gap: 10 }}>
+                {backBtn(7)}
+                <button onClick={handleVerifyIdentity}
+                  disabled={!idSelfie || !idPhoto || idVerifying}
+                  style={{
+                    flex: 1, padding: '14px', border: 'none', borderRadius: '8px', fontSize: '16px', fontWeight: 600, cursor: idSelfie && idPhoto && !idVerifying ? 'pointer' : 'not-allowed',
+                    background: idSelfie && idPhoto && !idVerifying ? 'var(--role-color)' : 'var(--border-light)',
+                    color: 'var(--text-on-primary)',
+                  }}>
+                  {idVerifying ? '&#9203; Verifying...' : 'Verify & Continue'}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ─── Step 9: Review & Complete ─── */}
+        {step === 9 && (
           <div className="card" style={{ padding: '24px' }}>
             <div style={{ textAlign: 'center', marginBottom: '24px' }}>
               <div style={{ fontSize: '48px', marginBottom: '12px' }}>&#127881;</div>
               <h2 style={{ fontSize: '22px', color: 'var(--role-color)', margin: '0 0 8px' }}>Welcome to InPlace!</h2>
               <p style={{ color: 'var(--text-secondary)', fontSize: '15px', margin: 0 }}>
-                Your profile has been created and your documents are uploaded.
+                Your profile has been created, documents uploaded, and identity verified.
               </p>
             </div>
 
@@ -1552,6 +1758,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
                 <div><span style={{ color: 'var(--text-tertiary)' }}>Caretaking experience:</span> {form.yearsExperience || 0} years</div>
                 <div><span style={{ color: 'var(--text-tertiary)' }}>Certifications:</span> {form.certifications.filter(c => c.certType).map(c => c.certType).join(', ') || 'None'}</div>
                 <div><span style={{ color: 'var(--text-tertiary)' }}>Documents:</span> {form.documents.length} uploaded</div>
+                <div><span style={{ color: 'var(--text-tertiary)' }}>Identity:</span> {idVerifyResult?.matched ? 'Verified' : 'Pending admin review'}</div>
                 <div><span style={{ color: 'var(--text-tertiary)' }}>Travel radius:</span> {form.travelRadius} miles</div>
                 {form.comfortableWithPets !== null && (
                   <div><span style={{ color: 'var(--text-tertiary)' }}>Pets:</span> {form.comfortableWithPets ? 'Comfortable' : 'Prefer pet-free'}</div>

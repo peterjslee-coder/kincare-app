@@ -595,6 +595,18 @@ router.put("/mark-onboarding-complete", async (req, res) => {
     // Not a hard gate — admin can manually approve, or skip if not configured
   }
 
+  // Identity verification (selfie + ID) — hard gate, requires admin approval
+  const idDoc = await db.prepare(
+    `SELECT status FROM verified_documents
+     WHERE owner_id = ? AND owner_type = 'caregiver' AND category = 'identity' AND document_type != 'selfie'
+     ORDER BY created_at DESC LIMIT 1`
+  ).get(profile.id);
+  if (!idDoc) {
+    missing.push("Identity verification (selfie + ID photo)");
+  } else if (idDoc.status !== 'approved') {
+    missing.push("Identity verification (pending admin review)");
+  }
+
   if (missing.length > 0) {
     return res.status(400).json({ error: "Incomplete onboarding", missing });
   }
