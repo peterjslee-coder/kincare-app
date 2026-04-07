@@ -4983,6 +4983,30 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                       {sessionDetail.session.special_instructions}
                     </div>
                   )}
+
+                  {/* Restore button for cancelled sessions */}
+                  {sessionDetail.session?.status === 'cancelled' && (
+                    <button
+                      onClick={async () => {
+                        await handleRestoreSession(sessionDetail.session.id);
+                        // Refresh session detail after restore
+                        try {
+                          const res = await apiFetch(`/api/admin/sessions/${sessionDetail.session.id}/detail`);
+                          if (res?.ok) setSessionDetail(await res.json());
+                        } catch (e) { /* best-effort refresh */ }
+                      }}
+                      disabled={restoreLoading === sessionDetail.session?.id}
+                      style={{
+                        marginTop: 12, width: '100%', padding: '12px 18px',
+                        background: restoreLoading === sessionDetail.session?.id ? 'var(--text-muted)' : 'var(--role-color)',
+                        color: 'var(--text-on-primary)', border: 'none',
+                        borderRadius: '10px', fontSize: '14px', fontWeight: 700, cursor: 'pointer',
+                        opacity: restoreLoading === sessionDetail.session?.id ? 0.6 : 1,
+                      }}
+                    >
+                      {restoreLoading === sessionDetail.session?.id ? 'Restoring...' : '\u21A9\uFE0F Restore This Session'}
+                    </button>
+                  )}
                 </div>
 
                 {/* GPS data from visit log */}

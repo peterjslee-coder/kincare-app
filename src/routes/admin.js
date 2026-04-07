@@ -3981,7 +3981,7 @@ router.get("/sessions/no-show-cancelled", async (req, res) => {
   }
 });
 
-// ─── POST /api/admin/sessions/:id/restore — Restore a wrongly-cancelled no-show session ───
+// ─── POST /api/admin/sessions/:id/restore — Restore any cancelled session ───
 // Optional body: { checkInTime: "2026-03-31T14:00:00", setInProgress: true }
 // If checkInTime is provided, also creates/updates the visit_log with the corrected check-in time.
 router.post("/sessions/:id/restore", async (req, res) => {
@@ -3994,11 +3994,12 @@ router.post("/sessions/:id/restore", async (req, res) => {
       WHERE cs.id = ?
     `).get(req.params.id);
     if (!session) return res.status(404).json({ error: "Session not found" });
-    if (session.cancelled_by !== 'system' || !session.caregiver_no_show) {
-      return res.status(400).json({ error: "This session was not cancelled by the no-show system" });
+    if (session.status !== 'cancelled') {
+      return res.status(400).json({ error: "Session is not cancelled — current status: " + session.status });
     }
 
     const { checkInTime, setInProgress } = req.body || {};
+    const wasNoShow = session.caregiver_no_show;
     const restoreStatus = (setInProgress || checkInTime) ? 'in_progress' : 'confirmed';
 
     await db.prepare(`
@@ -4032,10 +4033,13 @@ router.post("/sessions/:id/restore", async (req, res) => {
 
     await logAdminAction(req, "restore_session", "care_session", req.params.id, {
       restoredTo: restoreStatus,
+      previousCancelledBy: session.cancelled_by,
+      previousCancelReason: session.cancel_reason,
+      wasNoShow: !!wasNoShow,
       checkInTime: checkInTime || null,
     });
 
-    console.log(`[admin] Restored no-show session ${req.params.id.slice(0, 8)} → ${restoreStatus}${checkInTime ? ` (check-in: ${checkInTime})` : ''} by ${req.user.email}`);
+    console.log(`[admin] Restored session ${req.params.id.slice(0, 8)} → ${restoreStatus} (was: cancelled by ${session.cancelled_by || 'unknown'})${checkInTime ? ` (check-in: ${checkInTime})` : ''} by ${req.user.email}`);
     res.json({ success: true, message: `Session restored to ${restoreStatus}${checkInTime ? ` with check-in at ${checkInTime}` : ''}` });
   } catch (err) {
     console.error("Restore session error:", err);

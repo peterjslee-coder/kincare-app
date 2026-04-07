@@ -63570,7 +63570,7 @@ const DocThumbnail = ({
 const AdminPanel = window.AdminPanel = ({
   currentUser
 }) => {
-  var _tabGroups$flatMap$fi, _reviewInsights$insig, _secDashboard$activeT, _secDashboard$failedL, _secDashboard$adminAc, _secDashboard$critica, _sessionDetail$recipi, _sessionDetail$recipi2, _sessionDetail$sessio, _sessionDetail$sessio2, _sessionDetail$sessio3, _sessionDetail$sessio4, _sessionDetail$family, _sessionDetail$caregi, _sessionDetail$sessio6, _sessionDetail$sessio7, _sessionDetail$sessio8, _sessionDetail$sessio9, _sessionDetail$visitL, _sessionDetail$visitL2, _sessionDetail$paymen, _onboardingModal$user, _onboardingModal$user2, _onboardingModal$user3, _onboardingModal$flag, _onboardingModal$docu, _userDrawer$sessionSt, _userDrawer$sessionSt2, _userDrawer$reviewSta, _userDrawer$reviewSta2, _userDrawer$careTeams, _userDrawer$user5, _userDrawer$tickets, _userDrawer$safetyFla, _userDrawer$allDocume, _userDrawer$allDocume2, _userDrawer$user1, _userDrawer$user11, _userDrawer$user13, _userDrawer$user14, _userDrawer$user15;
+  var _tabGroups$flatMap$fi, _reviewInsights$insig, _secDashboard$activeT, _secDashboard$failedL, _secDashboard$adminAc, _secDashboard$critica, _sessionDetail$recipi, _sessionDetail$recipi2, _sessionDetail$sessio, _sessionDetail$sessio2, _sessionDetail$sessio3, _sessionDetail$sessio4, _sessionDetail$family, _sessionDetail$caregi, _sessionDetail$sessio6, _sessionDetail$sessio7, _sessionDetail$sessio8, _sessionDetail$sessio9, _sessionDetail$sessio0, _sessionDetail$sessio1, _sessionDetail$sessio10, _sessionDetail$sessio11, _sessionDetail$sessio12, _sessionDetail$visitL, _sessionDetail$visitL2, _sessionDetail$paymen, _onboardingModal$user, _onboardingModal$user2, _onboardingModal$user3, _onboardingModal$flag, _onboardingModal$docu, _userDrawer$sessionSt, _userDrawer$sessionSt2, _userDrawer$reviewSta, _userDrawer$reviewSta2, _userDrawer$careTeams, _userDrawer$user5, _userDrawer$tickets, _userDrawer$safetyFla, _userDrawer$allDocume, _userDrawer$allDocume2, _userDrawer$user1, _userDrawer$user11, _userDrawer$user13, _userDrawer$user14, _userDrawer$user15;
   const {
     showToast
   } = useToast();
@@ -73547,7 +73547,30 @@ const AdminPanel = window.AdminPanel = ({
       background: 'var(--bg-neutral)',
       borderRadius: 6
     }
-  }, sessionDetail.session.special_instructions)), ((_sessionDetail$visitL = sessionDetail.visitLog) === null || _sessionDetail$visitL === void 0 ? void 0 : _sessionDetail$visitL.some(vl => vl.check_in_lat && vl.check_in_lng)) && /*#__PURE__*/React.createElement("div", {
+  }, sessionDetail.session.special_instructions), ((_sessionDetail$sessio0 = sessionDetail.session) === null || _sessionDetail$sessio0 === void 0 ? void 0 : _sessionDetail$sessio0.status) === 'cancelled' && /*#__PURE__*/React.createElement("button", {
+    onClick: async () => {
+      await handleRestoreSession(sessionDetail.session.id);
+      // Refresh session detail after restore
+      try {
+        const res = await apiFetch(`/api/admin/sessions/${sessionDetail.session.id}/detail`);
+        if (res !== null && res !== void 0 && res.ok) setSessionDetail(await res.json());
+      } catch (e) {/* best-effort refresh */}
+    },
+    disabled: restoreLoading === ((_sessionDetail$sessio1 = sessionDetail.session) === null || _sessionDetail$sessio1 === void 0 ? void 0 : _sessionDetail$sessio1.id),
+    style: {
+      marginTop: 12,
+      width: '100%',
+      padding: '12px 18px',
+      background: restoreLoading === ((_sessionDetail$sessio10 = sessionDetail.session) === null || _sessionDetail$sessio10 === void 0 ? void 0 : _sessionDetail$sessio10.id) ? 'var(--text-muted)' : 'var(--role-color)',
+      color: 'var(--text-on-primary)',
+      border: 'none',
+      borderRadius: '10px',
+      fontSize: '14px',
+      fontWeight: 700,
+      cursor: 'pointer',
+      opacity: restoreLoading === ((_sessionDetail$sessio11 = sessionDetail.session) === null || _sessionDetail$sessio11 === void 0 ? void 0 : _sessionDetail$sessio11.id) ? 0.6 : 1
+    }
+  }, restoreLoading === ((_sessionDetail$sessio12 = sessionDetail.session) === null || _sessionDetail$sessio12 === void 0 ? void 0 : _sessionDetail$sessio12.id) ? 'Restoring...' : '\u21A9\uFE0F Restore This Session')), ((_sessionDetail$visitL = sessionDetail.visitLog) === null || _sessionDetail$visitL === void 0 ? void 0 : _sessionDetail$visitL.some(vl => vl.check_in_lat && vl.check_in_lng)) && /*#__PURE__*/React.createElement("div", {
     style: {
       background: '#f0fdf4',
       border: '1px solid #bbf7d0',
