@@ -334,10 +334,26 @@ async function generateSessionSummary(sessionId) {
     WHERE cs.id = ?
   `).get(sessionId);
 
-  if (!session || !session.care_feedback) return null;
+  // Use summary (Care Notes from checkout form) as primary; fall back to care_feedback for legacy visits
+  const caregiverNotes = session?.summary || session?.care_feedback;
+  if (!session || !caregiverNotes) return null;
 
   const conditions = (() => { try { return JSON.parse(session.health_conditions || "[]"); } catch { return []; } })();
   const tags = (() => { try { return JSON.parse(session.condition_tags || "[]"); } catch { return []; } })();
+
+  // Also pull recent care notes for this recipient to give AI context (but keep them separate from this visit's notes)
+  let recentCareNotes = [];
+  try {
+    recentCareNotes = await db.prepare(`
+      SELECT content, note_type, created_at FROM recipient_notes
+      WHERE care_recipient_id = ? AND id != ?
+      ORDER BY created_at DESC LIMIT 5
+    `).all(session.care_recipient_id, sessionId);
+  } catch { /* non-critical */ }
+
+  const recentContext = recentCareNotes.length > 0
+    ? `\n\nRECENT CARE HISTORY (for context, do NOT just repeat these — use them to notice trends or changes):\n${recentCareNotes.map(n => `- ${n.created_at}: ${n.content?.substring(0, 150)}`).join("\n")}`
+    : "";
 
   const prompt = `You are iPAi, writing a warm post-session summary for a family about their loved one's care visit.
 
@@ -351,12 +367,15 @@ VISIT DETAILS:
 - Arrival mood: ${parseMoodDisplay(session.arrival_mood) || "not recorded"}
 - Departure mood: ${parseMoodDisplay(session.departure_mood) || "not recorded"}
 - Condition tags: ${tags.join(", ") || "none"}
-- Caregiver notes: "${session.care_feedback}"
-${session.service_feedback ? `- Service notes: "${session.service_feedback}"` : ""}
+- Caregiver notes: "${caregiverNotes}"
+${session.service_feedback ? `- Service notes: "${session.service_feedback}"` : ""}${recentContext}
 
-Write a 3-4 sentence warm summary for the family. Be specific about what happened — reference actual observations. If the mood changed, note it. If there are concerning observations, flag them gently with a suggestion. End on a positive or constructive note. Keep it conversational, like a thoughtful caregiver texting the family.
+INSTRUCTIONS:
+Write a 3-4 sentence warm summary for the family about THIS visit. Be specific about what happened — reference actual observations from the caregiver's notes above. Do NOT just list or rephrase the care notes — synthesize them into a natural narrative. If the mood changed, note it. If there are concerning observations, flag them gently with a suggestion. End on a positive or constructive note. Keep it conversational, like a thoughtful caregiver texting the family.
 
-Then provide 1-2 brief suggestions if the data warrants it (e.g., scheduling tips, things to watch for).
+If recent care history is provided, use it only to note meaningful changes or trends (e.g. "mood has been improving over the last few visits"). Do NOT summarize past visits.
+
+Then provide 1-2 brief actionable suggestions if warranted (e.g., scheduling tips, things to watch for).
 
 Return JSON:
 {
@@ -536,7 +555,7 @@ async function generateCaregiverCoaching(sessionId) {
       cr.medications, cr.age, cr.mobility,
       u.first_name AS caregiver_name,
       vl.arrival_mood, vl.departure_mood, vl.condition_tags,
-      vl.care_feedback, vl.service_feedback
+      vl.care_feedback, vl.service_feedback, vl.summary
     FROM care_sessions cs
     JOIN care_recipients cr ON cs.care_recipient_id = cr.id
     JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
@@ -545,7 +564,9 @@ async function generateCaregiverCoaching(sessionId) {
     WHERE cs.id = ?
   `).get(sessionId);
 
-  if (!session || !session.care_feedback) return null;
+  // Use summary (Care Notes from checkout form) as primary; fall back to care_feedback for legacy visits
+  const coachingNotes = session?.summary || session?.care_feedback;
+  if (!session || !coachingNotes) return null;
 
   // Get care notes from family for context
   const familyNotes = await db.prepare(`
@@ -556,7 +577,7 @@ async function generateCaregiverCoaching(sessionId) {
 
   // Get past visit data for trend context
   const pastVisits = await db.prepare(`
-    SELECT vl.departure_mood, vl.condition_tags, vl.care_feedback,
+    SELECT vl.departure_mood, vl.condition_tags, vl.care_feedback, vl.summary,
       cs.scheduled_date
     FROM visit_logs vl
     JOIN care_sessions cs ON vl.session_id = cs.id
@@ -571,7 +592,7 @@ async function generateCaregiverCoaching(sessionId) {
 
   const pastContext = pastVisits.map(v => {
     const t = (() => { try { return JSON.parse(v.condition_tags || "[]"); } catch { return []; } })();
-    return `${v.scheduled_date}: mood=${parseMoodDisplay(v.departure_mood) || "?"}, tags=[${t.join(",")}], notes="${(v.care_feedback || "").substring(0, 100)}"`;
+    return `${v.scheduled_date}: mood=${parseMoodDisplay(v.departure_mood) || "?"}, tags=[${t.join(",")}], notes="${(v.summary || v.care_feedback || "").substring(0, 100)}"`;
   }).join("\n");
 
   const familyContext = familyNotes.map(n => `- "${(n.content || "").substring(0, 150)}"`).join("\n");
@@ -588,7 +609,7 @@ TODAY'S SESSION:
 - Arrival mood: ${parseMoodDisplay(session.arrival_mood) || "not recorded"}
 - Departure mood: ${parseMoodDisplay(session.departure_mood) || "not recorded"}
 - Condition tags: ${tags.join(", ") || "none"}
-- ${session.caregiver_name}'s notes: "${session.care_feedback || ""}"
+- ${session.caregiver_name}'s notes: "${coachingNotes}"
 
 PAST SESSIONS WITH ${session.recipient_name}:
 ${pastContext || "This was the first session"}

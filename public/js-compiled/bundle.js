@@ -78836,13 +78836,46 @@ const App = () => {
       if (token) headers['Authorization'] = `Bearer ${token}`;
       const csrf = typeof getCsrfToken === 'function' ? getCsrfToken() : null;
       if (csrf) headers['X-CSRF-Token'] = csrf;
-      const res = await fetch('/api/admin/impersonate/' + userId, {
+
+      // Step 1: Get passkey challenge
+      const challengeRes = await fetch('/api/admin/impersonate/' + userId + '/challenge', {
         method: 'POST',
         headers,
         credentials: 'same-origin'
       });
+      if (!(challengeRes !== null && challengeRes !== void 0 && challengeRes.ok)) {
+        const err = await challengeRes.json().catch(() => ({}));
+        alert(err.error || 'Failed to start passkey challenge');
+        return;
+      }
+      const challengeData = await challengeRes.json();
+      const challengeKey = challengeData._challengeKey;
+      let impersonateBody = {
+        _challengeKey: challengeKey
+      };
+      if (!challengeData.noPasskey) {
+        // Step 2: Passkey verification
+        const authResp = await window.SimpleWebAuthnBrowser.startAuthentication({
+          optionsJSON: challengeData
+        });
+        impersonateBody = {
+          ...authResp,
+          _challengeKey: challengeKey
+        };
+      }
+
+      // Step 3: Impersonate with passkey proof
+      const res = await fetch('/api/admin/impersonate/' + userId, {
+        method: 'POST',
+        headers: {
+          ...headers,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(impersonateBody),
+        credentials: 'same-origin'
+      });
       if (!(res !== null && res !== void 0 && res.ok)) {
-        const err = await res.json();
+        const err = await res.json().catch(() => ({}));
         alert(err.error || 'Failed to impersonate');
         return;
       }
@@ -78903,14 +78936,31 @@ const App = () => {
   window.__startImpersonation = startImpersonation;
 
   // ─── Admin Impersonation: stop and return to admin view ───
-  const stopImpersonation = () => {
+  const stopImpersonation = async () => {
+    // Clear all impersonation state
     window.setImpersonationToken(null);
     sessionStorage.removeItem('inplace_impersonation_user');
     const backupToken = sessionStorage.getItem('inplace_admin_token_backup');
     sessionStorage.removeItem('inplace_admin_token_backup');
     setImpersonating(null);
-    // Restore admin's real token and reload
-    if (backupToken) window.setAuthToken(backupToken);
+    // Reset active role back to family (admin's default)
+    window.setActiveRole('family');
+    setActiveRoleState('family');
+    // Restore admin's auth cookie by calling refresh (cookie-based, ignores bearer token)
+    try {
+      const csrf = typeof getCsrfToken === 'function' ? getCsrfToken() : null;
+      const refreshRes = await fetch('/api/auth/refresh', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: csrf ? {
+          'X-CSRF-Token': csrf
+        } : {}
+      });
+      if (refreshRes.ok) {
+        const data = await refreshRes.json();
+        if (data.token) window.setAuthToken(data.token);
+      }
+    } catch (e) {/* if refresh fails, reload will use whatever cookie is left */}
     window.location.reload();
   };
 
