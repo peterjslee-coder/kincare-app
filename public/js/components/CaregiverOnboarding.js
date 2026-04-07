@@ -992,7 +992,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
 
             {disclosureCheck('acceptBackgroundCheck',
               'Background Check Required',
-              'InPlace requires a background check through Checkr for all caregivers. You are responsible for the one-time cost ($35). This includes criminal history, driving record, and identity verification.'
+              'InPlace requires a background check through Checkr for all caregivers. You are responsible for the one-time cost ($30). This includes criminal history, driving record, and identity verification.'
             )}
 
             {disclosureCheck('acceptStripePayments',
@@ -1279,7 +1279,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
                 <span style={{ fontSize: '13px', color: 'var(--text-primary)', lineHeight: '1.5' }}>
                   I authorize InPlace to conduct a background check, including criminal history, driving record,
                   and identity verification through Checkr. I understand this is required
-                  to provide care through InPlace and the $35 fee will be refunded after 10 completed sessions.
+                  to provide care through InPlace and the $30 fee will be refunded after 10 completed sessions.
                 </span>
               </label>
               {errors.backgroundCheckConsent && <div style={errorStyle}>{errors.backgroundCheckConsent}</div>}
