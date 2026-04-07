@@ -1455,24 +1455,15 @@ async function processOverduePayments(pushFn) {
         const pmType = chosenPM.type === 'us_bank_account' ? 'ACH bank' : 'card';
         console.log(`[auto-pay] Session ${s.id}: using ${pmType} (${chosenPM.type}) ending ${chosenPM[chosenPM.type]?.last4 || '????'}`);
 
-        // Calculate cost — include pending tip if family set one during grace period
+        // Calculate cost — use the estimated_cost already computed at checkout (single source of truth)
         // CORE PRINCIPLE: Caregiver gets EXACTLY their pay + tip. Fees go on top, charged to family.
+        // estimated_cost includes pro-rated surcharge and is the amount the family was shown.
         const tipCents = Math.max(0, parseInt(s.pending_tip_cents) || 0);
-        const rawDuration = s.duration_hours || 2;
-        const roundedDuration = Math.ceil(rawDuration * 4) / 4; // 15-min increments
-        const effectiveRate = (s.proposed_rate && parseFloat(s.proposed_rate) > 0)
-          ? parseFloat(s.proposed_rate) : s.agreed_rate || null;
-        const caregiverPayCents = effectiveRate
-          ? Math.round(effectiveRate * roundedDuration * 100)
-          : Math.round((s.estimated_cost || 0) * 100); // fallback to estimated_cost for tiered rates
-        const surchargeCents = Math.round((s.short_notice_surcharge || 0) * 100);
-        const caregiverTotalCents = caregiverPayCents + surchargeCents + tipCents;
+        const caregiverPayCents = Math.round((s.estimated_cost || 0) * 100);
+        const caregiverTotalCents = caregiverPayCents + tipCents;
 
-        // Platform fee: 20% of caregiver pay + tip (tips are compensation), plus surcharge share
-        let platformFeeCents = Math.round((caregiverPayCents + tipCents) * PLATFORM_FEE_PERCENT / 100);
-        if (surchargeCents > 0) {
-          platformFeeCents += Math.round(surchargeCents * SURCHARGE_PLATFORM_SHARE);
-        }
+        // Platform fee: 20% of caregiver pay + tip (tips are compensation)
+        const platformFeeCents = Math.round((caregiverPayCents + tipCents) * PLATFORM_FEE_PERCENT / 100);
 
         // Family pays caregiver + platform fee. Stripe's cut comes out of InPlace's 20%.
         const totalCents = caregiverTotalCents + platformFeeCents;
@@ -1552,7 +1543,7 @@ async function processOverduePayments(pushFn) {
           if (pushFn && s.family_user_id) {
             pushFn(s.family_user_id, {
               title: 'Payment action needed',
-              body: `Your card requires verification for the $${((s.estimated_cost || 0)).toFixed(2)} care session payment. Please open the app to complete payment.`,
+              body: `Your card requires verification for the $${(parseFloat(s.estimated_cost || 0) * 1.20).toFixed(2)} care session payment. Please open the app to complete payment.`,
               data: { type: 'payment_auth_required', sessionId: s.id, page: 'home' },
             }, 'payment_auth_required').catch(() => {});
           }

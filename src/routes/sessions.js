@@ -1564,6 +1564,10 @@ router.post("/:id/check-out", async (req, res) => {
       }
     } else {
       console.log(`[checkout] TEST MODE — skipping payment capture for session ${req.params.id.slice(0,8)}`);
+      // Waive payment and review for test sessions so they don't trigger lockout banners
+      await db.prepare(`
+        UPDATE care_sessions SET payment_status = 'waived', review_required = 0, payment_due_at = NULL WHERE id = ?
+      `).run(req.params.id);
     }
 
     // Calculate how many minutes early (for storage and notification)

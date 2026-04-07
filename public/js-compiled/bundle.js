@@ -8156,14 +8156,18 @@ const Dashboard = window.Dashboard = ({
     className: "greeting"
   }, isNewUser ? `Welcome, ${firstName}!` : `Welcome back, ${firstName}!`)), (() => {
     const overdue = pendingReviews.filter(pr => {
-      if (pr.payment_status === 'paid' || pr.caregiver_no_show) return false;
+      if (pr.payment_status === 'paid' || pr.payment_status === 'processing' || pr.caregiver_no_show) return false;
       const cost = parseFloat(pr.estimated_cost || 0);
       if (cost <= 0) return false;
       const dueAt = pr.payment_due_at ? new Date(pr.payment_due_at) : null;
       return dueAt && dueAt.getTime() < Date.now();
     });
     if (overdue.length === 0) return null;
-    const totalOwed = overdue.reduce((sum, pr) => sum + parseFloat(pr.estimated_cost || 0), 0);
+    // estimated_cost is caregiver pay; family also pays the 20% platform fee
+    const totalOwed = overdue.reduce((sum, pr) => {
+      const base = parseFloat(pr.estimated_cost || 0);
+      return sum + base + Math.round(base * 0.20 * 100) / 100;
+    }, 0);
     return /*#__PURE__*/React.createElement("div", {
       style: {
         background: '#FDE8E8',
@@ -8242,7 +8246,7 @@ const Dashboard = window.Dashboard = ({
         fontSize: 12,
         cursor: 'pointer'
       }
-    }, "Pay $", parseFloat(pr.estimated_cost).toFixed(2)))));
+    }, "Pay $", (parseFloat(pr.estimated_cost) * 1.20).toFixed(2)))));
   })(), pendingInvites.length > 0 && pendingInvites.map(invite => /*#__PURE__*/React.createElement("div", {
     key: invite.id,
     style: {
