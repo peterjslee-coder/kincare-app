@@ -3267,81 +3267,91 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                 onClick: () => setCheckInStep(firstVisitNeeded ? 'first-visit' : 'briefing'),
                 style: { background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: 'var(--text-muted)', padding: '8px 0', marginBottom: 8 }
               }, '\u2190 Back to briefing'),
-
-              // Big final check-in button
-              React.createElement('button', {
-                onClick: async () => {
-                  setCheckSubmitting(true);
-                  setIncompleteCheckIn(null); // Clear incomplete state on successful attempt
-                  const checkInData = {
-                    arrivalMood: checkInMood.length > 0 ? checkInMood : null,
-                    checkInLatitude: checkInLocation?.lat || null,
-                    checkInLongitude: checkInLocation?.lng || null,
-                    briefingAcknowledged: true,
-                  };
-                  try {
-                    const res = await apiFetch('/api/sessions/' + checkInSession.id + '/check-in', {
-                      method: 'POST',
-                      body: JSON.stringify(checkInData),
-                    });
-                    if (res?.ok) {
-                      await res.json();
-                      showToast('Checked in! Session started.', 'success');
-                      setCheckInSession(null);
-                      setIncompleteCheckIn(null);
-                      if (incompleteTimerRef.current) { clearTimeout(incompleteTimerRef.current); incompleteTimerRef.current = null; }
-                      try {
-                        const refreshRes = await apiFetch('/api/dashboard');
-                        if (refreshRes?.ok) setData(await refreshRes.json());
-                      } catch (e) { /* refresh is best-effort */ }
-                    } else if (res?.status === 503 || !navigator.onLine) {
-                      if (window.OfflineQueue) {
-                        await window.OfflineQueue.queueCheckIn(checkInSession.id, checkInData);
-                        showToast('Saved offline — will sync when you reconnect', 'success');
-                        setCheckInSession(null);
-                        setIncompleteCheckIn(null);
-                      } else {
-                        showToast('You\'re offline — please try again when connected', 'error');
-                      }
-                    } else if (res?.status === 402) {
-                      const err = await res?.json().catch(() => null);
-                      showToast(err?.code === 'FAMILY_UNPAID'
-                        ? 'Check-in blocked — the family has an unpaid balance. They\'ve been notified.'
-                        : (err?.message || 'Check-in blocked — payment issue'), 'error');
-                      setCheckInSession(null);
-                    } else {
-                      const err = await res?.json().catch(() => null);
-                      showToast(err?.message || err?.error || 'Check-in failed', 'error');
-                    }
-                  } catch (e) {
-                    if (window.OfflineQueue) {
-                      try {
-                        await window.OfflineQueue.queueCheckIn(checkInSession.id, checkInData);
-                        showToast('Saved offline — will sync when you reconnect', 'success');
-                        setCheckInSession(null);
-                        setIncompleteCheckIn(null);
-                      } catch { showToast('Check-in failed — could not save offline', 'error'); }
-                    } else {
-                      showToast('Check-in failed — no connection', 'error');
-                    }
-                  }
-                  setCheckSubmitting(false);
-                },
-                disabled: checkSubmitting,
-                style: {
-                  width: '100%', padding: 22, border: 'none', borderRadius: 16,
-                  fontSize: 20, fontWeight: 800, cursor: 'pointer', letterSpacing: 0.5,
-                  background: 'linear-gradient(135deg, var(--color-success), #16a34a)',
-                  color: '#fff', boxShadow: '0 6px 24px rgba(34, 197, 94, 0.4)',
-                  transition: 'all 0.15s',
-                  opacity: checkSubmitting ? 0.6 : 1,
-                }
-              }, checkSubmitting ? 'Checking in...' : "I'm Here \u2713"),
-              React.createElement('p', { style: { textAlign: 'center', fontSize: 11, color: 'var(--text-muted)', marginTop: 8 } },
-                'This will start your session timer')
             )}
 
           </div>{/* end step content area */}
+
+          {/* ── PINNED CHECK-IN BUTTON (always visible at bottom) ── */}
+          {checkInStep === 'checkin' && React.createElement('div', {
+            style: {
+              padding: '16px 16px', paddingBottom: 'max(16px, env(safe-area-inset-bottom))',
+              background: 'var(--bg-surface)',
+              borderTop: '1px solid var(--border-light)',
+              maxWidth: 520, width: '100%', margin: '0 auto',
+              boxSizing: 'border-box',
+            }
+          },
+            React.createElement('button', {
+              onClick: async () => {
+                setCheckSubmitting(true);
+                setIncompleteCheckIn(null);
+                const checkInData = {
+                  arrivalMood: checkInMood.length > 0 ? checkInMood : null,
+                  checkInLatitude: checkInLocation?.lat || null,
+                  checkInLongitude: checkInLocation?.lng || null,
+                  briefingAcknowledged: true,
+                };
+                try {
+                  const res = await apiFetch('/api/sessions/' + checkInSession.id + '/check-in', {
+                    method: 'POST',
+                    body: JSON.stringify(checkInData),
+                  });
+                  if (res?.ok) {
+                    await res.json();
+                    showToast('Checked in! Session started.', 'success');
+                    setCheckInSession(null);
+                    setIncompleteCheckIn(null);
+                    if (incompleteTimerRef.current) { clearTimeout(incompleteTimerRef.current); incompleteTimerRef.current = null; }
+                    try {
+                      const refreshRes = await apiFetch('/api/dashboard');
+                      if (refreshRes?.ok) setData(await refreshRes.json());
+                    } catch (e) { /* refresh is best-effort */ }
+                  } else if (res?.status === 503 || !navigator.onLine) {
+                    if (window.OfflineQueue) {
+                      await window.OfflineQueue.queueCheckIn(checkInSession.id, checkInData);
+                      showToast('Saved offline — will sync when you reconnect', 'success');
+                      setCheckInSession(null);
+                      setIncompleteCheckIn(null);
+                    } else {
+                      showToast('You\'re offline — please try again when connected', 'error');
+                    }
+                  } else if (res?.status === 402) {
+                    const err = await res?.json().catch(() => null);
+                    showToast(err?.code === 'FAMILY_UNPAID'
+                      ? 'Check-in blocked — the family has an unpaid balance. They\'ve been notified.'
+                      : (err?.message || 'Check-in blocked — payment issue'), 'error');
+                    setCheckInSession(null);
+                  } else {
+                    const err = await res?.json().catch(() => null);
+                    showToast(err?.message || err?.error || 'Check-in failed', 'error');
+                  }
+                } catch (e) {
+                  if (window.OfflineQueue) {
+                    try {
+                      await window.OfflineQueue.queueCheckIn(checkInSession.id, checkInData);
+                      showToast('Saved offline — will sync when you reconnect', 'success');
+                      setCheckInSession(null);
+                      setIncompleteCheckIn(null);
+                    } catch { showToast('Check-in failed — could not save offline', 'error'); }
+                  } else {
+                    showToast('Check-in failed — no connection', 'error');
+                  }
+                }
+                setCheckSubmitting(false);
+              },
+              disabled: checkSubmitting,
+              style: {
+                width: '100%', padding: 22, border: 'none', borderRadius: 16,
+                fontSize: 20, fontWeight: 800, cursor: 'pointer', letterSpacing: 0.5,
+                background: 'linear-gradient(135deg, var(--color-success), #16a34a)',
+                color: '#fff', boxShadow: '0 6px 24px rgba(34, 197, 94, 0.4)',
+                transition: 'all 0.15s',
+                opacity: checkSubmitting ? 0.6 : 1,
+              }
+            }, checkSubmitting ? 'Checking in...' : "I'm Here \u2713"),
+            React.createElement('p', { style: { textAlign: 'center', fontSize: 11, color: 'var(--text-muted)', marginTop: 8 } },
+              'This will start your session timer')
+          )}
 
           {/* ── EXIT WARNING OVERLAY ── */}
           {exitWarningOpen && React.createElement('div', {

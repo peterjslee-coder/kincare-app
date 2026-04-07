@@ -48197,12 +48197,21 @@ const CaretakerHub = window.CaretakerHub = ({
       padding: '8px 0',
       marginBottom: 8
     }
-  }, '\u2190 Back to briefing'),
-  // Big final check-in button
-  React.createElement('button', {
+  }, '\u2190 Back to briefing'))), checkInStep === 'checkin' && React.createElement('div', {
+    style: {
+      padding: '16px 16px',
+      paddingBottom: 'max(16px, env(safe-area-inset-bottom))',
+      background: 'var(--bg-surface)',
+      borderTop: '1px solid var(--border-light)',
+      maxWidth: 520,
+      width: '100%',
+      margin: '0 auto',
+      boxSizing: 'border-box'
+    }
+  }, React.createElement('button', {
     onClick: async () => {
       setCheckSubmitting(true);
-      setIncompleteCheckIn(null); // Clear incomplete state on successful attempt
+      setIncompleteCheckIn(null);
       const checkInData = {
         arrivalMood: checkInMood.length > 0 ? checkInMood : null,
         checkInLatitude: (checkInLocation === null || checkInLocation === void 0 ? void 0 : checkInLocation.lat) || null,
@@ -48283,7 +48292,7 @@ const CaretakerHub = window.CaretakerHub = ({
       color: 'var(--text-muted)',
       marginTop: 8
     }
-  }, 'This will start your session timer'))), exitWarningOpen && React.createElement('div', {
+  }, 'This will start your session timer')), exitWarningOpen && React.createElement('div', {
     style: {
       position: 'absolute',
       inset: 0,
