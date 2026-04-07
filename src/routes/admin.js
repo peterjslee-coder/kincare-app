@@ -4047,6 +4047,46 @@ router.post("/sessions/:id/restore", async (req, res) => {
   }
 });
 
+// ─── POST /api/admin/sessions/:id/force-check-in ───
+// Admin can force-check-in any confirmed session (bypasses caregiver-only gate)
+router.post("/sessions/:id/force-check-in", async (req, res) => {
+  try {
+    const db = await getDb();
+    const session = await db.prepare(`
+      SELECT cs.*, cp.id AS caregiver_profile_id
+      FROM care_sessions cs
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      WHERE cs.id = ?
+    `).get(req.params.id);
+    if (!session) return res.status(404).json({ error: "Session not found" });
+    if (session.status === 'in_progress') return res.json({ success: true, message: "Already checked in" });
+    if (session.status !== 'confirmed') {
+      return res.status(400).json({ error: "Cannot check in — session status is " + session.status });
+    }
+
+    const now = new Date();
+    // Set session to in_progress
+    await db.prepare(`
+      UPDATE care_sessions SET status = 'in_progress', updated_at = NOW() WHERE id = ?
+    `).run(req.params.id);
+
+    // Create visit_log
+    const { v4: uuidv4 } = require("uuid");
+    await db.prepare(`
+      INSERT INTO visit_logs (id, session_id, caregiver_id, check_in_time, created_at)
+      VALUES (?, ?, ?, ?, NOW())
+      ON CONFLICT (session_id) DO UPDATE SET check_in_time = EXCLUDED.check_in_time, updated_at = NOW()
+    `).run(uuidv4(), req.params.id, session.caregiver_profile_id, now.toISOString());
+
+    await logAdminAction(req, "force_check_in", "care_session", req.params.id, { checkInTime: now.toISOString() });
+    console.log(`[admin] Force check-in session ${req.params.id.slice(0, 8)} by ${req.user.email}`);
+    res.json({ success: true, message: "Session checked in" });
+  } catch (err) {
+    console.error("Force check-in error:", err);
+    res.status(500).json({ error: "Failed to force check-in" });
+  }
+});
+
 // ─── GET /api/admin/sessions/:id/detail ───
 // Full session lifecycle drill-down for admin audit view
 // Returns: booking info, confirmation, check-in (GPS, mood), visit log,
