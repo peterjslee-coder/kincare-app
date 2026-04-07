@@ -5111,4 +5111,42 @@ router.get("/backup", authenticate, requireAdmin, async (req, res) => {
   }
 });
 
+// ─── POST /api/admin/backfill-assignments ───
+// One-time backfill: create caregiver_assignments for any caregiver who has
+// confirmed/completed sessions with a care recipient but no assignment record.
+router.post("/backfill-assignments", async (req, res) => {
+  try {
+    const db = await getDb();
+    // Find caregiver+recipient+family combos with sessions but no assignment
+    const missing = await db.prepare(`
+      SELECT DISTINCT cs.caregiver_id AS caregiver_profile_id,
+        cs.care_recipient_id, cs.family_user_id
+      FROM care_sessions cs
+      WHERE cs.caregiver_id IS NOT NULL
+        AND cs.status IN ('confirmed', 'in_progress', 'completed')
+        AND NOT EXISTS (
+          SELECT 1 FROM caregiver_assignments ca
+          WHERE ca.caregiver_profile_id = cs.caregiver_id
+            AND ca.care_recipient_id = cs.care_recipient_id
+            AND ca.family_user_id = cs.family_user_id
+        )
+    `).all();
+
+    let created = 0;
+    for (const row of missing) {
+      await db.prepare(`
+        INSERT INTO caregiver_assignments (id, care_recipient_id, family_user_id, caregiver_profile_id, is_active, is_favorite)
+        VALUES (?, ?, ?, ?, 1, 0)
+      `).run(uuid(), row.care_recipient_id, row.family_user_id, row.caregiver_profile_id);
+      created++;
+      console.log(`[backfill] Created assignment: caregiver ${row.caregiver_profile_id.slice(0,8)} → recipient ${row.care_recipient_id.slice(0,8)} (family ${row.family_user_id.slice(0,8)})`);
+    }
+
+    res.json({ success: true, created, missing: missing.length });
+  } catch (err) {
+    console.error("Backfill assignments error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

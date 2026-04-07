@@ -12,6 +12,36 @@ const { MODEL_HAIKU } = require("../utils/aiModels");
 const router = express.Router();
 router.use(authenticate);
 
+// ─── Auto-assignment: ensure caregiver ↔ care recipient link exists ───
+// When a session is confirmed, the caregiver should appear in the family's
+// "Request Care" list for that care recipient. This was previously only
+// created via POST /api/assignments, leaving caregivers who were matched
+// through Kindred or session claiming invisible in the care request modal.
+async function ensureAssignment(db, { careRecipientId, familyUserId, caregiverProfileId }) {
+  if (!careRecipientId || !familyUserId || !caregiverProfileId) return;
+  const existing = await db.prepare(`
+    SELECT id, is_active FROM caregiver_assignments
+    WHERE care_recipient_id = ? AND family_user_id = ? AND caregiver_profile_id = ?
+  `).get(careRecipientId, familyUserId, caregiverProfileId);
+
+  if (existing && existing.is_active) return; // already active
+
+  if (existing && !existing.is_active) {
+    // Reactivate a previously deactivated assignment
+    await db.prepare("UPDATE caregiver_assignments SET is_active = 1 WHERE id = ?").run(existing.id);
+    console.log(`[ensureAssignment] Reactivated assignment ${existing.id} for caregiver ${caregiverProfileId.slice(0,8)}`);
+    return;
+  }
+
+  // Create new assignment
+  const id = uuid();
+  await db.prepare(`
+    INSERT INTO caregiver_assignments (id, care_recipient_id, family_user_id, caregiver_profile_id, is_active, is_favorite)
+    VALUES (?, ?, ?, ?, 1, 0)
+  `).run(id, careRecipientId, familyUserId, caregiverProfileId);
+  console.log(`[ensureAssignment] Created assignment ${id.slice(0,8)} for caregiver ${caregiverProfileId.slice(0,8)} → recipient ${careRecipientId.slice(0,8)}`);
+}
+
 // ─── Payment gates: check for unpaid sessions and saved payment method ───
 async function checkPaymentStanding(db, familyUserId) {
   // Only block families whose auto-pay has actually FAILED (card declined, auth required, etc.)
@@ -388,6 +418,15 @@ router.put("/:id/claim", async (req, res) => {
       updated_at = NOW()
     WHERE id = ?
   `).run(profile.id, interviewStatus, req.params.id);
+
+  // Auto-create assignment so caregiver appears in future "Request Care" lists
+  try {
+    await ensureAssignment(db, {
+      careRecipientId: session.care_recipient_id,
+      familyUserId: session.family_user_id,
+      caregiverProfileId: profile.id,
+    });
+  } catch (assignErr) { console.error('[claim] ensureAssignment error:', assignErr.message); }
 
   // If interview is required, auto-create the interview record + chat connection
   if (session.interview_required) {
@@ -971,6 +1010,15 @@ router.post("/:id/match", requireRole("family", "admin"), async (req, res) => {
     SET caregiver_id = ?, status = 'confirmed', updated_at = NOW()
     WHERE id = ?
   `).run(matched.id, req.params.id);
+
+  // Auto-create assignment so caregiver appears in future "Request Care" lists
+  try {
+    await ensureAssignment(db, {
+      careRecipientId: session.care_recipient_id,
+      familyUserId: req.user.id,
+      caregiverProfileId: matched.id,
+    });
+  } catch (assignErr) { console.error('[match] ensureAssignment error:', assignErr.message); }
 
   // Activity feed
   await db.prepare(`
@@ -2750,6 +2798,15 @@ router.put("/:id/proposals/:proposalId/accept", async (req, res) => {
     // Mark this proposal as accepted, decline any other pending proposals for same session
     await db.prepare("UPDATE time_proposals SET status = 'accepted', responded_at = NOW() WHERE id = ?").run(req.params.proposalId);
     await db.prepare("UPDATE time_proposals SET status = 'declined', responded_at = NOW() WHERE session_id = ? AND id != ? AND status = 'pending'").run(req.params.id, req.params.proposalId);
+
+    // Auto-create assignment so caregiver appears in future "Request Care" lists
+    try {
+      await ensureAssignment(db, {
+        careRecipientId: proposal.care_recipient_id,
+        familyUserId: proposal.family_user_id,
+        caregiverProfileId: proposal.caregiver_profile_id,
+      });
+    } catch (assignErr) { console.error('[proposal-accept] ensureAssignment error:', assignErr.message); }
 
     // Notify the caregiver
     const emitToUser = req.app.get("emitToUser");
