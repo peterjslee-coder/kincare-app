@@ -1354,12 +1354,16 @@ async function initializeDatabase() {
     }
   } catch (e) { console.error("  e2e test session error:", e.message); }
 
-  // ─── v1.57.47 — Mark Cary Taker (test caregiver) as demo so her sessions are excluded from financials ───
+  // ─── v1.57.47 — (REVERTED in v1.57.72) Cary is a real caregiver, not demo ───
+  // Original migration marked Cary as is_demo=1 to exclude from financials,
+  // but that also hid her from caregiver search/availability. Reverted below.
+
+  // ─── v1.57.72 — Restore Cary Taker as normal user (undo is_demo flag) ───
   try {
     const updated = await db.prepare(
-      "UPDATE users SET is_demo = 1 WHERE email = 'peter@yourinplace.com' AND COALESCE(is_demo, 0) = 0"
+      "UPDATE users SET is_demo = 0 WHERE email = 'peter@yourinplace.com' AND COALESCE(is_demo, 0) = 1"
     ).run();
-    if (updated.changes > 0) console.log("  ✅ Marked Cary Taker (peter@yourinplace.com) as is_demo=1");
+    if (updated.changes > 0) console.log("  ✅ Restored Cary Taker (peter@yourinplace.com) — is_demo=0, visible again");
   } catch (e) { /* already done */ }
 
   // ─── v1.57.49 — Clear phantom unread from old Kindred self-echo ───
