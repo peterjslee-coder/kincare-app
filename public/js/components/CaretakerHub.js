@@ -3054,25 +3054,36 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                           )
                         : null,
 
-                      // ── Recent care notes (raw, no AI) ──
-                      (bd?.recentNotes && bd.recentNotes.length > 0)
+                      // ── iPAi synthesis (or fallback to raw notes) ──
+                      bd?.notesSynthesis
                         ? React.createElement('div', { style: {
-                            padding: 12, background: '#f8f4ff', borderRadius: 8, border: '1px solid #e8daff', marginBottom: 14,
+                            padding: 14, background: 'linear-gradient(135deg, #f0f7f5, #e8f4f0)', borderRadius: 10,
+                            border: '1px solid #b2dfdb', marginBottom: 14,
                           }},
-                            React.createElement('div', { style: { fontSize: 12, fontWeight: 600, color: '#6b21a8', marginBottom: 8 } }, 'Recent Care Notes'),
-                            bd.recentNotes.map((n, i) =>
-                              React.createElement('div', { key: i, style: {
-                                fontSize: 12, color: 'var(--text-primary)', lineHeight: 1.5,
-                                padding: '8px 0', borderBottom: i < bd.recentNotes.length - 1 ? '1px solid #f0e8ff' : 'none',
-                              }},
-                                React.createElement('div', { style: { fontSize: 10, color: 'var(--text-muted)', marginBottom: 3, fontWeight: 600 } },
-                                  n.createdAt ? new Date(n.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''
-                                ),
-                                n.content
+                            React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 } },
+                              React.createElement('span', { style: { fontSize: 14 } }, '\u{1F9E0}'),
+                              React.createElement('span', { style: { fontSize: 12, fontWeight: 700, color: 'var(--role-color)', textTransform: 'uppercase', letterSpacing: 0.5 } }, 'What to know today')
+                            ),
+                            React.createElement('div', { style: { fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.6 } }, bd.notesSynthesis)
+                          )
+                        : (bd?.recentNotes && bd.recentNotes.length > 0)
+                          ? React.createElement('div', { style: {
+                              padding: 12, background: '#f8f4ff', borderRadius: 8, border: '1px solid #e8daff', marginBottom: 14,
+                            }},
+                              React.createElement('div', { style: { fontSize: 12, fontWeight: 600, color: '#6b21a8', marginBottom: 8 } }, 'Recent Care Notes'),
+                              bd.recentNotes.map((n, i) =>
+                                React.createElement('div', { key: i, style: {
+                                  fontSize: 12, color: 'var(--text-primary)', lineHeight: 1.5,
+                                  padding: '8px 0', borderBottom: i < bd.recentNotes.length - 1 ? '1px solid #f0e8ff' : 'none',
+                                }},
+                                  React.createElement('div', { style: { fontSize: 10, color: 'var(--text-muted)', marginBottom: 3, fontWeight: 600 } },
+                                    n.createdAt ? new Date(n.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''
+                                  ),
+                                  n.content
+                                )
                               )
                             )
-                          )
-                        : null,
+                          : null,
 
                     )
               );

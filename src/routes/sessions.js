@@ -1212,20 +1212,17 @@ router.get("/:id/care-briefing", async (req, res) => {
     const visitCount = visitHistory?.visit_count || 0;
     const isExperienced = visitCount >= 3;
 
-    // Recent care notes — only family/team-authored notes (general, health, etc.)
-    // Exclude visit_summary: those are auto-generated from caregiver checkout summaries
-    // and shouldn't appear in the pre-check-in briefing.
+    // Gather ALL recent notes (including visit summaries) — iPAi reads everything
     const recentNotes = await db.prepare(`
-      SELECT content, created_at, note_type FROM recipient_notes
-      WHERE care_recipient_id = ? AND note_type != 'visit_summary'
-      ORDER BY created_at DESC LIMIT 10
+      SELECT content, created_at, note_type, author_id FROM recipient_notes
+      WHERE care_recipient_id = ?
+      ORDER BY created_at DESC LIMIT 15
     `).all(session.care_recipient_id);
-
-    // No AI synthesis — show raw notes only. Caregivers need real data, not AI interpretation.
 
     // Recent visit moods (last 5 visits by any caregiver) — pattern data
     const recentMoods = await db.prepare(`
-      SELECT vl.arrival_mood, vl.departure_mood, cs.scheduled_time, cs.service_type,
+      SELECT vl.arrival_mood, vl.departure_mood, vl.summary, cs.scheduled_date,
+        cs.scheduled_time, cs.service_type,
         u.first_name AS caregiver_first_name
       FROM visit_logs vl
       JOIN care_sessions cs ON vl.session_id = cs.id
@@ -1249,6 +1246,67 @@ router.get("/:id/care-briefing", async (req, res) => {
     };
     const serviceLabel = serviceLabels[session.service_type] || session.service_type;
 
+    // ─── iPAi synthesis: condense notes + moods into a short actionable briefing ───
+    let notesSynthesis = null;
+    const hasContext = recentNotes.length > 0 || recentMoods.length > 0;
+    if (hasContext) {
+      try {
+        const apiKey = process.env.ANTHROPIC_API_KEY;
+        if (apiKey) {
+          const Anthropic = require("@anthropic-ai/sdk");
+          const client = new Anthropic({ apiKey });
+
+          // Build context for iPAi
+          const notesText = recentNotes.map(n => {
+            const dateStr = n.created_at ? new Date(n.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '?';
+            const typeLabel = n.note_type === 'visit_summary' ? '[Visit note]' : '[Care team note]';
+            return `${dateStr} ${typeLabel}: ${n.content}`;
+          }).join('\n');
+
+          const moodText = recentMoods.map(m => {
+            const dateStr = m.scheduled_date || '?';
+            const arrival = m.arrival_mood || '?';
+            const departure = m.departure_mood || '?';
+            const who = m.caregiver_first_name || 'Caregiver';
+            const summary = m.summary ? ` — "${m.summary}"` : '';
+            return `${dateStr}: ${who} visited. Mood: ${arrival} → ${departure}.${summary}`;
+          }).join('\n');
+
+          // Determine time-of-day context
+          const sessionHour = parseInt((session.scheduled_time || '12:00').split(':')[0]);
+          const timeContext = sessionHour < 12 ? 'morning' : sessionHour < 17 ? 'afternoon' : 'evening';
+
+          const prompt = `You are iPAi, the AI care assistant for InPlace. A caregiver is about to check in for a ${timeContext} ${serviceLabel} visit with ${recipientName}${session.age ? ` (age ${session.age})` : ''}.
+
+${isExperienced ? `This caregiver has visited ${recipientName} ${visitCount} times before — keep it brief and focus only on what's new or different.` : `This is a newer caregiver — give a warm, helpful overview.`}
+
+Here is the recent context:
+
+${notesText ? `CARE NOTES:\n${notesText}\n` : ''}${moodText ? `RECENT VISIT MOODS:\n${moodText}\n` : ''}${session.caregiver_briefing ? `FAMILY'S CARE BRIEFING:\n${session.caregiver_briefing}\n` : ''}${healthConditions.length ? `HEALTH CONDITIONS: ${healthConditions.join(', ')}\n` : ''}${medications.length ? `MEDICATIONS: ${medications.join(', ')}\n` : ''}${session.food_allergies ? `FOOD ALLERGIES: ${session.food_allergies}\n` : ''}${session.pets ? `PETS: ${session.pets}\n` : ''}${session.special_instructions ? `TODAY'S SPECIAL INSTRUCTIONS: ${session.special_instructions}\n` : ''}
+Write a SHORT, warm, actionable briefing (3-5 sentences max). Focus on:
+- What the caregiver should know RIGHT NOW for this visit
+- Any recent mood patterns or behavioral changes worth noting
+- Practical tips based on recent observations
+- Any special instructions for today
+
+Do NOT list every note. Synthesize. Write in second person ("Betty may be..."). Be warm but concise. No headers, no bullets — just natural sentences.`;
+
+          const result = await client.messages.create({
+            model: MODEL_HAIKU,
+            max_tokens: 300,
+            messages: [{ role: "user", content: prompt }],
+          });
+          notesSynthesis = result.content?.[0]?.text || null;
+          if (notesSynthesis) {
+            console.log(`[care-briefing] iPAi synthesized briefing for session ${req.params.id.slice(0,8)} (${recentNotes.length} notes, ${recentMoods.length} moods)`);
+          }
+        }
+      } catch (aiErr) {
+        console.warn("[care-briefing] iPAi synthesis failed (non-blocking):", aiErr.message);
+        // Fallback: no synthesis, raw notes will still be available as fallback
+      }
+    }
+
     // Build the briefing
     const briefing = {
       recipientName,
@@ -1266,8 +1324,9 @@ router.get("/:id/care-briefing", async (req, res) => {
       foodAllergies: session.food_allergies || null,
       pets: session.pets || null,
       preferences: session.preferences || null,
-      recentNotes: recentNotes.slice(0, 10).map(n => ({ content: n.content, createdAt: n.created_at, noteType: n.note_type })),
-      notesSynthesis: null,
+      // Only send raw notes if iPAi synthesis failed (fallback)
+      recentNotes: notesSynthesis ? [] : recentNotes.slice(0, 5).map(n => ({ content: n.content, createdAt: n.created_at, noteType: n.note_type })),
+      notesSynthesis,
       recentMoods: recentMoods.map(m => ({
         arrivalMood: m.arrival_mood,
         departureMood: m.departure_mood,
