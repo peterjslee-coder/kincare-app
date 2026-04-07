@@ -4070,13 +4070,18 @@ router.post("/sessions/:id/force-check-in", async (req, res) => {
       UPDATE care_sessions SET status = 'in_progress', updated_at = NOW() WHERE id = ?
     `).run(req.params.id);
 
-    // Create visit_log
+    // Create or update visit_log
     const { v4: uuidv4 } = require("uuid");
-    await db.prepare(`
-      INSERT INTO visit_logs (id, session_id, caregiver_id, check_in_time, created_at)
-      VALUES (?, ?, ?, ?, NOW())
-      ON CONFLICT (session_id) DO UPDATE SET check_in_time = EXCLUDED.check_in_time, updated_at = NOW()
-    `).run(uuidv4(), req.params.id, session.caregiver_profile_id, now.toISOString());
+    const existing = await db.prepare("SELECT id FROM visit_logs WHERE session_id = ?").get(req.params.id);
+    if (existing) {
+      await db.prepare("UPDATE visit_logs SET check_in_time = ?, updated_at = NOW() WHERE session_id = ?")
+        .run(now.toISOString(), req.params.id);
+    } else {
+      await db.prepare(`
+        INSERT INTO visit_logs (id, session_id, caregiver_id, check_in_time, created_at)
+        VALUES (?, ?, ?, ?, NOW())
+      `).run(uuidv4(), req.params.id, session.caregiver_profile_id, now.toISOString());
+    }
 
     await logAdminAction(req, "force_check_in", "care_session", req.params.id, { checkInTime: now.toISOString() });
     console.log(`[admin] Force check-in session ${req.params.id.slice(0, 8)} by ${req.user.email}`);
