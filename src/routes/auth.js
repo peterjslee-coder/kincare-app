@@ -593,8 +593,11 @@ router.get("/me", authenticate, async (req, res) => {
 
   // Include token for in-memory use (WebSocket auth) — cookie handles persistence
   const token = generateToken(user);
-  setAuthCookie(res, token);
-  setCsrfCookie(res);
+  // Don't overwrite admin's auth cookie when impersonating another user
+  if (!req.user.impersonatedBy) {
+    setAuthCookie(res, token);
+    setCsrfCookie(res);
+  }
   res.json({
     user: {
       ...user,

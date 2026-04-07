@@ -1284,14 +1284,28 @@ const App = () => {
   window.__startImpersonation = startImpersonation;
 
   // ─── Admin Impersonation: stop and return to admin view ───
-  const stopImpersonation = () => {
+  const stopImpersonation = async () => {
+    // Clear all impersonation state
     window.setImpersonationToken(null);
     sessionStorage.removeItem('inplace_impersonation_user');
     const backupToken = sessionStorage.getItem('inplace_admin_token_backup');
     sessionStorage.removeItem('inplace_admin_token_backup');
     setImpersonating(null);
-    // Restore admin's real token and reload
-    if (backupToken) window.setAuthToken(backupToken);
+    // Reset active role back to family (admin's default)
+    window.setActiveRole('family');
+    setActiveRoleState('family');
+    // Restore admin's auth cookie by calling refresh (cookie-based, ignores bearer token)
+    try {
+      const csrf = typeof getCsrfToken === 'function' ? getCsrfToken() : null;
+      const refreshRes = await fetch('/api/auth/refresh', {
+        method: 'POST', credentials: 'same-origin',
+        headers: csrf ? { 'X-CSRF-Token': csrf } : {},
+      });
+      if (refreshRes.ok) {
+        const data = await refreshRes.json();
+        if (data.token) window.setAuthToken(data.token);
+      }
+    } catch (e) { /* if refresh fails, reload will use whatever cookie is left */ }
     window.location.reload();
   };
 
