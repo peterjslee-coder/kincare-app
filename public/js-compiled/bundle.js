@@ -47768,8 +47768,8 @@ const CaretakerHub = window.CaretakerHub = ({
         color: 'var(--text-primary)'
       }
     }, checkInSession.special_instructions || checkInSession.specialInstructions)) : null,
-    // ── Care notes — AI synthesis with expandable raw notes ──
-    bd !== null && bd !== void 0 && bd.notesSynthesis || bd !== null && bd !== void 0 && bd.recentNotes && bd.recentNotes.length > 0 ? React.createElement('div', {
+    // ── Recent care notes (raw, no AI) ──
+    bd !== null && bd !== void 0 && bd.recentNotes && bd.recentNotes.length > 0 ? React.createElement('div', {
       style: {
         padding: 12,
         background: '#f8f4ff',
@@ -47782,49 +47782,28 @@ const CaretakerHub = window.CaretakerHub = ({
         fontSize: 12,
         fontWeight: 600,
         color: '#6b21a8',
-        marginBottom: 6
+        marginBottom: 8
       }
-    }, 'Care Note Insights'), bd.notesSynthesis ? React.createElement('div', {
-      style: {
-        fontSize: 13,
-        color: 'var(--text-primary)',
-        lineHeight: 1.5,
-        whiteSpace: 'pre-wrap'
-      }
-    }, bd.notesSynthesis) : bd.recentNotes.slice(0, 3).map((n, i) => React.createElement('div', {
+    }, 'Recent Care Notes'), bd.recentNotes.map((n, i) => React.createElement('div', {
       key: i,
       style: {
         fontSize: 12,
-        color: 'var(--text-secondary)',
-        marginTop: i > 0 ? 4 : 2,
-        lineHeight: 1.4
+        color: 'var(--text-primary)',
+        lineHeight: 1.5,
+        padding: '8px 0',
+        borderBottom: i < bd.recentNotes.length - 1 ? '1px solid #f0e8ff' : 'none'
       }
-    }, n.content)), bd.notesSynthesis && bd.recentNotes && bd.recentNotes.length > 0 ? React.createElement('details', {
+    }, React.createElement('div', {
       style: {
-        marginTop: 8
-      }
-    }, React.createElement('summary', {
-      style: {
-        fontSize: 11,
-        color: '#8b5cf6',
-        cursor: 'pointer',
+        fontSize: 10,
+        color: 'var(--text-muted)',
+        marginBottom: 3,
         fontWeight: 600
       }
-    }, `View ${bd.recentNotes.length} original note${bd.recentNotes.length !== 1 ? 's' : ''}`), React.createElement('div', {
-      style: {
-        marginTop: 6,
-        paddingLeft: 8,
-        borderLeft: '2px solid #e8daff'
-      }
-    }, bd.recentNotes.map((n, i) => React.createElement('div', {
-      key: i,
-      style: {
-        fontSize: 11,
-        color: 'var(--text-secondary)',
-        marginTop: i > 0 ? 4 : 0,
-        lineHeight: 1.4
-      }
-    }, n.content)))) : null) : null,
+    }, n.createdAt ? new Date(n.createdAt).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric'
+    }) : ''), n.content))) : null,
     // ── Acknowledge checkbox ──
     React.createElement('label', {
       style: {
