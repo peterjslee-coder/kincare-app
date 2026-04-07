@@ -1212,11 +1212,13 @@ router.get("/:id/care-briefing", async (req, res) => {
     const visitCount = visitHistory?.visit_count || 0;
     const isExperienced = visitCount >= 3;
 
-    // Recent care notes (last 15 for AI synthesis, show last 5 raw as fallback)
+    // Recent care notes — only family/team-authored notes (general, health, etc.)
+    // Exclude visit_summary: those are auto-generated from caregiver checkout summaries
+    // and shouldn't appear in the pre-check-in briefing.
     const recentNotes = await db.prepare(`
       SELECT content, created_at, note_type FROM recipient_notes
-      WHERE care_recipient_id = ?
-      ORDER BY created_at DESC LIMIT 15
+      WHERE care_recipient_id = ? AND note_type != 'visit_summary'
+      ORDER BY created_at DESC LIMIT 10
     `).all(session.care_recipient_id);
 
     // No AI synthesis — show raw notes only. Caregivers need real data, not AI interpretation.
