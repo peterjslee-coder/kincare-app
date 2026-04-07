@@ -391,6 +391,8 @@ async function initializeDatabase() {
     // v1.33.0 — Location tagging on check-in
     `ALTER TABLE visit_logs ADD COLUMN IF NOT EXISTS check_in_latitude REAL`,
     `ALTER TABLE visit_logs ADD COLUMN IF NOT EXISTS check_in_longitude REAL`,
+    // v1.57.72 — Test mode flag for admin impersonation check-ins
+    `ALTER TABLE visit_logs ADD COLUMN IF NOT EXISTS is_test INTEGER DEFAULT 0`,
     // v1.33.0 — Track which notifications have been sent per session (prevents duplicates)
     `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS notifications_sent TEXT`,
     // v1.31.0 — Backfill linked_user_id for care_for users whose names match a care_recipient

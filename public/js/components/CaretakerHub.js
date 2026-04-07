@@ -1947,8 +1947,10 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                           setBriefingAcked(false);
                           setCheckInStep('briefing');
                           setBriefingLoading(true);
-                          // Start geolocation early
-                          if (navigator.geolocation) {
+                          // Start geolocation early (skip in test mode)
+                          if (window.getImpersonationToken && window.getImpersonationToken()) {
+                            setCheckInLocation({ lat: 0, lng: 0, accuracy: 0, testMode: true });
+                          } else if (navigator.geolocation) {
                             navigator.geolocation.getCurrentPosition(
                               (pos) => setCheckInLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy }),
                               (err) => { console.warn('Geolocation error:', err.message); setLocationError(err.message); },
@@ -2771,7 +2773,10 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               setCheckInLocation(null);
               setLocationError(null);
               // Request geolocation when check-in modal opens
-              if (navigator.geolocation) {
+              // Skip GPS when admin is impersonating (test mode)
+              if (window.getImpersonationToken && window.getImpersonationToken()) {
+                setCheckInLocation({ lat: 0, lng: 0, accuracy: 0, testMode: true });
+              } else if (navigator.geolocation) {
                 navigator.geolocation.getCurrentPosition(
                   (pos) => setCheckInLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy }),
                   (err) => { console.warn('Geolocation error:', err.message); setLocationError(err.message); },
@@ -2792,8 +2797,10 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               setEarlyDepartureReason('');
               setEarlyDepartureAcked(false);
               setCheckOutLocation(null);
-              // Capture GPS at check-out
-              if (navigator.geolocation) {
+              // Capture GPS at check-out (skip in test mode)
+              if (window.getImpersonationToken && window.getImpersonationToken()) {
+                setCheckOutLocation({ lat: 0, lng: 0, accuracy: 0, testMode: true });
+              } else if (navigator.geolocation) {
                 navigator.geolocation.getCurrentPosition(
                   (pos) => setCheckOutLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy }),
                   () => {},

@@ -6146,6 +6146,17 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                     <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--text-secondary)' }}>
                       {userDrawer.user.email} · {userDrawer.user.role}
                     </p>
+                    <button onClick={() => {
+                      if (!window.__startImpersonation) { alert('Impersonation not available'); return; }
+                      if (!confirm(`View the app as ${userDrawer.user.first_name} ${userDrawer.user.last_name}? You'll see exactly what they see. GPS will be skipped, and no payments will be charged.`)) return;
+                      window.__startImpersonation(userDrawer.user.id);
+                    }}
+                      style={{
+                        marginTop: 8, padding: '5px 14px', background: '#ff6f00', color: '#fff',
+                        border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                      }}>
+                      View As This User
+                    </button>
                   </>
                 ) : (
                   <h3 style={{ margin: 0, fontSize: 18, color: 'var(--text-secondary)' }}>Loading...</h3>

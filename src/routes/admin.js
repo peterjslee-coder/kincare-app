@@ -118,6 +118,47 @@ router.use(async (req, res, next) => {
   }
 });
 
+// ─── POST /api/admin/impersonate/:userId — View app as another user (test mode) ───
+// Generates a short-lived JWT that lets admin see exactly what the target user sees.
+// Sessions checked in/out while impersonating skip payment gates and flag visit logs as test.
+router.post("/impersonate/:userId", async (req, res) => {
+  try {
+    const db = await getDb();
+    const target = await db.prepare(
+      "SELECT id, email, first_name, last_name, roles, role, is_active, is_admin FROM users WHERE id = ?"
+    ).get(req.params.userId);
+    if (!target) return res.status(404).json({ error: "User not found" });
+    if (!target.is_active) return res.status(400).json({ error: "User is deactivated" });
+    if (target.is_admin) return res.status(400).json({ error: "Cannot impersonate another admin" });
+
+    let roles = target.roles
+      ? (typeof target.roles === "string" ? JSON.parse(target.roles) : target.roles)
+      : [target.role || "family"];
+
+    const jwt = require("jsonwebtoken");
+    const token = jwt.sign(
+      { id: target.id, email: target.email, roles, role: roles[0], impersonatedBy: req.user.id },
+      process.env.JWT_SECRET,
+      { expiresIn: "2h" }
+    );
+
+    console.log(`[admin] Impersonation started: admin ${req.user.id.slice(0,8)} → user ${target.id.slice(0,8)} (${target.first_name} ${target.last_name})`);
+
+    res.json({
+      token,
+      user: {
+        id: target.id, email: target.email,
+        firstName: target.first_name, lastName: target.last_name,
+        first_name: target.first_name, last_name: target.last_name,
+        roles,
+      },
+    });
+  } catch (err) {
+    console.error("Impersonation error:", err);
+    res.status(500).json({ error: "Failed to start impersonation" });
+  }
+});
+
 // ─── POST /api/admin/ip-verify/challenge — Generate passkey challenge for IP verification ───
 router.post("/ip-verify/challenge", async (req, res) => {
   try {

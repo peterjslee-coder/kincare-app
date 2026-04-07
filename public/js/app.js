@@ -355,6 +355,10 @@ const App = () => {
   const [adminAlertDetails, setAdminAlertDetails] = useState(null);
   // In-app notification badge (v1.56.0)
   const [unreadNotifCount, setUnreadNotifCount] = useState(0);
+  // ─── Admin Impersonation (View As) state ───
+  const [impersonating, setImpersonating] = useState(() => {
+    try { return JSON.parse(sessionStorage.getItem('inplace_impersonation_user')); } catch { return null; }
+  });
 
   // ─── In-app navigation history (prevents PWA back-swipe from closing app) ───
   const navHistoryRef = useRef(['dashboard']);
@@ -1224,6 +1228,73 @@ const App = () => {
     setSidebarOpen(false);
   };
 
+  // ─── Admin Impersonation: start viewing as another user ───
+  const startImpersonation = async (userId) => {
+    try {
+      // Use the admin's real token for this request (not impersonation token)
+      const headers = { 'Content-Type': 'application/json' };
+      const adminToken = sessionStorage.getItem('inplace_admin_token_backup') || null;
+      const token = adminToken || (window.getAuthToken ? window.getAuthToken() : null);
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const csrf = typeof getCsrfToken === 'function' ? getCsrfToken() : null;
+      if (csrf) headers['X-CSRF-Token'] = csrf;
+      const res = await fetch('/api/admin/impersonate/' + userId, { method: 'POST', headers, credentials: 'same-origin' });
+      if (!res?.ok) { const err = await res.json(); alert(err.error || 'Failed to impersonate'); return; }
+      const data = await res.json();
+      // Back up admin's real token so we can restore later
+      if (!sessionStorage.getItem('inplace_admin_token_backup')) {
+        sessionStorage.setItem('inplace_admin_token_backup', window.getAuthToken ? window.getAuthToken() : '');
+      }
+      // Store impersonation state
+      const impUser = { id: data.user.id, firstName: data.user.firstName || data.user.first_name, lastName: data.user.lastName || data.user.last_name, roles: data.user.roles };
+      sessionStorage.setItem('inplace_impersonation_user', JSON.stringify(impUser));
+      window.setImpersonationToken(data.token);
+      setImpersonating(impUser);
+      // Switch active role to the impersonated user's primary role
+      const impRole = data.user.roles[0] || 'family';
+      setActiveRoleState(impRole);
+      window.setActiveRole(impRole);
+      // Reload user context as the impersonated user
+      const meRes = await apiFetch('/api/auth/me');
+      if (meRes?.ok) {
+        const meData = await meRes.json();
+        if (meData.user) {
+          const userRoles = meData.user.roles || [meData.user.role];
+          setCurrentUser({
+            id: meData.user.id, email: meData.user.email, role: meData.user.role, roles: userRoles,
+            firstName: meData.user.first_name, lastName: meData.user.last_name,
+            first_name: meData.user.first_name, last_name: meData.user.last_name,
+            profilePhoto: meData.user.profile_photo || null,
+            emailVerified: !!meData.user.email_verified, isDemo: !!meData.user.is_demo,
+            isAdmin: false, is_tester: !!meData.user.is_tester,
+            account_approved: !!meData.user.account_approved, companionAccess: !!meData.user.companion_access,
+            onboardingComplete: meData.user.onboarding_complete,
+            selfOnboardingComplete: meData.user.selfOnboardingComplete,
+            careRecipientId: meData.user.careRecipientId,
+          });
+        }
+      }
+      setCurrentPage('dashboard');
+    } catch (err) {
+      console.error('Impersonation error:', err);
+      alert('Failed to start impersonation');
+    }
+  };
+  // Expose to AdminPanel
+  window.__startImpersonation = startImpersonation;
+
+  // ─── Admin Impersonation: stop and return to admin view ───
+  const stopImpersonation = () => {
+    window.setImpersonationToken(null);
+    sessionStorage.removeItem('inplace_impersonation_user');
+    const backupToken = sessionStorage.getItem('inplace_admin_token_backup');
+    sessionStorage.removeItem('inplace_admin_token_backup');
+    setImpersonating(null);
+    // Restore admin's real token and reload
+    if (backupToken) window.setAuthToken(backupToken);
+    window.location.reload();
+  };
+
   // Role-based navigation items — main nav (top) and bottom nav (pinned to sidebar bottom)
   const getNavItems = () => {
     if (role === 'caregiver') {
@@ -1523,6 +1594,22 @@ const App = () => {
         </nav>
       </aside>
       <main className="main-content">
+        {/* Impersonation banner — shown when admin is viewing as another user */}
+        {impersonating && (
+          <div style={{
+            background: '#ff6f00', color: '#fff', padding: '8px 16px',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            fontSize: 13, fontWeight: 600, borderRadius: 8, margin: '0 0 8px',
+            boxShadow: '0 2px 8px rgba(255,111,0,0.3)',
+          }}>
+            <span>Viewing as {impersonating.firstName} {impersonating.lastName} — Test Mode (GPS skipped, no payments)</span>
+            <button onClick={stopImpersonation} style={{
+              background: 'rgba(255,255,255,0.25)', border: 'none', color: '#fff',
+              padding: '4px 12px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600,
+              marginLeft: 12, flexShrink: 0,
+            }}>Exit</button>
+          </div>
+        )}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
           <button className="hamburger-btn" onClick={() => setSidebarOpen(true)} aria-label="Open menu" style={{ position: 'relative', zIndex: 1 }}>
             <span></span><span></span><span></span>

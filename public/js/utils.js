@@ -53,6 +53,7 @@ const setAuthToken = window.setAuthToken = (token) => {
   // Token is now stored in httpOnly cookie by the server — no localStorage
   // Keep in-memory for WebSocket auth and in-flight requests
 };
+const getAuthToken = window.getAuthToken = () => AUTH_TOKEN;
 
 // Active role for dual-role users (which view/mode they're in)
 let ACTIVE_ROLE = localStorage.getItem('active_role') || null;
@@ -119,10 +120,23 @@ const _onVisibilityRefresh = async () => {
   } catch (e) { /* silent */ }
 };
 
+// ─── Admin Impersonation (View As) ───
+// When set, apiFetch uses this token instead of the admin's own token.
+// This makes all API calls return data as the impersonated user would see it.
+let IMPERSONATION_TOKEN = sessionStorage.getItem('inplace_impersonation_token') || null;
+const setImpersonationToken = window.setImpersonationToken = (token) => {
+  IMPERSONATION_TOKEN = token;
+  if (token) sessionStorage.setItem('inplace_impersonation_token', token);
+  else sessionStorage.removeItem('inplace_impersonation_token');
+};
+const getImpersonationToken = window.getImpersonationToken = () => IMPERSONATION_TOKEN;
+
 const apiFetch = window.apiFetch = async (url, options = {}) => {
   const headers = { 'Content-Type': 'application/json', ...options.headers };
-  if (AUTH_TOKEN) headers['Authorization'] = `Bearer ${AUTH_TOKEN}`;
-  if (ACTIVE_ROLE) headers['X-Active-Role'] = ACTIVE_ROLE;
+  // Use impersonation token if active (admin viewing as another user)
+  const effectiveToken = IMPERSONATION_TOKEN || AUTH_TOKEN;
+  if (effectiveToken) headers['Authorization'] = `Bearer ${effectiveToken}`;
+  if (ACTIVE_ROLE && !IMPERSONATION_TOKEN) headers['X-Active-Role'] = ACTIVE_ROLE;
   const csrf = getCsrfToken();
   if (csrf) headers['X-CSRF-Token'] = csrf;
   const response = await fetch(API_BASE + url, { ...options, headers, credentials: 'same-origin' });
@@ -141,6 +155,17 @@ const apiFetch = window.apiFetch = async (url, options = {}) => {
   }
 
   if (response.status === 401 && url !== '/api/auth/refresh') {
+    // If impersonation token expired, end impersonation instead of refreshing
+    if (IMPERSONATION_TOKEN) {
+      console.warn('Impersonation token expired — ending test mode');
+      setImpersonationToken(null);
+      sessionStorage.removeItem('inplace_impersonation_user');
+      const backup = sessionStorage.getItem('inplace_admin_token_backup');
+      sessionStorage.removeItem('inplace_admin_token_backup');
+      if (backup) setAuthToken(backup);
+      window.location.reload();
+      return null;
+    }
     // Attempt silent token refresh before logging out
     try {
       if (!_refreshPromise) {
