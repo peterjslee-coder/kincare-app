@@ -92,17 +92,44 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
   const [bgCheckLoading, setBgCheckLoading] = useState(false);
   const [checkrAlertCount, setCheckrAlertCount] = useState(0);
   const [bgCheckActionItems, setBgCheckActionItems] = useState([]);
+  // BG check kill switch
+  const [bgChecksEnabled, setBgChecksEnabled] = useState(false);
+  const [bgCheckToggleLoading, setBgCheckToggleLoading] = useState(false);
+  const [bgCheckToggleConfirm, setBgCheckToggleConfirm] = useState(false);
 
   const loadBgChecks = async () => {
     setBgCheckLoading(true);
     try {
-      const res = await apiFetch('/api/checkr/admin/candidates');
+      const [res, enabledRes] = await Promise.all([
+        apiFetch('/api/checkr/admin/candidates'),
+        apiFetch('/api/checkr/bg-checks-enabled'),
+      ]);
       if (res?.ok) {
         const data = await res.json();
         setBgCheckCandidates(data.candidates || []);
       }
+      if (enabledRes?.ok) {
+        const ed = await enabledRes.json();
+        setBgChecksEnabled(ed.bgChecksEnabled);
+      }
     } catch {}
     setBgCheckLoading(false);
+  };
+
+  const toggleBgChecks = async () => {
+    setBgCheckToggleLoading(true);
+    try {
+      const res = await apiFetch('/api/checkr/bg-checks-enabled', {
+        method: 'PUT',
+        body: JSON.stringify({ enabled: !bgChecksEnabled }),
+      });
+      if (res?.ok) {
+        const d = await res.json();
+        setBgChecksEnabled(d.bgChecksEnabled);
+      }
+    } catch (err) { console.error('Toggle bg checks error:', err); }
+    setBgCheckToggleLoading(false);
+    setBgCheckToggleConfirm(false);
   };
 
   // Safety flags
@@ -5713,6 +5740,73 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
 
         return (
           <div>
+            {/* BG Check Kill Switch */}
+            <div className="card" style={{
+              marginBottom: 16,
+              borderLeft: `4px solid ${bgChecksEnabled ? 'var(--color-success)' : 'var(--color-error)'}`,
+              background: bgChecksEnabled ? '#f1f8e9' : 'var(--color-warning-bg)',
+            }}>
+              <div className="card-header">
+                <span className="card-icon">{bgChecksEnabled ? '\u2705' : '\u{1F512}'}</span>
+                Background Checks
+                <span style={{
+                  marginLeft: 8, fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10,
+                  background: bgChecksEnabled ? 'var(--color-success)' : 'var(--color-error)', color: 'var(--text-on-primary)',
+                }}>
+                  {bgChecksEnabled ? 'ENABLED' : 'DISABLED'}
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+                <div style={{ fontSize: 13, color: 'var(--text-secondary)', flex: '1 1 300px' }}>
+                  {bgChecksEnabled
+                    ? 'Background checks are active. Caregivers can pay and initiate Checkr checks during onboarding.'
+                    : 'Background checks are disabled. Caregivers cannot pay for or start background checks. Enable when Checkr is ready.'}
+                </div>
+                {!bgCheckToggleConfirm ? (
+                  <button
+                    onClick={() => setBgCheckToggleConfirm(true)}
+                    disabled={bgCheckToggleLoading}
+                    style={{
+                      padding: '8px 20px', borderRadius: 6, border: 'none', fontSize: 13, fontWeight: 700,
+                      cursor: 'pointer', whiteSpace: 'nowrap',
+                      background: bgChecksEnabled ? 'var(--color-error)' : 'var(--color-success)', color: 'var(--text-on-primary)',
+                    }}
+                  >
+                    {bgChecksEnabled ? 'Disable BG Checks' : 'Enable BG Checks'}
+                  </button>
+                ) : (
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px',
+                    background: 'rgba(0,0,0,0.05)', borderRadius: 8,
+                  }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: bgChecksEnabled ? 'var(--color-error)' : 'var(--color-success)' }}>
+                      {bgChecksEnabled ? 'Disable background checks?' : 'Enable background checks?'}
+                    </span>
+                    <button
+                      onClick={toggleBgChecks}
+                      disabled={bgCheckToggleLoading}
+                      style={{
+                        padding: '5px 14px', borderRadius: 6, border: 'none', fontSize: 12, fontWeight: 700,
+                        cursor: bgCheckToggleLoading ? 'wait' : 'pointer',
+                        background: bgChecksEnabled ? 'var(--color-error)' : 'var(--color-success)', color: 'var(--text-on-primary)',
+                      }}
+                    >
+                      {bgCheckToggleLoading ? '...' : 'Confirm'}
+                    </button>
+                    <button
+                      onClick={() => setBgCheckToggleConfirm(false)}
+                      style={{
+                        padding: '5px 14px', borderRadius: 6, border: '1px solid #ccc', background: 'var(--bg-surface)',
+                        fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <div>
                 <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>Background Check Status</div>

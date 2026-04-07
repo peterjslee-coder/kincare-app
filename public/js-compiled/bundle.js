@@ -27717,11 +27717,12 @@ const RequestCareModal = window.RequestCareModal = ({
       if (!proposedRate) setProposedRate(String(avg));
     }
   }, [assignedCaregivers, time]);
-  const hasCaregiverData = assignedCaregivers !== null && assignedCaregivers.length > 0;
+  const hasCaregiverData = assignedCaregivers !== null; // show caregiver section once data loaded (nearby fetch fills in even without assignments)
   // NEW: 2-step flow — Step 1: What & When, Step 2: Caregiver + Confirm
   const reviewStep = 2;
 
-  // Caregiver matching
+  // Caregiver matching — uses /api/assignments/suggestions which combines
+  // session history + formal assignments + nearby available caregivers
   const findMatchingCaregivers = async () => {
     if (!date || !time || !duration || !serviceType) return;
     setLoadingCaregivers(true);
@@ -27731,10 +27732,72 @@ const RequestCareModal = window.RequestCareModal = ({
     };
     const requestStart = parseTime24(time);
     const requestEnd = requestStart + parseInt(duration) * 60;
+
+    // Helper: check a caregiver's availability slots for the requested window
+    const checkAvailability = async profileId => {
+      try {
+        var _slotsData$slots;
+        const slotsRes = await apiFetch(`/api/availability/${profileId}/slots?date=${date}`);
+        if (!(slotsRes !== null && slotsRes !== void 0 && slotsRes.ok)) return {
+          available: false,
+          reason: 'Could not check availability'
+        };
+        const slotsData = await slotsRes.json();
+        const daySlots = ((_slotsData$slots = slotsData.slots) === null || _slotsData$slots === void 0 ? void 0 : _slotsData$slots[date]) || [];
+        if (daySlots.length === 0) return {
+          available: false,
+          reason: 'Not scheduled this day'
+        };
+        for (let m = requestStart; m < requestEnd; m += 60) {
+          const slotExists = daySlots.some(s => s.startMinutes <= m && s.startMinutes + 60 > m);
+          if (!slotExists) return {
+            available: false,
+            reason: 'Not available at this time'
+          };
+        }
+        return {
+          available: true
+        };
+      } catch (err) {
+        return {
+          available: false,
+          reason: 'Could not check availability'
+        };
+      }
+    };
     try {
-      const caregivers = assignedCaregivers || [];
+      // Fetch smart suggestions (session history + assigned + nearby)
+      const params = selectedRecipientId ? `?careRecipientId=${selectedRecipientId}` : '';
+      const suggestRes = await apiFetch(`/api/assignments/suggestions${params}`);
+      let allSuggestions = [];
+      if (suggestRes !== null && suggestRes !== void 0 && suggestRes.ok) {
+        const data = await suggestRes.json();
+        allSuggestions = data.suggestions || [];
+      }
+
+      // Fall back to assignedCaregivers if suggestions endpoint fails
+      if (allSuggestions.length === 0 && (assignedCaregivers === null || assignedCaregivers === void 0 ? void 0 : assignedCaregivers.length) > 0) {
+        allSuggestions = assignedCaregivers.map(cg => ({
+          caregiver_profile_id: cg.caregiver_profile_id,
+          caregiver_user_id: cg.caregiver_user_id,
+          first_name: cg.first_name,
+          last_name: cg.last_name,
+          hourly_rate: cg.hourly_rate,
+          rate_daytime: cg.rate_daytime,
+          rate_nighttime: cg.rate_nighttime,
+          rate_overnight: cg.rate_overnight,
+          specialties: cg.specialties || [],
+          certifications: cg.certifications || [],
+          open_to_interview: cg.open_to_interview,
+          visit_count: 0,
+          source: 'assigned',
+          distance: null
+        }));
+      }
+
+      // Check availability for each and build display list
       const matches = [];
-      for (const cg of caregivers) {
+      for (const cg of allSuggestions) {
         const cgName = `${cg.first_name} ${cg.last_name}`;
         const hasSkill = caregiverMatchesService(cgName, serviceType);
         const rate = cg.hourly_rate || 30;
@@ -27742,55 +27805,44 @@ const RequestCareModal = window.RequestCareModal = ({
         const rateNighttime = cg.rate_nighttime || rate;
         const rateOvernight = cg.rate_overnight || rate;
         const hasTieredRates = rateDaytime !== rateNighttime || rateDaytime !== rateOvernight;
-        try {
-          const slotsRes = await apiFetch(`/api/availability/${cg.caregiver_profile_id}/slots?date=${date}`);
-          if (slotsRes !== null && slotsRes !== void 0 && slotsRes.ok) {
-            var _slotsData$slots;
-            const slotsData = await slotsRes.json();
-            const daySlots = ((_slotsData$slots = slotsData.slots) === null || _slotsData$slots === void 0 ? void 0 : _slotsData$slots[date]) || [];
-            let isAvailable = true;
-            if (daySlots.length === 0) {
-              isAvailable = false;
-            } else {
-              for (let m = requestStart; m < requestEnd; m += 60) {
-                const slotExists = daySlots.some(s => s.startMinutes <= m && s.startMinutes + 60 > m);
-                if (!slotExists) {
-                  isAvailable = false;
-                  break;
-                }
-              }
-            }
-            matches.push({
-              name: cgName,
-              caregiverId: cg.caregiver_profile_id,
-              userId: cg.caregiver_user_id,
-              skills: cg.specialties || [],
-              rate: hasTieredRates ? `Day $${rateDaytime} \u00b7 Night $${rateNighttime}` : `$${rate}/hr`,
-              skillMatch: hasSkill,
-              available: isAvailable,
-              openToInterview: !!cg.open_to_interview,
-              reason: !isAvailable ? daySlots.length === 0 ? 'Not scheduled this day' : 'Not available at this time' : undefined
-            });
-          }
-        } catch (err) {
-          matches.push({
-            name: cgName,
-            caregiverId: cg.caregiver_profile_id,
-            userId: cg.caregiver_user_id,
-            skills: cg.specialties || [],
-            rate: `$${rate}/hr`,
-            skillMatch: hasSkill,
-            available: false,
-            openToInterview: !!cg.open_to_interview,
-            reason: 'Could not check availability'
-          });
-        }
+        const avail = await checkAvailability(cg.caregiver_profile_id);
+        const source = cg.source || 'assigned';
+        matches.push({
+          name: cgName,
+          caregiverId: cg.caregiver_profile_id,
+          userId: cg.caregiver_user_id,
+          skills: cg.specialties || [],
+          rate: hasTieredRates ? `Day $${rateDaytime} · Night $${rateNighttime}` : `$${rate}/hr`,
+          skillMatch: hasSkill,
+          available: avail.available,
+          openToInterview: !!cg.open_to_interview,
+          reason: avail.reason,
+          // Source labeling
+          isTeam: source === 'history' || source === 'assigned',
+          source: source,
+          visitCount: cg.visit_count || 0,
+          distance: cg.distance ? `${cg.distance} mi` : null,
+          rating: cg.rating_avg,
+          reviewCount: cg.rating_count
+        });
       }
+
+      // Sort: history caregivers first (by visit count), then assigned, then nearby
+      // Within each group: available+skill > available > unavailable
       matches.sort((a, b) => {
-        if (a.available && a.skillMatch && (!b.available || !b.skillMatch)) return -1;
-        if (b.available && b.skillMatch && (!a.available || !a.skillMatch)) return 1;
+        // History caregivers always first
+        if (a.source === 'history' && b.source !== 'history') return -1;
+        if (b.source === 'history' && a.source !== 'history') return 1;
+        // Then assigned
+        if (a.source === 'assigned' && b.source === 'nearby') return -1;
+        if (b.source === 'assigned' && a.source === 'nearby') return 1;
+        // Within same source: visit count (more visits = better match)
+        if (a.visitCount !== b.visitCount) return b.visitCount - a.visitCount;
+        // Then availability
         if (a.available && !b.available) return -1;
         if (b.available && !a.available) return 1;
+        if (a.skillMatch && !b.skillMatch) return -1;
+        if (b.skillMatch && !a.skillMatch) return 1;
         return 0;
       });
       setMatchedCaregivers(matches);
@@ -27894,7 +27946,7 @@ const RequestCareModal = window.RequestCareModal = ({
   // Trigger caregiver matching + cost preview when entering step 2
   useEffect(() => {
     if (step === 2 && date && time && duration && serviceType) {
-      if (hasCaregiverData) findMatchingCaregivers();
+      if (hasCaregiverData) findMatchingCaregivers(); // fetches both care team + nearby
       // Fetch cost preview
       const fetchCost = async () => {
         try {
@@ -28703,84 +28755,182 @@ const RequestCareModal = window.RequestCareModal = ({
       color: 'var(--text-muted)',
       fontSize: 13
     }
-  }, "Checking availability...") : /*#__PURE__*/React.createElement("div", {
+  }, "Finding caregivers...") : /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       flexDirection: 'column',
       gap: 8
     }
-  }, matchedCaregivers.map((cg, idx) => /*#__PURE__*/React.createElement("button", {
-    key: idx,
-    type: "button",
-    onClick: () => setSelectedCaregiver(cg),
-    style: {
-      padding: 12,
-      border: (selectedCaregiver === null || selectedCaregiver === void 0 ? void 0 : selectedCaregiver.name) === cg.name ? '2px solid #1b6b5a' : '1px solid #e0e0e0',
-      borderRadius: 10,
-      background: (selectedCaregiver === null || selectedCaregiver === void 0 ? void 0 : selectedCaregiver.name) === cg.name ? 'var(--color-success-bg)' : 'var(--bg-card)',
-      cursor: 'pointer',
-      textAlign: 'left'
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center'
-    }
-  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontWeight: 600,
-      fontSize: 14,
-      color: 'var(--text-primary)'
-    }
-  }, cg.name), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 12,
-      color: 'var(--role-color)',
-      fontWeight: 500,
-      marginTop: 2
-    }
-  }, cg.rate)), /*#__PURE__*/React.createElement("div", null, cg.available && cg.skillMatch && /*#__PURE__*/React.createElement("span", {
-    style: {
-      background: 'var(--color-success-bg)',
-      color: 'var(--role-color)',
-      padding: '3px 8px',
-      borderRadius: 16,
-      fontSize: 11,
-      fontWeight: 600
-    }
-  }, "Best Match"), cg.available && !cg.skillMatch && /*#__PURE__*/React.createElement("span", {
-    style: {
-      background: 'var(--color-warning-bg)',
-      color: 'var(--color-warning)',
-      padding: '3px 8px',
-      borderRadius: 16,
-      fontSize: 11,
-      fontWeight: 600
-    }
-  }, "Available"), !cg.available && /*#__PURE__*/React.createElement("span", {
-    style: {
-      background: 'var(--color-warning-bg)',
-      color: 'var(--color-warning)',
-      padding: '3px 8px',
-      borderRadius: 16,
-      fontSize: 11,
-      fontWeight: 600
-    }
-  }, "Off This Day"))), !cg.available && /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 11,
-      color: 'var(--role-color)',
-      marginTop: 3,
-      fontWeight: 500
-    }
-  }, '\u{1F44B}', " You can still request \\u2014 they can accept or propose a different time"), cg.openToInterview && /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 11,
-      color: 'var(--role-color)',
-      marginTop: 3
-    }
-  }, "\uD83E\uDD1D Open to intro call"))), /*#__PURE__*/React.createElement("button", {
+  }, (() => {
+    const hasTeam = matchedCaregivers.some(cg => cg.isTeam);
+    const hasNearby = matchedCaregivers.some(cg => !cg.isTeam);
+    const showHeaders = hasTeam && hasNearby;
+    const recipFirst = (careRecipients.find(r => r.id === selectedRecipientId) || {}).first_name || '';
+    return React.createElement(React.Fragment, null,
+    // Section header: care team / previous caregivers
+    showHeaders && React.createElement('div', {
+      style: {
+        fontSize: 11,
+        fontWeight: 600,
+        color: 'var(--role-color)',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+        marginBottom: -2
+      }
+    }, recipFirst ? `${recipFirst}'s caregivers` : 'Previous caregivers'),
+    // Team / history caregivers
+    ...matchedCaregivers.filter(cg => cg.isTeam).map((cg, idx) => React.createElement('button', {
+      key: `team-${idx}`,
+      type: 'button',
+      onClick: () => setSelectedCaregiver(cg),
+      style: {
+        padding: 12,
+        border: (selectedCaregiver === null || selectedCaregiver === void 0 ? void 0 : selectedCaregiver.caregiverId) === cg.caregiverId ? '2px solid #1b6b5a' : '1px solid #e0e0e0',
+        borderRadius: 10,
+        background: (selectedCaregiver === null || selectedCaregiver === void 0 ? void 0 : selectedCaregiver.caregiverId) === cg.caregiverId ? 'var(--color-success-bg)' : 'var(--bg-card)',
+        cursor: 'pointer',
+        textAlign: 'left'
+      }
+    }, React.createElement('div', {
+      style: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center'
+      }
+    }, React.createElement('div', null, React.createElement('div', {
+      style: {
+        fontWeight: 600,
+        fontSize: 14,
+        color: 'var(--text-primary)'
+      }
+    }, cg.name), React.createElement('div', {
+      style: {
+        fontSize: 12,
+        color: 'var(--role-color)',
+        fontWeight: 500,
+        marginTop: 2
+      }
+    }, cg.rate, cg.visitCount > 0 ? ` · ${cg.visitCount} visit${cg.visitCount !== 1 ? 's' : ''}` : '')), React.createElement('div', null, cg.available && cg.skillMatch && React.createElement('span', {
+      style: {
+        background: 'var(--color-success-bg)',
+        color: 'var(--role-color)',
+        padding: '3px 8px',
+        borderRadius: 16,
+        fontSize: 11,
+        fontWeight: 600
+      }
+    }, 'Best Match'), cg.available && !cg.skillMatch && React.createElement('span', {
+      style: {
+        background: 'var(--color-warning-bg)',
+        color: 'var(--color-warning)',
+        padding: '3px 8px',
+        borderRadius: 16,
+        fontSize: 11,
+        fontWeight: 600
+      }
+    }, 'Available'), !cg.available && React.createElement('span', {
+      style: {
+        background: 'var(--color-warning-bg)',
+        color: 'var(--color-warning)',
+        padding: '3px 8px',
+        borderRadius: 16,
+        fontSize: 11,
+        fontWeight: 600
+      }
+    }, 'Off This Day'))), !cg.available && React.createElement('div', {
+      style: {
+        fontSize: 11,
+        color: 'var(--role-color)',
+        marginTop: 3,
+        fontWeight: 500
+      }
+    }, 'You can still request \u2014 they can accept or propose a different time'), cg.openToInterview && React.createElement('div', {
+      style: {
+        fontSize: 11,
+        color: 'var(--role-color)',
+        marginTop: 3
+      }
+    }, 'Open to intro call'))),
+    // Section header: nearby
+    hasNearby && React.createElement('div', {
+      style: {
+        fontSize: 11,
+        fontWeight: 600,
+        color: 'var(--text-tertiary)',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+        marginTop: 4,
+        marginBottom: -2
+      }
+    }, 'Nearby caregivers'),
+    // Nearby caregivers
+    ...matchedCaregivers.filter(cg => !cg.isTeam).map((cg, idx) => React.createElement('button', {
+      key: `nearby-${idx}`,
+      type: 'button',
+      onClick: () => setSelectedCaregiver(cg),
+      style: {
+        padding: 12,
+        border: (selectedCaregiver === null || selectedCaregiver === void 0 ? void 0 : selectedCaregiver.caregiverId) === cg.caregiverId ? '2px solid #1b6b5a' : '1px solid #e0e0e0',
+        borderRadius: 10,
+        background: (selectedCaregiver === null || selectedCaregiver === void 0 ? void 0 : selectedCaregiver.caregiverId) === cg.caregiverId ? 'var(--color-success-bg)' : 'var(--bg-card)',
+        cursor: 'pointer',
+        textAlign: 'left'
+      }
+    }, React.createElement('div', {
+      style: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center'
+      }
+    }, React.createElement('div', null, React.createElement('div', {
+      style: {
+        fontWeight: 600,
+        fontSize: 14,
+        color: 'var(--text-primary)'
+      }
+    }, cg.name), React.createElement('div', {
+      style: {
+        fontSize: 12,
+        color: 'var(--text-muted)',
+        fontWeight: 500,
+        marginTop: 2
+      }
+    }, cg.rate, cg.distance ? ` · ${cg.distance}` : '', cg.rating ? ` · ${cg.rating}\u2605` : '')), React.createElement('div', null, cg.available && cg.skillMatch && React.createElement('span', {
+      style: {
+        background: 'var(--color-success-bg)',
+        color: 'var(--role-color)',
+        padding: '3px 8px',
+        borderRadius: 16,
+        fontSize: 11,
+        fontWeight: 600
+      }
+    }, 'Best Match'), cg.available && !cg.skillMatch && React.createElement('span', {
+      style: {
+        background: 'var(--color-warning-bg)',
+        color: 'var(--color-warning)',
+        padding: '3px 8px',
+        borderRadius: 16,
+        fontSize: 11,
+        fontWeight: 600
+      }
+    }, 'Available'), !cg.available && React.createElement('span', {
+      style: {
+        background: 'var(--color-warning-bg)',
+        color: 'var(--color-warning)',
+        padding: '3px 8px',
+        borderRadius: 16,
+        fontSize: 11,
+        fontWeight: 600
+      }
+    }, 'Off This Day'))), !cg.available && React.createElement('div', {
+      style: {
+        fontSize: 11,
+        color: 'var(--role-color)',
+        marginTop: 3,
+        fontWeight: 500
+      }
+    }, 'You can still request \u2014 they can accept or propose a different time'))));
+  })(), /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: () => {
       setSelectedCaregiver(null);
@@ -47818,8 +47968,41 @@ const CaretakerHub = window.CaretakerHub = ({
         color: 'var(--text-primary)'
       }
     }, checkInSession.special_instructions || checkInSession.specialInstructions)) : null,
-    // ── Recent care notes (raw, no AI) ──
-    bd !== null && bd !== void 0 && bd.recentNotes && bd.recentNotes.length > 0 ? React.createElement('div', {
+    // ── iPAi synthesis (or fallback to raw notes) ──
+    bd !== null && bd !== void 0 && bd.notesSynthesis ? React.createElement('div', {
+      style: {
+        padding: 14,
+        background: 'linear-gradient(135deg, #f0f7f5, #e8f4f0)',
+        borderRadius: 10,
+        border: '1px solid #b2dfdb',
+        marginBottom: 14
+      }
+    }, React.createElement('div', {
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+        marginBottom: 8
+      }
+    }, React.createElement('span', {
+      style: {
+        fontSize: 14
+      }
+    }, '\u{1F9E0}'), React.createElement('span', {
+      style: {
+        fontSize: 12,
+        fontWeight: 700,
+        color: 'var(--role-color)',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5
+      }
+    }, 'What to know today')), React.createElement('div', {
+      style: {
+        fontSize: 14,
+        color: 'var(--text-primary)',
+        lineHeight: 1.6
+      }
+    }, bd.notesSynthesis)) : bd !== null && bd !== void 0 && bd.recentNotes && bd.recentNotes.length > 0 ? React.createElement('div', {
       style: {
         padding: 12,
         background: '#f8f4ff',
@@ -56216,7 +56399,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({
       marginTop: 0,
       marginBottom: '20px'
     }
-  }, "Please review and acknowledge the following terms to continue with your application."), errorSummary(), disclosureCheck('acceptNoMedical', 'Important Notice — Non-Medical Care Platform', 'Although some caregivers on InPlace may hold medical licenses or certifications (such as CNA, LPN, or RN), this platform is not for seeking or administering medical care. All services provided through InPlace are limited to non-medical companionship, personal care, and household assistance. Licensed medical professionals using InPlace must understand they are operating in a non-medical capacity only. Future development may introduce medically supervised care options, but at this time, medical care is not available through InPlace.'), disclosureCheck('acceptBackgroundCheck', 'Background Check Required', 'InPlace requires a background check through Checkr for all caregivers. You are responsible for the one-time cost ($35). This includes criminal history, driving record, and identity verification.'), disclosureCheck('acceptStripePayments', 'Payment via Stripe', 'All payments are processed through Stripe. You will set up a Stripe account to receive direct deposits for completed care sessions. InPlace retains a platform fee from each session.'), disclosureCheck('accept1099', '1099 Tax Reporting', 'As an independent contractor, you will receive a 1099-NEC from Stripe for earnings over $600 in a calendar year. When you set up your payout account, Stripe will securely collect your full SSN directly for IRS reporting — InPlace never sees or stores your full SSN. You are responsible for your own taxes, including self-employment tax.'), disclosureCheck('acceptIndependentContractor', 'Independent Contractor Status', 'You are an independent contractor, not an employee of InPlace. You control your own schedule, rates, and clients. InPlace does not provide benefits, workers\' compensation, or unemployment insurance.'), disclosureCheck('acceptRefundPolicy', 'Refund & Cancellation Policy', 'After completing 10 sessions, your background check fee will be refunded. If a family cancels within 24 hours of a session, you will still be compensated unless you agree to a grace cancellation.'), disclosureCheck('acceptTransportation', 'Transportation & Auto Insurance Requirements', 'If you transport care recipients in your personal vehicle, you are required to carry auto insurance with a business use endorsement that covers transporting others for paid care work. Your liability limits must meet or exceed your state\'s required minimums. InPlace will conduct a Motor Vehicle Record (MVR) check as part of your background check to verify your driving history. You may not transport care recipients until these requirements are met. If you drive the care recipient\'s vehicle, the family is responsible for ensuring you are covered under their auto policy. InPlace is not liable for accidents or incidents that occur during transportation.'), disclosureCheck('acceptConfidentiality', 'Confidentiality & Protected Information', 'As a caregiver on InPlace, you will have access to sensitive personal and health-related information about care recipients, including their medical conditions, medications, care needs, daily routines, and household details. You agree to keep all care recipient information strictly confidential and not share, discuss, photograph, or disclose it to anyone outside the care team — including on social media, with friends or family, or with other clients. This obligation continues even after you stop providing care through InPlace. Unauthorized disclosure of care recipient information may result in immediate removal from the platform and may expose you to legal liability. If you become aware of any unauthorized access to or disclosure of care recipient information, you must notify InPlace immediately.'), errors.submit && /*#__PURE__*/React.createElement("div", {
+  }, "Please review and acknowledge the following terms to continue with your application."), errorSummary(), disclosureCheck('acceptNoMedical', 'Important Notice — Non-Medical Care Platform', 'Although some caregivers on InPlace may hold medical licenses or certifications (such as CNA, LPN, or RN), this platform is not for seeking or administering medical care. All services provided through InPlace are limited to non-medical companionship, personal care, and household assistance. Licensed medical professionals using InPlace must understand they are operating in a non-medical capacity only. Future development may introduce medically supervised care options, but at this time, medical care is not available through InPlace.'), disclosureCheck('acceptBackgroundCheck', 'Background Check Required', 'InPlace requires a background check through Checkr for all caregivers. You are responsible for the one-time cost ($30). This includes criminal history, driving record, and identity verification.'), disclosureCheck('acceptStripePayments', 'Payment via Stripe', 'All payments are processed through Stripe. You will set up a Stripe account to receive direct deposits for completed care sessions. InPlace retains a platform fee from each session.'), disclosureCheck('accept1099', '1099 Tax Reporting', 'As an independent contractor, you will receive a 1099-NEC from Stripe for earnings over $600 in a calendar year. When you set up your payout account, Stripe will securely collect your full SSN directly for IRS reporting — InPlace never sees or stores your full SSN. You are responsible for your own taxes, including self-employment tax.'), disclosureCheck('acceptIndependentContractor', 'Independent Contractor Status', 'You are an independent contractor, not an employee of InPlace. You control your own schedule, rates, and clients. InPlace does not provide benefits, workers\' compensation, or unemployment insurance.'), disclosureCheck('acceptRefundPolicy', 'Refund & Cancellation Policy', 'After completing 10 sessions, your background check fee will be refunded. If a family cancels within 24 hours of a session, you will still be compensated unless you agree to a grace cancellation.'), disclosureCheck('acceptTransportation', 'Transportation & Auto Insurance Requirements', 'If you transport care recipients in your personal vehicle, you are required to carry auto insurance with a business use endorsement that covers transporting others for paid care work. Your liability limits must meet or exceed your state\'s required minimums. InPlace will conduct a Motor Vehicle Record (MVR) check as part of your background check to verify your driving history. You may not transport care recipients until these requirements are met. If you drive the care recipient\'s vehicle, the family is responsible for ensuring you are covered under their auto policy. InPlace is not liable for accidents or incidents that occur during transportation.'), disclosureCheck('acceptConfidentiality', 'Confidentiality & Protected Information', 'As a caregiver on InPlace, you will have access to sensitive personal and health-related information about care recipients, including their medical conditions, medications, care needs, daily routines, and household details. You agree to keep all care recipient information strictly confidential and not share, discuss, photograph, or disclose it to anyone outside the care team — including on social media, with friends or family, or with other clients. This obligation continues even after you stop providing care through InPlace. Unauthorized disclosure of care recipient information may result in immediate removal from the platform and may expose you to legal liability. If you become aware of any unauthorized access to or disclosure of care recipient information, you must notify InPlace immediately.'), errors.submit && /*#__PURE__*/React.createElement("div", {
     style: {
       ...errorStyle,
       marginBottom: '12px'
@@ -56740,7 +56923,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({
       color: 'var(--text-primary)',
       lineHeight: '1.5'
     }
-  }, "I authorize InPlace to conduct a background check, including criminal history, driving record, and identity verification through Checkr. I understand this is required to provide care through InPlace and the $35 fee will be refunded after 10 completed sessions.")), errors.backgroundCheckConsent && /*#__PURE__*/React.createElement("div", {
+  }, "I authorize InPlace to conduct a background check, including criminal history, driving record, and identity verification through Checkr. I understand this is required to provide care through InPlace and the $30 fee will be refunded after 10 completed sessions.")), errors.backgroundCheckConsent && /*#__PURE__*/React.createElement("div", {
     style: errorStyle
   }, errors.backgroundCheckConsent)), errors.submit && /*#__PURE__*/React.createElement("div", {
     style: {
@@ -63663,16 +63846,43 @@ const AdminPanel = window.AdminPanel = ({
   const [bgCheckLoading, setBgCheckLoading] = useState(false);
   const [checkrAlertCount, setCheckrAlertCount] = useState(0);
   const [bgCheckActionItems, setBgCheckActionItems] = useState([]);
+  // BG check kill switch
+  const [bgChecksEnabled, setBgChecksEnabled] = useState(false);
+  const [bgCheckToggleLoading, setBgCheckToggleLoading] = useState(false);
+  const [bgCheckToggleConfirm, setBgCheckToggleConfirm] = useState(false);
   const loadBgChecks = async () => {
     setBgCheckLoading(true);
     try {
-      const res = await apiFetch('/api/checkr/admin/candidates');
+      const [res, enabledRes] = await Promise.all([apiFetch('/api/checkr/admin/candidates'), apiFetch('/api/checkr/bg-checks-enabled')]);
       if (res !== null && res !== void 0 && res.ok) {
         const data = await res.json();
         setBgCheckCandidates(data.candidates || []);
       }
+      if (enabledRes !== null && enabledRes !== void 0 && enabledRes.ok) {
+        const ed = await enabledRes.json();
+        setBgChecksEnabled(ed.bgChecksEnabled);
+      }
     } catch {}
     setBgCheckLoading(false);
+  };
+  const toggleBgChecks = async () => {
+    setBgCheckToggleLoading(true);
+    try {
+      const res = await apiFetch('/api/checkr/bg-checks-enabled', {
+        method: 'PUT',
+        body: JSON.stringify({
+          enabled: !bgChecksEnabled
+        })
+      });
+      if (res !== null && res !== void 0 && res.ok) {
+        const d = await res.json();
+        setBgChecksEnabled(d.bgChecksEnabled);
+      }
+    } catch (err) {
+      console.error('Toggle bg checks error:', err);
+    }
+    setBgCheckToggleLoading(false);
+    setBgCheckToggleConfirm(false);
   };
 
   // Safety flags
@@ -75043,6 +75253,93 @@ const AdminPanel = window.AdminPanel = ({
       }, '\u{1F4AC}', " Message"))));
     };
     return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+      className: "card",
+      style: {
+        marginBottom: 16,
+        borderLeft: `4px solid ${bgChecksEnabled ? 'var(--color-success)' : 'var(--color-error)'}`,
+        background: bgChecksEnabled ? '#f1f8e9' : 'var(--color-warning-bg)'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "card-header"
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "card-icon"
+    }, bgChecksEnabled ? '\u2705' : '\u{1F512}'), "Background Checks", /*#__PURE__*/React.createElement("span", {
+      style: {
+        marginLeft: 8,
+        fontSize: 11,
+        fontWeight: 700,
+        padding: '2px 8px',
+        borderRadius: 10,
+        background: bgChecksEnabled ? 'var(--color-success)' : 'var(--color-error)',
+        color: 'var(--text-on-primary)'
+      }
+    }, bgChecksEnabled ? 'ENABLED' : 'DISABLED')), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 16,
+        flexWrap: 'wrap'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 13,
+        color: 'var(--text-secondary)',
+        flex: '1 1 300px'
+      }
+    }, bgChecksEnabled ? 'Background checks are active. Caregivers can pay and initiate Checkr checks during onboarding.' : 'Background checks are disabled. Caregivers cannot pay for or start background checks. Enable when Checkr is ready.'), !bgCheckToggleConfirm ? /*#__PURE__*/React.createElement("button", {
+      onClick: () => setBgCheckToggleConfirm(true),
+      disabled: bgCheckToggleLoading,
+      style: {
+        padding: '8px 20px',
+        borderRadius: 6,
+        border: 'none',
+        fontSize: 13,
+        fontWeight: 700,
+        cursor: 'pointer',
+        whiteSpace: 'nowrap',
+        background: bgChecksEnabled ? 'var(--color-error)' : 'var(--color-success)',
+        color: 'var(--text-on-primary)'
+      }
+    }, bgChecksEnabled ? 'Disable BG Checks' : 'Enable BG Checks') : /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        padding: '8px 12px',
+        background: 'rgba(0,0,0,0.05)',
+        borderRadius: 8
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 12,
+        fontWeight: 600,
+        color: bgChecksEnabled ? 'var(--color-error)' : 'var(--color-success)'
+      }
+    }, bgChecksEnabled ? 'Disable background checks?' : 'Enable background checks?'), /*#__PURE__*/React.createElement("button", {
+      onClick: toggleBgChecks,
+      disabled: bgCheckToggleLoading,
+      style: {
+        padding: '5px 14px',
+        borderRadius: 6,
+        border: 'none',
+        fontSize: 12,
+        fontWeight: 700,
+        cursor: bgCheckToggleLoading ? 'wait' : 'pointer',
+        background: bgChecksEnabled ? 'var(--color-error)' : 'var(--color-success)',
+        color: 'var(--text-on-primary)'
+      }
+    }, bgCheckToggleLoading ? '...' : 'Confirm'), /*#__PURE__*/React.createElement("button", {
+      onClick: () => setBgCheckToggleConfirm(false),
+      style: {
+        padding: '5px 14px',
+        borderRadius: 6,
+        border: '1px solid #ccc',
+        background: 'var(--bg-surface)',
+        fontSize: 12,
+        fontWeight: 600,
+        cursor: 'pointer'
+      }
+    }, "Cancel")))), /*#__PURE__*/React.createElement("div", {
       style: {
         display: 'flex',
         justifyContent: 'space-between',

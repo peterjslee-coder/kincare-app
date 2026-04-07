@@ -5,6 +5,44 @@ const { writeAuditLog } = require("../middleware/auditLog");
 
 const router = express.Router();
 
+// ─── Helper: check if background checks are enabled by admin ───
+async function bgChecksEnabled() {
+  const db = await getDb();
+  const row = await db.prepare("SELECT value FROM platform_settings WHERE key = 'bg_checks_enabled'").get();
+  return row?.value === 'true';
+}
+
+// ─── GET /api/checkr/bg-checks-enabled ───
+router.get("/bg-checks-enabled", async (req, res) => {
+  try {
+    const enabled = await bgChecksEnabled();
+    res.json({ bgChecksEnabled: enabled });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to check background check status" });
+  }
+});
+
+// ─── PUT /api/checkr/bg-checks-enabled ───
+// Toggle background checks on/off — admin kill switch
+router.put("/bg-checks-enabled", authenticate, async (req, res) => {
+  const { enabled } = req.body;
+  if (typeof enabled !== 'boolean') {
+    return res.status(400).json({ error: "enabled must be true or false" });
+  }
+  try {
+    const db = await getDb();
+    const adminCheck = await db.prepare("SELECT is_admin FROM users WHERE id = ?").get(req.user.id);
+    if (!adminCheck?.is_admin) return res.status(403).json({ error: "Admin only" });
+    await db.prepare(
+      "INSERT INTO platform_settings (key, value) VALUES ('bg_checks_enabled', ?) ON CONFLICT (key) DO UPDATE SET value = ?, updated_at = NOW()"
+    ).run(String(enabled), String(enabled));
+    console.log(`🔍 Background checks ${enabled ? 'ENABLED' : 'DISABLED'} by admin`);
+    res.json({ bgChecksEnabled: enabled });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to update background check status" });
+  }
+});
+
 // ─── Checkr API helpers ───
 // Use staging URL when CHECKR_STAGING=true (set in Railway env for testing)
 const CHECKR_API_BASE = process.env.CHECKR_STAGING === "true"
@@ -41,6 +79,10 @@ async function checkrRequest(method, path, body = null) {
 // Generates a Checkr Embed session token for the WebSDK
 // The frontend calls this via sessionTokenPath prop on the NewInvitation embed
 router.post("/session-token", authenticate, requireRole("caregiver"), async (req, res) => {
+  // Kill switch check
+  if (!(await bgChecksEnabled())) {
+    return res.status(503).json({ error: "Background checks are currently disabled by the administrator." });
+  }
   try {
     getCheckrKey();
   } catch {
@@ -92,6 +134,11 @@ router.get("/config", authenticate, async (req, res) => {
 // Caregiver must have: legal name, DOB, address, and consent. SSN is collected by Checkr's invitation flow.
 router.post("/initiate", authenticate, requireRole("caregiver"), async (req, res) => {
   const db = await getDb();
+
+  // Kill switch check
+  if (!(await bgChecksEnabled())) {
+    return res.status(503).json({ error: "Background checks are currently disabled by the administrator." });
+  }
 
   try {
     // Verify Checkr is configured

@@ -1265,6 +1265,13 @@ router.get("/history", requireRole("family"), async (req, res) => {
 // Create a PaymentIntent for the $30 background check fee (caregiver)
 router.post("/background-check", requireRole("caregiver"), requirePaymentsEnabled, async (req, res) => {
   const db = await getDb();
+
+  // Check bg checks kill switch
+  const bgRow = await db.prepare("SELECT value FROM platform_settings WHERE key = 'bg_checks_enabled'").get();
+  if (bgRow?.value !== 'true') {
+    return res.status(503).json({ error: "Background checks are currently disabled by the administrator." });
+  }
+
   let stripe;
   try { stripe = getStripe(); } catch {
     return res.status(503).json({ error: "Payment system is not configured yet.", notConfigured: true });
