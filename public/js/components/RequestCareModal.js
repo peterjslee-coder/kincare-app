@@ -211,21 +211,64 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
     }
   }, [assignedCaregivers, time]);
 
-  const hasCaregiverData = assignedCaregivers !== null && assignedCaregivers.length > 0;
+  const hasCaregiverData = assignedCaregivers !== null; // show caregiver section once data loaded (nearby fetch fills in even without assignments)
   // NEW: 2-step flow — Step 1: What & When, Step 2: Caregiver + Confirm
   const reviewStep = 2;
 
-  // Caregiver matching
+  // Caregiver matching — uses /api/assignments/suggestions which combines
+  // session history + formal assignments + nearby available caregivers
   const findMatchingCaregivers = async () => {
     if (!date || !time || !duration || !serviceType) return;
     setLoadingCaregivers(true);
     const parseTime24 = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
     const requestStart = parseTime24(time);
     const requestEnd = requestStart + parseInt(duration) * 60;
+
+    // Helper: check a caregiver's availability slots for the requested window
+    const checkAvailability = async (profileId) => {
+      try {
+        const slotsRes = await apiFetch(`/api/availability/${profileId}/slots?date=${date}`);
+        if (!slotsRes?.ok) return { available: false, reason: 'Could not check availability' };
+        const slotsData = await slotsRes.json();
+        const daySlots = slotsData.slots?.[date] || [];
+        if (daySlots.length === 0) return { available: false, reason: 'Not scheduled this day' };
+        for (let m = requestStart; m < requestEnd; m += 60) {
+          const slotExists = daySlots.some(s => s.startMinutes <= m && s.startMinutes + 60 > m);
+          if (!slotExists) return { available: false, reason: 'Not available at this time' };
+        }
+        return { available: true };
+      } catch (err) {
+        return { available: false, reason: 'Could not check availability' };
+      }
+    };
+
     try {
-      const caregivers = assignedCaregivers || [];
+      // Fetch smart suggestions (session history + assigned + nearby)
+      const params = selectedRecipientId ? `?careRecipientId=${selectedRecipientId}` : '';
+      const suggestRes = await apiFetch(`/api/assignments/suggestions${params}`);
+      let allSuggestions = [];
+      if (suggestRes?.ok) {
+        const data = await suggestRes.json();
+        allSuggestions = data.suggestions || [];
+      }
+
+      // Fall back to assignedCaregivers if suggestions endpoint fails
+      if (allSuggestions.length === 0 && assignedCaregivers?.length > 0) {
+        allSuggestions = assignedCaregivers.map(cg => ({
+          caregiver_profile_id: cg.caregiver_profile_id,
+          caregiver_user_id: cg.caregiver_user_id,
+          first_name: cg.first_name, last_name: cg.last_name,
+          hourly_rate: cg.hourly_rate, rate_daytime: cg.rate_daytime,
+          rate_nighttime: cg.rate_nighttime, rate_overnight: cg.rate_overnight,
+          specialties: cg.specialties || [], certifications: cg.certifications || [],
+          open_to_interview: cg.open_to_interview,
+          visit_count: 0, source: 'assigned', distance: null,
+        }));
+      }
+
+      // Check availability for each and build display list
       const matches = [];
-      for (const cg of caregivers) {
+      for (const cg of allSuggestions) {
         const cgName = `${cg.first_name} ${cg.last_name}`;
         const hasSkill = caregiverMatchesService(cgName, serviceType);
         const rate = cg.hourly_rate || 30;
@@ -233,32 +276,41 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
         const rateNighttime = cg.rate_nighttime || rate;
         const rateOvernight = cg.rate_overnight || rate;
         const hasTieredRates = rateDaytime !== rateNighttime || rateDaytime !== rateOvernight;
-        try {
-          const slotsRes = await apiFetch(`/api/availability/${cg.caregiver_profile_id}/slots?date=${date}`);
-          if (slotsRes?.ok) {
-            const slotsData = await slotsRes.json();
-            const daySlots = slotsData.slots?.[date] || [];
-            let isAvailable = true;
-            if (daySlots.length === 0) { isAvailable = false; }
-            else { for (let m = requestStart; m < requestEnd; m += 60) { const slotExists = daySlots.some(s => s.startMinutes <= m && s.startMinutes + 60 > m); if (!slotExists) { isAvailable = false; break; } } }
-            matches.push({
-              name: cgName, caregiverId: cg.caregiver_profile_id, userId: cg.caregiver_user_id,
-              skills: cg.specialties || [], rate: hasTieredRates ? `Day $${rateDaytime} \u00b7 Night $${rateNighttime}` : `$${rate}/hr`,
-              skillMatch: hasSkill, available: isAvailable, openToInterview: !!cg.open_to_interview,
-              reason: !isAvailable ? (daySlots.length === 0 ? 'Not scheduled this day' : 'Not available at this time') : undefined,
-            });
-          }
-        } catch (err) {
-          matches.push({ name: cgName, caregiverId: cg.caregiver_profile_id, userId: cg.caregiver_user_id, skills: cg.specialties || [], rate: `$${rate}/hr`, skillMatch: hasSkill, available: false, openToInterview: !!cg.open_to_interview, reason: 'Could not check availability' });
-        }
+        const avail = await checkAvailability(cg.caregiver_profile_id);
+        const source = cg.source || 'assigned';
+        matches.push({
+          name: cgName, caregiverId: cg.caregiver_profile_id, userId: cg.caregiver_user_id,
+          skills: cg.specialties || [], rate: hasTieredRates ? `Day $${rateDaytime} · Night $${rateNighttime}` : `$${rate}/hr`,
+          skillMatch: hasSkill, available: avail.available, openToInterview: !!cg.open_to_interview,
+          reason: avail.reason,
+          // Source labeling
+          isTeam: source === 'history' || source === 'assigned',
+          source: source,
+          visitCount: cg.visit_count || 0,
+          distance: cg.distance ? `${cg.distance} mi` : null,
+          rating: cg.rating_avg, reviewCount: cg.rating_count,
+        });
       }
+
+      // Sort: history caregivers first (by visit count), then assigned, then nearby
+      // Within each group: available+skill > available > unavailable
       matches.sort((a, b) => {
-        if (a.available && a.skillMatch && (!b.available || !b.skillMatch)) return -1;
-        if (b.available && b.skillMatch && (!a.available || !a.skillMatch)) return 1;
+        // History caregivers always first
+        if (a.source === 'history' && b.source !== 'history') return -1;
+        if (b.source === 'history' && a.source !== 'history') return 1;
+        // Then assigned
+        if (a.source === 'assigned' && b.source === 'nearby') return -1;
+        if (b.source === 'assigned' && a.source === 'nearby') return 1;
+        // Within same source: visit count (more visits = better match)
+        if (a.visitCount !== b.visitCount) return b.visitCount - a.visitCount;
+        // Then availability
         if (a.available && !b.available) return -1;
         if (b.available && !a.available) return 1;
+        if (a.skillMatch && !b.skillMatch) return -1;
+        if (b.skillMatch && !a.skillMatch) return 1;
         return 0;
       });
+
       setMatchedCaregivers(matches);
     } catch (err) { console.error('Caregiver matching error:', err); setMatchedCaregivers([]); }
     setLoadingCaregivers(false);
@@ -344,7 +396,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
   // Trigger caregiver matching + cost preview when entering step 2
   useEffect(() => {
     if (step === 2 && date && time && duration && serviceType) {
-      if (hasCaregiverData) findMatchingCaregivers();
+      if (hasCaregiverData) findMatchingCaregivers(); // fetches both care team + nearby
       // Fetch cost preview
       const fetchCost = async () => {
         try {
@@ -753,31 +805,81 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
               <div style={{ marginBottom: 16 }}>
                 <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>Choose a caregiver</div>
                 {loadingCaregivers ? (
-                  <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>Checking availability...</div>
+                  <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>Finding caregivers...</div>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {matchedCaregivers.map((cg, idx) => (
-                      <button key={idx} type="button" onClick={() => setSelectedCaregiver(cg)}
-                        style={{
-                          padding: 12, border: selectedCaregiver?.name === cg.name ? '2px solid #1b6b5a' : '1px solid #e0e0e0',
-                          borderRadius: 10, background: selectedCaregiver?.name === cg.name ? 'var(--color-success-bg)' : 'var(--bg-card)',
-                          cursor: 'pointer', textAlign: 'left',
-                        }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <div>
-                            <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>{cg.name}</div>
-                            <div style={{ fontSize: 12, color: 'var(--role-color)', fontWeight: 500, marginTop: 2 }}>{cg.rate}</div>
-                          </div>
-                          <div>
-                            {cg.available && cg.skillMatch && <span style={{ background: 'var(--color-success-bg)', color: 'var(--role-color)', padding: '3px 8px', borderRadius: 16, fontSize: 11, fontWeight: 600 }}>Best Match</span>}
-                            {cg.available && !cg.skillMatch && <span style={{ background: 'var(--color-warning-bg)', color: 'var(--color-warning)', padding: '3px 8px', borderRadius: 16, fontSize: 11, fontWeight: 600 }}>Available</span>}
-                            {!cg.available && <span style={{ background: 'var(--color-warning-bg)', color: 'var(--color-warning)', padding: '3px 8px', borderRadius: 16, fontSize: 11, fontWeight: 600 }}>Off This Day</span>}
-                          </div>
-                        </div>
-                        {!cg.available && <div style={{ fontSize: 11, color: 'var(--role-color)', marginTop: 3, fontWeight: 500 }}>{'\u{1F44B}'} You can still request \u2014 they can accept or propose a different time</div>}
-                        {cg.openToInterview && <div style={{ fontSize: 11, color: 'var(--role-color)', marginTop: 3 }}>🤝 Open to intro call</div>}
-                      </button>
-                    ))}
+                    {(() => {
+                      const hasTeam = matchedCaregivers.some(cg => cg.isTeam);
+                      const hasNearby = matchedCaregivers.some(cg => !cg.isTeam);
+                      const showHeaders = hasTeam && hasNearby;
+                      const recipFirst = (careRecipients.find(r => r.id === selectedRecipientId) || {}).first_name || '';
+                      return React.createElement(React.Fragment, null,
+                        // Section header: care team / previous caregivers
+                        showHeaders && React.createElement('div', {
+                          style: { fontSize: 11, fontWeight: 600, color: 'var(--role-color)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: -2 }
+                        }, recipFirst ? `${recipFirst}'s caregivers` : 'Previous caregivers'),
+                        // Team / history caregivers
+                        ...matchedCaregivers.filter(cg => cg.isTeam).map((cg, idx) =>
+                          React.createElement('button', {
+                            key: `team-${idx}`, type: 'button',
+                            onClick: () => setSelectedCaregiver(cg),
+                            style: {
+                              padding: 12, border: selectedCaregiver?.caregiverId === cg.caregiverId ? '2px solid #1b6b5a' : '1px solid #e0e0e0',
+                              borderRadius: 10, background: selectedCaregiver?.caregiverId === cg.caregiverId ? 'var(--color-success-bg)' : 'var(--bg-card)',
+                              cursor: 'pointer', textAlign: 'left',
+                            }
+                          },
+                            React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
+                              React.createElement('div', null,
+                                React.createElement('div', { style: { fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' } }, cg.name),
+                                React.createElement('div', { style: { fontSize: 12, color: 'var(--role-color)', fontWeight: 500, marginTop: 2 } },
+                                  cg.rate,
+                                  cg.visitCount > 0 ? ` · ${cg.visitCount} visit${cg.visitCount !== 1 ? 's' : ''}` : ''
+                                )
+                              ),
+                              React.createElement('div', null,
+                                cg.available && cg.skillMatch && React.createElement('span', { style: { background: 'var(--color-success-bg)', color: 'var(--role-color)', padding: '3px 8px', borderRadius: 16, fontSize: 11, fontWeight: 600 } }, 'Best Match'),
+                                cg.available && !cg.skillMatch && React.createElement('span', { style: { background: 'var(--color-warning-bg)', color: 'var(--color-warning)', padding: '3px 8px', borderRadius: 16, fontSize: 11, fontWeight: 600 } }, 'Available'),
+                                !cg.available && React.createElement('span', { style: { background: 'var(--color-warning-bg)', color: 'var(--color-warning)', padding: '3px 8px', borderRadius: 16, fontSize: 11, fontWeight: 600 } }, 'Off This Day')
+                              )
+                            ),
+                            !cg.available && React.createElement('div', { style: { fontSize: 11, color: 'var(--role-color)', marginTop: 3, fontWeight: 500 } }, 'You can still request \u2014 they can accept or propose a different time'),
+                            cg.openToInterview && React.createElement('div', { style: { fontSize: 11, color: 'var(--role-color)', marginTop: 3 } }, 'Open to intro call')
+                          )
+                        ),
+                        // Section header: nearby
+                        hasNearby && React.createElement('div', {
+                          style: { fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 4, marginBottom: -2 }
+                        }, 'Nearby caregivers'),
+                        // Nearby caregivers
+                        ...matchedCaregivers.filter(cg => !cg.isTeam).map((cg, idx) =>
+                          React.createElement('button', {
+                            key: `nearby-${idx}`, type: 'button',
+                            onClick: () => setSelectedCaregiver(cg),
+                            style: {
+                              padding: 12, border: selectedCaregiver?.caregiverId === cg.caregiverId ? '2px solid #1b6b5a' : '1px solid #e0e0e0',
+                              borderRadius: 10, background: selectedCaregiver?.caregiverId === cg.caregiverId ? 'var(--color-success-bg)' : 'var(--bg-card)',
+                              cursor: 'pointer', textAlign: 'left',
+                            }
+                          },
+                            React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
+                              React.createElement('div', null,
+                                React.createElement('div', { style: { fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' } }, cg.name),
+                                React.createElement('div', { style: { fontSize: 12, color: 'var(--text-muted)', fontWeight: 500, marginTop: 2 } },
+                                  cg.rate, cg.distance ? ` · ${cg.distance}` : '', cg.rating ? ` · ${cg.rating}\u2605` : ''
+                                )
+                              ),
+                              React.createElement('div', null,
+                                cg.available && cg.skillMatch && React.createElement('span', { style: { background: 'var(--color-success-bg)', color: 'var(--role-color)', padding: '3px 8px', borderRadius: 16, fontSize: 11, fontWeight: 600 } }, 'Best Match'),
+                                cg.available && !cg.skillMatch && React.createElement('span', { style: { background: 'var(--color-warning-bg)', color: 'var(--color-warning)', padding: '3px 8px', borderRadius: 16, fontSize: 11, fontWeight: 600 } }, 'Available'),
+                                !cg.available && React.createElement('span', { style: { background: 'var(--color-warning-bg)', color: 'var(--color-warning)', padding: '3px 8px', borderRadius: 16, fontSize: 11, fontWeight: 600 } }, 'Off This Day')
+                              )
+                            ),
+                            !cg.available && React.createElement('div', { style: { fontSize: 11, color: 'var(--role-color)', marginTop: 3, fontWeight: 500 } }, 'You can still request \u2014 they can accept or propose a different time')
+                          )
+                        )
+                      );
+                    })()}
                     <button type="button" onClick={() => { setSelectedCaregiver(null); setPrivateOnly(false); }}
                       style={{
                         padding: 10, border: !selectedCaregiver ? '2px solid #e8724a' : '1px dashed #e8724a', borderRadius: 10,
