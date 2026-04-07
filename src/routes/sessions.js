@@ -631,8 +631,27 @@ router.post("/", requireRole("family", "care_for"), validateSession, async (req,
     });
   }
 
-  // Verify card on file — Stripe customer must exist and have at least one saved payment method
-  if (!standing.hasStripeCustomer) {
+  // Verify payment method on file — check the booker first, then fall back to care team billing contact
+  let payerCustomerId = standing.stripeCustomerId;
+  let hasPayer = standing.hasStripeCustomer;
+
+  // If the booker has no Stripe customer, check the care team's billing contact
+  if (!hasPayer && careRecipientId) {
+    try {
+      const billingRow = await db.prepare(`
+        SELECT u.stripe_customer_id FROM care_teams ct
+        JOIN users u ON ct.billing_user_id = u.id
+        WHERE ct.care_recipient_id = ? AND ct.billing_user_id IS NOT NULL
+        LIMIT 1
+      `).get(careRecipientId);
+      if (billingRow?.stripe_customer_id) {
+        payerCustomerId = billingRow.stripe_customer_id;
+        hasPayer = true;
+      }
+    } catch (e) { console.warn('[payment-gate] billing contact lookup failed:', e.message); }
+  }
+
+  if (!hasPayer) {
     return res.status(402).json({
       error: 'A payment method is required to book care. Please set up your payment method first.',
       code: 'NO_PAYMENT_METHOD',
@@ -641,10 +660,17 @@ router.post("/", requireRole("family", "care_for"), validateSession, async (req,
   try {
     const { getStripe } = require("./payments");
     const stripe = getStripe();
-    const methods = await stripe.paymentMethods.list({ customer: standing.stripeCustomerId, type: "card", limit: 1 });
-    if (!methods.data.length) {
+    // Check all accepted payment method types — card, link, and bank account
+    let hasMethod = false;
+    for (const pmType of ["card", "link", "us_bank_account"]) {
+      try {
+        const methods = await stripe.paymentMethods.list({ customer: payerCustomerId, type: pmType, limit: 1 });
+        if (methods.data.length) { hasMethod = true; break; }
+      } catch { /* some types may not be supported */ }
+    }
+    if (!hasMethod) {
       return res.status(402).json({
-        error: 'No saved payment method found. Please add a card before booking care.',
+        error: 'No saved payment method found. Please add a card or bank account before booking care.',
         code: 'NO_PAYMENT_METHOD',
       });
     }
@@ -1246,7 +1272,8 @@ router.post("/:id/check-in", async (req, res) => {
     }
 
     // ─── Payment gate: block check-in if family has unpaid sessions ───
-    if (session.family_user_id) {
+    // Skip when admin is impersonating (test mode) — don't block test check-ins
+    if (session.family_user_id && !req.user.impersonatedBy) {
       const standing = await checkPaymentStanding(db, session.family_user_id);
       if (standing.unpaidSessions.length > 0) {
         // Notify the family that their session is blocked
@@ -1312,67 +1339,74 @@ router.post("/:id/check-in", async (req, res) => {
     // Use effective check-in time (offline timestamp if syncing, NOW() otherwise)
     const visitId = require("uuid").v4();
     const checkInTimeSQL = isOfflineSync ? `'${effectiveCheckInTime.toISOString()}'` : 'NOW()';
+    const isTestMode = !!req.user.impersonatedBy;
+    if (isTestMode) console.log(`[check-in] TEST MODE — admin ${req.user.impersonatedBy.slice(0,8)} impersonating ${req.user.id.slice(0,8)}`);
     await db.prepare(`
-      INSERT INTO visit_logs (id, session_id, caregiver_id, check_in_time, arrival_mood, check_in_latitude, check_in_longitude, briefing_acknowledged_at, offline_sync, created_at)
-      VALUES (?, ?, ?, ${checkInTimeSQL}, ?, ?, ?, ${briefingAcknowledged ? 'NOW()' : 'NULL'}, ?, NOW())
-    `).run(visitId, req.params.id, session.caregiver_id, arrivalMood ? (Array.isArray(arrivalMood) ? JSON.stringify(arrivalMood) : arrivalMood) : null, checkInLatitude || null, checkInLongitude || null, isOfflineSync ? 1 : 0);
+      INSERT INTO visit_logs (id, session_id, caregiver_id, check_in_time, arrival_mood, check_in_latitude, check_in_longitude, briefing_acknowledged_at, offline_sync, is_test, created_at)
+      VALUES (?, ?, ?, ${checkInTimeSQL}, ?, ?, ?, ${briefingAcknowledged ? 'NOW()' : 'NULL'}, ?, ?, NOW())
+    `).run(visitId, req.params.id, session.caregiver_id, arrivalMood ? (Array.isArray(arrivalMood) ? JSON.stringify(arrivalMood) : arrivalMood) : null, checkInLatitude || null, checkInLongitude || null, isOfflineSync ? 1 : 0, isTestMode ? 1 : 0);
 
     // Get special instructions and recent notes for the caregiver
     const notes = await db.prepare(
       "SELECT content, created_at FROM recipient_notes WHERE care_recipient_id = ? ORDER BY created_at DESC LIMIT 5"
     ).all(session.care_recipient_id);
 
-    // Notify family that session has started
-    const emitToUser = req.app.get("emitToUser");
+    // Notify family that session has started (skip in test mode — admin impersonation)
     const caregiverUser = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(req.user.id);
     const caregiverName = caregiverUser ? `${caregiverUser.first_name} ${caregiverUser.last_name}` : "Your caregiver";
 
-    // Activity feed entry
-    await db.prepare(
-      "INSERT INTO activity_feed (id, family_user_id, care_recipient_id, event_type, title, message, metadata) VALUES (?, ?, ?, 'session_checkin', ?, ?, ?)"
-    ).run(
-      require("uuid").v4(),
-      session.family_user_id,
-      session.care_recipient_id,
-      `${caregiverName} has checked in`,
-      `Care session with ${session.recipient_first_name} has started. ${arrivalMood ? `Mood on arrival: ${arrivalMood}` : ""}`,
-      JSON.stringify({ sessionId: req.params.id })
-    );
+    if (!isTestMode) {
+      const emitToUser = req.app.get("emitToUser");
 
-    if (emitToUser) {
-      emitToUser(session.family_user_id, "session_update", {
-        sessionId: req.params.id,
-        status: "in_progress",
-        checkIn: true,
-        arrivalMood,
-        lateCheckIn,
-        lateMinutes: lateCheckIn ? lateMinutes : undefined,
-      });
-      emitToUser(session.family_user_id, "activity_update", {});
+      // Activity feed entry
+      await db.prepare(
+        "INSERT INTO activity_feed (id, family_user_id, care_recipient_id, event_type, title, message, metadata) VALUES (?, ?, ?, 'session_checkin', ?, ?, ?)"
+      ).run(
+        require("uuid").v4(),
+        session.family_user_id,
+        session.care_recipient_id,
+        `${caregiverName} has checked in`,
+        `Care session with ${session.recipient_first_name} has started. ${arrivalMood ? `Mood on arrival: ${arrivalMood}` : ""}`,
+        JSON.stringify({ sessionId: req.params.id })
+      );
 
-      // If late, send a separate event so the family can choose extend/truncate
-      if (lateCheckIn) {
-        emitToUser(session.family_user_id, "late_check_in", {
+      if (emitToUser) {
+        emitToUser(session.family_user_id, "session_update", {
           sessionId: req.params.id,
-          lateMinutes,
-          caregiverName,
-          message: `${caregiverName} checked in ${lateMinutes} minutes late. Would you like to extend the session or keep the original end time?`,
+          status: "in_progress",
+          checkIn: true,
+          arrivalMood,
+          lateCheckIn,
+          lateMinutes: lateCheckIn ? lateMinutes : undefined,
         });
-      }
-    }
+        emitToUser(session.family_user_id, "activity_update", {});
 
-    // Push notification to family if late
-    if (lateCheckIn) {
-      try {
-        const sendPush = req.app.get("sendPush");
-        if (sendPush) {
-          await sendPush(session.family_user_id, {
-            title: `${caregiverName} Checked In Late`,
-            body: `${lateMinutes} minutes late. Open InPlace to choose: extend session or keep original end time.`,
-            data: { type: "late_check_in", sessionId: req.params.id },
+        // If late, send a separate event so the family can choose extend/truncate
+        if (lateCheckIn) {
+          emitToUser(session.family_user_id, "late_check_in", {
+            sessionId: req.params.id,
+            lateMinutes,
+            caregiverName,
+            message: `${caregiverName} checked in ${lateMinutes} minutes late. Would you like to extend the session or keep the original end time?`,
           });
         }
-      } catch {}
+      }
+
+      // Push notification to family if late
+      if (lateCheckIn) {
+        try {
+          const sendPush = req.app.get("sendPush");
+          if (sendPush) {
+            await sendPush(session.family_user_id, {
+              title: `${caregiverName} Checked In Late`,
+              body: `${lateMinutes} minutes late. Open InPlace to choose: extend session or keep original end time.`,
+              data: { type: "late_check_in", sessionId: req.params.id },
+            });
+          }
+        } catch {}
+      }
+    } else {
+      console.log(`[check-in] TEST MODE — skipping notifications for session ${req.params.id.slice(0,8)}`);
     }
 
     res.json({
@@ -1389,6 +1423,7 @@ router.post("/:id/check-in", async (req, res) => {
       lateCheckIn,
       lateMinutes: lateCheckIn ? lateMinutes : undefined,
       offlineSync: isOfflineSync,
+      testMode: isTestMode || undefined,
     });
   } catch (err) {
     console.error("Check-in error:", err);
@@ -1510,19 +1545,25 @@ router.post("/:id/check-out", async (req, res) => {
     `).run(adjustedCost, actualDurationHours, overtimeMinutes, overtimeCost, req.params.id);
 
     // ─── Capture payment (Stripe auth → charge) ───
-    // If payment was pre-authorized, capture the appropriate amount now
-    try {
-      const { captureSessionPayment } = require("./accountability");
-      const captureAmountCents = Math.round(adjustedCost * 100);
-      if (captureAmountCents > 0) {
-        const captureResult = await captureSessionPayment(req.params.id, captureAmountCents);
-        if (captureResult.error) {
-          console.warn(`[checkout] Payment capture skipped: ${captureResult.error}`);
+    // Skip when admin is impersonating (test mode) — don't charge real money
+    const isTestCheckout = !!req.user.impersonatedBy;
+    if (!isTestCheckout) {
+      // If payment was pre-authorized, capture the appropriate amount now
+      try {
+        const { captureSessionPayment } = require("./accountability");
+        const captureAmountCents = Math.round(adjustedCost * 100);
+        if (captureAmountCents > 0) {
+          const captureResult = await captureSessionPayment(req.params.id, captureAmountCents);
+          if (captureResult.error) {
+            console.warn(`[checkout] Payment capture skipped: ${captureResult.error}`);
+          }
         }
+      } catch (captureErr) {
+        // Non-blocking — don't fail checkout if capture fails
+        console.error("[checkout] Payment capture error (non-blocking):", captureErr.message);
       }
-    } catch (captureErr) {
-      // Non-blocking — don't fail checkout if capture fails
-      console.error("[checkout] Payment capture error (non-blocking):", captureErr.message);
+    } else {
+      console.log(`[checkout] TEST MODE — skipping payment capture for session ${req.params.id.slice(0,8)}`);
     }
 
     // Calculate how many minutes early (for storage and notification)
