@@ -388,6 +388,7 @@ const setAuthToken = window.setAuthToken = token => {
   // Token is now stored in httpOnly cookie by the server — no localStorage
   // Keep in-memory for WebSocket auth and in-flight requests
 };
+const getAuthToken = window.getAuthToken = () => AUTH_TOKEN;
 
 // Active role for dual-role users (which view/mode they're in)
 let ACTIVE_ROLE = localStorage.getItem('active_role') || null;
@@ -504,6 +505,17 @@ const apiFetch = window.apiFetch = async (url, options = {}) => {
     } catch (e) {/* not JSON, fall through */}
   }
   if (response.status === 401 && url !== '/api/auth/refresh') {
+    // If impersonation token expired, end impersonation instead of refreshing
+    if (IMPERSONATION_TOKEN) {
+      console.warn('Impersonation token expired — ending test mode');
+      setImpersonationToken(null);
+      sessionStorage.removeItem('inplace_impersonation_user');
+      const backup = sessionStorage.getItem('inplace_admin_token_backup');
+      sessionStorage.removeItem('inplace_admin_token_backup');
+      if (backup) setAuthToken(backup);
+      window.location.reload();
+      return null;
+    }
     // Attempt silent token refresh before logging out
     try {
       if (!_refreshPromise) {
