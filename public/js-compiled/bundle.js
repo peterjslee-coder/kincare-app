@@ -47464,7 +47464,7 @@ const CaretakerHub = window.CaretakerHub = ({
       position: 'fixed',
       inset: 0,
       background: 'var(--bg-surface)',
-      zIndex: 1000,
+      zIndex: 1200,
       display: 'flex',
       flexDirection: 'column'
     }
@@ -47803,96 +47803,7 @@ const CaretakerHub = window.CaretakerHub = ({
     }, n.createdAt ? new Date(n.createdAt).toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric'
-    }) : ''), n.content))) : null,
-    // ── Acknowledge checkbox ──
-    React.createElement('label', {
-      style: {
-        display: 'flex',
-        alignItems: 'flex-start',
-        gap: 10,
-        padding: 14,
-        background: briefingAcked ? 'var(--color-success-bg)' : 'var(--bg-primary)',
-        borderRadius: 10,
-        border: briefingAcked ? '2px solid #4caf50' : '2px solid #ddd',
-        cursor: 'pointer',
-        marginTop: 4,
-        transition: 'all 0.2s'
-      }
-    }, React.createElement('input', {
-      type: 'checkbox',
-      checked: briefingAcked,
-      onChange: e => setBriefingAcked(e.target.checked),
-      style: {
-        marginTop: 2,
-        width: 18,
-        height: 18,
-        accentColor: 'var(--role-color)'
-      }
-    }), React.createElement('span', {
-      style: {
-        fontSize: 13,
-        fontWeight: 600,
-        color: briefingAcked ? 'var(--color-success)' : 'var(--text-secondary)'
-      }
-    }, 'I\'ve reviewed this care briefing'))),
-    // ── Continue button with shake feedback ──
-    React.createElement('div', {
-      style: {
-        marginTop: 20
-      }
-    }, React.createElement('button', {
-      onClick: async () => {
-        if (!briefingAcked) {
-          // Shake + show hint
-          setContinueShaking(true);
-          setContinueHintVisible(true);
-          setTimeout(() => setContinueShaking(false), 400);
-          return;
-        }
-        setContinueHintVisible(false);
-        // Check if first-visit confirmation is needed
-        try {
-          const fvRes = await apiFetch('/api/sessions/' + checkInSession.id + '/first-visit-check');
-          if (fvRes !== null && fvRes !== void 0 && fvRes.ok) {
-            const fvData = await fvRes.json();
-            if (fvData.needsConfirmation) {
-              setFirstVisitNeeded(true);
-              setFirstVisitName(fvData.recipientName || 'the care recipient');
-              setFirstVisitChoice('');
-              setFirstVisitNotes('');
-              setCheckInStep('first-visit');
-              return;
-            }
-          }
-        } catch (e) {
-          console.error('First-visit check failed:', e);
-        }
-        setCheckInStep('checkin');
-      },
-      style: {
-        width: '100%',
-        padding: '16px',
-        border: 'none',
-        borderRadius: 14,
-        fontSize: 16,
-        fontWeight: 700,
-        cursor: 'pointer',
-        background: briefingAcked ? 'linear-gradient(135deg, var(--role-color), var(--color-success))' : 'var(--bg-primary)',
-        color: briefingAcked ? 'var(--text-on-primary)' : 'var(--text-muted)',
-        transition: 'all 0.2s',
-        animation: continueShaking ? 'checkInShake 0.4s ease-in-out' : 'none',
-        border: briefingAcked ? 'none' : '1px solid var(--border-light)'
-      }
-    }, briefingAcked ? 'Continue to Check In →' : 'Continue to Check In →'), continueHintVisible && !briefingAcked ? React.createElement('div', {
-      style: {
-        textAlign: 'center',
-        fontSize: 13,
-        color: 'var(--color-warning)',
-        marginTop: 8,
-        fontWeight: 500,
-        animation: 'fadeIn 0.3s ease'
-      }
-    }, '☝️ Please acknowledge the care briefing first') : null));
+    }) : ''), n.content))) : null));
   })(), checkInStep === 'first-visit' && React.createElement('div', null, React.createElement('div', {
     style: {
       textAlign: 'center',
@@ -48176,8 +48087,100 @@ const CaretakerHub = window.CaretakerHub = ({
       padding: '8px 0',
       marginBottom: 8
     }
-  }, '\u2190 Back to briefing'))), checkInStep === 'checkin' && React.createElement('div', {
+  }, '\u2190 Back to briefing'))), checkInStep === 'briefing' && React.createElement('div', {
     style: {
+      flexShrink: 0,
+      padding: '12px 16px',
+      paddingBottom: 'max(12px, env(safe-area-inset-bottom))',
+      background: 'var(--bg-surface)',
+      borderTop: '1px solid var(--border-light)',
+      maxWidth: 520,
+      width: '100%',
+      margin: '0 auto',
+      boxSizing: 'border-box'
+    }
+  }, React.createElement('label', {
+    style: {
+      display: 'flex',
+      alignItems: 'flex-start',
+      gap: 10,
+      padding: 12,
+      background: briefingAcked ? 'var(--color-success-bg)' : 'var(--bg-primary)',
+      borderRadius: 10,
+      border: briefingAcked ? '2px solid #4caf50' : '2px solid #ddd',
+      cursor: 'pointer',
+      transition: 'all 0.2s',
+      marginBottom: 12
+    }
+  }, React.createElement('input', {
+    type: 'checkbox',
+    checked: briefingAcked,
+    onChange: e => setBriefingAcked(e.target.checked),
+    style: {
+      marginTop: 2,
+      width: 18,
+      height: 18,
+      accentColor: 'var(--role-color)'
+    }
+  }), React.createElement('span', {
+    style: {
+      fontSize: 13,
+      fontWeight: 600,
+      color: briefingAcked ? 'var(--color-success)' : 'var(--text-secondary)'
+    }
+  }, 'I\'ve reviewed this care briefing')), React.createElement('button', {
+    onClick: async () => {
+      if (!briefingAcked) {
+        setContinueShaking(true);
+        setContinueHintVisible(true);
+        setTimeout(() => setContinueShaking(false), 400);
+        return;
+      }
+      setContinueHintVisible(false);
+      try {
+        const fvRes = await apiFetch('/api/sessions/' + checkInSession.id + '/first-visit-check');
+        if (fvRes !== null && fvRes !== void 0 && fvRes.ok) {
+          const fvData = await fvRes.json();
+          if (fvData.needsConfirmation) {
+            setFirstVisitNeeded(true);
+            setFirstVisitName(fvData.recipientName || 'the care recipient');
+            setFirstVisitChoice('');
+            setFirstVisitNotes('');
+            setCheckInStep('first-visit');
+            return;
+          }
+        }
+      } catch (e) {
+        console.error('First-visit check failed:', e);
+      }
+      setCheckInStep('checkin');
+    },
+    style: {
+      width: '100%',
+      padding: '16px',
+      border: 'none',
+      borderRadius: 14,
+      fontSize: 16,
+      fontWeight: 700,
+      cursor: 'pointer',
+      background: briefingAcked ? 'linear-gradient(135deg, var(--role-color), var(--color-success))' : 'var(--bg-primary)',
+      color: briefingAcked ? 'var(--text-on-primary)' : 'var(--text-muted)',
+      transition: 'all 0.2s',
+      animation: continueShaking ? 'checkInShake 0.4s ease-in-out' : 'none',
+      border: briefingAcked ? 'none' : '1px solid var(--border-light)'
+    }
+  }, briefingAcked ? 'Continue to Check In →' : 'Continue to Check In →'), continueHintVisible && !briefingAcked ? React.createElement('div', {
+    style: {
+      textAlign: 'center',
+      fontSize: 13,
+      color: 'var(--color-warning)',
+      marginTop: 8,
+      fontWeight: 500,
+      animation: 'fadeIn 0.3s ease'
+    }
+  }, '☝️ Please acknowledge the care briefing first') : null), checkInStep === 'checkin' && React.createElement('div', {
+    style: {
+      flexShrink: 0,
       padding: '16px 16px',
       paddingBottom: 'max(16px, env(safe-area-inset-bottom))',
       background: 'var(--bg-surface)',
