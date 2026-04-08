@@ -5034,6 +5034,71 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                       {restoreLoading === sessionDetail.session?.id ? 'Restoring...' : '\u21A9\uFE0F Restore This Session'}
                     </button>
                   )}
+
+                  {/* Rewind buttons for testing — undo checkout or check-in */}
+                  {(sessionDetail.session?.status === 'completed' || sessionDetail.session?.status === 'in_progress') && (
+                    <div style={{ marginTop: 12 }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>
+                        {'\u23EA'} Rewind for Testing
+                      </div>
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        {sessionDetail.session?.status === 'completed' && (
+                          <button onClick={async () => {
+                            if (!confirm('Rewind to In Progress? This will undo the checkout (clear checkout data, payment, review) but keep the check-in. You can re-test checkout.')) return;
+                            try {
+                              const res = await apiFetch(`/api/admin/sessions/${sessionDetail.session.id}/rewind`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ target: 'in_progress' }),
+                              });
+                              if (res?.ok) {
+                                showToast('Rewound to In Progress — checkout undone', 'success');
+                                const refresh = await apiFetch(`/api/admin/sessions/${sessionDetail.session.id}/detail`);
+                                if (refresh?.ok) setSessionDetail(await refresh.json());
+                              } else {
+                                const err = await res?.json().catch(() => null);
+                                showToast(err?.error || 'Rewind failed', 'error');
+                              }
+                            } catch (e) { showToast('Rewind failed: ' + e.message, 'error'); }
+                          }} style={{
+                            padding: '8px 14px', background: '#2563eb', color: '#fff', border: 'none',
+                            borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                          }}>
+                            {'\u23EA'} Undo Checkout
+                          </button>
+                        )}
+                        <button onClick={async () => {
+                          const action = sessionDetail.session?.status === 'completed'
+                            ? 'Full rewind to Confirmed? This deletes the visit log, payment, and all check-in/out data. You can re-test the entire flow.'
+                            : 'Rewind to Confirmed? This will undo the check-in and delete the visit log. You can re-test check-in.';
+                          if (!confirm(action)) return;
+                          try {
+                            const res = await apiFetch(`/api/admin/sessions/${sessionDetail.session.id}/rewind`, {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ target: 'confirmed' }),
+                            });
+                            if (res?.ok) {
+                              showToast('Rewound to Confirmed — ready for fresh check-in', 'success');
+                              const refresh = await apiFetch(`/api/admin/sessions/${sessionDetail.session.id}/detail`);
+                              if (refresh?.ok) setSessionDetail(await refresh.json());
+                            } else {
+                              const err = await res?.json().catch(() => null);
+                              showToast(err?.error || 'Rewind failed', 'error');
+                            }
+                          } catch (e) { showToast('Rewind failed: ' + e.message, 'error'); }
+                        }} style={{
+                          padding: '8px 14px', background: '#7c3aed', color: '#fff', border: 'none',
+                          borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                        }}>
+                          {sessionDetail.session?.status === 'completed' ? '\u23EE\uFE0F Full Rewind' : '\u23EA Undo Check-In'}
+                        </button>
+                      </div>
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>
+                        Rewind before auto-pay fires to re-test the flow. No notifications sent.
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* GPS data from visit log */}

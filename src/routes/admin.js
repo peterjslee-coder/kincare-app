@@ -4202,6 +4202,113 @@ router.post("/sessions/:id/restore", async (req, res) => {
   }
 });
 
+// ─── POST /api/admin/sessions/:id/rewind — Rewind session to an earlier state ───
+// Lets admin undo checkout (completed→in_progress) or undo check-in (in_progress→confirmed)
+// Body: { target: "in_progress" | "confirmed" }
+//   completed → in_progress: clears checkout data, keeps check-in. Re-test checkout.
+//   completed → confirmed: full rewind, deletes visit log. Re-test everything.
+//   in_progress → confirmed: undo check-in, deletes visit log. Re-test check-in.
+router.post("/sessions/:id/rewind", async (req, res) => {
+  try {
+    const db = await getDb();
+    const session = await db.prepare(`
+      SELECT cs.*, cp.user_id AS caregiver_user_id
+      FROM care_sessions cs
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      WHERE cs.id = ?
+    `).get(req.params.id);
+    if (!session) return res.status(404).json({ error: "Session not found" });
+
+    const { target } = req.body || {};
+    const validTransitions = {
+      'completed': ['in_progress', 'confirmed'],
+      'in_progress': ['confirmed'],
+    };
+    const allowed = validTransitions[session.status];
+    if (!allowed) {
+      return res.status(400).json({ error: `Cannot rewind from status "${session.status}" — only completed or in_progress sessions can be rewound` });
+    }
+    if (!target || !allowed.includes(target)) {
+      return res.status(400).json({ error: `Invalid target "${target}" for status "${session.status}". Allowed: ${allowed.join(', ')}` });
+    }
+
+    const previousStatus = session.status;
+
+    if (target === 'in_progress') {
+      // Undo checkout only — keep the visit log and check-in, clear checkout data
+      await db.prepare(`
+        UPDATE care_sessions SET
+          status = 'in_progress',
+          completed_at = NULL,
+          payment_due_at = NULL,
+          payment_status = NULL,
+          review_required = 0,
+          review_completed = 0,
+          overtime_minutes = NULL,
+          overtime_cost = NULL,
+          updated_at = NOW()
+        WHERE id = ?
+      `).run(req.params.id);
+
+      // Clear checkout fields on the visit log (keep check-in data)
+      await db.prepare(`
+        UPDATE visit_logs SET
+          check_out_time = NULL,
+          departure_mood = NULL,
+          condition_tags = NULL,
+          care_feedback = NULL,
+          service_feedback = NULL,
+          summary = NULL,
+          early_departure_reason = NULL,
+          early_departure_minutes = NULL,
+          check_out_lat = NULL,
+          check_out_lng = NULL,
+          ai_summary = NULL
+        WHERE session_id = ?
+      `).run(req.params.id);
+
+      // Delete any payment records created during checkout
+      await db.prepare("DELETE FROM payments WHERE session_id = ? AND status IN ('pending', 'waived')").run(req.params.id);
+
+    } else if (target === 'confirmed') {
+      // Full rewind — delete visit log, reset to pre-check-in state
+      await db.prepare(`
+        UPDATE care_sessions SET
+          status = 'confirmed',
+          completed_at = NULL,
+          payment_due_at = NULL,
+          payment_status = NULL,
+          review_required = 0,
+          review_completed = 0,
+          overtime_minutes = NULL,
+          overtime_cost = NULL,
+          late_check_in = 0,
+          late_minutes = NULL,
+          notifications_sent = '[]',
+          updated_at = NOW()
+        WHERE id = ?
+      `).run(req.params.id);
+
+      // Delete visit logs entirely
+      await db.prepare("DELETE FROM visit_logs WHERE session_id = ?").run(req.params.id);
+
+      // Delete any payment records
+      await db.prepare("DELETE FROM payments WHERE session_id = ? AND status IN ('pending', 'waived')").run(req.params.id);
+    }
+
+    await logAdminAction(req, "rewind_session", "care_session", req.params.id, {
+      from: previousStatus,
+      to: target,
+    });
+
+    console.log(`[admin] Rewound session ${req.params.id.slice(0, 8)}: ${previousStatus} → ${target} by ${req.user.email}`);
+    res.json({ success: true, message: `Session rewound: ${previousStatus} → ${target}` });
+  } catch (err) {
+    console.error("Rewind session error:", err);
+    res.status(500).json({ error: "Failed to rewind session" });
+  }
+});
+
 // ─── POST /api/admin/sessions/:id/force-check-in ───
 // Admin can force-check-in any confirmed session (bypasses caregiver-only gate)
 router.post("/sessions/:id/force-check-in", async (req, res) => {

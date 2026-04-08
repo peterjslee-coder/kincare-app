@@ -63820,7 +63820,7 @@ const DocThumbnail = ({
 const AdminPanel = window.AdminPanel = ({
   currentUser
 }) => {
-  var _tabGroups$flatMap$fi, _reviewInsights$insig, _secDashboard$activeT, _secDashboard$failedL, _secDashboard$adminAc, _secDashboard$critica, _sessionDetail$recipi, _sessionDetail$recipi2, _sessionDetail$sessio, _sessionDetail$sessio2, _sessionDetail$sessio3, _sessionDetail$sessio4, _sessionDetail$family, _sessionDetail$caregi, _sessionDetail$sessio6, _sessionDetail$sessio7, _sessionDetail$sessio8, _sessionDetail$sessio9, _sessionDetail$sessio0, _sessionDetail$sessio1, _sessionDetail$sessio10, _sessionDetail$sessio11, _sessionDetail$sessio12, _sessionDetail$visitL, _sessionDetail$visitL2, _sessionDetail$paymen, _onboardingModal$user, _onboardingModal$user2, _onboardingModal$user3, _onboardingModal$flag, _onboardingModal$docu, _userDrawer$sessionSt, _userDrawer$sessionSt2, _userDrawer$reviewSta, _userDrawer$reviewSta2, _userDrawer$careTeams, _userDrawer$user5, _userDrawer$tickets, _userDrawer$safetyFla, _userDrawer$allDocume, _userDrawer$allDocume2, _userDrawer$user1, _userDrawer$user11, _userDrawer$user13, _userDrawer$user14, _userDrawer$user15;
+  var _tabGroups$flatMap$fi, _reviewInsights$insig, _secDashboard$activeT, _secDashboard$failedL, _secDashboard$adminAc, _secDashboard$critica, _sessionDetail$recipi, _sessionDetail$recipi2, _sessionDetail$sessio, _sessionDetail$sessio2, _sessionDetail$sessio3, _sessionDetail$sessio4, _sessionDetail$family, _sessionDetail$caregi, _sessionDetail$sessio6, _sessionDetail$sessio7, _sessionDetail$sessio8, _sessionDetail$sessio9, _sessionDetail$sessio0, _sessionDetail$sessio1, _sessionDetail$sessio10, _sessionDetail$sessio11, _sessionDetail$sessio12, _sessionDetail$sessio13, _sessionDetail$sessio14, _sessionDetail$sessio15, _sessionDetail$sessio17, _sessionDetail$visitL, _sessionDetail$visitL2, _sessionDetail$paymen, _onboardingModal$user, _onboardingModal$user2, _onboardingModal$user3, _onboardingModal$flag, _onboardingModal$docu, _userDrawer$sessionSt, _userDrawer$sessionSt2, _userDrawer$reviewSta, _userDrawer$reviewSta2, _userDrawer$careTeams, _userDrawer$user5, _userDrawer$tickets, _userDrawer$safetyFla, _userDrawer$allDocume, _userDrawer$allDocume2, _userDrawer$user1, _userDrawer$user11, _userDrawer$user13, _userDrawer$user14, _userDrawer$user15;
   const {
     showToast
   } = useToast();
@@ -73847,7 +73847,104 @@ const AdminPanel = window.AdminPanel = ({
       cursor: 'pointer',
       opacity: restoreLoading === ((_sessionDetail$sessio11 = sessionDetail.session) === null || _sessionDetail$sessio11 === void 0 ? void 0 : _sessionDetail$sessio11.id) ? 0.6 : 1
     }
-  }, restoreLoading === ((_sessionDetail$sessio12 = sessionDetail.session) === null || _sessionDetail$sessio12 === void 0 ? void 0 : _sessionDetail$sessio12.id) ? 'Restoring...' : '\u21A9\uFE0F Restore This Session')), ((_sessionDetail$visitL = sessionDetail.visitLog) === null || _sessionDetail$visitL === void 0 ? void 0 : _sessionDetail$visitL.some(vl => vl.check_in_lat && vl.check_in_lng)) && /*#__PURE__*/React.createElement("div", {
+  }, restoreLoading === ((_sessionDetail$sessio12 = sessionDetail.session) === null || _sessionDetail$sessio12 === void 0 ? void 0 : _sessionDetail$sessio12.id) ? 'Restoring...' : '\u21A9\uFE0F Restore This Session'), (((_sessionDetail$sessio13 = sessionDetail.session) === null || _sessionDetail$sessio13 === void 0 ? void 0 : _sessionDetail$sessio13.status) === 'completed' || ((_sessionDetail$sessio14 = sessionDetail.session) === null || _sessionDetail$sessio14 === void 0 ? void 0 : _sessionDetail$sessio14.status) === 'in_progress') && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      fontWeight: 700,
+      color: 'var(--text-muted)',
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+      marginBottom: 6
+    }
+  }, '\u23EA', " Rewind for Testing"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 8,
+      flexWrap: 'wrap'
+    }
+  }, ((_sessionDetail$sessio15 = sessionDetail.session) === null || _sessionDetail$sessio15 === void 0 ? void 0 : _sessionDetail$sessio15.status) === 'completed' && /*#__PURE__*/React.createElement("button", {
+    onClick: async () => {
+      if (!confirm('Rewind to In Progress? This will undo the checkout (clear checkout data, payment, review) but keep the check-in. You can re-test checkout.')) return;
+      try {
+        const res = await apiFetch(`/api/admin/sessions/${sessionDetail.session.id}/rewind`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            target: 'in_progress'
+          })
+        });
+        if (res !== null && res !== void 0 && res.ok) {
+          showToast('Rewound to In Progress — checkout undone', 'success');
+          const refresh = await apiFetch(`/api/admin/sessions/${sessionDetail.session.id}/detail`);
+          if (refresh !== null && refresh !== void 0 && refresh.ok) setSessionDetail(await refresh.json());
+        } else {
+          const err = await (res === null || res === void 0 ? void 0 : res.json().catch(() => null));
+          showToast((err === null || err === void 0 ? void 0 : err.error) || 'Rewind failed', 'error');
+        }
+      } catch (e) {
+        showToast('Rewind failed: ' + e.message, 'error');
+      }
+    },
+    style: {
+      padding: '8px 14px',
+      background: '#2563eb',
+      color: '#fff',
+      border: 'none',
+      borderRadius: 8,
+      fontSize: 12,
+      fontWeight: 600,
+      cursor: 'pointer'
+    }
+  }, '\u23EA', " Undo Checkout"), /*#__PURE__*/React.createElement("button", {
+    onClick: async () => {
+      var _sessionDetail$sessio16;
+      const action = ((_sessionDetail$sessio16 = sessionDetail.session) === null || _sessionDetail$sessio16 === void 0 ? void 0 : _sessionDetail$sessio16.status) === 'completed' ? 'Full rewind to Confirmed? This deletes the visit log, payment, and all check-in/out data. You can re-test the entire flow.' : 'Rewind to Confirmed? This will undo the check-in and delete the visit log. You can re-test check-in.';
+      if (!confirm(action)) return;
+      try {
+        const res = await apiFetch(`/api/admin/sessions/${sessionDetail.session.id}/rewind`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            target: 'confirmed'
+          })
+        });
+        if (res !== null && res !== void 0 && res.ok) {
+          showToast('Rewound to Confirmed — ready for fresh check-in', 'success');
+          const refresh = await apiFetch(`/api/admin/sessions/${sessionDetail.session.id}/detail`);
+          if (refresh !== null && refresh !== void 0 && refresh.ok) setSessionDetail(await refresh.json());
+        } else {
+          const err = await (res === null || res === void 0 ? void 0 : res.json().catch(() => null));
+          showToast((err === null || err === void 0 ? void 0 : err.error) || 'Rewind failed', 'error');
+        }
+      } catch (e) {
+        showToast('Rewind failed: ' + e.message, 'error');
+      }
+    },
+    style: {
+      padding: '8px 14px',
+      background: '#7c3aed',
+      color: '#fff',
+      border: 'none',
+      borderRadius: 8,
+      fontSize: 12,
+      fontWeight: 600,
+      cursor: 'pointer'
+    }
+  }, ((_sessionDetail$sessio17 = sessionDetail.session) === null || _sessionDetail$sessio17 === void 0 ? void 0 : _sessionDetail$sessio17.status) === 'completed' ? '\u23EE\uFE0F Full Rewind' : '\u23EA Undo Check-In')), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 10,
+      color: 'var(--text-muted)',
+      marginTop: 4
+    }
+  }, "Rewind before auto-pay fires to re-test the flow. No notifications sent."))), ((_sessionDetail$visitL = sessionDetail.visitLog) === null || _sessionDetail$visitL === void 0 ? void 0 : _sessionDetail$visitL.some(vl => vl.check_in_lat && vl.check_in_lng)) && /*#__PURE__*/React.createElement("div", {
     style: {
       background: '#f0fdf4',
       border: '1px solid #bbf7d0',
