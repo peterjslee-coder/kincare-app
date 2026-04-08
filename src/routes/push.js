@@ -337,7 +337,9 @@ async function _sendNativePush(subscriptionObj, notificationPayload) {
           icon: "ic_notification",
           color: "#1b6b5a",
           channelId: "inplace_default",
+          ...(parsed.tag ? { tag: parsed.tag } : {}), // supersede previous notification with same tag
         },
+        collapseKey: parsed.tag || undefined, // collapse queued messages with same key
       },
     };
     await admin.messaging().send(message);
@@ -428,6 +430,7 @@ async function sendPushToUser(userId, payload, eventType) {
       body: payload.body || "",
       icon: "/icons/icon-192.png",
       badge: "/icons/icon-maskable-96.png",
+      tag: payload.tag || undefined, // same tag → OS replaces previous notification
       data: payload.data || {},
     });
 
@@ -537,12 +540,19 @@ async function sendSessionReminders(sessionId, reminderType) {
       ? careTeamMembers.map(m => m.user_id)
       : (session.family_user_id ? [session.family_user_id] : []);
 
+    // Notification tags — same tag replaces the previous notification instead of stacking
+    // This creates a lifecycle: arriving → in progress → wrapping up → complete
+    const cgTag = `session-${sessionId.slice(0,8)}-cg`;       // caregiver's notification slot
+    const famTag = `session-${sessionId.slice(0,8)}-family`;   // family/care team slot
+    const recipTag = `session-${sessionId.slice(0,8)}-recip`;  // care recipient slot
+
     if (reminderType === "pre_check_in") {
       // 1. To caregiver: push + SMS "Get ready to check in"
       if (session.caregiver_user_id) {
         await sendPushToUser(session.caregiver_user_id, {
           title: "Get Ready to Check In",
           body: `Time to check in with ${recipientName} (session at ${session.scheduled_time})`,
+          tag: cgTag,
           data: { type: "check_in_reminder", sessionId, page: "schedule" },
         }, "check_in_reminder");
 
@@ -561,6 +571,7 @@ async function sendSessionReminders(sessionId, reminderType) {
         await sendPushToUser(userId, {
           title: "Caregiver Arriving Soon",
           body: `${caregiverName} is about to check in with ${recipientName}`,
+          tag: famTag,
           data: { type: "caregiver_arriving", sessionId, page: "dashboard" },
         }, "caregiver_arriving");
       }
@@ -574,6 +585,7 @@ async function sendSessionReminders(sessionId, reminderType) {
         await sendPushToUser(session.care_for_user_id, {
           title: "Your Caregiver is Almost Here!",
           body: `${caregiverName} will be at your door soon!`,
+          tag: recipTag,
           data: { type: "caregiver_arriving_recipient", sessionId },
         }, "caregiver_arriving_recipient");
       }
@@ -592,6 +604,7 @@ async function sendSessionReminders(sessionId, reminderType) {
         await sendPushToUser(session.caregiver_user_id, {
           title: "Time to Wrap Up",
           body: `Get ready to check out with ${recipientName}`,
+          tag: cgTag,
           data: { type: "check_out_reminder", sessionId, page: "schedule" },
         }, "check_out_reminder");
 
@@ -609,6 +622,7 @@ async function sendSessionReminders(sessionId, reminderType) {
         await sendPushToUser(userId, {
           title: "Session Wrapping Up",
           body: `${caregiverName} is nearly done at ${recipientName}'s`,
+          tag: famTag,
           data: { type: "check_out_imminent", sessionId, page: "dashboard" },
         }, "check_out_imminent");
       }
@@ -621,6 +635,7 @@ async function sendSessionReminders(sessionId, reminderType) {
         await sendPushToUser(session.care_for_user_id, {
           title: "Your Caregiver is About to Leave",
           body: `${caregiverName} will be heading out soon.`,
+          tag: recipTag,
           data: { type: "caregiver_leaving_recipient", sessionId },
         }, "caregiver_leaving_recipient");
       }
@@ -649,6 +664,7 @@ async function sendSessionReminders(sessionId, reminderType) {
         await sendPushToUser(session.caregiver_user_id, {
           title: "Check In Now!",
           body: `Your session with ${recipientName} has started — please check in ASAP`,
+          tag: cgTag,
           data: { type: "overdue_check_in", sessionId, page: "schedule" },
         }, "overdue_check_in");
 
@@ -666,6 +682,7 @@ async function sendSessionReminders(sessionId, reminderType) {
         await sendPushToUser(userId, {
           title: "Caregiver Late",
           body: `${caregiverName} hasn't checked in yet for ${recipientName}'s session`,
+          tag: famTag,
           data: { type: "overdue_check_in_family", sessionId, page: "dashboard" },
         }, "overdue_check_in_family");
       }
@@ -688,6 +705,7 @@ async function sendSessionReminders(sessionId, reminderType) {
         await sendPushToUser(session.caregiver_user_id, {
           title: "Don't Forget to Check Out",
           body: `Your session with ${recipientName} has passed its scheduled end time — please check out when you're done`,
+          tag: cgTag,
           data: { type: "overdue_check_out", sessionId, page: "schedule" },
         }, "overdue_check_out");
 
@@ -705,6 +723,7 @@ async function sendSessionReminders(sessionId, reminderType) {
         await sendPushToUser(userId, {
           title: "Session Running Over",
           body: `${caregiverName}'s session with ${recipientName} has passed its scheduled end time`,
+          tag: famTag,
           data: { type: "overdue_check_out_family", sessionId, page: "dashboard" },
         }, "overdue_check_out_family");
       }

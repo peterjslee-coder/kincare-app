@@ -1,6 +1,6 @@
 // InPlace Service Worker — v1.57.14
-const CACHE_NAME = 'inplace-build-65e05145-mnqgsovu';
-const SW_VERSION = 'build-65e05145-mnqgsovu';
+const CACHE_NAME = 'inplace-build-65e05145-mnqj9zv7';
+const SW_VERSION = 'build-65e05145-mnqj9zv7';
 const STATIC_ASSETS = [
   '/',
   '/css/styles.css',
@@ -165,6 +165,8 @@ self.addEventListener('push', (event) => {
     badge: '/icons/icon-maskable-96.png',
     vibrate: [100, 50, 100],
     data: data.data || {},
+    tag: data.tag || undefined, // same tag → replaces previous notification instead of stacking
+    renotify: !!data.tag, // vibrate/sound again even when replacing an existing tag
     actions: [
       { action: 'open', title: 'Open' },
       { action: 'dismiss', title: 'Dismiss' },

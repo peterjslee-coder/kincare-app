@@ -1501,18 +1501,58 @@ router.post("/:id/check-in", async (req, res) => {
         }
       }
 
-      // Push notification to family if late
-      if (lateCheckIn) {
-        try {
-          const sendPush = req.app.get("sendPush");
-          if (sendPush) {
-            await sendPush(session.family_user_id, {
-              title: `${caregiverName} Checked In Late`,
-              body: `${lateMinutes} minutes late. Open InPlace to choose: extend session or keep original end time.`,
-              data: { type: "late_check_in", sessionId: req.params.id },
-            });
-          }
-        } catch {}
+      // ─── Push notifications to care team: "Session In Progress" ───
+      // Uses same tag as pre_check_in reminder → replaces "Caregiver Arriving Soon"
+      const famTag = `session-${req.params.id.slice(0,8)}-family`;
+      const cgTag = `session-${req.params.id.slice(0,8)}-cg`;
+
+      // Compute scheduled end time for the notification body
+      let endTimeStr = "";
+      try {
+        if (session.scheduled_time && session.duration_hours) {
+          const [h, m] = session.scheduled_time.split(":").map(Number);
+          const endMin = h * 60 + m + Math.round(parseFloat(session.duration_hours) * 60);
+          const endH = Math.floor(endMin / 60) % 24;
+          const endM = endMin % 60;
+          const ampm = endH >= 12 ? "PM" : "AM";
+          const h12 = endH > 12 ? endH - 12 : (endH === 0 ? 12 : endH);
+          endTimeStr = ` — Ending ${h12}:${String(endM).padStart(2, "0")} ${ampm}`;
+        }
+      } catch {}
+
+      // Format check-in time for display
+      let checkInTimeStr = "";
+      try {
+        const cit = effectiveCheckInTime || new Date();
+        const ch = cit.getHours(); const cm = cit.getMinutes();
+        const ap = ch >= 12 ? "PM" : "AM";
+        const ch12 = ch > 12 ? ch - 12 : (ch === 0 ? 12 : ch);
+        checkInTimeStr = `${ch12}:${String(cm).padStart(2, "0")} ${ap}`;
+      } catch {}
+
+      // To entire care team: session is now in progress (supersedes "arriving soon")
+      try {
+        // Get all care team members (same pattern as sendSessionReminders)
+        const careTeamMembers = await db.prepare(`
+          SELECT DISTINCT ctm.user_id FROM care_team_members ctm
+          JOIN care_teams ct ON ctm.care_team_id = ct.id
+          WHERE ct.care_recipient_id = ?
+        `).all(session.care_recipient_id);
+        const teamUserIds = careTeamMembers.length > 0
+          ? careTeamMembers.map(m => m.user_id)
+          : (session.family_user_id ? [session.family_user_id] : []);
+
+        for (const userId of teamUserIds) {
+          if (userId === req.user.id) continue; // don't notify the caregiver themselves
+          await sendPushToUser(userId, {
+            title: "Session In Progress",
+            body: `${caregiverName} checked in${checkInTimeStr ? ` at ${checkInTimeStr}` : ""}${endTimeStr}${lateCheckIn ? ` (${lateMinutes} min late)` : ""}`,
+            tag: famTag,
+            data: { type: "session_in_progress", sessionId: req.params.id, page: "dashboard" },
+          }, "session_in_progress");
+        }
+      } catch (pushErr) {
+        console.warn("[check-in] Family push notification failed (non-blocking):", pushErr.message);
       }
     } else {
       console.log(`[check-in] TEST MODE — skipping notifications for session ${req.params.id.slice(0,8)}`);
@@ -1772,6 +1812,37 @@ router.post("/:id/check-out", async (req, res) => {
         overtimeCost,
       });
       emitToUser(session.family_user_id, "activity_update", {});
+    }
+
+    // ─── Push notification to care team: "Session Complete" ───
+    // Uses same tag → replaces "In Progress" / "Wrapping Up" notifications
+    if (!isTestCheckout) {
+      const famTag = `session-${req.params.id.slice(0,8)}-family`;
+      const durationStr = actualDurationHours
+        ? `${Math.floor(actualDurationHours)}h ${Math.round((actualDurationHours % 1) * 60)}m`
+        : "";
+      try {
+        const careTeamMembers = await db.prepare(`
+          SELECT DISTINCT ctm.user_id FROM care_team_members ctm
+          JOIN care_teams ct ON ctm.care_team_id = ct.id
+          WHERE ct.care_recipient_id = ?
+        `).all(session.care_recipient_id);
+        const teamUserIds = careTeamMembers.length > 0
+          ? careTeamMembers.map(m => m.user_id)
+          : (session.family_user_id ? [session.family_user_id] : []);
+
+        for (const userId of teamUserIds) {
+          if (userId === req.user.id) continue;
+          await sendPushToUser(userId, {
+            title: "Session Complete",
+            body: `${caregiverName} has checked out from ${session.recipient_first_name}'s session${durationStr ? ` (${durationStr})` : ""}${overtimeNote}`,
+            tag: famTag,
+            data: { type: "session_complete", sessionId: req.params.id, page: "dashboard" },
+          }, "session_complete");
+        }
+      } catch (pushErr) {
+        console.warn("[checkout] Family push notification failed (non-blocking):", pushErr.message);
+      }
     }
 
     // ─── iPAi: Generate AI session summary (non-blocking) ───
