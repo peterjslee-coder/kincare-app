@@ -674,6 +674,7 @@ async function caregiverDashboard(db, userId, res) {
       dlNumber: profile.dl_number,
       dlState: profile.dl_state,
       care_stoplight: profile.care_stoplight,
+      care_preferences: profile.care_preferences,
       avatar_url: user.avatar_url || null,
       academicProgram: profile.academic_program || null,
       academicProgramYear: profile.academic_program_year || null,
