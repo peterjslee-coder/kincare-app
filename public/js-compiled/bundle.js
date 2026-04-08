@@ -44654,12 +44654,46 @@ const CaretakerHub = window.CaretakerHub = ({
       style: {
         padding: '14px 16px',
         marginBottom: 8,
+        position: 'relative',
         background: 'var(--bg-error-light)',
         border: '2px solid #ef5350',
         borderRadius: 12,
         boxShadow: '0 2px 8px rgba(239,83,80,0.15)'
       }
-    }, /*#__PURE__*/React.createElement("div", {
+    }, /*#__PURE__*/React.createElement("button", {
+      onClick: async e => {
+        e.stopPropagation();
+        try {
+          await apiFetch(`/api/accountability/no-show/${alert.id}/acknowledge`, {
+            method: 'POST'
+          });
+          setData(prev => ({
+            ...prev,
+            noShowAlerts: (prev.noShowAlerts || []).filter(a => a.id !== alert.id)
+          }));
+        } catch (err) {
+          console.error('Dismiss no-show error:', err);
+        }
+      },
+      style: {
+        position: 'absolute',
+        top: 8,
+        right: 8,
+        background: 'rgba(0,0,0,0.2)',
+        border: 'none',
+        borderRadius: '50%',
+        width: 24,
+        height: 24,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: 'pointer',
+        color: 'var(--text-secondary)',
+        fontSize: 14,
+        lineHeight: 1
+      },
+      title: "Dismiss"
+    }, '\u2715'), /*#__PURE__*/React.createElement("div", {
       style: {
         display: 'flex',
         alignItems: 'center',

@@ -1129,6 +1129,9 @@ async function initializeDatabase() {
     `ALTER TABLE verified_documents ADD COLUMN IF NOT EXISTS is_verified INTEGER DEFAULT 0`,
     `ALTER TABLE verified_documents ADD COLUMN IF NOT EXISTS verified_at TIMESTAMPTZ`,
     `ALTER TABLE verified_documents ADD COLUMN IF NOT EXISTS verified_by TEXT`,
+
+    // v1.57.85 — Allow caregivers to dismiss no-show alert banners
+    `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS no_show_acknowledged INTEGER DEFAULT 0`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }

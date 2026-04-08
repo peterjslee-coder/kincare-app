@@ -1043,6 +1043,30 @@ router.get("/incident-context", async (req, res) => {
   }
 });
 
+// ─── Acknowledge (dismiss) a no-show alert ───
+router.post("/no-show/:sessionId/acknowledge", async (req, res) => {
+  try {
+    const db = getDb();
+    const userId = req.user.id;
+    const { sessionId } = req.params;
+
+    // Verify this session belongs to the requesting caregiver
+    const session = await db.prepare(
+      `SELECT id FROM care_sessions WHERE id = ? AND caregiver_id = ? AND caregiver_no_show = 1`
+    ).get(sessionId, userId);
+    if (!session) return res.status(404).json({ error: "Session not found" });
+
+    await db.prepare(
+      `UPDATE care_sessions SET no_show_acknowledged = 1 WHERE id = ?`
+    ).run(sessionId);
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Acknowledge no-show error:", err);
+    res.status(500).json({ error: "Failed to acknowledge" });
+  }
+});
+
 module.exports = router;
 module.exports.authorizeSessionPayment = authorizeSessionPayment;
 module.exports.captureSessionPayment = captureSessionPayment;

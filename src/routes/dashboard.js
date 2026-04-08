@@ -621,6 +621,7 @@ async function caregiverDashboard(db, userId, res) {
       LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
       WHERE cs.caregiver_id = ?
         AND cs.caregiver_no_show = 1
+        AND COALESCE(cs.no_show_acknowledged, 0) = 0
         AND cs.cancelled_by = 'system'
         AND cs.scheduled_date::date >= CURRENT_DATE - INTERVAL '30 days'
       ORDER BY cs.caregiver_no_show_at DESC
