@@ -1162,4 +1162,19 @@ router.post("/test-candidate", authenticate, async (req, res) => {
   }
 });
 
+// ─── GET /api/checkr/admin/packages ───
+// List available Checkr packages (admin diagnostic)
+router.get("/admin/packages", authenticate, async (req, res) => {
+  const db = await getDb();
+  const adminCheck = await db.prepare("SELECT is_admin FROM users WHERE id = ?").get(req.user.id);
+  if (!adminCheck?.is_admin) return res.status(403).json({ error: "Admin only" });
+  try {
+    getCheckrKey();
+    const pkgs = await checkrRequest("GET", "/packages");
+    res.json(pkgs);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
