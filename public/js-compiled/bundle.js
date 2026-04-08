@@ -43795,7 +43795,7 @@ const CaretakerHub = window.CaretakerHub = ({
       await apiFetch('/api/caregivers/profile', {
         method: 'POST',
         body: JSON.stringify({
-          hourlyRate: profile.hourlyRate || 25,
+          hourlyRate: profile.hourlyRate > 0 ? profile.hourlyRate : 25,
           careStoplight: stoplightForm
         })
       });
@@ -50414,9 +50414,9 @@ const FindWork = window.FindWork = () => {
       const res = await apiFetch('/api/caregivers/rates', {
         method: 'PUT',
         body: JSON.stringify({
-          rateDaytime: parseFloat(rates.daytime) || null,
-          rateNighttime: parseFloat(rates.nighttime) || null,
-          rateOvernight: parseFloat(rates.overnight) || null
+          rateDaytime: isNaN(parseFloat(rates.daytime)) ? undefined : parseFloat(rates.daytime),
+          rateNighttime: isNaN(parseFloat(rates.nighttime)) ? undefined : parseFloat(rates.nighttime),
+          rateOvernight: isNaN(parseFloat(rates.overnight)) ? undefined : parseFloat(rates.overnight)
         })
       });
       if (res !== null && res !== void 0 && res.ok) showToast('Rates saved!', 'success');else showToast('Failed to save rates', 'error');

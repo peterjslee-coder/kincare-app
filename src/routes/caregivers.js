@@ -329,10 +329,10 @@ router.put("/me", requireRole("caregiver"), async (req, res) => {
   const params = [];
 
   if (care_preferences !== undefined) { updates.push("care_preferences = ?"); params.push(care_preferences); updates.push("care_stoplight = ?"); params.push(care_preferences); }
-  if (rateDaytime !== undefined) { updates.push("rate_daytime = ?"); params.push(parseFloat(rateDaytime) || null); }
-  if (rateNighttime !== undefined) { updates.push("rate_nighttime = ?"); params.push(parseFloat(rateNighttime) || null); }
-  if (rateOvernight !== undefined) { updates.push("rate_overnight = ?"); params.push(parseFloat(rateOvernight) || null); }
-  if (rateDaytime !== undefined) { updates.push("hourly_rate = ?"); params.push(parseFloat(rateDaytime) || null); }
+  if (rateDaytime !== undefined) { const v = parseFloat(rateDaytime); updates.push("rate_daytime = ?"); params.push(isNaN(v) ? null : v); }
+  if (rateNighttime !== undefined) { const v = parseFloat(rateNighttime); updates.push("rate_nighttime = ?"); params.push(isNaN(v) ? null : v); }
+  if (rateOvernight !== undefined) { const v = parseFloat(rateOvernight); updates.push("rate_overnight = ?"); params.push(isNaN(v) ? null : v); }
+  if (rateDaytime !== undefined) { const v = parseFloat(rateDaytime); updates.push("hourly_rate = ?"); params.push(isNaN(v) ? null : v); }
 
   if (updates.length === 0) return res.json({ ok: true });
 
@@ -524,7 +524,7 @@ router.put("/rates", requireRole("caregiver"), async (req, res) => {
     }
   }
 
-  if (!rateDaytime && !rateNighttime && !rateOvernight) {
+  if (rateDaytime == null && rateNighttime == null && rateOvernight == null) {
     return res.status(400).json({ error: "At least one rate is required" });
   }
 
@@ -532,6 +532,7 @@ router.put("/rates", requireRole("caregiver"), async (req, res) => {
   const profile = await db.prepare("SELECT id FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
   if (!profile) return res.status(404).json({ error: "Caregiver profile not found" });
 
+  const safeRate = (v) => (v != null && !isNaN(parseFloat(v))) ? parseFloat(v) : null;
   await db.prepare(`
     UPDATE caregiver_profiles SET
       rate_daytime = COALESCE(?, rate_daytime),
@@ -540,7 +541,7 @@ router.put("/rates", requireRole("caregiver"), async (req, res) => {
       hourly_rate = COALESCE(?, hourly_rate),
       updated_at = NOW()
     WHERE user_id = ?
-  `).run(rateDaytime || null, rateNighttime || null, rateOvernight || null, rateDaytime || null, req.user.id);
+  `).run(safeRate(rateDaytime), safeRate(rateNighttime), safeRate(rateOvernight), safeRate(rateDaytime), req.user.id);
 
   const updated = await db.prepare("SELECT * FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
   res.json({

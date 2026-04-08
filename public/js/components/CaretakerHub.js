@@ -1048,7 +1048,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
     try {
       await apiFetch('/api/caregivers/profile', {
         method: 'POST',
-        body: JSON.stringify({ hourlyRate: profile.hourlyRate || 25, careStoplight: stoplightForm }),
+        body: JSON.stringify({ hourlyRate: profile.hourlyRate > 0 ? profile.hourlyRate : 25, careStoplight: stoplightForm }),
       });
       setStoplightData(stoplightForm);
       setEditingStoplight(false);

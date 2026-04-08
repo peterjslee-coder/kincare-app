@@ -153,9 +153,9 @@ const FindWork = window.FindWork = () => {
       const res = await apiFetch('/api/caregivers/rates', {
         method: 'PUT',
         body: JSON.stringify({
-          rateDaytime: parseFloat(rates.daytime) || null,
-          rateNighttime: parseFloat(rates.nighttime) || null,
-          rateOvernight: parseFloat(rates.overnight) || null,
+          rateDaytime: isNaN(parseFloat(rates.daytime)) ? undefined : parseFloat(rates.daytime),
+          rateNighttime: isNaN(parseFloat(rates.nighttime)) ? undefined : parseFloat(rates.nighttime),
+          rateOvernight: isNaN(parseFloat(rates.overnight)) ? undefined : parseFloat(rates.overnight),
         }),
       });
       if (res?.ok) showToast('Rates saved!', 'success');
