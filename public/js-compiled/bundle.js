@@ -44785,7 +44785,7 @@ const CaretakerHub = window.CaretakerHub = ({
           padding: '16px 18px',
           border: '2px solid #7c3aed',
           borderRadius: 12,
-          background: 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)',
+          background: 'var(--bg-exclusive-card)',
           boxShadow: '0 2px 8px rgba(124,58,237,0.15)'
         }
       }, /*#__PURE__*/React.createElement("div", {
@@ -44899,11 +44899,11 @@ const CaretakerHub = window.CaretakerHub = ({
         style: {
           marginTop: 6,
           padding: '6px 8px',
-          background: 'rgba(255,255,255,0.7)',
+          background: 'var(--bg-accent-light)',
           borderLeft: '3px solid #7c3aed',
           borderRadius: 4,
           fontSize: 11,
-          color: 'var(--text-secondary)',
+          color: 'var(--text-primary)',
           lineHeight: 1.4
         }
       }, '\uD83D\uDCCB', " ", job.careSummary.length > 150 ? job.careSummary.substring(0, 150) + '...' : job.careSummary)), /*#__PURE__*/React.createElement("div", {
@@ -51563,7 +51563,7 @@ const FindWork = window.FindWork = () => {
         padding: 16,
         cursor: 'pointer',
         transition: 'box-shadow 0.15s',
-        background: activeOffer ? 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)' : hasConflict ? 'var(--bg-warm)' : undefined,
+        background: activeOffer ? 'var(--bg-exclusive-card)' : hasConflict ? 'var(--bg-warm)' : undefined,
         boxShadow: activeOffer ? '0 2px 12px rgba(124,58,237,0.15)' : undefined
       },
       onClick: () => setExpandedId(isExpanded ? null : s.id)

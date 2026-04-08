@@ -1539,7 +1539,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                 <div key={job.id} className="card" style={{
                   marginBottom: 10, padding: '16px 18px',
                   border: '2px solid #7c3aed', borderRadius: 12,
-                  background: 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)',
+                  background: 'var(--bg-exclusive-card)',
                   boxShadow: '0 2px 8px rgba(124,58,237,0.15)',
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
@@ -1576,7 +1576,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                         </div>
                       )}
                       {job.careSummary && (
-                        <div style={{ marginTop: 6, padding: '6px 8px', background: 'rgba(255,255,255,0.7)', borderLeft: '3px solid #7c3aed', borderRadius: 4, fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                        <div style={{ marginTop: 6, padding: '6px 8px', background: 'var(--bg-accent-light)', borderLeft: '3px solid #7c3aed', borderRadius: 4, fontSize: 11, color: 'var(--text-primary)', lineHeight: 1.4 }}>
                           {'\uD83D\uDCCB'} {job.careSummary.length > 150 ? job.careSummary.substring(0, 150) + '...' : job.careSummary}
                         </div>
                       )}

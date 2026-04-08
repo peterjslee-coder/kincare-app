@@ -899,7 +899,7 @@ const FindWork = window.FindWork = () => {
                     borderLeft: activeOffer ? '4px solid #7c3aed' : hasConflict ? '4px solid #ffd89b' : matchQuality === 'great' ? '4px solid #1b6b5a' : '4px solid #fb8c00',
                     padding: 16, cursor: 'pointer',
                     transition: 'box-shadow 0.15s',
-                    background: activeOffer ? 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)' : hasConflict ? 'var(--bg-warm)' : undefined,
+                    background: activeOffer ? 'var(--bg-exclusive-card)' : hasConflict ? 'var(--bg-warm)' : undefined,
                     boxShadow: activeOffer ? '0 2px 12px rgba(124,58,237,0.15)' : undefined,
                   }} onClick={() => setExpandedId(isExpanded ? null : s.id)}>
                     {/* Badge row: offer, match, conflict, distance, rate */}
