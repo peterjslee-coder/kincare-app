@@ -1128,9 +1128,9 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const bgPaid = !!profile.background_check_paid || !!profile.isBackgroundChecked;
   const bgCheckSubmitted = !!profile.isBackgroundChecked || (profile.checkrStatus && profile.checkrStatus !== 'pending' && profile.checkrStatus !== 'not_initiated');
   const idVerified = idVerification.verified;
-  // Check for NEW preference format (comfortable/with_support/not_comfortable) — old stoplight format (green/yellow/red) doesn't count
+  // Check if user has set any care preferences (values are green/yellow/red, 'none' means unset)
   const hasPreferences = !!stoplightData && Object.keys(stoplightData).length > 0 &&
-    Object.values(stoplightData).some(v => v === 'comfortable' || v === 'with_support' || v === 'not_comfortable');
+    Object.values(stoplightData).some(v => v === 'green' || v === 'yellow' || v === 'red');
 
   // Per-step admin overrides — only skip what was explicitly granted
   const stripeOverride = !!profile.stripeOnboardComplete;  // admin granted Stripe bypass

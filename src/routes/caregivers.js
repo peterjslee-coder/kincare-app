@@ -209,65 +209,9 @@ router.get("/nearby/:careRecipientId", async (req, res) => {
   });
 });
 
-// ─── GET /api/caregivers/:id ───
-router.get("/:id", async (req, res) => {
-  const db = await getDb();
-  const cg = await db.prepare(`
-    SELECT cp.*, u.first_name, u.last_name, u.phone, u.avatar_url
-    FROM caregiver_profiles cp
-    JOIN users u ON cp.user_id = u.id
-    WHERE cp.id = ?
-  `).get(req.params.id);
-
-  if (!cg) return res.status(404).json({ error: "Caregiver not found" });
-
-  // Get recent reviews
-  const reviews = await db.prepare(`
-    SELECT r.*, u.first_name || ' ' || u.last_name AS reviewer_name
-    FROM reviews r
-    JOIN users u ON r.family_user_id = u.id
-    WHERE r.caregiver_id = ?
-    ORDER BY r.created_at DESC LIMIT 10
-  `).all(req.params.id);
-
-  // Get completed session count
-  const stats = await db.prepare(`
-    SELECT COUNT(*) as total_sessions,
-           AVG(duration_hours) as avg_duration
-    FROM care_sessions
-    WHERE caregiver_id = ? AND status = 'completed'
-  `).get(req.params.id);
-
-  res.json({
-    caregiver: {
-      id: cg.id,
-      name: `${cg.first_name} ${cg.last_name}`,
-      bio: cg.bio,
-      yearsExperience: cg.years_experience,
-      hourlyRate: cg.hourly_rate,
-      rateDaytime: cg.rate_daytime || cg.hourly_rate,
-      rateNighttime: cg.rate_nighttime || cg.hourly_rate,
-      rateOvernight: cg.rate_overnight || cg.hourly_rate,
-      specialties: JSON.parse(cg.specialties || "[]"),
-      certifications: JSON.parse(cg.certifications || "[]"),
-      rating: cg.rating_avg,
-      reviewCount: cg.rating_count,
-      isAvailable: !!cg.is_available,
-      isBackgroundChecked: !!cg.is_background_checked,
-      city: cg.location_city,
-      state: cg.location_state,
-      latitude: cg.latitude,
-      longitude: cg.longitude,
-      maxTravelMiles: cg.max_travel_miles,
-      totalSessions: stats.total_sessions,
-      avgSessionDuration: stats.avg_duration,
-    },
-    reviews,
-  });
-});
-
 // ─── GET /api/caregivers/me ───
 // Get the current caregiver's own profile (for map centering, etc.)
+// IMPORTANT: Must be defined BEFORE /:id route so Express doesn't treat "me" as an ID
 router.get("/me", requireRole("caregiver"), async (req, res) => {
   const db = await getDb();
   let profile = await db.prepare(`
@@ -281,7 +225,12 @@ router.get("/me", requireRole("caregiver"), async (req, res) => {
   if (!profile) {
     const { v4: uuidv4 } = require("uuid");
     const newId = uuidv4();
-    await db.prepare(`INSERT INTO caregiver_profiles (id, user_id) VALUES (?, ?)`).run(newId, req.user.id);
+    try {
+      await db.prepare(`INSERT INTO caregiver_profiles (id, user_id, hourly_rate) VALUES (?, ?, 0)`).run(newId, req.user.id);
+    } catch (err) {
+      console.error("Auto-create caregiver profile failed:", err);
+      return res.status(500).json({ error: "Failed to create caregiver profile" });
+    }
     profile = await db.prepare(`
       SELECT cp.*, u.first_name, u.last_name, u.email, u.phone, u.avatar_url
       FROM caregiver_profiles cp
@@ -348,6 +297,64 @@ router.put("/me", requireRole("caregiver"), async (req, res) => {
   `).get(req.user.id);
   res.json({ ok: true, profile: updated });
 });
+
+// ─── GET /api/caregivers/:id ───
+router.get("/:id", async (req, res) => {
+  const db = await getDb();
+  const cg = await db.prepare(`
+    SELECT cp.*, u.first_name, u.last_name, u.phone, u.avatar_url
+    FROM caregiver_profiles cp
+    JOIN users u ON cp.user_id = u.id
+    WHERE cp.id = ?
+  `).get(req.params.id);
+
+  if (!cg) return res.status(404).json({ error: "Caregiver not found" });
+
+  // Get recent reviews
+  const reviews = await db.prepare(`
+    SELECT r.*, u.first_name || ' ' || u.last_name AS reviewer_name
+    FROM reviews r
+    JOIN users u ON r.family_user_id = u.id
+    WHERE r.caregiver_id = ?
+    ORDER BY r.created_at DESC LIMIT 10
+  `).all(req.params.id);
+
+  // Get completed session count
+  const stats = await db.prepare(`
+    SELECT COUNT(*) as total_sessions,
+           AVG(duration_hours) as avg_duration
+    FROM care_sessions
+    WHERE caregiver_id = ? AND status = 'completed'
+  `).get(req.params.id);
+
+  res.json({
+    caregiver: {
+      id: cg.id,
+      name: `${cg.first_name} ${cg.last_name}`,
+      bio: cg.bio,
+      yearsExperience: cg.years_experience,
+      hourlyRate: cg.hourly_rate,
+      rateDaytime: cg.rate_daytime || cg.hourly_rate,
+      rateNighttime: cg.rate_nighttime || cg.hourly_rate,
+      rateOvernight: cg.rate_overnight || cg.hourly_rate,
+      specialties: JSON.parse(cg.specialties || "[]"),
+      certifications: JSON.parse(cg.certifications || "[]"),
+      rating: cg.rating_avg,
+      reviewCount: cg.rating_count,
+      isAvailable: !!cg.is_available,
+      isBackgroundChecked: !!cg.is_background_checked,
+      city: cg.location_city,
+      state: cg.location_state,
+      latitude: cg.latitude,
+      longitude: cg.longitude,
+      maxTravelMiles: cg.max_travel_miles,
+      totalSessions: stats.total_sessions,
+      avgSessionDuration: stats.avg_duration,
+    },
+    reviews,
+  });
+});
+
 
 // ─── POST /api/caregivers/profile ───
 // Create or update caregiver profile (for caregiver users)
