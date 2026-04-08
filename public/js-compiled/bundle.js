@@ -48639,7 +48639,7 @@ const CaretakerHub = window.CaretakerHub = ({
       padding: '28px',
       width: '500px',
       maxWidth: '92vw',
-      maxHeight: '90vh',
+      maxHeight: '85vh',
       overflow: 'auto'
     }
   }, /*#__PURE__*/React.createElement("div", {

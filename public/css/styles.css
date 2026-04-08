@@ -2084,7 +2084,7 @@
         display: none !important;
       }
 
-      /* Bottom navigation bar */
+      /* Bottom navigation bar — z-index 900 so modals (1000+) cover it */
       .bottom-nav {
         display: flex;
         position: fixed;
@@ -2094,7 +2094,7 @@
         height: auto;
         background: var(--bg-surface);
         border-top: 1px solid var(--border-light);
-        z-index: 1100;
+        z-index: 900;
         justify-content: space-around;
         align-items: center;
         padding: 8px 4px;
@@ -2769,7 +2769,7 @@
       }
 
       .demo-mode-active .bottom-nav {
-        z-index: 1201;
+        z-index: 900; /* keep below modals even in demo mode */
       }
     }
 

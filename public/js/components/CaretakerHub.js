@@ -3447,7 +3447,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         }}>
           <div style={{
             background: 'var(--bg-surface)', borderRadius: '16px', padding: '28px', width: '500px', maxWidth: '92vw',
-            maxHeight: '90vh', overflow: 'auto',
+            maxHeight: '85vh', overflow: 'auto',
           }}>
             <div style={{ textAlign: 'center', marginBottom: 20 }}>
               <div style={{ fontSize: 40, marginBottom: 8 }}>👋</div>
