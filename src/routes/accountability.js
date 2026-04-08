@@ -1046,14 +1046,20 @@ router.get("/incident-context", async (req, res) => {
 // ─── Acknowledge (dismiss) a no-show alert ───
 router.post("/no-show/:sessionId/acknowledge", async (req, res) => {
   try {
-    const db = getDb();
+    const db = await getDb();
     const userId = req.user.id;
     const { sessionId } = req.params;
+
+    // Look up the caregiver profile ID (care_sessions.caregiver_id = caregiver_profiles.id, not users.id)
+    const profile = await db.prepare(
+      `SELECT id FROM caregiver_profiles WHERE user_id = ?`
+    ).get(userId);
+    if (!profile) return res.status(404).json({ error: "Caregiver profile not found" });
 
     // Verify this session belongs to the requesting caregiver
     const session = await db.prepare(
       `SELECT id FROM care_sessions WHERE id = ? AND caregiver_id = ? AND caregiver_no_show = 1`
-    ).get(sessionId, userId);
+    ).get(sessionId, profile.id);
     if (!session) return res.status(404).json({ error: "Session not found" });
 
     await db.prepare(
