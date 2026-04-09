@@ -462,15 +462,23 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
       setPasskeyName('');
       fetchPasskeys();
     } catch (err) {
-      console.error('[Passkey] Registration error:', err.name, err.message);
+      console.error('[Passkey] Registration error:', err.name, err.message, err);
       if (err.name === 'InvalidStateError') {
         setPwError('You already have a passkey registered on this device. Remove it first if you want to re-register.');
       } else if (err.name === 'NotAllowedError') {
-        // User cancelled — don't show error, but log it
-        console.log('[Passkey] User cancelled the prompt');
+        // In a native app WebView, NotAllowedError usually means passkeys aren't
+        // supported in this context (not that the user cancelled).
+        // In Safari/Chrome, it typically means user cancelled the prompt.
+        const isNativeApp = window.Capacitor?.isNativePlatform?.() || navigator.userAgent.includes('InPlace');
+        if (isNativeApp) {
+          setPwError('Passkey creation isn\'t supported inside the app yet. Open yourinplace.com in Safari to create a passkey — it will still work for sign-in everywhere.');
+        } else {
+          // Likely user cancelled — show a mild message just in case
+          console.log('[Passkey] NotAllowedError (user may have cancelled)');
+        }
       } else {
         setPwError(err.message || 'Passkey registration failed');
-        showToast('Passkey registration failed — see error below', 'error');
+        showToast('Passkey registration failed', 'error');
       }
     }
     setRegisteringPasskey(false);
@@ -500,7 +508,8 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
     fetchUser();
     fetch2FAStatus();
     fetchPasskeys(); // Always fetch — show existing passkeys even if WebAuthn unavailable
-    // iOS Capacitor: requires Associated Domains entitlement (webcredentials:yourinplace.com) in Xcode
+    // Passkey support check — PublicKeyCredential exists in WebViews but
+    // create() may not work. We still show the UI but handle the error.
     if (window.PublicKeyCredential) {
       setPasskeySupported(true);
     }
@@ -1445,7 +1454,12 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
             </p>
             {!passkeySupported && (
               <div style={{ background: 'var(--color-warning-bg)', color: 'var(--color-warning)', padding: 12, borderRadius: 8, marginBottom: 16, fontSize: 13 }}>
-                Passkey management isn't available in this app. To add or remove passkeys, open <strong>yourinplace.com</strong> in your phone's browser (Safari or Chrome).
+                Passkey management isn't available in this browser. To add or remove passkeys, open <strong>yourinplace.com</strong> in Safari or Chrome.
+              </div>
+            )}
+            {passkeySupported && window.Capacitor?.isNativePlatform?.() && (
+              <div style={{ background: '#fff3e0', color: '#e65100', padding: 12, borderRadius: 8, marginBottom: 16, fontSize: 13 }}>
+                <strong>Tip:</strong> To create a new passkey, open <strong>yourinplace.com</strong> in Safari. Once created, it will work for sign-in everywhere — including this app.
               </div>
             )}
             {loadingPasskeys ? (
