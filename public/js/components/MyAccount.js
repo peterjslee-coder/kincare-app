@@ -483,7 +483,9 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
     fetchUser();
     fetch2FAStatus();
     fetchPasskeys(); // Always fetch — show existing passkeys even if WebAuthn unavailable
-    if (window.PublicKeyCredential) {
+    // Capacitor WKWebView on iOS reports PublicKeyCredential but can't actually use passkeys
+    const isNativeApp = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+    if (window.PublicKeyCredential && !isNativeApp) {
       setPasskeySupported(true);
     }
   }, []);
