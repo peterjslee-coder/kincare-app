@@ -4305,6 +4305,7 @@ const LoginPage = window.LoginPage = ({
   const [failCount, setFailCount] = useState(0);
   const [showDemo, setShowDemo] = useState(false);
   const [googleAvailable, setGoogleAvailable] = useState(false);
+  const [appleAvailable, setAppleAvailable] = useState(false);
 
   // 2FA state
   const [show2FA, setShow2FA] = useState(false);
@@ -4325,10 +4326,14 @@ const LoginPage = window.LoginPage = ({
   // Check if Google OAuth is configured + passkey availability + handle OAuth redirects
   useEffect(() => {
     apiFetch('/api/oauth/config').then(res => {
-      if (res !== null && res !== void 0 && res.ok) res.json().then(data => setGoogleAvailable(data.google));
+      if (res !== null && res !== void 0 && res.ok) res.json().then(data => {
+        setGoogleAvailable(data.google);
+        setAppleAvailable(data.apple);
+      });
     }).catch(() => {});
 
     // Check if WebAuthn/passkeys are supported in this browser
+    // iOS Capacitor: requires Associated Domains entitlement (webcredentials:yourinplace.com) in Xcode
     if (window.PublicKeyCredential) {
       var _PublicKeyCredential$, _PublicKeyCredential;
       (_PublicKeyCredential$ = (_PublicKeyCredential = PublicKeyCredential).isUserVerifyingPlatformAuthenticatorAvailable) === null || _PublicKeyCredential$ === void 0 || _PublicKeyCredential$.call(_PublicKeyCredential).then(available => setPasskeyAvailable(available || !!window.PublicKeyCredential)).catch(() => setPasskeyAvailable(!!window.PublicKeyCredential));
@@ -5027,7 +5032,7 @@ const LoginPage = window.LoginPage = ({
     }
   }, "resetting your password"), " or contact support.")), googleAvailable && /*#__PURE__*/React.createElement("div", {
     style: {
-      marginBottom: 16
+      marginBottom: 8
     }
   }, /*#__PURE__*/React.createElement("button", {
     onClick: () => {
@@ -5051,7 +5056,29 @@ const LoginPage = window.LoginPage = ({
   }), /*#__PURE__*/React.createElement("path", {
     d: "M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z",
     fill: "#EA4335"
-  })), "Sign in with Google"), !passkeyAvailable && /*#__PURE__*/React.createElement("div", {
+  })), "Sign in with Google")), appleAvailable && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 8
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      window.location.href = '/api/oauth/apple';
+    },
+    style: {
+      ...googleBtnStyle,
+      background: '#000',
+      color: '#fff',
+      border: '1px solid #000'
+    },
+    disabled: loading
+  }, /*#__PURE__*/React.createElement("svg", {
+    width: "18",
+    height: "18",
+    viewBox: "0 0 24 24",
+    fill: "#fff"
+  }, /*#__PURE__*/React.createElement("path", {
+    d: "M17.05 20.28c-.98.95-2.05.88-3.08.4-1.09-.5-2.08-.48-3.24 0-1.44.62-2.2.44-3.06-.4C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"
+  })), "Sign in with Apple")), (googleAvailable || appleAvailable) && !passkeyAvailable && /*#__PURE__*/React.createElement("div", {
     style: {
       position: 'relative',
       textAlign: 'center',
@@ -5070,7 +5097,7 @@ const LoginPage = window.LoginPage = ({
       color: 'var(--text-muted)',
       fontSize: 12
     }
-  }, "or sign in with email"))), passkeyAvailable && /*#__PURE__*/React.createElement("div", {
+  }, "or sign in with email")), passkeyAvailable && /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 16
     }
@@ -5102,7 +5129,7 @@ const LoginPage = window.LoginPage = ({
     ry: "2"
   }), /*#__PURE__*/React.createElement("path", {
     d: "M7 11V7a5 5 0 0110 0v4"
-  })), loading ? 'Checking...' : 'Sign in with passkey')), (googleAvailable || passkeyAvailable) && /*#__PURE__*/React.createElement("div", {
+  })), loading ? 'Checking...' : 'Sign in with passkey')), passkeyAvailable && /*#__PURE__*/React.createElement("div", {
     style: {
       position: 'relative',
       textAlign: 'center',
@@ -18875,24 +18902,24 @@ const CareRecipients = window.CareRecipients = () => {
         color: 'var(--text-tertiary)',
         fontSize: 13
       }
-    }, "Verify your identity with a photo ID"))), /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: 'inline-block',
-        padding: '6px 12px',
-        background: 'var(--color-warning-bg)',
-        color: 'var(--accent-color)',
-        borderRadius: '6px',
-        fontSize: 12,
-        fontWeight: 600
-      }
-    }, "Coming Soon \u2014 Powered by Stripe Identity"), /*#__PURE__*/React.createElement("p", {
+    }, "Verify your identity with a photo ID"))), /*#__PURE__*/React.createElement("p", {
       style: {
         color: 'var(--text-secondary)',
         fontSize: 13,
-        marginTop: '12px',
+        marginTop: '4px',
         marginBottom: 0
       }
-    }, "Identity verification will be required before care can begin. We'll notify you when this is available.")), /*#__PURE__*/React.createElement("div", {
+    }, "You can verify your identity with a selfie and photo ID from your ", /*#__PURE__*/React.createElement("a", {
+      href: "#",
+      onClick: e => {
+        e.preventDefault();
+        if (typeof onNavigate === 'function') onNavigate('account');
+      },
+      style: {
+        color: 'var(--role-color)',
+        fontWeight: 600
+      }
+    }, "My Account"), " page. Verified users earn a blue check on their profile.")), /*#__PURE__*/React.createElement("div", {
       style: {
         padding: '24px',
         borderRadius: '12px',
@@ -31233,7 +31260,17 @@ const MyAccount = window.MyAccount = ({
 
   // Family - Identity & Payment status
   const [familyStripeStatus, setFamilyStripeStatus] = useState(null); // null | 'not_started' | 'pending' | 'complete'
-  const [familyIdentityStatus, setFamilyIdentityStatus] = useState(null); // null | 'not_started' | 'pending' | 'verified'
+  const [familyIdentityStatus, setFamilyIdentityStatus] = useState(null); // null | 'not_started' | 'pending' | 'verified' | 'rejected'
+
+  // Identity verification inline flow
+  const [idVerOpen, setIdVerOpen] = useState(false);
+  const [idVerStep, setIdVerStep] = useState(1); // 1=selfie, 2=ID photo, 3=submitting
+  const [idVerSelfie, setIdVerSelfie] = useState(null); // base64
+  const [idVerIdPhoto, setIdVerIdPhoto] = useState(null); // base64
+  const [idVerSubmitting, setIdVerSubmitting] = useState(false);
+  const [idVerError, setIdVerError] = useState(null);
+  const idVerSelfieRef = useRef(null);
+  const idVerIdPhotoRef = useRef(null);
 
   // Caregiver - Payments state
   const [stripeStatus, setStripeStatus] = useState(null);
@@ -31335,9 +31372,65 @@ const MyAccount = window.MyAccount = ({
     if (bitmap.close) bitmap.close(); // Free ImageBitmap memory
     return canvas.toDataURL('image/jpeg', quality);
   };
-  const handlePhotoUpload = async e => {
+
+  // ─── Identity Verification Handlers ───
+  const handleIdVerFileSelect = async (e, type) => {
     var _e$target$files2;
     const file = (_e$target$files2 = e.target.files) === null || _e$target$files2 === void 0 ? void 0 : _e$target$files2[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      showToast('Please select an image file', 'error');
+      return;
+    }
+    try {
+      const dataUrl = await resizeImage(file, 800, 0.85); // Larger for ID readability
+      if (type === 'selfie') setIdVerSelfie(dataUrl);else setIdVerIdPhoto(dataUrl);
+    } catch (err) {
+      showToast(err.message || 'Could not load image', 'error');
+    }
+  };
+  const handleIdVerSubmit = async () => {
+    if (!idVerIdPhoto) {
+      showToast('Please upload a photo of your ID', 'error');
+      return;
+    }
+    setIdVerSubmitting(true);
+    setIdVerError(null);
+    try {
+      const res = await apiFetch('/api/self-onboarding/verify-id', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          idPhoto: idVerIdPhoto,
+          selfie: idVerSelfie || undefined
+        })
+      });
+      if (res !== null && res !== void 0 && res.ok) {
+        const data = await res.json();
+        if (data.matched && !data.needsHumanReview) {
+          setFamilyIdentityStatus('verified');
+          showToast('Identity verified!', 'success');
+        } else {
+          setFamilyIdentityStatus('pending');
+          showToast('ID submitted for review.', 'info');
+        }
+        setIdVerOpen(false);
+        // Refresh user data to get updated identityVerified flag
+        fetchUser();
+      } else {
+        const err = await (res === null || res === void 0 ? void 0 : res.json().catch(() => ({})));
+        setIdVerError(err.error || 'Verification failed. Please try again.');
+      }
+    } catch (err) {
+      setIdVerError('Network error. Please try again.');
+    }
+    setIdVerSubmitting(false);
+  };
+  const handlePhotoUpload = async e => {
+    var _e$target$files3;
+    const file = (_e$target$files3 = e.target.files) === null || _e$target$files3 === void 0 ? void 0 : _e$target$files3[0];
     if (!file) return;
     if (!file.type.startsWith('image/')) {
       showToast('Please select an image file', 'error');
@@ -31501,6 +31594,7 @@ const MyAccount = window.MyAccount = ({
     fetchUser();
     fetch2FAStatus();
     fetchPasskeys(); // Always fetch — show existing passkeys even if WebAuthn unavailable
+    // iOS Capacitor: requires Associated Domains entitlement (webcredentials:yourinplace.com) in Xcode
     if (window.PublicKeyCredential) {
       setPasskeySupported(true);
     }
@@ -31550,8 +31644,8 @@ const MyAccount = window.MyAccount = ({
         setFamilyStripeStatus(d.status || 'not_started');
       } else setFamilyStripeStatus('not_started');
     }).catch(() => setFamilyStripeStatus('not_started'));
-    // Identity verification status — placeholder until Stripe Identity or Vouched.id is wired up
-    setFamilyIdentityStatus('not_started');
+    // Identity verification status — from /api/auth/me user object
+    if (user !== null && user !== void 0 && user.identityStatus) setFamilyIdentityStatus(user.identityStatus);else setFamilyIdentityStatus('not_started');
   }, [activeTab]);
 
   // Fetch caregiver financial data
@@ -32455,8 +32549,34 @@ const MyAccount = window.MyAccount = ({
   }, /*#__PURE__*/React.createElement("div", {
     className: "info-label"
   }, "Name"), /*#__PURE__*/React.createElement("div", {
-    className: "info-value"
-  }, user ? `${user.first_name} ${user.last_name}` : '—')), /*#__PURE__*/React.createElement("div", {
+    className: "info-value",
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 6
+    }
+  }, user ? `${user.first_name} ${user.last_name}` : '—', (user === null || user === void 0 ? void 0 : user.identityVerified) && /*#__PURE__*/React.createElement("svg", {
+    width: "16",
+    height: "16",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    title: "Identity Verified",
+    style: {
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement("circle", {
+    cx: "12",
+    cy: "12",
+    r: "11",
+    fill: "#3b82f6"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M8 12.5l2.5 2.5 5.5-5.5",
+    stroke: "#fff",
+    strokeWidth: "2.2",
+    strokeLinecap: "round",
+    strokeLinejoin: "round",
+    fill: "none"
+  })))), /*#__PURE__*/React.createElement("div", {
     className: "info-item"
   }, /*#__PURE__*/React.createElement("div", {
     className: "info-label"
@@ -32644,16 +32764,42 @@ const MyAccount = window.MyAccount = ({
       justifyContent: 'space-between',
       alignItems: 'center'
     }
-  }, /*#__PURE__*/React.createElement("span", null, "Identity Verification"), familyIdentityStatus === 'verified' ? React.createElement('span', {
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 6
+    }
+  }, "Identity Verification", familyIdentityStatus === 'verified' && /*#__PURE__*/React.createElement("svg", {
+    width: "16",
+    height: "16",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    style: {
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement("circle", {
+    cx: "12",
+    cy: "12",
+    r: "11",
+    fill: "#3b82f6"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M8 12.5l2.5 2.5 5.5-5.5",
+    stroke: "#fff",
+    strokeWidth: "2.2",
+    strokeLinecap: "round",
+    strokeLinejoin: "round",
+    fill: "none"
+  }))), familyIdentityStatus === 'verified' ? React.createElement('span', {
     style: {
       fontSize: 11,
       fontWeight: 600,
-      color: 'var(--color-success)',
-      background: 'var(--color-success-bg)',
+      color: '#3b82f6',
+      background: '#eff6ff',
       padding: '2px 10px',
       borderRadius: 12
     }
-  }, '\u2705 Verified') : familyIdentityStatus === 'pending' ? React.createElement('span', {
+  }, 'Verified') : familyIdentityStatus === 'pending' ? React.createElement('span', {
     style: {
       fontSize: 11,
       fontWeight: 600,
@@ -32662,39 +32808,284 @@ const MyAccount = window.MyAccount = ({
       padding: '2px 10px',
       borderRadius: 12
     }
-  }, 'Pending') : React.createElement('span', {
+  }, 'Pending Review') : familyIdentityStatus === 'rejected' ? React.createElement('span', {
     style: {
       fontSize: 11,
       fontWeight: 600,
-      color: 'var(--color-indigo)',
-      background: 'var(--color-purple-bg)',
+      color: '#dc2626',
+      background: '#fef2f2',
       padding: '2px 10px',
       borderRadius: 12
     }
-  }, 'Not Started')), /*#__PURE__*/React.createElement("div", {
+  }, 'Needs Resubmission') : React.createElement('span', {
+    style: {
+      fontSize: 11,
+      fontWeight: 600,
+      color: 'var(--text-muted)',
+      background: 'var(--bg-skeleton)',
+      padding: '2px 10px',
+      borderRadius: 12
+    }
+  }, 'Not Verified')), /*#__PURE__*/React.createElement("div", {
     style: {
       padding: '8px 0',
       color: 'var(--text-secondary)',
       fontSize: 14,
       lineHeight: 1.6
     }
-  }, familyIdentityStatus === 'verified' ? /*#__PURE__*/React.createElement("p", {
+  }, familyIdentityStatus === 'verified' ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    width: "20",
+    height: "20",
+    viewBox: "0 0 24 24",
+    fill: "none"
+  }, /*#__PURE__*/React.createElement("circle", {
+    cx: "12",
+    cy: "12",
+    r: "11",
+    fill: "#3b82f6"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M8 12.5l2.5 2.5 5.5-5.5",
+    stroke: "#fff",
+    strokeWidth: "2.2",
+    strokeLinecap: "round",
+    strokeLinejoin: "round",
+    fill: "none"
+  })), /*#__PURE__*/React.createElement("span", null, "Your identity has been verified. Thank you for helping keep InPlace safe.")) : familyIdentityStatus === 'pending' ? /*#__PURE__*/React.createElement("p", {
     style: {
       margin: 0
     }
-  }, "Your identity has been verified. Thank you for helping keep InPlace safe.") : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("p", {
+  }, "Your ID is being reviewed. You'll be notified once verification is complete.") : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("p", {
     style: {
       margin: '0 0 10px'
     }
-  }, "Verify your identity with a photo ID to ensure the safety of everyone on the platform."), /*#__PURE__*/React.createElement("div", {
+  }, "Verify your identity with a selfie and photo ID to earn a blue check and help keep everyone on InPlace safe."), !idVerOpen ? /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      setIdVerOpen(true);
+      setIdVerStep(1);
+      setIdVerSelfie(null);
+      setIdVerIdPhoto(null);
+      setIdVerError(null);
+    },
     style: {
-      padding: '10px 14px',
-      background: 'var(--color-warning-bg)',
+      background: 'var(--role-color)',
+      color: 'var(--text-on-primary)',
+      border: 'none',
       borderRadius: 8,
-      fontSize: 13,
-      color: 'var(--color-warning)'
+      padding: '10px 20px',
+      fontSize: 14,
+      fontWeight: 600,
+      cursor: 'pointer',
+      width: '100%'
     }
-  }, "Identity verification will be available soon. We'll notify you when it's ready.")))), /*#__PURE__*/React.createElement("div", {
+  }, "Verify My Identity") : /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: 'var(--bg-skeleton)',
+      borderRadius: 10,
+      padding: 16
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: idVerSelfie ? 16 : 0
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontWeight: 600,
+      fontSize: 13,
+      marginBottom: 6,
+      color: 'var(--text-primary)'
+    }
+  }, "Step 1: Take a selfie"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: 'var(--text-secondary)',
+      marginBottom: 8
+    }
+  }, "A clear photo of your face for identity matching."), idVerSelfie ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 10
+    }
+  }, /*#__PURE__*/React.createElement("img", {
+    src: idVerSelfie,
+    alt: "Selfie",
+    style: {
+      width: 60,
+      height: 60,
+      borderRadius: 8,
+      objectFit: 'cover',
+      border: '2px solid var(--color-success)'
+    }
+  }), /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: 'var(--color-success)',
+      fontSize: 13,
+      fontWeight: 600
+    }
+  }, "Selfie captured"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      setIdVerSelfie(null);
+      if (idVerSelfieRef.current) idVerSelfieRef.current.value = '';
+    },
+    style: {
+      marginLeft: 'auto',
+      background: 'none',
+      border: 'none',
+      color: 'var(--text-muted)',
+      cursor: 'pointer',
+      fontSize: 12,
+      textDecoration: 'underline'
+    }
+  }, "Retake")) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("input", {
+    ref: idVerSelfieRef,
+    type: "file",
+    accept: "image/*",
+    capture: "user",
+    onChange: e => handleIdVerFileSelect(e, 'selfie'),
+    style: {
+      display: 'none'
+    }
+  }), /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      var _idVerSelfieRef$curre;
+      return (_idVerSelfieRef$curre = idVerSelfieRef.current) === null || _idVerSelfieRef$curre === void 0 ? void 0 : _idVerSelfieRef$curre.click();
+    },
+    style: {
+      background: 'var(--bg-surface)',
+      border: '1.5px dashed var(--border-light)',
+      borderRadius: 8,
+      padding: '12px 16px',
+      width: '100%',
+      cursor: 'pointer',
+      fontSize: 13,
+      color: 'var(--text-secondary)'
+    }
+  }, "Take or upload selfie"))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 16
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontWeight: 600,
+      fontSize: 13,
+      marginBottom: 6,
+      color: 'var(--text-primary)'
+    }
+  }, "Step 2: Upload a photo ID"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: 'var(--text-secondary)',
+      marginBottom: 8
+    }
+  }, "Driver's license, passport, or state ID. Make sure text is readable."), idVerIdPhoto ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 10
+    }
+  }, /*#__PURE__*/React.createElement("img", {
+    src: idVerIdPhoto,
+    alt: "ID",
+    style: {
+      width: 80,
+      height: 50,
+      borderRadius: 6,
+      objectFit: 'cover',
+      border: '2px solid var(--color-success)'
+    }
+  }), /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: 'var(--color-success)',
+      fontSize: 13,
+      fontWeight: 600
+    }
+  }, "ID photo captured"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      setIdVerIdPhoto(null);
+      if (idVerIdPhotoRef.current) idVerIdPhotoRef.current.value = '';
+    },
+    style: {
+      marginLeft: 'auto',
+      background: 'none',
+      border: 'none',
+      color: 'var(--text-muted)',
+      cursor: 'pointer',
+      fontSize: 12,
+      textDecoration: 'underline'
+    }
+  }, "Retake")) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("input", {
+    ref: idVerIdPhotoRef,
+    type: "file",
+    accept: "image/*",
+    capture: "environment",
+    onChange: e => handleIdVerFileSelect(e, 'id'),
+    style: {
+      display: 'none'
+    }
+  }), /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      var _idVerIdPhotoRef$curr;
+      return (_idVerIdPhotoRef$curr = idVerIdPhotoRef.current) === null || _idVerIdPhotoRef$curr === void 0 ? void 0 : _idVerIdPhotoRef$curr.click();
+    },
+    style: {
+      background: 'var(--bg-surface)',
+      border: '1.5px dashed var(--border-light)',
+      borderRadius: 8,
+      padding: '12px 16px',
+      width: '100%',
+      cursor: 'pointer',
+      fontSize: 13,
+      color: 'var(--text-secondary)'
+    }
+  }, "Take or upload photo of ID"))), idVerError && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 12,
+      padding: '8px 12px',
+      background: '#fef2f2',
+      color: '#dc2626',
+      borderRadius: 8,
+      fontSize: 13
+    }
+  }, idVerError), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 10,
+      marginTop: 16
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => setIdVerOpen(false),
+    style: {
+      flex: 1,
+      background: 'var(--bg-surface)',
+      border: '1px solid var(--border-light)',
+      borderRadius: 8,
+      padding: '10px 16px',
+      fontSize: 14,
+      cursor: 'pointer',
+      color: 'var(--text-secondary)'
+    }
+  }, "Cancel"), /*#__PURE__*/React.createElement("button", {
+    onClick: handleIdVerSubmit,
+    disabled: !idVerIdPhoto || idVerSubmitting,
+    style: {
+      flex: 1,
+      background: idVerIdPhoto ? 'var(--role-color)' : 'var(--bg-skeleton)',
+      color: idVerIdPhoto ? 'var(--text-on-primary)' : 'var(--text-muted)',
+      border: 'none',
+      borderRadius: 8,
+      padding: '10px 16px',
+      fontSize: 14,
+      fontWeight: 600,
+      cursor: idVerIdPhoto ? 'pointer' : 'default',
+      opacity: idVerSubmitting ? 0.7 : 1
+    }
+  }, idVerSubmitting ? 'Verifying...' : 'Submit for Verification')))))), /*#__PURE__*/React.createElement("div", {
     className: "card"
   }, /*#__PURE__*/React.createElement("div", {
     className: "card-header"
@@ -38034,8 +38425,8 @@ const SelfOnboardingWizard = window.SelfOnboardingWizard = ({
     }
   };
   const handleIdUpload = async e => {
-    var _e$target$files3;
-    const file = (_e$target$files3 = e.target.files) === null || _e$target$files3 === void 0 ? void 0 : _e$target$files3[0];
+    var _e$target$files4;
+    const file = (_e$target$files4 = e.target.files) === null || _e$target$files4 === void 0 ? void 0 : _e$target$files4[0];
     if (!file) return;
     setLoading(true);
     try {
@@ -43716,8 +44107,8 @@ const CaretakerHub = window.CaretakerHub = ({
   });
   const CARE_TASKS = ['Bathing / Showering', 'Toileting', 'Dressing', 'Feeding / Meal Assistance', 'Medication Reminders', 'Mobility / Transfer', 'Light Housekeeping', 'Laundry', 'Meal Preparation', 'Grocery Shopping', 'Transportation / Errands', 'Companionship', 'Exercise / Physical Therapy', 'Wound Care', 'Dementia / Memory Care', 'Hospice / End-of-Life'];
   const handleAvatarUpload = async e => {
-    var _e$target$files4;
-    const file = (_e$target$files4 = e.target.files) === null || _e$target$files4 === void 0 ? void 0 : _e$target$files4[0];
+    var _e$target$files5;
+    const file = (_e$target$files5 = e.target.files) === null || _e$target$files5 === void 0 ? void 0 : _e$target$files5[0];
     if (!file) return;
     setUploadingAvatar(true);
     try {
@@ -55746,8 +56137,8 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({
     };
   }, [cameraStream]);
   const handleIdFileUpload = (type, e) => {
-    var _e$target$files5;
-    const file = (_e$target$files5 = e.target.files) === null || _e$target$files5 === void 0 ? void 0 : _e$target$files5[0];
+    var _e$target$files6;
+    const file = (_e$target$files6 = e.target.files) === null || _e$target$files6 === void 0 ? void 0 : _e$target$files6[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = ev => {
