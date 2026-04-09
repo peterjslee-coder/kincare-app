@@ -203,7 +203,17 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
 
   // Family - Identity & Payment status
   const [familyStripeStatus, setFamilyStripeStatus] = useState(null); // null | 'not_started' | 'pending' | 'complete'
-  const [familyIdentityStatus, setFamilyIdentityStatus] = useState(null); // null | 'not_started' | 'pending' | 'verified'
+  const [familyIdentityStatus, setFamilyIdentityStatus] = useState(null); // null | 'not_started' | 'pending' | 'verified' | 'rejected'
+
+  // Identity verification inline flow
+  const [idVerOpen, setIdVerOpen] = useState(false);
+  const [idVerStep, setIdVerStep] = useState(1); // 1=selfie, 2=ID photo, 3=submitting
+  const [idVerSelfie, setIdVerSelfie] = useState(null); // base64
+  const [idVerIdPhoto, setIdVerIdPhoto] = useState(null); // base64
+  const [idVerSubmitting, setIdVerSubmitting] = useState(false);
+  const [idVerError, setIdVerError] = useState(null);
+  const idVerSelfieRef = useRef(null);
+  const idVerIdPhotoRef = useRef(null);
 
   // Caregiver - Payments state
   const [stripeStatus, setStripeStatus] = useState(null);
@@ -286,6 +296,52 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
     canvas.getContext('2d').drawImage(bitmap, 0, 0, w, h);
     if (bitmap.close) bitmap.close(); // Free ImageBitmap memory
     return canvas.toDataURL('image/jpeg', quality);
+  };
+
+  // ─── Identity Verification Handlers ───
+  const handleIdVerFileSelect = async (e, type) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { showToast('Please select an image file', 'error'); return; }
+    try {
+      const dataUrl = await resizeImage(file, 800, 0.85); // Larger for ID readability
+      if (type === 'selfie') setIdVerSelfie(dataUrl);
+      else setIdVerIdPhoto(dataUrl);
+    } catch (err) {
+      showToast(err.message || 'Could not load image', 'error');
+    }
+  };
+
+  const handleIdVerSubmit = async () => {
+    if (!idVerIdPhoto) { showToast('Please upload a photo of your ID', 'error'); return; }
+    setIdVerSubmitting(true);
+    setIdVerError(null);
+    try {
+      const res = await apiFetch('/api/self-onboarding/verify-id', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idPhoto: idVerIdPhoto, selfie: idVerSelfie || undefined }),
+      });
+      if (res?.ok) {
+        const data = await res.json();
+        if (data.matched && !data.needsHumanReview) {
+          setFamilyIdentityStatus('verified');
+          showToast('Identity verified!', 'success');
+        } else {
+          setFamilyIdentityStatus('pending');
+          showToast('ID submitted for review.', 'info');
+        }
+        setIdVerOpen(false);
+        // Refresh user data to get updated identityVerified flag
+        fetchUser();
+      } else {
+        const err = await res?.json().catch(() => ({}));
+        setIdVerError(err.error || 'Verification failed. Please try again.');
+      }
+    } catch (err) {
+      setIdVerError('Network error. Please try again.');
+    }
+    setIdVerSubmitting(false);
   };
 
   const handlePhotoUpload = async (e) => {
@@ -474,8 +530,9 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
       if (r?.ok) { const d = await r.json(); setFamilyStripeStatus(d.status || 'not_started'); }
       else setFamilyStripeStatus('not_started');
     }).catch(() => setFamilyStripeStatus('not_started'));
-    // Identity verification status — placeholder until Stripe Identity or Vouched.id is wired up
-    setFamilyIdentityStatus('not_started');
+    // Identity verification status — from /api/auth/me user object
+    if (user?.identityStatus) setFamilyIdentityStatus(user.identityStatus);
+    else setFamilyIdentityStatus('not_started');
   }, [activeTab]);
 
   // Fetch caregiver financial data
@@ -1003,7 +1060,15 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
               <div className="info-grid">
                 <div className="info-item">
                   <div className="info-label">Name</div>
-                  <div className="info-value">{user ? `${user.first_name} ${user.last_name}` : '—'}</div>
+                  <div className="info-value" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {user ? `${user.first_name} ${user.last_name}` : '—'}
+                    {user?.identityVerified && (
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" title="Identity Verified" style={{ flexShrink: 0 }}>
+                        <circle cx="12" cy="12" r="11" fill="#3b82f6"/>
+                        <path d="M8 12.5l2.5 2.5 5.5-5.5" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+                      </svg>
+                    )}
+                  </div>
                 </div>
                 <div className="info-item">
                   <div className="info-label">Email</div>
@@ -1106,23 +1171,106 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
           {/* Identity Verification Card */}
           <div className="card">
             <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span>Identity Verification</span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                Identity Verification
+                {familyIdentityStatus === 'verified' && (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}>
+                    <circle cx="12" cy="12" r="11" fill="#3b82f6"/>
+                    <path d="M8 12.5l2.5 2.5 5.5-5.5" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+                  </svg>
+                )}
+              </span>
               {familyIdentityStatus === 'verified'
-                ? React.createElement('span', { style: { fontSize: 11, fontWeight: 600, color: 'var(--color-success)', background: 'var(--color-success-bg)', padding: '2px 10px', borderRadius: 12 } }, '\u2705 Verified')
+                ? React.createElement('span', { style: { fontSize: 11, fontWeight: 600, color: '#3b82f6', background: '#eff6ff', padding: '2px 10px', borderRadius: 12 } }, 'Verified')
                 : familyIdentityStatus === 'pending'
-                  ? React.createElement('span', { style: { fontSize: 11, fontWeight: 600, color: 'var(--color-warning)', background: 'var(--color-warning-bg)', padding: '2px 10px', borderRadius: 12 } }, 'Pending')
-                  : React.createElement('span', { style: { fontSize: 11, fontWeight: 600, color: 'var(--color-indigo)', background: 'var(--color-purple-bg)', padding: '2px 10px', borderRadius: 12 } }, 'Not Started')
+                  ? React.createElement('span', { style: { fontSize: 11, fontWeight: 600, color: 'var(--color-warning)', background: 'var(--color-warning-bg)', padding: '2px 10px', borderRadius: 12 } }, 'Pending Review')
+                  : familyIdentityStatus === 'rejected'
+                    ? React.createElement('span', { style: { fontSize: 11, fontWeight: 600, color: '#dc2626', background: '#fef2f2', padding: '2px 10px', borderRadius: 12 } }, 'Needs Resubmission')
+                    : React.createElement('span', { style: { fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', background: 'var(--bg-skeleton)', padding: '2px 10px', borderRadius: 12 } }, 'Not Verified')
               }
             </div>
             <div style={{ padding: '8px 0', color: 'var(--text-secondary)', fontSize: 14, lineHeight: 1.6 }}>
               {familyIdentityStatus === 'verified' ? (
-                <p style={{ margin: 0 }}>Your identity has been verified. Thank you for helping keep InPlace safe.</p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="12" r="11" fill="#3b82f6"/>
+                    <path d="M8 12.5l2.5 2.5 5.5-5.5" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+                  </svg>
+                  <span>Your identity has been verified. Thank you for helping keep InPlace safe.</span>
+                </div>
+              ) : familyIdentityStatus === 'pending' ? (
+                <p style={{ margin: 0 }}>Your ID is being reviewed. You'll be notified once verification is complete.</p>
               ) : (
                 <>
-                  <p style={{ margin: '0 0 10px' }}>Verify your identity with a photo ID to ensure the safety of everyone on the platform.</p>
-                  <div style={{ padding: '10px 14px', background: 'var(--color-warning-bg)', borderRadius: 8, fontSize: 13, color: 'var(--color-warning)' }}>
-                    Identity verification will be available soon. We'll notify you when it's ready.
-                  </div>
+                  <p style={{ margin: '0 0 10px' }}>Verify your identity with a selfie and photo ID to earn a blue check and help keep everyone on InPlace safe.</p>
+                  {!idVerOpen ? (
+                    <button onClick={() => { setIdVerOpen(true); setIdVerStep(1); setIdVerSelfie(null); setIdVerIdPhoto(null); setIdVerError(null); }}
+                      style={{ background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, padding: '10px 20px', fontSize: 14, fontWeight: 600, cursor: 'pointer', width: '100%' }}>
+                      Verify My Identity
+                    </button>
+                  ) : (
+                    <div style={{ background: 'var(--bg-skeleton)', borderRadius: 10, padding: 16 }}>
+                      {/* Step 1: Selfie */}
+                      <div style={{ marginBottom: idVerSelfie ? 16 : 0 }}>
+                        <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6, color: 'var(--text-primary)' }}>Step 1: Take a selfie</div>
+                        <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>A clear photo of your face for identity matching.</div>
+                        {idVerSelfie ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <img src={idVerSelfie} alt="Selfie" style={{ width: 60, height: 60, borderRadius: 8, objectFit: 'cover', border: '2px solid var(--color-success)' }} />
+                            <span style={{ color: 'var(--color-success)', fontSize: 13, fontWeight: 600 }}>Selfie captured</span>
+                            <button onClick={() => { setIdVerSelfie(null); if (idVerSelfieRef.current) idVerSelfieRef.current.value = ''; }}
+                              style={{ marginLeft: 'auto', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 12, textDecoration: 'underline' }}>Retake</button>
+                          </div>
+                        ) : (
+                          <>
+                            <input ref={idVerSelfieRef} type="file" accept="image/*" capture="user"
+                              onChange={(e) => handleIdVerFileSelect(e, 'selfie')}
+                              style={{ display: 'none' }} />
+                            <button onClick={() => idVerSelfieRef.current?.click()}
+                              style={{ background: 'var(--bg-surface)', border: '1.5px dashed var(--border-light)', borderRadius: 8, padding: '12px 16px', width: '100%', cursor: 'pointer', fontSize: 13, color: 'var(--text-secondary)' }}>
+                              Take or upload selfie
+                            </button>
+                          </>
+                        )}
+                      </div>
+                      {/* Step 2: ID photo */}
+                      <div style={{ marginTop: 16 }}>
+                        <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6, color: 'var(--text-primary)' }}>Step 2: Upload a photo ID</div>
+                        <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>Driver's license, passport, or state ID. Make sure text is readable.</div>
+                        {idVerIdPhoto ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <img src={idVerIdPhoto} alt="ID" style={{ width: 80, height: 50, borderRadius: 6, objectFit: 'cover', border: '2px solid var(--color-success)' }} />
+                            <span style={{ color: 'var(--color-success)', fontSize: 13, fontWeight: 600 }}>ID photo captured</span>
+                            <button onClick={() => { setIdVerIdPhoto(null); if (idVerIdPhotoRef.current) idVerIdPhotoRef.current.value = ''; }}
+                              style={{ marginLeft: 'auto', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 12, textDecoration: 'underline' }}>Retake</button>
+                          </div>
+                        ) : (
+                          <>
+                            <input ref={idVerIdPhotoRef} type="file" accept="image/*" capture="environment"
+                              onChange={(e) => handleIdVerFileSelect(e, 'id')}
+                              style={{ display: 'none' }} />
+                            <button onClick={() => idVerIdPhotoRef.current?.click()}
+                              style={{ background: 'var(--bg-surface)', border: '1.5px dashed var(--border-light)', borderRadius: 8, padding: '12px 16px', width: '100%', cursor: 'pointer', fontSize: 13, color: 'var(--text-secondary)' }}>
+                              Take or upload photo of ID
+                            </button>
+                          </>
+                        )}
+                      </div>
+                      {/* Error */}
+                      {idVerError && <div style={{ marginTop: 12, padding: '8px 12px', background: '#fef2f2', color: '#dc2626', borderRadius: 8, fontSize: 13 }}>{idVerError}</div>}
+                      {/* Submit */}
+                      <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+                        <button onClick={() => setIdVerOpen(false)}
+                          style={{ flex: 1, background: 'var(--bg-surface)', border: '1px solid var(--border-light)', borderRadius: 8, padding: '10px 16px', fontSize: 14, cursor: 'pointer', color: 'var(--text-secondary)' }}>
+                          Cancel
+                        </button>
+                        <button onClick={handleIdVerSubmit} disabled={!idVerIdPhoto || idVerSubmitting}
+                          style={{ flex: 1, background: idVerIdPhoto ? 'var(--role-color)' : 'var(--bg-skeleton)', color: idVerIdPhoto ? 'var(--text-on-primary)' : 'var(--text-muted)', border: 'none', borderRadius: 8, padding: '10px 16px', fontSize: 14, fontWeight: 600, cursor: idVerIdPhoto ? 'pointer' : 'default', opacity: idVerSubmitting ? 0.7 : 1 }}>
+                          {idVerSubmitting ? 'Verifying...' : 'Submit for Verification'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </>
               )}
             </div>

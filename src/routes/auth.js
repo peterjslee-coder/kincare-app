@@ -577,6 +577,29 @@ router.get("/me", authenticate, async (req, res) => {
     }
   }
 
+  // Check identity verification status (selfie + ID in verified_documents)
+  let identityVerified = false;
+  let identityStatus = 'not_started'; // 'not_started' | 'pending' | 'verified' | 'rejected'
+  try {
+    // Check docs uploaded BY this user or docs owned by their care recipient record
+    const idDoc = await db.prepare(
+      `SELECT status, is_verified FROM verified_documents
+       WHERE category = 'identity' AND document_type != 'selfie'
+         AND (uploaded_by = ? ${careRecipientId ? `OR owner_id = ?` : ''})
+       ORDER BY created_at DESC LIMIT 1`
+    ).get(...[req.user.id, ...(careRecipientId ? [careRecipientId] : [])]);
+    if (idDoc) {
+      if (idDoc.status === 'approved' || idDoc.is_verified) {
+        identityVerified = true;
+        identityStatus = 'verified';
+      } else if (idDoc.status === 'rejected') {
+        identityStatus = 'rejected';
+      } else {
+        identityStatus = 'pending';
+      }
+    }
+  } catch (e) { /* verified_documents table may not exist yet */ }
+
   // Check for pending legal documents that need acceptance
   let pendingLegalDocs = [];
   try {
@@ -613,6 +636,8 @@ router.get("/me", authenticate, async (req, res) => {
       onboarding_complete: onboardingComplete,
       selfOnboardingComplete,
       careRecipientId,
+      identityVerified,
+      identityStatus,
       pendingLegalDocs,
     },
     token,

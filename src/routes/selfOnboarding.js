@@ -88,14 +88,14 @@ router.post("/verify-id", authenticate, async (req, res) => {
       return res.status(404).json({ error: "User not found" });
     }
 
-    // Get the care_recipient record
+    // Get the care_recipient record (if one exists for this user)
     const careRecipient = await db.prepare(
       "SELECT id FROM care_recipients WHERE linked_user_id = ?"
     ).get(req.user.id);
 
-    if (!careRecipient) {
-      return res.status(404).json({ error: "Care recipient record not found" });
-    }
+    // Determine document owner — care_recipient if linked, otherwise the user directly
+    const ownerId = careRecipient ? careRecipient.id : req.user.id;
+    const ownerType = careRecipient ? 'care_recipient' : 'user';
 
     // Extract mimetype from data URI (e.g. "data:image/jpeg;base64,..." → "image/jpeg")
     const mimeMatch = idPhotoBase64.match(/^data:([^;]+);/);
@@ -128,17 +128,19 @@ router.post("/verify-id", authenticate, async (req, res) => {
       allConcerns.unshift(`Name mismatch: account registered as "${registeredName}" but ID shows "${extractedName}"`);
     }
 
-    // Check DOB match if we have both
-    const careRecipientFull = await db.prepare(
-      "SELECT date_of_birth FROM care_recipients WHERE id = ?"
-    ).get(careRecipient.id);
+    // Check DOB match if we have both (only for care_recipients who have DOB on file)
     let dobMatched = true;
-    if (extractedDOB && careRecipientFull?.date_of_birth) {
-      const registeredDOB = new Date(careRecipientFull.date_of_birth).toLocaleDateString('en-US');
-      dobMatched = extractedDOB.includes(registeredDOB) || registeredDOB.includes(extractedDOB) ||
-                   careRecipientFull.date_of_birth === extractedDOB;
-      if (!dobMatched) {
-        allConcerns.unshift(`Date of birth mismatch: registered "${registeredDOB}" but ID shows "${extractedDOB}"`);
+    if (careRecipient) {
+      const careRecipientFull = await db.prepare(
+        "SELECT date_of_birth FROM care_recipients WHERE id = ?"
+      ).get(careRecipient.id);
+      if (extractedDOB && careRecipientFull?.date_of_birth) {
+        const registeredDOB = new Date(careRecipientFull.date_of_birth).toLocaleDateString('en-US');
+        dobMatched = extractedDOB.includes(registeredDOB) || registeredDOB.includes(extractedDOB) ||
+                     careRecipientFull.date_of_birth === extractedDOB;
+        if (!dobMatched) {
+          allConcerns.unshift(`Date of birth mismatch: registered "${registeredDOB}" but ID shows "${extractedDOB}"`);
+        }
       }
     }
 
@@ -191,8 +193,8 @@ router.post("/verify-id", authenticate, async (req, res) => {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       docId,
-      careRecipient.id,
-      'care_recipient',
+      ownerId,
+      ownerType,
       req.user.id,
       'identity',
       classifyResult.classification || 'drivers_license',
@@ -221,7 +223,7 @@ router.post("/verify-id", authenticate, async (req, res) => {
         `INSERT INTO verified_documents (id, owner_id, owner_type, uploaded_by, category, document_type, file_data, mime_type, status, ai_classification, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).run(
-        selfieDocId, careRecipient.id, 'care_recipient', req.user.id,
+        selfieDocId, ownerId, ownerType, req.user.id,
         'identity', 'selfie', selfieBase64, selfieMime,
         'approved',  // selfie itself doesn't need review — it's supporting evidence
         JSON.stringify({ linkedIdDocId: docId, faceComparison }),

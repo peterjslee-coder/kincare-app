@@ -757,19 +757,8 @@ const CareRecipients = window.CareRecipients = () => {
               <p style={{ margin: 0, color: 'var(--text-tertiary)', fontSize: 13 }}>Verify your identity with a photo ID</p>
             </div>
           </div>
-          <div style={{
-            display: 'inline-block',
-            padding: '6px 12px',
-            background: 'var(--color-warning-bg)',
-            color: 'var(--accent-color)',
-            borderRadius: '6px',
-            fontSize: 12,
-            fontWeight: 600,
-          }}>
-            Coming Soon — Powered by Stripe Identity
-          </div>
-          <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginTop: '12px', marginBottom: 0 }}>
-            Identity verification will be required before care can begin. We'll notify you when this is available.
+          <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginTop: '4px', marginBottom: 0 }}>
+            You can verify your identity with a selfie and photo ID from your <a href="#" onClick={(e) => { e.preventDefault(); if (typeof onNavigate === 'function') onNavigate('account'); }} style={{ color: 'var(--role-color)', fontWeight: 600 }}>My Account</a> page. Verified users earn a blue check on their profile.
           </p>
         </div>
 
