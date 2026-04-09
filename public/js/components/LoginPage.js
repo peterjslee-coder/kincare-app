@@ -46,9 +46,11 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBa
     const oauthCode = params.get('oauth_code');
     const oauthError = params.get('oauth_error');
 
+    const appleLinked = params.get('apple_linked') === '1';
+
     if (oauthCode) {
       window.history.replaceState({}, '', window.location.pathname);
-      console.log('[OAuth] Exchanging auth code...');
+      console.log('[OAuth] Exchanging auth code...', appleLinked ? '(Apple link mode)' : '');
       apiFetch('/api/oauth/exchange', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -64,9 +66,11 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBa
           if (data.token && data.user) {
             console.log('[OAuth] Exchange success, setting token for:', data.user.email);
             setAuthToken(data.token);
-            // Verify token was set
             console.log('[OAuth] AUTH_TOKEN set:', !!window.getAuthToken?.());
             trackAuthEvent('login', 'oauth_success', { email: data.user.email, provider: 'oauth' });
+            if (appleLinked && window.__showToast) {
+              window.__showToast('Apple ID linked to your account!', 'success');
+            }
             onLogin(data.user);
           } else {
             console.error('[OAuth] Exchange returned no token/user:', data.error);
@@ -83,6 +87,10 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBa
     if (oauthError) {
       const errorMsg = oauthError === 'apple_hidden_email'
         ? 'Apple "Hide My Email" is not supported. Please sign in with Apple again and choose "Share My Email", or use your email and password.'
+        : oauthError === 'apple_already_linked'
+        ? 'This Apple ID is already linked to a different account.'
+        : oauthError === 'link_expired'
+        ? 'Your session expired. Please sign in and try linking Apple again.'
         : 'Sign-in failed. Please try again.';
       trackAuthEvent('login', 'error', { error: oauthError, source: 'oauth' });
       setError(errorMsg);

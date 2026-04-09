@@ -4341,9 +4341,10 @@ const LoginPage = window.LoginPage = ({
     const params = new URLSearchParams(window.location.search);
     const oauthCode = params.get('oauth_code');
     const oauthError = params.get('oauth_error');
+    const appleLinked = params.get('apple_linked') === '1';
     if (oauthCode) {
       window.history.replaceState({}, '', window.location.pathname);
-      console.log('[OAuth] Exchanging auth code...');
+      console.log('[OAuth] Exchanging auth code...', appleLinked ? '(Apple link mode)' : '');
       apiFetch('/api/oauth/exchange', {
         method: 'POST',
         headers: {
@@ -4366,12 +4367,14 @@ const LoginPage = window.LoginPage = ({
           var _window$getAuthToken, _window4;
           console.log('[OAuth] Exchange success, setting token for:', data.user.email);
           setAuthToken(data.token);
-          // Verify token was set
           console.log('[OAuth] AUTH_TOKEN set:', !!((_window$getAuthToken = (_window4 = window).getAuthToken) !== null && _window$getAuthToken !== void 0 && _window$getAuthToken.call(_window4)));
           trackAuthEvent('login', 'oauth_success', {
             email: data.user.email,
             provider: 'oauth'
           });
+          if (appleLinked && window.__showToast) {
+            window.__showToast('Apple ID linked to your account!', 'success');
+          }
           onLogin(data.user);
         } else {
           console.error('[OAuth] Exchange returned no token/user:', data.error);
@@ -4391,7 +4394,7 @@ const LoginPage = window.LoginPage = ({
       });
     }
     if (oauthError) {
-      const errorMsg = oauthError === 'apple_hidden_email' ? 'Apple "Hide My Email" is not supported. Please sign in with Apple again and choose "Share My Email", or use your email and password.' : 'Sign-in failed. Please try again.';
+      const errorMsg = oauthError === 'apple_hidden_email' ? 'Apple "Hide My Email" is not supported. Please sign in with Apple again and choose "Share My Email", or use your email and password.' : oauthError === 'apple_already_linked' ? 'This Apple ID is already linked to a different account.' : oauthError === 'link_expired' ? 'Your session expired. Please sign in and try linking Apple again.' : 'Sign-in failed. Please try again.';
       trackAuthEvent('login', 'error', {
         error: oauthError,
         source: 'oauth'
@@ -33601,21 +33604,21 @@ const MyAccount = window.MyAccount = ({
     className: "card"
   }, /*#__PURE__*/React.createElement("div", {
     className: "card-header"
-  }, "Linked Accounts"), linkedAccounts.length > 0 ? /*#__PURE__*/React.createElement("div", null, linkedAccounts.map((acct, i) => /*#__PURE__*/React.createElement("div", {
+  }, "Linked Accounts"), linkedAccounts.length > 0 && /*#__PURE__*/React.createElement("div", null, linkedAccounts.map((acct, i) => /*#__PURE__*/React.createElement("div", {
     key: i,
     style: {
       display: 'flex',
       alignItems: 'center',
       gap: 12,
       padding: '10px 0',
-      borderBottom: i < linkedAccounts.length - 1 ? '1px solid #f0f0f0' : 'none'
+      borderBottom: '1px solid #f0f0f0'
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       width: 36,
       height: 36,
       borderRadius: '50%',
-      background: 'var(--bg-primary)',
+      background: acct.provider === 'apple' ? '#000' : 'var(--bg-primary)',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center'
@@ -33636,6 +33639,13 @@ const MyAccount = window.MyAccount = ({
   }), /*#__PURE__*/React.createElement("path", {
     d: "M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z",
     fill: "#EA4335"
+  })) : acct.provider === 'apple' ? /*#__PURE__*/React.createElement("svg", {
+    width: "16",
+    height: "16",
+    viewBox: "0 0 24 24",
+    fill: "#fff"
+  }, /*#__PURE__*/React.createElement("path", {
+    d: "M17.05 20.28c-.98.95-2.05.88-3.08.4-1.09-.5-2.08-.48-3.24 0-1.44.62-2.2.44-3.06-.4C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"
   })) : '🔗'), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     style: {
       fontWeight: 600,
@@ -33647,13 +33657,51 @@ const MyAccount = window.MyAccount = ({
       fontSize: 13,
       color: 'var(--text-tertiary)'
     }
-  }, acct.email))))) : /*#__PURE__*/React.createElement("p", {
+  }, acct.email || 'Linked'))))), !linkedAccounts.some(a => a.provider === 'apple') && /*#__PURE__*/React.createElement("div", {
     style: {
-      color: 'var(--text-secondary)',
-      fontSize: 14,
-      margin: 0
+      paddingTop: linkedAccounts.length > 0 ? 8 : 0
     }
-  }, "No linked accounts. You can link your Google account by signing in with Google.")), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      var _window$getAuthToken2, _window5;
+      // Get the current auth token to pass through the OAuth flow
+      const token = ((_window$getAuthToken2 = (_window5 = window).getAuthToken) === null || _window$getAuthToken2 === void 0 ? void 0 : _window$getAuthToken2.call(_window5)) || '';
+      if (!token) {
+        showToast('Please sign in first', 'error');
+        return;
+      }
+      window.location.href = `/api/oauth/apple?link_mode=1&link_token=${encodeURIComponent(token)}`;
+    },
+    style: {
+      width: '100%',
+      padding: '12px 16px',
+      background: '#000',
+      color: '#fff',
+      border: 'none',
+      borderRadius: 10,
+      fontSize: 14,
+      fontWeight: 600,
+      cursor: 'pointer',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    width: "16",
+    height: "16",
+    viewBox: "0 0 24 24",
+    fill: "#fff"
+  }, /*#__PURE__*/React.createElement("path", {
+    d: "M17.05 20.28c-.98.95-2.05.88-3.08.4-1.09-.5-2.08-.48-3.24 0-1.44.62-2.2.44-3.06-.4C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"
+  })), "Link Apple ID"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontSize: 11,
+      color: 'var(--text-muted)',
+      margin: '6px 0 0',
+      textAlign: 'center'
+    }
+  }, "Connect your Apple ID so you can sign in with Face ID or Touch ID. Works even if you choose \"Hide My Email.\""))), /*#__PURE__*/React.createElement("div", {
     className: "card"
   }, /*#__PURE__*/React.createElement("div", {
     className: "card-header"

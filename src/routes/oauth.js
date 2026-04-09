@@ -263,15 +263,20 @@ async function verifyAppleIdToken(idToken) {
 }
 
 // ─── GET /api/oauth/apple ─── Redirect to Apple Sign In
+// ?link_mode=1&link_token=<jwt> — used from My Account to link Apple ID to existing account
 router.get("/apple", (req, res) => {
   if (!APPLE_CLIENT_ID || !APPLE_TEAM_ID || !APPLE_KEY_ID || !APPLE_PRIVATE_KEY) {
     return res.status(503).json({ error: "Apple Sign-In is not configured" });
   }
 
-  const state = crypto.randomBytes(16).toString("hex");
+  // If link_mode, encode the user's auth token into the state so the callback
+  // can attach the Apple ID to the correct account (regardless of relay email)
+  const linkToken = req.query.link_mode === '1' ? (req.query.link_token || '') : '';
+  const statePayload = crypto.randomBytes(16).toString("hex") + (linkToken ? `|link|${linkToken}` : '');
+
   // Apple uses form_post (cross-site POST), so sameSite must be "none" + secure
   // (lax cookies are not sent on cross-site POSTs, only top-level GET navigations)
-  res.cookie("apple_oauth_state", state, { httpOnly: true, maxAge: 600000, sameSite: "none", secure: true });
+  res.cookie("apple_oauth_state", statePayload, { httpOnly: true, maxAge: 600000, sameSite: "none", secure: true });
 
   const redirectUri = `${APP_URL}/api/oauth/apple/callback`;
   const params = new URLSearchParams({
@@ -280,7 +285,7 @@ router.get("/apple", (req, res) => {
     response_type: "code id_token",
     response_mode: "form_post",
     scope: "name email",
-    state,
+    state: statePayload,
   });
 
   res.redirect(`https://appleid.apple.com/auth/authorize?${params.toString()}`);
@@ -300,6 +305,22 @@ router.post("/apple/callback", express.urlencoded({ extended: false }), async (r
       return res.redirect(`${APP_URL}?oauth_error=invalid_state`);
     }
     res.clearCookie("apple_oauth_state");
+
+    // Check if this is a "link" flow (user linking Apple from My Account settings)
+    let linkUserId = null;
+    if (savedState.includes('|link|')) {
+      const linkToken = savedState.split('|link|')[1];
+      if (linkToken) {
+        try {
+          const decoded = jwt.verify(linkToken, process.env.JWT_SECRET);
+          linkUserId = decoded.id;
+          console.log(`[Apple OAuth] Link mode — attaching to user ${linkUserId?.slice(0, 8)}`);
+        } catch (e) {
+          console.error("[Apple OAuth] Link mode token invalid:", e.message);
+          return res.redirect(`${APP_URL}?oauth_error=link_expired`);
+        }
+      }
+    }
 
     if (!id_token) {
       console.error("[Apple OAuth] No id_token in callback body");
@@ -322,13 +343,50 @@ router.post("/apple/callback", express.urlencoded({ extended: false }), async (r
 
     const db = await getDb();
 
-    // Check if Apple account is already linked
+    // Check if Apple account is already linked to any user
     const existingOAuth = await db.prepare(
       "SELECT user_id FROM oauth_accounts WHERE provider = 'apple' AND provider_user_id = ?"
     ).get(appleUserId);
 
     let user;
 
+    // ─── LINK MODE: user is linking Apple from My Account settings ───
+    if (linkUserId) {
+      const linkUser = await db.prepare("SELECT * FROM users WHERE id = ? AND is_active = 1").get(linkUserId);
+      if (!linkUser) {
+        return res.redirect(`${APP_URL}?oauth_error=account_disabled`);
+      }
+
+      if (existingOAuth) {
+        if (existingOAuth.user_id === linkUserId) {
+          // Already linked to this user — just log in
+          console.log(`[Apple OAuth] Link mode — already linked to ${linkUserId.slice(0, 8)}`);
+          user = linkUser;
+        } else {
+          // Apple ID is linked to a different account
+          console.log(`[Apple OAuth] Link mode — Apple ID already linked to different user ${existingOAuth.user_id.slice(0, 8)}`);
+          return res.redirect(`${APP_URL}?oauth_error=apple_already_linked`);
+        }
+      } else {
+        // Link Apple ID to this user (works regardless of relay email)
+        await db.prepare(
+          "INSERT INTO oauth_accounts (id, user_id, provider, provider_user_id, provider_email, access_token) VALUES (?, ?, 'apple', ?, ?, ?)"
+        ).run(uuid(), linkUserId, appleUserId, email || null, code || null);
+        console.log(`[Apple OAuth] Linked Apple ID to user ${linkUserId.slice(0, 8)} (${linkUser.email})`);
+        user = linkUser;
+      }
+      // Redirect to account settings with success flag instead of normal login
+      const token = generateToken(user);
+      const authCode = crypto.randomBytes(32).toString("hex");
+      oauthCodes.set(authCode, { token, user: { id: user.id, email: user.email, role: user.role }, expiresAt: Date.now() + 60000 });
+      setAuthCookie(res, token);
+      setCsrfCookie(res);
+      const refreshToken = generateRefreshToken(user);
+      setRefreshCookie(res, refreshToken);
+      return res.redirect(`${APP_URL}?oauth_code=${authCode}&apple_linked=1`);
+    }
+
+    // ─── NORMAL LOGIN/SIGNUP MODE ───
     if (existingOAuth) {
       user = await db.prepare("SELECT * FROM users WHERE id = ? AND is_active = 1").get(existingOAuth.user_id);
       if (!user) {
