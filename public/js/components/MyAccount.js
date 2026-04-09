@@ -425,35 +425,52 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
     setPwError(null);
     try {
       const SimpleWebAuthnBrowser = window.SimpleWebAuthnBrowser;
-      if (!SimpleWebAuthnBrowser) throw new Error('Passkey support not loaded');
+      if (!SimpleWebAuthnBrowser) throw new Error('Passkey support not loaded — ensure you are on a supported browser');
 
-      // Get registration options
+      // Step 1: Get registration options from server
+      console.log('[Passkey] Requesting registration options...');
       const optRes = await apiFetch('/api/passkeys/register/options', { method: 'POST' });
-      if (!optRes?.ok) throw new Error('Failed to start passkey registration');
+      if (!optRes) throw new Error('Session expired — please sign in again and retry');
+      if (!optRes.ok) {
+        const errBody = await optRes.json().catch(() => ({}));
+        throw new Error(errBody?.error || `Server error (${optRes.status}) — try again`);
+      }
       const options = await optRes.json();
+      console.log('[Passkey] Got options, rpId:', options.rp?.id, 'challenge length:', options.challenge?.length);
 
-      // Trigger browser passkey/biometric prompt
+      // Step 2: Trigger browser passkey/biometric prompt
+      console.log('[Passkey] Starting browser registration prompt...');
       const regResp = await SimpleWebAuthnBrowser.startRegistration({ optionsJSON: options });
+      console.log('[Passkey] Browser registration complete, sending to server for verification...');
 
-      // Send to server for verification
+      // Step 3: Send to server for verification
       const verifyRes = await apiFetch('/api/passkeys/register/verify', {
         method: 'POST',
         body: JSON.stringify({ ...regResp, passkeyName: passkeyName || 'My Passkey' }),
       });
-      if (!verifyRes?.ok) {
-        const errData = await verifyRes.json();
-        throw new Error(errData?.error || 'Passkey registration failed');
+      if (!verifyRes) throw new Error('Session expired during verification — please sign in again and retry');
+      if (!verifyRes.ok) {
+        const errData = await verifyRes.json().catch(() => ({}));
+        console.error('[Passkey] Server verification failed:', errData);
+        throw new Error(errData?.error || 'Passkey verification failed on server');
       }
 
+      const result = await verifyRes.json();
+      console.log('[Passkey] Registration verified!', result);
       showToast('Passkey registered! You can now sign in with biometrics.', 'success');
       setShowPasskeyNameInput(false);
       setPasskeyName('');
       fetchPasskeys();
     } catch (err) {
+      console.error('[Passkey] Registration error:', err.name, err.message);
       if (err.name === 'InvalidStateError') {
         setPwError('You already have a passkey registered on this device. Remove it first if you want to re-register.');
-      } else if (err.name !== 'NotAllowedError') {
-        setPwError(err.message);
+      } else if (err.name === 'NotAllowedError') {
+        // User cancelled — don't show error, but log it
+        console.log('[Passkey] User cancelled the prompt');
+      } else {
+        setPwError(err.message || 'Passkey registration failed');
+        showToast('Passkey registration failed — see error below', 'error');
       }
     }
     setRegisteringPasskey(false);

@@ -124,7 +124,17 @@ router.post("/register/verify", authenticate, async (req, res) => {
   try {
     const expectedChallenge = getChallenge(`reg_${req.user.id}`);
     if (!expectedChallenge) {
+      console.log(`  [passkey] Challenge expired/missing for user ${req.user.id.slice(0,8)}`);
       return res.status(400).json({ error: "Registration challenge expired. Please try again." });
+    }
+
+    // Log the incoming origin for diagnostics (helps debug iOS/Android mismatches)
+    const clientData = req.body?.response?.clientDataJSON;
+    if (clientData) {
+      try {
+        const decoded = JSON.parse(Buffer.from(clientData, 'base64url').toString());
+        console.log(`  [passkey] Register verify — origin: ${decoded.origin}, type: ${decoded.type}, rpId: ${RP_ID}`);
+      } catch (e) { /* parsing clientDataJSON for logging only */ }
     }
 
     const verification = await verifyRegistrationResponse({
