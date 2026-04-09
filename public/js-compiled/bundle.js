@@ -53940,7 +53940,7 @@ const FeedbackButton = window.FeedbackButton = ({
 
 // Detect iOS/iPadOS and whether running as installed PWA
 const _isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
-const _isStandalone = () => window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
+const _isStandalone = () => window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches || !!window.Capacitor;
 const _isNativeApp = () => !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
 const NotificationPrompt = window.NotificationPrompt = ({
   onSubscribed
@@ -63829,6 +63829,9 @@ const AdminPanel = window.AdminPanel = ({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userDrawer, setUserDrawer] = useState(null);
   const [userDrawerLoading, setUserDrawerLoading] = useState(false);
+  const [setPasswordOpen, setSetPasswordOpen] = useState(false);
+  const [setPasswordValue, setSetPasswordValue] = useState('');
+  const [setPasswordSubmitting, setSetPasswordSubmitting] = useState(false);
   const [stats, setStats] = useState(null);
   const [users, setUsers] = useState([]);
   const [usersTotal, setUsersTotal] = useState(0);
@@ -76585,7 +76588,104 @@ const AdminPanel = window.AdminPanel = ({
       fontWeight: 600,
       cursor: 'pointer'
     }
-  }, "View As This User")) : /*#__PURE__*/React.createElement("h3", {
+  }, "View As This User"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      setSetPasswordOpen(!setPasswordOpen);
+      setSetPasswordValue('');
+    },
+    style: {
+      marginTop: 8,
+      marginLeft: 8,
+      padding: '5px 14px',
+      background: '#1565c0',
+      color: '#fff',
+      border: 'none',
+      borderRadius: 6,
+      fontSize: 12,
+      fontWeight: 600,
+      cursor: 'pointer'
+    }
+  }, "\uD83D\uDD11 Set Password"), setPasswordOpen && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 10,
+      padding: 12,
+      background: '#e3f2fd',
+      borderRadius: 8,
+      border: '1px solid #90caf9'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      fontWeight: 600,
+      color: '#1565c0',
+      marginBottom: 6
+    }
+  }, "Set a new password for ", userDrawer.user.first_name), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: 'var(--text-secondary)',
+      marginBottom: 8
+    }
+  }, "They'll be prompted to change it on next login."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "text",
+    value: setPasswordValue,
+    onChange: e => setSetPasswordValue(e.target.value),
+    placeholder: "New password (8+ chars)",
+    style: {
+      flex: 1,
+      padding: '8px 10px',
+      border: '1px solid #90caf9',
+      borderRadius: 6,
+      fontSize: 13,
+      fontFamily: 'monospace'
+    }
+  }), /*#__PURE__*/React.createElement("button", {
+    onClick: async () => {
+      if (setPasswordValue.length < 8) {
+        showToast('Password must be at least 8 characters', 'error');
+        return;
+      }
+      if (!confirm(`Set password for ${userDrawer.user.first_name} ${userDrawer.user.last_name} (${userDrawer.user.email})? They will need to change it on next login.`)) return;
+      setSetPasswordSubmitting(true);
+      try {
+        const r = await apiFetch(`/api/admin/users/${userDrawer.user.id}/set-password`, {
+          method: 'POST',
+          body: JSON.stringify({
+            password: setPasswordValue
+          })
+        });
+        if (r !== null && r !== void 0 && r.ok) {
+          const d = await r.json();
+          showToast(d.message || 'Password set', 'success');
+          setSetPasswordOpen(false);
+          setSetPasswordValue('');
+        } else {
+          const e = await (r === null || r === void 0 ? void 0 : r.json().catch(() => ({})));
+          showToast((e === null || e === void 0 ? void 0 : e.error) || 'Failed to set password', 'error');
+        }
+      } catch {
+        showToast('Failed to set password', 'error');
+      }
+      setSetPasswordSubmitting(false);
+    },
+    disabled: setPasswordSubmitting || setPasswordValue.length < 8,
+    style: {
+      padding: '8px 16px',
+      background: setPasswordValue.length >= 8 ? '#1565c0' : '#ccc',
+      color: '#fff',
+      border: 'none',
+      borderRadius: 6,
+      fontSize: 12,
+      fontWeight: 700,
+      cursor: setPasswordValue.length >= 8 ? 'pointer' : 'not-allowed',
+      opacity: setPasswordSubmitting ? 0.6 : 1
+    }
+  }, setPasswordSubmitting ? '...' : 'Set')))) : /*#__PURE__*/React.createElement("h3", {
     style: {
       margin: 0,
       fontSize: 18,
@@ -76596,6 +76696,7 @@ const AdminPanel = window.AdminPanel = ({
       e.stopPropagation();
       setUserDrawer(null);
       setUserDrawerLoading(false);
+      setSetPasswordOpen(false);
     },
     style: {
       background: 'var(--bg-surface)',
@@ -77712,8 +77813,8 @@ const PWAInstallBanner = window.PWAInstallBanner = () => {
   const isChrome = /Chrome|CriOS/i.test(ua) && !/Edge/i.test(ua);
   const isIOS = /iPad|iPhone|iPod/.test(ua) || navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
   useEffect(() => {
-    // Check if already installed
-    if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) {
+    // Check if already installed or running in native Capacitor shell
+    if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone || window.Capacitor) {
       setIsStandalone(true);
       return;
     }

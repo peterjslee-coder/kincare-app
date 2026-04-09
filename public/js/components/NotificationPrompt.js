@@ -4,7 +4,7 @@
 
 // Detect iOS/iPadOS and whether running as installed PWA
 const _isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-const _isStandalone = () => window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
+const _isStandalone = () => window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches || !!window.Capacitor;
 const _isNativeApp = () => !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
 
 const NotificationPrompt = window.NotificationPrompt = ({ onSubscribed }) => {
