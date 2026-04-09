@@ -469,11 +469,11 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
         // In a native app WebView, NotAllowedError usually means passkeys aren't
         // supported in this context (not that the user cancelled).
         // In Safari/Chrome, it typically means user cancelled the prompt.
-        const isNativeApp = window.Capacitor?.isNativePlatform?.() || navigator.userAgent.includes('InPlace');
+        // NotAllowedError can mean "user cancelled" OR "not allowed in this context" (e.g. WKWebView without entitlement)
+        const isNativeApp = window.Capacitor?.isNativePlatform?.();
         if (isNativeApp) {
-          setPwError('Passkey creation isn\'t supported inside the app yet. Open yourinplace.com in Safari to create a passkey — it will still work for sign-in everywhere.');
+          setPwError('Passkey creation failed. If this keeps happening, try opening yourinplace.com in Safari instead — the passkey will sync to this app automatically.');
         } else {
-          // Likely user cancelled — show a mild message just in case
           console.log('[Passkey] NotAllowedError (user may have cancelled)');
         }
       } else {
@@ -1455,11 +1455,6 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
             {!passkeySupported && (
               <div style={{ background: 'var(--color-warning-bg)', color: 'var(--color-warning)', padding: 12, borderRadius: 8, marginBottom: 16, fontSize: 13 }}>
                 Passkey management isn't available in this browser. To add or remove passkeys, open <strong>yourinplace.com</strong> in Safari or Chrome.
-              </div>
-            )}
-            {passkeySupported && window.Capacitor?.isNativePlatform?.() && (
-              <div style={{ background: '#fff3e0', color: '#e65100', padding: 12, borderRadius: 8, marginBottom: 16, fontSize: 13 }}>
-                <strong>Tip:</strong> To create a new passkey, open <strong>yourinplace.com</strong> in Safari. Once created, it will work for sign-in everywhere — including this app.
               </div>
             )}
             {loadingPasskeys ? (

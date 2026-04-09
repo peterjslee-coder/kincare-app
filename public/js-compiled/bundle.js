@@ -31208,7 +31208,7 @@ const MyAccount = window.MyAccount = ({
   setCurrentUser,
   onNavigate
 }) => {
-  var _user$first_name, _window$Capacitor7, _window$Capacitor7$is;
+  var _user$first_name;
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
@@ -31607,11 +31607,11 @@ const MyAccount = window.MyAccount = ({
         // In a native app WebView, NotAllowedError usually means passkeys aren't
         // supported in this context (not that the user cancelled).
         // In Safari/Chrome, it typically means user cancelled the prompt.
-        const isNativeApp = ((_window$Capacitor6 = window.Capacitor) === null || _window$Capacitor6 === void 0 || (_window$Capacitor6$is = _window$Capacitor6.isNativePlatform) === null || _window$Capacitor6$is === void 0 ? void 0 : _window$Capacitor6$is.call(_window$Capacitor6)) || navigator.userAgent.includes('InPlace');
+        // NotAllowedError can mean "user cancelled" OR "not allowed in this context" (e.g. WKWebView without entitlement)
+        const isNativeApp = (_window$Capacitor6 = window.Capacitor) === null || _window$Capacitor6 === void 0 || (_window$Capacitor6$is = _window$Capacitor6.isNativePlatform) === null || _window$Capacitor6$is === void 0 ? void 0 : _window$Capacitor6$is.call(_window$Capacitor6);
         if (isNativeApp) {
-          setPwError('Passkey creation isn\'t supported inside the app yet. Open yourinplace.com in Safari to create a passkey — it will still work for sign-in everywhere.');
+          setPwError('Passkey creation failed. If this keeps happening, try opening yourinplace.com in Safari instead — the passkey will sync to this app automatically.');
         } else {
-          // Likely user cancelled — show a mild message just in case
           console.log('[Passkey] NotAllowedError (user may have cancelled)');
         }
       } else {
@@ -33473,16 +33473,7 @@ const MyAccount = window.MyAccount = ({
       marginBottom: 16,
       fontSize: 13
     }
-  }, "Passkey management isn't available in this browser. To add or remove passkeys, open ", /*#__PURE__*/React.createElement("strong", null, "yourinplace.com"), " in Safari or Chrome."), passkeySupported && ((_window$Capacitor7 = window.Capacitor) === null || _window$Capacitor7 === void 0 || (_window$Capacitor7$is = _window$Capacitor7.isNativePlatform) === null || _window$Capacitor7$is === void 0 ? void 0 : _window$Capacitor7$is.call(_window$Capacitor7)) && /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: '#fff3e0',
-      color: '#e65100',
-      padding: 12,
-      borderRadius: 8,
-      marginBottom: 16,
-      fontSize: 13
-    }
-  }, /*#__PURE__*/React.createElement("strong", null, "Tip:"), " To create a new passkey, open ", /*#__PURE__*/React.createElement("strong", null, "yourinplace.com"), " in Safari. Once created, it will work for sign-in everywhere \u2014 including this app."), loadingPasskeys ? /*#__PURE__*/React.createElement(LoadingSpinner, {
+  }, "Passkey management isn't available in this browser. To add or remove passkeys, open ", /*#__PURE__*/React.createElement("strong", null, "yourinplace.com"), " in Safari or Chrome."), loadingPasskeys ? /*#__PURE__*/React.createElement(LoadingSpinner, {
     text: "Loading passkeys..."
   }) : /*#__PURE__*/React.createElement("div", null, passkeys.length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
@@ -53916,7 +53907,7 @@ const FeedbackButton = window.FeedbackButton = ({
 
   // Build rich pageContext with device/browser info
   const buildPageContext = () => {
-    var _navigator$connection, _window$Capacitor8, _window$Capacitor8$is, _window$Capacitor$get, _window$Capacitor9;
+    var _navigator$connection, _window$Capacitor7, _window$Capacitor7$is, _window$Capacitor$get, _window$Capacitor8;
     const ua = navigator.userAgent;
     const {
       browserName,
@@ -53945,7 +53936,7 @@ const FeedbackButton = window.FeedbackButton = ({
       connectionType: ((_navigator$connection = navigator.connection) === null || _navigator$connection === void 0 ? void 0 : _navigator$connection.effectiveType) || 'unknown',
       language: navigator.language || 'unknown',
       isPWA: window.navigator.standalone === true ? 'yes' : 'no',
-      platform: (_window$Capacitor8 = window.Capacitor) !== null && _window$Capacitor8 !== void 0 && (_window$Capacitor8$is = _window$Capacitor8.isNativePlatform) !== null && _window$Capacitor8$is !== void 0 && _window$Capacitor8$is.call(_window$Capacitor8) ? ((_window$Capacitor$get = (_window$Capacitor9 = window.Capacitor).getPlatform) === null || _window$Capacitor$get === void 0 ? void 0 : _window$Capacitor$get.call(_window$Capacitor9)) === 'ios' ? 'ios-native' : 'android-native' : window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches ? 'pwa' : 'web',
+      platform: (_window$Capacitor7 = window.Capacitor) !== null && _window$Capacitor7 !== void 0 && (_window$Capacitor7$is = _window$Capacitor7.isNativePlatform) !== null && _window$Capacitor7$is !== void 0 && _window$Capacitor7$is.call(_window$Capacitor7) ? ((_window$Capacitor$get = (_window$Capacitor8 = window.Capacitor).getPlatform) === null || _window$Capacitor$get === void 0 ? void 0 : _window$Capacitor$get.call(_window$Capacitor8)) === 'ios' ? 'ios-native' : 'android-native' : window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches ? 'pwa' : 'web',
       recentErrors: recentErrorsRef.current.length > 0 ? recentErrorsRef.current : null,
       // Flow context — what was open when user tapped feedback
       openModals: snapshot.openModals || null,
@@ -79418,7 +79409,7 @@ const App = () => {
     }
   }, []);
   const handleLogin = user => {
-    var _window$Capacitor0, _window$Capacitor0$is;
+    var _window$Capacitor9, _window$Capacitor9$is;
     // Mark this tab as having an active session so refreshes auto-restore,
     // but closing the browser requires re-authentication.
     sessionStorage.setItem('inplace_session_active', '1');
@@ -79485,7 +79476,7 @@ const App = () => {
     // Start proactive auth token refresh (keeps user logged in across app restarts)
     if (typeof startProactiveRefresh === 'function') startProactiveRefresh();
     // Re-sync push subscription on login
-    if ((_window$Capacitor0 = window.Capacitor) !== null && _window$Capacitor0 !== void 0 && (_window$Capacitor0$is = _window$Capacitor0.isNativePlatform) !== null && _window$Capacitor0$is !== void 0 && _window$Capacitor0$is.call(_window$Capacitor0)) {
+    if ((_window$Capacitor9 = window.Capacitor) !== null && _window$Capacitor9 !== void 0 && (_window$Capacitor9$is = _window$Capacitor9.isNativePlatform) !== null && _window$Capacitor9$is !== void 0 && _window$Capacitor9$is.call(_window$Capacitor9)) {
       // Native app: register FCM token with server on every login
       // (ensures token is always fresh — previous registration may have failed or token rotated)
       if (typeof subscribeNativePush === 'function') {
