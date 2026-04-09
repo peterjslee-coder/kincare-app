@@ -46,6 +46,9 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userDrawer, setUserDrawer] = useState(null);
   const [userDrawerLoading, setUserDrawerLoading] = useState(false);
+  const [setPasswordOpen, setSetPasswordOpen] = useState(false);
+  const [setPasswordValue, setSetPasswordValue] = useState('');
+  const [setPasswordSubmitting, setSetPasswordSubmitting] = useState(false);
   const [stats, setStats] = useState(null);
   const [users, setUsers] = useState([]);
   const [usersTotal, setUsersTotal] = useState(0);
@@ -6316,12 +6319,57 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                       }}>
                       View As This User
                     </button>
+                    <button onClick={() => { setSetPasswordOpen(!setPasswordOpen); setSetPasswordValue(''); }}
+                      style={{
+                        marginTop: 8, marginLeft: 8, padding: '5px 14px', background: '#1565c0', color: '#fff',
+                        border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                      }}>
+                      🔑 Set Password
+                    </button>
+                    {setPasswordOpen && (
+                      <div style={{ marginTop: 10, padding: 12, background: '#e3f2fd', borderRadius: 8, border: '1px solid #90caf9' }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: '#1565c0', marginBottom: 6 }}>Set a new password for {userDrawer.user.first_name}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 8 }}>They'll be prompted to change it on next login.</div>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <input type="text" value={setPasswordValue} onChange={e => setSetPasswordValue(e.target.value)}
+                            placeholder="New password (8+ chars)"
+                            style={{ flex: 1, padding: '8px 10px', border: '1px solid #90caf9', borderRadius: 6, fontSize: 13, fontFamily: 'monospace' }}
+                          />
+                          <button onClick={async () => {
+                            if (setPasswordValue.length < 8) { showToast('Password must be at least 8 characters', 'error'); return; }
+                            if (!confirm(`Set password for ${userDrawer.user.first_name} ${userDrawer.user.last_name} (${userDrawer.user.email})? They will need to change it on next login.`)) return;
+                            setSetPasswordSubmitting(true);
+                            try {
+                              const r = await apiFetch(`/api/admin/users/${userDrawer.user.id}/set-password`, {
+                                method: 'POST', body: JSON.stringify({ password: setPasswordValue }),
+                              });
+                              if (r?.ok) {
+                                const d = await r.json();
+                                showToast(d.message || 'Password set', 'success');
+                                setSetPasswordOpen(false);
+                                setSetPasswordValue('');
+                              } else {
+                                const e = await r?.json().catch(() => ({}));
+                                showToast(e?.error || 'Failed to set password', 'error');
+                              }
+                            } catch { showToast('Failed to set password', 'error'); }
+                            setSetPasswordSubmitting(false);
+                          }} disabled={setPasswordSubmitting || setPasswordValue.length < 8}
+                            style={{
+                              padding: '8px 16px', background: setPasswordValue.length >= 8 ? '#1565c0' : '#ccc', color: '#fff',
+                              border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 700,
+                              cursor: setPasswordValue.length >= 8 ? 'pointer' : 'not-allowed',
+                              opacity: setPasswordSubmitting ? 0.6 : 1,
+                            }}>{setPasswordSubmitting ? '...' : 'Set'}</button>
+                        </div>
+                      </div>
+                    )}
                   </>
                 ) : (
                   <h3 style={{ margin: 0, fontSize: 18, color: 'var(--text-secondary)' }}>Loading...</h3>
                 )}
               </div>
-              <button onClick={(e) => { e.stopPropagation(); setUserDrawer(null); setUserDrawerLoading(false); }}
+              <button onClick={(e) => { e.stopPropagation(); setUserDrawer(null); setUserDrawerLoading(false); setSetPasswordOpen(false); }}
                 style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', fontSize: 18, cursor: 'pointer', color: 'var(--text-secondary)', padding: '4px 10px', borderRadius: 8, lineHeight: 1, flexShrink: 0 }}
                 title="Close">✕</button>
             </div>

@@ -935,6 +935,38 @@ router.put("/users/:id/admin-notes", async (req, res) => {
   }
 });
 
+// ─── POST /api/admin/users/:id/set-password — Admin sets a user's password ───
+router.post("/users/:id/set-password", async (req, res) => {
+  try {
+    const db = await getDb();
+    const { password } = req.body;
+    if (!password || password.length < 8) {
+      return res.status(400).json({ error: "Password must be at least 8 characters" });
+    }
+
+    const user = await db.prepare("SELECT id, email, first_name, last_name FROM users WHERE id = ?").get(req.params.id);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    const bcrypt = require("bcryptjs");
+    const passwordHash = await bcrypt.hash(password, 10);
+    await db.prepare(
+      "UPDATE users SET password_hash = ?, must_change_password = 1, password_changed_at = NOW(), updated_at = NOW() WHERE id = ?"
+    ).run(passwordHash, req.params.id);
+
+    // Audit log
+    await logAdminAction(req, "set_password", "user", req.params.id, {
+      userName: `${user.first_name} ${user.last_name}`,
+      email: user.email,
+    });
+
+    console.log(`[admin] Password set for ${user.email} by ${req.user.email}`);
+    res.json({ ok: true, message: `Password set for ${user.email}. User will be prompted to change it on next login.` });
+  } catch (err) {
+    console.error("Admin set-password error:", err);
+    res.status(500).json({ error: "Failed to set password" });
+  }
+});
+
 // ─── GET /api/admin/waitlist — Full waitlist ───
 router.get("/waitlist", async (req, res) => {
   try {
