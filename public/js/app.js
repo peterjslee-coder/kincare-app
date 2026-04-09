@@ -337,6 +337,8 @@ const App = () => {
     const p = new URLSearchParams(window.location.search);
     if (p.get('reset')) return 'reset-password';
     if (p.get('consent-response')) return 'consent-response';
+    // OAuth callback: go straight to login so LoginPage can exchange the code
+    if (p.get('oauth_code') || p.get('oauth_error')) return 'login';
     return 'splash';
   });
   const [currentUser, setCurrentUser] = useState(null);
