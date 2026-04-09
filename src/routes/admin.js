@@ -677,7 +677,7 @@ router.get("/users", async (req, res) => {
     // Build query dynamically
     let sql = `
       SELECT id, email, role, first_name, last_name, phone, email_verified, is_demo, is_admin, admin_role, admin_notes, is_tester, is_active, companion_access, created_at, updated_at
-      FROM users WHERE 1=1
+      FROM users WHERE COALESCE(is_active, 1) = 1
     `;
     const params = [];
 
@@ -709,7 +709,7 @@ router.get("/users", async (req, res) => {
     const users = await db.prepare(sql).all(...params);
 
     // Total count for pagination
-    let countSql = "SELECT COUNT(*) as count FROM users WHERE 1=1";
+    let countSql = "SELECT COUNT(*) as count FROM users WHERE COALESCE(is_active, 1) = 1";
     const countParams = [];
     if (search) {
       countParams.push(`%${search}%`, `%${search}%`);
