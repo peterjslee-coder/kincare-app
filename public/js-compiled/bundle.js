@@ -4343,6 +4343,7 @@ const LoginPage = window.LoginPage = ({
     const oauthError = params.get('oauth_error');
     if (oauthCode) {
       window.history.replaceState({}, '', window.location.pathname);
+      console.log('[OAuth] Exchanging auth code...');
       apiFetch('/api/oauth/exchange', {
         method: 'POST',
         headers: {
@@ -4351,16 +4352,30 @@ const LoginPage = window.LoginPage = ({
         body: JSON.stringify({
           code: oauthCode
         })
-      }).then(r => r.json()).then(data => {
+      }).then(r => {
+        console.log('[OAuth] Exchange response status:', r === null || r === void 0 ? void 0 : r.status);
+        if (!r) {
+          console.error('[OAuth] Exchange returned null (apiFetch 401 cascade?)');
+          setError('Sign-in failed — session could not be established.');
+          return null;
+        }
+        return r.json();
+      }).then(data => {
+        if (!data) return;
         if (data.token && data.user) {
+          var _window$getAuthToken, _window4;
+          console.log('[OAuth] Exchange success, setting token for:', data.user.email);
           setAuthToken(data.token);
+          // Verify token was set
+          console.log('[OAuth] AUTH_TOKEN set:', !!((_window$getAuthToken = (_window4 = window).getAuthToken) !== null && _window$getAuthToken !== void 0 && _window$getAuthToken.call(_window4)));
           trackAuthEvent('login', 'oauth_success', {
             email: data.user.email,
-            provider: 'google'
+            provider: 'oauth'
           });
           onLogin(data.user);
         } else {
-          setError('Google sign-in failed. Please try again.');
+          console.error('[OAuth] Exchange returned no token/user:', data.error);
+          setError('Sign-in failed. Please try again.');
           trackAuthEvent('login', 'error', {
             error: data.error || 'exchange_failed',
             source: 'oauth'
@@ -4368,7 +4383,7 @@ const LoginPage = window.LoginPage = ({
         }
       }).catch(e => {
         console.error('OAuth exchange error:', e);
-        setError('Google sign-in failed. Please try again.');
+        setError('Sign-in failed. Please try again.');
         trackAuthEvent('login', 'error', {
           error: 'OAuth exchange error',
           source: 'oauth_callback'
@@ -78640,6 +78655,8 @@ const App = () => {
     const p = new URLSearchParams(window.location.search);
     if (p.get('reset')) return 'reset-password';
     if (p.get('consent-response')) return 'consent-response';
+    // OAuth callback: go straight to login so LoginPage can exchange the code
+    if (p.get('oauth_code') || p.get('oauth_error')) return 'login';
     return 'splash';
   });
   const [currentUser, setCurrentUser] = useState(null);
@@ -79026,8 +79043,12 @@ const App = () => {
   const [signupPrefill, setSignupPrefill] = useState(null); // { email, role, signupToken }
 
   useEffect(() => {
-    // If we're in a pre-auth URL mode (reset-password, consent-response), skip auto-login
-    if (appState === 'reset-password' || appState === 'consent-response') return;
+    // If we're in a pre-auth URL mode, skip auto-login entirely.
+    // 'login' is included because it may be set by an OAuth redirect (oauth_code in URL).
+    // Running auto-login concurrently with the OAuth exchange causes a race condition:
+    // the stale session's 401 → refresh-fail → logout cascade fires and clears the
+    // fresh cookies that the exchange just set, causing immediate re-logout.
+    if (appState === 'reset-password' || appState === 'consent-response' || appState === 'login') return;
 
     // Only auto-restore if this tab has an active session (set at login).
     // Closing the browser/tab clears sessionStorage, so the user must

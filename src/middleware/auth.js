@@ -80,6 +80,8 @@ async function authenticate(req, res, next) {
   const cookieToken = req.cookies?.auth_token;
   const tokenSource = header?.startsWith("Bearer ") ? header.split(" ")[1] : cookieToken;
   if (!tokenSource) {
+    const fullPath = req.originalUrl || req.path;
+    console.log(`[Auth 401] No token — path: ${fullPath}, hasBearerHeader: ${!!header}, hasCookie: ${!!cookieToken}, cookieKeys: ${Object.keys(req.cookies || {}).join(',')}`);
     return res.status(401).json({ error: "Authentication required" });
   }
 
@@ -118,6 +120,8 @@ async function authenticate(req, res, next) {
     next();
   } catch (err) {
     const isExpired = err.name === 'TokenExpiredError';
+    const fullPath = req.originalUrl || req.path;
+    console.log(`[Auth 401] Token verify failed — path: ${fullPath}, error: ${err.name}: ${err.message}, source: ${header ? 'bearer' : 'cookie'}`);
     return res.status(401).json({ error: isExpired ? "Your session has expired. Please sign in again." : "Authentication failed. Please sign in again.", code: isExpired ? "TOKEN_EXPIRED" : "TOKEN_INVALID" });
   }
 }

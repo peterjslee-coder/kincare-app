@@ -48,25 +48,35 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBa
 
     if (oauthCode) {
       window.history.replaceState({}, '', window.location.pathname);
+      console.log('[OAuth] Exchanging auth code...');
       apiFetch('/api/oauth/exchange', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code: oauthCode }),
       })
-        .then(r => r.json())
+        .then(r => {
+          console.log('[OAuth] Exchange response status:', r?.status);
+          if (!r) { console.error('[OAuth] Exchange returned null (apiFetch 401 cascade?)'); setError('Sign-in failed — session could not be established.'); return null; }
+          return r.json();
+        })
         .then(data => {
+          if (!data) return;
           if (data.token && data.user) {
+            console.log('[OAuth] Exchange success, setting token for:', data.user.email);
             setAuthToken(data.token);
-            trackAuthEvent('login', 'oauth_success', { email: data.user.email, provider: 'google' });
+            // Verify token was set
+            console.log('[OAuth] AUTH_TOKEN set:', !!window.getAuthToken?.());
+            trackAuthEvent('login', 'oauth_success', { email: data.user.email, provider: 'oauth' });
             onLogin(data.user);
           } else {
-            setError('Google sign-in failed. Please try again.');
+            console.error('[OAuth] Exchange returned no token/user:', data.error);
+            setError('Sign-in failed. Please try again.');
             trackAuthEvent('login', 'error', { error: data.error || 'exchange_failed', source: 'oauth' });
           }
         })
         .catch(e => {
           console.error('OAuth exchange error:', e);
-          setError('Google sign-in failed. Please try again.');
+          setError('Sign-in failed. Please try again.');
           trackAuthEvent('login', 'error', { error: 'OAuth exchange error', source: 'oauth_callback' });
         });
     }

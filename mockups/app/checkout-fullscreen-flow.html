@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>inPlace — Checkout Flow (Full-Screen Stepper)</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #ffffff;
+    color: #333;
+    min-height: 100vh;
+    max-width: 420px;
+    margin: 0 auto;
+    position: relative;
+    overflow: hidden;
+  }
+
+  :root {
+    --role-color: #2e5984;
+    --role-color-light: #e0ecf5;
+    --color-success: #2e7d32;
+    --color-success-bg: #e8f5e9;
+    --color-error: #c62828;
+    --color-error-bg: #ffebee;
+    --color-warning: #f9a825;
+    --color-warning-bg: #fff8e1;
+    --text-primary: #333333;
+    --text-secondary: #6c757d;
+    --text-tertiary: #888888;
+    --text-muted: #999999;
+    --text-on-primary: #ffffff;
+    --bg-primary: #f8f9fa;
+    --bg-surface: #ffffff;
+    --bg-card: #ffffff;
+    --border-light: #e0e0e0;
+    --accent-color: #e8724a;
+    --nav-bg: #ffffff;
+    --nav-inactive: #9ca3af;
+    --shadow-nav: 0 -2px 8px rgba(0, 0, 0, 0.06);
+  }
+
+  /* Full-screen container — leaves room for bottom nav */
+  .checkout-flow {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 64px; /* above bottom nav */
+    background: var(--bg-surface);
+    z-index: 800;
+    display: flex;
+    flex-direction: column;
+    max-width: 420px;
+    margin: 0 auto;
+  }
+
+  /* Bottom navigation bar */
+  .bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    max-width: 420px;
+    margin: 0 auto;
+    height: 64px;
+    background: var(--nav-bg);
+    border-top: 1px solid var(--border-light);
+    box-shadow: var(--shadow-nav);
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    z-index: 900;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    font-size: 10px;
+    color: var(--nav-inactive);
+    text-decoration: none;
+    padding: 6px 12px;
+  }
+  .nav-item.active { color: var(--role-color); }
+  .nav-item svg { width: 22px; height: 22px; }
+
+  /* Stepper bar */
+  .stepper-bar {
+    display: flex;
+    align-items: center;
+    padding: 14px 20px;
+    background: var(--bg-primary);
+    border-bottom: 1px solid var(--border-light);
+  }
+  .step-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    cursor: pointer;
+  }
+  .step-circle {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 700;
+    transition: all 0.3s;
+  }
+  .step-circle.done { background: var(--color-success); color: var(--text-on-primary); }
+  .step-circle.active { background: var(--role-color); color: var(--text-on-primary); box-shadow: 0 0 10px rgba(46,89,132,0.3); }
+  .step-circle.upcoming { background: var(--bg-primary); color: var(--text-muted); border: 2px solid var(--border-light); }
+  .step-label { font-size: 9px; margin-top: 3px; font-weight: 500; color: var(--text-muted); }
+  .step-label.done { color: var(--color-success); }
+  .step-label.active { color: var(--role-color); font-weight: 700; }
+  .step-connector { flex: 1; height: 2px; margin: 0 8px; margin-bottom: 14px; background: var(--border-light); }
+  .step-connector.done { background: var(--color-success); }
+  .close-btn {
+    background: var(--bg-primary); border: 1px solid var(--border-light); border-radius: 50%;
+    width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
+    cursor: pointer; color: var(--text-muted); font-size: 16px; margin-left: auto; margin-bottom: 14px;
+  }
+
+  /* Content area */
+  .step-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px 16px;
+    max-width: 520px;
+    width: 100%;
+    margin: 0 auto;
+  }
+
+  /* Mood grid */
+  .mood-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+  .mood-card {
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    padding: 14px 8px; border-radius: 12px; border: 2px solid var(--border-light);
+    background: var(--bg-primary); cursor: pointer; transition: all 0.15s;
+  }
+  .mood-card.selected { border: 2px solid var(--color-success); background: var(--color-success-bg); }
+  .mood-card .emoji { font-size: 28px; }
+  .mood-card .label { font-size: 10px; font-weight: 500; color: var(--text-muted); }
+  .mood-card.selected .label { color: var(--color-success); font-weight: 600; }
+
+  /* Observation tags */
+  .tag-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+  .obs-tag {
+    padding: 8px 14px; border-radius: 20px; font-size: 12px; border: 1px solid #ddd;
+    background: var(--bg-card); color: var(--text-secondary); cursor: pointer; transition: all 0.15s;
+  }
+  .obs-tag.selected-good { border: 2px solid var(--color-success); background: var(--color-success-bg); color: var(--color-success); font-weight: 600; }
+  .obs-tag.selected-concern { border: 2px solid var(--color-error); background: var(--color-error-bg); color: var(--color-error); font-weight: 600; }
+
+  /* Form elements */
+  .form-hint { font-size: 12px; color: var(--text-tertiary); margin: 0 0 8px; }
+  textarea {
+    width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #ddd;
+    font-size: 13px; resize: vertical; font-family: inherit;
+  }
+
+  /* Photo upload */
+  .photo-upload-btn {
+    padding: 14px; background: var(--bg-primary); border: 2px dashed #ccc; border-radius: 10px;
+    cursor: pointer; font-size: 13px; color: var(--text-secondary); width: 100%;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+  }
+  .photo-upload-btn.has-photos {
+    background: var(--color-success-bg); border: 2px solid #1b6b5a; color: #1b6b5a; font-weight: 600;
+  }
+
+  /* Location banner */
+  .location-banner {
+    margin-bottom: 16px; padding: 12px; background: var(--color-success-bg); border-radius: 10px;
+    border: 1px solid var(--color-success); font-size: 13px; color: var(--color-success);
+    display: flex; align-items: center; gap: 8px;
+  }
+
+  /* Early departure warning */
+  .early-departure-warning {
+    background: var(--color-warning-bg); border: 2px solid #e8724a; border-radius: 12px;
+    padding: 16px; margin-bottom: 20px;
+  }
+
+  /* Time adjuster */
+  .time-adjuster {
+    background: var(--bg-primary); border: 1px solid var(--border-light); border-radius: 12px;
+    padding: 16px; margin-bottom: 20px;
+  }
+  .time-adjuster-header {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 12px;
+  }
+  .time-display {
+    display: flex; align-items: center; gap: 12px; justify-content: center;
+  }
+  .time-value {
+    font-size: 32px; font-weight: 800; color: var(--text-primary);
+    font-variant-numeric: tabular-nums; letter-spacing: -1px;
+  }
+  .time-btn {
+    width: 44px; height: 44px; border-radius: 50%; border: 2px solid var(--border-light);
+    background: var(--bg-surface); cursor: pointer; display: flex; align-items: center;
+    justify-content: center; font-size: 20px; color: var(--text-primary); font-weight: 700;
+    transition: all 0.15s;
+  }
+  .time-btn:active { background: var(--role-color-light); border-color: var(--role-color); }
+  .time-btn.disabled { opacity: 0.3; cursor: not-allowed; }
+  .time-hint {
+    text-align: center; font-size: 11px; color: var(--text-muted); margin-top: 8px;
+  }
+  .time-adjusted-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600;
+    background: #e3f2fd; color: #1565c0;
+  }
+
+  /* Pinned footer */
+  .pinned-footer {
+    flex-shrink: 0; padding: 16px; background: var(--bg-surface);
+    border-top: 1px solid var(--border-light); max-width: 520px; width: 100%; margin: 0 auto;
+  }
+  .pinned-btn {
+    width: 100%; padding: 22px; border: none; border-radius: 16px;
+    font-size: 20px; font-weight: 800; cursor: pointer; letter-spacing: 0.5px; transition: all 0.2s;
+  }
+  .pinned-btn.primary {
+    background: linear-gradient(135deg, var(--role-color), var(--color-success));
+    color: var(--text-on-primary); box-shadow: 0 4px 12px rgba(46,89,132,0.3);
+  }
+  .pinned-btn.next {
+    background: linear-gradient(135deg, var(--role-color), #4a8bc2);
+    color: var(--text-on-primary); box-shadow: 0 4px 12px rgba(46,89,132,0.3);
+  }
+
+  .back-link { background: none; border: none; cursor: pointer; font-size: 13px; color: var(--text-muted); padding: 8px 0; margin-bottom: 8px; }
+  .summary-card { padding: 14px; border-radius: 10px; margin-bottom: 14px; }
+  .summary-label { font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .section-label { font-size: 12px; font-weight: 700; color: var(--role-color); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
+
+  /* Mockup variant label */
+  .variant-label {
+    position: fixed; bottom: 68px; left: 0; right: 0; max-width: 420px; margin: 0 auto;
+    text-align: center; font-size: 9px; color: #fff; background: rgba(0,0,0,0.5);
+    padding: 4px 8px; z-index: 999; letter-spacing: 0.5px; text-transform: uppercase;
+  }
+
+  /* Hidden views */
+  .view { display: none; }
+  .view.active { display: flex; flex-direction: column; height: 100%; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- BOTTOM NAV (always visible, same as real app)          -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="bottom-nav">
+  <a class="nav-item active" href="#">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+    <span>Home</span>
+  </a>
+  <a class="nav-item" href="#">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+    <span>Schedule</span>
+  </a>
+  <a class="nav-item" href="#">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+    <span>Messages</span>
+  </a>
+  <a class="nav-item" href="#">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+    <span>Account</span>
+  </a>
+</div>
+
+
+<!-- ═══════════════════════════════════════ -->
+<!-- STEP 1: On-time checkout               -->
+<!-- ═══════════════════════════════════════ -->
+<div id="step1" class="view active">
+<div class="checkout-flow">
+
+  <div class="stepper-bar">
+    <div class="step-item" onclick="showView('step1')">
+      <div class="step-circle active">1</div>
+      <div class="step-label active">Mood</div>
+    </div>
+    <div class="step-connector"></div>
+    <div class="step-item" onclick="showView('step2')">
+      <div class="step-circle upcoming">2</div>
+      <div class="step-label">Notes</div>
+    </div>
+    <div class="step-connector"></div>
+    <div class="step-item" onclick="showView('step3')">
+      <div class="step-circle upcoming">3</div>
+      <div class="step-label">Review</div>
+    </div>
+    <button class="close-btn">✕</button>
+  </div>
+
+  <div class="step-content">
+    <div style="text-align: center; margin-bottom: 20px;">
+      <h3 style="margin-top: 0; margin-bottom: 4px; font-size: 22px;">Wrapping Up</h3>
+      <p style="font-size: 13px; color: var(--text-secondary); margin: 0;">How is Betty right now?</p>
+    </div>
+
+    <!-- TIME ADJUSTER -->
+    <div class="time-adjuster">
+      <div class="time-adjuster-header">
+        <span style="font-size: 16px;">🕐</span>
+        <span style="font-size: 12px; font-weight: 700; color: var(--role-color); text-transform: uppercase; letter-spacing: 0.5px;">Checkout Time</span>
+        <span style="flex:1"></span>
+        <span style="font-size: 11px; color: var(--text-muted);">Scheduled end: 6:00 PM</span>
+      </div>
+      <div class="time-display">
+        <button class="time-btn" onclick="adjustTime(-5)">−</button>
+        <div class="time-value" id="timeValue1">6:00 PM</div>
+        <button class="time-btn disabled" title="Cannot set checkout time in the future">+</button>
+      </div>
+      <div class="time-hint">Tap − to adjust back in 5-min steps · Cannot go forward past now</div>
+    </div>
+
+    <div class="mood-grid">
+      <div class="mood-card selected"><span class="emoji">😊</span><span class="label">Happy</span></div>
+      <div class="mood-card"><span class="emoji">😌</span><span class="label">Calm</span></div>
+      <div class="mood-card"><span class="emoji">😴</span><span class="label">Sleepy</span></div>
+      <div class="mood-card"><span class="emoji">😐</span><span class="label">Neutral</span></div>
+      <div class="mood-card"><span class="emoji">😰</span><span class="label">Anxious</span></div>
+      <div class="mood-card"><span class="emoji">😢</span><span class="label">Sad</span></div>
+      <div class="mood-card"><span class="emoji">😠</span><span class="label">Upset</span></div>
+      <div class="mood-card selected"><span class="emoji">🥰</span><span class="label">Warm</span></div>
+    </div>
+
+    <div class="location-banner">
+      <span style="font-size: 16px;">📍</span> Location captured · 12m accuracy
+    </div>
+  </div>
+
+  <div class="pinned-footer">
+    <button class="pinned-btn next" onclick="showView('step2')">Continue to Notes →</button>
+  </div>
+
+</div>
+<div class="variant-label">On-time checkout · time adjuster defaults to now</div>
+</div>
+
+
+<!-- ═══════════════════════════════════════ -->
+<!-- STEP 1: EARLY checkout (adjusted back) -->
+<!-- ═══════════════════════════════════════ -->
+<div id="step1early" class="view">
+<div class="checkout-flow">
+
+  <div class="stepper-bar">
+    <div class="step-item" onclick="showView('step1early')">
+      <div class="step-circle active">1</div>
+      <div class="step-label active">Mood</div>
+    </div>
+    <div class="step-connector"></div>
+    <div class="step-item" onclick="showView('step2')">
+      <div class="step-circle upcoming">2</div>
+      <div class="step-label">Notes</div>
+    </div>
+    <div class="step-connector"></div>
+    <div class="step-item" onclick="showView('step3')">
+      <div class="step-circle upcoming">3</div>
+      <div class="step-label">Review</div>
+    </div>
+    <button class="close-btn">✕</button>
+  </div>
+
+  <div class="step-content">
+    <div style="text-align: center; margin-bottom: 20px;">
+      <h3 style="margin-top: 0; margin-bottom: 4px; font-size: 22px;">Wrapping Up</h3>
+      <p style="font-size: 13px; color: var(--text-secondary); margin: 0;">How is Betty right now?</p>
+    </div>
+
+    <!-- TIME ADJUSTER — adjusted back -->
+    <div class="time-adjuster" style="border-color: #1565c0;">
+      <div class="time-adjuster-header">
+        <span style="font-size: 16px;">🕐</span>
+        <span style="font-size: 12px; font-weight: 700; color: var(--role-color); text-transform: uppercase; letter-spacing: 0.5px;">Checkout Time</span>
+        <span style="flex:1"></span>
+        <span class="time-adjusted-badge">⏪ Adjusted</span>
+      </div>
+      <div class="time-display">
+        <button class="time-btn">−</button>
+        <div class="time-value">5:15 PM</div>
+        <button class="time-btn">+</button>
+      </div>
+      <div class="time-hint">Scheduled end: 6:00 PM · Now: 6:02 PM · Adjusted 45 min back</div>
+    </div>
+
+    <!-- EARLY DEPARTURE WARNING (appears when time is adjusted before scheduled end) -->
+    <div class="early-departure-warning">
+      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+        <span style="font-size: 20px;">⚠️</span>
+        <strong style="font-size: 14px; color: var(--color-error);">Early Checkout</strong>
+      </div>
+      <p style="font-size: 13px; color: var(--text-primary); margin: 0 0 8px; line-height: 1.5;">
+        Session was scheduled until <strong>6:00 PM</strong>. Checkout time set to <strong>5:15 PM</strong> — <strong>45 minutes early</strong>.
+      </p>
+      <p style="font-size: 13px; color: var(--color-error); font-weight: 600; margin: 0 0 12px;">
+        Pay is calculated in 5-minute blocks — you'll receive 63% of the session pay.
+      </p>
+      <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: var(--text-primary);">
+        Please let us and the family know why you're leaving early: *
+      </label>
+      <textarea placeholder="e.g., Family emergency, care recipient asked me to leave..." style="min-height: 60px; border-color: #e8724a;">Care recipient's daughter arrived early and took over.</textarea>
+    </div>
+
+    <div class="mood-grid">
+      <div class="mood-card selected"><span class="emoji">😊</span><span class="label">Happy</span></div>
+      <div class="mood-card"><span class="emoji">😌</span><span class="label">Calm</span></div>
+      <div class="mood-card"><span class="emoji">😴</span><span class="label">Sleepy</span></div>
+      <div class="mood-card"><span class="emoji">😐</span><span class="label">Neutral</span></div>
+      <div class="mood-card"><span class="emoji">😰</span><span class="label">Anxious</span></div>
+      <div class="mood-card"><span class="emoji">😢</span><span class="label">Sad</span></div>
+      <div class="mood-card"><span class="emoji">😠</span><span class="label">Upset</span></div>
+      <div class="mood-card selected"><span class="emoji">🥰</span><span class="label">Warm</span></div>
+    </div>
+
+    <div class="location-banner">
+      <span style="font-size: 16px;">📍</span> Location captured · 12m accuracy
+    </div>
+  </div>
+
+  <div class="pinned-footer">
+    <button class="pinned-btn next" onclick="showView('step2')">Continue to Notes →</button>
+  </div>
+
+</div>
+<div class="variant-label">Early checkout · time dialed back to 5:15 PM · early departure warning shown</div>
+</div>
+
+
+<!-- ═══════════════════════════════════════ -->
+<!-- STEP 2: Observations & Notes           -->
+<!-- ═══════════════════════════════════════ -->
+<div id="step2" class="view">
+<div class="checkout-flow">
+
+  <div class="stepper-bar">
+    <div class="step-item" onclick="showView('step1')">
+      <div class="step-circle done">✓</div>
+      <div class="step-label done">Mood</div>
+    </div>
+    <div class="step-connector done"></div>
+    <div class="step-item" onclick="showView('step2')">
+      <div class="step-circle active">2</div>
+      <div class="step-label active">Notes</div>
+    </div>
+    <div class="step-connector"></div>
+    <div class="step-item" onclick="showView('step3')">
+      <div class="step-circle upcoming">3</div>
+      <div class="step-label">Review</div>
+    </div>
+    <button class="close-btn">✕</button>
+  </div>
+
+  <div class="step-content">
+    <button class="back-link" onclick="showView('step1')">← Back to mood</button>
+
+    <div style="margin-bottom: 24px;">
+      <div class="section-label">What did you observe?</div>
+      <p class="form-hint" style="margin-bottom: 10px;">Tap all that apply</p>
+      <div class="tag-grid">
+        <div class="obs-tag selected-good">Good spirits</div>
+        <div class="obs-tag selected-good">Cooperative</div>
+        <div class="obs-tag">Engaged in activity</div>
+        <div class="obs-tag selected-good">Good appetite</div>
+        <div class="obs-tag">Good mobility</div>
+        <div class="obs-tag selected-good">Medication taken</div>
+        <div class="obs-tag">Confused</div>
+        <div class="obs-tag">Anxious</div>
+        <div class="obs-tag">Withdrawn</div>
+        <div class="obs-tag">Resistant to care</div>
+        <div class="obs-tag">No appetite</div>
+        <div class="obs-tag">Toileting issues</div>
+        <div class="obs-tag">Wandering</div>
+        <div class="obs-tag">Pain/discomfort</div>
+        <div class="obs-tag">Fall risk</div>
+        <div class="obs-tag">Medication refused</div>
+      </div>
+    </div>
+
+    <div style="margin-bottom: 24px;">
+      <div class="section-label">📝 Care Notes</div>
+      <p class="form-hint">How was the visit? This will be saved as a care note for the family.</p>
+      <textarea rows="4" placeholder="e.g. Betty was in good spirits today..." style="min-height: 80px;">Betty was in great spirits today! We played cards and she won twice. She had a full lunch — soup and a sandwich. She asked about Daniel's visit this weekend.</textarea>
+    </div>
+
+    <div style="margin-bottom: 24px;">
+      <div class="section-label">Service or logistics notes</div>
+      <p class="form-hint">Issues with location, supplies, instructions, or our service? (optional)</p>
+      <textarea rows="2" placeholder="e.g. 'Door code was wrong', 'Driveway icy'" style="min-height: 50px;"></textarea>
+    </div>
+
+    <div style="margin-bottom: 20px;">
+      <div class="section-label">📸 Visit Photos</div>
+      <p class="form-hint">Share photos from the visit — activities, meals, smiles! (optional, up to 5)</p>
+      <div class="photo-upload-btn has-photos">
+        <span style="font-size: 18px;">✅</span> 2 photos selected
+      </div>
+      <div style="display: flex; gap: 8px; margin-top: 8px;">
+        <div style="width: 64px; height: 64px; background: #e8f5e9; border-radius: 8px; border: 1px solid #ddd; display: flex; align-items: center; justify-content: center; font-size: 24px;">🃏</div>
+        <div style="width: 64px; height: 64px; background: #fff8e1; border-radius: 8px; border: 1px solid #ddd; display: flex; align-items: center; justify-content: center; font-size: 24px;">🥗</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pinned-footer">
+    <button class="pinned-btn next" onclick="showView('step3')">Review & Complete →</button>
+  </div>
+
+</div>
+<div class="variant-label">Step 2 · Observations, care notes, photos</div>
+</div>
+
+
+<!-- ═══════════════════════════════════════ -->
+<!-- STEP 3: Review & Complete              -->
+<!-- ═══════════════════════════════════════ -->
+<div id="step3" class="view">
+<div class="checkout-flow">
+
+  <div class="stepper-bar">
+    <div class="step-item" onclick="showView('step1')">
+      <div class="step-circle done">✓</div>
+      <div class="step-label done">Mood</div>
+    </div>
+    <div class="step-connector done"></div>
+    <div class="step-item" onclick="showView('step2')">
+      <div class="step-circle done">✓</div>
+      <div class="step-label done">Notes</div>
+    </div>
+    <div class="step-connector done"></div>
+    <div class="step-item" onclick="showView('step3')">
+      <div class="step-circle active">3</div>
+      <div class="step-label active">Review</div>
+    </div>
+    <button class="close-btn">✕</button>
+  </div>
+
+  <div class="step-content">
+    <button class="back-link" onclick="showView('step2')">← Back to notes</button>
+
+    <div style="text-align: center; margin-bottom: 20px;">
+      <div style="font-size: 40px; margin-bottom: 8px;">👋</div>
+      <h3 style="margin-top: 0; margin-bottom: 4px; font-size: 22px;">Session Summary</h3>
+      <p style="font-size: 13px; color: var(--text-secondary); margin: 0;">Betty Lee · April 8, 2026 at 4:00 PM</p>
+    </div>
+
+    <div class="summary-card" style="background: linear-gradient(135deg, #f0f7f5, #e8f4f0); border: 1px solid #b2dfdb;">
+      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+        <span style="font-size: 16px;">⏱</span>
+        <span style="font-size: 12px; font-weight: 700; color: var(--role-color); text-transform: uppercase; letter-spacing: 0.5px;">Session Duration</span>
+      </div>
+      <div style="font-size: 22px; font-weight: 800; color: var(--text-primary);">2h 00m</div>
+      <div style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">Checked in 4:00 PM · Checking out 6:00 PM</div>
+    </div>
+
+    <div class="summary-card" style="background: var(--color-success-bg); border: 1px solid var(--color-success);">
+      <div class="summary-label">Departure Mood</div>
+      <div style="display: flex; gap: 12px; font-size: 14px;">
+        <span>😊 Happy</span>
+        <span>🥰 Warm</span>
+      </div>
+    </div>
+
+    <div class="summary-card" style="background: var(--bg-primary); border: 1px solid var(--border-light);">
+      <div class="summary-label">Observations</div>
+      <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+        <span style="padding: 4px 10px; border-radius: 12px; font-size: 11px; background: var(--color-success-bg); color: var(--color-success); font-weight: 600;">Good spirits</span>
+        <span style="padding: 4px 10px; border-radius: 12px; font-size: 11px; background: var(--color-success-bg); color: var(--color-success); font-weight: 600;">Cooperative</span>
+        <span style="padding: 4px 10px; border-radius: 12px; font-size: 11px; background: var(--color-success-bg); color: var(--color-success); font-weight: 600;">Good appetite</span>
+        <span style="padding: 4px 10px; border-radius: 12px; font-size: 11px; background: var(--color-success-bg); color: var(--color-success); font-weight: 600;">Medication taken</span>
+      </div>
+    </div>
+
+    <div class="summary-card" style="background: var(--bg-primary); border: 1px solid var(--border-light);">
+      <div class="summary-label">📝 Care Notes</div>
+      <div style="font-size: 13px; color: var(--text-primary); line-height: 1.5;">
+        Betty was in great spirits today! We played cards and she won twice. She had a full lunch — soup and a sandwich. She asked about Daniel's visit this weekend.
+      </div>
+    </div>
+
+    <div class="summary-card" style="background: var(--bg-primary); border: 1px solid var(--border-light);">
+      <div class="summary-label">📸 Photos</div>
+      <div style="display: flex; gap: 8px;">
+        <div style="width: 64px; height: 64px; background: #e8f5e9; border-radius: 8px; border: 1px solid #ddd; display: flex; align-items: center; justify-content: center; font-size: 24px;">🃏</div>
+        <div style="width: 64px; height: 64px; background: #fff8e1; border-radius: 8px; border: 1px solid #ddd; display: flex; align-items: center; justify-content: center; font-size: 24px;">🥗</div>
+      </div>
+    </div>
+
+    <div class="location-banner">
+      <span style="font-size: 16px;">📍</span> Location captured · 12m accuracy
+    </div>
+  </div>
+
+  <div class="pinned-footer">
+    <button class="pinned-btn primary">Complete Session ✓</button>
+  </div>
+
+</div>
+<div class="variant-label">Step 3 · Review summary before completing</div>
+</div>
+
+
+<script>
+function showView(id) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+showView('step1');
+</script>
+
+</body>
+</html>

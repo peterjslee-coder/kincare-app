@@ -447,6 +447,7 @@ router.post("/refresh", async (req, res) => {
   try {
     const rawToken = req.cookies?.refresh_token;
     if (!rawToken) {
+      console.log(`[Auth Refresh] No refresh_token cookie — cookieKeys: ${Object.keys(req.cookies || {}).join(',')}`);
       return res.status(401).json({ error: "No refresh token", code: "NO_REFRESH_TOKEN" });
     }
 

@@ -616,6 +616,33 @@
 - [x] **Geocoding & distance:** ✅ Done (v1.2.0). Nominatim geocoding + Haversine radius search. Swap to Google Maps = one function change.
 - [ ] **Build step for frontend:** Move to Vite when component count demands it. Not urgent yet.
 
+---
+
+## Scaling & Infrastructure Roadmap
+
+> Current setup (April 2026): Single Node.js process on Railway (1 replica), PostgreSQL with default 10-connection pool, Socket.IO for real-time. 5–6 background pollers on setInterval. Comfortable for ~100–200 concurrent users.
+
+### Tier 1 — First Growing Pains (50–200 active users)
+- [ ] **Bump PG pool size:** Increase from default 10 to 25–50. Pollers eat pool slots; more users means more contention.
+- [ ] **Add connection timeout/retry:** Pool exhaustion currently fails silently. Add `connectionTimeoutMillis` and proper error handling.
+- [ ] **Move pollers to a separate worker:** The 5–6 `setInterval` pollers (accountability, no-shows, payment auth, Kindred reminders) compete with user requests for DB connections. Split into a dedicated Railway service or use a proper job queue (e.g., BullMQ + Redis).
+- [ ] **Add request-level caching:** Dashboard queries are heavy (8+ JOINs). Add short-lived in-memory cache (e.g., node-cache) for repeated dashboard loads by the same user within 30s.
+
+### Tier 2 — Real Traction (200–1,000 active users)
+- [ ] **Horizontal scaling:** Add Railway replicas (2–3 instances). Requires sticky sessions or moving Socket.IO to Redis adapter so WebSocket connections work across instances.
+- [ ] **Redis for sessions + caching:** Replace in-memory session state and Socket.IO rooms with Redis. Enables multi-instance without losing state.
+- [ ] **Database read replica:** Offload read-heavy queries (dashboard, Find Work, calendar) to a PG read replica. Write queries stay on primary.
+- [ ] **CDN for static assets:** Move `/js-compiled/bundle.js`, CSS, and images behind a CDN (Cloudflare, Railway's built-in, or S3+CloudFront). Reduces server load and improves load times.
+- [ ] **Rate limiting per-user:** Add API rate limiting (express-rate-limit + Redis store) to prevent runaway clients or abuse.
+
+### Tier 3 — Scale (1,000+ active users)
+- [ ] **Job queue (BullMQ/Redis):** Replace all setInterval pollers with a proper job queue. Supports retries, backoff, dead-letter queues, and monitoring.
+- [ ] **Database connection pooling (PgBouncer):** External connection pooler between app instances and PostgreSQL. Handles hundreds of app connections with fewer actual DB connections.
+- [ ] **Search optimization:** Add indexes for common query patterns (geospatial queries, date-range session lookups, caregiver availability search). Consider PostGIS for radius-based matching.
+- [ ] **Monitoring & alerting:** Add APM (e.g., Sentry, Datadog) for error tracking, slow query detection, and uptime monitoring.
+- [ ] **Build step for frontend:** Move to Vite. Bundle is currently 2.7MB single-file; code-splitting would dramatically improve initial load.
+- [ ] **Multi-region:** If expanding beyond Virginia/Radford area, add Railway regions or move to a provider with multi-region support.
+
 
 ## Demo Credentials
 

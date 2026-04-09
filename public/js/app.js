@@ -677,8 +677,12 @@ const App = () => {
   const [signupPrefill, setSignupPrefill] = useState(null); // { email, role, signupToken }
 
   useEffect(() => {
-    // If we're in a pre-auth URL mode (reset-password, consent-response), skip auto-login
-    if (appState === 'reset-password' || appState === 'consent-response') return;
+    // If we're in a pre-auth URL mode, skip auto-login entirely.
+    // 'login' is included because it may be set by an OAuth redirect (oauth_code in URL).
+    // Running auto-login concurrently with the OAuth exchange causes a race condition:
+    // the stale session's 401 → refresh-fail → logout cascade fires and clears the
+    // fresh cookies that the exchange just set, causing immediate re-logout.
+    if (appState === 'reset-password' || appState === 'consent-response' || appState === 'login') return;
 
     // Only auto-restore if this tab has an active session (set at login).
     // Closing the browser/tab clears sessionStorage, so the user must
