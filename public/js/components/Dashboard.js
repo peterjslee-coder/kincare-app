@@ -654,14 +654,15 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
         <h1 className="greeting">{isNewUser ? `Welcome, ${firstName}!` : `Welcome back, ${firstName}!`}</h1>
       </div>
 
-      {/* Payment lockout banner — overdue unpaid sessions block new bookings */}
+      {/* Payment lockout banner — only show for FAILED payments, not pending/processing */}
       {(() => {
         const overdue = pendingReviews.filter(pr => {
-          if (pr.payment_status === 'paid' || pr.payment_status === 'processing' || pr.caregiver_no_show) return false;
+          // Only hold for explicitly failed payments — not NULL (awaiting auto-pay) or processing
+          if (pr.payment_status !== 'failed') return false;
+          if (pr.caregiver_no_show) return false;
           const cost = parseFloat(pr.estimated_cost || 0);
           if (cost <= 0) return false;
-          const dueAt = pr.payment_due_at ? new Date(pr.payment_due_at) : null;
-          return dueAt && dueAt.getTime() < Date.now();
+          return true;
         });
         if (overdue.length === 0) return null;
         // estimated_cost is caregiver pay; family also pays the 20% platform fee

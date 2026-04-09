@@ -3595,7 +3595,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               // Calculate pay impact
               const totalMins = sDur * 60;
               const actualMins = totalMins - minsEarly;
-              const roundedMins = Math.ceil(actualMins / 15) * 15;
+              const roundedMins = Math.ceil(actualMins / 5) * 5;
               const payPercent = Math.round((roundedMins / totalMins) * 100);
               return React.createElement('div', { style: {
                 background: 'var(--color-warning-bg)', border: '2px solid #e8724a', borderRadius: 12,
@@ -3609,7 +3609,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                   `This appointment is scheduled until ${endTimeStr}. You are checking out ${Math.round(minsEarly)} minutes early.`
                 ),
                 React.createElement('p', { style: { fontSize: 13, color: 'var(--color-error)', fontWeight: 600, margin: '0 0 12px' } },
-                  `Pay is calculated in 15-minute blocks — you'll receive ${payPercent}% of the session pay.`
+                  `Pay is calculated in 5-minute blocks — you'll receive ${payPercent}% of the session pay.`
                 ),
                 React.createElement('label', { style: { display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6, color: 'var(--text-primary)' } },
                   'Please let us and the family know why you\'re leaving early: *'

@@ -894,9 +894,9 @@ router.post("/checkout", requireRole("family"), requirePaymentsEnabled, async (r
 
   // ─── Calculate amounts ───
   // CORE PRINCIPLE: Caregiver gets EXACTLY rate × time. All fees go on top, paid by family.
-  // Duration rounds UP to 15-minute increments.
+  // Duration rounds UP to 5-minute increments.
   const rawDurationHours = session.duration_hours || 2;
-  const durationHours = Math.ceil(rawDurationHours * 4) / 4; // round up to nearest 0.25h (15 min)
+  const durationHours = Math.ceil(rawDurationHours * 12) / 12; // round up to nearest 5 min (1/12 hour)
 
   let caregiverPayCents, surchargeCents = 0;
   const effectiveRate = (session.proposed_rate && parseFloat(session.proposed_rate) > 0)

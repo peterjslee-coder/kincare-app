@@ -8156,11 +8156,12 @@ const Dashboard = window.Dashboard = ({
     className: "greeting"
   }, isNewUser ? `Welcome, ${firstName}!` : `Welcome back, ${firstName}!`)), (() => {
     const overdue = pendingReviews.filter(pr => {
-      if (pr.payment_status === 'paid' || pr.payment_status === 'processing' || pr.caregiver_no_show) return false;
+      // Only hold for explicitly failed payments — not NULL (awaiting auto-pay) or processing
+      if (pr.payment_status !== 'failed') return false;
+      if (pr.caregiver_no_show) return false;
       const cost = parseFloat(pr.estimated_cost || 0);
       if (cost <= 0) return false;
-      const dueAt = pr.payment_due_at ? new Date(pr.payment_due_at) : null;
-      return dueAt && dueAt.getTime() < Date.now();
+      return true;
     });
     if (overdue.length === 0) return null;
     // estimated_cost is caregiver pay; family also pays the 20% platform fee
@@ -48937,7 +48938,7 @@ const CaretakerHub = window.CaretakerHub = ({
     // Calculate pay impact
     const totalMins = sDur * 60;
     const actualMins = totalMins - minsEarly;
-    const roundedMins = Math.ceil(actualMins / 15) * 15;
+    const roundedMins = Math.ceil(actualMins / 5) * 5;
     const payPercent = Math.round(roundedMins / totalMins * 100);
     return React.createElement('div', {
       style: {
@@ -48977,7 +48978,7 @@ const CaretakerHub = window.CaretakerHub = ({
         fontWeight: 600,
         margin: '0 0 12px'
       }
-    }, `Pay is calculated in 15-minute blocks — you'll receive ${payPercent}% of the session pay.`), React.createElement('label', {
+    }, `Pay is calculated in 5-minute blocks — you'll receive ${payPercent}% of the session pay.`), React.createElement('label', {
       style: {
         display: 'block',
         fontSize: 13,
