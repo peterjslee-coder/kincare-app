@@ -269,8 +269,9 @@ router.get("/apple", (req, res) => {
   }
 
   const state = crypto.randomBytes(16).toString("hex");
-  const isProduction = process.env.NODE_ENV === "production";
-  res.cookie("apple_oauth_state", state, { httpOnly: true, maxAge: 600000, sameSite: "lax", secure: isProduction });
+  // Apple uses form_post (cross-site POST), so sameSite must be "none" + secure
+  // (lax cookies are not sent on cross-site POSTs, only top-level GET navigations)
+  res.cookie("apple_oauth_state", state, { httpOnly: true, maxAge: 600000, sameSite: "none", secure: true });
 
   const redirectUri = `${APP_URL}/api/oauth/apple/callback`;
   const params = new URLSearchParams({
