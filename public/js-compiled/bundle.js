@@ -60174,7 +60174,7 @@ const AdminFinancials = window.AdminFinancials = () => {
         fontSize: 10,
         color: 'var(--text-muted)'
       }
-    }, "vs yesterday"));
+    }, "vs prior 4 wks"));
   })), (() => {
     const days = dailySnapshot.days || [];
     if (days.length === 0) return null;
@@ -60223,7 +60223,7 @@ const AdminFinancials = window.AdminFinancials = () => {
         fontWeight: 700,
         color: 'var(--text-primary)'
       }
-    }, "14-Day Revenue Trend"), /*#__PURE__*/React.createElement("div", {
+    }, "4-Week Revenue Trend"), /*#__PURE__*/React.createElement("div", {
       style: {
         display: 'flex',
         gap: 12

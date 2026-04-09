@@ -204,12 +204,12 @@ router.get("/summary", async (req, res) => {
 });
 
 // ─── GET /api/admin/financials/daily-snapshot ───
-// Daily chart data (last 14 days) + today vs yesterday quick stats
+// Daily chart data (last 28 days) + rolling 4-week quick stats vs prior 4 weeks
 router.get("/daily-snapshot", async (req, res) => {
   try {
     const db = await getDb();
 
-    // Daily data for last 14 days — from completed sessions, exclude demo
+    // Daily data for last 56 days (current 4 weeks + prior 4 weeks for comparison)
     const dailyData = await db.prepare(`
       SELECT DATE(COALESCE(cs.completed_at, cs.updated_at, cs.created_at)) AS day,
              COALESCE(SUM(cs.estimated_cost), 0) AS gross,
@@ -220,33 +220,33 @@ router.get("/daily-snapshot", async (req, res) => {
       JOIN users u ON cs.family_user_id = u.id
       WHERE cs.status = 'completed' AND cs.estimated_cost > 0
         AND COALESCE(u.is_demo, 0) = 0 ${NO_DEMO_CAREGIVER}
-        AND COALESCE(cs.completed_at, cs.updated_at, cs.created_at) >= CURRENT_DATE - INTERVAL '13 days'
+        AND COALESCE(cs.completed_at, cs.updated_at, cs.created_at) >= CURRENT_DATE - INTERVAL '55 days'
       GROUP BY DATE(COALESCE(cs.completed_at, cs.updated_at, cs.created_at))
       ORDER BY day ASC
     `).all();
 
-    // Sessions per day (last 14 days) — exclude demo
+    // Sessions per day (last 56 days) — exclude demo
     const dailySessions = await db.prepare(`
       SELECT DATE(cs.scheduled_date) AS day, COUNT(*) AS cnt
       FROM care_sessions cs
       JOIN users u ON cs.family_user_id = u.id
       WHERE cs.status IN ('completed', 'confirmed', 'checked_in', 'scheduled')
-        AND cs.scheduled_date::date >= CURRENT_DATE - INTERVAL '13 days'
+        AND cs.scheduled_date::date >= CURRENT_DATE - INTERVAL '55 days'
         AND COALESCE(u.is_demo, 0) = 0 ${NO_DEMO_CAREGIVER}
       GROUP BY DATE(cs.scheduled_date) ORDER BY day ASC
     `).all();
 
-    // Fill in all 14 days (including zeros)
-    const days = [];
+    // Fill in all 56 days (including zeros)
+    const allDays = [];
     const now = new Date();
-    for (let i = 13; i >= 0; i--) {
+    for (let i = 55; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
       const key = d.toISOString().split('T')[0];
       const found = dailyData.find(r => r.day && r.day.toISOString ? r.day.toISOString().split('T')[0] === key : String(r.day).split('T')[0] === key);
       const sess = dailySessions.find(r => r.day && r.day.toISOString ? r.day.toISOString().split('T')[0] === key : String(r.day).split('T')[0] === key);
       const label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
       const shortLabel = d.toLocaleDateString('en-US', { weekday: 'short' });
-      days.push({
+      allDays.push({
         day: key, label, shortLabel,
         gross: found ? Math.round(Number(found.gross) * 100) / 100 : 0,
         fees: found ? Math.round(Number(found.fees) * 100) / 100 : 0,
@@ -256,22 +256,27 @@ router.get("/daily-snapshot", async (req, res) => {
       });
     }
 
-    // Today = last element, yesterday = second to last
-    const today = days[days.length - 1];
-    const yesterday = days[days.length - 2];
+    // Chart: last 28 days only
+    const days = allDays.slice(-28);
+
+    // Rolling 4-week stats: current 28 days vs prior 28 days
+    const current4w = allDays.slice(-28);
+    const prior4w = allDays.slice(0, 28);
+
+    const sum = (arr, key) => arr.reduce((s, d) => s + d[key], 0);
     const pctChange = (curr, prev) => prev > 0 ? Math.round(((curr - prev) / prev) * 100) : (curr > 0 ? 100 : 0);
 
     const quickStats = {
-      sessionsToday: today.sessions,
-      sessionsDelta: pctChange(today.sessions, yesterday.sessions),
-      grossToday: today.gross,
-      grossDelta: pctChange(today.gross, yesterday.gross),
-      feesToday: today.fees,
-      feesDelta: pctChange(today.fees, yesterday.fees),
-      netToday: today.net,
-      netDelta: pctChange(today.net, yesterday.net),
-      paymentsToday: today.payments,
-      paymentsDelta: pctChange(today.payments, yesterday.payments),
+      sessionsToday: sum(current4w, 'sessions'),
+      sessionsDelta: pctChange(sum(current4w, 'sessions'), sum(prior4w, 'sessions')),
+      grossToday: Math.round(sum(current4w, 'gross') * 100) / 100,
+      grossDelta: pctChange(sum(current4w, 'gross'), sum(prior4w, 'gross')),
+      feesToday: Math.round(sum(current4w, 'fees') * 100) / 100,
+      feesDelta: pctChange(sum(current4w, 'fees'), sum(prior4w, 'fees')),
+      netToday: Math.round(sum(current4w, 'net') * 100) / 100,
+      netDelta: pctChange(sum(current4w, 'net'), sum(prior4w, 'net')),
+      paymentsToday: sum(current4w, 'payments'),
+      paymentsDelta: pctChange(sum(current4w, 'payments'), sum(prior4w, 'payments')),
     };
 
     res.json({ days, quickStats });

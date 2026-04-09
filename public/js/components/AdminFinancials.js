@@ -402,7 +402,7 @@ const AdminFinancials = window.AdminFinancials = () => {
                     )}
                     {isZero && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>—</span>}
                   </div>
-                  <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>vs yesterday</div>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>vs prior 4 wks</div>
                 </div>
               );
             })}
@@ -434,7 +434,7 @@ const AdminFinancials = window.AdminFinancials = () => {
             return (
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>14-Day Revenue Trend</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>4-Week Revenue Trend</span>
                   <div style={{ display: 'flex', gap: 12 }}>
                     {lines.map(l => (
                       <span key={l.key} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: l.color }}>
