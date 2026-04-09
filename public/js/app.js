@@ -12,8 +12,8 @@ const PWAInstallBanner = window.PWAInstallBanner = () => {
   const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
   useEffect(() => {
-    // Check if already installed
-    if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) {
+    // Check if already installed or running in native Capacitor shell
+    if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone || window.Capacitor) {
       setIsStandalone(true);
       return;
     }
