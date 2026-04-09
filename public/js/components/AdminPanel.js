@@ -248,8 +248,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
   const [flagPasskeyLoading, setFlagPasskeyLoading] = useState(false);
   const [flagPasskeyError, setFlagPasskeyError] = useState(null);
   const [flagPasswordInput, setFlagPasswordInput] = useState('');
-  const _isNativeApp = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
-  const _hasWebAuthn = !!(window.PublicKeyCredential && window.SimpleWebAuthnBrowser && !_isNativeApp);
+  const _hasWebAuthn = !!(window.PublicKeyCredential && window.SimpleWebAuthnBrowser);
 
   const handleReviewFlag = async (flagId, status) => {
     // Escalate does NOT require passkey — it's raising priority, not closing

@@ -1,0 +1,25 @@
+{
+  "webcredentials": {
+    "apps": [
+      "7964RAMZJL.com.yourinplace.app"
+    ]
+  },
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appIDs": ["7964RAMZJL.com.yourinplace.app"],
+        "components": [
+          {
+            "/": "/invite/*",
+            "comment": "Care team invite links"
+          },
+          {
+            "/": "/reset-password/*",
+            "comment": "Password reset links"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -31,9 +31,8 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBa
     }).catch(() => {});
 
     // Check if WebAuthn/passkeys are supported in this browser
-    // Capacitor WKWebView on iOS reports PublicKeyCredential but can't actually create/get credentials
-    const isNativeApp = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
-    if (window.PublicKeyCredential && !isNativeApp) {
+    // iOS Capacitor: requires Associated Domains entitlement (webcredentials:yourinplace.com) in Xcode
+    if (window.PublicKeyCredential) {
       PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable?.()
         .then(available => setPasskeyAvailable(available || !!window.PublicKeyCredential))
         .catch(() => setPasskeyAvailable(!!window.PublicKeyCredential));

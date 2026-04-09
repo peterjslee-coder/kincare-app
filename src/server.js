@@ -237,6 +237,12 @@ app.use((req, res, next) => {
   }
   next();
 });
+// Apple App Site Association — must serve as application/json (no file extension)
+app.get("/.well-known/apple-app-site-association", (req, res) => {
+  res.set("Content-Type", "application/json");
+  res.sendFile(path.join(__dirname, "../public/.well-known/apple-app-site-association"));
+});
+
 app.use(express.static(path.join(__dirname, "../public")));
 
 // Request logging
@@ -307,7 +313,7 @@ app.use("/api/kindred", require("./routes/kindred"));
 app.use("/api/legal", require("./routes/legal"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.58.0";
+const APP_VERSION = "1.58.1";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });
