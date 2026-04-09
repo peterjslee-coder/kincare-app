@@ -81,8 +81,11 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBa
         });
     }
     if (oauthError) {
-      trackAuthEvent('login', 'error', { error: 'Google sign-in failed', source: 'oauth' });
-      setError('Google sign-in failed. Please try again.');
+      const errorMsg = oauthError === 'apple_hidden_email'
+        ? 'Apple "Hide My Email" is not supported. Please sign in with Apple again and choose "Share My Email", or use your email and password.'
+        : 'Sign-in failed. Please try again.';
+      trackAuthEvent('login', 'error', { error: oauthError, source: 'oauth' });
+      setError(errorMsg);
       window.history.replaceState({}, '', window.location.pathname);
     }
   }, []);

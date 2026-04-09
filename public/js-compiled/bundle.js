@@ -4391,11 +4391,12 @@ const LoginPage = window.LoginPage = ({
       });
     }
     if (oauthError) {
+      const errorMsg = oauthError === 'apple_hidden_email' ? 'Apple "Hide My Email" is not supported. Please sign in with Apple again and choose "Share My Email", or use your email and password.' : 'Sign-in failed. Please try again.';
       trackAuthEvent('login', 'error', {
-        error: 'Google sign-in failed',
+        error: oauthError,
         source: 'oauth'
       });
-      setError('Google sign-in failed. Please try again.');
+      setError(errorMsg);
       window.history.replaceState({}, '', window.location.pathname);
     }
   }, []);

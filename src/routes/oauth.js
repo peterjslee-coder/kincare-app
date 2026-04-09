@@ -335,7 +335,11 @@ router.post("/apple/callback", express.urlencoded({ extended: false }), async (r
         return res.redirect(`${APP_URL}?oauth_error=account_disabled`);
       }
     } else {
-      // Check if a user with this email already exists
+      // No existing OAuth link — try to match by email
+      // Apple "Hide My Email" generates a @privaterelay.appleid.com address
+      // that won't match the user's real account — don't auto-create in that case
+      const isRelayEmail = email && email.endsWith("@privaterelay.appleid.com");
+
       const existingUser = email
         ? await db.prepare("SELECT * FROM users WHERE LOWER(email) = LOWER(?) AND is_active = 1").get(email)
         : null;
@@ -350,8 +354,13 @@ router.post("/apple/callback", express.urlencoded({ extended: false }), async (r
         if (email_verified && !user.email_verified) {
           await db.prepare("UPDATE users SET email_verified = 1, email_verified_at = NOW() WHERE id = ?").run(user.id);
         }
+      } else if (isRelayEmail) {
+        // Apple Hide My Email — relay address doesn't match any existing user.
+        // Don't auto-create an orphan account. Tell the user to share their real email.
+        console.log(`[Apple OAuth] Blocked new account for relay email ${email} — user should retry with real email or sign in first`);
+        return res.redirect(`${APP_URL}?oauth_error=apple_hidden_email`);
       } else if (email) {
-        // Create new user via Apple
+        // Create new user via Apple (real email, genuinely new user)
         const userId = uuid();
         const bcrypt = require("bcryptjs");
         const randomPassword = crypto.randomBytes(32).toString("hex");

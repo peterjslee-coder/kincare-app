@@ -313,7 +313,7 @@ app.use("/api/kindred", require("./routes/kindred"));
 app.use("/api/legal", require("./routes/legal"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.58.7";
+const APP_VERSION = "1.58.8";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });
@@ -912,6 +912,22 @@ async function start() {
     } catch (err) {
       console.log("  Geocode backfill skipped:", err.message);
     }
+  })();
+
+  // ─── One-time migration: merge Daniel Lee's duplicate Apple-relay account ───
+  // Apple "Hide My Email" created v7vx2xsc8z@privaterelay.appleid.com instead of linking to danbecklee@me.com
+  (async () => {
+    try {
+      const original = await db.prepare("SELECT id FROM users WHERE LOWER(email) = 'danbecklee@me.com' AND is_active = 1").get();
+      const duplicate = await db.prepare("SELECT id FROM users WHERE LOWER(email) = 'v7vx2xsc8z@privaterelay.appleid.com'").get();
+      if (original && duplicate && original.id !== duplicate.id) {
+        // Move Apple OAuth link from duplicate → original
+        await db.prepare("UPDATE oauth_accounts SET user_id = ? WHERE user_id = ? AND provider = 'apple'").run(original.id, duplicate.id);
+        // Soft-delete the duplicate
+        await db.prepare("UPDATE users SET is_active = 0 WHERE id = ?").run(duplicate.id);
+        console.log(`  [Migration] Merged Apple OAuth from duplicate ${duplicate.id} → original ${original.id} (danbecklee@me.com). Duplicate soft-deleted.`);
+      }
+    } catch (e) { console.log("  [Migration] Daniel merge skipped:", e.message); }
   })();
 
   server.listen(PORT, "0.0.0.0", () => {
