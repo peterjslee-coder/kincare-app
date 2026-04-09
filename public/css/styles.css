@@ -2792,6 +2792,14 @@
       padding-top: calc(env(safe-area-inset-top, 0px) + 12px);
     }
 
+    .msg-chat-header {
+      padding-top: calc(env(safe-area-inset-top, 0px) + 12px);
+    }
+
+    .msg-list-header {
+      padding-top: calc(env(safe-area-inset-top, 0px) + 16px);
+    }
+
     /* safe-area bottom nav handled in base mobile styles */
 
     /* ─── Print Styles (Hour Reports) ─── */

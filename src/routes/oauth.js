@@ -291,14 +291,18 @@ router.post("/apple/callback", express.urlencoded({ extended: false }), async (r
   try {
     const { code, id_token, state, user: userJson } = req.body;
 
+    console.log("[Apple OAuth] callback hit, body keys:", Object.keys(req.body || {}));
+
     // Validate CSRF state
     const savedState = req.cookies?.apple_oauth_state;
     if (!state || !savedState || state !== savedState) {
+      console.error("[Apple OAuth] CSRF state mismatch — state:", !!state, "savedState:", !!savedState, "match:", state === savedState);
       return res.redirect(`${APP_URL}?oauth_error=invalid_state`);
     }
     res.clearCookie("apple_oauth_state");
 
     if (!id_token) {
+      console.error("[Apple OAuth] No id_token in callback body");
       return res.redirect(`${APP_URL}?oauth_error=no_token`);
     }
 
@@ -386,9 +390,10 @@ router.post("/apple/callback", express.urlencoded({ extended: false }), async (r
       expiresAt: Date.now() + 60 * 1000,
     });
 
+    console.log("[Apple OAuth] success — redirecting with auth code for user:", user.email);
     res.redirect(`${APP_URL}?oauth_code=${authCode}`);
   } catch (err) {
-    console.error("Apple OAuth callback error:", err);
+    console.error("[Apple OAuth] callback error:", err.message, err.stack);
     res.redirect(`${APP_URL}?oauth_error=server_error`);
   }
 });
