@@ -894,6 +894,24 @@ router.get("/users/:id/detail", async (req, res) => {
       if (daysSinceLast > 30) journeyStage = 'churned';
     }
 
+    // Auth methods (password, passkeys, OAuth providers)
+    let authMethods = [];
+    try {
+      // Check if user has a password set
+      const pwRow = await db.prepare("SELECT password_hash FROM users WHERE id = ?").get(userId);
+      if (pwRow?.password_hash) authMethods.push({ type: 'password' });
+
+      // Passkeys
+      const passkeys = await db.prepare("SELECT id, created_at FROM user_passkeys WHERE user_id = ?").all(userId);
+      if (passkeys.length > 0) authMethods.push({ type: 'passkey', count: passkeys.length });
+
+      // OAuth providers (apple, google, etc.)
+      const oauthAccounts = await db.prepare("SELECT provider FROM oauth_accounts WHERE user_id = ?").all(userId);
+      for (const oa of oauthAccounts) {
+        authMethods.push({ type: 'oauth', provider: oa.provider });
+      }
+    } catch (e) { /* tables may not exist yet */ }
+
     res.json({
       user,
       caregiverProfile,
@@ -907,6 +925,7 @@ router.get("/users/:id/detail", async (req, res) => {
       lastActive,
       journeyStage,
       journeySteps,
+      authMethods,
     });
   } catch (err) {
     console.error("Admin user detail error:", err);

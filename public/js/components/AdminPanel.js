@@ -6308,6 +6308,22 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                     <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--text-secondary)' }}>
                       {userDrawer.user.email} · {userDrawer.user.role}
                     </p>
+                    {userDrawer.authMethods?.length > 0 && (
+                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 6 }}>
+                        {userDrawer.authMethods.map((m, i) => {
+                          const label = m.type === 'password' ? '🔑 Password'
+                            : m.type === 'passkey' ? `🛡️ Passkey${m.count > 1 ? ` (${m.count})` : ''}`
+                            : m.type === 'oauth' && m.provider === 'apple' ? ' Apple'
+                            : m.type === 'oauth' ? `🔗 ${m.provider}` : m.type;
+                          const bg = m.type === 'passkey' ? '#e8f5e9' : m.type === 'oauth' ? '#e3f2fd' : '#f5f5f5';
+                          const color = m.type === 'passkey' ? '#2e7d32' : m.type === 'oauth' ? '#1565c0' : '#616161';
+                          return React.createElement('span', { key: i, style: {
+                            fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 10,
+                            background: bg, color: color, whiteSpace: 'nowrap',
+                          }}, label);
+                        })}
+                      </div>
+                    )}
                     <button onClick={() => {
                       if (!window.__startImpersonation) { alert('Impersonation not available'); return; }
                       if (!confirm(`View the app as ${userDrawer.user.first_name} ${userDrawer.user.last_name}? You'll see exactly what they see. GPS will be skipped, and no payments will be charged.`)) return;

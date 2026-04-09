@@ -64235,7 +64235,7 @@ const DocThumbnail = ({
 const AdminPanel = window.AdminPanel = ({
   currentUser
 }) => {
-  var _tabGroups$flatMap$fi, _reviewInsights$insig, _secDashboard$activeT, _secDashboard$failedL, _secDashboard$adminAc, _secDashboard$critica, _sessionDetail$recipi, _sessionDetail$recipi2, _sessionDetail$sessio, _sessionDetail$sessio2, _sessionDetail$sessio3, _sessionDetail$sessio4, _sessionDetail$family, _sessionDetail$caregi, _sessionDetail$sessio6, _sessionDetail$sessio7, _sessionDetail$sessio8, _sessionDetail$sessio9, _sessionDetail$sessio0, _sessionDetail$sessio1, _sessionDetail$sessio10, _sessionDetail$sessio11, _sessionDetail$sessio12, _sessionDetail$sessio13, _sessionDetail$sessio14, _sessionDetail$sessio15, _sessionDetail$sessio17, _sessionDetail$visitL, _sessionDetail$visitL2, _sessionDetail$paymen, _onboardingModal$user, _onboardingModal$user2, _onboardingModal$user3, _onboardingModal$flag, _onboardingModal$docu, _userDrawer$sessionSt, _userDrawer$sessionSt2, _userDrawer$reviewSta, _userDrawer$reviewSta2, _userDrawer$careTeams, _userDrawer$user5, _userDrawer$tickets, _userDrawer$safetyFla, _userDrawer$allDocume, _userDrawer$allDocume2, _userDrawer$user1, _userDrawer$user11, _userDrawer$user13, _userDrawer$user14, _userDrawer$user15;
+  var _tabGroups$flatMap$fi, _reviewInsights$insig, _secDashboard$activeT, _secDashboard$failedL, _secDashboard$adminAc, _secDashboard$critica, _sessionDetail$recipi, _sessionDetail$recipi2, _sessionDetail$sessio, _sessionDetail$sessio2, _sessionDetail$sessio3, _sessionDetail$sessio4, _sessionDetail$family, _sessionDetail$caregi, _sessionDetail$sessio6, _sessionDetail$sessio7, _sessionDetail$sessio8, _sessionDetail$sessio9, _sessionDetail$sessio0, _sessionDetail$sessio1, _sessionDetail$sessio10, _sessionDetail$sessio11, _sessionDetail$sessio12, _sessionDetail$sessio13, _sessionDetail$sessio14, _sessionDetail$sessio15, _sessionDetail$sessio17, _sessionDetail$visitL, _sessionDetail$visitL2, _sessionDetail$paymen, _onboardingModal$user, _onboardingModal$user2, _onboardingModal$user3, _onboardingModal$flag, _onboardingModal$docu, _userDrawer$authMetho, _userDrawer$sessionSt, _userDrawer$sessionSt2, _userDrawer$reviewSta, _userDrawer$reviewSta2, _userDrawer$careTeams, _userDrawer$user5, _userDrawer$tickets, _userDrawer$safetyFla, _userDrawer$allDocume, _userDrawer$allDocume2, _userDrawer$user1, _userDrawer$user11, _userDrawer$user13, _userDrawer$user14, _userDrawer$user15;
   const {
     showToast
   } = useToast();
@@ -76982,7 +76982,30 @@ const AdminPanel = window.AdminPanel = ({
       fontSize: 12,
       color: 'var(--text-secondary)'
     }
-  }, userDrawer.user.email, " \xB7 ", userDrawer.user.role), /*#__PURE__*/React.createElement("button", {
+  }, userDrawer.user.email, " \xB7 ", userDrawer.user.role), ((_userDrawer$authMetho = userDrawer.authMethods) === null || _userDrawer$authMetho === void 0 ? void 0 : _userDrawer$authMetho.length) > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 4,
+      flexWrap: 'wrap',
+      marginTop: 6
+    }
+  }, userDrawer.authMethods.map((m, i) => {
+    const label = m.type === 'password' ? '🔑 Password' : m.type === 'passkey' ? `🛡️ Passkey${m.count > 1 ? ` (${m.count})` : ''}` : m.type === 'oauth' && m.provider === 'apple' ? ' Apple' : m.type === 'oauth' ? `🔗 ${m.provider}` : m.type;
+    const bg = m.type === 'passkey' ? '#e8f5e9' : m.type === 'oauth' ? '#e3f2fd' : '#f5f5f5';
+    const color = m.type === 'passkey' ? '#2e7d32' : m.type === 'oauth' ? '#1565c0' : '#616161';
+    return React.createElement('span', {
+      key: i,
+      style: {
+        fontSize: 10,
+        fontWeight: 600,
+        padding: '2px 8px',
+        borderRadius: 10,
+        background: bg,
+        color: color,
+        whiteSpace: 'nowrap'
+      }
+    }, label);
+  })), /*#__PURE__*/React.createElement("button", {
     onClick: () => {
       if (!window.__startImpersonation) {
         alert('Impersonation not available');
