@@ -292,9 +292,25 @@ const Schedule = window.Schedule = () => {
         </div>
       </div>
 
+      {/* Book care button — above the daily detail card so it's visible right below the calendar */}
+      {selectedDate && !isPast(selectedDate) && (
+        <div onClick={() => window.__openRequestCareModal && window.__openRequestCareModal(selectedDate)}
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            marginTop: 16, padding: '14px 24px', cursor: 'pointer',
+            background: '#e67e22', color: '#fff', fontSize: 15, fontWeight: 700,
+            borderRadius: 12, transition: 'background 0.15s',
+            boxShadow: '0 2px 8px rgba(230,126,34,0.3)',
+          }}
+          onMouseEnter={e => e.currentTarget.style.background = '#d35400'}
+          onMouseLeave={e => e.currentTarget.style.background = '#e67e22'}>
+          <span style={{ fontSize: 20, fontWeight: 700 }}>+</span> Book care on {(() => { const p = selectedDate.split('-').map(Number); return new Date(p[0], p[1]-1, p[2]).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); })()}
+        </div>
+      )}
+
       {/* Selected date detail panel */}
       {selectedDate && (
-        <div className="card" style={{ marginTop: '16px' }}>
+        <div className="card" style={{ marginTop: '12px' }}>
           <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span>
               <span className="card-icon">📋</span>
@@ -359,18 +375,7 @@ const Schedule = window.Schedule = () => {
                   )}
                 </div>
               ))}
-              {!isPast(selectedDate) && (
-                <div onClick={() => window.__openRequestCareModal && window.__openRequestCareModal(selectedDate)}
-                  style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                    padding: '14px', cursor: 'pointer', color: 'var(--accent-color)', fontSize: 13, fontWeight: 700,
-                    borderTop: '1px solid #f0f0f0', marginTop: 4, transition: 'background 0.15s',
-                  }}
-                  onMouseEnter={e => e.currentTarget.style.background = '#fff8f4'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                  <span style={{ fontSize: 18 }}>+</span> Book care on {(() => { const p = selectedDate.split('-').map(Number); return new Date(p[0], p[1]-1, p[2]).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); })()}
-                </div>
-              )}
+              {/* Book care button moved above the card */}
             </>
           ) : (
             <div style={{ padding: '24px 16px', textAlign: 'center' }}>
