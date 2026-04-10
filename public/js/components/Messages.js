@@ -51,6 +51,17 @@ const Messages = window.Messages = () => {
 
   const isMobile = window.innerWidth <= 768;
 
+  // Lock body/html scroll on mobile to prevent iOS elastic overscroll from
+  // bouncing the fixed container and bottom nav when scrolling past message edges
+  useEffect(() => {
+    if (!isMobile) return;
+    const style = document.createElement('style');
+    style.setAttribute('data-messages-lock', '1');
+    style.textContent = 'html,body{overflow:hidden!important;height:100%!important;position:fixed!important;width:100%!important;} .msg-messages-area{overscroll-behavior:contain;-webkit-overflow-scrolling:touch;}';
+    document.head.appendChild(style);
+    return () => { if (style.parentNode) style.parentNode.removeChild(style); };
+  }, [isMobile]);
+
   // Fetch current user
   useEffect(() => {
     (async () => {
@@ -1967,6 +1978,7 @@ const Messages = window.Messages = () => {
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
+        overscrollBehavior: 'none',
         zIndex: 1,
         background: 'var(--bg-surface)',
       }}>
