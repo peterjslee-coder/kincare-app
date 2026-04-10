@@ -2098,8 +2098,8 @@
         z-index: 900;
         justify-content: space-around;
         align-items: center;
-        padding: 8px 4px;
-        padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 2px);
+        padding: 6px 4px;
+        padding-bottom: env(safe-area-inset-bottom, 0px);
         box-shadow: 0 -2px 8px rgba(0,0,0,0.06);
       }
 
@@ -2150,18 +2150,27 @@
         display: none !important;
       }
 
-      /* Messages: strip main-content padding so msg-panel owns its own layout */
+      /* Messages: zero padding on main-content — headers own the safe-area-top */
       .main-content:has(.msg-panel) {
-        padding: env(safe-area-inset-top, 0px) 0 0 0 !important;
+        padding: 0 !important;
         overflow: hidden;
       }
 
-      /* Messages panel: fill from below safe-area-top to above the fixed bottom nav.
-         Bottom nav height ≈ 56px + safe-area-bottom.
-         100dvh = dynamic viewport (accounts for iOS address bar). */
+      /* Messages headers: apply safe-area-inset-top directly so status bar / notch
+         never overlaps the header content, regardless of parent padding state */
+      .main-content:has(.msg-panel) .msg-chat-header {
+        padding-top: calc(env(safe-area-inset-top, 0px) + 8px);
+      }
+      .main-content:has(.msg-panel) .msg-list-header {
+        padding-top: calc(env(safe-area-inset-top, 0px) + 12px);
+      }
+
+      /* Messages panel: fill from viewport top to above the fixed bottom nav.
+         Safe-area-top is inside the header padding, not the parent.
+         Bottom nav height = 1px border + 6px pad-top + 48px content = 55px above safe-area. */
       .msg-panel {
-        height: calc(100vh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 56px);
-        height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 56px);
+        height: calc(100vh - env(safe-area-inset-bottom, 0px) - 55px);
+        height: calc(100dvh - env(safe-area-inset-bottom, 0px) - 55px);
         max-height: none;
         min-height: 0;
         overflow: hidden;
