@@ -1530,13 +1530,17 @@ async function processOverduePayments(pushFn) {
 
         console.log(`💳 Auto-pay: session ${s.id} — caregiver=$${(caregiverTotalCents/100).toFixed(2)}${tipCents > 0 ? ` (includes $${(tipCents/100).toFixed(2)} tip)` : ''} platform=$${(platformFeeCents/100).toFixed(2)} total=$${(totalCents/100).toFixed(2)}`);
 
-        // Notify family
+        // Notify family + billing contact (if different)
+        const paymentNotif = {
+          title: 'Payment processed',
+          body: `$${(totalCents / 100).toFixed(2)} charged for ${s.service_type} on ${s.scheduled_date} with ${s.caregiver_name || 'your caregiver'}.`,
+          data: { type: 'payment_auto_charged', sessionId: s.id, page: 'home' },
+        };
         if (pushFn && s.family_user_id) {
-          pushFn(s.family_user_id, {
-            title: 'Payment processed',
-            body: `$${(totalCents / 100).toFixed(2)} charged for ${s.service_type} on ${s.scheduled_date} with ${s.caregiver_name || 'your caregiver'}.`,
-            data: { type: 'payment_auto_charged', sessionId: s.id, page: 'home' },
-          }, 'payment_auto_charged').catch(() => {});
+          pushFn(s.family_user_id, paymentNotif, 'payment_auto_charged').catch(() => {});
+        }
+        if (pushFn && s.billing_user_id && s.billing_user_id !== s.family_user_id) {
+          pushFn(s.billing_user_id, paymentNotif, 'payment_auto_charged').catch(() => {});
         }
 
         // Check if family's held sessions can be restored
@@ -1547,10 +1551,11 @@ async function processOverduePayments(pushFn) {
         await db.prepare("UPDATE care_sessions SET payment_status = 'failed', updated_at = NOW() WHERE id = ?").run(s.id);
 
         // STP "authentication_required" = card needs 3DS, can't auto-charge
+        const failNotifyId = s.billing_user_id || s.family_user_id;
         if (err.code === 'authentication_required') {
           console.warn(`[auto-pay] Session ${s.id}: card requires authentication — sending manual pay notification`);
-          if (pushFn && s.family_user_id) {
-            pushFn(s.family_user_id, {
+          if (pushFn && failNotifyId) {
+            pushFn(failNotifyId, {
               title: 'Payment action needed',
               body: `Your card requires verification for the $${(parseFloat(s.estimated_cost || 0) * 1.20).toFixed(2)} care session payment. Please open the app to complete payment.`,
               data: { type: 'payment_auth_required', sessionId: s.id, page: 'home' },
@@ -1558,8 +1563,8 @@ async function processOverduePayments(pushFn) {
           }
         } else {
           console.error(`[auto-pay] Session ${s.id} failed:`, err.message);
-          if (pushFn && s.family_user_id) {
-            pushFn(s.family_user_id, {
+          if (pushFn && failNotifyId) {
+            pushFn(failNotifyId, {
               title: 'Payment failed',
               body: `We couldn't charge your card for the ${s.service_type} session on ${s.scheduled_date}. Please update your payment method.`,
               data: { type: 'payment_failed', sessionId: s.id, page: 'home' },

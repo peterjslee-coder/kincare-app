@@ -7197,6 +7197,7 @@ const Dashboard = window.Dashboard = ({
   const [analyticsData, setAnalyticsData] = useState(null);
   const [analyticsOpen, setAnalyticsOpen] = useState(false);
   const [activityExpanded, setActivityExpanded] = useState(false);
+  const [notificationsExpanded, setNotificationsExpanded] = useState(false);
   const [showPwaGuide, setShowPwaGuide] = useState(false);
   // Cancel + review state
   const [cancellingId, setCancellingId] = useState(null);
@@ -9839,75 +9840,96 @@ const Dashboard = window.Dashboard = ({
         fontWeight: 600,
         cursor: 'pointer'
       }
-    }, "Mark all read")), unread.slice(0, 5).map(n => {
-      const nData = n.data ? typeof n.data === 'string' ? JSON.parse(n.data) : n.data : {};
-      return /*#__PURE__*/React.createElement("div", {
-        key: n.id,
-        className: "activity-new-shimmer",
-        onClick: () => {
-          markNotificationsRead([n.id]);
-          // Navigate based on notification type
-          if (nData.sessionId && typeof setVisitDetailSessionId === 'function') setVisitDetailSessionId(nData.sessionId);else if (nData.type === 'message' && onNavigate) onNavigate('messages');else if (['payment', 'manual_payment'].includes(nData.type) && onNavigate) onNavigate('payments');
-        },
+    }, "Mark all read")), (() => {
+      const notifExpanded = notificationsExpanded;
+      const visibleNotifs = notifExpanded ? unread.slice(0, 8) : unread.slice(0, 2);
+      const hasMoreNotifs = unread.length > 2;
+      return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
         style: {
-          marginBottom: 6,
-          padding: '12px 14px',
+          position: 'relative'
+        }
+      }, visibleNotifs.map(n => {
+        const nData = n.data ? typeof n.data === 'string' ? JSON.parse(n.data) : n.data : {};
+        return /*#__PURE__*/React.createElement("div", {
+          key: n.id,
+          className: "activity-new-shimmer",
+          onClick: () => {
+            markNotificationsRead([n.id]);
+            if (nData.sessionId && typeof setVisitDetailSessionId === 'function') setVisitDetailSessionId(nData.sessionId);else if (nData.type === 'message' && onNavigate) onNavigate('messages');else if (['payment', 'manual_payment'].includes(nData.type) && onNavigate) onNavigate('payments');
+          },
+          style: {
+            marginBottom: 6,
+            padding: '12px 14px',
+            cursor: 'pointer',
+            borderRadius: 10,
+            border: '2px solid #4a90d9',
+            background: 'linear-gradient(135deg, rgba(74, 144, 217, 0.06) 0%, var(--bg-card) 100%)',
+            boxShadow: '0 1px 6px rgba(74, 144, 217, 0.10)',
+            position: 'relative',
+            overflow: 'hidden'
+          }
+        }, /*#__PURE__*/React.createElement("div", {
+          style: {
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: 10
+          }
+        }, /*#__PURE__*/React.createElement("span", {
+          style: {
+            fontSize: 18,
+            flexShrink: 0,
+            marginTop: 1
+          }
+        }, getIcon(n.type)), /*#__PURE__*/React.createElement("div", {
+          style: {
+            flex: 1,
+            minWidth: 0
+          }
+        }, /*#__PURE__*/React.createElement("div", {
+          style: {
+            fontWeight: 600,
+            fontSize: 14,
+            color: 'var(--text-primary)'
+          }
+        }, n.title), n.body && /*#__PURE__*/React.createElement("div", {
+          style: {
+            fontSize: 13,
+            color: 'var(--text-secondary)',
+            marginTop: 2,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis'
+          }
+        }, n.body)), /*#__PURE__*/React.createElement("div", {
+          style: {
+            fontSize: 11,
+            color: 'var(--text-muted)',
+            flexShrink: 0,
+            marginTop: 2
+          }
+        }, timeAgo(n.created_at))));
+      }), !notifExpanded && hasMoreNotifs && /*#__PURE__*/React.createElement("div", {
+        style: {
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: 48,
+          background: 'linear-gradient(transparent, var(--bg-surface))',
+          pointerEvents: 'none'
+        }
+      })), hasMoreNotifs && /*#__PURE__*/React.createElement("div", {
+        onClick: () => setNotificationsExpanded(!notifExpanded),
+        style: {
+          textAlign: 'center',
+          padding: '8px 0 2px',
           cursor: 'pointer',
-          borderRadius: 10,
-          border: '2px solid #4a90d9',
-          background: 'linear-gradient(135deg, rgba(74, 144, 217, 0.06) 0%, var(--bg-card) 100%)',
-          boxShadow: '0 1px 6px rgba(74, 144, 217, 0.10)',
-          position: 'relative',
-          overflow: 'hidden'
+          fontSize: 12,
+          color: '#4a90d9',
+          fontWeight: 600
         }
-      }, /*#__PURE__*/React.createElement("div", {
-        style: {
-          display: 'flex',
-          alignItems: 'flex-start',
-          gap: 10
-        }
-      }, /*#__PURE__*/React.createElement("span", {
-        style: {
-          fontSize: 18,
-          flexShrink: 0,
-          marginTop: 1
-        }
-      }, getIcon(n.type)), /*#__PURE__*/React.createElement("div", {
-        style: {
-          flex: 1,
-          minWidth: 0
-        }
-      }, /*#__PURE__*/React.createElement("div", {
-        style: {
-          fontWeight: 600,
-          fontSize: 14,
-          color: 'var(--text-primary)'
-        }
-      }, n.title), n.body && /*#__PURE__*/React.createElement("div", {
-        style: {
-          fontSize: 13,
-          color: 'var(--text-secondary)',
-          marginTop: 2,
-          whiteSpace: 'nowrap',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis'
-        }
-      }, n.body)), /*#__PURE__*/React.createElement("div", {
-        style: {
-          fontSize: 11,
-          color: 'var(--text-muted)',
-          flexShrink: 0,
-          marginTop: 2
-        }
-      }, timeAgo(n.created_at))));
-    }), unread.length > 5 && /*#__PURE__*/React.createElement("div", {
-      style: {
-        textAlign: 'center',
-        fontSize: 12,
-        color: 'var(--text-muted)',
-        marginTop: 4
-      }
-    }, "+ ", unread.length - 5, " more"));
+      }, notifExpanded ? 'Show less' : `Show ${Math.min(unread.length, 8) - 2} more`));
+    })());
   })(), ((_upcoming$4, _data$careRecipients, _data$careRecipients2) => {
     const tz = ((_upcoming$4 = upcoming[0]) === null || _upcoming$4 === void 0 ? void 0 : _upcoming$4.timezone) || TimezoneHelper.DEFAULT_TZ;
     const nowMs = TimezoneHelper.realNowMs();
