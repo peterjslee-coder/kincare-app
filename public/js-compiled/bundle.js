@@ -25291,7 +25291,9 @@ const Messages = window.Messages = () => {
     }
   }, /*#__PURE__*/React.createElement("div", {
     className: "msg-chat-header",
-    style: undefined
+    style: isMobile ? {
+      paddingTop: 12
+    } : undefined
   }, /*#__PURE__*/React.createElement("button", {
     className: "msg-back-btn",
     onClick: () => {
@@ -25497,7 +25499,9 @@ const Messages = window.Messages = () => {
     }
   }, /*#__PURE__*/React.createElement("div", {
     className: "msg-chat-header",
-    style: undefined
+    style: isMobile ? {
+      paddingTop: 12
+    } : undefined
   }, /*#__PURE__*/React.createElement("button", {
     className: "msg-back-btn",
     onClick: () => {
@@ -25812,7 +25816,9 @@ const Messages = window.Messages = () => {
     }
   }, /*#__PURE__*/React.createElement("div", {
     className: "msg-list-header",
-    style: undefined
+    style: isMobile ? {
+      paddingTop: 16
+    } : undefined
   }, /*#__PURE__*/React.createElement("h1", {
     style: {
       fontSize: '22px',
@@ -26737,7 +26743,9 @@ const Messages = window.Messages = () => {
       }
     }, /*#__PURE__*/React.createElement("div", {
       className: "msg-chat-header",
-      style: undefined
+      style: isMobile ? {
+        paddingTop: 12
+      } : undefined
     }, (isMobile || !conversations.length) && /*#__PURE__*/React.createElement("button", {
       className: "msg-back-btn",
       onClick: handleBack,

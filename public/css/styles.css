@@ -2160,13 +2160,13 @@
         overflow: hidden;
       }
 
-      /* Messages headers: apply safe-area-inset-top directly so status bar / notch
-         never overlaps the header content, regardless of parent padding state */
+      /* Safe-area-top is handled by the spacer div in the Messages fixed container.
+         Headers just get their normal padding. */
       .main-content:has(.msg-panel) .msg-chat-header {
-        padding-top: calc(var(--sat) + 8px);
+        padding-top: 12px;
       }
       .main-content:has(.msg-panel) .msg-list-header {
-        padding-top: calc(var(--sat) + 12px);
+        padding-top: 16px;
       }
 
       /* Messages panel: fill from viewport top to above the fixed bottom nav.
