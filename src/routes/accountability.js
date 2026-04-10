@@ -374,6 +374,7 @@ router.get("/pending-reviews", requireRole("family"), async (req, res) => {
   try {
     const db = await getDb();
     // Sessions needing review (not yet reviewed)
+    // v1.58.29 — Also show to billing contact on the care team
     const needsReview = await db.prepare(`
       SELECT cs.id, cs.scheduled_date, cs.scheduled_time, cs.duration_hours,
         cs.caregiver_id, cs.status, cs.caregiver_no_show,
@@ -387,14 +388,16 @@ router.get("/pending-reviews", requireRole("family"), async (req, res) => {
       LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
       LEFT JOIN users u ON cp.user_id = u.id
       LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
-      WHERE cs.family_user_id = ?
+      LEFT JOIN care_teams ct ON ct.care_recipient_id = cs.care_recipient_id
+      WHERE (cs.family_user_id = ? OR ct.billing_user_id = ?)
         AND cs.review_required = 1
         AND cs.review_completed = 0
         AND (cs.status = 'completed' OR (cs.status = 'cancelled' AND cs.caregiver_no_show = 1))
       ORDER BY cs.scheduled_date DESC
-    `).all(req.user.id);
+    `).all(req.user.id, req.user.id);
 
     // v1.56.3 — Sessions reviewed but NOT paid (payment fell through)
+    // v1.58.29 — Also show to billing contact on the care team
     const reviewedUnpaid = await db.prepare(`
       SELECT cs.id, cs.scheduled_date, cs.scheduled_time, cs.duration_hours,
         cs.caregiver_id, cs.status, cs.caregiver_no_show,
@@ -408,7 +411,8 @@ router.get("/pending-reviews", requireRole("family"), async (req, res) => {
       LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
       LEFT JOIN users u ON cp.user_id = u.id
       LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
-      WHERE cs.family_user_id = ?
+      LEFT JOIN care_teams ct ON ct.care_recipient_id = cs.care_recipient_id
+      WHERE (cs.family_user_id = ? OR ct.billing_user_id = ?)
         AND cs.review_completed = 1
         AND cs.status = 'completed'
         AND cs.estimated_cost > 0
@@ -417,7 +421,7 @@ router.get("/pending-reviews", requireRole("family"), async (req, res) => {
           SELECT 1 FROM payments p WHERE p.session_id = cs.id AND p.status = 'completed'
         )
       ORDER BY cs.scheduled_date DESC
-    `).all(req.user.id);
+    `).all(req.user.id, req.user.id);
 
     res.json({ pendingReviews: [...(needsReview || []), ...(reviewedUnpaid || [])] });
   } catch (err) {

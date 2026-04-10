@@ -1430,9 +1430,10 @@ async function processOverduePayments(pushFn) {
         const customerId = s.billing_stripe_customer_id || s.family_stripe_customer_id;
         if (!customerId) {
           console.warn(`[auto-pay] Session ${s.id}: no saved payment method — skipping`);
-          // Send push notification asking family to pay manually
-          if (pushFn && s.family_user_id) {
-            pushFn(s.family_user_id, {
+          // Send push notification asking family/billing contact to pay manually
+          const notifyUserId = s.billing_user_id || s.family_user_id;
+          if (pushFn && notifyUserId) {
+            pushFn(notifyUserId, {
               title: 'Payment needed',
               body: `Please complete payment for your care session on ${s.scheduled_date}. Open the app to pay.`,
               data: { type: 'payment_needed', sessionId: s.id, page: 'home' },
@@ -1448,8 +1449,9 @@ async function processOverduePayments(pushFn) {
         }
         if (!paymentMethods.data.length) {
           console.warn(`[auto-pay] Session ${s.id}: customer ${customerId} has no saved payment methods — skipping`);
-          if (pushFn && s.family_user_id) {
-            pushFn(s.family_user_id, {
+          const notifyUserId2 = s.billing_user_id || s.family_user_id;
+          if (pushFn && notifyUserId2) {
+            pushFn(notifyUserId2, {
               title: 'Payment needed',
               body: `Please complete payment for your care session on ${s.scheduled_date}. Open the app to pay.`,
               data: { type: 'payment_needed', sessionId: s.id, page: 'home' },

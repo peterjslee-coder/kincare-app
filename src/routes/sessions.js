@@ -1920,9 +1920,13 @@ router.post("/:id/pending-tip", requireRole("family"), async (req, res) => {
     const { tipCents, tipReason } = req.body;
     const safeTipCents = Math.max(0, Math.min(50000, Math.round(tipCents || 0)));
 
-    const session = await db.prepare(
-      "SELECT id, family_user_id, status, payment_status FROM care_sessions WHERE id = ? AND family_user_id = ?"
-    ).get(req.params.id, req.user.id);
+    // Allow both the booker and the billing contact to set a tip
+    const session = await db.prepare(`
+      SELECT cs.id, cs.family_user_id, cs.status, cs.payment_status
+      FROM care_sessions cs
+      LEFT JOIN care_teams ct ON ct.care_recipient_id = cs.care_recipient_id
+      WHERE cs.id = ? AND (cs.family_user_id = ? OR ct.billing_user_id = ?)
+    `).get(req.params.id, req.user.id, req.user.id);
 
     if (!session) return res.status(404).json({ error: "Session not found" });
     if (session.payment_status === 'paid') return res.status(400).json({ error: "Session already paid" });
@@ -2396,9 +2400,17 @@ router.post("/:id/review", async (req, res) => {
     const session = await db.prepare("SELECT * FROM care_sessions WHERE id = ?").get(req.params.id);
     if (!session) return res.status(404).json({ error: "Session not found" });
 
-    // Only the family user can review
+    // Any care team member can review (v1.58.29)
     if (userId !== session.family_user_id) {
-      return res.status(403).json({ error: "Only the family can leave a review" });
+      const isCareTeam = await db.prepare(`
+        SELECT 1 FROM care_team_members ctm
+        JOIN care_teams ct ON ctm.care_team_id = ct.id
+        WHERE ct.care_recipient_id = ? AND ctm.user_id = ?
+        LIMIT 1
+      `).get(session.care_recipient_id, userId);
+      if (!isCareTeam) {
+        return res.status(403).json({ error: "Only care team members can leave a review" });
+      }
     }
 
     // Determine review type and caregiver to review
