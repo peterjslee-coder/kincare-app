@@ -1,22 +1,36 @@
 // ─── Safe-Area Polyfill (Capacitor WKWebView) ───
 // env(safe-area-inset-*) returns 0 when contentInsetAdjustmentBehavior=never.
-// Detect and inject correct values as --sat/--sab CSS custom properties.
+// Detect actual safe area and expose as globals + CSS custom properties.
+window.__safeAreaTop = 0;
+window.__safeAreaBottom = 0;
 (function(){try{
+  // Probe env() to see if it returns real values
   var d=document.createElement('div');
   d.style.cssText='position:absolute;visibility:hidden;padding-top:env(safe-area-inset-top,0px)';
   document.body.appendChild(d);
   var v=parseFloat(getComputedStyle(d).paddingTop)||0;
   document.body.removeChild(d);
-  if(v<1){
+  if(v>0){
+    window.__safeAreaTop=v;
+    var d2=document.createElement('div');
+    d2.style.cssText='position:absolute;visibility:hidden;padding-bottom:env(safe-area-inset-bottom,0px)';
+    document.body.appendChild(d2);
+    window.__safeAreaBottom=parseFloat(getComputedStyle(d2).paddingBottom)||0;
+    document.body.removeChild(d2);
+  }else{
+    // env() returned 0 — use device heuristic
     var h=Math.max(screen.height,screen.width),w=Math.min(screen.height,screen.width);
     if(h/w>2.0){
-      document.documentElement.style.setProperty('--sat',(h>=852?59:47)+'px');
-      document.documentElement.style.setProperty('--sab','34px');
+      window.__safeAreaTop=h>=852?59:47;
+      window.__safeAreaBottom=34;
     }else if(h/w>1.7){
-      document.documentElement.style.setProperty('--sat','20px');
-      document.documentElement.style.setProperty('--sab','0px');
+      window.__safeAreaTop=20;
+      window.__safeAreaBottom=0;
     }
   }
+  // Also set CSS vars (for any CSS that references them)
+  document.documentElement.style.setProperty('--sat',window.__safeAreaTop+'px');
+  document.documentElement.style.setProperty('--sab',window.__safeAreaBottom+'px');
 }catch(e){console.warn('safe-area polyfill error',e)}})();
 
 // ─── PWA Install Prompt ───
@@ -1652,7 +1666,7 @@ const App = () => {
           </div>
         </nav>
       </aside>
-      <main className="main-content">
+      <main className="main-content" style={currentPage === 'messages' ? { padding: 0, overflow: 'hidden' } : window.__safeAreaTop ? { paddingTop: window.__safeAreaTop } : undefined}>
         {/* Impersonation banner — shown when admin is viewing as another user */}
         {impersonating && (
           <div style={{
@@ -1739,7 +1753,7 @@ const App = () => {
         ) : renderPage()}
       </main>
       {/* Bottom navigation bar — visible on mobile only (CSS hides on desktop) */}
-      <nav className="bottom-nav">
+      <nav className="bottom-nav" style={window.__safeAreaBottom ? { paddingBottom: window.__safeAreaBottom } : undefined}>
         {getBottomNavItems().map(item => (
           <button key={item.id} className={`bottom-nav-item ${currentPage === item.id ? 'active' : ''}`} onClick={item.disabled ? undefined : item.isKindred ? () => window.open(`/kindred?token=${encodeURIComponent(AUTH_TOKEN)}`, '_blank') : () => handlePageChange(item.id)} style={{ position: 'relative', ...(item.disabled ? { opacity: 0.35, cursor: 'not-allowed' } : {}), ...(item.isAccent && currentPage !== item.id && !item.disabled ? { color: 'var(--accent-color)' } : {}), ...(item.isKindred ? { color: 'var(--color-info)' } : {}) }}>
             <span className="bottom-nav-icon" style={item.isAccent && currentPage !== item.id ? { background: 'var(--bg-accent-light)', borderRadius: '50%', padding: '2px' } : undefined}>{item.icon}</span>
