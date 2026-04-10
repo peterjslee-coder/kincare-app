@@ -5307,4 +5307,35 @@ router.post("/backfill-assignments", async (req, res) => {
   }
 });
 
+// ─── POST /api/admin/clear-old-pending-reviews — One-time cleanup (remove after use) ───
+router.post("/clear-old-pending-reviews", async (req, res) => {
+  try {
+    const db = await getDb();
+    const cutoff = "2026-04-01"; // Clear anything before April
+
+    // Mark unreviewed old sessions as not requiring review
+    const r1 = await db.prepare(`
+      UPDATE care_sessions
+      SET review_required = 0, review_completed = 1, payment_status = 'waived', updated_at = NOW()
+      WHERE review_required = 1 AND review_completed = 0
+        AND scheduled_date < ?
+        AND (status = 'completed' OR (status = 'cancelled' AND caregiver_no_show = 1))
+    `).run(cutoff);
+
+    // Mark reviewed-but-unpaid old sessions as waived
+    const r2 = await db.prepare(`
+      UPDATE care_sessions
+      SET payment_status = 'waived', updated_at = NOW()
+      WHERE review_completed = 1 AND status = 'completed'
+        AND scheduled_date < ?
+        AND (payment_status IS NULL OR payment_status = 'pending')
+    `).run(cutoff);
+
+    res.json({ success: true, unreviewed_cleared: r1.changes, unpaid_waived: r2.changes });
+  } catch (err) {
+    console.error("Clear old pending reviews error:", err);
+    res.status(500).json({ error: "Failed to clear old reviews" });
+  }
+});
+
 module.exports = router;
