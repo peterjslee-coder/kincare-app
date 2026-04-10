@@ -898,8 +898,8 @@ const Messages = window.Messages = () => {
 
   // ─── New Chat / Group Creator ───
   const renderNewChatPicker = () => (
-    <div className="msg-panel" style={{ display: 'flex', flexDirection: 'column', height: isMobile ? `calc(100dvh - ${(window.__safeAreaBottom || 0) + 55}px)` : '100%', overflow: 'hidden' }}>
-      <div className="msg-chat-header" style={isMobile && window.__safeAreaTop ? { paddingTop: window.__safeAreaTop + 8 } : undefined}>
+    <div className="msg-panel" style={{ display: 'flex', flexDirection: 'column', height: isMobile ? 'auto' : '100%', flex: isMobile ? '1 1 0%' : undefined, minHeight: isMobile ? 0 : undefined, overflow: 'hidden' }}>
+      <div className="msg-chat-header" style={undefined}>
         <button className="msg-back-btn" onClick={() => { setShowNewChat(false); setCreatingGroup(false); }}
           style={{ background: 'none', border: 'none', fontSize: '22px', cursor: 'pointer', color: 'var(--role-color)', padding: '4px 8px', marginRight: '8px' }}>
           ‹
@@ -979,8 +979,8 @@ const Messages = window.Messages = () => {
 
   // ─── Find People Panel ───
   const renderFindPeople = () => (
-    <div className="msg-panel" style={{ display: 'flex', flexDirection: 'column', height: isMobile ? `calc(100dvh - ${(window.__safeAreaBottom || 0) + 55}px)` : '100%', overflow: 'hidden' }}>
-      <div className="msg-chat-header" style={isMobile && window.__safeAreaTop ? { paddingTop: window.__safeAreaTop + 8 } : undefined}>
+    <div className="msg-panel" style={{ display: 'flex', flexDirection: 'column', height: isMobile ? 'auto' : '100%', flex: isMobile ? '1 1 0%' : undefined, minHeight: isMobile ? 0 : undefined, overflow: 'hidden' }}>
+      <div className="msg-chat-header" style={undefined}>
         <button className="msg-back-btn" onClick={() => { setShowFindPeople(false); setPeopleSearch(''); setPeopleResults([]); }}
           style={{ background: 'none', border: 'none', fontSize: '22px', cursor: 'pointer', color: 'var(--role-color)', padding: '4px 8px', marginRight: '8px' }}>
           ‹
@@ -1111,8 +1111,8 @@ const Messages = window.Messages = () => {
 
   // ─── Conversation List ───
   const renderConversationList = () => (
-    <div className="msg-panel" style={{ display: 'flex', flexDirection: 'column', height: isMobile ? `calc(100dvh - ${(window.__safeAreaBottom || 0) + 55}px)` : '100%', overflow: 'hidden' }}>
-      <div className="msg-list-header" style={isMobile && window.__safeAreaTop ? { paddingTop: window.__safeAreaTop + 12 } : undefined}>
+    <div className="msg-panel" style={{ display: 'flex', flexDirection: 'column', height: isMobile ? 'auto' : '100%', flex: isMobile ? '1 1 0%' : undefined, minHeight: isMobile ? 0 : undefined, overflow: 'hidden' }}>
+      <div className="msg-list-header" style={undefined}>
         <h1 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
           {selectMode ? `${selectedIds.length} selected` : 'Messages'}
         </h1>
@@ -1525,8 +1525,8 @@ const Messages = window.Messages = () => {
   const renderChatView = () => {
     const isGroup = isGroupConv(activeConv);
     return (
-      <div className={`msg-panel ${isMobile ? 'msg-panel-mobile' : ''}`} style={{ display: 'flex', flexDirection: 'column', height: isMobile ? `calc(100dvh - ${(window.__safeAreaBottom || 0) + 55}px)` : '100%', overflow: 'hidden' }}>
-        <div className="msg-chat-header" style={isMobile && window.__safeAreaTop ? { paddingTop: window.__safeAreaTop + 8 } : undefined}>
+      <div className={`msg-panel ${isMobile ? 'msg-panel-mobile' : ''}`} style={{ display: 'flex', flexDirection: 'column', height: isMobile ? 'auto' : '100%', flex: isMobile ? '1 1 0%' : undefined, minHeight: isMobile ? 0 : undefined, overflow: 'hidden' }}>
+        <div className="msg-chat-header" style={undefined}>
           {(isMobile || !conversations.length) && (
             <button className="msg-back-btn" onClick={handleBack}
               style={{ background: 'none', border: 'none', fontSize: '22px', cursor: 'pointer', color: 'var(--role-color)', padding: '4px 8px', marginRight: '4px' }}>
@@ -1955,18 +1955,32 @@ const Messages = window.Messages = () => {
   });
 
   if (isMobile) {
+    const safeTop = window.__safeAreaTop || 0;
+    const safeBot = window.__safeAreaBottom || 0;
     return (
-      <>
+      <div style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: (safeBot + 55) + 'px',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+        zIndex: 1,
+        background: 'var(--bg-surface)',
+      }}>
+        {safeTop > 0 && <div style={{ height: safeTop, flexShrink: 0, background: 'var(--bg-surface)' }} />}
         {renderIncomingCallBanner()}
         {callOverlay}
         {messagingLimited && !activeConvId && (
-          <div style={{ padding: '10px 16px', background: 'var(--color-warning-bg)', borderBottom: '1px solid #ffe082', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ padding: '10px 16px', background: 'var(--color-warning-bg)', borderBottom: '1px solid #ffe082', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
             <span style={{ fontSize: 16 }}>🔒</span>
             <span style={{ fontSize: 13, color: '#6d4c00' }}>Messaging limited to InPlace Support until your background check is approved.</span>
           </div>
         )}
         {showFindPeople ? renderFindPeople() : showNewChat ? renderNewChatPicker() : activeConvId ? renderChatView() : renderConversationList()}
-      </>
+      </div>
     );
   }
 

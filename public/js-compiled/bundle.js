@@ -25239,14 +25239,14 @@ const Messages = window.Messages = () => {
     style: {
       display: 'flex',
       flexDirection: 'column',
-      height: isMobile ? `calc(100dvh - ${(window.__safeAreaBottom || 0) + 55}px)` : '100%',
+      height: isMobile ? 'auto' : '100%',
+      flex: isMobile ? '1 1 0%' : undefined,
+      minHeight: isMobile ? 0 : undefined,
       overflow: 'hidden'
     }
   }, /*#__PURE__*/React.createElement("div", {
     className: "msg-chat-header",
-    style: isMobile && window.__safeAreaTop ? {
-      paddingTop: window.__safeAreaTop + 8
-    } : undefined
+    style: undefined
   }, /*#__PURE__*/React.createElement("button", {
     className: "msg-back-btn",
     onClick: () => {
@@ -25445,14 +25445,14 @@ const Messages = window.Messages = () => {
     style: {
       display: 'flex',
       flexDirection: 'column',
-      height: isMobile ? `calc(100dvh - ${(window.__safeAreaBottom || 0) + 55}px)` : '100%',
+      height: isMobile ? 'auto' : '100%',
+      flex: isMobile ? '1 1 0%' : undefined,
+      minHeight: isMobile ? 0 : undefined,
       overflow: 'hidden'
     }
   }, /*#__PURE__*/React.createElement("div", {
     className: "msg-chat-header",
-    style: isMobile && window.__safeAreaTop ? {
-      paddingTop: window.__safeAreaTop + 8
-    } : undefined
+    style: undefined
   }, /*#__PURE__*/React.createElement("button", {
     className: "msg-back-btn",
     onClick: () => {
@@ -25760,14 +25760,14 @@ const Messages = window.Messages = () => {
     style: {
       display: 'flex',
       flexDirection: 'column',
-      height: isMobile ? `calc(100dvh - ${(window.__safeAreaBottom || 0) + 55}px)` : '100%',
+      height: isMobile ? 'auto' : '100%',
+      flex: isMobile ? '1 1 0%' : undefined,
+      minHeight: isMobile ? 0 : undefined,
       overflow: 'hidden'
     }
   }, /*#__PURE__*/React.createElement("div", {
     className: "msg-list-header",
-    style: isMobile && window.__safeAreaTop ? {
-      paddingTop: window.__safeAreaTop + 12
-    } : undefined
+    style: undefined
   }, /*#__PURE__*/React.createElement("h1", {
     style: {
       fontSize: '22px',
@@ -26685,14 +26685,14 @@ const Messages = window.Messages = () => {
       style: {
         display: 'flex',
         flexDirection: 'column',
-        height: isMobile ? `calc(100dvh - ${(window.__safeAreaBottom || 0) + 55}px)` : '100%',
+        height: isMobile ? 'auto' : '100%',
+        flex: isMobile ? '1 1 0%' : undefined,
+        minHeight: isMobile ? 0 : undefined,
         overflow: 'hidden'
       }
     }, /*#__PURE__*/React.createElement("div", {
       className: "msg-chat-header",
-      style: isMobile && window.__safeAreaTop ? {
-        paddingTop: window.__safeAreaTop + 8
-      } : undefined
+      style: undefined
     }, (isMobile || !conversations.length) && /*#__PURE__*/React.createElement("button", {
       className: "msg-back-btn",
       onClick: handleBack,
@@ -27459,14 +27459,36 @@ const Messages = window.Messages = () => {
     currentUserId: currentUser === null || currentUser === void 0 ? void 0 : currentUser.id
   });
   if (isMobile) {
-    return /*#__PURE__*/React.createElement(React.Fragment, null, renderIncomingCallBanner(), callOverlay, messagingLimited && !activeConvId && /*#__PURE__*/React.createElement("div", {
+    const safeTop = window.__safeAreaTop || 0;
+    const safeBot = window.__safeAreaBottom || 0;
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: safeBot + 55 + 'px',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+        zIndex: 1,
+        background: 'var(--bg-surface)'
+      }
+    }, safeTop > 0 && /*#__PURE__*/React.createElement("div", {
+      style: {
+        height: safeTop,
+        flexShrink: 0,
+        background: 'var(--bg-surface)'
+      }
+    }), renderIncomingCallBanner(), callOverlay, messagingLimited && !activeConvId && /*#__PURE__*/React.createElement("div", {
       style: {
         padding: '10px 16px',
         background: 'var(--color-warning-bg)',
         borderBottom: '1px solid #ffe082',
         display: 'flex',
         alignItems: 'center',
-        gap: 8
+        gap: 8,
+        flexShrink: 0
       }
     }, /*#__PURE__*/React.createElement("span", {
       style: {
