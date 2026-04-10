@@ -50,50 +50,16 @@ const Messages = window.Messages = () => {
   const [readReceipts, setReadReceipts] = useState({}); // { conversationId: { userId: readAt } }
 
   const isMobile = window.innerWidth <= 768;
-  const [kbVisible, setKbVisible] = useState(false);
 
-  // Lock body/html scroll on mobile to prevent iOS elastic overscroll.
-  // NOTE: we intentionally do NOT use position:fixed on body — that prevents
-  // the viewport from resizing when the keyboard opens.
+  // Lock body/html scroll on mobile to prevent iOS elastic overscroll
   useEffect(() => {
     if (!isMobile) return;
     const style = document.createElement('style');
     style.setAttribute('data-messages-lock', '1');
-    style.textContent = [
-      'html,body{overflow:hidden!important;overscroll-behavior:none!important;}',
-      '.msg-messages-area{overscroll-behavior:contain;-webkit-overflow-scrolling:touch;}',
-    ].join('');
+    style.textContent = 'html,body{overflow:hidden!important;height:100%!important;position:fixed!important;width:100%!important;} .msg-messages-area{overscroll-behavior:contain;-webkit-overflow-scrolling:touch;}';
     document.head.appendChild(style);
     return () => { if (style.parentNode) style.parentNode.removeChild(style); };
   }, [isMobile]);
-
-  // Detect keyboard open/close via visualViewport resize.
-  // When the keyboard opens, the visual viewport shrinks significantly.
-  useEffect(() => {
-    if (!isMobile) return;
-    const vv = window.visualViewport;
-    if (!vv) return;
-    const fullH = window.innerHeight;
-    const onResize = () => {
-      setKbVisible(vv.height < fullH * 0.75);
-    };
-    vv.addEventListener('resize', onResize);
-    return () => vv.removeEventListener('resize', onResize);
-  }, [isMobile]);
-
-  // When keyboard is open, hide the bottom nav so it doesn't float above the
-  // keyboard. Restore it when the keyboard closes or Messages unmounts.
-  useEffect(() => {
-    if (!isMobile) return;
-    const nav = document.querySelector('.bottom-nav');
-    if (!nav) return;
-    if (kbVisible) {
-      nav.style.display = 'none';
-    } else {
-      nav.style.display = '';
-    }
-    return () => { if (nav) nav.style.display = ''; };
-  }, [kbVisible, isMobile]);
 
   // Fetch current user
   useEffect(() => {
@@ -1999,15 +1965,17 @@ const Messages = window.Messages = () => {
   });
 
   if (isMobile) {
-    const safeTop = window.__safeAreaTop || 0;
-    const safeBot = window.__safeAreaBottom || 0;
+    // Capacitor native iOS fallback: 59px top, 34px bottom — covers all modern iPhones
+    const isCapNative = window.Capacitor?.isNativePlatform?.();
+    const safeTop = window.__safeAreaTop || (isCapNative ? 59 : 0);
+    const safeBot = window.__safeAreaBottom || (isCapNative ? 34 : 0);
     return (
       <div style={{
         position: 'fixed',
         top: 0,
         left: 0,
         right: 0,
-        bottom: kbVisible ? 0 : (safeBot + 55) + 'px',
+        bottom: (safeBot + 55) + 'px',
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',

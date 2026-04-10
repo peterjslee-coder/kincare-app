@@ -24264,51 +24264,18 @@ const Messages = window.Messages = () => {
   const [readReceipts, setReadReceipts] = useState({}); // { conversationId: { userId: readAt } }
 
   const isMobile = window.innerWidth <= 768;
-  const [kbVisible, setKbVisible] = useState(false);
 
-  // Lock body/html scroll on mobile to prevent iOS elastic overscroll.
-  // NOTE: we intentionally do NOT use position:fixed on body — that prevents
-  // the viewport from resizing when the keyboard opens.
+  // Lock body/html scroll on mobile to prevent iOS elastic overscroll
   useEffect(() => {
     if (!isMobile) return;
     const style = document.createElement('style');
     style.setAttribute('data-messages-lock', '1');
-    style.textContent = ['html,body{overflow:hidden!important;overscroll-behavior:none!important;}', '.msg-messages-area{overscroll-behavior:contain;-webkit-overflow-scrolling:touch;}'].join('');
+    style.textContent = 'html,body{overflow:hidden!important;height:100%!important;position:fixed!important;width:100%!important;} .msg-messages-area{overscroll-behavior:contain;-webkit-overflow-scrolling:touch;}';
     document.head.appendChild(style);
     return () => {
       if (style.parentNode) style.parentNode.removeChild(style);
     };
   }, [isMobile]);
-
-  // Detect keyboard open/close via visualViewport resize.
-  // When the keyboard opens, the visual viewport shrinks significantly.
-  useEffect(() => {
-    if (!isMobile) return;
-    const vv = window.visualViewport;
-    if (!vv) return;
-    const fullH = window.innerHeight;
-    const onResize = () => {
-      setKbVisible(vv.height < fullH * 0.75);
-    };
-    vv.addEventListener('resize', onResize);
-    return () => vv.removeEventListener('resize', onResize);
-  }, [isMobile]);
-
-  // When keyboard is open, hide the bottom nav so it doesn't float above the
-  // keyboard. Restore it when the keyboard closes or Messages unmounts.
-  useEffect(() => {
-    if (!isMobile) return;
-    const nav = document.querySelector('.bottom-nav');
-    if (!nav) return;
-    if (kbVisible) {
-      nav.style.display = 'none';
-    } else {
-      nav.style.display = '';
-    }
-    return () => {
-      if (nav) nav.style.display = '';
-    };
-  }, [kbVisible, isMobile]);
 
   // Fetch current user
   useEffect(() => {
@@ -27515,15 +27482,18 @@ const Messages = window.Messages = () => {
     currentUserId: currentUser === null || currentUser === void 0 ? void 0 : currentUser.id
   });
   if (isMobile) {
-    const safeTop = window.__safeAreaTop || 0;
-    const safeBot = window.__safeAreaBottom || 0;
+    var _window$Capacitor6, _window$Capacitor6$is;
+    // Capacitor native iOS fallback: 59px top, 34px bottom — covers all modern iPhones
+    const isCapNative = (_window$Capacitor6 = window.Capacitor) === null || _window$Capacitor6 === void 0 || (_window$Capacitor6$is = _window$Capacitor6.isNativePlatform) === null || _window$Capacitor6$is === void 0 ? void 0 : _window$Capacitor6$is.call(_window$Capacitor6);
+    const safeTop = window.__safeAreaTop || (isCapNative ? 59 : 0);
+    const safeBot = window.__safeAreaBottom || (isCapNative ? 34 : 0);
     return /*#__PURE__*/React.createElement("div", {
       style: {
         position: 'fixed',
         top: 0,
         left: 0,
         right: 0,
-        bottom: kbVisible ? 0 : safeBot + 55 + 'px',
+        bottom: safeBot + 55 + 'px',
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
@@ -31697,12 +31667,12 @@ const MyAccount = window.MyAccount = ({
       if (err.name === 'InvalidStateError') {
         setPwError('You already have a passkey registered on this device. Remove it first if you want to re-register.');
       } else if (err.name === 'NotAllowedError') {
-        var _window$Capacitor6, _window$Capacitor6$is;
+        var _window$Capacitor7, _window$Capacitor7$is;
         // In a native app WebView, NotAllowedError usually means passkeys aren't
         // supported in this context (not that the user cancelled).
         // In Safari/Chrome, it typically means user cancelled the prompt.
         // NotAllowedError can mean "user cancelled" OR "not allowed in this context" (e.g. WKWebView without entitlement)
-        const isNativeApp = (_window$Capacitor6 = window.Capacitor) === null || _window$Capacitor6 === void 0 || (_window$Capacitor6$is = _window$Capacitor6.isNativePlatform) === null || _window$Capacitor6$is === void 0 ? void 0 : _window$Capacitor6$is.call(_window$Capacitor6);
+        const isNativeApp = (_window$Capacitor7 = window.Capacitor) === null || _window$Capacitor7 === void 0 || (_window$Capacitor7$is = _window$Capacitor7.isNativePlatform) === null || _window$Capacitor7$is === void 0 ? void 0 : _window$Capacitor7$is.call(_window$Capacitor7);
         if (isNativeApp) {
           setPwError('Passkey creation failed. If this keeps happening, try opening yourinplace.com in Safari instead — the passkey will sync to this app automatically.');
         } else {
@@ -54001,7 +53971,7 @@ const FeedbackButton = window.FeedbackButton = ({
 
   // Build rich pageContext with device/browser info
   const buildPageContext = () => {
-    var _navigator$connection, _window$Capacitor7, _window$Capacitor7$is, _window$Capacitor$get, _window$Capacitor8;
+    var _navigator$connection, _window$Capacitor8, _window$Capacitor8$is, _window$Capacitor$get, _window$Capacitor9;
     const ua = navigator.userAgent;
     const {
       browserName,
@@ -54030,7 +54000,7 @@ const FeedbackButton = window.FeedbackButton = ({
       connectionType: ((_navigator$connection = navigator.connection) === null || _navigator$connection === void 0 ? void 0 : _navigator$connection.effectiveType) || 'unknown',
       language: navigator.language || 'unknown',
       isPWA: window.navigator.standalone === true ? 'yes' : 'no',
-      platform: (_window$Capacitor7 = window.Capacitor) !== null && _window$Capacitor7 !== void 0 && (_window$Capacitor7$is = _window$Capacitor7.isNativePlatform) !== null && _window$Capacitor7$is !== void 0 && _window$Capacitor7$is.call(_window$Capacitor7) ? ((_window$Capacitor$get = (_window$Capacitor8 = window.Capacitor).getPlatform) === null || _window$Capacitor$get === void 0 ? void 0 : _window$Capacitor$get.call(_window$Capacitor8)) === 'ios' ? 'ios-native' : 'android-native' : window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches ? 'pwa' : 'web',
+      platform: (_window$Capacitor8 = window.Capacitor) !== null && _window$Capacitor8 !== void 0 && (_window$Capacitor8$is = _window$Capacitor8.isNativePlatform) !== null && _window$Capacitor8$is !== void 0 && _window$Capacitor8$is.call(_window$Capacitor8) ? ((_window$Capacitor$get = (_window$Capacitor9 = window.Capacitor).getPlatform) === null || _window$Capacitor$get === void 0 ? void 0 : _window$Capacitor$get.call(_window$Capacitor9)) === 'ios' ? 'ios-native' : 'android-native' : window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches ? 'pwa' : 'web',
       recentErrors: recentErrorsRef.current.length > 0 ? recentErrorsRef.current : null,
       // Flow context — what was open when user tapped feedback
       openModals: snapshot.openModals || null,
@@ -78439,6 +78409,12 @@ window.__safeAreaBottom = 0;
         window.__safeAreaBottom = 0;
       }
     }
+    // Capacitor native iOS fallback: if detection still returned 0, hardcode it.
+    // Every modern iPhone has a notch or Dynamic Island — 59px covers both safely.
+    if (window.__safeAreaTop === 0 && window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform()) {
+      window.__safeAreaTop = 59;
+      window.__safeAreaBottom = 34;
+    }
     // Also set CSS vars (for any CSS that references them)
     document.documentElement.style.setProperty('--sat', window.__safeAreaTop + 'px');
     document.documentElement.style.setProperty('--sab', window.__safeAreaBottom + 'px');
@@ -79543,7 +79519,7 @@ const App = () => {
     }
   }, []);
   const handleLogin = user => {
-    var _window$Capacitor9, _window$Capacitor9$is;
+    var _window$Capacitor0, _window$Capacitor0$is;
     // Mark this tab as having an active session so refreshes auto-restore,
     // but closing the browser requires re-authentication.
     sessionStorage.setItem('inplace_session_active', '1');
@@ -79610,7 +79586,7 @@ const App = () => {
     // Start proactive auth token refresh (keeps user logged in across app restarts)
     if (typeof startProactiveRefresh === 'function') startProactiveRefresh();
     // Re-sync push subscription on login
-    if ((_window$Capacitor9 = window.Capacitor) !== null && _window$Capacitor9 !== void 0 && (_window$Capacitor9$is = _window$Capacitor9.isNativePlatform) !== null && _window$Capacitor9$is !== void 0 && _window$Capacitor9$is.call(_window$Capacitor9)) {
+    if ((_window$Capacitor0 = window.Capacitor) !== null && _window$Capacitor0 !== void 0 && (_window$Capacitor0$is = _window$Capacitor0.isNativePlatform) !== null && _window$Capacitor0$is !== void 0 && _window$Capacitor0$is.call(_window$Capacitor0)) {
       // Native app: register FCM token with server on every login
       // (ensures token is always fresh — previous registration may have failed or token rotated)
       if (typeof subscribeNativePush === 'function') {

@@ -28,6 +28,12 @@ window.__safeAreaBottom = 0;
       window.__safeAreaBottom=0;
     }
   }
+  // Capacitor native iOS fallback: if detection still returned 0, hardcode it.
+  // Every modern iPhone has a notch or Dynamic Island — 59px covers both safely.
+  if(window.__safeAreaTop===0 && window.Capacitor && typeof window.Capacitor.isNativePlatform==='function' && window.Capacitor.isNativePlatform()){
+    window.__safeAreaTop=59;
+    window.__safeAreaBottom=34;
+  }
   // Also set CSS vars (for any CSS that references them)
   document.documentElement.style.setProperty('--sat',window.__safeAreaTop+'px');
   document.documentElement.style.setProperty('--sab',window.__safeAreaBottom+'px');
