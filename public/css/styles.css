@@ -5,6 +5,10 @@
        Care Recipient: #7b5ea7 (soft purple — comfort, dignity)
     */
     :root {
+      /* ─── Safe Area Insets (CSS defaults; JS overrides on Capacitor native) ─── */
+      --sat: env(safe-area-inset-top, 0px);
+      --sab: env(safe-area-inset-bottom, 0px);
+
       /* ─── Role / Brand Colors ─── */
       --role-color: #1b6b5a;
       --role-color-light: #e0f2e9;
@@ -2099,7 +2103,7 @@
         justify-content: space-around;
         align-items: center;
         padding: 6px 4px;
-        padding-bottom: env(safe-area-inset-bottom, 0px);
+        padding-bottom: var(--sab);
         box-shadow: 0 -2px 8px rgba(0,0,0,0.06);
       }
 
@@ -2139,7 +2143,7 @@
       /* Main content padding for bottom nav — space so content isn't hidden behind it.
          Bottom padding = nav height (~56px) + safe area + small buffer. */
       .main-content {
-        padding: 16px 12px calc(env(safe-area-inset-bottom, 0px) + 70px);
+        padding: 16px 12px calc(var(--sab) + 70px);
         width: 100%;
         box-sizing: border-box;
         overflow-x: hidden;
@@ -2159,18 +2163,18 @@
       /* Messages headers: apply safe-area-inset-top directly so status bar / notch
          never overlaps the header content, regardless of parent padding state */
       .main-content:has(.msg-panel) .msg-chat-header {
-        padding-top: calc(env(safe-area-inset-top, 0px) + 8px);
+        padding-top: calc(var(--sat) + 8px);
       }
       .main-content:has(.msg-panel) .msg-list-header {
-        padding-top: calc(env(safe-area-inset-top, 0px) + 12px);
+        padding-top: calc(var(--sat) + 12px);
       }
 
       /* Messages panel: fill from viewport top to above the fixed bottom nav.
          Safe-area-top is inside the header padding, not the parent.
          Bottom nav height = 1px border + 6px pad-top + 48px content = 55px above safe-area. */
       .msg-panel {
-        height: calc(100vh - env(safe-area-inset-bottom, 0px) - 55px);
-        height: calc(100dvh - env(safe-area-inset-bottom, 0px) - 55px);
+        height: calc(100vh - var(--sab) - 55px);
+        height: calc(100dvh - var(--sab) - 55px);
         max-height: none;
         min-height: 0;
         overflow: hidden;
@@ -2304,7 +2308,7 @@
 
       /* Modal bottom padding on mobile so action buttons aren't hidden by bottom nav */
       .modal-content {
-        padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 40px);
+        padding-bottom: calc(var(--sab) + 40px);
       }
 
       .msg-input {
@@ -2519,7 +2523,7 @@
     @media (max-width: 768px) {
       /* Nav: tighter padding, smaller gap */
       .splash-nav-bar {
-        padding: calc(env(safe-area-inset-top, 0px) + 10px) 12px 10px 12px !important;
+        padding: calc(var(--sat) + 10px) 12px 10px 12px !important;
       }
       .splash-nav-actions {
         gap: 4px !important;
@@ -2809,13 +2813,13 @@
        safe-area-inset-top so the clock, battery, and signal indicators
        are always readable and never overlap app UI. */
     .splash-nav-bar {
-      padding: calc(env(safe-area-inset-top, 0px) + 14px) 32px 14px 32px !important;
+      padding: calc(var(--sat) + 14px) 32px 14px 32px !important;
       background-color: var(--bg-surface);
     }
 
     /* main-content owns the top safe area inset — child headers must NOT re-add it */
     .main-content {
-      padding-top: env(safe-area-inset-top, 0px);
+      padding-top: var(--sat);
     }
 
     /* No extra safe-area on these — main-content already handles it */

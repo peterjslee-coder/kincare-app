@@ -3,6 +3,27 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <script>
+    // Safe-area polyfill: WKWebView with contentInsetAdjustmentBehavior=never
+    // can return 0 for env(safe-area-inset-*). Detect and inject real values.
+    (function(){try{
+      var d=document.createElement('div');
+      d.style.cssText='position:absolute;visibility:hidden;padding-top:env(safe-area-inset-top,0px)';
+      document.documentElement.appendChild(d);
+      var v=parseFloat(getComputedStyle(d).paddingTop)||0;
+      document.documentElement.removeChild(d);
+      if(v<1){
+        var h=Math.max(screen.height,screen.width),w=Math.min(screen.height,screen.width);
+        if(h/w>2.0){
+          document.documentElement.style.setProperty('--sat',(h>=852?59:47)+'px');
+          document.documentElement.style.setProperty('--sab','34px');
+        }else if(h/w>1.7){
+          document.documentElement.style.setProperty('--sat','20px');
+          document.documentElement.style.setProperty('--sab','0px');
+        }
+      }
+    }catch(e){}})();
+  </script>
   <title>InPlace - On-Demand Care for Your Loved Ones</title>
 
   <!-- PWA Meta Tags -->
@@ -20,7 +41,7 @@
   <!-- PWA Manifest -->
   <link rel="manifest" href="/manifest.json">
 
-  <link rel="stylesheet" href="/css/styles.css?v=build-f3136f61-mns5sven">
+  <link rel="stylesheet" href="/css/styles.css?v=build-f3136f61-mns7fupr">
 
   <!-- Leaflet CSS for maps (self-hosted — no CDN dependency) -->
   <link rel="stylesheet" href="/vendor/leaflet.css">
@@ -49,7 +70,7 @@
   <script src="/vendor/twilio-video.min.js"></script>
 
   <!-- Pre-compiled app bundle (built by scripts/build-client.js) -->
-  <script>window.APP_VERSION = '1.58.16';</script>
+  <script>window.APP_VERSION = '1.58.17';</script>
   <script>
     // ─── Theme initialization ───
     // Always start light (brand green). Unauthenticated visitors should never
@@ -100,7 +121,7 @@
       });
     })();
   </script>
-  <script src="/js-compiled/bundle.js?v=build-f3136f61-mns5sven"></script>
+  <script src="/js-compiled/bundle.js?v=build-f3136f61-mns7fupr"></script>
 
   <script>
     // Service worker: register/update and auto-reload on new version
