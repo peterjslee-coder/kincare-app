@@ -898,7 +898,7 @@ const Messages = window.Messages = () => {
 
   // ─── New Chat / Group Creator ───
   const renderNewChatPicker = () => (
-    <div className="msg-panel" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div className="msg-panel" style={{ display: 'flex', flexDirection: 'column', height: isMobile ? undefined : '100%' }}>
       <div className="msg-chat-header">
         <button className="msg-back-btn" onClick={() => { setShowNewChat(false); setCreatingGroup(false); }}
           style={{ background: 'none', border: 'none', fontSize: '22px', cursor: 'pointer', color: 'var(--role-color)', padding: '4px 8px', marginRight: '8px' }}>
@@ -979,7 +979,7 @@ const Messages = window.Messages = () => {
 
   // ─── Find People Panel ───
   const renderFindPeople = () => (
-    <div className="msg-panel" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div className="msg-panel" style={{ display: 'flex', flexDirection: 'column', height: isMobile ? undefined : '100%' }}>
       <div className="msg-chat-header">
         <button className="msg-back-btn" onClick={() => { setShowFindPeople(false); setPeopleSearch(''); setPeopleResults([]); }}
           style={{ background: 'none', border: 'none', fontSize: '22px', cursor: 'pointer', color: 'var(--role-color)', padding: '4px 8px', marginRight: '8px' }}>
@@ -1111,7 +1111,7 @@ const Messages = window.Messages = () => {
 
   // ─── Conversation List ───
   const renderConversationList = () => (
-    <div className="msg-panel" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div className="msg-panel" style={{ display: 'flex', flexDirection: 'column', height: isMobile ? undefined : '100%' }}>
       <div className="msg-list-header">
         <h1 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
           {selectMode ? `${selectedIds.length} selected` : 'Messages'}
@@ -1525,7 +1525,7 @@ const Messages = window.Messages = () => {
   const renderChatView = () => {
     const isGroup = isGroupConv(activeConv);
     return (
-      <div className="msg-panel" style={{ display: 'flex', flexDirection: 'column', height: isMobile ? 'calc(100vh - 110px)' : '100%', overflow: 'hidden' }}>
+      <div className={`msg-panel ${isMobile ? 'msg-panel-mobile' : ''}`} style={{ display: 'flex', flexDirection: 'column', height: isMobile ? undefined : '100%', overflow: 'hidden' }}>
         <div className="msg-chat-header">
           {(isMobile || !conversations.length) && (
             <button className="msg-back-btn" onClick={handleBack}

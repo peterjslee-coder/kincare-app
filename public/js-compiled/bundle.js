@@ -25239,7 +25239,7 @@ const Messages = window.Messages = () => {
     style: {
       display: 'flex',
       flexDirection: 'column',
-      height: '100%'
+      height: isMobile ? undefined : '100%'
     }
   }, /*#__PURE__*/React.createElement("div", {
     className: "msg-chat-header"
@@ -25441,7 +25441,7 @@ const Messages = window.Messages = () => {
     style: {
       display: 'flex',
       flexDirection: 'column',
-      height: '100%'
+      height: isMobile ? undefined : '100%'
     }
   }, /*#__PURE__*/React.createElement("div", {
     className: "msg-chat-header"
@@ -25752,7 +25752,7 @@ const Messages = window.Messages = () => {
     style: {
       display: 'flex',
       flexDirection: 'column',
-      height: '100%'
+      height: isMobile ? undefined : '100%'
     }
   }, /*#__PURE__*/React.createElement("div", {
     className: "msg-list-header"
@@ -26669,11 +26669,11 @@ const Messages = window.Messages = () => {
     var _activeConv$members4, _activeConv$members5;
     const isGroup = isGroupConv(activeConv);
     return /*#__PURE__*/React.createElement("div", {
-      className: "msg-panel",
+      className: `msg-panel ${isMobile ? 'msg-panel-mobile' : ''}`,
       style: {
         display: 'flex',
         flexDirection: 'column',
-        height: isMobile ? 'calc(100vh - 110px)' : '100%',
+        height: isMobile ? undefined : '100%',
         overflow: 'hidden'
       }
     }, /*#__PURE__*/React.createElement("div", {
@@ -80636,6 +80636,7 @@ const App = () => {
       flexShrink: 0
     }
   }, "Exit")), /*#__PURE__*/React.createElement("div", {
+    className: "hamburger-wrapper",
     style: {
       display: 'flex',
       alignItems: 'center',

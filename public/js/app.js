@@ -1648,7 +1648,7 @@ const App = () => {
             }}>Exit</button>
           </div>
         )}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+        <div className="hamburger-wrapper" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
           <button className="hamburger-btn" onClick={() => setSidebarOpen(true)} aria-label="Open menu" style={{ position: 'relative', zIndex: 1 }}>
             <span></span><span></span><span></span>
           </button>

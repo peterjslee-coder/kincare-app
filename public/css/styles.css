@@ -967,6 +967,7 @@
       display: flex;
       gap: 8px;
       background-color: var(--bg-surface);
+      flex-shrink: 0;
     }
 
     .msg-input {
@@ -2098,7 +2099,7 @@
         justify-content: space-around;
         align-items: center;
         padding: 8px 4px;
-        padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 4px);
+        padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 2px);
         box-shadow: 0 -2px 8px rgba(0,0,0,0.06);
       }
 
@@ -2135,16 +2136,35 @@
         white-space: nowrap;
       }
 
-      /* Main content padding for bottom nav — extra space so content isn't hidden.
-         Bottom padding = nav height (~60px) + safe area + generous buffer.
-         120px ensures buttons at the very bottom of scrollable pages are always
-         reachable on both iOS and Android (Android doesn't report safe-area
-         for its gesture bar, so we pad more generously). */
+      /* Main content padding for bottom nav — space so content isn't hidden behind it.
+         Bottom padding = nav height (~56px) + safe area + small buffer. */
       .main-content {
-        padding: 16px 12px calc(env(safe-area-inset-bottom, 0px) + 120px);
+        padding: 16px 12px calc(env(safe-area-inset-bottom, 0px) + 70px);
         width: 100%;
         box-sizing: border-box;
         overflow-x: hidden;
+      }
+
+      /* Hide hamburger wrapper on mobile — button already hidden via .hamburger-btn rule */
+      .hamburger-wrapper {
+        display: none !important;
+      }
+
+      /* Messages: strip main-content padding so msg-panel owns its own layout */
+      .main-content:has(.msg-panel) {
+        padding: env(safe-area-inset-top, 0px) 0 0 0 !important;
+        overflow: hidden;
+      }
+
+      /* Messages panel: fill from below safe-area-top to above the fixed bottom nav.
+         Bottom nav height ≈ 56px + safe-area-bottom.
+         100dvh = dynamic viewport (accounts for iOS address bar). */
+      .msg-panel {
+        height: calc(100vh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 56px);
+        height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 56px);
+        max-height: none;
+        min-height: 0;
+        overflow: hidden;
       }
 
       .card {
@@ -2784,20 +2804,22 @@
       background-color: var(--bg-surface);
     }
 
+    /* main-content owns the top safe area inset — child headers must NOT re-add it */
     .main-content {
-      padding-top: max(16px, env(safe-area-inset-top, 0px));
+      padding-top: env(safe-area-inset-top, 0px);
     }
 
+    /* No extra safe-area on these — main-content already handles it */
     .mobile-header {
-      padding-top: calc(env(safe-area-inset-top, 0px) + 12px);
+      padding-top: 12px;
     }
 
     .msg-chat-header {
-      padding-top: calc(env(safe-area-inset-top, 0px) + 12px);
+      padding-top: 12px;
     }
 
     .msg-list-header {
-      padding-top: calc(env(safe-area-inset-top, 0px) + 16px);
+      padding-top: 16px;
     }
 
     /* safe-area bottom nav handled in base mobile styles */
