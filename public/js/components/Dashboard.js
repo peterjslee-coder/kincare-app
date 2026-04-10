@@ -11,6 +11,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
   const [error, setError] = useState(false);
   const [analyticsData, setAnalyticsData] = useState(null);
   const [analyticsOpen, setAnalyticsOpen] = useState(false);
+  const [activityExpanded, setActivityExpanded] = useState(false);
   const [showPwaGuide, setShowPwaGuide] = useState(false);
   // Cancel + review state
   const [cancellingId, setCancellingId] = useState(null);
@@ -1929,35 +1930,49 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
         </div>
       )}
 
-      {/* Recent Activity — last 5 items */}
-      {activity.length > 0 && (
-        <div className="card">
-          <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span><span className="card-icon">📢</span>Recent Activity</span>
-            <span onClick={() => onNavigate && onNavigate('activity')} style={{ fontSize: 12, color: 'var(--role-color)', cursor: 'pointer', fontWeight: 600 }}>View All →</span>
-          </div>
-          <div>
-            {activity.slice(0, 5).map((a, idx) => (
-              <div key={idx}
-                onClick={() => a.sessionId && setVisitDetailSessionId(a.sessionId)}
-                style={{
-                  padding: '10px 0', borderBottom: idx < Math.min(activity.length, 5) - 1 ? '1px solid var(--border-light)' : 'none',
-                  cursor: a.sessionId ? 'pointer' : 'default', transition: 'background 0.15s',
-                  borderRadius: 4, margin: '0 -4px', paddingLeft: 4, paddingRight: 4,
-                }}
-                onMouseEnter={(e) => { if (a.sessionId) e.currentTarget.style.background = 'var(--bg-elevated)'; }}
-                onMouseLeave={(e) => { if (a.sessionId) e.currentTarget.style.background = ''; }}>
-                <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 13, marginBottom: 2 }}>
-                  {a.title}
-                  {a.sessionId && <span style={{ fontSize: 11, color: 'var(--role-color)', marginLeft: 6, fontWeight: 500 }}>View →</span>}
+      {/* Recent Activity — fade after 2, expand to 5 */}
+      {activity.length > 0 && (() => {
+        const actExpanded = activityExpanded;
+        const visibleCount = actExpanded ? 5 : 2;
+        const items = activity.slice(0, visibleCount);
+        const hasMore = activity.length > 2;
+        return (
+          <div className="card">
+            <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span><span className="card-icon">📢</span>Recent Activity</span>
+              <span onClick={() => onNavigate && onNavigate('activity')} style={{ fontSize: 12, color: 'var(--role-color)', cursor: 'pointer', fontWeight: 600 }}>View All →</span>
+            </div>
+            <div style={{ position: 'relative' }}>
+              {items.map((a, idx) => (
+                <div key={idx}
+                  onClick={() => a.sessionId && setVisitDetailSessionId(a.sessionId)}
+                  style={{
+                    padding: '10px 0', borderBottom: idx < items.length - 1 ? '1px solid var(--border-light)' : 'none',
+                    cursor: a.sessionId ? 'pointer' : 'default', transition: 'background 0.15s',
+                    borderRadius: 4, margin: '0 -4px', paddingLeft: 4, paddingRight: 4,
+                  }}
+                  onMouseEnter={(e) => { if (a.sessionId) e.currentTarget.style.background = 'var(--bg-elevated)'; }}
+                  onMouseLeave={(e) => { if (a.sessionId) e.currentTarget.style.background = ''; }}>
+                  <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 13, marginBottom: 2 }}>
+                    {a.title}
+                    {a.sessionId && <span style={{ fontSize: 11, color: 'var(--role-color)', marginLeft: 6, fontWeight: 500 }}>View →</span>}
+                  </div>
+                  {a.message && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2, lineHeight: 1.4 }}>{a.message}</div>}
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3 }}>{formatActivityTime(a.timestamp)}</div>
                 </div>
-                {a.message && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2, lineHeight: 1.4 }}>{a.message}</div>}
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3 }}>{formatActivityTime(a.timestamp)}</div>
+              ))}
+              {!actExpanded && hasMore && (
+                <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 48, background: 'linear-gradient(transparent, var(--bg-surface))', pointerEvents: 'none' }} />
+              )}
+            </div>
+            {hasMore && (
+              <div onClick={() => setActivityExpanded(!actExpanded)} style={{ textAlign: 'center', padding: '8px 0 2px', cursor: 'pointer', fontSize: 12, color: 'var(--role-color)', fontWeight: 600 }}>
+                {actExpanded ? 'Show less' : `Show ${Math.min(activity.length, 5) - 2} more`}
               </div>
-            ))}
+            )}
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Restore dismissed tiles */}
       {Object.keys(dismissedTiles).length > 0 && (

@@ -7196,6 +7196,7 @@ const Dashboard = window.Dashboard = ({
   const [error, setError] = useState(false);
   const [analyticsData, setAnalyticsData] = useState(null);
   const [analyticsOpen, setAnalyticsOpen] = useState(false);
+  const [activityExpanded, setActivityExpanded] = useState(false);
   const [showPwaGuide, setShowPwaGuide] = useState(false);
   // Cancel + review state
   const [cancellingId, setCancellingId] = useState(null);
@@ -10685,72 +10686,102 @@ const Dashboard = window.Dashboard = ({
       marginTop: 6,
       fontWeight: 600
     }
-  }, "View visit details \u2192"))), activity.length > 0 && /*#__PURE__*/React.createElement("div", {
-    className: "card"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "card-header",
-    style: {
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center'
-    }
-  }, /*#__PURE__*/React.createElement("span", null, /*#__PURE__*/React.createElement("span", {
-    className: "card-icon"
-  }, "\uD83D\uDCE2"), "Recent Activity"), /*#__PURE__*/React.createElement("span", {
-    onClick: () => onNavigate && onNavigate('activity'),
-    style: {
-      fontSize: 12,
-      color: 'var(--role-color)',
-      cursor: 'pointer',
-      fontWeight: 600
-    }
-  }, "View All \u2192")), /*#__PURE__*/React.createElement("div", null, activity.slice(0, 5).map((a, idx) => /*#__PURE__*/React.createElement("div", {
-    key: idx,
-    onClick: () => a.sessionId && setVisitDetailSessionId(a.sessionId),
-    style: {
-      padding: '10px 0',
-      borderBottom: idx < Math.min(activity.length, 5) - 1 ? '1px solid var(--border-light)' : 'none',
-      cursor: a.sessionId ? 'pointer' : 'default',
-      transition: 'background 0.15s',
-      borderRadius: 4,
-      margin: '0 -4px',
-      paddingLeft: 4,
-      paddingRight: 4
-    },
-    onMouseEnter: e => {
-      if (a.sessionId) e.currentTarget.style.background = 'var(--bg-elevated)';
-    },
-    onMouseLeave: e => {
-      if (a.sessionId) e.currentTarget.style.background = '';
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontWeight: 600,
-      color: 'var(--text-primary)',
-      fontSize: 13,
-      marginBottom: 2
-    }
-  }, a.title, a.sessionId && /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 11,
-      color: 'var(--role-color)',
-      marginLeft: 6,
-      fontWeight: 500
-    }
-  }, "View \u2192")), a.message && /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 12,
-      color: 'var(--text-secondary)',
-      marginTop: 2,
-      lineHeight: 1.4
-    }
-  }, a.message), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 11,
-      color: 'var(--text-muted)',
-      marginTop: 3
-    }
-  }, formatActivityTime(a.timestamp)))))), Object.keys(dismissedTiles).length > 0 && /*#__PURE__*/React.createElement("div", {
+  }, "View visit details \u2192"))), activity.length > 0 && (() => {
+    const actExpanded = activityExpanded;
+    const visibleCount = actExpanded ? 5 : 2;
+    const items = activity.slice(0, visibleCount);
+    const hasMore = activity.length > 2;
+    return /*#__PURE__*/React.createElement("div", {
+      className: "card"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "card-header",
+      style: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center'
+      }
+    }, /*#__PURE__*/React.createElement("span", null, /*#__PURE__*/React.createElement("span", {
+      className: "card-icon"
+    }, "\uD83D\uDCE2"), "Recent Activity"), /*#__PURE__*/React.createElement("span", {
+      onClick: () => onNavigate && onNavigate('activity'),
+      style: {
+        fontSize: 12,
+        color: 'var(--role-color)',
+        cursor: 'pointer',
+        fontWeight: 600
+      }
+    }, "View All \u2192")), /*#__PURE__*/React.createElement("div", {
+      style: {
+        position: 'relative'
+      }
+    }, items.map((a, idx) => /*#__PURE__*/React.createElement("div", {
+      key: idx,
+      onClick: () => a.sessionId && setVisitDetailSessionId(a.sessionId),
+      style: {
+        padding: '10px 0',
+        borderBottom: idx < items.length - 1 ? '1px solid var(--border-light)' : 'none',
+        cursor: a.sessionId ? 'pointer' : 'default',
+        transition: 'background 0.15s',
+        borderRadius: 4,
+        margin: '0 -4px',
+        paddingLeft: 4,
+        paddingRight: 4
+      },
+      onMouseEnter: e => {
+        if (a.sessionId) e.currentTarget.style.background = 'var(--bg-elevated)';
+      },
+      onMouseLeave: e => {
+        if (a.sessionId) e.currentTarget.style.background = '';
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontWeight: 600,
+        color: 'var(--text-primary)',
+        fontSize: 13,
+        marginBottom: 2
+      }
+    }, a.title, a.sessionId && /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 11,
+        color: 'var(--role-color)',
+        marginLeft: 6,
+        fontWeight: 500
+      }
+    }, "View \u2192")), a.message && /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 12,
+        color: 'var(--text-secondary)',
+        marginTop: 2,
+        lineHeight: 1.4
+      }
+    }, a.message), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 11,
+        color: 'var(--text-muted)',
+        marginTop: 3
+      }
+    }, formatActivityTime(a.timestamp)))), !actExpanded && hasMore && /*#__PURE__*/React.createElement("div", {
+      style: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: 48,
+        background: 'linear-gradient(transparent, var(--bg-surface))',
+        pointerEvents: 'none'
+      }
+    })), hasMore && /*#__PURE__*/React.createElement("div", {
+      onClick: () => setActivityExpanded(!actExpanded),
+      style: {
+        textAlign: 'center',
+        padding: '8px 0 2px',
+        cursor: 'pointer',
+        fontSize: 12,
+        color: 'var(--role-color)',
+        fontWeight: 600
+      }
+    }, actExpanded ? 'Show less' : `Show ${Math.min(activity.length, 5) - 2} more`));
+  })(), Object.keys(dismissedTiles).length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: 'center',
       marginTop: 12,
