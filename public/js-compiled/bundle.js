@@ -29626,6 +29626,27 @@ const VisitDetailModal = window.VisitDetailModal = ({
     setUploadingPhotos(false);
     e.target.value = '';
   };
+  const handlePhotoDelete = async photoId => {
+    if (!photoId || !sessionId) return;
+    if (!confirm('Delete this photo? This cannot be undone.')) return;
+    try {
+      const res = await apiFetch(`/api/photos/${photoId}`, {
+        method: 'DELETE'
+      });
+      if (res !== null && res !== void 0 && res.ok) {
+        // Refresh session data to remove the deleted photo
+        const refreshRes = await apiFetch(`/api/sessions/${sessionId}`);
+        if (refreshRes !== null && refreshRes !== void 0 && refreshRes.ok) setData(await refreshRes.json());
+        setLightboxIdx(null);
+        if (typeof showToast === 'function') showToast('Photo deleted', 'success');
+      } else {
+        const err = await (res === null || res === void 0 ? void 0 : res.json().catch(() => ({})));
+        if (typeof showToast === 'function') showToast(err.error || 'Could not delete photo', 'error');
+      }
+    } catch (err) {
+      if (typeof showToast === 'function') showToast('Could not delete photo', 'error');
+    }
+  };
   useEffect(() => {
     if (!sessionId) return;
     const fetchDetail = async () => {
@@ -30211,7 +30232,31 @@ const VisitDetailModal = window.VisitDetailModal = ({
         objectFit: 'cover',
         display: 'block'
       }
-    }), p.caption && /*#__PURE__*/React.createElement("div", {
+    }), p.id && /*#__PURE__*/React.createElement("button", {
+      onClick: e => {
+        e.stopPropagation();
+        handlePhotoDelete(p.id);
+      },
+      style: {
+        position: 'absolute',
+        top: 4,
+        right: 4,
+        width: 22,
+        height: 22,
+        borderRadius: '50%',
+        background: 'rgba(0,0,0,0.55)',
+        border: 'none',
+        color: '#fff',
+        fontSize: 13,
+        cursor: 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        lineHeight: 1,
+        padding: 0
+      },
+      title: "Delete photo"
+    }, '\u00D7'), p.caption && /*#__PURE__*/React.createElement("div", {
       style: {
         position: 'absolute',
         bottom: 0,
@@ -30317,7 +30362,23 @@ const VisitDetailModal = window.VisitDetailModal = ({
         fontSize: 12,
         marginTop: 6
       }
-    }, lightboxIdx + 1, " of ", photos.length)), cost && role === 'caregiver' && /*#__PURE__*/React.createElement("div", {
+    }, lightboxIdx + 1, " of ", photos.length), photos[lightboxIdx].id && /*#__PURE__*/React.createElement("button", {
+      onClick: e => {
+        e.stopPropagation();
+        handlePhotoDelete(photos[lightboxIdx].id);
+      },
+      style: {
+        marginTop: 12,
+        padding: '8px 20px',
+        background: 'rgba(220,53,69,0.85)',
+        border: 'none',
+        color: '#fff',
+        borderRadius: 8,
+        fontSize: 13,
+        fontWeight: 600,
+        cursor: 'pointer'
+      }
+    }, "Delete Photo")), cost && role === 'caregiver' && /*#__PURE__*/React.createElement("div", {
       style: {
         background: 'var(--bg-surface)',
         border: '1px solid #e0e0e0',

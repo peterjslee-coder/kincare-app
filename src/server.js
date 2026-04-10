@@ -313,7 +313,7 @@ app.use("/api/kindred", require("./routes/kindred"));
 app.use("/api/legal", require("./routes/legal"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.58.25";
+const APP_VERSION = "1.58.26";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });

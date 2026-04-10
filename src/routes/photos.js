@@ -236,6 +236,34 @@ router.get("/session/:sessionId", async (req, res) => {
   res.json({ photos });
 });
 
+// ─── DELETE /api/photos/:photoId ───
+// Delete a visit photo — allowed for any care team member, session participant, or admin
+router.delete("/:photoId", async (req, res) => {
+  const db = await getDb();
+  const { photoId } = req.params;
+
+  // Find the photo and its associated session
+  const photo = await db.prepare(`
+    SELECT vp.id, vp.visit_log_id, vl.session_id, cs.family_user_id, cs.caregiver_id, cs.care_recipient_id
+    FROM visit_photos vp
+    JOIN visit_logs vl ON vp.visit_log_id = vl.id
+    JOIN care_sessions cs ON vl.session_id = cs.id
+    WHERE vp.id = ?
+  `).get(photoId);
+
+  if (!photo) return res.status(404).json({ error: "Photo not found" });
+
+  // Check authorization: session participant, care team member, or admin
+  const isParticipant = photo.family_user_id === req.user.id || photo.caregiver_id === req.user.id;
+  const isAdmin = req.user.isAdmin || req.user.is_admin;
+  if (!isParticipant && !isAdmin && !(await isCareTeamMember(db, photo.care_recipient_id, req.user.id))) {
+    return res.status(403).json({ error: "Not authorized to delete this photo" });
+  }
+
+  await db.prepare("DELETE FROM visit_photos WHERE id = ?").run(photoId);
+  res.json({ success: true, deletedId: photoId });
+});
+
 // Error handler for multer
 router.use((err, req, res, next) => {
   if (err instanceof multer.MulterError) {
