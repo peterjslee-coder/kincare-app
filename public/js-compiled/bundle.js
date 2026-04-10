@@ -78313,6 +78313,32 @@ const IPAiInsightsCard = window.IPAiInsightsCard = ({
   })());
 };
 ;
+// ─── Safe-Area Polyfill (Capacitor WKWebView) ───
+// env(safe-area-inset-*) returns 0 when contentInsetAdjustmentBehavior=never.
+// Detect and inject correct values as --sat/--sab CSS custom properties.
+(function () {
+  try {
+    var d = document.createElement('div');
+    d.style.cssText = 'position:absolute;visibility:hidden;padding-top:env(safe-area-inset-top,0px)';
+    document.body.appendChild(d);
+    var v = parseFloat(getComputedStyle(d).paddingTop) || 0;
+    document.body.removeChild(d);
+    if (v < 1) {
+      var h = Math.max(screen.height, screen.width),
+        w = Math.min(screen.height, screen.width);
+      if (h / w > 2.0) {
+        document.documentElement.style.setProperty('--sat', (h >= 852 ? 59 : 47) + 'px');
+        document.documentElement.style.setProperty('--sab', '34px');
+      } else if (h / w > 1.7) {
+        document.documentElement.style.setProperty('--sat', '20px');
+        document.documentElement.style.setProperty('--sab', '0px');
+      }
+    }
+  } catch (e) {
+    console.warn('safe-area polyfill error', e);
+  }
+})();
+
 // ─── PWA Install Prompt ───
 const PWAInstallBanner = window.PWAInstallBanner = () => {
   const [deferredPrompt, setDeferredPrompt] = useState(null);
