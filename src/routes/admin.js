@@ -204,7 +204,10 @@ router.post("/impersonate/:userId", async (req, res) => {
         return res.status(401).json({ error: "Passkey not recognized." });
       }
 
-      const EXPECTED_ORIGINS = [ORIGIN, ORIGIN.replace('https://', 'android:apk-key-hash:')];
+      const EXPECTED_ORIGINS = [
+        ORIGIN,
+        `android:apk-key-hash:${process.env.ANDROID_CERT_HASH || ""}`,
+      ].filter(Boolean);
       const verification = await verifyAuthenticationResponse({
         response: req.body,
         expectedChallenge: stored.challenge,
@@ -1412,14 +1415,19 @@ router.delete("/users/:id/nuke", async (req, res) => {
         return res.status(401).json({ error: "Passkey not recognized or doesn't belong to you." });
       }
 
+      const EXPECTED_ORIGINS_NUKE = [
+        ORIGIN,
+        `android:apk-key-hash:${process.env.ANDROID_CERT_HASH || ""}`,
+      ].filter(Boolean);
+
       const verification = await verifyAuthenticationResponse({
         response: authResponse,
         expectedChallenge: stored.challenge,
-        expectedOrigin: ORIGIN,
+        expectedOrigin: EXPECTED_ORIGINS_NUKE,
         expectedRPID: RP_ID,
         credential: {
           id: passkey.credential_id,
-          publicKey: Buffer.from(passkey.public_key, "base64"),
+          publicKey: Buffer.from(passkey.public_key, "base64url"),
           counter: Number(passkey.counter),
         },
         requireUserVerification: true,
@@ -4965,12 +4973,17 @@ router.put("/safety-flags/:id/verified", authenticate, checkAdmin, requireAdmin,
       return res.status(401).json({ error: "Passkey not found or doesn't belong to you." });
     }
 
+    const EXPECTED_ORIGINS = [
+      ORIGIN,
+      `android:apk-key-hash:${process.env.ANDROID_CERT_HASH || ""}`,
+    ].filter(Boolean);
+
     const verification = await verifyAuthenticationResponse({
       response: authResponse,
       expectedChallenge: stored.challenge,
-      expectedOrigin: ORIGIN,
+      expectedOrigin: EXPECTED_ORIGINS,
       expectedRPID: RP_ID,
-      credential: { id: passkey.credential_id, publicKey: Buffer.from(passkey.public_key, "base64"), counter: passkey.counter || 0 },
+      credential: { id: passkey.credential_id, publicKey: Buffer.from(passkey.public_key, "base64url"), counter: passkey.counter || 0 },
     });
 
     if (!verification.verified) {
