@@ -313,7 +313,7 @@ app.use("/api/kindred", require("./routes/kindred"));
 app.use("/api/legal", require("./routes/legal"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.58.31";
+const APP_VERSION = "1.58.32";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });
@@ -594,6 +594,53 @@ async function start() {
         // Send if we're within the notification window (up to session start)
         if (careNow >= reminderTime && careNow <= sessionStart) {
           await sendSessionReminders(s.id, "pre_check_in");
+        }
+      }
+
+      // ─── Arrival SMS reminders for care recipients (2hr, 1hr, 30min) ───
+      // Sends friendly countdown texts to the care recipient's phone before each visit
+      const { sendArrivalSms } = require("./routes/push");
+      const arrivalCandidates = await pollDb.prepare(`
+        SELECT cs.id, cs.scheduled_date, cs.scheduled_time, cs.notifications_sent,
+          cr.timezone AS care_timezone, cr.notification_channel, cr.sms_phone,
+          cr.sms_reminder_intervals, cr.first_name AS recipient_first_name,
+          cp.user_id AS caregiver_user_id
+        FROM care_sessions cs
+        LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+        LEFT JOIN users u ON cs.family_user_id = u.id
+        LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+        LEFT JOIN users cu ON cp.user_id = cu.id
+        WHERE cs.status = 'confirmed'
+          AND cs.scheduled_date BETWEEN ? AND ?
+          AND (u.is_demo IS NULL OR u.is_demo = 0)
+          AND (cu.is_demo IS NULL OR cu.is_demo = 0)
+      `).all(dateRangeStart, dateRangeEnd);
+
+      for (const s of arrivalCandidates) {
+        if (!s.scheduled_time || !s.sms_phone) continue;
+        // Only send if channel includes SMS
+        const channel = s.notification_channel || "push";
+        if (!["sms", "both"].includes(channel)) continue;
+
+        const tz = s.care_timezone || 'America/New_York';
+        const careNow = getNowInZone(tz);
+        const sessionStart = buildDateTimeInZone(s.scheduled_date, s.scheduled_time, tz);
+        const minutesUntil = (sessionStart - careNow) / 60000;
+
+        // Parse enabled intervals (default: all three)
+        let intervals;
+        try { intervals = JSON.parse(s.sms_reminder_intervals || '[120, 60, 30]'); } catch { intervals = [120, 60, 30]; }
+        if (!Array.isArray(intervals) || intervals.length === 0) continue;
+
+        const sent = s.notifications_sent || '';
+        for (const mins of intervals) {
+          const tag = `arrival_sms_${mins}`;
+          if (sent.includes(tag)) continue; // already sent this tier
+          // Send when we're within the window: (mins) to (mins - 2) minutes before
+          // The 2-min buffer accounts for the 60s poll interval
+          if (minutesUntil <= mins && minutesUntil > (mins - 2)) {
+            await sendArrivalSms(s, mins);
+          }
         }
       }
 

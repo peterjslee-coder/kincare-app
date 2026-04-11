@@ -130,6 +130,7 @@ router.get("/:id", requireRole("family"), async (req, res) => {
         lu.accessibility_prefs AS recipient_accessibility_prefs,
         cr.sms_phone AS recipient_sms_phone,
         cr.notification_channel AS recipient_notification_channel,
+        cr.sms_reminder_intervals AS recipient_sms_reminder_intervals,
         bu.first_name || ' ' || bu.last_name AS billing_contact_name,
         bu.email AS billing_contact_email
       FROM care_teams ct
@@ -723,7 +724,7 @@ router.put("/:teamId/recipient-notifications", authenticate, async (req, res) =>
   try {
     const db = await getDb();
     const { teamId } = req.params;
-    const { smsPhone, notificationChannel } = req.body;
+    const { smsPhone, notificationChannel, smsReminderIntervals } = req.body;
 
     // Verify caller is team leader
     const membership = await db.prepare(
@@ -743,19 +744,35 @@ router.put("/:teamId/recipient-notifications", authenticate, async (req, res) =>
       return res.status(400).json({ error: "Phone number required for text message reminders" });
     }
 
+    // Validate reminder intervals (must be array of valid minute values)
+    const validIntervals = [120, 60, 30];
+    let intervalsJson = null;
+    if (smsReminderIntervals !== undefined) {
+      const intervals = Array.isArray(smsReminderIntervals) ? smsReminderIntervals : [];
+      const cleaned = intervals.filter(v => validIntervals.includes(Number(v))).map(Number);
+      intervalsJson = JSON.stringify(cleaned);
+    }
+
     // Get care recipient ID from team
     const team = await db.prepare("SELECT care_recipient_id FROM care_teams WHERE id = ?").get(teamId);
     if (!team) return res.status(404).json({ error: "Care team not found" });
 
     // Update care recipient
-    await db.prepare(
-      "UPDATE care_recipients SET sms_phone = ?, notification_channel = ?, updated_at = NOW() WHERE id = ?"
-    ).run(smsPhone || null, notificationChannel || "push", team.care_recipient_id);
+    if (intervalsJson !== null) {
+      await db.prepare(
+        "UPDATE care_recipients SET sms_phone = ?, notification_channel = ?, sms_reminder_intervals = ?, updated_at = NOW() WHERE id = ?"
+      ).run(smsPhone || null, notificationChannel || "push", intervalsJson, team.care_recipient_id);
+    } else {
+      await db.prepare(
+        "UPDATE care_recipients SET sms_phone = ?, notification_channel = ?, updated_at = NOW() WHERE id = ?"
+      ).run(smsPhone || null, notificationChannel || "push", team.care_recipient_id);
+    }
 
     res.json({
       success: true,
       smsPhone: smsPhone || null,
       notificationChannel: notificationChannel || "push",
+      smsReminderIntervals: intervalsJson || "[120, 60, 30]",
     });
   } catch (err) {
     console.error("Update recipient notifications error:", err);

@@ -506,6 +506,48 @@ async function sendPushToUser(userId, payload, eventType) {
   }
 }
 
+// ─── Arrival SMS reminders for care recipients ───
+// Sends friendly countdown texts: "[Caregiver] is arriving in X! 😊"
+// Called from the notification poller in server.js with the session row + interval in minutes
+async function sendArrivalSms(session, minutesBefore) {
+  try {
+    const db = await getDb();
+
+    // Get caregiver's first name
+    let caregiverFirstName = "Your caregiver";
+    if (session.caregiver_user_id) {
+      const cg = await db.prepare("SELECT first_name FROM users WHERE id = ?").get(session.caregiver_user_id);
+      if (cg?.first_name) caregiverFirstName = cg.first_name;
+    }
+
+    // Human-friendly time label
+    let timeLabel;
+    if (minutesBefore >= 120) timeLabel = "2 hours";
+    else if (minutesBefore >= 60) timeLabel = "1 hour";
+    else timeLabel = "30 minutes";
+
+    const recipName = session.recipient_first_name || "there";
+    const message = `Hi ${recipName}, ${caregiverFirstName} is arriving in ${timeLabel}! 😊`;
+
+    const { sendSms } = require("../utils/sms");
+    const result = await sendSms(session.sms_phone, message);
+
+    // Track that we sent this tier so it doesn't re-fire
+    const tag = `arrival_sms_${minutesBefore}`;
+    await db.prepare(`
+      UPDATE care_sessions
+      SET notifications_sent = COALESCE(notifications_sent, '') || ' ' || ?
+      WHERE id = ?
+    `).run(tag, session.id);
+
+    console.log(`  [arrival-sms] ${result.success ? '✅' : '❌'} ${recipName}: "${caregiverFirstName} arriving in ${timeLabel}" (session ${session.id.slice(0,8)})`);
+    return result;
+  } catch (err) {
+    console.error("  [arrival-sms] Error:", err.message);
+    return { success: false, error: err.message };
+  }
+}
+
 // ─── Session reminder notifications ───
 // Sends pre-check-in or pre-check-out push notifications for a session
 // reminderType: 'pre_check_in' or 'pre_check_out'
@@ -793,3 +835,4 @@ module.exports.notifyAdmins = notifyAdmins;
 module.exports.initializeVapidKeys = initializeVapidKeys;
 module.exports.setVapidKeys = setVapidKeys;
 module.exports.sendSessionReminders = sendSessionReminders;
+module.exports.sendArrivalSms = sendArrivalSms;

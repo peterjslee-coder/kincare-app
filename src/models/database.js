@@ -1132,6 +1132,10 @@ async function initializeDatabase() {
 
     // v1.57.85 — Allow caregivers to dismiss no-show alert banners
     `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS no_show_acknowledged INTEGER DEFAULT 0`,
+
+    // v1.58.32 — Arrival SMS reminders for care recipients (customizable intervals)
+    // JSON array of minutes before session: e.g. [120, 60, 30] = 2hr, 1hr, 30min
+    `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS sms_reminder_intervals TEXT DEFAULT '[120, 60, 30]'`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }

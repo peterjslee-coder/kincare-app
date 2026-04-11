@@ -35400,6 +35400,7 @@ const CareTeamManage = window.CareTeamManage = ({
   const [intlPhone, setIntlPhone] = useState(false);
   const [notifChannel, setNotifChannel] = useState('push');
   const [savingNotif, setSavingNotif] = useState(false);
+  const [reminderIntervals, setReminderIntervals] = useState([120, 60, 30]);
   const [a11yExpanded, setA11yExpanded] = useState(false);
   const [billingUserId, setBillingUserId] = useState('');
   const [savingBilling, setSavingBilling] = useState(false);
@@ -35421,6 +35422,11 @@ const CareTeamManage = window.CareTeamManage = ({
         setBillingUserId(data.careTeam.billing_user_id || '');
         setSmsPhone(data.careTeam.recipient_sms_phone || '');
         setNotifChannel(data.careTeam.recipient_notification_channel || 'push');
+        try {
+          setReminderIntervals(JSON.parse(data.careTeam.recipient_sms_reminder_intervals || '[120, 60, 30]'));
+        } catch {
+          setReminderIntervals([120, 60, 30]);
+        }
       }
     } catch (err) {
       console.error('Fetch care team error:', err);
@@ -35653,7 +35659,8 @@ const CareTeamManage = window.CareTeamManage = ({
         method: 'PUT',
         body: JSON.stringify({
           smsPhone: smsPhone.trim(),
-          notificationChannel: notifChannel
+          notificationChannel: notifChannel,
+          smsReminderIntervals: reminderIntervals
         })
       });
       if (res !== null && res !== void 0 && res.ok) {
@@ -36774,7 +36781,76 @@ const CareTeamManage = window.CareTeamManage = ({
       marginTop: 4,
       lineHeight: 1.4
     }
-  }, INTL_PHONE_DISCLAIMER)), /*#__PURE__*/React.createElement("div", {
+  }, INTL_PHONE_DISCLAIMER)), ['sms', 'both'].includes(notifChannel) && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      fontWeight: 600,
+      color: 'var(--text-primary)',
+      marginBottom: 8
+    }
+  }, "Arrival reminders"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontSize: 12,
+      color: 'var(--text-secondary)',
+      margin: '0 0 8px'
+    }
+  }, team.recipient_first_name, " will get a friendly text countdown before each confirmed visit."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 6
+    }
+  }, [{
+    mins: 120,
+    label: '2 hours before',
+    emoji: '🕑'
+  }, {
+    mins: 60,
+    label: '1 hour before',
+    emoji: '🕐'
+  }, {
+    mins: 30,
+    label: '30 minutes before',
+    emoji: '⏰'
+  }].map(opt => {
+    const checked = reminderIntervals.includes(opt.mins);
+    return /*#__PURE__*/React.createElement("label", {
+      key: opt.mins,
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        fontSize: 13,
+        color: 'var(--text-primary)',
+        cursor: 'pointer',
+        padding: '6px 10px',
+        borderRadius: 8,
+        background: checked ? 'var(--bg-accent-light)' : 'var(--bg-card)',
+        border: checked ? '1px solid #e8724a' : '1px solid #e8e8e8'
+      }
+    }, /*#__PURE__*/React.createElement("input", {
+      type: "checkbox",
+      checked: checked,
+      onChange: () => {
+        if (checked) setReminderIntervals(reminderIntervals.filter(v => v !== opt.mins));else setReminderIntervals([...reminderIntervals, opt.mins].sort((a, b) => b - a));
+      },
+      style: {
+        accentColor: 'var(--accent-color)',
+        width: 16,
+        height: 16
+      }
+    }), opt.emoji, " ", opt.label);
+  })), reminderIntervals.length === 0 && ['sms', 'both'].includes(notifChannel) && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: '#d35400',
+      marginTop: 6
+    }
+  }, "No arrival reminders selected \u2014 ", team.recipient_first_name, " will still get the standard 15-minute heads up.")), /*#__PURE__*/React.createElement("div", {
     style: {
       background: '#f0f8f5',
       padding: '10px 14px',
@@ -36783,7 +36859,7 @@ const CareTeamManage = window.CareTeamManage = ({
       color: 'var(--role-color)',
       marginBottom: 14
     }
-  }, notifChannel === 'none' ? `${team.recipient_first_name} won't receive any session reminders.` : notifChannel === 'sms' ? `${team.recipient_first_name} will get a text 15 minutes before each session starts and before the caregiver leaves.` : notifChannel === 'both' ? `${team.recipient_first_name} will get both app notifications and text messages for session reminders.` : `${team.recipient_first_name} will get app notifications for session reminders (requires the app installed).`), /*#__PURE__*/React.createElement("button", {
+  }, notifChannel === 'none' ? `${team.recipient_first_name} won't receive any session reminders.` : notifChannel === 'sms' ? `${team.recipient_first_name} will get text reminders${reminderIntervals.length > 0 ? ` at ${reminderIntervals.sort((a, b) => b - a).map(m => m >= 60 ? `${m / 60}hr` : `${m}min`).join(', ')} before` : ''} each confirmed visit, plus a heads-up when the caregiver is about to leave.` : notifChannel === 'both' ? `${team.recipient_first_name} will get both app notifications and text messages for session reminders.` : `${team.recipient_first_name} will get app notifications for session reminders (requires the app installed).`), /*#__PURE__*/React.createElement("button", {
     onClick: handleSaveNotifications,
     disabled: savingNotif,
     style: {
