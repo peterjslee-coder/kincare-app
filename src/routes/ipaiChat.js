@@ -242,11 +242,11 @@ router.post("/detect-instructions", async (req, res) => {
   const { message } = req.body;
 
   if (!message || typeof message !== "string" || message.trim().length < 15) {
-    return res.json({ suggestion: null });
+    return res.json({ suggestion: null, _debug: 'too_short' });
   }
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return res.json({ suggestion: null });
+  if (!apiKey) return res.json({ suggestion: null, _debug: 'no_api_key' });
 
   try {
     // Quick pre-screen: skip obvious non-coordination messages
@@ -259,8 +259,8 @@ router.post("/detect-instructions", async (req, res) => {
       "want her to", "want him to", "could you", "can you", "would you", "should ",
       "next session", "next visit", "on tues", "on wed", "on thurs", "on fri", "on sat",
       "on sun", "on mon", "tomorrow", "this week"];
-    const hasSignal = coordSignals.some(s => msgLC.includes(s));
-    if (!hasSignal) return res.json({ suggestion: null });
+    const matchedSignal = coordSignals.find(s => msgLC.includes(s));
+    if (!matchedSignal) return res.json({ suggestion: null, _debug: 'no_keyword_match' });
 
     // Get user's upcoming sessions for context
     const upcomingSessions = await db.prepare(`
@@ -279,7 +279,7 @@ router.post("/detect-instructions", async (req, res) => {
       LIMIT 10
     `).all(userId);
 
-    if (upcomingSessions.length === 0) return res.json({ suggestion: null });
+    if (upcomingSessions.length === 0) return res.json({ suggestion: null, _debug: 'no_upcoming_sessions', _matchedSignal: matchedSignal });
 
     const sessionContext = upcomingSessions.map(s => {
       const cg = s.cg_first ? `${s.cg_first} ${s.cg_last}` : 'Unassigned';
@@ -310,6 +310,7 @@ Return ONLY valid JSON (no markdown):
     const cleaned = raw.replace(/^```json?\n?/, "").replace(/\n?```$/, "").trim();
     const parsed = JSON.parse(cleaned);
 
+    console.log('[detect-instructions] Claude raw:', raw, 'parsed:', JSON.stringify(parsed));
     if (parsed.hasInstructions && parsed.matchedSessionId && parsed.instructionSummary) {
       return res.json({
         suggestion: {
@@ -320,10 +321,10 @@ Return ONLY valid JSON (no markdown):
       });
     }
 
-    return res.json({ suggestion: null });
+    return res.json({ suggestion: null, _debug: 'claude_said_no', _matchedSignal: matchedSignal, _sessionCount: upcomingSessions.length, _claudeRaw: raw?.substring(0, 200) });
   } catch (err) {
     console.error("[iPAi] detect-instructions error:", err.message);
-    return res.json({ suggestion: null });
+    return res.json({ suggestion: null, _debug: 'error', _error: err.message });
   }
 });
 
