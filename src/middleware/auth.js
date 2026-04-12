@@ -231,6 +231,7 @@ function verifyCsrf(req, res, next) {
   const publicAuthPaths = ["/api/auth/login", "/api/auth/register", "/api/auth/demo-login",
     "/api/auth/verify-email", "/api/auth/refresh", "/api/auth/passkey-login",
     "/api/auth/passkey-login-verify", "/api/auth/logout",
+    "/api/oauth/exchange", "/api/oauth/complete-signup",
     "/api/passkeys/authenticate/options", "/api/passkeys/authenticate/verify",
     "/api/passkeys/register/options", "/api/passkeys/register/verify"];
   if (publicAuthPaths.some(p => fullPath === p || fullPath.startsWith(p + "?"))) return next();
