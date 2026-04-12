@@ -242,11 +242,11 @@ router.post("/detect-instructions", async (req, res) => {
   const { message } = req.body;
 
   if (!message || typeof message !== "string" || message.trim().length < 15) {
-    return res.json({ suggestion: null, _debug: 'too_short' });
+    return res.json({ suggestion: null });
   }
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return res.json({ suggestion: null, _debug: 'no_api_key' });
+  if (!apiKey) return res.json({ suggestion: null });
 
   try {
     // Quick pre-screen: skip obvious non-coordination messages
@@ -260,7 +260,7 @@ router.post("/detect-instructions", async (req, res) => {
       "next session", "next visit", "on tues", "on wed", "on thurs", "on fri", "on sat",
       "on sun", "on mon", "tomorrow", "this week"];
     const matchedSignal = coordSignals.find(s => msgLC.includes(s));
-    if (!matchedSignal) return res.json({ suggestion: null, _debug: 'no_keyword_match' });
+    if (!matchedSignal) return res.json({ suggestion: null });
 
     // Get user's upcoming sessions for context
     const upcomingSessions = await db.prepare(`
@@ -274,12 +274,12 @@ router.post("/detect-instructions", async (req, res) => {
       LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
       WHERE cs.family_user_id = ?
         AND cs.status IN ('confirmed', 'pending', 'open', 'requested')
-        AND cs.scheduled_date >= CURRENT_DATE
+        AND cs.scheduled_date >= to_char(CURRENT_DATE, 'YYYY-MM-DD')
       ORDER BY cs.scheduled_date ASC, cs.scheduled_time ASC
       LIMIT 10
     `).all(userId);
 
-    if (upcomingSessions.length === 0) return res.json({ suggestion: null, _debug: 'no_upcoming_sessions', _matchedSignal: matchedSignal });
+    if (upcomingSessions.length === 0) return res.json({ suggestion: null });
 
     const sessionContext = upcomingSessions.map(s => {
       const cg = s.cg_first ? `${s.cg_first} ${s.cg_last}` : 'Unassigned';
@@ -310,7 +310,7 @@ Return ONLY valid JSON (no markdown):
     const cleaned = raw.replace(/^```json?\n?/, "").replace(/\n?```$/, "").trim();
     const parsed = JSON.parse(cleaned);
 
-    console.log('[detect-instructions] Claude raw:', raw, 'parsed:', JSON.stringify(parsed));
+    // Detection passed — check Claude's response
     if (parsed.hasInstructions && parsed.matchedSessionId && parsed.instructionSummary) {
       return res.json({
         suggestion: {
@@ -321,10 +321,10 @@ Return ONLY valid JSON (no markdown):
       });
     }
 
-    return res.json({ suggestion: null, _debug: 'claude_said_no', _matchedSignal: matchedSignal, _sessionCount: upcomingSessions.length, _claudeRaw: raw?.substring(0, 200) });
+    return res.json({ suggestion: null });
   } catch (err) {
     console.error("[iPAi] detect-instructions error:", err.message);
-    return res.json({ suggestion: null, _debug: 'error', _error: err.message });
+    return res.json({ suggestion: null });
   }
 });
 

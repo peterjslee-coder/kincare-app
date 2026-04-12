@@ -194,7 +194,7 @@ async function handleCareCoordination(messageText, userId, userContext) {
     LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
     WHERE cs.family_user_id = ?
       AND cs.status IN ('confirmed', 'pending', 'open', 'requested')
-      AND cs.scheduled_date >= CURRENT_DATE
+      AND cs.scheduled_date >= to_char(CURRENT_DATE, 'YYYY-MM-DD')
     ORDER BY cs.scheduled_date ASC, cs.scheduled_time ASC
     LIMIT 10
   `).all(userId);
