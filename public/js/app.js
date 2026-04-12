@@ -380,6 +380,8 @@ const App = () => {
     if (p.get('consent-response')) return 'consent-response';
     // OAuth callback: go straight to login so LoginPage can exchange the code
     if (p.get('oauth_code') || p.get('oauth_error')) return 'login';
+    // OAuth signup: new user from Google/Apple → send to registration
+    if (p.get('oauth_signup')) return 'register';
     return 'splash';
   });
   const [currentUser, setCurrentUser] = useState(null);
@@ -895,6 +897,27 @@ const App = () => {
         });
     }
 
+    // OAuth signup: new user from Google/Apple — fetch their info and send to registration
+    const oauthSignupCode = params.get('oauth_signup');
+    if (oauthSignupCode) {
+      window.history.replaceState({}, '', window.location.pathname);
+      fetch(`/api/oauth/pending-signup?code=${oauthSignupCode}`)
+        .then(r => r.json().then(data => ({ ok: r.ok, data })))
+        .then(({ ok, data }) => {
+          if (ok && data.email) {
+            setSignupPrefill({ email: data.email, firstName: data.firstName, lastName: data.lastName, oauthSignupCode: oauthSignupCode });
+            setAppState('register');
+          } else {
+            setVerifyMessage({ type: 'error', text: 'Sign-up link expired. Please try again.' });
+            setAppState('login');
+          }
+        })
+        .catch(() => {
+          setVerifyMessage({ type: 'error', text: 'Failed to load sign-up info.' });
+          setAppState('login');
+        });
+    }
+
     // Sandbox mode detection
     if (params.get('sandbox') === 'true') {
       window.__sandboxMode = true;
@@ -1248,7 +1271,7 @@ const App = () => {
       </div>
     </div>,
     login: <LoginPage onLogin={handleLogin} onNavigate={handleNavigate} banner={verifyMessage} onDismissBanner={() => setVerifyMessage(null)} inviteInfo={inviteInfo} />,
-    register: <RegisterPage onLogin={handleLogin} onNavigate={handleNavigate} prefilledEmail={signupPrefill?.email || inviteInfo?.email} prefilledRole={signupPrefill?.role} signupToken={signupPrefill?.signupToken} pendingInviteToken={pendingInviteToken} sandboxMode={!!window.__sandboxMode} />,
+    register: <RegisterPage onLogin={handleLogin} onNavigate={handleNavigate} prefilledEmail={signupPrefill?.email || inviteInfo?.email} prefilledRole={signupPrefill?.role} signupToken={signupPrefill?.signupToken} pendingInviteToken={pendingInviteToken} sandboxMode={!!window.__sandboxMode} oauthSignupCode={signupPrefill?.oauthSignupCode} prefilledFirstName={signupPrefill?.firstName} prefilledLastName={signupPrefill?.lastName} />,
     'forgot-password': <ForgotPasswordPage onNavigate={handleNavigate} />,
     'reset-password': <ResetPasswordPage token={resetToken} onNavigate={handleNavigate} />,
     'consent-response': <ConsentResponsePage token={consentResponseToken} />,

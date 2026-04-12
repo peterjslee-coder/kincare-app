@@ -4,15 +4,21 @@ const jwt = require("jsonwebtoken");
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { generateToken, setAuthCookie, setCsrfCookie, generateRefreshToken, setRefreshCookie } = require("../middleware/auth");
+const { notifyAdmins } = require("./push");
 
 const router = express.Router();
 
 // In-memory store for single-use OAuth auth codes (code → { token, user, expiresAt })
 const oauthCodes = new Map();
+// In-memory store for pending OAuth signups (new users → redirect to registration)
+const oauthSignups = new Map();
 setInterval(() => {
   const now = Date.now();
   for (const [code, data] of oauthCodes) {
     if (now > data.expiresAt) oauthCodes.delete(code);
+  }
+  for (const [code, data] of oauthSignups) {
+    if (now > data.expiresAt) oauthSignups.delete(code);
   }
 }, 60 * 1000);
 
@@ -41,7 +47,7 @@ router.get("/google", (req, res) => {
   const isProduction = process.env.NODE_ENV === "production";
   res.cookie("oauth_state", state, { httpOnly: true, maxAge: 600000, sameSite: "lax", secure: isProduction });
 
-  const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GOOGLE_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${scope}&state=${state}&access_type=offline&prompt=consent`;
+  const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GOOGLE_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${scope}&state=${state}&prompt=select_account`;
 
   res.redirect(authUrl);
 });
@@ -126,24 +132,20 @@ router.get("/google/callback", async (req, res) => {
           await db.prepare("UPDATE users SET email_verified = 1, email_verified_at = NOW() WHERE id = ?").run(user.id);
         }
       } else {
-        // Create new user via Google
-        const userId = uuid();
-        // Generate a random password hash (user can set a real password later if they want)
-        const bcrypt = require("bcryptjs");
-        const randomPassword = require("crypto").randomBytes(32).toString("hex");
-        const passwordHash = await bcrypt.hash(randomPassword, 10);
-
-        await db.prepare(`
-          INSERT INTO users (id, email, password_hash, role, first_name, last_name, avatar_url, email_verified, email_verified_at)
-          VALUES (?, ?, ?, 'family', ?, ?, ?, 1, NOW())
-        `).run(userId, email, passwordHash, firstName || "User", lastName || "", picture || null);
-
-        // Link Google account
-        await db.prepare(
-          "INSERT INTO oauth_accounts (id, user_id, provider, provider_user_id, provider_email, access_token, refresh_token) VALUES (?, ?, 'google', ?, ?, ?, ?)"
-        ).run(uuid(), userId, googleId, email, tokens.access_token, tokens.refresh_token || null);
-
-        user = await db.prepare("SELECT * FROM users WHERE id = ?").get(userId);
+        // No existing account — redirect to registration with Google info pre-filled
+        const signupCode = crypto.randomBytes(32).toString("hex");
+        oauthSignups.set(signupCode, {
+          provider: "google",
+          providerId: googleId,
+          email,
+          firstName: firstName || "",
+          lastName: lastName || "",
+          avatarUrl: picture || null,
+          accessToken: tokens.access_token,
+          refreshToken: tokens.refresh_token || null,
+          expiresAt: Date.now() + 5 * 60 * 1000, // 5 minutes
+        });
+        return res.redirect(`${APP_URL}?oauth_signup=${signupCode}`);
       }
     }
 
@@ -418,22 +420,21 @@ router.post("/apple/callback", express.urlencoded({ extended: false }), async (r
         console.log(`[Apple OAuth] Blocked new account for relay email ${email} — user should retry with real email or sign in first`);
         return res.redirect(`${APP_URL}?oauth_error=apple_hidden_email`);
       } else if (email) {
-        // Create new user via Apple (real email, genuinely new user)
-        const userId = uuid();
-        const bcrypt = require("bcryptjs");
-        const randomPassword = crypto.randomBytes(32).toString("hex");
-        const passwordHash = await bcrypt.hash(randomPassword, 10);
-
-        await db.prepare(`
-          INSERT INTO users (id, email, password_hash, role, first_name, last_name, email_verified, email_verified_at)
-          VALUES (?, ?, ?, 'family', ?, ?, ?, ${email_verified ? "NOW()" : "NULL"})
-        `).run(userId, email, passwordHash, firstName || "User", lastName || "", email_verified ? 1 : 0);
-
-        await db.prepare(
-          "INSERT INTO oauth_accounts (id, user_id, provider, provider_user_id, provider_email, access_token) VALUES (?, ?, 'apple', ?, ?, ?)"
-        ).run(uuid(), userId, appleUserId, email, code || null);
-
-        user = await db.prepare("SELECT * FROM users WHERE id = ?").get(userId);
+        // No existing account — redirect to registration with Apple info pre-filled
+        const signupCode = crypto.randomBytes(32).toString("hex");
+        oauthSignups.set(signupCode, {
+          provider: "apple",
+          providerId: appleUserId,
+          email,
+          firstName: firstName || "",
+          lastName: lastName || "",
+          avatarUrl: null,
+          accessToken: code || null,
+          refreshToken: null,
+          emailVerified: email_verified,
+          expiresAt: Date.now() + 5 * 60 * 1000,
+        });
+        return res.redirect(`${APP_URL}?oauth_signup=${signupCode}`);
       } else {
         // Apple didn't share email and no existing link — can't create account
         return res.redirect(`${APP_URL}?oauth_error=no_email`);
@@ -481,6 +482,121 @@ router.post("/exchange", async (req, res) => {
   const refreshToken = await generateRefreshToken(data.user.id);
   setRefreshCookie(res, refreshToken);
   res.json({ token: data.token, user: data.user });
+});
+
+// ─── GET /api/oauth/pending-signup ─── Retrieve pending OAuth signup info for registration
+router.get("/pending-signup", (req, res) => {
+  const { code } = req.query;
+  if (!code || !oauthSignups.has(code)) {
+    return res.status(400).json({ error: "Invalid or expired signup code" });
+  }
+  const data = oauthSignups.get(code);
+  if (Date.now() > data.expiresAt) {
+    oauthSignups.delete(code);
+    return res.status(400).json({ error: "Signup code expired" });
+  }
+  // Don't delete yet — we need it when they complete registration
+  res.json({
+    email: data.email,
+    firstName: data.firstName,
+    lastName: data.lastName,
+    provider: data.provider,
+  });
+});
+
+// ─── POST /api/oauth/complete-signup ─── Complete registration for an OAuth user
+router.post("/complete-signup", async (req, res) => {
+  const { code, role, firstName, lastName, phone, password } = req.body;
+  if (!code || !oauthSignups.has(code)) {
+    return res.status(400).json({ error: "Invalid or expired signup code" });
+  }
+  const data = oauthSignups.get(code);
+  if (Date.now() > data.expiresAt) {
+    oauthSignups.delete(code);
+    return res.status(400).json({ error: "Signup code expired" });
+  }
+  oauthSignups.delete(code); // single-use
+
+  if (!role || !["family", "caregiver", "care_for"].includes(role)) {
+    return res.status(400).json({ error: "Invalid role" });
+  }
+
+  try {
+    const db = await getDb();
+    const bcrypt = require("bcryptjs");
+    const passwordHash = await bcrypt.hash(password, 10);
+    const userId = uuid();
+    const finalFirst = firstName || data.firstName;
+    const finalLast = lastName || data.lastName;
+    const roles = JSON.stringify([role]);
+
+    // Email is already verified by Google/Apple — no confirmation email needed.
+    // But account_approved defaults to false — admin must still approve.
+    await db.prepare(`
+      INSERT INTO users (id, email, password_hash, role, roles, first_name, last_name, phone, avatar_url, email_verified, email_verified_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW())
+    `).run(userId, data.email, passwordHash, role, roles, finalFirst, finalLast, phone || null, data.avatarUrl);
+
+    // Link OAuth account
+    await db.prepare(
+      "INSERT INTO oauth_accounts (id, user_id, provider, provider_user_id, provider_email, access_token, refresh_token) VALUES (?, ?, ?, ?, ?, ?, ?)"
+    ).run(uuid(), userId, data.provider, data.providerId, data.email, data.accessToken, data.refreshToken);
+
+    // Auto-create care_recipient record for care_for signups (same as normal registration)
+    if (role === "care_for") {
+      try {
+        const crId = uuid();
+        await db.prepare(`
+          INSERT INTO care_recipients
+          (id, family_user_id, first_name, last_name, linked_user_id,
+           authorization_tier, consent_status, consent_method, consent_verified_at)
+          VALUES (?, ?, ?, ?, ?, 'tier1', 'verified', 'self_signup', NOW())
+        `).run(crId, userId, finalFirst, finalLast, userId);
+        const teamId = uuid();
+        await db.prepare(
+          "INSERT INTO care_teams (id, name, care_recipient_id, created_by) VALUES (?, ?, ?, ?)"
+        ).run(teamId, `${finalFirst} ${finalLast}'s Care Team`, crId, userId);
+        await db.prepare(
+          "INSERT INTO care_team_members (id, care_team_id, user_id, role, invited_by) VALUES (?, ?, ?, 'leader', ?)"
+        ).run(uuid(), teamId, userId, userId);
+      } catch (e) {
+        console.error("OAuth care_for auto-setup error:", e);
+      }
+    }
+
+    // Notify admins — new signup needs approval (same as normal registration)
+    const roleName = role === "caregiver" ? "Caregiver" : role === "care_for" ? "Care Recipient" : "Family";
+    const providerName = data.provider === "google" ? "Google" : "Apple";
+    notifyAdmins("new_registration", {
+      title: "New Signup — Approval Needed",
+      body: `${finalFirst} ${finalLast} (${roleName}) signed up via ${providerName} and needs your approval to continue.`,
+      data: { type: "new_registration", userId, email: data.email, needsApproval: true },
+    });
+
+    const user = { id: userId, email: data.email, role, roles: [role], firstName: finalFirst, lastName: finalLast, emailVerified: true };
+    const token = generateToken(user);
+
+    setAuthCookie(res, token);
+    setCsrfCookie(res);
+    const refreshToken = await generateRefreshToken(userId);
+    setRefreshCookie(res, refreshToken);
+
+    res.status(201).json({
+      token,
+      user: {
+        id: userId,
+        email: data.email,
+        role,
+        firstName: finalFirst,
+        lastName: finalLast,
+        emailVerified: true,
+        isDemo: false,
+      },
+    });
+  } catch (err) {
+    console.error("OAuth complete-signup error:", err);
+    res.status(500).json({ error: "Registration failed" });
+  }
 });
 
 // ─── GET /api/oauth/config ─── Return which OAuth providers are configured (public)

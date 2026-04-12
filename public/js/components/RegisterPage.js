@@ -1,9 +1,10 @@
-const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmail, prefilledRole, signupToken, pendingInviteToken, sandboxMode }) => {
+const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmail, prefilledRole, signupToken, pendingInviteToken, sandboxMode, oauthSignupCode, prefilledFirstName, prefilledLastName }) => {
   // ─── State ───
   const [track, setTrack] = useState(prefilledRole === 'caregiver' ? 'caregiver' : prefilledRole === 'family' ? 'family' : prefilledRole === 'care_for' ? 'care_for' : null);
   const [step, setStep] = useState(prefilledRole ? 2 : 1); // Step 1 = role picker, Step 2 = basic info, Step 3 = caregiver disclosures
+  const isOAuthSignup = !!oauthSignupCode;
   const [formData, setFormData] = useState({
-    firstName: '', lastName: '', email: prefilledEmail || '', password: '',
+    firstName: prefilledFirstName || '', lastName: prefilledLastName || '', email: prefilledEmail || '', password: '',
     confirmPassword: '',
     phone: '',
     // Caregiver disclosures
@@ -116,18 +117,13 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
     }
 
     try {
-      const response = await apiFetch('/api/auth/register', {
+      const endpoint = isOAuthSignup ? '/api/oauth/complete-signup' : '/api/auth/register';
+      const payload = isOAuthSignup
+        ? { code: oauthSignupCode, role, firstName: formData.firstName, lastName: formData.lastName, phone: normalizePhone(formData.phone), password: formData.password }
+        : { email: formData.email, password: formData.password, firstName: formData.firstName, lastName: formData.lastName, phone: normalizePhone(formData.phone), role, ...(authHint ? { authHint } : {}), ...(signupToken ? { signupToken } : {}) };
+      const response = await apiFetch(endpoint, {
         method: 'POST',
-        body: JSON.stringify({
-          email: formData.email,
-          password: formData.password,
-          firstName: formData.firstName,
-          lastName: formData.lastName,
-          phone: normalizePhone(formData.phone),
-          role,
-          ...(authHint ? { authHint } : {}),
-          ...(signupToken ? { signupToken } : {})
-        })
+        body: JSON.stringify(payload)
       });
 
       if (!response) throw new Error('Registration failed');
