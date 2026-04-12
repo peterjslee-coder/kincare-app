@@ -363,29 +363,38 @@ async function familyDashboard(db, userId, res) {
         sessionId: p.session_id,
         sessionDate: p.scheduled_date,
       })),
-      recentlyCompleted: await Promise.all(recentCompleted.map(async (s) => {
-        let condTags = [];
-        try { condTags = s.condition_tags ? JSON.parse(s.condition_tags) : []; } catch(e) {}
-        // Check if family already reviewed this session
-        const existingReview = await db.prepare(
-          "SELECT id, rating FROM reviews WHERE session_id = ? AND family_user_id = ?"
-        ).get(s.id, userId);
-        return {
-          id: s.id,
-          date: s.scheduled_date,
-          time: s.scheduled_time,
-          serviceType: s.service_type,
-          durationHours: s.duration_hours,
-          caregiverName: s.caregiver_name,
-          caregiverId: s.caregiver_id,
-          recipientName: s.recipient_name,
-          visitSummary: s.care_feedback || s.visit_summary,
-          departureMood: s.departure_mood,
-          conditionTags: condTags,
-          hasReview: !!existingReview,
-          reviewRating: existingReview ? existingReview.rating : null,
-        };
-      })),
+      recentlyCompleted: await (async () => {
+        // Batch-fetch reviews for all completed sessions in one query (no N+1)
+        const sessionIds = recentCompleted.map(s => s.id);
+        const reviewMap = {};
+        if (sessionIds.length > 0) {
+          const placeholders = sessionIds.map(() => '?').join(',');
+          const reviews = await db.prepare(
+            `SELECT session_id, id, rating FROM reviews WHERE session_id IN (${placeholders}) AND family_user_id = ?`
+          ).all(...sessionIds, userId);
+          for (const r of reviews) reviewMap[r.session_id] = r;
+        }
+        return recentCompleted.map(s => {
+          let condTags = [];
+          try { condTags = s.condition_tags ? JSON.parse(s.condition_tags) : []; } catch(e) {}
+          const existingReview = reviewMap[s.id];
+          return {
+            id: s.id,
+            date: s.scheduled_date,
+            time: s.scheduled_time,
+            serviceType: s.service_type,
+            durationHours: s.duration_hours,
+            caregiverName: s.caregiver_name,
+            caregiverId: s.caregiver_id,
+            recipientName: s.recipient_name,
+            visitSummary: s.care_feedback || s.visit_summary,
+            departureMood: s.departure_mood,
+            conditionTags: condTags,
+            hasReview: !!existingReview,
+            reviewRating: existingReview ? existingReview.rating : null,
+          };
+        });
+      })(),
     });
   } catch (err) {
     console.error("Family dashboard error:", err);

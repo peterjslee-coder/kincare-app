@@ -4,7 +4,16 @@ const Messages = window.Messages = () => {
   const [activeConvType, setActiveConvType] = useState('direct');
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
-  const draftsRef = useRef({});
+  // Drafts persist to localStorage so they survive page navigation
+  const DRAFTS_KEY = 'inplace_msg_drafts';
+  const draftsRef = useRef(() => {
+    try { return JSON.parse(localStorage.getItem(DRAFTS_KEY)) || {}; } catch { return {}; }
+  });
+  // Initialize draftsRef from localStorage on first render
+  if (typeof draftsRef.current === 'function') draftsRef.current = draftsRef.current();
+  const persistDrafts = () => {
+    try { localStorage.setItem(DRAFTS_KEY, JSON.stringify(draftsRef.current)); } catch {}
+  };
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [messagingLimited, setMessagingLimited] = useState(false);
@@ -45,6 +54,8 @@ const Messages = window.Messages = () => {
   const [typingUsers, setTypingUsers] = useState({}); // { conversationId: { userId: { name, timeout } } }
   const typingTimeoutRef = useRef(null);
   const lastTypingEmitRef = useRef(0);
+  const inputTextRef = useRef('');
+  const activeConvIdRef = useRef(null);
 
   // ─── Read receipts ───
   const [readReceipts, setReadReceipts] = useState({}); // { conversationId: { userId: readAt } }
@@ -354,6 +365,10 @@ const Messages = window.Messages = () => {
     } catch { showToast('Failed to respond', 'error'); }
   };
 
+  // Keep refs in sync for unmount cleanup
+  useEffect(() => { inputTextRef.current = inputText; }, [inputText]);
+  useEffect(() => { activeConvIdRef.current = activeConvId; }, [activeConvId]);
+
   // Handle deep-link from push notification or URL param
   useEffect(() => {
     fetchConversations().then(() => {
@@ -385,6 +400,11 @@ const Messages = window.Messages = () => {
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.removeEventListener('message', handlePushNav);
       }
+      // Save any in-progress draft to localStorage when leaving Messages
+      if (activeConvIdRef.current && inputTextRef.current?.trim()) {
+        draftsRef.current[activeConvIdRef.current] = inputTextRef.current;
+      }
+      persistDrafts();
     };
   }, []);
 
@@ -442,6 +462,7 @@ const Messages = window.Messages = () => {
     } else if (activeConvId) {
       delete draftsRef.current[activeConvId];
     }
+    persistDrafts();
     setActiveConvId(conv.id);
     setActiveConvType(conv.type || 'direct');
     setShowNewChat(false);
@@ -460,6 +481,7 @@ const Messages = window.Messages = () => {
     } else if (activeConvId) {
       delete draftsRef.current[activeConvId];
     }
+    persistDrafts();
     setActiveConvId(null);
     setInputText('');
     setMessages([]);
@@ -572,6 +594,7 @@ const Messages = window.Messages = () => {
           setInputText('');
           setReplyTo(null);
           delete draftsRef.current[activeConvId];
+          persistDrafts();
           if (data.conversationId && data.conversationId !== activeConvId) {
             setActiveConvId(data.conversationId);
           }

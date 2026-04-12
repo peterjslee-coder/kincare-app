@@ -7,6 +7,29 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, 
   const [lightboxIdx, setLightboxIdx] = useState(null);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
 
+  // Push history state so back button / swipe-back closes the modal instead of navigating away
+  useEffect(() => {
+    if (!sessionId) return;
+    // Tag so we can detect our own history entry
+    window.history.pushState({ modal: 'visit-detail' }, '');
+    const handlePopState = () => { onClose(); };
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [sessionId]);
+
+  // Wrap onClose to also pop our history entry when closed via X/overlay (not back)
+  const handleClose = () => {
+    if (window.history.state?.modal === 'visit-detail') {
+      // Pop our pushed entry — this fires popstate but our listener is about to be removed
+      window.__skipPopstate = true;
+      window.history.back();
+      setTimeout(() => { window.__skipPopstate = false; }, 50);
+    }
+    onClose();
+  };
+
   const handlePhotoUpload = async (e) => {
     const files = Array.from(e.target.files || []);
     if (!files.length || !sessionId) return;
@@ -110,9 +133,9 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, 
   if (!sessionId) return null;
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay" onClick={handleClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560, maxHeight: '90vh', overflow: 'auto' }}>
-        <button className="modal-close" onClick={onClose}>✕</button>
+        <button className="modal-close" onClick={handleClose}>✕</button>
 
         {loading && (
           <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>Loading session details...</div>
@@ -479,7 +502,7 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, flexWrap: 'wrap', gap: 6 }}>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           {data && data.session && data.session.status === 'confirmed' && data.session.caregiver_id && !data.session.pending_time_change_id && onTimeChange && (
-            <button onClick={() => { onTimeChange(data.session); onClose(); }}
+            <button onClick={() => { onTimeChange(data.session); handleClose(); }}
               style={{ padding: '8px 16px', background: 'var(--color-purple-bg)', color: 'var(--color-purple)', border: '1px solid var(--color-purple)', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
               Change Time
             </button>
@@ -504,7 +527,7 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, 
                 });
                 if (res?.ok) {
                   if (onRefresh) onRefresh();
-                  onClose();
+                  handleClose();
                 } else {
                   const err = await res.json().catch(() => ({}));
                   alert(err.error || 'Failed to cancel');
@@ -520,7 +543,7 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, 
           )}
           </div>
           {!(data && data.session && ['confirmed', 'pending', 'open', 'requested'].includes(data.session.status)) && !onTimeChange && <div />}
-          <button className="btn btn-outline" onClick={onClose}>Close</button>
+          <button className="btn btn-outline" onClick={handleClose}>Close</button>
         </div>
       </div>
     </div>

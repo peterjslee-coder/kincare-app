@@ -1136,6 +1136,24 @@ async function initializeDatabase() {
     // v1.58.32 — Arrival SMS reminders for care recipients (customizable intervals)
     // JSON array of minutes before session: e.g. [120, 60, 30] = 2hr, 1hr, 30min
     `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS sms_reminder_intervals TEXT DEFAULT '[120, 60, 30]'`,
+
+    // v1.58.34 — Dashboard performance indexes
+    // Core session queries (dashboard, schedule, notifications) all filter by user + date
+    `CREATE INDEX IF NOT EXISTS idx_care_sessions_family_date ON care_sessions(family_user_id, scheduled_date DESC)`,
+    `CREATE INDEX IF NOT EXISTS idx_care_sessions_caregiver_date ON care_sessions(caregiver_id, scheduled_date DESC)`,
+    `CREATE INDEX IF NOT EXISTS idx_care_sessions_status_date ON care_sessions(status, scheduled_date DESC)`,
+    `CREATE INDEX IF NOT EXISTS idx_care_sessions_recipient_date ON care_sessions(care_recipient_id, scheduled_date DESC)`,
+    // Activity feed — every dashboard load queries this
+    `CREATE INDEX IF NOT EXISTS idx_activity_feed_family ON activity_feed(family_user_id, created_at DESC)`,
+    `CREATE INDEX IF NOT EXISTS idx_activity_feed_recipient ON activity_feed(care_recipient_id, created_at DESC)`,
+    // Reviews — N+1 lookup per completed session
+    `CREATE INDEX IF NOT EXISTS idx_reviews_session_family ON reviews(session_id, family_user_id)`,
+    // Visit photos — ordered by created_at in dashboard
+    `CREATE INDEX IF NOT EXISTS idx_visit_photos_created ON visit_photos(created_at DESC)`,
+    // Visit logs — joined on session_id constantly
+    `CREATE INDEX IF NOT EXISTS idx_visit_logs_session ON visit_logs(session_id)`,
+    // Notifications — queried on every page load
+    `CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, created_at DESC)`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }

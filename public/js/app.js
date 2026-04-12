@@ -435,6 +435,10 @@ const App = () => {
     window.history.replaceState({ page: 'dashboard' }, '', window.location.pathname);
 
     const handlePopState = (e) => {
+      // Skip if a modal is cleaning up its own history entry
+      if (window.__skipPopstate) return;
+      // If a modal pushed its own history state, let the modal handle it
+      if (e.state?.modal) return;
       if (navHistoryRef.current.length > 1) {
         navHistoryRef.current.pop();
         const prevPage = navHistoryRef.current[navHistoryRef.current.length - 1];
