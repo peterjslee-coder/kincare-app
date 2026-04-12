@@ -1310,7 +1310,9 @@ const Messages = window.Messages = () => {
                 onTouchMove={(e) => !selectMode && onConvTouchMove(e, c.id)}
                 onTouchEnd={() => !selectMode && onConvTouchEnd(c.id)}
                 style={{
-                  position: 'relative', background: selectMode && selectedIds.includes(c.id) ? '#f0f7ff' : 'var(--bg-card)',
+                  position: 'relative',
+                  background: selectMode && selectedIds.includes(c.id) ? '#f0f7ff' : (activeConvId === c.id ? 'var(--bg-teal-light)' : 'var(--bg-card)'),
+                  borderLeft: activeConvId === c.id ? '3px solid var(--role-color)' : '3px solid transparent',
                   transform: isSwiping ? `translateX(${swipeOffset}px)` : 'none',
                   transition: isSwiping ? 'none' : 'transform 0.2s',
                 }}>
