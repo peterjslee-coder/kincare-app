@@ -1595,13 +1595,11 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                       ) : (
                         <div style={{ padding: '8px 14px', background: 'var(--bg-primary)', borderRadius: 10, fontSize: 11, color: 'var(--text-tertiary)', textAlign: 'center', maxWidth: 140 }}>Complete setup to accept</div>
                       )}
-                      {job.hasConflict && (
-                        <button onClick={(e) => { e.stopPropagation(); openProposalModal(job); }}
-                          style={{
-                            padding: '7px 14px', background: 'var(--bg-surface)', color: 'var(--color-purple-light)', border: '2px solid #7c3aed',
-                            borderRadius: '10px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
-                          }}>Propose Different Time</button>
-                      )}
+                      <button onClick={(e) => { e.stopPropagation(); openProposalModal(job); }}
+                        style={{
+                          padding: '7px 14px', background: 'var(--bg-surface)', color: 'var(--color-purple-light)', border: '2px solid #7c3aed',
+                          borderRadius: '10px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
+                        }}>Propose Different Time</button>
                     </div>
                   </div>
                 </div>
@@ -2238,13 +2236,11 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                         ) : (
                           <div style={{ padding: '8px 14px', background: 'var(--bg-primary)', borderRadius: 10, fontSize: 11, color: 'var(--text-tertiary)', textAlign: 'center', maxWidth: 140 }}>Complete setup to accept</div>
                         )}
-                        {job.hasConflict && (
-                          <button onClick={(e) => { e.stopPropagation(); openProposalModal(job); }}
-                            style={{
-                              padding: '7px 14px', background: 'var(--bg-surface)', color: 'var(--role-color)', border: '2px solid #1b6b5a',
-                              borderRadius: '10px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
-                            }}>Propose Different Time</button>
-                        )}
+                        <button onClick={(e) => { e.stopPropagation(); openProposalModal(job); }}
+                          style={{
+                            padding: '7px 14px', background: 'var(--bg-surface)', color: 'var(--role-color)', border: '2px solid #1b6b5a',
+                            borderRadius: '10px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
+                          }}>Propose Different Time</button>
                       </div>
                     </div>
                   );

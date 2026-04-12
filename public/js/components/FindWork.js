@@ -1025,17 +1025,15 @@ const FindWork = window.FindWork = () => {
                             Your account is paused. Contact support for assistance.
                           </div>
                         )}
-                        {hasConflict && (
-                          <button onClick={(e) => { e.stopPropagation(); openProposalModal(s); }}
-                            style={{
-                              width: '100%', padding: 12, marginTop: 8,
-                              background: 'var(--bg-surface)', color: 'var(--role-color)', border: '2px solid #1b6b5a',
-                              borderRadius: 10, fontSize: 14, fontWeight: 600,
-                              cursor: 'pointer',
-                            }}>
-                            {'\u{1F504}'} Propose Different Time
-                          </button>
-                        )}
+                        <button onClick={(e) => { e.stopPropagation(); openProposalModal(s); }}
+                          style={{
+                            width: '100%', padding: 12, marginTop: 8,
+                            background: 'var(--bg-surface)', color: 'var(--role-color)', border: '2px solid #1b6b5a',
+                            borderRadius: 10, fontSize: 14, fontWeight: 600,
+                            cursor: 'pointer',
+                          }}>
+                          {'\u{1F504}'} Propose Different Time
+                        </button>
                       </div>
                     )}
                   </div>

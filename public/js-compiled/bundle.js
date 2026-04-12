@@ -45993,7 +45993,7 @@ const CaretakerHub = window.CaretakerHub = ({
           textAlign: 'center',
           maxWidth: 140
         }
-      }, "Complete setup to accept"), job.hasConflict && /*#__PURE__*/React.createElement("button", {
+      }, "Complete setup to accept"), /*#__PURE__*/React.createElement("button", {
         onClick: e => {
           e.stopPropagation();
           openProposalModal(job);
@@ -47166,7 +47166,7 @@ const CaretakerHub = window.CaretakerHub = ({
           textAlign: 'center',
           maxWidth: 140
         }
-      }, "Complete setup to accept"), job.hasConflict && /*#__PURE__*/React.createElement("button", {
+      }, "Complete setup to accept"), /*#__PURE__*/React.createElement("button", {
         onClick: e => {
           e.stopPropagation();
           openProposalModal(job);
@@ -52866,7 +52866,7 @@ const FindWork = window.FindWork = () => {
         fontWeight: 600,
         textAlign: 'center'
       }
-    }, "Your account is paused. Contact support for assistance."), hasConflict && /*#__PURE__*/React.createElement("button", {
+    }, "Your account is paused. Contact support for assistance."), /*#__PURE__*/React.createElement("button", {
       onClick: e => {
         e.stopPropagation();
         openProposalModal(s);
