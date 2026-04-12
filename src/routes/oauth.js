@@ -41,7 +41,9 @@ router.get("/google", (req, res) => {
 
   const redirectUri = `${APP_URL}/api/oauth/google/callback`;
   const scope = encodeURIComponent("openid email profile");
-  const state = crypto.randomBytes(16).toString("hex");
+  // Encode from_app flag into state so it survives the Google round-trip
+  const fromApp = req.query.from_app === "1";
+  const state = crypto.randomBytes(16).toString("hex") + (fromApp ? "|app" : "");
 
   // Store state in a short-lived cookie for CSRF protection
   const isProduction = process.env.NODE_ENV === "production";
@@ -166,7 +168,23 @@ router.get("/google/callback", async (req, res) => {
       expiresAt: Date.now() + 60 * 1000, // 60 seconds
     });
 
-    res.redirect(`${APP_URL}?oauth_code=${authCode}`);
+    // On Android Capacitor, a 302 redirect inside a Chrome Custom Tab won't trigger
+    // App Links — the Custom Tab just loads the URL itself. Instead, serve a tiny HTML
+    // page that uses an Android intent URI to bring the user back to the native app.
+    // The |app flag was encoded into the state param by the /google endpoint.
+    const isFromApp = state && state.includes("|app");
+    const redirectUrl = `${APP_URL}?oauth_code=${authCode}`;
+
+    if (isFromApp) {
+      // Intent URI: opens the app via App Links, falls back to the URL in browser
+      const intentUri = `intent://${APP_URL.replace(/^https?:\/\//, '')}?oauth_code=${authCode}#Intent;scheme=https;package=com.yourinplace.app;end`;
+      res.send(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Signing in…</title></head><body>
+        <p style="text-align:center;margin-top:40vh;font-family:sans-serif;color:#666">Signing you in…</p>
+        <script>window.location.href="${intentUri}";</script>
+      </body></html>`);
+    } else {
+      res.redirect(redirectUrl);
+    }
   } catch (err) {
     console.error("Google OAuth callback error:", err);
     res.redirect(`${APP_URL}?oauth_error=server_error`);

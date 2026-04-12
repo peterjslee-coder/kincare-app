@@ -51,9 +51,12 @@ window.__safeAreaBottom = 0;
     if (!AppPlugin) return;
     AppPlugin.addListener('appUrlOpen', function(data) {
       console.log('[DeepLink] appUrlOpen:', data.url);
+      // DEBUG: show what the deep link handler received
+      alert('[DeepLink] URL: ' + (data.url || 'EMPTY'));
       try {
         var url = new URL(data.url);
         var hasOAuth = url.searchParams.get('oauth_code') || url.searchParams.get('oauth_signup') || url.searchParams.get('oauth_error');
+        alert('[DeepLink] hasOAuth: ' + !!hasOAuth + ' search: ' + url.search);
         if (hasOAuth) {
           // Close the Chrome Custom Tab if still open
           if (window.Capacitor?.Plugins?.Browser?.close) {
@@ -63,6 +66,7 @@ window.__safeAreaBottom = 0;
           window.location.href = url.pathname + url.search;
         }
       } catch (e) {
+        alert('[DeepLink] ERROR: ' + e.message);
         console.error('[DeepLink] Error handling appUrlOpen:', e);
       }
     });

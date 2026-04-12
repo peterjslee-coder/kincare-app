@@ -5062,7 +5062,7 @@ const LoginPage = window.LoginPage = ({
       const isAndroidNative = ((_window$Capacitor4 = window.Capacitor) === null || _window$Capacitor4 === void 0 || (_window$Capacitor4$is = _window$Capacitor4.isNativePlatform) === null || _window$Capacitor4$is === void 0 ? void 0 : _window$Capacitor4$is.call(_window$Capacitor4)) && ((_window$Capacitor5 = window.Capacitor) === null || _window$Capacitor5 === void 0 || (_window$Capacitor5$ge = _window$Capacitor5.getPlatform) === null || _window$Capacitor5$ge === void 0 ? void 0 : _window$Capacitor5$ge.call(_window$Capacitor5)) === 'android';
       if (isAndroidNative && (_window$Capacitor6 = window.Capacitor) !== null && _window$Capacitor6 !== void 0 && (_window$Capacitor6 = _window$Capacitor6.Plugins) !== null && _window$Capacitor6 !== void 0 && _window$Capacitor6.Browser) {
         window.Capacitor.Plugins.Browser.open({
-          url: 'https://yourinplace.com/api/oauth/google',
+          url: 'https://yourinplace.com/api/oauth/google?from_app=1',
           presentationStyle: 'popover'
         });
       } else {
@@ -5097,7 +5097,7 @@ const LoginPage = window.LoginPage = ({
       const isAndroidNative = ((_window$Capacitor7 = window.Capacitor) === null || _window$Capacitor7 === void 0 || (_window$Capacitor7$is = _window$Capacitor7.isNativePlatform) === null || _window$Capacitor7$is === void 0 ? void 0 : _window$Capacitor7$is.call(_window$Capacitor7)) && ((_window$Capacitor8 = window.Capacitor) === null || _window$Capacitor8 === void 0 || (_window$Capacitor8$ge = _window$Capacitor8.getPlatform) === null || _window$Capacitor8$ge === void 0 ? void 0 : _window$Capacitor8$ge.call(_window$Capacitor8)) === 'android';
       if (isAndroidNative && (_window$Capacitor9 = window.Capacitor) !== null && _window$Capacitor9 !== void 0 && (_window$Capacitor9 = _window$Capacitor9.Plugins) !== null && _window$Capacitor9 !== void 0 && _window$Capacitor9.Browser) {
         window.Capacitor.Plugins.Browser.open({
-          url: 'https://yourinplace.com/api/oauth/apple',
+          url: 'https://yourinplace.com/api/oauth/apple?from_app=1',
           presentationStyle: 'popover'
         });
       } else {
@@ -79016,9 +79016,12 @@ window.__safeAreaBottom = 0;
     if (!AppPlugin) return;
     AppPlugin.addListener('appUrlOpen', function (data) {
       console.log('[DeepLink] appUrlOpen:', data.url);
+      // DEBUG: show what the deep link handler received
+      alert('[DeepLink] URL: ' + (data.url || 'EMPTY'));
       try {
         var url = new URL(data.url);
         var hasOAuth = url.searchParams.get('oauth_code') || url.searchParams.get('oauth_signup') || url.searchParams.get('oauth_error');
+        alert('[DeepLink] hasOAuth: ' + !!hasOAuth + ' search: ' + url.search);
         if (hasOAuth) {
           var _window$Capacitor16;
           // Close the Chrome Custom Tab if still open
@@ -79029,6 +79032,7 @@ window.__safeAreaBottom = 0;
           window.location.href = url.pathname + url.search;
         }
       } catch (e) {
+        alert('[DeepLink] ERROR: ' + e.message);
         console.error('[DeepLink] Error handling appUrlOpen:', e);
       }
     });

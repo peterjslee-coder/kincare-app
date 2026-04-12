@@ -429,7 +429,7 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBa
               // The redirect back to yourinplace.com triggers App Links → deep link handler in app.js.
               const isAndroidNative = window.Capacitor?.isNativePlatform?.() && window.Capacitor?.getPlatform?.() === 'android';
               if (isAndroidNative && window.Capacitor?.Plugins?.Browser) {
-                window.Capacitor.Plugins.Browser.open({ url: 'https://yourinplace.com/api/oauth/google', presentationStyle: 'popover' });
+                window.Capacitor.Plugins.Browser.open({ url: 'https://yourinplace.com/api/oauth/google?from_app=1', presentationStyle: 'popover' });
               } else {
                 window.location.href = '/api/oauth/google';
               }
@@ -446,7 +446,7 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBa
             <button onClick={() => {
               const isAndroidNative = window.Capacitor?.isNativePlatform?.() && window.Capacitor?.getPlatform?.() === 'android';
               if (isAndroidNative && window.Capacitor?.Plugins?.Browser) {
-                window.Capacitor.Plugins.Browser.open({ url: 'https://yourinplace.com/api/oauth/apple', presentationStyle: 'popover' });
+                window.Capacitor.Plugins.Browser.open({ url: 'https://yourinplace.com/api/oauth/apple?from_app=1', presentationStyle: 'popover' });
               } else {
                 window.location.href = '/api/oauth/apple';
               }

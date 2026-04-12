@@ -1,0 +1,41 @@
+{
+	"appId": "com.yourinplace.app",
+	"appName": "InPlace",
+	"webDir": "public",
+	"server": {
+		"url": "https://yourinplace.com",
+		"cleartext": false,
+		"allowNavigation": [
+			"accounts.google.com",
+			"appleid.apple.com"
+		]
+	},
+	"plugins": {
+		"SplashScreen": {
+			"launchAutoHide": true,
+			"launchShowDuration": 2000,
+			"backgroundColor": "#1b6b5a",
+			"showSpinner": false
+		},
+		"PushNotifications": {
+			"presentationOptions": [
+				"badge",
+				"sound",
+				"alert"
+			]
+		},
+		"StatusBar": {
+			"style": "LIGHT",
+			"backgroundColor": "#ffffff",
+			"overlaysWebView": true
+		}
+	},
+	"ios": {
+		"contentInset": "never",
+		"preferredContentMode": "mobile",
+		"scheme": "InPlace"
+	},
+	"android": {
+		"backgroundColor": "#ffffff"
+	}
+}
