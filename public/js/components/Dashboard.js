@@ -61,23 +61,25 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
   const [notifications, setNotifications] = useState([]);
   const [unreadNotifCount, setUnreadNotifCount] = useState(0);
 
-  // Dismissible dashboard sections — stores a content fingerprint per tile.
-  // Tile stays hidden until the content changes (new data arrives).
+  // Dismissible dashboard sections — stores timestamp per tile.
+  // Tile stays hidden until the next calendar day (resets at midnight).
   const [dismissedTiles, setDismissedTiles] = useState(() => {
     try { return JSON.parse(localStorage.getItem('dash_dismissed') || '{}'); } catch { return {}; }
   });
 
-  // Dismiss a tile, recording a fingerprint of its current content
-  const dismissTile = (tileId, contentFingerprint) => {
-    const updated = { ...dismissedTiles, [tileId]: contentFingerprint || 'dismissed' };
+  const todayStr = () => new Date().toISOString().slice(0, 10); // 'YYYY-MM-DD'
+
+  // Dismiss a tile for the rest of today
+  const dismissTile = (tileId, _contentFingerprint) => {
+    const updated = { ...dismissedTiles, [tileId]: todayStr() };
     setDismissedTiles(updated);
     localStorage.setItem('dash_dismissed', JSON.stringify(updated));
   };
 
-  // Check if a tile should show: hidden only if fingerprint matches (no new data)
-  const isTileDismissed = (tileId, contentFingerprint) => {
+  // Check if a tile should show: hidden only if dismissed today
+  const isTileDismissed = (tileId, _contentFingerprint) => {
     if (!dismissedTiles[tileId]) return false;
-    return dismissedTiles[tileId] === (contentFingerprint || 'dismissed');
+    return dismissedTiles[tileId] === todayStr();
   };
 
   const restoreTiles = () => {
