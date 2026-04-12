@@ -6,6 +6,9 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, 
   const [showPhotos, setShowPhotos] = useState(true);
   const [lightboxIdx, setLightboxIdx] = useState(null);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
+  const [editingInstructions, setEditingInstructions] = useState(false);
+  const [instructionsText, setInstructionsText] = useState('');
+  const [savingInstructions, setSavingInstructions] = useState(false);
 
   // Push history state so back button / swipe-back closes the modal instead of navigating away
   useEffect(() => {
@@ -210,12 +213,6 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, 
                       <span style={{ fontSize: 13 }}>{[s.location_address, s.location_city, s.location_state].filter(Boolean).join(', ')}</span>
                     </>
                   )}
-                  {s.special_instructions && (
-                    <>
-                      <span style={{ color: 'var(--text-tertiary)' }}>Instructions</span>
-                      <span style={{ fontSize: 13 }}>{s.special_instructions}</span>
-                    </>
-                  )}
                   {s.flex_timing && s.flex_timing !== 'strict' && (
                     <>
                       <span style={{ color: 'var(--text-tertiary)' }}>Overtime</span>
@@ -228,6 +225,68 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, 
                   )}
                 </div>
               </div>
+
+              {/* Caregiver Instructions — editable by family/care_for, read-only for caregiver */}
+              {(() => {
+                const canEdit = (role === 'family' || role === 'care_for' || role === 'admin') && !['completed', 'cancelled'].includes(s.status);
+                const hasInstructions = !!s.special_instructions;
+                const saveInstructions = async () => {
+                  setSavingInstructions(true);
+                  try {
+                    const res = await apiFetch(`/api/sessions/${s.id}/instructions`, {
+                      method: 'PUT',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ specialInstructions: instructionsText })
+                    });
+                    if (res?.ok) {
+                      const result = await res.json();
+                      s.special_instructions = result.special_instructions;
+                      setEditingInstructions(false);
+                      if (onRefresh) onRefresh();
+                    }
+                  } catch (e) { console.error('Save instructions error:', e); }
+                  setSavingInstructions(false);
+                };
+
+                if (!hasInstructions && !canEdit) return null;
+
+                return (
+                  <div style={{ background: 'var(--bg-primary)', border: '1px solid #e0e0e0', borderRadius: 10, padding: 14, marginBottom: 14 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: editingInstructions || hasInstructions ? 8 : 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--role-color)' }}>
+                        {String.fromCodePoint(0x1F4CB)} Caregiver Instructions
+                      </div>
+                      {canEdit && !editingInstructions && (
+                        <button onClick={() => { setInstructionsText(s.special_instructions || ''); setEditingInstructions(true); }}
+                          style={{ background: 'none', border: 'none', color: 'var(--role-color)', fontSize: 13, fontWeight: 600, cursor: 'pointer', padding: '2px 8px' }}>
+                          {hasInstructions ? 'Edit' : '+ Add'}
+                        </button>
+                      )}
+                    </div>
+                    {editingInstructions ? (
+                      <div>
+                        <textarea value={instructionsText} onChange={(e) => setInstructionsText(e.target.value)}
+                          placeholder="Leave instructions for the caregiver (e.g., activities, requests, things to note)..."
+                          rows={4} maxLength={2000}
+                          style={{ width: '100%', fontSize: 13, padding: 10, borderRadius: 8, border: '1px solid #ccc', resize: 'vertical', fontFamily: 'inherit', boxSizing: 'border-box' }} />
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{instructionsText.length}/2000</span>
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            <button onClick={() => setEditingInstructions(false)}
+                              style={{ background: 'none', border: '1px solid #ccc', borderRadius: 8, padding: '6px 14px', fontSize: 13, cursor: 'pointer' }}>Cancel</button>
+                            <button onClick={saveInstructions} disabled={savingInstructions}
+                              style={{ background: 'var(--role-color)', color: '#fff', border: 'none', borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer', opacity: savingInstructions ? 0.6 : 1 }}>
+                              {savingInstructions ? 'Saving...' : 'Save'}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ) : hasInstructions ? (
+                      <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{s.special_instructions}</div>
+                    ) : null}
+                  </div>
+                );
+              })()}
 
               {/* Visit Log — check-in/out, moods, notes */}
               {v && (

@@ -108,6 +108,7 @@ User's role: ${userContext.user.role}
 User's care recipients: ${recipientsList || "none"}
 
 Intent categories:
+- care_coordination: User is giving instructions, tasks, or requests for a caregiver to perform during an upcoming visit (e.g., "tell Edwina to assemble the fountain with Betty", "ask Cary to do laundry tomorrow", "leave a note for the caregiver to take a photo"). This includes any message where the user wants a caregiver to do something specific during a session.
 - scheduling: Request to schedule a caregiver visit or find someone for a time slot
 - care_question: Questions about a specific care recipient's health, behavior, or care
 - availability: Checking when caregivers are available
@@ -118,7 +119,7 @@ Intent categories:
 - escalate: Complex requests, urgent issues, or something iPAi can't handle
 
 Return ONLY valid JSON:
-{ "intent": "scheduling|care_question|availability|care_plan|app_help|greeting|general|escalate", "confidence": 0.0-1.0, "reason": "brief explanation" }`;
+{ "intent": "care_coordination|scheduling|care_question|availability|care_plan|app_help|greeting|general|escalate", "confidence": 0.0-1.0, "reason": "brief explanation" }`;
 
   try {
     const textResponse = await callClaudeChat(apiKey, systemPrompt, [{ role: "user", content: messageText }], 200);
@@ -166,6 +167,84 @@ async function handleSchedulingIntent(messageText, userId, userContext) {
   } catch (err) {
     console.error("[iPAi] Scheduling error:", err.message);
     return "I encountered an error while searching for available caregivers. Please try again or contact support.";
+  }
+}
+
+/**
+ * Handle care coordination intent
+ * Detects caregiver instructions, finds matching session, and suggests adding them.
+ */
+async function handleCareCoordination(messageText, userId, userContext) {
+  const db = await getDb();
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return { text: "AI service is not configured.", suggestion: null };
+
+  const allRecipients = userContext.allRecipients;
+  const recipientNames = allRecipients.map(r => `${r.first_name} ${r.last_name}`.trim());
+
+  // Get upcoming sessions to provide context
+  const upcomingSessions = await db.prepare(`
+    SELECT cs.id, cs.scheduled_date, cs.scheduled_time, cs.duration_hours, cs.status,
+      cs.special_instructions, cs.caregiver_id,
+      u_cg.first_name AS cg_first, u_cg.last_name AS cg_last,
+      cr.first_name AS cr_first, cr.last_name AS cr_last, cr.id AS cr_id
+    FROM care_sessions cs
+    LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+    LEFT JOIN users u_cg ON cp.user_id = u_cg.id
+    LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+    WHERE cs.family_user_id = ?
+      AND cs.status IN ('confirmed', 'pending', 'open', 'requested')
+      AND cs.scheduled_date >= date('now')
+    ORDER BY cs.scheduled_date ASC, cs.scheduled_time ASC
+    LIMIT 10
+  `).all(userId);
+
+  const sessionContext = upcomingSessions.map(s => {
+    const cg = s.cg_first ? `${s.cg_first} ${s.cg_last}` : 'Unassigned';
+    return `- Session ${s.id}: ${cg} with ${s.cr_first} ${s.cr_last} on ${s.scheduled_date} at ${s.scheduled_time || 'TBD'} (${s.status})${s.special_instructions ? ` [existing instructions: ${s.special_instructions}]` : ''}`;
+  }).join('\n');
+
+  const systemPrompt = `You are iPAi, InPlace's AI care assistant. The user is giving instructions for a caregiver visit.
+
+CARE RECIPIENTS: ${recipientNames.join(', ') || 'none'}
+
+UPCOMING SESSIONS:
+${sessionContext || 'No upcoming sessions found.'}
+
+Your job:
+1. Respond warmly, acknowledging the user's instructions.
+2. Extract a clean, actionable summary of the instructions for the caregiver (written as direct instructions TO the caregiver, e.g., "Please assemble the fountain as a project with Betty. Take a photo of the finished result before you leave.").
+3. Identify which upcoming session this applies to (by session ID), or null if no match.
+
+Return ONLY valid JSON:
+{
+  "response": "Your warm acknowledgment to the user (1-2 sentences)",
+  "instructionSummary": "Clean instructions written for the caregiver",
+  "matchedSessionId": "session-uuid-here or null",
+  "matchedSessionLabel": "Caregiver Name — Date (e.g., Edwina — Tue Apr 14)"
+}`;
+
+  try {
+    const raw = await callClaudeChat(apiKey, systemPrompt, [{ role: "user", content: messageText }], 500);
+    const cleaned = raw.replace(/^```json?\n?/, "").replace(/\n?```$/, "").trim();
+    const parsed = JSON.parse(cleaned);
+
+    const suggestion = parsed.matchedSessionId && parsed.instructionSummary ? {
+      sessionId: parsed.matchedSessionId,
+      sessionLabel: parsed.matchedSessionLabel || 'Upcoming session',
+      summary: parsed.instructionSummary,
+    } : null;
+
+    return {
+      text: parsed.response || "Got it! I'll help you coordinate that.",
+      suggestion,
+    };
+  } catch (err) {
+    console.error("[iPAi] Care coordination error:", err.message);
+    return {
+      text: "I understand you want to leave instructions for a caregiver. You can add them directly by opening the session details and tapping the instructions section.",
+      suggestion: null,
+    };
   }
 }
 
@@ -397,6 +476,20 @@ async function handleIPAiMessage(userId, messageText) {
     const actions = [];
 
     switch (intent) {
+      case "care_coordination": {
+        const coordResult = await handleCareCoordination(messageText, userId, userContext);
+        response = coordResult.text;
+        if (coordResult.suggestion) {
+          actions.push({
+            type: "suggest_instructions",
+            sessionId: coordResult.suggestion.sessionId,
+            sessionLabel: coordResult.suggestion.sessionLabel,
+            summary: coordResult.suggestion.summary,
+          });
+        }
+        break;
+      }
+
       case "scheduling":
         response = await handleSchedulingIntent(messageText, userId, userContext);
         actions.push({ type: "suggest_scheduling" });

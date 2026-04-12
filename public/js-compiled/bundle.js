@@ -5319,14 +5319,18 @@ const RegisterPage = window.RegisterPage = ({
   prefilledRole,
   signupToken,
   pendingInviteToken,
-  sandboxMode
+  sandboxMode,
+  oauthSignupCode,
+  prefilledFirstName,
+  prefilledLastName
 }) => {
   // ─── State ───
   const [track, setTrack] = useState(prefilledRole === 'caregiver' ? 'caregiver' : prefilledRole === 'family' ? 'family' : prefilledRole === 'care_for' ? 'care_for' : null);
   const [step, setStep] = useState(prefilledRole ? 2 : 1); // Step 1 = role picker, Step 2 = basic info, Step 3 = caregiver disclosures
+  const isOAuthSignup = !!oauthSignupCode;
   const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
+    firstName: prefilledFirstName || '',
+    lastName: prefilledLastName || '',
     email: prefilledEmail || '',
     password: '',
     confirmPassword: '',
@@ -5445,22 +5449,31 @@ const RegisterPage = window.RegisterPage = ({
       });
     }
     try {
-      const response = await apiFetch('/api/auth/register', {
+      const endpoint = isOAuthSignup ? '/api/oauth/complete-signup' : '/api/auth/register';
+      const payload = isOAuthSignup ? {
+        code: oauthSignupCode,
+        role,
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        phone: normalizePhone(formData.phone),
+        password: formData.password
+      } : {
+        email: formData.email,
+        password: formData.password,
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        phone: normalizePhone(formData.phone),
+        role,
+        ...(authHint ? {
+          authHint
+        } : {}),
+        ...(signupToken ? {
+          signupToken
+        } : {})
+      };
+      const response = await apiFetch(endpoint, {
         method: 'POST',
-        body: JSON.stringify({
-          email: formData.email,
-          password: formData.password,
-          firstName: formData.firstName,
-          lastName: formData.lastName,
-          phone: normalizePhone(formData.phone),
-          role,
-          ...(authHint ? {
-            authHint
-          } : {}),
-          ...(signupToken ? {
-            signupToken
-          } : {})
-        })
+        body: JSON.stringify(payload)
       });
       if (!response) throw new Error('Registration failed');
       const res = await response.json();
@@ -7246,8 +7259,8 @@ const Dashboard = window.Dashboard = ({
   const [notifications, setNotifications] = useState([]);
   const [unreadNotifCount, setUnreadNotifCount] = useState(0);
 
-  // Dismissible dashboard sections — stores a content fingerprint per tile.
-  // Tile stays hidden until the content changes (new data arrives).
+  // Dismissible dashboard sections — stores timestamp per tile.
+  // Tile stays hidden until the next calendar day (resets at midnight).
   const [dismissedTiles, setDismissedTiles] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem('dash_dismissed') || '{}');
@@ -7255,21 +7268,22 @@ const Dashboard = window.Dashboard = ({
       return {};
     }
   });
+  const todayStr = () => new Date().toISOString().slice(0, 10); // 'YYYY-MM-DD'
 
-  // Dismiss a tile, recording a fingerprint of its current content
-  const dismissTile = (tileId, contentFingerprint) => {
+  // Dismiss a tile for the rest of today
+  const dismissTile = (tileId, _contentFingerprint) => {
     const updated = {
       ...dismissedTiles,
-      [tileId]: contentFingerprint || 'dismissed'
+      [tileId]: todayStr()
     };
     setDismissedTiles(updated);
     localStorage.setItem('dash_dismissed', JSON.stringify(updated));
   };
 
-  // Check if a tile should show: hidden only if fingerprint matches (no new data)
-  const isTileDismissed = (tileId, contentFingerprint) => {
+  // Check if a tile should show: hidden only if dismissed today
+  const isTileDismissed = (tileId, _contentFingerprint) => {
     if (!dismissedTiles[tileId]) return false;
-    return dismissedTiles[tileId] === (contentFingerprint || 'dismissed');
+    return dismissedTiles[tileId] === todayStr();
   };
   const restoreTiles = () => {
     setDismissedTiles({});
@@ -24333,6 +24347,9 @@ const Messages = window.Messages = () => {
   // ─── Read receipts ───
   const [readReceipts, setReadReceipts] = useState({}); // { conversationId: { userId: readAt } }
 
+  // ─── iPAi instruction suggestion (care coordination) ───
+  const [instructionSuggestion, setInstructionSuggestion] = useState(null); // { sessionId, sessionLabel, summary }
+  const [savingInstruction, setSavingInstruction] = useState(false);
   const isMobile = window.innerWidth <= 768;
 
   // Lock body/html scroll on mobile to prevent iOS elastic overscroll
@@ -24906,6 +24923,15 @@ const Messages = window.Messages = () => {
           // Update conversation ID if this was the first message
           if (data.conversationId && data.conversationId !== activeConvId) {
             setActiveConvId(data.conversationId);
+          }
+          // Check for care coordination suggestion
+          const instrAction = (data.actions || []).find(a => a.type === 'suggest_instructions');
+          if (instrAction && instrAction.sessionId && instrAction.summary) {
+            setInstructionSuggestion({
+              sessionId: instrAction.sessionId,
+              sessionLabel: instrAction.sessionLabel || 'Upcoming session',
+              summary: instrAction.summary
+            });
           }
           await fetchMessages(data.conversationId || activeConvId);
           await fetchConversations();
@@ -27384,7 +27410,92 @@ const Messages = window.Messages = () => {
       })), /*#__PURE__*/React.createElement("span", null, label));
     })(), /*#__PURE__*/React.createElement("div", {
       ref: messagesEndRef
-    })), replyTo && /*#__PURE__*/React.createElement("div", {
+    })), instructionSuggestion && /*#__PURE__*/React.createElement("div", {
+      style: {
+        margin: '8px 16px',
+        padding: 14,
+        background: '#f0faf7',
+        border: '1px solid #b2dfdb',
+        borderRadius: 12,
+        fontSize: 13
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontWeight: 600,
+        color: 'var(--role-color)',
+        marginBottom: 6,
+        fontSize: 14
+      }
+    }, String.fromCodePoint(0x1F4CB), " Add caregiver instructions?"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        color: 'var(--text-secondary)',
+        marginBottom: 4,
+        fontSize: 12
+      }
+    }, "For: ", /*#__PURE__*/React.createElement("strong", null, instructionSuggestion.sessionLabel)), /*#__PURE__*/React.createElement("div", {
+      style: {
+        background: '#fff',
+        border: '1px solid #e0e0e0',
+        borderRadius: 8,
+        padding: '10px 12px',
+        marginBottom: 10,
+        lineHeight: 1.5,
+        whiteSpace: 'pre-wrap'
+      }
+    }, instructionSuggestion.summary), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        gap: 8,
+        justifyContent: 'flex-end'
+      }
+    }, /*#__PURE__*/React.createElement("button", {
+      onClick: () => setInstructionSuggestion(null),
+      style: {
+        background: 'none',
+        border: '1px solid #ccc',
+        borderRadius: 8,
+        padding: '6px 16px',
+        fontSize: 13,
+        cursor: 'pointer'
+      }
+    }, "No thanks"), /*#__PURE__*/React.createElement("button", {
+      disabled: savingInstruction,
+      onClick: async () => {
+        setSavingInstruction(true);
+        try {
+          const res = await apiFetch(`/api/sessions/${instructionSuggestion.sessionId}/instructions`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              specialInstructions: instructionSuggestion.summary
+            })
+          });
+          if (res !== null && res !== void 0 && res.ok) {
+            if (typeof showToast === 'function') showToast('Instructions added to session', 'success');
+            setInstructionSuggestion(null);
+          } else {
+            const err = await (res === null || res === void 0 ? void 0 : res.json().catch(() => ({})));
+            if (typeof showToast === 'function') showToast((err === null || err === void 0 ? void 0 : err.error) || 'Failed to save instructions', 'error');
+          }
+        } catch (e) {
+          if (typeof showToast === 'function') showToast('Network error saving instructions', 'error');
+        }
+        setSavingInstruction(false);
+      },
+      style: {
+        background: 'var(--role-color)',
+        color: '#fff',
+        border: 'none',
+        borderRadius: 8,
+        padding: '6px 16px',
+        fontSize: 13,
+        fontWeight: 600,
+        cursor: 'pointer',
+        opacity: savingInstruction ? 0.6 : 1
+      }
+    }, savingInstruction ? 'Adding...' : 'Yes, add'))), replyTo && /*#__PURE__*/React.createElement("div", {
       style: {
         display: 'flex',
         alignItems: 'center',
@@ -29683,6 +29794,9 @@ const VisitDetailModal = window.VisitDetailModal = ({
   const [showPhotos, setShowPhotos] = useState(true);
   const [lightboxIdx, setLightboxIdx] = useState(null);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
+  const [editingInstructions, setEditingInstructions] = useState(false);
+  const [instructionsText, setInstructionsText] = useState('');
+  const [savingInstructions, setSavingInstructions] = useState(false);
 
   // Push history state so back button / swipe-back closes the modal instead of navigating away
   useEffect(() => {
@@ -29991,15 +30105,7 @@ const VisitDetailModal = window.VisitDetailModal = ({
       style: {
         fontSize: 13
       }
-    }, [s.location_address, s.location_city, s.location_state].filter(Boolean).join(', '))), s.special_instructions && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("span", {
-      style: {
-        color: 'var(--text-tertiary)'
-      }
-    }, "Instructions"), /*#__PURE__*/React.createElement("span", {
-      style: {
-        fontSize: 13
-      }
-    }, s.special_instructions)), s.flex_timing && s.flex_timing !== 'strict' && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("span", {
+    }, [s.location_address, s.location_city, s.location_state].filter(Boolean).join(', '))), s.flex_timing && s.flex_timing !== 'strict' && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("span", {
       style: {
         color: 'var(--text-tertiary)'
       }
@@ -30016,7 +30122,134 @@ const VisitDetailModal = window.VisitDetailModal = ({
         fontSize: 11,
         fontWeight: 600
       }
-    }, s.flex_timing === 'flexible' ? 'Flexible (+30 min)' : 'Open-ended (+2 hrs)'))))), v && /*#__PURE__*/React.createElement("div", {
+    }, s.flex_timing === 'flexible' ? 'Flexible (+30 min)' : 'Open-ended (+2 hrs)'))))), (() => {
+      const canEdit = (role === 'family' || role === 'care_for' || role === 'admin') && !['completed', 'cancelled'].includes(s.status);
+      const hasInstructions = !!s.special_instructions;
+      const saveInstructions = async () => {
+        setSavingInstructions(true);
+        try {
+          const res = await apiFetch(`/api/sessions/${s.id}/instructions`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              specialInstructions: instructionsText
+            })
+          });
+          if (res !== null && res !== void 0 && res.ok) {
+            const result = await res.json();
+            s.special_instructions = result.special_instructions;
+            setEditingInstructions(false);
+            if (onRefresh) onRefresh();
+          }
+        } catch (e) {
+          console.error('Save instructions error:', e);
+        }
+        setSavingInstructions(false);
+      };
+      if (!hasInstructions && !canEdit) return null;
+      return /*#__PURE__*/React.createElement("div", {
+        style: {
+          background: 'var(--bg-primary)',
+          border: '1px solid #e0e0e0',
+          borderRadius: 10,
+          padding: 14,
+          marginBottom: 14
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: editingInstructions || hasInstructions ? 8 : 0
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 14,
+          fontWeight: 600,
+          color: 'var(--role-color)'
+        }
+      }, String.fromCodePoint(0x1F4CB), " Caregiver Instructions"), canEdit && !editingInstructions && /*#__PURE__*/React.createElement("button", {
+        onClick: () => {
+          setInstructionsText(s.special_instructions || '');
+          setEditingInstructions(true);
+        },
+        style: {
+          background: 'none',
+          border: 'none',
+          color: 'var(--role-color)',
+          fontSize: 13,
+          fontWeight: 600,
+          cursor: 'pointer',
+          padding: '2px 8px'
+        }
+      }, hasInstructions ? 'Edit' : '+ Add')), editingInstructions ? /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("textarea", {
+        value: instructionsText,
+        onChange: e => setInstructionsText(e.target.value),
+        placeholder: "Leave instructions for the caregiver (e.g., activities, requests, things to note)...",
+        rows: 4,
+        maxLength: 2000,
+        style: {
+          width: '100%',
+          fontSize: 13,
+          padding: 10,
+          borderRadius: 8,
+          border: '1px solid #ccc',
+          resize: 'vertical',
+          fontFamily: 'inherit',
+          boxSizing: 'border-box'
+        }
+      }), /*#__PURE__*/React.createElement("div", {
+        style: {
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginTop: 6
+        }
+      }, /*#__PURE__*/React.createElement("span", {
+        style: {
+          fontSize: 11,
+          color: 'var(--text-muted)'
+        }
+      }, instructionsText.length, "/2000"), /*#__PURE__*/React.createElement("div", {
+        style: {
+          display: 'flex',
+          gap: 8
+        }
+      }, /*#__PURE__*/React.createElement("button", {
+        onClick: () => setEditingInstructions(false),
+        style: {
+          background: 'none',
+          border: '1px solid #ccc',
+          borderRadius: 8,
+          padding: '6px 14px',
+          fontSize: 13,
+          cursor: 'pointer'
+        }
+      }, "Cancel"), /*#__PURE__*/React.createElement("button", {
+        onClick: saveInstructions,
+        disabled: savingInstructions,
+        style: {
+          background: 'var(--role-color)',
+          color: '#fff',
+          border: 'none',
+          borderRadius: 8,
+          padding: '6px 14px',
+          fontSize: 13,
+          fontWeight: 600,
+          cursor: 'pointer',
+          opacity: savingInstructions ? 0.6 : 1
+        }
+      }, savingInstructions ? 'Saving...' : 'Save')))) : hasInstructions ? /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 13,
+          color: 'var(--text-secondary)',
+          lineHeight: 1.5,
+          whiteSpace: 'pre-wrap'
+        }
+      }, s.special_instructions) : null);
+    })(), v && /*#__PURE__*/React.createElement("div", {
       style: {
         background: 'var(--bg-surface)',
         border: '1px solid #e0e0e0',
@@ -79128,6 +79361,8 @@ const App = () => {
     if (p.get('consent-response')) return 'consent-response';
     // OAuth callback: go straight to login so LoginPage can exchange the code
     if (p.get('oauth_code') || p.get('oauth_error')) return 'login';
+    // OAuth signup: new user from Google/Apple → send to registration
+    if (p.get('oauth_signup')) return 'register';
     return 'splash';
   });
   const [currentUser, setCurrentUser] = useState(null);
@@ -79724,6 +79959,41 @@ const App = () => {
       });
     }
 
+    // OAuth signup: new user from Google/Apple — fetch their info and send to registration
+    const oauthSignupCode = params.get('oauth_signup');
+    if (oauthSignupCode) {
+      window.history.replaceState({}, '', window.location.pathname);
+      fetch(`/api/oauth/pending-signup?code=${oauthSignupCode}`).then(r => r.json().then(data => ({
+        ok: r.ok,
+        data
+      }))).then(({
+        ok,
+        data
+      }) => {
+        if (ok && data.email) {
+          setSignupPrefill({
+            email: data.email,
+            firstName: data.firstName,
+            lastName: data.lastName,
+            oauthSignupCode: oauthSignupCode
+          });
+          setAppState('register');
+        } else {
+          setVerifyMessage({
+            type: 'error',
+            text: 'Sign-up link expired. Please try again.'
+          });
+          setAppState('login');
+        }
+      }).catch(() => {
+        setVerifyMessage({
+          type: 'error',
+          text: 'Failed to load sign-up info.'
+        });
+        setAppState('login');
+      });
+    }
+
     // Sandbox mode detection
     if (params.get('sandbox') === 'true') {
       window.__sandboxMode = true;
@@ -80198,7 +80468,10 @@ const App = () => {
       prefilledRole: signupPrefill === null || signupPrefill === void 0 ? void 0 : signupPrefill.role,
       signupToken: signupPrefill === null || signupPrefill === void 0 ? void 0 : signupPrefill.signupToken,
       pendingInviteToken: pendingInviteToken,
-      sandboxMode: !!window.__sandboxMode
+      sandboxMode: !!window.__sandboxMode,
+      oauthSignupCode: signupPrefill === null || signupPrefill === void 0 ? void 0 : signupPrefill.oauthSignupCode,
+      prefilledFirstName: signupPrefill === null || signupPrefill === void 0 ? void 0 : signupPrefill.firstName,
+      prefilledLastName: signupPrefill === null || signupPrefill === void 0 ? void 0 : signupPrefill.lastName
     }),
     'forgot-password': /*#__PURE__*/React.createElement(ForgotPasswordPage, {
       onNavigate: handleNavigate

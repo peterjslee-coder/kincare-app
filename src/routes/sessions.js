@@ -2259,6 +2259,57 @@ function formatTime12h(timeStr) {
   return `${h12}:${String(m || 0).padStart(2, "0")} ${ampm}`;
 }
 
+// ─── PUT /api/sessions/:id/instructions ───
+// Update special_instructions on a session (family/care_for only, before completion)
+router.put("/:id/instructions", async (req, res) => {
+  try {
+    const db = await getDb();
+    const userId = req.user.id;
+    const activeRole = req.user.activeRole || req.user.role;
+    const { specialInstructions } = req.body;
+
+    if (typeof specialInstructions !== "string") {
+      return res.status(400).json({ error: "specialInstructions must be a string" });
+    }
+
+    // Sanitize input
+    const sanitize = (str) => str.replace(/<[^>]*>/g, "").trim();
+    const cleaned = sanitize(specialInstructions).slice(0, 2000);
+
+    const session = await db.prepare(`
+      SELECT cs.*, cr.family_user_id AS owner_id
+      FROM care_sessions cs
+      LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+      WHERE cs.id = ?
+    `).get(req.params.id);
+
+    if (!session) return res.status(404).json({ error: "Session not found" });
+
+    // Only family owner, session booker, or care_for can edit instructions
+    const isOwner = userId === session.owner_id || userId === session.family_user_id;
+    const isCareFor = activeRole === "care_for";
+    const isAdmin = activeRole === "admin";
+    if (!isOwner && !isCareFor && !isAdmin) {
+      return res.status(403).json({ error: "Not authorized to edit instructions" });
+    }
+
+    // Cannot edit completed or cancelled sessions
+    if (["completed", "cancelled"].includes(session.status)) {
+      return res.status(400).json({ error: "Cannot edit instructions on a completed or cancelled session" });
+    }
+
+    await db.prepare(`
+      UPDATE care_sessions SET special_instructions = ?, updated_at = datetime('now')
+      WHERE id = ?
+    `).run(cleaned || null, req.params.id);
+
+    res.json({ ok: true, special_instructions: cleaned || null });
+  } catch (err) {
+    console.error("PUT /sessions/:id/instructions error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 // ─── PUT /api/sessions/:id/cancel ───
 // Cancel a confirmed/pending session with late-cancel tracking
 router.put("/:id/cancel", async (req, res) => {

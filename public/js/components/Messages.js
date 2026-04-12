@@ -60,6 +60,10 @@ const Messages = window.Messages = () => {
   // ─── Read receipts ───
   const [readReceipts, setReadReceipts] = useState({}); // { conversationId: { userId: readAt } }
 
+  // ─── iPAi instruction suggestion (care coordination) ───
+  const [instructionSuggestion, setInstructionSuggestion] = useState(null); // { sessionId, sessionLabel, summary }
+  const [savingInstruction, setSavingInstruction] = useState(false);
+
   const isMobile = window.innerWidth <= 768;
 
   // Lock body/html scroll on mobile to prevent iOS elastic overscroll
@@ -576,6 +580,15 @@ const Messages = window.Messages = () => {
           // Update conversation ID if this was the first message
           if (data.conversationId && data.conversationId !== activeConvId) {
             setActiveConvId(data.conversationId);
+          }
+          // Check for care coordination suggestion
+          const instrAction = (data.actions || []).find(a => a.type === 'suggest_instructions');
+          if (instrAction && instrAction.sessionId && instrAction.summary) {
+            setInstructionSuggestion({
+              sessionId: instrAction.sessionId,
+              sessionLabel: instrAction.sessionLabel || 'Upcoming session',
+              summary: instrAction.summary,
+            });
           }
           await fetchMessages(data.conversationId || activeConvId);
           await fetchConversations();
@@ -1884,6 +1897,56 @@ const Messages = window.Messages = () => {
           })()}
           <div ref={messagesEndRef} />
         </div>
+
+        {/* iPAi instruction suggestion card */}
+        {instructionSuggestion && (
+          <div style={{
+            margin: '8px 16px', padding: 14, background: '#f0faf7', border: '1px solid #b2dfdb',
+            borderRadius: 12, fontSize: 13,
+          }}>
+            <div style={{ fontWeight: 600, color: 'var(--role-color)', marginBottom: 6, fontSize: 14 }}>
+              {String.fromCodePoint(0x1F4CB)} Add caregiver instructions?
+            </div>
+            <div style={{ color: 'var(--text-secondary)', marginBottom: 4, fontSize: 12 }}>
+              For: <strong>{instructionSuggestion.sessionLabel}</strong>
+            </div>
+            <div style={{
+              background: '#fff', border: '1px solid #e0e0e0', borderRadius: 8,
+              padding: '10px 12px', marginBottom: 10, lineHeight: 1.5, whiteSpace: 'pre-wrap',
+            }}>
+              {instructionSuggestion.summary}
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button onClick={() => setInstructionSuggestion(null)}
+                style={{ background: 'none', border: '1px solid #ccc', borderRadius: 8, padding: '6px 16px', fontSize: 13, cursor: 'pointer' }}>
+                No thanks
+              </button>
+              <button disabled={savingInstruction} onClick={async () => {
+                setSavingInstruction(true);
+                try {
+                  const res = await apiFetch(`/api/sessions/${instructionSuggestion.sessionId}/instructions`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ specialInstructions: instructionSuggestion.summary }),
+                  });
+                  if (res?.ok) {
+                    if (typeof showToast === 'function') showToast('Instructions added to session', 'success');
+                    setInstructionSuggestion(null);
+                  } else {
+                    const err = await res?.json().catch(() => ({}));
+                    if (typeof showToast === 'function') showToast(err?.error || 'Failed to save instructions', 'error');
+                  }
+                } catch (e) {
+                  if (typeof showToast === 'function') showToast('Network error saving instructions', 'error');
+                }
+                setSavingInstruction(false);
+              }}
+                style={{ background: 'var(--role-color)', color: '#fff', border: 'none', borderRadius: 8, padding: '6px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer', opacity: savingInstruction ? 0.6 : 1 }}>
+                {savingInstruction ? 'Adding...' : 'Yes, add'}
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Reply preview bar */}
         {replyTo && (
