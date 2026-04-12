@@ -447,6 +447,19 @@ const Messages = window.Messages = () => {
     return cleanup;
   }, [activeConvId]);
 
+  // Listen for real-time message deletions
+  useEffect(() => {
+    if (typeof onSocketEvent !== 'function') return;
+    const cleanup = onSocketEvent('message_deleted', (data) => {
+      if (data.conversationId === activeConvId) {
+        setMessages(prev => prev.map(m =>
+          m.id === data.messageId ? { ...m, content: data.tombstone, is_deleted: 1 } : m
+        ));
+      }
+    });
+    return cleanup;
+  }, [activeConvId]);
+
   useEffect(() => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
@@ -598,6 +611,7 @@ const Messages = window.Messages = () => {
         }
       } else {
         // Regular message send
+        const sentText = inputText;
         const res = await apiFetch(`/api/messages/conversations/${activeConvId}`, {
           method: 'POST',
           body: JSON.stringify({ content: inputText, replyToId: replyTo?.id || null }),
@@ -613,6 +627,20 @@ const Messages = window.Messages = () => {
           }
           await fetchMessages(data.conversationId || activeConvId);
           await fetchConversations();
+          // Background: check if message contains caregiver instructions
+          if (sentText.length >= 15) {
+            apiFetch('/api/ipai/detect-instructions', {
+              method: 'POST',
+              body: JSON.stringify({ message: sentText }),
+            }).then(async (dr) => {
+              if (dr?.ok) {
+                const dd = await dr.json();
+                if (dd.suggestion && dd.suggestion.sessionId && dd.suggestion.summary) {
+                  setInstructionSuggestion(dd.suggestion);
+                }
+              }
+            }).catch(() => {});
+          }
         }
       }
     } catch (err) {
@@ -1779,9 +1807,10 @@ const Messages = window.Messages = () => {
                         <div style={{
                           padding: '10px 14px',
                           borderRadius: m.replyTo ? (isSent ? '0 0 4px 18px' : '0 0 18px 4px') : (isSent ? '18px 18px 4px 18px' : '18px 18px 18px 4px'),
-                          background: isSent ? 'var(--role-color)' : 'var(--badge-muted-bg)',
-                          color: isSent ? 'var(--bg-surface)' : 'var(--text-primary)',
+                          background: m.is_deleted ? 'var(--badge-muted-bg)' : (isSent ? 'var(--role-color)' : 'var(--badge-muted-bg)'),
+                          color: m.is_deleted ? 'var(--text-muted)' : (isSent ? 'var(--bg-surface)' : 'var(--text-primary)'),
                           fontSize: '14px', lineHeight: 1.45, wordWrap: 'break-word',
+                          fontStyle: m.is_deleted ? 'italic' : 'normal',
                         }}>
                           {renderMessageContent(m.content)}
                           <div style={{ fontSize: '10px', color: isSent ? 'rgba(255,255,255,0.6)' : 'var(--text-muted)', marginTop: '4px', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 3 }}>
@@ -1852,6 +1881,26 @@ const Messages = window.Messages = () => {
                             title="React">
                             😀
                           </button>
+                          {isSent && !m.is_deleted && (
+                            <button onClick={async () => {
+                              if (!confirm('Delete this message? Others will see "deleted a message".')) return;
+                              try {
+                                const dr = await apiFetch(`/api/messages/${m.id}`, { method: 'DELETE' });
+                                if (dr?.ok) {
+                                  const dd = await dr.json();
+                                  m.content = dd.tombstone;
+                                  m.is_deleted = 1;
+                                  await fetchMessages(activeConvId);
+                                } else {
+                                  if (typeof showToast === 'function') showToast('Failed to delete message', 'error');
+                                }
+                              } catch (e) { console.error('Delete message error:', e); }
+                            }}
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px 6px', fontSize: 14, borderRadius: 6, color: 'var(--color-error)' }}
+                              title="Delete">
+                              🗑
+                            </button>
+                          )}
                         </div>
                         {/* Emoji picker popover */}
                         {showEmojiFor === m.id && (

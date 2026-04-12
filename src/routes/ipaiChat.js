@@ -232,4 +232,95 @@ router.post("/chat", async (req, res) => {
   }
 });
 
+// ─── POST /api/ipai/detect-instructions ───
+// Lightweight: checks if a regular chat message contains caregiver task instructions.
+// Does NOT store messages, does NOT count against rate limit.
+// Returns { suggestion: { sessionId, sessionLabel, summary } | null }
+router.post("/detect-instructions", async (req, res) => {
+  const db = await getDb();
+  const userId = req.user.id;
+  const { message } = req.body;
+
+  if (!message || typeof message !== "string" || message.trim().length < 15) {
+    return res.json({ suggestion: null });
+  }
+
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return res.json({ suggestion: null });
+
+  try {
+    // Quick pre-screen: skip obvious non-coordination messages
+    const msgLC = message.toLowerCase();
+    const coordSignals = ["ask ", "tell ", "have her ", "have him ", "remind ", "please ", "make sure ",
+      "bring ", "take a photo", "take a picture", "pick up", "put together", "assemble",
+      "instructions", "when she", "when he", "before you leave", "before she leaves",
+      "project with", "activity with", "task for", "request for"];
+    const hasSignal = coordSignals.some(s => msgLC.includes(s));
+    if (!hasSignal) return res.json({ suggestion: null });
+
+    // Get user's upcoming sessions for context
+    const upcomingSessions = await db.prepare(`
+      SELECT cs.id, cs.scheduled_date, cs.scheduled_time, cs.duration_hours, cs.status,
+        cs.special_instructions, cs.caregiver_id,
+        u_cg.first_name AS cg_first, u_cg.last_name AS cg_last,
+        cr.first_name AS cr_first, cr.last_name AS cr_last
+      FROM care_sessions cs
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      LEFT JOIN users u_cg ON cp.user_id = u_cg.id
+      LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+      WHERE cs.family_user_id = ?
+        AND cs.status IN ('confirmed', 'pending', 'open', 'requested')
+        AND cs.scheduled_date >= date('now')
+      ORDER BY cs.scheduled_date ASC, cs.scheduled_time ASC
+      LIMIT 10
+    `).all(userId);
+
+    if (upcomingSessions.length === 0) return res.json({ suggestion: null });
+
+    const sessionContext = upcomingSessions.map(s => {
+      const cg = s.cg_first ? `${s.cg_first} ${s.cg_last}` : 'Unassigned';
+      return `- Session ${s.id}: ${cg} with ${s.cr_first} ${s.cr_last} on ${s.scheduled_date} at ${s.scheduled_time || 'TBD'} (${s.status})`;
+    }).join('\n');
+
+    const Anthropic = require("@anthropic-ai/sdk");
+    const client = new Anthropic({ apiKey });
+    const result = await client.messages.create({
+      model: require("../utils/aiModels").MODEL_HAIKU,
+      max_tokens: 400,
+      system: `You analyze chat messages to detect caregiver task instructions.
+
+UPCOMING SESSIONS:
+${sessionContext}
+
+Determine if this message contains instructions or tasks for a caregiver to do during an upcoming session. This includes things like: asking a caregiver to do an activity, bring something, take photos, assemble something, remind the care recipient of something, etc.
+
+If YES — extract a clean instruction summary written TO the caregiver and match it to the best session.
+If NO — return null.
+
+Return ONLY valid JSON (no markdown):
+{ "hasInstructions": true/false, "instructionSummary": "Clean instructions for the caregiver" or null, "matchedSessionId": "uuid" or null, "matchedSessionLabel": "Caregiver — Day Mon Date" or null }`,
+      messages: [{ role: "user", content: message }],
+    });
+
+    const raw = result.content?.[0]?.text || "";
+    const cleaned = raw.replace(/^```json?\n?/, "").replace(/\n?```$/, "").trim();
+    const parsed = JSON.parse(cleaned);
+
+    if (parsed.hasInstructions && parsed.matchedSessionId && parsed.instructionSummary) {
+      return res.json({
+        suggestion: {
+          sessionId: parsed.matchedSessionId,
+          sessionLabel: parsed.matchedSessionLabel || "Upcoming session",
+          summary: parsed.instructionSummary,
+        },
+      });
+    }
+
+    return res.json({ suggestion: null });
+  } catch (err) {
+    console.error("[iPAi] detect-instructions error:", err.message);
+    return res.json({ suggestion: null });
+  }
+});
+
 module.exports = router;

@@ -769,6 +769,47 @@ router.get("/:partnerId", async (req, res) => {
   res.json({ messages: enriched });
 });
 
+// ─── DELETE /api/messages/:messageId ─── Soft-delete a message (sender only)
+// Replaces content with "[Name] deleted a message" so the conversation flow still makes sense
+router.delete("/:messageId", async (req, res) => {
+  const db = await getDb();
+  const userId = req.user.id;
+  const { messageId } = req.params;
+
+  try {
+    const msg = await db.prepare("SELECT * FROM messages WHERE id = ?").get(messageId);
+    if (!msg) return res.status(404).json({ error: "Message not found" });
+
+    // Only the sender can delete their own message
+    if (msg.sender_id !== userId) {
+      return res.status(403).json({ error: "You can only delete your own messages" });
+    }
+
+    // Get sender name for the tombstone
+    const sender = await db.prepare("SELECT first_name FROM users WHERE id = ?").get(userId);
+    const tombstone = `${sender?.first_name || 'Someone'} deleted a message`;
+
+    await db.prepare(
+      "UPDATE messages SET content = ?, is_deleted = 1, updated_at = NOW() WHERE id = ?"
+    ).run(tombstone, messageId);
+
+    // Also delete any reactions on this message
+    await db.prepare("DELETE FROM message_reactions WHERE message_id = ?").run(messageId);
+
+    // Emit socket event so other participants see the deletion in real time
+    if (msg.conversation_id && global.io) {
+      global.io.to(`conv:${msg.conversation_id}`).emit("message_deleted", {
+        messageId, conversationId: msg.conversation_id, tombstone,
+      });
+    }
+
+    res.json({ ok: true, tombstone });
+  } catch (err) {
+    console.error("DELETE /messages/:messageId error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 // ─── POST /api/messages/:messageId/reactions ─── Add or toggle a reaction
 router.post("/:messageId/reactions", async (req, res) => {
   const db = await getDb();
