@@ -9,8 +9,6 @@ const config: CapacitorConfig = {
     // Comment this out to use local bundled assets instead
     url: 'https://yourinplace.com',
     cleartext: false,
-    // Allow Google OAuth to stay inside the WebView instead of opening Chrome
-    allowNavigation: ['accounts.google.com', 'appleid.apple.com'],
   },
   plugins: {
     SplashScreen: {

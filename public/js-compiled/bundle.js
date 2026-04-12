@@ -5055,7 +5055,19 @@ const LoginPage = window.LoginPage = ({
     }
   }, /*#__PURE__*/React.createElement("button", {
     onClick: () => {
-      window.location.href = '/api/oauth/google';
+      var _window$Capacitor4, _window$Capacitor4$is, _window$Capacitor5, _window$Capacitor5$ge, _window$Capacitor6;
+      // Android Capacitor: Google blocks OAuth in WebViews (disallowed_useragent).
+      // Open in Chrome Custom Tab via @capacitor/browser — Google allows these.
+      // The redirect back to yourinplace.com triggers App Links → deep link handler in app.js.
+      const isAndroidNative = ((_window$Capacitor4 = window.Capacitor) === null || _window$Capacitor4 === void 0 || (_window$Capacitor4$is = _window$Capacitor4.isNativePlatform) === null || _window$Capacitor4$is === void 0 ? void 0 : _window$Capacitor4$is.call(_window$Capacitor4)) && ((_window$Capacitor5 = window.Capacitor) === null || _window$Capacitor5 === void 0 || (_window$Capacitor5$ge = _window$Capacitor5.getPlatform) === null || _window$Capacitor5$ge === void 0 ? void 0 : _window$Capacitor5$ge.call(_window$Capacitor5)) === 'android';
+      if (isAndroidNative && (_window$Capacitor6 = window.Capacitor) !== null && _window$Capacitor6 !== void 0 && (_window$Capacitor6 = _window$Capacitor6.Plugins) !== null && _window$Capacitor6 !== void 0 && _window$Capacitor6.Browser) {
+        window.Capacitor.Plugins.Browser.open({
+          url: 'https://yourinplace.com/api/oauth/google',
+          presentationStyle: 'popover'
+        });
+      } else {
+        window.location.href = '/api/oauth/google';
+      }
     },
     style: googleBtnStyle,
     disabled: loading
@@ -5081,7 +5093,16 @@ const LoginPage = window.LoginPage = ({
     }
   }, /*#__PURE__*/React.createElement("button", {
     onClick: () => {
-      window.location.href = '/api/oauth/apple';
+      var _window$Capacitor7, _window$Capacitor7$is, _window$Capacitor8, _window$Capacitor8$ge, _window$Capacitor9;
+      const isAndroidNative = ((_window$Capacitor7 = window.Capacitor) === null || _window$Capacitor7 === void 0 || (_window$Capacitor7$is = _window$Capacitor7.isNativePlatform) === null || _window$Capacitor7$is === void 0 ? void 0 : _window$Capacitor7$is.call(_window$Capacitor7)) && ((_window$Capacitor8 = window.Capacitor) === null || _window$Capacitor8 === void 0 || (_window$Capacitor8$ge = _window$Capacitor8.getPlatform) === null || _window$Capacitor8$ge === void 0 ? void 0 : _window$Capacitor8$ge.call(_window$Capacitor8)) === 'android';
+      if (isAndroidNative && (_window$Capacitor9 = window.Capacitor) !== null && _window$Capacitor9 !== void 0 && (_window$Capacitor9 = _window$Capacitor9.Plugins) !== null && _window$Capacitor9 !== void 0 && _window$Capacitor9.Browser) {
+        window.Capacitor.Plugins.Browser.open({
+          url: 'https://yourinplace.com/api/oauth/apple',
+          presentationStyle: 'popover'
+        });
+      } else {
+        window.location.href = '/api/oauth/apple';
+      }
     },
     style: {
       ...googleBtnStyle,
@@ -11733,7 +11754,7 @@ const Dashboard = window.Dashboard = ({
 const CareProfile = window.CareProfile = ({
   onNavigate
 }) => {
-  var _profile$first_name, _profile$last_name, _kindredSummary$abuse, _kindredSummary$medic, _kindredSummary$care_, _companionUsage$summa, _companionUsage$summa2, _companionUsage$summa3, _companionUsage$summa4, _companionUsage$summa5, _window$Capacitor5, _window$Capacitor5$is;
+  var _profile$first_name, _profile$last_name, _kindredSummary$abuse, _kindredSummary$medic, _kindredSummary$care_, _companionUsage$summa, _companionUsage$summa2, _companionUsage$summa3, _companionUsage$summa4, _companionUsage$summa5, _window$Capacitor1, _window$Capacitor1$is;
   const [profile, setProfile] = useState(null);
   const [allRecipients, setAllRecipients] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -15242,12 +15263,12 @@ const CareProfile = window.CareProfile = ({
     }
   }, /*#__PURE__*/React.createElement("button", {
     onClick: e => {
-      var _window$Capacitor4, _window$Capacitor4$is;
+      var _window$Capacitor0, _window$Capacitor0$is;
       e.stopPropagation();
       // Pass token so kindred/index.html can authenticate
       // Capacitor: location.href (window.open fails in WebView)
       // Web: window.open in new tab
-      const isCapacitor = (_window$Capacitor4 = window.Capacitor) === null || _window$Capacitor4 === void 0 || (_window$Capacitor4$is = _window$Capacitor4.isNativePlatform) === null || _window$Capacitor4$is === void 0 ? void 0 : _window$Capacitor4$is.call(_window$Capacitor4);
+      const isCapacitor = (_window$Capacitor0 = window.Capacitor) === null || _window$Capacitor0 === void 0 || (_window$Capacitor0$is = _window$Capacitor0.isNativePlatform) === null || _window$Capacitor0$is === void 0 ? void 0 : _window$Capacitor0$is.call(_window$Capacitor0);
       const kindredUrl = AUTH_TOKEN ? `/kindred?token=${encodeURIComponent(AUTH_TOKEN)}` : '/kindred';
       if (isCapacitor) {
         window.location.href = kindredUrl;
@@ -15273,7 +15294,7 @@ const CareProfile = window.CareProfile = ({
       fontSize: 12,
       color: 'var(--text-muted)'
     }
-  }, "Opens ", profile === null || profile === void 0 ? void 0 : profile.first_name, "'s Kindred", (_window$Capacitor5 = window.Capacitor) !== null && _window$Capacitor5 !== void 0 && (_window$Capacitor5$is = _window$Capacitor5.isNativePlatform) !== null && _window$Capacitor5$is !== void 0 && _window$Capacitor5$is.call(_window$Capacitor5) ? '' : ' in a new tab')))), canEdit && (profile !== null && profile !== void 0 && profile.linked_user_id ? /*#__PURE__*/React.createElement("div", {
+  }, "Opens ", profile === null || profile === void 0 ? void 0 : profile.first_name, "'s Kindred", (_window$Capacitor1 = window.Capacitor) !== null && _window$Capacitor1 !== void 0 && (_window$Capacitor1$is = _window$Capacitor1.isNativePlatform) !== null && _window$Capacitor1$is !== void 0 && _window$Capacitor1$is.call(_window$Capacitor1) ? '' : ' in a new tab')))), canEdit && (profile !== null && profile !== void 0 && profile.linked_user_id ? /*#__PURE__*/React.createElement("div", {
     className: "card",
     style: {
       marginBottom: 16,
@@ -27748,9 +27769,9 @@ const Messages = window.Messages = () => {
     currentUserId: currentUser === null || currentUser === void 0 ? void 0 : currentUser.id
   });
   if (isMobile) {
-    var _window$Capacitor6, _window$Capacitor6$is;
+    var _window$Capacitor10, _window$Capacitor10$i;
     // Capacitor native iOS fallback: 59px top, 34px bottom — covers all modern iPhones
-    const isCapNative = (_window$Capacitor6 = window.Capacitor) === null || _window$Capacitor6 === void 0 || (_window$Capacitor6$is = _window$Capacitor6.isNativePlatform) === null || _window$Capacitor6$is === void 0 ? void 0 : _window$Capacitor6$is.call(_window$Capacitor6);
+    const isCapNative = (_window$Capacitor10 = window.Capacitor) === null || _window$Capacitor10 === void 0 || (_window$Capacitor10$i = _window$Capacitor10.isNativePlatform) === null || _window$Capacitor10$i === void 0 ? void 0 : _window$Capacitor10$i.call(_window$Capacitor10);
     const safeTop = window.__safeAreaTop || (isCapNative ? 59 : 0);
     const safeBot = window.__safeAreaBottom || (isCapNative ? 34 : 0);
     return /*#__PURE__*/React.createElement("div", {
@@ -32150,12 +32171,12 @@ const MyAccount = window.MyAccount = ({
       if (err.name === 'InvalidStateError') {
         setPwError('You already have a passkey registered on this device. Remove it first if you want to re-register.');
       } else if (err.name === 'NotAllowedError') {
-        var _window$Capacitor7, _window$Capacitor7$is;
+        var _window$Capacitor11, _window$Capacitor11$i;
         // In a native app WebView, NotAllowedError usually means passkeys aren't
         // supported in this context (not that the user cancelled).
         // In Safari/Chrome, it typically means user cancelled the prompt.
         // NotAllowedError can mean "user cancelled" OR "not allowed in this context" (e.g. WKWebView without entitlement)
-        const isNativeApp = (_window$Capacitor7 = window.Capacitor) === null || _window$Capacitor7 === void 0 || (_window$Capacitor7$is = _window$Capacitor7.isNativePlatform) === null || _window$Capacitor7$is === void 0 ? void 0 : _window$Capacitor7$is.call(_window$Capacitor7);
+        const isNativeApp = (_window$Capacitor11 = window.Capacitor) === null || _window$Capacitor11 === void 0 || (_window$Capacitor11$i = _window$Capacitor11.isNativePlatform) === null || _window$Capacitor11$i === void 0 ? void 0 : _window$Capacitor11$i.call(_window$Capacitor11);
         if (isNativeApp) {
           setPwError('Passkey creation failed. If this keeps happening, try opening yourinplace.com in Safari instead — the passkey will sync to this app automatically.');
         } else {
@@ -54530,7 +54551,7 @@ const FeedbackButton = window.FeedbackButton = ({
 
   // Build rich pageContext with device/browser info
   const buildPageContext = () => {
-    var _navigator$connection, _window$Capacitor8, _window$Capacitor8$is, _window$Capacitor$get, _window$Capacitor9;
+    var _navigator$connection, _window$Capacitor12, _window$Capacitor12$i, _window$Capacitor$get, _window$Capacitor13;
     const ua = navigator.userAgent;
     const {
       browserName,
@@ -54559,7 +54580,7 @@ const FeedbackButton = window.FeedbackButton = ({
       connectionType: ((_navigator$connection = navigator.connection) === null || _navigator$connection === void 0 ? void 0 : _navigator$connection.effectiveType) || 'unknown',
       language: navigator.language || 'unknown',
       isPWA: window.navigator.standalone === true ? 'yes' : 'no',
-      platform: (_window$Capacitor8 = window.Capacitor) !== null && _window$Capacitor8 !== void 0 && (_window$Capacitor8$is = _window$Capacitor8.isNativePlatform) !== null && _window$Capacitor8$is !== void 0 && _window$Capacitor8$is.call(_window$Capacitor8) ? ((_window$Capacitor$get = (_window$Capacitor9 = window.Capacitor).getPlatform) === null || _window$Capacitor$get === void 0 ? void 0 : _window$Capacitor$get.call(_window$Capacitor9)) === 'ios' ? 'ios-native' : 'android-native' : window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches ? 'pwa' : 'web',
+      platform: (_window$Capacitor12 = window.Capacitor) !== null && _window$Capacitor12 !== void 0 && (_window$Capacitor12$i = _window$Capacitor12.isNativePlatform) !== null && _window$Capacitor12$i !== void 0 && _window$Capacitor12$i.call(_window$Capacitor12) ? ((_window$Capacitor$get = (_window$Capacitor13 = window.Capacitor).getPlatform) === null || _window$Capacitor$get === void 0 ? void 0 : _window$Capacitor$get.call(_window$Capacitor13)) === 'ios' ? 'ios-native' : 'android-native' : window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches ? 'pwa' : 'web',
       recentErrors: recentErrorsRef.current.length > 0 ? recentErrorsRef.current : null,
       // Flow context — what was open when user tapped feedback
       openModals: snapshot.openModals || null,
@@ -78982,6 +79003,40 @@ window.__safeAreaBottom = 0;
   }
 })();
 
+// ─── Deep Link Handler (Capacitor App Links → OAuth callback) ───
+// When OAuth runs in a Chrome Custom Tab (Android), the final redirect to
+// yourinplace.com?oauth_code=... triggers App Links, which brings the user
+// back to the Capacitor app. This listener catches that URL and navigates
+// the WebView so the existing LoginPage OAuth-exchange code kicks in.
+(function () {
+  try {
+    var _window$Capacitor14, _window$Capacitor14$i, _window$Capacitor15;
+    if (!((_window$Capacitor14 = window.Capacitor) !== null && _window$Capacitor14 !== void 0 && (_window$Capacitor14$i = _window$Capacitor14.isNativePlatform) !== null && _window$Capacitor14$i !== void 0 && _window$Capacitor14$i.call(_window$Capacitor14))) return;
+    var AppPlugin = (_window$Capacitor15 = window.Capacitor) === null || _window$Capacitor15 === void 0 || (_window$Capacitor15 = _window$Capacitor15.Plugins) === null || _window$Capacitor15 === void 0 ? void 0 : _window$Capacitor15.App;
+    if (!AppPlugin) return;
+    AppPlugin.addListener('appUrlOpen', function (data) {
+      console.log('[DeepLink] appUrlOpen:', data.url);
+      try {
+        var url = new URL(data.url);
+        var hasOAuth = url.searchParams.get('oauth_code') || url.searchParams.get('oauth_signup') || url.searchParams.get('oauth_error');
+        if (hasOAuth) {
+          var _window$Capacitor16;
+          // Close the Chrome Custom Tab if still open
+          if ((_window$Capacitor16 = window.Capacitor) !== null && _window$Capacitor16 !== void 0 && (_window$Capacitor16 = _window$Capacitor16.Plugins) !== null && _window$Capacitor16 !== void 0 && (_window$Capacitor16 = _window$Capacitor16.Browser) !== null && _window$Capacitor16 !== void 0 && _window$Capacitor16.close) {
+            window.Capacitor.Plugins.Browser.close();
+          }
+          // Navigate WebView to the callback URL — existing LoginPage code handles the rest
+          window.location.href = url.pathname + url.search;
+        }
+      } catch (e) {
+        console.error('[DeepLink] Error handling appUrlOpen:', e);
+      }
+    });
+  } catch (e) {
+    console.warn('[DeepLink] init error', e);
+  }
+})();
+
 // ─── PWA Install Prompt ───
 const PWAInstallBanner = window.PWAInstallBanner = () => {
   const [deferredPrompt, setDeferredPrompt] = useState(null);
@@ -80120,7 +80175,7 @@ const App = () => {
     }
   }, []);
   const handleLogin = user => {
-    var _window$Capacitor0, _window$Capacitor0$is;
+    var _window$Capacitor17, _window$Capacitor17$i;
     // Mark this tab as having an active session so refreshes auto-restore,
     // but closing the browser requires re-authentication.
     sessionStorage.setItem('inplace_session_active', '1');
@@ -80187,7 +80242,7 @@ const App = () => {
     // Start proactive auth token refresh (keeps user logged in across app restarts)
     if (typeof startProactiveRefresh === 'function') startProactiveRefresh();
     // Re-sync push subscription on login
-    if ((_window$Capacitor0 = window.Capacitor) !== null && _window$Capacitor0 !== void 0 && (_window$Capacitor0$is = _window$Capacitor0.isNativePlatform) !== null && _window$Capacitor0$is !== void 0 && _window$Capacitor0$is.call(_window$Capacitor0)) {
+    if ((_window$Capacitor17 = window.Capacitor) !== null && _window$Capacitor17 !== void 0 && (_window$Capacitor17$i = _window$Capacitor17.isNativePlatform) !== null && _window$Capacitor17$i !== void 0 && _window$Capacitor17$i.call(_window$Capacitor17)) {
       // Native app: register FCM token with server on every login
       // (ensures token is always fresh — previous registration may have failed or token rotated)
       if (typeof subscribeNativePush === 'function') {

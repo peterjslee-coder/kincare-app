@@ -39,6 +39,36 @@ window.__safeAreaBottom = 0;
   document.documentElement.style.setProperty('--sab',window.__safeAreaBottom+'px');
 }catch(e){console.warn('safe-area polyfill error',e)}})();
 
+// ─── Deep Link Handler (Capacitor App Links → OAuth callback) ───
+// When OAuth runs in a Chrome Custom Tab (Android), the final redirect to
+// yourinplace.com?oauth_code=... triggers App Links, which brings the user
+// back to the Capacitor app. This listener catches that URL and navigates
+// the WebView so the existing LoginPage OAuth-exchange code kicks in.
+(function() {
+  try {
+    if (!window.Capacitor?.isNativePlatform?.()) return;
+    var AppPlugin = window.Capacitor?.Plugins?.App;
+    if (!AppPlugin) return;
+    AppPlugin.addListener('appUrlOpen', function(data) {
+      console.log('[DeepLink] appUrlOpen:', data.url);
+      try {
+        var url = new URL(data.url);
+        var hasOAuth = url.searchParams.get('oauth_code') || url.searchParams.get('oauth_signup') || url.searchParams.get('oauth_error');
+        if (hasOAuth) {
+          // Close the Chrome Custom Tab if still open
+          if (window.Capacitor?.Plugins?.Browser?.close) {
+            window.Capacitor.Plugins.Browser.close();
+          }
+          // Navigate WebView to the callback URL — existing LoginPage code handles the rest
+          window.location.href = url.pathname + url.search;
+        }
+      } catch (e) {
+        console.error('[DeepLink] Error handling appUrlOpen:', e);
+      }
+    });
+  } catch (e) { console.warn('[DeepLink] init error', e); }
+})();
+
 // ─── PWA Install Prompt ───
 const PWAInstallBanner = window.PWAInstallBanner = () => {
   const [deferredPrompt, setDeferredPrompt] = useState(null);
