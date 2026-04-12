@@ -79016,23 +79016,24 @@ window.__safeAreaBottom = 0;
     if (!AppPlugin) return;
     AppPlugin.addListener('appUrlOpen', function (data) {
       console.log('[DeepLink] appUrlOpen:', data.url);
-      // DEBUG: show what the deep link handler received
-      alert('[DeepLink] URL: ' + (data.url || 'EMPTY'));
       try {
         var url = new URL(data.url);
-        var hasOAuth = url.searchParams.get('oauth_code') || url.searchParams.get('oauth_signup') || url.searchParams.get('oauth_error');
-        alert('[DeepLink] hasOAuth: ' + !!hasOAuth + ' search: ' + url.search);
-        if (hasOAuth) {
+        // Custom scheme: inplace://oauth?oauth_code=...
+        // Sent by server after Google/Apple OAuth completes in Chrome Custom Tab
+        var oauthCode = url.searchParams.get('oauth_code');
+        var oauthSignup = url.searchParams.get('oauth_signup');
+        var oauthError = url.searchParams.get('oauth_error');
+        if (oauthCode || oauthSignup || oauthError) {
           var _window$Capacitor16;
-          // Close the Chrome Custom Tab if still open
+          // Close the Chrome Custom Tab
           if ((_window$Capacitor16 = window.Capacitor) !== null && _window$Capacitor16 !== void 0 && (_window$Capacitor16 = _window$Capacitor16.Plugins) !== null && _window$Capacitor16 !== void 0 && (_window$Capacitor16 = _window$Capacitor16.Browser) !== null && _window$Capacitor16 !== void 0 && _window$Capacitor16.close) {
             window.Capacitor.Plugins.Browser.close();
           }
-          // Navigate WebView to the callback URL — existing LoginPage code handles the rest
-          window.location.href = url.pathname + url.search;
+          // Navigate WebView so existing LoginPage OAuth exchange code runs
+          var params = oauthCode ? 'oauth_code=' + oauthCode : oauthSignup ? 'oauth_signup=' + oauthSignup : 'oauth_error=' + oauthError;
+          window.location.href = '/?' + params;
         }
       } catch (e) {
-        alert('[DeepLink] ERROR: ' + e.message);
         console.error('[DeepLink] Error handling appUrlOpen:', e);
       }
     });

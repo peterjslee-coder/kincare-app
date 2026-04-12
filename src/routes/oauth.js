@@ -168,22 +168,15 @@ router.get("/google/callback", async (req, res) => {
       expiresAt: Date.now() + 60 * 1000, // 60 seconds
     });
 
-    // On Android Capacitor, a 302 redirect inside a Chrome Custom Tab won't trigger
-    // App Links — the Custom Tab just loads the URL itself. Instead, serve a tiny HTML
-    // page that uses an Android intent URI to bring the user back to the native app.
+    // On Android Capacitor, redirect to a custom URL scheme (inplace://oauth)
+    // so the native app receives the auth code via deep link.
     // The |app flag was encoded into the state param by the /google endpoint.
     const isFromApp = state && state.includes("|app");
-    const redirectUrl = `${APP_URL}?oauth_code=${authCode}`;
 
     if (isFromApp) {
-      // Intent URI: opens the app via App Links, falls back to the URL in browser
-      const intentUri = `intent://${APP_URL.replace(/^https?:\/\//, '')}?oauth_code=${authCode}#Intent;scheme=https;package=com.yourinplace.app;end`;
-      res.send(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Signing in…</title></head><body>
-        <p style="text-align:center;margin-top:40vh;font-family:sans-serif;color:#666">Signing you in…</p>
-        <script>window.location.href="${intentUri}";</script>
-      </body></html>`);
+      res.redirect(`inplace://oauth?oauth_code=${authCode}`);
     } else {
-      res.redirect(redirectUrl);
+      res.redirect(`${APP_URL}?oauth_code=${authCode}`);
     }
   } catch (err) {
     console.error("Google OAuth callback error:", err);

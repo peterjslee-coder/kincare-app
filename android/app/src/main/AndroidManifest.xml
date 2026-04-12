@@ -22,12 +22,12 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- App Links: route yourinplace.com URLs back to the app (OAuth redirects, deep links) -->
-            <intent-filter android:autoVerify="true">
+            <!-- Custom URL scheme: used by OAuth callback to return to the app -->
+            <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" android:host="yourinplace.com" />
+                <data android:scheme="inplace" android:host="oauth" />
             </intent-filter>
 
         </activity>
