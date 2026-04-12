@@ -40,11 +40,42 @@ router.get("/:recipientId", authenticate, async (req, res) => {
       return res.status(403).json({ error: "Access denied" });
     }
 
+    // Check for cached intelligence — return it if fresh enough (< 24 hours or force=true to regenerate)
+    const forceRegenerate = req.query.force === 'true';
+    if (!forceRegenerate && recipient.ai_care_summary) {
+      const updatedAt = recipient.ai_care_summary_updated_at;
+      const ageMs = updatedAt ? (Date.now() - new Date(updatedAt).getTime()) : Infinity;
+      const MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
+      if (ageMs < MAX_AGE_MS) {
+        console.log(`[iPAi] Returning cached care intelligence for ${req.params.recipientId} (age: ${Math.round(ageMs / 60000)} min)`);
+        // Return cached summary alongside fresh pattern analysis (patterns are cheap, no AI)
+        try {
+          const analysis = await analyzePatterns(req.params.recipientId);
+          return res.json({ intelligence: recipient.ai_care_summary, analysis, cached: true });
+        } catch {
+          return res.json({ intelligence: recipient.ai_care_summary, cached: true });
+        }
+      }
+    }
+
     console.log(`[iPAi] Generating care intelligence for recipient ${req.params.recipientId} by user ${req.user.id}`);
     const result = await generateCareIntelligence(req.params.recipientId);
 
     if (result.error) {
       console.error("[iPAi] Care intelligence returned error:", result.error);
+    }
+
+    // Cache the intelligence result so we don't re-call Claude every time
+    if (result.intelligence) {
+      try {
+        const summaryStr = typeof result.intelligence === 'string' ? result.intelligence : JSON.stringify(result.intelligence);
+        await db.prepare(
+          "UPDATE care_recipients SET ai_care_summary = ?, ai_care_summary_updated_at = NOW() WHERE id = ?"
+        ).run(summaryStr, req.params.recipientId);
+        console.log(`[iPAi] Cached care intelligence for ${req.params.recipientId}`);
+      } catch (cacheErr) {
+        console.error("[iPAi] Failed to cache intelligence:", cacheErr.message);
+      }
     }
 
     // Always return 200 with whatever we got — partial data is better than nothing

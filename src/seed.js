@@ -770,30 +770,110 @@ async function seed({ force = false, demoOnly = false } = {}) {
 
   console.log("✅ Care sessions created (44 — 8 upcoming Paul/Barbara, 19 past completed, 4 Henderson, 2 Patel, 2 David/Barbara, 1 Susan/Barbara, 6 Carlos past + 3 upcoming, 4 care requests)");
 
-  // ─── Visit Logs ───
-  // pastSessions[10] = Feb 12 full 8-hr day, [13] = Feb 18 rides, [25] = James Feb 9, [26] = David Feb 6
-  const visitLogs = [
-    [uuid(), pastSessions[10][0], mariaId,
-      "Full 8-hour day with Barbara. Prepared breakfast, lunch, and dinner. Organized medications, did light housekeeping, and spent afternoon doing puzzles. Barbara was in wonderful spirits all day!",
-      "Happy & engaged", ["Prepared 3 meals", "Organized medications", "Light housekeeping", "Puzzles", "Kitchen cleanup"]],
-    [uuid(), pastSessions[25][0], jamesId,
-      "Spent the morning looking through photo albums and chatting about her garden. She was in great spirits. We took a short walk around the block.",
-      "Cheerful", ["Photo album activity", "Short walk", "Conversation"]],
-    [uuid(), pastSessions[13][0], mariaId,
-      "Drove Barbara to Dr. Patel's office. Picked up prescriptions and groceries on the way home. Stocked the fridge and labeled leftovers.",
-      "Calm", ["Doctor transport", "Prescription pickup", "Grocery shopping", "Stocked fridge"]],
-    [uuid(), pastSessions[26][0], davidId,
-      "Drove Barbara to her doctor's appointment. The visit went well — no changes to medication. Picked up her prescription on the way home.",
-      "A little tired", ["Doctor transport", "Prescription pickup"]],
+  // ─── Visit Logs (Barbara — rich care notes for every session) ───
+  const barbaraVisitLogs = [
+    // pastSessions[0]: meals, -50 days, Maria, 6hrs
+    { session: 0, cgId: mariaId, summary: "Made scrambled eggs and toast for breakfast — Barbara ate well. Organized her weekly pill box and noticed the Donepezil was running low (only 4 days left). Prepped chicken soup and cornbread for lunch. Barbara helped snap the green beans, which she enjoyed. She talked about her garden and wanting to plant tomatoes this spring.",
+      mood: "Content & talkative", departure: "Content", tags: '["ate well","medication reminder","engaged in conversation"]',
+      feedback: "Good appetite today. Donepezil supply low — family should refill soon.", tasks: ["Breakfast prep", "Pill box organized", "Lunch prep", "Medication inventory"] },
+    // pastSessions[1]: companion, -48 days, Maria, 5hrs
+    { session: 1, cgId: mariaId, summary: "Companionship day. We looked through old photo albums — Barbara recognized everyone and told stories about each photo. She got a little emotional looking at photos of her late husband but recovered quickly. Did a 15-min walk around the yard; she was steady on her feet. Made tea and we watched an old Hitchcock movie (Rear Window).",
+      mood: "Nostalgic but happy", departure: "Relaxed", tags: '["emotionally engaged","good mobility","enjoys movies"]',
+      feedback: "Great day overall. Long-term memory strong — recognized all family in photos.", tasks: ["Photo albums", "Yard walk", "Tea", "Movie (Rear Window)"] },
+    // pastSessions[2]: meals, -45 days, Maria, 6hrs
+    { session: 2, cgId: mariaId, summary: "Breakfast: oatmeal with blueberries (her favorite). Set out morning meds — she took them without fuss. Prepped 3 days of dinners and labeled everything. Barbara was quiet today; she said she didn't sleep well. Knee was bothering her. Applied ice pack after lunch.",
+      mood: "Quiet, slightly fatigued", departure: "Resting comfortably", tags: '["poor sleep","knee pain","ate well","medication taken"]',
+      feedback: "Sleep disrupted — woke at 5am. Knee pain moderate. Ice helped. Ate full meals.", tasks: ["Breakfast", "Medication reminders", "3-day dinner prep", "Ice for knee"] },
+    // pastSessions[3]: companion, -42 days, Maria, 7hrs
+    { session: 3, cgId: mariaId, summary: "Long day together. Morning: gentle stretches and walk to the mailbox. She was excited about a card from her granddaughter. Made lunch together — Barbara insisted on helping make the salad. Afternoon: puzzles (500-piece landscape) and gardening talk. She asked about planting tomatoes twice, forgetting she'd already mentioned it. Evening: light dinner and meds.",
+      mood: "Happy & engaged", departure: "Happy but tired", tags: '["good mobility","repetitive questions","enjoys cooking","engaged in activity"]',
+      feedback: "Repeated tomato question — typical for her. Energy dipped around 3pm. Great morning.", tasks: ["Stretches", "Walk to mailbox", "Lunch together", "500-piece puzzle", "Dinner", "Meds"] },
+    // pastSessions[4]: meals, -39 days, Maria, 5hrs
+    { session: 4, cgId: mariaId, summary: "Grocery run to Kroger. Barbara came along and enjoyed picking out produce. She remembered that she likes Honeycrisp apples without prompting. Back home: put everything away, prepped a baked chicken casserole and portioned it for the week. She had a good appetite at lunch.",
+      mood: "Alert & cheerful", departure: "Cheerful", tags: '["good memory recall","ate well","enjoyed outing"]',
+      feedback: "Good short-term recall today — remembered apple preference. Enjoys grocery trips.", tasks: ["Grocery shopping (Kroger)", "Put away groceries", "Chicken casserole prep", "Portioned meals"] },
+    // pastSessions[5]: companion, -36 days, Maria, 6hrs
+    { session: 5, cgId: mariaId, summary: "Beautiful day so we spent time in the garden. Barbara deadheaded the roses and watered the flowerbeds. She was very focused and clearly happy. We had lunch on the porch. Afternoon: she took a 30-min nap in her chair (normal for her). After nap she was a bit disoriented for a few minutes but came around. Watched Vertigo together.",
+      mood: "Happy in garden", departure: "Calm", tags: '["enjoys gardening","post-nap confusion (brief)","good appetite","active day"]',
+      feedback: "Brief disorientation after nap — resolved in ~5 min. Normal pattern for her.", tasks: ["Gardening", "Lunch on porch", "Nap monitoring", "Movie (Vertigo)"] },
+    // pastSessions[6]: meals, -33 days, Maria, 6hrs
+    { session: 6, cgId: mariaId, summary: "Weekly meal prep day. Made meatloaf, mashed potatoes, green beans, and a pot of vegetable soup. Barbara helped peel potatoes — her arthritis was manageable today. Organized her medications for the week. She was chatty about her daughter's upcoming visit and asked about it three times.",
+      mood: "Upbeat", departure: "Upbeat", tags: '["arthritis manageable","repetitive questions","ate well","medication organized"]',
+      feedback: "Arthritis didn't limit her today. Repetitive questions about daughter's visit (3x).", tasks: ["Meatloaf", "Mashed potatoes", "Green beans", "Vegetable soup", "Pill box"] },
+    // pastSessions[7]: companion, -30 days, Maria, 5hrs
+    { session: 7, cgId: mariaId, summary: "Quiet morning. Barbara said she had a weird dream and was a little unsettled. We looked through photo albums, which calmed her down. Short walk — she was a bit unsteady going down the porch steps (held the railing). Had tea and cookies. She perked up in the afternoon and we played cards.",
+      mood: "Unsettled → calm", departure: "Calm, improved", tags: '["balance concern (steps)","dreams/sleep issue","calmed by photos","enjoys cards"]',
+      feedback: "Watch the porch steps — she was unsteady today. Mood improved throughout the day.", tasks: ["Photo albums", "Short walk", "Tea & cookies", "Card game"] },
+    // pastSessions[8]: meals, -27 days, Maria, 7hrs
+    { session: 8, cgId: mariaId, summary: "Extended day. Breakfast: pancakes (Barbara's request). She was in great spirits — sang along to the radio while I cooked. Lunch: soup and sandwich. Afternoon: organized her craft supplies together, she found old knitting needles and wants to start a scarf. Dinner prep: lasagna for the week. Full meds taken on time.",
+      mood: "Joyful", departure: "Content & relaxed", tags: '["singing (great sign)","good appetite","interested in new activity","medication on time"]',
+      feedback: "One of her best days. Singing along to radio — strong mood indicator. Wants to knit.", tasks: ["Pancakes", "Lunch", "Craft organizing", "Lasagna prep", "All meds taken"] },
+    // pastSessions[9]: companion, -24 days, Maria, 6hrs
+    { session: 9, cgId: mariaId, summary: "Morning routine: helped Barbara get dressed (she had trouble with buttons today — arthritis in fingers). Gentle stretches. We worked on the puzzle from last week. She was focused but got frustrated when pieces didn't fit — redirected to music and she calmed right down. Lunch was good. Cats were extra cuddly today, which made her happy.",
+      mood: "Frustrated → content", departure: "Content", tags: '["fine motor difficulty (buttons)","frustration episode","music calming","cats therapeutic"]',
+      feedback: "Button difficulty — consider adaptive clothing. Music is reliable mood reset.", tasks: ["Dressing assistance", "Stretches", "Puzzle", "Lunch", "Music therapy"] },
+    // pastSessions[10]: meals, -21 days, Maria, 8hrs (FULL DAY)
+    { session: 10, cgId: mariaId, summary: "Full 8-hour day with Barbara. Prepared breakfast, lunch, and dinner. Organized medications, did light housekeeping, and spent the afternoon doing puzzles. Barbara was in wonderful spirits all day! She told me about a Hitchcock movie she wants to watch again. Vacuumed the living room and did two loads of laundry. Evening meds given on time.",
+      mood: "Happy & engaged", departure: "Happy & engaged", tags: '["excellent day","ate well","medication adherent","active and social"]',
+      feedback: "Standout day — alert, social, happy throughout. Full meals, all meds on time.", tasks: ["Prepared 3 meals", "Organized medications", "Light housekeeping", "Puzzles", "Laundry", "Vacuuming"] },
+    // pastSessions[11]: companion, -18 days, Maria, 5hrs
+    { session: 11, cgId: mariaId, summary: "Made valentines together — Barbara carefully wrote messages to each grandchild. Her handwriting was shaky but legible. We had a special lunch (heart-shaped sandwiches, she loved it). She talked about her husband and got teary but said they were 'good tears.' Fed the cats and brushed Whiskers.",
+      mood: "Sentimental & sweet", departure: "Warm, at peace", tags: '["fine motor - writing shaky","emotionally expressive","enjoyed crafts","cat care"]',
+      feedback: "Handwriting shakier than usual — track over time. Emotionally healthy expression.", tasks: ["Card making", "Special lunch", "Cat care", "Conversation"] },
+    // pastSessions[12]: meals, -15 days, Maria, 6hrs
+    { session: 12, cgId: mariaId, summary: "Meal prep focus day. Made her favorite chicken pot pie from scratch — Barbara watched and narrated the recipe from memory (impressive!). Also prepped salads and a fruit tray for the week. Organized the kitchen pantry, tossed some expired items. Medication check: all on track, Donepezil refilled last week.",
+      mood: "Alert & sharp", departure: "Satisfied", tags: '["good long-term memory","recipe recall","ate well","medication on track"]',
+      feedback: "Recited pot pie recipe from memory — long-term memory holding strong.", tasks: ["Chicken pot pie", "Salad prep", "Fruit tray", "Pantry organized", "Medication check"] },
+    // pastSessions[13]: rides, -12 days, Maria, 4hrs
+    { session: 13, cgId: mariaId, summary: "Drove Barbara to Dr. Patel's office for regular checkup. BP was 138/82 — doctor said it's fine with current Lisinopril dose. Picked up prescriptions at CVS and groceries on the way home. Stocked the fridge and labeled leftovers with dates. Barbara was a little tired after the outing.",
+      mood: "Calm", departure: "A little tired", tags: '["doctor visit","BP 138/82","medication pickup","fatigued after outing"]',
+      feedback: "BP stable. She tires easily on outings — keep errands grouped. All scripts filled.", tasks: ["Doctor transport", "Prescription pickup", "Grocery shopping", "Stocked fridge"] },
+    // pastSessions[14]: companion, -35 days, Maria, 6hrs
+    { session: 14, cgId: mariaId, summary: "Morning routine assistance, then puzzles. Barbara was focused and completed a 300-piece puzzle in under 2 hours — her fastest yet! Lunch: grilled cheese and tomato soup (comfort food day, it was cold outside). She napped briefly after lunch. We talked about her sister-in-law and she recalled details from 40 years ago clearly.",
+      mood: "Focused & sharp", departure: "Relaxed", tags: '["excellent cognition","puzzle completion","good appetite","long-term memory intact"]',
+      feedback: "Cognitive day — puzzle speed and detail recall both excellent.", tasks: ["Morning routine", "300-piece puzzle", "Lunch", "Nap monitoring", "Conversation"] },
+    // pastSessions[15]: meals, -29 days, Maria, 7hrs
+    { session: 15, cgId: mariaId, summary: "Grocery run to Food Lion — Barbara came along. She had a vertigo moment in the parking lot (grabbed my arm, steadied after 30 seconds). Inside the store she was fine. Back home: put groceries away, prepped beef stew and biscuits. Kitchen deep clean. She ate a big lunch and was cheerful all afternoon.",
+      mood: "Good (minus vertigo episode)", departure: "Cheerful", tags: '["vertigo episode (brief)","recovered quickly","good appetite","enjoyed outing"]',
+      feedback: "Vertigo in parking lot — lasted ~30 sec. Note for doctor. Fine afterward.", tasks: ["Grocery shopping", "Beef stew prep", "Biscuits", "Kitchen deep clean"] },
+    // pastSessions[16]: companion, -25 days, Maria, 6hrs
+    { session: 16, cgId: mariaId, summary: "Photo album day — Barbara's favorite. She was animated, telling stories about each picture. Identified everyone correctly, including her college roommate from the 1960s. Short walk around the back yard. She pointed out where she wants to plant tomatoes this spring. Afternoon nap was peaceful. Fed Mittens and Whiskers.",
+      mood: "Animated & social", departure: "Peaceful", tags: '["excellent memory recall","enjoys photos","garden planning","good sleep"]',
+      feedback: "Memory strong today — identified everyone in old photos including college friend.", tasks: ["Photo albums", "Yard walk", "Garden planning talk", "Nap monitoring", "Cat feeding"] },
+    // pastSessions[17]: meals, -22 days, Maria, 6hrs
+    { session: 17, cgId: mariaId, summary: "Standard meal prep day. Breakfast: French toast (she requested it). Organized medications — everything on track. Made chicken noodle soup for the week. Barbara seemed a little distracted today; kept looking out the window. When I asked, she said she was waiting for someone but couldn't remember who. Redirected to cooking and she was fine.",
+      mood: "Distracted", departure: "Calm after redirection", tags: '["confusion episode","waiting for unknown person","redirected successfully","medication on track"]',
+      feedback: "Mild confusion — thought someone was coming. Redirected easily. No distress.", tasks: ["French toast", "Medication organizing", "Chicken noodle soup", "Redirection"] },
+    // pastSessions[18]: companion, -19 days, Maria, 7hrs
+    { session: 18, cgId: mariaId, summary: "Full day companionship. Started with gentle stretches — she's getting more flexible! Made friendship bracelets (she chose the colors and was very particular). Lunch: leftover soup reheated. Afternoon: we played Scrabble and she won! Her word recall was impressive. Walked Whiskers around the living room on a string toy (her idea, hilarious). All evening meds taken.",
+      mood: "Playful & competitive", departure: "Happy", tags: '["good flexibility","fine motor ok (bracelets)","won Scrabble","humor intact","all meds taken"]',
+      feedback: "Exceptional day. Won at Scrabble, creative with crafts. Humor and personality strong.", tasks: ["Stretches", "Friendship bracelets", "Lunch", "Scrabble", "Cat play", "Evening meds"] },
+    // pastSessions[19]: meals, -16 days, Maria, 6hrs
+    { session: 19, cgId: mariaId, summary: "Made Barbara's favorite pot roast. She sat in the kitchen and talked to me while I cooked — she was in storytelling mode, telling me about the time she drove cross-country in the 1970s. I've heard the story before but she adds new details each time. Prepped side dishes for the week. Cats got their treats. All meds taken.",
+      mood: "Chatty & nostalgic", departure: "Satisfied", tags: '["good storytelling","repetitive stories (with variation)","ate well","medication adherent"]',
+      feedback: "Repeats cross-country story but adds new details — not pure repetition. Good sign.", tasks: ["Pot roast", "Side dish prep", "Storytelling", "Cat treats", "Medications"] },
+    // pastSessions[25]: James with Barbara, companion, -25 days, 3hrs
+    { session: 25, cgId: jamesId, summary: "Spent the morning looking through photo albums and chatting about her garden. She was in great spirits and told me about every plant she wants to grow this year. We took a short walk around the block — she was steady and confident. She asked about James' family and remembered my daughter's name (Ava).",
+      mood: "Cheerful", departure: "Cheerful & social", tags: '["excellent memory","good mobility","enjoys outdoors","social engagement"]',
+      feedback: "Great visit. Remembered my daughter's name. Steady on walk. No concerns.", tasks: ["Photo album activity", "Short walk", "Conversation"] },
+    // pastSessions[26]: David with Barbara, rides, -29 days, 1.5hrs
+    { session: 26, cgId: davidId, summary: "Drove Barbara to her doctor's appointment. She was a little anxious in the car (gripping the handle). The visit went well — no changes to medication, doctor pleased with BP. Picked up her prescription on the way home. She was tired but relieved after the appointment.",
+      mood: "A little anxious → relieved", departure: "A little tired", tags: '["car anxiety","doctor visit positive","medication unchanged","fatigued after outing"]',
+      feedback: "Some car anxiety — play calming music next time. Doctor visit all clear.", tasks: ["Doctor transport", "Prescription pickup"] },
   ];
 
-  for (const [id, sessionId, cgId, summary, mood, tasks] of visitLogs) {
+  for (const log of barbaraVisitLogs) {
     await db.prepare(`
       INSERT INTO visit_logs
       (id, session_id, caregiver_id, check_in_time, check_out_time,
-       summary, mood_rating, tasks_completed)
-      VALUES (?, ?, ?, NOW() - INTERVAL '2 hours', NOW(), ?, ?, ?)
-    `).run(id, sessionId, cgId, summary, mood, JSON.stringify(tasks));
+       summary, mood_rating, departure_mood, condition_tags, care_feedback,
+       tasks_completed)
+      VALUES (?, ?, ?, NOW() - INTERVAL '2 hours', NOW(), ?, ?, ?, ?, ?, ?)
+    `).run(
+      uuid(), pastSessions[log.session][0], log.cgId,
+      log.summary, log.mood, log.departure, log.tags, log.feedback,
+      JSON.stringify(log.tasks)
+    );
   }
 
   // Visit logs for Carlos's past sessions
@@ -818,7 +898,7 @@ async function seed({ force = false, demoOnly = false } = {}) {
     `).run(id, sessionId, cgId, summary, mood, JSON.stringify(tasks));
   }
 
-  console.log("✅ Visit logs created (7 — Barbara 4, Carlos 3)");
+  console.log("✅ Visit logs created (25 — Barbara 22, Carlos 3)");
 
   // ─── Activity Feed ───
   // Paul's activity feed — spans 10 days of realistic care coordination
@@ -1291,12 +1371,35 @@ Recovery milestones:
 • Emotional regulation improved; fewer frustration episodes
 • Next goal: resume light cooking with caregiver supervision`;
 
-  await db.prepare("UPDATE care_recipients SET ai_care_summary = ?, ai_care_summary_updated_at = NOW() - INTERVAL '2 days' WHERE id = ?").run(barbaraSummary, bettyId);
+  await db.prepare("UPDATE care_recipients SET ai_care_summary = ?, ai_care_summary_updated_at = NOW() - INTERVAL '4 hours' WHERE id = ?").run(barbaraSummary, bettyId);
   await db.prepare("UPDATE care_recipients SET ai_care_summary = ?, ai_care_summary_updated_at = NOW() - INTERVAL '5 days' WHERE id = ?").run(dorothySummary, dorothyId);
   await db.prepare("UPDATE care_recipients SET ai_care_summary = ?, ai_care_summary_updated_at = NOW() - INTERVAL '3 days' WHERE id = ?").run(arunSummary, arunId);
   await db.prepare("UPDATE care_recipients SET ai_care_summary = ?, ai_care_summary_updated_at = NOW() - INTERVAL '1 day' WHERE id = ?").run(carlosSummary, carlosId);
 
-  console.log("✅ AI care summaries set for all 4 care recipients");
+  // ─── Pre-generated Care Plan for Barbara (persists in demo) ───
+  const barbaraCarePlan = JSON.stringify({
+    goals: [
+      { title: "Maintain cognitive engagement", description: "Daily activities that exercise memory and problem-solving: puzzles, photo albums, Scrabble, recipe recall. Track puzzle completion times as a soft metric.", priority: "high" },
+      { title: "Support safe mobility", description: "Daily walks (yard or block) with caregiver present. Monitor porch steps and uneven surfaces. Balance check at each visit. Report any vertigo episodes to Dr. Patel.", priority: "high" },
+      { title: "Medication adherence", description: "Donepezil 10mg every evening, Lisinopril 10mg every morning, baby aspirin 81mg daily. Organize weekly pill box at Monday visit. Track refill dates — Donepezil supply runs low easily.", priority: "high" },
+      { title: "Nutrition and hydration", description: "Three full meals daily with caregiver prep. Barbara enjoys helping (snapping beans, peeling potatoes). Favorite comfort foods: pot roast, chicken pot pie, French toast. Ensure adequate water intake — she forgets to drink.", priority: "medium" },
+      { title: "Emotional wellbeing", description: "Photo albums and gardening are reliable mood boosters. Music calms frustration episodes. Watch for post-nap disorientation (brief, resolves in 5 min — normal pattern). Allow tearful moments about late husband without redirecting — she says they are 'good tears.'", priority: "medium" },
+      { title: "Spring garden project", description: "Barbara has expressed strong interest in planting tomatoes. This is a positive sign of forward-thinking engagement. Plan a small raised-bed garden project with Maria as a therapeutic activity.", priority: "low" },
+    ],
+    schedule: "Maria handles primary care (weekday meals and companionship, 5-7 hrs/visit). James provides companionship backup. David and Susan handle transport and weekend check-ins. Aim for daily caregiver contact.",
+    watchItems: [
+      "Vertigo episodes — log frequency and duration, report to Dr. Patel at next visit",
+      "Button/fine motor difficulty — may need adaptive clothing if arthritis worsens",
+      "Repetitive questions increasing — track frequency, current baseline is 2-3x per visit on familiar topics",
+      "Post-nap confusion — currently brief (5 min), escalate if duration increases",
+      "Sleep disruption — occasional early waking (5-6am), monitor pattern",
+    ],
+    nextReview: "After Dr. Patel follow-up appointment (scheduled within 2 weeks)",
+  });
+
+  await db.prepare("UPDATE care_recipients SET ai_care_plan = ?, ai_care_plan_updated_at = NOW() - INTERVAL '4 hours' WHERE id = ?").run(barbaraCarePlan, bettyId);
+
+  console.log("✅ AI care summaries + Barbara care plan set for all 4 care recipients");
 
   // ─── User Feedback (demo entries) ───
   console.log("💬 Creating demo feedback entries...");
