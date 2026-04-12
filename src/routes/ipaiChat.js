@@ -298,11 +298,13 @@ ${sessionContext}
 
 Determine if this message contains instructions or tasks for a caregiver to do during an upcoming session. This includes things like: asking a caregiver to do an activity, bring something, take photos, assemble something, remind the care recipient of something, etc.
 
-If YES — extract a clean instruction summary written TO the caregiver and match it to the best session.
+If YES — extract a clean instruction summary written TO the caregiver in a warm, friendly tone. Use "please" and "thank you", and add a relevant emoji or two. Write it as a kind note from the family, not a command. Use the care recipient's first name only.
+Example: "Please assemble the solar fountain as a project with Betty and place it where she can enjoy watching birds from the kitchen window. A photo when it's all set up would be wonderful — thank you! 🌻"
+
 If NO — return null.
 
 Return ONLY valid JSON (no markdown):
-{ "hasInstructions": true/false, "instructionSummary": "Clean instructions for the caregiver" or null, "matchedSessionId": "uuid" or null, "matchedSessionLabel": "Caregiver — Day Mon Date" or null }`,
+{ "hasInstructions": true/false, "instructionSummary": "Warm, friendly instructions for the caregiver" or null, "matchedSessionId": "uuid" or null, "matchedSessionLabel": "Caregiver — Day Mon Date" or null }`,
       messages: [{ role: "user", content: message }],
     });
 

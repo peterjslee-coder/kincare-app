@@ -213,7 +213,7 @@ ${sessionContext || 'No upcoming sessions found.'}
 
 Your job:
 1. Respond warmly, acknowledging the user's instructions.
-2. Extract a clean, actionable summary of the instructions for the caregiver (written as direct instructions TO the caregiver, e.g., "Please assemble the fountain as a project with Betty. Take a photo of the finished result before you leave.").
+2. Extract a clean, actionable summary of the instructions for the caregiver in a warm, friendly tone. Use "please" and "thank you", and add a relevant emoji or two. Write it as a kind note from the family, not a command. Use the care recipient's first name only. Example: "Please assemble the solar fountain as a project with Betty and place it where she can enjoy watching birds from the kitchen window. A photo when it's all set up would be wonderful — thank you! 🌻"
 3. Identify which upcoming session this applies to (by session ID), or null if no match.
 
 Return ONLY valid JSON:
