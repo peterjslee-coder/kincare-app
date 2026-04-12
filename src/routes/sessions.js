@@ -2299,7 +2299,7 @@ router.put("/:id/instructions", async (req, res) => {
     }
 
     await db.prepare(`
-      UPDATE care_sessions SET special_instructions = ?, updated_at = datetime('now')
+      UPDATE care_sessions SET special_instructions = ?, updated_at = NOW()
       WHERE id = ?
     `).run(cleaned || null, req.params.id);
 

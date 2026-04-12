@@ -243,8 +243,14 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, 
                       s.special_instructions = result.special_instructions;
                       setEditingInstructions(false);
                       if (onRefresh) onRefresh();
+                    } else {
+                      const err = await res?.json().catch(() => ({}));
+                      if (typeof window.__showToast === 'function') window.__showToast(err?.error || 'Failed to save instructions', 'error');
                     }
-                  } catch (e) { console.error('Save instructions error:', e); }
+                  } catch (e) {
+                    console.error('Save instructions error:', e);
+                    if (typeof window.__showToast === 'function') window.__showToast('Network error saving instructions', 'error');
+                  }
                   setSavingInstructions(false);
                 };
 
