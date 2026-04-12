@@ -2559,7 +2559,7 @@ const SplashPage = window.SplashPage = ({
     style: {
       fontSize: '44px',
       lineHeight: 1.18,
-      color: '#1a1a1a',
+      color: 'var(--text-primary)',
       marginBottom: '12px'
     }
   }, "On-demand care for your loved one. ", /*#__PURE__*/React.createElement("span", {
@@ -2589,8 +2589,8 @@ const SplashPage = window.SplashPage = ({
       display: 'inline-flex',
       alignItems: 'center',
       gap: '8px',
-      background: '#f0f9f6',
-      border: '1px solid #d0e8e0',
+      background: 'var(--bg-highlight)',
+      border: '1px solid var(--border-color)',
       borderRadius: '8px',
       padding: '8px 14px',
       fontSize: '13px',
@@ -2845,7 +2845,7 @@ const SplashPage = window.SplashPage = ({
     style: {
       fontSize: '16px',
       fontWeight: 700,
-      color: '#1a1a1a',
+      color: 'var(--text-primary)',
       marginBottom: '8px'
     }
   }, item.title), /*#__PURE__*/React.createElement("div", {
@@ -3025,7 +3025,7 @@ const SplashPage = window.SplashPage = ({
       padding: '24px',
       background: 'var(--bg-surface)',
       borderRadius: '12px',
-      border: '1px solid #e8e8e8',
+      border: '1px solid var(--border-color)',
       boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
     }
   }, /*#__PURE__*/React.createElement("div", {
@@ -3101,7 +3101,7 @@ const SplashPage = window.SplashPage = ({
       padding: '24px',
       background: 'var(--bg-surface)',
       borderRadius: '12px',
-      border: '1px solid #e8e8e8',
+      border: '1px solid var(--border-color)',
       boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
     }
   }, /*#__PURE__*/React.createElement("div", {
@@ -3204,7 +3204,7 @@ const SplashPage = window.SplashPage = ({
       padding: '24px',
       background: 'var(--bg-surface)',
       borderRadius: '12px',
-      border: '1px solid #e8e8e8',
+      border: '1px solid var(--border-color)',
       boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
     }
   }, /*#__PURE__*/React.createElement("div", {
@@ -3272,7 +3272,7 @@ const SplashPage = window.SplashPage = ({
       padding: '24px',
       background: 'var(--bg-surface)',
       borderRadius: '12px',
-      border: '1px solid #e8e8e8',
+      border: '1px solid var(--border-color)',
       boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
     }
   }, /*#__PURE__*/React.createElement("div", {
@@ -3314,12 +3314,12 @@ const SplashPage = window.SplashPage = ({
     style: {
       display: 'inline-block',
       padding: '6px 16px',
-      background: '#f0f4ff',
-      border: '1px solid #d0daf0',
+      background: 'var(--bg-highlight)',
+      border: '1px solid var(--border-color)',
       borderRadius: '20px',
       fontSize: '12px',
       fontWeight: 600,
-      color: '#4a5fa8',
+      color: 'var(--role-color)',
       letterSpacing: '0.5px',
       textTransform: 'uppercase',
       marginBottom: '12px'
@@ -3372,9 +3372,9 @@ const SplashPage = window.SplashPage = ({
     key: i,
     style: {
       padding: '28px 24px',
-      background: '#fafbff',
+      background: 'var(--bg-highlight)',
       borderRadius: '14px',
-      border: '1px solid #e4e8f4',
+      border: '1px solid var(--border-color)',
       boxShadow: '0 2px 8px rgba(74,95,168,0.04)',
       transition: 'transform 0.2s, box-shadow 0.2s'
     }
@@ -3767,7 +3767,7 @@ const SplashPage = window.SplashPage = ({
   }, '\u2715'), /*#__PURE__*/React.createElement("h2", {
     style: {
       fontSize: '24px',
-      color: '#1a1a1a',
+      color: 'var(--text-primary)',
       marginBottom: '2px',
       fontWeight: 700
     }
@@ -3820,7 +3820,7 @@ const SplashPage = window.SplashPage = ({
     style: {
       marginBottom: '20px',
       fontSize: '16px',
-      color: '#1a1a1a',
+      color: 'var(--text-primary)',
       fontWeight: 500,
       lineHeight: 1.7
     }
@@ -24253,7 +24253,22 @@ const Messages = window.Messages = () => {
   const [activeConvType, setActiveConvType] = useState('direct');
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
-  const draftsRef = useRef({});
+  // Drafts persist to localStorage so they survive page navigation
+  const DRAFTS_KEY = 'inplace_msg_drafts';
+  const draftsRef = useRef(() => {
+    try {
+      return JSON.parse(localStorage.getItem(DRAFTS_KEY)) || {};
+    } catch {
+      return {};
+    }
+  });
+  // Initialize draftsRef from localStorage on first render
+  if (typeof draftsRef.current === 'function') draftsRef.current = draftsRef.current();
+  const persistDrafts = () => {
+    try {
+      localStorage.setItem(DRAFTS_KEY, JSON.stringify(draftsRef.current));
+    } catch {}
+  };
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [messagingLimited, setMessagingLimited] = useState(false);
@@ -24312,6 +24327,8 @@ const Messages = window.Messages = () => {
   const [typingUsers, setTypingUsers] = useState({}); // { conversationId: { userId: { name, timeout } } }
   const typingTimeoutRef = useRef(null);
   const lastTypingEmitRef = useRef(0);
+  const inputTextRef = useRef('');
+  const activeConvIdRef = useRef(null);
 
   // ─── Read receipts ───
   const [readReceipts, setReadReceipts] = useState({}); // { conversationId: { userId: readAt } }
@@ -24678,6 +24695,14 @@ const Messages = window.Messages = () => {
     }
   };
 
+  // Keep refs in sync for unmount cleanup
+  useEffect(() => {
+    inputTextRef.current = inputText;
+  }, [inputText]);
+  useEffect(() => {
+    activeConvIdRef.current = activeConvId;
+  }, [activeConvId]);
+
   // Handle deep-link from push notification or URL param
   useEffect(() => {
     fetchConversations().then(() => {
@@ -24707,9 +24732,15 @@ const Messages = window.Messages = () => {
       navigator.serviceWorker.addEventListener('message', handlePushNav);
     }
     return () => {
+      var _inputTextRef$current;
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.removeEventListener('message', handlePushNav);
       }
+      // Save any in-progress draft to localStorage when leaving Messages
+      if (activeConvIdRef.current && (_inputTextRef$current = inputTextRef.current) !== null && _inputTextRef$current !== void 0 && _inputTextRef$current.trim()) {
+        draftsRef.current[activeConvIdRef.current] = inputTextRef.current;
+      }
+      persistDrafts();
     };
   }, []);
 
@@ -24769,6 +24800,7 @@ const Messages = window.Messages = () => {
     } else if (activeConvId) {
       delete draftsRef.current[activeConvId];
     }
+    persistDrafts();
     setActiveConvId(conv.id);
     setActiveConvType(conv.type || 'direct');
     setShowNewChat(false);
@@ -24786,6 +24818,7 @@ const Messages = window.Messages = () => {
     } else if (activeConvId) {
       delete draftsRef.current[activeConvId];
     }
+    persistDrafts();
     setActiveConvId(null);
     setInputText('');
     setMessages([]);
@@ -24894,6 +24927,7 @@ const Messages = window.Messages = () => {
           setInputText('');
           setReplyTo(null);
           delete draftsRef.current[activeConvId];
+          persistDrafts();
           if (data.conversationId && data.conversationId !== activeConvId) {
             setActiveConvId(data.conversationId);
           }
@@ -29649,6 +29683,36 @@ const VisitDetailModal = window.VisitDetailModal = ({
   const [showPhotos, setShowPhotos] = useState(true);
   const [lightboxIdx, setLightboxIdx] = useState(null);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
+
+  // Push history state so back button / swipe-back closes the modal instead of navigating away
+  useEffect(() => {
+    if (!sessionId) return;
+    // Tag so we can detect our own history entry
+    window.history.pushState({
+      modal: 'visit-detail'
+    }, '');
+    const handlePopState = () => {
+      onClose();
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [sessionId]);
+
+  // Wrap onClose to also pop our history entry when closed via X/overlay (not back)
+  const handleClose = () => {
+    var _window$history$state;
+    if (((_window$history$state = window.history.state) === null || _window$history$state === void 0 ? void 0 : _window$history$state.modal) === 'visit-detail') {
+      // Pop our pushed entry — this fires popstate but our listener is about to be removed
+      window.__skipPopstate = true;
+      window.history.back();
+      setTimeout(() => {
+        window.__skipPopstate = false;
+      }, 50);
+    }
+    onClose();
+  };
   const handlePhotoUpload = async e => {
     const files = Array.from(e.target.files || []);
     if (!files.length || !sessionId) return;
@@ -29780,7 +29844,7 @@ const VisitDetailModal = window.VisitDetailModal = ({
   if (!sessionId) return null;
   return /*#__PURE__*/React.createElement("div", {
     className: "modal-overlay",
-    onClick: onClose
+    onClick: handleClose
   }, /*#__PURE__*/React.createElement("div", {
     className: "modal-content",
     onClick: e => e.stopPropagation(),
@@ -29791,7 +29855,7 @@ const VisitDetailModal = window.VisitDetailModal = ({
     }
   }, /*#__PURE__*/React.createElement("button", {
     className: "modal-close",
-    onClick: onClose
+    onClick: handleClose
   }, "\u2715"), loading && /*#__PURE__*/React.createElement("div", {
     style: {
       padding: 40,
@@ -30623,7 +30687,7 @@ const VisitDetailModal = window.VisitDetailModal = ({
   }, data && data.session && data.session.status === 'confirmed' && data.session.caregiver_id && !data.session.pending_time_change_id && onTimeChange && /*#__PURE__*/React.createElement("button", {
     onClick: () => {
       onTimeChange(data.session);
-      onClose();
+      handleClose();
     },
     style: {
       padding: '8px 16px',
@@ -30668,7 +30732,7 @@ const VisitDetailModal = window.VisitDetailModal = ({
         });
         if (res !== null && res !== void 0 && res.ok) {
           if (onRefresh) onRefresh();
-          onClose();
+          handleClose();
         } else {
           const err = await res.json().catch(() => ({}));
           alert(err.error || 'Failed to cancel');
@@ -30690,7 +30754,7 @@ const VisitDetailModal = window.VisitDetailModal = ({
     }
   }, cancelling ? 'Cancelling...' : 'Cancel Session')), !(data && data.session && ['confirmed', 'pending', 'open', 'requested'].includes(data.session.status)) && !onTimeChange && /*#__PURE__*/React.createElement("div", null), /*#__PURE__*/React.createElement("button", {
     className: "btn btn-outline",
-    onClick: onClose
+    onClick: handleClose
   }, "Close"))));
 };
 ;
@@ -79126,6 +79190,11 @@ const App = () => {
       page: 'dashboard'
     }, '', window.location.pathname);
     const handlePopState = e => {
+      var _e$state;
+      // Skip if a modal is cleaning up its own history entry
+      if (window.__skipPopstate) return;
+      // If a modal pushed its own history state, let the modal handle it
+      if ((_e$state = e.state) !== null && _e$state !== void 0 && _e$state.modal) return;
       if (navHistoryRef.current.length > 1) {
         navHistoryRef.current.pop();
         const prevPage = navHistoryRef.current[navHistoryRef.current.length - 1];

@@ -87,7 +87,7 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
       {/* ── Hero: Split layout with fade ── */}
       <section className="splash-hero" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', minHeight: '560px', position: 'relative', overflow: 'hidden' }}>
         <div className="splash-hero-text" style={{ padding: '72px 48px 72px 64px', display: 'flex', flexDirection: 'column', justifyContent: 'center', background: 'var(--bg-surface)', position: 'relative', zIndex: 2 }}>
-          <h1 className="splash-hero-h1" style={{ fontSize: '44px', lineHeight: 1.18, color: '#1a1a1a', marginBottom: '12px' }}>
+          <h1 className="splash-hero-h1" style={{ fontSize: '44px', lineHeight: 1.18, color: 'var(--text-primary)', marginBottom: '12px' }}>
             On-demand care for your loved one. <span style={{ color: 'var(--accent-color)' }}>Finally.</span>
           </h1>
           <div className="splash-hero-subtitle" style={{ fontSize: '22px', color: 'var(--role-color)', fontWeight: 600, marginBottom: '20px', lineHeight: 1.4 }}>
@@ -96,7 +96,7 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
           <p className="splash-hero-body" style={{ fontSize: '16px', color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: '16px', maxWidth: '480px' }}>
             inPlace matches families with vetted caregivers in hours — by the visit, no contracts, no agency markup. Caregivers keep 80%. Families see everything in real time.
           </p>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: '#f0f9f6', border: '1px solid #d0e8e0', borderRadius: '8px', padding: '8px 14px', fontSize: '13px', color: 'var(--role-color)', fontWeight: 500, marginBottom: '20px' }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: 'var(--bg-highlight)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '8px 14px', fontSize: '13px', color: 'var(--role-color)', fontWeight: 500, marginBottom: '20px' }}>
             <span style={{ fontSize: '15px' }}>{'\u{1F4CD}'}</span> Launching Spring 2026 in Virginia
           </div>
           <div className="splash-hero-buttons" style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '16px' }}>
@@ -201,7 +201,7 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontSize: '16px', fontWeight: 700, marginBottom: '14px',
                 }}>{item.step}</div>
-                <div style={{ fontSize: '16px', fontWeight: 700, color: '#1a1a1a', marginBottom: '8px' }}>{item.title}</div>
+                <div style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '8px' }}>{item.title}</div>
                 <div style={{ fontSize: '14px', color: 'var(--text-secondary)', lineHeight: 1.65 }}>{item.desc}</div>
               </div>
             ))}
@@ -274,7 +274,7 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
                 { icon: '\uD83D\uDEE1\uFE0F', title: 'Background-Checked', desc: "Every caregiver is vetted, verified, and reviewed by other families." },
                 { icon: '\uD83D\uDCF1', title: 'Real-Time Updates', desc: 'Get notified when visits start, see summaries, message caregivers directly.' },
               ].map((c, i) => (
-                <div key={i} style={{ padding: '24px', background: 'var(--bg-surface)', borderRadius: '12px', border: '1px solid #e8e8e8', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
+                <div key={i} style={{ padding: '24px', background: 'var(--bg-surface)', borderRadius: '12px', border: '1px solid var(--border-color)', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
                   <div style={{ fontSize: '24px', marginBottom: '10px' }}>{c.icon}</div>
                   <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--role-color)', marginBottom: '6px' }}>{c.title}</div>
                   <div style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>{c.desc}</div>
@@ -302,7 +302,7 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
                 { icon: '\uD83D\uDCAC', title: 'Stay Connected', desc: 'Your family can see updates so they worry less.' },
                 { icon: '\uD83C\uDFAF', title: 'Choose Your Services', desc: 'Companionship, meals, rides, housekeeping — you choose.' },
               ].map((c, i) => (
-                <div key={i} style={{ padding: '24px', background: 'var(--bg-surface)', borderRadius: '12px', border: '1px solid #e8e8e8', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
+                <div key={i} style={{ padding: '24px', background: 'var(--bg-surface)', borderRadius: '12px', border: '1px solid var(--border-color)', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
                   <div style={{ fontSize: '24px', marginBottom: '10px' }}>{c.icon}</div>
                   <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--role-color)', marginBottom: '6px' }}>{c.title}</div>
                   <div style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>{c.desc}</div>
@@ -339,7 +339,7 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
                 { icon: '\uD83D\uDCC5', title: 'Flexible Scheduling', desc: 'Work when you want. Accept visits that fit your life.' },
                 { icon: '\u2B50', title: 'Build Reputation', desc: 'Every visit builds your profile with ratings and reviews.' },
               ].map((c, i) => (
-                <div key={i} style={{ padding: '24px', background: 'var(--bg-surface)', borderRadius: '12px', border: '1px solid #e8e8e8', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
+                <div key={i} style={{ padding: '24px', background: 'var(--bg-surface)', borderRadius: '12px', border: '1px solid var(--border-color)', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
                   <div style={{ fontSize: '24px', marginBottom: '10px' }}>{c.icon}</div>
                   <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--role-color)', marginBottom: '6px' }}>{c.title}</div>
                   <div style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>{c.desc}</div>
@@ -365,7 +365,7 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
                 { icon: '\uD83D\uDCB0', title: 'Get Paid to Learn', desc: 'Unlike unpaid rotations, earn competitive pay while building skills.' },
                 { icon: '\uD83D\uDCC5', title: 'Flex Around Classes', desc: 'Pick visits that work around your schedule.' },
               ].map((c, i) => (
-                <div key={i} style={{ padding: '24px', background: 'var(--bg-surface)', borderRadius: '12px', border: '1px solid #e8e8e8', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
+                <div key={i} style={{ padding: '24px', background: 'var(--bg-surface)', borderRadius: '12px', border: '1px solid var(--border-color)', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
                   <div style={{ fontSize: '24px', marginBottom: '10px' }}>{c.icon}</div>
                   <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--role-color)', marginBottom: '6px' }}>{c.title}</div>
                   <div style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>{c.desc}</div>
@@ -383,7 +383,7 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
       <section style={{ padding: '64px 32px', background: 'var(--bg-surface)' }}>
         <div style={{ maxWidth: '900px', margin: '0 auto' }}>
           <div style={{ textAlign: 'center', marginBottom: '40px' }}>
-            <div style={{ display: 'inline-block', padding: '6px 16px', background: '#f0f4ff', border: '1px solid #d0daf0', borderRadius: '20px', fontSize: '12px', fontWeight: 600, color: '#4a5fa8', letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: '12px' }}>AI-Powered</div>
+            <div style={{ display: 'inline-block', padding: '6px 16px', background: 'var(--bg-highlight)', border: '1px solid var(--border-color)', borderRadius: '20px', fontSize: '12px', fontWeight: 600, color: 'var(--role-color)', letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: '12px' }}>AI-Powered</div>
             <h2 style={{ fontSize: '28px', color: 'var(--role-color)', marginBottom: '10px' }}>Smarter Care, Not Just More Care</h2>
             <p style={{ fontSize: '15px', color: 'var(--text-secondary)', maxWidth: '580px', margin: '0 auto', lineHeight: 1.6 }}>
               AI works behind the scenes at every step — matching the right caregiver, tracking care patterns over time, and giving families insights that matter.
@@ -399,8 +399,8 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
               { icon: '\uD83D\uDD12', title: 'Private & Secure', desc: 'Your family\'s health data is encrypted and never shared with third parties. AI runs for your benefit, not for ads or data mining.' },
             ].map((c, i) => (
               <div key={i} style={{
-                padding: '28px 24px', background: '#fafbff', borderRadius: '14px',
-                border: '1px solid #e4e8f4', boxShadow: '0 2px 8px rgba(74,95,168,0.04)',
+                padding: '28px 24px', background: 'var(--bg-highlight)', borderRadius: '14px',
+                border: '1px solid var(--border-color)', boxShadow: '0 2px 8px rgba(74,95,168,0.04)',
                 transition: 'transform 0.2s, box-shadow 0.2s',
               }}>
                 <div style={{ fontSize: '28px', marginBottom: '12px' }}>{c.icon}</div>
@@ -534,7 +534,7 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
                 width: '36px', height: '36px', fontSize: '18px', cursor: 'pointer',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)',
               }}>{'\u2715'}</button>
-              <h2 style={{ fontSize: '24px', color: '#1a1a1a', marginBottom: '2px', fontWeight: 700 }}>Why I Built inPlace</h2>
+              <h2 style={{ fontSize: '24px', color: 'var(--text-primary)', marginBottom: '2px', fontWeight: 700 }}>Why I Built inPlace</h2>
               <div style={{ fontSize: '14px', color: 'var(--text-tertiary)', marginBottom: '24px' }}>Pete Lee, Founder</div>
             </div>
 
@@ -564,7 +564,7 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
 
             {/* Story content */}
             <div style={{ padding: '0 40px 48px', fontSize: '15px', color: 'var(--text-primary)', lineHeight: 1.8 }}>
-              <p style={{ marginBottom: '20px', fontSize: '16px', color: '#1a1a1a', fontWeight: 500, lineHeight: 1.7 }}>
+              <p style={{ marginBottom: '20px', fontSize: '16px', color: 'var(--text-primary)', fontWeight: 500, lineHeight: 1.7 }}>
                 I built inPlace because it's what my family needs to keep Mom at home — and because my community deserves a better way to give and receive care.
               </p>
               <p style={{ marginBottom: '16px' }}>
