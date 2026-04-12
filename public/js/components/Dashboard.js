@@ -67,19 +67,23 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
     try { return JSON.parse(localStorage.getItem('dash_dismissed') || '{}'); } catch { return {}; }
   });
 
-  const todayStr = () => new Date().toISOString().slice(0, 10); // 'YYYY-MM-DD'
+  // Use local date (not UTC) so dismiss-until-tomorrow works correctly for the user's timezone
+  const todayLocal = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
 
-  // Dismiss a tile for the rest of today
+  // Dismiss a tile for the rest of today (local time)
   const dismissTile = (tileId, _contentFingerprint) => {
-    const updated = { ...dismissedTiles, [tileId]: todayStr() };
+    const updated = { ...dismissedTiles, [tileId]: todayLocal() };
     setDismissedTiles(updated);
     localStorage.setItem('dash_dismissed', JSON.stringify(updated));
   };
 
-  // Check if a tile should show: hidden only if dismissed today
+  // Check if a tile should show: hidden only if dismissed today (local time)
   const isTileDismissed = (tileId, _contentFingerprint) => {
     if (!dismissedTiles[tileId]) return false;
-    return dismissedTiles[tileId] === todayStr();
+    return dismissedTiles[tileId] === todayLocal();
   };
 
   const restoreTiles = () => {
