@@ -251,10 +251,14 @@ router.post("/detect-instructions", async (req, res) => {
   try {
     // Quick pre-screen: skip obvious non-coordination messages
     const msgLC = message.toLowerCase();
-    const coordSignals = ["ask ", "tell ", "have her ", "have him ", "remind ", "please ", "make sure ",
-      "bring ", "take a photo", "take a picture", "pick up", "put together", "assemble",
-      "instructions", "when she", "when he", "before you leave", "before she leaves",
-      "project with", "activity with", "task for", "request for"];
+    const coordSignals = ["ask", "tell ", "have her ", "have him ", "remind", "please ",
+      "make sure", "bring ", "take a photo", "take a picture", "pick up", "put together",
+      "put it together", "assemble", "set up", "set it up", "instructions", "when she",
+      "when he", "before i leave", "before you leave", "before she leaves", "before he leaves",
+      "project with", "activity with", "task for", "request for", "need her to", "need him to",
+      "want her to", "want him to", "could you", "can you", "would you", "should ",
+      "next session", "next visit", "on tues", "on wed", "on thurs", "on fri", "on sat",
+      "on sun", "on mon", "tomorrow", "this week"];
     const hasSignal = coordSignals.some(s => msgLC.includes(s));
     if (!hasSignal) return res.json({ suggestion: null });
 
