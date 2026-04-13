@@ -132,7 +132,9 @@ const setImpersonationToken = window.setImpersonationToken = (token) => {
 const getImpersonationToken = window.getImpersonationToken = () => IMPERSONATION_TOKEN;
 
 const apiFetch = window.apiFetch = async (url, options = {}) => {
-  const headers = { 'Content-Type': 'application/json', ...options.headers };
+  // For FormData (file uploads), don't set Content-Type — browser sets multipart boundary automatically
+  const isFormData = options.body instanceof FormData;
+  const headers = isFormData ? { ...options.headers } : { 'Content-Type': 'application/json', ...options.headers };
   // Use impersonation token if active (admin viewing as another user)
   const effectiveToken = IMPERSONATION_TOKEN || AUTH_TOKEN;
   if (effectiveToken) headers['Authorization'] = `Bearer ${effectiveToken}`;
@@ -638,6 +640,12 @@ const subscribeNativePush = window.subscribeNativePush = async () => {
       // Also set up notification received/action listeners
       PushNotifications.addListener('pushNotificationReceived', (notification) => {
         console.log('NativePush: notification received in foreground:', notification.title);
+        const nData = notification.data || {};
+        // Suppress toast if user is already viewing this conversation
+        if (nData.type === 'message' && nData.conversationId && window.__activeConversationId === nData.conversationId) {
+          console.log('NativePush: suppressed — user is viewing this conversation');
+          return;
+        }
         // Show in-app toast for foreground notifications
         if (window.useToast) {
           try { window.__showToast?.(notification.title || 'New notification', 'info'); } catch {}
@@ -647,8 +655,22 @@ const subscribeNativePush = window.subscribeNativePush = async () => {
       PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
         console.log('NativePush: notification tapped:', action.notification?.title);
         const data = action.notification?.data;
-        if (data?.page) {
-          // Navigate to the relevant page when notification is tapped
+        // Deep-link: mirror the service worker routing logic for native push
+        if (data?.type === 'message' && data.conversationId) {
+          window.__pendingConversation = data.conversationId;
+          window.__navigateTo?.('messages');
+        } else if (data?.type === 'care_request' || data?.type === 'care_request_accepted') {
+          window.__navigateTo?.('schedule');
+        } else if (data?.type === 'new_job') {
+          window.__navigateTo?.('find-work');
+        } else if (data?.type === 'check_in_reminder' || data?.type === 'check_out_reminder' || data?.type === 'caregiver_arriving' || data?.type === 'caregiver_arriving_recipient') {
+          window.__navigateTo?.('dashboard');
+        } else if (data?.type === 'kindred_relay') {
+          window.__navigateTo?.('messages');
+        } else if (data?.type === 'video_call' && data.conversationId) {
+          window.__pendingConversation = data.conversationId;
+          window.__navigateTo?.('messages');
+        } else if (data?.page) {
           window.__navigateTo?.(data.page);
         }
       });
@@ -703,11 +725,31 @@ const initNativeTokenRefresh = window.initNativeTokenRefresh = () => {
 
       PushNotifications.addListener('pushNotificationReceived', (notification) => {
         console.log('NativePush: foreground notification:', notification.title);
+        const nData = notification.data || {};
+        // Suppress toast if user is already viewing this conversation
+        if (nData.type === 'message' && nData.conversationId && window.__activeConversationId === nData.conversationId) return;
+        if (window.useToast) {
+          try { window.__showToast?.(notification.title || 'New notification', 'info'); } catch {}
+        }
       });
 
       PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
         const data = action.notification?.data;
-        if (data?.page) window.__navigateTo?.(data.page);
+        if (data?.type === 'message' && data.conversationId) {
+          window.__pendingConversation = data.conversationId;
+          window.__navigateTo?.('messages');
+        } else if (data?.type === 'care_request' || data?.type === 'care_request_accepted') {
+          window.__navigateTo?.('schedule');
+        } else if (data?.type === 'new_job') {
+          window.__navigateTo?.('find-work');
+        } else if (data?.type === 'kindred_relay') {
+          window.__navigateTo?.('messages');
+        } else if (data?.type === 'video_call' && data.conversationId) {
+          window.__pendingConversation = data.conversationId;
+          window.__navigateTo?.('messages');
+        } else if (data?.page) {
+          window.__navigateTo?.(data.page);
+        }
       });
     }).catch(() => {});
   } catch (err) {

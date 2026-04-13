@@ -15,6 +15,8 @@
 
 ### P1
 
+- [ ] **Auto-pay blocked by 2FA requirement.** "How are we supposed to have auto payments if we have to do 2FA every time?" Needs pre-authorized payment tokens or session-scoped auth bypass for recurring charges. Architectural decision needed. *(Feedback `3373060b` — Pete, Mar 30)* **P1**
+- [ ] **Session countdown shows wrong time remaining.** Shows "1 hour plus remaining" but appointment ends at noon Eastern. Backend timezone fix shipped v1.50.21, but frontend countdown may still use device time. Check `TimezoneHelper` usage in countdown component. *(Feedback `77f89256` — Pete, Mar 28)* **P1**
 - [ ] **Admin notifications bleed into family dashboard.** When a care_for user (e.g., Granny Tester) creates a care request, `notifyAdmins()` sends an in-app notification to all users with `is_admin = true`. Since Pete is both admin and family, the notification shows in his family dashboard's "Recent Activity" section with vague text ("companion for a care recipient") — looks like it's about Betty but it's actually about Granny. Fix: either visually distinguish admin notifications from family ones, filter admin-type notifications out of the family dashboard, or add the requester's name to the notification text. *(Pete — Apr 3)* **P2**
 - [x] **No-show poller duplicate guard.** ✅ Fixed v1.57.18 — Added `NOT EXISTS (SELECT 1 FROM admin_audit_log WHERE target_id = cs.id AND action = 'restore_session')` guard to `pollCaregiverNoShows()` query. Restored sessions are now skipped by the poller. *(Pete — Mar 31)*
 - [x] **Notes endpoint lacks access control.** ✅ Fixed v1.57.18 — Added `hasAccess()` function to notes.js (same pattern as careRecipients.js). Checks owner, shared, care team membership, and assigned caregiver. GET and POST both gated. *(Found during care team access audit — Mar 31)*
@@ -71,6 +73,12 @@
 
 ### P2
 
+- [ ] **Stripe Link UX deceptive for bank accounts.** Flow pushes Link, which has higher fees at no benefit. Check Stripe Checkout `payment_method_types` config. May need to disable Link or default to direct card/bank. *(Feedback `d63ed33e` — Pete, Apr 4)* **P2**
+- [ ] **Notification bell too much space on mobile.** Only shows when notifications exist but takes way too much room. Quick CSS fix — reduce size or use icon-only on mobile. *(Feedback `81cb9e47` — Pete, Mar 29)* **P2**
+- [ ] **Cancel open request without reason.** Cancelling an unfilled request shouldn't require a reason — just confirm and do it. Only require reason when caregiver is already assigned. *(Feedback `ab7fea88` — Pete, Mar 29)* **P2**
+- [ ] **Cancel requests from Schedule page.** Currently only possible from Dashboard. Add cancel action to Schedule session cards. *(Feedback `3fdfdc1d` — Pete, Mar 29)* **P2**
+- [ ] **Passkey create/cancel buttons off-screen on mobile.** Text is right of screen and unusable. CSS overflow/wrapping issue on passkey modal buttons. *(Feedback `6706317b` — Pete, Mar 28)* **P2**
+- [ ] **Admin search text garbled on mobile.** Text in search box is overlapping and unreadable. CSS input styling issue in AdminPanel search. *(Feedback `56386949` — Pete, Mar 28)* **P2**
 - [ ] **Caregiver dashboard too cluttered — icon/text overload.** The CaretakerHub tab bar (My Families, Area Map, Earnings, Reviews, etc.) has too many small icons with text labels crammed together. Suggestion: use larger, more illustrative icons without text labels, and show the text label on hover (tooltip) or when selected. Reduce visual noise so the dashboard feels cleaner.
 - [ ] **Mobile formatting broken on feedback/general pages.** Pete reports "formatting on mobile screen doesn't work here." Needs investigation — which page specifically. *(Feedback — Pete, Mar 6)* **P2**
 - [ ] **Payment architecture: team-leader-assigned billing.** Team leader sets the default payment account (e.g., Betty's bank) for scheduled events. Per-member can pay from own account if they scheduled it. Team leader assigns $ qualifiers (who pays for what). *(Feedback — Pete, Feb 25)* **P2**
@@ -140,6 +148,41 @@
 - [x] **Ticket count badge fix (v1.57.8, Mar 30).** PostgreSQL COUNT returns string, JS `"2" + 0 = "20"`. Fixed with `Number(c.count) || 0`. *(Pete — Mar 30)*
 - [x] **Offline check-in/check-out + notes (v1.57.8, Mar 30).** Caregivers can now check in, check out, and leave care notes when they have no internet. Actions are saved to IndexedDB and auto-sync when connectivity returns. Orange "pending sync" badge shows queued count, with manual "Sync Now" button. Server accepts `offlineTimestamp` so recorded times reflect when the action actually happened, not when it synced. *(Pete — Mar 30)*
 - [x] **Admin document viewer — unified across all 3 tables (v1.57.8, Mar 30).** Admin can now see all uploaded documents for any user in the user detail drawer. Searches `caregiver_documents` (DL, certs from onboarding), `verified_documents` (unified system with AI classification), and `authorization_documents` (legacy POA/guardianship). Each doc shows type label, category icon, file name, date, and status badge. Click to preview (images inline, PDFs in iframe). Admin preview endpoint now searches all 3 tables. *(Pete — Mar 30)*
+
+- [x] **v1.58.16–25: iOS safe area + Messages layout overhaul (Apr 5–7).** Multi-session effort fixing iOS Capacitor safe area insets and Messages page layout:
+  - **v1.58.16–17:** JS safe-area polyfill for Capacitor WKWebView — `env(safe-area-inset-*)` returns 0 when `contentInsetAdjustmentBehavior=never`. JS probes env() values, falls back to device heuristics, exposes as CSS custom properties.
+  - **v1.58.18–19:** Moved polyfill to JS bundle (SW was caching old HTML), then inline style to bypass CSS cache entirely.
+  - **v1.58.20–21:** Messages mobile layout — position-fixed container with safe-area spacer, prevent iOS elastic overscroll.
+  - **v1.58.22–23:** Hide bottom nav when keyboard open, fix keyboard viewport resize, fix double safe-area padding on Messages headers.
+  - **v1.58.24:** Move "Book care" button above daily detail card, style orange.
+  - **v1.58.25:** Bulletproof safe-area top — Capacitor fallback, remove keyboard complexity.
+
+- [x] **v1.58.26–31: Care team features + notifications (Apr 7–8).**
+  - **v1.58.26:** Allow care team members to delete visit photos.
+  - **v1.58.27–28:** Admin cleanup endpoint for old pending reviews (one-time, then removed).
+  - **v1.58.29:** Fade treatment on Recent Activity dashboard cards.
+  - **v1.58.30:** Billing contact + care team payment/review access — team members can now manage payments and leave reviews for sessions.
+  - **v1.58.31:** Notification fade + billing contact payment alerts.
+
+- [x] **v1.58.32–35: SMS reminders + demo data + dark mode fixes (Apr 8–9).**
+  - **v1.58.32:** Arrival SMS reminders for care recipients — 2hr, 1hr, 30min before scheduled session.
+  - **v1.58.33:** Fix passkey verification on Android for safety flags, nuke, impersonate admin actions.
+  - **v1.58.34:** Draft message persistence, dashboard query indexes for performance, modal close fix.
+  - **v1.58.35:** Rich demo care notes + iPAi profile caching for faster responses.
+
+- [x] **v1.58.40–46: Caregiver instructions + iPAi detection (Apr 10–11).**
+  - **v1.58.40:** Caregiver instructions — edit from session detail + iPAi auto-suggest. Family can add/edit per-session instructions, and iPAi detects instruction-like messages in chat.
+  - **v1.58.41:** Fix Google sign-in failing on first attempt.
+  - **v1.58.42:** Fix Latest tile reappearing — use local date not UTC for dismissal.
+  - **v1.58.43:** Fix instructions save — `datetime('now')` → `NOW()` for PostgreSQL.
+  - **v1.58.44:** Show "Propose Different Time" button on all jobs, not just conflicts.
+  - **v1.58.45:** Fix active conversation highlight in Messages sidebar.
+  - **v1.58.46:** Detect care instructions in regular chats + message deletion support.
+
+- [x] **v1.58.47–55: iPAi instruction detection fixes + Android OAuth (Apr 12).**
+  - **v1.58.47–50:** Three-layer fix for care instruction detection: SQLite `date('now')` → PostgreSQL `CURRENT_DATE`, widened keyword pre-screen, fixed TEXT vs DATE type mismatch (`scheduled_date` is TEXT column, must compare with `to_char(CURRENT_DATE, 'YYYY-MM-DD')`).
+  - **v1.58.51:** Soften care instruction tone — warm, friendly with emoji, not command-y.
+  - **v1.58.52–55:** Fix Google OAuth on Android — WebView blocked by Google's `disallowed_useragent` policy. Solution: open OAuth in Chrome Custom Tab via `@capacitor/browser`, return to app via custom URL scheme (`inplace://oauth`). App Links intent-filter was too broad (intercepted Google callback URL), replaced with custom scheme intent-filter.
 
 ## iPAi Smart FAQ — Phased Roadmap
 
@@ -292,7 +335,7 @@
 - [ ] **Weekly availability rules (multi-day repeat).** Current availability rules are per-day only. Caregivers want to set "available 8-5 Mon-Thu" as one rule instead of 4 separate entries. Add multi-day selection to the "Add Recurring Rule" modal. Intermediate step before the full drag-to-select calendar rewrite. *(Feedback — Feb 23, #6)*
 - [ ] **Time-of-day positioned calendar blocks.** Calendar day cells should visually position sessions by time of day: AM sessions anchored to top of cell, PM to bottom, mid-day in the middle. Currently cells just stack session labels; this would make the calendar a true at-a-glance time map. Requires taller cells (100-120px), proportional vertical positioning of session blocks within each cell. Phase 1 (done v1.30.1): time prefix labels ("9a", "7p") on each preview. Phase 2: actual spatial positioning. *(Pete — Feb 25)*
 - [ ] **Plausible Analytics setup:** Sign up at plausible.io, add `yourinplace.com` as a site. Script tag is already in index.html.
-- [ ] **Google OAuth setup on Railway:** Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET env vars (requires Google Cloud Console setup — it's free)
+- [x] **Google OAuth setup on Railway.** ✅ Done — Google OAuth live with `prompt=select_account`. Apple Sign-In also implemented. Android OAuth uses Chrome Custom Tab + custom URL scheme (`inplace://oauth`) to work around Google's WebView block. *(Fixed v1.58.55)*
 - [ ] **Upgrade to Google Maps geocoding:** Swap Nominatim → Google Maps for better residential accuracy when ready for production
 - [ ] **🔴 P1 — Stripe Connect + Identity integration (target: Mar 6–7).** Bank account nearly ready. Deploy Stripe live mode, Stripe Connect for marketplace payments, and Stripe Identity for ID verification in consent flow.
 - [ ] **Stripe Connect integration:** Marketplace payments — families pay, caregivers get paid, platform takes fee.

@@ -470,7 +470,11 @@ const setImpersonationToken = window.setImpersonationToken = token => {
 };
 const getImpersonationToken = window.getImpersonationToken = () => IMPERSONATION_TOKEN;
 const apiFetch = window.apiFetch = async (url, options = {}) => {
-  const headers = {
+  // For FormData (file uploads), don't set Content-Type — browser sets multipart boundary automatically
+  const isFormData = options.body instanceof FormData;
+  const headers = isFormData ? {
+    ...options.headers
+  } : {
     'Content-Type': 'application/json',
     ...options.headers
   };
@@ -1139,6 +1143,12 @@ const subscribeNativePush = window.subscribeNativePush = async () => {
       // Also set up notification received/action listeners
       PushNotifications.addListener('pushNotificationReceived', notification => {
         console.log('NativePush: notification received in foreground:', notification.title);
+        const nData = notification.data || {};
+        // Suppress toast if user is already viewing this conversation
+        if (nData.type === 'message' && nData.conversationId && window.__activeConversationId === nData.conversationId) {
+          console.log('NativePush: suppressed — user is viewing this conversation');
+          return;
+        }
         // Show in-app toast for foreground notifications
         if (window.useToast) {
           try {
@@ -1151,10 +1161,30 @@ const subscribeNativePush = window.subscribeNativePush = async () => {
         var _action$notification, _action$notification2;
         console.log('NativePush: notification tapped:', (_action$notification = action.notification) === null || _action$notification === void 0 ? void 0 : _action$notification.title);
         const data = (_action$notification2 = action.notification) === null || _action$notification2 === void 0 ? void 0 : _action$notification2.data;
-        if (data !== null && data !== void 0 && data.page) {
+        // Deep-link: mirror the service worker routing logic for native push
+        if ((data === null || data === void 0 ? void 0 : data.type) === 'message' && data.conversationId) {
           var _window$__navigateTo, _window2;
-          // Navigate to the relevant page when notification is tapped
-          (_window$__navigateTo = (_window2 = window).__navigateTo) === null || _window$__navigateTo === void 0 || _window$__navigateTo.call(_window2, data.page);
+          window.__pendingConversation = data.conversationId;
+          (_window$__navigateTo = (_window2 = window).__navigateTo) === null || _window$__navigateTo === void 0 || _window$__navigateTo.call(_window2, 'messages');
+        } else if ((data === null || data === void 0 ? void 0 : data.type) === 'care_request' || (data === null || data === void 0 ? void 0 : data.type) === 'care_request_accepted') {
+          var _window$__navigateTo2, _window3;
+          (_window$__navigateTo2 = (_window3 = window).__navigateTo) === null || _window$__navigateTo2 === void 0 || _window$__navigateTo2.call(_window3, 'schedule');
+        } else if ((data === null || data === void 0 ? void 0 : data.type) === 'new_job') {
+          var _window$__navigateTo3, _window4;
+          (_window$__navigateTo3 = (_window4 = window).__navigateTo) === null || _window$__navigateTo3 === void 0 || _window$__navigateTo3.call(_window4, 'find-work');
+        } else if ((data === null || data === void 0 ? void 0 : data.type) === 'check_in_reminder' || (data === null || data === void 0 ? void 0 : data.type) === 'check_out_reminder' || (data === null || data === void 0 ? void 0 : data.type) === 'caregiver_arriving' || (data === null || data === void 0 ? void 0 : data.type) === 'caregiver_arriving_recipient') {
+          var _window$__navigateTo4, _window5;
+          (_window$__navigateTo4 = (_window5 = window).__navigateTo) === null || _window$__navigateTo4 === void 0 || _window$__navigateTo4.call(_window5, 'dashboard');
+        } else if ((data === null || data === void 0 ? void 0 : data.type) === 'kindred_relay') {
+          var _window$__navigateTo5, _window6;
+          (_window$__navigateTo5 = (_window6 = window).__navigateTo) === null || _window$__navigateTo5 === void 0 || _window$__navigateTo5.call(_window6, 'messages');
+        } else if ((data === null || data === void 0 ? void 0 : data.type) === 'video_call' && data.conversationId) {
+          var _window$__navigateTo6, _window7;
+          window.__pendingConversation = data.conversationId;
+          (_window$__navigateTo6 = (_window7 = window).__navigateTo) === null || _window$__navigateTo6 === void 0 || _window$__navigateTo6.call(_window7, 'messages');
+        } else if (data !== null && data !== void 0 && data.page) {
+          var _window$__navigateTo7, _window8;
+          (_window$__navigateTo7 = (_window8 = window).__navigateTo) === null || _window$__navigateTo7 === void 0 || _window$__navigateTo7.call(_window8, data.page);
         }
       });
 
@@ -1211,11 +1241,40 @@ const initNativeTokenRefresh = window.initNativeTokenRefresh = () => {
       });
       PushNotifications.addListener('pushNotificationReceived', notification => {
         console.log('NativePush: foreground notification:', notification.title);
+        const nData = notification.data || {};
+        // Suppress toast if user is already viewing this conversation
+        if (nData.type === 'message' && nData.conversationId && window.__activeConversationId === nData.conversationId) return;
+        if (window.useToast) {
+          try {
+            var _window$__showToast2, _window9;
+            (_window$__showToast2 = (_window9 = window).__showToast) === null || _window$__showToast2 === void 0 || _window$__showToast2.call(_window9, notification.title || 'New notification', 'info');
+          } catch {}
+        }
       });
       PushNotifications.addListener('pushNotificationActionPerformed', action => {
-        var _action$notification3, _window$__navigateTo2, _window3;
+        var _action$notification3;
         const data = (_action$notification3 = action.notification) === null || _action$notification3 === void 0 ? void 0 : _action$notification3.data;
-        if (data !== null && data !== void 0 && data.page) (_window$__navigateTo2 = (_window3 = window).__navigateTo) === null || _window$__navigateTo2 === void 0 || _window$__navigateTo2.call(_window3, data.page);
+        if ((data === null || data === void 0 ? void 0 : data.type) === 'message' && data.conversationId) {
+          var _window$__navigateTo8, _window0;
+          window.__pendingConversation = data.conversationId;
+          (_window$__navigateTo8 = (_window0 = window).__navigateTo) === null || _window$__navigateTo8 === void 0 || _window$__navigateTo8.call(_window0, 'messages');
+        } else if ((data === null || data === void 0 ? void 0 : data.type) === 'care_request' || (data === null || data === void 0 ? void 0 : data.type) === 'care_request_accepted') {
+          var _window$__navigateTo9, _window1;
+          (_window$__navigateTo9 = (_window1 = window).__navigateTo) === null || _window$__navigateTo9 === void 0 || _window$__navigateTo9.call(_window1, 'schedule');
+        } else if ((data === null || data === void 0 ? void 0 : data.type) === 'new_job') {
+          var _window$__navigateTo0, _window10;
+          (_window$__navigateTo0 = (_window10 = window).__navigateTo) === null || _window$__navigateTo0 === void 0 || _window$__navigateTo0.call(_window10, 'find-work');
+        } else if ((data === null || data === void 0 ? void 0 : data.type) === 'kindred_relay') {
+          var _window$__navigateTo1, _window11;
+          (_window$__navigateTo1 = (_window11 = window).__navigateTo) === null || _window$__navigateTo1 === void 0 || _window$__navigateTo1.call(_window11, 'messages');
+        } else if ((data === null || data === void 0 ? void 0 : data.type) === 'video_call' && data.conversationId) {
+          var _window$__navigateTo10, _window12;
+          window.__pendingConversation = data.conversationId;
+          (_window$__navigateTo10 = (_window12 = window).__navigateTo) === null || _window$__navigateTo10 === void 0 || _window$__navigateTo10.call(_window12, 'messages');
+        } else if (data !== null && data !== void 0 && data.page) {
+          var _window$__navigateTo11, _window13;
+          (_window$__navigateTo11 = (_window13 = window).__navigateTo) === null || _window$__navigateTo11 === void 0 || _window$__navigateTo11.call(_window13, data.page);
+        }
       });
     }).catch(() => {});
   } catch (err) {
@@ -4364,10 +4423,10 @@ const LoginPage = window.LoginPage = ({
       }).then(data => {
         if (!data) return;
         if (data.token && data.user) {
-          var _window$getAuthToken, _window4;
+          var _window$getAuthToken, _window14;
           console.log('[OAuth] Exchange success, setting token for:', data.user.email);
           setAuthToken(data.token);
-          console.log('[OAuth] AUTH_TOKEN set:', !!((_window$getAuthToken = (_window4 = window).getAuthToken) !== null && _window$getAuthToken !== void 0 && _window$getAuthToken.call(_window4)));
+          console.log('[OAuth] AUTH_TOKEN set:', !!((_window$getAuthToken = (_window14 = window).getAuthToken) !== null && _window$getAuthToken !== void 0 && _window$getAuthToken.call(_window14)));
           trackAuthEvent('login', 'oauth_success', {
             email: data.user.email,
             provider: 'oauth'
@@ -24369,6 +24428,8 @@ const Messages = window.Messages = () => {
   const lastTypingEmitRef = useRef(0);
   const inputTextRef = useRef('');
   const activeConvIdRef = useRef(null);
+  const photoInputRef = useRef(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   // ─── Read receipts ───
   const [readReceipts, setReadReceipts] = useState({}); // { conversationId: { userId: readAt } }
@@ -24744,6 +24805,11 @@ const Messages = window.Messages = () => {
   }, [inputText]);
   useEffect(() => {
     activeConvIdRef.current = activeConvId;
+    // Expose to window so native push handler can suppress notifications for active conversation
+    window.__activeConversationId = activeConvId;
+    return () => {
+      if (window.__activeConversationId === activeConvId) window.__activeConversationId = null;
+    };
   }, [activeConvId]);
 
   // Handle deep-link from push notification or URL param
@@ -25023,6 +25089,51 @@ const Messages = window.Messages = () => {
       console.error('Send message error:', err);
     }
     setSending(false);
+  };
+
+  // ─── Photo upload ───
+  const handlePhotoUpload = async e => {
+    var _e$target$files2;
+    const file = (_e$target$files2 = e.target.files) === null || _e$target$files2 === void 0 ? void 0 : _e$target$files2[0];
+    if (!file || !activeConvId) return;
+    // Reset input so same file can be re-selected
+    if (photoInputRef.current) photoInputRef.current.value = '';
+    if (file.size > 5 * 1024 * 1024) {
+      showToast('Photo must be under 5MB', 'error');
+      return;
+    }
+    if (!file.type.startsWith('image/')) {
+      showToast('Only image files are allowed', 'error');
+      return;
+    }
+    setUploadingPhoto(true);
+    try {
+      const formData = new FormData();
+      formData.append('photo', file);
+      // Use inputText as caption if user typed something
+      if (inputText.trim()) {
+        formData.append('caption', inputText.trim());
+      }
+      const res = await apiFetch(`/api/messages/conversations/${activeConvId}/photo`, {
+        method: 'POST',
+        body: formData
+      });
+      if (res !== null && res !== void 0 && res.ok) {
+        setInputText('');
+        setReplyTo(null);
+        delete draftsRef.current[activeConvId];
+        persistDrafts();
+        await fetchMessages(activeConvId);
+        await fetchConversations();
+      } else {
+        const err = await (res === null || res === void 0 ? void 0 : res.json().catch(() => ({})));
+        showToast((err === null || err === void 0 ? void 0 : err.error) || 'Failed to upload photo', 'error');
+      }
+    } catch (err) {
+      console.error('Photo upload error:', err);
+      showToast('Failed to upload photo', 'error');
+    }
+    setUploadingPhoto(false);
   };
   const handleStartCall = async callType => {
     var _activeConv$members2;
@@ -27273,7 +27384,34 @@ const Messages = window.Messages = () => {
           wordWrap: 'break-word',
           fontStyle: m.is_deleted ? 'italic' : 'normal'
         }
-      }, renderMessageContent(m.content), /*#__PURE__*/React.createElement("div", {
+      }, m.message_type === 'photo' && m.metadata ? (() => {
+        try {
+          const meta = typeof m.metadata === 'string' ? JSON.parse(m.metadata) : m.metadata;
+          return React.createElement('div', {
+            style: {
+              margin: '-6px -10px 4px -10px'
+            }
+          }, React.createElement('img', {
+            src: meta.photoUrl,
+            alt: meta.caption || 'Photo',
+            style: {
+              maxWidth: '100%',
+              maxHeight: 300,
+              borderRadius: 12,
+              display: 'block',
+              cursor: 'pointer'
+            },
+            onClick: () => window.open(meta.photoUrl, '_blank')
+          }), meta.caption ? React.createElement('div', {
+            style: {
+              padding: '4px 10px 0',
+              fontSize: 14
+            }
+          }, meta.caption) : null);
+        } catch {
+          return renderMessageContent(m.content);
+        }
+      })() : renderMessageContent(m.content), /*#__PURE__*/React.createElement("div", {
         style: {
           fontSize: '10px',
           color: isSent ? 'rgba(255,255,255,0.6)' : 'var(--text-muted)',
@@ -27626,7 +27764,65 @@ const Messages = window.Messages = () => {
       }
     }, "\xD7")), /*#__PURE__*/React.createElement("div", {
       className: "msg-input-area"
-    }, /*#__PURE__*/React.createElement("textarea", {
+    }, /*#__PURE__*/React.createElement("input", {
+      ref: photoInputRef,
+      type: "file",
+      accept: "image/*",
+      capture: "environment",
+      style: {
+        display: 'none'
+      },
+      onChange: handlePhotoUpload
+    }), /*#__PURE__*/React.createElement("button", {
+      onClick: () => {
+        var _photoInputRef$curren;
+        return (_photoInputRef$curren = photoInputRef.current) === null || _photoInputRef$curren === void 0 ? void 0 : _photoInputRef$curren.click();
+      },
+      disabled: uploadingPhoto || sending,
+      title: "Send a photo",
+      style: {
+        background: 'none',
+        border: 'none',
+        cursor: 'pointer',
+        padding: '8px 6px',
+        color: uploadingPhoto ? 'var(--text-muted)' : 'var(--role-color)',
+        display: 'flex',
+        alignItems: 'center',
+        flexShrink: 0
+      }
+    }, uploadingPhoto ? /*#__PURE__*/React.createElement("span", {
+      style: {
+        display: 'inline-block',
+        width: 20,
+        height: 20,
+        border: '2px solid var(--text-muted)',
+        borderTopColor: 'var(--role-color)',
+        borderRadius: '50%',
+        animation: 'spin 0.6s linear infinite'
+      }
+    }) : /*#__PURE__*/React.createElement("svg", {
+      width: "20",
+      height: "20",
+      viewBox: "0 0 24 24",
+      fill: "none",
+      stroke: "currentColor",
+      strokeWidth: "2",
+      strokeLinecap: "round",
+      strokeLinejoin: "round"
+    }, /*#__PURE__*/React.createElement("rect", {
+      x: "3",
+      y: "3",
+      width: "18",
+      height: "18",
+      rx: "2",
+      ry: "2"
+    }), /*#__PURE__*/React.createElement("circle", {
+      cx: "8.5",
+      cy: "8.5",
+      r: "1.5"
+    }), /*#__PURE__*/React.createElement("polyline", {
+      points: "21 15 16 10 5 21"
+    }))), /*#__PURE__*/React.createElement("textarea", {
       ref: inputRef,
       className: "msg-input",
       placeholder: replyTo ? "Type your reply..." : "Type a message...",
@@ -31969,8 +32165,8 @@ const MyAccount = window.MyAccount = ({
 
   // ─── Identity Verification Handlers ───
   const handleIdVerFileSelect = async (e, type) => {
-    var _e$target$files2;
-    const file = (_e$target$files2 = e.target.files) === null || _e$target$files2 === void 0 ? void 0 : _e$target$files2[0];
+    var _e$target$files3;
+    const file = (_e$target$files3 = e.target.files) === null || _e$target$files3 === void 0 ? void 0 : _e$target$files3[0];
     if (!file) return;
     if (!file.type.startsWith('image/')) {
       showToast('Please select an image file', 'error');
@@ -32023,8 +32219,8 @@ const MyAccount = window.MyAccount = ({
     setIdVerSubmitting(false);
   };
   const handlePhotoUpload = async e => {
-    var _e$target$files3;
-    const file = (_e$target$files3 = e.target.files) === null || _e$target$files3 === void 0 ? void 0 : _e$target$files3[0];
+    var _e$target$files4;
+    const file = (_e$target$files4 = e.target.files) === null || _e$target$files4 === void 0 ? void 0 : _e$target$files4[0];
     if (!file) return;
     if (!file.type.startsWith('image/')) {
       showToast('Please select an image file', 'error');
@@ -32956,8 +33152,8 @@ const MyAccount = window.MyAccount = ({
     }
   }, /*#__PURE__*/React.createElement("button", {
     onClick: () => {
-      var _photoInputRef$curren;
-      return (_photoInputRef$curren = photoInputRef.current) === null || _photoInputRef$curren === void 0 ? void 0 : _photoInputRef$curren.click();
+      var _photoInputRef$curren2;
+      return (_photoInputRef$curren2 = photoInputRef.current) === null || _photoInputRef$curren2 === void 0 ? void 0 : _photoInputRef$curren2.click();
     },
     disabled: uploadingPhoto,
     style: {
@@ -34259,9 +34455,9 @@ const MyAccount = window.MyAccount = ({
     }
   }, /*#__PURE__*/React.createElement("button", {
     onClick: () => {
-      var _window$getAuthToken2, _window5;
+      var _window$getAuthToken2, _window15;
       // Get the current auth token to pass through the OAuth flow
-      const token = ((_window$getAuthToken2 = (_window5 = window).getAuthToken) === null || _window$getAuthToken2 === void 0 ? void 0 : _window$getAuthToken2.call(_window5)) || '';
+      const token = ((_window$getAuthToken2 = (_window15 = window).getAuthToken) === null || _window$getAuthToken2 === void 0 ? void 0 : _window$getAuthToken2.call(_window15)) || '';
       if (!token) {
         showToast('Please sign in first', 'error');
         return;
@@ -39168,8 +39364,8 @@ const SelfOnboardingWizard = window.SelfOnboardingWizard = ({
     }
   };
   const handleIdUpload = async e => {
-    var _e$target$files4;
-    const file = (_e$target$files4 = e.target.files) === null || _e$target$files4 === void 0 ? void 0 : _e$target$files4[0];
+    var _e$target$files5;
+    const file = (_e$target$files5 = e.target.files) === null || _e$target$files5 === void 0 ? void 0 : _e$target$files5[0];
     if (!file) return;
     setLoading(true);
     try {
@@ -44850,8 +45046,8 @@ const CaretakerHub = window.CaretakerHub = ({
   });
   const CARE_TASKS = ['Bathing / Showering', 'Toileting', 'Dressing', 'Feeding / Meal Assistance', 'Medication Reminders', 'Mobility / Transfer', 'Light Housekeeping', 'Laundry', 'Meal Preparation', 'Grocery Shopping', 'Transportation / Errands', 'Companionship', 'Exercise / Physical Therapy', 'Wound Care', 'Dementia / Memory Care', 'Hospice / End-of-Life'];
   const handleAvatarUpload = async e => {
-    var _e$target$files5;
-    const file = (_e$target$files5 = e.target.files) === null || _e$target$files5 === void 0 ? void 0 : _e$target$files5[0];
+    var _e$target$files6;
+    const file = (_e$target$files6 = e.target.files) === null || _e$target$files6 === void 0 ? void 0 : _e$target$files6[0];
     if (!file) return;
     setUploadingAvatar(true);
     try {
@@ -48736,8 +48932,8 @@ const CaretakerHub = window.CaretakerHub = ({
     }
   }), /*#__PURE__*/React.createElement("button", {
     onClick: () => {
-      var _photoInputRef$curren2;
-      return (_photoInputRef$curren2 = photoInputRef.current) === null || _photoInputRef$curren2 === void 0 ? void 0 : _photoInputRef$curren2.click();
+      var _photoInputRef$curren3;
+      return (_photoInputRef$curren3 = photoInputRef.current) === null || _photoInputRef$curren3 === void 0 ? void 0 : _photoInputRef$curren3.click();
     },
     style: {
       padding: '16px',
@@ -56880,8 +57076,8 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({
     };
   }, [cameraStream]);
   const handleIdFileUpload = (type, e) => {
-    var _e$target$files6;
-    const file = (_e$target$files6 = e.target.files) === null || _e$target$files6 === void 0 ? void 0 : _e$target$files6[0];
+    var _e$target$files7;
+    const file = (_e$target$files7 = e.target.files) === null || _e$target$files7 === void 0 ? void 0 : _e$target$files7[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = ev => {
@@ -80152,11 +80348,22 @@ const App = () => {
       window.history.replaceState({}, '', window.location.pathname);
     }
 
-    // Listen for push navigation messages from service worker
+    // Listen for messages from service worker
     if ('serviceWorker' in navigator) {
+      // Respond to SW asking if user is viewing a specific conversation (for push suppression)
       navigator.serviceWorker.addEventListener('message', event => {
         var _event$data3;
-        if (((_event$data3 = event.data) === null || _event$data3 === void 0 ? void 0 : _event$data3.type) === 'PUSH_NAVIGATE') {
+        if (((_event$data3 = event.data) === null || _event$data3 === void 0 ? void 0 : _event$data3.type) === 'CHECK_ACTIVE_CONVERSATION') {
+          var _event$ports;
+          const isViewing = window.__activeConversationId === event.data.conversationId;
+          if ((_event$ports = event.ports) !== null && _event$ports !== void 0 && _event$ports[0]) event.ports[0].postMessage({
+            viewing: isViewing
+          });
+        }
+      });
+      navigator.serviceWorker.addEventListener('message', event => {
+        var _event$data4;
+        if (((_event$data4 = event.data) === null || _event$data4 === void 0 ? void 0 : _event$data4.type) === 'PUSH_NAVIGATE') {
           const d = event.data.data || {};
           if (d.type === 'message' && d.conversationId) {
             window.__pendingConversation = d.conversationId;

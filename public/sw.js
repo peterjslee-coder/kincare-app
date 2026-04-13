@@ -1,6 +1,6 @@
 // InPlace Service Worker — v1.57.14
-const CACHE_NAME = 'inplace-build-bc4e3c6b-mnwf0gxs';
-const SW_VERSION = 'build-bc4e3c6b-mnwf0gxs';
+const CACHE_NAME = 'inplace-build-28f014c8-mnxdahs2';
+const SW_VERSION = 'build-28f014c8-mnxdahs2';
 const STATIC_ASSETS = [
   '/',
   '/css/styles.css',
@@ -159,21 +159,50 @@ self.addEventListener('push', (event) => {
     // fallback to default
   }
 
-  const options = {
-    body: data.body,
-    icon: '/icons/icon-192.png',
-    badge: '/icons/icon-maskable-96.png',
-    vibrate: [100, 50, 100],
-    data: data.data || {},
-    tag: data.tag || undefined, // same tag → replaces previous notification instead of stacking
-    renotify: !!data.tag, // vibrate/sound again even when replacing an existing tag
-    actions: [
-      { action: 'open', title: 'Open' },
-      { action: 'dismiss', title: 'Dismiss' },
-    ],
-  };
+  const pushData = data.data || {};
 
-  event.waitUntil(self.registration.showNotification(data.title, options));
+  // Suppress notification if user is actively viewing this conversation
+  // Ask the focused client if this conversation is active
+  event.waitUntil(
+    (async () => {
+      if (pushData.type === 'message' && pushData.conversationId) {
+        const windowClients = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+        for (const client of windowClients) {
+          if (client.focused || client.visibilityState === 'visible') {
+            try {
+              // Use MessageChannel to ask the client if it's viewing this conversation
+              const isViewing = await new Promise((resolve) => {
+                const mc = new MessageChannel();
+                mc.port1.onmessage = (e) => resolve(e.data?.viewing === true);
+                client.postMessage({ type: 'CHECK_ACTIVE_CONVERSATION', conversationId: pushData.conversationId }, [mc.port2]);
+                setTimeout(() => resolve(false), 200); // timeout fallback
+              });
+              if (isViewing) {
+                console.log('SW: suppressed notification — user is viewing conversation', pushData.conversationId);
+                return; // Don't show the notification
+              }
+            } catch {}
+          }
+        }
+      }
+
+      const options = {
+        body: data.body,
+        icon: '/icons/icon-192.png',
+        badge: '/icons/icon-maskable-96.png',
+        vibrate: [100, 50, 100],
+        data: pushData,
+        tag: data.tag || undefined,
+        renotify: !!data.tag,
+        actions: [
+          { action: 'open', title: 'Open' },
+          { action: 'dismiss', title: 'Dismiss' },
+        ],
+      };
+
+      await self.registration.showNotification(data.title, options);
+    })()
+  );
 });
 
 // Handle notification click — open the app with deep-link

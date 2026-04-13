@@ -56,6 +56,8 @@ const Messages = window.Messages = () => {
   const lastTypingEmitRef = useRef(0);
   const inputTextRef = useRef('');
   const activeConvIdRef = useRef(null);
+  const photoInputRef = useRef(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   // ─── Read receipts ───
   const [readReceipts, setReadReceipts] = useState({}); // { conversationId: { userId: readAt } }
@@ -371,7 +373,12 @@ const Messages = window.Messages = () => {
 
   // Keep refs in sync for unmount cleanup
   useEffect(() => { inputTextRef.current = inputText; }, [inputText]);
-  useEffect(() => { activeConvIdRef.current = activeConvId; }, [activeConvId]);
+  useEffect(() => {
+    activeConvIdRef.current = activeConvId;
+    // Expose to window so native push handler can suppress notifications for active conversation
+    window.__activeConversationId = activeConvId;
+    return () => { if (window.__activeConversationId === activeConvId) window.__activeConversationId = null; };
+  }, [activeConvId]);
 
   // Handle deep-link from push notification or URL param
   useEffect(() => {
@@ -647,6 +654,54 @@ const Messages = window.Messages = () => {
       console.error('Send message error:', err);
     }
     setSending(false);
+  };
+
+  // ─── Photo upload ───
+  const handlePhotoUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !activeConvId) return;
+    // Reset input so same file can be re-selected
+    if (photoInputRef.current) photoInputRef.current.value = '';
+
+    if (file.size > 5 * 1024 * 1024) {
+      showToast('Photo must be under 5MB', 'error');
+      return;
+    }
+    if (!file.type.startsWith('image/')) {
+      showToast('Only image files are allowed', 'error');
+      return;
+    }
+
+    setUploadingPhoto(true);
+    try {
+      const formData = new FormData();
+      formData.append('photo', file);
+      // Use inputText as caption if user typed something
+      if (inputText.trim()) {
+        formData.append('caption', inputText.trim());
+      }
+
+      const res = await apiFetch(`/api/messages/conversations/${activeConvId}/photo`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (res?.ok) {
+        setInputText('');
+        setReplyTo(null);
+        delete draftsRef.current[activeConvId];
+        persistDrafts();
+        await fetchMessages(activeConvId);
+        await fetchConversations();
+      } else {
+        const err = await res?.json().catch(() => ({}));
+        showToast(err?.error || 'Failed to upload photo', 'error');
+      }
+    } catch (err) {
+      console.error('Photo upload error:', err);
+      showToast('Failed to upload photo', 'error');
+    }
+    setUploadingPhoto(false);
   };
 
   const handleStartCall = async (callType) => {
@@ -1812,7 +1867,20 @@ const Messages = window.Messages = () => {
                           fontSize: '14px', lineHeight: 1.45, wordWrap: 'break-word',
                           fontStyle: m.is_deleted ? 'italic' : 'normal',
                         }}>
-                          {renderMessageContent(m.content)}
+                          {m.message_type === 'photo' && m.metadata ? (() => {
+                            try {
+                              const meta = typeof m.metadata === 'string' ? JSON.parse(m.metadata) : m.metadata;
+                              return React.createElement('div', { style: { margin: '-6px -10px 4px -10px' } },
+                                React.createElement('img', {
+                                  src: meta.photoUrl,
+                                  alt: meta.caption || 'Photo',
+                                  style: { maxWidth: '100%', maxHeight: 300, borderRadius: 12, display: 'block', cursor: 'pointer' },
+                                  onClick: () => window.open(meta.photoUrl, '_blank'),
+                                }),
+                                meta.caption ? React.createElement('div', { style: { padding: '4px 10px 0', fontSize: 14 } }, meta.caption) : null
+                              );
+                            } catch { return renderMessageContent(m.content); }
+                          })() : renderMessageContent(m.content)}
                           <div style={{ fontSize: '10px', color: isSent ? 'rgba(255,255,255,0.6)' : 'var(--text-muted)', marginTop: '4px', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 3 }}>
                             <span>{(() => {
                               const d = parseTimestamp(m.created_at);
@@ -2020,6 +2088,36 @@ const Messages = window.Messages = () => {
           </div>
         )}
         <div className="msg-input-area">
+          {/* Hidden file input for photo uploads */}
+          <input
+            ref={photoInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            style={{ display: 'none' }}
+            onChange={handlePhotoUpload}
+          />
+          {/* Photo upload button */}
+          <button
+            onClick={() => photoInputRef.current?.click()}
+            disabled={uploadingPhoto || sending}
+            title="Send a photo"
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer', padding: '8px 6px',
+              color: uploadingPhoto ? 'var(--text-muted)' : 'var(--role-color)',
+              display: 'flex', alignItems: 'center', flexShrink: 0,
+            }}
+          >
+            {uploadingPhoto ? (
+              <span style={{ display: 'inline-block', width: 20, height: 20, border: '2px solid var(--text-muted)', borderTopColor: 'var(--role-color)', borderRadius: '50%', animation: 'spin 0.6s linear infinite' }}></span>
+            ) : (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                <polyline points="21 15 16 10 5 21"></polyline>
+              </svg>
+            )}
+          </button>
           <textarea
             ref={inputRef}
             className="msg-input"

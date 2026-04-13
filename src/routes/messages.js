@@ -1,12 +1,24 @@
 const express = require("express");
+const multer = require("multer");
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { authenticate } = require("../middleware/auth");
 const { sendPushToUser } = require("./push");
 const { screenMessage } = require("../utils/messageSafety");
+const { validateMagicBytes } = require("../utils/fileValidation");
 
 const router = express.Router();
 router.use(authenticate);
+
+// Multer for chat photo uploads — memory storage, 5MB limit, images only
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith("image/")) cb(null, true);
+    else cb(new Error("Only image files are allowed"));
+  },
+});
 
 // Helper: check if caregiver is cleared (BG check passed + approved)
 // Returns true for non-caregivers (they have no restrictions)
@@ -514,6 +526,94 @@ router.get("/conversations/:id", async (req, res) => {
   }));
 
   res.json({ messages: enriched, conversationType: conv?.type || "direct" });
+});
+
+// ─── POST /api/messages/conversations/:id/photo ─── Upload a photo in a conversation
+router.post("/conversations/:id/photo", upload.single("photo"), async (req, res) => {
+  try {
+    const db = await getDb();
+    const userId = req.user.id;
+    const convId = req.params.id;
+    const caption = req.body.caption || "";
+
+    if (!req.file) return res.status(400).json({ error: "No photo uploaded" });
+
+    // Validate magic bytes
+    const validation = validateMagicBytes(req.file.buffer, req.file.mimetype);
+    if (!validation.valid) {
+      return res.status(400).json({ error: "Invalid image file" });
+    }
+
+    // Uncleared caregivers can only message in conversations with admin
+    const cleared = await isCaregiverCleared(db, req.user);
+    if (!cleared) {
+      const hasAdmin = await conversationHasAdmin(db, convId);
+      if (!hasAdmin) {
+        return res.status(403).json({ error: "Messaging is limited to InPlace Support until your background check is approved." });
+      }
+    }
+
+    // Verify membership
+    const membership = await db.prepare(
+      "SELECT id FROM conversation_members WHERE conversation_id = ? AND user_id = ?"
+    ).get(convId, userId);
+    if (!membership) return res.status(403).json({ error: "Not a member of this conversation" });
+
+    // Convert to base64 data URL
+    const base64 = req.file.buffer.toString("base64");
+    const dataUrl = `data:${req.file.mimetype};base64,${base64}`;
+
+    // Get conversation members for notification
+    const members = await db.prepare(
+      "SELECT user_id FROM conversation_members WHERE conversation_id = ? AND user_id != ?"
+    ).all(convId, userId);
+
+    // For 1:1 conversations, set recipient_id for backward compat
+    const conv = await db.prepare("SELECT type FROM conversations WHERE id = ?").get(convId);
+    const recipientId = (conv?.type === "direct" && members.length === 1) ? members[0].user_id : null;
+
+    const msgId = uuid();
+    const displayContent = caption || "📷 Photo";
+    const metadata = JSON.stringify({ photoUrl: dataUrl, caption, originalName: req.file.originalname });
+
+    await db.prepare(
+      "INSERT INTO messages (id, sender_id, recipient_id, content, conversation_id, message_type, metadata) VALUES (?, ?, ?, ?, ?, 'photo', ?)"
+    ).run(msgId, userId, recipientId || userId, displayContent, convId, metadata);
+
+    // Update conversation timestamp
+    await db.prepare("UPDATE conversations SET updated_at = NOW() WHERE id = ?").run(convId);
+
+    // Update sender's last_read_at
+    await db.prepare(
+      "UPDATE conversation_members SET last_read_at = NOW() WHERE conversation_id = ? AND user_id = ?"
+    ).run(convId, userId);
+
+    const message = await db.prepare("SELECT * FROM messages WHERE id = ?").get(msgId);
+    const sender = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(userId);
+    const senderName = sender ? `${sender.first_name} ${sender.last_name}` : "Someone";
+
+    // Notify all other members
+    const emitToUser = req.app.get("emitToUser");
+    for (const member of members) {
+      sendPushToUser(member.user_id, {
+        title: "InPlace",
+        body: `${senderName}: 📷 Photo${caption ? " — " + caption.substring(0, 60) : ""}`,
+        data: { type: "message", senderId: userId, conversationId: convId },
+      }).catch(() => {});
+
+      if (emitToUser) {
+        emitToUser(member.user_id, "new_message", {
+          ...message, senderName, type: "received", conversationId: convId,
+        });
+      }
+    }
+
+    res.status(201).json({ message });
+  } catch (err) {
+    console.error("Photo upload error:", err);
+    if (err.code === "LIMIT_FILE_SIZE") return res.status(413).json({ error: "Photo must be under 5MB" });
+    res.status(500).json({ error: "Failed to upload photo" });
+  }
 });
 
 // ─── POST /api/messages/conversations/:id ─── Send a message to a conversation

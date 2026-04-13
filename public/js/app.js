@@ -981,8 +981,15 @@ const App = () => {
       window.history.replaceState({}, '', window.location.pathname);
     }
 
-    // Listen for push navigation messages from service worker
+    // Listen for messages from service worker
     if ('serviceWorker' in navigator) {
+      // Respond to SW asking if user is viewing a specific conversation (for push suppression)
+      navigator.serviceWorker.addEventListener('message', (event) => {
+        if (event.data?.type === 'CHECK_ACTIVE_CONVERSATION') {
+          const isViewing = window.__activeConversationId === event.data.conversationId;
+          if (event.ports?.[0]) event.ports[0].postMessage({ viewing: isViewing });
+        }
+      });
       navigator.serviceWorker.addEventListener('message', (event) => {
         if (event.data?.type === 'PUSH_NAVIGATE') {
           const d = event.data.data || {};
