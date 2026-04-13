@@ -80291,11 +80291,10 @@ const App = () => {
     // fresh cookies that the exchange just set, causing immediate re-logout.
     if (appState === 'reset-password' || appState === 'consent-response' || appState === 'login') return;
 
-    // Only auto-restore if this tab has an active session (set at login).
-    // Closing the browser/tab clears sessionStorage, so the user must
-    // re-authenticate on next visit instead of silently auto-logging in.
+    // Auto-restore if user has an active session (persists until explicit logout or 7-day cookie expiry).
+    // Uses localStorage so sessions survive browser/app restarts (important for native Capacitor app).
     // Invite links bypass this check so the accept-invite flow still works.
-    const hasActiveSession = sessionStorage.getItem('inplace_session_active');
+    const hasActiveSession = localStorage.getItem('inplace_session_active');
     const hasInviteToken = new URLSearchParams(window.location.search).get('invite') || new URLSearchParams(window.__originalSearch || '').get('invite') || localStorage.getItem('pendingInviteToken');
     if (!hasActiveSession && !hasInviteToken) return;
 
@@ -80358,7 +80357,7 @@ const App = () => {
             if (a11y.textSize && typeof applyTextSize === 'function') applyTextSize(a11y.textSize);
           } catch {}
           // Session successfully restored — keep flag active for this tab
-          sessionStorage.setItem('inplace_session_active', '1');
+          localStorage.setItem('inplace_session_active', '1');
           setAppState('app');
           // If returning user has a pending invite token, accept it now
           // Check URL, __originalSearch, and localStorage (survives approval gate)
@@ -80592,7 +80591,7 @@ const App = () => {
     var _window$Capacitor17, _window$Capacitor17$i;
     // Mark this tab as having an active session so refreshes auto-restore,
     // but closing the browser requires re-authentication.
-    sessionStorage.setItem('inplace_session_active', '1');
+    localStorage.setItem('inplace_session_active', '1');
     // Clear stale active role from any previous session
     window.setActiveRole(null);
     setActiveRoleState(null);
@@ -80737,7 +80736,7 @@ const App = () => {
   };
   const handleLogout = () => {
     // Clear session-active flag so next page load requires re-authentication
-    sessionStorage.removeItem('inplace_session_active');
+    localStorage.removeItem('inplace_session_active');
     // Clear server-side session: revoke refresh token + clear httpOnly cookies
     AUTH_TOKEN = null;
     fetch('/api/auth/logout', {
