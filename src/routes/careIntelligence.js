@@ -49,11 +49,12 @@ router.get("/:recipientId", authenticate, async (req, res) => {
       if (ageMs < MAX_AGE_MS) {
         console.log(`[iPAi] Returning cached care intelligence for ${req.params.recipientId} (age: ${Math.round(ageMs / 60000)} min)`);
         // Return cached summary alongside fresh pattern analysis (patterns are cheap, no AI)
+        const generatedAt = recipient.ai_care_summary_updated_at || new Date().toISOString();
         try {
           const analysis = await analyzePatterns(req.params.recipientId);
-          return res.json({ intelligence: recipient.ai_care_summary, analysis, cached: true });
+          return res.json({ intelligence: recipient.ai_care_summary, analysis, generatedAt, cached: true });
         } catch {
-          return res.json({ intelligence: recipient.ai_care_summary, cached: true });
+          return res.json({ intelligence: recipient.ai_care_summary, generatedAt, cached: true });
         }
       }
     }

@@ -21,11 +21,11 @@ const IPAiInsightsCard = window.IPAiInsightsCard = ({ recipientId, recipientName
     }).catch(() => {});
   }, [recipientId]);
 
-  const generate = async () => {
+  const generate = async (force = false) => {
     setLoading(true);
     setError(null);
     try {
-      const res = await apiFetch(`/api/care-intelligence/${recipientId}`);
+      const res = await apiFetch(`/api/care-intelligence/${recipientId}${force ? '?force=true' : ''}`);
       if (res?.ok) {
         const data = await res.json();
         if (data.error && !data.intelligence && !data.analysis) {
@@ -222,10 +222,10 @@ const IPAiInsightsCard = window.IPAiInsightsCard = ({ recipientId, recipientName
             {/* Footer */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, paddingTop: 8, borderTop: '1px solid #e5e7eb' }}>
               <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
-                Generated {new Date(intelligence.generatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                Generated {intelligence.generatedAt && !isNaN(new Date(intelligence.generatedAt)) ? new Date(intelligence.generatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'recently'}
                 {intelligence.analysis?.stats?.totalVisits > 0 && ` from ${intelligence.analysis.stats.totalVisits} visits`}
               </div>
-              <button onClick={generate} disabled={loading} style={{
+              <button onClick={() => generate(true)} disabled={loading} style={{
                 padding: '6px 12px', borderRadius: 6, border: '1px solid #ccc',
                 background: 'var(--bg-surface)', color: 'var(--text-secondary)', fontWeight: 600, fontSize: 11, cursor: 'pointer',
               }}>Regenerate</button>

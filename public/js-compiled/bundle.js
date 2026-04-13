@@ -78935,11 +78935,11 @@ const IPAiInsightsCard = window.IPAiInsightsCard = ({
       if (data !== null && data !== void 0 && data.family_ai_notes) setFamilyNoteText(data.family_ai_notes);
     }).catch(() => {});
   }, [recipientId]);
-  const generate = async () => {
+  const generate = async (force = false) => {
     setLoading(true);
     setError(null);
     try {
-      const res = await apiFetch(`/api/care-intelligence/${recipientId}`);
+      const res = await apiFetch(`/api/care-intelligence/${recipientId}${force ? '?force=true' : ''}`);
       if (res !== null && res !== void 0 && res.ok) {
         const data = await res.json();
         if (data.error && !data.intelligence && !data.analysis) {
@@ -79332,14 +79332,14 @@ const IPAiInsightsCard = window.IPAiInsightsCard = ({
         fontSize: 10,
         color: 'var(--text-muted)'
       }
-    }, "Generated ", new Date(intelligence.generatedAt).toLocaleDateString(undefined, {
+    }, "Generated ", intelligence.generatedAt && !isNaN(new Date(intelligence.generatedAt)) ? new Date(intelligence.generatedAt).toLocaleDateString(undefined, {
       month: 'short',
       day: 'numeric',
       year: 'numeric',
       hour: 'numeric',
       minute: '2-digit'
-    }), ((_intelligence$analysi = intelligence.analysis) === null || _intelligence$analysi === void 0 || (_intelligence$analysi = _intelligence$analysi.stats) === null || _intelligence$analysi === void 0 ? void 0 : _intelligence$analysi.totalVisits) > 0 && ` from ${intelligence.analysis.stats.totalVisits} visits`), /*#__PURE__*/React.createElement("button", {
-      onClick: generate,
+    }) : 'recently', ((_intelligence$analysi = intelligence.analysis) === null || _intelligence$analysi === void 0 || (_intelligence$analysi = _intelligence$analysi.stats) === null || _intelligence$analysi === void 0 ? void 0 : _intelligence$analysi.totalVisits) > 0 && ` from ${intelligence.analysis.stats.totalVisits} visits`), /*#__PURE__*/React.createElement("button", {
+      onClick: () => generate(true),
       disabled: loading,
       style: {
         padding: '6px 12px',
