@@ -2390,7 +2390,7 @@ const Messages = window.Messages = () => {
           <span style={{ fontSize: 13, color: '#6d4c00' }}>Messaging is limited to InPlace Support until your background check is approved.</span>
         </div>
       )}
-      <div style={{ display: 'flex', height: messagingLimited ? 'calc(100vh - 160px)' : 'calc(100vh - 120px)', background: 'var(--bg-surface)', borderRadius: messagingLimited ? '0 0 12px 12px' : '12px', overflow: 'hidden', boxShadow: '0 1px 8px rgba(0,0,0,0.08)' }}>
+      <div style={{ display: 'flex', height: messagingLimited ? 'calc(100% - 40px)' : '100%', background: 'var(--bg-surface)', borderRadius: messagingLimited ? '0 0 12px 12px' : '12px', overflow: 'hidden', boxShadow: '0 1px 8px rgba(0,0,0,0.08)' }}>
         <div style={{ width: '320px', borderRight: '1px solid #e8e8e8', display: 'flex', flexDirection: 'column', background: 'var(--bg-primary)' }}>
           {showFindPeople ? renderFindPeople() : showNewChat ? renderNewChatPicker() : renderConversationList()}
         </div>

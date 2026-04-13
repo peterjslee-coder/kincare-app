@@ -28237,7 +28237,7 @@ const Messages = window.Messages = () => {
   }, "Messaging is limited to InPlace Support until your background check is approved.")), /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
-      height: messagingLimited ? 'calc(100vh - 160px)' : 'calc(100vh - 120px)',
+      height: messagingLimited ? 'calc(100% - 40px)' : '100%',
       background: 'var(--bg-surface)',
       borderRadius: messagingLimited ? '0 0 12px 12px' : '12px',
       overflow: 'hidden',
