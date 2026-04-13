@@ -908,7 +908,6 @@
     /* Messages — conversation list + chat */
     .msg-panel {
       height: 100%;
-      max-height: calc(100vh - 120px);
       min-height: 400px;
     }
 
