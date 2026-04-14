@@ -141,6 +141,10 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
   const [safetyLoading, setSafetyLoading] = useState(false);
   const [safetyReviewNotes, setSafetyReviewNotes] = useState('');
 
+  // Client versions tracking
+  const [clientVersions, setClientVersions] = useState([]);
+  const [clientVersionsLoading, setClientVersionsLoading] = useState(false);
+
   const loadSafetyFlags = async () => {
     setSafetyLoading(true);
     try {
@@ -152,6 +156,18 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
       }
     } catch {}
     setSafetyLoading(false);
+  };
+
+  const loadClientVersions = async () => {
+    setClientVersionsLoading(true);
+    try {
+      const res = await apiFetch('/api/admin/client-versions');
+      if (res?.ok) {
+        const data = await res.json();
+        setClientVersions(data.users || []);
+      }
+    } catch (err) { console.error('Load client versions error:', err); }
+    setClientVersionsLoading(false);
   };
 
   const loadTickets = async () => {
@@ -996,6 +1012,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
     if (activeTab === 'security') { loadSecDashboard(); loadSecAuditLog(); loadTrustedIps(); }
     if (activeTab === 'sessions') { loadNoShowSessions(); loadPausedCaregivers(); loadAllSessions(); }
     if (activeTab === 'safety') loadSafetyFlags();
+    if (activeTab === 'client-versions') loadClientVersions();
     if (activeTab === 'bgchecks') {
       loadBgChecks();
       // Mark Checkr alerts as read when viewing the tab
@@ -1665,6 +1682,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
       { id: 'overview', label: 'Overview', icon: '📊' },
       { id: 'people', label: 'People', icon: '👥', badge: pendingApprovals.length || null },
       { id: 'sessions', label: 'Sessions', icon: '📅', badge: pausedCaregivers.length || null },
+      { id: 'client-versions', label: 'Versions', icon: '📱' },
     ]},
     { label: 'Customer Service', tabs: [
       { id: 'tickets', label: 'Tickets', icon: '🎫', badge: ticketCount || null },
@@ -5935,6 +5953,63 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
               flagPasskeyConfirm, flagPasskeyLoading, flagPasskeyError,
             })
           : React.createElement('div', { style: { padding: 40, textAlign: 'center', color: 'var(--text-tertiary)' } }, 'Safety flags component loading... Please refresh the page.')
+      )}
+
+      {/* ── CLIENT VERSIONS TAB ── */}
+      {activeTab === 'client-versions' && (
+        <div>
+          <div className="card">
+            <div className="card-header">Client Version Tracking</div>
+            {clientVersionsLoading ? (
+              <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-secondary)' }}>Loading...</div>
+            ) : clientVersions.length === 0 ? (
+              <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-secondary)' }}>No client version data available</div>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid var(--border-color)', background: 'var(--bg-secondary)' }}>
+                      <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 600 }}>Name</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 600 }}>Role</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 600 }}>Version</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 600 }}>Platform</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 600 }}>Last Seen</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {clientVersions.map(user => {
+                      const isOutdated = user.app_version !== window.APP_VERSION;
+                      const versionColor = !user.app_version ? '#999' : isOutdated ? '#ff9800' : '#4caf50';
+                      const versionBg = !user.app_version ? '#f5f5f5' : isOutdated ? 'rgba(255, 152, 0, 0.1)' : 'rgba(76, 175, 80, 0.1)';
+                      const lastSeenDate = user.last_seen_at ? new Date(user.last_seen_at) : null;
+                      const lastSeenStr = lastSeenDate ? lastSeenDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Never';
+
+                      return React.createElement('tr', { key: user.id, style: { borderBottom: '1px solid var(--border-color)' } },
+                        React.createElement('td', { style: { padding: '10px 12px' } }, `${user.first_name} ${user.last_name}`),
+                        React.createElement('td', { style: { padding: '10px 12px' } }, user.role || (user.roles ? JSON.parse(user.roles)[0] : '')),
+                        React.createElement('td', { style: { padding: '10px 12px' } },
+                          React.createElement('span', {
+                            style: {
+                              padding: '3px 8px',
+                              borderRadius: 4,
+                              fontSize: 12,
+                              fontWeight: 500,
+                              color: versionColor,
+                              background: versionBg,
+                              display: 'inline-block'
+                            }
+                          }, user.app_version || 'Unknown')
+                        ),
+                        React.createElement('td', { style: { padding: '10px 12px' } }, user.platform || 'web'),
+                        React.createElement('td', { style: { padding: '10px 12px', fontSize: 12, color: 'var(--text-secondary)' } }, lastSeenStr)
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {/* ── COSTS TAB ── */}

@@ -1849,13 +1849,13 @@ const Messages = window.Messages = () => {
                         {m.replyTo && (
                           <div style={{
                             padding: '6px 10px', marginBottom: -6, borderRadius: isSent ? '12px 12px 0 0' : '12px 12px 0 0',
-                            background: isSent ? '#15594b' : '#e4e4e4', fontSize: 12, lineHeight: 1.3,
-                            borderLeft: isSent ? '3px solid rgba(255,255,255,0.4)' : '3px solid #1b6b5a',
+                            background: isSent ? 'var(--bubble-reply-sent-bg)' : 'var(--bubble-reply-received-bg)', fontSize: 12, lineHeight: 1.3,
+                            borderLeft: isSent ? '3px solid rgba(255,255,255,0.4)' : '3px solid var(--bubble-sent-bg)',
                           }}>
-                            <div style={{ fontWeight: 600, fontSize: 11, color: isSent ? 'rgba(255,255,255,0.7)' : 'var(--role-color)', marginBottom: 1 }}>
+                            <div style={{ fontWeight: 600, fontSize: 11, color: isSent ? 'rgba(255,255,255,0.7)' : 'var(--bubble-sent-bg)', marginBottom: 1 }}>
                               {m.replyTo.senderName || 'Unknown'}
                             </div>
-                            <div style={{ color: isSent ? 'rgba(255,255,255,0.6)' : 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 220 }}>
+                            <div style={{ color: isSent ? 'rgba(255,255,255,0.6)' : 'var(--bubble-received-meta)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 220 }}>
                               {m.replyTo.content}
                             </div>
                           </div>
@@ -1863,8 +1863,8 @@ const Messages = window.Messages = () => {
                         <div style={{
                           padding: '10px 14px',
                           borderRadius: m.replyTo ? (isSent ? '0 0 4px 18px' : '0 0 18px 4px') : (isSent ? '18px 18px 4px 18px' : '18px 18px 18px 4px'),
-                          background: m.is_deleted ? 'var(--badge-muted-bg)' : (isSent ? 'var(--role-color)' : 'var(--badge-muted-bg)'),
-                          color: m.is_deleted ? 'var(--text-muted)' : (isSent ? 'var(--bg-surface)' : 'var(--text-primary)'),
+                          background: m.is_deleted ? 'var(--badge-muted-bg)' : (isSent ? 'var(--bubble-sent-bg)' : 'var(--bubble-received-bg)'),
+                          color: m.is_deleted ? 'var(--text-muted)' : (isSent ? 'var(--bubble-sent-text)' : 'var(--bubble-received-text)'),
                           fontSize: '14px', lineHeight: 1.45, wordWrap: 'break-word',
                           fontStyle: m.is_deleted ? 'italic' : 'normal',
                         }}>
@@ -1882,7 +1882,7 @@ const Messages = window.Messages = () => {
                               );
                             } catch { return renderMessageContent(m.content); }
                           })() : renderMessageContent(m.content)}
-                          <div style={{ fontSize: '10px', color: isSent ? 'rgba(255,255,255,0.6)' : 'var(--text-muted)', marginTop: '4px', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 3 }}>
+                          <div style={{ fontSize: '10px', color: isSent ? 'var(--bubble-sent-meta)' : 'var(--bubble-received-meta)', marginTop: '4px', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 3 }}>
                             <span>{(() => {
                               const d = parseTimestamp(m.created_at);
                               if (!d) return '';
@@ -1901,10 +1901,10 @@ const Messages = window.Messages = () => {
                               const msgTime = new Date(m.created_at).getTime();
                               const isRead = Object.values(convReceipts).some(readAt => new Date(readAt).getTime() >= msgTime);
                               return (
-                                <span title={isRead ? 'Read' : 'Sent'} style={{ display: 'inline-flex', alignItems: 'center' }}
+                                <span title={isRead ? 'Read' : 'Delivered'} style={{ display: 'inline-flex', alignItems: 'center' }}
                                   dangerouslySetInnerHTML={{ __html: isRead
-                                    ? '<svg width="16" height="10" viewBox="0 0 24 14"><path d="M1 7l4.5 5L17 1" fill="none" stroke="rgba(255,255,255,0.9)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 7l4.5 5L23 1" fill="none" stroke="rgba(255,255,255,0.9)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'
-                                    : '<svg width="12" height="10" viewBox="0 0 16 14"><path d="M1 7l4.5 5L15 1" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+                                    ? '<svg width="16" height="10" viewBox="0 0 24 14"><path d="M1 7l4.5 5L17 1" fill="none" stroke="rgba(255,255,255,0.95)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 7l4.5 5L23 1" fill="none" stroke="rgba(255,255,255,0.95)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+                                    : '<svg width="12" height="10" viewBox="0 0 16 14"><path d="M1 7l4.5 5L15 1" fill="none" stroke="rgba(255,255,255,0.45)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'
                                   }} />
                               );
                             })()}

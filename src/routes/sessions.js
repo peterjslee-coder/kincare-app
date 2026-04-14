@@ -1506,28 +1506,34 @@ router.post("/:id/check-in", async (req, res) => {
       const famTag = `session-${req.params.id.slice(0,8)}-family`;
       const cgTag = `session-${req.params.id.slice(0,8)}-cg`;
 
-      // Compute scheduled end time for the notification body
-      let endTimeStr = "";
+      // Compute remaining time for the notification body (timezone-neutral)
+      let remainStr = "";
       try {
         if (session.scheduled_time && session.duration_hours) {
           const [h, m] = session.scheduled_time.split(":").map(Number);
-          const endMin = h * 60 + m + Math.round(parseFloat(session.duration_hours) * 60);
-          const endH = Math.floor(endMin / 60) % 24;
-          const endM = endMin % 60;
-          const ampm = endH >= 12 ? "PM" : "AM";
-          const h12 = endH > 12 ? endH - 12 : (endH === 0 ? 12 : endH);
-          endTimeStr = ` — Ending ${h12}:${String(endM).padStart(2, "0")} ${ampm}`;
+          const durationMin = Math.round(parseFloat(session.duration_hours) * 60);
+          // Calculate how many minutes remain from now until scheduled end
+          const now = new Date();
+          const nowInTz = new Date(now.toLocaleString("en-US", { timeZone: careTz }));
+          const startMin = h * 60 + m;
+          const endMin = startMin + durationMin;
+          const nowMin = nowInTz.getHours() * 60 + nowInTz.getMinutes();
+          const leftMin = endMin - nowMin;
+          if (leftMin > 0) {
+            const hrs = Math.floor(leftMin / 60);
+            const mins = leftMin % 60;
+            remainStr = hrs > 0 ? ` — ${hrs}h ${mins}m remaining` : ` — ${mins}m remaining`;
+          }
         }
       } catch {}
 
-      // Format check-in time for display
+      // Format check-in time in the care recipient's timezone
       let checkInTimeStr = "";
       try {
         const cit = effectiveCheckInTime || new Date();
-        const ch = cit.getHours(); const cm = cit.getMinutes();
-        const ap = ch >= 12 ? "PM" : "AM";
-        const ch12 = ch > 12 ? ch - 12 : (ch === 0 ? 12 : ch);
-        checkInTimeStr = `${ch12}:${String(cm).padStart(2, "0")} ${ap}`;
+        const tzAbbr = cit.toLocaleString("en-US", { timeZone: careTz, timeZoneName: "short" }).split(" ").pop();
+        const formatted = cit.toLocaleTimeString("en-US", { timeZone: careTz, hour: "numeric", minute: "2-digit" });
+        checkInTimeStr = `${formatted} ${tzAbbr}`;
       } catch {}
 
       // To entire care team: session is now in progress (supersedes "arriving soon")
@@ -1546,7 +1552,7 @@ router.post("/:id/check-in", async (req, res) => {
           if (userId === req.user.id) continue; // don't notify the caregiver themselves
           await sendPushToUser(userId, {
             title: "Session In Progress",
-            body: `${caregiverName} checked in${checkInTimeStr ? ` at ${checkInTimeStr}` : ""}${endTimeStr}${lateCheckIn ? ` (${lateMinutes} min late)` : ""}`,
+            body: `${caregiverName} checked in${checkInTimeStr ? ` at ${checkInTimeStr}` : ""}${remainStr}${lateCheckIn ? ` (${lateMinutes} min late)` : ""}`,
             tag: famTag,
             data: { type: "session_in_progress", sessionId: req.params.id, page: "dashboard" },
           }, "session_in_progress");

@@ -139,6 +139,7 @@ const apiFetch = window.apiFetch = async (url, options = {}) => {
   const effectiveToken = IMPERSONATION_TOKEN || AUTH_TOKEN;
   if (effectiveToken) headers['Authorization'] = `Bearer ${effectiveToken}`;
   if (ACTIVE_ROLE && !IMPERSONATION_TOKEN) headers['X-Active-Role'] = ACTIVE_ROLE;
+  if (window.APP_VERSION) headers['X-App-Version'] = window.APP_VERSION;
   const csrf = getCsrfToken();
   if (csrf) headers['X-CSRF-Token'] = csrf;
   const response = await fetch(API_BASE + url, { ...options, headers, credentials: 'same-origin' });

@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Messages — iMessage-Style Mockup</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro', 'Segoe UI', sans-serif; background: #000; color: #fff; }
+
+    .container { display: flex; height: 100vh; max-width: 1200px; margin: 0 auto; }
+
+    /* ─── Conversation List (left) ─── */
+    .conv-list {
+      width: 340px; background: #1c1c1e; border-right: 1px solid #333;
+      display: flex; flex-direction: column;
+    }
+    .conv-header {
+      padding: 16px 20px; font-size: 22px; font-weight: 700;
+      border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center;
+    }
+    .conv-header .actions { display: flex; gap: 12px; }
+    .conv-header .actions button {
+      background: none; border: none; color: #0a84ff; font-size: 14px; cursor: pointer; font-weight: 500;
+    }
+    .conv-item {
+      padding: 12px 20px; display: flex; gap: 12px; cursor: pointer;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      transition: background 0.15s;
+    }
+    .conv-item:hover { background: rgba(255,255,255,0.05); }
+    .conv-item.active { background: #0a84ff22; }
+    .conv-avatar {
+      width: 48px; height: 48px; border-radius: 50%; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 16px; color: #fff;
+    }
+    .conv-info { flex: 1; min-width: 0; }
+    .conv-name { font-weight: 600; font-size: 15px; margin-bottom: 2px; }
+    .conv-preview { font-size: 13px; color: #999; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .conv-meta { font-size: 11px; color: #666; text-align: right; flex-shrink: 0; }
+    .unread-dot { width: 10px; height: 10px; background: #0a84ff; border-radius: 50%; margin-top: 4px; }
+
+    /* ─── Chat Panel (right) ─── */
+    .chat-panel {
+      flex: 1; display: flex; flex-direction: column; background: #000;
+    }
+    .chat-header {
+      padding: 14px 20px; border-bottom: 1px solid #333;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .chat-header-left { display: flex; align-items: center; gap: 12px; }
+    .chat-header-avatar {
+      width: 36px; height: 36px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 14px; color: #fff;
+    }
+    .chat-header-name { font-weight: 600; font-size: 16px; }
+    .chat-header-role { font-size: 12px; color: #999; }
+    .chat-header-actions { display: flex; gap: 16px; }
+    .chat-header-actions button {
+      background: none; border: none; cursor: pointer; padding: 4px;
+    }
+
+    /* ─── Messages Area ─── */
+    .messages-area {
+      flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column;
+    }
+    .messages-area::before { content: ''; flex: 1; }
+
+    .date-divider {
+      text-align: center; padding: 12px 0; font-size: 12px; color: #666; font-weight: 500;
+    }
+
+    .msg-row { display: flex; margin-bottom: 2px; align-items: flex-end; }
+    .msg-row.sent { justify-content: flex-end; }
+    .msg-row.received { justify-content: flex-start; }
+
+    .msg-row + .msg-row.sent { margin-bottom: 2px; }
+    .msg-row.sent + .msg-row.received,
+    .msg-row.received + .msg-row.sent { margin-top: 12px; }
+
+    /* ─── Bubbles ─── */
+    .bubble {
+      max-width: 70%; padding: 10px 14px; font-size: 15px; line-height: 1.4;
+      word-wrap: break-word; position: relative;
+    }
+
+    /* Sent (you) — blue like iMessage */
+    .msg-row.sent .bubble {
+      background: #0a84ff;
+      color: #fff;
+      border-radius: 18px 18px 4px 18px;
+    }
+    .msg-row.sent + .msg-row.sent .bubble {
+      border-radius: 18px 4px 4px 18px;
+    }
+    .msg-row.sent:last-child .bubble,
+    .msg-row.sent + .msg-row.received + .msg-row ~ .msg-row { }
+
+    /* Received (them) — grey */
+    .msg-row.received .bubble {
+      background: #2c2c2e;
+      color: #fff;
+      border-radius: 18px 18px 18px 4px;
+    }
+    .msg-row.received + .msg-row.received .bubble {
+      border-radius: 4px 18px 18px 4px;
+    }
+
+    /* Tail on last bubble in a group */
+    .msg-row.sent.tail .bubble { border-radius: 18px 18px 4px 18px; }
+    .msg-row.received.tail .bubble { border-radius: 18px 18px 18px 4px; }
+    .msg-row.sent.first .bubble { border-radius: 18px 18px 4px 18px; }
+    .msg-row.received.first .bubble { border-radius: 18px 18px 18px 4px; }
+    .msg-row.sent.mid .bubble { border-radius: 18px 4px 4px 18px; }
+    .msg-row.received.mid .bubble { border-radius: 4px 18px 18px 4px; }
+    .msg-row.sent.last .bubble { border-radius: 18px 4px 18px 18px; }
+    .msg-row.received.last .bubble { border-radius: 4px 18px 18px 18px; }
+    .msg-row.sent.solo .bubble { border-radius: 18px; }
+    .msg-row.received.solo .bubble { border-radius: 18px; }
+
+    .msg-time {
+      font-size: 11px; color: #666; margin-top: 4px; padding: 0 4px;
+    }
+    .msg-row.sent .msg-time { text-align: right; }
+    .msg-row.received .msg-time { text-align: left; }
+
+    /* Read receipts */
+    .read-receipt { font-size: 10px; color: #666; text-align: right; padding-right: 4px; margin-top: 1px; }
+    .read-receipt.delivered { color: #666; }
+    .read-receipt.read { color: #0a84ff; }
+
+    /* ─── Input Area ─── */
+    .input-area {
+      padding: 12px 16px; border-top: 1px solid #333;
+      display: flex; align-items: center; gap: 10px; background: #1c1c1e;
+    }
+    .input-area button.icon-btn {
+      background: none; border: none; cursor: pointer; padding: 6px;
+      color: #0a84ff; display: flex; align-items: center;
+    }
+    .input-area input {
+      flex: 1; background: #2c2c2e; border: 1px solid #444; border-radius: 20px;
+      padding: 10px 16px; font-size: 15px; color: #fff; outline: none;
+      font-family: inherit;
+    }
+    .input-area input::placeholder { color: #666; }
+    .input-area input:focus { border-color: #0a84ff; }
+    .send-btn {
+      width: 36px; height: 36px; border-radius: 50%; background: #0a84ff;
+      border: none; cursor: pointer; display: flex; align-items: center; justify-content: center;
+    }
+    .send-btn svg { color: #fff; }
+
+    /* ─── Comparison toggle ─── */
+    .toggle-bar {
+      position: fixed; top: 12px; right: 12px; z-index: 100;
+      display: flex; gap: 8px; background: #2c2c2e; padding: 6px 12px; border-radius: 20px;
+    }
+    .toggle-bar button {
+      padding: 6px 14px; border-radius: 14px; border: none; font-size: 12px; font-weight: 600;
+      cursor: pointer; transition: all 0.2s;
+    }
+    .toggle-bar button.active { background: #0a84ff; color: #fff; }
+    .toggle-bar button:not(.active) { background: transparent; color: #999; }
+
+    /* ─── Current (green) theme ─── */
+    .theme-current .msg-row.sent .bubble {
+      background: #1b6b5a;
+      color: #000;
+    }
+    .theme-current .msg-row.received .bubble {
+      background: #2a3a35;
+      color: #ccc;
+    }
+    .theme-current .input-area { background: #1a2a25; }
+    .theme-current .conv-list { background: #1a2a25; }
+    .theme-current .chat-header { border-color: #2a3a35; }
+    .theme-current .input-area input { background: #2a3a35; border-color: #3a4a45; }
+    .theme-current .send-btn { background: #1b6b5a; }
+    .theme-current .conv-item.active { background: #1b6b5a33; }
+    .theme-current .input-area button.icon-btn { color: #1b6b5a; }
+
+    /* ─── Light mode variant ─── */
+    .theme-light { background: #fff; color: #000; }
+    .theme-light .conv-list { background: #f2f2f7; border-color: #d1d1d6; }
+    .theme-light .conv-item { border-color: #e5e5ea; }
+    .theme-light .conv-item:hover { background: rgba(0,0,0,0.03); }
+    .theme-light .conv-item.active { background: #0a84ff15; }
+    .theme-light .conv-name { color: #000; }
+    .theme-light .conv-preview { color: #8e8e93; }
+    .theme-light .conv-meta { color: #8e8e93; }
+    .theme-light .conv-header { border-color: #d1d1d6; color: #000; }
+    .theme-light .chat-panel { background: #fff; }
+    .theme-light .chat-header { border-color: #d1d1d6; }
+    .theme-light .chat-header-name { color: #000; }
+    .theme-light .date-divider { color: #8e8e93; }
+    .theme-light .msg-row.sent .bubble { background: #0a84ff; color: #fff; }
+    .theme-light .msg-row.received .bubble { background: #e9e9eb; color: #000; }
+    .theme-light .msg-time { color: #8e8e93; }
+    .theme-light .read-receipt { color: #8e8e93; }
+    .theme-light .read-receipt.read { color: #0a84ff; }
+    .theme-light .input-area { background: #f2f2f7; border-color: #d1d1d6; }
+    .theme-light .input-area input { background: #fff; border-color: #d1d1d6; color: #000; }
+    .theme-light .input-area input::placeholder { color: #8e8e93; }
+  </style>
+</head>
+<body>
+  <div class="toggle-bar">
+    <button class="active" onclick="setTheme('new')">New (iMessage)</button>
+    <button onclick="setTheme('light')">Light Mode</button>
+    <button onclick="setTheme('current')">Current (Green)</button>
+  </div>
+
+  <div class="container" id="app">
+    <!-- Conversation List -->
+    <div class="conv-list">
+      <div class="conv-header">
+        Messages
+        <div class="actions">
+          <button>🔍 Find People</button>
+          <button>＋</button>
+        </div>
+      </div>
+
+      <div class="conv-item" onclick="selectConv(0)">
+        <div class="conv-avatar" style="background: #e8724a;">🤖</div>
+        <div class="conv-info">
+          <div class="conv-name">iPAi ✓</div>
+          <div class="conv-preview">Hey there! I'm iPAi, InPlace's AI care ...</div>
+        </div>
+        <div class="conv-meta">2m</div>
+      </div>
+
+      <div class="conv-item active" onclick="selectConv(1)">
+        <div class="conv-avatar" style="background: #5856d6;">EM</div>
+        <div class="conv-info">
+          <div class="conv-name">Edwina McDaniel</div>
+          <div class="conv-preview">all done. easy enough once the button is there...</div>
+        </div>
+        <div class="conv-meta">
+          10m
+          <div class="unread-dot"></div>
+        </div>
+      </div>
+
+      <div class="conv-item" onclick="selectConv(2)">
+        <div class="conv-avatar" style="background: #ff9500;">SH</div>
+        <div class="conv-info">
+          <div class="conv-name">Sara Huber</div>
+          <div class="conv-preview">Also check out these roasted brown...</div>
+        </div>
+        <div class="conv-meta">4h</div>
+      </div>
+
+      <div class="conv-item" onclick="selectConv(3)">
+        <div class="conv-avatar" style="background: #34c759;">
+          <span style="font-size: 11px;">4</span>
+        </div>
+        <div class="conv-info">
+          <div class="conv-name">Betty, Edwina, Sibs</div>
+          <div class="conv-preview">Great. And you can del...</div>
+        </div>
+        <div class="conv-meta">6h</div>
+      </div>
+
+      <div class="conv-item" onclick="selectConv(4)">
+        <div class="conv-avatar" style="background: #ff3b30;">DL</div>
+        <div class="conv-info">
+          <div class="conv-name">Daniel Lee</div>
+          <div class="conv-preview">Peter deleted a message</div>
+        </div>
+        <div class="conv-meta">Sun</div>
+      </div>
+    </div>
+
+    <!-- Chat Panel -->
+    <div class="chat-panel">
+      <div class="chat-header">
+        <div class="chat-header-left">
+          <div class="chat-header-avatar" style="background: #5856d6;">EM</div>
+          <div>
+            <div class="chat-header-name">Edwina McDaniel</div>
+            <div class="chat-header-role">Caregiver</div>
+          </div>
+        </div>
+        <div class="chat-header-actions">
+          <button>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0a84ff" stroke-width="2" stroke-linecap="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.97.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.84.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+          </button>
+          <button>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0a84ff" stroke-width="2" stroke-linecap="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="messages-area">
+        <div class="date-divider">Yesterday</div>
+
+        <div class="msg-row sent solo">
+          <div>
+            <div class="bubble">time" there though. give me a minute. you'll see it.</div>
+            <div class="msg-time">12:41 PM</div>
+          </div>
+        </div>
+
+        <div class="msg-row sent solo">
+          <div>
+            <div class="bubble">new build deploying, should include it on your screen in about 4 minutes.</div>
+            <div class="msg-time">12:42 PM</div>
+          </div>
+        </div>
+
+        <div class="msg-row sent solo">
+          <div>
+            <div class="bubble">you should be able to see it now. "Propose new time"</div>
+            <div class="msg-time">1:09 PM</div>
+            <div class="read-receipt read">Read</div>
+          </div>
+        </div>
+
+        <div class="msg-row received solo">
+          <div>
+            <div class="bubble">all done. easy enough once the button is there. thanks!</div>
+            <div class="msg-time">1:12 PM</div>
+          </div>
+        </div>
+
+        <div class="date-divider">Monday, Apr 13</div>
+
+        <div class="msg-row received first">
+          <div>
+            <div class="bubble">i can feel it. the app is going to work tomorrow and there won't be any issues lol. I've tested all i can. Good luck with mom.</div>
+            <div class="msg-time">3:42 PM</div>
+          </div>
+        </div>
+
+        <div class="date-divider">Today</div>
+
+        <div class="msg-row sent solo">
+          <div>
+            <div class="bubble">Session starts in about an hour! Betty's at 123 Oak Lane. Let me know if you need anything 🙏</div>
+            <div class="msg-time">11:02 AM</div>
+          </div>
+        </div>
+
+        <div class="msg-row received first">
+          <div>
+            <div class="bubble">On my way now! Should be there in about 15 min</div>
+          </div>
+        </div>
+        <div class="msg-row received last">
+          <div>
+            <div class="bubble">Traffic isn't too bad today 😊</div>
+            <div class="msg-time">11:45 AM</div>
+          </div>
+        </div>
+
+        <div class="msg-row sent solo">
+          <div>
+            <div class="bubble">Perfect, thanks Edwina! Mom's excited to see you</div>
+            <div class="msg-time">11:46 AM</div>
+            <div class="read-receipt read">Read</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="input-area">
+        <button class="icon-btn">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+            <circle cx="8.5" cy="8.5" r="1.5"></circle>
+            <polyline points="21 15 16 10 5 21"></polyline>
+          </svg>
+        </button>
+        <input type="text" placeholder="Type a message...">
+        <button class="send-btn">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round">
+            <line x1="22" y1="2" x2="11" y2="13"></line>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function setTheme(theme) {
+      const container = document.getElementById('app');
+      container.className = 'container';
+      if (theme === 'current') container.classList.add('theme-current');
+      if (theme === 'light') container.classList.add('theme-light');
+      // Update toggle buttons
+      document.querySelectorAll('.toggle-bar button').forEach(b => b.classList.remove('active'));
+      event.target.classList.add('active');
+    }
+  </script>
+</body>
+</html>

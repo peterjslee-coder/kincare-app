@@ -622,6 +622,32 @@ router.get("/me", authenticate, async (req, res) => {
     setAuthCookie(res, token);
     setCsrfCookie(res);
   }
+
+  // ─── Track client version info (non-blocking) ───
+  // Read app version from header, detect platform from user-agent
+  const appVersion = req.headers['x-app-version'] || null;
+  const userAgent = req.headers['user-agent'] || '';
+  let platform = 'web';
+  if (userAgent.includes('InPlace-Android')) {
+    platform = 'android';
+  } else if (userAgent.includes('InPlace-iOS')) {
+    platform = 'ios';
+  }
+  // Upsert into user_client_info (non-blocking)
+  db.prepare(
+    `INSERT INTO user_client_info (user_id, app_version, user_agent, platform, last_seen_at, updated_at)
+     VALUES (?, ?, ?, ?, NOW(), NOW())
+     ON CONFLICT (user_id) DO UPDATE SET
+       app_version = EXCLUDED.app_version,
+       user_agent = EXCLUDED.user_agent,
+       platform = EXCLUDED.platform,
+       last_seen_at = NOW(),
+       updated_at = NOW()`
+  ).run(req.user.id, appVersion, userAgent, platform).catch(err => {
+    // Silent fail — don't let tracking errors break auth
+    console.warn('Client info tracking error:', err.message);
+  });
+
   res.json({
     user: {
       ...user,

@@ -5320,4 +5320,25 @@ router.post("/backfill-assignments", async (req, res) => {
   }
 });
 
+// ─── GET /api/admin/client-versions ───
+// Returns all active users with their client version info (web/iOS/Android, app_version, platform)
+router.get("/client-versions", authenticate, checkAdmin, requireAdmin, async (req, res) => {
+  try {
+    const db = await getDb();
+    const data = await db.prepare(`
+      SELECT
+        u.id, u.first_name, u.last_name, u.email, u.role, u.roles,
+        uci.app_version, uci.user_agent, uci.platform, uci.last_seen_at
+      FROM users u
+      LEFT JOIN user_client_info uci ON u.id = uci.user_id
+      WHERE u.is_active = 1
+      ORDER BY uci.last_seen_at DESC NULLS LAST
+    `).all();
+    res.json({ users: data });
+  } catch (err) {
+    console.error("Client versions error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

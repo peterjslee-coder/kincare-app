@@ -73,6 +73,17 @@
       --color-navy: #2C3E50;
       --color-red-strong: #cc0000;
 
+      /* ─── Message Bubbles (iMessage-style) ─── */
+      --bubble-sent-bg: #0a84ff;
+      --bubble-sent-text: #ffffff;
+      --bubble-sent-meta: rgba(255, 255, 255, 0.6);
+      --bubble-received-bg: #e9e9eb;
+      --bubble-received-text: #000000;
+      --bubble-received-meta: #8e8e93;
+      --bubble-reply-sent-bg: #0872db;
+      --bubble-reply-received-bg: #dcdcde;
+      --bubble-read-color: #0a84ff;
+
       /* ─── Overlay / Backdrop ─── */
       --overlay-bg: rgba(0, 0, 0, 0.5);
     }
@@ -131,6 +142,17 @@
       --color-navy: #7da8cc;
       --color-red-strong: #ef5350;
       --overlay-bg: rgba(0, 0, 0, 0.7);
+
+      /* ─── Message Bubbles (iMessage-style, dark) ─── */
+      --bubble-sent-bg: #0a84ff;
+      --bubble-sent-text: #ffffff;
+      --bubble-sent-meta: rgba(255, 255, 255, 0.6);
+      --bubble-received-bg: #2c2c2e;
+      --bubble-received-text: #f0f0f5;
+      --bubble-received-meta: #8888a0;
+      --bubble-reply-sent-bg: #0872db;
+      --bubble-reply-received-bg: #3a3a3e;
+      --bubble-read-color: #0a84ff;
     }
     /* ─── Dark Mode Overrides ───
        Class-based overrides for structural elements.

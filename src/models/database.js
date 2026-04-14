@@ -1160,6 +1160,16 @@ async function initializeDatabase() {
     `CREATE INDEX IF NOT EXISTS idx_visit_logs_session ON visit_logs(session_id)`,
     // Notifications — queried on every page load
     `CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, created_at DESC)`,
+    // v1.57.73 — Client version tracking (web/iOS/Android, app_version, user_agent)
+    `CREATE TABLE IF NOT EXISTS user_client_info (
+      user_id TEXT PRIMARY KEY REFERENCES users(id),
+      app_version TEXT,
+      user_agent TEXT,
+      platform TEXT,
+      last_seen_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_user_client_info_last_seen ON user_client_info(last_seen_at DESC)`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }
