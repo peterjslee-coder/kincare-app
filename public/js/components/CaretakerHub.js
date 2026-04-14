@@ -31,6 +31,8 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const [checkInLocation, setCheckInLocation] = useState(null);
   const [locationError, setLocationError] = useState(null);
   const [checkOutLocation, setCheckOutLocation] = useState(null);
+  const [onMyWaySent, setOnMyWaySent] = useState({}); // { [sessionId]: true }
+  const [onMyWaySending, setOnMyWaySending] = useState(null);
   // Live countdown tick state — interval set up later after sessions are derived
   const [countdownTick, setCountdownTick] = useState(0);
 
@@ -1878,7 +1880,11 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                         </div>
                       )}
                       {loc ? (
-                        <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>{'\uD83D\uDCCD'} {loc}</div>
+                        <a href={`https://maps.google.com/?q=${encodeURIComponent(loc)}`} target="_blank" rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          style={{ display: 'block', fontSize: 12, color: 'var(--role-color)', marginTop: 2, textDecoration: 'none' }}>
+                          {'\uD83D\uDCCD'} {loc}
+                        </a>
                       ) : noAddress ? (
                         <div style={{ fontSize: 12, color: 'var(--color-error)', marginTop: 2, fontWeight: 600 }}>{'\u26A0\uFE0F'} No care address on file</div>
                       ) : null}
@@ -1985,6 +1991,60 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                           borderRadius: '10px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
                           boxShadow: '0 2px 8px rgba(232,114,74,0.3)', whiteSpace: 'nowrap',
                         }}>Check In Now</button>
+                      )}
+                      {/* On My Way button — show for upcoming confirmed sessions that haven't been signaled */}
+                      {(isUpcoming || isReady) && !isActive && s.status === 'confirmed' && !onMyWaySent[s.id] && !s.on_my_way_at && (
+                        <button
+                          disabled={onMyWaySending === s.id}
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            setOnMyWaySending(s.id);
+                            try {
+                              // Get current location for ETA calculation
+                              let body = {};
+                              try {
+                                const pos = await new Promise((resolve, reject) =>
+                                  navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000, enableHighAccuracy: false })
+                                );
+                                body = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+                              } catch {} // location optional — still send on-my-way
+                              const r = await apiFetch(`/api/sessions/${s.id}/on-my-way`, {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(body),
+                              });
+                              if (r?.ok) {
+                                setOnMyWaySent(prev => ({ ...prev, [s.id]: true }));
+                                showToast('Care team notified — you\'re on your way!', 'success');
+                                // Open maps for directions
+                                if (loc) {
+                                  window.open(`https://maps.google.com/?q=${encodeURIComponent(loc)}&navigate=yes`, '_blank');
+                                }
+                              } else {
+                                const err = await r?.json().catch(() => ({}));
+                                showToast(err?.error || 'Failed to send', 'error');
+                              }
+                            } catch { showToast('Network error', 'error'); }
+                            setOnMyWaySending(null);
+                          }}
+                          style={{
+                            padding: '8px 16px', background: 'linear-gradient(135deg, #1b6b5a, #2a9d8f)', color: '#fff', border: 'none',
+                            borderRadius: '10px', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
+                            boxShadow: '0 2px 8px rgba(27,107,90,0.3)', whiteSpace: 'nowrap',
+                            display: 'flex', alignItems: 'center', gap: 6,
+                            opacity: onMyWaySending === s.id ? 0.6 : 1,
+                          }}>
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polygon points="3 11 22 2 13 21 11 13 3 11"></polygon>
+                          </svg>
+                          {onMyWaySending === s.id ? 'Sending...' : 'On My Way'}
+                        </button>
+                      )}
+                      {(onMyWaySent[s.id] || s.on_my_way_at) && !isActive && (
+                        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-success)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                          En route
+                        </span>
                       )}
                       {isUpcoming && (
                         <button disabled style={{
@@ -2323,7 +2383,11 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                         {svcType ? ` \u2022 ${formatServiceType(svcType)}` : ''}
                       </div>
                       {loc ? (
-                        <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>{'\uD83D\uDCCD'} {loc}</div>
+                        <a href={`https://maps.google.com/?q=${encodeURIComponent(loc)}`} target="_blank" rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          style={{ display: 'block', fontSize: 12, color: 'var(--role-color)', marginTop: 2, textDecoration: 'none' }}>
+                          {'\uD83D\uDCCD'} {loc}
+                        </a>
                       ) : noAddress ? (
                         <div style={{ fontSize: 12, color: 'var(--color-error)', marginTop: 2, fontWeight: 600 }}>{'\u26A0\uFE0F'} No care address on file</div>
                       ) : null}

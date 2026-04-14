@@ -1,6 +1,6 @@
 // InPlace Service Worker — v1.57.14
-const CACHE_NAME = 'inplace-build-98436bb6-mnyjje87';
-const SW_VERSION = 'build-98436bb6-mnyjje87';
+const CACHE_NAME = 'inplace-build-69fdaca5-mnyjyftq';
+const SW_VERSION = 'build-69fdaca5-mnyjyftq';
 const STATIC_ASSETS = [
   '/',
   '/css/styles.css',
@@ -186,6 +186,14 @@ self.addEventListener('push', (event) => {
         }
       }
 
+      const actions = [
+        { action: 'open', title: 'Open' },
+      ];
+      if (pushData.mapsUrl) {
+        actions.push({ action: 'directions', title: 'Directions' });
+      }
+      actions.push({ action: 'dismiss', title: 'Dismiss' });
+
       const options = {
         body: data.body,
         icon: '/icons/icon-192.png',
@@ -194,10 +202,7 @@ self.addEventListener('push', (event) => {
         data: pushData,
         tag: data.tag || undefined,
         renotify: !!data.tag,
-        actions: [
-          { action: 'open', title: 'Open' },
-          { action: 'dismiss', title: 'Dismiss' },
-        ],
+        actions,
       };
 
       await self.registration.showNotification(data.title, options);
@@ -210,6 +215,12 @@ self.addEventListener('notificationclick', (event) => {
   event.notification.close();
 
   if (event.action === 'dismiss') return;
+
+  // "Directions" action — open maps directly
+  if (event.action === 'directions' && event.notification.data?.mapsUrl) {
+    event.waitUntil(clients.openWindow(event.notification.data.mapsUrl));
+    return;
+  }
 
   const data = event.notification.data || {};
   let targetUrl = '/?page=dashboard';

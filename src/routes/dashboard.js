@@ -750,6 +750,7 @@ async function caregiverDashboard(db, userId, res) {
         tcProposedTime: s.tc_proposed_time || null,
         tcProposedDuration: s.tc_proposed_duration || null,
         tcProposedBy: s.tc_proposed_by || null,
+        on_my_way_at: s.on_my_way_at || null,
       };
     }),
     reviews: reviews.map(r => ({

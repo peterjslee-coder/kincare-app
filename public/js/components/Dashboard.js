@@ -1301,8 +1301,14 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
               </div>
             </div>
             {/* Session info */}
-            <div style={{ fontWeight: 700, fontSize: 17, color: 'var(--text-primary)', marginBottom: 4 }}>
+            <div style={{ fontWeight: 700, fontSize: 17, color: 'var(--text-primary)', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               {hero.recipientName || 'Care Visit'} with {hero.caregiverName}
+              {hero.on_my_way_at && !isActive && (
+                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-success)', background: 'var(--color-success-bg)', padding: '2px 8px', borderRadius: 10, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polygon points="3 11 22 2 13 21 11 13 3 11"></polygon></svg>
+                  En Route
+                </span>
+              )}
             </div>
             {hasPendingTC && hero.tcProposedTime ? (
               <div style={{ fontSize: 14, color: 'var(--text-secondary)' }}>

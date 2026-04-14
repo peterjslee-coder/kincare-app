@@ -2317,6 +2317,157 @@ router.put("/:id/instructions", async (req, res) => {
   }
 });
 
+// ─── PUT /api/sessions/:id/on-my-way ───
+// Caregiver signals they're en route — notifies care team + care recipient
+router.put("/:id/on-my-way", async (req, res) => {
+  try {
+    const db = await getDb();
+    const userId = req.user.id;
+    const activeRole = req.user.activeRole || req.user.role;
+    const { estimatedMinutes, lat, lng } = req.body || {}; // optional ETA or caregiver coords
+
+    const session = await db.prepare(`
+      SELECT cs.*, cp.user_id AS caregiver_user_id,
+        cr.first_name AS recipient_first_name, cr.last_name AS recipient_last_name,
+        cr.linked_user_id AS care_for_user_id,
+        cr.notification_channel, cr.sms_phone,
+        cr.location_address, cr.location_city, cr.location_state,
+        cr.latitude AS recipient_lat, cr.longitude AS recipient_lng
+      FROM care_sessions cs
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+      WHERE cs.id = ?
+    `).get(req.params.id);
+
+    if (!session) return res.status(404).json({ error: "Session not found" });
+
+    // Only the assigned caregiver (or admin) can signal on-my-way
+    if (activeRole !== "admin" && userId !== session.caregiver_user_id) {
+      return res.status(403).json({ error: "Only the assigned caregiver can signal en route" });
+    }
+
+    if (["completed", "cancelled"].includes(session.status)) {
+      return res.status(400).json({ error: "Session is already completed or cancelled" });
+    }
+
+    // Mark the on_my_way timestamp
+    await db.prepare(`
+      UPDATE care_sessions SET on_my_way_at = NOW(), updated_at = NOW()
+      WHERE id = ?
+    `).run(req.params.id);
+
+    // Build notification content
+    const caregiver = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(session.caregiver_user_id);
+    const cgName = caregiver ? `${caregiver.first_name}` : "Your caregiver";
+    const recipientName = `${session.recipient_first_name || ""} ${session.recipient_last_name || ""}`.trim() || "your loved one";
+    const etaStr = estimatedMinutes ? ` (about ${estimatedMinutes} min away)` : "";
+    const locationParts = [session.location_address, session.location_city, session.location_state].filter(Boolean);
+    const mapsUrl = locationParts.length ? `https://maps.google.com/?q=${encodeURIComponent(locationParts.join(", "))}` : null;
+
+    const { sendPushToUser } = require("./push");
+
+    // Notification tags
+    const famTag = `session-${req.params.id.slice(0,8)}-family`;
+    const recipTag = `session-${req.params.id.slice(0,8)}-recip`;
+
+    // Notify care team
+    const careTeamMembers = await db.prepare(`
+      SELECT DISTINCT ctm.user_id FROM care_team_members ctm
+      JOIN care_teams ct ON ctm.care_team_id = ct.id
+      WHERE ct.care_recipient_id = ?
+    `).all(session.care_recipient_id);
+    const teamUserIds = careTeamMembers.length > 0
+      ? careTeamMembers.map(m => m.user_id)
+      : (session.family_user_id ? [session.family_user_id] : []);
+
+    for (const uid of teamUserIds) {
+      if (uid === session.caregiver_user_id) continue;
+      await sendPushToUser(uid, {
+        title: `${cgName} is On the Way!`,
+        body: `Heading to ${recipientName}'s now${etaStr}`,
+        tag: famTag,
+        data: { type: "on_my_way", sessionId: req.params.id, page: "dashboard", mapsUrl },
+      }, "on_my_way");
+    }
+
+    // Notify care recipient
+    const channel = session.notification_channel || "push";
+    const recipFirstName = session.recipient_first_name || "there";
+
+    if (["push", "both"].includes(channel) && session.care_for_user_id && !teamUserIds.includes(session.care_for_user_id)) {
+      await sendPushToUser(session.care_for_user_id, {
+        title: `${cgName} is On the Way!`,
+        body: `Hi ${recipFirstName}, ${cgName} is heading to you now${etaStr}`,
+        tag: recipTag,
+        data: { type: "on_my_way_recipient", sessionId: req.params.id },
+      }, "on_my_way_recipient");
+    }
+
+    if (["sms", "both"].includes(channel) && session.sms_phone) {
+      const { sendSms } = require("../utils/sms");
+      await sendSms(session.sms_phone, `Hi ${recipFirstName}, ${cgName} is on the way to you now${etaStr}!`);
+    }
+
+    // ─── Schedule "5 minutes away" notification if we can estimate ETA ───
+    let etaMinutes = estimatedMinutes || null;
+    if (!etaMinutes && lat && lng && session.recipient_lat && session.recipient_lng) {
+      // Haversine distance → rough driving ETA at ~30 mph average
+      const toRad = (d) => d * Math.PI / 180;
+      const R = 3959; // Earth radius in miles
+      const dLat = toRad(session.recipient_lat - lat);
+      const dLng = toRad(session.recipient_lng - lng);
+      const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat)) * Math.cos(toRad(session.recipient_lat)) * Math.sin(dLng/2)**2;
+      const miles = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      etaMinutes = Math.round((miles / 30) * 60); // 30 mph average
+    }
+
+    if (etaMinutes && etaMinutes > 5) {
+      const delayMs = (etaMinutes - 5) * 60 * 1000;
+      const sessionId = req.params.id;
+      setTimeout(async () => {
+        try {
+          // Send "5 minutes away" notification to care team + care recipient
+          const { sendPushToUser: pushToUser } = require("./push");
+          for (const uid of teamUserIds) {
+            if (uid === session.caregiver_user_id) continue;
+            await pushToUser(uid, {
+              title: `${cgName} is 5 Minutes Away`,
+              body: `Almost there! ${cgName} will arrive at ${recipientName}'s shortly.`,
+              tag: famTag,
+              data: { type: "five_min_away", sessionId, page: "dashboard" },
+            }, "five_min_away");
+          }
+          const ch = session.notification_channel || "push";
+          const rName = session.recipient_first_name || "there";
+          if (["push", "both"].includes(ch) && session.care_for_user_id && !teamUserIds.includes(session.care_for_user_id)) {
+            await pushToUser(session.care_for_user_id, {
+              title: `${cgName} is Almost Here!`,
+              body: `Hi ${rName}, ${cgName} will be at your door in about 5 minutes!`,
+              tag: recipTag,
+              data: { type: "five_min_away_recipient", sessionId },
+            }, "five_min_away_recipient");
+          }
+          if (["sms", "both"].includes(ch) && session.sms_phone) {
+            const { sendSms } = require("../utils/sms");
+            await sendSms(session.sms_phone, `Hi ${rName}, ${cgName} will be at your door in about 5 minutes!`);
+          }
+          console.log(`  5-min-away notification sent for session ${sessionId}`);
+        } catch (err) {
+          console.error("5-min-away notification error:", err.message);
+        }
+      }, delayMs);
+      console.log(`  On-my-way signal sent for session ${req.params.id}${etaStr}. 5-min-away scheduled in ${Math.round(delayMs/60000)} min`);
+    } else {
+      console.log(`  On-my-way signal sent for session ${req.params.id}${etaStr}. ETA <= 5 min or unknown — no delayed notification.`);
+    }
+
+    res.json({ ok: true, on_my_way_at: new Date().toISOString(), etaMinutes });
+  } catch (err) {
+    console.error("PUT /sessions/:id/on-my-way error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 // ─── PUT /api/sessions/:id/cancel ───
 // Cancel a confirmed/pending session with late-cancel tracking
 router.put("/:id/cancel", async (req, res) => {

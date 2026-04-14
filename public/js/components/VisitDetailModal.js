@@ -207,12 +207,23 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, 
                       <span>{s.booked_by_name}</span>
                     </>
                   )}
-                  {(s.location_address || s.location_city) && (
-                    <>
-                      <span style={{ color: 'var(--text-tertiary)' }}>Location</span>
-                      <span style={{ fontSize: 13 }}>{[s.location_address, s.location_city, s.location_state].filter(Boolean).join(', ')}</span>
-                    </>
-                  )}
+                  {(s.location_address || s.location_city) && (() => {
+                    const addrParts = [s.location_address, s.location_city, s.location_state].filter(Boolean).join(', ');
+                    const mapsUrl = `https://maps.google.com/?q=${encodeURIComponent(addrParts)}`;
+                    return (
+                      <>
+                        <span style={{ color: 'var(--text-tertiary)' }}>Location</span>
+                        <a href={mapsUrl} target="_blank" rel="noopener noreferrer"
+                          style={{ fontSize: 13, color: 'var(--role-color)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                            <circle cx="12" cy="10" r="3"></circle>
+                          </svg>
+                          {addrParts}
+                        </a>
+                      </>
+                    );
+                  })()}
                   {s.flex_timing && s.flex_timing !== 'strict' && (
                     <>
                       <span style={{ color: 'var(--text-tertiary)' }}>Overtime</span>

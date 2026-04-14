@@ -715,6 +715,9 @@ async function initializeDatabase() {
     `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS review_completed INTEGER DEFAULT 0`,
     `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS review_reminded_at TIMESTAMPTZ`,
 
+    // On-my-way / ETA tracking
+    `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS on_my_way_at TIMESTAMPTZ`,
+
     // Session disputes
     `CREATE TABLE IF NOT EXISTS session_disputes (
       id TEXT PRIMARY KEY,

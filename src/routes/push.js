@@ -558,7 +558,8 @@ async function sendSessionReminders(sessionId, reminderType) {
       SELECT cs.*, cp.user_id AS caregiver_user_id,
         cr.first_name AS recipient_first_name, cr.last_name AS recipient_last_name,
         cr.linked_user_id AS care_for_user_id,
-        cr.notification_channel, cr.sms_phone
+        cr.notification_channel, cr.sms_phone,
+        cr.location_address, cr.location_city, cr.location_state
       FROM care_sessions cs
       LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
       LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
@@ -570,6 +571,9 @@ async function sendSessionReminders(sessionId, reminderType) {
     const caregiver = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(session.caregiver_user_id);
     const caregiverName = caregiver ? `${caregiver.first_name} ${caregiver.last_name}` : "Your caregiver";
     const recipientName = `${session.recipient_first_name || ""} ${session.recipient_last_name || ""}`.trim() || "your loved one";
+    const locationParts = [session.location_address, session.location_city, session.location_state].filter(Boolean);
+    const locationStr = locationParts.join(", ");
+    const mapsUrl = locationStr ? `https://maps.google.com/?q=${encodeURIComponent(locationStr)}` : null;
 
     // Get ALL care team members for this care recipient (not just the session creator)
     const careTeamMembers = await db.prepare(`
@@ -591,11 +595,12 @@ async function sendSessionReminders(sessionId, reminderType) {
     if (reminderType === "pre_check_in") {
       // 1. To caregiver: push + SMS "Get ready to check in"
       if (session.caregiver_user_id) {
+        const addrSnippet = locationStr ? `\n📍 ${locationStr}` : "";
         await sendPushToUser(session.caregiver_user_id, {
           title: "Get Ready to Check In",
-          body: `Time to check in with ${recipientName} (session at ${session.scheduled_time})`,
+          body: `Time to check in with ${recipientName} (session at ${session.scheduled_time})${addrSnippet}`,
           tag: cgTag,
-          data: { type: "check_in_reminder", sessionId, page: "schedule" },
+          data: { type: "check_in_reminder", sessionId, page: "schedule", mapsUrl },
         }, "check_in_reminder");
 
         // Also SMS the caregiver (push may not be enabled)
@@ -603,7 +608,8 @@ async function sendSessionReminders(sessionId, reminderType) {
         if (cgUser?.phone) {
           const { sendSms } = require("../utils/sms");
           const timeStr = session.scheduled_time ? session.scheduled_time.replace(/^0/, "") : "soon";
-          await sendSms(cgUser.phone, `InPlace: Heads up — your session with ${recipientName} starts at ${timeStr}. Don't forget to check in!`);
+          const smsAddr = mapsUrl ? `\nDirections: ${mapsUrl}` : "";
+          await sendSms(cgUser.phone, `InPlace: Heads up — your session with ${recipientName} starts at ${timeStr}. Don't forget to check in!${smsAddr}`);
         }
       }
 
@@ -612,9 +618,9 @@ async function sendSessionReminders(sessionId, reminderType) {
         if (userId === session.caregiver_user_id) continue; // don't double-notify caregiver
         await sendPushToUser(userId, {
           title: "Caregiver Arriving Soon",
-          body: `${caregiverName} is about to check in with ${recipientName}`,
+          body: `${caregiverName} is about to check in with ${recipientName}${locationStr ? ` at ${locationStr}` : ""}`,
           tag: famTag,
-          data: { type: "caregiver_arriving", sessionId, page: "dashboard" },
+          data: { type: "caregiver_arriving", sessionId, page: "dashboard", mapsUrl },
         }, "caregiver_arriving");
       }
 
