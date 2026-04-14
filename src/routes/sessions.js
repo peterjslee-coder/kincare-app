@@ -2298,12 +2298,19 @@ router.put("/:id/instructions", async (req, res) => {
       return res.status(400).json({ error: "Cannot edit instructions on a completed or cancelled session" });
     }
 
+    // Append to existing instructions instead of overwriting
+    const existing = (session.special_instructions || "").trim();
+    const merged = existing
+      ? existing + "\n\n" + cleaned
+      : cleaned;
+    const finalInstructions = merged.slice(0, 2000) || null;
+
     await db.prepare(`
       UPDATE care_sessions SET special_instructions = ?, updated_at = NOW()
       WHERE id = ?
-    `).run(cleaned || null, req.params.id);
+    `).run(finalInstructions, req.params.id);
 
-    res.json({ ok: true, special_instructions: cleaned || null });
+    res.json({ ok: true, special_instructions: finalInstructions });
   } catch (err) {
     console.error("PUT /sessions/:id/instructions error:", err);
     res.status(500).json({ error: "Server error" });
