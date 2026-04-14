@@ -1365,8 +1365,18 @@ const App = () => {
       let impersonateBody = { _challengeKey: challengeKey };
       if (!challengeData.noPasskey) {
         // Step 2: Passkey verification
-        const authResp = await window.SimpleWebAuthnBrowser.startAuthentication({ optionsJSON: challengeData });
-        impersonateBody = { ...authResp, _challengeKey: challengeKey };
+        if (!window.SimpleWebAuthnBrowser?.startAuthentication) {
+          alert('Passkey library not available. Try impersonating from desktop.');
+          return;
+        }
+        try {
+          const authResp = await window.SimpleWebAuthnBrowser.startAuthentication({ optionsJSON: challengeData });
+          impersonateBody = { ...authResp, _challengeKey: challengeKey };
+        } catch (passkeyErr) {
+          console.error('Passkey verification failed:', passkeyErr);
+          alert(`Passkey verification failed: ${passkeyErr.message || passkeyErr}.\n\nTry from desktop, or register a passkey on this device.`);
+          return;
+        }
       }
 
       // Step 3: Impersonate with passkey proof
@@ -1412,7 +1422,7 @@ const App = () => {
       setCurrentPage('dashboard');
     } catch (err) {
       console.error('Impersonation error:', err);
-      alert('Failed to start impersonation');
+      alert(`Failed to start impersonation: ${err.message || err}`);
     }
   };
   // Expose to AdminPanel
