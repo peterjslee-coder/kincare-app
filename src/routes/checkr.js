@@ -253,7 +253,7 @@ router.post("/initiate", authenticate, requireRole("caregiver"), async (req, res
     console.log(`[checkr] Creating invitation for candidate ${candidate.id}`);
 
     // Certification: retrieve account hierarchy nodes and packages dynamically
-    let packageSlug = process.env.CHECKR_PACKAGE || "essential_criminal";
+    let packageSlug = process.env.CHECKR_PACKAGE || "inplace_starter";
     let nodeId = null;
     try {
       const nodesResp = await checkrRequest("GET", "/nodes?include=packages");
