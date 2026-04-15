@@ -50,7 +50,7 @@ const CHECKR_API_BASE = process.env.CHECKR_STAGING === "true"
   : "https://api.checkr.com/v1";
 
 function getCheckrKey() {
-  const key = process.env.CHECKR_API_KEY;
+  const key = (process.env.CHECKR_API_KEY || "").trim();
   if (!key) throw new Error("CHECKR_API_KEY not configured");
   return key;
 }
