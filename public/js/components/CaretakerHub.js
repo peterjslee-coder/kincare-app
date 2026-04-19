@@ -1,3 +1,27 @@
+// ─── Check-out draft persistence (prevents feedback loss on refresh/interruption) ───
+// Keyed by sessionId — each session is globally unique and assigned to one caregiver.
+// Cleared only on successful submit or offline-queue hand-off (see onClick below).
+const CHECKOUT_DRAFT_KEY_PREFIX = 'ip_checkout_draft:';
+const loadCheckOutDraft = (sessionId) => {
+  try {
+    if (!sessionId) return null;
+    const raw = localStorage.getItem(CHECKOUT_DRAFT_KEY_PREFIX + sessionId);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+};
+const saveCheckOutDraft = (sessionId, draft) => {
+  try {
+    if (!sessionId) return;
+    localStorage.setItem(CHECKOUT_DRAFT_KEY_PREFIX + sessionId, JSON.stringify({ ...draft, savedAt: Date.now() }));
+  } catch {}
+};
+const clearCheckOutDraft = (sessionId) => {
+  try {
+    if (!sessionId) return;
+    localStorage.removeItem(CHECKOUT_DRAFT_KEY_PREFIX + sessionId);
+  } catch {}
+};
+
 const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) => {
   const { showToast } = useToast();
   const [data, setData] = useState(null);
@@ -28,6 +52,11 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const [checkSubmitting, setCheckSubmitting] = useState(false);
   const [earlyDepartureReason, setEarlyDepartureReason] = useState('');
   const [earlyDepartureAcked, setEarlyDepartureAcked] = useState(false);
+  // Draft-persistence bookkeeping — shows a "Draft restored" badge when we rehydrate,
+  // and gates the auto-save effect so it doesn't overwrite a stored draft with empty
+  // state before rehydrate runs on the fresh session.
+  const [draftRestored, setDraftRestored] = useState(false);
+  const rehydratedSessionIdRef = useRef(null);
   const [checkInLocation, setCheckInLocation] = useState(null);
   const [locationError, setLocationError] = useState(null);
   const [checkOutLocation, setCheckOutLocation] = useState(null);
@@ -304,6 +333,58 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
     });
     setShowAddRule(true);
   };
+
+  // ─── Check-out draft: rehydrate when the modal opens for a session ───
+  // Runs when the session id changes. If a draft exists for that session,
+  // populate mood/tags/text fields and show the "Draft restored" badge.
+  // Sets rehydratedSessionIdRef BEFORE the auto-save effect runs, so the
+  // save effect won't wipe the stored draft with empty reset values.
+  useEffect(() => {
+    if (!checkOutSession?.id) {
+      rehydratedSessionIdRef.current = null;
+      setDraftRestored(false);
+      return;
+    }
+    const draft = loadCheckOutDraft(checkOutSession.id);
+    if (draft) {
+      if (Array.isArray(draft.mood)) setCheckOutMood(draft.mood);
+      if (Array.isArray(draft.tags)) setCheckOutTags(draft.tags);
+      if (typeof draft.summary === 'string') setCheckOutSummary(draft.summary);
+      if (typeof draft.serviceFeedback === 'string') setCheckOutServiceFeedback(draft.serviceFeedback);
+      if (typeof draft.earlyDepartureReason === 'string') {
+        setEarlyDepartureReason(draft.earlyDepartureReason);
+        if (draft.earlyDepartureReason.trim()) setEarlyDepartureAcked(true);
+      }
+      setDraftRestored(true);
+    } else {
+      setDraftRestored(false);
+    }
+    rehydratedSessionIdRef.current = checkOutSession.id;
+  }, [checkOutSession?.id]);
+
+  // ─── Check-out draft: auto-save on every change ───
+  // Only saves once rehydrate has run for the current session (guarded by ref),
+  // and only if there's something worth saving — avoids stomping a stored
+  // draft with the empty reset that happens when "Check Out" is first tapped.
+  useEffect(() => {
+    if (!checkOutSession?.id) return;
+    if (rehydratedSessionIdRef.current !== checkOutSession.id) return;
+    const hasContent = (
+      (checkOutMood && checkOutMood.length > 0) ||
+      (checkOutTags && checkOutTags.length > 0) ||
+      (checkOutSummary && checkOutSummary.trim()) ||
+      (checkOutServiceFeedback && checkOutServiceFeedback.trim()) ||
+      (earlyDepartureReason && earlyDepartureReason.trim())
+    );
+    if (!hasContent) return;
+    saveCheckOutDraft(checkOutSession.id, {
+      mood: checkOutMood,
+      tags: checkOutTags,
+      summary: checkOutSummary,
+      serviceFeedback: checkOutServiceFeedback,
+      earlyDepartureReason,
+    });
+  }, [checkOutSession?.id, checkOutMood, checkOutTags, checkOutSummary, checkOutServiceFeedback, earlyDepartureReason]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -3517,6 +3598,17 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               </p>
             </div>
 
+            {draftRestored && (
+              <div style={{
+                background: 'var(--color-success-bg)', border: '1px solid var(--color-success)',
+                borderRadius: 8, padding: '8px 12px', marginBottom: 16, fontSize: 12,
+                color: 'var(--color-success)', display: 'flex', alignItems: 'center', gap: 8,
+              }}>
+                <span style={{ fontSize: 14 }}>💾</span>
+                <span>Draft restored — picking up where you left off. Your notes were saved automatically.</span>
+              </div>
+            )}
+
             <div style={{ marginBottom: 20 }}>
               <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 8 }}>
                 How is {(checkOutSession.recipientName || checkOutSession.recipient_name || '').split(' ')[0] || 'the care recipient'} now? (tap all that apply)
@@ -3760,6 +3852,9 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                     setCheckOutSummary('');
                     setEarlyDepartureReason('');
                     setEarlyDepartureAcked(false);
+                    // Submission succeeded — drop the saved draft so it doesn't
+                    // resurface on next check-out of an unrelated session.
+                    clearCheckOutDraft(checkOutSession.id);
                     showToast('Checked out! Session complete.', 'success');
                     setCheckOutSession(null);
                     const refreshRes = await apiFetch('/api/dashboard');
@@ -3768,6 +3863,9 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                     // Offline — queue for later sync
                     if (window.OfflineQueue) {
                       await window.OfflineQueue.queueCheckOut(checkOutSession.id, checkOutPayload);
+                      // Payload is now safely queued for background sync — draft
+                      // can be cleared; the queued payload carries the feedback.
+                      clearCheckOutDraft(checkOutSession.id);
                       showToast('Saved offline — will sync when you reconnect', 'success');
                       setCheckOutSession(null);
                     } else {
@@ -3784,6 +3882,8 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                     // Network error and offline — queue it
                     try {
                       await window.OfflineQueue.queueCheckOut(checkOutSession.id, checkOutPayload);
+                      // Queued successfully — feedback is safe, drop the draft.
+                      clearCheckOutDraft(checkOutSession.id);
                       showToast('Saved offline — will sync when you reconnect', 'success');
                       setCheckOutSession(null);
                     } catch { showToast('Check-out failed — could not save offline', 'error'); }

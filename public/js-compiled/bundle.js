@@ -482,6 +482,7 @@ const apiFetch = window.apiFetch = async (url, options = {}) => {
   const effectiveToken = IMPERSONATION_TOKEN || AUTH_TOKEN;
   if (effectiveToken) headers['Authorization'] = `Bearer ${effectiveToken}`;
   if (ACTIVE_ROLE && !IMPERSONATION_TOKEN) headers['X-Active-Role'] = ACTIVE_ROLE;
+  if (window.APP_VERSION) headers['X-App-Version'] = window.APP_VERSION;
   const csrf = getCsrfToken();
   if (csrf) headers['X-CSRF-Token'] = csrf;
   const response = await fetch(API_BASE + url, {
@@ -9552,9 +9553,34 @@ const Dashboard = window.Dashboard = ({
         fontWeight: 700,
         fontSize: 17,
         color: 'var(--text-primary)',
-        marginBottom: 4
+        marginBottom: 4,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        flexWrap: 'wrap'
       }
-    }, hero.recipientName || 'Care Visit', " with ", hero.caregiverName), hasPendingTC && hero.tcProposedTime ? /*#__PURE__*/React.createElement("div", {
+    }, hero.recipientName || 'Care Visit', " with ", hero.caregiverName, hero.on_my_way_at && !isActive && /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 11,
+        fontWeight: 700,
+        color: 'var(--color-success)',
+        background: 'var(--color-success-bg)',
+        padding: '2px 8px',
+        borderRadius: 10,
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 3
+      }
+    }, /*#__PURE__*/React.createElement("svg", {
+      width: "12",
+      height: "12",
+      viewBox: "0 0 24 24",
+      fill: "none",
+      stroke: "currentColor",
+      strokeWidth: "2.5"
+    }, /*#__PURE__*/React.createElement("polygon", {
+      points: "3 11 22 2 13 21 11 13 3 11"
+    })), "En Route")), hasPendingTC && hero.tcProposedTime ? /*#__PURE__*/React.createElement("div", {
       style: {
         fontSize: 14,
         color: 'var(--text-secondary)'
@@ -27354,21 +27380,21 @@ const Messages = window.Messages = () => {
           padding: '6px 10px',
           marginBottom: -6,
           borderRadius: isSent ? '12px 12px 0 0' : '12px 12px 0 0',
-          background: isSent ? '#15594b' : '#e4e4e4',
+          background: isSent ? 'var(--bubble-reply-sent-bg)' : 'var(--bubble-reply-received-bg)',
           fontSize: 12,
           lineHeight: 1.3,
-          borderLeft: isSent ? '3px solid rgba(255,255,255,0.4)' : '3px solid #1b6b5a'
+          borderLeft: isSent ? '3px solid rgba(255,255,255,0.4)' : '3px solid var(--bubble-sent-bg)'
         }
       }, /*#__PURE__*/React.createElement("div", {
         style: {
           fontWeight: 600,
           fontSize: 11,
-          color: isSent ? 'rgba(255,255,255,0.7)' : 'var(--role-color)',
+          color: isSent ? 'rgba(255,255,255,0.7)' : 'var(--bubble-sent-bg)',
           marginBottom: 1
         }
       }, m.replyTo.senderName || 'Unknown'), /*#__PURE__*/React.createElement("div", {
         style: {
-          color: isSent ? 'rgba(255,255,255,0.6)' : 'var(--text-secondary)',
+          color: isSent ? 'rgba(255,255,255,0.6)' : 'var(--bubble-received-meta)',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
           whiteSpace: 'nowrap',
@@ -27378,8 +27404,8 @@ const Messages = window.Messages = () => {
         style: {
           padding: '10px 14px',
           borderRadius: m.replyTo ? isSent ? '0 0 4px 18px' : '0 0 18px 4px' : isSent ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
-          background: m.is_deleted ? 'var(--badge-muted-bg)' : isSent ? 'var(--role-color)' : 'var(--badge-muted-bg)',
-          color: m.is_deleted ? 'var(--text-muted)' : isSent ? 'var(--bg-surface)' : 'var(--text-primary)',
+          background: m.is_deleted ? 'var(--badge-muted-bg)' : isSent ? 'var(--bubble-sent-bg)' : 'var(--bubble-received-bg)',
+          color: m.is_deleted ? 'var(--text-muted)' : isSent ? 'var(--bubble-sent-text)' : 'var(--bubble-received-text)',
           fontSize: '14px',
           lineHeight: 1.45,
           wordWrap: 'break-word',
@@ -27421,7 +27447,7 @@ const Messages = window.Messages = () => {
       })() : renderMessageContent(m.content), /*#__PURE__*/React.createElement("div", {
         style: {
           fontSize: '10px',
-          color: isSent ? 'rgba(255,255,255,0.6)' : 'var(--text-muted)',
+          color: isSent ? 'var(--bubble-sent-meta)' : 'var(--bubble-received-meta)',
           marginTop: '4px',
           textAlign: 'right',
           display: 'flex',
@@ -27453,13 +27479,13 @@ const Messages = window.Messages = () => {
         const msgTime = new Date(m.created_at).getTime();
         const isRead = Object.values(convReceipts).some(readAt => new Date(readAt).getTime() >= msgTime);
         return /*#__PURE__*/React.createElement("span", {
-          title: isRead ? 'Read' : 'Sent',
+          title: isRead ? 'Read' : 'Delivered',
           style: {
             display: 'inline-flex',
             alignItems: 'center'
           },
           dangerouslySetInnerHTML: {
-            __html: isRead ? '<svg width="16" height="10" viewBox="0 0 24 14"><path d="M1 7l4.5 5L17 1" fill="none" stroke="rgba(255,255,255,0.9)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 7l4.5 5L23 1" fill="none" stroke="rgba(255,255,255,0.9)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' : '<svg width="12" height="10" viewBox="0 0 16 14"><path d="M1 7l4.5 5L15 1" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+            __html: isRead ? '<svg width="16" height="10" viewBox="0 0 24 14"><path d="M1 7l4.5 5L17 1" fill="none" stroke="rgba(255,255,255,0.95)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 7l4.5 5L23 1" fill="none" stroke="rgba(255,255,255,0.95)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' : '<svg width="12" height="10" viewBox="0 0 16 14"><path d="M1 7l4.5 5L15 1" fill="none" stroke="rgba(255,255,255,0.45)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'
           }
         });
       })())), reactions.length > 0 && /*#__PURE__*/React.createElement("div", {
@@ -30584,15 +30610,42 @@ const VisitDetailModal = window.VisitDetailModal = ({
       style: {
         color: 'var(--text-tertiary)'
       }
-    }, "Booked by"), /*#__PURE__*/React.createElement("span", null, s.booked_by_name)), (s.location_address || s.location_city) && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("span", {
-      style: {
-        color: 'var(--text-tertiary)'
-      }
-    }, "Location"), /*#__PURE__*/React.createElement("span", {
-      style: {
-        fontSize: 13
-      }
-    }, [s.location_address, s.location_city, s.location_state].filter(Boolean).join(', '))), s.flex_timing && s.flex_timing !== 'strict' && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("span", {
+    }, "Booked by"), /*#__PURE__*/React.createElement("span", null, s.booked_by_name)), (s.location_address || s.location_city) && (() => {
+      const addrParts = [s.location_address, s.location_city, s.location_state].filter(Boolean).join(', ');
+      const mapsUrl = `https://maps.google.com/?q=${encodeURIComponent(addrParts)}`;
+      return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("span", {
+        style: {
+          color: 'var(--text-tertiary)'
+        }
+      }, "Location"), /*#__PURE__*/React.createElement("a", {
+        href: mapsUrl,
+        target: "_blank",
+        rel: "noopener noreferrer",
+        style: {
+          fontSize: 13,
+          color: 'var(--role-color)',
+          textDecoration: 'none',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 4
+        }
+      }, /*#__PURE__*/React.createElement("svg", {
+        width: "14",
+        height: "14",
+        viewBox: "0 0 24 24",
+        fill: "none",
+        stroke: "currentColor",
+        strokeWidth: "2",
+        strokeLinecap: "round",
+        strokeLinejoin: "round"
+      }, /*#__PURE__*/React.createElement("path", {
+        d: "M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"
+      }), /*#__PURE__*/React.createElement("circle", {
+        cx: "12",
+        cy: "10",
+        r: "3"
+      })), addrParts));
+    })(), s.flex_timing && s.flex_timing !== 'strict' && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("span", {
       style: {
         color: 'var(--text-tertiary)'
       }
@@ -44168,6 +44221,34 @@ const HourReports = window.HourReports = ({
   }, "Select a date range above and click \"Generate Report\" to see your verified care hours. You can then print it as a PDF or email it directly to your school.")));
 };
 ;
+// ─── Check-out draft persistence (prevents feedback loss on refresh/interruption) ───
+// Keyed by sessionId — each session is globally unique and assigned to one caregiver.
+// Cleared only on successful submit or offline-queue hand-off (see onClick below).
+const CHECKOUT_DRAFT_KEY_PREFIX = 'ip_checkout_draft:';
+const loadCheckOutDraft = sessionId => {
+  try {
+    if (!sessionId) return null;
+    const raw = localStorage.getItem(CHECKOUT_DRAFT_KEY_PREFIX + sessionId);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
+const saveCheckOutDraft = (sessionId, draft) => {
+  try {
+    if (!sessionId) return;
+    localStorage.setItem(CHECKOUT_DRAFT_KEY_PREFIX + sessionId, JSON.stringify({
+      ...draft,
+      savedAt: Date.now()
+    }));
+  } catch {}
+};
+const clearCheckOutDraft = sessionId => {
+  try {
+    if (!sessionId) return;
+    localStorage.removeItem(CHECKOUT_DRAFT_KEY_PREFIX + sessionId);
+  } catch {}
+};
 const CaretakerHub = window.CaretakerHub = ({
   onNeedsOnboarding,
   initialTab
@@ -44204,9 +44285,16 @@ const CaretakerHub = window.CaretakerHub = ({
   const [checkSubmitting, setCheckSubmitting] = useState(false);
   const [earlyDepartureReason, setEarlyDepartureReason] = useState('');
   const [earlyDepartureAcked, setEarlyDepartureAcked] = useState(false);
+  // Draft-persistence bookkeeping — shows a "Draft restored" badge when we rehydrate,
+  // and gates the auto-save effect so it doesn't overwrite a stored draft with empty
+  // state before rehydrate runs on the fresh session.
+  const [draftRestored, setDraftRestored] = useState(false);
+  const rehydratedSessionIdRef = useRef(null);
   const [checkInLocation, setCheckInLocation] = useState(null);
   const [locationError, setLocationError] = useState(null);
   const [checkOutLocation, setCheckOutLocation] = useState(null);
+  const [onMyWaySent, setOnMyWaySent] = useState({}); // { [sessionId]: true }
+  const [onMyWaySending, setOnMyWaySending] = useState(null);
   // Live countdown tick state — interval set up later after sessions are derived
   const [countdownTick, setCountdownTick] = useState(0);
 
@@ -44525,6 +44613,52 @@ const CaretakerHub = window.CaretakerHub = ({
     });
     setShowAddRule(true);
   };
+
+  // ─── Check-out draft: rehydrate when the modal opens for a session ───
+  // Runs when the session id changes. If a draft exists for that session,
+  // populate mood/tags/text fields and show the "Draft restored" badge.
+  // Sets rehydratedSessionIdRef BEFORE the auto-save effect runs, so the
+  // save effect won't wipe the stored draft with empty reset values.
+  useEffect(() => {
+    if (!(checkOutSession !== null && checkOutSession !== void 0 && checkOutSession.id)) {
+      rehydratedSessionIdRef.current = null;
+      setDraftRestored(false);
+      return;
+    }
+    const draft = loadCheckOutDraft(checkOutSession.id);
+    if (draft) {
+      if (Array.isArray(draft.mood)) setCheckOutMood(draft.mood);
+      if (Array.isArray(draft.tags)) setCheckOutTags(draft.tags);
+      if (typeof draft.summary === 'string') setCheckOutSummary(draft.summary);
+      if (typeof draft.serviceFeedback === 'string') setCheckOutServiceFeedback(draft.serviceFeedback);
+      if (typeof draft.earlyDepartureReason === 'string') {
+        setEarlyDepartureReason(draft.earlyDepartureReason);
+        if (draft.earlyDepartureReason.trim()) setEarlyDepartureAcked(true);
+      }
+      setDraftRestored(true);
+    } else {
+      setDraftRestored(false);
+    }
+    rehydratedSessionIdRef.current = checkOutSession.id;
+  }, [checkOutSession === null || checkOutSession === void 0 ? void 0 : checkOutSession.id]);
+
+  // ─── Check-out draft: auto-save on every change ───
+  // Only saves once rehydrate has run for the current session (guarded by ref),
+  // and only if there's something worth saving — avoids stomping a stored
+  // draft with the empty reset that happens when "Check Out" is first tapped.
+  useEffect(() => {
+    if (!(checkOutSession !== null && checkOutSession !== void 0 && checkOutSession.id)) return;
+    if (rehydratedSessionIdRef.current !== checkOutSession.id) return;
+    const hasContent = checkOutMood && checkOutMood.length > 0 || checkOutTags && checkOutTags.length > 0 || checkOutSummary && checkOutSummary.trim() || checkOutServiceFeedback && checkOutServiceFeedback.trim() || earlyDepartureReason && earlyDepartureReason.trim();
+    if (!hasContent) return;
+    saveCheckOutDraft(checkOutSession.id, {
+      mood: checkOutMood,
+      tags: checkOutTags,
+      summary: checkOutSummary,
+      serviceFeedback: checkOutServiceFeedback,
+      earlyDepartureReason
+    });
+  }, [checkOutSession === null || checkOutSession === void 0 ? void 0 : checkOutSession.id, checkOutMood, checkOutTags, checkOutSummary, checkOutServiceFeedback, earlyDepartureReason]);
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -46953,11 +47087,17 @@ const CaretakerHub = window.CaretakerHub = ({
           color: 'var(--text-secondary)',
           marginTop: 2
         }
-      }, dayLabel, timeLabel ? ` at ${timeLabel}` : '', duration ? ` \u2022 ${duration}hr` : '', svcType ? ` \u2022 ${formatServiceType(svcType)}` : ''), loc ? /*#__PURE__*/React.createElement("div", {
+      }, dayLabel, timeLabel ? ` at ${timeLabel}` : '', duration ? ` \u2022 ${duration}hr` : '', svcType ? ` \u2022 ${formatServiceType(svcType)}` : ''), loc ? /*#__PURE__*/React.createElement("a", {
+        href: `https://maps.google.com/?q=${encodeURIComponent(loc)}`,
+        target: "_blank",
+        rel: "noopener noreferrer",
+        onClick: e => e.stopPropagation(),
         style: {
+          display: 'block',
           fontSize: 12,
-          color: 'var(--text-tertiary)',
-          marginTop: 2
+          color: 'var(--role-color)',
+          marginTop: 2,
+          textDecoration: 'none'
         }
       }, '\uD83D\uDCCD', " ", loc) : noAddress ? /*#__PURE__*/React.createElement("div", {
         style: {
@@ -47134,7 +47274,96 @@ const CaretakerHub = window.CaretakerHub = ({
           boxShadow: '0 2px 8px rgba(232,114,74,0.3)',
           whiteSpace: 'nowrap'
         }
-      }, "Check In Now"), isUpcoming && /*#__PURE__*/React.createElement("button", {
+      }, "Check In Now"), (isUpcoming || isReady) && !isActive && s.status === 'confirmed' && !onMyWaySent[s.id] && !s.on_my_way_at && /*#__PURE__*/React.createElement("button", {
+        disabled: onMyWaySending === s.id,
+        onClick: async e => {
+          e.stopPropagation();
+          setOnMyWaySending(s.id);
+          try {
+            // Get current location for ETA calculation
+            let body = {};
+            try {
+              const pos = await new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, {
+                timeout: 5000,
+                enableHighAccuracy: false
+              }));
+              body = {
+                lat: pos.coords.latitude,
+                lng: pos.coords.longitude
+              };
+            } catch {} // location optional — still send on-my-way
+            const r = await apiFetch(`/api/sessions/${s.id}/on-my-way`, {
+              method: 'PUT',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify(body)
+            });
+            if (r !== null && r !== void 0 && r.ok) {
+              setOnMyWaySent(prev => ({
+                ...prev,
+                [s.id]: true
+              }));
+              showToast('Care team notified — you\'re on your way!', 'success');
+              // Open maps for directions
+              if (loc) {
+                window.open(`https://maps.google.com/?q=${encodeURIComponent(loc)}&navigate=yes`, '_blank');
+              }
+            } else {
+              const err = await (r === null || r === void 0 ? void 0 : r.json().catch(() => ({})));
+              showToast((err === null || err === void 0 ? void 0 : err.error) || 'Failed to send', 'error');
+            }
+          } catch {
+            showToast('Network error', 'error');
+          }
+          setOnMyWaySending(null);
+        },
+        style: {
+          padding: '8px 16px',
+          background: 'linear-gradient(135deg, #1b6b5a, #2a9d8f)',
+          color: '#fff',
+          border: 'none',
+          borderRadius: '10px',
+          fontSize: '13px',
+          fontWeight: 600,
+          cursor: 'pointer',
+          boxShadow: '0 2px 8px rgba(27,107,90,0.3)',
+          whiteSpace: 'nowrap',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          opacity: onMyWaySending === s.id ? 0.6 : 1
+        }
+      }, /*#__PURE__*/React.createElement("svg", {
+        width: "16",
+        height: "16",
+        viewBox: "0 0 24 24",
+        fill: "none",
+        stroke: "currentColor",
+        strokeWidth: "2",
+        strokeLinecap: "round",
+        strokeLinejoin: "round"
+      }, /*#__PURE__*/React.createElement("polygon", {
+        points: "3 11 22 2 13 21 11 13 3 11"
+      })), onMyWaySending === s.id ? 'Sending...' : 'On My Way'), (onMyWaySent[s.id] || s.on_my_way_at) && !isActive && /*#__PURE__*/React.createElement("span", {
+        style: {
+          fontSize: 11,
+          fontWeight: 600,
+          color: 'var(--color-success)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 4
+        }
+      }, /*#__PURE__*/React.createElement("svg", {
+        width: "14",
+        height: "14",
+        viewBox: "0 0 24 24",
+        fill: "none",
+        stroke: "currentColor",
+        strokeWidth: "2.5"
+      }, /*#__PURE__*/React.createElement("polyline", {
+        points: "20 6 9 17 4 12"
+      })), "En route"), isUpcoming && /*#__PURE__*/React.createElement("button", {
         disabled: true,
         style: {
           padding: '10px 22px',
@@ -47803,11 +48032,17 @@ const CaretakerHub = window.CaretakerHub = ({
           color: 'var(--text-secondary)',
           marginTop: 2
         }
-      }, dayLabel, timeLabel ? ` at ${timeLabel}` : '', duration ? ` \u2022 ${duration}hr` : '', svcType ? ` \u2022 ${formatServiceType(svcType)}` : ''), loc ? /*#__PURE__*/React.createElement("div", {
+      }, dayLabel, timeLabel ? ` at ${timeLabel}` : '', duration ? ` \u2022 ${duration}hr` : '', svcType ? ` \u2022 ${formatServiceType(svcType)}` : ''), loc ? /*#__PURE__*/React.createElement("a", {
+        href: `https://maps.google.com/?q=${encodeURIComponent(loc)}`,
+        target: "_blank",
+        rel: "noopener noreferrer",
+        onClick: e => e.stopPropagation(),
         style: {
+          display: 'block',
           fontSize: 12,
-          color: 'var(--text-tertiary)',
-          marginTop: 2
+          color: 'var(--role-color)',
+          marginTop: 2,
+          textDecoration: 'none'
         }
       }, '\uD83D\uDCCD', " ", loc) : noAddress ? /*#__PURE__*/React.createElement("div", {
         style: {
@@ -50197,7 +50432,24 @@ const CaretakerHub = window.CaretakerHub = ({
       color: 'var(--text-secondary)',
       margin: 0
     }
-  }, checkOutSession.recipientName || checkOutSession.recipient_name || 'Care Session', " \u2022 ", checkOutSession.date || checkOutSession.scheduled_date)), /*#__PURE__*/React.createElement("div", {
+  }, checkOutSession.recipientName || checkOutSession.recipient_name || 'Care Session', " \u2022 ", checkOutSession.date || checkOutSession.scheduled_date)), draftRestored && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: 'var(--color-success-bg)',
+      border: '1px solid var(--color-success)',
+      borderRadius: 8,
+      padding: '8px 12px',
+      marginBottom: 16,
+      fontSize: 12,
+      color: 'var(--color-success)',
+      display: 'flex',
+      alignItems: 'center',
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 14
+    }
+  }, "\uD83D\uDCBE"), /*#__PURE__*/React.createElement("span", null, "Draft restored \u2014 picking up where you left off. Your notes were saved automatically.")), /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 20
     }
@@ -50632,6 +50884,9 @@ const CaretakerHub = window.CaretakerHub = ({
           setCheckOutSummary('');
           setEarlyDepartureReason('');
           setEarlyDepartureAcked(false);
+          // Submission succeeded — drop the saved draft so it doesn't
+          // resurface on next check-out of an unrelated session.
+          clearCheckOutDraft(checkOutSession.id);
           showToast('Checked out! Session complete.', 'success');
           setCheckOutSession(null);
           const refreshRes = await apiFetch('/api/dashboard');
@@ -50640,6 +50895,9 @@ const CaretakerHub = window.CaretakerHub = ({
           // Offline — queue for later sync
           if (window.OfflineQueue) {
             await window.OfflineQueue.queueCheckOut(checkOutSession.id, checkOutPayload);
+            // Payload is now safely queued for background sync — draft
+            // can be cleared; the queued payload carries the feedback.
+            clearCheckOutDraft(checkOutSession.id);
             showToast('Saved offline — will sync when you reconnect', 'success');
             setCheckOutSession(null);
           } else {
@@ -50656,6 +50914,8 @@ const CaretakerHub = window.CaretakerHub = ({
           // Network error and offline — queue it
           try {
             await window.OfflineQueue.queueCheckOut(checkOutSession.id, checkOutPayload);
+            // Queued successfully — feedback is safe, drop the draft.
+            clearCheckOutDraft(checkOutSession.id);
             showToast('Saved offline — will sync when you reconnect', 'success');
             setCheckOutSession(null);
           } catch {
@@ -65461,6 +65721,10 @@ const AdminPanel = window.AdminPanel = ({
   const [safetyFlagCount, setSafetyFlagCount] = useState(0);
   const [safetyLoading, setSafetyLoading] = useState(false);
   const [safetyReviewNotes, setSafetyReviewNotes] = useState('');
+
+  // Client versions tracking
+  const [clientVersions, setClientVersions] = useState([]);
+  const [clientVersionsLoading, setClientVersionsLoading] = useState(false);
   const loadSafetyFlags = async () => {
     setSafetyLoading(true);
     try {
@@ -65472,6 +65736,19 @@ const AdminPanel = window.AdminPanel = ({
       }
     } catch {}
     setSafetyLoading(false);
+  };
+  const loadClientVersions = async () => {
+    setClientVersionsLoading(true);
+    try {
+      const res = await apiFetch('/api/admin/client-versions');
+      if (res !== null && res !== void 0 && res.ok) {
+        const data = await res.json();
+        setClientVersions(data.users || []);
+      }
+    } catch (err) {
+      console.error('Load client versions error:', err);
+    }
+    setClientVersionsLoading(false);
   };
   const loadTickets = async () => {
     setTicketLoading(true);
@@ -66456,6 +66733,7 @@ const AdminPanel = window.AdminPanel = ({
       loadAllSessions();
     }
     if (activeTab === 'safety') loadSafetyFlags();
+    if (activeTab === 'client-versions') loadClientVersions();
     if (activeTab === 'bgchecks') {
       loadBgChecks();
       // Mark Checkr alerts as read when viewing the tab
@@ -67281,6 +67559,10 @@ const AdminPanel = window.AdminPanel = ({
       label: 'Sessions',
       icon: '📅',
       badge: pausedCaregivers.length || null
+    }, {
+      id: 'client-versions',
+      label: 'Versions',
+      icon: '📱'
     }]
   }, {
     label: 'Customer Service',
@@ -77107,7 +77389,117 @@ const AdminPanel = window.AdminPanel = ({
       textAlign: 'center',
       color: 'var(--text-tertiary)'
     }
-  }, 'Safety flags component loading... Please refresh the page.')), activeTab === 'costs' && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+  }, 'Safety flags component loading... Please refresh the page.')), activeTab === 'client-versions' && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    className: "card"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "card-header"
+  }, "Client Version Tracking"), clientVersionsLoading ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: 40,
+      textAlign: 'center',
+      color: 'var(--text-secondary)'
+    }
+  }, "Loading...") : clientVersions.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: 40,
+      textAlign: 'center',
+      color: 'var(--text-secondary)'
+    }
+  }, "No client version data available") : /*#__PURE__*/React.createElement("div", {
+    style: {
+      overflowX: 'auto'
+    }
+  }, /*#__PURE__*/React.createElement("table", {
+    style: {
+      width: '100%',
+      borderCollapse: 'collapse',
+      fontSize: 13
+    }
+  }, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", {
+    style: {
+      borderBottom: '1px solid var(--border-color)',
+      background: 'var(--bg-secondary)'
+    }
+  }, /*#__PURE__*/React.createElement("th", {
+    style: {
+      padding: '10px 12px',
+      textAlign: 'left',
+      fontWeight: 600
+    }
+  }, "Name"), /*#__PURE__*/React.createElement("th", {
+    style: {
+      padding: '10px 12px',
+      textAlign: 'left',
+      fontWeight: 600
+    }
+  }, "Role"), /*#__PURE__*/React.createElement("th", {
+    style: {
+      padding: '10px 12px',
+      textAlign: 'left',
+      fontWeight: 600
+    }
+  }, "Version"), /*#__PURE__*/React.createElement("th", {
+    style: {
+      padding: '10px 12px',
+      textAlign: 'left',
+      fontWeight: 600
+    }
+  }, "Platform"), /*#__PURE__*/React.createElement("th", {
+    style: {
+      padding: '10px 12px',
+      textAlign: 'left',
+      fontWeight: 600
+    }
+  }, "Last Seen"))), /*#__PURE__*/React.createElement("tbody", null, clientVersions.map(user => {
+    const isOutdated = user.app_version !== window.APP_VERSION;
+    const versionColor = !user.app_version ? '#999' : isOutdated ? '#ff9800' : '#4caf50';
+    const versionBg = !user.app_version ? '#f5f5f5' : isOutdated ? 'rgba(255, 152, 0, 0.1)' : 'rgba(76, 175, 80, 0.1)';
+    const lastSeenDate = user.last_seen_at ? new Date(user.last_seen_at) : null;
+    const lastSeenStr = lastSeenDate ? lastSeenDate.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    }) : 'Never';
+    return React.createElement('tr', {
+      key: user.id,
+      style: {
+        borderBottom: '1px solid var(--border-color)'
+      }
+    }, React.createElement('td', {
+      style: {
+        padding: '10px 12px'
+      }
+    }, `${user.first_name} ${user.last_name}`), React.createElement('td', {
+      style: {
+        padding: '10px 12px'
+      }
+    }, user.role || (user.roles ? JSON.parse(user.roles)[0] : '')), React.createElement('td', {
+      style: {
+        padding: '10px 12px'
+      }
+    }, React.createElement('span', {
+      style: {
+        padding: '3px 8px',
+        borderRadius: 4,
+        fontSize: 12,
+        fontWeight: 500,
+        color: versionColor,
+        background: versionBg,
+        display: 'inline-block'
+      }
+    }, user.app_version || 'Unknown')), React.createElement('td', {
+      style: {
+        padding: '10px 12px'
+      }
+    }, user.platform || 'web'), React.createElement('td', {
+      style: {
+        padding: '10px 12px',
+        fontSize: 12,
+        color: 'var(--text-secondary)'
+      }
+    }, lastSeenStr));
+  })))))), activeTab === 'costs' && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     className: "card"
   }, /*#__PURE__*/React.createElement("div", {
     className: "card-header"
@@ -81090,14 +81482,25 @@ const App = () => {
         _challengeKey: challengeKey
       };
       if (!challengeData.noPasskey) {
+        var _window$SimpleWebAuth;
         // Step 2: Passkey verification
-        const authResp = await window.SimpleWebAuthnBrowser.startAuthentication({
-          optionsJSON: challengeData
-        });
-        impersonateBody = {
-          ...authResp,
-          _challengeKey: challengeKey
-        };
+        if (!((_window$SimpleWebAuth = window.SimpleWebAuthnBrowser) !== null && _window$SimpleWebAuth !== void 0 && _window$SimpleWebAuth.startAuthentication)) {
+          alert('Passkey library not available. Try impersonating from desktop.');
+          return;
+        }
+        try {
+          const authResp = await window.SimpleWebAuthnBrowser.startAuthentication({
+            optionsJSON: challengeData
+          });
+          impersonateBody = {
+            ...authResp,
+            _challengeKey: challengeKey
+          };
+        } catch (passkeyErr) {
+          console.error('Passkey verification failed:', passkeyErr);
+          alert(`Passkey verification failed: ${passkeyErr.message || passkeyErr}.\n\nTry from desktop, or register a passkey on this device.`);
+          return;
+        }
       }
 
       // Step 3: Impersonate with passkey proof
@@ -81165,7 +81568,7 @@ const App = () => {
       setCurrentPage('dashboard');
     } catch (err) {
       console.error('Impersonation error:', err);
-      alert('Failed to start impersonation');
+      alert(`Failed to start impersonation: ${err.message || err}`);
     }
   };
   // Expose to AdminPanel
