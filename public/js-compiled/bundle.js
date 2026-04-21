@@ -65860,114 +65860,45 @@ const AdminPanel = window.AdminPanel = ({
     }
   };
 
-  // Safety flag passkey state
+  // Safety flag confirm state
   const [flagPasskeyConfirm, setFlagPasskeyConfirm] = useState(null); // { flagId, status }
   const [flagPasskeyLoading, setFlagPasskeyLoading] = useState(false);
   const [flagPasskeyError, setFlagPasskeyError] = useState(null);
-  const [flagPasswordInput, setFlagPasswordInput] = useState('');
-  const _hasWebAuthn = !!(window.PublicKeyCredential && window.SimpleWebAuthnBrowser);
   const handleReviewFlag = async (flagId, status) => {
-    // Escalate does NOT require passkey — it's raising priority, not closing
-    if (status === 'escalated') {
-      try {
-        const res = await apiFetch(`/api/admin/safety-flags/${flagId}`, {
-          method: 'PUT',
-          body: JSON.stringify({
-            status,
-            admin_notes: safetyReviewNotes
-          })
-        });
-        if (res !== null && res !== void 0 && res.ok) {
-          showToast('Flag escalated', 'success');
-          setSafetyReviewNotes('');
-          loadSafetyFlags();
-          loadAlerts();
-        }
-      } catch {}
-      return;
-    }
-
-    // Resolve / Dismiss require verification
-    // First click — show confirm state
+    // First click — show confirm state (for all statuses: resolve, dismiss, escalate)
     if (!flagPasskeyConfirm || flagPasskeyConfirm.flagId !== flagId || flagPasskeyConfirm.status !== status) {
       setFlagPasskeyConfirm({
         flagId,
         status
       });
       setFlagPasskeyError(null);
-      setFlagPasswordInput('');
       return;
     }
+
+    // Second click — execute the update
     setFlagPasskeyLoading(true);
     setFlagPasskeyError(null);
     try {
-      if (_hasWebAuthn) {
-        // Passkey path
-        const challengeRes = await apiFetch(`/api/admin/safety-flags/${flagId}/challenge`, {
-          method: 'POST'
-        });
-        if (!(challengeRes !== null && challengeRes !== void 0 && challengeRes.ok)) {
-          const err = await challengeRes.json().catch(() => ({}));
-          throw new Error(err.error || 'Failed to start passkey challenge');
-        }
-        const options = await challengeRes.json();
-        const challengeKey = options._challengeKey;
-        const authResp = await window.SimpleWebAuthnBrowser.startAuthentication({
-          optionsJSON: options
-        });
-        const verifyRes = await apiFetch(`/api/admin/safety-flags/${flagId}/verified`, {
-          method: 'PUT',
-          body: JSON.stringify({
-            ...authResp,
-            _challengeKey: challengeKey,
-            status,
-            admin_notes: safetyReviewNotes
-          })
-        });
-        if (verifyRes !== null && verifyRes !== void 0 && verifyRes.ok) {
-          showToast(`Flag ${status}`, 'success');
-          setSafetyReviewNotes('');
-          setFlagPasskeyConfirm(null);
-          loadSafetyFlags();
-          loadAlerts();
-        } else {
-          const data = await verifyRes.json().catch(() => ({}));
-          throw new Error(data.error || 'Failed to update flag');
-        }
+      const res = await apiFetch(`/api/admin/safety-flags/${flagId}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          status,
+          admin_notes: safetyReviewNotes
+        })
+      });
+      if (res !== null && res !== void 0 && res.ok) {
+        const label = status === 'escalated' ? 'escalated' : status === 'resolved' ? 'resolved' : 'dismissed';
+        showToast(`Flag ${label}`, 'success');
+        setSafetyReviewNotes('');
+        setFlagPasskeyConfirm(null);
+        loadSafetyFlags();
+        loadAlerts();
       } else {
-        // Password fallback
-        if (!flagPasswordInput) {
-          setFlagPasskeyError('Enter your password to confirm.');
-          setFlagPasskeyLoading(false);
-          return;
-        }
-        const res = await apiFetch(`/api/admin/safety-flags/${flagId}/verified`, {
-          method: 'PUT',
-          body: JSON.stringify({
-            _passwordAuth: true,
-            password: flagPasswordInput,
-            status,
-            admin_notes: safetyReviewNotes
-          })
-        });
-        if (res !== null && res !== void 0 && res.ok) {
-          showToast(`Flag ${status}`, 'success');
-          setSafetyReviewNotes('');
-          setFlagPasskeyConfirm(null);
-          setFlagPasswordInput('');
-          loadSafetyFlags();
-          loadAlerts();
-        } else {
-          const data = await res.json().catch(() => ({}));
-          throw new Error(data.error || 'Failed to update flag');
-        }
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to update flag');
       }
     } catch (err) {
-      if (err.name === 'NotAllowedError') {
-        setFlagPasskeyError('Passkey prompt cancelled.');
-      } else {
-        setFlagPasskeyError(err.message || 'Failed');
-      }
+      setFlagPasskeyError(err.message || 'Failed to update flag');
       console.error('Safety flag error:', err);
     }
     setFlagPasskeyLoading(false);
