@@ -318,27 +318,34 @@ YOUR TASK: Generate a comprehensive care intelligence report for ${recipientName
 
 Structure your response as a JSON object:
 {
-  "headline": "One-sentence overall assessment (warm, clear, actionable)",
+  "headline": "One-sentence overall assessment (warm, clear, actionable, under 30 words)",
   "insights": [
     {
-      "title": "Short insight title",
-      "observation": "What the data shows",
-      "explanation": "WHY this is happening — connect to medical/behavioral knowledge",
-      "recommendation": "What the family or caregiver should DO about it",
+      "title": "Short insight title (under 8 words)",
+      "observation": "What the data shows (under 40 words)",
+      "explanation": "WHY this is happening — connect to medical/behavioral knowledge (under 40 words)",
+      "recommendation": "What the family or caregiver should DO about it (under 30 words)",
       "priority": "high|medium|low"
     }
   ],
-  "caregiverGuidance": "2-3 paragraphs of guidance specifically for caregivers working with ${recipientName}. Include communication techniques, things to watch for, and approaches that work best based on the data. Be specific and practical — not generic dementia advice.",
-  "schedulingAdvice": "Based on mood/time patterns, when are the best times to schedule care? Be specific.",
-  "watchList": ["Things the family should actively monitor based on trends"]
+  "caregiverGuidance": "Two short paragraphs (under 150 words total) of guidance for caregivers — communication techniques, things to watch for, what works. Specific, practical, not generic.",
+  "schedulingAdvice": "One or two sentences (under 40 words) on best times to schedule care.",
+  "watchList": ["Each item under 15 words. Max 4 items."]
 }
 
-Be specific to ${recipientName}. Reference actual observations from the visit data. Don't be generic — if you see patterns, name them and explain what they mean for THIS person. If there isn't enough data for deep insights, say so honestly and suggest what data would help.
+LENGTH BUDGET — STRICT: total response must stay under 3500 characters.
+- Headline: 1 sentence, under 30 words.
+- Insights: 3 to 5 maximum. Each field stays within the per-field budgets above.
+- caregiverGuidance: under 150 words total across both paragraphs.
+- schedulingAdvice: under 40 words.
+- watchList: at most 4 items, each under 15 words.
+
+Be specific to ${recipientName}. Reference actual observations from the visit data. Don't be generic — name patterns and explain what they mean for THIS person. If data is thin, say so honestly and suggest what would help, but stay within the length budget.
 
 IMPORTANT: Return ONLY the JSON object, no markdown formatting or code blocks.`;
 
   try {
-    const text = await callClaude(apiKey, "claude-haiku-4-5-20251001", 8000, [{ role: "user", content: prompt }]);
+    const text = await callClaude(apiKey, "claude-haiku-4-5-20251001", 3000, [{ role: "user", content: prompt }]);
 
     // Parse JSON response — robust extraction handles code fences, leading text, etc.
     // v1.58.71: more forgiving — tries multiple strategies, salvages partial fields,
@@ -547,7 +554,7 @@ Structure as JSON:
 CRITICAL: Return ONLY the JSON object, no markdown formatting or code blocks. Be specific to this person's actual visit history.`;
 
   try {
-    const text = await callClaude(apiKey, "claude-haiku-4-5-20251001", 8000, [{ role: "user", content: prompt }]);
+    const text = await callClaude(apiKey, "claude-haiku-4-5-20251001", 3000, [{ role: "user", content: prompt }]);
 
     let carePlan;
     try {
