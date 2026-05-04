@@ -224,8 +224,12 @@ function parseIntelligenceJSON(text, recipientName) {
   }
 
   if (!parsed || typeof parsed !== 'object') {
-    console.error("[iPAi] All JSON parse strategies failed. Raw text starts:", text.substring(0, 300));
-    return makeIntelligenceStub(recipientName, 'unparseable AI response');
+    console.error("[iPAi] All JSON parse strategies failed. Raw text starts:", text.substring(0, 500));
+    const stub = makeIntelligenceStub(recipientName, 'unparseable AI response');
+    // v1.58.72 TEMP DEBUG: include sample of raw text so we can see what Claude returned
+    stub._debug_raw = text.substring(0, 800);
+    stub._debug_text_len = text.length;
+    return stub;
   }
 
   // Normalize: ensure all expected fields exist with sensible defaults so the client never crashes.
