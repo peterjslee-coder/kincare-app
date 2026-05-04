@@ -177,6 +177,83 @@ function analyzePatterns(visits) {
  * Generate deep care intelligence using Claude
  * This is the core iPAi feature — connects observations with medical knowledge
  */
+/**
+ * Robust JSON extraction for iPAi care intelligence output.
+ * Tries strategies in order; falls back to a stub only if all fail.
+ * Always returns an object shaped like { headline, insights, caregiverGuidance, schedulingAdvice, watchList }.
+ */
+function parseIntelligenceJSON(text, recipientName) {
+  if (!text || typeof text !== 'string') {
+    return makeIntelligenceStub(recipientName, 'empty AI response');
+  }
+
+  const tryParse = (s) => {
+    try { return JSON.parse(s); } catch { return null; }
+  };
+
+  // Strategy 1: strip markdown code fences and parse what's left.
+  let cleaned = text.replace(/^[\s\S]*?```json?\s*\n?/i, "").replace(/\n?\s*```[\s\S]*$/, "").trim();
+  if (!cleaned.startsWith("{")) {
+    const firstBrace = text.indexOf("{");
+    const lastBrace = text.lastIndexOf("}");
+    if (firstBrace !== -1 && lastBrace > firstBrace) cleaned = text.substring(firstBrace, lastBrace + 1);
+  }
+  let parsed = tryParse(cleaned);
+
+  // Strategy 2: balanced-brace scan starting at the first {. Handles trailing commentary.
+  if (!parsed && text.indexOf("{") !== -1) {
+    const start = text.indexOf("{");
+    let depth = 0, inString = false, escape = false, end = -1;
+    for (let i = start; i < text.length; i++) {
+      const c = text[i];
+      if (escape) { escape = false; continue; }
+      if (c === '\\') { escape = true; continue; }
+      if (c === '"') inString = !inString;
+      else if (!inString) {
+        if (c === '{') depth++;
+        else if (c === '}') { depth--; if (depth === 0) { end = i; break; } }
+      }
+    }
+    if (end > start) parsed = tryParse(text.substring(start, end + 1));
+  }
+
+  // Strategy 3: greedy regex anchored on expected keys.
+  if (!parsed) {
+    const m = text.match(/\{[\s\S]*"headline"[\s\S]*"insights"[\s\S]*\}/);
+    if (m) parsed = tryParse(m[0]);
+  }
+
+  if (!parsed || typeof parsed !== 'object') {
+    console.error("[iPAi] All JSON parse strategies failed. Raw text starts:", text.substring(0, 300));
+    return makeIntelligenceStub(recipientName, 'unparseable AI response');
+  }
+
+  // Normalize: ensure all expected fields exist with sensible defaults so the client never crashes.
+  return {
+    headline: typeof parsed.headline === 'string' ? parsed.headline : `Care intelligence for ${recipientName}`,
+    insights: Array.isArray(parsed.insights) ? parsed.insights : [],
+    caregiverGuidance: typeof parsed.caregiverGuidance === 'string' ? parsed.caregiverGuidance : '',
+    schedulingAdvice: typeof parsed.schedulingAdvice === 'string' ? parsed.schedulingAdvice : '',
+    watchList: Array.isArray(parsed.watchList) ? parsed.watchList : [],
+  };
+}
+
+function makeIntelligenceStub(recipientName, reason) {
+  return {
+    headline: `Care intelligence for ${recipientName} — please regenerate`,
+    insights: [{
+      title: "Couldn't generate insights",
+      observation: `The AI service returned a response we couldn't read (${reason}).`,
+      explanation: "",
+      recommendation: "Tap 'Regenerate' to try again.",
+      priority: "medium",
+    }],
+    caregiverGuidance: "",
+    schedulingAdvice: "",
+    watchList: [],
+  };
+}
+
 async function generateCareIntelligence(careRecipientId) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
@@ -262,41 +339,9 @@ IMPORTANT: Return ONLY the JSON object, no markdown formatting or code blocks.`;
     const text = await callClaude(apiKey, "claude-haiku-4-5-20251001", 2500, [{ role: "user", content: prompt }]);
 
     // Parse JSON response — robust extraction handles code fences, leading text, etc.
-    let intelligence;
-    try {
-      // Strategy 1: strip markdown code fences (common pattern)
-      let cleaned = text.replace(/^[\s\S]*?```json?\s*\n?/i, "").replace(/\n?\s*```[\s\S]*$/, "").trim();
-      // Strategy 2: if that didn't produce valid JSON, find first { to last }
-      if (!cleaned.startsWith("{")) {
-        const firstBrace = text.indexOf("{");
-        const lastBrace = text.lastIndexOf("}");
-        if (firstBrace !== -1 && lastBrace > firstBrace) {
-          cleaned = text.substring(firstBrace, lastBrace + 1);
-        }
-      }
-      intelligence = JSON.parse(cleaned);
-    } catch (parseErr) {
-      // Strategy 3: try extracting JSON with a more aggressive regex
-      let parsed = false;
-      try {
-        const jsonMatch = text.match(/\{[\s\S]*"headline"[\s\S]*"insights"[\s\S]*\}/);
-        if (jsonMatch) {
-          intelligence = JSON.parse(jsonMatch[0]);
-          parsed = true;
-        }
-      } catch {}
-      if (!parsed) {
-        console.error("[iPAi] Failed to parse AI response:", parseErr.message, "| Raw text starts:", text.substring(0, 200));
-        // Fallback: try to extract meaningful content from the raw response
-        intelligence = {
-          headline: "Care intelligence generated — display issue detected",
-          insights: [{ title: "AI Analysis", observation: "The AI generated a response but it couldn't be parsed into structured format. Please try regenerating.", explanation: "", recommendation: "Tap 'Regenerate' below to try again.", priority: "medium" }],
-          caregiverGuidance: "",
-          schedulingAdvice: "",
-          watchList: [],
-        };
-      }
-    }
+    // v1.58.71: more forgiving — tries multiple strategies, salvages partial fields,
+    // and only falls back to the "display issue" stub when truly nothing parses.
+    let intelligence = parseIntelligenceJSON(text, recipientName);
 
     return {
       intelligence,

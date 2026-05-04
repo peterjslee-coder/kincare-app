@@ -1170,6 +1170,25 @@ async function initializeDatabase() {
       updated_at TIMESTAMPTZ DEFAULT NOW()
     )`,
     `CREATE INDEX IF NOT EXISTS idx_user_client_info_last_seen ON user_client_info(last_seen_at DESC)`,
+
+    // v1.58.71 — Separate column for structured iPAi care intelligence JSON.
+    // Before this, /api/care-intelligence was caching its JSON output to ai_care_summary,
+    // clobbering the plain-text caregiver-facing summary written by /generate-summary.
+    // The profile screen reads ai_care_summary as text, so the JSON rendered as gibberish.
+    `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS ai_care_intelligence TEXT`,
+    `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS ai_care_intelligence_updated_at TIMESTAMPTZ`,
+    // One-time cleanup: move any existing ai_care_summary values that are clearly the
+    // structured JSON (have "headline" and "insights" keys) into the new column.
+    `UPDATE care_recipients
+       SET ai_care_intelligence = ai_care_summary,
+           ai_care_intelligence_updated_at = ai_care_summary_updated_at,
+           ai_care_summary = NULL,
+           ai_care_summary_updated_at = NULL
+     WHERE ai_care_summary IS NOT NULL
+       AND ai_care_intelligence IS NULL
+       AND TRIM(BOTH FROM ai_care_summary) LIKE '{%}'
+       AND ai_care_summary LIKE '%"headline"%'
+       AND ai_care_summary LIKE '%"insights"%'`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }

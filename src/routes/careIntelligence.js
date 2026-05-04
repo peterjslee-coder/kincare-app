@@ -41,20 +41,29 @@ router.get("/:recipientId", authenticate, async (req, res) => {
     }
 
     // Check for cached intelligence — return it if fresh enough (< 24 hours or force=true to regenerate)
+    // v1.58.71: cache lives in ai_care_intelligence (separate column) so we never clobber
+    // the plain-text ai_care_summary written by /api/care-recipients/:id/generate-summary.
     const forceRegenerate = req.query.force === 'true';
-    if (!forceRegenerate && recipient.ai_care_summary) {
-      const updatedAt = recipient.ai_care_summary_updated_at;
+    const cachedRaw = recipient.ai_care_intelligence;
+    if (!forceRegenerate && cachedRaw) {
+      const updatedAt = recipient.ai_care_intelligence_updated_at;
       const ageMs = updatedAt ? (Date.now() - new Date(updatedAt).getTime()) : Infinity;
       const MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
       if (ageMs < MAX_AGE_MS) {
         console.log(`[iPAi] Returning cached care intelligence for ${req.params.recipientId} (age: ${Math.round(ageMs / 60000)} min)`);
-        // Return cached summary alongside fresh pattern analysis (patterns are cheap, no AI)
-        const generatedAt = recipient.ai_care_summary_updated_at || new Date().toISOString();
+        // Re-hydrate stored JSON into an object so the client always gets the same shape.
+        let cachedIntelligence = cachedRaw;
+        try {
+          if (typeof cachedRaw === 'string' && cachedRaw.trim().startsWith('{')) {
+            cachedIntelligence = JSON.parse(cachedRaw);
+          }
+        } catch { /* fall back to raw string */ }
+        const generatedAt = updatedAt || new Date().toISOString();
         try {
           const analysis = await analyzePatterns(req.params.recipientId);
-          return res.json({ intelligence: recipient.ai_care_summary, analysis, generatedAt, cached: true });
+          return res.json({ intelligence: cachedIntelligence, analysis, generatedAt, cached: true });
         } catch {
-          return res.json({ intelligence: recipient.ai_care_summary, generatedAt, cached: true });
+          return res.json({ intelligence: cachedIntelligence, generatedAt, cached: true });
         }
       }
     }
@@ -66,12 +75,13 @@ router.get("/:recipientId", authenticate, async (req, res) => {
       console.error("[iPAi] Care intelligence returned error:", result.error);
     }
 
-    // Cache the intelligence result so we don't re-call Claude every time
+    // Cache the intelligence result so we don't re-call Claude every time.
+    // v1.58.71: write to ai_care_intelligence, NOT ai_care_summary.
     if (result.intelligence) {
       try {
         const summaryStr = typeof result.intelligence === 'string' ? result.intelligence : JSON.stringify(result.intelligence);
         await db.prepare(
-          "UPDATE care_recipients SET ai_care_summary = ?, ai_care_summary_updated_at = NOW() WHERE id = ?"
+          "UPDATE care_recipients SET ai_care_intelligence = ?, ai_care_intelligence_updated_at = NOW() WHERE id = ?"
         ).run(summaryStr, req.params.recipientId);
         console.log(`[iPAi] Cached care intelligence for ${req.params.recipientId}`);
       } catch (cacheErr) {

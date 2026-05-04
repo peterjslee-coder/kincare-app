@@ -12520,8 +12520,13 @@ const CareProfile = window.CareProfile = ({
             } catch {
               setCareDetails({});
             }
-            if (first.ai_care_summary) {
-              setAiSummary(first.ai_care_summary);
+            // v1.58.71: defensive — older versions wrote structured JSON into ai_care_summary.
+            // Treat anything that looks like a JSON object ({...with "headline"...) as not-a-summary
+            // so we don't render a JSON dump on the profile screen.
+            const rawSummary = first.ai_care_summary;
+            const looksLikeJSON = typeof rawSummary === 'string' && rawSummary.trim().startsWith('{') && rawSummary.indexOf('"headline"') !== -1;
+            if (rawSummary && !looksLikeJSON) {
+              setAiSummary(rawSummary);
               setAiSummaryDate(first.ai_care_summary_updated_at);
             }
             fetchNotes(first.id);
