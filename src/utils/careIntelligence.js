@@ -224,12 +224,10 @@ function parseIntelligenceJSON(text, recipientName) {
   }
 
   if (!parsed || typeof parsed !== 'object') {
-    console.error("[iPAi] All JSON parse strategies failed. Raw text starts:", text.substring(0, 500));
-    const stub = makeIntelligenceStub(recipientName, 'unparseable AI response');
-    // v1.58.72 TEMP DEBUG: include sample of raw text so we can see what Claude returned
-    stub._debug_raw = text.substring(0, 800);
-    stub._debug_text_len = text.length;
-    return stub;
+    // Truncation by max_tokens is a common cause — log a hint when text is long.
+    const hint = text.length > 9000 ? ' (response is large — possible max_tokens truncation)' : '';
+    console.error("[iPAi] All JSON parse strategies failed" + hint + ". Raw text starts:", text.substring(0, 300));
+    return makeIntelligenceStub(recipientName, text.length > 9000 ? 'AI response was cut off mid-thought' : 'unparseable AI response');
   }
 
   // Normalize: ensure all expected fields exist with sensible defaults so the client never crashes.
@@ -340,7 +338,7 @@ Be specific to ${recipientName}. Reference actual observations from the visit da
 IMPORTANT: Return ONLY the JSON object, no markdown formatting or code blocks.`;
 
   try {
-    const text = await callClaude(apiKey, "claude-haiku-4-5-20251001", 2500, [{ role: "user", content: prompt }]);
+    const text = await callClaude(apiKey, "claude-haiku-4-5-20251001", 8000, [{ role: "user", content: prompt }]);
 
     // Parse JSON response — robust extraction handles code fences, leading text, etc.
     // v1.58.71: more forgiving — tries multiple strategies, salvages partial fields,
@@ -549,7 +547,7 @@ Structure as JSON:
 CRITICAL: Return ONLY the JSON object, no markdown formatting or code blocks. Be specific to this person's actual visit history.`;
 
   try {
-    const text = await callClaude(apiKey, "claude-haiku-4-5-20251001", 2500, [{ role: "user", content: prompt }]);
+    const text = await callClaude(apiKey, "claude-haiku-4-5-20251001", 8000, [{ role: "user", content: prompt }]);
 
     let carePlan;
     try {
