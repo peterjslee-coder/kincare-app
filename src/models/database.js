@@ -948,6 +948,7 @@ async function initializeDatabase() {
 
     // v1.51.81 — Server-side message archive (was localStorage-only, lost on login)
     `ALTER TABLE conversation_members ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ`,
+    `ALTER TABLE conversation_members ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ`, // Batch 4: per-user soft-delete of a conversation (messages are never hard-deleted)
 
     // v1.51.82 — Push reliability: track consecutive failures to auto-remove dead tokens
     `ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS fail_count INTEGER DEFAULT 0`,
@@ -1196,6 +1197,33 @@ async function initializeDatabase() {
        AND TRIM(BOTH FROM ai_care_summary) LIKE '{%}'
        AND ai_care_summary LIKE '%"headline"%'
        AND ai_care_summary LIKE '%"insights"%'`,
+
+    // ─── Batch 4 (v1.62.0) — money columns REAL(float) → NUMERIC(10,2) ───
+    // Guarded + idempotent: only converts a column that is still real/double precision,
+    // so it runs exactly once and never rewrites the tables on subsequent boots.
+    `DO $$
+     DECLARE r RECORD;
+     BEGIN
+       FOR r IN SELECT * FROM (VALUES
+         ('payments','amount'),('payments','platform_fee'),('payments','caregiver_payout'),
+         ('care_sessions','estimated_cost'),('care_sessions','actual_cost'),('care_sessions','agreed_rate'),
+         ('care_sessions','short_notice_surcharge'),('care_sessions','proposed_rate'),('care_sessions','overtime_cost'),
+         ('caregiver_profiles','hourly_rate'),('caregiver_profiles','rate_daytime'),
+         ('caregiver_profiles','rate_nighttime'),('caregiver_profiles','rate_overnight'),
+         ('session_offers','offered_rate'),
+         ('background_check_payments','amount')
+       ) AS t(tbl, col)
+       LOOP
+         IF EXISTS (
+           SELECT 1 FROM information_schema.columns
+           WHERE table_name = r.tbl AND column_name = r.col
+             AND data_type IN ('real','double precision')
+         ) THEN
+           EXECUTE format('ALTER TABLE %I ALTER COLUMN %I TYPE numeric(10,2) USING %I::numeric(10,2)', r.tbl, r.col, r.col);
+           RAISE NOTICE 'Batch4: converted %.% to numeric(10,2)', r.tbl, r.col;
+         END IF;
+       END LOOP;
+     END $$;`,
   ];
   for (const sql of migrations) {
     try { await db.exec(sql); } catch (e) { /* column may already exist */ }

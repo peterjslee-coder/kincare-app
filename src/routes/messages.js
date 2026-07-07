@@ -55,6 +55,7 @@ router.get("/conversations", async (req, res) => {
     FROM conversation_members cm
     JOIN conversations c ON cm.conversation_id = c.id
     WHERE cm.user_id = ?
+      AND (cm.deleted_at IS NULL OR c.updated_at > cm.deleted_at)
     ORDER BY c.updated_at DESC
   `).all(userId);
 
@@ -1039,13 +1040,19 @@ router.delete("/conversations/:id", async (req, res) => {
       return res.status(403).json({ error: "Not a member of this conversation" });
     }
 
-    // Delete messages, members, then conversation
-    await db.prepare("DELETE FROM message_reactions WHERE message_id IN (SELECT id FROM messages WHERE conversation_id = ?)").run(convId);
-    await db.prepare("DELETE FROM messages WHERE conversation_id = ?").run(convId);
-    await db.prepare("DELETE FROM conversation_members WHERE conversation_id = ?").run(convId);
-    await db.prepare("DELETE FROM conversations WHERE id = ?").run(convId);
+    // Soft-delete: hide this conversation for the requesting user only. Messages,
+    // membership, and the conversation itself are NEVER destroyed — the other party
+    // keeps their copy and the full thread remains available as evidence. A new
+    // message bumps conversations.updated_at, which un-hides the thread for this user.
+    if (!member) {
+      // Admins are not members here; they must not hard-delete evidence either.
+      return res.status(403).json({ error: "Only a conversation member can remove it from their inbox" });
+    }
+    await db.prepare(
+      "UPDATE conversation_members SET deleted_at = NOW() WHERE conversation_id = ? AND user_id = ?"
+    ).run(convId, userId);
 
-    res.json({ success: true });
+    res.json({ success: true, softDeleted: true });
   } catch (err) {
     console.error("[Messages] Delete conversation error:", err);
     res.status(500).json({ error: "Failed to delete conversation" });
