@@ -259,6 +259,9 @@ async function initializeDatabase() {
     // Availability table: add type and note columns
     `ALTER TABLE availability ADD COLUMN IF NOT EXISTS type TEXT DEFAULT 'available'`,
     `ALTER TABLE availability ADD COLUMN IF NOT EXISTS note TEXT`,
+    // Ensure admin_role column exists before the promote below (its dedicated
+    // ADD COLUMN runs later in this list, which previously made this UPDATE fail).
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS admin_role TEXT`,
     // Auto-promote Pete's real account to admin
     `UPDATE users SET is_admin = 1, admin_role = 'god' WHERE email = 'peterjslee@gmail.com'`,
     // Backfill is_demo flag for demo accounts that were seeded before the column existed

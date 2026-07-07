@@ -10,7 +10,7 @@ const { v4: uuid } = require("uuid");
 const { initializeDatabase, getDb } = require("./models/database");
 
 // Bump this whenever seed data changes — triggers auto-reseed on deploy
-const DEMO_SEED_VERSION = '1.57.33';
+const DEMO_SEED_VERSION = '1.58.75';
 
 async function seed({ force = false, demoOnly = false } = {}) {
   console.log("🌱 Seeding InPlace database...\n");
@@ -66,11 +66,28 @@ async function seed({ force = false, demoOnly = false } = {}) {
         await db.prepare(`DELETE FROM care_sessions WHERE id IN (${sp})`).run(...sessionIds);
       }
 
-      // Messages and conversations involving demo users
+      // Messages and conversations involving demo users.
+      // Delete every conversation a demo user created OR is a member of, along
+      // with its messages and members. Deleting conversations by id (not just the
+      // old orphan-only cleanup) guarantees no conversation with a demo `created_by`
+      // survives to block the `DELETE FROM users` below (conversations.created_by
+      // has an FK to users(id) that previously crashed the demo-only reseed).
       await db.prepare(`DELETE FROM messages WHERE sender_id IN (${placeholders}) OR recipient_id IN (${placeholders})`).run(...demoIds, ...demoIds);
-      // Delete conversation members for demo users, then orphaned conversations
+      const demoConvoRows = await db.prepare(
+        `SELECT id FROM conversations WHERE created_by IN (${placeholders})
+         UNION
+         SELECT conversation_id AS id FROM conversation_members WHERE user_id IN (${placeholders})`
+      ).all(...demoIds, ...demoIds);
+      const demoConvoIds = [...new Set(demoConvoRows.map(r => r.id).filter(Boolean))];
+      if (demoConvoIds.length > 0) {
+        const cvp = demoConvoIds.map(() => '?').join(',');
+        await db.prepare(`DELETE FROM messages WHERE conversation_id IN (${cvp})`).run(...demoConvoIds);
+        await db.prepare(`DELETE FROM conversation_members WHERE conversation_id IN (${cvp})`).run(...demoConvoIds);
+        await db.prepare(`DELETE FROM conversations WHERE id IN (${cvp})`).run(...demoConvoIds);
+      }
+      // Belt-and-suspenders: clear any remaining demo memberships / demo-created convos
       await db.prepare(`DELETE FROM conversation_members WHERE user_id IN (${placeholders})`).run(...demoIds);
-      await db.exec(`DELETE FROM conversations WHERE id NOT IN (SELECT DISTINCT conversation_id FROM conversation_members)`);
+      await db.prepare(`DELETE FROM conversations WHERE created_by IN (${placeholders})`).run(...demoIds);
 
       // Care teams created by demo users
       const demoTeams = await db.prepare(`SELECT id FROM care_teams WHERE created_by IN (${placeholders})`).all(...demoIds);
@@ -103,6 +120,37 @@ async function seed({ force = false, demoOnly = false } = {}) {
 
       // Care recipients owned by demo family users
       await db.prepare(`DELETE FROM care_recipients WHERE family_user_id IN (${placeholders})`).run(...demoIds);
+
+      // ─── Final FK sweep ───
+      // Any table with a column referencing users(id) will block the delete below
+      // if it still has a row pointing at a demo user. Beyond the content tables
+      // handled above, demoing the accounts creates runtime rows (refresh_tokens,
+      // user_passkeys, connections, payout_preferences, ...). Discover every such
+      // FK column dynamically from the catalog so a newly-added table can never
+      // silently break the demo-only reseed again. Table/column names come from
+      // information_schema (trusted), not user input.
+      try {
+        const fkCols = await db.prepare(`
+          SELECT tc.table_name, kcu.column_name
+          FROM information_schema.table_constraints tc
+          JOIN information_schema.key_column_usage kcu
+            ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema
+          JOIN information_schema.constraint_column_usage ccu
+            ON tc.constraint_name = ccu.constraint_name AND tc.table_schema = ccu.table_schema
+          WHERE tc.constraint_type = 'FOREIGN KEY'
+            AND ccu.table_name = 'users' AND ccu.column_name = 'id'
+        `).all();
+        // Several passes so child→parent ordering among these tables resolves.
+        for (let pass = 0; pass < 3; pass++) {
+          for (const fk of fkCols) {
+            try {
+              await db.prepare(`DELETE FROM ${fk.table_name} WHERE ${fk.column_name} IN (${placeholders})`).run(...demoIds);
+            } catch (e) { /* blocked by another FK this pass — retry next pass */ }
+          }
+        }
+      } catch (sweepErr) {
+        console.warn("  ⚠️  FK sweep skipped:", sweepErr.message);
+      }
 
       // Finally, delete the demo users themselves
       await db.prepare(`DELETE FROM users WHERE is_demo = 1`).run();
@@ -1145,11 +1193,16 @@ async function seed({ force = false, demoOnly = false } = {}) {
 
   // ─── iPAi Demo Conversation ───
   // Create iPAi system user for demo
-  const ipaiUserId = uuid();
+  // iPAi is a non-demo system account (is_demo=0), so it survives the demo-only
+  // cleanup. Insert idempotently and adopt the existing row's id if present,
+  // otherwise the demo-only reseed dies on a duplicate-email constraint.
+  let ipaiUserId = uuid();
   await db.prepare(`
     INSERT INTO users (id, email, first_name, last_name, role, is_demo, is_active, password_hash)
     VALUES (?, 'ipai@yourinplace.com', 'iPAi', 'Assistant', 'system', 0, 1, 'nologin')
+    ON CONFLICT (email) DO NOTHING
   `).run(ipaiUserId);
+  ipaiUserId = (await db.prepare("SELECT id FROM users WHERE email = 'ipai@yourinplace.com'").get()).id;
 
   // Paul ↔ iPAi conversation
   const convPaulIPAi = uuid();
