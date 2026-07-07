@@ -10,13 +10,28 @@ const { v4: uuid } = require("uuid");
 const { initializeDatabase, getDb } = require("./models/database");
 
 // Bump this whenever seed data changes — triggers auto-reseed on deploy
-const DEMO_SEED_VERSION = '1.58.75';
+const DEMO_SEED_VERSION = '1.58.76';
 
 async function seed({ force = false, demoOnly = false } = {}) {
   console.log("🌱 Seeding InPlace database...\n");
 
   await initializeDatabase();
-  const db = await getDb();
+
+  // Run the ENTIRE seed inside one transaction so the demo can never be left
+  // half-wiped: if anything throws, Postgres rolls the whole thing back and the
+  // previous working demo stays exactly as it was. (This is the fallback Pete
+  // asked for — a failed reseed reverts instead of nuking the demo.)
+  const _pool = await getDb();
+  await _pool.transaction(async (db) => {
+  // Savepoint-guarded runner for the few deletes we intentionally allow to fail
+  // (missing optional tables, trial-and-error FK ordering). Inside a transaction
+  // an unguarded error would abort EVERYTHING after it, so each such attempt gets
+  // its own savepoint and only that attempt rolls back on error.
+  const trySavepoint = async (fn) => {
+    await db.exec('SAVEPOINT sp');
+    try { await fn(); await db.exec('RELEASE SAVEPOINT sp'); }
+    catch (e) { await db.exec('ROLLBACK TO SAVEPOINT sp'); }
+  };
 
   if (demoOnly) {
     // ─── OPTION B: Demo-only reseed ───
@@ -112,10 +127,10 @@ async function seed({ force = false, demoOnly = false } = {}) {
       const demoCrIds = (await db.prepare(`SELECT id FROM care_recipients WHERE family_user_id IN (${placeholders})`).all(...demoIds)).map(r => r.id);
       if (demoCrIds.length > 0) {
         const crp = demoCrIds.map(() => '?').join(',');
-        try { await db.prepare(`DELETE FROM first_visit_confirmations WHERE care_recipient_id IN (${crp})`).run(...demoCrIds); } catch(e) {}
-        try { await db.prepare(`DELETE FROM verification_attempts WHERE care_recipient_id IN (${crp})`).run(...demoCrIds); } catch(e) {}
-        try { await db.prepare(`DELETE FROM attestations WHERE care_recipient_id IN (${crp})`).run(...demoCrIds); } catch(e) {}
-        try { await db.prepare(`DELETE FROM authorization_documents WHERE care_recipient_id IN (${crp})`).run(...demoCrIds); } catch(e) {}
+        await trySavepoint(() => db.prepare(`DELETE FROM first_visit_confirmations WHERE care_recipient_id IN (${crp})`).run(...demoCrIds));
+        await trySavepoint(() => db.prepare(`DELETE FROM verification_attempts WHERE care_recipient_id IN (${crp})`).run(...demoCrIds));
+        await trySavepoint(() => db.prepare(`DELETE FROM attestations WHERE care_recipient_id IN (${crp})`).run(...demoCrIds));
+        await trySavepoint(() => db.prepare(`DELETE FROM authorization_documents WHERE care_recipient_id IN (${crp})`).run(...demoCrIds));
       }
 
       // Care recipients owned by demo family users
@@ -143,9 +158,7 @@ async function seed({ force = false, demoOnly = false } = {}) {
         // Several passes so child→parent ordering among these tables resolves.
         for (let pass = 0; pass < 3; pass++) {
           for (const fk of fkCols) {
-            try {
-              await db.prepare(`DELETE FROM ${fk.table_name} WHERE ${fk.column_name} IN (${placeholders})`).run(...demoIds);
-            } catch (e) { /* blocked by another FK this pass — retry next pass */ }
+            await trySavepoint(() => db.prepare(`DELETE FROM ${fk.table_name} WHERE ${fk.column_name} IN (${placeholders})`).run(...demoIds));
           }
         }
       } catch (sweepErr) {
@@ -1469,12 +1482,10 @@ Recovery milestones:
   ];
 
   for (const [id, userId, category, description, mood, screenshot, pageCtx, tags, status] of feedbackEntries) {
-    try {
-      await db.prepare(`
+    await trySavepoint(() => db.prepare(`
         INSERT INTO feedback (id, user_id, category, description, mood, screenshot, page_context, tags, status, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW() - (random() * INTERVAL '14 days'))
-      `).run(id, userId, category, description, mood, screenshot, pageCtx, tags, status);
-    } catch (e) { /* skip if user doesn't exist */ }
+      `).run(id, userId, category, description, mood, screenshot, pageCtx, tags, status));
   }
 
   console.log("✅ Feedback entries created (8 demo entries)");
@@ -1552,6 +1563,7 @@ Recovery milestones:
   console.log("  Caretaker+Family:maria@inplace.care      / inplace123  (dual role — also manages brother Carlos)");
   console.log("  Cared-For:       barbara@inplace.care    / inplace123\n");
 
+  }); // end atomic transaction — commits on success, rolls back (demo preserved) on any error
 }
 
 // Export for in-process seeding from server.js

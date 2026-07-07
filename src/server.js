@@ -313,7 +313,7 @@ app.use("/api/kindred", require("./routes/kindred"));
 app.use("/api/legal", require("./routes/legal"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.58.75";
+const APP_VERSION = "1.58.76";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });
@@ -446,9 +446,31 @@ async function start() {
         "SELECT name FROM waitlist WHERE email = '_seed_version@inplace.internal' LIMIT 1"
       ).get();
       const currentVersion = versionRow ? versionRow.name : null;
-      if (currentVersion !== DEMO_SEED_VERSION) {
+
+      // Refresh the demo when the code version changed OR when there are no
+      // upcoming demo sessions (dates drifted into the past, or the demo was
+      // emptied). The 24h timer alone isn't enough — it resets on every Railway
+      // restart, so a frequently-restarting process could otherwise show a demo
+      // full of past dates. This makes the demo self-heal on boot.
+      let demoStale = false;
+      try {
+        const fresh = await db.prepare(`
+          SELECT COUNT(*) AS count FROM care_sessions
+          WHERE scheduled_date::date >= CURRENT_DATE
+            AND (caregiver_id IN (SELECT id FROM users WHERE is_demo = 1)
+                 OR family_user_id IN (SELECT id FROM users WHERE is_demo = 1))
+        `).get();
+        demoStale = parseInt(fresh && fresh.count || 0) === 0;
+      } catch (e) {
+        // Older schema without care_sessions/scheduled_date — fall back to version check only
+      }
+
+      if (currentVersion !== DEMO_SEED_VERSION || demoStale) {
+        const reason = currentVersion !== DEMO_SEED_VERSION
+          ? `version ${currentVersion || 'none'} → ${DEMO_SEED_VERSION}`
+          : 'no upcoming demo sessions (stale dates or emptied)';
         // Always use demoOnly mode for auto-reseed — never risk real user data
-        console.log(`  Demo data stale (${currentVersion || 'none'} → ${DEMO_SEED_VERSION}) — refreshing demo data only...`);
+        console.log(`  Demo data needs refresh (${reason}) — refreshing demo data only...`);
         await seed({ demoOnly: true });
         console.log("  Demo-only re-seed complete (real user data preserved)");
       }
