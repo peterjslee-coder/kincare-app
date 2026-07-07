@@ -613,7 +613,16 @@ router.get("/me", authenticate, async (req, res) => {
     ).all(req.user.id);
     const acceptMap = {};
     for (const a of acceptances) acceptMap[a.doc_type] = a.version;
-    pendingLegalDocs = activeDocs.filter(d => acceptMap[d.doc_type] !== d.version);
+    // v1.65.0: role-scoped agreements — the Caregiver Agreement only binds
+    // caregivers; the Client Services Agreement only binds families and care
+    // recipients. Platform-wide docs (terms/privacy/etc.) apply to everyone.
+    const DOC_ROLES = { caregiver_agreement: ["caregiver"], client_services: ["family", "care_for"] };
+    pendingLegalDocs = activeDocs
+      .filter(d => acceptMap[d.doc_type] !== d.version)
+      .filter(d => {
+        const required = DOC_ROLES[d.doc_type];
+        return !required || required.some(r => userRoles.includes(r));
+      });
   } catch (e) { /* legal docs table may not exist yet */ }
 
   // Include token for in-memory use (WebSocket auth) — cookie handles persistence

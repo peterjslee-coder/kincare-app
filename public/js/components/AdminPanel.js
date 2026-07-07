@@ -5399,6 +5399,8 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                   <option value="privacy">Privacy Policy</option>
                   <option value="liability">Liability Disclaimer</option>
                   <option value="disclaimer">Platform Disclaimer</option>
+                  <option value="caregiver_agreement">Caregiver Agreement (caregivers only)</option>
+                  <option value="client_services">Client Services Agreement (families only)</option>
                 </select>
               </div>
               <div>

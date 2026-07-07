@@ -8,6 +8,20 @@ const router = express.Router();
 // All routes require authentication
 router.use(authenticate);
 
+// v1.65.0: resolve admin status from DB for JWT-authenticated admins.
+// (authenticate only sets req.isAdmin on the API-key path, so the admin
+// publish/list routes below returned 403 for every JWT admin — meaning
+// legal documents could never actually be published from the AdminPanel.)
+router.use(async (req, res, next) => {
+  if (req.isAdmin || !req.user?.id) return next();
+  try {
+    const db = await getDb();
+    const u = await db.prepare("SELECT is_admin FROM users WHERE id = ?").get(req.user.id);
+    req.isAdmin = !!(u && u.is_admin);
+  } catch (e) { /* leave isAdmin unset */ }
+  next();
+});
+
 // ─── GET /api/legal/pending ───
 // Returns legal documents the current user hasn't accepted yet
 router.get("/pending", async (req, res) => {
@@ -104,7 +118,7 @@ router.post("/admin/publish", requireAdmin, async (req, res) => {
       return res.status(400).json({ error: "docType, version, title, and content are required" });
     }
 
-    const validTypes = ['terms', 'privacy', 'liability', 'disclaimer'];
+    const validTypes = ['terms', 'privacy', 'liability', 'disclaimer', 'caregiver_agreement', 'client_services'];
     if (!validTypes.includes(docType)) {
       return res.status(400).json({ error: `docType must be one of: ${validTypes.join(', ')}` });
     }

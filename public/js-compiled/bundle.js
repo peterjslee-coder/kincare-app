@@ -76385,7 +76385,11 @@ const AdminPanel = window.AdminPanel = ({
     value: "liability"
   }, "Liability Disclaimer"), /*#__PURE__*/React.createElement("option", {
     value: "disclaimer"
-  }, "Platform Disclaimer"))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+  }, "Platform Disclaimer"), /*#__PURE__*/React.createElement("option", {
+    value: "caregiver_agreement"
+  }, "Caregiver Agreement (caregivers only)"), /*#__PURE__*/React.createElement("option", {
+    value: "client_services"
+  }, "Client Services Agreement (families only)"))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
     style: {
       fontSize: 11,
       fontWeight: 600,
