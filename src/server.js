@@ -1,5 +1,8 @@
 require("dotenv").config();
 
+const { initSentry, setupSentryErrorHandler, captureException } = require("./utils/sentry");
+initSentry();
+
 const express = require("express");
 const http = require("http");
 const cors = require("cors");
@@ -313,7 +316,7 @@ app.use("/api/kindred", require("./routes/kindred"));
 app.use("/api/legal", require("./routes/legal"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.62.0";
+const APP_VERSION = "1.63.0";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });
@@ -405,8 +408,10 @@ app.get("*", (req, res) => {
 });
 
 // ─── Error handling ───
+setupSentryErrorHandler(app);
 app.use((err, req, res, next) => {
   console.error("Unhandled error:", err);
+  captureException(err);
   res.status(500).json({ error: "Internal server error" });
 });
 

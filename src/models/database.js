@@ -113,8 +113,75 @@ async function getDb() {
   return db;
 }
 
+
+// ─── Batch 5 (v1.63.0): pre-migration safety snapshot ───
+// Saves a JSON copy of the money/evidence-critical tables into boot_snapshots
+// BEFORE any boot-time migration/backfill runs, so a bad migration can be
+// recovered from the previous boot's data. This protects against migration
+// bugs (the demo-reseed class of failure) — it is NOT an off-box backup;
+// pg_dump via "Backup InPlace DB.command" is still the real backup.
+// Fail-open: a snapshot failure logs loudly + reports to Sentry but never
+// blocks boot (a blocked boot would be a worse outage than a missing snapshot).
+const SNAPSHOT_TABLES = {
+  users: { exclude: ["profile_photo"] },            // exclude base64 photo blobs
+  care_recipients: { exclude: ["photo"] },
+  caregiver_profiles: {},
+  payments: {},
+  care_sessions: {},
+  visit_logs: {},
+  session_offers: {},
+  background_check_payments: {},
+  conversations: {},
+  conversation_members: {},
+  messages: {},
+  admin_audit_log: {},
+  audit_log: {},
+  reviews: {},
+};
+const SNAPSHOT_MAX_ROWS_PER_TABLE = 20000; // safety valve against runaway snapshot size
+const SNAPSHOT_KEEP = 5;
+
+async function preMigrationSnapshot(db) {
+  try {
+    await db.exec(`CREATE TABLE IF NOT EXISTS boot_snapshots (
+      id SERIAL PRIMARY KEY,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      data JSONB NOT NULL
+    )`);
+    const snap = { _meta: { taken_at: new Date().toISOString(), note: "pre-migration boot snapshot" } };
+    for (const [table, opts] of Object.entries(SNAPSHOT_TABLES)) {
+      const reg = await db.prepare("SELECT to_regclass(?) AS t").get("public." + table);
+      if (!reg || !reg.t) continue; // table doesn't exist yet (fresh DB)
+      const cols = await db.prepare(
+        "SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = ?"
+      ).all(table);
+      const keep = cols.map((c) => c.column_name).filter((c) => !(opts.exclude || []).includes(c));
+      if (!keep.length) continue;
+      const cnt = await db.prepare(`SELECT COUNT(*)::int AS n FROM ${table}`).get();
+      if (cnt.n > SNAPSHOT_MAX_ROWS_PER_TABLE) {
+        snap._meta["skipped_" + table] = `row count ${cnt.n} exceeds cap`;
+        continue;
+      }
+      const colList = keep.map((c) => `"${c}"`).join(", ");
+      snap[table] = await db.prepare(`SELECT ${colList} FROM ${table}`).all();
+    }
+    await db.prepare("INSERT INTO boot_snapshots (data) VALUES (?)").run(JSON.stringify(snap));
+    await db.prepare(
+      "DELETE FROM boot_snapshots WHERE id NOT IN (SELECT id FROM boot_snapshots ORDER BY created_at DESC, id DESC LIMIT ?)"
+    ).run(SNAPSHOT_KEEP);
+    const tableCount = Object.keys(snap).length - 1;
+    console.log(`\u2705 Pre-migration snapshot saved (${tableCount} tables, keeping last ${SNAPSHOT_KEEP})`);
+  } catch (err) {
+    console.error("\u26a0\ufe0f  Pre-migration snapshot FAILED (boot continues):", err.message);
+    try { require("../utils/sentry").captureException(err, { where: "preMigrationSnapshot" }); } catch (_) { /* noop */ }
+  }
+}
+
 async function initializeDatabase() {
   const db = await getDb();
+
+  // Snapshot critical tables BEFORE any migration/backfill below can touch them.
+  await preMigrationSnapshot(db);
 
   // ┌──────────────────────────────────────────────────────────────────────┐
   // │  ⚠️  PHI (Protected Health Information) FIELD REGISTRY             │
@@ -264,8 +331,14 @@ async function initializeDatabase() {
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS admin_role TEXT`,
     // Auto-promote Pete's real account to admin
     `UPDATE users SET is_admin = 1, admin_role = 'god' WHERE email = 'peterjslee@gmail.com'`,
-    // Backfill is_demo flag for demo accounts that were seeded before the column existed
-    `UPDATE users SET is_demo = 1 WHERE email IN ('pete@inplace.care', 'david.lee@inplace.care', 'susan.lee@inplace.care', 'maria@inplace.care', 'betty@inplace.care')`,
+    // Backfill is_demo flag for demo accounts seeded before the column existed.
+    // Batch 5 (v1.63.0): guarded one-time via platform_settings marker — previously
+    // this re-ran every boot, so a real user later registered with one of these
+    // legacy addresses would silently be flagged demo. Runs once more, then never again.
+    `UPDATE users SET is_demo = 1
+       WHERE email IN ('pete@inplace.care', 'david.lee@inplace.care', 'susan.lee@inplace.care', 'maria@inplace.care', 'betty@inplace.care')
+         AND NOT EXISTS (SELECT 1 FROM platform_settings WHERE key = 'migr_is_demo_backfill_v1')`,
+    `INSERT INTO platform_settings (key, value) VALUES ('migr_is_demo_backfill_v1', 'done') ON CONFLICT (key) DO NOTHING`,
     // Caregiver profile: Checkr background check fields
     `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS legal_first_name TEXT`,
     `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS legal_last_name TEXT`,
