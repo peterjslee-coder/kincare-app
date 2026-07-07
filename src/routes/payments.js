@@ -54,26 +54,23 @@ router.get("/config", async (req, res) => {
 router.post("/webhook", express.raw({ type: "application/json" }), async (req, res) => {
   let event;
 
-  // Verify webhook signature if secret is configured
-  if (WEBHOOK_SECRET) {
-    const sig = req.headers["stripe-signature"];
-    try {
-      const stripe = getStripe();
-      event = stripe.webhooks.constructEvent(req.body, sig, WEBHOOK_SECRET);
-    } catch (err) {
-      console.error("⚠️  Webhook signature verification failed:", err.message);
-      // Log the sig header prefix so we can identify which Stripe source sent this
-      console.error(`  → stripe-signature header starts with: ${(sig || '').substring(0, 30)}...`);
-      return res.status(400).json({ error: "Webhook signature verification failed" });
-    }
-  } else {
-    // No webhook secret — parse body but log warning
-    console.warn("⚠️  STRIPE_WEBHOOK_SECRET not configured — webhook signatures are NOT being verified");
-    try {
-      event = JSON.parse(req.body);
-    } catch (err) {
-      return res.status(400).json({ error: "Invalid JSON" });
-    }
+  // FAIL CLOSED: never process an unsigned/unverified webhook. Without signature
+  // verification anyone who knows this URL could forge events (mark sessions paid,
+  // flip background_check_paid, set identity_verified). If the secret is missing,
+  // reject everything rather than trust attacker-supplied JSON.
+  if (!WEBHOOK_SECRET) {
+    console.error("FATAL: STRIPE_WEBHOOK_SECRET not configured — rejecting all webhook events");
+    return res.status(503).json({ error: "Webhook not configured" });
+  }
+
+  const sig = req.headers["stripe-signature"];
+  try {
+    const stripe = getStripe();
+    event = stripe.webhooks.constructEvent(req.body, sig, WEBHOOK_SECRET);
+  } catch (err) {
+    console.error("⚠️  Webhook signature verification failed:", err.message);
+    console.error(`  → stripe-signature header starts with: ${(sig || '').substring(0, 30)}...`);
+    return res.status(400).json({ error: "Webhook signature verification failed" });
   }
 
   const db = await getDb();

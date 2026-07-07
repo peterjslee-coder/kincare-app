@@ -287,7 +287,8 @@ router.post("/login", validateLogin, async (req, res) => {
     const user = await db.prepare("SELECT * FROM users WHERE LOWER(email) = LOWER(?) AND is_active = 1").get(email);
 
     if (!user) {
-      return res.status(401).json({ error: "We don't have an account with that email. Check for typos, or sign up if you're new.", code: "EMAIL_NOT_FOUND" });
+      // Generic message: do not reveal whether an email is registered (anti-enumeration).
+      return res.status(401).json({ error: "Incorrect email or password.", code: "INVALID_CREDENTIALS" });
     }
 
     // Account lockout: 5 failed attempts → 15 minute cooldown
@@ -313,7 +314,7 @@ router.post("/login", validateLogin, async (req, res) => {
       if (pendingReset || user.must_change_password) {
         return res.status(401).json({ error: "Your password was recently reset. Check your email for a reset link, or use \"Forgot password\" below.", code: "PASSWORD_RESET_PENDING" });
       }
-      return res.status(401).json({ error: "Incorrect password. Try again, or use \"Forgot password\" if you can't remember it.", code: "WRONG_PASSWORD" });
+      return res.status(401).json({ error: "Incorrect email or password.", code: "INVALID_CREDENTIALS" });
     }
 
     // Reset failed attempts on successful login

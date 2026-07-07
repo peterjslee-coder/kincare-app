@@ -5,6 +5,39 @@ const { getDb } = require("../models/database");
 const { generateCareIntelligence, generateSessionSummary, analyzePatterns, gatherVisitData, generateCarePlan } = require("../utils/careIntelligence");
 const { MODEL_HAIKU } = require("../utils/aiModels");
 
+// ─── Shared access checks (IDOR guards) ───
+// A user may see a recipient's care data if they own it, are an admin, are an
+// accepted care-team member, or are an active assigned caregiver. Mirrors the
+// inline check used by GET /:recipientId so all routes authorize consistently.
+async function userCanAccessRecipient(db, userId, recipientId) {
+  const recipient = await db.prepare("SELECT family_user_id FROM care_recipients WHERE id = ?").get(recipientId);
+  if (!recipient) return false;
+  if (recipient.family_user_id === userId) return true;
+  const admin = await db.prepare("SELECT is_admin FROM users WHERE id = ?").get(userId);
+  if (admin?.is_admin) return true;
+  try {
+    const team = await db.prepare("SELECT 1 FROM care_team_members WHERE care_recipient_id = ? AND user_id = ? AND status = 'accepted'").get(recipientId, userId);
+    if (team) return true;
+  } catch {}
+  try {
+    const cg = await db.prepare("SELECT 1 FROM caregiver_assignments WHERE care_recipient_id = ? AND caregiver_user_id = ? AND status = 'active'").get(recipientId, userId);
+    if (cg) return true;
+  } catch {}
+  return false;
+}
+
+async function userIsAdmin(db, userId) {
+  const a = await db.prepare("SELECT is_admin FROM users WHERE id = ?").get(userId);
+  return !!a?.is_admin;
+}
+
+// Resolve the recipient a session belongs to, then apply the recipient access check.
+async function userCanAccessSession(db, userId, sessionId) {
+  const sess = await db.prepare("SELECT care_recipient_id FROM care_sessions WHERE id = ?").get(sessionId);
+  if (!sess) return null; // caller returns 404
+  return await userCanAccessRecipient(db, userId, sess.care_recipient_id);
+}
+
 // ─── GET /api/care-intelligence/:recipientId — Generate full care intelligence report ───
 router.get("/:recipientId", authenticate, async (req, res) => {
   try {
@@ -100,6 +133,8 @@ router.get("/:recipientId", authenticate, async (req, res) => {
 // ─── GET /api/care-intelligence/test — Test AI connectivity ───
 router.get("/test/ai", authenticate, async (req, res) => {
   try {
+    const db = await getDb();
+    if (!(await userIsAdmin(db, req.user.id))) return res.status(403).json({ error: "Access denied" });
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) return res.json({ error: "ANTHROPIC_API_KEY not set", hasKey: false });
 
@@ -113,7 +148,7 @@ router.get("/test/ai", authenticate, async (req, res) => {
     const text = result.content?.[0]?.text || "";
     res.json({ success: true, response: text, model: MODEL_HAIKU });
   } catch (err) {
-    res.json({ error: err.message, type: err.constructor.name, stack: err.stack?.split("\n").slice(0, 3) });
+    res.status(500).json({ error: "AI connectivity test failed" });
   }
 });
 
@@ -122,6 +157,7 @@ router.get("/test/data/:recipientId", authenticate, async (req, res) => {
   const steps = {};
   try {
     const db = await getDb();
+    if (!(await userIsAdmin(db, req.user.id))) return res.status(403).json({ error: "Access denied" });
     steps.dbConnected = true;
 
     const recipient = await db.prepare("SELECT id, first_name, health_conditions, family_id FROM care_recipients WHERE id = ?").get(req.params.recipientId);
@@ -188,6 +224,9 @@ router.get("/test/data/:recipientId", authenticate, async (req, res) => {
 // ─── GET /api/care-intelligence/:recipientId/patterns — Quick patterns (no AI call) ───
 router.get("/:recipientId/patterns", authenticate, async (req, res) => {
   try {
+    const db = await getDb();
+    if (!(await userCanAccessRecipient(db, req.user.id, req.params.recipientId)))
+      return res.status(403).json({ error: "Access denied" });
     const data = await gatherVisitData(req.params.recipientId);
     if (!data) return res.status(404).json({ error: "Care recipient not found" });
 
@@ -201,6 +240,10 @@ router.get("/:recipientId/patterns", authenticate, async (req, res) => {
 // ─── POST /api/care-intelligence/session-summary/:sessionId — Generate post-session summary ───
 router.post("/session-summary/:sessionId", authenticate, async (req, res) => {
   try {
+    const db = await getDb();
+    const ok = await userCanAccessSession(db, req.user.id, req.params.sessionId);
+    if (ok === null) return res.status(404).json({ error: "Session not found" });
+    if (!ok) return res.status(403).json({ error: "Access denied" });
     const summary = await generateSessionSummary(req.params.sessionId);
     if (!summary) return res.status(404).json({ error: "Could not generate summary — missing visit data" });
     res.json(summary);
@@ -214,6 +257,9 @@ router.post("/session-summary/:sessionId", authenticate, async (req, res) => {
 router.get("/coaching/:sessionId", authenticate, async (req, res) => {
   try {
     const db = await getDb();
+    const ok = await userCanAccessSession(db, req.user.id, req.params.sessionId);
+    if (ok === null) return res.status(404).json({ error: "Session not found" });
+    if (!ok) return res.status(403).json({ error: "Access denied" });
     // Check if coaching already exists
     const vl = await db.prepare("SELECT ai_coaching FROM visit_logs WHERE session_id = ?").get(req.params.sessionId);
     if (vl?.ai_coaching) {
