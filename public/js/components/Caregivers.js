@@ -420,9 +420,11 @@ const Caregivers = window.Caregivers = () => {
               {(cg.specialties || []).map((s, i) => (
                 <span key={i} style={{ padding: '2px 8px', background: 'var(--bg-highlight)', color: 'var(--role-color)', borderRadius: '10px', fontSize: '10px', fontWeight: 500 }}>{s}</span>
               ))}
-              {cg.isBackgroundChecked && (
+              {cg.isBackgroundChecked ? (
                 <span style={{ padding: '2px 8px', background: 'var(--color-info-bg)', color: 'var(--color-info)', borderRadius: '10px', fontSize: '10px', fontWeight: 500 }}>✓ Background checked</span>
-              )}
+              ) : cg.vouchedForYou ? (
+                <span style={{ padding: '2px 8px', background: 'var(--color-warning-bg, #fff8e1)', color: 'var(--color-warning, #f57f17)', borderRadius: '10px', fontSize: '10px', fontWeight: 500 }} title="An InPlace admin personally vouched for this caregiver working with your family. No background check has been completed.">🤝 Admin-approved for your family · no background check</span>
+              ) : null}
             </div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginLeft: '12px' }}>

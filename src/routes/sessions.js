@@ -8,6 +8,7 @@ const { sendPushToUser, notifyAdmins, sendSessionReminders } = require("./push")
 const { calculateSessionCost, isShortNotice } = require("../utils/rateCalculator");
 const { getNowInZone, getTodayStringInZone, buildDateTimeInZone } = require("../utils/timezone");
 const { geofenceEvidence } = require("../utils/geocode");
+const { hasActiveVouch } = require("../utils/vouches");
 const { MODEL_HAIKU } = require("../utils/aiModels");
 
 const router = express.Router();
@@ -388,13 +389,10 @@ router.put("/:id/claim", async (req, res) => {
     return res.status(403).json({ error: "Your account is paused. Contact support for assistance." });
   }
 
-  // Gate: must have passed a background check OR been deliberately approved by an admin.
-  // (Previously this accepted `is_available`, which defaults to 1 for every new profile —
-  // that accidentally let un-vetted caregivers claim jobs. Admin override is now the
-  // explicit `bg_check_admin_approved` flag, set via POST /api/admin/caregivers/:id/approve-bgcheck.)
-  if (!profile.is_background_checked && !profile.bg_check_admin_approved) {
-    return res.status(403).json({ error: "You must complete your background check before accepting care requests. If you have an existing relationship, ask the platform admin to approve you." });
-  }
+  // Gate: background check — enforced BELOW once the session (and its family) is
+  // known, because an admin vouch is scoped to one family, not the whole platform.
+  // (v1.64.0: the global bg_check_admin_approved bypass is retired; vouches in
+  // bg_admin_vouches are the only non-Checkr path, and only for the vouched family.)
 
   // Gate: Stripe — skipped for now (not live yet). Admin is_available override also bypasses.
   // if (!profile.stripe_onboard_complete && !profile.is_available) {
@@ -410,6 +408,16 @@ router.put("/:id/claim", async (req, res) => {
   if (!session) return res.status(404).json({ error: "Session not found" });
   if (!["requested", "open", "pending"].includes(session.status)) {
     return res.status(400).json({ error: "This session is not available for claiming (status: " + session.status + ")" });
+  }
+
+  // Honest background-check gate (v1.64.0):
+  //  - a real Checkr result clears the caregiver for any job;
+  //  - an admin vouch clears them ONLY for the vouched family's jobs.
+  if (!profile.is_background_checked) {
+    const vouched = await hasActiveVouch(db, req.user.id, session.family_user_id);
+    if (!vouched) {
+      return res.status(403).json({ error: "You must complete your background check before accepting care requests. If you have an existing relationship with this family, ask the platform admin to approve you for them." });
+    }
   }
 
   // If interview is required by the family, claim the job but mark as pending interview
@@ -994,10 +1002,14 @@ router.post("/:id/match", requireRole("family", "admin"), async (req, res) => {
     SELECT cp.*, u.first_name, u.last_name
     FROM caregiver_profiles cp
     JOIN users u ON cp.user_id = u.id
-    WHERE cp.is_available = 1 AND cp.is_background_checked = 1
+    WHERE cp.is_available = 1
+      AND (cp.is_background_checked = 1 OR EXISTS (
+        SELECT 1 FROM bg_admin_vouches v
+        WHERE v.caregiver_user_id = cp.user_id AND v.family_user_id = ? AND v.revoked_at IS NULL
+      ))
     ORDER BY cp.rating_avg DESC, cp.years_experience DESC
     LIMIT 5
-  `).all();
+  `).all(req.user.id);
 
   if (caregivers.length === 0) {
     return res.status(404).json({ error: "No available caregivers found" });

@@ -1,4 +1,5 @@
 const express = require("express");
+const { activeVouchesFor } = require("../utils/vouches");
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { authenticate, requireAdmin } = require("../middleware/auth");
@@ -2858,8 +2859,14 @@ router.put("/users/:id/onboarding", async (req, res) => {
     }
 
     if (backgroundCheckCleared !== undefined) {
-      colMap.set("is_background_checked", { sql: "is_background_checked = ?", param: backgroundCheckCleared ? 1 : 0 });
-      colMap.set("checkr_status", { sql: backgroundCheckCleared ? "checkr_status = 'clear'" : "checkr_status = 'pending'" });
+      // v1.64.0: hand-setting "cleared" is retired — it forged a passed Checkr
+      // check (this is exactly how a vouched caregiver got mislabeled). Only a
+      // real Checkr result may set this flag. Un-clearing remains allowed.
+      if (backgroundCheckCleared) {
+        return res.status(400).json({ error: "Background checks can no longer be set by hand. Use a per-family vouch (Admin \u2192 Background Checks \u2192 Vouch for family) instead." });
+      }
+      colMap.set("is_background_checked", { sql: "is_background_checked = ?", param: 0 });
+      colMap.set("checkr_status", { sql: "checkr_status = 'pending'" });
     }
     if (backgroundCheckPaid !== undefined) {
       colMap.set("background_check_paid", { sql: "background_check_paid = ?", param: backgroundCheckPaid ? 1 : 0 });
@@ -3920,46 +3927,180 @@ router.get("/consent/pending", requireAdmin, async (req, res) => {
 // ─── CAREGIVER MANAGEMENT — Manual background check approval ───
 // ═══════════════════════════════════════════════════════════════════════
 
-// POST /api/admin/caregivers/:id/approve-bgcheck — manually approve a caregiver's background check
+// POST /api/admin/caregivers/:id/approve-bgcheck — RETIRED (v1.64.0)
+// This endpoint used to forge checkr_status='clear' + is_background_checked=1,
+// making an admin override indistinguishable from a passed Checkr check.
+// Use POST /api/admin/vouches instead (per-family, honestly labeled).
 router.post("/caregivers/:id/approve-bgcheck", requireAdmin, async (req, res) => {
+  res.status(410).json({ error: "Retired: manual approvals are now per-family vouches. Refresh the app and use \u201cVouch for family\u201d in Admin \u2192 Background Checks." });
+});
+
+// POST /api/admin/caregivers/:id/approve-consider — approve a REAL Checkr
+// 'consider'/'disputed' report after human review (v1.64.0). Unlike the retired
+// approve-bgcheck, this requires an actual report to exist.
+router.post("/caregivers/:id/approve-consider", requireAdmin, async (req, res) => {
   try {
     const db = await getDb();
-    const { id } = req.params;
-    const { notes } = req.body;
-
     const profile = await db.prepare(
-      "SELECT cp.*, u.first_name, u.last_name, u.email FROM caregiver_profiles cp JOIN users u ON u.id = cp.user_id WHERE cp.user_id = ?"
-    ).get(id);
+      "SELECT cp.checkr_status, cp.checkr_report_id, u.first_name, u.last_name FROM caregiver_profiles cp JOIN users u ON u.id = cp.user_id WHERE cp.user_id = ?"
+    ).get(req.params.id);
     if (!profile) return res.status(404).json({ error: "Caregiver profile not found" });
-
-    await db.prepare(`
-      UPDATE caregiver_profiles
-      SET is_background_checked = 1, bg_check_admin_approved = 1,
-          bg_check_admin_approved_by = ?, bg_check_admin_approved_at = NOW(),
-          checkr_status = CASE WHEN checkr_status IS NULL OR checkr_status = 'pending' THEN 'clear' ELSE checkr_status END,
-          background_check_consent = 1
-      WHERE user_id = ?
-    `).run(req.user.id, id);
-
-    await logAdminAction(req, "bgcheck_manual_approve", "caregiver", id, {
+    if (!profile.checkr_report_id || !["consider", "disputed"].includes(profile.checkr_status)) {
+      return res.status(400).json({ error: "No Checkr 'consider' report to approve. For caregivers without a background check, use a per-family vouch instead." });
+    }
+    await db.prepare(
+      "UPDATE caregiver_profiles SET checkr_status = 'consider_approved', is_background_checked = 1, updated_at = NOW() WHERE user_id = ?"
+    ).run(req.params.id);
+    await logAdminAction(req, "bgcheck_consider_approved", "caregiver", req.params.id, {
       caregiverName: `${profile.first_name} ${profile.last_name}`.trim(),
-      notes,
+      reportId: profile.checkr_report_id,
+    });
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Approve-consider error:", err);
+    res.status(500).json({ error: "Failed to approve" });
+  }
+});
+
+// ─── Admin vouches (v1.64.0 honest-override batch) ───
+// A vouch approves ONE caregiver for ONE family and is always displayed as
+// "approved by admin — no background check", never as a passed check.
+
+// GET /api/admin/vouches — all active vouches (+ names)
+router.get("/vouches", requireAdmin, async (req, res) => {
+  try {
+    const db = await getDb();
+    const vouches = await db.prepare(`
+      SELECT v.id, v.caregiver_user_id, v.family_user_id, v.note, v.created_at,
+             cu.first_name || ' ' || cu.last_name AS caregiver_name,
+             fu.first_name || ' ' || fu.last_name AS family_name
+      FROM bg_admin_vouches v
+      JOIN users cu ON cu.id = v.caregiver_user_id
+      JOIN users fu ON fu.id = v.family_user_id
+      WHERE v.revoked_at IS NULL
+      ORDER BY v.created_at DESC
+    `).all();
+    res.json({ vouches });
+  } catch (err) {
+    console.error("Admin vouches list error:", err);
+    res.status(500).json({ error: "Failed to fetch vouches" });
+  }
+});
+
+// POST /api/admin/vouches — vouch a caregiver for a family
+router.post("/vouches", requireAdmin, async (req, res) => {
+  try {
+    const db = await getDb();
+    const { caregiverUserId, familyUserId, note } = req.body;
+    if (!caregiverUserId || !familyUserId) {
+      return res.status(400).json({ error: "caregiverUserId and familyUserId are required" });
+    }
+    const caregiver = await db.prepare(
+      "SELECT u.first_name, u.last_name FROM users u JOIN caregiver_profiles cp ON cp.user_id = u.id WHERE u.id = ?"
+    ).get(caregiverUserId);
+    if (!caregiver) return res.status(404).json({ error: "Caregiver not found" });
+    const family = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(familyUserId);
+    if (!family) return res.status(404).json({ error: "Family user not found" });
+
+    const existing = await db.prepare(
+      "SELECT id FROM bg_admin_vouches WHERE caregiver_user_id = ? AND family_user_id = ? AND revoked_at IS NULL"
+    ).get(caregiverUserId, familyUserId);
+    if (existing) return res.status(409).json({ error: "An active vouch for this pair already exists" });
+
+    const id = uuid();
+    await db.prepare(
+      "INSERT INTO bg_admin_vouches (id, caregiver_user_id, family_user_id, vouched_by, note) VALUES (?, ?, ?, ?, ?)"
+    ).run(id, caregiverUserId, familyUserId, req.user.id, note || null);
+
+    await logAdminAction(req, "vouch_created", "caregiver", caregiverUserId, {
+      familyUserId,
+      caregiverName: `${caregiver.first_name} ${caregiver.last_name}`.trim(),
+      familyName: `${family.first_name} ${family.last_name}`.trim(),
+      note: note || null,
     });
 
-    // Notify the caregiver
+    // Honest notification — never says "background check approved"
     try {
       await db.prepare(`
         INSERT INTO activity_feed (id, family_user_id, event_type, title, message, created_at)
-        VALUES (?, ?, 'bgcheck_approved', 'Background Check Approved', 'Your background check has been approved. You can now accept care sessions!', NOW())
-      `).run(uuid(), id);
+        VALUES (?, ?, 'admin_vouch', 'Approved to work with a family', ?, NOW())
+      `).run(uuid(), caregiverUserId,
+        `An admin approved you to provide care for ${family.first_name} ${family.last_name}'s family. A background check is still required before working with other families.`);
       const emitToUser = req.app.get("emitToUser");
-      if (emitToUser) emitToUser(id, "activity_update", { title: "Background Check Approved", message: "Your background check has been approved!" });
-    } catch (notifErr) { console.error("BG check notification error:", notifErr.message); }
+      if (emitToUser) emitToUser(caregiverUserId, "activity_update", { title: "Approved to work with a family" });
+    } catch (notifErr) { console.error("Vouch notification error:", notifErr.message); }
 
-    res.json({ success: true, message: `Background check approved for ${profile.first_name} ${profile.last_name}`.trim() });
+    res.json({ success: true, vouchId: id });
   } catch (err) {
-    console.error("Admin bgcheck approve error:", err);
-    res.status(500).json({ error: "Failed to approve background check" });
+    console.error("Admin vouch create error:", err);
+    res.status(500).json({ error: "Failed to create vouch" });
+  }
+});
+
+// DELETE /api/admin/vouches/:id — revoke a vouch
+router.delete("/vouches/:id", requireAdmin, async (req, res) => {
+  try {
+    const db = await getDb();
+    const vouch = await db.prepare("SELECT * FROM bg_admin_vouches WHERE id = ? AND revoked_at IS NULL").get(req.params.id);
+    if (!vouch) return res.status(404).json({ error: "Active vouch not found" });
+    await db.prepare("UPDATE bg_admin_vouches SET revoked_at = NOW(), revoked_by = ? WHERE id = ?").run(req.user.id, req.params.id);
+    await logAdminAction(req, "vouch_revoked", "caregiver", vouch.caregiver_user_id, { vouchId: req.params.id, familyUserId: vouch.family_user_id });
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Admin vouch revoke error:", err);
+    res.status(500).json({ error: "Failed to revoke vouch" });
+  }
+});
+
+// POST /api/admin/caregivers/:id/convert-to-vouch — unforge a hand-set
+// "background cleared" flag into an honest per-family vouch (v1.64.0).
+// Refuses when real Checkr evidence exists (nothing to unforge).
+router.post("/caregivers/:id/convert-to-vouch", requireAdmin, async (req, res) => {
+  try {
+    const db = await getDb();
+    const { id } = req.params;
+    const { familyUserId, note } = req.body;
+    if (!familyUserId) return res.status(400).json({ error: "familyUserId is required" });
+
+    const profile = await db.prepare(
+      "SELECT cp.*, u.first_name, u.last_name FROM caregiver_profiles cp JOIN users u ON u.id = cp.user_id WHERE cp.user_id = ?"
+    ).get(id);
+    if (!profile) return res.status(404).json({ error: "Caregiver profile not found" });
+    if (profile.checkr_report_id) {
+      return res.status(400).json({ error: "This caregiver has a real Checkr report — nothing to convert" });
+    }
+    const family = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(familyUserId);
+    if (!family) return res.status(404).json({ error: "Family user not found" });
+
+    await db.transaction(async (tx) => {
+      await tx.prepare(`
+        UPDATE caregiver_profiles
+        SET is_background_checked = 0,
+            bg_check_admin_approved = 0,
+            checkr_status = CASE WHEN checkr_status IN ('clear','consider_approved') THEN 'pending' ELSE checkr_status END,
+            updated_at = NOW()
+        WHERE user_id = ?
+      `).run(id);
+      const existing = await tx.prepare(
+        "SELECT id FROM bg_admin_vouches WHERE caregiver_user_id = ? AND family_user_id = ? AND revoked_at IS NULL"
+      ).get(id, familyUserId);
+      if (!existing) {
+        await tx.prepare(
+          "INSERT INTO bg_admin_vouches (id, caregiver_user_id, family_user_id, vouched_by, note) VALUES (?, ?, ?, ?, ?)"
+        ).run(uuid(), id, familyUserId, req.user.id, note || "Converted from manually-set background check flag");
+      }
+    });
+
+    await logAdminAction(req, "bgcheck_converted_to_vouch", "caregiver", id, {
+      caregiverName: `${profile.first_name} ${profile.last_name}`.trim(),
+      familyUserId,
+      familyName: `${family.first_name} ${family.last_name}`.trim(),
+    });
+
+    res.json({ success: true, message: `${profile.first_name} is now honestly labeled: vouched for ${family.first_name}'s family, no background check on file.` });
+  } catch (err) {
+    console.error("Convert-to-vouch error:", err);
+    res.status(500).json({ error: "Failed to convert" });
   }
 });
 

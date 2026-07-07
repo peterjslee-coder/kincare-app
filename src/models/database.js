@@ -309,6 +309,25 @@ async function initializeDatabase() {
   // Admin audit log — tracks all admin actions for accountability
   await db.exec(`CREATE TABLE IF NOT EXISTS admin_audit_log (id TEXT PRIMARY KEY, admin_user_id TEXT NOT NULL, action TEXT NOT NULL, target_type TEXT, target_id TEXT, details TEXT, ip_address TEXT, created_at TIMESTAMPTZ DEFAULT NOW())`);
 
+  // ─── v1.64.0 (honest-override batch): admin vouches ───
+  // A vouch is an admin's approval of ONE caregiver working for ONE family
+  // ("I can vouch for this pair") — it is NOT a background check and never
+  // displays as one. Gates: vouched caregivers can claim/work jobs only for
+  // their vouched family; a real Checkr result (is_background_checked=1) is
+  // required for everything else. bg_check_admin_approved is deprecated from
+  // all gates in favor of this table.
+  await db.exec(`CREATE TABLE IF NOT EXISTS bg_admin_vouches (
+    id TEXT PRIMARY KEY,
+    caregiver_user_id TEXT NOT NULL REFERENCES users(id),
+    family_user_id TEXT NOT NULL REFERENCES users(id),
+    vouched_by TEXT NOT NULL,
+    note TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    revoked_at TIMESTAMPTZ,
+    revoked_by TEXT
+  )`);
+  await db.exec(`CREATE INDEX IF NOT EXISTS idx_vouches_caregiver ON bg_admin_vouches(caregiver_user_id) WHERE revoked_at IS NULL`);
+
   // Migrations for existing databases
   const migrations = [
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS notification_prefs TEXT`,

@@ -1,4 +1,5 @@
 const express = require("express");
+const { hasActiveVouch, activeVouchesFor } = require("../utils/vouches");
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { authenticate, requireRole } = require("../middleware/auth");
@@ -90,6 +91,12 @@ router.get("/", async (req, res) => {
   // Hard cap: 100 miles max regardless of what's requested
   const maxRadius = Math.min(parseFloat(radius), 100);
 
+  // Vouches held by the requesting user's family (v1.64.0)
+  const vouchRows = await db.prepare(
+    "SELECT caregiver_user_id FROM bg_admin_vouches WHERE family_user_id = ? AND revoked_at IS NULL"
+  ).all(req.user.id);
+  const vouchedCaregiverIds = new Set(vouchRows.map((v) => v.caregiver_user_id));
+
   const result = caregivers.map((c) => {
     const entry = {
       id: c.id,
@@ -106,6 +113,9 @@ router.get("/", async (req, res) => {
       reviewCount: c.rating_count,
       isAvailable: !!c.is_available,
       isBackgroundChecked: !!c.is_background_checked,
+      // v1.64.0: admin vouch scoped to the REQUESTING family — "approved by
+      // admin for your family, no background check". Never shown to others.
+      vouchedForYou: vouchedCaregiverIds.has(c.user_id),
       city: c.location_city,
       state: c.location_state,
       latitude: c.latitude,
@@ -173,6 +183,11 @@ router.get("/nearby/:careRecipientId", async (req, res) => {
 
   const maxRadius = parseFloat(radius);
 
+  const nearbyVouchRows = await db.prepare(
+    "SELECT caregiver_user_id FROM bg_admin_vouches WHERE family_user_id = ? AND revoked_at IS NULL"
+  ).all(req.user.id);
+  const nearbyVouchedIds = new Set(nearbyVouchRows.map((v) => v.caregiver_user_id));
+
   const nearby = allCaregivers
     .map((c) => ({
       id: c.id,
@@ -188,6 +203,7 @@ router.get("/nearby/:careRecipientId", async (req, res) => {
       rating: c.rating_avg,
       reviewCount: c.rating_count,
       isBackgroundChecked: !!c.is_background_checked,
+      vouchedForYou: nearbyVouchedIds.has(c.user_id),
       city: c.location_city,
       state: c.location_state,
       latitude: c.latitude,
@@ -343,6 +359,7 @@ router.get("/:id", async (req, res) => {
       reviewCount: cg.rating_count,
       isAvailable: !!cg.is_available,
       isBackgroundChecked: !!cg.is_background_checked,
+      vouchedForYou: await hasActiveVouch(db, cg.user_id, req.user.id),
       city: cg.location_city,
       state: cg.location_state,
       latitude: cg.latitude,
@@ -595,12 +612,12 @@ router.put("/mark-onboarding-complete", async (req, res) => {
   const checkrConfigured = !!process.env.CHECKR_API_KEY;
 
   if (stripeConfigured && !profile.stripe_onboard_complete) missing.push("Stripe payments");
-  if (checkrConfigured && !profile.background_check_paid && !profile.is_background_checked) {
+  // v1.64.0: an active admin vouch satisfies this step — the caregiver can work
+  // for their vouched family without Checkr. (A real check is still required to
+  // work for anyone else; the UI says so.)
+  const cgVouches = await activeVouchesFor(db, req.user.id);
+  if (checkrConfigured && !profile.background_check_paid && !profile.is_background_checked && cgVouches.length === 0) {
     missing.push("Background check");
-  }
-  // Allow admin-approved background checks to satisfy the gate regardless of Checkr
-  if (!checkrConfigured && !profile.is_background_checked && !profile.bg_check_admin_approved) {
-    // Not a hard gate — admin can manually approve, or skip if not configured
   }
 
   // Identity verification (selfie + ID) — hard gate, requires admin approval

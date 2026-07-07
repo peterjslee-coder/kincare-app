@@ -17735,7 +17735,7 @@ const Caregivers = window.Caregivers = () => {
         fontSize: '10px',
         fontWeight: 500
       }
-    }, s)), cg.isBackgroundChecked && /*#__PURE__*/React.createElement("span", {
+    }, s)), cg.isBackgroundChecked ? /*#__PURE__*/React.createElement("span", {
       style: {
         padding: '2px 8px',
         background: 'var(--color-info-bg)',
@@ -17744,7 +17744,17 @@ const Caregivers = window.Caregivers = () => {
         fontSize: '10px',
         fontWeight: 500
       }
-    }, "\u2713 Background checked"))), /*#__PURE__*/React.createElement("div", {
+    }, "\u2713 Background checked") : cg.vouchedForYou ? /*#__PURE__*/React.createElement("span", {
+      style: {
+        padding: '2px 8px',
+        background: 'var(--color-warning-bg, #fff8e1)',
+        color: 'var(--color-warning, #f57f17)',
+        borderRadius: '10px',
+        fontSize: '10px',
+        fontWeight: 500
+      },
+      title: "An InPlace admin personally vouched for this caregiver working with your family. No background check has been completed."
+    }, "\uD83E\uDD1D Admin-approved for your family \xB7 no background check") : null)), /*#__PURE__*/React.createElement("div", {
       style: {
         display: 'flex',
         flexDirection: 'column',
@@ -32329,6 +32339,7 @@ const MyAccount = window.MyAccount = ({
 
   // Caregiver - Checkr Background Check state
   const [checkrStatus, setCheckrStatus] = useState(null); // null | 'not_initiated' | 'in_progress' | 'complete' | 'error'
+  const [myVouches, setMyVouches] = useState([]); // v1.64.0: active admin vouches (per-family, not a bg check)
   const [checkrError, setCheckrError] = useState(null);
   const [checkrStaging, setCheckrStaging] = useState(false);
   const [checkrStagingEmail, setCheckrStagingEmail] = useState('');
@@ -32749,6 +32760,7 @@ const MyAccount = window.MyAccount = ({
           setCheckrStatus(d.status || 'not_initiated');
           setCheckrStaging(!!d.staging);
           if (d.paid) setBgCheckPaid(true);
+          setMyVouches(d.vouches || []);
         }
       }).catch(() => {
         setCheckrStatus('not_initiated');
@@ -35200,7 +35212,16 @@ const MyAccount = window.MyAccount = ({
     className: "card"
   }, /*#__PURE__*/React.createElement("div", {
     className: "card-header"
-  }, "Background Check"), checkrStatus === 'complete' ? /*#__PURE__*/React.createElement("div", {
+  }, "Background Check"), myVouches.length > 0 && checkrStatus !== 'complete' ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: '8px 10px',
+      marginBottom: 10,
+      background: 'var(--color-warning-bg, #fff8e1)',
+      borderRadius: 8,
+      fontSize: 13,
+      color: 'var(--text-secondary)'
+    }
+  }, "\uD83E\uDD1D An admin approved you to work with ", /*#__PURE__*/React.createElement("strong", null, myVouches.map(v => v.familyName).join(', ')), " without a background check. A completed check is required to work with any other family.") : null, checkrStatus === 'complete' ? /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       alignItems: 'center',
@@ -45582,8 +45603,10 @@ const CaretakerHub = window.CaretakerHub = ({
 
   // Per-step admin overrides — only skip what was explicitly granted
   const stripeOverride = !!profile.stripeOnboardComplete; // admin granted Stripe bypass
-  const bgOverride = !!profile.isBackgroundChecked; // admin granted BG check bypass
-
+  // v1.64.0: a real check satisfies this; so does an active admin vouch (which
+  // covers ONLY the vouched family — honest copy shown below).
+  const adminVouches = profile.adminVouches || [];
+  const bgOverride = !!profile.isBackgroundChecked || adminVouches.length > 0;
   const firstSteps = [{
     id: 'stripe-bg',
     label: 'Set up Stripe and connect your bank account',
@@ -45596,7 +45619,7 @@ const CaretakerHub = window.CaretakerHub = ({
     desc: 'A background check is required to participate on InPlace. This is a one-time $30 fee that is refunded after 10 completed sessions. Your report is reviewed fairly — you\'ll be given a chance to provide context on anything that comes up, and a real person is always in the loop.',
     done: bgCheckSubmitted || bgOverride,
     missing: !(bgCheckSubmitted || bgOverride) ? bgPaid ? 'Complete the background check form' : stripeConnected || stripeOverride ? 'Pay for background check ($30)' : 'Complete Stripe setup first' : null,
-    warning: bgCheckSubmitted && profile.checkrStatus === 'consider' ? 'Your background check needs additional information. Please check your email for instructions from Checkr on how to complete the review process.' : bgCheckSubmitted && profile.checkrStatus === 'processing' ? 'Your background check is being processed. This usually takes 2–5 business days.' : bgCheckSubmitted && profile.checkrStatus === 'disputed' ? 'Your dispute is being reviewed. We\'ll notify you when there\'s an update.' : null
+    warning: !profile.isBackgroundChecked && adminVouches.length > 0 && !bgCheckSubmitted ? 'You\'re approved to work with ' + adminVouches.map(v => v.familyName).join(', ') + ' without a background check. To accept work from other families, a background check is required.' : bgCheckSubmitted && profile.checkrStatus === 'consider' ? 'Your background check needs additional information. Please check your email for instructions from Checkr on how to complete the review process.' : bgCheckSubmitted && profile.checkrStatus === 'processing' ? 'Your background check is being processed. This usually takes 2–5 business days.' : bgCheckSubmitted && profile.checkrStatus === 'disputed' ? 'Your dispute is being reviewed. We\'ll notify you when there\'s an update.' : null
   }, {
     id: 'security',
     label: 'Make your account more secure',
@@ -68321,9 +68344,9 @@ const AdminPanel = window.AdminPanel = ({
     }, isConsider && /*#__PURE__*/React.createElement("button", {
       onClick: async e => {
         e.stopPropagation();
-        if (!confirm('Approve ' + item.name + ' despite "consider" status?')) return;
+        if (!confirm('Approve ' + item.name + ' despite "consider" status? (Requires a real Checkr report \u2014 this marks the reviewed report as approved.)')) return;
         try {
-          const r = await fetch('/api/admin/caregivers/' + item.userId + '/approve-bgcheck', {
+          const r = await fetch('/api/admin/caregivers/' + item.userId + '/approve-consider', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -76844,10 +76867,6 @@ const AdminPanel = window.AdminPanel = ({
     label: 'Background Check Paid',
     desc: 'Paid $30 fee for background check'
   }, {
-    key: 'backgroundCheckCleared',
-    label: 'Background Check Cleared',
-    desc: 'Checkr returned OK (or admin override)'
-  }, {
     key: 'onboardingComplete',
     label: 'Onboarding Complete',
     desc: 'All registration steps finished'
@@ -76963,13 +76982,90 @@ const AdminPanel = window.AdminPanel = ({
     const actionItems = bgCheckCandidates.filter(c => actionStatuses.includes(c.checkr_status) || (!c.checkr_status || c.checkr_status === 'pending') && !c.is_background_checked && !c.bg_check_admin_approved);
     const filedItems = bgCheckCandidates.filter(c => filedStatuses.includes(c.checkr_status) || c.is_background_checked || c.bg_check_admin_approved);
     const checkrDashUrl = 'https://dashboard.checkrhq-staging.net';
-    const getStatusColor = s => s === 'clear' ? 'var(--color-success)' : s === 'consider' ? 'var(--color-warning)' : s === 'adverse_action' ? 'var(--color-error)' : s === 'suspended' ? 'var(--color-warning)' : s === 'disputed' ? 'var(--color-purple)' : s === 'consider_approved' ? 'var(--color-success)' : s === 'rejected' ? 'var(--color-error)' : s === 'did_not_pass' ? 'var(--color-error)' : s === 'processing' ? 'var(--color-info)' : s === 'invitation_sent' ? 'var(--color-purple)' : s === 'invitation_expired' ? 'var(--text-tertiary)' : s === 'invitation_canceled' ? 'var(--text-tertiary)' : 'var(--text-secondary)';
-    const getStatusIcon = s => s === 'clear' ? '\u2705' : s === 'consider' ? '\u26A0\uFE0F' : s === 'adverse_action' ? '\u{1F6A8}' : s === 'suspended' ? '\u26A0\uFE0F' : s === 'disputed' ? '\u2696\uFE0F' : s === 'consider_approved' ? '\u2705' : s === 'rejected' ? '\u274C' : s === 'did_not_pass' ? '\u{1F6AB}' : s === 'processing' ? '\u23F3' : s === 'invitation_sent' ? '\u{1F4E8}' : s === 'invitation_expired' ? '\u23F0' : s === 'invitation_canceled' ? '\u{1F6AB}' : '\u2022';
-    const getStatusLabel = s => s === 'consider_approved' ? 'APPROVED (FLAGGED)' : s === 'rejected' ? 'REJECTED' : s === 'did_not_pass' ? 'DID NOT PASS' : s === 'invitation_canceled' ? 'CANCELED' : (s || 'pending').replace(/_/g, ' ').toUpperCase();
+    const getStatusColor = s => s === 'manual_no_report' ? 'var(--color-warning)' : s === 'vouched' ? 'var(--color-info)' : s === 'clear' ? 'var(--color-success)' : s === 'consider' ? 'var(--color-warning)' : s === 'adverse_action' ? 'var(--color-error)' : s === 'suspended' ? 'var(--color-warning)' : s === 'disputed' ? 'var(--color-purple)' : s === 'consider_approved' ? 'var(--color-success)' : s === 'rejected' ? 'var(--color-error)' : s === 'did_not_pass' ? 'var(--color-error)' : s === 'processing' ? 'var(--color-info)' : s === 'invitation_sent' ? 'var(--color-purple)' : s === 'invitation_expired' ? 'var(--text-tertiary)' : s === 'invitation_canceled' ? 'var(--text-tertiary)' : 'var(--text-secondary)';
+    const getStatusIcon = s => s === 'manual_no_report' ? '\u26A0\uFE0F' : s === 'vouched' ? '\u{1F91D}' : s === 'clear' ? '\u2705' : s === 'consider' ? '\u26A0\uFE0F' : s === 'adverse_action' ? '\u{1F6A8}' : s === 'suspended' ? '\u26A0\uFE0F' : s === 'disputed' ? '\u2696\uFE0F' : s === 'consider_approved' ? '\u2705' : s === 'rejected' ? '\u274C' : s === 'did_not_pass' ? '\u{1F6AB}' : s === 'processing' ? '\u23F3' : s === 'invitation_sent' ? '\u{1F4E8}' : s === 'invitation_expired' ? '\u23F0' : s === 'invitation_canceled' ? '\u{1F6AB}' : '\u2022';
+    const getStatusLabel = s => s === 'manual_no_report' ? 'MANUALLY SET \u2014 NO REPORT' : s === 'vouched' ? 'VOUCHED \u2014 NO BG CHECK' : s === 'consider_approved' ? 'APPROVED (FLAGGED)' : s === 'rejected' ? 'REJECTED' : s === 'did_not_pass' ? 'DID NOT PASS' : s === 'invitation_canceled' ? 'CANCELED' : (s || 'pending').replace(/_/g, ' ').toUpperCase();
     const isHighlight = s => s === 'consider' || s === 'adverse_action' || s === 'suspended' || s === 'disputed' || s === 'did_not_pass';
+
+    // ── v1.64.0 honest-override: vouch actions ──
+    const pickFamily = async () => {
+      const r = await apiFetch('/api/admin/users?role=family&limit=100');
+      if (!r || !r.ok) {
+        showToast('Failed to load families', 'error');
+        return null;
+      }
+      const d = await r.json();
+      const fams = (d.users || d || []).filter(u => !u.is_demo);
+      if (!fams.length) {
+        showToast('No family accounts found', 'error');
+        return null;
+      }
+      const listing = fams.map((f, i) => `${i + 1}. ${f.first_name} ${f.last_name} (${f.email})`).join('\n');
+      const pick = prompt('Vouch for which family?\n\n' + listing + '\n\nEnter number:');
+      if (!pick) return null;
+      const idx = parseInt(pick, 10) - 1;
+      if (isNaN(idx) || !fams[idx]) {
+        showToast('Invalid selection', 'error');
+        return null;
+      }
+      return fams[idx];
+    };
+    const vouchForFamily = async c => {
+      const fam = await pickFamily();
+      if (!fam) return;
+      const note = prompt(`Optional note \u2014 why can you vouch for ${c.first_name} with ${fam.first_name} ${fam.last_name}'s family?`) || '';
+      if (!confirm(`Vouch for ${c.first_name} ${c.last_name} to work with ${fam.first_name} ${fam.last_name}'s family ONLY?\n\nThis is NOT a background check and will never display as one. That family sees: \u201cApproved by admin \u2014 no background check.\u201d`)) return;
+      const r = await apiFetch('/api/admin/vouches', {
+        method: 'POST',
+        body: JSON.stringify({
+          caregiverUserId: c.user_id,
+          familyUserId: fam.id,
+          note
+        })
+      });
+      if (r && r.ok) {
+        showToast('Vouch created', 'success');
+        loadBgChecks();
+      } else {
+        const d = r ? await r.json().catch(() => ({})) : {};
+        showToast(d.error || 'Failed to vouch', 'error');
+      }
+    };
+    const convertToVouch = async c => {
+      const fam = await pickFamily();
+      if (!fam) return;
+      if (!confirm(`Convert ${c.first_name} ${c.last_name}'s manually-set \u201cbackground cleared\u201d flag into an honest per-family vouch for ${fam.first_name} ${fam.last_name}'s family?\n\nAfter this:\n\u2022 They can still work for that family\n\u2022 They will NO LONGER display as background-checked\n\u2022 A real check is required for any other family`)) return;
+      const r = await apiFetch(`/api/admin/caregivers/${c.user_id}/convert-to-vouch`, {
+        method: 'POST',
+        body: JSON.stringify({
+          familyUserId: fam.id
+        })
+      });
+      if (r && r.ok) {
+        showToast('Converted to honest vouch', 'success');
+        loadBgChecks();
+      } else {
+        const d = r ? await r.json().catch(() => ({})) : {};
+        showToast(d.error || 'Failed to convert', 'error');
+      }
+    };
+    const revokeVouch = async (v, c) => {
+      if (!confirm(`Revoke the vouch for ${c.first_name} with ${v.family_name}'s family? They will no longer be able to claim that family's jobs.`)) return;
+      const r = await apiFetch(`/api/admin/vouches/${v.id}`, {
+        method: 'DELETE'
+      });
+      if (r && r.ok) {
+        showToast('Vouch revoked', 'success');
+        loadBgChecks();
+      } else {
+        showToast('Failed to revoke', 'error');
+      }
+    };
     const renderCard = (c, faded) => {
-      // For admin-approved caregivers without a checkr_status, treat as 'clear'
-      const effectiveStatus = (!c.checkr_status || c.checkr_status === 'pending') && (c.is_background_checked || c.bg_check_admin_approved) ? 'clear' : c.checkr_status;
+      // v1.64.0 honesty: a hand-set "cleared" flag with no Checkr report is
+      // NOT 'clear', and a vouch is its own status — never shown as a check.
+      const hasVouches = (c.vouches || []).length > 0;
+      const effectiveStatus = c.manually_set_no_report ? 'manual_no_report' : (!c.checkr_status || c.checkr_status === 'pending') && c.is_background_checked ? 'clear' : (!c.checkr_status || c.checkr_status === 'pending') && hasVouches ? 'vouched' : c.checkr_status;
       const statusColor = getStatusColor(effectiveStatus);
       return /*#__PURE__*/React.createElement("div", {
         key: c.user_id,
@@ -77016,7 +77112,42 @@ const AdminPanel = window.AdminPanel = ({
           fontSize: 13,
           color: statusColor
         }
-      }, getStatusLabel(effectiveStatus), c.bg_check_admin_approved && !c.checkr_candidate_id ? ' (Admin)' : '')), /*#__PURE__*/React.createElement("div", {
+      }, getStatusLabel(effectiveStatus), c.bg_check_admin_approved && !c.checkr_candidate_id ? ' (Admin)' : '')), (c.vouches || []).length > 0 && /*#__PURE__*/React.createElement("div", {
+        style: {
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: 4,
+          marginTop: 6
+        }
+      }, c.vouches.map(v => /*#__PURE__*/React.createElement("span", {
+        key: v.id,
+        style: {
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 4,
+          padding: '2px 8px',
+          background: 'var(--color-info-bg)',
+          color: 'var(--color-info)',
+          borderRadius: 10,
+          fontSize: 11,
+          fontWeight: 600
+        }
+      }, '\u{1F91D}', " Vouched for ", v.family_name, /*#__PURE__*/React.createElement("span", {
+        onClick: () => revokeVouch(v, c),
+        style: {
+          cursor: 'pointer',
+          fontWeight: 700,
+          marginLeft: 2
+        },
+        title: "Revoke vouch"
+      }, '\u2715')))), c.manually_set_no_report ? /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 11,
+          color: 'var(--color-warning)',
+          marginTop: 4,
+          fontWeight: 600
+        }
+      }, '\u26A0\uFE0F', " Displays as background-checked but has no Checkr report ", '\u2014', " convert to an honest vouch") : null, /*#__PURE__*/React.createElement("div", {
         style: {
           fontSize: 11,
           color: 'var(--text-muted)',
@@ -77118,7 +77249,31 @@ const AdminPanel = window.AdminPanel = ({
           fontWeight: 600,
           cursor: 'pointer'
         }
-      }, "Reject")), /*#__PURE__*/React.createElement("button", {
+      }, "Reject")), c.manually_set_no_report && /*#__PURE__*/React.createElement("button", {
+        onClick: () => convertToVouch(c),
+        style: {
+          padding: '4px 10px',
+          background: 'var(--color-warning)',
+          color: 'var(--text-on-primary)',
+          border: 'none',
+          borderRadius: 4,
+          fontSize: 11,
+          fontWeight: 600,
+          cursor: 'pointer'
+        }
+      }, '\u{1F91D}', " Convert to family vouch"), !c.is_background_checked && /*#__PURE__*/React.createElement("button", {
+        onClick: () => vouchForFamily(c),
+        style: {
+          padding: '4px 10px',
+          background: 'var(--color-info)',
+          color: 'var(--text-on-primary)',
+          border: 'none',
+          borderRadius: 4,
+          fontSize: 11,
+          fontWeight: 600,
+          cursor: 'pointer'
+        }
+      }, '\u{1F91D}', " Vouch for family", '\u2026'), /*#__PURE__*/React.createElement("button", {
         onClick: () => {
           setAdminMsgTarget({
             userId: c.user_id,

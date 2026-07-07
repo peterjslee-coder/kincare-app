@@ -155,9 +155,12 @@ router.get('/ranked', async (req, res) => {
       JOIN users u ON cp.user_id = u.id
       WHERE cp.is_available = 1
         AND (cp.account_paused IS NULL OR cp.account_paused = 0)
-        AND (cp.is_background_checked = 1 OR cp.background_check_paid = 1)
+        AND (cp.is_background_checked = 1 OR EXISTS (
+          SELECT 1 FROM bg_admin_vouches v
+          WHERE v.caregiver_user_id = cp.user_id AND v.family_user_id = ? AND v.revoked_at IS NULL
+        ))
       LIMIT 200
-    `).all();
+    `).all(session.family_user_id);
 
     // Compute match scores for all caregivers
     const matches = [];

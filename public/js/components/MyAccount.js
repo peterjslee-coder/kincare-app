@@ -222,6 +222,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
 
   // Caregiver - Checkr Background Check state
   const [checkrStatus, setCheckrStatus] = useState(null); // null | 'not_initiated' | 'in_progress' | 'complete' | 'error'
+  const [myVouches, setMyVouches] = useState([]); // v1.64.0: active admin vouches (per-family, not a bg check)
   const [checkrError, setCheckrError] = useState(null);
   const [checkrStaging, setCheckrStaging] = useState(false);
   const [checkrStagingEmail, setCheckrStagingEmail] = useState('');
@@ -574,7 +575,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
       }).catch(() => {});
       // Fetch Checkr status
       apiFetch('/api/checkr/status').then(async r => {
-        if (r?.ok) { const d = await r.json(); setCheckrStatus(d.status || 'not_initiated'); setCheckrStaging(!!d.staging); if (d.paid) setBgCheckPaid(true); }
+        if (r?.ok) { const d = await r.json(); setCheckrStatus(d.status || 'not_initiated'); setCheckrStaging(!!d.staging); if (d.paid) setBgCheckPaid(true); setMyVouches(d.vouches || []); }
       }).catch(() => { setCheckrStatus('not_initiated'); });
       apiFetch('/api/caregivers/me').then(async r => {
         if (r?.ok) { const d = await r.json(); setEditRates({ daytime: d.profile?.rate_daytime || '24', nighttime: d.profile?.rate_nighttime || '28', overnight: d.profile?.rate_overnight || '30' }); }
@@ -1788,6 +1789,11 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
           {/* Background Check Card */}
           <div className="card">
             <div className="card-header">Background Check</div>
+            {myVouches.length > 0 && checkrStatus !== 'complete' ? (
+              <div style={{ padding: '8px 10px', marginBottom: 10, background: 'var(--color-warning-bg, #fff8e1)', borderRadius: 8, fontSize: 13, color: 'var(--text-secondary)' }}>
+                🤝 An admin approved you to work with <strong>{myVouches.map(v => v.familyName).join(', ')}</strong> without a background check. A completed check is required to work with any other family.
+              </div>
+            ) : null}
             {checkrStatus === 'complete' ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ fontSize: 18 }}>✓</span>

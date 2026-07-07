@@ -1,4 +1,5 @@
 const express = require("express");
+const { hasAnyActiveVouch } = require("../utils/vouches");
 const multer = require("multer");
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
@@ -20,7 +21,8 @@ const upload = multer({
   },
 });
 
-// Helper: check if caregiver is cleared (BG check passed + approved)
+// Helper: check if caregiver is cleared to message (real BG check, or an
+// active admin vouch for at least one family — v1.64.0 honest-override).
 // Returns true for non-caregivers (they have no restrictions)
 async function isCaregiverCleared(db, user) {
   const roles = user.roles || [user.role];
@@ -28,7 +30,8 @@ async function isCaregiverCleared(db, user) {
   const profile = await db.prepare(
     "SELECT is_background_checked FROM caregiver_profiles WHERE user_id = ?"
   ).get(user.id);
-  return !!profile?.is_background_checked;
+  if (profile?.is_background_checked) return true;
+  return await hasAnyActiveVouch(db, user.id);
 }
 
 // Helper: check if a conversation includes an admin member

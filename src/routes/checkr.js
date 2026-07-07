@@ -1,4 +1,5 @@
 const express = require("express");
+const { activeVouchesFor } = require("../utils/vouches");
 const { getDb } = require("../models/database");
 const { authenticate, requireRole } = require("../middleware/auth");
 const { writeAuditLog } = require("../middleware/auditLog");
@@ -347,6 +348,7 @@ router.get("/status", authenticate, requireRole("caregiver"), async (req, res) =
       paid: !!profile.background_check_paid,
       status: profile.is_background_checked ? "complete" : (profile.checkr_status || "pending"),
       cleared: !!profile.is_background_checked,
+      vouches: (await activeVouchesFor(db, req.user.id)).map((v) => ({ familyName: v.family_name, since: v.created_at })),
       candidateId: profile.checkr_candidate_id || null,
       invitationId: profile.checkr_invitation_id || null,
       reportId: profile.checkr_report_id || null,
@@ -1051,6 +1053,19 @@ router.get("/admin/candidates", authenticate, async (req, res) => {
          OR COALESCE(cp.bg_check_admin_approved, 0) = 1
       ORDER BY cp.updated_at DESC
     `).all();
+
+    // v1.64.0: attach active vouches + flag hand-set "cleared" rows that have
+    // no Checkr report behind them (candidates for convert-to-vouch).
+    const allVouches = await db.prepare(`
+      SELECT v.id, v.caregiver_user_id, v.family_user_id, v.note, v.created_at,
+             fu.first_name || ' ' || fu.last_name AS family_name
+      FROM bg_admin_vouches v JOIN users fu ON fu.id = v.family_user_id
+      WHERE v.revoked_at IS NULL
+    `).all();
+    for (const c of candidates) {
+      c.vouches = allVouches.filter((v) => v.caregiver_user_id === c.user_id);
+      c.manually_set_no_report = !!c.is_background_checked && !c.checkr_report_id;
+    }
 
     res.json({ candidates });
   } catch (err) {

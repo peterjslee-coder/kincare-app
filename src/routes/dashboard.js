@@ -1,4 +1,5 @@
 const express = require("express");
+const { activeVouchesFor } = require("../utils/vouches");
 const { getDb } = require("../models/database");
 const { authenticate } = require("../middleware/auth");
 const { getNowInZone, getTodayStringInZone } = require("../utils/timezone");
@@ -642,6 +643,12 @@ async function caregiverDashboard(db, userId, res) {
 
   const feePercentCg = await getPlatformFeePercent(db);
 
+  // Families this caregiver holds an active admin vouch for (v1.64.0)
+  const vouchedFamilyIds = new Set(
+    (await db.prepare("SELECT family_user_id FROM bg_admin_vouches WHERE caregiver_user_id = ? AND revoked_at IS NULL").all(req.user.id))
+      .map((v) => v.family_user_id)
+  );
+
   res.json({
     role: "caregiver",
     platformFeePercent: feePercentCg,
@@ -670,10 +677,11 @@ async function caregiverDashboard(db, userId, res) {
       background_check_paid: !!profile.background_check_paid,
       isBackgroundChecked: !!profile.is_background_checked,
       checkrStatus: profile.is_background_checked ? 'clear' : (profile.checkr_status || 'pending'),
+      adminVouches: (await activeVouchesFor(db, req.user.id)).map((v) => ({ familyName: v.family_name })),
       stripeConnected: !!profile.stripe_onboard_complete,
       stripeOnboardComplete: !!profile.stripe_onboard_complete,
       // Stripe not yet live — cleared if BG check passed OR admin set is_available override
-      caregiverCleared: !!profile.is_background_checked || !!profile.is_available,
+      caregiverCleared: !!profile.is_background_checked || vouchedFamilyIds.size > 0, // v1.64.0: is_available bypass removed; vouches count
       bgCheckRejectionReason: profile.bg_check_rejection_reason || null,
       legalFirstName: profile.legal_first_name,
       legalMiddleName: profile.legal_middle_name || '',
@@ -761,11 +769,13 @@ async function caregiverDashboard(db, userId, res) {
       createdAt: r.created_at,
     })),
     openJobs: await (async () => {
-      // Caregiver must have passed BG check AND completed Stripe to see sensitive job details
-      const bgCleared = !!profile.is_background_checked && !!profile.stripe_onboard_complete;
+      // Sensitive job details require Stripe onboarding plus either a real
+      // background check or an admin vouch FOR THAT JOB'S FAMILY (v1.64.0).
       const results = [];
 
       for (const s of openJobs) {
+        const bgCleared = !!profile.stripe_onboard_complete &&
+          (!!profile.is_background_checked || vouchedFamilyIds.has(s.family_user_id));
         // Conflict detection: check against caregiver's upcoming sessions
         const conflict = computeJobConflicts(s, upcoming);
         // Distance from caregiver's location

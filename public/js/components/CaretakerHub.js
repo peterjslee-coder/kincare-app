@@ -1217,7 +1217,10 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
 
   // Per-step admin overrides — only skip what was explicitly granted
   const stripeOverride = !!profile.stripeOnboardComplete;  // admin granted Stripe bypass
-  const bgOverride = !!profile.isBackgroundChecked;         // admin granted BG check bypass
+  // v1.64.0: a real check satisfies this; so does an active admin vouch (which
+  // covers ONLY the vouched family — honest copy shown below).
+  const adminVouches = profile.adminVouches || [];
+  const bgOverride = !!profile.isBackgroundChecked || adminVouches.length > 0;
 
   const firstSteps = [
     { id: 'stripe-bg',
@@ -1230,7 +1233,9 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       desc: 'A background check is required to participate on InPlace. This is a one-time $30 fee that is refunded after 10 completed sessions. Your report is reviewed fairly — you\'ll be given a chance to provide context on anything that comes up, and a real person is always in the loop.',
       done: bgCheckSubmitted || bgOverride,
       missing: !(bgCheckSubmitted || bgOverride) ? (bgPaid ? 'Complete the background check form' : ((stripeConnected || stripeOverride) ? 'Pay for background check ($30)' : 'Complete Stripe setup first')) : null,
-      warning: bgCheckSubmitted && profile.checkrStatus === 'consider'
+      warning: (!profile.isBackgroundChecked && adminVouches.length > 0 && !bgCheckSubmitted)
+        ? ('You\'re approved to work with ' + adminVouches.map(v => v.familyName).join(', ') + ' without a background check. To accept work from other families, a background check is required.')
+        : bgCheckSubmitted && profile.checkrStatus === 'consider'
         ? 'Your background check needs additional information. Please check your email for instructions from Checkr on how to complete the review process.'
         : (bgCheckSubmitted && profile.checkrStatus === 'processing'
           ? 'Your background check is being processed. This usually takes 2–5 business days.'
