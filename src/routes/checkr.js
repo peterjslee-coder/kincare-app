@@ -1051,6 +1051,7 @@ router.get("/admin/candidates", authenticate, async (req, res) => {
          OR cp.checkr_candidate_id IS NOT NULL
          OR cp.is_background_checked = 1
          OR COALESCE(cp.bg_check_admin_approved, 0) = 1
+         OR EXISTS (SELECT 1 FROM bg_admin_vouches v WHERE v.caregiver_user_id = cp.user_id AND v.revoked_at IS NULL)
       ORDER BY cp.updated_at DESC
     `).all();
 
