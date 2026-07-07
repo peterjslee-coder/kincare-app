@@ -2593,6 +2593,18 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                                 title="Freeze caregiver account">
                                 {'\u{1F6D1}'}
                               </button>
+                              <button onClick={async () => {
+                                if (!confirm(`Deactivate ${u.first_name} ${u.last_name} (${u.email})?\n\nThey disappear from caregiver browse and cannot log in. Session/payment history is preserved. NOTE: there is no reactivate button in the UI \u2014 treat this as permanent.`)) return;
+                                try {
+                                  const res = await apiFetch(`/api/admin/users/${u.id}/reject`, { method: 'PUT', body: JSON.stringify({ reason: 'Deactivated by admin (retired account)' }) });
+                                  if (res?.ok) { showToast(`${u.first_name} deactivated`, 'success'); loadUsers(); }
+                                  else { const d = res ? await res.json().catch(() => ({})) : {}; showToast(d.error || 'Failed to deactivate', 'error'); }
+                                } catch (err) { showToast('Error: ' + err.message, 'error'); }
+                              }}
+                                style={{ padding: '4px 8px', background: 'var(--bg-surface)', color: 'var(--color-error)', border: '1px solid #e0e0e0', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}
+                                title="Deactivate account (hidden from browse, cannot log in)">
+                                {'\u{1F6AB}'}
+                              </button>
                               <button onClick={() => { setAdminMsgTarget({ userId: u.id, name: `${u.first_name} ${u.last_name}` }); setAdminMsgText(''); }}
                                 style={{ padding: '4px 8px', background: 'var(--bg-surface)', color: 'var(--role-color)', border: '1px solid #e0e0e0', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}
                                 title="Message as InPlace Support">
