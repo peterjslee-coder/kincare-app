@@ -380,7 +380,7 @@ router.put("/:id/claim", async (req, res) => {
   }
 
   const db = await getDb();
-  const profile = await db.prepare("SELECT id, background_check_paid, is_background_checked, stripe_onboard_complete, is_available, care_stoplight, care_preferences, account_paused FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
+  const profile = await db.prepare("SELECT id, background_check_paid, is_background_checked, bg_check_admin_approved, stripe_onboard_complete, is_available, care_stoplight, care_preferences, account_paused FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
   if (!profile) return res.status(404).json({ error: "Caregiver profile not found" });
 
   // Gate: account must not be paused
@@ -388,9 +388,12 @@ router.put("/:id/claim", async (req, res) => {
     return res.status(403).json({ error: "Your account is paused. Contact support for assistance." });
   }
 
-  // Gate: must have passed background check OR admin set is_available (not just paid)
-  if (!profile.is_background_checked && !profile.is_available) {
-    return res.status(403).json({ error: "You must complete your background check before accepting care requests." });
+  // Gate: must have passed a background check OR been deliberately approved by an admin.
+  // (Previously this accepted `is_available`, which defaults to 1 for every new profile —
+  // that accidentally let un-vetted caregivers claim jobs. Admin override is now the
+  // explicit `bg_check_admin_approved` flag, set via POST /api/admin/caregivers/:id/approve-bgcheck.)
+  if (!profile.is_background_checked && !profile.bg_check_admin_approved) {
+    return res.status(403).json({ error: "You must complete your background check before accepting care requests. If you have an existing relationship, ask the platform admin to approve you." });
   }
 
   // Gate: Stripe — skipped for now (not live yet). Admin is_available override also bypasses.
