@@ -81,4 +81,20 @@ function toRad(deg) {
   return (deg * Math.PI) / 180;
 }
 
-module.exports = { geocodeAddress, buildAddressString, haversineDistance };
+/**
+ * Geofence evidence for a caregiver check-in/out point vs. the care recipient's home.
+ * Returns the distance in feet and a flag used as proof-of-presence evidence.
+ *   flag: 'ok' (within geofence) | 'far' (outside) | 'no_geo' (caregiver gave no location)
+ *         | 'no_home_geo' (recipient address not geocoded)
+ * Default geofence is generous (1000 ft) to tolerate GPS jitter + imprecise address geocoding;
+ * the recorded distanceFt is the real evidence, the flag is a convenience.
+ */
+function geofenceEvidence(pointLat, pointLng, homeLat, homeLng, geofenceFt = 1000) {
+  if (pointLat == null || pointLng == null) return { distanceFt: null, flag: 'no_geo' };
+  if (homeLat == null || homeLng == null) return { distanceFt: null, flag: 'no_home_geo' };
+  const miles = haversineDistance(Number(pointLat), Number(pointLng), Number(homeLat), Number(homeLng));
+  const distanceFt = Math.round(miles * 5280);
+  return { distanceFt, flag: distanceFt <= geofenceFt ? 'ok' : 'far' };
+}
+
+module.exports = { geocodeAddress, buildAddressString, haversineDistance, geofenceEvidence };

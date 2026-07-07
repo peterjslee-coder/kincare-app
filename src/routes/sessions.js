@@ -7,6 +7,7 @@ const availabilityRouter = require("./availability");
 const { sendPushToUser, notifyAdmins, sendSessionReminders } = require("./push");
 const { calculateSessionCost, isShortNotice } = require("../utils/rateCalculator");
 const { getNowInZone, getTodayStringInZone, buildDateTimeInZone } = require("../utils/timezone");
+const { geofenceEvidence } = require("../utils/geocode");
 const { MODEL_HAIKU } = require("../utils/aiModels");
 
 const router = express.Router();
@@ -1354,7 +1355,7 @@ router.post("/:id/check-in", async (req, res) => {
     const session = await db.prepare(`
       SELECT cs.*, cp.user_id AS caregiver_user_id, cp.early_check_in_allowed,
         cr.first_name AS recipient_first_name, cr.last_name AS recipient_last_name,
-        cr.timezone AS care_timezone
+        cr.timezone AS care_timezone, cr.latitude AS recipient_lat, cr.longitude AS recipient_lng
       FROM care_sessions cs
       LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
       LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
@@ -1373,8 +1374,19 @@ router.post("/:id/check-in", async (req, res) => {
       return res.status(400).json({ error: `Cannot check in — session status is '${session.status}'` });
     }
 
-    // Use offline timestamp if provided (caregiver was offline and recorded locally)
-    const effectiveCheckInTime = offlineTimestamp ? new Date(offlineTimestamp) : new Date();
+    // Use offline timestamp if provided (caregiver was offline and recorded locally).
+    // Bound it: reject invalid/future/>18h-stale client times and fall back to server time,
+    // so a caregiver controlling the client can't claim an arbitrary arrival moment.
+    let effectiveCheckInTime = new Date();
+    if (offlineTimestamp) {
+      const t = new Date(offlineTimestamp);
+      const nowMs = Date.now();
+      if (!isNaN(t.getTime()) && t.getTime() <= nowMs + 5 * 60000 && t.getTime() >= nowMs - 18 * 3600 * 1000) {
+        effectiveCheckInTime = t;
+      } else {
+        console.warn(`[check-in] Implausible offline timestamp ${offlineTimestamp} — using server time. session ${req.params.id.slice(0, 8)}`);
+      }
+    }
     const isOfflineSync = !!offlineSync;
     if (isOfflineSync) {
       console.log(`[check-in] Offline sync — original time: ${offlineTimestamp}, session ${req.params.id.slice(0, 8)}`);
@@ -1450,10 +1462,13 @@ router.post("/:id/check-in", async (req, res) => {
     const checkInTimeSQL = isOfflineSync ? `'${effectiveCheckInTime.toISOString()}'` : 'NOW()';
     const isTestMode = !!req.user.impersonatedBy;
     if (isTestMode) console.log(`[check-in] TEST MODE — admin ${req.user.impersonatedBy.slice(0,8)} impersonating ${req.user.id.slice(0,8)}`);
+    // Proof-of-presence: distance from the caregiver's check-in point to the recipient's home + geofence flag
+    const ciGeo = geofenceEvidence(checkInLatitude, checkInLongitude, session.recipient_lat, session.recipient_lng);
+    if (ciGeo.flag === 'far') console.warn(`[check-in] Geofence FAR: ${ciGeo.distanceFt} ft from home — session ${req.params.id.slice(0, 8)}`);
     await db.prepare(`
-      INSERT INTO visit_logs (id, session_id, caregiver_id, check_in_time, arrival_mood, check_in_latitude, check_in_longitude, briefing_acknowledged_at, offline_sync, is_test, created_at)
-      VALUES (?, ?, ?, ${checkInTimeSQL}, ?, ?, ?, ${briefingAcknowledged ? 'NOW()' : 'NULL'}, ?, ?, NOW())
-    `).run(visitId, req.params.id, session.caregiver_id, arrivalMood ? (Array.isArray(arrivalMood) ? JSON.stringify(arrivalMood) : arrivalMood) : null, checkInLatitude || null, checkInLongitude || null, isOfflineSync ? 1 : 0, isTestMode ? 1 : 0);
+      INSERT INTO visit_logs (id, session_id, caregiver_id, check_in_time, arrival_mood, check_in_latitude, check_in_longitude, check_in_distance_ft, check_in_geo_flag, briefing_acknowledged_at, offline_sync, is_test, created_at)
+      VALUES (?, ?, ?, ${checkInTimeSQL}, ?, ?, ?, ?, ?, ${briefingAcknowledged ? 'NOW()' : 'NULL'}, ?, ?, NOW())
+    `).run(visitId, req.params.id, session.caregiver_id, arrivalMood ? (Array.isArray(arrivalMood) ? JSON.stringify(arrivalMood) : arrivalMood) : null, checkInLatitude || null, checkInLongitude || null, ciGeo.distanceFt, ciGeo.flag, isOfflineSync ? 1 : 0, isTestMode ? 1 : 0);
 
     // Get special instructions and recent notes for the caregiver
     const notes = await db.prepare(
@@ -1596,7 +1611,7 @@ router.post("/:id/check-out", async (req, res) => {
     const session = await db.prepare(`
       SELECT cs.*, cp.user_id AS caregiver_user_id,
         cr.first_name AS recipient_first_name, cr.last_name AS recipient_last_name,
-        cr.timezone AS care_timezone
+        cr.timezone AS care_timezone, cr.latitude AS recipient_lat, cr.longitude AS recipient_lng
       FROM care_sessions cs
       LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
       LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
@@ -1616,8 +1631,17 @@ router.post("/:id/check-out", async (req, res) => {
       return res.status(400).json({ error: `Cannot check out — session status is '${session.status}'` });
     }
 
-    // Use offline timestamp if provided (caregiver was offline and recorded locally)
-    const effectiveCheckOutTime = offlineTimestamp ? new Date(offlineTimestamp) : new Date();
+    // Use offline timestamp if provided; bound it the same way as check-in.
+    let effectiveCheckOutTime = new Date();
+    if (offlineTimestamp) {
+      const t = new Date(offlineTimestamp);
+      const nowMs = Date.now();
+      if (!isNaN(t.getTime()) && t.getTime() <= nowMs + 5 * 60000 && t.getTime() >= nowMs - 18 * 3600 * 1000) {
+        effectiveCheckOutTime = t;
+      } else {
+        console.warn(`[check-out] Implausible offline timestamp ${offlineTimestamp} — using server time. session ${req.params.id.slice(0, 8)}`);
+      }
+    }
     if (isOfflineSync) {
       console.log(`[check-out] Offline sync — original time: ${offlineTimestamp}, session ${req.params.id.slice(0, 8)}`);
     }
@@ -1736,6 +1760,7 @@ router.post("/:id/check-out", async (req, res) => {
       earlyMinutes = Math.max(0, (schedEnd - nowCare) / 60000);
     }
 
+    const coGeo = geofenceEvidence(checkOutLatitude, checkOutLongitude, session.recipient_lat, session.recipient_lng);
     if (visitLog) {
       await db.prepare(`
         UPDATE visit_logs SET
@@ -1749,7 +1774,9 @@ router.post("/:id/check-out", async (req, res) => {
           early_departure_reason = ?,
           early_departure_minutes = ?,
           check_out_lat = ?,
-          check_out_lng = ?
+          check_out_lng = ?,
+          check_out_distance_ft = ?,
+          check_out_geo_flag = ?
         WHERE id = ?
       `).run(
         departureMood ? (Array.isArray(departureMood) ? JSON.stringify(departureMood) : departureMood) : null,
@@ -1762,6 +1789,8 @@ router.post("/:id/check-out", async (req, res) => {
         earlyMinutes > 15 ? Math.round(earlyMinutes) : null,
         checkOutLatitude || null,
         checkOutLongitude || null,
+        coGeo.distanceFt,
+        coGeo.flag,
         visitLog.id
       );
     }

@@ -18,7 +18,9 @@ const SENSITIVE_PATTERNS = [
   // Sensitive data access
   { pattern: /^\/api\/caregivers\/.*\/profile/, action: "caregiver_profile_access", severity: "info" },
   { pattern: /^\/api\/care-recipients/, action: "care_recipient_access", severity: "info" },
-  { pattern: /^\/api\/sessions\/.*\/(cancel|claim|checkout|review)/, action: "session_action", severity: "info" },
+  { pattern: /^\/api\/sessions\/.*\/(cancel|claim|check-in|check-out|checkout|review)/, action: "session_action", severity: "info" },
+  // Accountability actions (nobody-home / no-show / disputes) — evidence-relevant
+  { pattern: /^\/api\/accountability\/(family-no-show|late-resolution|dispute)/, action: "accountability_action", severity: "warn" },
   // Document writes (upload, delete, review) — higher sensitivity
   { pattern: /^\/api\/documents/, method: "POST|PUT|DELETE", action: "document_write", severity: "warn" },
   // Document reads — normal info

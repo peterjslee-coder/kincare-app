@@ -998,6 +998,10 @@ async function initializeDatabase() {
     `ALTER TABLE visit_logs ADD COLUMN IF NOT EXISTS check_out_lat REAL`,
     `ALTER TABLE visit_logs ADD COLUMN IF NOT EXISTS check_out_lng REAL`,
     `ALTER TABLE visit_logs ADD COLUMN IF NOT EXISTS check_in_distance_ft REAL`,
+    // Batch 2 (v1.60.0) — proof-of-presence evidence: geofence flag + check-out distance
+    `ALTER TABLE visit_logs ADD COLUMN IF NOT EXISTS check_in_geo_flag TEXT`,
+    `ALTER TABLE visit_logs ADD COLUMN IF NOT EXISTS check_out_distance_ft REAL`,
+    `ALTER TABLE visit_logs ADD COLUMN IF NOT EXISTS check_out_geo_flag TEXT`,
 
     // ─── v1.54.0 — Tip-with-payment & auto-pay ───
     `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ`,
