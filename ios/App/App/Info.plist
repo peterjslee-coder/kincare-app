@@ -24,6 +24,12 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>InPlace uses the camera to photograph receipts, care documents, and your ID for identity verification, and for video calls with your care team.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>InPlace lets you choose existing photos of receipts, documents, and profile pictures from your photo library.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>InPlace uses the microphone for video calls with your care team.</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
