@@ -41,6 +41,7 @@ const scripts = [
   "js/components/VisitDetailModal.js",
   "js/components/TwoFactorSetup.js",
   "js/components/MyAccount.js",
+  "js/components/AddressAutocomplete.js",
   "js/components/Reimbursements.js",
   "js/components/CareTeamManage.js",
   "js/components/CareTeamPage.js",

@@ -1292,7 +1292,10 @@ const CareRecipients = window.CareRecipients = () => {
           </div>
           <div className="form-group">
             <label>Street Address</label>
-            <input type="text" value={formData.address} onChange={(e) => fd('address', e.target.value)} placeholder="123 Oak Lane" />
+            <AddressAutocomplete value={formData.address}
+              onChange={(v) => fd('address', v)}
+              onSelect={(s) => setFormData(prev => ({ ...prev, address: s.line1, city: s.city || prev.city, state: s.state || prev.state, zip: s.zip || prev.zip }))}
+              placeholder="Start typing — e.g. 123 Oak Lane" />
           </div>
           <div className="form-row">
             <div className="form-group">

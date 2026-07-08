@@ -1075,7 +1075,10 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                 </div>
                 <div style={{ gridColumn: '1 / -1' }}>
                   <div style={fieldLabel}>Street Address</div>
-                  <input style={inputStyle} value={editData.addressLine1 || ''} onChange={(e) => ed('addressLine1', e.target.value)} placeholder="123 Main St" />
+                  <AddressAutocomplete style={inputStyle} value={editData.addressLine1 || ''}
+                    onChange={(v) => ed('addressLine1', v)}
+                    onSelect={(s) => setEditData(prev => ({ ...prev, addressLine1: s.line1, city: s.city || prev.city, state: s.state || prev.state, zip: s.zip || prev.zip }))}
+                    placeholder="Start typing — e.g. 123 Main St" />
                 </div>
                 <div style={{ gridColumn: '1 / -1' }}>
                   <div style={fieldLabel}>Apt / Suite / Unit</div>

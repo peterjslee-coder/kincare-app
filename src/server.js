@@ -311,6 +311,7 @@ app.use("/api/oauth", require("./routes/oauth"));
 app.use("/api/care-teams", require("./routes/careTeams"));
 const reimbursementsRouter = require("./routes/reimbursements");
 app.use("/api/reimbursements", reimbursementsRouter);
+app.use("/api/geocode", require("./routes/geocode"));
 app.use("/api/waitlist", require("./routes/waitlist"));
 app.use("/api/password-reset", require("./routes/passwordReset"));
 app.use("/api/availability", require("./routes/availability"));
@@ -344,7 +345,7 @@ app.use("/api/legal", require("./routes/legal"));
 app.use("/api/media", require("./routes/media"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.74.5";
+const APP_VERSION = "1.75.0";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });

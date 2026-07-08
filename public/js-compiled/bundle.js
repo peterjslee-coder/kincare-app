@@ -13024,11 +13024,18 @@ const CareProfile = window.CareProfile = ({
     onChange: e => ed('age', e.target.value)
   })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     style: fieldLabel
-  }, "Street Address"), /*#__PURE__*/React.createElement("input", {
+  }, "Street Address"), /*#__PURE__*/React.createElement(AddressAutocomplete, {
     style: inputStyle,
     value: editData.address,
-    onChange: e => ed('address', e.target.value),
-    placeholder: "123 Main Street"
+    onChange: v => ed('address', v),
+    onSelect: s => setEditData(prev => ({
+      ...prev,
+      address: s.line1,
+      city: s.city || prev.city,
+      state: s.state || prev.state,
+      zip: s.zip || prev.zip
+    })),
+    placeholder: "Start typing \u2014 e.g. 123 Main Street"
   })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     style: fieldLabel
   }, "City"), /*#__PURE__*/React.createElement("input", {
@@ -20115,11 +20122,17 @@ const CareRecipients = window.CareRecipients = () => {
     }
   }, "Used for care awareness verification \u2014 we'll email them to confirm they're aware"))), /*#__PURE__*/React.createElement("div", {
     className: "form-group"
-  }, /*#__PURE__*/React.createElement("label", null, "Street Address"), /*#__PURE__*/React.createElement("input", {
-    type: "text",
+  }, /*#__PURE__*/React.createElement("label", null, "Street Address"), /*#__PURE__*/React.createElement(AddressAutocomplete, {
     value: formData.address,
-    onChange: e => fd('address', e.target.value),
-    placeholder: "123 Oak Lane"
+    onChange: v => fd('address', v),
+    onSelect: s => setFormData(prev => ({
+      ...prev,
+      address: s.line1,
+      city: s.city || prev.city,
+      state: s.state || prev.state,
+      zip: s.zip || prev.zip
+    })),
+    placeholder: "Start typing \u2014 e.g. 123 Oak Lane"
   })), /*#__PURE__*/React.createElement("div", {
     className: "form-row"
   }, /*#__PURE__*/React.createElement("div", {
@@ -33603,11 +33616,18 @@ const MyAccount = window.MyAccount = ({
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: fieldLabel
-  }, "Street Address"), /*#__PURE__*/React.createElement("input", {
+  }, "Street Address"), /*#__PURE__*/React.createElement(AddressAutocomplete, {
     style: inputStyle,
     value: editData.addressLine1 || '',
-    onChange: e => ed('addressLine1', e.target.value),
-    placeholder: "123 Main St"
+    onChange: v => ed('addressLine1', v),
+    onSelect: s => setEditData(prev => ({
+      ...prev,
+      addressLine1: s.line1,
+      city: s.city || prev.city,
+      state: s.state || prev.state,
+      zip: s.zip || prev.zip
+    })),
+    placeholder: "Start typing \u2014 e.g. 123 Main St"
   })), /*#__PURE__*/React.createElement("div", {
     style: {
       gridColumn: '1 / -1'
@@ -36256,6 +36276,124 @@ const MyAccount = window.MyAccount = ({
       color: 'var(--text-muted)'
     }
   }, "v", window.APP_VERSION || '?'));
+};
+;
+// ─── AddressAutocomplete (v1.75.0) ───
+// A street-address text input with as-you-type suggestions (OpenStreetMap data
+// via our /api/geocode/suggest proxy). Picking a suggestion fills the whole
+// address via onSelect({ line1, city, state, zip, lat, lng, label }).
+// Typing normally still works — it's a plain input if suggestions never come.
+const AddressAutocomplete = window.AddressAutocomplete = ({
+  value,
+  onChange,
+  onSelect,
+  placeholder,
+  style,
+  className
+}) => {
+  const [items, setItems] = useState([]);
+  const [open, setOpen] = useState(false);
+  const timerRef = useRef(null);
+  const boxRef = useRef(null);
+  const skipNextSearch = useRef(false);
+  useEffect(() => {
+    const close = e => {
+      if (boxRef.current && !boxRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', close);
+    document.addEventListener('touchstart', close);
+    return () => {
+      document.removeEventListener('mousedown', close);
+      document.removeEventListener('touchstart', close);
+    };
+  }, []);
+  useEffect(() => {
+    if (skipNextSearch.current) {
+      skipNextSearch.current = false;
+      return;
+    }
+    if (timerRef.current) clearTimeout(timerRef.current);
+    const q = (value || '').trim();
+    if (q.length < 4) {
+      setItems([]);
+      setOpen(false);
+      return;
+    }
+    timerRef.current = setTimeout(async () => {
+      try {
+        const r = await apiFetch('/api/geocode/suggest?q=' + encodeURIComponent(q));
+        if (r !== null && r !== void 0 && r.ok) {
+          const d = await r.json();
+          setItems(d.suggestions || []);
+          setOpen((d.suggestions || []).length > 0);
+        }
+      } catch (e) {/* suggestions are best-effort */}
+    }, 300);
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, [value]);
+  const pick = s => {
+    skipNextSearch.current = true;
+    setOpen(false);
+    setItems([]);
+    if (onSelect) onSelect(s);
+  };
+  return /*#__PURE__*/React.createElement("div", {
+    ref: boxRef,
+    style: {
+      position: 'relative'
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "text",
+    className: className,
+    value: value || '',
+    onChange: e => onChange(e.target.value),
+    onFocus: () => {
+      if (items.length) setOpen(true);
+    },
+    placeholder: placeholder || 'Start typing an address…',
+    autoComplete: "off",
+    style: style
+  }), open && /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: 'absolute',
+      top: '100%',
+      left: 0,
+      right: 0,
+      zIndex: 1200,
+      background: 'var(--bg-card)',
+      border: '1px solid var(--border-light)',
+      borderRadius: 8,
+      boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+      marginTop: 2,
+      maxHeight: 220,
+      overflowY: 'auto'
+    }
+  }, items.map((s, i) => /*#__PURE__*/React.createElement("div", {
+    key: i,
+    onMouseDown: e => {
+      e.preventDefault();
+      pick(s);
+    },
+    onTouchStart: e => {
+      e.preventDefault();
+      pick(s);
+    },
+    style: {
+      padding: '10px 12px',
+      fontSize: 14,
+      cursor: 'pointer',
+      color: 'var(--text-primary)',
+      borderTop: i ? '1px solid var(--border-light)' : 'none'
+    }
+  }, "\uD83D\uDCCD ", s.label)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: '4px 12px 6px',
+      fontSize: 10,
+      color: 'var(--text-muted)'
+    }
+  }, "Suggestions from OpenStreetMap \u2014 keep typing if yours isn't listed")));
 };
 ;
 // ─── Reimbursements (v1.72.0) ───

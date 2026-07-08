@@ -792,7 +792,10 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
             </div>
             <div>
               <div style={fieldLabel}>Street Address</div>
-              <input style={inputStyle} value={editData.address} onChange={(e) => ed('address', e.target.value)} placeholder="123 Main Street" />
+              <AddressAutocomplete style={inputStyle} value={editData.address}
+                onChange={(v) => ed('address', v)}
+                onSelect={(s) => setEditData(prev => ({ ...prev, address: s.line1, city: s.city || prev.city, state: s.state || prev.state, zip: s.zip || prev.zip }))}
+                placeholder="Start typing — e.g. 123 Main Street" />
             </div>
             <div>
               <div style={fieldLabel}>City</div>
