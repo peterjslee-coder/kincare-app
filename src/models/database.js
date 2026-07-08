@@ -15,7 +15,12 @@ function getPool() {
         "DATABASE_URL environment variable is required. Set it in .env for local dev or Railway dashboard for production."
       );
     }
-    pool = new Pool({ connectionString });
+    pool = new Pool({
+      connectionString,
+      max: 10, // explicit (pg default) — raise deliberately, with data (review H4)
+      idleTimeoutMillis: 30000, // recycle idle clients
+      connectionTimeoutMillis: 10000, // fail loudly if the pool is exhausted instead of queueing forever
+    });
   }
   return pool;
 }
@@ -1258,6 +1263,12 @@ async function initializeDatabase() {
     `CREATE INDEX IF NOT EXISTS idx_visit_photos_created ON visit_photos(created_at DESC)`,
     // Visit logs — joined on session_id constantly
     `CREATE INDEX IF NOT EXISTS idx_visit_logs_session ON visit_logs(session_id)`,
+
+    // v1.67.0 — hot FK indexes (codebase review H3)
+    // messages list: WHERE conversation_id = ? ORDER BY created_at DESC
+    `CREATE INDEX IF NOT EXISTS idx_messages_conversation_created ON messages(conversation_id, created_at DESC)`,
+    // payment lookups by session across payments/sessions/admin/financials/accountability
+    `CREATE INDEX IF NOT EXISTS idx_payments_session ON payments(session_id)`,
     // Notifications — queried on every page load
     `CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, created_at DESC)`,
     // v1.57.73 — Client version tracking (web/iOS/Android, app_version, user_agent)

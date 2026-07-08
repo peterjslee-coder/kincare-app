@@ -3,6 +3,7 @@ const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { authenticate, requireRole } = require("../middleware/auth");
 const { validateSession } = require("../middleware/validate");
+const { captureException } = require("../utils/sentry");
 const availabilityRouter = require("./availability");
 const { sendPushToUser, notifyAdmins, sendSessionReminders } = require("./push");
 const { calculateSessionCost, isShortNotice } = require("../utils/rateCalculator");
@@ -1419,7 +1420,7 @@ router.post("/:id/check-in", async (req, res) => {
             body: `Your caregiver tried to check in but you have ${standing.unpaidSessions.length} unpaid session${standing.unpaidSessions.length > 1 ? 's' : ''}. Please pay to resume care.`,
             data: { type: 'payment_hold', page: 'home' },
           }, 'payment_hold').catch(() => {});
-        } catch {}
+        } catch (e) { captureException(e, { where: "sessions: notify family payment_hold on blocked check-in" }); }
         return res.status(402).json({
           error: `This session is on hold. The family has ${standing.unpaidSessions.length} unpaid session${standing.unpaidSessions.length > 1 ? 's' : ''}. They have been notified.`,
           code: 'FAMILY_UNPAID',
@@ -1463,7 +1464,7 @@ router.post("/:id/check-in", async (req, res) => {
           lateCheckIn = true;
           console.log(`[check-in] Late by ${lateMinutes} min (tz: ${careTz}) — session ${req.params.id.slice(0, 8)}`);
         }
-      } catch {}
+      } catch (e) { captureException(e, { where: "sessions: late check-in computation failed (late flag lost)" }); }
     }
 
     // Transition to in_progress (with late check-in flag if applicable)
@@ -1555,7 +1556,7 @@ router.post("/:id/check-in", async (req, res) => {
             remainStr = hrs > 0 ? ` — ${hrs}h ${mins}m remaining` : ` — ${mins}m remaining`;
           }
         }
-      } catch {}
+      } catch (e) { captureException(e, { where: "sessions: remaining-time display computation" }); }
 
       // Format check-in time in the care recipient's timezone
       let checkInTimeStr = "";
@@ -1564,7 +1565,7 @@ router.post("/:id/check-in", async (req, res) => {
         const tzAbbr = cit.toLocaleString("en-US", { timeZone: careTz, timeZoneName: "short" }).split(" ").pop();
         const formatted = cit.toLocaleTimeString("en-US", { timeZone: careTz, hour: "numeric", minute: "2-digit" });
         checkInTimeStr = `${formatted} ${tzAbbr}`;
-      } catch {}
+      } catch (e) { captureException(e, { where: "sessions: check-in time formatting" }); }
 
       // To entire care team: session is now in progress (supersedes "arriving soon")
       try {
@@ -1921,7 +1922,7 @@ router.post("/:id/check-out", async (req, res) => {
           }
         }
       }).catch(err => console.warn("[iPAi] Session summary generation failed (non-blocking):", err.message));
-    } catch {}
+    } catch (e) { captureException(e, { where: "sessions: iPAi session summary kickoff" }); }
 
     // ─── iPAi: Generate caregiver coaching tips (non-blocking) ───
     try {
@@ -1944,7 +1945,7 @@ router.post("/:id/check-out", async (req, res) => {
           }
         }
       }).catch(err => console.warn("[iPAi] Coaching generation failed (non-blocking):", err.message));
-    } catch {}
+    } catch (e) { captureException(e, { where: "sessions: iPAi coaching kickoff" }); }
 
     res.json({
       session: {

@@ -2,6 +2,7 @@ const express = require("express");
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { authenticate, requireRole } = require("../middleware/auth");
+const { captureException } = require("../utils/sentry");
 const { calculateSessionCost, isShortNotice, SURCHARGE_CAREGIVER_SHARE, SURCHARGE_PLATFORM_SHARE } = require("../utils/rateCalculator");
 
 const router = express.Router();
@@ -1185,7 +1186,7 @@ router.get("/earnings", requireRole("caregiver"), async (req, res) => {
                 if (bt.available_on) {
                   mp.payout_expected_date = new Date(bt.available_on * 1000).toISOString().split('T')[0];
                   // Persist so we don't look it up again
-                  try { await db.prepare("UPDATE manual_payments SET payout_expected_date = ? WHERE id = ?").run(mp.payout_expected_date, mp.id); } catch(e) {}
+                  try { await db.prepare("UPDATE manual_payments SET payout_expected_date = ? WHERE id = ?").run(mp.payout_expected_date, mp.id); } catch (e) { captureException(e, { where: "payments: persist payout_expected_date" }); }
                 }
               }
             }
@@ -1660,7 +1661,7 @@ async function restoreHeldSessions(familyUserId, pushFn) {
               data: { type: 'session_restored', sessionId: s.id, page: 'home' },
             }, 'session_restored').catch(() => {});
           }
-        } catch {}
+        } catch (e) { captureException(e, { where: "payments: notify caregiver session_restored" }); }
       }
 
       // Notify family
