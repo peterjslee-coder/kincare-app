@@ -2134,8 +2134,11 @@
         z-index: 900;
         justify-content: space-around;
         align-items: center;
-        padding: 6px 4px;
-        padding-bottom: var(--sab);
+        padding: 5px 4px;
+        /* v1.74.3 — the home indicator only needs ~13px clearance, not the full
+           34px inset; trimming 12px removes the dead white slab under the labels
+           (Pete's long-standing gripe). Floor keeps no-inset devices sane. */
+        padding-bottom: max(5px, calc(var(--sab) - 12px));
         box-shadow: 0 -2px 8px rgba(0,0,0,0.06);
       }
 
@@ -2145,7 +2148,7 @@
         align-items: center;
         justify-content: center;
         flex: 1;
-        padding: 6px 2px;
+        padding: 4px 2px 3px;
         border: none;
         background: none;
         color: var(--text-tertiary);
