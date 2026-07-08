@@ -733,7 +733,7 @@ router.put("/me", authenticate, validateProfileUpdate, async (req, res) => {
 
     // Return updated user
     const user = await db.prepare(
-      "SELECT id, email, role, roles, first_name, last_name, phone, avatar_url, notification_prefs, accessibility_prefs, pets, pet_allergies, food_allergies, medical_conditions, address_line1, address_line2, city, state, zip, created_at FROM users WHERE id = ?"
+      "SELECT id, email, role, roles, first_name, last_name, phone, avatar_url, profile_photo, notification_prefs, accessibility_prefs, pets, pet_allergies, food_allergies, medical_conditions, address_line1, address_line2, city, state, zip, created_at FROM users WHERE id = ?" /* v1.74.5: profile_photo was missing — saving an address blanked the avatar in the UI */
     ).get(req.user.id);
 
     // Parse roles

@@ -32885,7 +32885,13 @@ const MyAccount = window.MyAccount = ({
       });
       if (res !== null && res !== void 0 && res.ok) {
         const data = await res.json();
-        setUser(data.user);
+        // v1.74.5 — MERGE, don't replace: if the server response ever omits a field
+        // (profile_photo did), replacing wiped it from the UI ("saving my address
+        // deleted my photo"). The DB was never touched — display-only loss.
+        setUser(prev => ({
+          ...(prev || {}),
+          ...data.user
+        }));
         setEditing(false);
         showToast('Profile updated', 'success');
       } else {
