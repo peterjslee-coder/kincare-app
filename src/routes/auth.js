@@ -606,7 +606,7 @@ router.get("/me", authenticate, async (req, res) => {
   let pendingLegalDocs = [];
   try {
     const activeDocs = await db.prepare(
-      "SELECT id, doc_type, version, title, change_summary, previous_version FROM legal_documents WHERE is_active = 1"
+      "SELECT id, doc_type, version, title, content, change_summary, previous_version FROM legal_documents WHERE is_active = 1"
     ).all();
     const acceptances = await db.prepare(
       "SELECT DISTINCT ON (doc_type) doc_type, version FROM user_legal_acceptances WHERE user_id = ? ORDER BY doc_type, accepted_at DESC"
