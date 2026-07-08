@@ -8,6 +8,7 @@ const DisclaimerModal = window.DisclaimerModal = ({ onAccept, pendingDocs }) => 
   const [checked, setChecked] = useState(false);
   const [accepting, setAccepting] = useState(false);
   const [currentIdx, setCurrentIdx] = useState(0);
+  const [copiedAI, setCopiedAI] = useState(false);
   const contentRef = useRef(null);
 
   // If no pendingDocs provided, fall back to legacy disclaimer
@@ -90,6 +91,26 @@ const DisclaimerModal = window.DisclaimerModal = ({ onAccept, pendingDocs }) => 
     disclaimer: '📋',
   };
 
+  // Copy the raw document text (with title + version header) so users can
+  // paste it into their own AI and get an independent read. Trust feature.
+  const copyForAI = async () => {
+    try {
+      if (!currentDoc?.content) return;
+      const header = `InPlace Care — ${currentDoc.title || currentDoc.doc_type} (version ${currentDoc.version}). Copied from the InPlace app for independent review. Suggested prompt: "Please review this document and point out anything unusual, one-sided, or worth asking about before agreeing."\n\n---\n\n`;
+      const full = header + currentDoc.content;
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(full);
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = full; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.focus(); ta.select();
+        document.execCommand('copy'); ta.remove();
+      }
+      setCopiedAI(true);
+      setTimeout(() => setCopiedAI(false), 4000);
+    } catch (e) { /* clipboard unavailable — non-critical, do nothing */ }
+  };
+
   const title = currentDoc ? (currentDoc.title || docTypeLabels[currentDoc.doc_type] || 'Legal Document') : 'Important Notice';
   const icon = currentDoc ? (docTypeIcons[currentDoc.doc_type] || '📄') : '📋';
   const isUpdate = currentDoc?.previous_version != null;
@@ -149,6 +170,18 @@ const DisclaimerModal = window.DisclaimerModal = ({ onAccept, pendingDocs }) => 
               <div style={{ fontSize: 13, color: '#0d47a1', lineHeight: 1.6 }}>
                 {currentDoc.change_summary}
               </div>
+            </div>
+          )}
+
+          {/* Copy-for-AI review button (trust feature) */}
+          {currentDoc?.content && (
+            <div style={{ textAlign: 'right', marginBottom: 10 }}>
+              <button onClick={copyForAI} style={{
+                background: 'none', border: '1px solid var(--border-light)', borderRadius: 8,
+                padding: '6px 12px', fontSize: 12, color: 'var(--text-secondary)', cursor: 'pointer',
+              }}>
+                {copiedAI ? '✓ Copied — paste it into your AI' : '🤖 Copy for AI review'}
+              </button>
             </div>
           )}
 

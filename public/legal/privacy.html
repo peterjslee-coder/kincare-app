@@ -21,6 +21,10 @@
     .legal-body .highlight { background: #f0faf8; border-left: 4px solid #1b6b5a; padding: 16px 20px; border-radius: 6px; margin: 20px 0; font-size: 15px; }
     .legal-footer { text-align: center; padding: 32px 24px; border-top: 1px solid #eee; font-size: 13px; color: #888; }
     .legal-footer a { color: #1b6b5a; text-decoration: none; }
+    .ai-copy { max-width: 760px; margin: 28px auto 0; padding: 0 24px; text-align: center; }
+    .ai-copy button { background: #fff; color: #1b6b5a; border: 2px solid #1b6b5a; border-radius: 10px; padding: 10px 18px; font-size: 15px; font-weight: 600; cursor: pointer; font-family: inherit; }
+    .ai-copy button:hover { background: #f0faf8; }
+    .ai-copy p { font-size: 13px; color: #888; margin-top: 8px; line-height: 1.5; }
   </style>
 </head>
 <body>
@@ -28,6 +32,12 @@
     <a href="/">in<span style="color:#e8724a">Place</span></a>
     <h1>Privacy Policy</h1>
     <div class="effective">Last Updated: July 7, 2026</div>
+  </div>
+
+
+  <div class="ai-copy">
+    <button id="aiCopyBtn" onclick="copyForAI()">🤖 Copy for AI review</button>
+    <p>Don't just take our word for it. Copy this document and paste it into your AI assistant<br>(Claude, ChatGPT, Gemini&hellip;) and ask it to flag anything unfair or worth questioning.</p>
   </div>
 
   <div class="legal-body">
@@ -92,5 +102,37 @@
     <a href="/">&larr; Back to inPlace</a> &nbsp;|&nbsp; <a href="/legal/terms.html">Terms of Use</a>
     <p style="margin-top: 8px;">&copy; 2026 Cedar Rock Holdings, LLC dba InPlace Care. All rights reserved.</p>
   </div>
+
+  <script>
+    async function copyForAI() {
+      var btn = document.getElementById('aiCopyBtn');
+      var reset = function () { setTimeout(function () { btn.textContent = '🤖 Copy for AI review'; }, 4000); };
+      try {
+        var text;
+        try {
+          var r = await fetch('/legal/source/IPC_Privacy_Policy_AMENDED.md', { cache: 'no-cache' });
+          if (!r.ok) throw new Error('source unavailable');
+          text = await r.text();
+        } catch (e) {
+          text = document.querySelector('.legal-body').innerText;
+        }
+        var header = 'InPlace Care — Privacy Policy (version 2026-07-07, last updated July 7, 2026). Copied from https://yourinplace.com/legal/privacy.html for independent review. Suggested prompt: "Please review this document and point out anything unusual, one-sided, or worth asking about before agreeing."\n\n---\n\n';
+        var full = header + text;
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(full);
+        } else {
+          var ta = document.createElement('textarea');
+          ta.value = full; ta.style.position = 'fixed'; ta.style.opacity = '0';
+          document.body.appendChild(ta); ta.focus(); ta.select();
+          document.execCommand('copy'); ta.remove();
+        }
+        btn.textContent = '✓ Copied — paste it into your AI';
+        reset();
+      } catch (e) {
+        btn.textContent = 'Copy failed — please select the text manually';
+        reset();
+      }
+    }
+  </script>
 </body>
 </html>
