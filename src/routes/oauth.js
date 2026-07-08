@@ -554,7 +554,16 @@ router.post("/complete-signup", async (req, res) => {
     ).run(uuid(), userId, data.provider, data.providerId, data.email, data.accessToken, data.refreshToken);
 
     // Auto-create care_recipient record for care_for signups (same as normal registration)
+    // v1.71.0 claim-by-invite: skip when a pending care_recipient invite exists (see auth.js)
+    let pendingClaimInvite = null;
     if (role === "care_for") {
+      try {
+        pendingClaimInvite = await db.prepare(
+          "SELECT id FROM care_team_invites WHERE LOWER(invited_email) = LOWER(?) AND status = 'pending' AND role = 'care_recipient' AND expires_at > NOW()"
+        ).get(data.email);
+      } catch (e) { pendingClaimInvite = null; }
+    }
+    if (role === "care_for" && !pendingClaimInvite) {
       try {
         const crId = uuid();
         await db.prepare(`

@@ -219,7 +219,19 @@ router.post("/register", validateRegister, async (req, res) => {
     // See: admin.js PUT /users/:id/approve
 
     // Auto-create care_recipient record for care_for signups (self-signup = Tier 1, auto-verified)
+    // v1.71.0 claim-by-invite: if a pending care_recipient invite exists for this email,
+    // skip the auto-create — accepting the invite links them to the family-created
+    // profile instead (prevents a duplicate recipient row).
+    let pendingClaimInvite = null;
     if (role === "care_for") {
+      try {
+        pendingClaimInvite = await db.prepare(
+          "SELECT id FROM care_team_invites WHERE LOWER(invited_email) = LOWER(?) AND status = 'pending' AND role = 'care_recipient' AND expires_at > NOW()"
+        ).get(email);
+      } catch (e) { pendingClaimInvite = null; }
+      if (pendingClaimInvite) console.log("  [auth] care_for signup has a pending care_recipient invite — skipping auto-create; profile links at invite acceptance");
+    }
+    if (role === "care_for" && !pendingClaimInvite) {
       try {
         const crId = uuid();
         await db.prepare(`

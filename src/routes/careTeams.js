@@ -3,6 +3,7 @@ const crypto = require("crypto");
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { authenticate, requireRole } = require("../middleware/auth");
+const { captureException } = require("../utils/sentry");
 const { sendEmail, brandedHtml } = require("../utils/email");
 
 const router = express.Router();
@@ -309,7 +310,18 @@ router.post("/:id/invite", requireRole("family"), async (req, res) => {
 
     const { email, role = "member" } = req.body;
     if (!email) return res.status(400).json({ error: "Email is required" });
-    if (!["member", "viewer"].includes(role)) return res.status(400).json({ error: "Role must be member or viewer" });
+    if (!["member", "viewer", "care_recipient"].includes(role)) return res.status(400).json({ error: "Role must be member, viewer, or care_recipient" });
+
+    // v1.71.0 claim-by-invite: a care_recipient invite lets the person receiving care
+    // claim this profile (unique token + exact email match at accept — never name matching).
+    // Only valid while the profile is unclaimed.
+    if (role === "care_recipient") {
+      const rec = await db.prepare(
+        "SELECT cr.linked_user_id FROM care_teams ct JOIN care_recipients cr ON ct.care_recipient_id = cr.id WHERE ct.id = ?"
+      ).get(req.params.id);
+      if (!rec) return res.status(404).json({ error: "Care team not found" });
+      if (rec.linked_user_id) return res.status(400).json({ error: "This care recipient already has a linked account" });
+    }
 
     // Check if already a member
     const existingUser = await db.prepare("SELECT id FROM users WHERE email = ?").get(email);
@@ -491,20 +503,66 @@ router.post("/accept-invite", authenticate, async (req, res) => {
       return res.status(403).json({ error: `This invite was sent to ${invite.invited_email}. Please sign in with that email.` });
     }
 
+    // ─── v1.71.0 claim-by-invite ───
+    // A care_recipient invite links the accepting account to the team's care
+    // recipient profile. Identity rail: unique invite token + exact email match
+    // (checked above) — never name matching (removed in v1.70.0 as a PHI hazard).
+    // Atomic: only links while the profile is unclaimed and the user isn't
+    // already linked to another profile.
+    let claimedRecipient = false;
+    if (invite.role === 'care_recipient') {
+      try {
+        const claimTeam = await db.prepare("SELECT care_recipient_id FROM care_teams WHERE id = ?").get(invite.care_team_id);
+        const alreadyLinked = await db.prepare("SELECT id FROM care_recipients WHERE linked_user_id = ? LIMIT 1").get(req.user.id);
+        if (claimTeam && !alreadyLinked) {
+          const linked = await db.prepare(`
+            UPDATE care_recipients SET
+              linked_user_id = ?,
+              authorization_tier = 'tier1',
+              consent_status = 'verified',
+              consent_method = 'invite_accept',
+              consent_verified_at = NOW()
+            WHERE id = ? AND linked_user_id IS NULL
+          `).run(req.user.id, claimTeam.care_recipient_id);
+          if (linked.changes > 0) {
+            claimedRecipient = true;
+            // Unlock CaredForView: add care_for to roles (additive; primary role unchanged)
+            try {
+              const u = await db.prepare("SELECT role, roles FROM users WHERE id = ?").get(req.user.id);
+              let list = [];
+              try { list = u.roles ? JSON.parse(u.roles) : []; } catch { list = []; }
+              if (!list.length && u.role) list = [u.role];
+              if (!list.includes('care_for')) {
+                list.push('care_for');
+                await db.prepare("UPDATE users SET roles = ? WHERE id = ?").run(JSON.stringify(list), req.user.id);
+              }
+            } catch (e) { captureException(e, { where: "careTeams: add care_for role on claim" }); }
+            // Consent audit trail
+            try {
+              await db.prepare(
+                "INSERT INTO consent_audit_log (id, care_recipient_id, actor_id, actor_role, event_type, description) VALUES (?, ?, ?, 'care_recipient', 'linked_via_invite', ?)"
+              ).run(uuid(), claimTeam.care_recipient_id, req.user.id,
+                `Account ${req.user.email} claimed this care profile via care-team invite (token + email match)`);
+            } catch (e) { captureException(e, { where: "careTeams: consent audit on claim" }); }
+          }
+        }
+      } catch (e) { captureException(e, { where: "careTeams: claim-by-invite" }); }
+    }
+
     // Check if already a member
     const existing = await db.prepare(
       "SELECT id FROM care_team_members WHERE care_team_id = ? AND user_id = ?"
     ).get(invite.care_team_id, req.user.id);
     if (existing) {
       await db.prepare("UPDATE care_team_invites SET status = 'accepted' WHERE id = ?").run(invite.id);
-      return res.json({ message: "You're already on this care team", careTeamId: invite.care_team_id });
+      return res.json({ message: "You're already on this care team", careTeamId: invite.care_team_id, claimedRecipient });
     }
 
     // Add as member
     const memberId = uuid();
     await db.prepare(
       "INSERT INTO care_team_members (id, care_team_id, user_id, role, invited_by) VALUES (?, ?, ?, ?, ?)"
-    ).run(memberId, invite.care_team_id, req.user.id, invite.role, invite.invited_by);
+    ).run(memberId, invite.care_team_id, req.user.id, invite.role === 'care_recipient' ? 'member' : invite.role, invite.invited_by);
 
     // Mark invite as accepted
     await db.prepare("UPDATE care_team_invites SET status = 'accepted' WHERE id = ?").run(invite.id);
@@ -593,7 +651,7 @@ router.post("/accept-invite", authenticate, async (req, res) => {
       });
     }
 
-    res.json({ message: "You've joined the care team!", careTeamId: invite.care_team_id });
+    res.json({ message: claimedRecipient ? "You've joined — this is your care profile now!" : "You've joined the care team!", careTeamId: invite.care_team_id, claimedRecipient });
   } catch (err) {
     console.error("Accept invite error:", err);
     res.status(500).json({ error: "Failed to accept invite" });

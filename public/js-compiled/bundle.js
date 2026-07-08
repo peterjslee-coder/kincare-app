@@ -36810,7 +36810,9 @@ const CareTeamManage = window.CareTeamManage = ({
     value: "member"
   }, "Member"), /*#__PURE__*/React.createElement("option", {
     value: "viewer"
-  }, "Viewer")), /*#__PURE__*/React.createElement("button", {
+  }, "Viewer"), /*#__PURE__*/React.createElement("option", {
+    value: "care_recipient"
+  }, "Care Recipient")), /*#__PURE__*/React.createElement("button", {
     type: "submit",
     disabled: inviting,
     style: {
@@ -36854,7 +36856,15 @@ const CareTeamManage = window.CareTeamManage = ({
     style: {
       color: 'var(--text-tertiary)'
     }
-  }, "View Only"), " \u2014 Read-only access: see the schedule and care notes, but cannot make changes or send messages on behalf of the team.")))), /*#__PURE__*/React.createElement("div", {
+  }, "View Only"), " \u2014 Read-only access: see the schedule and care notes, but cannot make changes or send messages on behalf of the team."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 4
+    }
+  }, /*#__PURE__*/React.createElement("strong", {
+    style: {
+      color: '#7b5ea7'
+    }
+  }, "Care Recipient"), " \u2014 For the person receiving care. When they accept (with this exact email), their account is securely linked to this care profile so they can see their own schedule and team.")))), /*#__PURE__*/React.createElement("div", {
     className: "card"
   }, /*#__PURE__*/React.createElement("div", {
     className: "card-header"

@@ -353,6 +353,7 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
                 style={{ ...inputStyle, flex: '0 0 120px' }}>
                 <option value="member">Member</option>
                 <option value="viewer">Viewer</option>
+                <option value="care_recipient">Care Recipient</option>
               </select>
               <button type="submit" disabled={inviting}
                 style={{ padding: '10px 20px', background: inviting ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: inviting ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>
@@ -363,6 +364,7 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
               <div style={{ marginBottom: 4 }}><strong style={{ color: 'var(--role-color)' }}>Leader</strong> — Full control: manage members, edit care profile, schedule sessions, assign caregivers, manage payments.</div>
               <div style={{ marginBottom: 4 }}><strong style={{ color: '#0066cc' }}>Member</strong> — View and coordinate: see the schedule, send messages, request care, view care notes. Cannot invite/remove members.</div>
               <div><strong style={{ color: 'var(--text-tertiary)' }}>View Only</strong> — Read-only access: see the schedule and care notes, but cannot make changes or send messages on behalf of the team.</div>
+              <div style={{ marginTop: 4 }}><strong style={{ color: '#7b5ea7' }}>Care Recipient</strong> — For the person receiving care. When they accept (with this exact email), their account is securely linked to this care profile so they can see their own schedule and team.</div>
             </div>
           </form>
         </div>
