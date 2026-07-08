@@ -408,4 +408,243 @@ router.post("/:id/cancel", async (req, res) => {
   }
 });
 
+
+// ═══ Recurring reimbursements (v1.74.0) ═══
+// Standing approval: the approver OKs the series once; each cycle an occurrence
+// is generated PRE-APPROVED (status 'approved'), ready for the approver to pay
+// and mark paid. Either side can pause/cancel the series at any time.
+
+// Next date (>= today) whose day-of-month equals min(dayOfMonth, days in month).
+// Dates use server time (UTC) — a few hours' skew vs. US time zones is fine for bills.
+function nextRunDate(dayOfMonth, from = new Date()) {
+  const base = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+  const d = new Date(base.getFullYear(), base.getMonth(), 1);
+  for (let i = 0; i < 3; i++) {
+    const daysInMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+    const candidate = new Date(d.getFullYear(), d.getMonth(), Math.min(dayOfMonth, daysInMonth));
+    if (candidate >= base) {
+      return `${candidate.getFullYear()}-${String(candidate.getMonth() + 1).padStart(2, "0")}-${String(candidate.getDate()).padStart(2, "0")}`;
+    }
+    d.setMonth(d.getMonth() + 1);
+  }
+}
+
+function advanceNextRun(currentISO, dayOfMonth) {
+  const [y, m] = currentISO.split("-").map(Number);
+  const ny = m === 12 ? y + 1 : y;
+  const nm = m === 12 ? 1 : m + 1;
+  const daysInMonth = new Date(ny, nm, 0).getDate();
+  return `${ny}-${String(nm).padStart(2, "0")}-${String(Math.min(dayOfMonth, daysInMonth)).padStart(2, "0")}`;
+}
+
+function monthLabel(iso) {
+  const [y, m] = iso.split("-").map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+}
+
+// Called hourly from server.js. Generates due occurrences atomically:
+// the schedule row is advanced with an optimistic lock inside the same
+// transaction as the occurrence insert, so a crash can't double-generate.
+async function generateRecurringReimbursements() {
+  const db = await getDb();
+  const due = await db.prepare(
+    "SELECT * FROM reimbursement_schedules WHERE status = 'active' AND next_run_date <= to_char(CURRENT_DATE, 'YYYY-MM-DD')"
+  ).all();
+  for (const sch of due) {
+    try {
+      let occurrenceId = null;
+      await db.transaction(async (tx) => {
+        const upd = await tx.prepare(
+          "UPDATE reimbursement_schedules SET next_run_date = ?, last_run_at = NOW(), updated_at = NOW() WHERE id = ? AND next_run_date = ? AND status = 'active'"
+        ).run(advanceNextRun(sch.next_run_date, sch.day_of_month), sch.id, sch.next_run_date);
+        if (!upd.changes) return; // another pass already handled it
+        occurrenceId = uuid();
+        await tx.prepare(`
+          INSERT INTO reimbursements
+            (id, care_team_id, care_recipient_id, requested_by, payee_user_id, amount, description,
+             category, expense_date, status, self_recorded, approved_by, approved_at, schedule_id)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'approved', 0, ?, NOW(), ?)
+        `).run(
+          occurrenceId, sch.care_team_id, sch.care_recipient_id, sch.payee_user_id, sch.payee_user_id,
+          sch.amount, `${sch.description} (recurring — ${monthLabel(sch.next_run_date)})`,
+          sch.category, sch.next_run_date, sch.approved_by, sch.id
+        );
+      });
+      if (!occurrenceId) continue;
+      writeAuditLog({
+        userId: sch.payee_user_id, action: "reimbursement_recurring_generated",
+        endpoint: "cron", method: "CRON", ipAddress: "server",
+        details: { scheduleId: sch.id, occurrenceId, amount: sch.amount }, severity: "info",
+      });
+      try {
+        const team = await db.prepare(
+          "SELECT ct.billing_user_id, cr.family_user_id, cr.id AS care_recipient_id FROM care_teams ct JOIN care_recipients cr ON ct.care_recipient_id = cr.id WHERE ct.id = ?"
+        ).get(sch.care_team_id);
+        const payee = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(sch.payee_user_id);
+        const pName = payee ? `${payee.first_name} ${payee.last_name}` : "a team member";
+        await feedEntry(db, team, "Recurring reimbursement due",
+          `$${Number(sch.amount).toFixed(2)} to ${pName} — ${sch.description}`);
+        const approverId = team.billing_user_id || sch.approved_by;
+        if (approverId) {
+          const { sendPushToUser } = require("./push");
+          sendPushToUser(approverId, {
+            title: "Recurring reimbursement due",
+            body: `$${Number(sch.amount).toFixed(2)} to ${pName} — ${sch.description} (pre-approved, ready to pay)`,
+            data: { type: "reimbursement_recurring", reimbursementId: occurrenceId, page: "careteam" },
+          }, "reimbursement_recurring").catch(() => {});
+        }
+      } catch (e) { captureException(e, { where: "reimbursements: recurring notify" }); }
+    } catch (e) {
+      captureException(e, { where: "reimbursements: recurring generate", scheduleId: sch.id });
+    }
+  }
+}
+
+// ── POST /api/reimbursements/schedules — create a recurring series ──
+router.post("/schedules", async (req, res) => {
+  try {
+    const db = await getDb();
+    const access = await teamAccess(db, req.body.careTeamId, req.user.id);
+    if (!access || !access.canView) return res.status(404).json({ error: "Care team not found" });
+    if (!access.canSubmit) return res.status(403).json({ error: "Only care team members can set up recurring reimbursements" });
+
+    const core = validateCore(req.body);
+    const day = parseInt(req.body.dayOfMonth);
+    if (!Number.isInteger(day) || day < 1 || day > 31) {
+      return res.status(400).json({ error: "Day of month must be 1–31" });
+    }
+
+    const id = uuid();
+    await db.prepare(`
+      INSERT INTO reimbursement_schedules
+        (id, care_team_id, care_recipient_id, payee_user_id, created_by, amount, description, category, day_of_month, status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_approval')
+    `).run(id, access.team.id, access.team.care_recipient_id, req.user.id, req.user.id,
+      core.amount, core.description, core.category, day);
+
+    audit(req, "reimbursement_schedule_requested", { id, amount: core.amount, dayOfMonth: day });
+    const requester = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(req.user.id);
+    const rName = requester ? `${requester.first_name} ${requester.last_name}` : "A team member";
+    const approverId = access.team.billing_user_id
+      || (await db.prepare("SELECT user_id FROM care_team_members WHERE care_team_id = ? AND role = 'leader' LIMIT 1").get(access.team.id))?.user_id;
+    if (approverId && approverId !== req.user.id) {
+      notify(req, approverId, "Recurring reimbursement request",
+        `${rName} wants $${core.amount.toFixed(2)}/month on day ${day} — ${core.description}`,
+        { type: "reimbursement_schedule_request", scheduleId: id, careTeamId: access.team.id, page: "careteam" });
+    }
+    res.status(201).json({ id, message: "Recurring reimbursement submitted for approval" });
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    console.error("Create schedule error:", err);
+    captureException(err, { where: "reimbursements: create schedule" });
+    res.status(500).json({ error: "Failed to create recurring reimbursement" });
+  }
+});
+
+// ── GET /api/reimbursements/schedules/team/:teamId ──
+router.get("/schedules/team/:teamId", async (req, res) => {
+  try {
+    const db = await getDb();
+    const access = await teamAccess(db, req.params.teamId, req.user.id);
+    if (!access || !access.canView) return res.status(404).json({ error: "Care team not found" });
+    const rows = await db.prepare(`
+      SELECT s.*, pu.first_name AS payee_first_name, pu.last_name AS payee_last_name
+      FROM reimbursement_schedules s JOIN users pu ON s.payee_user_id = pu.id
+      WHERE s.care_team_id = ? AND s.status != 'cancelled'
+      ORDER BY s.created_at DESC LIMIT 50
+    `).all(req.params.teamId);
+    res.json({ schedules: rows, isApprover: access.isApprover });
+  } catch (err) {
+    console.error("List schedules error:", err);
+    captureException(err, { where: "reimbursements: list schedules" });
+    res.status(500).json({ error: "Failed to load recurring reimbursements" });
+  }
+});
+
+// ── Schedule actions ──
+async function loadSchedule(db, req, res) {
+  const sch = await db.prepare("SELECT * FROM reimbursement_schedules WHERE id = ?").get(req.params.id);
+  if (!sch) { res.status(404).json({ error: "Recurring reimbursement not found" }); return null; }
+  const access = await teamAccess(db, sch.care_team_id, req.user.id);
+  if (!access || !access.canView) { res.status(404).json({ error: "Recurring reimbursement not found" }); return null; }
+  return { sch, access };
+}
+
+router.post("/schedules/:id/approve", async (req, res) => {
+  try {
+    const db = await getDb();
+    const ctx = await loadSchedule(db, req, res);
+    if (!ctx) return;
+    if (!ctx.access.isApprover) return res.status(403).json({ error: "Only the billing contact (or team leader) can approve" });
+    if (ctx.sch.status !== "pending_approval") return res.status(400).json({ error: `Cannot approve a ${ctx.sch.status} series` });
+    const next = nextRunDate(ctx.sch.day_of_month);
+    await db.prepare("UPDATE reimbursement_schedules SET status = 'active', approved_by = ?, approved_at = NOW(), next_run_date = ?, updated_at = NOW() WHERE id = ? AND status = 'pending_approval'")
+      .run(req.user.id, next, req.params.id);
+    audit(req, "reimbursement_schedule_approved", { id: req.params.id, nextRunDate: next });
+    await feedEntry(db, ctx.access.team, "Recurring reimbursement approved",
+      `$${Number(ctx.sch.amount).toFixed(2)}/month — ${ctx.sch.description}`);
+    notify(req, ctx.sch.payee_user_id, "Recurring reimbursement approved",
+      `$${Number(ctx.sch.amount).toFixed(2)}/month for ${ctx.sch.description} — first on ${next}`,
+      { type: "reimbursement_schedule_approved", scheduleId: req.params.id, page: "careteam" });
+    res.json({ message: "Series approved", nextRunDate: next });
+  } catch (err) {
+    console.error("Approve schedule error:", err);
+    captureException(err, { where: "reimbursements: approve schedule" });
+    res.status(500).json({ error: "Failed to approve" });
+  }
+});
+
+router.post("/schedules/:id/decline", async (req, res) => {
+  try {
+    const db = await getDb();
+    const ctx = await loadSchedule(db, req, res);
+    if (!ctx) return;
+    if (!ctx.access.isApprover) return res.status(403).json({ error: "Only the billing contact (or team leader) can decline" });
+    if (ctx.sch.status !== "pending_approval") return res.status(400).json({ error: `Cannot decline a ${ctx.sch.status} series` });
+    const reason = (req.body.reason || "").slice(0, 300) || null;
+    await db.prepare("UPDATE reimbursement_schedules SET status = 'declined', approved_by = ?, declined_reason = ?, updated_at = NOW() WHERE id = ? AND status = 'pending_approval'")
+      .run(req.user.id, reason, req.params.id);
+    audit(req, "reimbursement_schedule_declined", { id: req.params.id, reason });
+    notify(req, ctx.sch.payee_user_id, "Recurring reimbursement declined",
+      reason ? `Declined: ${reason}` : "Your recurring reimbursement was declined",
+      { type: "reimbursement_schedule_declined", scheduleId: req.params.id, page: "careteam" });
+    res.json({ message: "Declined" });
+  } catch (err) {
+    console.error("Decline schedule error:", err);
+    captureException(err, { where: "reimbursements: decline schedule" });
+    res.status(500).json({ error: "Failed to decline" });
+  }
+});
+
+// Pause / resume / cancel — the payee OR the approver can manage a series
+router.post("/schedules/:id/:action(pause|resume|cancel)", async (req, res) => {
+  try {
+    const db = await getDb();
+    const ctx = await loadSchedule(db, req, res);
+    if (!ctx) return;
+    const mine = ctx.sch.payee_user_id === req.user.id;
+    if (!mine && !ctx.access.isApprover) return res.status(403).json({ error: "Only the payee or the billing contact can manage this series" });
+    const a = req.params.action;
+    if (a === "pause") {
+      if (ctx.sch.status !== "active") return res.status(400).json({ error: `Cannot pause a ${ctx.sch.status} series` });
+      await db.prepare("UPDATE reimbursement_schedules SET status = 'paused', updated_at = NOW() WHERE id = ? AND status = 'active'").run(req.params.id);
+    } else if (a === "resume") {
+      if (ctx.sch.status !== "paused") return res.status(400).json({ error: `Cannot resume a ${ctx.sch.status} series` });
+      // recompute so paused months are skipped, not back-filled
+      await db.prepare("UPDATE reimbursement_schedules SET status = 'active', next_run_date = ?, updated_at = NOW() WHERE id = ? AND status = 'paused'")
+        .run(nextRunDate(ctx.sch.day_of_month), req.params.id);
+    } else {
+      if (!["pending_approval", "active", "paused"].includes(ctx.sch.status)) return res.status(400).json({ error: `Cannot cancel a ${ctx.sch.status} series` });
+      await db.prepare("UPDATE reimbursement_schedules SET status = 'cancelled', updated_at = NOW() WHERE id = ?").run(req.params.id);
+    }
+    audit(req, `reimbursement_schedule_${a}`, { id: req.params.id });
+    res.json({ message: a === "pause" ? "Paused" : a === "resume" ? "Resumed" : "Cancelled" });
+  } catch (err) {
+    console.error("Schedule action error:", err);
+    captureException(err, { where: "reimbursements: schedule action" });
+    res.status(500).json({ error: "Action failed" });
+  }
+});
+
 module.exports = router;
+module.exports.generateRecurringReimbursements = generateRecurringReimbursements;

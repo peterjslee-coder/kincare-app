@@ -1301,6 +1301,29 @@ async function initializeDatabase() {
       uploaded_by TEXT REFERENCES users(id),
       created_at TIMESTAMPTZ DEFAULT NOW()
     )`,
+    // v1.74.0 — Recurring reimbursements (standing approval: approver OKs the series once,
+    // occurrences are generated pre-approved; settlement still recorded off-platform)
+    `CREATE TABLE IF NOT EXISTS reimbursement_schedules (
+      id TEXT PRIMARY KEY,
+      care_team_id TEXT NOT NULL REFERENCES care_teams(id),
+      care_recipient_id TEXT REFERENCES care_recipients(id),
+      payee_user_id TEXT NOT NULL REFERENCES users(id),
+      created_by TEXT NOT NULL REFERENCES users(id),
+      amount NUMERIC(10,2) NOT NULL,
+      description TEXT NOT NULL,
+      category TEXT DEFAULT 'other',
+      day_of_month INTEGER NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending_approval',
+      approved_by TEXT REFERENCES users(id),
+      approved_at TIMESTAMPTZ,
+      declined_reason TEXT,
+      next_run_date TEXT,
+      last_run_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_reimb_sched_due ON reimbursement_schedules(status, next_run_date)`,
+    `ALTER TABLE reimbursements ADD COLUMN IF NOT EXISTS schedule_id TEXT`,
     `CREATE INDEX IF NOT EXISTS idx_reimb_team_created ON reimbursements(care_team_id, created_at DESC)`,
     `CREATE INDEX IF NOT EXISTS idx_reimb_receipts ON reimbursement_receipts(reimbursement_id)`,
     // v1.72.0 — Venmo handle for off-platform reimbursement settlement

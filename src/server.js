@@ -309,7 +309,8 @@ app.use("/api/auth/2fa", require("./routes/twoFactor"));
 app.use("/api/passkeys", require("./routes/passkeys"));
 app.use("/api/oauth", require("./routes/oauth"));
 app.use("/api/care-teams", require("./routes/careTeams"));
-app.use("/api/reimbursements", require("./routes/reimbursements"));
+const reimbursementsRouter = require("./routes/reimbursements");
+app.use("/api/reimbursements", reimbursementsRouter);
 app.use("/api/waitlist", require("./routes/waitlist"));
 app.use("/api/password-reset", require("./routes/passwordReset"));
 app.use("/api/availability", require("./routes/availability"));
@@ -343,7 +344,7 @@ app.use("/api/legal", require("./routes/legal"));
 app.use("/api/media", require("./routes/media"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.73.0";
+const APP_VERSION = "1.74.0";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });
@@ -1030,6 +1031,12 @@ async function start() {
       }
     } catch (e) { console.log("  [Migration] Daniel merge skipped:", e.message); }
   })();
+
+  // ─── Recurring reimbursements: generate due occurrences (v1.74.0) ───
+  // Hourly + once shortly after boot. Generation is transactional with an
+  // optimistic lock on next_run_date, so restarts/overlaps can't double-generate.
+  setTimeout(() => reimbursementsRouter.generateRecurringReimbursements().catch((e) => console.error("[reimb] initial generate:", e.message)), 90 * 1000);
+  setInterval(() => reimbursementsRouter.generateRecurringReimbursements().catch((e) => console.error("[reimb] generate:", e.message)), 60 * 60 * 1000);
 
   server.listen(PORT, "0.0.0.0", () => {
     console.log(`\n  InPlace v${APP_VERSION} running on port ${PORT}\n`);

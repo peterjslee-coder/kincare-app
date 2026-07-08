@@ -9,6 +9,9 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [recordMode, setRecordMode] = useState(false); // approver "record directly" mode
+  const [recurringMode, setRecurringMode] = useState(false); // monthly series
+  const [dayOfMonth, setDayOfMonth] = useState('1');
+  const [schedules, setSchedules] = useState([]);
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('other');
@@ -32,6 +35,8 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
         setItems(d.reimbursements || []);
         setMeta({ isApprover: !!d.isApprover, canSubmit: !!d.canSubmit });
       }
+      const rs = await apiFetch(`/api/reimbursements/schedules/team/${careTeamId}`);
+      if (rs?.ok) { const d2 = await rs.json(); setSchedules(d2.schedules || []); }
     } catch {}
     setLoading(false);
   };
@@ -79,7 +84,7 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
 
   const resetForm = () => {
     setAmount(''); setDescription(''); setCategory('other'); setExpenseDate(''); setZelleContact('');
-    setReceipts([]); setPayeeUserId(''); setError(''); setShowForm(false); setRecordMode(false);
+    setReceipts([]); setPayeeUserId(''); setError(''); setShowForm(false); setRecordMode(false); setRecurringMode(false); setDayOfMonth('1');
   };
 
   const submit = async (e) => {
@@ -88,8 +93,12 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
     try {
       const body = { careTeamId, amount: parseFloat(amount), description, category, expenseDate: expenseDate || undefined, receipts };
       let url = '/api/reimbursements';
-      if (recordMode) { url = '/api/reimbursements/record'; body.payeeUserId = payeeUserId || undefined; body.paidMethod = paidMethod; }
-      else {
+      if (recurringMode) {
+        url = '/api/reimbursements/schedules';
+        body.dayOfMonth = parseInt(dayOfMonth);
+        delete body.receipts; delete body.expenseDate;
+      } else if (recordMode) { url = '/api/reimbursements/record'; body.payeeUserId = payeeUserId || undefined; body.paidMethod = paidMethod; }
+      else if (!recurringMode) {
         if (venmoHandle.trim()) body.venmoHandle = venmoHandle;
         if (zelleContact.trim()) body.zelleContact = zelleContact;
         // Soft requirement: without payout details the approver has no way to pay you
@@ -98,7 +107,7 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
         }
       }
       const res = await apiFetch(url, { method: 'POST', body: JSON.stringify(body) });
-      if (res?.ok) { showToast(recordMode ? 'Reimbursement recorded' : 'Request submitted', 'success'); resetForm(); fetchList(); }
+      if (res?.ok) { showToast(recurringMode ? 'Recurring reimbursement submitted for approval' : recordMode ? 'Reimbursement recorded' : 'Request submitted', 'success'); resetForm(); fetchList(); }
       else { const d = await res.json().catch(() => ({})); setError(d.error || 'Failed to submit'); }
     } catch { setError('Failed to submit'); }
     setBusy(false);
@@ -142,15 +151,21 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
         <div style={{ display: 'flex', gap: 8 }}>
           {meta.canSubmit && !showForm && (
             <button onClick={async () => {
-                setShowForm(true); setRecordMode(false);
+                setShowForm(true); setRecordMode(false); setRecurringMode(false);
                 try { const r = await apiFetch('/api/reimbursements/my-payout-info'); if (r?.ok) { const d = await r.json(); if (d.venmoHandle) setVenmoHandle(d.venmoHandle); if (d.zelleContact) setZelleContact(d.zelleContact); } } catch {}
               }}
               style={{ padding: '6px 14px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
               + Request
             </button>
           )}
+          {meta.canSubmit && !showForm && (
+            <button onClick={() => { setShowForm(true); setRecordMode(false); setRecurringMode(true); }}
+              style={{ padding: '6px 14px', background: 'var(--bg-card)', color: 'var(--role-color)', border: '1px solid var(--role-color)', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+              ↻ Recurring
+            </button>
+          )}
           {meta.isApprover && !showForm && (
-            <button onClick={() => { setShowForm(true); setRecordMode(true); }}
+            <button onClick={() => { setShowForm(true); setRecordMode(true); setRecurringMode(false); }}
               style={{ padding: '6px 14px', background: 'var(--bg-card)', color: 'var(--role-color)', border: '1px solid var(--role-color)', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
               Record paid
             </button>
@@ -166,7 +181,7 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
       {showForm && (
         <form onSubmit={submit} style={{ background: 'var(--bg-primary)', borderRadius: 10, padding: 14, marginBottom: 14 }}>
           <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 10 }}>
-            {recordMode ? 'Record a reimbursement you already paid' : 'Request reimbursement'}
+            {recordMode ? 'Record a reimbursement you already paid' : recurringMode ? 'Set up a monthly reimbursement (e.g. internet, phone bill)' : 'Request reimbursement'}
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
             <input type="number" min="0.01" max="10000" step="0.01" required value={amount} onChange={(e) => setAmount(e.target.value)}
@@ -183,12 +198,21 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
               <option value="transport">Transport</option>
               <option value="other">Other</option>
             </select>
-            <input type="date" value={expenseDate} onChange={(e) => setExpenseDate(e.target.value)} style={{ ...inputStyle, flex: '0 0 150px' }} />
-            {!recordMode && (
+            {!recurringMode && (
+              <input type="date" value={expenseDate} onChange={(e) => setExpenseDate(e.target.value)} style={{ ...inputStyle, flex: '0 0 150px' }} />
+            )}
+            {recurringMode && (
+              <select value={dayOfMonth} onChange={(e) => setDayOfMonth(e.target.value)} style={{ ...inputStyle, flex: '0 0 190px' }}>
+                {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => (
+                  <option key={d} value={d}>Repeats monthly on day {d}</option>
+                ))}
+              </select>
+            )}
+            {!recordMode && !recurringMode && (
               <input type="text" value={venmoHandle} onChange={(e) => setVenmoHandle(e.target.value)}
                 placeholder="Your Venmo @username" style={{ ...inputStyle, flex: '1 1 160px' }} />
             )}
-            {!recordMode && (
+            {!recordMode && !recurringMode && (
               <input type="text" value={zelleContact} onChange={(e) => setZelleContact(e.target.value)}
                 placeholder="Your Zelle email/phone" style={{ ...inputStyle, flex: '1 1 160px' }} />
             )}
@@ -211,7 +235,12 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
               </select>
             )}
           </div>
-          <div style={{ marginBottom: 8 }}>
+          {recurringMode && (
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>
+              Once the approver OKs the series, an entry appears each month pre-approved and ready to pay. Either of you can pause or cancel anytime.
+            </div>
+          )}
+          <div style={{ marginBottom: 8, display: recurringMode ? 'none' : 'block' }}>
             <label style={{ display: 'inline-block', padding: '8px 14px', background: 'var(--bg-card)', border: '1px dashed var(--border-light)', borderRadius: 8, fontSize: 13, cursor: 'pointer', color: 'var(--text-secondary)' }}>
               📷 Add receipt photo / PDF
               <input type="file" accept="image/*,application/pdf" multiple capture="environment" onChange={handleFiles} style={{ display: 'none' }} />
@@ -228,7 +257,7 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
           <div style={{ display: 'flex', gap: 8 }}>
             <button type="submit" disabled={busy}
               style={{ padding: '10px 18px', background: busy ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: busy ? 'wait' : 'pointer' }}>
-              {busy ? 'Saving...' : (recordMode ? 'Record' : 'Submit request')}
+              {busy ? 'Saving...' : (recurringMode ? 'Submit for approval' : recordMode ? 'Record' : 'Submit request')}
             </button>
             <button type="button" onClick={resetForm}
               style={{ padding: '10px 14px', background: 'none', border: '1px solid var(--border-light)', borderRadius: 8, fontSize: 14, cursor: 'pointer', color: 'var(--text-secondary)' }}>
@@ -236,6 +265,51 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
             </button>
           </div>
         </form>
+      )}
+
+      {schedules.length > 0 && (
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 6 }}>↻ Recurring</div>
+          {schedules.map((sc) => {
+            const schedAct = async (action) => {
+              const r = await apiFetch(`/api/reimbursements/schedules/${sc.id}/${action}`, { method: 'POST', body: JSON.stringify({}) });
+              if (r?.ok) fetchList(); else { const d = await r.json().catch(() => ({})); showToast(d.error || 'Action failed', 'error'); }
+            };
+            const chip = {
+              pending_approval: { t: 'Awaiting approval', bg: '#fff3e0', fg: '#e65100' },
+              active: { t: `Next: ${sc.next_run_date || '—'}`, bg: '#e8f5e9', fg: '#2e7d32' },
+              paused: { t: 'Paused', bg: 'var(--bg-primary)', fg: 'var(--text-muted)' },
+              declined: { t: sc.declined_reason ? `Declined — ${sc.declined_reason}` : 'Declined', bg: '#ffebee', fg: '#c62828' },
+            }[sc.status] || { t: sc.status, bg: 'var(--bg-primary)', fg: 'var(--text-muted)' };
+            const mine = sc.payee_user_id === myUserId;
+            return (
+              <div key={sc.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '8px 4px', borderTop: '1px solid var(--border-light)' }}>
+                <div style={{ flex: '1 1 220px' }}>
+                  <span style={{ fontWeight: 600, fontSize: 14 }}>${Number(sc.amount).toFixed(2)}/mo</span>
+                  <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}> — {sc.description} · day {sc.day_of_month} · to {sc.payee_first_name} {sc.payee_last_name}</span>
+                </div>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: chip.fg, background: chip.bg, padding: '3px 8px', borderRadius: 10 }}>{chip.t}</span>
+                  {meta.isApprover && sc.status === 'pending_approval' && (
+                    <>
+                      <button onClick={() => schedAct('approve')} style={{ padding: '4px 10px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Approve</button>
+                      <button onClick={() => schedAct('decline')} style={{ padding: '4px 10px', background: 'none', border: '1px solid #c62828', color: '#c62828', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>Decline</button>
+                    </>
+                  )}
+                  {(meta.isApprover || mine) && sc.status === 'active' && (
+                    <button onClick={() => schedAct('pause')} style={{ padding: '4px 10px', background: 'none', border: '1px solid var(--border-light)', color: 'var(--text-secondary)', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>Pause</button>
+                  )}
+                  {(meta.isApprover || mine) && sc.status === 'paused' && (
+                    <button onClick={() => schedAct('resume')} style={{ padding: '4px 10px', background: 'none', border: '1px solid #2e7d32', color: '#2e7d32', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>Resume</button>
+                  )}
+                  {(meta.isApprover || mine) && ['pending_approval', 'active', 'paused'].includes(sc.status) && (
+                    <button onClick={() => { if (confirm('Cancel this recurring reimbursement?')) schedAct('cancel'); }} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: 12, cursor: 'pointer', textDecoration: 'underline' }}>Cancel</button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       )}
 
       {loading ? (

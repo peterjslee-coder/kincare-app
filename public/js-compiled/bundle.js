@@ -36264,6 +36264,9 @@ const Reimbursements = window.Reimbursements = ({
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [recordMode, setRecordMode] = useState(false); // approver "record directly" mode
+  const [recurringMode, setRecurringMode] = useState(false); // monthly series
+  const [dayOfMonth, setDayOfMonth] = useState('1');
+  const [schedules, setSchedules] = useState([]);
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('other');
@@ -36288,6 +36291,11 @@ const Reimbursements = window.Reimbursements = ({
           isApprover: !!d.isApprover,
           canSubmit: !!d.canSubmit
         });
+      }
+      const rs = await apiFetch(`/api/reimbursements/schedules/team/${careTeamId}`);
+      if (rs !== null && rs !== void 0 && rs.ok) {
+        const d2 = await rs.json();
+        setSchedules(d2.schedules || []);
       }
     } catch {}
     setLoading(false);
@@ -36364,6 +36372,8 @@ const Reimbursements = window.Reimbursements = ({
     setError('');
     setShowForm(false);
     setRecordMode(false);
+    setRecurringMode(false);
+    setDayOfMonth('1');
   };
   const submit = async e => {
     e.preventDefault();
@@ -36379,11 +36389,16 @@ const Reimbursements = window.Reimbursements = ({
         receipts
       };
       let url = '/api/reimbursements';
-      if (recordMode) {
+      if (recurringMode) {
+        url = '/api/reimbursements/schedules';
+        body.dayOfMonth = parseInt(dayOfMonth);
+        delete body.receipts;
+        delete body.expenseDate;
+      } else if (recordMode) {
         url = '/api/reimbursements/record';
         body.payeeUserId = payeeUserId || undefined;
         body.paidMethod = paidMethod;
-      } else {
+      } else if (!recurringMode) {
         if (venmoHandle.trim()) body.venmoHandle = venmoHandle;
         if (zelleContact.trim()) body.zelleContact = zelleContact;
         // Soft requirement: without payout details the approver has no way to pay you
@@ -36399,7 +36414,7 @@ const Reimbursements = window.Reimbursements = ({
         body: JSON.stringify(body)
       });
       if (res !== null && res !== void 0 && res.ok) {
-        showToast(recordMode ? 'Reimbursement recorded' : 'Request submitted', 'success');
+        showToast(recurringMode ? 'Recurring reimbursement submitted for approval' : recordMode ? 'Reimbursement recorded' : 'Request submitted', 'success');
         resetForm();
         fetchList();
       } else {
@@ -36506,6 +36521,7 @@ const Reimbursements = window.Reimbursements = ({
     onClick: async () => {
       setShowForm(true);
       setRecordMode(false);
+      setRecurringMode(false);
       try {
         const r = await apiFetch('/api/reimbursements/my-payout-info');
         if (r !== null && r !== void 0 && r.ok) {
@@ -36525,10 +36541,27 @@ const Reimbursements = window.Reimbursements = ({
       fontWeight: 600,
       cursor: 'pointer'
     }
-  }, "+ Request"), meta.isApprover && !showForm && /*#__PURE__*/React.createElement("button", {
+  }, "+ Request"), meta.canSubmit && !showForm && /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      setShowForm(true);
+      setRecordMode(false);
+      setRecurringMode(true);
+    },
+    style: {
+      padding: '6px 14px',
+      background: 'var(--bg-card)',
+      color: 'var(--role-color)',
+      border: '1px solid var(--role-color)',
+      borderRadius: 8,
+      fontSize: 13,
+      fontWeight: 600,
+      cursor: 'pointer'
+    }
+  }, "\u21BB Recurring"), meta.isApprover && !showForm && /*#__PURE__*/React.createElement("button", {
     onClick: () => {
       setShowForm(true);
       setRecordMode(true);
+      setRecurringMode(false);
     },
     style: {
       padding: '6px 14px',
@@ -36560,7 +36593,7 @@ const Reimbursements = window.Reimbursements = ({
       fontSize: 14,
       marginBottom: 10
     }
-  }, recordMode ? 'Record a reimbursement you already paid' : 'Request reimbursement'), /*#__PURE__*/React.createElement("div", {
+  }, recordMode ? 'Record a reimbursement you already paid' : recurringMode ? 'Set up a monthly reimbursement (e.g. internet, phone bill)' : 'Request reimbursement'), /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       gap: 8,
@@ -36616,7 +36649,7 @@ const Reimbursements = window.Reimbursements = ({
     value: "transport"
   }, "Transport"), /*#__PURE__*/React.createElement("option", {
     value: "other"
-  }, "Other")), /*#__PURE__*/React.createElement("input", {
+  }, "Other")), !recurringMode && /*#__PURE__*/React.createElement("input", {
     type: "date",
     value: expenseDate,
     onChange: e => setExpenseDate(e.target.value),
@@ -36624,7 +36657,19 @@ const Reimbursements = window.Reimbursements = ({
       ...inputStyle,
       flex: '0 0 150px'
     }
-  }), !recordMode && /*#__PURE__*/React.createElement("input", {
+  }), recurringMode && /*#__PURE__*/React.createElement("select", {
+    value: dayOfMonth,
+    onChange: e => setDayOfMonth(e.target.value),
+    style: {
+      ...inputStyle,
+      flex: '0 0 190px'
+    }
+  }, Array.from({
+    length: 28
+  }, (_, i) => i + 1).map(d => /*#__PURE__*/React.createElement("option", {
+    key: d,
+    value: d
+  }, "Repeats monthly on day ", d))), !recordMode && !recurringMode && /*#__PURE__*/React.createElement("input", {
     type: "text",
     value: venmoHandle,
     onChange: e => setVenmoHandle(e.target.value),
@@ -36633,7 +36678,7 @@ const Reimbursements = window.Reimbursements = ({
       ...inputStyle,
       flex: '1 1 160px'
     }
-  }), !recordMode && /*#__PURE__*/React.createElement("input", {
+  }), !recordMode && !recurringMode && /*#__PURE__*/React.createElement("input", {
     type: "text",
     value: zelleContact,
     onChange: e => setZelleContact(e.target.value),
@@ -36673,9 +36718,16 @@ const Reimbursements = window.Reimbursements = ({
     value: "bank"
   }, "Bank"), /*#__PURE__*/React.createElement("option", {
     value: "other"
-  }, "Other"))), /*#__PURE__*/React.createElement("div", {
+  }, "Other"))), recurringMode && /*#__PURE__*/React.createElement("div", {
     style: {
+      fontSize: 12,
+      color: 'var(--text-secondary)',
       marginBottom: 8
+    }
+  }, "Once the approver OKs the series, an entry appears each month pre-approved and ready to pay. Either of you can pause or cancel anytime."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 8,
+      display: recurringMode ? 'none' : 'block'
     }
   }, /*#__PURE__*/React.createElement("label", {
     style: {
@@ -36738,7 +36790,7 @@ const Reimbursements = window.Reimbursements = ({
       fontWeight: 600,
       cursor: busy ? 'wait' : 'pointer'
     }
-  }, busy ? 'Saving...' : recordMode ? 'Record' : 'Submit request'), /*#__PURE__*/React.createElement("button", {
+  }, busy ? 'Saving...' : recurringMode ? 'Submit for approval' : recordMode ? 'Record' : 'Submit request'), /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: resetForm,
     style: {
@@ -36750,7 +36802,155 @@ const Reimbursements = window.Reimbursements = ({
       cursor: 'pointer',
       color: 'var(--text-secondary)'
     }
-  }, "Cancel"))), loading ? /*#__PURE__*/React.createElement("div", {
+  }, "Cancel"))), schedules.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      fontWeight: 700,
+      color: 'var(--text-secondary)',
+      marginBottom: 6
+    }
+  }, "\u21BB Recurring"), schedules.map(sc => {
+    const schedAct = async action => {
+      const r = await apiFetch(`/api/reimbursements/schedules/${sc.id}/${action}`, {
+        method: 'POST',
+        body: JSON.stringify({})
+      });
+      if (r !== null && r !== void 0 && r.ok) fetchList();else {
+        const d = await r.json().catch(() => ({}));
+        showToast(d.error || 'Action failed', 'error');
+      }
+    };
+    const chip = {
+      pending_approval: {
+        t: 'Awaiting approval',
+        bg: '#fff3e0',
+        fg: '#e65100'
+      },
+      active: {
+        t: `Next: ${sc.next_run_date || '—'}`,
+        bg: '#e8f5e9',
+        fg: '#2e7d32'
+      },
+      paused: {
+        t: 'Paused',
+        bg: 'var(--bg-primary)',
+        fg: 'var(--text-muted)'
+      },
+      declined: {
+        t: sc.declined_reason ? `Declined — ${sc.declined_reason}` : 'Declined',
+        bg: '#ffebee',
+        fg: '#c62828'
+      }
+    }[sc.status] || {
+      t: sc.status,
+      bg: 'var(--bg-primary)',
+      fg: 'var(--text-muted)'
+    };
+    const mine = sc.payee_user_id === myUserId;
+    return /*#__PURE__*/React.createElement("div", {
+      key: sc.id,
+      style: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        gap: 8,
+        flexWrap: 'wrap',
+        padding: '8px 4px',
+        borderTop: '1px solid var(--border-light)'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        flex: '1 1 220px'
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontWeight: 600,
+        fontSize: 14
+      }
+    }, "$", Number(sc.amount).toFixed(2), "/mo"), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 13,
+        color: 'var(--text-secondary)'
+      }
+    }, " \u2014 ", sc.description, " \xB7 day ", sc.day_of_month, " \xB7 to ", sc.payee_first_name, " ", sc.payee_last_name)), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        gap: 6,
+        alignItems: 'center',
+        flexWrap: 'wrap'
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 11,
+        fontWeight: 600,
+        color: chip.fg,
+        background: chip.bg,
+        padding: '3px 8px',
+        borderRadius: 10
+      }
+    }, chip.t), meta.isApprover && sc.status === 'pending_approval' && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("button", {
+      onClick: () => schedAct('approve'),
+      style: {
+        padding: '4px 10px',
+        background: 'var(--role-color)',
+        color: 'var(--text-on-primary)',
+        border: 'none',
+        borderRadius: 6,
+        fontSize: 12,
+        fontWeight: 600,
+        cursor: 'pointer'
+      }
+    }, "Approve"), /*#__PURE__*/React.createElement("button", {
+      onClick: () => schedAct('decline'),
+      style: {
+        padding: '4px 10px',
+        background: 'none',
+        border: '1px solid #c62828',
+        color: '#c62828',
+        borderRadius: 6,
+        fontSize: 12,
+        cursor: 'pointer'
+      }
+    }, "Decline")), (meta.isApprover || mine) && sc.status === 'active' && /*#__PURE__*/React.createElement("button", {
+      onClick: () => schedAct('pause'),
+      style: {
+        padding: '4px 10px',
+        background: 'none',
+        border: '1px solid var(--border-light)',
+        color: 'var(--text-secondary)',
+        borderRadius: 6,
+        fontSize: 12,
+        cursor: 'pointer'
+      }
+    }, "Pause"), (meta.isApprover || mine) && sc.status === 'paused' && /*#__PURE__*/React.createElement("button", {
+      onClick: () => schedAct('resume'),
+      style: {
+        padding: '4px 10px',
+        background: 'none',
+        border: '1px solid #2e7d32',
+        color: '#2e7d32',
+        borderRadius: 6,
+        fontSize: 12,
+        cursor: 'pointer'
+      }
+    }, "Resume"), (meta.isApprover || mine) && ['pending_approval', 'active', 'paused'].includes(sc.status) && /*#__PURE__*/React.createElement("button", {
+      onClick: () => {
+        if (confirm('Cancel this recurring reimbursement?')) schedAct('cancel');
+      },
+      style: {
+        background: 'none',
+        border: 'none',
+        color: 'var(--text-muted)',
+        fontSize: 12,
+        cursor: 'pointer',
+        textDecoration: 'underline'
+      }
+    }, "Cancel")));
+  })), loading ? /*#__PURE__*/React.createElement("div", {
     style: {
       color: 'var(--text-muted)',
       fontSize: 14,
