@@ -228,6 +228,9 @@
 
 ## Features — Up Next
 
+- [ ] **Bottom nav bar still reads as bulky (Pete, July 8 — v1.74.3 trimmed 12px off the safe-area stack but he still dislikes it).** Next ideas, in rough order of impact: (a) tint the safe-area zone the same as the bar with the labels sitting lower so the inset reads as part of the bar, not dead space; (b) icons-only nav (drop the text labels, +30% less height) with the active tab showing its label; (c) dip further into the inset (home indicator needs ~13px, we currently leave 22px). Mock 2–3 options as HTML in mockups/app/ before touching prod.
+
+
 - [ ] **Payments page v2 (from Pete's July 8 feedback):** show which card/account paid each payment (e.g. "Visa ****6411"); add reimbursement status to the payments view — "reimbursed" indicator + hotlink to the care-team reimbursement ledger.
 - [ ] **Desktop webcam capture for identity verification (from Pete's July 8 feedback):** the ID-verification modal in MyAccount is upload-only on desktop (mobile already opens the camera via `capture`). SelfOnboardingWizard already has a working getUserMedia camera flow — reuse it. Also add an optional selfie step alongside the ID photo.
 
