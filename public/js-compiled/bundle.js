@@ -34133,7 +34133,7 @@ const MyAccount = window.MyAccount = ({
       fontSize: 13,
       color: 'var(--text-secondary)'
     }
-  }, "Take or upload photo of ID"))), idVerError && /*#__PURE__*/React.createElement("div", {
+  }, 'ontouchstart' in window || navigator.maxTouchPoints > 0 ? 'Take or upload photo of ID' : 'Upload photo of ID (JPEG/PNG)'))), idVerError && /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 12,
       padding: '8px 12px',

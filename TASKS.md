@@ -228,6 +228,10 @@
 
 ## Features — Up Next
 
+- [ ] **Payments page v2 (from Pete's July 8 feedback):** show which card/account paid each payment (e.g. "Visa ****6411"); add reimbursement status to the payments view — "reimbursed" indicator + hotlink to the care-team reimbursement ledger.
+- [ ] **Desktop webcam capture for identity verification (from Pete's July 8 feedback):** the ID-verification modal in MyAccount is upload-only on desktop (mobile already opens the camera via `capture`). SelfOnboardingWizard already has a working getUserMedia camera flow — reuse it. Also add an optional selfie step alongside the ID photo.
+
+
 > Ideas and features not yet batched. When enough accumulate, we'll group them into the next batch.
 
 - [ ] **Tier 3 consent flow — complete redesign.** The Tier 3 (Son signing up Mom) flow is broken and confusing. Major issues from Son Tester testing (Mar 5):

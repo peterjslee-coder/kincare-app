@@ -1279,7 +1279,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                               style={{ display: 'none' }} />
                             <button onClick={() => idVerIdPhotoRef.current?.click()}
                               style={{ background: 'var(--bg-surface)', border: '1.5px dashed var(--border-light)', borderRadius: 8, padding: '12px 16px', width: '100%', cursor: 'pointer', fontSize: 13, color: 'var(--text-secondary)' }}>
-                              Take or upload photo of ID
+                              {('ontouchstart' in window || navigator.maxTouchPoints > 0) ? 'Take or upload photo of ID' : 'Upload photo of ID (JPEG/PNG)'}
                             </button>
                           </>
                         )}

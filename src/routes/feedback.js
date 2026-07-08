@@ -5,6 +5,13 @@ const { authenticate } = require("../middleware/auth");
 
 const router = express.Router();
 
+// v1.74.2 — parse stored JSON defensively: a single malformed row must not 500 an endpoint
+function safeJson(raw, fallback) {
+  if (!raw) return fallback;
+  try { return JSON.parse(raw); } catch { return fallback; }
+}
+
+
 // ─── POST /api/feedback/anonymous ───
 // Submit feedback without authentication (splash/demo visitors)
 router.post("/anonymous", async (req, res) => {
@@ -144,8 +151,8 @@ router.get("/", async (req, res) => {
         description: f.description,
         mood: f.mood,
         hasScreenshot: !!f.screenshot,
-        pageContext: f.page_context ? JSON.parse(f.page_context) : null,
-        tags: f.tags ? JSON.parse(f.tags) : [],
+        pageContext: safeJson(f.page_context, null), // one malformed row must not 500 the whole ledger (v1.74.2)
+        tags: safeJson(f.tags, []),
         status: f.status,
         adminNotes: f.admin_notes,
         createdAt: f.created_at,

@@ -35,6 +35,13 @@ const getNukeChallenge = getPasskeyChallenge;
 
 const router = express.Router();
 
+// v1.74.2 — parse stored JSON defensively: a single malformed row must not 500 an endpoint
+function safeJson(raw, fallback) {
+  if (!raw) return fallback;
+  try { return JSON.parse(raw); } catch { return fallback; }
+}
+
+
 // ─── Audit log helper ───
 async function logAdminAction(req, action, targetType, targetId, details) {
   try {
@@ -3526,8 +3533,8 @@ router.get("/feedback/triage", async (req, res) => {
       mood: f.mood,
       status: f.status,
       adminNotes: f.admin_notes,
-      tags: f.tags ? JSON.parse(f.tags) : [],
-      pageContext: f.page_context ? JSON.parse(f.page_context) : null,
+      tags: safeJson(f.tags, []), // defensive — see feedback.js v1.74.2
+      pageContext: safeJson(f.page_context, null),
       userName: f.first_name ? `${f.first_name} ${f.last_name}` : "Anonymous",
       userEmail: f.email || "—",
       userRole: f.user_role || "—",

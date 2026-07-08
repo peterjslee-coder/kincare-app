@@ -251,7 +251,9 @@ async function collectMode() {
 
     if (fbRes.status !== 200) {
       console.error("❌ Fetch failed:", fbRes.data);
-      break;
+      console.error("   NOT writing FEEDBACK.md (won't clobber good data with an empty file).");
+      process.exitCode = 1;
+      return; // v1.74.2 — a failed fetch must not overwrite FEEDBACK.md
     }
 
     const items = fbRes.data.feedback || [];
