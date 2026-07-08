@@ -501,13 +501,13 @@ async function initializeDatabase() {
     `ALTER TABLE visit_logs ADD COLUMN IF NOT EXISTS is_test INTEGER DEFAULT 0`,
     // v1.33.0 — Track which notifications have been sent per session (prevents duplicates)
     `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS notifications_sent TEXT`,
-    // v1.31.0 — Backfill linked_user_id for care_for users whose names match a care_recipient
-    `UPDATE care_recipients SET linked_user_id = (
-      SELECT u.id FROM users u
-      WHERE LOWER(u.first_name || ' ' || u.last_name) = LOWER(care_recipients.first_name || ' ' || care_recipients.last_name)
-        AND (u.role = 'care_for' OR u.roles LIKE '%care_for%')
-      LIMIT 1
-    ) WHERE linked_user_id IS NULL`,
+    // v1.70.0 — REMOVED: the v1.31.0 boot backfill that linked care_recipients to
+    // care_for users BY NAME MATCH. linked_user_id grants CaredForView (schedule,
+    // care details, messages) — at scale, two people with the same name meant the
+    // wrong person could be silently granted another person's PHI on the next boot.
+    // Linking must only happen via unique identifiers: self-signup links by user id
+    // at INSERT (auth.js/oauth.js); a claim-by-invite flow (token + email match) is
+    // the intended path for family-created recipients.
     // v1.33.12 — Reply-to support for messages
     `ALTER TABLE messages ADD COLUMN IF NOT EXISTS reply_to_id TEXT`,
     // v1.33.12 — Emoji reactions on messages
@@ -535,22 +535,9 @@ async function initializeDatabase() {
     `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS exclusive_until TIMESTAMPTZ`,
     // v1.34.35 — Accessibility preferences (text size, etc.) stored as JSON
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS accessibility_prefs TEXT`,
-    // v1.34.36 — Backfill linked_user_id for care_for users who have a CaredForView dashboard
-    // Match care_for user to care_recipient via the user's CaredForView session lookup pattern:
-    // CaredForView finds sessions WHERE cr.linked_user_id = user.id, so we reverse it:
-    // Find care_for users who aren't linked yet, and link them to the care_recipient
-    // created by their family (matched via care_teams.created_by = care_recipients.family_user_id)
-    `UPDATE care_recipients SET linked_user_id = sub.uid
-     FROM (
-       SELECT DISTINCT cr.id AS crid, u.id AS uid
-       FROM care_recipients cr
-       JOIN care_teams ct ON ct.care_recipient_id = cr.id
-       CROSS JOIN users u
-       WHERE cr.linked_user_id IS NULL
-         AND (u.role = 'care_for' OR u.roles LIKE '%care_for%')
-         AND ct.created_by = cr.family_user_id
-     ) sub
-     WHERE care_recipients.id = sub.crid AND care_recipients.linked_user_id IS NULL`,
+    // v1.70.0 — REMOVED: the v1.34.36 boot backfill (CROSS JOIN users) that linked
+    // any unlinked care_recipient to an ARBITRARY care_for user — no name, email, or
+    // family condition tied the user to the recipient. Same PHI hazard as above, worse.
     // v1.34.38 — SMS session reminders for care recipients (Tier 1)
     `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS sms_phone TEXT`,
     `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS notification_channel TEXT DEFAULT 'push'`,
