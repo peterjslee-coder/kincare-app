@@ -14,6 +14,7 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
   const [category, setCategory] = useState('other');
   const [expenseDate, setExpenseDate] = useState('');
   const [venmoHandle, setVenmoHandle] = useState('');
+  const [zelleContact, setZelleContact] = useState('');
   const [payeeUserId, setPayeeUserId] = useState('');
   const [paidMethod, setPaidMethod] = useState('venmo');
   const [receipts, setReceipts] = useState([]); // { data, name }
@@ -77,7 +78,7 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
   };
 
   const resetForm = () => {
-    setAmount(''); setDescription(''); setCategory('other'); setExpenseDate('');
+    setAmount(''); setDescription(''); setCategory('other'); setExpenseDate(''); setZelleContact('');
     setReceipts([]); setPayeeUserId(''); setError(''); setShowForm(false); setRecordMode(false);
   };
 
@@ -88,7 +89,14 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
       const body = { careTeamId, amount: parseFloat(amount), description, category, expenseDate: expenseDate || undefined, receipts };
       let url = '/api/reimbursements';
       if (recordMode) { url = '/api/reimbursements/record'; body.payeeUserId = payeeUserId || undefined; body.paidMethod = paidMethod; }
-      else if (venmoHandle.trim()) body.venmoHandle = venmoHandle;
+      else {
+        if (venmoHandle.trim()) body.venmoHandle = venmoHandle;
+        if (zelleContact.trim()) body.zelleContact = zelleContact;
+        // Soft requirement: without payout details the approver has no way to pay you
+        if (!venmoHandle.trim() && !zelleContact.trim()) {
+          if (!confirm('No Venmo or Zelle details provided — the approver will have to coordinate with you on how to pay (check, cash…). Submit anyway?')) { setBusy(false); return; }
+        }
+      }
       const res = await apiFetch(url, { method: 'POST', body: JSON.stringify(body) });
       if (res?.ok) { showToast(recordMode ? 'Reimbursement recorded' : 'Request submitted', 'success'); resetForm(); fetchList(); }
       else { const d = await res.json().catch(() => ({})); setError(d.error || 'Failed to submit'); }
@@ -133,7 +141,10 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
         <span>💵 Reimbursements</span>
         <div style={{ display: 'flex', gap: 8 }}>
           {meta.canSubmit && !showForm && (
-            <button onClick={() => { setShowForm(true); setRecordMode(false); }}
+            <button onClick={async () => {
+                setShowForm(true); setRecordMode(false);
+                try { const r = await apiFetch('/api/reimbursements/my-payout-info'); if (r?.ok) { const d = await r.json(); if (d.venmoHandle) setVenmoHandle(d.venmoHandle); if (d.zelleContact) setZelleContact(d.zelleContact); } } catch {}
+              }}
               style={{ padding: '6px 14px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
               + Request
             </button>
@@ -175,7 +186,11 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
             <input type="date" value={expenseDate} onChange={(e) => setExpenseDate(e.target.value)} style={{ ...inputStyle, flex: '0 0 150px' }} />
             {!recordMode && (
               <input type="text" value={venmoHandle} onChange={(e) => setVenmoHandle(e.target.value)}
-                placeholder="Your Venmo @username (optional)" style={{ ...inputStyle, flex: '1 1 180px' }} />
+                placeholder="Your Venmo @username" style={{ ...inputStyle, flex: '1 1 160px' }} />
+            )}
+            {!recordMode && (
+              <input type="text" value={zelleContact} onChange={(e) => setZelleContact(e.target.value)}
+                placeholder="Your Zelle email/phone" style={{ ...inputStyle, flex: '1 1 160px' }} />
             )}
             {recordMode && (
               <select value={payeeUserId} onChange={(e) => setPayeeUserId(e.target.value)} style={{ ...inputStyle, flex: '1 1 160px' }}>
@@ -253,6 +268,15 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
               </div>
               <div style={{ textAlign: 'right' }}>{statusChip(it)}</div>
             </div>
+
+            {/* Approver: how to pay the payee */}
+            {meta.isApprover && ['pending', 'approved'].includes(it.status) && (
+              <div style={{ fontSize: 12, marginTop: 6, color: (it.payee_venmo_handle || it.payee_zelle_contact) ? 'var(--text-secondary)' : '#e65100' }}>
+                {(it.payee_venmo_handle || it.payee_zelle_contact)
+                  ? <>Pay to: {it.payee_venmo_handle ? `Venmo @${it.payee_venmo_handle}` : ''}{it.payee_venmo_handle && it.payee_zelle_contact ? ' · ' : ''}{it.payee_zelle_contact ? `Zelle ${it.payee_zelle_contact}` : ''}</>
+                  : <>⚠️ No payment details on file — coordinate with {it.payee_first_name} on how to pay</>}
+              </div>
+            )}
 
             {/* Approver actions */}
             {meta.isApprover && it.status === 'pending' && (

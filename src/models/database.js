@@ -1,4 +1,4 @@
-const { Pool } = require("pg");
+const { Pool, types } = require("pg");
 const pg = require("pg");
 
 // Return timestamps as strings (not Date objects) for frontend compatibility
@@ -15,6 +15,13 @@ function getPool() {
         "DATABASE_URL environment variable is required. Set it in .env for local dev or Railway dashboard for production."
       );
     }
+    // v1.73.0 — pg returns NUMERIC as *strings* by default. The v1.62.0 money
+    // migration (REAL → NUMERIC(10,2)) silently changed every amount from JS
+    // number to string, crashing frontend .toFixed() calls (blank Payments page)
+    // and threatening server-side money arithmetic. Parse NUMERIC back to
+    // numbers — the contract the whole app was written against. 2-decimal money
+    // is exactly representable; precision is enforced by the column type.
+    types.setTypeParser(types.builtins.NUMERIC, (v) => (v === null ? null : parseFloat(v)));
     pool = new Pool({
       connectionString,
       max: 10, // explicit (pg default) — raise deliberately, with data (review H4)
@@ -1298,6 +1305,8 @@ async function initializeDatabase() {
     `CREATE INDEX IF NOT EXISTS idx_reimb_receipts ON reimbursement_receipts(reimbursement_id)`,
     // v1.72.0 — Venmo handle for off-platform reimbursement settlement
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS venmo_handle TEXT`,
+    // v1.73.0 — Zelle contact (email or phone) for off-platform reimbursement settlement
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS zelle_contact TEXT`,
 
     // v1.67.0 — hot FK indexes (codebase review H3)
     // messages list: WHERE conversation_id = ? ORDER BY created_at DESC

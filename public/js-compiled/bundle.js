@@ -36269,6 +36269,7 @@ const Reimbursements = window.Reimbursements = ({
   const [category, setCategory] = useState('other');
   const [expenseDate, setExpenseDate] = useState('');
   const [venmoHandle, setVenmoHandle] = useState('');
+  const [zelleContact, setZelleContact] = useState('');
   const [payeeUserId, setPayeeUserId] = useState('');
   const [paidMethod, setPaidMethod] = useState('venmo');
   const [receipts, setReceipts] = useState([]); // { data, name }
@@ -36357,6 +36358,7 @@ const Reimbursements = window.Reimbursements = ({
     setDescription('');
     setCategory('other');
     setExpenseDate('');
+    setZelleContact('');
     setReceipts([]);
     setPayeeUserId('');
     setError('');
@@ -36381,7 +36383,17 @@ const Reimbursements = window.Reimbursements = ({
         url = '/api/reimbursements/record';
         body.payeeUserId = payeeUserId || undefined;
         body.paidMethod = paidMethod;
-      } else if (venmoHandle.trim()) body.venmoHandle = venmoHandle;
+      } else {
+        if (venmoHandle.trim()) body.venmoHandle = venmoHandle;
+        if (zelleContact.trim()) body.zelleContact = zelleContact;
+        // Soft requirement: without payout details the approver has no way to pay you
+        if (!venmoHandle.trim() && !zelleContact.trim()) {
+          if (!confirm('No Venmo or Zelle details provided — the approver will have to coordinate with you on how to pay (check, cash…). Submit anyway?')) {
+            setBusy(false);
+            return;
+          }
+        }
+      }
       const res = await apiFetch(url, {
         method: 'POST',
         body: JSON.stringify(body)
@@ -36491,9 +36503,17 @@ const Reimbursements = window.Reimbursements = ({
       gap: 8
     }
   }, meta.canSubmit && !showForm && /*#__PURE__*/React.createElement("button", {
-    onClick: () => {
+    onClick: async () => {
       setShowForm(true);
       setRecordMode(false);
+      try {
+        const r = await apiFetch('/api/reimbursements/my-payout-info');
+        if (r !== null && r !== void 0 && r.ok) {
+          const d = await r.json();
+          if (d.venmoHandle) setVenmoHandle(d.venmoHandle);
+          if (d.zelleContact) setZelleContact(d.zelleContact);
+        }
+      } catch {}
     },
     style: {
       padding: '6px 14px',
@@ -36608,10 +36628,19 @@ const Reimbursements = window.Reimbursements = ({
     type: "text",
     value: venmoHandle,
     onChange: e => setVenmoHandle(e.target.value),
-    placeholder: "Your Venmo @username (optional)",
+    placeholder: "Your Venmo @username",
     style: {
       ...inputStyle,
-      flex: '1 1 180px'
+      flex: '1 1 160px'
+    }
+  }), !recordMode && /*#__PURE__*/React.createElement("input", {
+    type: "text",
+    value: zelleContact,
+    onChange: e => setZelleContact(e.target.value),
+    placeholder: "Your Zelle email/phone",
+    style: {
+      ...inputStyle,
+      flex: '1 1 160px'
     }
   }), recordMode && /*#__PURE__*/React.createElement("select", {
     value: payeeUserId,
@@ -36790,7 +36819,13 @@ const Reimbursements = window.Reimbursements = ({
     style: {
       textAlign: 'right'
     }
-  }, statusChip(it))), meta.isApprover && it.status === 'pending' && /*#__PURE__*/React.createElement("div", {
+  }, statusChip(it))), meta.isApprover && ['pending', 'approved'].includes(it.status) && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      marginTop: 6,
+      color: it.payee_venmo_handle || it.payee_zelle_contact ? 'var(--text-secondary)' : '#e65100'
+    }
+  }, it.payee_venmo_handle || it.payee_zelle_contact ? /*#__PURE__*/React.createElement(React.Fragment, null, "Pay to: ", it.payee_venmo_handle ? `Venmo @${it.payee_venmo_handle}` : '', it.payee_venmo_handle && it.payee_zelle_contact ? ' · ' : '', it.payee_zelle_contact ? `Zelle ${it.payee_zelle_contact}` : '') : /*#__PURE__*/React.createElement(React.Fragment, null, "\u26A0\uFE0F No payment details on file \u2014 coordinate with ", it.payee_first_name, " on how to pay")), meta.isApprover && it.status === 'pending' && /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       gap: 8,

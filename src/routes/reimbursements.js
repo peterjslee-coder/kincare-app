@@ -146,10 +146,14 @@ router.post("/", async (req, res) => {
     const core = validateCore(req.body);
     const receipts = parseReceipts(req.body.receipts);
 
-    // Optional: save the requester's Venmo handle for the settlement step
+    // Optional: save the requester's payout details for the settlement step
     if (typeof req.body.venmoHandle === "string" && req.body.venmoHandle.trim()) {
       const handle = req.body.venmoHandle.trim().replace(/^@/, "").slice(0, 60);
       await db.prepare("UPDATE users SET venmo_handle = ? WHERE id = ?").run(handle, req.user.id);
+    }
+    if (typeof req.body.zelleContact === "string" && req.body.zelleContact.trim()) {
+      const zelle = req.body.zelleContact.trim().slice(0, 100);
+      await db.prepare("UPDATE users SET zelle_contact = ? WHERE id = ?").run(zelle, req.user.id);
     }
 
     const id = await insertReimbursement(db, {
@@ -222,6 +226,18 @@ router.post("/record", async (req, res) => {
   }
 });
 
+// ── GET /api/reimbursements/my-payout-info — prefill for the request form ──
+router.get("/my-payout-info", async (req, res) => {
+  try {
+    const db = await getDb();
+    const u = await db.prepare("SELECT venmo_handle, zelle_contact FROM users WHERE id = ?").get(req.user.id);
+    res.json({ venmoHandle: u?.venmo_handle || "", zelleContact: u?.zelle_contact || "" });
+  } catch (err) {
+    captureException(err, { where: "reimbursements: payout info" });
+    res.status(500).json({ error: "Failed to load payout info" });
+  }
+});
+
 // ── GET /api/reimbursements/team/:teamId — the team ledger (no file blobs!) ──
 router.get("/team/:teamId", async (req, res) => {
   try {
@@ -235,7 +251,7 @@ router.get("/team/:teamId", async (req, res) => {
              r.paid_at, r.paid_method, r.paid_reference,
              r.requested_by, ru.first_name AS requester_first_name, ru.last_name AS requester_last_name,
              r.payee_user_id, pu.first_name AS payee_first_name, pu.last_name AS payee_last_name,
-             pu.venmo_handle AS payee_venmo_handle,
+             pu.venmo_handle AS payee_venmo_handle, pu.zelle_contact AS payee_zelle_contact,
              r.approved_by, au.first_name AS approver_first_name, au.last_name AS approver_last_name
       FROM reimbursements r
       JOIN users ru ON r.requested_by = ru.id
