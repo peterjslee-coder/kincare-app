@@ -36244,6 +36244,674 @@ const MyAccount = window.MyAccount = ({
   }, "v", window.APP_VERSION || '?'));
 };
 ;
+// ─── Reimbursements (v1.72.0) ───
+// Family expense ledger: submit receipts, billing contact approves, settlement
+// happens outside the platform (Venmo deep link / Zelle / check / cash) and is
+// recorded here. Visible to the whole care team.
+const Reimbursements = window.Reimbursements = ({
+  careTeamId,
+  members,
+  myUserId
+}) => {
+  const {
+    showToast
+  } = useToast();
+  const [items, setItems] = useState([]);
+  const [meta, setMeta] = useState({
+    isApprover: false,
+    canSubmit: false
+  });
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [recordMode, setRecordMode] = useState(false); // approver "record directly" mode
+  const [amount, setAmount] = useState('');
+  const [description, setDescription] = useState('');
+  const [category, setCategory] = useState('other');
+  const [expenseDate, setExpenseDate] = useState('');
+  const [venmoHandle, setVenmoHandle] = useState('');
+  const [payeeUserId, setPayeeUserId] = useState('');
+  const [paidMethod, setPaidMethod] = useState('venmo');
+  const [receipts, setReceipts] = useState([]); // { data, name }
+  const [busy, setBusy] = useState(false);
+  const [busyId, setBusyId] = useState(null);
+  const [payingId, setPayingId] = useState(null); // row showing the mark-paid method picker
+  const [markMethod, setMarkMethod] = useState('venmo');
+  const [error, setError] = useState('');
+  const fetchList = async () => {
+    try {
+      const res = await apiFetch(`/api/reimbursements/team/${careTeamId}`);
+      if (res !== null && res !== void 0 && res.ok) {
+        const d = await res.json();
+        setItems(d.reimbursements || []);
+        setMeta({
+          isApprover: !!d.isApprover,
+          canSubmit: !!d.canSubmit
+        });
+      }
+    } catch {}
+    setLoading(false);
+  };
+  useEffect(() => {
+    fetchList();
+  }, [careTeamId]);
+
+  // Client-side image resize (max 1600px, JPEG q0.85) — receipts shouldn't be 5MB photos
+  const processFile = file => new Promise((resolve, reject) => {
+    if (file.type === 'application/pdf') {
+      if (file.size > 5 * 1024 * 1024) return reject(new Error(`${file.name} is over 5MB`));
+      const r = new FileReader();
+      r.onload = () => resolve({
+        data: r.result,
+        name: file.name
+      });
+      r.onerror = () => reject(new Error('Could not read file'));
+      r.readAsDataURL(file);
+      return;
+    }
+    if (!file.type.startsWith('image/')) return reject(new Error('Photos or PDFs only'));
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const MAX = 1600;
+      let {
+        width,
+        height
+      } = img;
+      if (width > MAX || height > MAX) {
+        const scale = MAX / Math.max(width, height);
+        width = Math.round(width * scale);
+        height = Math.round(height * scale);
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+      resolve({
+        data: canvas.toDataURL('image/jpeg', 0.85),
+        name: (file.name || 'receipt').replace(/\.[^.]+$/, '') + '.jpg'
+      });
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('Could not read image'));
+    };
+    img.src = url;
+  });
+  const handleFiles = async e => {
+    setError('');
+    const files = Array.from(e.target.files || []).slice(0, 5 - receipts.length);
+    for (const f of files) {
+      try {
+        setReceipts(prev => [...prev, ...(prev.length < 5 ? [null] : [])].filter(Boolean));
+        const p = await processFile(f);
+        setReceipts(prev => [...prev, p].slice(0, 5));
+      } catch (err) {
+        setError(err.message);
+      }
+    }
+    e.target.value = '';
+  };
+  const resetForm = () => {
+    setAmount('');
+    setDescription('');
+    setCategory('other');
+    setExpenseDate('');
+    setReceipts([]);
+    setPayeeUserId('');
+    setError('');
+    setShowForm(false);
+    setRecordMode(false);
+  };
+  const submit = async e => {
+    e.preventDefault();
+    setBusy(true);
+    setError('');
+    try {
+      const body = {
+        careTeamId,
+        amount: parseFloat(amount),
+        description,
+        category,
+        expenseDate: expenseDate || undefined,
+        receipts
+      };
+      let url = '/api/reimbursements';
+      if (recordMode) {
+        url = '/api/reimbursements/record';
+        body.payeeUserId = payeeUserId || undefined;
+        body.paidMethod = paidMethod;
+      } else if (venmoHandle.trim()) body.venmoHandle = venmoHandle;
+      const res = await apiFetch(url, {
+        method: 'POST',
+        body: JSON.stringify(body)
+      });
+      if (res !== null && res !== void 0 && res.ok) {
+        showToast(recordMode ? 'Reimbursement recorded' : 'Request submitted', 'success');
+        resetForm();
+        fetchList();
+      } else {
+        const d = await res.json().catch(() => ({}));
+        setError(d.error || 'Failed to submit');
+      }
+    } catch {
+      setError('Failed to submit');
+    }
+    setBusy(false);
+  };
+  const act = async (id, path, body) => {
+    setBusyId(id);
+    try {
+      const res = await apiFetch(`/api/reimbursements/${id}/${path}`, {
+        method: 'POST',
+        body: JSON.stringify(body || {})
+      });
+      if (res !== null && res !== void 0 && res.ok) fetchList();else {
+        const d = await res.json().catch(() => ({}));
+        showToast(d.error || 'Action failed', 'error');
+      }
+    } catch {
+      showToast('Action failed', 'error');
+    }
+    setBusyId(null);
+    setPayingId(null);
+  };
+  const venmoLink = it => {
+    if (!it.payee_venmo_handle) return null;
+    const note = `InPlace reimbursement — ${it.description}`.slice(0, 130);
+    return `https://venmo.com/${encodeURIComponent(it.payee_venmo_handle)}?txn=pay&amount=${Number(it.amount).toFixed(2)}&note=${encodeURIComponent(note)}`;
+  };
+  const statusChip = it => {
+    const map = {
+      pending: {
+        label: 'Pending approval',
+        bg: '#fff3e0',
+        fg: '#e65100'
+      },
+      approved: {
+        label: 'Approved — awaiting payment',
+        bg: '#e3f2fd',
+        fg: '#1565c0'
+      },
+      paid: {
+        label: it.paid_method ? `Paid via ${it.paid_method}` : 'Paid',
+        bg: '#e8f5e9',
+        fg: '#2e7d32'
+      },
+      declined: {
+        label: it.declined_reason ? `Declined — ${it.declined_reason}` : 'Declined',
+        bg: '#ffebee',
+        fg: '#c62828'
+      },
+      cancelled: {
+        label: 'Cancelled',
+        bg: 'var(--bg-primary)',
+        fg: 'var(--text-muted)'
+      }
+    };
+    const c = map[it.status] || map.pending;
+    return /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 12,
+        fontWeight: 600,
+        color: c.fg,
+        background: c.bg,
+        padding: '3px 10px',
+        borderRadius: 12
+      }
+    }, c.label);
+  };
+  const fmtDate = d => d ? new Date(d).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric'
+  }) : '';
+  const inputStyle = {
+    padding: '10px 12px',
+    border: '1px solid var(--border-light)',
+    borderRadius: 8,
+    fontSize: 14,
+    background: 'var(--bg-card)',
+    color: 'var(--text-primary)'
+  };
+  return /*#__PURE__*/React.createElement("div", {
+    className: "card",
+    style: {
+      marginTop: 16
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "card-header",
+    style: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center'
+    }
+  }, /*#__PURE__*/React.createElement("span", null, "\uD83D\uDCB5 Reimbursements"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 8
+    }
+  }, meta.canSubmit && !showForm && /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      setShowForm(true);
+      setRecordMode(false);
+    },
+    style: {
+      padding: '6px 14px',
+      background: 'var(--role-color)',
+      color: 'var(--text-on-primary)',
+      border: 'none',
+      borderRadius: 8,
+      fontSize: 13,
+      fontWeight: 600,
+      cursor: 'pointer'
+    }
+  }, "+ Request"), meta.isApprover && !showForm && /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      setShowForm(true);
+      setRecordMode(true);
+    },
+    style: {
+      padding: '6px 14px',
+      background: 'var(--bg-card)',
+      color: 'var(--role-color)',
+      border: '1px solid var(--role-color)',
+      borderRadius: 8,
+      fontSize: 13,
+      fontWeight: 600,
+      cursor: 'pointer'
+    }
+  }, "Record paid"))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: 'var(--text-secondary)',
+      margin: '4px 0 12px'
+    }
+  }, "Fronted money for ", `the care recipient`, "? Snap the receipt and request reimbursement. The whole care team can see requests; the billing contact approves and pays outside InPlace (Venmo, Zelle, check) \u2014 no fees."), showForm && /*#__PURE__*/React.createElement("form", {
+    onSubmit: submit,
+    style: {
+      background: 'var(--bg-primary)',
+      borderRadius: 10,
+      padding: 14,
+      marginBottom: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontWeight: 600,
+      fontSize: 14,
+      marginBottom: 10
+    }
+  }, recordMode ? 'Record a reimbursement you already paid' : 'Request reimbursement'), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 8,
+      flexWrap: 'wrap',
+      marginBottom: 8
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "number",
+    min: "0.01",
+    max: "10000",
+    step: "0.01",
+    required: true,
+    value: amount,
+    onChange: e => setAmount(e.target.value),
+    placeholder: "Amount ($)",
+    style: {
+      ...inputStyle,
+      flex: '0 0 110px'
+    }
+  }), /*#__PURE__*/React.createElement("input", {
+    type: "text",
+    required: true,
+    value: description,
+    onChange: e => setDescription(e.target.value),
+    placeholder: "What was it for? (e.g. Walgreens \u2014 prescriptions)",
+    style: {
+      ...inputStyle,
+      flex: '1 1 220px'
+    }
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 8,
+      flexWrap: 'wrap',
+      marginBottom: 8
+    }
+  }, /*#__PURE__*/React.createElement("select", {
+    value: category,
+    onChange: e => setCategory(e.target.value),
+    style: {
+      ...inputStyle,
+      flex: '0 0 140px'
+    }
+  }, /*#__PURE__*/React.createElement("option", {
+    value: "pharmacy"
+  }, "Pharmacy"), /*#__PURE__*/React.createElement("option", {
+    value: "groceries"
+  }, "Groceries"), /*#__PURE__*/React.createElement("option", {
+    value: "medical"
+  }, "Medical"), /*#__PURE__*/React.createElement("option", {
+    value: "supplies"
+  }, "Supplies"), /*#__PURE__*/React.createElement("option", {
+    value: "transport"
+  }, "Transport"), /*#__PURE__*/React.createElement("option", {
+    value: "other"
+  }, "Other")), /*#__PURE__*/React.createElement("input", {
+    type: "date",
+    value: expenseDate,
+    onChange: e => setExpenseDate(e.target.value),
+    style: {
+      ...inputStyle,
+      flex: '0 0 150px'
+    }
+  }), !recordMode && /*#__PURE__*/React.createElement("input", {
+    type: "text",
+    value: venmoHandle,
+    onChange: e => setVenmoHandle(e.target.value),
+    placeholder: "Your Venmo @username (optional)",
+    style: {
+      ...inputStyle,
+      flex: '1 1 180px'
+    }
+  }), recordMode && /*#__PURE__*/React.createElement("select", {
+    value: payeeUserId,
+    onChange: e => setPayeeUserId(e.target.value),
+    style: {
+      ...inputStyle,
+      flex: '1 1 160px'
+    }
+  }, /*#__PURE__*/React.createElement("option", {
+    value: ""
+  }, "Paid to: me"), (members || []).map(m => /*#__PURE__*/React.createElement("option", {
+    key: m.userId,
+    value: m.userId
+  }, "Paid to: ", m.firstName, " ", m.lastName))), recordMode && /*#__PURE__*/React.createElement("select", {
+    value: paidMethod,
+    onChange: e => setPaidMethod(e.target.value),
+    style: {
+      ...inputStyle,
+      flex: '0 0 120px'
+    }
+  }, /*#__PURE__*/React.createElement("option", {
+    value: "venmo"
+  }, "Venmo"), /*#__PURE__*/React.createElement("option", {
+    value: "zelle"
+  }, "Zelle"), /*#__PURE__*/React.createElement("option", {
+    value: "check"
+  }, "Check"), /*#__PURE__*/React.createElement("option", {
+    value: "cash"
+  }, "Cash"), /*#__PURE__*/React.createElement("option", {
+    value: "bank"
+  }, "Bank"), /*#__PURE__*/React.createElement("option", {
+    value: "other"
+  }, "Other"))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 8
+    }
+  }, /*#__PURE__*/React.createElement("label", {
+    style: {
+      display: 'inline-block',
+      padding: '8px 14px',
+      background: 'var(--bg-card)',
+      border: '1px dashed var(--border-light)',
+      borderRadius: 8,
+      fontSize: 13,
+      cursor: 'pointer',
+      color: 'var(--text-secondary)'
+    }
+  }, "\uD83D\uDCF7 Add receipt photo / PDF", /*#__PURE__*/React.createElement("input", {
+    type: "file",
+    accept: "image/*,application/pdf",
+    multiple: true,
+    capture: "environment",
+    onChange: handleFiles,
+    style: {
+      display: 'none'
+    }
+  })), receipts.map((r, i) => /*#__PURE__*/React.createElement("span", {
+    key: i,
+    style: {
+      fontSize: 12,
+      marginLeft: 8,
+      color: 'var(--text-secondary)'
+    }
+  }, "\uD83D\uDCCE ", r.name, /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setReceipts(prev => prev.filter((_, j) => j !== i)),
+    style: {
+      background: 'none',
+      border: 'none',
+      color: 'var(--text-muted)',
+      cursor: 'pointer',
+      fontSize: 12
+    }
+  }, "\u2715")))), error && /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: '#c62828',
+      fontSize: 13,
+      marginBottom: 8
+    }
+  }, error), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    type: "submit",
+    disabled: busy,
+    style: {
+      padding: '10px 18px',
+      background: busy ? 'var(--text-muted)' : 'var(--role-color)',
+      color: 'var(--text-on-primary)',
+      border: 'none',
+      borderRadius: 8,
+      fontSize: 14,
+      fontWeight: 600,
+      cursor: busy ? 'wait' : 'pointer'
+    }
+  }, busy ? 'Saving...' : recordMode ? 'Record' : 'Submit request'), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: resetForm,
+    style: {
+      padding: '10px 14px',
+      background: 'none',
+      border: '1px solid var(--border-light)',
+      borderRadius: 8,
+      fontSize: 14,
+      cursor: 'pointer',
+      color: 'var(--text-secondary)'
+    }
+  }, "Cancel"))), loading ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: 'var(--text-muted)',
+      fontSize: 14,
+      padding: 8
+    }
+  }, "Loading\u2026") : items.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: 'var(--text-muted)',
+      fontSize: 14,
+      padding: 8
+    }
+  }, "No reimbursements yet.") : items.map(it => /*#__PURE__*/React.createElement("div", {
+    key: it.id,
+    style: {
+      borderTop: '1px solid var(--border-light)',
+      padding: '12px 4px'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      gap: 8,
+      flexWrap: 'wrap'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: '1 1 240px'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontWeight: 600,
+      fontSize: 15
+    }
+  }, "$", Number(it.amount).toFixed(2), " ", /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontWeight: 400,
+      color: 'var(--text-secondary)'
+    }
+  }, "\u2014 ", it.description)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: 'var(--text-tertiary)',
+      marginTop: 2
+    }
+  }, it.payee_first_name, " ", it.payee_last_name, it.expense_date ? ` · ${it.expense_date}` : '', " \xB7 requested ", fmtDate(it.created_at), !!it.self_recorded && /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: '#7b5ea7',
+      fontWeight: 600
+    }
+  }, " \xB7 recorded by approver")), it.receipts.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 4
+    }
+  }, it.receipts.map(rc => /*#__PURE__*/React.createElement("a", {
+    key: rc.id,
+    href: `/api/reimbursements/receipt/${rc.id}`,
+    target: "_blank",
+    rel: "noopener",
+    style: {
+      fontSize: 12,
+      color: 'var(--role-color)',
+      marginRight: 10
+    }
+  }, "\uD83D\uDCCE ", rc.file_name || 'receipt')))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: 'right'
+    }
+  }, statusChip(it))), meta.isApprover && it.status === 'pending' && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 8,
+      marginTop: 8,
+      flexWrap: 'wrap'
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    disabled: busyId === it.id,
+    onClick: () => act(it.id, 'approve'),
+    style: {
+      padding: '6px 14px',
+      background: 'var(--role-color)',
+      color: 'var(--text-on-primary)',
+      border: 'none',
+      borderRadius: 8,
+      fontSize: 13,
+      fontWeight: 600,
+      cursor: 'pointer'
+    }
+  }, "Approve"), /*#__PURE__*/React.createElement("button", {
+    disabled: busyId === it.id,
+    onClick: () => {
+      const reason = prompt('Reason (optional):') || '';
+      act(it.id, 'decline', {
+        reason
+      });
+    },
+    style: {
+      padding: '6px 14px',
+      background: 'none',
+      border: '1px solid #c62828',
+      color: '#c62828',
+      borderRadius: 8,
+      fontSize: 13,
+      cursor: 'pointer'
+    }
+  }, "Decline")), meta.isApprover && it.status === 'approved' && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 8,
+      marginTop: 8,
+      flexWrap: 'wrap',
+      alignItems: 'center'
+    }
+  }, venmoLink(it) && /*#__PURE__*/React.createElement("a", {
+    href: venmoLink(it),
+    target: "_blank",
+    rel: "noopener",
+    style: {
+      padding: '6px 14px',
+      background: '#008CFF',
+      color: '#fff',
+      borderRadius: 8,
+      fontSize: 13,
+      fontWeight: 600,
+      textDecoration: 'none'
+    }
+  }, "Pay with Venmo \u2192"), payingId === it.id ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("select", {
+    value: markMethod,
+    onChange: e => setMarkMethod(e.target.value),
+    style: {
+      ...inputStyle,
+      padding: '6px 8px',
+      fontSize: 13
+    }
+  }, /*#__PURE__*/React.createElement("option", {
+    value: "venmo"
+  }, "Venmo"), /*#__PURE__*/React.createElement("option", {
+    value: "zelle"
+  }, "Zelle"), /*#__PURE__*/React.createElement("option", {
+    value: "check"
+  }, "Check"), /*#__PURE__*/React.createElement("option", {
+    value: "cash"
+  }, "Cash"), /*#__PURE__*/React.createElement("option", {
+    value: "bank"
+  }, "Bank"), /*#__PURE__*/React.createElement("option", {
+    value: "other"
+  }, "Other")), /*#__PURE__*/React.createElement("button", {
+    disabled: busyId === it.id,
+    onClick: () => act(it.id, 'mark-paid', {
+      method: markMethod
+    }),
+    style: {
+      padding: '6px 14px',
+      background: '#2e7d32',
+      color: '#fff',
+      border: 'none',
+      borderRadius: 8,
+      fontSize: 13,
+      fontWeight: 600,
+      cursor: 'pointer'
+    }
+  }, "Confirm paid")) : /*#__PURE__*/React.createElement("button", {
+    onClick: () => setPayingId(it.id),
+    style: {
+      padding: '6px 14px',
+      background: 'none',
+      border: '1px solid #2e7d32',
+      color: '#2e7d32',
+      borderRadius: 8,
+      fontSize: 13,
+      cursor: 'pointer'
+    }
+  }, "Mark as paid")), it.status === 'pending' && it.requested_by === myUserId && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 6
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    disabled: busyId === it.id,
+    onClick: () => act(it.id, 'cancel'),
+    style: {
+      background: 'none',
+      border: 'none',
+      color: 'var(--text-muted)',
+      fontSize: 12,
+      cursor: 'pointer',
+      textDecoration: 'underline'
+    }
+  }, "Withdraw request")))));
+};
+;
 // ─── CareTeamManage — View and manage care team members & invites ───
 const CareTeamManage = window.CareTeamManage = ({
   careTeamId,
@@ -37749,7 +38417,11 @@ const CareTeamManage = window.CareTeamManage = ({
       fontSize: 13,
       cursor: savingNotif ? 'wait' : 'pointer'
     }
-  }, savingNotif ? 'Saving...' : 'Save Settings')))), visitDetailSessionId && /*#__PURE__*/React.createElement(VisitDetailModal, {
+  }, savingNotif ? 'Saving...' : 'Save Settings')))), /*#__PURE__*/React.createElement(Reimbursements, {
+    careTeamId: careTeamId,
+    members: team.members || [],
+    myUserId: myUserId
+  }), visitDetailSessionId && /*#__PURE__*/React.createElement(VisitDetailModal, {
     sessionId: visitDetailSessionId,
     role: "family",
     onClose: () => setVisitDetailSessionId(null)

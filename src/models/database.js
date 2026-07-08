@@ -1260,6 +1260,45 @@ async function initializeDatabase() {
     // Visit logs — joined on session_id constantly
     `CREATE INDEX IF NOT EXISTS idx_visit_logs_session ON visit_logs(session_id)`,
 
+    // v1.72.0 — Reimbursements: family expense ledger (settlement recorded, no platform money movement)
+    `CREATE TABLE IF NOT EXISTS reimbursements (
+      id TEXT PRIMARY KEY,
+      care_team_id TEXT NOT NULL REFERENCES care_teams(id),
+      care_recipient_id TEXT REFERENCES care_recipients(id),
+      requested_by TEXT NOT NULL REFERENCES users(id),
+      payee_user_id TEXT NOT NULL REFERENCES users(id),
+      amount NUMERIC(10,2) NOT NULL,
+      description TEXT NOT NULL,
+      category TEXT DEFAULT 'other',
+      expense_date TEXT,
+      status TEXT NOT NULL DEFAULT 'pending',
+      self_recorded INTEGER DEFAULT 0,
+      approved_by TEXT REFERENCES users(id),
+      approved_at TIMESTAMPTZ,
+      declined_reason TEXT,
+      paid_at TIMESTAMPTZ,
+      paid_method TEXT,
+      paid_reference TEXT,
+      paid_by TEXT REFERENCES users(id),
+      cancelled_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    )`,
+    `CREATE TABLE IF NOT EXISTS reimbursement_receipts (
+      id TEXT PRIMARY KEY,
+      reimbursement_id TEXT NOT NULL REFERENCES reimbursements(id) ON DELETE CASCADE,
+      file_data TEXT NOT NULL, /* base64 data URI — never returned in list payloads (C2 rule) */
+      file_name TEXT,
+      mime_type TEXT,
+      file_size INTEGER,
+      uploaded_by TEXT REFERENCES users(id),
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_reimb_team_created ON reimbursements(care_team_id, created_at DESC)`,
+    `CREATE INDEX IF NOT EXISTS idx_reimb_receipts ON reimbursement_receipts(reimbursement_id)`,
+    // v1.72.0 — Venmo handle for off-platform reimbursement settlement
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS venmo_handle TEXT`,
+
     // v1.67.0 — hot FK indexes (codebase review H3)
     // messages list: WHERE conversation_id = ? ORDER BY created_at DESC
     `CREATE INDEX IF NOT EXISTS idx_messages_conversation_created ON messages(conversation_id, created_at DESC)`,

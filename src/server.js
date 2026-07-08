@@ -221,6 +221,7 @@ app.use(require("cookie-parser")());
 app.use("/api/auth/me/photo", express.json({ limit: "5mb" }));
 app.use("/api/care-recipients", express.json({ limit: "5mb" }));
 app.use("/api/self-onboarding", express.json({ limit: "10mb" }));
+app.use("/api/reimbursements", express.json({ limit: "10mb" })); // receipt photos/PDFs (base64)
 // Skip JSON parsing for webhooks that need raw body for signature verification
 app.use((req, res, next) => {
   if (req.originalUrl === '/api/payments/webhook' || req.originalUrl === '/api/checkr/webhook') return next();
@@ -308,6 +309,7 @@ app.use("/api/auth/2fa", require("./routes/twoFactor"));
 app.use("/api/passkeys", require("./routes/passkeys"));
 app.use("/api/oauth", require("./routes/oauth"));
 app.use("/api/care-teams", require("./routes/careTeams"));
+app.use("/api/reimbursements", require("./routes/reimbursements"));
 app.use("/api/waitlist", require("./routes/waitlist"));
 app.use("/api/password-reset", require("./routes/passwordReset"));
 app.use("/api/availability", require("./routes/availability"));
@@ -341,7 +343,7 @@ app.use("/api/legal", require("./routes/legal"));
 app.use("/api/media", require("./routes/media"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.71.0";
+const APP_VERSION = "1.72.0";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });

@@ -800,6 +800,9 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
         </div>
       )}
 
+      {/* Reimbursements ledger (v1.72.0) */}
+      <Reimbursements careTeamId={careTeamId} members={team.members || []} myUserId={myUserId} />
+
       {/* Visit Detail Modal */}
       {visitDetailSessionId && (
         <VisitDetailModal sessionId={visitDetailSessionId} role="family" onClose={() => setVisitDetailSessionId(null)} />
