@@ -17,3 +17,4 @@ android/.gradle/
 android/app/build/
 android/build/
 inplace-care-firebase-adminsdk-fbsvc-*.json
+FEEDBACK_INBOX.md

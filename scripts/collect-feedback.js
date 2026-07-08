@@ -7,6 +7,11 @@
  *   node scripts/collect-feedback.js --triage             # Quick triage: show new items + counts
  *   node scripts/collect-feedback.js --mark-reviewed      # Mark all 'new' items as 'reviewed'
  *   node scripts/collect-feedback.js --local              # Use localhost:3001 instead of production
+ *   node scripts/collect-feedback.js --pull               # THE closed loop: fetch everything →
+ *                                                         # FEEDBACK.md, append new items to
+ *                                                         # FEEDBACK_INBOX.md, then mark them
+ *                                                         # reviewed on the server. Next pull
+ *                                                         # only surfaces genuinely new items.
  *
  * Authenticates via ADMIN_API_KEY (bypasses 2FA) or email/password login.
  * Run this before planning any new version to incorporate real user input.
@@ -21,12 +26,13 @@ const PROD_URL = "https://yourinplace.com";
 const LOCAL_URL = "http://localhost:3001";
 
 const ADMIN_EMAIL = "peterjslee@gmail.com";
-const ADMIN_PASSWORD = "inplace123";
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || null; // never hardcode — 2FA blocks password login anyway
 const ADMIN_API_KEY = process.env.ADMIN_API_KEY || null;
 
 const isLocal = process.argv.includes("--local");
 const isTriage = process.argv.includes("--triage");
 const isMarkReviewed = process.argv.includes("--mark-reviewed");
+const isPull = process.argv.includes("--pull");
 const BASE_URL = isLocal ? LOCAL_URL : PROD_URL;
 
 function request(url, options = {}) {
@@ -60,7 +66,12 @@ async function getAuthHeaders() {
     return { "X-Admin-API-Key": ADMIN_API_KEY };
   }
 
-  // Try email/password login as fallback
+  // Try email/password login as fallback (requires ADMIN_PASSWORD env; 2FA usually blocks this)
+  if (!ADMIN_PASSWORD) {
+    console.error("❌ No ADMIN_API_KEY set (and no ADMIN_PASSWORD fallback).\n");
+    console.error("   Fix: add ADMIN_API_KEY to kincare-repo/.env (value in Railway → Variables).");
+    process.exit(1);
+  }
   const loginRes = await request(`${BASE_URL}/api/auth/login`, {
     method: "POST",
     body: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD },
@@ -153,10 +164,74 @@ async function markReviewedMode() {
   console.log(`✅ Marked ${bulkRes.data.updated} item(s) as reviewed.\n`);
 }
 
+// ── Pull mode: fetch → write files → mark reviewed (in that order, so a failure
+// can never lose feedback). FEEDBACK_INBOX.md accumulates unprocessed items
+// across pulls (deduped by id); Claude clears entries once they're fixed/triaged.
+async function pullMode() {
+  console.log(`\n🔄 Feedback pull (closed loop) from ${BASE_URL}...\n`);
+  const authHeaders = await getAuthHeaders();
+
+  // 1. Snapshot what's NEW right now
+  const t = await request(`${BASE_URL}/api/admin/feedback/triage`, { headers: authHeaders });
+  if (t.status !== 200) { console.error("❌ Triage fetch failed:", t.data); process.exit(1); }
+  const newItems = t.data.newItems || [];
+  console.log(`🆕 ${newItems.length} new item(s) since last pull`);
+
+  // 2. Full ledger → FEEDBACK.md
+  await collectMode();
+
+  // 3. Append new items to FEEDBACK_INBOX.md (dedupe by id)
+  const inboxPath = path.join(__dirname, "..", "FEEDBACK_INBOX.md");
+  let inbox = fs.existsSync(inboxPath) ? fs.readFileSync(inboxPath, "utf8") : "";
+  if (!inbox) {
+    inbox = "# InPlace Feedback Inbox — unprocessed items\n\n" +
+      "> New feedback lands here on every pull and is marked 'reviewed' on the server.\n" +
+      "> Claude works from this file and REMOVES entries once they're fixed or triaged\n" +
+      "> into TASKS.md — so anything still in here is still owed a response.\n";
+  }
+  const fresh = newItems.filter((f) => !inbox.includes(`(id: ${f.id})`));
+  if (fresh.length) {
+    const today = new Date().toISOString().split("T")[0];
+    let section = `\n## Pulled ${today}\n\n`;
+    for (const f of fresh) {
+      const ctx = f.pageContext || {};
+      section += `### [${f.category.toUpperCase()}] ${f.description.substring(0, 80)} (id: ${f.id})\n`;
+      section += `- From: ${f.userName} (${f.userEmail || "anonymous"}) — ${f.userRole || "visitor"}\n`;
+      section += `- Date: ${new Date(f.createdAt).toLocaleDateString()} | Page: ${ctx.page || "?"} | ${ctx.browser || "?"} on ${ctx.os || "?"}\n`;
+      if (ctx.recentErrors && ctx.recentErrors.length) {
+        section += `- ⚠️ Console errors: ${ctx.recentErrors.map((e) => e.message.substring(0, 70)).join("; ")}\n`;
+      }
+      section += `- Full: ${f.description}\n\n`;
+    }
+    fs.writeFileSync(inboxPath, inbox + section, "utf8");
+    console.log(`📥 ${fresh.length} item(s) appended to FEEDBACK_INBOX.md`);
+  } else {
+    console.log("📥 Nothing new for the inbox.");
+  }
+
+  // 4. ONLY NOW mark the captured items reviewed on the server
+  if (newItems.length) {
+    const updates = newItems.map((f) => ({ id: f.id, status: "reviewed" }));
+    const bulkRes = await request(`${BASE_URL}/api/admin/feedback/bulk-update`, {
+      method: "POST", headers: authHeaders, body: { updates },
+    });
+    if (bulkRes.status !== 200) {
+      console.error("⚠️ Files are written, but marking reviewed FAILED — items will show as new again next pull (safe, just noisy):", bulkRes.data);
+    } else {
+      console.log(`✅ Marked ${bulkRes.data.updated} item(s) reviewed on the server.`);
+    }
+  }
+  console.log(`\n✅ Pull complete. Tell Claude: "look at the new feedback" (it reads FEEDBACK_INBOX.md).\n`);
+}
+
 async function main() {
   if (isTriage) return triageMode();
   if (isMarkReviewed) return markReviewedMode();
+  if (isPull) return pullMode();
+  return collectMode();
+}
 
+async function collectMode() {
   console.log(`\n📋 Collecting feedback from ${BASE_URL}...\n`);
 
   // 1. Authenticate — prefer API key (bypasses 2FA), fall back to email/password login
