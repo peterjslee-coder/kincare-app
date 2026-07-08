@@ -433,13 +433,19 @@ async function initializeDatabase() {
     `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS academic_program_year TEXT`,
     `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS needs_hour_reports INTEGER DEFAULT 0`,
     // v1.12.0 — Backfill tiered rates from hourly_rate
-    `UPDATE caregiver_profiles SET rate_daytime = hourly_rate WHERE rate_daytime IS NULL AND hourly_rate IS NOT NULL`,
+    // H1 guard (v1.69.0): one-time; reads COALESCE(rate_daytime, hourly_rate) everywhere, so new profiles don't need this
+    `UPDATE caregiver_profiles SET rate_daytime = hourly_rate WHERE rate_daytime IS NULL AND hourly_rate IS NOT NULL
+       AND NOT EXISTS (SELECT 1 FROM platform_settings WHERE key = 'migr_rate_daytime_backfill_v1')`,
+    `INSERT INTO platform_settings (key, value) VALUES ('migr_rate_daytime_backfill_v1', 'done') ON CONFLICT (key) DO NOTHING`,
     // v1.20.2 — Allow group/team messages without a single recipient
     `ALTER TABLE messages ALTER COLUMN recipient_id DROP NOT NULL`,
     // v1.14.0 — Dual-role support: users can have multiple roles
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS roles TEXT`,
     // Backfill roles from existing single role column
-    `UPDATE users SET roles = '["' || role || '"]' WHERE roles IS NULL AND role IS NOT NULL`,
+    // H1 guard (v1.69.0): one-time; registration + seed always write roles now
+    `UPDATE users SET roles = '["' || role || '"]' WHERE roles IS NULL AND role IS NOT NULL
+       AND NOT EXISTS (SELECT 1 FROM platform_settings WHERE key = 'migr_roles_backfill_v1')`,
+    `INSERT INTO platform_settings (key, value) VALUES ('migr_roles_backfill_v1', 'done') ON CONFLICT (key) DO NOTHING`,
     // v1.20.4 — Care recipient photo
     `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS photo TEXT`,
     // v1.21.0 — Care recipient emoji avatar
@@ -843,7 +849,10 @@ async function initializeDatabase() {
     // Auto-approve demo and admin users only (real signups require manual approval)
     `UPDATE users SET account_approved = 1 WHERE account_approved = 0 AND (is_demo = 1 OR is_admin = 1)`,
     // Backfill: rename session_booked → session_requested + fix message text
-    `UPDATE activity_feed SET event_type = 'session_requested', message = REPLACE(message, 'booked', 'requested') WHERE event_type = 'session_booked'`,
+    // H1 guard (v1.69.0): one-time; nothing writes 'session_booked' anymore
+    `UPDATE activity_feed SET event_type = 'session_requested', message = REPLACE(message, 'booked', 'requested') WHERE event_type = 'session_booked'
+       AND NOT EXISTS (SELECT 1 FROM platform_settings WHERE key = 'migr_activity_feed_rename_v1')`,
+    `INSERT INTO platform_settings (key, value) VALUES ('migr_activity_feed_rename_v1', 'done') ON CONFLICT (key) DO NOTHING`,
     // v1.43.0 — 2hr response window for time proposals
     `ALTER TABLE time_proposals ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ`,
 
@@ -1299,7 +1308,9 @@ async function initializeDatabase() {
        AND ai_care_intelligence IS NULL
        AND TRIM(BOTH FROM ai_care_summary) LIKE '{%}'
        AND ai_care_summary LIKE '%"headline"%'
-       AND ai_care_summary LIKE '%"insights"%'`,
+       AND ai_care_summary LIKE '%"insights"%'
+       AND NOT EXISTS (SELECT 1 FROM platform_settings WHERE key = 'migr_ai_summary_json_move_v1')`, /* H1 guard (v1.69.0): one-time; the JSON writer targets ai_care_intelligence since v1.58.71 */
+    `INSERT INTO platform_settings (key, value) VALUES ('migr_ai_summary_json_move_v1', 'done') ON CONFLICT (key) DO NOTHING`,
 
     // ─── Batch 4 (v1.62.0) — money columns REAL(float) → NUMERIC(10,2) ───
     // Guarded + idempotent: only converts a column that is still real/double precision,
@@ -1354,6 +1365,15 @@ async function initializeDatabase() {
     `).run();
     if (restored.changes > 0) console.log(`[migration] Restored ${restored.changes} private-only sessions that were wrongly cancelled`);
   } catch (e) { /* ignore */ }
+
+  // ─── H1 guard (v1.69.0): everything until the marker-insert below is a one-time
+  // fixup that ran in production long ago (hardcoded IDs / March-2026 test sessions).
+  // The marker stops the replay every boot — and, more importantly, stops boot from
+  // RE-CREATING the test sessions if they're ever deleted: test-autopay-20260329 is
+  // seeded with payment_due_at, so a re-created copy would get picked up and charged
+  // by the auto-pay cron.
+  const oneTimeFixupsA = await db.prepare("SELECT 1 FROM platform_settings WHERE key = ?").get('migr_one_time_fixups_a_v1');
+  if (!oneTimeFixupsA) {
 
   // ─── v1.56.3 — One-time: clear old test sessions stuck in pending review/payment ───
   try {
@@ -1480,6 +1500,9 @@ async function initializeDatabase() {
     }
   } catch (e) { console.error("  Auto-pay test session error:", e.message); }
 
+  await db.prepare("INSERT INTO platform_settings (key, value) VALUES ('migr_one_time_fixups_a_v1', 'done') ON CONFLICT (key) DO NOTHING").run();
+  } // end H1 guard A
+
   // ─── v1.50.55 — Rewrite FAQ articles with accurate content ───
   try {
     const faqVersion = await db.prepare("SELECT answer FROM help_articles WHERE question = 'Does InPlace cost anything?' AND is_published = 1").get();
@@ -1518,6 +1541,11 @@ async function initializeDatabase() {
       console.log(`  ✅ ${faqArticles.length} FAQ articles refreshed`);
     }
   } catch (faqErr) { console.error("  FAQ refresh error:", faqErr.message); }
+
+  // ─── H1 guard (v1.69.0): second one-time-fixup region (the FAQ refresh above
+  // stays per-boot by design — it no-ops unless the sentinel article is missing) ───
+  const oneTimeFixupsB = await db.prepare("SELECT 1 FROM platform_settings WHERE key = ?").get('migr_one_time_fixups_b_v1');
+  if (!oneTimeFixupsB) {
 
   // ─── v1.56.19 — Force-complete the test session Pete just paid ───
   try {
@@ -1579,6 +1607,9 @@ async function initializeDatabase() {
         )
     `).run();
   } catch (e) { /* already done */ }
+
+  await db.prepare("INSERT INTO platform_settings (key, value) VALUES ('migr_one_time_fixups_b_v1', 'done') ON CONFLICT (key) DO NOTHING").run();
+  } // end H1 guard B
 
   console.log("  Database initialized successfully");
   return db;
