@@ -25332,7 +25332,7 @@ const Messages = window.Messages = () => {
         // Find the user's display name from conversations
         const conv = conversations.find(c => c.id === data.conversationId);
         const member = conv === null || conv === void 0 || (_conv$members = conv.members) === null || _conv$members === void 0 ? void 0 : _conv$members.find(m => m.id === data.userId);
-        const displayName = member ? `${member.first_name || ''}`.trim() || data.userName : data.userName;
+        const displayName = member && `${member.first_name || ''}`.trim() || 'Someone';
         // Clear existing timeout for this user
         if ((_convTypers$data$user = convTypers[data.userId]) !== null && _convTypers$data$user !== void 0 && _convTypers$data$user.timeout) clearTimeout(convTypers[data.userId].timeout);
         // Set new timeout to clear after 3 seconds

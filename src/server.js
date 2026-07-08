@@ -46,6 +46,27 @@ io.use((socket, next) => {
 // Track connected users: userId -> Set of socket ids
 const connectedUsers = new Map();
 
+// v1.66.0 (C1): resolve conversation membership for socket fan-out, with a
+// short TTL cache so rapid typing events don't hammer the DB. Returns [] on error.
+const _convMemberCache = new Map(); // convId -> { ids:[], exp:ms }
+async function conversationMemberIds(conversationId) {
+  const now = Date.now();
+  const hit = _convMemberCache.get(conversationId);
+  if (hit && hit.exp > now) return hit.ids;
+  try {
+    const db = await getDb();
+    const rows = await db.prepare(
+      "SELECT user_id FROM conversation_members WHERE conversation_id = ?"
+    ).all(conversationId);
+    const ids = rows.map((r) => r.user_id);
+    _convMemberCache.set(conversationId, { ids, exp: now + 15000 }); // 15s TTL
+    return ids;
+  } catch (err) {
+    captureException(err);
+    return [];
+  }
+}
+
 io.on("connection", (socket) => {
   const userId = socket.user.id;
   if (!connectedUsers.has(userId)) connectedUsers.set(userId, new Set());
@@ -99,40 +120,43 @@ io.on("connection", (socket) => {
   });
 
   // ─── Typing indicators ───
-  socket.on("typing_start", (data) => {
-    // data: { conversationId }
-    // Broadcast to all members of the conversation except sender
-    const convId = data.conversationId;
-    if (!convId) return;
-    // Get all connected users and check if they're in this conversation
-    // For efficiency, broadcast to all connected users and let client filter
-    for (const [uid, sockets] of connectedUsers) {
-      if (uid === userId) continue;
-      for (const sid of sockets) {
-        io.to(sid).emit("typing_indicator", {
-          conversationId: convId,
-          userId: userId,
-          userName: socket.user.email, // will be enriched client-side
-        });
+  // v1.66.0 (C1 fix): emit ONLY to the other members of this conversation.
+  // Previously this broadcast to every connected user (and leaked the sender's
+  // email) then let the client filter — a privacy leak and O(users) per keystroke.
+  socket.on("typing_start", async (data) => {
+    try {
+      const convId = data?.conversationId;
+      if (!convId) return;
+      const memberIds = await conversationMemberIds(convId);
+      if (!memberIds.includes(userId)) return; // sender must be a member
+      for (const memberId of memberIds) {
+        if (memberId === userId) continue;
+        const sockets = connectedUsers.get(memberId);
+        if (!sockets) continue;
+        for (const sid of sockets) {
+          io.to(sid).emit("typing_indicator", { conversationId: convId, userId });
+        }
       }
-    }
+    } catch (err) { captureException(err); }
   });
 
   // ─── Read receipts ───
-  socket.on("messages_read", (data) => {
-    // data: { conversationId }
-    const convId = data.conversationId;
-    if (!convId) return;
-    for (const [uid, sockets] of connectedUsers) {
-      if (uid === userId) continue;
-      for (const sid of sockets) {
-        io.to(sid).emit("messages_read", {
-          conversationId: convId,
-          userId: userId,
-          readAt: new Date().toISOString(),
-        });
+  socket.on("messages_read", async (data) => {
+    try {
+      const convId = data?.conversationId;
+      if (!convId) return;
+      const memberIds = await conversationMemberIds(convId);
+      if (!memberIds.includes(userId)) return;
+      const readAt = new Date().toISOString();
+      for (const memberId of memberIds) {
+        if (memberId === userId) continue;
+        const sockets = connectedUsers.get(memberId);
+        if (!sockets) continue;
+        for (const sid of sockets) {
+          io.to(sid).emit("messages_read", { conversationId: convId, userId, readAt });
+        }
       }
-    }
+    } catch (err) { captureException(err); }
   });
 
   socket.on("disconnect", () => {
@@ -314,9 +338,10 @@ app.use("/api/ipai", require("./routes/ipaiChat"));
 app.use("/api/referrals", require("./routes/referrals"));
 app.use("/api/kindred", require("./routes/kindred"));
 app.use("/api/legal", require("./routes/legal"));
+app.use("/api/media", require("./routes/media"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.65.1";
+const APP_VERSION = "1.66.0";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });

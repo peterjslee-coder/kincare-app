@@ -1,5 +1,6 @@
 const express = require("express");
 const { hasAnyActiveVouch } = require("../utils/vouches");
+const { userPhotoUrl } = require("./media");
 const multer = require("multer");
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
@@ -80,7 +81,7 @@ router.get("/conversations", async (req, res) => {
 
     // Get members
     const members = await db.prepare(`
-      SELECT u.id, u.first_name, u.last_name, u.role, u.profile_photo
+      SELECT u.id, u.first_name, u.last_name, u.role, u.profile_photo, u.avatar_url
       FROM conversation_members cm
       JOIN users u ON cm.user_id = u.id
       WHERE cm.conversation_id = ?
@@ -97,7 +98,7 @@ router.get("/conversations", async (req, res) => {
       } else {
         displayName = partner ? `${partner.first_name} ${partner.last_name}` : "Unknown";
       }
-      partnerPhoto = partner?.profile_photo || null;
+      partnerPhoto = userPhotoUrl(partner);
     }
 
     conversations.push({
@@ -112,7 +113,7 @@ router.get("/conversations", async (req, res) => {
         first_name: m.first_name,
         last_name: m.last_name,
         role: m.role,
-        profilePhoto: m.profile_photo || null,
+        profilePhoto: userPhotoUrl(m),
       })),
       lastMessage: lastMsg?.content || null,
       lastMessageAt: lastMsg?.created_at || conv.created_at,
@@ -137,7 +138,7 @@ router.get("/conversations", async (req, res) => {
     if (existingConv) continue;
 
     // Build a virtual conversation from legacy messages
-    const partner = await db.prepare("SELECT id, first_name, last_name, role, profile_photo, is_admin FROM users WHERE id = ?").get(row.partner_id);
+    const partner = await db.prepare("SELECT id, first_name, last_name, role, profile_photo, avatar_url, is_admin FROM users WHERE id = ?").get(row.partner_id);
     if (!partner) continue;
 
     // Skip legacy conversations with unconnected users (unless admin)
@@ -175,11 +176,11 @@ router.get("/conversations", async (req, res) => {
       id: `legacy-${row.partner_id}`,
       type: "direct",
       name: `${partner.first_name} ${partner.last_name}`,
-      profilePhoto: partner.profile_photo || null,
+      profilePhoto: userPhotoUrl(partner),
       careTeamId: null,
       members: [
         { id: userId, name: "You", role: req.user.activeRole || req.user.role },
-        { id: partner.id, name: `${partner.first_name} ${partner.last_name}`, role: partner.role, profilePhoto: partner.profile_photo || null },
+        { id: partner.id, name: `${partner.first_name} ${partner.last_name}`, role: partner.role, profilePhoto: userPhotoUrl(partner) },
       ],
       lastMessage: lastMsg?.content || null,
       lastMessageAt: lastMsg?.created_at || null,
@@ -331,12 +332,12 @@ router.get("/contacts", async (req, res) => {
   const cleared = await isCaregiverCleared(db, req.user);
   if (!cleared) {
     const admins = await db.prepare(`
-      SELECT id, first_name, last_name, role, email, profile_photo FROM users
+      SELECT id, first_name, last_name, role, email, profile_photo, avatar_url FROM users
       WHERE is_admin = 1 AND is_active = 1 AND COALESCE(is_demo, 0) = ?
       ORDER BY first_name ASC
     `).all(isDemo);
     return res.json({
-      contacts: admins.map(u => ({ id: u.id, name: `${u.first_name} ${u.last_name}`, role: u.role, email: u.email, profilePhoto: u.profile_photo || null })),
+      contacts: admins.map(u => ({ id: u.id, name: `${u.first_name} ${u.last_name}`, role: u.role, email: u.email, profilePhoto: userPhotoUrl(u) })),
       messagingLimited: true,
     });
   }
@@ -405,7 +406,7 @@ router.get("/contacts", async (req, res) => {
   let users;
   if (search) {
     users = await db.prepare(`
-      SELECT id, first_name, last_name, role, email, profile_photo FROM users
+      SELECT id, first_name, last_name, role, email, profile_photo, avatar_url FROM users
       WHERE id IN (${placeholders}) AND COALESCE(is_demo, 0) = ? AND is_active = 1
         AND (LOWER(first_name || ' ' || last_name) LIKE ? OR LOWER(email) LIKE ?)
       ORDER BY first_name ASC
@@ -413,7 +414,7 @@ router.get("/contacts", async (req, res) => {
     `).all(...idList, isDemo, `%${search}%`, `%${search}%`);
   } else {
     users = await db.prepare(`
-      SELECT id, first_name, last_name, role, email, profile_photo FROM users
+      SELECT id, first_name, last_name, role, email, profile_photo, avatar_url FROM users
       WHERE id IN (${placeholders}) AND COALESCE(is_demo, 0) = ? AND is_active = 1
       ORDER BY first_name ASC
     `).all(...idList, isDemo);
@@ -424,7 +425,7 @@ router.get("/contacts", async (req, res) => {
     name: `${u.first_name} ${u.last_name}`,
     role: u.role,
     email: u.email,
-    profilePhoto: u.profile_photo || null,
+    profilePhoto: userPhotoUrl(u),
   }));
 
   res.json({ contacts });

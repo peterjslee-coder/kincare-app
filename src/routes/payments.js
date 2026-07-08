@@ -1049,6 +1049,48 @@ router.post("/checkout", requireRole("family"), requirePaymentsEnabled, async (r
 router.get("/session/:sessionId", async (req, res) => {
   const db = await getDb();
 
+  // v1.66.0 (C3 fix): authorize access to this session's payment record.
+  // Previously any authenticated user could read any session's amount/payout by
+  // iterating session IDs (IDOR). Allow the paying family, the billing contact,
+  // the assigned caregiver, a care-team member of the recipient, or an admin.
+  const session = await db.prepare(
+    "SELECT family_user_id, caregiver_id, care_recipient_id FROM care_sessions WHERE id = ?"
+  ).get(req.params.sessionId);
+  if (!session) return res.json({ payment: null });
+
+  let allowed = session.family_user_id === req.user.id;
+  // Billing contact for this recipient's care team (if a separate payer is set).
+  if (!allowed && session.care_recipient_id) {
+    const billing = await db.prepare(
+      "SELECT billing_user_id FROM care_teams WHERE care_recipient_id = ? AND billing_user_id IS NOT NULL LIMIT 1"
+    ).get(session.care_recipient_id);
+    if (billing && billing.billing_user_id === req.user.id) allowed = true;
+  }
+  if (!allowed && session.caregiver_id) {
+    const cg = await db.prepare("SELECT user_id FROM caregiver_profiles WHERE id = ?").get(session.caregiver_id);
+    if (cg && cg.user_id === req.user.id) allowed = true;
+  }
+  if (!allowed && session.care_recipient_id) {
+    // Care-team member of this recipient, or someone the recipient is shared with.
+    const team = await db.prepare(`
+      SELECT 1 FROM care_team_members ctm
+      JOIN care_teams ct ON ctm.care_team_id = ct.id
+      WHERE ct.care_recipient_id = ? AND ctm.user_id = ? LIMIT 1
+    `).get(session.care_recipient_id, req.user.id);
+    if (team) allowed = true;
+    if (!allowed) {
+      const shared = await db.prepare(
+        "SELECT 1 FROM care_recipient_shares WHERE care_recipient_id = ? AND shared_with_user_id = ? LIMIT 1"
+      ).get(session.care_recipient_id, req.user.id);
+      if (shared) allowed = true;
+    }
+  }
+  if (!allowed) {
+    const me = await db.prepare("SELECT is_admin FROM users WHERE id = ?").get(req.user.id);
+    if (me && me.is_admin) allowed = true;
+  }
+  if (!allowed) return res.status(403).json({ error: "Not authorized to view this payment" });
+
   const payment = await db.prepare(`
     SELECT p.*, u.first_name || ' ' || u.last_name AS caregiver_name
     FROM payments p

@@ -24,7 +24,7 @@ router.get("/search", async (req, res) => {
     const term = `%${q.trim().toLowerCase()}%`;
 
     const users = await db.prepare(`
-      SELECT id, first_name, last_name, email, role, profile_photo
+      SELECT id, first_name, last_name, email, role, profile_photo, avatar_url
       FROM users
       WHERE id != ? AND is_demo = 0 AND is_active = 1
         AND (LOWER(first_name || ' ' || last_name) LIKE ? OR LOWER(email) LIKE ?)
@@ -58,7 +58,7 @@ router.get("/search", async (req, res) => {
         lastName: u.last_name,
         email: u.email,
         role: u.role,
-        profilePhoto: u.profile_photo,
+        profilePhoto: (u.profile_photo || u.avatar_url) ? `/api/media/user/${u.id}/photo` : null,
         connection: connectionStatuses[u.id] || null,
       })),
     });

@@ -1,5 +1,6 @@
 const express = require("express");
 const { hasActiveVouch, activeVouchesFor } = require("../utils/vouches");
+const { userPhotoUrl } = require("./media");
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { authenticate, requireRole } = require("../middleware/auth");
@@ -121,7 +122,7 @@ router.get("/", async (req, res) => {
       latitude: c.latitude,
       longitude: c.longitude,
       maxTravelMiles: c.max_travel_miles,
-      profilePhoto: c.avatar_url || null,
+      profilePhoto: (c.avatar_url || c.profile_photo) ? `/api/media/user/${c.user_id}/photo` : null,
     };
 
     // Calculate distance if search center is provided
@@ -209,7 +210,7 @@ router.get("/nearby/:careRecipientId", async (req, res) => {
       latitude: c.latitude,
       longitude: c.longitude,
       maxTravelMiles: c.max_travel_miles,
-      profilePhoto: c.avatar_url || null,
+      profilePhoto: (c.avatar_url || c.profile_photo) ? `/api/media/user/${c.user_id}/photo` : null,
       distance: Math.round(
         haversineDistance(recipient.latitude, recipient.longitude, c.latitude, c.longitude) * 10
       ) / 10,

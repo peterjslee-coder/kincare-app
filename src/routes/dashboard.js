@@ -1,5 +1,6 @@
 const express = require("express");
 const { activeVouchesFor } = require("../utils/vouches");
+const { recipientPhotoUrl } = require("./media");
 const { getDb } = require("../models/database");
 const { authenticate } = require("../middleware/auth");
 const { getNowInZone, getTodayStringInZone } = require("../utils/timezone");
@@ -264,7 +265,7 @@ async function familyDashboard(db, userId, res) {
           healthConditions: JSON.parse(primary.health_conditions || "[]"),
           medications: JSON.parse(primary.medications || "[]"),
           preferences: primary.preferences,
-          photo: primary.photo || null,
+          photo: primary.photo ? `/api/media/recipient/${primary.id}/photo` : null,
           emoji: primary.emoji || null,
           consent_status: primary.consent_status || 'pending',
           authorization_tier: primary.authorization_tier || 'unset',
@@ -1065,7 +1066,7 @@ async function careForDashboard(db, userId, res) {
       pets: recipient.pets,
       foodAllergies: parseJson(recipient.food_allergies),
       medicalConditions: recipient.medical_conditions,
-      photo: recipient.photo,
+      photo: recipient.photo ? `/api/media/recipient/${recipient.id}/photo` : null,
       emoji: recipient.emoji,
       locationCity: recipient.location_city,
       locationState: recipient.location_state,
