@@ -1134,12 +1134,18 @@ const App = () => {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     // Clear session-active flag so next page load requires re-authentication
     localStorage.removeItem('inplace_session_active');
     // Clear server-side session: revoke refresh token + clear httpOnly cookies
+    // v1.74.4 — awaited (3s cap) so navigation can't cancel the cookie clear
     AUTH_TOKEN = null;
-    fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' }).catch(() => {});
+    try {
+      await Promise.race([
+        fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' }),
+        new Promise((resolve) => setTimeout(resolve, 3000)),
+      ]);
+    } catch (e) {}
     // Clear client state
     setCurrentUser(null);
     setAuthToken(null);
@@ -1831,7 +1837,7 @@ const App = () => {
             <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
               If you have questions, contact us at support@yourinplace.com.
             </p>
-            <button onClick={() => { AUTH_TOKEN = null; fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' }).catch(() => {}); window.location.reload(); }}
+            <button onClick={async () => { AUTH_TOKEN = null; try { await Promise.race([fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' }), new Promise((resolve) => setTimeout(resolve, 3000))]); } catch (e) {} window.location.reload(); }}
               style={{ marginTop: 20, padding: '10px 24px', background: 'var(--bg-primary)', color: 'var(--text-secondary)', border: '1px solid #ddd', borderRadius: 8, fontSize: 14, cursor: 'pointer' }}>
               Log Out
             </button>

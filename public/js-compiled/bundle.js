@@ -33213,17 +33213,25 @@ const MyAccount = window.MyAccount = ({
     id: 'payments',
     label: '💳 Payments'
   }])];
-  const handleLogoutFromAccount = () => {
+  const handleLogoutFromAccount = async () => {
     AUTH_TOKEN = null;
-    // Clear httpOnly cookie via server
+    // v1.74.4 — AWAIT the cookie-clearing request before reloading. Navigation
+    // cancels in-flight fetches (reliably so in the iOS WebView), so the httpOnly
+    // auth cookie survived and the reload logged the user straight back in —
+    // "I can't log out of the app." 3s timeout so a dead network can't trap them.
     const _lcsrf = typeof getCsrfToken === 'function' ? getCsrfToken() : window.getCsrfToken ? window.getCsrfToken() : null;
-    fetch('/api/auth/logout', {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: _lcsrf ? {
-        'X-CSRF-Token': _lcsrf
-      } : {}
-    }).catch(() => {});
+    try {
+      await Promise.race([fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: _lcsrf ? {
+          'X-CSRF-Token': _lcsrf
+        } : {}
+      }), new Promise(resolve => setTimeout(resolve, 3000))]);
+    } catch (e) {/* still reload — worst case the cookie survives one more cycle */}
+    try {
+      localStorage.removeItem('inplace_session_active');
+    } catch (e) {}
     if (typeof disconnectSocket === 'function') disconnectSocket();
     window.location.reload();
   };
@@ -82211,15 +82219,18 @@ const App = () => {
       window.__originalSearch = ''; // Clear so auto-auth won't re-try
     }
   };
-  const handleLogout = () => {
+  const handleLogout = async () => {
     // Clear session-active flag so next page load requires re-authentication
     localStorage.removeItem('inplace_session_active');
     // Clear server-side session: revoke refresh token + clear httpOnly cookies
+    // v1.74.4 — awaited (3s cap) so navigation can't cancel the cookie clear
     AUTH_TOKEN = null;
-    fetch('/api/auth/logout', {
-      method: 'POST',
-      credentials: 'same-origin'
-    }).catch(() => {});
+    try {
+      await Promise.race([fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'same-origin'
+      }), new Promise(resolve => setTimeout(resolve, 3000))]);
+    } catch (e) {}
     // Clear client state
     setCurrentUser(null);
     setAuthToken(null);
@@ -83459,12 +83470,14 @@ const App = () => {
       color: 'var(--text-muted)'
     }
   }, "If you have questions, contact us at support@yourinplace.com."), /*#__PURE__*/React.createElement("button", {
-    onClick: () => {
+    onClick: async () => {
       AUTH_TOKEN = null;
-      fetch('/api/auth/logout', {
-        method: 'POST',
-        credentials: 'same-origin'
-      }).catch(() => {});
+      try {
+        await Promise.race([fetch('/api/auth/logout', {
+          method: 'POST',
+          credentials: 'same-origin'
+        }), new Promise(resolve => setTimeout(resolve, 3000))]);
+      } catch (e) {}
       window.location.reload();
     },
     style: {

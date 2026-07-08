@@ -912,11 +912,20 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
         ]),
       ];
 
-  const handleLogoutFromAccount = () => {
+  const handleLogoutFromAccount = async () => {
     AUTH_TOKEN = null;
-    // Clear httpOnly cookie via server
+    // v1.74.4 — AWAIT the cookie-clearing request before reloading. Navigation
+    // cancels in-flight fetches (reliably so in the iOS WebView), so the httpOnly
+    // auth cookie survived and the reload logged the user straight back in —
+    // "I can't log out of the app." 3s timeout so a dead network can't trap them.
     const _lcsrf = typeof getCsrfToken === 'function' ? getCsrfToken() : (window.getCsrfToken ? window.getCsrfToken() : null);
-    fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin', headers: _lcsrf ? { 'X-CSRF-Token': _lcsrf } : {} }).catch(() => {});
+    try {
+      await Promise.race([
+        fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin', headers: _lcsrf ? { 'X-CSRF-Token': _lcsrf } : {} }),
+        new Promise((resolve) => setTimeout(resolve, 3000)),
+      ]);
+    } catch (e) { /* still reload — worst case the cookie survives one more cycle */ }
+    try { localStorage.removeItem('inplace_session_active'); } catch (e) {}
     if (typeof disconnectSocket === 'function') disconnectSocket();
     window.location.reload();
   };
