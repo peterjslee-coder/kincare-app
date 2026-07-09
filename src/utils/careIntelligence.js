@@ -349,11 +349,16 @@ BEHAVIORAL PATTERNS DETECTED:
 - Trends: ${analysis.trendNote || "no significant trends detected"}
 
 YOUR TASK: Generate a care intelligence report for ${recipientName}'s family. Connect the observations in the data to your care knowledge to explain WHY things are happening and WHAT to do — while staying strictly within the facts provided.
-GROUNDING RULES — ABSOLUTE, apply to every sentence you write:
-- State only facts that appear in the data above. Every claim about this person's life, abilities, habits, or history must trace to a specific visit note, care note, family addition, or profile field provided here.
-- NEVER assume or invent lifestyle facts — driving, living situation, falls, wandering, continence, hobbies, family details — that are not explicitly in the data. People with the same diagnosis differ enormously; do not autocomplete a typical patient story.
-- General care knowledge may inform RECOMMENDATIONS, phrased as general guidance ("many people with early-stage dementia do better with morning routines"), never as a fact about this person ("since she stopped driving").
-- If the data is too thin to support an insight, omit that insight. Fewer, fully grounded insights are worth more than plausible fiction — one invented "fact" destroys the family's trust in all the real ones.
+TRUTH AND VOICE — two separate rules, both absolute:
+
+WHAT you may claim (truth):
+- Never state a past event or current lifestyle fact about ${recipientName} — driving, falls, moves, living situation, habits, history — unless it appears in the data above. If it is not in the data, it did not happen, no matter how typical it is for the diagnosis.
+- Interpretation is welcome and should be PERSONAL: connect her documented behavior to your care knowledge, by name, framed as a possibility or guidance. "${recipientName} may get frustrated when she's aware she's forgetful — reassure rather than correct" is exactly right: it interprets what was observed, it does not invent an event.
+- If the data can't support an insight, leave that insight out silently. Do not write about what the data lacks.
+
+HOW you sound (voice):
+- Warm, plain, human — like a trusted nurse who knows ${recipientName} talking with her family, not a report. Contractions are good. Normalize and reassure where the observations support it ("she's been sleeping in the recliner instead of her bed — and that's OK").
+- NEVER hedge with meta-language: no "based on the provided data", "the data suggests", "according to the notes", "it appears that". The truth rules govern what you claim — they must be invisible in the writing.
 
 
 Structure your response as a JSON object:
@@ -450,7 +455,7 @@ async function generateSessionSummary(sessionId) {
     : "";
 
   const prompt = `You are iPAi, writing a warm post-session summary for a family about their loved one's care visit.
-Write ONLY from the visit data below — do not add details, events, or background facts that are not in it.
+Write only from the visit data below — never add events or background facts that are not in it. Warm interpretation of what IS in it is welcome; write like a caring human, not a report, and never use meta-language like \"based on the data\".
 
 VISIT DETAILS:
 - Care recipient: ${session.recipient_name}
@@ -569,7 +574,7 @@ YOUR TASK: Generate a structured CARE PLAN JSON that captures the living wisdom 
 - ACTIONABLE for caregivers (things to do and avoid)
 - EVOLVING (references visit count and dates for staleness awareness)
 - HONEST about gaps (if data is insufficient, say so)
-- GROUNDED: every statement about ${recipientName} must come from the data above. Never invent lifestyle facts (driving, falls, living situation, habits) that are not documented — general best practices must be phrased as general guidance, not as facts about this person.
+- GROUNDED: never state events or lifestyle facts (driving, falls, living situation, habits) that are not in the data above. Personal, possibility-framed interpretation of documented behavior IS welcome (\"she may...\", \"watch for...\"). No meta-language about the data itself.
 
 Structure as JSON:
 {
@@ -694,7 +699,7 @@ async function generateCaregiverCoaching(sessionId) {
   const familyContext = familyNotes.map(n => `- "${(n.content || "").substring(0, 150)}"`).join("\n");
 
   const prompt = `You are iPAi, a private coaching assistant for caregivers on InPlace. Generate brief, actionable coaching tips for ${session.caregiver_name} about caring for ${session.recipient_name}.
-Ground every tip in the data provided below — never state or imply facts about ${session.recipient_name} that are not in it; phrase general technique advice as general advice.
+Ground every tip in the data below — never state events or facts about ${session.recipient_name} that are not in it. Personal, possibility-framed coaching (\"she may respond better if...\") is welcome; keep the voice warm and direct, no meta-language about the data.
 
 CARE RECIPIENT:
 - Name: ${session.recipient_name}, Age: ${session.age || "unknown"}
