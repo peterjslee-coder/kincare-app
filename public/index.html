@@ -41,7 +41,7 @@
   <!-- PWA Manifest -->
   <link rel="manifest" href="/manifest.json">
 
-  <link rel="stylesheet" href="/css/styles.css?v=build-e94895bd-mrcukik8">
+  <link rel="stylesheet" href="/css/styles.css?v=build-e94895bd-mrdk8e88">
 
   <!-- Leaflet CSS for maps (self-hosted — no CDN dependency) -->
   <link rel="stylesheet" href="/vendor/leaflet.css">
@@ -70,7 +70,7 @@
   <script src="/vendor/twilio-video.min.js"></script>
 
   <!-- Pre-compiled app bundle (built by scripts/build-client.js) -->
-  <script>window.APP_VERSION = '1.77.0';</script>
+  <script>window.APP_VERSION = '1.78.0';</script>
   <script>
     // ─── Theme initialization ───
     // Always start light (brand green). Unauthenticated visitors should never
@@ -121,7 +121,7 @@
       });
     })();
   </script>
-  <script src="/js-compiled/bundle.js?v=build-e94895bd-mrcukik8"></script>
+  <script src="/js-compiled/bundle.js?v=build-e94895bd-mrdk8e88"></script>
 
   <script>
     // Service worker: register/update and auto-reload on new version
@@ -136,12 +136,67 @@
         }
       });
 
+      // v1.78.0 — surface waiting updates instead of letting users run stale
+      // bundles forever (the PWA/native app can stay open for weeks). Deliberately
+      // injected here, NOT in the React bundle: the whole point is that the
+      // running bundle may be old.
+      var swHadController = !!navigator.serviceWorker.controller;
+      var swReloaded = false;
+      navigator.serviceWorker.addEventListener('controllerchange', function() {
+        // Only reload when a controller is REPLACED (update applied). First-install
+        // claim also fires this event — reloading then would loop new visitors.
+        if (!swHadController) { swHadController = true; return; }
+        if (swReloaded) return;
+        swReloaded = true;
+        window.location.reload();
+      });
+
+      function swShowUpdatePill(reg) {
+        if (!reg.waiting || document.getElementById('sw-update-pill')) return;
+        var pill = document.createElement('button');
+        pill.id = 'sw-update-pill';
+        pill.textContent = 'Update ready — tap to refresh';
+        pill.setAttribute('aria-label', 'A new version of InPlace is ready. Tap to refresh.');
+        pill.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);' +
+          'bottom:calc(env(safe-area-inset-bottom, 0px) + 78px);z-index:9998;' +
+          'background:#1b6b5a;color:#fff;border:none;border-radius:22px;' +
+          'padding:12px 20px;font:600 14px -apple-system,BlinkMacSystemFont,sans-serif;' +
+          'box-shadow:0 4px 14px rgba(0,0,0,0.25);cursor:pointer;';
+        pill.onclick = function() {
+          if (reg.waiting) {
+            pill.textContent = 'Updating\u2026';
+            pill.disabled = true;
+            reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+          }
+        };
+        document.body.appendChild(pill);
+      }
+
       window.addEventListener('load', async function() {
         try {
           var reg = await navigator.serviceWorker.register('/sw.js');
           // Force check for updates on every page load
           reg.update().catch(function() {});
           console.log('SW registered:', reg.scope);
+
+          // Already-waiting worker (deploy happened while app was closed)
+          swShowUpdatePill(reg);
+          // Worker that finishes installing while the app is open
+          reg.addEventListener('updatefound', function() {
+            var nw = reg.installing;
+            if (!nw) return;
+            nw.addEventListener('statechange', function() {
+              if (nw.state === 'installed' && navigator.serviceWorker.controller) {
+                swShowUpdatePill(reg);
+              }
+            });
+          });
+          // Long-lived PWA/native sessions: re-check when the app comes back to
+          // the foreground, and every 30 minutes while open
+          document.addEventListener('visibilitychange', function() {
+            if (document.visibilityState === 'visible') reg.update().catch(function() {});
+          });
+          setInterval(function() { reg.update().catch(function() {}); }, 30 * 60 * 1000);
         } catch (err) {
           console.log('SW setup failed:', err);
         }

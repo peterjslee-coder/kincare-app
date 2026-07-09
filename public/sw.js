@@ -1,6 +1,6 @@
 // InPlace Service Worker — v1.57.14
-const CACHE_NAME = 'inplace-build-e94895bd-mrcukik8';
-const SW_VERSION = 'build-e94895bd-mrcukik8';
+const CACHE_NAME = 'inplace-build-e94895bd-mrdk8e88';
+const SW_VERSION = 'build-e94895bd-mrdk8e88';
 const STATIC_ASSETS = [
   '/',
   '/css/styles.css',
@@ -270,6 +270,13 @@ self.addEventListener('sync', (event) => {
 self.addEventListener('message', (event) => {
   if (event.data?.type === 'GET_VERSION') {
     event.ports?.[0]?.postMessage({ version: SW_VERSION });
+  }
+
+  // v1.78.0 — user tapped the update pill: activate the waiting SW now.
+  // Safe because it only ever fires on explicit user consent (never automatic —
+  // automatic skipWaiting is what broke in-flight dashboards pre-v1.57.14).
+  if (event.data?.type === 'SKIP_WAITING') {
+    self.skipWaiting();
   }
 
   // Force update check requested by page
