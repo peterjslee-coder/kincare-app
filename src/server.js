@@ -13,6 +13,11 @@ const { Server } = require("socket.io");
 const jwt = require("jsonwebtoken");
 const { initializeDatabase, getDb } = require("./models/database");
 const { limitBodySize } = require("./middleware/validate");
+const { withPollerLock } = require("./models/database");
+// v1.82.0 (H5): every poller tick runs under a pg advisory lock so a second app
+// instance can never double-fire (double auto-pay, duplicate reminders).
+const guardedPoller = (lockKey, fn) => () =>
+  withPollerLock(lockKey, fn).catch((e) => console.error(`[poller ${lockKey}]`, e.message));
 const { getNowInZone, getTodayStringInZone, buildDateTimeInZone } = require("./utils/timezone");
 
 const app = express();
@@ -345,7 +350,7 @@ app.use("/api/legal", require("./routes/legal"));
 app.use("/api/media", require("./routes/media"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.82.0";
+const APP_VERSION = "1.82.1";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });
@@ -515,7 +520,7 @@ async function start() {
 
   // ─── Daily demo data refresh ───
   // Re-seed demo data every 24 hours so relative dates stay fresh
-  setInterval(async () => {
+  setInterval(guardedPoller(101, async () => {
     try {
       console.log("🔄 Daily demo data refresh starting...");
       const { seed: dailySeed } = require("./seed");
@@ -524,7 +529,7 @@ async function start() {
     } catch (err) {
       console.error("⚠️  Daily demo refresh failed:", err.message);
     }
-  }, 24 * 60 * 60 * 1000); // 24 hours
+  }), 24 * 60 * 60 * 1000); // 24 hours
 
   // ─── Demo data patch ───
   // Ensures key demo profile fields are correct even when full reseed is skipped
@@ -609,7 +614,7 @@ async function start() {
   const OVERDUE_GRACE_MINUTES = 5; // how long after session start before "you're late" fires
   const MAX_OVERDUE_WINDOW = 60;   // stop sending overdue alerts after 60 min
 
-  setInterval(async () => {
+  setInterval(guardedPoller(102, async () => {
     try {
       const pollDb = await getDb();
       // ─── Per-session timezone-aware notification logic ───
@@ -853,7 +858,7 @@ async function start() {
         console.error("  Notification poller error:", err.message);
       }
     }
-  }, NOTIFICATION_POLL_INTERVAL);
+  }), NOTIFICATION_POLL_INTERVAL);
   console.log(`  Session notification poller started (every ${NOTIFICATION_POLL_INTERVAL / 1000}s)`);
 
   // ─── Session Accountability Poller ───
@@ -867,7 +872,7 @@ async function start() {
   } = require("./routes/accountability");
   setAccountabilityEmit(emitToUser);
 
-  setInterval(async () => {
+  setInterval(guardedPoller(103, async () => {
     try {
       await pollPaymentAuthorizations();
       await pollLateCheckIns();
@@ -878,11 +883,11 @@ async function start() {
         console.error("  Accountability poller error:", err.message);
       }
     }
-  }, NOTIFICATION_POLL_INTERVAL);
+  }), NOTIFICATION_POLL_INTERVAL);
   console.log("  Accountability poller started (payment auth, late check-ins, no-shows)");
 
   // ─── Kindred Reminder Delivery Poller ───
-  setInterval(async () => {
+  setInterval(guardedPoller(104, async () => {
     try {
       const now = new Date();
       const fiveMinAgo = new Date(now.getTime() - 5 * 60000).toISOString();
@@ -954,13 +959,13 @@ async function start() {
         console.error("  Kindred reminder poller error:", err.message);
       }
     }
-  }, 60000); // Check every minute
+  }), 60000); // Check every minute
   console.log("  Kindred reminder delivery poller started");
 
   // ─── Auto-pay cron: charge overdue sessions ───
   // Runs every 5 minutes. If a completed session's payment_due_at has passed and no payment
   // exists, auto-charges the family's saved card. No tip (they missed the review window).
-  setInterval(async () => {
+  setInterval(guardedPoller(105, async () => {
     try {
       const paymentRouter = require("./routes/payments");
       const { sendPushToUser } = require("./routes/push");
@@ -977,7 +982,7 @@ async function start() {
         console.error("  Auto-pay cron error:", err.message);
       }
     }
-  }, 5 * 60000); // Every 5 minutes
+  }), 5 * 60000); // Every 5 minutes
   console.log("  Auto-pay cron started (checks every 5 min for overdue payments + session holds)");
 
   // ─── Backfill missing caregiver coordinates from zip/city/state ───
@@ -1036,8 +1041,8 @@ async function start() {
   // ─── Recurring reimbursements: generate due occurrences (v1.74.0) ───
   // Hourly + once shortly after boot. Generation is transactional with an
   // optimistic lock on next_run_date, so restarts/overlaps can't double-generate.
-  setTimeout(() => reimbursementsRouter.generateRecurringReimbursements().catch((e) => console.error("[reimb] initial generate:", e.message)), 90 * 1000);
-  setInterval(() => reimbursementsRouter.generateRecurringReimbursements().catch((e) => console.error("[reimb] generate:", e.message)), 60 * 60 * 1000);
+  setTimeout(guardedPoller(106, () => reimbursementsRouter.generateRecurringReimbursements()), 90 * 1000);
+  setInterval(guardedPoller(106, () => reimbursementsRouter.generateRecurringReimbursements()), 60 * 60 * 1000);
 
   server.listen(PORT, "0.0.0.0", () => {
     console.log(`\n  InPlace v${APP_VERSION} running on port ${PORT}\n`);

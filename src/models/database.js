@@ -1726,8 +1726,27 @@ async function initializeDatabase() {
   return db;
 }
 
+/**
+ * v1.82.0 (review H5) — run a poller tick under a Postgres advisory lock so a
+ * second app instance never double-fires it (double auto-pay, double reminders).
+ * Uses pg_try_advisory_xact_lock inside a transaction: auto-released at commit,
+ * survives crashes, no-op cost at a single instance. Returns false if another
+ * instance holds the lock.
+ */
+async function withPollerLock(lockKey, fn) {
+  const db = await getDb();
+  let ran = false;
+  await db.transaction(async (tx) => {
+    const row = await tx.prepare("SELECT pg_try_advisory_xact_lock(?) AS got").get(lockKey);
+    if (!row || row.got !== true) return;
+    ran = true;
+    await fn();
+  });
+  return ran;
+}
+
 function resetDb() {
   // No-op for PostgreSQL — pool always queries live database
 }
 
-module.exports = { getDb, initializeDatabase, resetDb };
+module.exports = { getDb, initializeDatabase, resetDb, withPollerLock };
