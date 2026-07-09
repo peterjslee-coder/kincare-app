@@ -56324,9 +56324,12 @@ function formatLegalContent(text) {
 const FeedbackButton = window.FeedbackButton = ({
   currentPage,
   userRole,
-  currentUser
+  currentUser,
+  onNavigate
 }) => {
   var _contextSnapshotRef$c;
+  const isAdminUser = !!(currentUser && (currentUser.isAdmin || currentUser.is_admin));
+  const [fanned, setFanned] = React.useState(false);
   const [open, setOpen] = useState(false);
   const [category, setCategory] = useState('general');
   const [description, setDescription] = useState('');
@@ -56648,7 +56651,60 @@ const FeedbackButton = window.FeedbackButton = ({
   }, [handleDragMove, handleDragEnd]);
   const handleFabClick = () => {
     if (dragRef.current.moved) return; // was a drag, not a click
+    // v1.80.0 — admins get a fan-out (Feedback / Admin); everyone else opens feedback directly
+    if (isAdminUser) {
+      setFanned(f => !f);
+      return;
+    }
     handleOpen();
+  };
+
+  // Anchor for the fan-out mini buttons: wherever the FAB currently sits
+  const fabAnchor = () => {
+    const r = fabRef.current ? fabRef.current.getBoundingClientRect() : null;
+    return r ? {
+      left: r.left,
+      top: r.top
+    } : {
+      left: 16,
+      top: window.innerHeight - 128
+    };
+  };
+  const miniBtnStyle = offsetY => {
+    const a = fabAnchor();
+    return {
+      position: 'fixed',
+      left: a.left,
+      top: a.top - offsetY,
+      width: 44,
+      height: 44,
+      borderRadius: '50%',
+      background: 'var(--role-color)',
+      border: 'none',
+      cursor: 'pointer',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      fontSize: 19,
+      boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+      zIndex: 10002,
+      color: 'var(--text-on-primary)'
+    };
+  };
+  const miniLabelStyle = offsetY => {
+    const a = fabAnchor();
+    return {
+      position: 'fixed',
+      left: a.left + 52,
+      top: a.top - offsetY + 11,
+      background: 'rgba(20,20,20,0.82)',
+      color: '#fff',
+      fontSize: 12,
+      padding: '4px 10px',
+      borderRadius: 10,
+      zIndex: 10002,
+      pointerEvents: 'none'
+    };
   };
   const moods = [{
     emoji: '\u{1F60A}',
@@ -56749,7 +56805,13 @@ const FeedbackButton = window.FeedbackButton = ({
       e.currentTarget.style.transform = 'scale(1)';
       e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.25)';
     }
-  }, React.createElement('svg', {
+  }, fanned ? React.createElement('span', {
+    style: {
+      color: 'var(--text-on-primary)',
+      fontSize: 18,
+      fontWeight: 700
+    }
+  }, '\u2715') : React.createElement('svg', {
     width: 22,
     height: 22,
     viewBox: '0 0 24 24',
@@ -56760,7 +56822,50 @@ const FeedbackButton = window.FeedbackButton = ({
     strokeLinejoin: 'round'
   }, React.createElement('path', {
     d: 'M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z'
-  }))),
+  })), isAdminUser && !fanned && React.createElement('span', {
+    style: {
+      position: 'absolute',
+      top: -3,
+      right: -3,
+      width: 16,
+      height: 16,
+      borderRadius: '50%',
+      background: 'var(--accent-color)',
+      fontSize: 9,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      border: '2px solid var(--bg-primary)'
+    }
+  }, '\uD83D\uDEE1\uFE0F')),
+  // v1.80.0 — admin fan-out: scrim + Feedback / Admin mini buttons
+  fanned && React.createElement(React.Fragment, null, React.createElement('div', {
+    style: {
+      position: 'fixed',
+      inset: 0,
+      background: 'rgba(0,0,0,0.18)',
+      zIndex: 10001
+    },
+    onClick: () => setFanned(false)
+  }), React.createElement('button', {
+    style: miniBtnStyle(104),
+    'aria-label': 'Open admin',
+    onClick: () => {
+      setFanned(false);
+      if (onNavigate) onNavigate('admin');
+    }
+  }, '\uD83D\uDEE1\uFE0F'), React.createElement('div', {
+    style: miniLabelStyle(104)
+  }, 'Admin'), React.createElement('button', {
+    style: miniBtnStyle(52),
+    'aria-label': 'Send feedback',
+    onClick: () => {
+      setFanned(false);
+      handleOpen();
+    }
+  }, '\uD83D\uDCA1'), React.createElement('div', {
+    style: miniLabelStyle(52)
+  }, 'Send feedback')),
   // Modal
   open && React.createElement('div', {
     style: {
@@ -83360,13 +83465,8 @@ const App = () => {
       icon: '👤',
       label: 'Account'
     });
-    if (currentUser !== null && currentUser !== void 0 && currentUser.isAdmin) {
-      familyBottom.push({
-        id: 'admin',
-        icon: '🛡️',
-        label: 'Admin'
-      });
-    }
+    // v1.80.0 — Admin left the bottom bar (Pete was the only one seeing 6 tabs);
+    // it now lives in the feedback floater's fan-out. Desktop sidebar unchanged.
     return familyBottom;
   };
   const isDemo = currentUser === null || currentUser === void 0 ? void 0 : currentUser.isDemo;
@@ -83908,7 +84008,8 @@ const App = () => {
   }), ((currentUser === null || currentUser === void 0 ? void 0 : currentUser.is_tester) || (currentUser === null || currentUser === void 0 ? void 0 : currentUser.isAdmin)) && /*#__PURE__*/React.createElement(FeedbackButton, {
     currentPage: currentPage,
     userRole: currentUser === null || currentUser === void 0 ? void 0 : currentUser.role,
-    currentUser: currentUser
+    currentUser: currentUser,
+    onNavigate: setCurrentPage
   }), /*#__PURE__*/React.createElement(PWAInstallBanner, null), /*#__PURE__*/React.createElement(OfflineIndicator, null));
   return /*#__PURE__*/React.createElement("div", {
     className: `app-container ${isDemo ? 'demo-mode-active' : ''}`

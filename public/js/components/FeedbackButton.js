@@ -2,7 +2,9 @@
 // Persistent FAB on every screen, opens feedback submission modal.
 // Draggable so it never blocks UI. Always on top of modals/popups.
 // Captures rich context: page, role, open modal, device, recent errors.
-const FeedbackButton = window.FeedbackButton = ({ currentPage, userRole, currentUser }) => {
+const FeedbackButton = window.FeedbackButton = ({ currentPage, userRole, currentUser, onNavigate }) => {
+  const isAdminUser = !!(currentUser && (currentUser.isAdmin || currentUser.is_admin));
+  const [fanned, setFanned] = React.useState(false);
   const [open, setOpen] = useState(false);
   const [category, setCategory] = useState('general');
   const [description, setDescription] = useState('');
@@ -301,7 +303,32 @@ const FeedbackButton = window.FeedbackButton = ({ currentPage, userRole, current
 
   const handleFabClick = () => {
     if (dragRef.current.moved) return; // was a drag, not a click
+    // v1.80.0 — admins get a fan-out (Feedback / Admin); everyone else opens feedback directly
+    if (isAdminUser) { setFanned((f) => !f); return; }
     handleOpen();
+  };
+
+  // Anchor for the fan-out mini buttons: wherever the FAB currently sits
+  const fabAnchor = () => {
+    const r = fabRef.current ? fabRef.current.getBoundingClientRect() : null;
+    return r ? { left: r.left, top: r.top } : { left: 16, top: window.innerHeight - 128 };
+  };
+  const miniBtnStyle = (offsetY) => {
+    const a = fabAnchor();
+    return {
+      position: 'fixed', left: a.left, top: a.top - offsetY, width: 44, height: 44,
+      borderRadius: '50%', background: 'var(--role-color)', border: 'none', cursor: 'pointer',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 19,
+      boxShadow: '0 4px 12px rgba(0,0,0,0.3)', zIndex: 10002, color: 'var(--text-on-primary)',
+    };
+  };
+  const miniLabelStyle = (offsetY) => {
+    const a = fabAnchor();
+    return {
+      position: 'fixed', left: a.left + 52, top: a.top - offsetY + 11,
+      background: 'rgba(20,20,20,0.82)', color: '#fff', fontSize: 12, padding: '4px 10px',
+      borderRadius: 10, zIndex: 10002, pointerEvents: 'none',
+    };
   };
 
   const moods = [
@@ -377,9 +404,34 @@ const FeedbackButton = window.FeedbackButton = ({ currentPage, userRole, current
         onMouseEnter: e => { if (!dragRef.current.dragging) { e.currentTarget.style.transform = 'scale(1.1)'; e.currentTarget.style.boxShadow = '0 6px 16px rgba(0,0,0,0.3)'; }},
         onMouseLeave: e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.25)'; },
       },
-        React.createElement('svg', { width: 22, height: 22, viewBox: '0 0 24 24', fill: 'none', stroke: 'var(--bg-surface)', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round' },
-          React.createElement('path', { d: 'M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z' })
-        )
+        fanned
+          ? React.createElement('span', { style: { color: 'var(--text-on-primary)', fontSize: 18, fontWeight: 700 } }, '\u2715')
+          : React.createElement('svg', { width: 22, height: 22, viewBox: '0 0 24 24', fill: 'none', stroke: 'var(--bg-surface)', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round' },
+              React.createElement('path', { d: 'M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z' })
+            ),
+        isAdminUser && !fanned && React.createElement('span', {
+          style: { position: 'absolute', top: -3, right: -3, width: 16, height: 16, borderRadius: '50%',
+                   background: 'var(--accent-color)', fontSize: 9, display: 'flex', alignItems: 'center',
+                   justifyContent: 'center', border: '2px solid var(--bg-primary)' },
+        }, '\uD83D\uDEE1\uFE0F')
+      ),
+
+      // v1.80.0 — admin fan-out: scrim + Feedback / Admin mini buttons
+      fanned && React.createElement(React.Fragment, null,
+        React.createElement('div', {
+          style: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.18)', zIndex: 10001 },
+          onClick: () => setFanned(false),
+        }),
+        React.createElement('button', {
+          style: miniBtnStyle(104), 'aria-label': 'Open admin',
+          onClick: () => { setFanned(false); if (onNavigate) onNavigate('admin'); },
+        }, '\uD83D\uDEE1\uFE0F'),
+        React.createElement('div', { style: miniLabelStyle(104) }, 'Admin'),
+        React.createElement('button', {
+          style: miniBtnStyle(52), 'aria-label': 'Send feedback',
+          onClick: () => { setFanned(false); handleOpen(); },
+        }, '\uD83D\uDCA1'),
+        React.createElement('div', { style: miniLabelStyle(52) }, 'Send feedback')
       ),
 
       // Modal

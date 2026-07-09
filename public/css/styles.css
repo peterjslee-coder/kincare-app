@@ -2129,16 +2129,17 @@
         left: 0;
         right: 0;
         height: auto;
-        background: var(--bg-surface);
+        /* v1.80.0 (option A) — tint the safe-area zone so it reads as the bottom
+           of the bar, not dead white below it. Dark mode overrides to flat. */
+        background: linear-gradient(var(--bg-surface), #f2f5f4 82%);
         border-top: 1px solid var(--border-light);
         z-index: 900;
         justify-content: space-around;
         align-items: center;
         padding: 5px 4px;
-        /* v1.74.3 — the home indicator only needs ~13px clearance, not the full
-           34px inset; trimming 12px removes the dead white slab under the labels
-           (Pete's long-standing gripe). Floor keeps no-inset devices sane. */
-        padding-bottom: max(5px, calc(var(--sab) - 12px));
+        /* v1.80.0 (option C) — full dip: the home indicator needs ~13px of
+           clearance; 34px inset − 21px = 13px. Floor keeps no-inset devices sane. */
+        padding-bottom: max(5px, calc(var(--sab) - 21px));
         box-shadow: 0 -2px 8px rgba(0,0,0,0.06);
       }
 

@@ -1602,9 +1602,8 @@ const App = () => {
       { id: 'messages', icon: '💬', label: 'Messages' },
     ];
     familyBottom.push({ id: 'account', icon: '👤', label: 'Account' });
-    if (currentUser?.isAdmin) {
-      familyBottom.push({ id: 'admin', icon: '🛡️', label: 'Admin' });
-    }
+    // v1.80.0 — Admin left the bottom bar (Pete was the only one seeing 6 tabs);
+    // it now lives in the feedback floater's fan-out. Desktop sidebar unchanged.
     return familyBottom;
   };
 
@@ -1872,7 +1871,7 @@ const App = () => {
         ))}
       </nav>
       {showRequestCareModal && <RequestCareModal onClose={() => setShowRequestCareModal(false)} />}
-      {(currentUser?.is_tester || currentUser?.isAdmin) && <FeedbackButton currentPage={currentPage} userRole={currentUser?.role} currentUser={currentUser} />}
+      {(currentUser?.is_tester || currentUser?.isAdmin) && <FeedbackButton currentPage={currentPage} userRole={currentUser?.role} currentUser={currentUser} onNavigate={setCurrentPage} />}
       <PWAInstallBanner />
       <OfflineIndicator />
     </React.Fragment>
