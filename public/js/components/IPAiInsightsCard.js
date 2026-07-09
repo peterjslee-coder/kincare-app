@@ -107,7 +107,12 @@ const IPAiInsightsCard = window.IPAiInsightsCard = ({ recipientId, recipientName
               {intel.headline}
             </div>
 
-            {/* Insights */}
+            {/* v1.77.0 — narrative paragraphs (new shape); falls through to legacy insights below */}
+            {Array.isArray(intel.paragraphs) && intel.paragraphs.map((para, i) => (
+              <p key={'p' + i} style={{ fontSize: 13.5, color: 'var(--text-primary)', lineHeight: 1.65, margin: '0 0 12px' }}>{para}</p>
+            ))}
+
+            {/* Insights (legacy cached shape) */}
             {(intel.insights || []).map((insight, i) => (
               <div key={i} style={{
                 padding: '10px 12px', marginBottom: 8, borderRadius: 8,

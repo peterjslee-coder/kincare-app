@@ -60,14 +60,9 @@ router.get("/:recipientId", authenticate, async (req, res) => {
         if (isTeamMember) hasAccess = true;
       } catch {}
     }
-    if (!hasAccess) {
-      try {
-        const isCaregiver = await db.prepare(
-          "SELECT 1 FROM caregiver_assignments WHERE care_recipient_id = ? AND caregiver_user_id = ? AND status = 'active'"
-        ).get(req.params.recipientId, req.user.id);
-        if (isCaregiver) hasAccess = true;
-      } catch {}
-    }
+    // v1.77.0 — the intelligence report is a FAMILY artifact (it names financial and
+    // other vulnerabilities). Caregivers get the check-in briefing, coaching, and the
+    // caregiver-facing care summary instead — never this.
 
     if (!hasAccess) {
       return res.status(403).json({ error: "Access denied" });

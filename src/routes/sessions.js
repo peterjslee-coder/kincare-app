@@ -1306,7 +1306,8 @@ Write a SHORT, warm, actionable briefing (3-5 sentences max). Focus on:
 - Practical tips based on recent observations
 - Any special instructions for today
 
-Do NOT list every note. Synthesize. Write in second person ("Betty may be..."). Be warm but concise. No headers, no bullets — just natural sentences.`;
+Do NOT list every note. Synthesize. Write in second person ("Betty may be..."). Be warm but concise. No headers, no bullets — just natural sentences.
+SAFETY: this goes to the caregiver. Never mention financial or security vulnerabilities — trouble with money, cash or valuables in the home, who pays, entry codes. If such a note is care-relevant, state the behavior neutrally ("may misplace belongings") without exploitable detail. Never state events or facts not present in the context above.`;
 
           const result = await client.messages.create({
             model: MODEL_HAIKU,

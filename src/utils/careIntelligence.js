@@ -348,7 +348,7 @@ BEHAVIORAL PATTERNS DETECTED:
 - Mood by time: ${analysis.patterns.filter(p => p.type === "mood_by_time").map(p => `${p.period}: avg ${p.avgMood.toFixed(1)}/5 (${p.count} visits)`).join(", ") || "insufficient data"}
 - Trends: ${analysis.trendNote || "no significant trends detected"}
 
-YOUR TASK: Generate a care intelligence report for ${recipientName}'s family. Connect the observations in the data to your care knowledge to explain WHY things are happening and WHAT to do — while staying strictly within the facts provided.
+YOUR TASK: Write a care intelligence report addressed to ${recipientName}'s FAMILY — the people who entered much of this data. They already know the raw facts; do NOT recite their own inputs back at them. Your value is synthesis: what's changing, what it means, and what to do next. Speak to them as "you".
 TRUTH AND VOICE — two separate rules, both absolute:
 
 WHAT you may claim (truth):
@@ -363,27 +363,16 @@ HOW you sound (voice):
 
 Structure your response as a JSON object:
 {
-  "headline": "One-sentence overall assessment (warm, clear, actionable, under 30 words)",
-  "insights": [
-    {
-      "title": "Short insight title (under 8 words)",
-      "observation": "What the data shows (under 40 words)",
-      "explanation": "WHY this is happening — connect to medical/behavioral knowledge (under 40 words)",
-      "recommendation": "What the family or caregiver should DO about it (under 30 words)",
-      "priority": "high|medium|low"
-    }
+  "headline": "One-sentence overall read (warm, clear, under 25 words)",
+  "paragraphs": [
+    "Paragraph 1 — HOW THINGS ARE GOING: the trajectory. What's steady, what's shifting, mood and rhythm across recent visits and observations. Narrative, not a list.",
+    "Paragraph 2 — WHAT IT MEANS: interpret the patterns with your care knowledge, personally and by name, possibility-framed. This is where 'she may get frustrated when she's aware she's forgetful' lives.",
+    "Paragraph 3 — WHAT WOULD HELP NOW: recommendations addressed to the FAMILY (scheduling, caregiver continuity, things to raise with her doctor, what to try). Family-level decisions only — caregiver technique goes in the caregiver briefing, not here."
   ],
-  "caregiverGuidance": "Two short paragraphs (under 150 words total) of guidance for caregivers — communication techniques, things to watch for, what works. Specific, practical, not generic.",
-  "schedulingAdvice": "One or two sentences (under 40 words) on best times to schedule care.",
-  "watchList": ["Each item under 15 words. Max 4 items."]
+  "watchList": ["Things for the family to keep an eye on. Each under 15 words. Max 4. Omit if nothing genuine."]
 }
 
-LENGTH BUDGET — STRICT: total response must stay under 3500 characters.
-- Headline: 1 sentence, under 30 words.
-- Insights: 3 to 5 maximum. Each field stays within the per-field budgets above.
-- caregiverGuidance: under 150 words total across both paragraphs.
-- schedulingAdvice: under 40 words.
-- watchList: at most 4 items, each under 15 words.
+LENGTH BUDGET — STRICT: total response under 2800 characters. Each paragraph 60–120 words, flowing prose, no headers or bullets inside.
 
 Be specific to ${recipientName}. Reference actual observations from the visit data. Don't be generic — name patterns and explain what they mean for THIS person. If data is thin, say so honestly and suggest what would help, but stay within the length budget.
 
@@ -575,6 +564,7 @@ YOUR TASK: Generate a structured CARE PLAN JSON that captures the living wisdom 
 - EVOLVING (references visit count and dates for staleness awareness)
 - HONEST about gaps (if data is insufficient, say so)
 - GROUNDED: never state events or lifestyle facts (driving, falls, living situation, habits) that are not in the data above. Personal, possibility-framed interpretation of documented behavior IS welcome (\"she may...\", \"watch for...\"). No meta-language about the data itself.
+SAFETY — this text is caregiver-visible: never include information that maps financial or security vulnerabilities — trouble managing money, cash or valuables in the home, who pays for things, entry codes, confusion about transactions. If money-adjacent behavior matters for care, state it neutrally ("may misplace belongings") without exploitable detail. No family coordination decisions (assignments, hiring, payments) — hands-on care guidance only.
 
 Structure as JSON:
 {
@@ -700,6 +690,7 @@ async function generateCaregiverCoaching(sessionId) {
 
   const prompt = `You are iPAi, a private coaching assistant for caregivers on InPlace. Generate brief, actionable coaching tips for ${session.caregiver_name} about caring for ${session.recipient_name}.
 Ground every tip in the data below — never state events or facts about ${session.recipient_name} that are not in it. Personal, possibility-framed coaching (\"she may respond better if...\") is welcome; keep the voice warm and direct, no meta-language about the data.
+SAFETY — this text is caregiver-visible: never include information that maps financial or security vulnerabilities — trouble managing money, cash or valuables in the home, who pays for things, entry codes, confusion about transactions. If money-adjacent behavior matters for care, state it neutrally ("may misplace belongings") without exploitable detail. No family coordination decisions (assignments, hiring, payments) — hands-on care guidance only.
 
 CARE RECIPIENT:
 - Name: ${session.recipient_name}, Age: ${session.age || "unknown"}

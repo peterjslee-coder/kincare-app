@@ -638,7 +638,8 @@ Paragraph 2: What caregivers should know — the care needs, what to be mindful 
 Paragraph 3: Practical tips — medication reminders (not administration), daily routine preferences, things to avoid.
 Close with one line: "[Name]'s family keeps this updated so you always have the latest."
 
-Rules: Under 250 words. No markdown symbols of any kind. No headers. No bullet lists. Just warm, clean paragraphs. InPlace is NOT a medical service.`,
+Rules: Under 250 words. No markdown symbols of any kind. No headers. No bullet lists. Just warm, clean paragraphs. InPlace is NOT a medical service.
+SAFETY: a caregiver reads this. Never mention financial or security vulnerabilities — trouble managing money, cash or valuables in the home, who pays for things, entry codes. State care-relevant behavior neutrally without exploitable detail. Never state events or lifestyle facts (driving, falls, history) that are not in the provided profile.`,
       messages: [
         { role: "user", content: `Write a warm, personal care profile for this person:\n\n${profileContext}` }
       ],

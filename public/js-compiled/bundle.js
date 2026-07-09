@@ -80838,7 +80838,15 @@ const IPAiInsightsCard = window.IPAiInsightsCard = ({
         background: '#e6f5f0',
         borderRadius: 8
       }
-    }, intel.headline), (intel.insights || []).map((insight, i) => /*#__PURE__*/React.createElement("div", {
+    }, intel.headline), Array.isArray(intel.paragraphs) && intel.paragraphs.map((para, i) => /*#__PURE__*/React.createElement("p", {
+      key: 'p' + i,
+      style: {
+        fontSize: 13.5,
+        color: 'var(--text-primary)',
+        lineHeight: 1.65,
+        margin: '0 0 12px'
+      }
+    }, para)), (intel.insights || []).map((insight, i) => /*#__PURE__*/React.createElement("div", {
       key: i,
       style: {
         padding: '10px 12px',
