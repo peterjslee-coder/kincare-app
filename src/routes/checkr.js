@@ -1047,7 +1047,8 @@ router.get("/admin/candidates", authenticate, async (req, res) => {
         u.email, u.first_name, u.last_name
       FROM caregiver_profiles cp
       JOIN users u ON cp.user_id = u.id
-      WHERE cp.background_check_consent = 1
+      WHERE COALESCE(u.is_demo, 0) = 0 /* v1.81.0 — demo caregivers out of the BG admin page */
+        AND cp.background_check_consent = 1
          OR cp.checkr_candidate_id IS NOT NULL
          OR cp.is_background_checked = 1
          OR COALESCE(cp.bg_check_admin_approved, 0) = 1

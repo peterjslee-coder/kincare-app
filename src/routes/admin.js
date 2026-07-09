@@ -35,6 +35,18 @@ const getNukeChallenge = getPasskeyChallenge;
 
 const router = express.Router();
 
+// v1.81.0 — one correct way to exclude demo sessions from admin surfaces.
+// A session is "demo" when its family OR its caregiver is a demo user.
+// (The previous inline version used cs.family_id — a column that doesn't exist —
+// and compared caregiver_profiles.id to users.id; it threw and was silently caught.)
+const NOT_DEMO_SESSION = (alias = "cs") => `NOT EXISTS (
+  SELECT 1 FROM users du
+  WHERE COALESCE(du.is_demo, 0) = 1
+    AND (du.id = ${alias}.family_user_id
+         OR du.id = (SELECT cp_d.user_id FROM caregiver_profiles cp_d WHERE cp_d.id = ${alias}.caregiver_id))
+)`;
+
+
 // v1.74.2 — parse stored JSON defensively: a single malformed row must not 500 an endpoint
 function safeJson(raw, fallback) {
   if (!raw) return fallback;
@@ -576,7 +588,7 @@ router.get("/stats", async (req, res) => {
     let users = { count: 0 }, waitlist = { count: 0 }, sessions = { count: 0 }, caregivers = { count: 0 }, recentSignups = [];
     try { users = await db.prepare("SELECT COUNT(*) as count FROM users WHERE COALESCE(is_demo, 0) = 0").get() || { count: 0 }; } catch (e) { console.error("Stats: users query failed:", e.message); }
     try { waitlist = await db.prepare("SELECT COUNT(*) as count FROM waitlist").get() || { count: 0 }; } catch (e) { console.error("Stats: waitlist query failed:", e.message); }
-    try { sessions = await db.prepare("SELECT COUNT(*) as count FROM care_sessions cs WHERE NOT EXISTS (SELECT 1 FROM users u WHERE u.id IN (cs.family_id, cs.caregiver_id) AND COALESCE(u.is_demo, 0) = 1)").get() || { count: 0 }; } catch (e) { console.error("Stats: sessions query failed:", e.message); }
+    try { sessions = await db.prepare(`SELECT COUNT(*) as count FROM care_sessions cs WHERE ${NOT_DEMO_SESSION()}`).get() || { count: 0 }; } catch (e) { console.error("Stats: sessions query failed:", e.message); }
     try { caregivers = await db.prepare("SELECT COUNT(*) as count FROM caregiver_profiles cp JOIN users u ON cp.user_id = u.id WHERE COALESCE(u.is_demo, 0) = 0").get() || { count: 0 }; } catch (e) { console.error("Stats: caregivers query failed:", e.message); }
     try {
       recentSignups = await db.prepare(`
@@ -605,7 +617,7 @@ router.get("/stats", async (req, res) => {
     try {
       sessionsByStatus = await db.prepare(`
         SELECT cs.status, COUNT(*) as count FROM care_sessions cs
-        WHERE NOT EXISTS (SELECT 1 FROM users u WHERE u.id IN (cs.family_id, cs.caregiver_id) AND COALESCE(u.is_demo, 0) = 1)
+        WHERE ${NOT_DEMO_SESSION()}
         GROUP BY cs.status
       `).all() || [];
     } catch (e) { console.error("Stats: sessionsByStatus query failed:", e.message); }
@@ -1044,6 +1056,7 @@ router.get("/activity", async (req, res) => {
       FROM care_sessions cs
       JOIN users u ON cs.family_user_id = u.id
       JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+      WHERE ${NOT_DEMO_SESSION()}
       ORDER BY cs.created_at DESC LIMIT ?
     `).all(parseInt(limit));
 
@@ -1073,6 +1086,9 @@ router.get("/care-team-invites", async (req, res) => {
       JOIN care_teams ct ON cti.care_team_id = ct.id
       JOIN care_recipients cr ON ct.care_recipient_id = cr.id
       JOIN users u ON cti.invited_by = u.id
+      /* v1.81.0 — demo-created invites out of the admin view */
+      LEFT JOIN users du_check ON du_check.id = cti.invited_by AND COALESCE(du_check.is_demo, 0) = 1
+      WHERE du_check.id IS NULL
       ORDER BY cti.created_at DESC
       LIMIT 100
     `).all();
@@ -2072,7 +2088,8 @@ router.get("/briefing", requireAdmin, async (req, res) => {
           COUNT(*) FILTER (WHERE status = 'completed' AND created_at > NOW() - INTERVAL '7 days') AS completed_7d,
           COUNT(*) FILTER (WHERE status = 'cancelled' AND created_at > NOW() - INTERVAL '7 days') AS cancelled_7d,
           COUNT(*) FILTER (WHERE status = 'pending' OR status = 'confirmed') AS upcoming
-        FROM care_sessions
+        FROM care_sessions cs
+        WHERE ${NOT_DEMO_SESSION()}
       `).get();
     } catch (e) { console.error("Briefing sessions:", e.message); briefing.sessions = {}; }
 
@@ -2086,7 +2103,8 @@ router.get("/briefing", requireAdmin, async (req, res) => {
           COUNT(*) FILTER (WHERE status = 'expired' AND created_at > NOW() - INTERVAL '7 days') AS expired_7d,
           COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '14 days' AND created_at <= NOW() - INTERVAL '7 days') AS offers_prior_7d,
           COUNT(*) FILTER (WHERE status = 'accepted' AND created_at > NOW() - INTERVAL '14 days' AND created_at <= NOW() - INTERVAL '7 days') AS accepted_prior_7d
-        FROM session_offers
+        FROM session_offers so
+        WHERE NOT EXISTS (SELECT 1 FROM users du WHERE COALESCE(du.is_demo, 0) = 1 AND du.id IN (so.from_user_id, so.to_user_id))
       `).get();
     } catch (e) { console.error("Briefing offers:", e.message); briefing.offers = {}; }
 
@@ -3437,7 +3455,7 @@ router.get("/sessions/open", async (req, res) => {
         cr.first_name || ' ' || cr.last_name AS recipient_name
       FROM care_sessions cs
       LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
-      WHERE cs.status IN ('requested','open','pending')
+      WHERE cs.status IN ('requested','open','pending') AND ${NOT_DEMO_SESSION()}
       ORDER BY cs.created_at DESC LIMIT 20
     `).all();
     res.json({ sessions: rows });
@@ -3455,7 +3473,7 @@ router.get("/sessions/all", authenticate, requireAdmin, async (req, res) => {
     const statusFilter = req.query.status;
     const days = parseInt(req.query.days) || 30;
 
-    let where = `cs.scheduled_date::date >= CURRENT_DATE - INTERVAL '${days} days'`;
+    let where = `cs.scheduled_date::date >= CURRENT_DATE - INTERVAL '${days} days' AND ${NOT_DEMO_SESSION()}`;
     const params = [];
     if (statusFilter && statusFilter !== 'all') {
       where += ` AND cs.status = ?`;
@@ -3632,7 +3650,7 @@ router.get("/authorizations", requireAdmin, async (req, res) => {
       FROM care_recipients cr
       LEFT JOIN users u ON u.id = cr.family_user_id
       LEFT JOIN attestations att ON att.care_recipient_id = cr.id
-      WHERE 1=1
+      WHERE COALESCE(u.is_demo, 0) = 0 /* v1.81.0 — demo recipients out of consent admin */
     `;
     const params = [];
     if (status) { sql += ` AND cr.consent_status = ?`; params.push(status); }
@@ -3905,7 +3923,8 @@ router.get("/consent/pending", requireAdmin, async (req, res) => {
       LEFT JOIN attestations att ON att.care_recipient_id = cr.id
       LEFT JOIN consent_outreach co ON co.care_recipient_id = cr.id
         AND co.created_at = (SELECT MAX(co2.created_at) FROM consent_outreach co2 WHERE co2.care_recipient_id = cr.id)
-      WHERE (
+      WHERE NOT EXISTS (SELECT 1 FROM users du WHERE du.id = cr.family_user_id AND COALESCE(du.is_demo, 0) = 1)
+      AND (
         -- Pending attestation review (original logic)
         (cr.authorization_tier = 'tier3'
           AND cr.consent_status IN ('attested', 'pending')
@@ -4332,7 +4351,7 @@ router.get("/sessions/no-show-cancelled", async (req, res) => {
       LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
       LEFT JOIN users u ON cp.user_id = u.id
       LEFT JOIN users fu ON cs.family_user_id = fu.id
-      WHERE cs.cancelled_by = 'system' AND cs.caregiver_no_show = 1
+      WHERE cs.cancelled_by = 'system' AND cs.caregiver_no_show = 1 AND ${NOT_DEMO_SESSION()}
       ORDER BY cs.cancelled_at DESC
       LIMIT 50
     `).all();
