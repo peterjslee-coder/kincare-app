@@ -238,6 +238,27 @@ router.get("/my-payout-info", async (req, res) => {
   }
 });
 
+// ── GET /api/reimbursements/mine — the viewer's own requests across teams (payments page) ──
+router.get("/mine", async (req, res) => {
+  try {
+    const db = await getDb();
+    const rows = await db.prepare(`
+      SELECT r.id, r.care_team_id, r.amount, r.description, r.status, r.self_recorded,
+             r.created_at, r.paid_at, r.paid_method,
+             cr.first_name AS recipient_first_name, cr.last_name AS recipient_last_name
+      FROM reimbursements r
+      LEFT JOIN care_recipients cr ON r.care_recipient_id = cr.id
+      WHERE r.payee_user_id = ? OR r.requested_by = ?
+      ORDER BY r.created_at DESC
+      LIMIT 20
+    `).all(req.user.id, req.user.id);
+    res.json({ reimbursements: rows });
+  } catch (err) {
+    captureException(err, { where: "reimbursements: mine" });
+    res.status(500).json({ error: "Failed to load reimbursements" });
+  }
+});
+
 // ── GET /api/reimbursements/team/:teamId — the team ledger (no file blobs!) ──
 router.get("/team/:teamId", async (req, res) => {
   try {

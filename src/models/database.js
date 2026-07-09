@@ -1267,6 +1267,10 @@ async function initializeDatabase() {
     // Visit logs — joined on session_id constantly
     `CREATE INDEX IF NOT EXISTS idx_visit_logs_session ON visit_logs(session_id)`,
 
+    // v1.79.0 — Payments page v2: which card/account paid
+    `ALTER TABLE payments ADD COLUMN IF NOT EXISTS card_brand TEXT`,
+    `ALTER TABLE payments ADD COLUMN IF NOT EXISTS card_last4 TEXT`,
+
     // v1.76.0 — Family care observations (session-less notes with AI harvesting)
     `ALTER TABLE recipient_notes ADD COLUMN IF NOT EXISTS needs_attention INTEGER DEFAULT 0`,
     `ALTER TABLE recipient_notes ADD COLUMN IF NOT EXISTS photo TEXT`, /* PHI — streamed via endpoint, never in list payloads */

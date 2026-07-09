@@ -61370,6 +61370,7 @@ const CheckrEmbed = window.CheckrEmbed = ({
 ;
 // FamilyPayments — Payment method setup + history for family users
 const FamilyPayments = window.FamilyPayments = () => {
+  const [myReimbursements, setMyReimbursements] = useState([]);
   const [payments, setPayments] = useState([]);
   const [totalSpent, setTotalSpent] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -61441,6 +61442,12 @@ const FamilyPayments = window.FamilyPayments = () => {
     // Fetch payment history
     const fetchHistory = async () => {
       try {
+        apiFetch('/api/reimbursements/mine').then(async r => {
+          if (r !== null && r !== void 0 && r.ok) {
+            const d = await r.json();
+            setMyReimbursements(d.reimbursements || []);
+          }
+        }).catch(() => {});
         const res = await apiFetch('/api/payments/history');
         if (res.ok) {
           const data = await res.json();
@@ -62129,7 +62136,13 @@ const FamilyPayments = window.FamilyPayments = () => {
     style: {
       padding: '10px 12px'
     }
-  }, p.caregiverName || '\u2014'), /*#__PURE__*/React.createElement("td", {
+  }, p.caregiverName || '\u2014', (p.cardBrand || p.paidBy) && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: 'var(--text-muted)',
+      marginTop: 2
+    }
+  }, p.cardBrand ? `${String(p.cardBrand).charAt(0).toUpperCase() + String(p.cardBrand).slice(1)}${p.cardLast4 ? ' \u2022\u2022\u2022\u2022' + p.cardLast4 : ''}` : '', p.cardBrand && p.paidBy ? ' \u00B7 ' : '', p.paidBy ? `paid by ${p.paidBy}` : '')), /*#__PURE__*/React.createElement("td", {
     style: {
       padding: '10px 12px',
       textTransform: 'capitalize'
@@ -62145,7 +62158,59 @@ const FamilyPayments = window.FamilyPayments = () => {
       padding: '10px 12px',
       textAlign: 'center'
     }
-  }, statusBadge(p.status)))))))));
+  }, statusBadge(p.status)))))))), myReimbursements.length > 0 && /*#__PURE__*/React.createElement("div", {
+    className: "card",
+    style: {
+      marginTop: 16
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "card-header",
+    style: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center'
+    }
+  }, /*#__PURE__*/React.createElement("span", null, "\\uD83D\\uDCB5 My Reimbursements"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 12,
+      color: 'var(--text-secondary)',
+      fontWeight: 400
+    }
+  }, "full ledger lives on the care team page")), myReimbursements.map(r => /*#__PURE__*/React.createElement("div", {
+    key: r.id,
+    style: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      gap: 8,
+      padding: '9px 4px',
+      borderTop: '1px solid var(--border-light)',
+      flexWrap: 'wrap'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: '1 1 220px',
+      fontSize: 14
+    }
+  }, /*#__PURE__*/React.createElement("strong", null, "$", Number(r.amount).toFixed(2)), /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: 'var(--text-secondary)'
+    }
+  }, " \u2014 ", r.description), r.recipient_first_name && /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: 'var(--text-muted)',
+      fontSize: 12
+    }
+  }, " (for ", r.recipient_first_name, ")")), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 12,
+      fontWeight: 600,
+      padding: '3px 10px',
+      borderRadius: 12,
+      color: r.status === 'paid' ? '#2e7d32' : r.status === 'declined' ? '#c62828' : r.status === 'approved' ? '#1565c0' : r.status === 'cancelled' ? 'var(--text-muted)' : '#e65100',
+      background: r.status === 'paid' ? '#e8f5e9' : r.status === 'declined' ? '#ffebee' : r.status === 'approved' ? '#e3f2fd' : r.status === 'cancelled' ? 'var(--bg-primary)' : '#fff3e0'
+    }
+  }, r.status === 'paid' ? `\u2713 Reimbursed${r.paid_method ? ' \u00B7 ' + r.paid_method : ''}` : r.status === 'approved' ? 'Approved \u2014 awaiting payment' : r.status.charAt(0).toUpperCase() + r.status.slice(1))))));
 };
 ;
 // ─── Admin Financials Dashboard ───

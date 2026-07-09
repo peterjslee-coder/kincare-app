@@ -214,6 +214,19 @@ router.post("/webhook", express.raw({ type: "application/json" }), async (req, r
           "UPDATE payments SET status = 'completed', stripe_payment_intent = ? WHERE stripe_checkout_id = ?"
         ).run(session.payment_intent, session.id);
 
+        // v1.79.0 — capture which card/account paid (non-blocking, for the payments page)
+        try {
+          if (session.payment_intent) {
+            const pi = await stripe.paymentIntents.retrieve(session.payment_intent, { expand: ["latest_charge"] });
+            const det = pi.latest_charge && pi.latest_charge.payment_method_details;
+            const card = det && (det.card || det.us_bank_account);
+            if (card) {
+              await db.prepare("UPDATE payments SET card_brand = ?, card_last4 = ? WHERE stripe_checkout_id = ?")
+                .run(det.card ? card.brand : (card.bank_name || 'bank'), card.last4 || null, session.id);
+            }
+          }
+        } catch (e) { captureException(e, { where: "webhook: capture card details" }); }
+
         // Update care session payment status
         await db.prepare(
           "UPDATE care_sessions SET payment_status = 'paid', updated_at = NOW() WHERE id = ?"
@@ -1243,10 +1256,18 @@ router.get("/history", requireRole("family"), async (req, res) => {
     LEFT JOIN caregiver_profiles cp ON p.caregiver_id = cp.id
     LEFT JOIN users u ON cp.user_id = u.id
     LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
-    WHERE p.family_user_id = ?
+    WHERE p.family_user_id = ? OR cs.family_user_id = ?
     ORDER BY p.created_at DESC
     LIMIT 50
-  `).all(req.user.id);
+  `).all(req.user.id, req.user.id);
+
+  // v1.79.0 — who actually paid (billing contact vs. booker) for rows the viewer didn't fund
+  const payerIds = [...new Set(payments.map(p => p.family_user_id).filter(id => id && id !== req.user.id))];
+  const payerNames = {};
+  if (payerIds.length) {
+    const rows = await db.prepare("SELECT id, first_name, last_name FROM users WHERE id = ANY(?)").all(payerIds);
+    for (const r of rows) payerNames[r.id] = `${r.first_name} ${r.last_name}`;
+  }
 
   // Manual payments (tips, bonuses, etc.)
   let manualPayments = [];
@@ -1281,6 +1302,9 @@ router.get("/history", requireRole("family"), async (req, res) => {
       caregiverName: p.caregiver_name,
       recipientName: p.recipient_name,
       createdAt: p.created_at,
+      cardBrand: p.card_brand || null,
+      cardLast4: p.card_last4 || null,
+      paidBy: p.family_user_id === req.user.id ? null : (payerNames[p.family_user_id] || null),
       type: 'session',
     })),
     ...manualPayments.map(p => ({
@@ -1542,15 +1566,17 @@ async function processOverduePayments(pushFn) {
           description: `Auto-pay: ${s.service_type} on ${s.scheduled_date} with ${s.caregiver_name || 'Caregiver'}${tipCents > 0 ? ` (includes $${(tipCents/100).toFixed(2)} tip)` : ''}`,
         });
 
-        // Record payment
+        // Record payment (v1.79.0: card details from the saved payment method — no extra API call)
+        const pmBrand = chosenPM.card ? chosenPM.card.brand : (chosenPM.us_bank_account ? (chosenPM.us_bank_account.bank_name || 'bank') : chosenPM.type);
+        const pmLast4 = (chosenPM.card && chosenPM.card.last4) || (chosenPM.us_bank_account && chosenPM.us_bank_account.last4) || null;
         const paymentId = uuid();
         await db.prepare(`
-          INSERT INTO payments (id, session_id, family_user_id, caregiver_id, amount, platform_fee, caregiver_payout, status, payment_method, stripe_payment_intent, tip_cents, tip_reason, auto_charged, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, 'completed', 'stripe', ?, ?, ?, 1, NOW())
+          INSERT INTO payments (id, session_id, family_user_id, caregiver_id, amount, platform_fee, caregiver_payout, status, payment_method, stripe_payment_intent, tip_cents, tip_reason, auto_charged, card_brand, card_last4, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, 'completed', 'stripe', ?, ?, ?, 1, ?, ?, NOW())
         `).run(
           paymentId, s.id, s.billing_user_id || s.family_user_id, s.caregiver_id,
           totalCents / 100, platformFeeCents / 100, caregiverTotalCents / 100,
-          intent.id, tipCents, s.pending_tip_reason || null
+          intent.id, tipCents, s.pending_tip_reason || null, pmBrand, pmLast4
         );
 
         // Create tip record if tip was included (so it shows in caregiver dashboard)
