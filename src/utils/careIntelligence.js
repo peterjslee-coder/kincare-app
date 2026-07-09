@@ -348,7 +348,13 @@ BEHAVIORAL PATTERNS DETECTED:
 - Mood by time: ${analysis.patterns.filter(p => p.type === "mood_by_time").map(p => `${p.period}: avg ${p.avgMood.toFixed(1)}/5 (${p.count} visits)`).join(", ") || "insufficient data"}
 - Trends: ${analysis.trendNote || "no significant trends detected"}
 
-YOUR TASK: Generate a comprehensive care intelligence report for ${recipientName}'s family. This should be genuinely insightful — not just restating data, but CONNECTING observations with your knowledge of ${healthConditions[0] || "their condition"} to explain WHY things are happening and WHAT to do about it.
+YOUR TASK: Generate a care intelligence report for ${recipientName}'s family. Connect the observations in the data to your care knowledge to explain WHY things are happening and WHAT to do — while staying strictly within the facts provided.
+GROUNDING RULES — ABSOLUTE, apply to every sentence you write:
+- State only facts that appear in the data above. Every claim about this person's life, abilities, habits, or history must trace to a specific visit note, care note, family addition, or profile field provided here.
+- NEVER assume or invent lifestyle facts — driving, living situation, falls, wandering, continence, hobbies, family details — that are not explicitly in the data. People with the same diagnosis differ enormously; do not autocomplete a typical patient story.
+- General care knowledge may inform RECOMMENDATIONS, phrased as general guidance ("many people with early-stage dementia do better with morning routines"), never as a fact about this person ("since she stopped driving").
+- If the data is too thin to support an insight, omit that insight. Fewer, fully grounded insights are worth more than plausible fiction — one invented "fact" destroys the family's trust in all the real ones.
+
 
 Structure your response as a JSON object:
 {
@@ -444,6 +450,7 @@ async function generateSessionSummary(sessionId) {
     : "";
 
   const prompt = `You are iPAi, writing a warm post-session summary for a family about their loved one's care visit.
+Write ONLY from the visit data below — do not add details, events, or background facts that are not in it.
 
 VISIT DETAILS:
 - Care recipient: ${session.recipient_name}
@@ -562,6 +569,7 @@ YOUR TASK: Generate a structured CARE PLAN JSON that captures the living wisdom 
 - ACTIONABLE for caregivers (things to do and avoid)
 - EVOLVING (references visit count and dates for staleness awareness)
 - HONEST about gaps (if data is insufficient, say so)
+- GROUNDED: every statement about ${recipientName} must come from the data above. Never invent lifestyle facts (driving, falls, living situation, habits) that are not documented — general best practices must be phrased as general guidance, not as facts about this person.
 
 Structure as JSON:
 {
@@ -686,6 +694,7 @@ async function generateCaregiverCoaching(sessionId) {
   const familyContext = familyNotes.map(n => `- "${(n.content || "").substring(0, 150)}"`).join("\n");
 
   const prompt = `You are iPAi, a private coaching assistant for caregivers on InPlace. Generate brief, actionable coaching tips for ${session.caregiver_name} about caring for ${session.recipient_name}.
+Ground every tip in the data provided below — never state or imply facts about ${session.recipient_name} that are not in it; phrase general technique advice as general advice.
 
 CARE RECIPIENT:
 - Name: ${session.recipient_name}, Age: ${session.age || "unknown"}
