@@ -341,6 +341,9 @@ async function initializeDatabase() {
   await db.exec(`CREATE INDEX IF NOT EXISTS idx_vouches_caregiver ON bg_admin_vouches(caregiver_user_id) WHERE revoked_at IS NULL`);
 
   // Migrations for existing databases
+  // ⚠️  FROZEN as baseline '000_legacy_baseline' (v1.82.0) — runs ONCE per database.
+  // DO NOT add new statements here; they will never execute on existing databases.
+  // Add new schema changes to MIGRATIONS_V2 (defined after this array runs).
   const migrations = [
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS notification_prefs TEXT`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified INTEGER DEFAULT 0`,
@@ -360,9 +363,7 @@ async function initializeDatabase() {
     // Ensure admin_role column exists before the promote below (its dedicated
     // ADD COLUMN runs later in this list, which previously made this UPDATE fail).
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS admin_role TEXT`,
-    // Auto-promote Pete's real account to admin
-    `UPDATE users SET is_admin = 1, admin_role = 'god' WHERE email = 'peterjslee@gmail.com'`,
-    // Backfill is_demo flag for demo accounts seeded before the column existed.
+    // Auto-promote Pete's real account to admin    // Backfill is_demo flag for demo accounts seeded before the column existed.
     // Batch 5 (v1.63.0): guarded one-time via platform_settings marker — previously
     // this re-ran every boot, so a real user later registered with one of these
     // legacy addresses would silently be flagged demo. Runs once more, then never again.
@@ -623,11 +624,7 @@ async function initializeDatabase() {
     `CREATE INDEX IF NOT EXISTS idx_fvc_session ON first_visit_confirmations(session_id)`,
     // v1.35.9 — Unique constraint to prevent double-submit race condition
     `CREATE UNIQUE INDEX IF NOT EXISTS idx_fvc_session_unique ON first_visit_confirmations(session_id)`,
-    // v1.35.0 — Backfill: existing care recipients with linked_user_id → tier1/verified/self_signup
-    `UPDATE care_recipients SET authorization_tier = 'tier1', consent_status = 'verified', consent_method = 'self_signup', consent_verified_at = NOW() WHERE linked_user_id IS NOT NULL AND authorization_tier = 'unset'`,
-    // v1.35.0 — Backfill: existing care recipients without linked_user_id → tier3/verified/legacy_account (don't break existing users)
-    `UPDATE care_recipients SET authorization_tier = 'tier3', consent_status = 'verified', consent_method = 'legacy_account', consent_verified_at = NOW() WHERE linked_user_id IS NULL AND authorization_tier = 'unset'`,
-    // v1.35.4 — Phase 2a: Add failed_attempts counter to verification_attempts
+    // v1.35.0 — Backfill: existing care recipients with linked_user_id → tier1/verified/self_signup    // v1.35.0 — Backfill: existing care recipients without linked_user_id → tier3/verified/legacy_account (don't break existing users)    // v1.35.4 — Phase 2a: Add failed_attempts counter to verification_attempts
     `ALTER TABLE verification_attempts ADD COLUMN IF NOT EXISTS failed_attempts INTEGER DEFAULT 0`,
     // v1.36.0 — Phase 4a: Unified document verification system
     `CREATE TABLE IF NOT EXISTS verified_documents (
@@ -674,20 +671,7 @@ async function initializeDatabase() {
     `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS managed_by_user_id TEXT`,
     `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS managed_reason TEXT`,
     `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS managed_at TIMESTAMPTZ`,
-    // v1.36.0 — Backfill: copy authorization_documents → verified_documents (idempotent via INSERT ... ON CONFLICT DO NOTHING)
-    `INSERT INTO verified_documents (id, owner_type, owner_id, uploaded_by, category, document_type, file_data, file_name, file_size, mime_type, status, admin_notes, admin_reviewed_by, admin_reviewed_at, created_at, updated_at)
-     SELECT id, 'care_recipient', care_recipient_id, submitted_by, 'consent', document_type, file_data, file_name, file_size, mime_type,
-       CASE upload_status WHEN 'approved' THEN 'approved' WHEN 'rejected' THEN 'rejected' ELSE 'pending' END,
-       admin_notes, reviewed_by, reviewed_at, created_at, updated_at
-     FROM authorization_documents WHERE id NOT IN (SELECT id FROM verified_documents) AND id IS NOT NULL`,
-    // v1.36.0 — Backfill: copy caregiver_documents → verified_documents
-    `INSERT INTO verified_documents (id, owner_type, owner_id, uploaded_by, category, document_type, file_data, file_name, file_size, mime_type, status, created_at, updated_at)
-     SELECT id, 'caregiver', (SELECT cp.id FROM caregiver_profiles cp WHERE cp.user_id = cd.user_id LIMIT 1), user_id,
-       CASE WHEN document_type IN ('dl_front', 'dl_back', 'drivers_license') THEN 'identity' ELSE 'certification' END,
-       CASE document_type WHEN 'dl_front' THEN 'DL_Front' WHEN 'dl_back' THEN 'DL_Back' WHEN 'drivers_license' THEN 'DL_Front' WHEN 'certification' THEN 'Other_Cert' ELSE 'Other' END,
-       file_data, file_name, 0, 'image/jpeg', 'pending', created_at, created_at
-     FROM caregiver_documents cd WHERE id NOT IN (SELECT id FROM verified_documents) AND id IS NOT NULL`,
-    // v1.37.0 — Consent redesign: care recipient email + outreach tracking
+    // v1.36.0 — Backfill: copy authorization_documents → verified_documents (idempotent via INSERT ... ON CONFLICT DO NOTHING)    // v1.36.0 — Backfill: copy caregiver_documents → verified_documents    // v1.37.0 — Consent redesign: care recipient email + outreach tracking
     `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS email TEXT`,
     // v1.37.0 — Consent outreach: track what was sent to care recipient and their response
     `CREATE TABLE IF NOT EXISTS consent_outreach (
@@ -840,9 +824,7 @@ async function initializeDatabase() {
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS account_approved INTEGER DEFAULT 0`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS approved_by TEXT`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ`,
-    // Auto-approve demo and admin users only (real signups require manual approval)
-    `UPDATE users SET account_approved = 1 WHERE account_approved = 0 AND (is_demo = 1 OR is_admin = 1)`,
-    // Backfill: rename session_booked → session_requested + fix message text
+    // Auto-approve demo and admin users only (real signups require manual approval)    // Backfill: rename session_booked → session_requested + fix message text
     // H1 guard (v1.69.0): one-time; nothing writes 'session_booked' anymore
     `UPDATE activity_feed SET event_type = 'session_requested', message = REPLACE(message, 'booked', 'requested') WHERE event_type = 'session_booked'
        AND NOT EXISTS (SELECT 1 FROM platform_settings WHERE key = 'migr_activity_feed_rename_v1')`,
@@ -1026,8 +1008,6 @@ async function initializeDatabase() {
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS companion_access INTEGER DEFAULT 0`,
 
     // v1.51.42 — Fix: clear review_required on cancelled sessions that aren't no-shows
-    `UPDATE care_sessions SET review_required = 0 WHERE status = 'cancelled' AND (caregiver_no_show IS NULL OR caregiver_no_show = 0) AND review_required = 1`,
-
     // v1.51.48 — Kindred: configurable name for care recipient (what family calls them)
     `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS called_by TEXT`,
 
@@ -1408,8 +1388,70 @@ async function initializeDatabase() {
        END LOOP;
      END $$;`,
   ];
-  for (const sql of migrations) {
-    try { await db.exec(sql); } catch (e) { /* column may already exist */ }
+  // ─── v1.82.0: statements that must run EVERY boot (deliberately not one-time) ───
+  const PER_BOOT_STATEMENTS = [
+    // admin promote (safety net if DB restored)
+    `UPDATE users SET is_admin = 1, admin_role = 'god' WHERE email = 'peterjslee@gmail.com'`,
+    // tier1 backfill — PER-BOOT pending consent policy decision (lawyer agenda)
+    `UPDATE care_recipients SET authorization_tier = 'tier1', consent_status = 'verified', consent_method = 'self_signup', consent_verified_at = NOW() WHERE linked_user_id IS NOT NULL AND authorization_tier = 'unset'`,
+    // tier3 backfill — PER-BOOT pending consent policy decision (lawyer agenda)
+    `UPDATE care_recipients SET authorization_tier = 'tier3', consent_status = 'verified', consent_method = 'legacy_account', consent_verified_at = NOW() WHERE linked_user_id IS NULL AND authorization_tier = 'unset'`,
+    // authorization_documents → verified_documents sync (uploads still write the OLD table — real fix is at upload path)
+    `INSERT INTO verified_documents (id, owner_type, owner_id, uploaded_by, category, document_type, file_data, file_name, file_size, mime_type, status, admin_notes, admin_reviewed_by, admin_reviewed_at, created_at, updated_at)
+     SELECT id, 'care_recipient', care_recipient_id, submitted_by, 'consent', document_type, file_data, file_name, file_size, mime_type,
+       CASE upload_status WHEN 'approved' THEN 'approved' WHEN 'rejected' THEN 'rejected' ELSE 'pending' END,
+       admin_notes, reviewed_by, reviewed_at, created_at, updated_at
+     FROM authorization_documents WHERE id NOT IN (SELECT id FROM verified_documents) AND id IS NOT NULL`,
+    // caregiver_documents → verified_documents sync (same)
+    `INSERT INTO verified_documents (id, owner_type, owner_id, uploaded_by, category, document_type, file_data, file_name, file_size, mime_type, status, created_at, updated_at)
+     SELECT id, 'caregiver', (SELECT cp.id FROM caregiver_profiles cp WHERE cp.user_id = cd.user_id LIMIT 1), user_id,
+       CASE WHEN document_type IN ('dl_front', 'dl_back', 'drivers_license') THEN 'identity' ELSE 'certification' END,
+       CASE document_type WHEN 'dl_front' THEN 'DL_Front' WHEN 'dl_back' THEN 'DL_Back' WHEN 'drivers_license' THEN 'DL_Front' WHEN 'certification' THEN 'Other_Cert' ELSE 'Other' END,
+       file_data, file_name, 0, 'image/jpeg', 'pending', created_at, created_at
+     FROM caregiver_documents cd WHERE id NOT IN (SELECT id FROM verified_documents) AND id IS NOT NULL`,
+    // auto-approve demo/admin (seed doesn't set it)
+    `UPDATE users SET account_approved = 1 WHERE account_approved = 0 AND (is_demo = 1 OR is_admin = 1)`,
+    // clear review_required on cancelled non-no-shows (state may still occur)
+    `UPDATE care_sessions SET review_required = 0 WHERE status = 'cancelled' AND (caregiver_no_show IS NULL OR caregiver_no_show = 0) AND review_required = 1`,
+  ];
+
+  // ─── v1.82.0: versioned migration runner (review H1, step 2) ───
+  // The legacy `migrations` array above (~400 statements) used to replay on EVERY
+  // boot. It now runs exactly once per database as baseline '000_legacy_baseline',
+  // recorded in schema_migrations. New schema changes go in MIGRATIONS_V2 below —
+  // DO NOT add to the legacy array; post-baseline databases will never run it again.
+  await db.exec(`CREATE TABLE IF NOT EXISTS schema_migrations (id TEXT PRIMARY KEY, applied_at TIMESTAMPTZ DEFAULT NOW())`);
+  const appliedRows = await db.prepare("SELECT id FROM schema_migrations").all();
+  const applied = new Set(appliedRows.map((r) => r.id));
+
+  if (!applied.has('000_legacy_baseline')) {
+    console.log(`  Running legacy baseline (${migrations.length} statements, first boot on this database)...`);
+    for (const sql of migrations) {
+      try { await db.exec(sql); } catch (e) { /* column may already exist */ }
+    }
+    await db.prepare("INSERT INTO schema_migrations (id) VALUES ('000_legacy_baseline') ON CONFLICT (id) DO NOTHING").run();
+    console.log("  Legacy baseline recorded — it will not replay on future boots.");
+  }
+
+  // Per-boot safety nets and load-bearing syncs (see labels above) — always run
+  for (const sql of PER_BOOT_STATEMENTS) {
+    try { await db.exec(sql); } catch (e) {
+      try { require("../utils/sentry").captureException(e, { where: "db: per-boot statement" }); } catch {}
+    }
+  }
+
+  // ─── MIGRATIONS_V2: add new schema changes here as { id, statements } ───
+  // Each runs exactly once per database, in order, inside a transaction.
+  const MIGRATIONS_V2 = [
+    // { id: '001_example', statements: [`ALTER TABLE x ADD COLUMN IF NOT EXISTS y TEXT`] },
+  ];
+  for (const m of MIGRATIONS_V2) {
+    if (applied.has(m.id)) continue;
+    await db.transaction(async (tx) => {
+      for (const sql of m.statements) await tx.exec(sql);
+      await tx.prepare("INSERT INTO schema_migrations (id) VALUES (?) ON CONFLICT (id) DO NOTHING").run(m.id);
+    });
+    console.log(`  Applied migration ${m.id}`);
   }
 
   // ─── v1.57.15 — Restore private-only sessions + clear stale exclusive_until ───
