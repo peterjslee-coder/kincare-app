@@ -541,7 +541,13 @@ router.post("/:id/generate-summary", async (req, res) => {
           AND vl.check_out_time > ?
       `).get(req.params.id, recipient.ai_care_summary_updated_at);
       if (!completedSince || completedSince.cnt === 0) {
-        return res.status(429).json({ error: "No new completed visits since last summary. Complete a visit first to regenerate." });
+        // v1.77.1 — new notes/observations are also new information worth a regenerate
+        const newNotes = await db.prepare(
+          "SELECT 1 FROM recipient_notes WHERE care_recipient_id = ? AND created_at > ? LIMIT 1"
+        ).get(req.params.id, recipient.ai_care_summary_updated_at);
+        if (!newNotes) {
+          return res.status(429).json({ error: "Nothing new since the last summary. Add an observation or complete a visit first." });
+        }
       }
     }
 
@@ -609,6 +615,23 @@ router.post("/:id/generate-summary", async (req, res) => {
         return `- ${label}: ${rating}${detail}`;
       }).join('\n');
 
+    // v1.77.1 — the summary used to see ONLY profile fields + preference ratings,
+    // so it invented personality ("sharp sense of humor") and sanitized needs
+    // ("help her with cooking") that the notes contradict. Give it the notes.
+    let notesContext = '';
+    try {
+      const recentNotes = await db.prepare(`
+        SELECT rn.content, rn.note_type, rn.created_at, u.first_name AS author
+        FROM recipient_notes rn JOIN users u ON rn.author_id = u.id
+        WHERE rn.care_recipient_id = ?
+        ORDER BY rn.created_at DESC LIMIT 15
+      `).all(req.params.id);
+      if (recentNotes.length) {
+        notesContext = '\n\nRECENT NOTES & FAMILY OBSERVATIONS (newest first — this is the ground truth of how care actually goes):\n' +
+          recentNotes.map(n => `${String(n.created_at).substring(0, 10)} (${n.author}): "${(n.content || '').substring(0, 400)}"`).join('\n');
+      }
+    } catch (e) { console.warn('[generate-summary] notes fetch failed:', e.message); }
+
     const profileContext = `
 CARE RECIPIENT: ${name}
 AGE: ${age}
@@ -620,7 +643,7 @@ FOOD ALLERGIES: ${recipient.food_allergies || 'None listed'}
 FREE-TEXT PREFERENCES: ${recipient.preferences || 'None'}
 
 CARE PREFERENCE RATINGS (from family):
-${prefLines || 'No preferences rated yet'}
+${prefLines || 'No preferences rated yet'}${notesContext}
 `.trim();
 
     const message = await client.messages.create({
@@ -639,6 +662,11 @@ Paragraph 3: Practical tips — medication reminders (not administration), daily
 Close with one line: "[Name]'s family keeps this updated so you always have the latest."
 
 Rules: Under 250 words. No markdown symbols of any kind. No headers. No bullet lists. Just warm, clean paragraphs. InPlace is NOT a medical service.
+
+ACCURACY over flattery:
+- Never attribute personality traits (sense of humor, conversational skill, sharpness) unless the notes actually show them. If the notes show repetition and difficulty holding a thread, say that warmly instead of inventing charm. A caregiver who expects "good conversation" and meets constant repetition was set up to fail.
+- When the notes show she RESISTS a kind of help, say so plainly and give the workaround — "she needs help clearing spoiled food and preparing safe meals, but she's defensive about accepting it; bringing food or eating together works better than cleaning for her" beats "help her with cooking." Technically-true-but-sanitized guidance is a disservice to both of them.
+- Prefer what the notes show over what the ratings imply, when they differ.
 SAFETY: a caregiver reads this. Never mention financial or security vulnerabilities — trouble managing money, cash or valuables in the home, who pays for things, entry codes. State care-relevant behavior neutrally without exploitable detail. Never state events or lifestyle facts (driving, falls, history) that are not in the provided profile.`,
       messages: [
         { role: "user", content: `Write a warm, personal care profile for this person:\n\n${profileContext}` }
