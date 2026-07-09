@@ -256,6 +256,40 @@ function makeIntelligenceStub(recipientName, reason) {
   };
 }
 
+/**
+ * v1.76.0 — Categorize a family observation note (non-blocking, fired after save).
+ * Extracts care domains + actionables so the timeline gets chips and the
+ * caregiver briefing gets substance without the family filling out forms.
+ */
+async function categorizeObservation(noteId) {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return null;
+  const db = await getDb();
+  const note = await db.prepare("SELECT id, content FROM recipient_notes WHERE id = ?").get(noteId);
+  if (!note || !note.content) return null;
+  const prompt = `A family member wrote this free-form observation about an elderly loved one they care for. Extract structure. Respond with ONLY valid JSON, no markdown:
+{"categories": [<zero or more of: "physical","nutrition","cognition","mood","safety","social","medication","other">], "actionables": [<0-3 short imperative strings a caregiver could act on, e.g. "Clip toenails — possible broken toe, check comfort walking">], "headline": "<one sentence, care-relevant essence>"}
+
+Observation: ${note.content.slice(0, 2000)}`;
+  try {
+    const text = await callClaude(apiKey, "claude-haiku-4-5-20251001", 400, [{ role: "user", content: prompt }]);
+    const m = text.match(/\{[\s\S]*\}/);
+    if (!m) return null;
+    const parsed = JSON.parse(m[0]);
+    const categories = Array.isArray(parsed.categories) ? parsed.categories.slice(0, 6) : [];
+    const highlights = {
+      actionables: Array.isArray(parsed.actionables) ? parsed.actionables.slice(0, 3) : [],
+      headline: typeof parsed.headline === "string" ? parsed.headline.slice(0, 200) : null,
+    };
+    await db.prepare("UPDATE recipient_notes SET categories = ?, ai_highlights = ?, updated_at = NOW() WHERE id = ?")
+      .run(JSON.stringify(categories), JSON.stringify(highlights), noteId);
+    return { categories, highlights };
+  } catch (err) {
+    console.warn("[iPAi] observation categorization failed (non-blocking):", err.message);
+    return null;
+  }
+}
+
 async function generateCareIntelligence(careRecipientId) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
@@ -701,6 +735,7 @@ Return ONLY JSON, no markdown.`;
 }
 
 module.exports = {
+  categorizeObservation,
   gatherVisitData,
   analyzePatterns,
   generateCareIntelligence,

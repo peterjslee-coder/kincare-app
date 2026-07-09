@@ -1267,6 +1267,13 @@ async function initializeDatabase() {
     // Visit logs — joined on session_id constantly
     `CREATE INDEX IF NOT EXISTS idx_visit_logs_session ON visit_logs(session_id)`,
 
+    // v1.76.0 — Family care observations (session-less notes with AI harvesting)
+    `ALTER TABLE recipient_notes ADD COLUMN IF NOT EXISTS needs_attention INTEGER DEFAULT 0`,
+    `ALTER TABLE recipient_notes ADD COLUMN IF NOT EXISTS photo TEXT`, /* PHI — streamed via endpoint, never in list payloads */
+    `ALTER TABLE recipient_notes ADD COLUMN IF NOT EXISTS categories TEXT`,
+    `ALTER TABLE recipient_notes ADD COLUMN IF NOT EXISTS ai_highlights TEXT`,
+    `CREATE INDEX IF NOT EXISTS idx_recipient_notes_recipient ON recipient_notes(care_recipient_id, created_at DESC)`,
+
     // v1.72.0 — Reimbursements: family expense ledger (settlement recorded, no platform money movement)
     `CREATE TABLE IF NOT EXISTS reimbursements (
       id TEXT PRIMARY KEY,

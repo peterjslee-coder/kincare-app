@@ -9,7 +9,9 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
   const [notes, setNotes] = useState([]);
   const [newNote, setNewNote] = useState('');
   const [addingNote, setAddingNote] = useState(false);
-  const [notesOpen, setNotesOpen] = useState(false);
+  const [notesOpen, setNotesOpen] = useState(true); // v1.76.0 — observations are a first-class feature, not buried
+  const [noteUrgent, setNoteUrgent] = useState(false);
+  const [notePhoto, setNotePhoto] = useState(null); // { data, name }
   const [photoUploading, setPhotoUploading] = useState(false);
   const [permTier, setPermTier] = useState('full');
   const [visSettings, setVisSettings] = useState(null);
@@ -457,14 +459,15 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
     if (!newNote.trim() || !profile?.id) return;
     setAddingNote(true);
     try {
-      const notePayload = { careRecipientId: profile.id, content: newNote.trim(), noteType: 'general' };
+      const notePayload = { careRecipientId: profile.id, content: newNote.trim(), noteType: 'observation', needsAttention: noteUrgent };
+      if (notePhoto) notePayload.photo = notePhoto.data;
       const res = await apiFetch('/api/notes', {
         method: 'POST',
         body: JSON.stringify(notePayload),
       });
       if (res?.ok) {
-        setNewNote('');
-        showToast('Note added', 'success');
+        setNewNote(''); setNoteUrgent(false); setNotePhoto(null);
+        showToast('Observation added', 'success');
         fetchNotes(profile.id);
       } else if (res?.status === 503 || !navigator.onLine) {
         if (window.OfflineQueue) {
@@ -1042,7 +1045,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
           onClick={() => setNotesOpen(!notesOpen)}>
           <div className="card-header" style={{ margin: 0 }}>
-            <span className="card-icon">{'\uD83D\uDCDD'}</span>Care Notes
+            <span className="card-icon">{'\uD83D\uDCDD'}</span>Observations & Notes
             {notes.length > 0 && (
               <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 600, color: 'var(--role-color)', background: '#E8F8F0', padding: '2px 8px', borderRadius: 10 }}>
                 {notes.length}
@@ -1056,19 +1059,68 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
             <div style={{ marginBottom: notes.length > 0 ? 12 : 0 }}>
               <textarea value={newNote} onChange={(e) => setNewNote(e.target.value)}
                 onClick={(e) => e.stopPropagation()}
-                placeholder="Add a note about care, observations, updates..."
-                rows={3}
+                placeholder="What did you notice? e.g. 'Had dinner with Mom — ate a lot, couldn't remember if she'd eaten today. Toenails need clipping, one toe might be hurt. Good mood, repeated the same story a few times.'"
+                rows={4}
                 style={{ width: '100%', minHeight: 80, padding: '10px 12px', border: '1px solid #d0d0d0', borderRadius: 8, fontSize: 14, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box', marginBottom: 8 }}
                 onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && newNote.trim()) { e.preventDefault(); handleAddNote(); } }} />
-              <button onClick={(e) => { e.stopPropagation(); handleAddNote(); }} disabled={addingNote || !newNote.trim()}
-                style={{ padding: '10px 20px', background: addingNote ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: addingNote ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>
-                {addingNote ? '...' : 'Add Note'}
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }} onClick={(e) => e.stopPropagation()}>
+                <button onClick={(e) => { e.stopPropagation(); handleAddNote(); }} disabled={addingNote || !newNote.trim()}
+                  style={{ padding: '10px 20px', background: addingNote ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: addingNote ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>
+                  {addingNote ? '...' : 'Add Observation'}
+                </button>
+                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                  <input type="checkbox" checked={noteUrgent} onChange={(e) => setNoteUrgent(e.target.checked)} style={{ accentColor: '#e65100' }} />
+                  Needs attention
+                </label>
+                <label style={{ fontSize: 13, color: notePhoto ? 'var(--role-color)' : 'var(--text-secondary)', cursor: 'pointer' }}>
+                  {notePhoto ? '\uD83D\uDCCE ' + notePhoto.name + ' \u2715' : '\uD83D\uDCF7 Add photo'}
+                  <input type="file" accept="image/*" capture="environment" style={{ display: 'none' }}
+                    onClick={(e) => { if (notePhoto) { e.preventDefault(); setNotePhoto(null); } }}
+                    onChange={(e) => {
+                      const file = e.target.files && e.target.files[0];
+                      e.target.value = '';
+                      if (!file || !file.type.startsWith('image/')) return;
+                      const img = new Image();
+                      const url = URL.createObjectURL(file);
+                      img.onload = () => {
+                        URL.revokeObjectURL(url);
+                        const MAX = 1600;
+                        let { width, height } = img;
+                        if (width > MAX || height > MAX) { const sc = MAX / Math.max(width, height); width = Math.round(width * sc); height = Math.round(height * sc); }
+                        const canvas = document.createElement('canvas');
+                        canvas.width = width; canvas.height = height;
+                        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+                        setNotePhoto({ data: canvas.toDataURL('image/jpeg', 0.85), name: (file.name || 'photo').replace(/\.[^.]+$/, '') + '.jpg' });
+                      };
+                      img.onerror = () => URL.revokeObjectURL(url);
+                      img.src = url;
+                    }} />
+                </label>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Visible to your care team {'\u00B7'} iPAi files it into her care picture</span>
+              </div>
             </div>
             {notes.length > 0 ? notes.map((n) => (
               <div key={n.id} style={{ padding: '10px 0', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
                 <div style={{ flex: 1 }}>
+                  {!!n.needs_attention && (
+                    <span style={{ display: 'inline-block', fontSize: 11, fontWeight: 700, color: '#e65100', background: '#fff3e0', padding: '2px 8px', borderRadius: 10, marginBottom: 4 }}>{'\u26A0'} Needs attention</span>
+                  )}
                   <div style={{ fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{n.content}</div>
+                  {Array.isArray(n.categories) && n.categories.length > 0 && (
+                    <div style={{ marginTop: 5, display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                      {n.categories.map((c) => (
+                        <span key={c} style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--role-color)', background: '#E8F8F0', padding: '2px 8px', borderRadius: 10, textTransform: 'capitalize' }}>{c}</span>
+                      ))}
+                    </div>
+                  )}
+                  {n.ai_highlights && Array.isArray(n.ai_highlights.actionables) && n.ai_highlights.actionables.length > 0 && (
+                    <div style={{ marginTop: 5, fontSize: 12, color: 'var(--text-secondary)' }}>
+                      {n.ai_highlights.actionables.map((a, i) => (<div key={i}>{'\u2192'} {a}</div>))}
+                    </div>
+                  )}
+                  {!!n.has_photo && (
+                    <a href={`/api/notes/${n.id}/photo`} target="_blank" rel="noopener" style={{ fontSize: 12, color: 'var(--role-color)', display: 'inline-block', marginTop: 5 }}>{'\uD83D\uDCCE'} View photo</a>
+                  )}
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
                     {n.author_first_name} {n.author_last_name}
                     {' \u00B7 '}{(parseTimestamp(n.created_at) || new Date()).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}

@@ -11850,7 +11850,9 @@ const CareProfile = window.CareProfile = ({
   const [notes, setNotes] = useState([]);
   const [newNote, setNewNote] = useState('');
   const [addingNote, setAddingNote] = useState(false);
-  const [notesOpen, setNotesOpen] = useState(false);
+  const [notesOpen, setNotesOpen] = useState(true); // v1.76.0 — observations are a first-class feature, not buried
+  const [noteUrgent, setNoteUrgent] = useState(false);
+  const [notePhoto, setNotePhoto] = useState(null); // { data, name }
   const [photoUploading, setPhotoUploading] = useState(false);
   const [permTier, setPermTier] = useState('full');
   const [visSettings, setVisSettings] = useState(null);
@@ -12456,15 +12458,19 @@ const CareProfile = window.CareProfile = ({
       const notePayload = {
         careRecipientId: profile.id,
         content: newNote.trim(),
-        noteType: 'general'
+        noteType: 'observation',
+        needsAttention: noteUrgent
       };
+      if (notePhoto) notePayload.photo = notePhoto.data;
       const res = await apiFetch('/api/notes', {
         method: 'POST',
         body: JSON.stringify(notePayload)
       });
       if (res !== null && res !== void 0 && res.ok) {
         setNewNote('');
-        showToast('Note added', 'success');
+        setNoteUrgent(false);
+        setNotePhoto(null);
+        showToast('Observation added', 'success');
         fetchNotes(profile.id);
       } else if ((res === null || res === void 0 ? void 0 : res.status) === 503 || !navigator.onLine) {
         if (window.OfflineQueue) {
@@ -13623,7 +13629,7 @@ const CareProfile = window.CareProfile = ({
     }
   }, /*#__PURE__*/React.createElement("span", {
     className: "card-icon"
-  }, '\uD83D\uDCDD'), "Care Notes", notes.length > 0 && /*#__PURE__*/React.createElement("span", {
+  }, '\uD83D\uDCDD'), "Observations & Notes", notes.length > 0 && /*#__PURE__*/React.createElement("span", {
     style: {
       marginLeft: 8,
       fontSize: 12,
@@ -13652,8 +13658,8 @@ const CareProfile = window.CareProfile = ({
     value: newNote,
     onChange: e => setNewNote(e.target.value),
     onClick: e => e.stopPropagation(),
-    placeholder: "Add a note about care, observations, updates...",
-    rows: 3,
+    placeholder: "What did you notice? e.g. 'Had dinner with Mom \u2014 ate a lot, couldn't remember if she'd eaten today. Toenails need clipping, one toe might be hurt. Good mood, repeated the same story a few times.'",
+    rows: 4,
     style: {
       width: '100%',
       minHeight: 80,
@@ -13672,7 +13678,15 @@ const CareProfile = window.CareProfile = ({
         handleAddNote();
       }
     }
-  }), /*#__PURE__*/React.createElement("button", {
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 10,
+      flexWrap: 'wrap'
+    },
+    onClick: e => e.stopPropagation()
+  }, /*#__PURE__*/React.createElement("button", {
     onClick: e => {
       e.stopPropagation();
       handleAddNote();
@@ -13689,7 +13703,77 @@ const CareProfile = window.CareProfile = ({
       cursor: addingNote ? 'wait' : 'pointer',
       whiteSpace: 'nowrap'
     }
-  }, addingNote ? '...' : 'Add Note')), notes.length > 0 ? notes.map(n => /*#__PURE__*/React.createElement("div", {
+  }, addingNote ? '...' : 'Add Observation'), /*#__PURE__*/React.createElement("label", {
+    style: {
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: 6,
+      fontSize: 13,
+      color: 'var(--text-secondary)',
+      cursor: 'pointer'
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "checkbox",
+    checked: noteUrgent,
+    onChange: e => setNoteUrgent(e.target.checked),
+    style: {
+      accentColor: '#e65100'
+    }
+  }), "Needs attention"), /*#__PURE__*/React.createElement("label", {
+    style: {
+      fontSize: 13,
+      color: notePhoto ? 'var(--role-color)' : 'var(--text-secondary)',
+      cursor: 'pointer'
+    }
+  }, notePhoto ? '\uD83D\uDCCE ' + notePhoto.name + ' \u2715' : '\uD83D\uDCF7 Add photo', /*#__PURE__*/React.createElement("input", {
+    type: "file",
+    accept: "image/*",
+    capture: "environment",
+    style: {
+      display: 'none'
+    },
+    onClick: e => {
+      if (notePhoto) {
+        e.preventDefault();
+        setNotePhoto(null);
+      }
+    },
+    onChange: e => {
+      const file = e.target.files && e.target.files[0];
+      e.target.value = '';
+      if (!file || !file.type.startsWith('image/')) return;
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const MAX = 1600;
+        let {
+          width,
+          height
+        } = img;
+        if (width > MAX || height > MAX) {
+          const sc = MAX / Math.max(width, height);
+          width = Math.round(width * sc);
+          height = Math.round(height * sc);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+        setNotePhoto({
+          data: canvas.toDataURL('image/jpeg', 0.85),
+          name: (file.name || 'photo').replace(/\.[^.]+$/, '') + '.jpg'
+        });
+      };
+      img.onerror = () => URL.revokeObjectURL(url);
+      img.src = url;
+    }
+  })), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 11,
+      color: 'var(--text-muted)'
+    }
+  }, "Visible to your care team ", '\u00B7', " iPAi files it into her care picture"))), notes.length > 0 ? notes.map(n => /*#__PURE__*/React.createElement("div", {
     key: n.id,
     style: {
       padding: '10px 0',
@@ -13703,7 +13787,18 @@ const CareProfile = window.CareProfile = ({
     style: {
       flex: 1
     }
-  }, /*#__PURE__*/React.createElement("div", {
+  }, !!n.needs_attention && /*#__PURE__*/React.createElement("span", {
+    style: {
+      display: 'inline-block',
+      fontSize: 11,
+      fontWeight: 700,
+      color: '#e65100',
+      background: '#fff3e0',
+      padding: '2px 8px',
+      borderRadius: 10,
+      marginBottom: 4
+    }
+  }, '\u26A0', " Needs attention"), /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 14,
       color: 'var(--text-primary)',
@@ -13711,7 +13806,43 @@ const CareProfile = window.CareProfile = ({
       whiteSpace: 'pre-wrap',
       wordBreak: 'break-word'
     }
-  }, n.content), /*#__PURE__*/React.createElement("div", {
+  }, n.content), Array.isArray(n.categories) && n.categories.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 5,
+      display: 'flex',
+      gap: 5,
+      flexWrap: 'wrap'
+    }
+  }, n.categories.map(c => /*#__PURE__*/React.createElement("span", {
+    key: c,
+    style: {
+      fontSize: 10.5,
+      fontWeight: 600,
+      color: 'var(--role-color)',
+      background: '#E8F8F0',
+      padding: '2px 8px',
+      borderRadius: 10,
+      textTransform: 'capitalize'
+    }
+  }, c))), n.ai_highlights && Array.isArray(n.ai_highlights.actionables) && n.ai_highlights.actionables.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 5,
+      fontSize: 12,
+      color: 'var(--text-secondary)'
+    }
+  }, n.ai_highlights.actionables.map((a, i) => /*#__PURE__*/React.createElement("div", {
+    key: i
+  }, '\u2192', " ", a))), !!n.has_photo && /*#__PURE__*/React.createElement("a", {
+    href: `/api/notes/${n.id}/photo`,
+    target: "_blank",
+    rel: "noopener",
+    style: {
+      fontSize: 12,
+      color: 'var(--role-color)',
+      display: 'inline-block',
+      marginTop: 5
+    }
+  }, '\uD83D\uDCCE', " View photo"), /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 11,
       color: 'var(--text-muted)',

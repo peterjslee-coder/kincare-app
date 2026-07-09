@@ -1487,8 +1487,10 @@ router.post("/:id/check-in", async (req, res) => {
     `).run(visitId, req.params.id, session.caregiver_id, arrivalMood ? (Array.isArray(arrivalMood) ? JSON.stringify(arrivalMood) : arrivalMood) : null, checkInLatitude || null, checkInLongitude || null, ciGeo.distanceFt, ciGeo.flag, isOfflineSync ? 1 : 0, isTestMode ? 1 : 0);
 
     // Get special instructions and recent notes for the caregiver
+    // v1.76.0 — caregivers get family observations via the AI-digested briefing,
+    // not raw (Pete's decision: candor for family, care-relevant digest for caregivers)
     const notes = await db.prepare(
-      "SELECT content, created_at FROM recipient_notes WHERE care_recipient_id = ? ORDER BY created_at DESC LIMIT 5"
+      "SELECT content, created_at FROM recipient_notes WHERE care_recipient_id = ? AND note_type != 'observation' ORDER BY created_at DESC LIMIT 5"
     ).all(session.care_recipient_id);
 
     // Notify family that session has started (skip in test mode — admin impersonation)
