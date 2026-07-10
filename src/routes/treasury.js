@@ -1,5 +1,6 @@
 const express = require("express");
 const { authenticate, requireAdmin } = require("../middleware/auth");
+const { captureException } = require("../utils/sentry");
 
 const router = express.Router();
 
@@ -97,7 +98,7 @@ router.get("/", authenticate, requireAdmin, async (req, res) => {
           created: new Date(p.created * 1000).toISOString(),
           description: p.description || null,
         }));
-      } catch {}
+      } catch (e) { captureException(e, { where: "treasury: stripe payouts list" }); }
 
       // Get any open disputes
       let openDisputes = [];
@@ -114,7 +115,7 @@ router.get("/", authenticate, requireAdmin, async (req, res) => {
             created: new Date(d.created * 1000).toISOString(),
             evidenceDueBy: d.evidence_details?.due_by ? new Date(d.evidence_details.due_by * 1000).toISOString() : null,
           }));
-      } catch {}
+      } catch (e) { captureException(e, { where: "treasury: stripe disputes list" }); }
 
       // Get recent charges summary (last 30 days volume)
       let last30DaysVolume = 0;
@@ -132,7 +133,7 @@ router.get("/", authenticate, requireAdmin, async (req, res) => {
           last30DaysFees += t.fee;
           last30DaysCount++;
         }
-      } catch {}
+      } catch (e) { captureException(e, { where: "treasury: stripe balance txns" }); }
 
       results.stripe = {
         balance: { available, pending, connectReserved, total: available + pending },

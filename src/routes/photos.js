@@ -4,6 +4,7 @@ const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { authenticate, requireRole } = require("../middleware/auth");
 const { validateMagicBytes } = require("../utils/fileValidation");
+const { captureException } = require("../utils/sentry");
 
 const router = express.Router();
 router.use(authenticate);
@@ -110,7 +111,7 @@ router.post(
             { type: 'visit_photos', visitLogId }
           );
         }
-      } catch {}
+      } catch (e) { captureException(e, { where: "photos: family notification" }); }
     }
 
     res.status(201).json({ photos, count: photos.length });

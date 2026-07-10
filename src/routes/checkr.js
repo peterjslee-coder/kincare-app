@@ -3,6 +3,7 @@ const { activeVouchesFor } = require("../utils/vouches");
 const { getDb } = require("../models/database");
 const { authenticate, requireRole } = require("../middleware/auth");
 const { writeAuditLog } = require("../middleware/auditLog");
+const { captureException } = require("../utils/sentry");
 
 const router = express.Router();
 
@@ -496,7 +497,7 @@ router.post("/webhook", express.raw({ type: "application/json", limit: "100kb" }
             if (sendPushToUser) {
               for (const admin of admins) { await sendPushToUser(db, admin.id, title, msg.substring(0, 100)); }
             }
-          } catch {}
+          } catch (e) { captureException(e, { where: "checkr: admin alert push (report complete)" }); }
         } catch (alertErr) {
           console.error("[checkr-webhook] Invitation completed alert error:", alertErr.message);
         }
@@ -558,7 +559,7 @@ router.post("/webhook", express.raw({ type: "application/json", limit: "100kb" }
                 if (sendPushToUser) {
                   for (const admin of admins) { await sendPushToUser(db, admin.id, title, msg.substring(0, 100)); }
                 }
-              } catch {}
+              } catch (e) { captureException(e, { where: "checkr: admin alert push (invitation)" }); }
             }
           } catch (alertErr) {
             console.error("[checkr-webhook] Admin alert error:", alertErr.message);
@@ -642,7 +643,7 @@ router.post("/webhook", express.raw({ type: "application/json", limit: "100kb" }
             if (sendPushToUser) {
               for (const admin of admins) { await sendPushToUser(db, admin.id, title, msg.substring(0, 100)); }
             }
-          } catch {}
+          } catch (e) { captureException(e, { where: "checkr: admin alert push (report created)" }); }
         } catch (alertErr) {
           console.error("[checkr-webhook] Invitation expired alert error:", alertErr.message);
         }
@@ -689,7 +690,7 @@ router.post("/webhook", express.raw({ type: "application/json", limit: "100kb" }
             if (sendPushToUser) {
               for (const admin of admins) { await sendPushToUser(db, admin.id, title, msg.substring(0, 100)); }
             }
-          } catch {}
+          } catch (e) { captureException(e, { where: "checkr: admin alert push (report pending)" }); }
         } catch (alertErr) {
           console.error("[checkr-webhook] Report suspended alert error:", alertErr.message);
         }
@@ -736,7 +737,7 @@ router.post("/webhook", express.raw({ type: "application/json", limit: "100kb" }
             if (sendPushToUser) {
               for (const admin of admins) { await sendPushToUser(db, admin.id, title, msg.substring(0, 100)); }
             }
-          } catch {}
+          } catch (e) { captureException(e, { where: "checkr: admin alert push (report engaged)" }); }
         } catch (alertErr) {
           console.error("[checkr-webhook] Report resumed alert error:", alertErr.message);
         }
@@ -802,7 +803,7 @@ router.post("/webhook", express.raw({ type: "application/json", limit: "100kb" }
             if (sendPushToUser) {
               for (const admin of admins) { await sendPushToUser(db, admin.id, title, msg.substring(0, 100)); }
             }
-          } catch {}
+          } catch (e) { captureException(e, { where: "checkr: admin alert push (adverse action)" }); }
         } catch (alertErr) {
           console.error("[checkr-webhook] Report disputed alert error:", alertErr.message);
         }
@@ -947,7 +948,7 @@ router.post("/webhook", express.raw({ type: "application/json", limit: "100kb" }
             if (sendPushToUser) {
               for (const admin of admins) { await sendPushToUser(db, admin.id, title, msg.substring(0, 100)); }
             }
-          } catch {}
+          } catch (e) { captureException(e, { where: "checkr: admin alert push (manual review)" }); }
         } catch (alertErr) {
           console.error("[checkr-webhook] Report canceled alert error:", alertErr.message);
         }

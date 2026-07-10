@@ -4,6 +4,7 @@ const { authenticate } = require("../middleware/auth");
 const { getDb } = require("../models/database");
 const { generateCareIntelligence, generateSessionSummary, analyzePatterns, gatherVisitData, generateCarePlan } = require("../utils/careIntelligence");
 const { MODEL_HAIKU } = require("../utils/aiModels");
+const { captureException } = require("../utils/sentry");
 
 // ─── Shared access checks (IDOR guards) ───
 // A user may see a recipient's care data if they own it, are an admin, are an
@@ -18,11 +19,11 @@ async function userCanAccessRecipient(db, userId, recipientId) {
   try {
     const team = await db.prepare("SELECT 1 FROM care_team_members WHERE care_recipient_id = ? AND user_id = ? AND status = 'accepted'").get(recipientId, userId);
     if (team) return true;
-  } catch {}
+  } catch (e) { captureException(e, { where: "careIntelligence: access check (care team)" }); }
   try {
     const cg = await db.prepare("SELECT 1 FROM caregiver_assignments WHERE care_recipient_id = ? AND caregiver_user_id = ? AND status = 'active'").get(recipientId, userId);
     if (cg) return true;
-  } catch {}
+  } catch (e) { captureException(e, { where: "careIntelligence: access check (caregiver assignment)" }); }
   return false;
 }
 
@@ -58,7 +59,7 @@ router.get("/:recipientId", authenticate, async (req, res) => {
           "SELECT 1 FROM care_team_members WHERE care_recipient_id = ? AND user_id = ? AND status = 'accepted'"
         ).get(req.params.recipientId, req.user.id);
         if (isTeamMember) hasAccess = true;
-      } catch {}
+      } catch (e) { captureException(e, { where: "careIntelligence: access check (team member)" }); }
     }
     // v1.77.0 — the intelligence report is a FAMILY artifact (it names financial and
     // other vulnerabilities). Caregivers get the check-in briefing, coaching, and the
@@ -258,7 +259,7 @@ router.get("/coaching/:sessionId", authenticate, async (req, res) => {
     // Check if coaching already exists
     const vl = await db.prepare("SELECT ai_coaching FROM visit_logs WHERE session_id = ?").get(req.params.sessionId);
     if (vl?.ai_coaching) {
-      try { return res.json(JSON.parse(vl.ai_coaching)); } catch {}
+      try { return res.json(JSON.parse(vl.ai_coaching)); } catch {} // expected: tolerated parse fallback
     }
     // Generate on demand
     const { generateCaregiverCoaching } = require("../utils/careIntelligence");
@@ -269,7 +270,7 @@ router.get("/coaching/:sessionId", authenticate, async (req, res) => {
       await db.prepare("UPDATE visit_logs SET ai_coaching = ? WHERE session_id = ?").run(
         JSON.stringify(coaching), req.params.sessionId
       );
-    } catch {}
+    } catch (e) { captureException(e, { where: "careIntelligence: cache coaching" }); }
     res.json(coaching);
   } catch (err) {
     console.error("[iPAi] Coaching route error:", err);

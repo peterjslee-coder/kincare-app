@@ -10,6 +10,7 @@ const { calculateSessionCost, SURCHARGE_PLATFORM_SHARE } = require("../utils/rat
 const { getNowInZone, buildDateTimeInZone } = require("../utils/timezone");
 const { sendPushToUser } = require("./push");
 const ticketRouter = require("./tickets");
+const { captureException } = require("../utils/sentry");
 
 // emitToUser injected from server.js at startup
 let _emitToUser = null;
@@ -296,7 +297,7 @@ router.post("/late-resolution/:sessionId", requireRole("family"), async (req, re
           data: { type: "late_resolution", sessionId: req.params.sessionId },
         });
       }
-    } catch {}
+    } catch (e) { captureException(e, { where: "accountability: push (late resolution)" }); }
 
     res.json({ success: true, resolution });
   } catch (err) {
@@ -350,7 +351,7 @@ router.post("/family-no-show/:sessionId", async (req, res) => {
           data: { type: "family_no_show", sessionId: req.params.sessionId },
         });
       }
-    } catch {}
+    } catch (e) { captureException(e, { where: "accountability: push (family no-show)" }); }
 
     res.json({
       success: true,
@@ -511,7 +512,7 @@ router.post("/dispute", async (req, res) => {
           data: { type: "dispute", disputeId, sessionId },
         });
       }
-    } catch {}
+    } catch (e) { captureException(e, { where: "accountability: push (dispute filed)" }); }
 
     res.json({ success: true, disputeId });
   } catch (err) {

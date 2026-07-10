@@ -328,7 +328,7 @@ async function familyDashboard(db, userId, res) {
       }),
       recentActivity: recentActivity.map((a) => {
         let meta = {};
-        try { meta = a.metadata ? JSON.parse(a.metadata) : {}; } catch(e) {}
+        try { meta = a.metadata ? JSON.parse(a.metadata) : {}; } catch(e) {} // expected: tolerated parse fallback
         return {
           id: a.id,
           eventType: a.event_type,
@@ -378,7 +378,7 @@ async function familyDashboard(db, userId, res) {
         }
         return recentCompleted.map(s => {
           let condTags = [];
-          try { condTags = s.condition_tags ? JSON.parse(s.condition_tags) : []; } catch(e) {}
+          try { condTags = s.condition_tags ? JSON.parse(s.condition_tags) : []; } catch(e) {} // expected: tolerated parse fallback
           const existingReview = reviewMap[s.id];
           return {
             id: s.id,
@@ -1105,7 +1105,7 @@ async function careForDashboard(db, userId, res) {
     })),
     recentActivity: recentActivity.map(a => {
       let meta = {};
-      try { meta = a.metadata ? JSON.parse(a.metadata) : {}; } catch(e) {}
+      try { meta = a.metadata ? JSON.parse(a.metadata) : {}; } catch(e) {} // expected: tolerated parse fallback
       return {
         id: a.id,
         eventType: a.event_type,

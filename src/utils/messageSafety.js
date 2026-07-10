@@ -15,6 +15,7 @@
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { MODEL_HAIKU } = require("./aiModels");
+const { captureException } = require("./sentry");
 
 const SAFETY_SYSTEM_PROMPT = `You are a safety classifier for InPlace, a caregiving platform that connects families with caregivers for elderly and vulnerable adults.
 
@@ -188,7 +189,7 @@ async function screenMessage(messageContent, senderId, conversationId, senderInf
           }).catch(() => {});
         }
       }
-    } catch {}
+    } catch (e) { captureException(e, { where: "messageSafety: safety alert dispatch" }); }
 
     console.warn(`[MessageSafety] ${severity.toUpperCase()} ${flagType} flagged for user ${senderId}: "${messageContent.substring(0, 100)}" — ${analysis.reason}`);
 

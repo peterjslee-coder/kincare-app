@@ -17,7 +17,7 @@ const { MODEL_HAIKU } = require("./aiModels");
 // Parse mood value — handles both legacy single strings and new JSON arrays
 function parseMoodDisplay(val) {
   if (!val) return null;
-  try { const p = JSON.parse(val); if (Array.isArray(p)) return p.join(", "); } catch {}
+  try { const p = JSON.parse(val); if (Array.isArray(p)) return p.join(", "); } catch {} // expected: tolerated parse fallback
   return val;
 }
 
@@ -124,7 +124,7 @@ function analyzePatterns(visits) {
   const tagCounts = {};
   for (const v of visits) {
     let tags = [];
-    try { tags = JSON.parse(v.condition_tags || "[]"); } catch {}
+    try { tags = JSON.parse(v.condition_tags || "[]"); } catch {} // expected: tolerated parse fallback
     for (const tag of tags) {
       tagCounts[tag] = (tagCounts[tag] || 0) + 1;
     }
@@ -530,7 +530,7 @@ async function generateCarePlan(careRecipientId) {
     try {
       const tags = JSON.parse(v.condition_tags || "[]");
       caregiverStats[cg].tags.push(...tags);
-    } catch {}
+    } catch {} // expected: tolerated parse fallback
   }
 
   const caregiverSummary = Object.entries(caregiverStats)

@@ -4,6 +4,7 @@ const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { authenticate, requireAdmin } = require("../middleware/auth");
 const authRouter = require("./auth");
+const { captureException } = require("../utils/sentry");
 const { sendVerificationEmail } = authRouter;
 const {
   generateAuthenticationOptions,
@@ -498,7 +499,7 @@ router.get("/alerts", async (req, res) => {
 
     // Calculate delta from last-seen snapshot — only badge genuinely new items
     let seen = {};
-    try { seen = JSON.parse(userRow?.admin_alerts_snapshot || '{}'); } catch {}
+    try { seen = JSON.parse(userRow?.admin_alerts_snapshot || '{}'); } catch {} // expected: tolerated parse fallback
     const delta = {
       pendingUsers: Math.max(0, counts.pendingUsers - (seen.pendingUsers || 0)),
       pausedCaregivers: Math.max(0, counts.pausedCaregivers - (seen.pausedCaregivers || 0)),
@@ -4213,14 +4214,14 @@ router.put("/users/:id/approve", requireAdmin, async (req, res) => {
           data: { type: "account_approved" },
         });
       }
-    } catch {}
+    } catch (e) { captureException(e, { where: "admin: push (account approved)" }); }
 
     // Activity feed
     try {
       await db.prepare(
         "INSERT INTO activity_feed (id, family_user_id, event_type, title, message, created_at) VALUES (?, ?, 'account_approved', 'Welcome to InPlace!', 'Your account has been approved. Continue setting up your profile to get started.', NOW())"
       ).run(uuid(), req.params.id);
-    } catch {}
+    } catch (e) { captureException(e, { where: "admin: activity feed (account approved)" }); }
 
     res.json({ success: true, message: `Approved ${user.first_name} ${user.last_name}` });
   } catch (err) {
@@ -4296,7 +4297,7 @@ router.put("/users/:id/reject-bgcheck", requireAdmin, async (req, res) => {
           data: { type: "bgcheck_rejected" },
         });
       }
-    } catch {}
+    } catch (e) { captureException(e, { where: "admin: push (bgcheck rejected)" }); }
 
     // Activity feed entry for admin
     try {
@@ -4304,7 +4305,7 @@ router.put("/users/:id/reject-bgcheck", requireAdmin, async (req, res) => {
         "INSERT INTO activity_feed (id, family_user_id, event_type, title, message, created_at) VALUES (?, ?, 'checkr_rejected', ?, ?, NOW())"
       ).run(uuid(), req.user.id, `Background check rejected — ${user.first_name} ${user.last_name}`,
         `${user.first_name} ${user.last_name} was rejected due to background check findings. Reason: ${reason || 'Did not meet requirements'}`);
-    } catch {}
+    } catch (e) { captureException(e, { where: "admin: activity feed (checkr rejected)" }); }
 
     res.json({ success: true, message: `Rejected ${user.first_name} ${user.last_name} — they've been notified via message` });
   } catch (err) {
@@ -4627,7 +4628,7 @@ router.get("/sessions/:id/detail", authenticate, requireAdmin, async (req, res) 
         FROM payments p WHERE p.session_id = ?
         ORDER BY p.created_at ASC
       `).all(sid);
-    } catch {}
+    } catch (e) { captureException(e, { where: "admin: session detail payments" }); }
 
     // 4. Activity feed entries for this session
     let activities = [];
@@ -4638,7 +4639,7 @@ router.get("/sessions/:id/detail", authenticate, requireAdmin, async (req, res) 
         WHERE af.metadata LIKE ?
         ORDER BY af.created_at ASC
       `).all(`%${sid}%`);
-    } catch {}
+    } catch (e) { captureException(e, { where: "admin: session detail activities" }); }
 
     // 5. Admin audit log entries for this session
     let auditLog = [];
@@ -4651,7 +4652,7 @@ router.get("/sessions/:id/detail", authenticate, requireAdmin, async (req, res) 
         WHERE aal.target_id = ? AND aal.target_type = 'care_session'
         ORDER BY aal.created_at ASC
       `).all(sid);
-    } catch {}
+    } catch (e) { captureException(e, { where: "admin: session detail audit log" }); }
 
     // 6. Build a unified timeline
     const timeline = [];
@@ -4686,7 +4687,7 @@ router.get("/sessions/:id/detail", authenticate, requireAdmin, async (req, res) 
       // Visit notes
       if (vl.care_feedback || vl.summary) {
         let tags = [];
-        try { tags = JSON.parse(vl.condition_tags || '[]'); } catch {}
+        try { tags = JSON.parse(vl.condition_tags || '[]'); } catch {} // expected: tolerated parse fallback
         timeline.push({ time: vl.check_out_time || vl.check_in_time || vl.created_at, type: 'visit_notes', label: 'Visit Notes',
           detail: vl.care_feedback || vl.summary, tags,
           serviceFeedback: vl.service_feedback || null });
@@ -4742,7 +4743,7 @@ router.get("/sessions/:id/detail", authenticate, requireAdmin, async (req, res) 
     // Admin actions
     for (const a of auditLog) {
       let details = {};
-      try { details = JSON.parse(a.details || '{}'); } catch {}
+      try { details = JSON.parse(a.details || '{}'); } catch {} // expected: tolerated parse fallback
       timeline.push({ time: a.created_at, type: 'admin_action', label: `Admin: ${a.action.replace(/_/g, ' ')}`,
         detail: `by ${a.admin_first || ''} ${a.admin_last || ''}`.trim() + (a.admin_email ? ` (${a.admin_email})` : ''),
         adminDetails: details });
@@ -4974,7 +4975,7 @@ router.post("/message/:userId", authenticate, checkAdmin, requireAdmin, async (r
       if (sendPushToUser) {
         await sendPushToUser(db, req.params.userId, "InPlace Support", message.trim().substring(0, 100), { conversationId: convId });
       }
-    } catch {}
+    } catch (e) { captureException(e, { where: "admin: support push" }); }
 
     await logAdminAction(req, "admin_message", "user", req.params.userId, {
       conversationId: convId,
@@ -5361,7 +5362,7 @@ router.post("/safety-flags/:id/message/:userId", authenticate, checkAdmin, requi
         body: message.trim().substring(0, 100),
         data: { type: "message", conversationId: convId },
       }).catch(() => {});
-    } catch {}
+    } catch (e) { captureException(e, { where: "admin: support push (legacy)" }); }
 
     await logAdminAction(req, "safety_flag_message", "safety_flag", flagId, {
       recipientId: targetUserId, conversationId: convId,

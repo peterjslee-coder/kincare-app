@@ -3,6 +3,7 @@ const router = express.Router();
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { authenticate } = require("../middleware/auth");
+const { captureException } = require("../utils/sentry");
 
 // Middleware: check admin
 const checkAdmin = async (req, res, next) => {
@@ -74,10 +75,10 @@ router.get("/summary", authenticate, checkAdmin, async (req, res) => {
             if (smsRecord && parseFloat(smsRecord.price || 0) > 0) {
               twilioCosts.push({ period_month: month, category: "Twilio SMS", total: parseFloat(smsRecord.price || 0), count: parseInt(smsRecord.count || 0), source: "auto" });
             }
-          } catch {}
+          } catch (e) { captureException(e, { where: "costs: twilio sms usage" }); }
         }
       }
-    } catch {}
+    } catch (e) { captureException(e, { where: "costs: twilio usage sweep" }); }
 
     // Auto-pull Stripe fees
     let stripeCosts = [];
@@ -98,10 +99,10 @@ router.get("/summary", authenticate, checkAdmin, async (req, res) => {
             if (txnCount > 0) {
               stripeCosts.push({ period_month: month, category: "Stripe Fees", total: totalFees / 100, count: txnCount, source: "auto" });
             }
-          } catch {}
+          } catch (e) { captureException(e, { where: "costs: stripe fees" }); }
         }
       }
-    } catch {}
+    } catch (e) { captureException(e, { where: "costs: stripe fees sweep" }); }
 
     // Auto-pull Claude API costs
     let claudeCosts = [];
@@ -128,10 +129,10 @@ router.get("/summary", authenticate, checkAdmin, async (req, res) => {
                 claudeCosts.push({ period_month: month, category: "Claude API", total: totalCents / 100, source: "auto" });
               }
             }
-          } catch {}
+          } catch (e) { captureException(e, { where: "costs: claude api usage" }); }
         }
       }
-    } catch {}
+    } catch (e) { captureException(e, { where: "costs: claude usage sweep" }); }
 
     // Build monthly summary
     const monthMap = {};

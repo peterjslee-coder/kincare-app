@@ -12,6 +12,7 @@ const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { authenticate } = require("../middleware/auth");
 const { handleIPAiMessage } = require("../utils/ipaiChat");
+const { captureException } = require("../utils/sentry");
 
 const router = express.Router();
 router.use(authenticate);
@@ -131,7 +132,7 @@ router.post("/chat", async (req, res) => {
           if (sendPushToUser) {
             for (const admin of admins) { await sendPushToUser(db, admin.id, flagTitle, flagMsg.substring(0, 100)); }
           }
-        } catch {}
+        } catch (e) { captureException(e, { where: "ipaiChat: admin push (pre-screen flag)" }); }
         console.warn(`[iPAi SAFETY] Pre-screen ${flagType} for user ${userId}: "${message.substring(0, 100)}"`);
 
         // Auto-create system ticket for safety flag
@@ -206,7 +207,7 @@ router.post("/chat", async (req, res) => {
               await sendPushToUser(db, admin.id, alertTitle, alertMsg.substring(0, 100));
             }
           }
-        } catch {}
+        } catch (e) { captureException(e, { where: "ipaiChat: admin push (safety alert)" }); }
 
         console.warn(`[iPAi SAFETY] ${flagType} flagged for user ${userId}: "${message.substring(0, 100)}"`);
       } catch (alertErr) {

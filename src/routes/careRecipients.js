@@ -5,6 +5,7 @@ const { authenticate, requireRole } = require("../middleware/auth");
 const { geocodeAddress, buildAddressString } = require("../utils/geocode");
 
 const { MODEL_SONNET, MODEL_HAIKU } = require("../utils/aiModels");
+const { captureException } = require("../utils/sentry");
 const router = express.Router();
 
 // All routes require authentication
@@ -57,7 +58,7 @@ router.get("/", requireRole("family", "admin", "care_for"), async (req, res) => 
       WHERE ctm.user_id = ?
       ORDER BY cr.created_at DESC
     `).all(req.user.id);
-  } catch {}
+  } catch (e) { captureException(e, { where: "careRecipients: list team memberships" }); }
 
   // Merge and deduplicate (owner takes precedence, then shared, then team)
   const ownedIds = new Set(owned.map(r => r.id));
@@ -768,7 +769,7 @@ router.post("/:id/doctor-report", async (req, res) => {
       const date = v.check_in_time ? new Date(v.check_in_time).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '?';
       const caregiver = `${v.cg_first || ''} ${v.cg_last || ''}`.trim();
       let tags = [];
-      try { tags = JSON.parse(v.condition_tags || '[]'); } catch {}
+      try { tags = JSON.parse(v.condition_tags || '[]'); } catch {} // expected: tolerated parse fallback
       return `[${date} — ${caregiver}] Mood: ${v.arrival_mood || '?'} → ${v.departure_mood || '?'}. ${v.summary || ''} ${v.notes || ''} ${tags.length > 0 ? 'Tags: ' + tags.join(', ') : ''}`.trim();
     }).join('\n');
 
