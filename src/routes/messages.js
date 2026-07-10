@@ -12,6 +12,19 @@ const { validateMagicBytes } = require("../utils/fileValidation");
 const router = express.Router();
 router.use(authenticate);
 
+// v1.84: rate-limit message sends (infra #4) — global apiLimiter (120/min) is
+// too loose for spam via send endpoints. 30 sends/min per IP is far above any
+// human typing rate. GETs (polling, list) are untouched.
+const rateLimit = require("express-rate-limit");
+const sendLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  message: { error: "You're sending messages too quickly — please wait a moment" },
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: { trustProxy: false, xForwardedForHeader: false },
+});
+
 // Multer for chat photo uploads — memory storage, 5MB limit, images only
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -534,7 +547,7 @@ router.get("/conversations/:id", async (req, res) => {
 });
 
 // ─── POST /api/messages/conversations/:id/photo ─── Upload a photo in a conversation
-router.post("/conversations/:id/photo", upload.single("photo"), async (req, res) => {
+router.post("/conversations/:id/photo", sendLimiter, upload.single("photo"), async (req, res) => {
   try {
     const db = await getDb();
     const userId = req.user.id;
@@ -622,7 +635,7 @@ router.post("/conversations/:id/photo", upload.single("photo"), async (req, res)
 });
 
 // ─── POST /api/messages/conversations/:id ─── Send a message to a conversation
-router.post("/conversations/:id", async (req, res) => {
+router.post("/conversations/:id", sendLimiter, async (req, res) => {
   const db = await getDb();
   const userId = req.user.id;
   const convId = req.params.id;
@@ -756,7 +769,7 @@ router.post("/conversations/:id", async (req, res) => {
 });
 
 // ─── LEGACY: POST /api/messages ─── Send a 1:1 message (backward compat)
-router.post("/", async (req, res) => {
+router.post("/", sendLimiter, async (req, res) => {
   const db = await getDb();
   const { recipientId, content } = req.body;
 

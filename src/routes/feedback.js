@@ -5,6 +5,18 @@ const { authenticate } = require("../middleware/auth");
 
 const router = express.Router();
 
+// v1.84: rate-limit feedback submissions (infra #4). /anonymous is
+// unauthenticated and reachable from the splash page — keep it tight.
+const rateLimit = require("express-rate-limit");
+const feedbackLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { error: "Too many feedback submissions — please try again later" },
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: { trustProxy: false, xForwardedForHeader: false },
+});
+
 // v1.74.2 — parse stored JSON defensively: a single malformed row must not 500 an endpoint
 function safeJson(raw, fallback) {
   if (!raw) return fallback;
@@ -14,7 +26,7 @@ function safeJson(raw, fallback) {
 
 // ─── POST /api/feedback/anonymous ───
 // Submit feedback without authentication (splash/demo visitors)
-router.post("/anonymous", async (req, res) => {
+router.post("/anonymous", feedbackLimiter, async (req, res) => {
   const db = await getDb();
   const { category, description, mood, screenshot, pageContext } = req.body;
 
@@ -60,7 +72,7 @@ router.use(authenticate);
 
 // ─── POST /api/feedback ───
 // Submit feedback (any authenticated user)
-router.post("/", async (req, res) => {
+router.post("/", feedbackLimiter, async (req, res) => {
   const db = await getDb();
   const { category, description, mood, screenshot, pageContext } = req.body;
 
