@@ -401,6 +401,43 @@ const _DayIcon = () => {
 };
 
 // Main App Component — role-aware routing & sidebar
+
+// ─── AdminPanelLazy (v1.85, infra #5) ───
+// AdminPanel + AdminFinancials + SafetyFlagsTab live in bundle-admin.js,
+// injected as a classic script the first time an admin opens this page.
+// Components are window-globals, so no module system is needed.
+const AdminPanelLazy = (props) => {
+  const [ready, setReady] = React.useState(() => !!window.AdminPanel);
+  const [failed, setFailed] = React.useState(false);
+  React.useEffect(() => {
+    if (window.AdminPanel) return;
+    const existing = document.getElementById('admin-bundle');
+    const onload = () => { if (window.AdminPanel) setReady(true); else setFailed(true); };
+    if (existing) {
+      // Already injected (fast re-mount) — poll briefly for it to finish
+      existing.addEventListener('load', onload);
+      existing.addEventListener('error', () => setFailed(true));
+      if (window.AdminPanel) setReady(true);
+      return;
+    }
+    const s = document.createElement('script');
+    s.id = 'admin-bundle';
+    s.src = window.__ADMIN_BUNDLE_URL || '/js-compiled/bundle-admin.js';
+    s.onload = onload;
+    s.onerror = () => setFailed(true);
+    document.head.appendChild(s);
+  }, []);
+  if (failed) return (
+    <div style={{ padding: 32, textAlign: 'center' }}>
+      <p>Couldn't load the admin tools — check your connection.</p>
+      <button className="btn btn-primary" onClick={() => window.location.reload()}>Reload</button>
+    </div>
+  );
+  if (!ready) return <LoadingSpinner text="Loading admin tools..." />;
+  const AP = window.AdminPanel;
+  return <AP {...props} />;
+};
+
 const App = () => {
   // Detect URL params at init — BEFORE any useEffect or auto-login can race
   // Capture verify token BEFORE any replaceState can strip the URL
@@ -1571,7 +1608,7 @@ const App = () => {
     if (currentPage === 'help') return <HelpPage key={pageKey} currentUser={currentUser} onNavigate={setCurrentPage} />;
     if (currentPage === 'financials') return <MyAccount key={pageKey} setCurrentUser={setCurrentUser} onNavigate={setCurrentPage} />; {/* Financials moved to Account */}
     if (currentPage === 'payments') { window.__accountTab = 'payments'; return <MyAccount key={pageKey} setCurrentUser={setCurrentUser} onNavigate={setCurrentPage} />; }
-    if (currentPage === 'admin' && currentUser?.isAdmin) return <AdminPanel key={pageKey} currentUser={currentUser} />;
+    if (currentPage === 'admin' && currentUser?.isAdmin) return <AdminPanelLazy key={pageKey} currentUser={currentUser} />;
     return <Dashboard key={pageKey} onNavigate={setCurrentPage} />;
   };
 

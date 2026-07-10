@@ -12,7 +12,11 @@ const babel = require("@babel/core");
 const PUBLIC = path.join(__dirname, "..", "public");
 const OUT_DIR = path.join(PUBLIC, "js-compiled");
 
-// Source files in dependency order (must match index.html script list)
+// Source files in dependency order.
+// v1.85 (infra #5): split into CORE (everyone) and ADMIN (lazy-loaded via
+// script-tag injection the first time an admin opens the Admin page).
+// AdminPanel alone was ~40% of the old single bundle. Admin components are
+// window-globals, so the second script file works without a module system.
 const scripts = [
   "js/offlineQueue.js",
   "js/utils.js",
@@ -64,61 +68,70 @@ const scripts = [
   "js/components/CaregiverOnboarding.js",
   "js/components/CheckrEmbed.js",
   "js/components/FamilyPayments.js",
-  "js/components/AdminFinancials.js",
   "js/components/HelpPage.js",
-  "js/components/SafetyFlagsTab.js",
-  "js/components/AdminPanel.js",
   "js/components/IPAiBadge.js",
   "js/components/IPAiInsightsCard.js",
   "js/app.js",
 ];
 
-console.log("  Building client bundle...");
+// Admin-only components — dependency order (AdminPanel renders the other two)
+const ADMIN_SCRIPTS = [
+  "js/components/AdminFinancials.js",
+  "js/components/SafetyFlagsTab.js",
+  "js/components/AdminPanel.js",
+];
 
-// Read and concatenate source files
-const sources = scripts.map((relPath) => {
-  const fullPath = path.join(PUBLIC, relPath);
-  if (!fs.existsSync(fullPath)) {
-    console.error(`  ERROR: Missing source file: ${relPath}`);
-    process.exit(1);
-  }
-  return fs.readFileSync(fullPath, "utf-8");
-});
+console.log("  Building client bundles...");
 
-const combined = sources.join("\n;\n");
+const crypto = require("crypto");
 
-// Babel transform — same presets as babel-standalone used in-browser
-const result = babel.transformSync(combined, {
-  presets: [
-    ["@babel/preset-react"],
-    [
-      "@babel/preset-env",
-      {
-        targets: "> 1%, not dead",
-        modules: false, // keep ES modules for browser
-      },
+function buildBundle(fileList, label) {
+  const sources = fileList.map((relPath) => {
+    const fullPath = path.join(PUBLIC, relPath);
+    if (!fs.existsSync(fullPath)) {
+      console.error(`  ERROR: Missing source file: ${relPath}`);
+      process.exit(1);
+    }
+    return fs.readFileSync(fullPath, "utf-8");
+  });
+
+  const combined = sources.join("\n;\n");
+
+  // Babel transform — same presets as babel-standalone used in-browser
+  const result = babel.transformSync(combined, {
+    presets: [
+      ["@babel/preset-react"],
+      [
+        "@babel/preset-env",
+        {
+          targets: "> 1%, not dead",
+          modules: false, // keep ES modules for browser
+        },
+      ],
     ],
-  ],
-  plugins: ["@babel/plugin-transform-optional-chaining"],
-  compact: false, // readable output for debugging
-  filename: "bundle.jsx", // helps Babel with source context
-});
+    plugins: ["@babel/plugin-transform-optional-chaining"],
+    compact: false, // readable output for debugging
+    filename: `${label}.jsx`, // helps Babel with source context
+  });
+  return result.code;
+}
 
-// Write output
 if (!fs.existsSync(OUT_DIR)) {
   fs.mkdirSync(OUT_DIR, { recursive: true });
 }
 
-const outPath = path.join(OUT_DIR, "bundle.js");
-fs.writeFileSync(outPath, result.code, "utf-8");
+const coreCode = buildBundle(scripts, "bundle");
+const adminCode = buildBundle(ADMIN_SCRIPTS, "bundle-admin");
 
-const sizeKB = (Buffer.byteLength(result.code, "utf-8") / 1024).toFixed(1);
-console.log(`  Bundle written: ${outPath} (${sizeKB} KB)`);
+fs.writeFileSync(path.join(OUT_DIR, "bundle.js"), coreCode, "utf-8");
+fs.writeFileSync(path.join(OUT_DIR, "bundle-admin.js"), adminCode, "utf-8");
+console.log(`  bundle.js:       ${(Buffer.byteLength(coreCode, "utf-8") / 1024).toFixed(1)} KB`);
+console.log(`  bundle-admin.js: ${(Buffer.byteLength(adminCode, "utf-8") / 1024).toFixed(1)} KB`);
 
 // ─── Auto-bump cache-buster in sw.js and index.html ───
-// Uses content hash + timestamp so SW always updates on every deploy
-const crypto = require("crypto");
-const bundleHash = crypto.createHash("md5").update(result.code).digest("hex").slice(0, 8);
+// Uses content hash + timestamp so SW always updates on every deploy.
+// Hash covers BOTH bundles so an admin-only change still busts caches.
+const bundleHash = crypto.createHash("md5").update(coreCode).update(adminCode).digest("hex").slice(0, 8);
 const buildTs = Date.now().toString(36);
 const buildVersion = `build-${bundleHash}-${buildTs}`;
 
@@ -132,11 +145,12 @@ if (fs.existsSync(swPath)) {
   console.log(`  SW cache version: ${buildVersion}`);
 }
 
-// Update index.html bundle.js cache buster + sync APP_VERSION from server.js
+// Update index.html bundle cache busters + sync APP_VERSION from server.js
 const indexPath = path.join(PUBLIC, "index.html");
 if (fs.existsSync(indexPath)) {
   let html = fs.readFileSync(indexPath, "utf-8");
-  html = html.replace(/bundle\.js\?v=[^"]+/, `bundle.js?v=${buildVersion}`);
+  html = html.replace(/bundle\.js\?v=[^"']+/, `bundle.js?v=${buildVersion}`);
+  html = html.replace(/bundle-admin\.js\?v=[^"']+/, `bundle-admin.js?v=${buildVersion}`);
   html = html.replace(/styles\.css\?v=[^"]+/, `styles.css?v=${buildVersion}`);
 
   // Auto-sync APP_VERSION from server.js so it never goes stale

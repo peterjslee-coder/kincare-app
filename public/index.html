@@ -41,7 +41,7 @@
   <!-- PWA Manifest -->
   <link rel="manifest" href="/manifest.json">
 
-  <link rel="stylesheet" href="/css/styles.css?v=build-77582ac4-mrdm6dls">
+  <link rel="stylesheet" href="/css/styles.css?v=build-d61d2d9c-mre9sun3">
 
   <!-- Leaflet CSS for maps (self-hosted — no CDN dependency) -->
   <link rel="stylesheet" href="/vendor/leaflet.css">
@@ -70,7 +70,11 @@
   <script src="/vendor/twilio-video.min.js"></script>
 
   <!-- Pre-compiled app bundle (built by scripts/build-client.js) -->
-  <script>window.APP_VERSION = '1.80.0';</script>
+  <script>
+    window.APP_VERSION = '1.85.0';
+    // v1.85: admin components live in a separate lazy bundle (infra #5)
+    window.__ADMIN_BUNDLE_URL = '/js-compiled/bundle-admin.js?v=build-d61d2d9c-mre9sun3';
+  </script>
   <script>
     // ─── Theme initialization ───
     // Always start light (brand green). Unauthenticated visitors should never
@@ -121,7 +125,7 @@
       });
     })();
   </script>
-  <script src="/js-compiled/bundle.js?v=build-77582ac4-mrdm6dls"></script>
+  <script src="/js-compiled/bundle.js?v=build-d61d2d9c-mre9sun3"></script>
 
   <script>
     // Service worker: register/update and auto-reload on new version
