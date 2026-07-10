@@ -3209,3 +3209,34 @@ body.text-size-xlarge h2, body.text-size-xlarge h3 { font-size: 28px !important;
 .text-size-pill-default { font-size: 14px !important; }
 .text-size-pill-large { font-size: 18px !important; }
 .text-size-pill-xlarge { font-size: 22px !important; }
+
+/* ═══ Accessibility floor (v1.87.0, infra #7) ═══
+   Older-adult-heavy user base: readable text ≥14px, meta/badge text ≥12px,
+   primary tap targets ≥44px (WCAG 2.5.5). Deliberately NOT touched: bottom
+   nav (Pete-approved v1.80 design) and splash (being redesigned separately).
+   These overrides win by cascade order — keep this section last. */
+
+/* Readable body/content text that sat at 12–13px */
+.activity-message, .empty-state-text, .recipient-card p, .track-option p,
+.caregiver-detail, .commitment-detail, .info-label, .session-type,
+.testimonial-role, .btn-small, .pwa-install-banner-subtitle,
+.pwa-instructions-step, .onboarding-step .step-text .step-desc {
+  font-size: 14px;
+}
+
+/* Meta text and badges that sat at 10–11px */
+.badge, .caregiver-badge, .activity-badge, .activity-time,
+.onboarding-gate-progress .progress-label {
+  font-size: 12px;
+}
+
+/* Primary tap targets: comfortable 44px minimum */
+.btn, .btn-primary, .btn-secondary {
+  min-height: 44px;
+}
+.btn-small {
+  min-height: 36px; /* secondary inline actions — full 44 distorts dense rows */
+}
+.form-group input, .form-group select, .form-group textarea, .modal-input {
+  min-height: 44px;
+}

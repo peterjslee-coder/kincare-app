@@ -52,6 +52,28 @@ router.post("/documents", upload.array("documents", 10), async (req, res) => {
         VALUES (?, ?, ?, ?, ?, ?)
       `).run(docId, req.user.id, docType, base64, file.originalname, docMeta);
 
+      // v1.87.0 (infra #7): write verified_documents AT UPLOAD (same id, so the
+      // per-boot caregiver_documents sync skips it) instead of waiting for the
+      // next boot. Mapping mirrors the boot sync; real size/mime instead of the
+      // sync's placeholders. Non-fatal: if the caregiver profile doesn't exist
+      // yet, owner_id is NULL and this insert fails — the boot sync picks the
+      // row up once the profile exists, exactly as before.
+      try {
+        await db.prepare(`
+          INSERT INTO verified_documents (id, owner_type, owner_id, uploaded_by, category, document_type,
+            file_data, file_name, file_size, mime_type, status, created_at, updated_at)
+          VALUES (?, 'caregiver', (SELECT cp.id FROM caregiver_profiles cp WHERE cp.user_id = ? LIMIT 1), ?,
+            ?, ?, ?, ?, ?, ?, 'pending', NOW(), NOW())
+        `).run(
+          docId, req.user.id, req.user.id,
+          ["dl_front", "dl_back", "drivers_license"].includes(docType) ? "identity" : "certification",
+          ({ dl_front: "DL_Front", dl_back: "DL_Back", drivers_license: "DL_Front", certification: "Other_Cert" })[docType] || "Other",
+          base64, file.originalname, file.size, file.mimetype
+        );
+      } catch (dualWriteErr) {
+        console.warn("verified_documents dual-write deferred to boot sync:", dualWriteErr.message);
+      }
+
       savedDocs.push({
         id: docId,
         documentType: docType,

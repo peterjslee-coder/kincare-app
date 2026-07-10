@@ -753,7 +753,11 @@ router.post("/:recipientId/documents", authenticate, uploadDoc.single("document"
     try {
       const { classifyDocument } = require("../utils/documentAI");
       const logConsentAudit = getLogConsentAudit();
-      const vDocId = uuid();
+      // v1.87.0 (infra #7): reuse the authorization_documents id — the boot-time
+      // sync copies old-table rows whose id is NOT already in verified_documents,
+      // so a fresh uuid here meant every consent upload got duplicated on the
+      // next boot. Same id = boot sync skips it.
+      const vDocId = id;
 
       await db.prepare(`
         INSERT INTO verified_documents (id, owner_type, owner_id, uploaded_by, category, document_type,

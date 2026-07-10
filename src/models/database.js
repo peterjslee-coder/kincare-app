@@ -1444,6 +1444,26 @@ async function initializeDatabase() {
   // Each runs exactly once per database, in order, inside a transaction.
   const MIGRATIONS_V2 = [
     // { id: '001_example', statements: [`ALTER TABLE x ADD COLUMN IF NOT EXISTS y TEXT`] },
+    {
+      // v1.87.0 (infra #7): one malformed tags/page_context row has been in prod
+      // feedback since ~v1.74.2 (tolerated by safeJson, but every list pays for
+      // it). NULL any value that does not parse as JSON — version-safe DO block,
+      // no pg_input_is_valid dependency.
+      id: "001_null_malformed_feedback_json",
+      statements: [
+        `DO $mig$
+         DECLARE r RECORD;
+         BEGIN
+           FOR r IN SELECT id, tags, page_context FROM feedback
+                    WHERE tags IS NOT NULL OR page_context IS NOT NULL LOOP
+             BEGIN PERFORM r.tags::json;
+             EXCEPTION WHEN others THEN UPDATE feedback SET tags = NULL WHERE id = r.id; END;
+             BEGIN PERFORM r.page_context::json;
+             EXCEPTION WHEN others THEN UPDATE feedback SET page_context = NULL WHERE id = r.id; END;
+           END LOOP;
+         END $mig$;`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;
