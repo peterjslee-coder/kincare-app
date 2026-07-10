@@ -297,7 +297,7 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
                 { icon: '\uD83D\uDD0D', title: 'Find Help in Hours', desc: 'Browse vetted caregivers, read reviews, book someone who fits — today.' },
                 { icon: '\uD83D\uDC65', title: 'Coordinate Together', desc: "Share your care profile with everyone involved. One schedule, one dashboard." },
                 { icon: '\uD83D\uDCCA', title: 'Track Everything', desc: 'Care hours, spending, caregiver performance — all in one place.' },
-                { icon: '\uD83D\uDCB0', title: 'Pay Only What You Need', desc: 'Sessions from $45. No monthly minimums. No long-term contracts.' },
+                { icon: '\uD83D\uDCB0', title: 'Pay Only What You Need', desc: 'One flat price per visit — you see the total before you book. No monthly minimums, no contracts.' },
                 { icon: '\uD83D\uDEE1\uFE0F', title: 'Background-Checked', desc: "Every caregiver is vetted, verified, and reviewed by other families." },
                 { icon: '\uD83D\uDCF1', title: 'Real-Time Updates', desc: 'Get notified when visits start, see summaries, message caregivers directly.' },
               ].map((c, i) => (
@@ -318,7 +318,7 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
                 {[
                   { label: 'Doing it all yourself', detail: 'Free — until it consumes your life.', us: false },
                   { label: 'Agency home care', detail: 'Typically $30\u201350+/hr with contracts and minimums. Caregivers rotate and take home less than half of what you pay.', us: false },
-                  { label: 'inPlace', detail: 'Visits from $45. No contracts, no minimums. The same vetted caregiver every time, chosen by you \u2014 and caregivers keep 80%, so the good ones stay.', us: true },
+                  { label: 'inPlace', detail: 'One flat price for the whole visit \u2014 most run $45\u201385 total, not per hour. No contracts, no minimums. The same vetted caregiver every time, chosen by you \u2014 and caregivers keep 80%, so the good ones stay.', us: true },
                   { label: 'Assisted living / facility', detail: 'Often $5,000\u20138,000+ per month \u2014 and it means leaving home.', us: false },
                 ].map((row, i) => (
                   <div key={i} style={{
@@ -346,7 +346,7 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
               <h3 style={{ fontSize: '24px', color: 'var(--text-primary)', marginBottom: '8px' }}>Not a nursing home. Not a nurse. Just a hand when you want one.</h3>
               <p style={{ fontSize: '15px', color: 'var(--text-secondary)', maxWidth: '620px', margin: '0 auto', lineHeight: 1.6 }}>
                 A ride to the doctor. Help with the garden or the heavy lifting. Someone to share a coffee with.
-                Find a friendly local helper you choose yourself — by the visit, from $45, no contracts. You stay in your home, on your terms.
+                Find a friendly local helper you choose yourself — one flat price per visit, no meter running, no contracts. You stay in your home, on your terms.
               </p>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '16px' }}>
@@ -487,7 +487,7 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
             <div style={{ padding: '36px', background: 'var(--bg-highlight)', borderRadius: '12px', border: '1px solid #d0e8e3', flex: '1 1 280px', maxWidth: '420px' }}>
               <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--role-color)', marginBottom: '12px' }}>Pay-Per-Use, Not Subscription</div>
               <p style={{ fontSize: '15px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-                Families pay per session — $45 to $85 depending on service type and duration. No monthly minimums, no long-term contracts. Just care when you need it.
+                Families pay one flat price per visit — $45 to $85 total, depending on service type and duration. Never an hourly meter. No monthly minimums, no long-term contracts. Just care when you need it.
               </p>
             </div>
             <div style={{ padding: '36px', background: 'var(--bg-highlight)', borderRadius: '12px', border: '1px solid #d0e8e3', flex: '1 1 280px', maxWidth: '420px' }}>

@@ -3145,7 +3145,7 @@ const SplashPage = window.SplashPage = ({
   }, {
     icon: '\uD83D\uDCB0',
     title: 'Pay Only What You Need',
-    desc: 'Sessions from $45. No monthly minimums. No long-term contracts.'
+    desc: 'One flat price per visit — you see the total before you book. No monthly minimums, no contracts.'
   }, {
     icon: '\uD83D\uDEE1\uFE0F',
     title: 'Background-Checked',
@@ -3214,7 +3214,7 @@ const SplashPage = window.SplashPage = ({
     us: false
   }, {
     label: 'inPlace',
-    detail: 'Visits from $45. No contracts, no minimums. The same vetted caregiver every time, chosen by you \u2014 and caregivers keep 80%, so the good ones stay.',
+    detail: 'One flat price for the whole visit \u2014 most run $45\u201385 total, not per hour. No contracts, no minimums. The same vetted caregiver every time, chosen by you \u2014 and caregivers keep 80%, so the good ones stay.',
     us: true
   }, {
     label: 'Assisted living / facility',
@@ -3270,7 +3270,7 @@ const SplashPage = window.SplashPage = ({
       margin: '0 auto',
       lineHeight: 1.6
     }
-  }, "A ride to the doctor. Help with the garden or the heavy lifting. Someone to share a coffee with. Find a friendly local helper you choose yourself \u2014 by the visit, from $45, no contracts. You stay in your home, on your terms.")), /*#__PURE__*/React.createElement("div", {
+  }, "A ride to the doctor. Help with the garden or the heavy lifting. Someone to share a coffee with. Find a friendly local helper you choose yourself \u2014 one flat price per visit, no meter running, no contracts. You stay in your home, on your terms.")), /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'grid',
       gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
@@ -3677,7 +3677,7 @@ const SplashPage = window.SplashPage = ({
       color: 'var(--text-secondary)',
       lineHeight: 1.6
     }
-  }, "Families pay per session \u2014 $45 to $85 depending on service type and duration. No monthly minimums, no long-term contracts. Just care when you need it.")), /*#__PURE__*/React.createElement("div", {
+  }, "Families pay one flat price per visit \u2014 $45 to $85 total, depending on service type and duration. Never an hourly meter. No monthly minimums, no long-term contracts. Just care when you need it.")), /*#__PURE__*/React.createElement("div", {
     style: {
       padding: '36px',
       background: 'var(--bg-highlight)',
