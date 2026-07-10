@@ -1749,4 +1749,10 @@ function resetDb() {
   // No-op for PostgreSQL — pool always queries live database
 }
 
-module.exports = { getDb, initializeDatabase, resetDb, withPollerLock };
+// Close the connection pool — used by the integration-test harness so jest
+// can tear down the embedded PostgreSQL without stray idle-client errors.
+async function closeDb() {
+  if (pool) { const p = pool; pool = null; db = null; await p.end(); }
+}
+
+module.exports = { getDb, initializeDatabase, resetDb, closeDb, withPollerLock };

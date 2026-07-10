@@ -10,6 +10,11 @@ const { captureException } = require("../utils/sentry");
 // A user may see a recipient's care data if they own it, are an admin, are an
 // accepted care-team member, or are an active assigned caregiver. Mirrors the
 // inline check used by GET /:recipientId so all routes authorize consistently.
+// v1.86.0: the team/caregiver access queries in this file referenced nonexistent
+// columns since inception (care_team_members.status/care_recipient_id,
+// caregiver_assignments.caregiver_user_id) — the two wrapped in try/catch always
+// threw and silently DENIED team members + caregivers; the care-plan endpoints'
+// unwrapped copies 500'd for everyone. Rewritten against the real schema.
 async function userCanAccessRecipient(db, userId, recipientId) {
   const recipient = await db.prepare("SELECT family_user_id FROM care_recipients WHERE id = ?").get(recipientId);
   if (!recipient) return false;
@@ -17,11 +22,11 @@ async function userCanAccessRecipient(db, userId, recipientId) {
   const admin = await db.prepare("SELECT is_admin FROM users WHERE id = ?").get(userId);
   if (admin?.is_admin) return true;
   try {
-    const team = await db.prepare("SELECT 1 FROM care_team_members WHERE care_recipient_id = ? AND user_id = ? AND status = 'accepted'").get(recipientId, userId);
+    const team = await db.prepare("SELECT 1 FROM care_team_members ctm JOIN care_teams ct ON ctm.care_team_id = ct.id WHERE ct.care_recipient_id = ? AND ctm.user_id = ?").get(recipientId, userId);
     if (team) return true;
   } catch (e) { captureException(e, { where: "careIntelligence: access check (care team)" }); }
   try {
-    const cg = await db.prepare("SELECT 1 FROM caregiver_assignments WHERE care_recipient_id = ? AND caregiver_user_id = ? AND status = 'active'").get(recipientId, userId);
+    const cg = await db.prepare("SELECT 1 FROM caregiver_assignments ca JOIN caregiver_profiles cp ON ca.caregiver_profile_id = cp.id WHERE ca.care_recipient_id = ? AND cp.user_id = ? AND ca.is_active = 1").get(recipientId, userId);
     if (cg) return true;
   } catch (e) { captureException(e, { where: "careIntelligence: access check (caregiver assignment)" }); }
   return false;
@@ -56,7 +61,7 @@ router.get("/:recipientId", authenticate, async (req, res) => {
     if (!hasAccess) {
       try {
         const isTeamMember = await db.prepare(
-          "SELECT 1 FROM care_team_members WHERE care_recipient_id = ? AND user_id = ? AND status = 'accepted'"
+          "SELECT 1 FROM care_team_members ctm JOIN care_teams ct ON ctm.care_team_id = ct.id WHERE ct.care_recipient_id = ? AND ctm.user_id = ?"
         ).get(req.params.recipientId, req.user.id);
         if (isTeamMember) hasAccess = true;
       } catch (e) { captureException(e, { where: "careIntelligence: access check (team member)" }); }
@@ -290,10 +295,10 @@ router.post("/:recipientId/care-plan", authenticate, async (req, res) => {
     // Check access: owner, care team member, assigned caregiver, or admin
     const isOwner = recipient.family_user_id === req.user.id;
     const isTeamMember = await db.prepare(
-      "SELECT 1 FROM care_team_members WHERE care_recipient_id = ? AND user_id = ? AND status = 'accepted'"
+      "SELECT 1 FROM care_team_members ctm JOIN care_teams ct ON ctm.care_team_id = ct.id WHERE ct.care_recipient_id = ? AND ctm.user_id = ?"
     ).get(req.params.recipientId, req.user.id);
     const isCaregiver = await db.prepare(
-      "SELECT 1 FROM caregiver_assignments WHERE care_recipient_id = ? AND caregiver_user_id = ? AND status = 'active'"
+      "SELECT 1 FROM caregiver_assignments ca JOIN caregiver_profiles cp ON ca.caregiver_profile_id = cp.id WHERE ca.care_recipient_id = ? AND cp.user_id = ? AND ca.is_active = 1"
     ).get(req.params.recipientId, req.user.id);
     const isAdmin = await db.prepare("SELECT is_admin FROM users WHERE id = ?").get(req.user.id);
 
@@ -329,10 +334,10 @@ router.get("/:recipientId/care-plan", authenticate, async (req, res) => {
     // Check access: owner, care team member, assigned caregiver, or admin
     const isOwner = recipient.family_user_id === req.user.id;
     const isTeamMember = await db.prepare(
-      "SELECT 1 FROM care_team_members WHERE care_recipient_id = ? AND user_id = ? AND status = 'accepted'"
+      "SELECT 1 FROM care_team_members ctm JOIN care_teams ct ON ctm.care_team_id = ct.id WHERE ct.care_recipient_id = ? AND ctm.user_id = ?"
     ).get(req.params.recipientId, req.user.id);
     const isCaregiver = await db.prepare(
-      "SELECT 1 FROM caregiver_assignments WHERE care_recipient_id = ? AND caregiver_user_id = ? AND status = 'active'"
+      "SELECT 1 FROM caregiver_assignments ca JOIN caregiver_profiles cp ON ca.caregiver_profile_id = cp.id WHERE ca.care_recipient_id = ? AND cp.user_id = ? AND ca.is_active = 1"
     ).get(req.params.recipientId, req.user.id);
     const isAdmin = await db.prepare("SELECT is_admin FROM users WHERE id = ?").get(req.user.id);
 
