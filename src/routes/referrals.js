@@ -32,7 +32,7 @@ router.get("/my-code", authenticate, async (req, res) => {
 
     res.json({
       referralCode: code,
-      referralLink: `${process.env.BASE_URL || "https://yourinplace.com"}?ref=${code}`,
+      referralLink: `${process.env.BASE_URL || "https://yourinplace.com"}/register?ref=${code}&role=caregiver`,
       totalSent: stats?.total_sent || 0,
       totalClaimed: stats?.total_claimed || 0,
     });
@@ -69,7 +69,7 @@ router.post("/send", authenticate, async (req, res) => {
     if (email) {
       try {
         const { sendEmail, brandedHtml } = require("../utils/email");
-        const refLink = `${process.env.BASE_URL || "https://yourinplace.com"}/register?ref=${code}`;
+        const refLink = `${process.env.BASE_URL || "https://yourinplace.com"}/register?ref=${code}&role=caregiver`;
         const recipientName = name?.trim() || "there";
 
         await sendEmail({
@@ -78,7 +78,7 @@ router.post("/send", authenticate, async (req, res) => {
           html: brandedHtml({
             title: "You've Been Referred!",
             greeting: `Hi ${recipientName},`,
-            body: `${referrerName} is a caregiver on inPlace — an on-demand home care platform where caregivers keep 80% of every session. They think you'd be great at it.<br><br>inPlace connects vetted caregivers with families who need help with companionship, meal prep, medication reminders, and transportation. You set your own schedule and build real relationships with families in your community.`,
+            body: `${referrerName} is a caregiver on inPlace — an on-demand home care platform where caregivers keep 80% of every session. They think you'd be great at it.<br><br>inPlace connects vetted caregivers with families who need help with companionship, meal prep, medication reminders, and transportation. You set your own schedule — it flexes around classes, another job, or family — and you build real relationships with families in your community. Typical caregivers earn $25–35/hr, paid within 48 hours.`,
             ctaUrl: refLink,
             ctaText: "Check It Out",
             footnote: `When you sign up, ${referrerName} gets credit for referring you. Questions? Just reply to this email.`,

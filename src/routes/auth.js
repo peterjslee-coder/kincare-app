@@ -9,6 +9,7 @@ const { sendEmail, brandedHtml } = require("../utils/email");
 const { sendPushToAdmins, notifyAdmins } = require("./push");
 const { registerTrustedIp } = require("../utils/trustedIps");
 const { getClientIp } = require("../middleware/auditLog");
+const { captureException } = require("../utils/sentry");
 
 const router = express.Router();
 
@@ -271,6 +272,23 @@ router.post("/register", validateRegister, async (req, res) => {
       body: `${firstName} ${lastName} (${roleName}) signed up and needs your approval to continue.`,
       data: { type: "new_registration", userId: id, email, needsApproval: true },
     });
+
+    // v1.88.0: limited-early-signups flow — email Pete so he can arrange a
+    // personal welcome call with every new member. Reply-to is the new user,
+    // so replying to the email starts the conversation directly. Non-fatal.
+    try {
+      const { sendEmail, brandedHtml } = require("../utils/email");
+      sendEmail({
+        to: "peter@yourinplace.com",
+        replyTo: email,
+        subject: `New signup: ${firstName + " " + lastName} (${roleName}) — arrange welcome call`,
+        html: brandedHtml({
+          title: "New inPlace Signup",
+          greeting: "Hi Pete,",
+          body: `<strong>${firstName + " " + lastName}</strong> just signed up as a <strong>${roleName}</strong>.<br><br>Email: ${email}<br>Phone: ${phone || "not provided"}<br><br>Reply to this email to reach them directly and arrange their welcome call.`,
+        }),
+      }).catch((e) => captureException(e, { where: "auth: signup welcome-call email" }));
+    } catch (e) { captureException(e, { where: "auth: signup welcome-call email" }); }
 
     setAuthCookie(res, token);
     setCsrfCookie(res);

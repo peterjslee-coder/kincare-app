@@ -91,13 +91,13 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
             On-demand care for your loved one. <span style={{ color: 'var(--accent-color)' }}>Finally.</span>
           </h1>
           <div className="splash-hero-subtitle" style={{ fontSize: '22px', color: 'var(--role-color)', fontWeight: 600, marginBottom: '20px', lineHeight: 1.4 }}>
-            Fair wages for caregivers. Real-time peace of mind for families.
+            Vetted local caregivers. Fair wages. Real-time peace of mind for families.
           </div>
           <p className="splash-hero-body" style={{ fontSize: '16px', color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: '16px', maxWidth: '480px' }}>
             inPlace matches families with vetted caregivers in hours — by the visit, no contracts, no agency markup. Caregivers keep 80%. Families see everything in real time.
           </p>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: 'var(--bg-highlight)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '8px 14px', fontSize: '13px', color: 'var(--role-color)', fontWeight: 500, marginBottom: '20px' }}>
-            <span style={{ fontSize: '15px' }}>{'\u{1F4CD}'}</span> Launching Spring 2026 in Virginia
+            <span style={{ fontSize: '15px' }}>{'\u{1F4CD}'}</span> Now serving the New River Valley — expanding across Virginia soon. Limited early signups.
           </div>
           <div className="splash-hero-buttons" style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '16px' }}>
             <button onClick={() => onNavigate('register')} style={{
@@ -112,6 +112,9 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
               padding: '14px 32px', fontSize: '16px', fontWeight: 600,
               background: 'none', color: 'var(--role-color)', border: '1.5px solid #1b6b5a', borderRadius: '8px', cursor: 'pointer',
             }}>View Live Demo</button>
+          </div>
+          <div style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '12px' }}>
+            {'\u260E\uFE0F'} Signups are limited while we grow — every new member gets a personal welcome call to get set up right.
           </div>
           <div style={{ fontSize: '14px', color: 'var(--text-tertiary)' }}>
             Already have an account?{' '}
@@ -147,6 +150,30 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
           }}></div>
         </div>
       </section>
+
+      {/* ── Audience router (v1.88): every visitor self-selects in one screen ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px', maxWidth: '860px', margin: '0 auto', padding: '20px 24px 4px' }}>
+        {[
+          { tab: 'families', icon: '\uD83D\uDC65', label: "I'm looking after someone", sub: 'Find trusted help for a parent or loved one' },
+          { tab: 'recipients', icon: '\uD83C\uDFE0', label: 'I could use a hand myself', sub: 'A little help around the house, on your terms' },
+          { tab: 'caregivers', icon: '\uD83E\uDD1D', label: 'I want caregiving work', sub: 'Fair pay, flexible hours — students welcome' },
+        ].map((r, i) => (
+          <button key={i} onClick={() => {
+            switchTab(r.tab);
+            setTimeout(() => document.getElementById('audience-tabs')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+          }} style={{
+            display: 'flex', alignItems: 'center', gap: '12px', textAlign: 'left',
+            padding: '16px 18px', background: 'var(--bg-card)', border: '1.5px solid var(--border-color)',
+            borderRadius: '12px', cursor: 'pointer', minHeight: '44px',
+          }}>
+            <span style={{ fontSize: '26px', flexShrink: 0 }}>{r.icon}</span>
+            <span>
+              <span style={{ display: 'block', fontSize: '15px', fontWeight: 700, color: 'var(--role-color)' }}>{r.label}</span>
+              <span style={{ display: 'block', fontSize: '13px', color: 'var(--text-secondary)', marginTop: '2px' }}>{r.sub}</span>
+            </span>
+          </button>
+        ))}
+      </div>
 
       {/* ── Value Strip ── */}
       <div className="splash-value-strip" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', background: 'var(--bg-highlight)', borderTop: '1px solid #d0e8e3', borderBottom: '1px solid #d0e8e3' }}>
@@ -232,7 +259,7 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
       </section>
 
       {/* ── Tabbed Audience Sections ── */}
-      <section style={{ maxWidth: '960px', margin: '0 auto', padding: '64px 24px' }}>
+      <section id="audience-tabs" style={{ maxWidth: '960px', margin: '0 auto', padding: '64px 24px', scrollMarginTop: '80px' }}>
         <h2 style={{ textAlign: 'center', fontSize: '32px', color: 'var(--role-color)', marginBottom: '8px' }}>Built for Everyone in the Care Circle</h2>
         <p style={{ textAlign: 'center', fontSize: '16px', color: 'var(--text-secondary)', marginBottom: '32px' }}>
           Whether you're a family member, a care recipient, or a caregiver — inPlace was designed for you.
@@ -242,9 +269,9 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
         <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginBottom: '32px', flexWrap: 'wrap' }}>
           {[
             { id: 'families', label: 'For Families' },
-            { id: 'recipients', label: 'For Care Recipients' },
+            { id: 'recipients', label: 'Getting a little help' },
             { id: 'caregivers', label: 'For Caregivers' },
-            { id: 'students', label: 'For Nursing Students' },
+            { id: 'students', label: 'For Students & New Caregivers' },
           ].map(tab => (
             <button key={tab.id} onClick={() => switchTab(tab.id)} style={{
               padding: '12px 28px', borderRadius: '24px', fontSize: '14px', fontWeight: 600,
@@ -281,6 +308,34 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
                 </div>
               ))}
             </div>
+
+            {/* The middle option (v1.88) — position against the real alternatives */}
+            <div style={{ marginTop: '36px', padding: '28px 24px', background: 'var(--bg-highlight)', borderRadius: '14px', border: '1px solid #d0e8e3' }}>
+              <div style={{ fontSize: '18px', fontWeight: 700, color: 'var(--role-color)', textAlign: 'center', marginBottom: '18px' }}>
+                The middle option families have been missing
+              </div>
+              <div style={{ display: 'grid', gap: '10px', maxWidth: '640px', margin: '0 auto' }}>
+                {[
+                  { label: 'Doing it all yourself', detail: 'Free — until it consumes your life.', us: false },
+                  { label: 'Agency home care', detail: 'Typically $30\u201350+/hr with contracts and minimums. Caregivers rotate and take home less than half of what you pay.', us: false },
+                  { label: 'inPlace', detail: 'Visits from $45. No contracts, no minimums. The same vetted caregiver every time, chosen by you \u2014 and caregivers keep 80%, so the good ones stay.', us: true },
+                  { label: 'Assisted living / facility', detail: 'Often $5,000\u20138,000+ per month \u2014 and it means leaving home.', us: false },
+                ].map((row, i) => (
+                  <div key={i} style={{
+                    display: 'flex', gap: '12px', alignItems: 'flex-start', padding: '12px 16px',
+                    background: row.us ? 'var(--bg-surface)' : 'transparent',
+                    border: row.us ? '2px solid #1b6b5a' : '1px solid transparent',
+                    borderRadius: '10px',
+                  }}>
+                    <span style={{ fontSize: '16px', flexShrink: 0, marginTop: '1px' }}>{row.us ? '\u2705' : '\u25CB'}</span>
+                    <span>
+                      <span style={{ fontSize: '14px', fontWeight: 700, color: row.us ? 'var(--role-color)' : 'var(--text-primary)' }}>{row.label}</span>
+                      <span style={{ display: 'block', fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.5, marginTop: '2px' }}>{row.detail}</span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         )}
 
@@ -288,9 +343,10 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
         {activeTab === 'recipients' && (
           <div>
             <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-              <h3 style={{ fontSize: '24px', color: 'var(--text-primary)', marginBottom: '8px' }}>Stay Independent. Stay Home. Stay You.</h3>
-              <p style={{ fontSize: '15px', color: 'var(--text-secondary)', maxWidth: '600px', margin: '0 auto', lineHeight: 1.6 }}>
-                Get the support you need without giving up your independence.
+              <h3 style={{ fontSize: '24px', color: 'var(--text-primary)', marginBottom: '8px' }}>Not a nursing home. Not a nurse. Just a hand when you want one.</h3>
+              <p style={{ fontSize: '15px', color: 'var(--text-secondary)', maxWidth: '620px', margin: '0 auto', lineHeight: 1.6 }}>
+                A ride to the doctor. Help with the garden or the heavy lifting. Someone to share a coffee with.
+                Find a friendly local helper you choose yourself — by the visit, from $45, no contracts. You stay in your home, on your terms.
               </p>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '16px' }}>
@@ -298,7 +354,7 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
                 { icon: '\uD83C\uDFE0', title: 'Stay at Home', desc: 'Stay in the home you love with help that comes to you.' },
                 { icon: '\uD83E\uDD1D', title: 'People You Trust', desc: 'Build a relationship with caregivers you look forward to seeing.' },
                 { icon: '\uD83D\uDDD3\uFE0F', title: 'Your Schedule', desc: "See who's coming, when, and what they'll help with — no surprises." },
-                { icon: '\u270D\uFE0F', title: 'Your Voice Matters', desc: 'Share preferences and tell caregivers what works for you.' },
+                { icon: '\uD83D\uDEE1\uFE0F', title: 'Vetted Before They Visit', desc: 'Every helper passes a professional background check before they can work.' },
                 { icon: '\uD83D\uDCAC', title: 'Stay Connected', desc: 'Your family can see updates so they worry less.' },
                 { icon: '\uD83C\uDFAF', title: 'Choose Your Services', desc: 'Companionship, meals, rides, housekeeping — you choose.' },
               ].map((c, i) => (
@@ -353,17 +409,19 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
         {activeTab === 'students' && (
           <div>
             <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-              <h3 style={{ fontSize: '24px', color: 'var(--text-primary)', marginBottom: '8px' }}>Earn Clinical Hours While Making a Difference</h3>
-              <p style={{ fontSize: '15px', color: 'var(--text-secondary)', maxWidth: '600px', margin: '0 auto', lineHeight: 1.6 }}>
-                Nursing students gain supervised, hands-on experience with real families — and get paid for it.
+              <h3 style={{ fontSize: '24px', color: 'var(--text-primary)', marginBottom: '8px' }}>The Best Résumé Line a Nursing Student Can Get — and It Pays</h3>
+              <p style={{ fontSize: '15px', color: 'var(--text-secondary)', maxWidth: '620px', margin: '0 auto', lineHeight: 1.6 }}>
+                Real caregiving experience with real families near Radford, Blacksburg, and Christiansburg — documented, paid, and flexible around your classes.
               </p>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '16px' }}>
               {[
-                { icon: '\uD83E\uDE7A', title: 'Real Patient Experience', desc: 'Work with patients in their homes — vitals, mobility, daily care.' },
-                { icon: '\uD83D\uDCCB', title: 'Tracked Hours', desc: 'Every visit logged and verified for your nursing program.' },
-                { icon: '\uD83D\uDCB0', title: 'Get Paid to Learn', desc: 'Unlike unpaid rotations, earn competitive pay while building skills.' },
-                { icon: '\uD83D\uDCC5', title: 'Flex Around Classes', desc: 'Pick visits that work around your schedule.' },
+                { icon: '\uD83E\uDE7A', title: 'Real Care Experience', desc: 'Dementia care, personal care, geriatric support — in real homes, with real families. The experience clinicals don\u2019t give you time for.' },
+                { icon: '\uD83D\uDCCB', title: 'Hours & Care Events, Documented', desc: 'Every visit is logged: your hours, the type of care (dementia, personal, geriatric), and family ratings. Get a report of your care history to bring to interviews.' },
+                { icon: '\uD83D\uDCB0', title: 'Pay That Beats Campus Jobs', desc: 'Keep 80% of every visit — typical caregivers earn $25\u201335/hr, paid within 48 hours.' },
+                { icon: '\uD83D\uDCC5', title: 'Flexes Around Classes', desc: 'Accept only the visits that fit your schedule. No shift minimums, no manager.' },
+                { icon: '\uD83D\uDCCD', title: 'Minutes from Campus', desc: 'Families in Radford, Fairlawn, Christiansburg, Blacksburg, and Pulaski County.' },
+                { icon: '\uD83E\uDD1D', title: 'Bring a Classmate', desc: 'Every caregiver gets a personal referral link after signup — refer friends who\u2019d be great at this.' },
               ].map((c, i) => (
                 <div key={i} style={{ padding: '24px', background: 'var(--bg-surface)', borderRadius: '12px', border: '1px solid var(--border-color)', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
                   <div style={{ fontSize: '24px', marginBottom: '10px' }}>{c.icon}</div>
@@ -371,6 +429,15 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
                   <div style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>{c.desc}</div>
                 </div>
               ))}
+            </div>
+            <div style={{ textAlign: 'center', marginTop: '28px' }}>
+              <button onClick={() => {
+                try { window.history.replaceState({}, '', '/register?role=caregiver'); } catch (e) {}
+                onNavigate('register');
+              }} style={{
+                padding: '14px 36px', fontSize: '16px', fontWeight: 600,
+                background: 'var(--accent-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: '8px', cursor: 'pointer',
+              }}>Apply to Caregive {'\u2192'}</button>
             </div>
           </div>
         )}

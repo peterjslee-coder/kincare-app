@@ -2635,7 +2635,7 @@ const SplashPage = window.SplashPage = ({
       marginBottom: '20px',
       lineHeight: 1.4
     }
-  }, "Fair wages for caregivers. Real-time peace of mind for families."), /*#__PURE__*/React.createElement("p", {
+  }, "Vetted local caregivers. Fair wages. Real-time peace of mind for families."), /*#__PURE__*/React.createElement("p", {
     className: "splash-hero-body",
     style: {
       fontSize: '16px',
@@ -2662,7 +2662,7 @@ const SplashPage = window.SplashPage = ({
     style: {
       fontSize: '15px'
     }
-  }, '\u{1F4CD}'), " Launching Spring 2026 in Virginia"), /*#__PURE__*/React.createElement("div", {
+  }, '\u{1F4CD}'), " Now serving the New River Valley \u2014 expanding across Virginia soon. Limited early signups."), /*#__PURE__*/React.createElement("div", {
     className: "splash-hero-buttons",
     style: {
       display: 'flex',
@@ -2708,6 +2708,12 @@ const SplashPage = window.SplashPage = ({
       cursor: 'pointer'
     }
   }, "View Live Demo")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '14px',
+      color: 'var(--text-secondary)',
+      marginBottom: '12px'
+    }
+  }, '\u260E\uFE0F', " Signups are limited while we grow \u2014 every new member gets a personal welcome call to get set up right."), /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: '14px',
       color: 'var(--text-tertiary)'
@@ -2782,6 +2788,73 @@ const SplashPage = window.SplashPage = ({
       zIndex: 2
     }
   }))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+      gap: '12px',
+      maxWidth: '860px',
+      margin: '0 auto',
+      padding: '20px 24px 4px'
+    }
+  }, [{
+    tab: 'families',
+    icon: '\uD83D\uDC65',
+    label: "I'm looking after someone",
+    sub: 'Find trusted help for a parent or loved one'
+  }, {
+    tab: 'recipients',
+    icon: '\uD83C\uDFE0',
+    label: 'I could use a hand myself',
+    sub: 'A little help around the house, on your terms'
+  }, {
+    tab: 'caregivers',
+    icon: '\uD83E\uDD1D',
+    label: 'I want caregiving work',
+    sub: 'Fair pay, flexible hours — students welcome'
+  }].map((r, i) => /*#__PURE__*/React.createElement("button", {
+    key: i,
+    onClick: () => {
+      switchTab(r.tab);
+      setTimeout(() => {
+        var _document$getElementB;
+        return (_document$getElementB = document.getElementById('audience-tabs')) === null || _document$getElementB === void 0 ? void 0 : _document$getElementB.scrollIntoView({
+          behavior: 'smooth',
+          block: 'start'
+        });
+      }, 50);
+    },
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '12px',
+      textAlign: 'left',
+      padding: '16px 18px',
+      background: 'var(--bg-card)',
+      border: '1.5px solid var(--border-color)',
+      borderRadius: '12px',
+      cursor: 'pointer',
+      minHeight: '44px'
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: '26px',
+      flexShrink: 0
+    }
+  }, r.icon), /*#__PURE__*/React.createElement("span", null, /*#__PURE__*/React.createElement("span", {
+    style: {
+      display: 'block',
+      fontSize: '15px',
+      fontWeight: 700,
+      color: 'var(--role-color)'
+    }
+  }, r.label), /*#__PURE__*/React.createElement("span", {
+    style: {
+      display: 'block',
+      fontSize: '13px',
+      color: 'var(--text-secondary)',
+      marginTop: '2px'
+    }
+  }, r.sub))))), /*#__PURE__*/React.createElement("div", {
     className: "splash-value-strip",
     style: {
       display: 'grid',
@@ -2977,10 +3050,12 @@ const SplashPage = window.SplashPage = ({
       textDecoration: 'underline'
     }
   }, "Sign in")))), /*#__PURE__*/React.createElement("section", {
+    id: "audience-tabs",
     style: {
       maxWidth: '960px',
       margin: '0 auto',
-      padding: '64px 24px'
+      padding: '64px 24px',
+      scrollMarginTop: '80px'
     }
   }, /*#__PURE__*/React.createElement("h2", {
     style: {
@@ -3009,13 +3084,13 @@ const SplashPage = window.SplashPage = ({
     label: 'For Families'
   }, {
     id: 'recipients',
-    label: 'For Care Recipients'
+    label: 'Getting a little help'
   }, {
     id: 'caregivers',
     label: 'For Caregivers'
   }, {
     id: 'students',
-    label: 'For Nursing Students'
+    label: 'For Students & New Caregivers'
   }].map(tab => /*#__PURE__*/React.createElement("button", {
     key: tab.id,
     onClick: () => switchTab(tab.id),
@@ -3106,7 +3181,77 @@ const SplashPage = window.SplashPage = ({
       color: 'var(--text-secondary)',
       lineHeight: 1.6
     }
-  }, c.desc))))), activeTab === 'recipients' && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+  }, c.desc)))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: '36px',
+      padding: '28px 24px',
+      background: 'var(--bg-highlight)',
+      borderRadius: '14px',
+      border: '1px solid #d0e8e3'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '18px',
+      fontWeight: 700,
+      color: 'var(--role-color)',
+      textAlign: 'center',
+      marginBottom: '18px'
+    }
+  }, "The middle option families have been missing"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'grid',
+      gap: '10px',
+      maxWidth: '640px',
+      margin: '0 auto'
+    }
+  }, [{
+    label: 'Doing it all yourself',
+    detail: 'Free — until it consumes your life.',
+    us: false
+  }, {
+    label: 'Agency home care',
+    detail: 'Typically $30\u201350+/hr with contracts and minimums. Caregivers rotate and take home less than half of what you pay.',
+    us: false
+  }, {
+    label: 'inPlace',
+    detail: 'Visits from $45. No contracts, no minimums. The same vetted caregiver every time, chosen by you \u2014 and caregivers keep 80%, so the good ones stay.',
+    us: true
+  }, {
+    label: 'Assisted living / facility',
+    detail: 'Often $5,000\u20138,000+ per month \u2014 and it means leaving home.',
+    us: false
+  }].map((row, i) => /*#__PURE__*/React.createElement("div", {
+    key: i,
+    style: {
+      display: 'flex',
+      gap: '12px',
+      alignItems: 'flex-start',
+      padding: '12px 16px',
+      background: row.us ? 'var(--bg-surface)' : 'transparent',
+      border: row.us ? '2px solid #1b6b5a' : '1px solid transparent',
+      borderRadius: '10px'
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: '16px',
+      flexShrink: 0,
+      marginTop: '1px'
+    }
+  }, row.us ? '\u2705' : '\u25CB'), /*#__PURE__*/React.createElement("span", null, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: '14px',
+      fontWeight: 700,
+      color: row.us ? 'var(--role-color)' : 'var(--text-primary)'
+    }
+  }, row.label), /*#__PURE__*/React.createElement("span", {
+    style: {
+      display: 'block',
+      fontSize: '13px',
+      color: 'var(--text-secondary)',
+      lineHeight: 1.5,
+      marginTop: '2px'
+    }
+  }, row.detail))))))), activeTab === 'recipients' && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: 'center',
       marginBottom: '32px'
@@ -3117,15 +3262,15 @@ const SplashPage = window.SplashPage = ({
       color: 'var(--text-primary)',
       marginBottom: '8px'
     }
-  }, "Stay Independent. Stay Home. Stay You."), /*#__PURE__*/React.createElement("p", {
+  }, "Not a nursing home. Not a nurse. Just a hand when you want one."), /*#__PURE__*/React.createElement("p", {
     style: {
       fontSize: '15px',
       color: 'var(--text-secondary)',
-      maxWidth: '600px',
+      maxWidth: '620px',
       margin: '0 auto',
       lineHeight: 1.6
     }
-  }, "Get the support you need without giving up your independence.")), /*#__PURE__*/React.createElement("div", {
+  }, "A ride to the doctor. Help with the garden or the heavy lifting. Someone to share a coffee with. Find a friendly local helper you choose yourself \u2014 by the visit, from $45, no contracts. You stay in your home, on your terms.")), /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'grid',
       gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
@@ -3144,9 +3289,9 @@ const SplashPage = window.SplashPage = ({
     title: 'Your Schedule',
     desc: "See who's coming, when, and what they'll help with — no surprises."
   }, {
-    icon: '\u270D\uFE0F',
-    title: 'Your Voice Matters',
-    desc: 'Share preferences and tell caregivers what works for you.'
+    icon: '\uD83D\uDEE1\uFE0F',
+    title: 'Vetted Before They Visit',
+    desc: 'Every helper passes a professional background check before they can work.'
   }, {
     icon: '\uD83D\uDCAC',
     title: 'Stay Connected',
@@ -3296,15 +3441,15 @@ const SplashPage = window.SplashPage = ({
       color: 'var(--text-primary)',
       marginBottom: '8px'
     }
-  }, "Earn Clinical Hours While Making a Difference"), /*#__PURE__*/React.createElement("p", {
+  }, "The Best R\xE9sum\xE9 Line a Nursing Student Can Get \u2014 and It Pays"), /*#__PURE__*/React.createElement("p", {
     style: {
       fontSize: '15px',
       color: 'var(--text-secondary)',
-      maxWidth: '600px',
+      maxWidth: '620px',
       margin: '0 auto',
       lineHeight: 1.6
     }
-  }, "Nursing students gain supervised, hands-on experience with real families \u2014 and get paid for it.")), /*#__PURE__*/React.createElement("div", {
+  }, "Real caregiving experience with real families near Radford, Blacksburg, and Christiansburg \u2014 documented, paid, and flexible around your classes.")), /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'grid',
       gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
@@ -3312,20 +3457,28 @@ const SplashPage = window.SplashPage = ({
     }
   }, [{
     icon: '\uD83E\uDE7A',
-    title: 'Real Patient Experience',
-    desc: 'Work with patients in their homes — vitals, mobility, daily care.'
+    title: 'Real Care Experience',
+    desc: 'Dementia care, personal care, geriatric support — in real homes, with real families. The experience clinicals don\u2019t give you time for.'
   }, {
     icon: '\uD83D\uDCCB',
-    title: 'Tracked Hours',
-    desc: 'Every visit logged and verified for your nursing program.'
+    title: 'Hours & Care Events, Documented',
+    desc: 'Every visit is logged: your hours, the type of care (dementia, personal, geriatric), and family ratings. Get a report of your care history to bring to interviews.'
   }, {
     icon: '\uD83D\uDCB0',
-    title: 'Get Paid to Learn',
-    desc: 'Unlike unpaid rotations, earn competitive pay while building skills.'
+    title: 'Pay That Beats Campus Jobs',
+    desc: 'Keep 80% of every visit — typical caregivers earn $25\u201335/hr, paid within 48 hours.'
   }, {
     icon: '\uD83D\uDCC5',
-    title: 'Flex Around Classes',
-    desc: 'Pick visits that work around your schedule.'
+    title: 'Flexes Around Classes',
+    desc: 'Accept only the visits that fit your schedule. No shift minimums, no manager.'
+  }, {
+    icon: '\uD83D\uDCCD',
+    title: 'Minutes from Campus',
+    desc: 'Families in Radford, Fairlawn, Christiansburg, Blacksburg, and Pulaski County.'
+  }, {
+    icon: '\uD83E\uDD1D',
+    title: 'Bring a Classmate',
+    desc: 'Every caregiver gets a personal referral link after signup — refer friends who\u2019d be great at this.'
   }].map((c, i) => /*#__PURE__*/React.createElement("div", {
     key: i,
     style: {
@@ -3353,7 +3506,29 @@ const SplashPage = window.SplashPage = ({
       color: 'var(--text-secondary)',
       lineHeight: 1.6
     }
-  }, c.desc)))))), /*#__PURE__*/React.createElement(CareStoryWalkthrough, {
+  }, c.desc)))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: 'center',
+      marginTop: '28px'
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      try {
+        window.history.replaceState({}, '', '/register?role=caregiver');
+      } catch (e) {}
+      onNavigate('register');
+    },
+    style: {
+      padding: '14px 36px',
+      fontSize: '16px',
+      fontWeight: 600,
+      background: 'var(--accent-color)',
+      color: 'var(--text-on-primary)',
+      border: 'none',
+      borderRadius: '8px',
+      cursor: 'pointer'
+    }
+  }, "Apply to Caregive ", '\u2192')))), /*#__PURE__*/React.createElement(CareStoryWalkthrough, {
     onNavigate: onNavigate
   }), /*#__PURE__*/React.createElement("section", {
     style: {
@@ -64783,6 +64958,9 @@ const App = () => {
     if (p.get('oauth_code') || p.get('oauth_error')) return 'login';
     // OAuth signup: new user from Google/Apple → send to registration
     if (p.get('oauth_signup')) return 'register';
+    // v1.88: referral links (?ref=CODE) and /register?role=caregiver land
+    // straight on registration — RegisterPage reads ?ref itself to auto-claim.
+    if (p.get('ref') || window.location.pathname === '/register') return 'register';
     return 'splash';
   });
   const [currentUser, setCurrentUser] = useState(null);
@@ -65898,7 +66076,7 @@ const App = () => {
       onLogin: handleLogin,
       onNavigate: handleNavigate,
       prefilledEmail: (signupPrefill === null || signupPrefill === void 0 ? void 0 : signupPrefill.email) || (inviteInfo === null || inviteInfo === void 0 ? void 0 : inviteInfo.email),
-      prefilledRole: signupPrefill === null || signupPrefill === void 0 ? void 0 : signupPrefill.role,
+      prefilledRole: (signupPrefill === null || signupPrefill === void 0 ? void 0 : signupPrefill.role) || new URLSearchParams(window.location.search).get('role'),
       signupToken: signupPrefill === null || signupPrefill === void 0 ? void 0 : signupPrefill.signupToken,
       pendingInviteToken: pendingInviteToken,
       sandboxMode: !!window.__sandboxMode,
