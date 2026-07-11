@@ -8,6 +8,11 @@
 const fs = require("fs");
 const path = require("path");
 const babel = require("@babel/core");
+const { minify } = require("terser");
+
+// v1.90.0 (tier-2 #1): bundles are minified with terser + external sourcemaps.
+// Set MINIFY=0 to skip minification for local debugging (readable output).
+const MINIFY = process.env.MINIFY !== "0";
 
 const PUBLIC = path.join(__dirname, "..", "public");
 const OUT_DIR = path.join(PUBLIC, "js-compiled");
@@ -85,7 +90,7 @@ console.log("  Building client bundles...");
 
 const crypto = require("crypto");
 
-function buildBundle(fileList, label) {
+async function buildBundle(fileList, label) {
   const sources = fileList.map((relPath) => {
     const fullPath = path.join(PUBLIC, relPath);
     if (!fs.existsSync(fullPath)) {
@@ -110,23 +115,53 @@ function buildBundle(fileList, label) {
       ],
     ],
     plugins: ["@babel/plugin-transform-optional-chaining"],
-    compact: false, // readable output for debugging
+    compact: false,
+    sourceMaps: MINIFY, // feed babel's map into terser so the final map points at the JSX source
+    sourceFileName: `${label}.src.jsx`,
     filename: `${label}.jsx`, // helps Babel with source context
   });
-  return result.code;
+
+  if (!MINIFY) {
+    return { code: result.code, map: null };
+  }
+
+  // Terser: mangle/compress with DEFAULT toplevel:false — the core and admin
+  // bundles are separate classic scripts that share top-level lexical bindings
+  // (const/function declarations in the core bundle are referenced by the admin
+  // bundle), so top-level names must never be renamed or dropped.
+  const min = await minify(result.code, {
+    compress: { passes: 2 },
+    mangle: true, // toplevel stays false (default) — see note above
+    format: { comments: false },
+    sourceMap: {
+      content: result.map,
+      filename: `${label}.js`,
+      url: `${label}.js.map`,
+    },
+  });
+  if (!min.code) {
+    console.error(`  ERROR: terser produced no output for ${label}`);
+    process.exit(1);
+  }
+  return { code: min.code, map: min.map };
 }
 
+async function main() {
 if (!fs.existsSync(OUT_DIR)) {
   fs.mkdirSync(OUT_DIR, { recursive: true });
 }
 
-const coreCode = buildBundle(scripts, "bundle");
-const adminCode = buildBundle(ADMIN_SCRIPTS, "bundle-admin");
+const core = await buildBundle(scripts, "bundle");
+const admin = await buildBundle(ADMIN_SCRIPTS, "bundle-admin");
+const coreCode = core.code;
+const adminCode = admin.code;
 
 fs.writeFileSync(path.join(OUT_DIR, "bundle.js"), coreCode, "utf-8");
 fs.writeFileSync(path.join(OUT_DIR, "bundle-admin.js"), adminCode, "utf-8");
-console.log(`  bundle.js:       ${(Buffer.byteLength(coreCode, "utf-8") / 1024).toFixed(1)} KB`);
-console.log(`  bundle-admin.js: ${(Buffer.byteLength(adminCode, "utf-8") / 1024).toFixed(1)} KB`);
+if (core.map) fs.writeFileSync(path.join(OUT_DIR, "bundle.js.map"), core.map, "utf-8");
+if (admin.map) fs.writeFileSync(path.join(OUT_DIR, "bundle-admin.js.map"), admin.map, "utf-8");
+console.log(`  bundle.js:       ${(Buffer.byteLength(coreCode, "utf-8") / 1024).toFixed(1)} KB${MINIFY ? " (minified)" : ""}`);
+console.log(`  bundle-admin.js: ${(Buffer.byteLength(adminCode, "utf-8") / 1024).toFixed(1)} KB${MINIFY ? " (minified)" : ""}`);
 
 // ─── Auto-bump cache-buster in sw.js and index.html ───
 // Uses content hash + timestamp so SW always updates on every deploy.
@@ -169,3 +204,9 @@ if (fs.existsSync(indexPath)) {
 }
 
 console.log("  Build complete.");
+}
+
+main().catch((err) => {
+  console.error("  Build failed:", err);
+  process.exit(1);
+});
