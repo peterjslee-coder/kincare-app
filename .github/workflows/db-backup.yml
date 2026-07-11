@@ -64,6 +64,10 @@ jobs:
       - name: Dump database
         if: steps.check.outputs.ready == 'true'
         run: |
+          # Ubuntu runners preinstall postgresql-client-16, which shadows the
+          # pgdg 17 client on PATH — prod is PG 17, so use the 17 binaries.
+          export PATH="/usr/lib/postgresql/17/bin:$PATH"
+          pg_dump --version
           STAMP=$(date -u +%F)
           echo "STAMP=$STAMP" >> "$GITHUB_ENV"
           pg_dump --format=custom --no-owner --file="inplace-$STAMP.dump" "$PROD_DATABASE_URL"
@@ -101,6 +105,7 @@ jobs:
       - name: Verify backup is restorable
         if: steps.check.outputs.ready == 'true'
         run: |
+          export PATH="/usr/lib/postgresql/17/bin:$PATH" # match pg_dump version (see Dump step)
           ENDPOINT="https://$R2_ACCOUNT_ID.r2.cloudflarestorage.com"
           aws s3 cp "s3://$R2_BUCKET/inplace-$STAMP.dump.enc" verify.dump.enc --endpoint-url "$ENDPOINT"
           openssl enc -d -aes-256-cbc -pbkdf2 \
