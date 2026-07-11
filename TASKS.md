@@ -228,6 +228,9 @@
 
 ## Features — Up Next
 
+- [ ] **Family-only care coordination tier — subscription (Pete's feedback, July 11).** A mode where NO caregivers are hired through the app: family members and friends alone use it for caretaking notes, bill/task coordination between family, doctor-visit coordination, and iPAi — for a nominal subscription fee. Strategic upside Pete flagged: builds the care-history background so the transition to hired care later is seamless. Needs product definition (what's gated behind the subscription, pricing, how it coexists with the marketplace tier) before any build. Candidate discussion topic for business development. **P1-discuss**
+
+
 - [ ] **Bottom nav bar still reads as bulky (Pete, July 8 — v1.74.3 trimmed 12px off the safe-area stack but he still dislikes it).** Next ideas, in rough order of impact: (a) tint the safe-area zone the same as the bar with the labels sitting lower so the inset reads as part of the bar, not dead space; (b) icons-only nav (drop the text labels, +30% less height) with the active tab showing its label; (c) dip further into the inset (home indicator needs ~13px, we currently leave 22px). Mock 2–3 options as HTML in mockups/app/ before touching prod.
 
 
