@@ -5,6 +5,7 @@ const { getDb } = require("../models/database");
 const { authenticate } = require("../middleware/auth");
 const { classifyDocument } = require("../utils/documentAI");
 const { MODEL_SONNET } = require("../utils/aiModels");
+const storage = require("../utils/storage"); // v1.91.0 — env-gated R2 offload for document blobs
 
 const router = express.Router();
 
@@ -47,10 +48,14 @@ router.post("/documents", upload.array("documents", 10), async (req, res) => {
       const docMeta = metadata[i] ? JSON.stringify(metadata[i]) : null;
       const docId = uuid();
 
+      // v1.91.0 — upload ONCE to R2 (when configured); same marker feeds the
+      // verified_documents dual-write below (same id by design).
+      const storedFileData = await storage.storeFileData("caregiver-docs", base64);
+
       await db.prepare(`
         INSERT INTO caregiver_documents (id, user_id, document_type, file_data, file_name, metadata)
         VALUES (?, ?, ?, ?, ?, ?)
-      `).run(docId, req.user.id, docType, base64, file.originalname, docMeta);
+      `).run(docId, req.user.id, docType, storedFileData, file.originalname, docMeta);
 
       // v1.87.0 (infra #7): write verified_documents AT UPLOAD (same id, so the
       // per-boot caregiver_documents sync skips it) instead of waiting for the
@@ -68,7 +73,7 @@ router.post("/documents", upload.array("documents", 10), async (req, res) => {
           docId, req.user.id, req.user.id,
           ["dl_front", "dl_back", "drivers_license"].includes(docType) ? "identity" : "certification",
           ({ dl_front: "DL_Front", dl_back: "DL_Back", drivers_license: "DL_Front", certification: "Other_Cert" })[docType] || "Other",
-          base64, file.originalname, file.size, file.mimetype
+          storedFileData, file.originalname, file.size, file.mimetype
         );
       } catch (dualWriteErr) {
         console.warn("verified_documents dual-write deferred to boot sync:", dualWriteErr.message);
@@ -136,7 +141,7 @@ router.get("/documents/:id/image", async (req, res) => {
       }
     }
 
-    res.json({ fileData: doc.file_data });
+    res.json({ fileData: await storage.resolveFileData(doc.file_data) }); // v1.91.0 — fetches from R2 when marker
   } catch (err) {
     console.error("Get document image error:", err);
     res.status(500).json({ error: "Failed to get document" });
@@ -268,7 +273,8 @@ router.post("/verify-id", async (req, res) => {
     ).run(
       docId, profile.id, 'caregiver', req.user.id, 'identity',
       classifyResult.classification || 'drivers_license',
-      idPhotoBase64, mimetype,
+      await storage.storeFileData("identity", idPhotoBase64), mimetype, // v1.91.0
+
       needsHumanReview ? 'pending' : 'approved',
       JSON.stringify(aiClassification),
       JSON.stringify({ extractedName, registeredName, extractedDOB, issuingAuthority, expiryDate, confidence: classifyResult.confidence, nameMatched, dobMatched }),
@@ -287,7 +293,7 @@ router.post("/verify-id", async (req, res) => {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       selfieDocId, profile.id, 'caregiver', req.user.id,
-      'identity', 'selfie', selfieBase64, selfieMime,
+      'identity', 'selfie', await storage.storeFileData("identity", selfieBase64), selfieMime, // v1.91.0
       'approved', JSON.stringify({ linkedIdDocId: docId, faceComparison }),
       new Date().toISOString()
     );

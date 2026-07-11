@@ -12,6 +12,7 @@ const { authenticate } = require("../middleware/auth");
 const { captureException } = require("../utils/sentry");
 const { validateMagicBytes } = require("../utils/fileValidation");
 const { writeAuditLog, getClientIp } = require("../middleware/auditLog");
+const storage = require("../utils/storage"); // v1.91.0 — env-gated R2 offload for receipt blobs
 
 const router = express.Router();
 router.use(authenticate);
@@ -103,9 +104,12 @@ async function insertReimbursement(db, fields, receipts) {
     fields.paidAt || null, fields.paidMethod || null, fields.paidReference || null, fields.paidBy || null
   );
   for (const r of receipts) {
+    // v1.91.0 — with R2 configured, the blob goes to object storage and the
+    // column stores an "r2:<key>" marker; otherwise the data URI as before.
+    const stored = await storage.storeFileData("receipts", r.data);
     await db.prepare(
       "INSERT INTO reimbursement_receipts (id, reimbursement_id, file_data, file_name, mime_type, file_size, uploaded_by) VALUES (?, ?, ?, ?, ?, ?, ?)"
-    ).run(uuid(), id, r.data, r.name, r.mime, r.size, fields.requestedBy);
+    ).run(uuid(), id, stored, r.name, r.mime, r.size, fields.requestedBy);
   }
   return id;
 }
@@ -317,7 +321,8 @@ router.get("/receipt/:receiptId", async (req, res) => {
     const access = await teamAccess(db, receipt.care_team_id, req.user.id);
     if (!access || !access.canView) return res.status(404).json({ error: "Receipt not found" });
 
-    const m = receipt.file_data.match(/^data:([^;]+);base64,(.+)$/s);
+    const fileData = await storage.resolveFileData(receipt.file_data); // v1.91.0 — fetches from R2 when marker
+    const m = fileData.match(/^data:([^;]+);base64,(.+)$/s);
     if (!m) return res.status(500).json({ error: "Stored receipt is corrupt" });
     const buf = Buffer.from(m[2], "base64");
     res.set("Content-Type", receipt.mime_type || m[1]);

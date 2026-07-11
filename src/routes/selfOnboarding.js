@@ -10,6 +10,7 @@ const { getDb } = require("../models/database");
 const { authenticate } = require("../middleware/auth");
 const { classifyDocument } = require("../utils/documentAI");
 const { MODEL_SONNET } = require("../utils/aiModels");
+const storage = require("../utils/storage"); // v1.91.0 — env-gated R2 offload for document blobs
 const router = express.Router();
 
 /**
@@ -198,7 +199,7 @@ router.post("/verify-id", authenticate, async (req, res) => {
       req.user.id,
       'identity',
       classifyResult.classification || 'drivers_license',
-      idPhotoBase64,
+      await storage.storeFileData("identity", idPhotoBase64), // v1.91.0
       mimetype,
       needsHumanReview ? 'pending' : 'approved',
       JSON.stringify(aiClassificationForAdmin),                // ai_classification — for admin panel
@@ -224,7 +225,7 @@ router.post("/verify-id", authenticate, async (req, res) => {
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).run(
         selfieDocId, ownerId, ownerType, req.user.id,
-        'identity', 'selfie', selfieBase64, selfieMime,
+        'identity', 'selfie', await storage.storeFileData("identity", selfieBase64), selfieMime, // v1.91.0
         'approved',  // selfie itself doesn't need review — it's supporting evidence
         JSON.stringify({ linkedIdDocId: docId, faceComparison }),
         new Date().toISOString()

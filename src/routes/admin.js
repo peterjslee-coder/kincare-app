@@ -3707,6 +3707,12 @@ router.get("/documents/:docId", requireAdmin, async (req, res) => {
     }
 
     if (!doc) return res.status(404).json({ error: "Document not found" });
+    // v1.91.0 — new uploads may hold an "r2:<key>" marker; resolve to a data URI
+    // so the admin preview keeps rendering both shapes.
+    if (doc.file_data) {
+      const storage = require("../utils/storage");
+      doc.file_data = await storage.resolveFileData(doc.file_data);
+    }
     res.json({ document: doc });
   } catch (err) {
     console.error("Admin document preview error:", err);

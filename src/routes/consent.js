@@ -4,6 +4,7 @@ const multer = require("multer");
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { authenticate } = require("../middleware/auth");
+const storage = require("../utils/storage"); // v1.91.0 — env-gated R2 offload for document blobs
 
 // Lazy-loaded to avoid circular dependency (documents.js may require consent patterns)
 let _logConsentAudit;
@@ -742,11 +743,16 @@ router.post("/:recipientId/documents", authenticate, uploadDoc.single("document"
     // Convert to base64 data URI
     const base64 = `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`;
 
+    // v1.91.0 — upload ONCE to R2 (when configured); the same marker is written
+    // to both authorization_documents and the verified_documents dual-write below,
+    // which share the same id by design (v1.87.0 boot-sync dedup).
+    const storedFileData = await storage.storeFileData("consent", base64);
+
     const id = uuid();
     await db.prepare(`
       INSERT INTO authorization_documents (id, care_recipient_id, submitted_by, document_type, file_data, file_name, file_size, mime_type, upload_status)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'uploaded')
-    `).run(id, req.params.recipientId, req.user.id, documentType, base64, req.file.originalname, req.file.size, req.file.mimetype);
+    `).run(id, req.params.recipientId, req.user.id, documentType, storedFileData, req.file.originalname, req.file.size, req.file.mimetype);
 
     // ─── Dual-write to verified_documents + AI classification ───
     let aiResult = null;
@@ -763,7 +769,7 @@ router.post("/:recipientId/documents", authenticate, uploadDoc.single("document"
         INSERT INTO verified_documents (id, owner_type, owner_id, uploaded_by, category, document_type,
           file_data, file_name, file_size, mime_type, status, created_at, updated_at)
         VALUES (?, 'care_recipient', ?, ?, 'consent', ?, ?, ?, ?, ?, 'ai_review', NOW(), NOW())
-      `).run(vDocId, req.params.recipientId, req.user.id, documentType, base64, req.file.originalname, req.file.size, req.file.mimetype);
+      `).run(vDocId, req.params.recipientId, req.user.id, documentType, storedFileData, req.file.originalname, req.file.size, req.file.mimetype);
 
       aiResult = await classifyDocument(base64, req.file.mimetype, documentType);
       const aiStatus = (!aiResult.skipped && !aiResult.error && (!aiResult.isValid || !aiResult.matchesClaimed || aiResult.confidence < 0.5))
@@ -858,7 +864,8 @@ router.get("/:recipientId/documents/:docId/download", authenticate, async (req, 
     if (!doc) return res.status(404).json({ error: "Document not found" });
 
     // Strip data URI prefix and decode base64
-    const base64Data = doc.file_data.replace(/^data:[^;]+;base64,/, "");
+    const fileData = await storage.resolveFileData(doc.file_data); // v1.91.0 — fetches from R2 when marker
+    const base64Data = fileData.replace(/^data:[^;]+;base64,/, "");
     const buffer = Buffer.from(base64Data, "base64");
 
     res.set({

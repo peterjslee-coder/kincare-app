@@ -5,6 +5,7 @@ const { getDb } = require("../models/database");
 const { authenticate, requireAdmin } = require("../middleware/auth");
 const { classifyDocument } = require("../utils/documentAI");
 const { validateMagicBytes } = require("../utils/fileValidation");
+const storage = require("../utils/storage"); // v1.91.0 — env-gated R2 offload for document blobs
 
 const router = express.Router();
 
@@ -146,12 +147,15 @@ router.post("/upload", authenticate, uploadDoc.single("document"), async (req, r
     const docId = uuid();
 
     // Insert document with 'ai_review' status
+    // v1.91.0 — blob goes to R2 when configured ("r2:<key>" marker in the column);
+    // the in-memory `base64` keeps feeding the AI classification below either way.
+    const storedFileData = await storage.storeFileData("documents", base64);
     await db.prepare(`
       INSERT INTO verified_documents (id, owner_type, owner_id, uploaded_by, category, document_type,
         file_data, file_name, file_size, mime_type, status, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ai_review', NOW(), NOW())
     `).run(docId, owner_type, owner_id, req.user.id, category, document_type,
-      base64, req.file.originalname, req.file.size, req.file.mimetype);
+      storedFileData, req.file.originalname, req.file.size, req.file.mimetype);
 
     // Log upload audit entry immediately (before AI, so user sees it)
     if ((category === "consent" || category === "legal") && owner_type === "care_recipient") {
@@ -472,7 +476,8 @@ router.get("/:docId/download", authenticate, checkDocAdmin, async (req, res) => 
       return res.status(403).json({ error: "You do not have access to this document" });
     }
 
-    const base64Data = doc.file_data.replace(/^data:[^;]+;base64,/, "");
+    const fileData = await storage.resolveFileData(doc.file_data); // v1.91.0 — fetches from R2 when marker
+    const base64Data = fileData.replace(/^data:[^;]+;base64,/, "");
     const buffer = Buffer.from(base64Data, "base64");
 
     res.set({
@@ -506,6 +511,10 @@ router.delete("/:docId", authenticate, async (req, res) => {
     }
 
     await db.prepare("DELETE FROM verified_documents WHERE id = ?").run(req.params.docId);
+    // v1.91.0 — deliberately NOT deleting the R2 object here: consent uploads
+    // dual-write the same blob marker into authorization_documents under the
+    // same id, so the object may still be referenced. Orphaned objects are
+    // harmless; cleanup happens in the future backfill/GC migration.
 
     // Audit log for consent docs
     if ((doc.category === "consent" || doc.category === "legal") && doc.owner_type === "care_recipient") {
@@ -535,7 +544,7 @@ router.post("/:docId/re-verify", authenticate, checkDocAdmin, requireAdmin, asyn
     const doc = await db.prepare("SELECT * FROM verified_documents WHERE id = ?").get(req.params.docId);
     if (!doc) return res.status(404).json({ error: "Document not found" });
 
-    const aiResult = await classifyDocument(doc.file_data, doc.mime_type, doc.document_type);
+    const aiResult = await classifyDocument(await storage.resolveFileData(doc.file_data), doc.mime_type, doc.document_type);
 
     let newStatus = doc.status;
     if (!aiResult.skipped && !aiResult.error) {
