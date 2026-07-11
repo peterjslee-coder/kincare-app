@@ -1,0 +1,110 @@
+# Nightly encrypted database backup to Cloudflare R2.
+#
+# Flow: pg_dump (custom format) → AES-256-CBC encrypt (pbkdf2) → upload to R2
+#       → prune backups older than 30 days → download + decrypt + pg_restore --list
+#       to verify the archive is actually restorable.
+#
+# Required repository secrets (Settings → Secrets and variables → Actions):
+#   PROD_DATABASE_URL      Railway → Postgres → Variables → DATABASE_PUBLIC_URL
+#                          (the public URL — .railway.internal is unreachable from GitHub)
+#   BACKUP_ENCRYPTION_KEY  long random passphrase (openssl rand -base64 32).
+#                          KEEP A COPY IN A PASSWORD MANAGER — without it backups are unreadable.
+#   R2_ACCOUNT_ID          Cloudflare account id (visible in the R2 S3 endpoint)
+#   R2_ACCESS_KEY_ID       R2 API token (Object Read & Write, scoped to the bucket)
+#   R2_SECRET_ACCESS_KEY   "
+#   R2_BUCKET              inplace-db-backups
+#
+# Until the secrets are set, the workflow exits early with a warning (does not fail).
+#
+# RESTORE PROCEDURE:
+#   1. Download the desired backup from R2 (Cloudflare dashboard or aws s3 cp).
+#   2. openssl enc -d -aes-256-cbc -pbkdf2 -in inplace-YYYY-MM-DD.dump.enc \
+#        -out inplace.dump -pass "pass:<BACKUP_ENCRYPTION_KEY>"
+#   3. Inspect:  pg_restore --list inplace.dump
+#   4. Restore:  pg_restore --clean --if-exists --no-owner -d "$DATABASE_URL" inplace.dump
+#      (use the Railway DATABASE_PUBLIC_URL of the target database; test on staging first)
+name: Nightly DB backup
+
+on:
+  schedule:
+    - cron: "0 7 * * *" # 07:00 UTC = 3am ET
+  workflow_dispatch: {}
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PROD_DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+      BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_BUCKET: ${{ secrets.R2_BUCKET }}
+      AWS_DEFAULT_REGION: auto
+    steps:
+      - name: Check secrets
+        id: check
+        run: |
+          if [ -z "$PROD_DATABASE_URL" ] || [ -z "$BACKUP_ENCRYPTION_KEY" ] || [ -z "$R2_ACCOUNT_ID" ] || [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ] || [ -z "$R2_BUCKET" ]; then
+            echo "::warning::Backup secrets not configured yet — skipping (see docs/OPS_RUNBOOK.md §3–4)."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install PostgreSQL 17 client
+        if: steps.check.outputs.ready == 'true'
+        run: |
+          sudo sh -c 'echo "deb https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/pgdg.gpg
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-17
+
+      - name: Dump database
+        if: steps.check.outputs.ready == 'true'
+        run: |
+          STAMP=$(date -u +%F)
+          echo "STAMP=$STAMP" >> "$GITHUB_ENV"
+          pg_dump --format=custom --no-owner --file="inplace-$STAMP.dump" "$PROD_DATABASE_URL"
+          ls -lh "inplace-$STAMP.dump"
+
+      - name: Encrypt
+        if: steps.check.outputs.ready == 'true'
+        run: |
+          openssl enc -aes-256-cbc -pbkdf2 -salt \
+            -in "inplace-$STAMP.dump" -out "inplace-$STAMP.dump.enc" \
+            -pass env:BACKUP_ENCRYPTION_KEY
+          rm "inplace-$STAMP.dump"
+
+      - name: Upload to R2
+        if: steps.check.outputs.ready == 'true'
+        run: |
+          ENDPOINT="https://$R2_ACCOUNT_ID.r2.cloudflarestorage.com"
+          aws s3 cp "inplace-$STAMP.dump.enc" "s3://$R2_BUCKET/inplace-$STAMP.dump.enc" --endpoint-url "$ENDPOINT"
+
+      - name: Prune backups older than 30 days
+        if: steps.check.outputs.ready == 'true'
+        run: |
+          ENDPOINT="https://$R2_ACCOUNT_ID.r2.cloudflarestorage.com"
+          CUTOFF=$(date -u -d "30 days ago" +%F)
+          aws s3 ls "s3://$R2_BUCKET/" --endpoint-url "$ENDPOINT" | awk '{print $4}' | while read -r KEY; do
+            [ -n "$KEY" ] || continue
+            FILEDATE=$(echo "$KEY" | sed -n 's/^inplace-\([0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}\)\.dump\.enc$/\1/p')
+            [ -n "$FILEDATE" ] || continue
+            if [ "$FILEDATE" \< "$CUTOFF" ]; then
+              echo "Pruning $KEY (older than $CUTOFF)"
+              aws s3 rm "s3://$R2_BUCKET/$KEY" --endpoint-url "$ENDPOINT"
+            fi
+          done
+
+      - name: Verify backup is restorable
+        if: steps.check.outputs.ready == 'true'
+        run: |
+          ENDPOINT="https://$R2_ACCOUNT_ID.r2.cloudflarestorage.com"
+          aws s3 cp "s3://$R2_BUCKET/inplace-$STAMP.dump.enc" verify.dump.enc --endpoint-url "$ENDPOINT"
+          openssl enc -d -aes-256-cbc -pbkdf2 \
+            -in verify.dump.enc -out verify.dump \
+            -pass env:BACKUP_ENCRYPTION_KEY
+          pg_restore --list verify.dump > /dev/null
+          echo "Backup inplace-$STAMP.dump.enc verified: decrypts and lists cleanly."

@@ -1,0 +1,33 @@
+# Uptime monitor — hits /api/health every 15 minutes.
+# 3 consecutive failures (30s apart) fail the workflow, which triggers
+# GitHub's "failed workflow" notification email to the repo owner.
+# (Upgrade path: UptimeRobot free tier checks every 5 min with SMS — if you
+# set that up, delete this workflow.)
+name: Uptime monitor
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check /api/health
+        run: |
+          for ATTEMPT in 1 2 3; do
+            CB=$(date +%s)-$ATTEMPT
+            STATUS=$(curl -s -o /tmp/health.out -w "%{http_code}" --max-time 20 "https://yourinplace.com/api/health?cb=$CB" || echo "000")
+            if [ "$STATUS" = "200" ]; then
+              echo "Attempt $ATTEMPT: healthy (200)"
+              cat /tmp/health.out
+              exit 0
+            fi
+            echo "Attempt $ATTEMPT: unhealthy (HTTP $STATUS)"
+            cat /tmp/health.out 2>/dev/null || true
+            [ "$ATTEMPT" -lt 3 ] && sleep 30
+          done
+          echo "::error::yourinplace.com /api/health failed 3 consecutive checks"
+          exit 1

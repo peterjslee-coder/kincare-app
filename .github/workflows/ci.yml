@@ -1,0 +1,33 @@
+# CI — runs on every push and pull request.
+# Unit suite (jest, mocked) → integration suite (embedded PostgreSQL, real SQL)
+# → client bundle build. With Railway "Wait for CI" enabled, a red run here
+# blocks the production deploy.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest # non-root runner user, so embedded-postgres initdb works
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Integration tests (embedded PostgreSQL)
+        run: npm run test:integration
+
+      - name: Client bundle build
+        run: node scripts/build-client.js
