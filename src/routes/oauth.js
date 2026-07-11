@@ -28,6 +28,40 @@ const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 const APP_URL = process.env.APP_URL || "https://yourinplace.com";
 
+// ─── Native-app OAuth return helpers (v1.89.1) ───
+// The Capacitor app opens OAuth in a system browser (Chrome Custom Tab on Android,
+// SFSafariViewController on iOS) with ?from_app=1 (Android) or ?from_app=ios (iOS).
+// The flag rides the OAuth `state` param, and the callback returns the result to the
+// app via the inplace:// custom scheme instead of loading the web app in the browser.
+// v1.89.1 extends this to iOS: previously the iOS app navigated its main WebView to
+// Google, Capacitor pushed that external navigation out to Safari, and the user's
+// whole session ended up in Safari — "like the first time I've ever signed in".
+function appStateFlag(state) {
+  if (typeof state !== "string") return null;
+  if (state.includes("|app-ios")) return "ios";
+  if (state.includes("|app")) return "android";
+  return null;
+}
+function fromAppStateSuffix(fromAppParam) {
+  if (fromAppParam === "ios") return "|app-ios";
+  if (fromAppParam === "1") return "|app";
+  return "";
+}
+function redirectToApp(res, appFlag, params) {
+  // params is built server-side from hex codes / fixed error slugs — never raw user input.
+  const target = `inplace://oauth?${params}`;
+  if (appFlag === "ios") {
+    // SFSafariViewController is unreliable with server-side 302s to custom schemes —
+    // serve a tiny interstitial that auto-attempts the scheme and offers a tap fallback.
+    return res.status(200).type("html").send(`<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Returning to InPlace</title>
+<style>body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:80vh;background:#f6faf9;color:#1b3b34;margin:0;padding:24px;text-align:center}a{display:inline-block;margin-top:18px;padding:14px 28px;background:#1b6b5a;color:#fff;border-radius:10px;text-decoration:none;font-weight:600;font-size:16px}</style></head>
+<body><p>Signing you in&hellip;</p><a href="${target}">Return to InPlace</a>
+<script>setTimeout(function(){window.location.href=${JSON.stringify(target)};},60);</script></body></html>`);
+  }
+  return res.redirect(target);
+}
+
 // Apple Sign In configuration
 const APPLE_CLIENT_ID = process.env.APPLE_CLIENT_ID; // Services ID (e.g. com.yourinplace.app.web)
 const APPLE_TEAM_ID = process.env.APPLE_TEAM_ID;     // e.g. 7964RAMZJL
@@ -43,8 +77,8 @@ router.get("/google", (req, res) => {
   const redirectUri = `${APP_URL}/api/oauth/google/callback`;
   const scope = encodeURIComponent("openid email profile");
   // Encode from_app flag into state so it survives the Google round-trip
-  const fromApp = req.query.from_app === "1";
-  const state = crypto.randomBytes(16).toString("hex") + (fromApp ? "|app" : "");
+  // ("1" = Android, "ios" = iOS — see redirectToApp)
+  const state = crypto.randomBytes(16).toString("hex") + fromAppStateSuffix(req.query.from_app);
 
   // Store state in a short-lived cookie for CSRF protection
   const isProduction = process.env.NODE_ENV === "production";
@@ -57,18 +91,26 @@ router.get("/google", (req, res) => {
 
 // ─── GET /api/oauth/google/callback ─── Handle Google's redirect
 router.get("/google/callback", async (req, res) => {
+  // v1.89.1 — when the flow started from the native app, EVERY outcome (success,
+  // signup, error) must return to the app via inplace://, not strand the user in
+  // the system browser. appFlag comes from the state param; error slugs are fixed
+  // strings, so routing errors back through the scheme is safe even pre-validation.
+  const appFlag = appStateFlag(req.query.state);
+  const failTo = (slug) => appFlag
+    ? redirectToApp(res, appFlag, `oauth_error=${slug}`)
+    : res.redirect(`${APP_URL}?oauth_error=${slug}`);
   try {
     const { code, state } = req.query;
 
     // Validate CSRF state parameter
     const savedState = req.cookies?.oauth_state;
     if (!state || !savedState || state !== savedState) {
-      return res.redirect(`${APP_URL}?oauth_error=invalid_state`);
+      return failTo("invalid_state");
     }
     res.clearCookie("oauth_state");
 
     if (!code) {
-      return res.redirect(`${APP_URL}?oauth_error=no_code`);
+      return failTo("no_code");
     }
 
     // Exchange authorization code for tokens
@@ -87,7 +129,7 @@ router.get("/google/callback", async (req, res) => {
 
     if (!tokenResponse.ok) {
       console.error("Google token exchange failed:", await tokenResponse.text());
-      return res.redirect(`${APP_URL}?oauth_error=token_exchange_failed`);
+      return failTo("token_exchange_failed");
     }
 
     const tokens = await tokenResponse.json();
@@ -98,7 +140,7 @@ router.get("/google/callback", async (req, res) => {
     });
 
     if (!userInfoResponse.ok) {
-      return res.redirect(`${APP_URL}?oauth_error=userinfo_failed`);
+      return failTo("userinfo_failed");
     }
 
     const googleUser = await userInfoResponse.json();
@@ -117,7 +159,7 @@ router.get("/google/callback", async (req, res) => {
       // Google account already linked — log in
       user = await db.prepare("SELECT * FROM users WHERE id = ? AND is_active = 1").get(existingOAuth.user_id);
       if (!user) {
-        return res.redirect(`${APP_URL}?oauth_error=account_disabled`);
+        return failTo("account_disabled");
       }
     } else {
       // Check if a user with this email already exists
@@ -148,7 +190,7 @@ router.get("/google/callback", async (req, res) => {
           refreshToken: tokens.refresh_token || null,
           expiresAt: Date.now() + 5 * 60 * 1000, // 5 minutes
         });
-        return res.redirect(`${APP_URL}?oauth_signup=${signupCode}`);
+        return appFlag ? redirectToApp(res, appFlag, `oauth_signup=${signupCode}`) : res.redirect(`${APP_URL}?oauth_signup=${signupCode}`);
       }
     }
 
@@ -169,19 +211,16 @@ router.get("/google/callback", async (req, res) => {
       expiresAt: Date.now() + 60 * 1000, // 60 seconds
     });
 
-    // On Android Capacitor, redirect to a custom URL scheme (inplace://oauth)
-    // so the native app receives the auth code via deep link.
-    // The |app flag was encoded into the state param by the /google endpoint.
-    const isFromApp = state && state.includes("|app");
-
-    if (isFromApp) {
-      res.redirect(`inplace://oauth?oauth_code=${authCode}`);
+    // Native app (Android or iOS): return the auth code via the inplace:// custom
+    // scheme so the app's appUrlOpen deep-link handler completes the sign-in.
+    if (appFlag) {
+      redirectToApp(res, appFlag, `oauth_code=${authCode}`);
     } else {
       res.redirect(`${APP_URL}?oauth_code=${authCode}`);
     }
   } catch (err) {
     console.error("Google OAuth callback error:", err);
-    res.redirect(`${APP_URL}?oauth_error=server_error`);
+    failTo("server_error");
   }
 });
 
@@ -285,8 +324,10 @@ router.get("/apple", (req, res) => {
 
   // If link_mode, encode the user's auth token into the state so the callback
   // can attach the Apple ID to the correct account (regardless of relay email)
+  // v1.89.1 — also carry the native-app flag (must come before |link| so the
+  // link-mode split('|link|') keeps working).
   const linkToken = req.query.link_mode === '1' ? (req.query.link_token || '') : '';
-  const statePayload = crypto.randomBytes(16).toString("hex") + (linkToken ? `|link|${linkToken}` : '');
+  const statePayload = crypto.randomBytes(16).toString("hex") + fromAppStateSuffix(req.query.from_app) + (linkToken ? `|link|${linkToken}` : '');
 
   // Apple uses form_post (cross-site POST), so sameSite must be "none" + secure
   // (lax cookies are not sent on cross-site POSTs, only top-level GET navigations)
@@ -307,6 +348,11 @@ router.get("/apple", (req, res) => {
 
 // ─── POST /api/oauth/apple/callback ─── Handle Apple's form_post redirect
 router.post("/apple/callback", express.urlencoded({ extended: false }), async (req, res) => {
+  // v1.89.1 — same native-app return contract as the Google callback.
+  const appFlag = appStateFlag(req.body?.state);
+  const failTo = (slug) => appFlag
+    ? redirectToApp(res, appFlag, `oauth_error=${slug}`)
+    : res.redirect(`${APP_URL}?oauth_error=${slug}`);
   try {
     const { code, id_token, state, user: userJson } = req.body;
 
@@ -316,7 +362,7 @@ router.post("/apple/callback", express.urlencoded({ extended: false }), async (r
     const savedState = req.cookies?.apple_oauth_state;
     if (!state || !savedState || state !== savedState) {
       console.error("[Apple OAuth] CSRF state mismatch — state:", !!state, "savedState:", !!savedState, "match:", state === savedState);
-      return res.redirect(`${APP_URL}?oauth_error=invalid_state`);
+      return failTo("invalid_state");
     }
     res.clearCookie("apple_oauth_state");
 
@@ -331,14 +377,14 @@ router.post("/apple/callback", express.urlencoded({ extended: false }), async (r
           console.log(`[Apple OAuth] Link mode — attaching to user ${linkUserId?.slice(0, 8)}`);
         } catch (e) {
           console.error("[Apple OAuth] Link mode token invalid:", e.message);
-          return res.redirect(`${APP_URL}?oauth_error=link_expired`);
+          return failTo("link_expired");
         }
       }
     }
 
     if (!id_token) {
       console.error("[Apple OAuth] No id_token in callback body");
-      return res.redirect(`${APP_URL}?oauth_error=no_token`);
+      return failTo("no_token");
     }
 
     // Verify the id_token JWT against Apple's public keys
@@ -368,7 +414,7 @@ router.post("/apple/callback", express.urlencoded({ extended: false }), async (r
     if (linkUserId) {
       const linkUser = await db.prepare("SELECT * FROM users WHERE id = ? AND is_active = 1").get(linkUserId);
       if (!linkUser) {
-        return res.redirect(`${APP_URL}?oauth_error=account_disabled`);
+        return failTo("account_disabled");
       }
 
       if (existingOAuth) {
@@ -379,7 +425,7 @@ router.post("/apple/callback", express.urlencoded({ extended: false }), async (r
         } else {
           // Apple ID is linked to a different account
           console.log(`[Apple OAuth] Link mode — Apple ID already linked to different user ${existingOAuth.user_id.slice(0, 8)}`);
-          return res.redirect(`${APP_URL}?oauth_error=apple_already_linked`);
+          return failTo("apple_already_linked");
         }
       } else {
         // Link Apple ID to this user (works regardless of relay email)
@@ -404,7 +450,7 @@ router.post("/apple/callback", express.urlencoded({ extended: false }), async (r
     if (existingOAuth) {
       user = await db.prepare("SELECT * FROM users WHERE id = ? AND is_active = 1").get(existingOAuth.user_id);
       if (!user) {
-        return res.redirect(`${APP_URL}?oauth_error=account_disabled`);
+        return failTo("account_disabled");
       }
     } else {
       // No existing OAuth link — try to match by email
@@ -430,7 +476,7 @@ router.post("/apple/callback", express.urlencoded({ extended: false }), async (r
         // Apple Hide My Email — relay address doesn't match any existing user.
         // Don't auto-create an orphan account. Tell the user to share their real email.
         console.log(`[Apple OAuth] Blocked new account for relay email ${email} — user should retry with real email or sign in first`);
-        return res.redirect(`${APP_URL}?oauth_error=apple_hidden_email`);
+        return failTo("apple_hidden_email");
       } else if (email) {
         // No existing account — redirect to registration with Apple info pre-filled
         const signupCode = crypto.randomBytes(32).toString("hex");
@@ -446,10 +492,10 @@ router.post("/apple/callback", express.urlencoded({ extended: false }), async (r
           emailVerified: email_verified,
           expiresAt: Date.now() + 5 * 60 * 1000,
         });
-        return res.redirect(`${APP_URL}?oauth_signup=${signupCode}`);
+        return appFlag ? redirectToApp(res, appFlag, `oauth_signup=${signupCode}`) : res.redirect(`${APP_URL}?oauth_signup=${signupCode}`);
       } else {
         // Apple didn't share email and no existing link — can't create account
-        return res.redirect(`${APP_URL}?oauth_error=no_email`);
+        return failTo("no_email");
       }
     }
 
@@ -471,10 +517,14 @@ router.post("/apple/callback", express.urlencoded({ extended: false }), async (r
     });
 
     console.log("[Apple OAuth] success — redirecting with auth code for user:", user.email);
-    res.redirect(`${APP_URL}?oauth_code=${authCode}`);
+    if (appFlag) {
+      redirectToApp(res, appFlag, `oauth_code=${authCode}`);
+    } else {
+      res.redirect(`${APP_URL}?oauth_code=${authCode}`);
+    }
   } catch (err) {
     console.error("[Apple OAuth] callback error:", err.message, err.stack);
-    res.redirect(`${APP_URL}?oauth_error=server_error`);
+    failTo("server_error");
   }
 });
 

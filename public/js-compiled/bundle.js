@@ -5290,14 +5290,18 @@ const LoginPage = window.LoginPage = ({
     }
   }, /*#__PURE__*/React.createElement("button", {
     onClick: () => {
-      var _window$Capacitor4, _window$Capacitor4$is, _window$Capacitor5, _window$Capacitor5$ge, _window$Capacitor6;
-      // Android Capacitor: Google blocks OAuth in WebViews (disallowed_useragent).
-      // Open in Chrome Custom Tab via @capacitor/browser — Google allows these.
-      // The redirect back to yourinplace.com triggers App Links → deep link handler in app.js.
-      const isAndroidNative = ((_window$Capacitor4 = window.Capacitor) === null || _window$Capacitor4 === void 0 || (_window$Capacitor4$is = _window$Capacitor4.isNativePlatform) === null || _window$Capacitor4$is === void 0 ? void 0 : _window$Capacitor4$is.call(_window$Capacitor4)) && ((_window$Capacitor5 = window.Capacitor) === null || _window$Capacitor5 === void 0 || (_window$Capacitor5$ge = _window$Capacitor5.getPlatform) === null || _window$Capacitor5$ge === void 0 ? void 0 : _window$Capacitor5$ge.call(_window$Capacitor5)) === 'android';
-      if (isAndroidNative && (_window$Capacitor6 = window.Capacitor) !== null && _window$Capacitor6 !== void 0 && (_window$Capacitor6 = _window$Capacitor6.Plugins) !== null && _window$Capacitor6 !== void 0 && _window$Capacitor6.Browser) {
+      var _window$Capacitor4, _window$Capacitor4$is, _window$Capacitor5;
+      // Native Capacitor (iOS + Android): Google blocks OAuth in WebViews
+      // (disallowed_useragent), and navigating the main WebView pushes the whole
+      // session out to Safari on iOS (v1.89.1 fix). Open in the system browser
+      // via @capacitor/browser; the callback returns via inplace:// deep link
+      // (handled by the appUrlOpen listener in app.js).
+      const isNative = (_window$Capacitor4 = window.Capacitor) === null || _window$Capacitor4 === void 0 || (_window$Capacitor4$is = _window$Capacitor4.isNativePlatform) === null || _window$Capacitor4$is === void 0 ? void 0 : _window$Capacitor4$is.call(_window$Capacitor4);
+      if (isNative && (_window$Capacitor5 = window.Capacitor) !== null && _window$Capacitor5 !== void 0 && (_window$Capacitor5 = _window$Capacitor5.Plugins) !== null && _window$Capacitor5 !== void 0 && _window$Capacitor5.Browser) {
+        var _window$Capacitor6, _window$Capacitor6$ge;
+        const flag = ((_window$Capacitor6 = window.Capacitor) === null || _window$Capacitor6 === void 0 || (_window$Capacitor6$ge = _window$Capacitor6.getPlatform) === null || _window$Capacitor6$ge === void 0 ? void 0 : _window$Capacitor6$ge.call(_window$Capacitor6)) === 'ios' ? 'ios' : '1';
         window.Capacitor.Plugins.Browser.open({
-          url: 'https://yourinplace.com/api/oauth/google?from_app=1',
+          url: 'https://yourinplace.com/api/oauth/google?from_app=' + flag,
           presentationStyle: 'popover'
         });
       } else {
@@ -5328,11 +5332,14 @@ const LoginPage = window.LoginPage = ({
     }
   }, /*#__PURE__*/React.createElement("button", {
     onClick: () => {
-      var _window$Capacitor7, _window$Capacitor7$is, _window$Capacitor8, _window$Capacitor8$ge, _window$Capacitor9;
-      const isAndroidNative = ((_window$Capacitor7 = window.Capacitor) === null || _window$Capacitor7 === void 0 || (_window$Capacitor7$is = _window$Capacitor7.isNativePlatform) === null || _window$Capacitor7$is === void 0 ? void 0 : _window$Capacitor7$is.call(_window$Capacitor7)) && ((_window$Capacitor8 = window.Capacitor) === null || _window$Capacitor8 === void 0 || (_window$Capacitor8$ge = _window$Capacitor8.getPlatform) === null || _window$Capacitor8$ge === void 0 ? void 0 : _window$Capacitor8$ge.call(_window$Capacitor8)) === 'android';
-      if (isAndroidNative && (_window$Capacitor9 = window.Capacitor) !== null && _window$Capacitor9 !== void 0 && (_window$Capacitor9 = _window$Capacitor9.Plugins) !== null && _window$Capacitor9 !== void 0 && _window$Capacitor9.Browser) {
+      var _window$Capacitor7, _window$Capacitor7$is, _window$Capacitor8;
+      // v1.89.1 — same system-browser flow as Google, for iOS + Android.
+      const isNative = (_window$Capacitor7 = window.Capacitor) === null || _window$Capacitor7 === void 0 || (_window$Capacitor7$is = _window$Capacitor7.isNativePlatform) === null || _window$Capacitor7$is === void 0 ? void 0 : _window$Capacitor7$is.call(_window$Capacitor7);
+      if (isNative && (_window$Capacitor8 = window.Capacitor) !== null && _window$Capacitor8 !== void 0 && (_window$Capacitor8 = _window$Capacitor8.Plugins) !== null && _window$Capacitor8 !== void 0 && _window$Capacitor8.Browser) {
+        var _window$Capacitor9, _window$Capacitor9$ge;
+        const flag = ((_window$Capacitor9 = window.Capacitor) === null || _window$Capacitor9 === void 0 || (_window$Capacitor9$ge = _window$Capacitor9.getPlatform) === null || _window$Capacitor9$ge === void 0 ? void 0 : _window$Capacitor9$ge.call(_window$Capacitor9)) === 'ios' ? 'ios' : '1';
         window.Capacitor.Plugins.Browser.open({
-          url: 'https://yourinplace.com/api/oauth/apple?from_app=1',
+          url: 'https://yourinplace.com/api/oauth/apple?from_app=' + flag,
           presentationStyle: 'popover'
         });
       } else {

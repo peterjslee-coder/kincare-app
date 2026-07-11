@@ -424,12 +424,15 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBa
         {googleAvailable && (
           <div style={{ marginBottom: 8 }}>
             <button onClick={() => {
-              // Android Capacitor: Google blocks OAuth in WebViews (disallowed_useragent).
-              // Open in Chrome Custom Tab via @capacitor/browser — Google allows these.
-              // The redirect back to yourinplace.com triggers App Links → deep link handler in app.js.
-              const isAndroidNative = window.Capacitor?.isNativePlatform?.() && window.Capacitor?.getPlatform?.() === 'android';
-              if (isAndroidNative && window.Capacitor?.Plugins?.Browser) {
-                window.Capacitor.Plugins.Browser.open({ url: 'https://yourinplace.com/api/oauth/google?from_app=1', presentationStyle: 'popover' });
+              // Native Capacitor (iOS + Android): Google blocks OAuth in WebViews
+              // (disallowed_useragent), and navigating the main WebView pushes the whole
+              // session out to Safari on iOS (v1.89.1 fix). Open in the system browser
+              // via @capacitor/browser; the callback returns via inplace:// deep link
+              // (handled by the appUrlOpen listener in app.js).
+              const isNative = window.Capacitor?.isNativePlatform?.();
+              if (isNative && window.Capacitor?.Plugins?.Browser) {
+                const flag = window.Capacitor?.getPlatform?.() === 'ios' ? 'ios' : '1';
+                window.Capacitor.Plugins.Browser.open({ url: 'https://yourinplace.com/api/oauth/google?from_app=' + flag, presentationStyle: 'popover' });
               } else {
                 window.location.href = '/api/oauth/google';
               }
@@ -444,9 +447,11 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBa
         {appleAvailable && (
           <div style={{ marginBottom: 8 }}>
             <button onClick={() => {
-              const isAndroidNative = window.Capacitor?.isNativePlatform?.() && window.Capacitor?.getPlatform?.() === 'android';
-              if (isAndroidNative && window.Capacitor?.Plugins?.Browser) {
-                window.Capacitor.Plugins.Browser.open({ url: 'https://yourinplace.com/api/oauth/apple?from_app=1', presentationStyle: 'popover' });
+              // v1.89.1 — same system-browser flow as Google, for iOS + Android.
+              const isNative = window.Capacitor?.isNativePlatform?.();
+              if (isNative && window.Capacitor?.Plugins?.Browser) {
+                const flag = window.Capacitor?.getPlatform?.() === 'ios' ? 'ios' : '1';
+                window.Capacitor.Plugins.Browser.open({ url: 'https://yourinplace.com/api/oauth/apple?from_app=' + flag, presentationStyle: 'popover' });
               } else {
                 window.location.href = '/api/oauth/apple';
               }

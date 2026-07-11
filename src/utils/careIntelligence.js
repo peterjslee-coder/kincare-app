@@ -217,9 +217,9 @@ function parseIntelligenceJSON(text, recipientName) {
     if (end > start) parsed = tryParse(text.substring(start, end + 1));
   }
 
-  // Strategy 3: greedy regex anchored on expected keys.
+  // Strategy 3: greedy regex anchored on expected keys (new narrative shape or legacy insights).
   if (!parsed) {
-    const m = text.match(/\{[\s\S]*"headline"[\s\S]*"insights"[\s\S]*\}/);
+    const m = text.match(/\{[\s\S]*"headline"[\s\S]*(?:"paragraphs"|"insights")[\s\S]*\}/);
     if (m) parsed = tryParse(m[0]);
   }
 
@@ -231,8 +231,12 @@ function parseIntelligenceJSON(text, recipientName) {
   }
 
   // Normalize: ensure all expected fields exist with sensible defaults so the client never crashes.
+  // v1.89.1 — BUG FIX: v1.77.0 moved the family card to narrative `paragraphs`, but this
+  // normalizer still whitelisted only the legacy fields, silently DROPPING the paragraphs.
+  // Result: the card rendered headline + watch list only — "a list of issues, not a narrative".
   return {
     headline: typeof parsed.headline === 'string' ? parsed.headline : `Care intelligence for ${recipientName}`,
+    paragraphs: Array.isArray(parsed.paragraphs) ? parsed.paragraphs.filter(p => typeof p === 'string' && p.trim()) : [],
     insights: Array.isArray(parsed.insights) ? parsed.insights : [],
     caregiverGuidance: typeof parsed.caregiverGuidance === 'string' ? parsed.caregiverGuidance : '',
     schedulingAdvice: typeof parsed.schedulingAdvice === 'string' ? parsed.schedulingAdvice : '',

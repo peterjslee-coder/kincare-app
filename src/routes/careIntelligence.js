@@ -77,8 +77,22 @@ router.get("/:recipientId", authenticate, async (req, res) => {
     // Check for cached intelligence — return it if fresh enough (< 24 hours or force=true to regenerate)
     // v1.58.71: cache lives in ai_care_intelligence (separate column) so we never clobber
     // the plain-text ai_care_summary written by /api/care-recipients/:id/generate-summary.
-    const forceRegenerate = req.query.force === 'true';
+    let forceRegenerate = req.query.force === 'true';
     const cachedRaw = recipient.ai_care_intelligence;
+    // v1.89.1 — self-heal: v1.77.0→v1.89.0 cached objects lost their narrative `paragraphs`
+    // (normalizer bug) and also carry no legacy `insights`, so the card rendered as a bare
+    // headline + watch list. Treat that shape as stale and regenerate instead of serving it.
+    if (!forceRegenerate && typeof cachedRaw === 'string' && cachedRaw.trim().startsWith('{')) {
+      try {
+        const probe = JSON.parse(cachedRaw);
+        const hasNarrative = Array.isArray(probe.paragraphs) && probe.paragraphs.length > 0;
+        const hasLegacyInsights = Array.isArray(probe.insights) && probe.insights.length > 0;
+        if (!hasNarrative && !hasLegacyInsights) {
+          console.log(`[iPAi] Cached intelligence for ${req.params.recipientId} has no narrative/insights (v1.77 normalizer bug) — regenerating`);
+          forceRegenerate = true;
+        }
+      } catch { /* unparseable cache — leave existing handling to deal with it */ }
+    }
     if (!forceRegenerate && cachedRaw) {
       const updatedAt = recipient.ai_care_intelligence_updated_at;
       const ageMs = updatedAt ? (Date.now() - new Date(updatedAt).getTime()) : Infinity;
