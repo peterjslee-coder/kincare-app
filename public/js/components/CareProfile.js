@@ -36,6 +36,8 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
   const [doctorEmailSent, setDoctorEmailSent] = useState(false);
   const [doctorReportAck, setDoctorReportAck] = useState(false); // v1.93.0 — reviewed-and-responsible acknowledgment
   const [doctorReportSending, setDoctorReportSending] = useState(false);
+  const [doctorQuestions, setDoctorQuestions] = useState([]); // v1.94.0 — iPAi's pre-draft gap questions
+  const [doctorAnswers, setDoctorAnswers] = useState({});
   // Kindred panel state
   const [companionOpen, setCompanionOpen] = useState(false);
   const [companionTab, setCompanionTab] = useState('conversations');
@@ -79,6 +81,9 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
   // v1.93.0 — generation and sending are now SEPARATE steps. The draft lands in
   // an editable review box; sending requires the family to acknowledge they
   // reviewed it and own the contents. iPAi drafts; the family decides.
+  // v1.94.0 — step 1: iPAi checks the record for gaps and may ask up to 3
+  // questions (home notes capture exceptions, not routines — the human knows
+  // the routines). Answers feed the draft AND are saved as observations.
   const handleGenerateDoctorReport = async () => {
     if (!profile?.id || !doctorApptType.trim()) {
       if (typeof showToast === 'function') showToast('Please enter the type of appointment', 'error');
@@ -88,6 +93,32 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
     setDoctorReport('');
     setDoctorEmailSent(false);
     setDoctorReportAck(false);
+    setDoctorQuestions([]);
+    setDoctorAnswers({});
+    try {
+      const qRes = await apiFetch(`/api/care-recipients/${profile.id}/doctor-report/questions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          appointmentType: doctorApptType.trim(),
+          appointmentDetails: doctorApptDetails.trim() || undefined,
+        }),
+      });
+      const qData = qRes ? await qRes.json().catch(() => ({})) : {};
+      const questions = Array.isArray(qData.questions) ? qData.questions : [];
+      if (questions.length > 0) {
+        setDoctorQuestions(questions);
+        setDoctorReportLoading(false);
+        return; // wait for answers (or skip) before drafting
+      }
+    } catch (e) { /* questions step is best-effort — fall through to drafting */ }
+    await runDoctorReportDraft([]);
+  };
+
+  // step 2: draft, optionally with the family's answers
+  const runDoctorReportDraft = async (clarifications) => {
+    setDoctorReportLoading(true);
+    setDoctorQuestions([]);
     try {
       const res = await apiFetch(`/api/care-recipients/${profile.id}/doctor-report`, {
         method: 'POST',
@@ -95,6 +126,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
         body: JSON.stringify({
           appointmentType: doctorApptType.trim(),
           appointmentDetails: doctorApptDetails.trim() || undefined,
+          clarifications: clarifications && clarifications.length ? clarifications : undefined,
         }),
       });
       const data = await res.json();
@@ -109,6 +141,13 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
       if (typeof showToast === 'function') showToast('Failed to generate doctor report', 'error');
     }
     setDoctorReportLoading(false);
+  };
+
+  const handleAnswersToDraft = () => {
+    const clarifications = doctorQuestions
+      .map((q, i) => ({ question: q, answer: (doctorAnswers[i] || '').trim() }))
+      .filter(c => c.answer);
+    runDoctorReportDraft(clarifications);
   };
 
   const handleSendDoctorReport = async () => {
@@ -944,6 +983,34 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                   }}>
                   {doctorReportLoading ? 'Analyzing care data...' : 'Generate Draft Report'}
                 </button>
+                {doctorQuestions.length > 0 && !doctorReport && (
+                  <div style={{ marginTop: 12, padding: 12, background: 'var(--bg-surface)', borderRadius: 8, border: '1px solid #c5d9d2' }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--role-color)', marginBottom: 4 }}>
+                      Quick questions before drafting
+                    </div>
+                    <p style={{ fontSize: 11.5, color: 'var(--text-secondary)', margin: '0 0 10px', lineHeight: 1.5 }}>
+                      Your notes capture incidents, not routines {'—'} iPAi wants to fill a few gaps so the report doesn't guess. Answer what you can; leave blank to skip. Your answers are saved to {profile.first_name}'s observations.
+                    </p>
+                    {doctorQuestions.map((q, i) => (
+                      <div key={i} style={{ marginBottom: 10 }}>
+                        <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', display: 'block', marginBottom: 4, lineHeight: 1.4 }}>{q}</label>
+                        <input value={doctorAnswers[i] || ''} onChange={e => setDoctorAnswers({ ...doctorAnswers, [i]: e.target.value })}
+                          placeholder="Your answer (optional)"
+                          style={{ width: '100%', padding: '8px 10px', borderRadius: 6, border: '1px solid #ddd', fontSize: 13, boxSizing: 'border-box' }} />
+                      </div>
+                    ))}
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button onClick={handleAnswersToDraft} disabled={doctorReportLoading}
+                        style={{ flex: 1, padding: '9px 14px', borderRadius: 8, border: 'none', background: 'var(--role-color)', color: 'var(--text-on-primary)', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+                        Continue to Draft
+                      </button>
+                      <button onClick={() => runDoctorReportDraft([])} disabled={doctorReportLoading}
+                        style={{ padding: '9px 14px', borderRadius: 8, border: '1px solid #ddd', background: 'var(--bg-surface)', color: 'var(--text-secondary)', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+                        Skip
+                      </button>
+                    </div>
+                  </div>
+                )}
                 {doctorReport && (
                   <div style={{ marginTop: 12 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>

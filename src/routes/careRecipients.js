@@ -690,6 +690,76 @@ SAFETY: a caregiver reads this. Never mention financial or security vulnerabilit
   }
 });
 
+// ─── POST /api/care-recipients/:id/doctor-report/questions ───
+// v1.94.0 — BEFORE drafting, iPAi asks the family up to 3 targeted questions
+// about gaps in the record (frequency/current-status facts the notes are too
+// sparse to establish). Rationale: home notes capture exceptions, not routines
+// — "drove to Kroger once in April" was really "drives every day", and no
+// prompt can conjure the missing fact. Asking the human can.
+router.post("/:id/doctor-report/questions", async (req, res) => {
+  try {
+    const db = await getDb();
+    const recipient = await db.prepare("SELECT * FROM care_recipients WHERE id = ?").get(req.params.id);
+    if (!recipient) return res.status(404).json({ error: "Care recipient not found" });
+    if (recipient.family_user_id !== req.user.id) return res.status(403).json({ error: "Not authorized" });
+
+    const me = await db.prepare("SELECT is_demo FROM users WHERE id = ?").get(req.user.id);
+    if (me?.is_demo) return res.status(403).json({ error: "AI doctor reports are not available in demo mode." });
+
+    const { appointmentType, appointmentDetails } = req.body;
+    if (!appointmentType || !appointmentType.trim()) return res.status(400).json({ error: "Appointment type is required" });
+
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) return res.status(500).json({ error: "AI service not configured" });
+
+    const firstName = recipient.first_name || 'the patient';
+    const notes = await db.prepare(`
+      SELECT rn.content, rn.created_at, u.first_name AS author_first
+      FROM recipient_notes rn JOIN users u ON rn.author_id = u.id
+      WHERE rn.care_recipient_id = ?
+      ORDER BY rn.created_at DESC LIMIT 20
+    `).all(req.params.id);
+    const noteSummaries = notes.map(n => {
+      const date = n.created_at ? new Date(n.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+      return `[${date} — ${n.author_first || ''}] ${(n.content || '').substring(0, 500)}`;
+    }).join('\n');
+
+    const Anthropic = require("@anthropic-ai/sdk");
+    const client = new Anthropic({ apiKey });
+    const msg = await client.messages.create({
+      model: MODEL_HAIKU,
+      max_tokens: 500,
+      messages: [{ role: "user", content: `A family is preparing a report for ${firstName}'s doctor. Before drafting, identify AT MOST 3 questions to ask the family — ONLY where the home observations below are too sparse or ambiguous to characterize something the report needs, and only where the answer materially affects THIS appointment.
+
+The best questions ask about the frequency or CURRENT status of things the notes mention only once or long ago (e.g. "A note from April mentions ${firstName} driving herself once — how often does she currently drive?"), or about what has changed since a prior assessment referenced in the appointment details. Home notes record exceptions, not routines — your job is to find where that bias would mislead the report.
+
+Do NOT ask about things the notes already establish. Do NOT ask generic intake questions the doctor will ask. If the observations are sufficient, return zero questions.
+
+APPOINTMENT TYPE: ${appointmentType.trim()}
+${appointmentDetails ? `APPOINTMENT DETAILS (family's stated purpose): ${String(appointmentDetails).trim()}` : ''}
+
+HOME OBSERVATIONS (newest first):
+${noteSummaries || 'No notes recorded yet.'}
+
+Respond with ONLY valid JSON, no markdown: {"questions": ["...", "..."]}` }],
+    });
+    const text = msg.content[0]?.text || '{}';
+    let questions = [];
+    try {
+      const m = text.match(/\{[\s\S]*\}/);
+      const parsed = m ? JSON.parse(m[0]) : {};
+      if (Array.isArray(parsed.questions)) {
+        questions = parsed.questions.filter(q => typeof q === 'string' && q.trim()).slice(0, 3);
+      }
+    } catch { /* unparseable → no questions, fall through to drafting */ }
+    res.json({ questions });
+  } catch (err) {
+    console.error("Doctor report questions error:", err);
+    // Never block drafting on this step — return no questions on failure.
+    res.json({ questions: [] });
+  }
+});
+
 // ─── POST /api/care-recipients/:id/doctor-report ───
 // AI-generated, appointment-specific report for a healthcare provider
 router.post("/:id/doctor-report", async (req, res) => {
@@ -705,6 +775,17 @@ router.post("/:id/doctor-report", async (req, res) => {
 
     const { appointmentType, appointmentDetails, doctorEmail } = req.body;
     if (!appointmentType || !appointmentType.trim()) return res.status(400).json({ error: "Appointment type is required" });
+
+    // v1.94.0 — answers to iPAi's pre-draft questions. Authoritative, current
+    // ground truth from the family; also saved back into the record below so
+    // the record itself gets less gappy over time.
+    let clarifications = [];
+    if (Array.isArray(req.body.clarifications)) {
+      clarifications = req.body.clarifications
+        .filter(c => c && typeof c.question === 'string' && typeof c.answer === 'string' && c.answer.trim())
+        .slice(0, 3)
+        .map(c => ({ question: c.question.trim().slice(0, 500), answer: c.answer.trim().slice(0, 1000) }));
+    }
 
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) return res.status(500).json({ error: "AI service not configured" });
@@ -842,11 +923,36 @@ ${visitSummaries || 'No visit logs recorded yet'}
 
 FAMILY AND CAREGIVER NOTES (ground truth):
 ${noteSummaries || 'No notes recorded yet'}
+${clarifications.length ? `
+FAMILY CLARIFICATIONS (provided by the family JUST NOW for this report — authoritative, current ground truth; these override anything the older notes imply):
+${clarifications.map(c => `Q: ${c.question}\nA: ${c.answer}`).join('\n')}` : ''}
 
 FAMILY CONTACT: ${familyName}, ${familyPhone}, ${familyEmail}` }],
     });
 
     const report = message.content[0]?.text || 'Unable to generate report';
+
+    // v1.94.0 — persist answered clarifications as observations so the record
+    // improves permanently (deduped: skip if identical content already saved).
+    if (clarifications.length) {
+      const { categorizeObservation } = require("../utils/careIntelligence");
+      for (const c of clarifications) {
+        try {
+          const content = `[Answered for ${appointmentType.trim()} doctor report] ${c.question} — ${c.answer}`;
+          const dupe = await db.prepare(
+            "SELECT 1 FROM recipient_notes WHERE care_recipient_id = ? AND content = ? LIMIT 1"
+          ).get(req.params.id, content);
+          if (dupe) continue;
+          const noteId = uuid();
+          await db.prepare(
+            "INSERT INTO recipient_notes (id, care_recipient_id, author_id, content, note_type) VALUES (?, ?, ?, ?, 'observation')"
+          ).run(noteId, req.params.id, req.user.id, content);
+          categorizeObservation(noteId).catch(() => {}); // non-blocking, same as regular observations
+        } catch (saveErr) {
+          console.warn("doctor-report: clarification save failed (non-blocking):", saveErr.message);
+        }
+      }
+    }
 
     // v1.93.0 — generation NEVER emails anymore. The family reviews (and can edit)
     // the draft, then explicitly sends via POST /:id/doctor-report/send with an
