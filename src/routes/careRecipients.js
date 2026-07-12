@@ -806,7 +806,9 @@ TRUTH — absolute rules. A single unsupported claim destroys the family's credi
 - NEVER upgrade a family concern into a fact, or into a legal or medical status. "The family is concerned about her driving and wants guidance" is correct; "she no longer drives legally" is a fabrication unless a documented license status appears in the data.
 - NEVER invent agency or arrangements. If a note says a friend brings dinner every night, do not write that anyone "arranged" it — say the friend brings dinner every night.
 - The family's beliefs and interpretations stay labeled as such: "the family's understanding is...", "the family is concerned that...", "her son believes...".
-- Anchor claims with the date and observer when available. Close paraphrase beats creative summary.
+- A single dated observation is ONE data point. NEVER generalize it into a frequency, habit, trajectory, or status — no "no longer", "still", "always", "rarely", "has stopped", "continues to". Report it as what it is: "on [date], [observer] documented [event]." If the family needs the doctor to know how often something happens, that is for the family to say — not for you to infer.
+- Absence of notes about something is NOT evidence it doesn't happen. Home notes capture exceptions and incidents, not daily routines. Never write that the patient "doesn't" or "no longer" does something based only on the notes being quiet about it.
+- Care-need ratings (e.g. "transportation: must have") describe what help the family WANTS — they are not evidence about what the patient does or can do. Never derive ability or lifestyle status from them.
 
 RELEVANCE — the appointment type and details STEER everything:
 - Select observations for what THIS clinician can act on. A podiatrist: foot issues, gait, fall risk, footwear, circulation/sensation signals — not a cognitive history. A neurologist or memory specialist: cognitive patterns, confusion episodes, sleep, mood. A primary care doctor: the broadest picture, still change-focused.
