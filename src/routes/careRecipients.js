@@ -668,6 +668,8 @@ ACCURACY over flattery:
 - Never attribute personality traits (sense of humor, conversational skill, sharpness) unless the notes actually show them. If the notes show repetition and difficulty holding a thread, say that warmly instead of inventing charm. A caregiver who expects "good conversation" and meets constant repetition was set up to fail.
 - When the notes show she RESISTS a kind of help, say so plainly and give the workaround — "she needs help clearing spoiled food and preparing safe meals, but she's defensive about accepting it; bringing food or eating together works better than cleaning for her" beats "help her with cooking." Technically-true-but-sanitized guidance is a disservice to both of them.
 - Prefer what the notes show over what the ratings imply, when they differ.
+- Never state a lifestyle status the notes don't document. If a note shows she drove somewhere and the family was concerned, "the family is concerned about her driving" is right; "she doesn't drive anymore" is an invention that other documents will inherit as fact.
+- Never invent agency or arrangements. If a note says a friend brings dinner every night, say exactly that — do not write that a family member "arranged" it unless a note says someone did.
 SAFETY: a caregiver reads this. Never mention financial or security vulnerabilities — trouble managing money, cash or valuables in the home, who pays for things, entry codes. State care-relevant behavior neutrally without exploitable detail. Never state events or lifestyle facts (driving, falls, history) that are not in the provided profile.`,
       messages: [
         { role: "user", content: `Write a warm, personal care profile for this person:\n\n${profileContext}` }
@@ -787,22 +789,32 @@ router.post("/:id/doctor-report", async (req, res) => {
     const Anthropic = require("@anthropic-ai/sdk");
     const client = new Anthropic({ apiKey });
 
+    // v1.93.0 — the AI care profile (recipient.ai_care_summary) is deliberately NOT
+    // fed to this prompt: it is itself AI-derived and has carried interpolations
+    // ("doesn't drive anymore", "her son arranged...") that this report then
+    // escalated into stated fact ("no longer drives legally"). Raw notes and visit
+    // logs are the only ground truth a doctor-facing document may draw from.
     const message = await client.messages.create({
       model: MODEL_SONNET,
-      max_tokens: 2000,
-      system: `You are a clinical communication specialist helping families share relevant home care observations with healthcare providers. You write professional, concise reports that doctors actually read and find useful.
+      max_tokens: 1200,
+      system: `You are a clinical communication specialist helping families share relevant home observations with healthcare providers. You write the SHORT, change-focused briefing a busy physician can absorb before a 10-minute appointment.
 
-Your job: Given information about a care recipient's daily life — observed by home caregivers and family — produce a focused report tailored to a SPECIFIC type of medical appointment. You are NOT diagnosing. You are surfacing observable patterns that a clinician should know about.
+The doctor already has the patient's medical records. Your job is ONLY what the chart doesn't show: what family and caregivers are seeing at home, what has CHANGED recently, and what the family wants addressed. You are NOT diagnosing.
 
-RULES:
-- Write in professional clinical-adjacent language. Not medical jargon, but the tone a nurse or care coordinator would use.
-- Be SPECIFIC about what was observed and when. Cite dates and caregiver names when available.
-- For the given specialty/appointment type, think about what that doctor would want to know from daily home observations. A podiatrist cares about foot issues, mobility, fall risk, shoe fit. A neurologist cares about cognitive patterns, confusion episodes, sleep, mood swings. A cardiologist cares about activity levels, breathing, swelling, fatigue.
-- If the data does NOT contain strong indicators relevant to the specialty, SAY SO clearly. e.g., "Based on the home care observations available, there are no strong indicators of [specialty-relevant symptoms]. The family and caregivers have not documented [specific things]. You may want to ask the family about [suggestions]."
-- Include a "Questions for the Doctor" section with 2-4 specific questions the family could ask, tailored to the appointment type and what you've seen in the data.
-- Keep it to about one page of content. Doctors are busy.
-- End with family contact info and a note that this was prepared through InPlace.
-- Use plain text paragraphs. NO markdown, NO bullet points, NO asterisks, NO headers with #. Use ALL CAPS for section titles on their own line.`,
+TRUTH — absolute rules. A single unsupported claim destroys the family's credibility with the doctor and taints every other observation in the report:
+- Every factual statement must trace to a specific observation in the data below. If it is not in the data, it does not go in the report, no matter how plausible it sounds.
+- NEVER upgrade a family concern into a fact, or into a legal or medical status. "The family is concerned about her driving and wants guidance" is correct; "she no longer drives legally" is a fabrication unless a documented license status appears in the data.
+- NEVER invent agency or arrangements. If a note says a friend brings dinner every night, do not write that anyone "arranged" it — say the friend brings dinner every night.
+- The family's beliefs and interpretations stay labeled as such: "the family's understanding is...", "the family is concerned that...", "her son believes...".
+- Anchor claims with the date and observer when available. Close paraphrase beats creative summary.
+
+STRUCTURE (plain text; ALL CAPS section titles on their own line; no markdown, no bullets, no asterisks):
+1. Three-line header: patient name and age, appointment type/purpose, primary family contact.
+2. WHAT THE FAMILY IS SEEING AT HOME — the 3 to 5 most clinically relevant patterns for THIS appointment type, one tight paragraph each, most significant or most changed first, each anchored by 1-2 dated examples. If the appointment follows a prior assessment (per the appointment details), emphasize what has changed since then.
+3. QUESTIONS FOR THE DOCTOR — 2 to 4 specific questions built from the family's actual documented concerns.
+4. One closing line: prepared via InPlace from non-clinical family/caregiver observations; not a clinical assessment.
+
+LENGTH — HARD LIMIT: 350 words of body. The doctor has the chart. Do not restate diagnosis history, do not list what is NOT documented, do not pad sections that have nothing new. Shorter is better.`,
       messages: [{ role: "user", content: `Generate a doctor visit report for the following appointment:
 
 APPOINTMENT TYPE: ${appointmentType.trim()}
@@ -814,16 +826,13 @@ MEDICATIONS: ${medications.length > 0 ? medications.join(', ') : 'None listed'}
 ALLERGIES: Food: ${recipient.food_allergies || 'None'}. Pet: ${recipient.pet_allergies || 'None'}.
 EMERGENCY CONTACT: ${recipient.emergency_contact_name || 'Not listed'} ${recipient.emergency_contact_phone || ''}
 
-DAILY LIVING CARE NEEDS (rated by family):
+FAMILY-RATED CARE NEEDS (context only — do not recite these in the report):
 ${prefLines || 'No preferences rated'}
 
-AI CARE PROFILE:
-${recipient.ai_care_summary || 'Not generated yet'}
-
-RECENT CAREGIVER VISIT OBSERVATIONS (most recent first):
+RECENT CAREGIVER VISIT OBSERVATIONS (most recent first — ground truth):
 ${visitSummaries || 'No visit logs recorded yet'}
 
-FAMILY AND CAREGIVER NOTES:
+FAMILY AND CAREGIVER NOTES (ground truth):
 ${noteSummaries || 'No notes recorded yet'}
 
 FAMILY CONTACT: ${familyName}, ${familyPhone}, ${familyEmail}` }],
@@ -831,12 +840,69 @@ FAMILY CONTACT: ${familyName}, ${familyPhone}, ${familyEmail}` }],
 
     const report = message.content[0]?.text || 'Unable to generate report';
 
-    // If email requested, send branded email to doctor
-    let emailResult = null;
-    if (doctorEmail && doctorEmail.trim()) {
-      const { sendEmail } = require("../utils/email");
+    // v1.93.0 — generation NEVER emails anymore. The family reviews (and can edit)
+    // the draft, then explicitly sends via POST /:id/doctor-report/send with an
+    // acknowledgment. A fabricated claim that reaches a doctor unreviewed damages
+    // the family's credibility — the sender must get the chance to catch it.
+    res.json({ report });
+  } catch (err) {
+    console.error("Generate doctor report error:", err);
+    res.status(500).json({ error: "Failed to generate report" });
+  }
+});
 
-      const emailHtml = `
+// ─── POST /api/care-recipients/:id/doctor-report/send ───
+// Sends a REVIEWED (and possibly family-edited) report to the doctor.
+// Requires explicit acknowledgment that the sender reviewed the content and
+// takes responsibility for it — the report is drafted with iPAi, but the
+// family owns what leaves the platform.
+router.post("/:id/doctor-report/send", async (req, res) => {
+  try {
+    const db = await getDb();
+    const recipient = await db.prepare("SELECT * FROM care_recipients WHERE id = ?").get(req.params.id);
+    if (!recipient) return res.status(404).json({ error: "Care recipient not found" });
+    if (recipient.family_user_id !== req.user.id) return res.status(403).json({ error: "Not authorized" });
+
+    const me = await db.prepare("SELECT is_demo FROM users WHERE id = ?").get(req.user.id);
+    if (me?.is_demo) return res.status(403).json({ error: "Emailing doctor reports is not available in demo mode." });
+
+    const { reportText, appointmentType, doctorEmail, acknowledged } = req.body;
+    if (acknowledged !== true) {
+      return res.status(400).json({ error: "Please review the report and confirm you take responsibility for its contents before sending." });
+    }
+    if (!reportText || !reportText.trim()) return res.status(400).json({ error: "Report text is required" });
+    if (reportText.length > 30000) return res.status(400).json({ error: "Report is too long to send" });
+    if (!appointmentType || !appointmentType.trim()) return res.status(400).json({ error: "Appointment type is required" });
+    if (!doctorEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(doctorEmail.trim())) {
+      return res.status(400).json({ error: "A valid doctor email is required" });
+    }
+
+    const name = `${recipient.first_name || ''} ${recipient.last_name || ''}`.trim() || 'Care Recipient';
+    const age = recipient.age || 'unknown age';
+    let healthConditions = [];
+    try { healthConditions = JSON.parse(recipient.health_conditions || '[]'); } catch { healthConditions = []; }
+    let medications = [];
+    try { medications = JSON.parse(recipient.medications || '[]'); } catch { medications = []; }
+    const familyUser = await db.prepare("SELECT first_name, last_name, phone, email FROM users WHERE id = ?").get(recipient.family_user_id);
+    const familyName = familyUser ? `${familyUser.first_name} ${familyUser.last_name}` : 'Family member';
+    const familyPhone = familyUser?.phone || '';
+    const familyEmail = familyUser?.email || '';
+    const report = reportText.trim();
+
+    // PHI disclosure audit trail — who sent what where, and that they acknowledged.
+    try {
+      await db.prepare(
+        "INSERT INTO consent_audit_log (id, care_recipient_id, actor_id, actor_role, event_type, description, metadata, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())"
+      ).run(uuid(), req.params.id, req.user.id, 'family', 'doctor_report_sent',
+        `Doctor report emailed to ${doctorEmail.trim()} for ${appointmentType.trim()} appointment (sender reviewed and acknowledged responsibility)`,
+        JSON.stringify({ doctorEmail: doctorEmail.trim(), appointmentType: appointmentType.trim(), reportLength: report.length, acknowledged: true }));
+    } catch (auditErr) {
+      console.warn("doctor-report send: audit log failed (non-blocking):", auditErr.message);
+    }
+
+    const { sendEmail } = require("../utils/email");
+
+    const emailHtml = `
 <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 640px; margin: 0 auto;">
   <div style="background: #1b6b5a; padding: 24px 28px; border-radius: 12px 12px 0 0;">
     <h1 style="color: white; margin: 0; font-size: 20px;">Home Care Report for ${name}</h1>
@@ -857,7 +923,7 @@ FAMILY CONTACT: ${familyName}, ${familyPhone}, ${familyEmail}` }],
     <div style="color: #333; font-size: 14px; line-height: 1.7; white-space: pre-wrap;">${report.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
     <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0 16px;" />
     <p style="color: #999; font-size: 11px; line-height: 1.5; margin: 0;">
-      This report contains observations from home caregivers and family members, collected through InPlace (yourinplace.com), a home care coordination platform. It is not a clinical assessment and should not replace medical evaluation. All observations are documented by non-clinical caregivers during routine home care visits.
+      This report contains observations from home caregivers and family members, collected through InPlace (yourinplace.com), a home care coordination platform. It was drafted with AI assistance and reviewed by ${familyName} before sending. It is not a clinical assessment and should not replace medical evaluation. All observations are documented by non-clinical caregivers during routine home care visits.
     </p>
   </div>
   <div style="padding: 16px 28px; background: #f8f9fa; border-radius: 0 0 12px 12px; border: 1px solid #e0e0e0; border-top: none; text-align: center;">
@@ -869,27 +935,25 @@ FAMILY CONTACT: ${familyName}, ${familyPhone}, ${familyEmail}` }],
   </div>
 </div>`;
 
-      // reply-to encodes care recipient ID for future inbound webhook routing
-      const replyToAddr = process.env.REPLY_EMAIL_PREFIX
-        ? `${process.env.REPLY_EMAIL_PREFIX}+${req.params.id}@${(process.env.FROM_EMAIL || 'care@yourinplace.com').split('@')[1]}`
-        : undefined;
+    // reply-to encodes care recipient ID for future inbound webhook routing
+    const replyToAddr = process.env.REPLY_EMAIL_PREFIX
+      ? `${process.env.REPLY_EMAIL_PREFIX}+${req.params.id}@${(process.env.FROM_EMAIL || 'care@yourinplace.com').split('@')[1]}`
+      : undefined;
 
-      emailResult = await sendEmail({
-        to: doctorEmail.trim(),
-        subject: `Home Care Report: ${name} — ${appointmentType.trim()} appointment`,
-        html: emailHtml,
-        ...(replyToAddr ? { replyTo: replyToAddr } : {}),
-      });
-    }
+    const emailResult = await sendEmail({
+      to: doctorEmail.trim(),
+      subject: `Home Care Report: ${name} — ${appointmentType.trim()} appointment`,
+      html: emailHtml,
+      ...(replyToAddr ? { replyTo: replyToAddr } : {}),
+    });
 
     res.json({
-      report,
       emailSent: emailResult?.success || false,
       emailError: emailResult && !emailResult.success ? emailResult.error : null,
     });
   } catch (err) {
-    console.error("Generate doctor report error:", err);
-    res.status(500).json({ error: "Failed to generate report" });
+    console.error("Send doctor report error:", err);
+    res.status(500).json({ error: "Failed to send report" });
   }
 });
 

@@ -34,6 +34,8 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
   const [doctorReportLoading, setDoctorReportLoading] = useState(false);
   const [doctorReport, setDoctorReport] = useState('');
   const [doctorEmailSent, setDoctorEmailSent] = useState(false);
+  const [doctorReportAck, setDoctorReportAck] = useState(false); // v1.93.0 — reviewed-and-responsible acknowledgment
+  const [doctorReportSending, setDoctorReportSending] = useState(false);
   // Kindred panel state
   const [companionOpen, setCompanionOpen] = useState(false);
   const [companionTab, setCompanionTab] = useState('conversations');
@@ -74,6 +76,9 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
   const [instructionsMeta, setInstructionsMeta] = useState({ updated_at: null, updated_by_name: null });
   const { showToast } = useToast();
 
+  // v1.93.0 — generation and sending are now SEPARATE steps. The draft lands in
+  // an editable review box; sending requires the family to acknowledge they
+  // reviewed it and own the contents. iPAi drafts; the family decides.
   const handleGenerateDoctorReport = async () => {
     if (!profile?.id || !doctorApptType.trim()) {
       if (typeof showToast === 'function') showToast('Please enter the type of appointment', 'error');
@@ -82,6 +87,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
     setDoctorReportLoading(true);
     setDoctorReport('');
     setDoctorEmailSent(false);
+    setDoctorReportAck(false);
     try {
       const res = await apiFetch(`/api/care-recipients/${profile.id}/doctor-report`, {
         method: 'POST',
@@ -89,20 +95,12 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
         body: JSON.stringify({
           appointmentType: doctorApptType.trim(),
           appointmentDetails: doctorApptDetails.trim() || undefined,
-          doctorEmail: doctorEmail.trim() || undefined,
         }),
       });
       const data = await res.json();
       if (res.ok && data.report) {
         setDoctorReport(data.report);
-        if (data.emailSent) {
-          setDoctorEmailSent(true);
-          if (typeof showToast === 'function') showToast(`Report emailed to ${doctorEmail.trim()}`, 'success');
-        } else if (data.emailError) {
-          if (typeof showToast === 'function') showToast(`Report ready but email failed: ${data.emailError}`, 'error');
-        } else {
-          if (typeof showToast === 'function') showToast('Doctor report generated', 'success');
-        }
+        if (typeof showToast === 'function') showToast('Draft ready — review and edit it before sending', 'success');
       } else {
         if (typeof showToast === 'function') showToast(data.error || 'Failed to generate report', 'error');
       }
@@ -111,6 +109,42 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
       if (typeof showToast === 'function') showToast('Failed to generate doctor report', 'error');
     }
     setDoctorReportLoading(false);
+  };
+
+  const handleSendDoctorReport = async () => {
+    if (!profile?.id || !doctorReport.trim()) return;
+    if (!doctorEmail.trim()) {
+      if (typeof showToast === 'function') showToast("Enter the doctor's email address", 'error');
+      return;
+    }
+    if (!doctorReportAck) {
+      if (typeof showToast === 'function') showToast('Please confirm you reviewed the report first', 'error');
+      return;
+    }
+    setDoctorReportSending(true);
+    try {
+      const res = await apiFetch(`/api/care-recipients/${profile.id}/doctor-report/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          reportText: doctorReport,
+          appointmentType: doctorApptType.trim(),
+          doctorEmail: doctorEmail.trim(),
+          acknowledged: true,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.emailSent) {
+        setDoctorEmailSent(true);
+        if (typeof showToast === 'function') showToast(`Report emailed to ${doctorEmail.trim()}`, 'success');
+      } else {
+        if (typeof showToast === 'function') showToast(data.emailError || data.error || 'Failed to send report', 'error');
+      }
+    } catch (e) {
+      console.error('Doctor report send error:', e);
+      if (typeof showToast === 'function') showToast('Failed to send report', 'error');
+    }
+    setDoctorReportSending(false);
   };
 
   // ── Kindred data fetchers ──
@@ -901,13 +935,6 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                     rows={3}
                     style={{ width: '100%', padding: '8px 10px', borderRadius: 6, border: '1px solid #ddd', fontSize: 13, resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit' }} />
                 </div>
-                <div style={{ marginBottom: 10 }}>
-                  <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>Doctor's Email (optional — sends report directly)</label>
-                  <input value={doctorEmail} onChange={e => setDoctorEmail(e.target.value)}
-                    placeholder="doctor@clinic.com"
-                    type="email"
-                    style={{ width: '100%', padding: '8px 10px', borderRadius: 6, border: '1px solid #ddd', fontSize: 13, boxSizing: 'border-box' }} />
-                </div>
                 <button onClick={handleGenerateDoctorReport} disabled={doctorReportLoading}
                   style={{
                     width: '100%', padding: '10px 16px', borderRadius: 8,
@@ -915,26 +942,56 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                     color: 'var(--text-on-primary)', fontWeight: 700, fontSize: 13, cursor: doctorReportLoading ? 'wait' : 'pointer',
                     transition: 'background 0.2s',
                   }}>
-                  {doctorReportLoading ? 'Analyzing care data...' : doctorEmail.trim() ? 'Generate & Email Report' : 'Generate Report'}
+                  {doctorReportLoading ? 'Analyzing care data...' : 'Generate Draft Report'}
                 </button>
-                {doctorEmailSent && (
-                  <div style={{ marginTop: 8, padding: '8px 10px', background: 'var(--color-success-bg)', borderRadius: 6, fontSize: 12, color: 'var(--color-success)' }}>
-                    {'\u2709\uFE0F'} Report emailed to {doctorEmail.trim()}
-                  </div>
-                )}
                 {doctorReport && (
                   <div style={{ marginTop: 12 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>Generated Report</span>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>Draft Report {'\u2014'} review and edit before sending</span>
                       <button onClick={() => { navigator.clipboard.writeText(doctorReport); if (typeof showToast === 'function') showToast('Report copied to clipboard', 'success'); }}
                         style={{ padding: '4px 10px', borderRadius: 5, border: '1px solid #ddd', background: 'var(--bg-surface)', fontSize: 11, cursor: 'pointer', color: 'var(--text-secondary)' }}>
                         Copy
                       </button>
                     </div>
-                    <div style={{
-                      padding: 14, background: 'var(--bg-surface)', borderRadius: 8, border: '1px solid #e0e0e0',
-                      fontSize: 13, lineHeight: 1.7, color: 'var(--text-primary)', whiteSpace: 'pre-wrap', maxHeight: 400, overflowY: 'auto',
-                    }}>{doctorReport}</div>
+                    <p style={{ fontSize: 11.5, color: 'var(--text-secondary)', margin: '0 0 6px', lineHeight: 1.5 }}>
+                      iPAi drafted this from your family's notes {'\u2014'} it can get things wrong. Read it the way the doctor will, fix anything that isn't right (tap into the text to edit), and only then send it.
+                    </p>
+                    <textarea value={doctorReport} onChange={e => { setDoctorReport(e.target.value); setDoctorEmailSent(false); }}
+                      rows={16}
+                      style={{
+                        width: '100%', padding: 14, background: 'var(--bg-surface)', borderRadius: 8, border: '1px solid #e0e0e0',
+                        fontSize: 13, lineHeight: 1.7, color: 'var(--text-primary)', resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit',
+                      }} />
+                    <div style={{ marginTop: 10 }}>
+                      <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>Doctor's Email</label>
+                      <input value={doctorEmail} onChange={e => setDoctorEmail(e.target.value)}
+                        placeholder="doctor@clinic.com"
+                        type="email"
+                        style={{ width: '100%', padding: '8px 10px', borderRadius: 6, border: '1px solid #ddd', fontSize: 13, boxSizing: 'border-box' }} />
+                    </div>
+                    <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginTop: 10, cursor: 'pointer' }}>
+                      <input type="checkbox" checked={doctorReportAck} onChange={e => setDoctorReportAck(e.target.checked)}
+                        style={{ marginTop: 2, width: 16, height: 16, flexShrink: 0, accentColor: '#1b6b5a' }} />
+                      <span style={{ fontSize: 12, color: 'var(--text-primary)', lineHeight: 1.5 }}>
+                        I've reviewed this report and it's accurate. I understand it was drafted with iPAi from my family's notes, and that I'm responsible for the health information I'm sending.
+                      </span>
+                    </label>
+                    <button onClick={handleSendDoctorReport}
+                      disabled={doctorReportSending || !doctorReportAck || !doctorEmail.trim()}
+                      style={{
+                        width: '100%', marginTop: 10, padding: '10px 16px', borderRadius: 8, border: 'none',
+                        background: (doctorReportSending || !doctorReportAck || !doctorEmail.trim()) ? '#a0c4b8' : 'var(--role-color)',
+                        color: 'var(--text-on-primary)', fontWeight: 700, fontSize: 13,
+                        cursor: doctorReportSending ? 'wait' : (!doctorReportAck || !doctorEmail.trim()) ? 'not-allowed' : 'pointer',
+                        transition: 'background 0.2s',
+                      }}>
+                      {doctorReportSending ? 'Sending...' : 'Email Report to Doctor'}
+                    </button>
+                    {doctorEmailSent && (
+                      <div style={{ marginTop: 8, padding: '8px 10px', background: 'var(--color-success-bg)', borderRadius: 6, fontSize: 12, color: 'var(--color-success)' }}>
+                        {'\u2709\uFE0F'} Report emailed to {doctorEmail.trim()}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
