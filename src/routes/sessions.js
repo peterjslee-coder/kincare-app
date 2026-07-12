@@ -1200,7 +1200,7 @@ router.get("/:id/care-briefing", async (req, res) => {
     const session = await db.prepare(`
       SELECT cs.*, cp.user_id AS caregiver_user_id,
         cr.first_name AS recipient_first_name, cr.last_name AS recipient_last_name,
-        cr.age, cr.health_conditions, cr.medications, cr.preferences,
+        cr.age, cr.health_conditions, cr.observed_concerns, cr.medications, cr.preferences,
         cr.caregiver_briefing, cr.food_allergies, cr.pets,
         cr.care_preferences, cr.care_preference_details
       FROM care_sessions cs
@@ -1252,6 +1252,8 @@ router.get("/:id/care-briefing", async (req, res) => {
     // Parse health conditions
     let healthConditions = [];
     try { healthConditions = JSON.parse(session.health_conditions || '[]'); } catch { healthConditions = []; }
+    let observedConcerns = [];
+    try { observedConcerns = JSON.parse(session.observed_concerns || '[]'); } catch { observedConcerns = []; }
     let medications = [];
     try { medications = JSON.parse(session.medications || '[]'); } catch { medications = []; }
 
@@ -1299,7 +1301,7 @@ ${isExperienced ? `This caregiver has visited ${recipientName} ${visitCount} tim
 
 Here is the recent context:
 
-${notesText ? `CARE NOTES:\n${notesText}\n` : ''}${moodText ? `RECENT VISIT MOODS:\n${moodText}\n` : ''}${session.caregiver_briefing ? `FAMILY'S CARE BRIEFING:\n${session.caregiver_briefing}\n` : ''}${healthConditions.length ? `HEALTH CONDITIONS: ${healthConditions.join(', ')}\n` : ''}${medications.length ? `MEDICATIONS: ${medications.join(', ')}\n` : ''}${session.food_allergies ? `FOOD ALLERGIES: ${session.food_allergies}\n` : ''}${session.pets ? `PETS: ${session.pets}\n` : ''}${session.special_instructions ? `TODAY'S SPECIAL INSTRUCTIONS: ${session.special_instructions}\n` : ''}
+${notesText ? `CARE NOTES:\n${notesText}\n` : ''}${moodText ? `RECENT VISIT MOODS:\n${moodText}\n` : ''}${session.caregiver_briefing ? `FAMILY'S CARE BRIEFING:\n${session.caregiver_briefing}\n` : ''}${healthConditions.length ? `DIAGNOSED CONDITIONS: ${healthConditions.join(', ')}\n` : ''}${observedConcerns.length ? `OBSERVED CONCERNS (family observations, not diagnoses): ${observedConcerns.join(', ')}\n` : ''}${medications.length ? `MEDICATIONS: ${medications.join(', ')}\n` : ''}${session.food_allergies ? `FOOD ALLERGIES: ${session.food_allergies}\n` : ''}${session.pets ? `PETS: ${session.pets}\n` : ''}${session.special_instructions ? `TODAY'S SPECIAL INSTRUCTIONS: ${session.special_instructions}\n` : ''}
 Write a SHORT, warm, actionable briefing (3-5 sentences max). Focus on:
 - What the caregiver should know RIGHT NOW for this visit
 - Any recent mood patterns or behavioral changes worth noting
@@ -1338,6 +1340,7 @@ SAFETY: this goes to the caregiver. Never mention financial or security vulnerab
       lastVisitDate: visitHistory?.last_visit_date,
       caregiverBriefing: session.caregiver_briefing || null,
       healthConditions,
+      observedConcerns,
       medications,
       foodAllergies: session.food_allergies || null,
       pets: session.pets || null,

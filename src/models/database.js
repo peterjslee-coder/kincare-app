@@ -1464,6 +1464,20 @@ async function initializeDatabase() {
          END $mig$;`,
       ],
     },
+    {
+      // v1.95.0 — split DIAGNOSED conditions from OBSERVED concerns (Pete's
+      // July 11 insight: "early stage dementia" in health_conditions was a
+      // family observation, not a diagnosis, and every AI generator treated it
+      // with diagnosis weight). health_conditions now means formal diagnoses;
+      // observed_concerns is a JSON array of family/caregiver observations
+      // ("serious memory issues suggesting dementia", "tends to fall").
+      // Existing entries stay in health_conditions — families move items
+      // themselves; the UI explains the split.
+      id: "002_observed_concerns",
+      statements: [
+        `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS observed_concerns TEXT`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

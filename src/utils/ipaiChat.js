@@ -277,7 +277,8 @@ async function handleCareQuestion(messageText, userId, userContext) {
 
 CARE RECIPIENT: ${recipient.first_name} ${recipient.last_name}
 Age: ${recipient.age || "unknown"}
-Conditions: ${recipient.health_conditions || "none listed"}
+Diagnosed conditions (formal diagnoses): ${recipient.health_conditions || "none listed"}
+Observed concerns (family observations, NOT diagnoses — never treat as diagnosed illness): ${recipient.observed_concerns || "none listed"}
 Medications: ${recipient.medications || "none listed"}
 
 RECENT VISITS (last 5):
@@ -451,13 +452,13 @@ async function handleIPAiMessage(userId, messageText) {
 
     // Get care recipients (both owned and shared)
     const ownedRecipients = await db
-      .prepare("SELECT id, first_name, last_name, age, health_conditions, medications FROM care_recipients WHERE family_user_id = ?")
+      .prepare("SELECT id, first_name, last_name, age, health_conditions, observed_concerns, medications FROM care_recipients WHERE family_user_id = ?")
       .all(userId);
 
     const sharedRecipients = await db
       .prepare(
         `
-      SELECT cr.id, cr.first_name, cr.last_name, cr.age, cr.health_conditions, cr.medications
+      SELECT cr.id, cr.first_name, cr.last_name, cr.age, cr.health_conditions, cr.observed_concerns, cr.medications
       FROM care_recipients cr
       JOIN care_recipient_shares crs ON crs.care_recipient_id = cr.id
       WHERE crs.shared_with_user_id = ?

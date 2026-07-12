@@ -27,6 +27,7 @@ router.get("/", requireRole("family", "admin", "care_for"), async (req, res) => 
       ...self,
       name: self.called_by || [self.first_name, self.last_name].filter(Boolean).join(' ') || 'Unknown',
       healthConditions: JSON.parse(self.health_conditions || "[]"),
+      observedConcerns: JSON.parse(self.observed_concerns || "[]"),
       medications: JSON.parse(self.medications || "[]"),
     }] : [];
     return res.json({ careRecipients: parsed });
@@ -72,6 +73,7 @@ router.get("/", requireRole("family", "admin", "care_for"), async (req, res) => 
     ...r,
     name: r.called_by || [r.first_name, r.last_name].filter(Boolean).join(' ') || 'Unknown',
     healthConditions: JSON.parse(r.health_conditions || "[]"),
+    observedConcerns: JSON.parse(r.observed_concerns || "[]"),
     medications: JSON.parse(r.medications || "[]"),
   }));
 
@@ -84,7 +86,7 @@ router.post("/", requireRole("family"), async (req, res) => {
   const {
     firstName, lastName, age, address, city, state, zip,
     phone, email,
-    healthConditions, medications, preferences,
+    healthConditions, observedConcerns, medications, preferences,
     emergencyContactName, emergencyContactPhone, emoji,
     authorizationTier,
   } = req.body;
@@ -114,16 +116,17 @@ router.post("/", requireRole("family"), async (req, res) => {
     (id, family_user_id, first_name, last_name, age,
      location_address, location_city, location_state, location_zip,
      latitude, longitude,
-     health_conditions, medications, preferences,
+     health_conditions, observed_concerns, medications, preferences,
      emergency_contact_name, emergency_contact_phone, emoji,
      sms_phone, email,
      authorization_tier, consent_status, consent_method, consent_verified_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id, req.user.id, firstName, lastName, age || null,
     address || null, city || null, state || null, zip || null,
     lat, lng,
     JSON.stringify(healthConditions || []),
+    JSON.stringify(observedConcerns || []),
     JSON.stringify(medications || []),
     preferences || null,
     emergencyContactName || null, emergencyContactPhone || null,
@@ -205,6 +208,7 @@ router.get("/:id", requireRole("family", "admin"), async (req, res) => {
     careRecipient: {
       ...recipient,
       healthConditions: JSON.parse(recipient.health_conditions || "[]"),
+      observedConcerns: JSON.parse(recipient.observed_concerns || "[]"),
       medications: JSON.parse(recipient.medications || "[]"),
       accessLevel: access,
       sharedWith: sharedWith.map(s => ({
@@ -261,6 +265,7 @@ router.put("/:id", requireRole("family", "admin"), async (req, res) => {
       latitude = COALESCE(?, latitude),
       longitude = COALESCE(?, longitude),
       health_conditions = COALESCE(?, health_conditions),
+      observed_concerns = COALESCE(?, observed_concerns),
       medications = COALESCE(?, medications),
       preferences = COALESCE(?, preferences),
       emergency_contact_name = COALESCE(?, emergency_contact_name),
@@ -280,6 +285,7 @@ router.put("/:id", requireRole("family", "admin"), async (req, res) => {
     address, city, state, zip,
     lat, lng,
     healthConditions ? JSON.stringify(healthConditions) : null,
+    req.body.observedConcerns ? JSON.stringify(req.body.observedConcerns) : null,
     medications ? JSON.stringify(medications) : null,
     preferences,
     emergencyContactName, emergencyContactPhone,
@@ -566,6 +572,8 @@ router.post("/:id/generate-summary", async (req, res) => {
 
     let healthConditions = [];
     try { healthConditions = JSON.parse(recipient.health_conditions || '[]'); } catch { healthConditions = []; }
+    let observedConcerns = [];
+    try { observedConcerns = JSON.parse(recipient.observed_concerns || '[]'); } catch { observedConcerns = []; }
 
     let medications = [];
     try { medications = JSON.parse(recipient.medications || '[]'); } catch { medications = []; }
@@ -637,7 +645,8 @@ router.post("/:id/generate-summary", async (req, res) => {
 CARE RECIPIENT: ${name}
 AGE: ${age}
 LOCATION: ${location}
-HEALTH CONDITIONS: ${healthConditions.length > 0 ? healthConditions.join(', ') : 'None listed'}
+DIAGNOSED CONDITIONS (formal medical diagnoses): ${healthConditions.length > 0 ? healthConditions.join(', ') : 'None listed'}
+OBSERVED CONCERNS (family observations — NOT diagnoses): ${observedConcerns.length > 0 ? observedConcerns.join(', ') : 'None listed'}
 MEDICATIONS: ${medications.length > 0 ? medications.join(', ') : 'None listed'}
 PETS: ${recipient.pets || 'Not specified'}
 FOOD ALLERGIES: ${recipient.food_allergies || 'None listed'}
@@ -670,6 +679,7 @@ ACCURACY over flattery:
 - Prefer what the notes show over what the ratings imply, when they differ.
 - Never state a lifestyle status the notes don't document. If a note shows she drove somewhere and the family was concerned, "the family is concerned about her driving" is right; "she doesn't drive anymore" is an invention that other documents will inherit as fact.
 - Never invent agency or arrangements. If a note says a friend brings dinner every night, say exactly that — do not write that a family member "arranged" it unless a note says someone did.
+- DIAGNOSED CONDITIONS are the only things you may call a diagnosis. OBSERVED CONCERNS are the family's observations — describe the behavior itself ("she has real memory lapses and gets confused about recent events") rather than naming a disease the family only suspects.
 SAFETY: a caregiver reads this. Never mention financial or security vulnerabilities — trouble managing money, cash or valuables in the home, who pays for things, entry codes. State care-relevant behavior neutrally without exploitable detail. Never state events or lifestyle facts (driving, falls, history) that are not in the provided profile.`,
       messages: [
         { role: "user", content: `Write a warm, personal care profile for this person:\n\n${profileContext}` }
@@ -797,6 +807,8 @@ router.post("/:id/doctor-report", async (req, res) => {
 
     let healthConditions = [];
     try { healthConditions = JSON.parse(recipient.health_conditions || '[]'); } catch { healthConditions = []; }
+    let observedConcerns = [];
+    try { observedConcerns = JSON.parse(recipient.observed_concerns || '[]'); } catch { observedConcerns = []; }
     let medications = [];
     try { medications = JSON.parse(recipient.medications || '[]'); } catch { medications = []; }
     let preferences = {};
@@ -890,6 +902,7 @@ TRUTH — absolute rules. A single unsupported claim destroys the family's credi
 - A single dated observation is ONE data point. NEVER generalize it into a frequency, habit, trajectory, or status — no "no longer", "still", "always", "rarely", "has stopped", "continues to". Report it as what it is: "on [date], [observer] documented [event]." If the family needs the doctor to know how often something happens, that is for the family to say — not for you to infer.
 - Absence of notes about something is NOT evidence it doesn't happen. Home notes capture exceptions and incidents, not daily routines. Never write that the patient "doesn't" or "no longer" does something based only on the notes being quiet about it.
 - Care-need ratings (e.g. "transportation: must have") describe what help the family WANTS — they are not evidence about what the patient does or can do. Never derive ability or lifestyle status from them.
+- DIAGNOSED vs OBSERVED is sacred. Only items listed under DIAGNOSED CONDITIONS may be written as diagnoses. Items under OBSERVED CONCERNS are family observations — present them exactly that way, and where it matters, state the distinction plainly: "There is no formal dementia diagnosis; the family observes recurring memory lapses and confusion that suggest cognitive decline." A doctor reads calibrated language as credible; inflated language as noise.
 
 RELEVANCE — the appointment type and details STEER everything:
 - Select observations for what THIS clinician can act on. A podiatrist: foot issues, gait, fall risk, footwear, circulation/sensation signals — not a cognitive history. A neurologist or memory specialist: cognitive patterns, confusion episodes, sleep, mood. A primary care doctor: the broadest picture, still change-focused.
@@ -910,7 +923,8 @@ APPOINTMENT TYPE: ${appointmentType.trim()}
 ${appointmentDetails ? `APPOINTMENT DETAILS: ${appointmentDetails.trim()}` : ''}
 
 PATIENT: ${name}, age ${age}
-KNOWN CONDITIONS: ${healthConditions.length > 0 ? healthConditions.join(', ') : 'None listed'}
+DIAGNOSED CONDITIONS (formal medical diagnoses, as reported by the family): ${healthConditions.length > 0 ? healthConditions.join(', ') : 'None listed'}
+OBSERVED CONCERNS (family/caregiver observations — NOT diagnoses): ${observedConcerns.length > 0 ? observedConcerns.join(', ') : 'None listed'}
 MEDICATIONS: ${medications.length > 0 ? medications.join(', ') : 'None listed'}
 ALLERGIES: Food: ${recipient.food_allergies || 'None'}. Pet: ${recipient.pet_allergies || 'None'}.
 EMERGENCY CONTACT: ${recipient.emergency_contact_name || 'Not listed'} ${recipient.emergency_contact_phone || ''}
@@ -995,6 +1009,8 @@ router.post("/:id/doctor-report/send", async (req, res) => {
     const age = recipient.age || 'unknown age';
     let healthConditions = [];
     try { healthConditions = JSON.parse(recipient.health_conditions || '[]'); } catch { healthConditions = []; }
+    let observedConcerns = [];
+    try { observedConcerns = JSON.parse(recipient.observed_concerns || '[]'); } catch { observedConcerns = []; }
     let medications = [];
     try { medications = JSON.parse(recipient.medications || '[]'); } catch { medications = []; }
     const familyUser = await db.prepare("SELECT first_name, last_name, phone, email FROM users WHERE id = ?").get(recipient.family_user_id);

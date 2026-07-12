@@ -605,6 +605,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
 
   const startEditing = () => {
     const hc = parseJsonField(profile.health_conditions);
+    const oc = parseJsonField(profile.observed_concerns);
     const meds = parseJsonField(profile.medications);
     setEditData({
       first_name: profile.first_name || '',
@@ -615,6 +616,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
       state: profile.location_state || '',
       zip: profile.location_zip || '',
       health_conditions: Array.isArray(hc) ? hc.join('\n') : '',
+      observed_concerns: Array.isArray(oc) ? oc.join('\n') : '',
       medications: Array.isArray(meds) ? meds.join('\n') : '',
       preferences: profile.preferences || '',
       emergency_contact_name: profile.emergency_contact_name || '',
@@ -642,6 +644,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
         state: editData.state,
         zip: editData.zip || null,
         healthConditions: editData.health_conditions.split('\n').map(s => s.trim()).filter(Boolean),
+        observedConcerns: (editData.observed_concerns || '').split('\n').map(s => s.trim()).filter(Boolean),
         medications: editData.medications.split('\n').map(s => s.trim()).filter(Boolean),
         preferences: editData.preferences,
         emergencyContactName: editData.emergency_contact_name,
@@ -663,6 +666,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
           location_state: editData.state,
           location_zip: editData.zip,
           health_conditions: JSON.stringify(editData.health_conditions.split('\n').map(s => s.trim()).filter(Boolean)),
+          observed_concerns: JSON.stringify((editData.observed_concerns || '').split('\n').map(s => s.trim()).filter(Boolean)),
           medications: JSON.stringify(editData.medications.split('\n').map(s => s.trim()).filter(Boolean)),
           preferences: editData.preferences,
           emergency_contact_name: editData.emergency_contact_name,
@@ -758,6 +762,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
 
   const canEdit = profile.access_level !== 'view';
   const healthConditions = parseJsonField(profile.health_conditions);
+  const observedConcerns = parseJsonField(profile.observed_concerns);
   const medications = parseJsonField(profile.medications);
 
   const inputStyle = { width: '100%', padding: '10px 12px', border: '1px solid #d0d0d0', borderRadius: 8, fontSize: 14, fontFamily: 'inherit', boxSizing: 'border-box' };
@@ -914,8 +919,14 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
         {editing ? (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             <div>
-              <div style={{ ...fieldLabel, marginBottom: 8 }}>Health Conditions (one per line)</div>
-              <textarea style={textareaStyle} value={editData.health_conditions} onChange={(e) => ed('health_conditions', e.target.value)} placeholder="Early-stage dementia&#10;Mild arthritis&#10;..." />
+              <div style={{ ...fieldLabel, marginBottom: 8 }}>Diagnosed Conditions (one per line)</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6, lineHeight: 1.4 }}>Only formal diagnoses from a doctor. Include the date if you know it.</div>
+              <textarea style={textareaStyle} value={editData.health_conditions} onChange={(e) => ed('health_conditions', e.target.value)} placeholder="Type 2 diabetes (diagnosed 2019)&#10;Parkinson's, diagnosed May 2024&#10;..." />
+            </div>
+            <div>
+              <div style={{ ...fieldLabel, marginBottom: 8 }}>Observed Concerns (one per line)</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6, lineHeight: 1.4 }}>Things your family sees that worry you {'\u2014'} not diagnoses. iPAi treats these differently.</div>
+              <textarea style={textareaStyle} value={editData.observed_concerns || ''} onChange={(e) => ed('observed_concerns', e.target.value)} placeholder="Serious memory issues suggesting dementia&#10;Tends to lose balance on stairs&#10;Trouble hearing lately&#10;..." />
             </div>
             <div>
               <div style={{ ...fieldLabel, marginBottom: 8 }}>Medications (one per line)</div>
@@ -925,7 +936,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             <div>
-              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>Conditions</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>Diagnosed Conditions</div>
               {healthConditions.length > 0 ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                   {healthConditions.map((c, i) => (
@@ -933,6 +944,14 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                   ))}
                 </div>
               ) : <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>None listed</span>}
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', margin: '12px 0 6px' }}>Observed Concerns</div>
+              {observedConcerns.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  {observedConcerns.map((c, i) => (
+                    <div key={i} style={{ fontSize: 13, color: 'var(--text-primary)', paddingLeft: 10, borderLeft: '2px solid #e8a13a' }}>{c}</div>
+                  ))}
+                </div>
+              ) : <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>None listed {'\u2014'} things your family sees that worry you (not diagnoses)</span>}
             </div>
             <div>
               <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>Medications</div>

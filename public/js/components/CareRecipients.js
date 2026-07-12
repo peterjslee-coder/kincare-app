@@ -7,7 +7,7 @@ const CareRecipients = window.CareRecipients = () => {
   const [formData, setFormData] = useState({
     firstName: '', lastName: '', age: '', relationship: '', nickname: '', emoji: '', address: '', city: '', state: '', zip: '',
     phone: '', email: '',
-    sameAddress: false, healthConditions: '', medications: '', pets: '', petAllergies: '', foodAllergies: '', medicalConditions: '', personality: '', preferences: '',
+    sameAddress: false, healthConditions: '', observedConcerns: '', medications: '', pets: '', petAllergies: '', foodAllergies: '', medicalConditions: '', personality: '', preferences: '',
     emergencyContactName: '', emergencyContactPhone: '',
     authorizationTier: 'tier3',
   });
@@ -161,6 +161,7 @@ const CareRecipients = window.CareRecipients = () => {
               email: r.email || '',
               sameAddress: false,
               healthConditions: parseField(r.health_conditions),
+              observedConcerns: parseField(r.observed_concerns),
               medications: parseField(r.medications),
               pets: r.pets || '',
               petAllergies: r.pet_allergies || r.petAllergies || '',
@@ -210,7 +211,7 @@ const CareRecipients = window.CareRecipients = () => {
     setFormData({
       firstName: '', lastName: '', age: '', relationship: '', nickname: '', emoji: '', address: '', city: '', state: '', zip: '',
       phone: '', email: '',
-      sameAddress: false, healthConditions: '', medications: '', pets: '', petAllergies: '', foodAllergies: '', medicalConditions: '', personality: '', preferences: '',
+      sameAddress: false, healthConditions: '', observedConcerns: '', medications: '', pets: '', petAllergies: '', foodAllergies: '', medicalConditions: '', personality: '', preferences: '',
       emergencyContactName: '', emergencyContactPhone: '',
       authorizationTier: 'tier3',
     });
@@ -248,6 +249,7 @@ const CareRecipients = window.CareRecipients = () => {
       email: r.email || '',
       sameAddress: false,
       healthConditions: parseField(r.health_conditions || r.healthConditions),
+      observedConcerns: parseField(r.observed_concerns || r.observedConcerns),
       medications: parseField(r.medications),
       pets: r.pets || '',
       petAllergies: r.pet_allergies || '',
@@ -290,6 +292,7 @@ const CareRecipients = window.CareRecipients = () => {
       phone: formData.phone || null,
       email: formData.email || null,
       healthConditions: formData.healthConditions.split('\n').map(s => s.trim()).filter(Boolean),
+      observedConcerns: (formData.observedConcerns || '').split('\n').map(s => s.trim()).filter(Boolean),
       medications: formData.medications.split('\n').map(s => s.trim()).filter(Boolean),
       pets: formData.pets,
       petAllergies: formData.petAllergies,
@@ -1317,8 +1320,14 @@ const CareRecipients = window.CareRecipients = () => {
             <label style={{ fontWeight: 600, display: 'block' }}>Health Information</label>
           </div>
           <div className="form-group">
-            <label>Health Conditions (one per line)</label>
-            <textarea value={formData.healthConditions} onChange={(e) => fd('healthConditions', e.target.value)} placeholder="Early-stage dementia&#10;Mild arthritis" />
+            <label>Diagnosed Conditions (one per line)</label>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Only formal diagnoses from a doctor {'\u2014'} include the date if known.</div>
+            <textarea value={formData.healthConditions} onChange={(e) => fd('healthConditions', e.target.value)} placeholder="Type 2 diabetes (diagnosed 2019)&#10;Parkinson's, diagnosed May 2024" />
+          </div>
+          <div className="form-group">
+            <label>Observed Concerns (one per line)</label>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Things your family sees that worry you {'\u2014'} not diagnoses.</div>
+            <textarea value={formData.observedConcerns || ''} onChange={(e) => fd('observedConcerns', e.target.value)} placeholder="Serious memory issues suggesting dementia&#10;Tends to lose balance on stairs" />
           </div>
           <div className="form-group">
             <label>Medications (one per line)</label>

@@ -310,6 +310,9 @@ async function generateCareIntelligence(careRecipientId) {
   const healthConditions = (() => {
     try { return JSON.parse(recipient.health_conditions || "[]"); } catch { return []; }
   })();
+  const observedConcerns = (() => {
+    try { return JSON.parse(recipient.observed_concerns || "[]"); } catch { return []; }
+  })();
   const medications = (() => {
     try { return JSON.parse(recipient.medications || "[]"); } catch { return []; }
   })();
@@ -334,7 +337,8 @@ async function generateCareIntelligence(careRecipientId) {
 
 CARE RECIPIENT: ${recipientName}
 Age: ${recipient.age || "unknown"}
-Health conditions: ${healthConditions.join(", ") || "none listed"}
+Diagnosed conditions (formal medical diagnoses): ${healthConditions.join(", ") || "none listed"}
+Observed concerns (family observations — NOT diagnoses; never present these as diagnosed illnesses): ${observedConcerns.join(", ") || "none listed"}
 Medications: ${medications.join(", ") || "none listed"}
 Mobility: ${recipient.mobility || "unknown"}
 
@@ -508,6 +512,9 @@ async function generateCarePlan(careRecipientId) {
   const healthConditions = (() => {
     try { return JSON.parse(recipient.health_conditions || "[]"); } catch { return []; }
   })();
+  const observedConcerns = (() => {
+    try { return JSON.parse(recipient.observed_concerns || "[]"); } catch { return []; }
+  })();
   const medications = (() => {
     try { return JSON.parse(recipient.medications || "[]"); } catch { return []; }
   })();
@@ -548,7 +555,8 @@ async function generateCarePlan(careRecipientId) {
 
 CARE RECIPIENT: ${recipientName}
 Age: ${recipient.age || "unknown"}
-Health conditions: ${healthConditions.join(", ") || "none listed"}
+Diagnosed conditions (formal medical diagnoses): ${healthConditions.join(", ") || "none listed"}
+Observed concerns (family observations — NOT diagnoses; never present these as diagnosed illnesses): ${observedConcerns.join(", ") || "none listed"}
 Medications: ${medications.join(", ") || "none listed"}
 Mobility: ${recipient.mobility || "unknown"}
 
