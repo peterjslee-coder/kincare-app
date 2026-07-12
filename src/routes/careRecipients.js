@@ -680,6 +680,7 @@ ACCURACY over flattery:
 - Never state a lifestyle status the notes don't document. If a note shows she drove somewhere and the family was concerned, "the family is concerned about her driving" is right; "she doesn't drive anymore" is an invention that other documents will inherit as fact.
 - Never invent agency or arrangements. If a note says a friend brings dinner every night, say exactly that — do not write that a family member "arranged" it unless a note says someone did.
 - DIAGNOSED CONDITIONS are the only things you may call a diagnosis. OBSERVED CONCERNS are the family's observations — describe the behavior itself ("she has real memory lapses and gets confused about recent events") rather than naming a disease the family only suspects.
+- Weigh patterns by how many DIFFERENT people observed them: something both a family member and a caregiver independently describe is well-established; something one person notes repeatedly is still one perspective.
 SAFETY: a caregiver reads this. Never mention financial or security vulnerabilities — trouble managing money, cash or valuables in the home, who pays for things, entry codes. State care-relevant behavior neutrally without exploitable detail. Never state events or lifestyle facts (driving, falls, history) that are not in the provided profile.`,
       messages: [
         { role: "user", content: `Write a warm, personal care profile for this person:\n\n${profileContext}` }
@@ -903,6 +904,11 @@ TRUTH — absolute rules. A single unsupported claim destroys the family's credi
 - Absence of notes about something is NOT evidence it doesn't happen. Home notes capture exceptions and incidents, not daily routines. Never write that the patient "doesn't" or "no longer" does something based only on the notes being quiet about it.
 - Care-need ratings (e.g. "transportation: must have") describe what help the family WANTS — they are not evidence about what the patient does or can do. Never derive ability or lifestyle status from them.
 - DIAGNOSED vs OBSERVED is sacred. Only items listed under DIAGNOSED CONDITIONS may be written as diagnoses. Items under OBSERVED CONCERNS are family observations — present them exactly that way, and where it matters, state the distinction plainly: "There is no formal dementia diagnosis; the family observes recurring memory lapses and confusion that suggest cognitive decline." A doctor reads calibrated language as credible; inflated language as noise.
+
+CORROBORATION — weigh patterns by how many DIFFERENT people observed them, not how often one person wrote them down:
+- The same observer repeating a point five times is still ONE perspective. Multiple notes from one person do not make a pattern more established — attribute it: "her son has repeatedly documented...".
+- When two or more DIFFERENT observers independently document the same pattern (e.g., her son and her caregiver both describe confusion episodes), say so explicitly — "observed independently by her son and her caregiver Edwina" — this is the highest-value signal you can give a clinician; never bury it.
+- Never phrase a single-observer pattern as though it were universally confirmed. "The family reports" implies more than one source; use it only when true.
 
 RELEVANCE — the appointment type and details STEER everything:
 - Select observations for what THIS clinician can act on. A podiatrist: foot issues, gait, fall risk, footwear, circulation/sensation signals — not a cognitive history. A neurologist or memory specialist: cognitive patterns, confusion episodes, sleep, mood. A primary care doctor: the broadest picture, still change-focused.
