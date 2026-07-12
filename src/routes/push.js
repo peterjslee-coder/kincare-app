@@ -314,8 +314,18 @@ function _getFirebaseMessaging() {
   return _firebaseApp;
 }
 
-// Send native push via FCM
+// Send native push: iOS → direct APNs (raw APNs tokens, no Firebase needed);
+// Android → Firebase FCM. The Capacitor iOS app registers a raw APNs device
+// token, which FCM rejects — so iOS must go straight to Apple (v1.96.0).
 async function _sendNativePush(subscriptionObj, notificationPayload) {
+  if (subscriptionObj.platform === "ios") {
+    const apns = require("../utils/apns");
+    if (!apns.isConfigured()) return false; // inert until APNS_KEY/_KEY_ID/_TEAM_ID are set
+    const parsed = JSON.parse(notificationPayload);
+    await apns.sendApnsNotification(subscriptionObj.token, parsed); // throws {statusCode:410} on dead tokens
+    return true;
+  }
+
   const app = _getFirebaseMessaging();
   if (!app) return false;
 
@@ -452,9 +462,18 @@ async function sendPushToUser(userId, payload, eventType) {
       try {
         const subObj = JSON.parse(sub.subscription_json);
 
+        // Native delivery not configured yet (no APNs key / Firebase credential) —
+        // skip silently WITHOUT counting a failure, so tokens survive until setup.
+        if (subObj.type === "native") {
+          const configured = subObj.platform === "ios"
+            ? require("../utils/apns").isConfigured()
+            : !!_getFirebaseMessaging();
+          if (!configured) continue;
+        }
+
         await _sendWithRetry(async () => {
           if (subObj.type === "native") {
-            // Native FCM/APNS token — send via Firebase Admin SDK
+            // Native token — iOS via direct APNs, Android via Firebase FCM
             const delivered = await _sendNativePush(subObj, notificationPayload);
             if (!delivered) throw new Error("Native push not configured");
           } else if (webpush) {

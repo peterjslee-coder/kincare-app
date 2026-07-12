@@ -1,6 +1,6 @@
 // InPlace Service Worker — v1.57.14
-const CACHE_NAME = 'inplace-build-6bfaf473-mrhrg3gq';
-const SW_VERSION = 'build-6bfaf473-mrhrg3gq';
+const CACHE_NAME = 'inplace-build-3f217eda-mri9putq';
+const SW_VERSION = 'build-3f217eda-mri9putq';
 const STATIC_ASSETS = [
   '/',
   '/css/styles.css',
@@ -238,6 +238,9 @@ self.addEventListener('notificationclick', (event) => {
     targetUrl = '/?page=messages';
   } else if (data.type === 'admin_setting_change') {
     targetUrl = '/?page=dashboard';
+  } else if (data.page) {
+    // Generic deep-link (e.g. team_note / observation_attention → lovedone)
+    targetUrl = `/?page=${encodeURIComponent(data.page)}`;
   }
 
   event.waitUntil(

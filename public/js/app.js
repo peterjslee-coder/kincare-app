@@ -1048,6 +1048,9 @@ const App = () => {
           } else if (d.type === 'video_call' && d.conversationId) {
             window.__pendingConversation = d.conversationId;
             setCurrentPage('messages');
+          } else if (d.page) {
+            // Generic deep-link (e.g. team_note / observation_attention → lovedone)
+            setCurrentPage(d.page);
           }
         }
       });

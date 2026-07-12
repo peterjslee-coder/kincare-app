@@ -26,6 +26,7 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
   const [payingId, setPayingId] = useState(null); // row showing the mark-paid method picker
   const [markMethod, setMarkMethod] = useState('venmo');
   const [error, setError] = useState('');
+  const [showMoney, setShowMoney] = useState(false); // v1.96.0 — Money view (leader + billing contact)
 
   const fetchList = async () => {
     try {
@@ -149,6 +150,12 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
       <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span>💵 Reimbursements</span>
         <div style={{ display: 'flex', gap: 8 }}>
+          {(meta.isApprover || (members || []).some((m) => m.userId === myUserId && m.role === 'leader')) && !showForm && (
+            <button onClick={() => setShowMoney(true)}
+              style={{ padding: '6px 14px', background: 'var(--bg-card)', color: 'var(--role-color)', border: '1px solid var(--role-color)', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+              💰 Money view
+            </button>
+          )}
           {meta.canSubmit && !showForm && (
             <button onClick={async () => {
                 setShowForm(true); setRecordMode(false); setRecurringMode(false);
@@ -209,12 +216,25 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
               </select>
             )}
             {!recordMode && !recurringMode && (
-              <input type="text" value={venmoHandle} onChange={(e) => setVenmoHandle(e.target.value)}
-                placeholder="Your Venmo @username" style={{ ...inputStyle, flex: '1 1 160px' }} />
+              <div style={{ flex: '1 1 160px' }}>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 3 }}>
+                  Venmo username <span style={{ fontWeight: 400 }}>(how you'll get paid back{venmoHandle ? ' — saved from last time' : ''})</span>
+                </label>
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                  <span style={{ ...inputStyle, padding: '10px 4px 10px 12px', borderRight: 'none', borderRadius: '8px 0 0 8px', color: 'var(--text-muted)' }}>@</span>
+                  <input type="text" value={venmoHandle} onChange={(e) => setVenmoHandle(e.target.value)}
+                    placeholder="Venmo username" style={{ ...inputStyle, width: '100%', borderLeft: 'none', borderRadius: '0 8px 8px 0', paddingLeft: 2 }} />
+                </div>
+              </div>
             )}
             {!recordMode && !recurringMode && (
-              <input type="text" value={zelleContact} onChange={(e) => setZelleContact(e.target.value)}
-                placeholder="Your Zelle email/phone" style={{ ...inputStyle, flex: '1 1 160px' }} />
+              <div style={{ flex: '1 1 160px' }}>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 3 }}>
+                  Zelle email or phone <span style={{ fontWeight: 400 }}>(optional{zelleContact ? ' — saved from last time' : ''})</span>
+                </label>
+                <input type="text" value={zelleContact} onChange={(e) => setZelleContact(e.target.value)}
+                  placeholder="Zelle email/phone" style={{ ...inputStyle, width: '100%' }} />
+              </div>
             )}
             {recordMode && (
               <select value={payeeUserId} onChange={(e) => setPayeeUserId(e.target.value)} style={{ ...inputStyle, flex: '1 1 160px' }}>
@@ -407,6 +427,10 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
             )}
           </div>
         ))
+      )}
+
+      {showMoney && typeof MoneyView !== 'undefined' && (
+        <MoneyView careTeamId={careTeamId} onClose={() => setShowMoney(false)} />
       )}
     </div>
   );

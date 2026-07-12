@@ -164,21 +164,43 @@ router.post("/", async (req, res) => {
     } catch (e) { captureException(e, { where: "notes: categorize require" }); }
   }
 
-  // Urgent observations ping the family owner (they can escalate from there)
-  if (needsAttention) {
-    try {
-      const cr = await db.prepare("SELECT family_user_id, first_name FROM care_recipients WHERE id = ?").get(careRecipientId);
-      if (cr && cr.family_user_id && cr.family_user_id !== req.user.id) {
-        const author = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(req.user.id);
-        const { sendPushToUser } = require("./push");
-        sendPushToUser(cr.family_user_id, {
-          title: `Needs attention — ${cr.first_name}`,
-          body: `${author ? author.first_name + " " + author.last_name : "A team member"}: ${String(content).slice(0, 120)}`,
-          data: { type: "observation_attention", careRecipientId, page: "lovedone" },
-        }, "observation_attention").catch(() => {});
+  // ─── v1.96.0 — every new note pings the whole care team (Pete's 7/12 feedback) ───
+  // Urgent notes get the ⚠️ variant, photo notes the 📷 variant. The author is
+  // never notified about their own note. Per-user opt-out via notification_prefs
+  // (push_team_note; urgent notes use the pre-existing push_observation_attention).
+  try {
+    const cr = await db.prepare("SELECT family_user_id, first_name FROM care_recipients WHERE id = ?").get(careRecipientId);
+    if (cr) {
+      const author = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(req.user.id);
+      const authorName = author ? `${author.first_name} ${author.last_name}` : "A team member";
+
+      // Everyone on any care team for this recipient, plus the family owner as fallback
+      const teamRows = await db.prepare(`
+        SELECT DISTINCT ctm.user_id FROM care_team_members ctm
+        JOIN care_teams ct ON ctm.care_team_id = ct.id
+        WHERE ct.care_recipient_id = ?
+      `).all(careRecipientId);
+      const notifyIds = new Set(teamRows.map((r) => r.user_id));
+      if (cr.family_user_id) notifyIds.add(cr.family_user_id);
+      notifyIds.delete(req.user.id); // never notify the author
+
+      const title = needsAttention
+        ? `⚠️ Needs attention — ${cr.first_name}`
+        : photoData
+          ? `📷 New photo note — ${cr.first_name}`
+          : `New note — ${cr.first_name}`;
+      const eventType = needsAttention ? "observation_attention" : "team_note";
+      const { sendPushToUser } = require("./push");
+      for (const userId of notifyIds) {
+        sendPushToUser(userId, {
+          title,
+          body: `${authorName}: ${String(content).slice(0, 120)}`,
+          tag: `note-${id.slice(0, 8)}`,
+          data: { type: eventType, careRecipientId, noteId: id, page: "care-profile" },
+        }, eventType).catch(() => {});
       }
-    } catch (e) { captureException(e, { where: "notes: urgent push" }); }
-  }
+    }
+  } catch (e) { captureException(e, { where: "notes: team push" }); }
 
   const note = await db.prepare(`
     SELECT rn.*, u.first_name AS author_first_name, u.last_name AS author_last_name, u.role AS author_role

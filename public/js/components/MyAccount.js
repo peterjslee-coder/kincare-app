@@ -1633,6 +1633,8 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
             <p style={{ padding: '0 16px', fontSize: 13, color: 'var(--text-tertiary)', margin: '0 0 8px' }}>Choose which events send push notifications to your phone.</p>
             {[
               { key: 'push_messages', label: 'New messages' },
+              { key: 'push_team_note', label: 'New care notes & observations from your care team' },
+              { key: 'push_observation_attention', label: 'Urgent "needs attention" notes' },
               { key: 'push_care_request', label: 'Care requests (for caregivers)' },
               { key: 'push_care_request_accepted', label: 'Care request accepted (for families)' },
               { key: 'push_session_status', label: 'Session status changes' },

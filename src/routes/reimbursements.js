@@ -672,5 +672,93 @@ router.post("/schedules/:id/:action(pause|resume|cancel)", async (req, res) => {
   }
 });
 
+// ── GET /api/reimbursements/money/:teamId — the Money view (v1.96.0) ──
+// One financial picture per care team for the LEADER + BILLING CONTACT:
+// every reimbursement (requested / approved / paid / declined, with notes and
+// receipts) plus the team's care-session payments, with summary totals.
+// From Pete's 7/12 feedback; folds in the "Payments page v2" intent.
+router.get("/money/:teamId", async (req, res) => {
+  try {
+    const db = await getDb();
+    const access = await teamAccess(db, req.params.teamId, req.user.id);
+    if (!access || !access.canView) return res.status(404).json({ error: "Care team not found" });
+    const isMoneyViewer = access.isApprover || access.role === "leader";
+    if (!isMoneyViewer) return res.status(403).json({ error: "The Money view is available to the team leader and billing contact" });
+
+    // Full reimbursement ledger (same shape as the team endpoint, deeper limit)
+    const reimbursements = await db.prepare(`
+      SELECT r.id, r.amount, r.description, r.category, r.expense_date, r.status,
+             r.self_recorded, r.created_at, r.approved_at, r.declined_reason,
+             r.paid_at, r.paid_method, r.paid_reference,
+             r.requested_by, ru.first_name AS requester_first_name, ru.last_name AS requester_last_name,
+             r.payee_user_id, pu.first_name AS payee_first_name, pu.last_name AS payee_last_name,
+             r.approved_by, au.first_name AS approver_first_name, au.last_name AS approver_last_name
+      FROM reimbursements r
+      JOIN users ru ON r.requested_by = ru.id
+      JOIN users pu ON r.payee_user_id = pu.id
+      LEFT JOIN users au ON r.approved_by = au.id
+      WHERE r.care_team_id = ?
+      ORDER BY r.created_at DESC
+      LIMIT 500
+    `).all(req.params.teamId);
+
+    const ids = reimbursements.map((r) => r.id);
+    let receiptMeta = [];
+    if (ids.length) {
+      receiptMeta = await db.prepare(
+        `SELECT id, reimbursement_id, file_name, mime_type, file_size FROM reimbursement_receipts WHERE reimbursement_id = ANY(?)`
+      ).all(ids);
+    }
+    const byReimb = {};
+    for (const m of receiptMeta) (byReimb[m.reimbursement_id] = byReimb[m.reimbursement_id] || []).push(m);
+
+    // Care-session payments for this team's care recipient (who paid + status)
+    let payments = [];
+    try {
+      payments = await db.prepare(`
+        SELECT p.id, p.amount, p.status, p.payment_method, p.created_at,
+               cs.service_type, cs.scheduled_date,
+               cu.first_name || ' ' || cu.last_name AS caregiver_name,
+               fu.first_name || ' ' || fu.last_name AS paid_by_name
+        FROM payments p
+        JOIN care_sessions cs ON p.session_id = cs.id
+        LEFT JOIN caregiver_profiles cp ON p.caregiver_id = cp.id
+        LEFT JOIN users cu ON cp.user_id = cu.id
+        LEFT JOIN users fu ON p.family_user_id = fu.id
+        WHERE cs.care_recipient_id = ?
+        ORDER BY p.created_at DESC
+        LIMIT 200
+      `).all(access.team.care_recipient_id);
+    } catch (e) { /* payments table shape may vary in older DBs — Money view still works */ }
+
+    // Summary totals (reimbursements by status; payments completed total)
+    const sum = (rows) => Math.round(rows.reduce((t, r) => t + (Number(r.amount) || 0), 0) * 100) / 100;
+    const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
+    const yearStart = new Date(monthStart.getFullYear(), 0, 1);
+    const paidRows = reimbursements.filter((r) => r.status === "paid");
+    const summary = {
+      pendingCount: reimbursements.filter((r) => r.status === "pending").length,
+      pendingTotal: sum(reimbursements.filter((r) => r.status === "pending")),
+      approvedAwaitingCount: reimbursements.filter((r) => r.status === "approved").length,
+      approvedAwaitingTotal: sum(reimbursements.filter((r) => r.status === "approved")),
+      paidThisMonthTotal: sum(paidRows.filter((r) => r.paid_at && new Date(r.paid_at) >= monthStart)),
+      paidYtdTotal: sum(paidRows.filter((r) => r.paid_at && new Date(r.paid_at) >= yearStart)),
+      declinedCount: reimbursements.filter((r) => r.status === "declined").length,
+      sessionPaymentsYtdTotal: sum(payments.filter((p) => p.status === "completed" && p.created_at && new Date(p.created_at) >= yearStart)),
+    };
+
+    res.json({
+      recipientFirstName: access.team.recipient_first_name,
+      reimbursements: reimbursements.map((r) => ({ ...r, receipts: byReimb[r.id] || [] })),
+      payments,
+      summary,
+    });
+  } catch (err) {
+    console.error("Money view error:", err);
+    captureException(err, { where: "reimbursements: money view" });
+    res.status(500).json({ error: "Failed to load the money view" });
+  }
+});
+
 module.exports = router;
 module.exports.generateRecurringReimbursements = generateRecurringReimbursements;
