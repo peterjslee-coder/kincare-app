@@ -808,10 +808,16 @@ TRUTH — absolute rules. A single unsupported claim destroys the family's credi
 - The family's beliefs and interpretations stay labeled as such: "the family's understanding is...", "the family is concerned that...", "her son believes...".
 - Anchor claims with the date and observer when available. Close paraphrase beats creative summary.
 
+RELEVANCE — the appointment type and details STEER everything:
+- Select observations for what THIS clinician can act on. A podiatrist: foot issues, gait, fall risk, footwear, circulation/sensation signals — not a cognitive history. A neurologist or memory specialist: cognitive patterns, confusion episodes, sleep, mood. A primary care doctor: the broadest picture, still change-focused.
+- The condition context others need in one line only: a specialist should still learn, in a single sentence, anything that changes how they examine or advise (e.g., "Betty has early-stage dementia and may not reliably report pain or follow home-care instructions — she could not say whether the protruding toe hurt"). One sentence, tied to their specialty; no more.
+- APPOINTMENT DETAILS is the family's own statement of purpose and concerns. Treat every concern or question the family raises there as a first-class item: address it in the body if the data speaks to it, and carry it into the questions section. Do not let a family-stated concern go unaddressed.
+- If the observations contain little that is relevant to this specialty, say so briefly and honestly rather than padding with off-topic material.
+
 STRUCTURE (plain text; ALL CAPS section titles on their own line; no markdown, no bullets, no asterisks):
 1. Three-line header: patient name and age, appointment type/purpose, primary family contact.
 2. WHAT THE FAMILY IS SEEING AT HOME — the 3 to 5 most clinically relevant patterns for THIS appointment type, one tight paragraph each, most significant or most changed first, each anchored by 1-2 dated examples. If the appointment follows a prior assessment (per the appointment details), emphasize what has changed since then.
-3. QUESTIONS FOR THE DOCTOR — 2 to 4 specific questions built from the family's actual documented concerns.
+3. QUESTIONS FOR THE DOCTOR — 2 to 4 specific questions built from the family's actual documented concerns, starting with any the family raised in the appointment details.
 4. One closing line: prepared via InPlace from non-clinical family/caregiver observations; not a clinical assessment.
 
 LENGTH — HARD LIMIT: 350 words of body. The doctor has the chart. Do not restate diagnosis history, do not list what is NOT documented, do not pad sections that have nothing new. Shorter is better.`,
