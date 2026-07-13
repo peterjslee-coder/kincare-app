@@ -20,6 +20,8 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
   const [payoutMethod, setPayoutMethod] = useState('venmo');
   const [payoutDetails, setPayoutDetails] = useState('');
   const [savedPayout, setSavedPayout] = useState({ venmo: '', zelle: '', bank: '' });
+  const [linkedBanks, setLinkedBanks] = useState([]); // v1.97.1 — banks already linked to InPlace (one-tap pick)
+  const [approverLinkedBanks, setApproverLinkedBanks] = useState([]);
   const [editingId, setEditingId] = useState(null); // v1.97.0 — editing a pending request
   const [payeeUserId, setPayeeUserId] = useState('');
   const [paidMethod, setPaidMethod] = useState('venmo');
@@ -131,6 +133,7 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
         const d = await r.json();
         const sv = { venmo: d.venmoHandle || '', zelle: d.zelleContact || '', bank: d.bankContact || '' };
         setSavedPayout(sv);
+        setLinkedBanks(d.linkedBanks || []);
         // Default to the first method that has saved details
         const m = sv.venmo ? 'venmo' : sv.zelle ? 'zelle' : sv.bank ? 'ach' : 'venmo';
         setPayoutMethod(m); applySavedPayout(m, sv);
@@ -189,6 +192,7 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
         const d = await r.json();
         const accts = d.accounts || [];
         setFundingAccounts(accts);
+        setApproverLinkedBanks(d.linkedBanks || []);
         setFromAccountId(accts.find((a) => a.is_default)?.id || accts[0]?.id || '');
       }
     } catch {}
@@ -376,12 +380,24 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
                   </div>
                 ) : (
                   <input type="text" value={payoutDetails} onChange={(e) => setPayoutDetails(e.target.value)}
-                    placeholder={payoutMethod === 'zelle' ? 'Zelle email/phone' : payoutMethod === 'ach' ? 'e.g. Truist checking ****4321' : 'e.g. mail to my address'}
+                    placeholder={payoutMethod === 'zelle' ? 'Zelle email/phone' : payoutMethod === 'ach' ? 'e.g. Chase checking ending in 4321' : 'e.g. mail to my address'}
                     style={{ ...inputStyle, width: '100%' }} />
                 )}
+                {payoutMethod === 'ach' && linkedBanks.length > 0 && (
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+                    {linkedBanks.map((b) => (
+                      <button key={b} type="button" onClick={() => setPayoutDetails(b)}
+                        style={{ padding: '5px 10px', background: payoutDetails === b ? 'var(--role-color)' : 'var(--bg-card)', color: payoutDetails === b ? 'var(--text-on-primary)' : 'var(--role-color)', border: '1px solid var(--role-color)', borderRadius: 14, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                        🏦 {b} — linked to InPlace
+                      </button>
+                    ))}
+                  </div>
+                )}
                 {payoutMethod === 'ach' && (
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3 }}>
-                    Nickname + last 4 only — never enter a full account number. The transfer itself happens from your family's banking app.
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                    {linkedBanks.length > 0
+                      ? 'Tap your linked account above, or describe another one. This just tells the approver where to send it — InPlace never stores account numbers, and the transfer happens between your banks.'
+                      : "Describe the account so the approver knows where to send it — like \u201CChase checking ending in 4321\u201D. Don't enter the full account number; InPlace only keeps this note, and the transfer happens between your banks."}
                   </div>
                 )}
               </div>
@@ -529,8 +545,16 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
             {meta.isApprover && ['pending', 'approved'].includes(it.status) && (
               <div style={{ fontSize: 12, marginTop: 6, color: payToLabel(it) ? 'var(--text-secondary)' : '#e65100' }}>
                 {payToLabel(it)
-                  ? <>Pay to: {payToLabel(it)}{it.paid_from_label ? <> · From: {it.paid_from_label}</> : null}</>
+                  ? <>Pay to: {payToLabel(it)}{!!it.payout_verified && <span style={{ color: '#2e7d32', fontWeight: 600 }}> ✓ verified linked account</span>}{it.paid_from_label ? <> · From: {it.paid_from_label}</> : null}</>
                   : <>⚠️ No payment details on file — coordinate with {it.payee_first_name} on how to pay</>}
+              </div>
+            )}
+            {/* Payee: how YOU will be paid — so there's no guessing where the money goes */}
+            {!meta.isApprover && it.payee_user_id === myUserId && ['pending', 'approved'].includes(it.status) && (
+              <div style={{ fontSize: 12, marginTop: 6, color: payToLabel(it) ? 'var(--text-secondary)' : '#e65100' }}>
+                {payToLabel(it)
+                  ? <>You'll be paid to: {payToLabel(it)}{!!it.payout_verified && <span style={{ color: '#2e7d32', fontWeight: 600 }}> ✓ verified linked account</span>} — the approver sends it from their bank; InPlace tracks it</>
+                  : <>⚠️ No payment details on this request — edit it to say how you want to be paid</>}
               </div>
             )}
 
@@ -613,7 +637,10 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
               <span style={{ color: 'var(--text-secondary)' }}> — {approveTarget.description} · to {approveTarget.payee_first_name} {approveTarget.payee_last_name}</span>
             </div>
             <div style={{ background: 'var(--bg-primary)', borderRadius: 10, padding: '10px 12px', marginBottom: 12, fontSize: 13 }}>
-              <div style={{ marginBottom: 4 }}><span style={{ fontWeight: 600 }}>To:</span> {payToLabel(approveTarget) || `coordinate with ${approveTarget.payee_first_name}`}</div>
+              <div style={{ marginBottom: 4 }}>
+                <span style={{ fontWeight: 600 }}>To:</span> {payToLabel(approveTarget) || `coordinate with ${approveTarget.payee_first_name}`}
+                {!!approveTarget.payout_verified && <span style={{ color: '#2e7d32', fontWeight: 600 }}> ✓ verified — this account is linked to {approveTarget.payee_first_name}'s InPlace profile</span>}
+              </div>
               <div>
                 <span style={{ fontWeight: 600 }}>From:</span>{' '}
                 {fundingAccounts.length > 0 ? (
@@ -625,16 +652,26 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
                   <span style={{ color: 'var(--text-muted)' }}>no accounts saved yet — add one below (optional)</span>
                 )}
               </div>
+              {approverLinkedBanks.filter((b) => !fundingAccounts.some((a) => a.label === b)).length > 0 && (
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
+                  {approverLinkedBanks.filter((b) => !fundingAccounts.some((a) => a.label === b)).map((b) => (
+                    <button key={b} type="button" onClick={() => { setNewAccountLabel(b); }}
+                      style={{ padding: '5px 10px', background: 'var(--bg-card)', color: 'var(--role-color)', border: '1px solid var(--role-color)', borderRadius: 14, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                      🏦 Use {b} — linked to InPlace
+                    </button>
+                  ))}
+                </div>
+              )}
               <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
                 <input type="text" value={newAccountLabel} onChange={(e) => setNewAccountLabel(e.target.value)}
-                  placeholder={'Add account — e.g. Mom\u2019s checking ****1234'} style={{ ...inputStyle, flex: 1, padding: '6px 10px', fontSize: 13 }} />
+                  placeholder={'Add account — e.g. Mom\u2019s checking, ends in 1234'} style={{ ...inputStyle, flex: 1, padding: '6px 10px', fontSize: 13 }} />
                 <button type="button" onClick={addFundingAccount} disabled={!newAccountLabel.trim()}
                   style={{ padding: '6px 12px', background: 'var(--bg-card)', color: 'var(--role-color)', border: '1px solid var(--role-color)', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
                   Add
                 </button>
               </div>
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
-                Nicknames + last 4 only — InPlace never stores account numbers. The money itself moves in your banking or payment app; everyone on the request gets notified when you approve and when you mark it paid.
+                This is a note for the family's records — which account the money comes from. No money moves through InPlace and account numbers are never stored; you make the actual payment from your bank, then mark it paid here. Everyone on the request is notified when you approve and when you pay.
               </div>
             </div>
             {approveError && <div style={{ color: '#c62828', fontSize: 13, marginBottom: 10 }}>{approveError}</div>}

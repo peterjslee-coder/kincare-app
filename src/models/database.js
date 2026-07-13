@@ -1527,6 +1527,16 @@ async function initializeDatabase() {
         `CREATE INDEX IF NOT EXISTS idx_team_funding_team ON team_funding_accounts(care_team_id)`,
       ],
     },
+    {
+      // v1.97.1 — payout destination verification: when the requester picks a
+      // bank that is ACTUALLY linked to their InPlace/Stripe profile (vs. a
+      // typed description), the server marks it verified so the approver can
+      // trust where the money is going.
+      id: "005_payout_verified",
+      statements: [
+        `ALTER TABLE reimbursements ADD COLUMN IF NOT EXISTS payout_verified INTEGER DEFAULT 0`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

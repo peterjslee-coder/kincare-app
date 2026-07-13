@@ -47,6 +47,48 @@ function parsePayout(body) {
   return { payoutMethod, payoutDetails };
 }
 
+// ── Linked bank accounts (v1.97.1) ──
+// Banks the user has ALREADY linked to InPlace (saved ACH payment methods on
+// their Stripe customer, and — for caregivers — the payout bank on their
+// Stripe Connect account). Returned as display labels only ("Chase ****4321")
+// so pickers can offer one-tap selection instead of asking anyone to type.
+// Read-only metadata; no money moves through InPlace.
+async function getLinkedBanks(db, userId) {
+  const labels = [];
+  let stripe;
+  try { stripe = require("./payments").getStripe(); } catch { return labels; }
+  try {
+    const u = await db.prepare("SELECT stripe_customer_id FROM users WHERE id = ?").get(userId);
+    if (u?.stripe_customer_id) {
+      const banks = await stripe.paymentMethods.list({ customer: u.stripe_customer_id, type: "us_bank_account", limit: 10 });
+      for (const pm of banks.data) {
+        labels.push(`${pm.us_bank_account.bank_name || "Bank account"} ****${pm.us_bank_account.last4}`);
+      }
+    }
+  } catch { /* no customer / API hiccup — picker just falls back to typing */ }
+  try {
+    const cg = await db.prepare("SELECT stripe_account_id FROM caregiver_profiles WHERE user_id = ?").get(userId);
+    if (cg?.stripe_account_id) {
+      const ext = await stripe.accounts.listExternalAccounts(cg.stripe_account_id, { object: "bank_account", limit: 10 });
+      for (const b of ext.data || []) {
+        labels.push(`${b.bank_name || "Bank account"} ****${b.last4}`);
+      }
+    }
+  } catch { /* not a caregiver / no Connect account */ }
+  return [...new Set(labels)];
+}
+
+// True when the chosen ACH destination exactly matches a bank the requester
+// has linked to InPlace — the approver sees a "verified" badge instead of
+// having to trust a typed description.
+async function isVerifiedPayout(db, userId, payout) {
+  if (payout.payoutMethod !== "ach" || !payout.payoutDetails) return 0;
+  try {
+    const banks = await getLinkedBanks(db, userId);
+    return banks.includes(payout.payoutDetails) ? 1 : 0;
+  } catch { return 0; }
+}
+
 // ── Access helpers ──
 // Returns { team, role, isRecipient, canView, canSubmit, isApprover } or null.
 async function teamAccess(db, teamId, userId) {
@@ -119,14 +161,14 @@ async function insertReimbursement(db, fields, receipts) {
     INSERT INTO reimbursements
       (id, care_team_id, care_recipient_id, requested_by, payee_user_id, amount, description,
        category, expense_date, status, self_recorded, approved_by, approved_at,
-       paid_at, paid_method, paid_reference, paid_by, payout_method, payout_details)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       paid_at, paid_method, paid_reference, paid_by, payout_method, payout_details, payout_verified)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id, fields.careTeamId, fields.careRecipientId, fields.requestedBy, fields.payeeUserId,
     fields.amount, fields.description, fields.category, fields.expenseDate,
     fields.status, fields.selfRecorded ? 1 : 0, fields.approvedBy || null, fields.approvedAt || null,
     fields.paidAt || null, fields.paidMethod || null, fields.paidReference || null, fields.paidBy || null,
-    fields.payoutMethod || null, fields.payoutDetails || null
+    fields.payoutMethod || null, fields.payoutDetails || null, fields.payoutVerified ? 1 : 0
   );
   for (const r of receipts) {
     // v1.91.0 — with R2 configured, the blob goes to object storage and the
@@ -175,6 +217,7 @@ router.post("/", async (req, res) => {
     const core = validateCore(req.body);
     const receipts = parseReceipts(req.body.receipts);
     const payout = parsePayout(req.body);
+    payout.payoutVerified = await isVerifiedPayout(db, req.user.id, payout);
 
     // Optional: save the requester's payout details for the settlement step
     if (typeof req.body.venmoHandle === "string" && req.body.venmoHandle.trim()) {
@@ -265,7 +308,8 @@ router.get("/my-payout-info", async (req, res) => {
   try {
     const db = await getDb();
     const u = await db.prepare("SELECT venmo_handle, zelle_contact, bank_contact FROM users WHERE id = ?").get(req.user.id);
-    res.json({ venmoHandle: u?.venmo_handle || "", zelleContact: u?.zelle_contact || "", bankContact: u?.bank_contact || "" });
+    const linkedBanks = await getLinkedBanks(db, req.user.id);
+    res.json({ venmoHandle: u?.venmo_handle || "", zelleContact: u?.zelle_contact || "", bankContact: u?.bank_contact || "", linkedBanks });
   } catch (err) {
     captureException(err, { where: "reimbursements: payout info" });
     res.status(500).json({ error: "Failed to load payout info" });
@@ -304,7 +348,7 @@ router.get("/team/:teamId", async (req, res) => {
       SELECT r.id, r.amount, r.description, r.category, r.expense_date, r.status,
              r.self_recorded, r.created_at, r.approved_at, r.declined_reason,
              r.paid_at, r.paid_method, r.paid_reference,
-             r.payout_method, r.payout_details, r.paid_from_label,
+             r.payout_method, r.payout_details, r.paid_from_label, r.payout_verified,
              r.requested_by, ru.first_name AS requester_first_name, ru.last_name AS requester_last_name,
              r.payee_user_id, pu.first_name AS payee_first_name, pu.last_name AS payee_last_name,
              pu.venmo_handle AS payee_venmo_handle, pu.zelle_contact AS payee_zelle_contact,
@@ -547,12 +591,13 @@ router.put("/:id", async (req, res) => {
 
     const core = validateCore(req.body);
     const payout = parsePayout(req.body);
+    const payoutVerified = await isVerifiedPayout(db, req.user.id, payout);
     await db.prepare(`
       UPDATE reimbursements SET amount = ?, description = ?, category = ?, expense_date = ?,
-        payout_method = ?, payout_details = ?, updated_at = NOW()
+        payout_method = ?, payout_details = ?, payout_verified = ?, updated_at = NOW()
       WHERE id = ? AND status = 'pending'
     `).run(core.amount, core.description, core.category, core.expenseDate,
-      payout.payoutMethod, payout.payoutDetails, req.params.id);
+      payout.payoutMethod, payout.payoutDetails, payoutVerified, req.params.id);
 
     // Remember payout details for next time (labels only, never account numbers)
     if (payout.payoutMethod === "venmo" && payout.payoutDetails) {
@@ -599,7 +644,9 @@ router.get("/accounts/:teamId", async (req, res) => {
     const accounts = await db.prepare(
       "SELECT id, label, type, is_default, created_at FROM team_funding_accounts WHERE care_team_id = ? ORDER BY is_default DESC, created_at ASC"
     ).all(req.params.teamId);
-    res.json({ accounts });
+    // v1.97.1 — banks the viewer already linked to InPlace, offered as one-tap adds
+    const linkedBanks = await getLinkedBanks(db, req.user.id);
+    res.json({ accounts, linkedBanks });
   } catch (err) {
     captureException(err, { where: "reimbursements: accounts list" });
     res.status(500).json({ error: "Failed to load funding accounts" });
