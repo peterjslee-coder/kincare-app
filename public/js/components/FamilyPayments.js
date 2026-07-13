@@ -12,6 +12,32 @@ const FamilyPayments = window.FamilyPayments = () => {
   const [sendPaymentState, setSendPaymentState] = useState({ caregiverId: '', amount: '', note: '' });
   const [sendPaymentLoading, setSendPaymentLoading] = useState(false);
   const [removingMethodId, setRemovingMethodId] = useState(null);
+  // v1.98.0 — "how you get paid back" (Stripe Connect payout account)
+  const [payoutStatus, setPayoutStatus] = useState(null);
+  const [payoutBusy, setPayoutBusy] = useState(false);
+  const { showToast: _payoutToast } = (typeof useToast === 'function' ? useToast() : { showToast: null });
+
+  useEffect(() => {
+    // Payout (receive-money) readiness + return-from-onboarding toast
+    apiFetch('/api/reimbursements/payout/status').then(async r => {
+      if (r?.ok) setPayoutStatus(await r.json());
+    }).catch(() => {});
+    try {
+      const q = new URLSearchParams(window.location.search);
+      if (q.get('payoutComplete') && _payoutToast) _payoutToast('Direct deposit setup saved — you can now be reimbursed straight to your bank.', 'success');
+    } catch {}
+  }, []);
+
+  const startPayoutOnboarding = async () => {
+    setPayoutBusy(true);
+    try {
+      const r = await apiFetch('/api/reimbursements/payout/onboard-link', { method: 'POST' });
+      if (r?.ok) { const d = await r.json(); if (d.url) { window.location.href = d.url; return; } }
+      const d = await r.json().catch(() => ({}));
+      if (_payoutToast) _payoutToast(d.error || 'Could not start setup', 'error');
+    } catch { if (_payoutToast) _payoutToast('Could not start setup', 'error'); }
+    setPayoutBusy(false);
+  };
 
   useEffect(() => {
     // Check if payments are enabled
@@ -284,6 +310,35 @@ const FamilyPayments = window.FamilyPayments = () => {
           </div>
         )}
       </div>
+
+      {/* v1.98.0 \u2014 Get Paid Back (payout / receive-money account) */}
+      {payoutStatus && payoutStatus.available !== false && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>Get Paid Back</span>
+            {payoutStatus.onboarded
+              ? <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-success)', background: 'var(--color-success-bg)', padding: '2px 10px', borderRadius: 12 }}>Direct deposit on</span>
+              : <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', background: 'var(--badge-muted-bg)', padding: '2px 10px', borderRadius: 12 }}>Not Set Up</span>}
+          </div>
+          {payoutStatus.onboarded ? (
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'var(--bg-primary)', borderRadius: 8, marginBottom: 10 }}>
+                <span style={{ fontSize: 22 }}>\uD83C\uDFE6</span>
+                <div style={{ fontSize: 14, fontWeight: 600 }}>{payoutStatus.bankLabel || 'Bank account connected'}</div>
+              </div>
+              <p style={{ margin: 0, fontSize: 13, color: 'var(--text-secondary)' }}>When someone reimburses you and chooses "Direct deposit through InPlace," the money lands here in ~1\u20133 business days \u2014 no Venmo or waiting.</p>
+            </div>
+          ) : (
+            <div>
+              <p style={{ margin: '0 0 10px', fontSize: 14, color: 'var(--text-secondary)' }}>Set up direct deposit so reimbursements can be sent straight to your bank. It's a one-time, secure Stripe step to verify you and your account. This is separate from your payment method above \u2014 that's how you <em>pay</em>; this is how you <em>get paid back</em>.</p>
+              <button onClick={startPayoutOnboarding} disabled={payoutBusy}
+                style={{ padding: '8px 16px', background: '#635bff', color: '#fff', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: payoutBusy ? 'wait' : 'pointer' }}>
+                {payoutBusy ? 'Opening\u2026' : (payoutStatus.started ? 'Finish direct-deposit setup' : 'Set up direct deposit')}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Send Payment Card */}
       {(

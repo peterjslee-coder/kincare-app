@@ -39,6 +39,10 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
   const [newAccountLabel, setNewAccountLabel] = useState('');
   const [approveError, setApproveError] = useState('');
   const [highlightId, setHighlightId] = useState(null); // deep-link focus flash
+  // v1.98.0 — in-app ACH: the current user's own "get paid back" readiness
+  const [payoutStatus, setPayoutStatus] = useState(null); // {onboarded, bankLabel, started, available}
+  const [payoutBusy, setPayoutBusy] = useState(false);
+  const [payAchId, setPayAchId] = useState(null); // reimbursement currently being sent
 
   const fetchList = async () => {
     try {
@@ -125,8 +129,25 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
     setPayoutDetails(method === 'venmo' ? (sv.venmo || '') : method === 'zelle' ? (sv.zelle || '') : method === 'ach' ? (sv.bank || '') : '');
   };
 
+  const fetchPayoutStatus = async () => {
+    try { const r = await apiFetch('/api/reimbursements/payout/status'); if (r?.ok) setPayoutStatus(await r.json()); } catch {}
+  };
+
+  // Kick off "get paid back through InPlace" onboarding (Stripe-hosted)
+  const startPayoutOnboarding = async () => {
+    setPayoutBusy(true);
+    try {
+      const r = await apiFetch('/api/reimbursements/payout/onboard-link', { method: 'POST' });
+      if (r?.ok) { const d = await r.json(); if (d.url) { window.location.href = d.url; return; } }
+      const d = await r.json().catch(() => ({}));
+      showToast(d.error || 'Could not start direct-deposit setup', 'error');
+    } catch { showToast('Could not start direct-deposit setup', 'error'); }
+    setPayoutBusy(false);
+  };
+
   const openRequestForm = async () => {
     setShowForm(true); setRecordMode(false); setRecurringMode(false); setEditingId(null);
+    fetchPayoutStatus();
     try {
       const r = await apiFetch('/api/reimbursements/my-payout-info');
       if (r?.ok) {
@@ -145,6 +166,7 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
   const openEditForm = async (it) => {
     setShowForm(true); setRecordMode(false); setRecurringMode(false);
     setEditingId(it.id);
+    fetchPayoutStatus();
     setAmount(String(it.amount)); setDescription(it.description); setCategory(it.category || 'other');
     setExpenseDate(it.expense_date || '');
     setPayoutMethod(it.payout_method || (it.payee_venmo_handle ? 'venmo' : it.payee_zelle_contact ? 'zelle' : 'venmo'));
@@ -181,6 +203,9 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
         // Keep legacy profile fields in sync so older views still show them
         if (payoutMethod === 'venmo' && payoutDetails.trim()) body.venmoHandle = payoutDetails.trim();
         if (payoutMethod === 'zelle' && payoutDetails.trim()) body.zelleContact = payoutDetails.trim();
+        if (payoutMethod === 'inplace' && !(payoutStatus && payoutStatus.onboarded)) {
+          if (!confirm('You haven\u2019t finished direct-deposit setup yet, so no one can send this through InPlace until you do. Submit the request anyway?')) { setBusy(false); return; }
+        }
         if (['venmo', 'zelle', 'ach'].includes(payoutMethod) && !payoutDetails.trim()) {
           if (!confirm('No payment details provided — the approver will have to coordinate with you on how to pay. Submit anyway?')) { setBusy(false); return; }
         }
@@ -239,6 +264,29 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
     setBusyId(null);
   };
 
+  // v1.98.0 — approver sends the money in-app via ACH
+  const payViaAch = async (it) => {
+    if (!confirm(`Send $${Number(it.amount).toFixed(2)} to ${it.payee_first_name} now via direct deposit? Your linked bank will be charged $${Number(it.amount).toFixed(2)} plus a small ACH fee, and it arrives in ~1\u20133 business days.`)) return;
+    setPayAchId(it.id); setBusyId(it.id);
+    try {
+      const res = await apiFetch(`/api/reimbursements/${it.id}/pay-ach`, { method: 'POST', body: JSON.stringify({}) });
+      const d = await res.json().catch(() => ({}));
+      if (res?.ok && d.ok) {
+        showToast(`Sent — $${Number(it.amount).toFixed(2)} is on its way to ${it.payee_first_name}`, 'success');
+        fetchList();
+      } else if (d.code === 'needs_payer_bank') {
+        showToast('Add a bank to pay from first — opening your Payments settings.', 'info');
+        window.__accountTab = 'payments';
+        if (window.__navigateTo) window.__navigateTo('account');
+      } else if (d.code === 'payee_not_ready') {
+        showToast(d.error || 'They haven\u2019t set up direct deposit yet', 'error');
+      } else {
+        showToast(d.error || 'Payment failed', 'error');
+      }
+    } catch { showToast('Payment failed — check your connection and try again', 'error'); }
+    setPayAchId(null); setBusyId(null);
+  };
+
   const act = async (id, path, body) => {
     setBusyId(id);
     try {
@@ -261,6 +309,7 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
   const payToLabel = (it) => {
     const d = it.payout_details;
     switch (it.payout_method) {
+      case 'inplace': return 'Direct deposit through InPlace';
       case 'venmo': return `Venmo @${(d || it.payee_venmo_handle || '?').replace(/^@/, '')}`;
       case 'zelle': return `Zelle ${d || it.payee_zelle_contact || '?'}`;
       case 'ach': return `Bank transfer (ACH)${d ? ` — ${d}` : ''}`;
@@ -278,11 +327,15 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
   };
 
   const statusChip = (it) => {
-    const paidLabel = it.paid_method === 'bank' ? 'bank transfer (ACH)' : it.paid_method;
+    const paidLabel = it.paid_method === 'bank' ? 'bank transfer (ACH)' : it.paid_method === 'ach_inplace' ? 'InPlace direct deposit' : it.paid_method;
+    // v1.98.0 — in-app ACH is async: "sent, depositing" until it settles
+    if (it.status === 'paid' && it.paid_method === 'ach_inplace' && it.payout_status === 'processing') {
+      return <span style={{ fontSize: 12, fontWeight: 600, color: '#1565c0', background: '#e3f2fd', padding: '3px 10px', borderRadius: 12 }}>Sent — depositing (1–3 business days)</span>;
+    }
     const map = {
       pending:   { label: 'Pending approval', bg: '#fff3e0', fg: '#e65100' },
       approved:  { label: `Approved — awaiting payment${it.paid_from_label ? ` from ${it.paid_from_label}` : ''}`, bg: '#e3f2fd', fg: '#1565c0' },
-      paid:      { label: it.paid_method ? `Paid via ${paidLabel}${it.paid_from_label ? ` from ${it.paid_from_label}` : ''}` : 'Paid', bg: '#e8f5e9', fg: '#2e7d32' },
+      paid:      { label: it.paid_method ? `Paid via ${paidLabel}${it.paid_method !== 'ach_inplace' && it.paid_from_label ? ` from ${it.paid_from_label}` : ''}` : 'Paid', bg: '#e8f5e9', fg: '#2e7d32' },
       declined:  { label: it.declined_reason ? `Declined — ${it.declined_reason}` : 'Declined', bg: '#ffebee', fg: '#c62828' },
       cancelled: { label: 'Cancelled', bg: 'var(--bg-primary)', fg: 'var(--text-muted)' },
     };
@@ -366,6 +419,7 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
                   Pay me back via
                 </label>
                 <select value={payoutMethod} onChange={(e) => { setPayoutMethod(e.target.value); applySavedPayout(e.target.value); }} style={{ ...inputStyle, width: '100%' }}>
+                  <option value="inplace">Direct deposit through InPlace</option>
                   <option value="venmo">Venmo</option>
                   <option value="zelle">Zelle</option>
                   <option value="ach">Bank transfer (ACH)</option>
@@ -373,6 +427,29 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
                   <option value="cash">Cash</option>
                   <option value="other">Other</option>
                 </select>
+              </div>
+            )}
+            {!recordMode && !recurringMode && payoutMethod === 'inplace' && (
+              <div style={{ flex: '1 1 100%', marginTop: 2 }}>
+                {payoutStatus && payoutStatus.onboarded ? (
+                  <div style={{ fontSize: 12, color: '#2e7d32', background: '#e8f5e9', borderRadius: 8, padding: '8px 12px' }}>
+                    ✓ You're set up for direct deposit{payoutStatus.bankLabel ? ` to ${payoutStatus.bankLabel}` : ''}. Once approved, the money is sent straight to your bank through InPlace — arrives in ~1–3 business days.
+                  </div>
+                ) : payoutStatus && !payoutStatus.available ? (
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', background: 'var(--bg-primary)', borderRadius: 8, padding: '8px 12px' }}>
+                    Direct deposit isn't available on this environment. Pick another way to be paid back.
+                  </div>
+                ) : (
+                  <div style={{ background: 'var(--bg-primary)', borderRadius: 8, padding: '10px 12px' }}>
+                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>
+                      Get reimbursed straight to your bank — no Venmo, no waiting on someone to send it. You set up direct deposit once (a quick, secure Stripe step to verify you and your bank), then approved reimbursements land automatically.
+                    </div>
+                    <button type="button" onClick={startPayoutOnboarding} disabled={payoutBusy}
+                      style={{ padding: '8px 16px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: payoutBusy ? 'wait' : 'pointer' }}>
+                      {payoutBusy ? 'Opening…' : (payoutStatus && payoutStatus.started ? 'Finish direct-deposit setup' : 'Set up direct deposit')}
+                    </button>
+                  </div>
+                )}
               </div>
             )}
             {!recordMode && !recurringMode && ['venmo', 'zelle', 'ach', 'check', 'other'].includes(payoutMethod) && (
@@ -571,18 +648,34 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
             {/* Approver actions */}
             {meta.isApprover && it.status === 'pending' && (
               <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+                {/* v1.98.0 — one-tap approve+pay when the payee can receive in-app */}
+                {it.payee_payout_ready ? (
+                  <button disabled={busyId === it.id} onClick={() => payViaAch(it)}
+                    style={{ padding: '6px 14px', background: '#2e7d32', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: busyId === it.id ? 'wait' : 'pointer' }}>
+                    {payAchId === it.id ? 'Sending…' : `💸 Pay $${Number(it.amount).toFixed(2)} via InPlace`}
+                  </button>
+                ) : null}
                 <button disabled={busyId === it.id} onClick={() => openApprove(it)}
-                  style={{ padding: '6px 14px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-                  Approve…
+                  style={{ padding: '6px 14px', background: it.payee_payout_ready ? 'none' : 'var(--role-color)', color: it.payee_payout_ready ? 'var(--role-color)' : 'var(--text-on-primary)', border: it.payee_payout_ready ? '1px solid var(--role-color)' : 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                  {it.payee_payout_ready ? 'Approve only' : 'Approve…'}
                 </button>
                 <button disabled={busyId === it.id} onClick={() => { const reason = prompt('Reason (optional):') || ''; act(it.id, 'decline', { reason }); }}
                   style={{ padding: '6px 14px', background: 'none', border: '1px solid #c62828', color: '#c62828', borderRadius: 8, fontSize: 13, cursor: 'pointer' }}>
                   Decline
                 </button>
+                {it.payout_method === 'inplace' && !it.payee_payout_ready && (
+                  <span style={{ fontSize: 12, color: '#e65100', alignSelf: 'center' }}>Waiting on {it.payee_first_name} to finish direct-deposit setup</span>
+                )}
               </div>
             )}
             {meta.isApprover && it.status === 'approved' && (
               <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                {it.payee_payout_ready && it.payout_status !== 'processing' && it.payout_status !== 'succeeded' && (
+                  <button disabled={busyId === it.id} onClick={() => payViaAch(it)}
+                    style={{ padding: '6px 14px', background: '#2e7d32', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: busyId === it.id ? 'wait' : 'pointer' }}>
+                    {payAchId === it.id ? 'Sending…' : `💸 Pay $${Number(it.amount).toFixed(2)} via InPlace`}
+                  </button>
+                )}
                 {venmoLink(it) && (
                   <a href={venmoLink(it)} target="_blank" rel="noopener"
                     style={{ padding: '6px 14px', background: '#008CFF', color: '#fff', borderRadius: 8, fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>

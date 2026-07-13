@@ -273,6 +273,18 @@ router.post("/webhook", express.raw({ type: "application/json" }), async (req, r
         break;
       }
 
+      case "payment_intent.processing": {
+        // v1.98.0 — ACH reimbursement submitted; funds in flight (~1-4 biz days)
+        const intent = event.data.object;
+        if (intent.metadata?.inplace_reimbursement_id) {
+          await db.prepare(
+            "UPDATE reimbursements SET payout_status = 'processing', updated_at = NOW() WHERE id = ? AND stripe_payment_intent = ?"
+          ).run(intent.metadata.inplace_reimbursement_id, intent.id);
+          console.log(`⏳ Reimbursement ACH processing: ${intent.metadata.inplace_reimbursement_id}`);
+        }
+        break;
+      }
+
       case "payment_intent.payment_failed": {
         const intent = event.data.object;
         await db.prepare(
@@ -284,12 +296,57 @@ router.post("/webhook", express.raw({ type: "application/json" }), async (req, r
           "UPDATE background_check_payments SET status = 'failed' WHERE stripe_payment_intent = ?"
         ).run(intent.id);
 
+        // v1.98.0 — ACH reimbursement returned/failed (can happen days later):
+        // roll the request back to 'approved' so the approver can retry, and
+        // notify both sides.
+        if (intent.metadata?.inplace_reimbursement_id) {
+          const rid = intent.metadata.inplace_reimbursement_id;
+          const row = await db.prepare("SELECT * FROM reimbursements WHERE id = ? AND stripe_payment_intent = ?").get(rid, intent.id);
+          if (row) {
+            await db.prepare(
+              "UPDATE reimbursements SET status = 'approved', payout_status = 'failed', paid_at = NULL, paid_method = NULL, paid_reference = NULL, updated_at = NOW() WHERE id = ?"
+            ).run(rid);
+            try {
+              const { sendPushToUser } = require("./push");
+              const reason = intent.last_payment_error?.message || "the bank transfer was returned";
+              for (const uid of [row.payee_user_id, row.paid_by].filter(Boolean)) {
+                sendPushToUser(uid, {
+                  title: "Reimbursement payment failed",
+                  body: `The $${Number(row.amount).toFixed(2)} direct deposit didn't go through (${reason}). You can try again.`,
+                  data: { type: "reimbursement_payment_failed", reimbursementId: rid, careTeamId: row.care_team_id, page: "care-team", focus: `reimbursement:${rid}` },
+                }, "reimbursement_payment_failed").catch(() => {});
+              }
+            } catch {}
+          }
+          console.log(`❌ Reimbursement ACH failed: ${rid} — ${intent.last_payment_error?.message || 'returned'}`);
+        }
+
         console.log(`❌ Payment failed: ${intent.id} — ${intent.last_payment_error?.message || 'unknown error'}`);
         break;
       }
 
       case "payment_intent.succeeded": {
         const intent = event.data.object;
+
+        // v1.98.0 — ACH reimbursement settled successfully
+        if (intent.metadata?.inplace_reimbursement_id) {
+          const rid = intent.metadata.inplace_reimbursement_id;
+          const row = await db.prepare("SELECT * FROM reimbursements WHERE id = ? AND stripe_payment_intent = ?").get(rid, intent.id);
+          if (row) {
+            await db.prepare(
+              "UPDATE reimbursements SET payout_status = 'succeeded', status = 'paid', updated_at = NOW() WHERE id = ?"
+            ).run(rid);
+            try {
+              const { sendPushToUser } = require("./push");
+              sendPushToUser(row.payee_user_id, {
+                title: "Reimbursement deposited",
+                body: `$${Number(row.amount).toFixed(2)} for "${row.description}" just landed in your bank.`,
+                data: { type: "reimbursement_paid", reimbursementId: rid, careTeamId: row.care_team_id, page: "care-team", focus: `reimbursement:${rid}` },
+              }, "reimbursement_paid").catch(() => {});
+            } catch {}
+            console.log(`✅ Reimbursement ACH settled: ${rid}`);
+          }
+        }
 
         // Handle background check payments
         if (intent.metadata?.type === "background_check") {
@@ -312,6 +369,10 @@ router.post("/webhook", express.raw({ type: "application/json" }), async (req, r
         if (isComplete) {
           await db.prepare(
             "UPDATE caregiver_profiles SET stripe_onboard_complete = 1, updated_at = NOW() WHERE stripe_account_id = ?"
+          ).run(account.id);
+          // v1.98.0 — family/payee reimbursement payout accounts live on users
+          await db.prepare(
+            "UPDATE users SET stripe_onboard_complete = 1, updated_at = NOW() WHERE stripe_account_id = ?"
           ).run(account.id);
           console.log(`✅ Stripe Connect onboarding complete for account ${account.id}`);
         }

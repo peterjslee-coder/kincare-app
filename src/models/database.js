@@ -1528,6 +1528,20 @@ async function initializeDatabase() {
       ],
     },
     {
+      // v1.98.0 — in-app ACH reimbursements (Pete accepted the Phase-2 risk to
+      // test person-to-person). Any user can become a PAYOUT recipient with
+      // their own Stripe Connect account (separate from the pay-IN customer +
+      // payment methods). payout_status tracks the async ACH lifecycle
+      // (processing → succeeded/failed over ~1-4 business days).
+      id: "006_inapp_ach_reimbursements",
+      statements: [
+        `ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_account_id TEXT`,
+        `ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_onboard_complete INTEGER DEFAULT 0`,
+        `ALTER TABLE reimbursements ADD COLUMN IF NOT EXISTS payout_status TEXT`,
+        `ALTER TABLE reimbursements ADD COLUMN IF NOT EXISTS stripe_payment_intent TEXT`,
+      ],
+    },
+    {
       // v1.97.1 — payout destination verification: when the requester picks a
       // bank that is ACTUALLY linked to their InPlace/Stripe profile (vs. a
       // typed description), the server marks it verified so the approver can

@@ -2,7 +2,7 @@
 // guard that keeps full account numbers out of the database.
 process.env.JWT_SECRET = process.env.JWT_SECRET || "test-secret-for-jest";
 const { _test } = require("../src/routes/reimbursements");
-const { parsePayout, assertLabelOnly, payoutLabel } = _test;
+const { parsePayout, assertLabelOnly, payoutLabel, achFeeCents } = _test;
 
 describe("parsePayout", () => {
   test("accepts a valid venmo payout", () => {
@@ -50,5 +50,29 @@ describe("payoutLabel", () => {
   test("ach includes the label", () => {
     expect(payoutLabel({ payout_method: "ach", payout_details: "Truist ****4321" }))
       .toBe("bank transfer (ACH) — Truist ****4321");
+  });
+});
+
+
+describe("achFeeCents (v1.98.0 — fee rides on top of payer's charge)", () => {
+  test("$81.46 → 66 cents (0.8%, rounded up)", () => {
+    expect(achFeeCents(8146)).toBe(66);
+  });
+  test("caps at $5 for large amounts", () => {
+    expect(achFeeCents(100000)).toBe(500); // $1000 * 0.8% = $8 → capped
+  });
+  test("never zero", () => {
+    expect(achFeeCents(50)).toBe(1);
+  });
+  test("payee receives exactly the base (fee is the application fee)", () => {
+    const base = 8146, fee = achFeeCents(base), total = base + fee;
+    expect(total - fee).toBe(base); // destination gets base
+  });
+  test("inplace payout stores no free-text details", () => {
+    expect(parsePayout({ payoutMethod: "inplace", payoutDetails: "whatever" }))
+      .toEqual({ payoutMethod: "inplace", payoutDetails: null });
+  });
+  test("inplace label", () => {
+    expect(payoutLabel({ payout_method: "inplace" })).toBe("Direct deposit through InPlace (ACH)");
   });
 });

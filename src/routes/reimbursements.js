@@ -25,7 +25,14 @@ const PAID_METHODS = ["venmo", "zelle", "check", "cash", "bank", "other"];
 // v1.97.0 — how the requester wants to be paid back (the "to" address).
 // "ach" = bank transfer the family runs from their own banking app; the app
 // stores a LABEL only (bank nickname + last 4), never account/routing numbers.
-const PAYOUT_METHODS = ["venmo", "zelle", "ach", "check", "cash", "other"];
+const PAYOUT_METHODS = ["inplace", "venmo", "zelle", "ach", "check", "cash", "other"];
+// v1.98.0 — Stripe's ACH fee (~0.8%, capped $5). Per Pete's call, this rides
+// ON TOP of what the payer is charged, so the payee receives the exact amount.
+const ACH_FEE_BPS = 8;        // 0.8%
+const ACH_FEE_CAP_CENTS = 500; // $5
+function achFeeCents(baseCents) {
+  return Math.min(ACH_FEE_CAP_CENTS, Math.max(1, Math.ceil(baseCents * ACH_FEE_BPS / 1000)));
+}
 
 // Reject anything that looks like a full account/routing number in bank labels.
 // (Zelle details legitimately contain 10-digit phone numbers, so this guard
@@ -41,8 +48,12 @@ function parsePayout(body) {
   let payoutMethod = null, payoutDetails = null;
   if (body.payoutMethod && PAYOUT_METHODS.includes(body.payoutMethod)) {
     payoutMethod = body.payoutMethod;
-    payoutDetails = (typeof body.payoutDetails === "string" ? body.payoutDetails.trim() : "").slice(0, 120) || null;
-    if (payoutMethod === "ach") assertLabelOnly(payoutDetails, "Bank details");
+    // "inplace" = the in-app Stripe ACH rail; destination is the payee's linked
+    // Connect payout bank, so there's no free-text detail to store.
+    if (payoutMethod !== "inplace") {
+      payoutDetails = (typeof body.payoutDetails === "string" ? body.payoutDetails.trim() : "").slice(0, 120) || null;
+      if (payoutMethod === "ach") assertLabelOnly(payoutDetails, "Bank details");
+    }
   }
   return { payoutMethod, payoutDetails };
 }
@@ -348,11 +359,11 @@ router.get("/team/:teamId", async (req, res) => {
       SELECT r.id, r.amount, r.description, r.category, r.expense_date, r.status,
              r.self_recorded, r.created_at, r.approved_at, r.declined_reason,
              r.paid_at, r.paid_method, r.paid_reference,
-             r.payout_method, r.payout_details, r.paid_from_label, r.payout_verified,
+             r.payout_method, r.payout_details, r.paid_from_label, r.payout_verified, r.payout_status,
              r.requested_by, ru.first_name AS requester_first_name, ru.last_name AS requester_last_name,
              r.payee_user_id, pu.first_name AS payee_first_name, pu.last_name AS payee_last_name,
              pu.venmo_handle AS payee_venmo_handle, pu.zelle_contact AS payee_zelle_contact,
-             pu.bank_contact AS payee_bank_contact,
+             pu.bank_contact AS payee_bank_contact, pu.stripe_onboard_complete AS payee_payout_ready,
              r.approved_by, au.first_name AS approver_first_name, au.last_name AS approver_last_name
       FROM reimbursements r
       JOIN users ru ON r.requested_by = ru.id
@@ -426,6 +437,7 @@ async function loadForApprover(db, req, res) {
 function payoutLabel(row) {
   const d = row.payout_details;
   switch (row.payout_method) {
+    case "inplace": return "Direct deposit through InPlace (ACH)";
     case "venmo": return d ? `Venmo @${d.replace(/^@/, "")}` : "Venmo";
     case "zelle": return d ? `Zelle ${d}` : "Zelle";
     case "ach": return d ? `bank transfer (ACH) — ${d}` : "bank transfer (ACH)";
@@ -693,6 +705,195 @@ router.delete("/accounts/:accountId", async (req, res) => {
   } catch (err) {
     captureException(err, { where: "reimbursements: accounts delete" });
     res.status(500).json({ error: "Failed to remove funding account" });
+  }
+});
+
+
+// ═══ In-app ACH payouts (v1.98.0) ═══
+// Just-in-time "get paid back through InPlace" onboarding + the actual money
+// movement. Paying and receiving are SEPARATE Stripe objects:
+//   • pay-IN  = a Stripe Customer + saved payment method (handled by
+//               /api/payments/family/setup — that's the "how you pay" link)
+//   • pay-OUT = a Stripe Connect account + payout bank (this section)
+// A user must complete payout onboarding once before anyone can send them an
+// in-app ACH reimbursement. Reuses the exact Connect pattern from caregivers.
+
+// GET /api/reimbursements/payout/status — is the CURRENT user set up to receive?
+router.get("/payout/status", async (req, res) => {
+  try {
+    const db = await getDb();
+    let stripe;
+    try { stripe = require("./payments").getStripe(); }
+    catch { return res.json({ onboarded: false, available: false, reason: "not_configured" }); }
+
+    const u = await db.prepare("SELECT stripe_account_id, stripe_onboard_complete FROM users WHERE id = ?").get(req.user.id);
+    if (!u?.stripe_account_id) return res.json({ onboarded: false, available: true, started: false });
+
+    // Trust the cached flag but refresh from Stripe so a just-finished
+    // onboarding reflects immediately (webhook may lag a few seconds).
+    let chargesEnabled = false, payoutsEnabled = false, bankLabel = null;
+    try {
+      const acct = await stripe.accounts.retrieve(u.stripe_account_id);
+      chargesEnabled = !!acct.charges_enabled;
+      payoutsEnabled = !!acct.payouts_enabled;
+      const ext = (acct.external_accounts?.data || []).find((e) => e.object === "bank_account");
+      if (ext) bankLabel = `${ext.bank_name || "Bank account"} ****${ext.last4}`;
+      const complete = chargesEnabled && payoutsEnabled;
+      if (complete && !u.stripe_onboard_complete) {
+        await db.prepare("UPDATE users SET stripe_onboard_complete = 1, updated_at = NOW() WHERE id = ?").run(req.user.id);
+      }
+    } catch { /* fall back to cached flag */ chargesEnabled = payoutsEnabled = !!u.stripe_onboard_complete; }
+
+    res.json({
+      onboarded: chargesEnabled && payoutsEnabled,
+      available: true, started: true,
+      chargesEnabled, payoutsEnabled, bankLabel,
+    });
+  } catch (err) {
+    captureException(err, { where: "reimbursements: payout status" });
+    res.status(500).json({ error: "Failed to load payout status" });
+  }
+});
+
+// POST /api/reimbursements/payout/onboard-link — create/continue Connect onboarding
+// Returns a Stripe-hosted onboarding URL (identity + payout bank + ToS).
+router.post("/payout/onboard-link", async (req, res) => {
+  try {
+    const db = await getDb();
+    let stripe;
+    try { stripe = require("./payments").getStripe(); }
+    catch { return res.status(503).json({ error: "Payments aren't set up on this environment yet.", notConfigured: true }); }
+
+    const user = await db.prepare("SELECT id, email, first_name, last_name, stripe_account_id FROM users WHERE id = ?").get(req.user.id);
+    let accountId = user.stripe_account_id;
+    if (!accountId) {
+      const account = await stripe.accounts.create({
+        type: "express",
+        country: "US",
+        email: user.email,
+        capabilities: { transfers: { requested: true } },
+        business_type: "individual",
+        individual: { first_name: user.first_name, last_name: user.last_name, email: user.email },
+        business_profile: { mcc: "8099", url: "https://inplace.care", product_description: "Family care-expense reimbursements" },
+        metadata: { inplace_user_id: req.user.id, inplace_purpose: "reimbursement_payout" },
+      });
+      accountId = account.id;
+      await db.prepare("UPDATE users SET stripe_account_id = ?, stripe_onboard_complete = 0, updated_at = NOW() WHERE id = ?").run(accountId, req.user.id);
+      audit(req, "payout_account_created", { accountId });
+    }
+
+    const origin = `${req.protocol}://${req.get("host")}`;
+    const link = await stripe.accountLinks.create({
+      account: accountId,
+      refresh_url: `${origin}/?page=account&payoutRefresh=1`,
+      return_url: `${origin}/?page=account&payoutComplete=1`,
+      type: "account_onboarding",
+    });
+    res.json({ url: link.url });
+  } catch (err) {
+    console.error("Payout onboard-link error:", err.message);
+    captureException(err, { where: "reimbursements: payout onboard" });
+    res.status(500).json({ error: "Couldn't start direct-deposit setup. Please try again." });
+  }
+});
+
+// POST /api/reimbursements/:id/pay-ach — approver sends the money in-app
+// Charges the approver's saved bank (ACH debit) → destination charge to the
+// payee's Connect account → Stripe pays out to the payee's bank. Fee-on-top:
+// the payer is charged amount + Stripe's ACH fee; the payee receives the exact
+// requested amount. ACH settles asynchronously (webhook flips to paid/failed).
+router.post("/:id/pay-ach", async (req, res) => {
+  try {
+    const db = await getDb();
+    let stripe;
+    try { stripe = require("./payments").getStripe(); }
+    catch { return res.status(503).json({ error: "Payments aren't configured.", notConfigured: true }); }
+
+    const ctx = await loadForApprover(db, req, res);
+    if (!ctx) return;
+    if (!["pending", "approved"].includes(ctx.row.status)) {
+      return res.status(400).json({ error: `Can't pay a ${ctx.row.status} request` });
+    }
+    if (ctx.row.payout_status === "processing" || ctx.row.payout_status === "succeeded") {
+      return res.status(400).json({ error: "This reimbursement is already being paid through InPlace." });
+    }
+
+    // Payee must be set up to RECEIVE
+    const payee = await db.prepare("SELECT id, first_name, stripe_account_id, stripe_onboard_complete FROM users WHERE id = ?").get(ctx.row.payee_user_id);
+    if (!payee?.stripe_account_id || !payee.stripe_onboard_complete) {
+      return res.status(400).json({ error: `${payee?.first_name || "The payee"} hasn't set up direct deposit yet — they'll get a nudge to finish it.`, code: "payee_not_ready" });
+    }
+
+    // Payer (the approver) must have a saved bank to charge
+    const payer = await db.prepare("SELECT stripe_customer_id FROM users WHERE id = ?").get(req.user.id);
+    if (!payer?.stripe_customer_id) {
+      return res.status(400).json({ error: "Add a bank account to pay from first.", code: "needs_payer_bank" });
+    }
+    const banks = await stripe.paymentMethods.list({ customer: payer.stripe_customer_id, type: "us_bank_account", limit: 1 });
+    if (!banks.data.length) {
+      return res.status(400).json({ error: "Add a bank account to pay from first.", code: "needs_payer_bank" });
+    }
+    const pm = banks.data[0];
+
+    const baseCents = Math.round(Number(ctx.row.amount) * 100);
+    const feeCents = achFeeCents(baseCents);
+    const totalCents = baseCents + feeCents;
+    if (totalCents < 50) return res.status(400).json({ error: "Amount too small to send via ACH (Stripe minimum is $0.50)." });
+
+    let intent;
+    try {
+      intent = await stripe.paymentIntents.create({
+        amount: totalCents,
+        currency: "usd",
+        customer: payer.stripe_customer_id,
+        payment_method: pm.id,
+        payment_method_types: ["us_bank_account"],
+        confirm: true,
+        off_session: false,
+        application_fee_amount: feeCents, // platform keeps the fee portion; Stripe's cut comes out of it → payee nets exactly baseCents
+        transfer_data: { destination: payee.stripe_account_id },
+        metadata: {
+          inplace_reimbursement_id: ctx.row.id,
+          inplace_team_id: ctx.row.care_team_id,
+          inplace_payer_user_id: req.user.id,
+          inplace_payee_user_id: payee.id,
+        },
+        description: `InPlace reimbursement: $${(baseCents / 100).toFixed(2)} — ${ctx.row.description}`.slice(0, 200),
+      });
+    } catch (stripeErr) {
+      console.error("pay-ach PaymentIntent error:", stripeErr.message, stripeErr.code);
+      return res.status(400).json({ error: stripeErr.message || "The bank charge was declined. Please try another method." });
+    }
+
+    // 'processing' is the normal ACH state; 'succeeded' only on instant rails
+    if (["processing", "succeeded", "requires_capture"].includes(intent.status)) {
+      const bankLabel = `${pm.us_bank_account.bank_name || "Bank"} ****${pm.us_bank_account.last4}`;
+      await db.prepare(`
+        UPDATE reimbursements SET status = 'paid', paid_method = 'ach_inplace', paid_reference = ?,
+          stripe_payment_intent = ?, payout_status = ?, paid_by = ?, paid_at = NOW(),
+          paid_from_label = COALESCE(paid_from_label, ?),
+          approved_by = COALESCE(approved_by, ?), approved_at = COALESCE(approved_at, NOW()), updated_at = NOW()
+        WHERE id = ? AND status IN ('pending', 'approved')
+      `).run(intent.id, intent.id, intent.status === "succeeded" ? "succeeded" : "processing", req.user.id, bankLabel, req.user.id, ctx.row.id);
+
+      audit(req, "reimbursement_paid_ach", { id: ctx.row.id, amount: ctx.row.amount, feeCents, paymentIntent: intent.id });
+      await feedEntry(db, ctx.access.team, "Reimbursement paid",
+        `$${(baseCents / 100).toFixed(2)} — ${ctx.row.description} (direct deposit via InPlace)`);
+      await notifyParties(db, req, ctx, "Reimbursement sent",
+        `$${(baseCents / 100).toFixed(2)} is on its way to ${payee.first_name} via direct deposit — arrives in ~1–3 business days.`,
+        "reimbursement_paid");
+      return res.json({ ok: true, status: intent.status, feeCents, totalCents });
+    }
+
+    if (intent.status === "requires_action") {
+      // Rare for ACH; hand back to the client to complete
+      return res.json({ requiresAction: true, clientSecret: intent.client_secret });
+    }
+    return res.status(400).json({ error: `Payment is in an unexpected state (${intent.status}). Nothing was charged twice — please check the Payments tab.` });
+  } catch (err) {
+    console.error("pay-ach error:", err);
+    captureException(err, { where: "reimbursements: pay-ach" });
+    res.status(500).json({ error: "Failed to send payment" });
   }
 });
 
@@ -1026,4 +1227,4 @@ router.get("/money/:teamId", async (req, res) => {
 module.exports = router;
 module.exports.generateRecurringReimbursements = generateRecurringReimbursements;
 // v1.97.0 — exported for unit tests only
-module.exports._test = { parsePayout, assertLabelOnly, payoutLabel };
+module.exports._test = { parsePayout, assertLabelOnly, payoutLabel, achFeeCents };
