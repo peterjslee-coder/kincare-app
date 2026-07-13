@@ -266,7 +266,7 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
 
   // v1.98.0 — approver sends the money in-app via ACH
   const payViaAch = async (it) => {
-    if (!confirm(`Send $${Number(it.amount).toFixed(2)} to ${it.payee_first_name} now via direct deposit? Your linked bank will be charged $${Number(it.amount).toFixed(2)} plus a small ACH fee, and it arrives in ~1\u20133 business days.`)) return;
+    if (!confirm(`Send $${Number(it.amount).toFixed(2)} to ${it.payee_first_name} now through InPlace? Your saved payment method (bank or card) will be charged $${Number(it.amount).toFixed(2)} plus the processing fee. Bank transfers land in ~1\u20133 business days.`)) return;
     setPayAchId(it.id); setBusyId(it.id);
     try {
       const res = await apiFetch(`/api/reimbursements/${it.id}/pay-ach`, { method: 'POST', body: JSON.stringify({}) });
@@ -274,8 +274,8 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
       if (res?.ok && d.ok) {
         showToast(`Sent — $${Number(it.amount).toFixed(2)} is on its way to ${it.payee_first_name}`, 'success');
         fetchList();
-      } else if (d.code === 'needs_payer_bank') {
-        showToast('Add a bank to pay from first — opening your Payments settings.', 'info');
+      } else if (d.code === 'needs_payer_method' || d.code === 'needs_payer_bank') {
+        showToast('Add a payment method to pay from first — opening your Payments settings.', 'info');
         window.__accountTab = 'payments';
         if (window.__navigateTo) window.__navigateTo('account');
       } else if (d.code === 'payee_not_ready') {

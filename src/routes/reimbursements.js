@@ -826,21 +826,30 @@ router.post("/:id/pay-ach", async (req, res) => {
       return res.status(400).json({ error: `${payee?.first_name || "The payee"} hasn't set up direct deposit yet — they'll get a nudge to finish it.`, code: "payee_not_ready" });
     }
 
-    // Payer (the approver) must have a saved bank to charge
+    // Payer (the approver) pays from a saved method. Prefer a bank (cheap ACH,
+    // 0.8% capped $5); fall back to their saved card (2.9% + 30¢) — the billing
+    // contact often has a card on file rather than a bank. Fee rides on top
+    // either way, so the payee always nets the exact requested amount.
     const payer = await db.prepare("SELECT stripe_customer_id FROM users WHERE id = ?").get(req.user.id);
     if (!payer?.stripe_customer_id) {
-      return res.status(400).json({ error: "Add a bank account to pay from first.", code: "needs_payer_bank" });
+      return res.status(400).json({ error: "Add a payment method to pay from first.", code: "needs_payer_method" });
     }
+    let pm = null, method = null;
     const banks = await stripe.paymentMethods.list({ customer: payer.stripe_customer_id, type: "us_bank_account", limit: 1 });
-    if (!banks.data.length) {
-      return res.status(400).json({ error: "Add a bank account to pay from first.", code: "needs_payer_bank" });
+    if (banks.data.length) { pm = banks.data[0]; method = "us_bank_account"; }
+    else {
+      const cards = await stripe.paymentMethods.list({ customer: payer.stripe_customer_id, type: "card", limit: 1 });
+      if (cards.data.length) { pm = cards.data[0]; method = "card"; }
     }
-    const pm = banks.data[0];
+    if (!pm) {
+      return res.status(400).json({ error: "Add a payment method to pay from first.", code: "needs_payer_method" });
+    }
 
     const baseCents = Math.round(Number(ctx.row.amount) * 100);
-    const feeCents = achFeeCents(baseCents);
+    // Fee on top: bank = 0.8% capped $5; card = 2.9% + 30¢ (Stripe's card cost)
+    const feeCents = method === "card" ? (Math.round(baseCents * 0.029) + 30) : achFeeCents(baseCents);
     const totalCents = baseCents + feeCents;
-    if (totalCents < 50) return res.status(400).json({ error: "Amount too small to send via ACH (Stripe minimum is $0.50)." });
+    if (totalCents < 50) return res.status(400).json({ error: "Amount too small to send (Stripe minimum is $0.50)." });
 
     let intent;
     try {
@@ -849,9 +858,9 @@ router.post("/:id/pay-ach", async (req, res) => {
         currency: "usd",
         customer: payer.stripe_customer_id,
         payment_method: pm.id,
-        payment_method_types: ["us_bank_account"],
+        payment_method_types: [method],
         confirm: true,
-        off_session: false,
+        off_session: true, // approver already authorized by tapping Pay; mirrors auto-pay's proven saved-method charge
         application_fee_amount: feeCents, // platform keeps the fee portion; Stripe's cut comes out of it → payee nets exactly baseCents
         transfer_data: { destination: payee.stripe_account_id },
         metadata: {
@@ -864,27 +873,35 @@ router.post("/:id/pay-ach", async (req, res) => {
       });
     } catch (stripeErr) {
       console.error("pay-ach PaymentIntent error:", stripeErr.message, stripeErr.code);
-      return res.status(400).json({ error: stripeErr.message || "The bank charge was declined. Please try another method." });
+      // Off-session cards can require authentication — tell the payer plainly
+      if (stripeErr.code === "authentication_required") {
+        return res.status(400).json({ error: "Your card needs verification for this charge. Try a bank account, or use the card in the Payments tab first." });
+      }
+      return res.status(400).json({ error: stripeErr.message || "The charge was declined. Please try another payment method." });
     }
 
-    // 'processing' is the normal ACH state; 'succeeded' only on instant rails
+    // Card charges settle instantly ('succeeded'); ACH goes 'processing' for ~1-4 biz days
     if (["processing", "succeeded", "requires_capture"].includes(intent.status)) {
-      const bankLabel = `${pm.us_bank_account.bank_name || "Bank"} ****${pm.us_bank_account.last4}`;
+      const fromLabel = method === "card"
+        ? `${(pm.card.brand || "Card").charAt(0).toUpperCase() + (pm.card.brand || "card").slice(1)} ****${pm.card.last4}`
+        : `${pm.us_bank_account.bank_name || "Bank"} ****${pm.us_bank_account.last4}`;
+      const isInstant = intent.status === "succeeded";
       await db.prepare(`
         UPDATE reimbursements SET status = 'paid', paid_method = 'ach_inplace', paid_reference = ?,
           stripe_payment_intent = ?, payout_status = ?, paid_by = ?, paid_at = NOW(),
           paid_from_label = COALESCE(paid_from_label, ?),
           approved_by = COALESCE(approved_by, ?), approved_at = COALESCE(approved_at, NOW()), updated_at = NOW()
         WHERE id = ? AND status IN ('pending', 'approved')
-      `).run(intent.id, intent.id, intent.status === "succeeded" ? "succeeded" : "processing", req.user.id, bankLabel, req.user.id, ctx.row.id);
+      `).run(intent.id, intent.id, isInstant ? "succeeded" : "processing", req.user.id, fromLabel, req.user.id, ctx.row.id);
 
-      audit(req, "reimbursement_paid_ach", { id: ctx.row.id, amount: ctx.row.amount, feeCents, paymentIntent: intent.id });
+      audit(req, "reimbursement_paid_ach", { id: ctx.row.id, amount: ctx.row.amount, method, feeCents, paymentIntent: intent.id });
       await feedEntry(db, ctx.access.team, "Reimbursement paid",
-        `$${(baseCents / 100).toFixed(2)} — ${ctx.row.description} (direct deposit via InPlace)`);
+        `$${(baseCents / 100).toFixed(2)} — ${ctx.row.description} (paid via InPlace from ${fromLabel})`);
+      const arrival = isInstant ? "and should land shortly" : "— arrives in ~1–3 business days";
       await notifyParties(db, req, ctx, "Reimbursement sent",
-        `$${(baseCents / 100).toFixed(2)} is on its way to ${payee.first_name} via direct deposit — arrives in ~1–3 business days.`,
+        `$${(baseCents / 100).toFixed(2)} is on its way to ${payee.first_name} through InPlace ${arrival}.`,
         "reimbursement_paid");
-      return res.json({ ok: true, status: intent.status, feeCents, totalCents });
+      return res.json({ ok: true, status: intent.status, method, feeCents, totalCents });
     }
 
     if (intent.status === "requires_action") {
