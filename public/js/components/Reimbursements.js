@@ -142,7 +142,7 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
   };
 
   // v1.97.0 — edit a still-pending request in place (no more withdraw + resubmit)
-  const openEditForm = (it) => {
+  const openEditForm = async (it) => {
     setShowForm(true); setRecordMode(false); setRecurringMode(false);
     setEditingId(it.id);
     setAmount(String(it.amount)); setDescription(it.description); setCategory(it.category || 'other');
@@ -150,6 +150,16 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
     setPayoutMethod(it.payout_method || (it.payee_venmo_handle ? 'venmo' : it.payee_zelle_contact ? 'zelle' : 'venmo'));
     setPayoutDetails(it.payout_details || it.payee_venmo_handle || it.payee_zelle_contact || '');
     setTimeout(() => { try { document.querySelector('[data-reimb-form]')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch {} }, 100);
+    // v1.97.2 — load saved payout details + linked banks for the chips
+    // (previously only the new-request path fetched these, so Edit showed no chip)
+    try {
+      const r = await apiFetch('/api/reimbursements/my-payout-info');
+      if (r?.ok) {
+        const d = await r.json();
+        setSavedPayout({ venmo: d.venmoHandle || '', zelle: d.zelleContact || '', bank: d.bankContact || '' });
+        setLinkedBanks(d.linkedBanks || []);
+      }
+    } catch {}
   };
 
   const submit = async (e) => {
