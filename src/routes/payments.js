@@ -339,8 +339,8 @@ router.post("/webhook", express.raw({ type: "application/json" }), async (req, r
             try {
               const { sendPushToUser } = require("./push");
               sendPushToUser(row.payee_user_id, {
-                title: "Reimbursement deposited",
-                body: `$${Number(row.amount).toFixed(2)} for "${row.description}" just landed in your bank.`,
+                title: "Reimbursement confirmed",
+                body: `$${Number(row.amount).toFixed(2)} for "${row.description}" is confirmed and on its way to your bank — usually a couple business days (the first deposit can take a bit longer).`,
                 data: { type: "reimbursement_paid", reimbursementId: rid, careTeamId: row.care_team_id, page: "care-team", focus: `reimbursement:${rid}` },
               }, "reimbursement_paid").catch(() => {});
             } catch {}

@@ -897,7 +897,13 @@ router.post("/:id/pay-ach", async (req, res) => {
       audit(req, "reimbursement_paid_ach", { id: ctx.row.id, amount: ctx.row.amount, method, feeCents, paymentIntent: intent.id });
       await feedEntry(db, ctx.access.team, "Reimbursement paid",
         `$${(baseCents / 100).toFixed(2)} — ${ctx.row.description} (paid via InPlace from ${fromLabel})`);
-      const arrival = isInstant ? "and should land shortly" : "— arrives in ~1–3 business days";
+      // NOTE: for a card, Stripe confirms the charge instantly, but that's the
+      // charge clearing — NOT the payout landing in the payee's external bank
+      // (that follows Stripe's payout schedule, ~a couple business days). Copy
+      // says "confirmed / heading to the bank", never "landed".
+      const arrival = isInstant
+        ? "— it's confirmed and heading to their bank (usually a couple business days)"
+        : "— arrives in ~1–3 business days";
       await notifyParties(db, req, ctx, "Reimbursement sent",
         `$${(baseCents / 100).toFixed(2)} is on its way to ${payee.first_name} through InPlace ${arrival}.`,
         "reimbursement_paid");
