@@ -44,7 +44,7 @@ const Messages = window.Messages = () => {
   const [msgSwipeOffset, setMsgSwipeOffset] = useState(0);
   const { showToast } = useToast();
   const REACTION_EMOJIS = ['\u2764\uFE0F', '\uD83D\uDC4D', '\uD83D\uDC4E', '\uD83D\uDE02', '\uD83D\uDE2E', '\uD83D\uDE4F'];
-  const [currentUser, setCurrentUser] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null); const [ipaiRecipientName, setIpaiRecipientName] = useState(null); useEffect(() => { (async () => { try { const res = await apiFetch('/api/care-recipients'); if (res?.ok) { const data = await res.json(); const name = data.careRecipients?.[0]?.name; if (name) setIpaiRecipientName(String(name).trim().split(/\s+/)[0]); } } catch (e) {} })(); }, []); // v1.96.1: personalize iPAi chips (was hardcoded demo names)
 
   // ─── In-app call state (Twilio Video) ───
   const [callState, setCallState] = useState({ active: false, roomName: null, callType: null, remoteParticipantName: null, remoteParticipantPhoto: null, callDirection: null });
@@ -1765,7 +1765,7 @@ const Messages = window.Messages = () => {
                     Your care assistant. I know your loved ones, their caregivers, and their visit history. Ask me anything.
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    {['When is Cary available this week?', 'How is Betty doing?', 'Find someone for Thursday morning'].map(q => (
+                    {["Who's available this week?", ipaiRecipientName ? ('How is ' + ipaiRecipientName + ' doing?') : 'How is my loved one doing?', 'Find someone for Thursday morning'].map(q => (
                       <button key={q} onClick={() => { setInputText(q); }} style={{
                         padding: '8px 14px', background: 'var(--color-success-bg)', border: '1px solid #bbf7d0', borderRadius: 8,
                         fontSize: 13, color: 'var(--role-color)', cursor: 'pointer', textAlign: 'left',
