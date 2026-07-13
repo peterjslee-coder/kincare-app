@@ -538,6 +538,19 @@ const App = () => {
     };
   }, []);
 
+  // v1.98.5 — Apply a stashed cold-start deep link AFTER the app is ready.
+  // The async /auth/me restore lands the user on 'dashboard' by default, which
+  // otherwise clobbers a notification tap's target page ("top of the hero" bug).
+  // Re-applying here — after appState flips to 'app' — wins the race, and the
+  // target component's focus effect then consumes window.__pendingFocus to
+  // scroll to / open the exact item.
+  useEffect(() => {
+    if (appState !== 'app' || !window.__pendingPage) return;
+    if (window.__pendingTeam) { setSelectedCareTeamId(window.__pendingTeam); window.__pendingTeam = null; }
+    setCurrentPage(window.__pendingPage);
+    window.__pendingPage = null;
+  }, [appState, currentUser]);
+
   // Expose modal opener and navigation for child components
   useEffect(() => {
     window.__openRequestCareModal = (prefillDate, prefillCaregiver) => {
@@ -1049,17 +1062,22 @@ const App = () => {
     const convId = params.get('conversation');
     if (convId) {
       window.__pendingConversation = convId;
+      window.__pendingPage = 'messages'; // v1.98.5 — survive the async login-restore race (see below)
       setCurrentPage('messages');
       window.history.replaceState({}, '', window.location.pathname);
     }
     // v1.97.0 — cold-start deep link: the service worker opens
-    // /?page=...&careTeamId=...&focus=... when no app window exists yet
+    // /?page=...&careTeamId=...&focus=... when no app window exists yet.
+    // v1.98.5 — the async /auth/me restore below calls setCurrentPage('dashboard')
+    // AFTER this runs, clobbering the target back to Home ("top of the hero").
+    // Stash the intent in window vars so a post-ready effect can re-apply it.
     const deepFocus = params.get('focus');
     if (deepFocus) window.__pendingFocus = deepFocus;
     const deepTeam = params.get('careTeamId');
-    if (deepTeam) setSelectedCareTeamId(deepTeam);
+    if (deepTeam) { window.__pendingTeam = deepTeam; setSelectedCareTeamId(deepTeam); }
     const deepPage = params.get('page');
     if (deepPage) {
+      window.__pendingPage = deepPage;
       setCurrentPage(deepPage);
       window.history.replaceState({}, '', window.location.pathname);
     } else if (deepFocus || deepTeam) {
