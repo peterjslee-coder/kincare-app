@@ -646,7 +646,7 @@ async function caregiverDashboard(db, userId, res) {
 
   // Families this caregiver holds an active admin vouch for (v1.64.0)
   const vouchedFamilyIds = new Set(
-    (await db.prepare("SELECT family_user_id FROM bg_admin_vouches WHERE caregiver_user_id = ? AND revoked_at IS NULL").all(req.user.id))
+    (await db.prepare("SELECT family_user_id FROM bg_admin_vouches WHERE caregiver_user_id = ? AND revoked_at IS NULL").all(userId))
       .map((v) => v.family_user_id)
   );
 
@@ -678,7 +678,7 @@ async function caregiverDashboard(db, userId, res) {
       background_check_paid: !!profile.background_check_paid,
       isBackgroundChecked: !!profile.is_background_checked,
       checkrStatus: profile.is_background_checked ? 'clear' : (profile.checkr_status || 'pending'),
-      adminVouches: (await activeVouchesFor(db, req.user.id)).map((v) => ({ familyName: v.family_name })),
+      adminVouches: (await activeVouchesFor(db, userId)).map((v) => ({ familyName: v.family_name })),
       stripeConnected: !!profile.stripe_onboard_complete,
       stripeOnboardComplete: !!profile.stripe_onboard_complete,
       // Stripe not yet live — cleared if BG check passed OR admin set is_available override
