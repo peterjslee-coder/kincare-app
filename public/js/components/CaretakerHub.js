@@ -1603,12 +1603,9 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
             </div>
             {exclusiveOffers.map(job => {
               const sDate = (job.date || '').split('T')[0];
-              const dateParts = sDate ? sDate.split('-').map(Number) : [];
-              const dateObj = dateParts.length === 3 ? new Date(dateParts[0], dateParts[1] - 1, dateParts[2]) : null;
-              const now = new Date();
-              const todayLocal = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-              const dayDiff = dateObj ? Math.round((dateObj - todayLocal) / 86400000) : null;
-              const dayLabel = dayDiff === 0 ? 'Today' : dayDiff === 1 ? 'Tomorrow' : dateObj ? dateObj.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : '';
+              const jobTz = job.timezone || TimezoneHelper.DEFAULT_TZ;
+              const dayDiff = sDate ? TimezoneHelper.getDaysUntil(sDate, jobTz) : null;
+              const dayLabel = sDate ? TimezoneHelper.getDateLabel(sDate, jobTz) : '';
               const tParts = (job.time || '').split(':').map(Number);
               const timeLabel = tParts.length >= 2 ? `${tParts[0] > 12 ? tParts[0] - 12 : tParts[0] || 12}:${String(tParts[1]).padStart(2, '0')} ${tParts[0] >= 12 ? 'PM' : 'AM'}` : '';
 
@@ -2284,12 +2281,9 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               <div style={{ padding: '4px 0' }}>
                 {sortedJobs.map(job => {
                   const sDate = (job.date || '').split('T')[0];
-                  const dateParts = sDate ? sDate.split('-').map(Number) : [];
-                  const dateObj = dateParts.length === 3 ? new Date(dateParts[0], dateParts[1] - 1, dateParts[2]) : null;
-                  const now = new Date();
-                  const todayLocal = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-                  const dayDiff = dateObj ? Math.round((dateObj - todayLocal) / 86400000) : null;
-                  const dayLabel = dayDiff === 0 ? 'Today' : dayDiff === 1 ? 'Tomorrow' : dateObj ? dateObj.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : '';
+                  const jobTz = job.timezone || TimezoneHelper.DEFAULT_TZ;
+                  const dayDiff = sDate ? TimezoneHelper.getDaysUntil(sDate, jobTz) : null;
+                  const dayLabel = sDate ? TimezoneHelper.getDateLabel(sDate, jobTz) : '';
                   const tParts = (job.time || '').split(':').map(Number);
                   const timeLabel = tParts.length >= 2 ? `${tParts[0] > 12 ? tParts[0] - 12 : tParts[0] || 12}:${String(tParts[1]).padStart(2, '0')} ${tParts[0] >= 12 ? 'PM' : 'AM'}` : '';
 
@@ -3151,7 +3145,17 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                   bd?.recipientName || recipName
                 ),
                 React.createElement('p', { style: { fontSize: 13, color: 'var(--text-tertiary)', margin: '0 0 16px 0' } },
-                  (bd?.sessionServiceType || '') + ' · ' + (checkInSession.date || checkInSession.scheduled_date || '') + ' at ' + (checkInSession.time || checkInSession.scheduled_time || '')
+                  (() => {
+                    // scheduled_date/scheduled_time are naive care-location values — format
+                    // them directly ("Jul 12 at 9:59 PM"), never re-parse through device time.
+                    const rawD = ((checkInSession.date || checkInSession.scheduled_date || '') + '').split('T')[0];
+                    const rawT = (checkInSession.time || checkInSession.scheduled_time || '') + '';
+                    const dObj = rawD ? TimezoneHelper.parseDate(rawD) : null;
+                    const dLabel = dObj && !isNaN(dObj.getTime()) ? dObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : rawD;
+                    const tLabel = rawT ? (/[AaPp][Mm]/.test(rawT) ? rawT : TimezoneHelper.formatTime(rawT)) : '';
+                    const when = dLabel + (tLabel ? ' at ' + tLabel : '');
+                    return [bd?.sessionServiceType, when].filter(Boolean).join(' · ');
+                  })()
                 ),
 
                 briefingLoading
@@ -3237,7 +3241,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                                   padding: '8px 0', borderBottom: i < bd.recentNotes.length - 1 ? '1px solid #f0e8ff' : 'none',
                                 }},
                                   React.createElement('div', { style: { fontSize: 10, color: 'var(--text-muted)', marginBottom: 3, fontWeight: 600 } },
-                                    n.createdAt ? new Date(n.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''
+                                    n.createdAt ? TimezoneHelper.formatTimestamp(n.createdAt, checkInSession.timezone, { month: 'short', day: 'numeric' }) : ''
                                   ),
                                   n.content
                                 )

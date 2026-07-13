@@ -1005,6 +1005,7 @@ const Messages = window.Messages = () => {
     if (role === 'family') return 'Family';
     if (role === 'caregiver') return 'Caregiver';
     if (role === 'care_for') return 'Care Recipient';
+    if (role === 'system' || role === 'ipai') return 'AI Care Assistant'; // iPAi's internal role — never show the raw value
     return role || '';
   };
 

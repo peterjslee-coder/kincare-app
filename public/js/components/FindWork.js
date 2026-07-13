@@ -214,11 +214,13 @@ const FindWork = window.FindWork = () => {
         setAccountPaused(!!d?.profile?.accountPaused);
         setCaregiverCleared(!!d?.profile?.caregiverCleared);
         // openJobs from dashboard already has matchQuality, distanceMiles, healthTags, careSummary, etc.
-        // Client-side safety: filter out jobs whose start time has already passed
-        const now = new Date();
-        const todayStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
-        const nowTimeStr = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+        // Client-side safety: filter out jobs whose start time has already passed.
+        // "Now" is computed in each job's care-location timezone — never device time.
         const jobs = (d.openJobs || []).filter(s => {
+          const tz = s.timezone || TimezoneHelper.DEFAULT_TZ;
+          const nowTz = TimezoneHelper.getNow(tz);
+          const todayStr = TimezoneHelper.getToday(tz);
+          const nowTimeStr = String(nowTz.getHours()).padStart(2, '0') + ':' + String(nowTz.getMinutes()).padStart(2, '0');
           const sDate = (s.date || s.scheduledDate || '').split('T')[0];
           const sTime = s.time || s.scheduledTime || '00:00';
           if (sDate < todayStr) return false;
@@ -519,15 +521,10 @@ const FindWork = window.FindWork = () => {
     return `${dh}:${String(min || 0).padStart(2, '0')} ${ampm}`;
   };
 
-  const formatDate = (dateStr) => {
+  const formatDate = (dateStr, tz) => {
     if (!dateStr) return '';
-    const d = new Date(dateStr + 'T12:00:00');
-    const today = new Date();
-    const tomorrow = new Date();
-    tomorrow.setDate(today.getDate() + 1);
-    if (d.toDateString() === today.toDateString()) return 'Today';
-    if (d.toDateString() === tomorrow.toDateString()) return 'Tomorrow';
-    return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    // "Today"/"Tomorrow" are determined in the care-location timezone, not device time
+    return TimezoneHelper.getDateLabel(dateStr, tz);
   };
 
   // Group upcoming sessions by date
@@ -791,7 +788,7 @@ const FindWork = window.FindWork = () => {
 
       {lastFetched && (
         <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 10, textAlign: 'right' }}>
-          Last checked: {lastFetched.toLocaleTimeString()}
+          Last checked: {TimezoneHelper.formatTimestamp(lastFetched, null, { hour: 'numeric', minute: '2-digit' })}
           {filteredRequests.length > 0 && <span style={{ marginLeft: 8, color: 'var(--color-warning)', fontWeight: 600 }}>{filteredRequests.length} open</span>}
         </div>
       )}
@@ -853,7 +850,7 @@ const FindWork = window.FindWork = () => {
           </div>
 
           {filteredRequests.length > 0 ? (
-            <div style={{ display: 'grid', gap: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 12 }}>
               {filteredRequests.map(s => {
                 const isExpanded = expandedId === s.id;
                 const time = s.time || s.scheduled_time;
@@ -885,19 +882,16 @@ const FindWork = window.FindWork = () => {
                 const basePerHour = proposedRate > 0 ? proposedRate : (hours > 0 ? Math.round(baseCost / hours) : 0);
                 const effectiveTotal = proposedRate > 0 ? (proposedRate * hours) + surcharge : baseCost;
 
-                // Date label with countdown
+                // Date label with countdown — care-location timezone, not device time
                 const sDate = (dateStr || '').split('T')[0];
-                const dateParts = sDate ? sDate.split('-').map(Number) : [];
-                const dateObj = dateParts.length === 3 ? new Date(dateParts[0], dateParts[1] - 1, dateParts[2]) : null;
-                const now = new Date();
-                const todayLocal = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-                const dayDiff = dateObj ? Math.round((dateObj - todayLocal) / 86400000) : null;
-                const dayLabel = dayDiff === 0 ? 'Today' : dayDiff === 1 ? 'Tomorrow' : dateObj ? dateObj.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : '';
+                const sTz = s.timezone || TimezoneHelper.DEFAULT_TZ;
+                const dayDiff = sDate ? TimezoneHelper.getDaysUntil(sDate, sTz) : null;
+                const dayLabel = sDate ? TimezoneHelper.getDateLabel(sDate, sTz) : '';
 
                 return (
                   <div key={s.id} className="card" style={{
                     borderLeft: activeOffer ? '4px solid #7c3aed' : hasConflict ? '4px solid #ffd89b' : matchQuality === 'great' ? '4px solid #1b6b5a' : '4px solid #fb8c00',
-                    padding: 16, cursor: 'pointer',
+                    padding: 16, cursor: 'pointer', minWidth: 0,
                     transition: 'box-shadow 0.15s',
                     background: activeOffer ? 'var(--bg-exclusive-card)' : hasConflict ? 'var(--bg-warm)' : undefined,
                     boxShadow: activeOffer ? '0 2px 12px rgba(124,58,237,0.15)' : undefined,
@@ -950,7 +944,7 @@ const FindWork = window.FindWork = () => {
                     </div>
 
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                      <div style={{ flex: 1 }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--text-primary)', marginBottom: 2 }}>
                           {(service || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
                         </div>
@@ -1080,13 +1074,11 @@ const FindWork = window.FindWork = () => {
           </h2>
 
           {sortedDates.length > 0 ? sortedDates.map(dateStr => {
-            // Date countdown
-            const dParts = dateStr.split('-').map(Number);
-            const dObj = dParts.length === 3 ? new Date(dParts[0], dParts[1] - 1, dParts[2]) : null;
-            const now = new Date();
-            const todayLocal = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-            const dDiff = dObj ? Math.round((dObj - todayLocal) / 86400000) : null;
-            const dateLabel = dDiff === 0 ? 'Today' : dDiff === 1 ? 'Tomorrow' : dObj ? dObj.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' }) : formatDate(dateStr);
+            // Date countdown — "Today" is the care-location's today, not the device's
+            const gTz = (sessionsByDate[dateStr] && sessionsByDate[dateStr][0] && sessionsByDate[dateStr][0].timezone) || TimezoneHelper.DEFAULT_TZ;
+            const dObj = TimezoneHelper.parseDate(dateStr);
+            const dDiff = !isNaN(dObj.getTime()) ? TimezoneHelper.getDaysUntil(dateStr, gTz) : null;
+            const dateLabel = dDiff === 0 ? 'Today' : dDiff === 1 ? 'Tomorrow' : !isNaN(dObj.getTime()) ? dObj.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }) : formatDate(dateStr, gTz);
             const countdownLabel = dDiff !== null && dDiff >= 2 ? `in ${dDiff} days` : '';
 
             return (
@@ -1209,8 +1201,8 @@ const FindWork = window.FindWork = () => {
             {(() => {
               const s = upcomingSessions.find(x => x.id === cancellingId);
               if (!s) return null;
-              const sessionDT = new Date(`${s.date || s.scheduled_date}T${s.time || s.scheduled_time || '00:00'}`);
-              const hoursAway = (sessionDT - new Date()) / (1000 * 60 * 60);
+              const sessionDT = TimezoneHelper.buildDateTime(((s.date || s.scheduled_date) || '').split('T')[0], s.time || s.scheduled_time || '00:00', s.timezone);
+              const hoursAway = (sessionDT.getTime() - TimezoneHelper.realNowMs()) / (1000 * 60 * 60);
               const isLate = hoursAway < 24;
               return (
                 <div>

@@ -67,7 +67,8 @@ const ActivityFeed = window.ActivityFeed = () => {
     if (diffMins < 60) return `${diffMins}m ago`;
     if (diffHours < 24) return `${diffHours}h ago`;
     if (diffDays < 7) return `${diffDays}d ago`;
-    return date.toLocaleDateString();
+    // Absolute dates render in the care-location timezone, never device time
+    return TimezoneHelper.formatTimestamp(date, null, { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
   const markAsRead = async (activityId, e) => {

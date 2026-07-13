@@ -618,7 +618,7 @@ const CareRecipients = window.CareRecipients = () => {
                 <span style={{ fontSize: 20 }}>{pref.icon}</span>
                 <span style={{ flex: 1, fontWeight: 500, color: 'var(--text-primary)' }}>{pref.label}</span>
               </div>
-              <div style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
+              <div style={{ display: 'flex', gap: '6px', marginBottom: '8px', flexWrap: 'wrap' }}>
                 {RATING_OPTIONS.map(opt => (
                   <button
                     key={opt.value}
@@ -626,6 +626,7 @@ const CareRecipients = window.CareRecipients = () => {
                     style={{
                       padding: '6px 12px',
                       borderRadius: '6px',
+                      whiteSpace: 'nowrap',
                       border: carePrefs[pref.id] === opt.value ? `2px solid ${opt.color}` : '1px solid #ddd',
                       background: carePrefs[pref.id] === opt.value ? opt.color : 'var(--bg-card)',
                       color: carePrefs[pref.id] === opt.value ? opt.textColor : 'var(--text-secondary)',

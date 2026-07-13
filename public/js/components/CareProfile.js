@@ -391,8 +391,8 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
     if (!newReminderText.trim() || !profile?.id) return;
     setSavingReminder(true);
     try {
-      // Build scheduled_for from time + today's date
-      const today = new Date().toISOString().split('T')[0];
+      // Build scheduled_for from time + today's date (care-location today, never UTC/device)
+      const today = TimezoneHelper.getToday(profile?.timezone);
       const scheduled_for = `${today}T${newReminderTime}:00`;
       const body = {
         care_recipient_id: profile.id,
@@ -1128,13 +1128,13 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                 const showDetail = hasFollowUp && val >= 2;
                 return (
                   <div key={pref.id} style={{ borderRadius: 8, background: val > 0 ? RATING_OPTIONS[val].color + '40' : 'var(--bg-primary)', border: '1px solid ' + (val > 0 ? RATING_OPTIONS[val].color : 'var(--border-light)'), transition: 'all 0.2s', overflow: 'hidden' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', flexWrap: 'wrap' }}>
                       <span style={{ fontSize: 18, width: 24, textAlign: 'center', flexShrink: 0 }}>{pref.icon}</span>
-                      <div style={{ flex: 1, fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', lineHeight: 1.3 }}>{pref.label}</div>
-                      <div style={{ display: 'flex', gap: 3, flexShrink: 0 }}>
+                      <div style={{ flex: '1 1 140px', minWidth: 0, fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', lineHeight: 1.3 }}>{pref.label}</div>
+                      <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
                         {RATING_OPTIONS.map(r => (
                           <button key={r.value} onClick={() => handlePrefRate(pref.id, r.value)} style={{
-                            padding: '3px 8px', borderRadius: 5, fontSize: 10, fontWeight: 600,
+                            padding: '3px 8px', borderRadius: 5, fontSize: 10, fontWeight: 600, whiteSpace: 'nowrap',
                             border: val === r.value ? '2px solid #1b6b5a' : '1px solid #ddd',
                             background: val === r.value ? r.color : 'var(--bg-card)',
                             color: val === r.value ? r.textColor : 'var(--text-muted)',
@@ -1239,7 +1239,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                       img.src = url;
                     }} />
                 </label>
-                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Visible to your care team {'\u00B7'} iPAi files it into her care picture</span>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Visible to your care team {'\u00B7'} iPAi files it into their care picture</span>
               </div>
             </div>
             {notes.length > 0 ? notes.map((n) => (
@@ -1266,7 +1266,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                   )}
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
                     {n.author_first_name} {n.author_last_name}
-                    {' \u00B7 '}{(parseTimestamp(n.created_at) || new Date()).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                    {' \u00B7 '}{TimezoneHelper.formatTimestamp(n.created_at, profile?.timezone, { month: 'short', day: 'numeric', year: 'numeric' }) || (new Date()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                   </div>
                 </div>
                 {canEdit && (
@@ -1500,7 +1500,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                       {instructionsMeta.updated_at && (
                         <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
                           {instructionsMeta.updated_by_name ? `${instructionsMeta.updated_by_name} \u2022 ` : ''}
-                          {new Date(instructionsMeta.updated_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                          {TimezoneHelper.formatTimestamp(instructionsMeta.updated_at, profile?.timezone, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
                         </span>
                       )}
                     </div>
@@ -1644,7 +1644,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                         {companionConvos.map((convo) => {
                           const isSelected = selectedConvos.has(convo.conversation_id);
-                          const startDate = convo.started_at ? new Date(convo.started_at) : null;
+                          const startDate = convo.started_at ? parseTimestamp(convo.started_at) : null;
                           return (
                             <div key={convo.conversation_id}
                               style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 8, border: isSelected ? '1px solid #E74C3C' : '1px solid #f0f0f0', background: isSelected ? '#FEF5F5' : 'var(--bg-card)', transition: 'all 0.15s' }}>
@@ -1659,10 +1659,10 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                                 style={{ width: 16, height: 16, cursor: 'pointer', accentColor: '#E74C3C' }} />
                               <div style={{ flex: 1 }}>
                                 <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-navy)' }}>
-                                  {startDate ? startDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : 'Conversation'}
+                                  {startDate ? TimezoneHelper.formatTimestamp(startDate, profile?.timezone, { month: 'short', day: 'numeric' }) : 'Conversation'}
                                 </span>
                                 <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 6 }}>
-                                  {startDate ? startDate.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : ''}
+                                  {startDate ? TimezoneHelper.formatTimestamp(startDate, profile?.timezone, { hour: 'numeric', minute: '2-digit' }) : ''}
                                 </span>
                               </div>
                               <span style={{ fontSize: 10, color: 'var(--text-muted)', background: '#F4F6F7', padding: '2px 6px', borderRadius: 6 }}>
@@ -1979,7 +1979,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                                 background: i % 2 === 0 ? 'var(--bg-card)' : '#FAFCFE',
                               }}>
                                 <span style={{ fontSize: 11, color: 'var(--color-navy)', fontWeight: 500, minWidth: 70 }}>
-                                  {new Date(day.day).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
+                                  {(() => { const d = TimezoneHelper.parseDate(String(day.day || '')); return isNaN(d.getTime()) ? String(day.day || '') : d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }); })()}
                                 </span>
                                 <div style={{ flex: '1 1 60px', height: 6, background: '#F4F6F7', borderRadius: 4, overflow: 'hidden' }}>
                                   <div style={{ height: '100%', background: 'var(--color-info)', borderRadius: 4, width: `${Math.min(100, (day.credits_used / Math.max(1, ...companionUsage.daily_breakdown.map(d => d.credits_used))) * 100)}%` }} />

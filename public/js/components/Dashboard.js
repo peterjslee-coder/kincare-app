@@ -383,7 +383,8 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
     if (diffMins < 60) return `${diffMins}m ago`;
     if (diffHours < 24) return `${diffHours}h ago`;
     if (diffDays < 7) return `${diffDays}d ago`;
-    return date.toLocaleDateString();
+    // Absolute dates render in the care-location timezone, never device time
+    return TimezoneHelper.formatTimestamp(date, data?.timezone, { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
   if (loading) return <LoadingSpinner text="Loading dashboard..." />;
@@ -2000,8 +2001,9 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
         );
       })()}
 
-      {/* Restore dismissed tiles */}
-      {Object.keys(dismissedTiles).length > 0 && (
+      {/* Restore dismissed tiles — only when a tile is actually hidden right now
+          (stale entries from previous days linger in localStorage and shouldn't show the pill) */}
+      {Object.values(dismissedTiles).some(v => v === todayLocal()) && (
         <div style={{ textAlign: 'center', marginTop: 12, marginBottom: 12 }}>
           <button onClick={restoreTiles} style={{
             background: 'var(--bg-primary)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', fontSize: 13,
@@ -2094,14 +2096,14 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
             {(() => {
               const s = upcoming.find(x => x.id === cancellingId);
               if (!s) return null;
-              const sessionDT = parseTimestamp(`${s.date}T${s.time || '00:00'}`) || new Date(`${s.date}T${s.time || '00:00'}`);
-              const hoursAway = (sessionDT - new Date()) / (1000 * 60 * 60);
+              const sessionDT = TimezoneHelper.buildDateTime((s.date || '').split('T')[0], s.time || '00:00', s.timezone || data?.timezone);
+              const hoursAway = (sessionDT.getTime() - TimezoneHelper.realNowMs()) / (1000 * 60 * 60);
               const hasCaregiver = !!s.caregiverName;
               const isLate = hasCaregiver && hoursAway < 24;
               return (
                 <div>
                   <div style={{ fontSize: 14, color: 'var(--text-primary)', marginBottom: 12 }}>
-                    {s.recipientName} — {s.date ? (parseTimestamp(s.date + 'T12:00:00') || new Date(s.date + 'T12:00:00')).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : ''} at {s.time}
+                    {s.recipientName} — {s.date ? TimezoneHelper.parseDate(s.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : ''} at {s.time}
                   </div>
                   {!hasCaregiver && (
                     <div style={{ padding: '10px 14px', background: 'var(--color-success-bg)', borderRadius: 8, border: '1px solid #c8e6c9', marginBottom: 12, fontSize: 13, color: 'var(--color-success)' }}>

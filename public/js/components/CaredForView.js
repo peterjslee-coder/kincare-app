@@ -827,7 +827,7 @@ const CaredForView = window.CaredForView = () => {
                       )}
                     </div>
                     <div style={{ fontSize: '14px', color: 'var(--text-primary)', lineHeight: 1.5 }}>{n.content}</div>
-                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '6px' }}>{n.createdAt ? (parseTimestamp(n.createdAt) || new Date()).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : ''}</div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '6px' }}>{n.createdAt ? TimezoneHelper.formatTimestamp(n.createdAt, null, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : ''}</div>
                   </div>
                 )}
               </div>

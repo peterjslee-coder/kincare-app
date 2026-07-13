@@ -128,6 +128,22 @@ const TimezoneHelper = window.TimezoneHelper = (() => {
   }
 
   /**
+   * Format an absolute timestamp (ISO string / Postgres TIMESTAMPTZ / Date)
+   * for display in the care location's timezone — never the device timezone.
+   * options: Intl.DateTimeFormat options (month, day, year, hour, minute, ...)
+   */
+  function formatTimestamp(ts, tz, options) {
+    let d = ts;
+    if (!(d instanceof Date)) {
+      d = (typeof window !== "undefined" && window.parseTimestamp)
+        ? window.parseTimestamp(ts)
+        : new Date(ts);
+    }
+    if (!d || isNaN(d.getTime())) return "";
+    return d.toLocaleString("en-US", Object.assign({ timeZone: tz || DEFAULT_TZ }, options || {}));
+  }
+
+  /**
    * Get the real current UTC epoch (milliseconds).
    * Use this for all time-until / countdown comparisons.
    *
@@ -149,6 +165,7 @@ const TimezoneHelper = window.TimezoneHelper = (() => {
     buildDateTime,
     parseDate,
     formatTime,
+    formatTimestamp,
     getDateLabel,
     getDaysUntil,
   };
