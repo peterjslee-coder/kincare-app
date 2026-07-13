@@ -326,11 +326,11 @@ const FamilyPayments = window.FamilyPayments = () => {
                 <span style={{ fontSize: 22 }}>\uD83C\uDFE6</span>
                 <div style={{ fontSize: 14, fontWeight: 600 }}>{payoutStatus.bankLabel || 'Bank account connected'}</div>
               </div>
-              <p style={{ margin: 0, fontSize: 13, color: 'var(--text-secondary)' }}>When someone reimburses you and chooses "Direct deposit through InPlace," the money lands here in ~1\u20133 business days \u2014 no Venmo or waiting.</p>
+              <p style={{ margin: 0, fontSize: 13, color: 'var(--text-secondary)' }}>{'When someone reimburses you and chooses \u201cDirect deposit through InPlace,\u201d the money lands here in ~1\u20133 business days \u2014 no Venmo or waiting.'}</p>
             </div>
           ) : (
             <div>
-              <p style={{ margin: '0 0 10px', fontSize: 14, color: 'var(--text-secondary)' }}>Set up direct deposit so reimbursements can be sent straight to your bank. It's a one-time, secure Stripe step to verify you and your account. This is separate from your payment method above \u2014 that's how you <em>pay</em>; this is how you <em>get paid back</em>.</p>
+              <p style={{ margin: '0 0 10px', fontSize: 14, color: 'var(--text-secondary)' }}>{'Set up direct deposit so reimbursements can be sent straight to your bank. It\u2019s a one-time, secure Stripe step to verify you and your account. This is separate from your payment method above \u2014 that\u2019s how you '}<em>pay</em>{'; this is how you '}<em>get paid back</em>.</p>
               <button onClick={startPayoutOnboarding} disabled={payoutBusy}
                 style={{ padding: '8px 16px', background: '#635bff', color: '#fff', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: payoutBusy ? 'wait' : 'pointer' }}>
                 {payoutBusy ? 'Opening\u2026' : (payoutStatus.started ? 'Finish direct-deposit setup' : 'Set up direct deposit')}

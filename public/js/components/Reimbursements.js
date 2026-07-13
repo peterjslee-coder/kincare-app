@@ -330,7 +330,7 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
     const paidLabel = it.paid_method === 'bank' ? 'bank transfer (ACH)' : it.paid_method === 'ach_inplace' ? 'InPlace direct deposit' : it.paid_method;
     // v1.98.0 — in-app ACH is async: "sent, depositing" until it settles
     if (it.status === 'paid' && it.paid_method === 'ach_inplace' && it.payout_status === 'processing') {
-      return <span style={{ fontSize: 12, fontWeight: 600, color: '#1565c0', background: '#e3f2fd', padding: '3px 10px', borderRadius: 12 }}>Sent — depositing (1–3 business days)</span>;
+      return <span style={{ fontSize: 12, fontWeight: 600, color: '#1565c0', background: '#e3f2fd', padding: '3px 10px', borderRadius: 12 }}>{'Sent — depositing (1–3 business days)'}</span>;
     }
     const map = {
       pending:   { label: 'Pending approval', bg: '#fff3e0', fg: '#e65100' },
@@ -433,16 +433,16 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
               <div style={{ flex: '1 1 100%', marginTop: 2 }}>
                 {payoutStatus && payoutStatus.onboarded ? (
                   <div style={{ fontSize: 12, color: '#2e7d32', background: '#e8f5e9', borderRadius: 8, padding: '8px 12px' }}>
-                    ✓ You're set up for direct deposit{payoutStatus.bankLabel ? ` to ${payoutStatus.bankLabel}` : ''}. Once approved, the money is sent straight to your bank through InPlace — arrives in ~1–3 business days.
+                    {'✓ You’re set up for direct deposit'}{payoutStatus.bankLabel ? ` to ${payoutStatus.bankLabel}` : ''}{'. Once approved, the money is sent straight to your bank through InPlace — arrives in ~1–3 business days.'}
                   </div>
                 ) : payoutStatus && !payoutStatus.available ? (
                   <div style={{ fontSize: 12, color: 'var(--text-muted)', background: 'var(--bg-primary)', borderRadius: 8, padding: '8px 12px' }}>
-                    Direct deposit isn't available on this environment. Pick another way to be paid back.
+                    {'Direct deposit isn’t available on this environment. Pick another way to be paid back.'}
                   </div>
                 ) : (
                   <div style={{ background: 'var(--bg-primary)', borderRadius: 8, padding: '10px 12px' }}>
                     <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>
-                      Get reimbursed straight to your bank — no Venmo, no waiting on someone to send it. You set up direct deposit once (a quick, secure Stripe step to verify you and your bank), then approved reimbursements land automatically.
+                      {'Get reimbursed straight to your bank — no Venmo, no waiting on someone to send it. You set up direct deposit once (a quick, secure Stripe step to verify you and your bank), then approved reimbursements land automatically.'}
                     </div>
                     <button type="button" onClick={startPayoutOnboarding} disabled={payoutBusy}
                       style={{ padding: '8px 16px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: payoutBusy ? 'wait' : 'pointer' }}>
