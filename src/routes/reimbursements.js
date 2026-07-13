@@ -771,7 +771,9 @@ router.post("/payout/onboard-link", async (req, res) => {
         type: "express",
         country: "US",
         email: user.email,
-        capabilities: { transfers: { requested: true } },
+        // Stripe requires card_payments alongside transfers unless the platform
+        // has special approval — request both (matches caregiver onboarding).
+        capabilities: { card_payments: { requested: true }, transfers: { requested: true } },
         business_type: "individual",
         individual: { first_name: user.first_name, last_name: user.last_name, email: user.email },
         business_profile: { mcc: "8099", url: "https://inplace.care", product_description: "Family care-expense reimbursements" },
