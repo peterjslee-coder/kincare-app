@@ -207,6 +207,10 @@ const trackAuthEvent = window.trackAuthEvent = (flow, eventType, extra = {}) => 
   try {
     const headers = { 'Content-Type': 'application/json' };
     if (AUTH_TOKEN) headers['Authorization'] = `Bearer ${AUTH_TOKEN}`;
+    // v1.97.0 — CSRF header was missing here: once an auth cookie exists (right
+    // after login), verifyCsrf 403'd every tracking POST from the native app
+    const _csrf = typeof getCsrfToken === 'function' ? getCsrfToken() : null;
+    if (_csrf) headers['X-CSRF-Token'] = _csrf;
     fetch('/api/onboarding-events', {
       method: 'POST',
       headers,
@@ -656,24 +660,11 @@ const subscribeNativePush = window.subscribeNativePush = async () => {
       PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
         console.log('NativePush: notification tapped:', action.notification?.title);
         const data = action.notification?.data;
-        // Deep-link: mirror the service worker routing logic for native push
-        if (data?.type === 'message' && data.conversationId) {
-          window.__pendingConversation = data.conversationId;
-          window.__navigateTo?.('messages');
-        } else if (data?.type === 'care_request' || data?.type === 'care_request_accepted') {
-          window.__navigateTo?.('schedule');
-        } else if (data?.type === 'new_job') {
-          window.__navigateTo?.('find-work');
-        } else if (data?.type === 'check_in_reminder' || data?.type === 'check_out_reminder' || data?.type === 'caregiver_arriving' || data?.type === 'caregiver_arriving_recipient') {
-          window.__navigateTo?.('dashboard');
-        } else if (data?.type === 'kindred_relay') {
-          window.__navigateTo?.('messages');
-        } else if (data?.type === 'video_call' && data.conversationId) {
-          window.__pendingConversation = data.conversationId;
-          window.__navigateTo?.('messages');
-        } else if (data?.page) {
-          window.__navigateTo?.(data.page);
-        }
+        // v1.97.0 — central router: same deep-link handling as web push and
+        // the in-app notification list (page + item focus, e.g. straight to
+        // a reimbursement's approve view)
+        if (window.__handlePushNavigate) window.__handlePushNavigate(data || {});
+        else if (data?.page) window.__navigateTo?.(data.page);
       });
 
       // Trigger the registration
@@ -736,21 +727,9 @@ const initNativeTokenRefresh = window.initNativeTokenRefresh = () => {
 
       PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
         const data = action.notification?.data;
-        if (data?.type === 'message' && data.conversationId) {
-          window.__pendingConversation = data.conversationId;
-          window.__navigateTo?.('messages');
-        } else if (data?.type === 'care_request' || data?.type === 'care_request_accepted') {
-          window.__navigateTo?.('schedule');
-        } else if (data?.type === 'new_job') {
-          window.__navigateTo?.('find-work');
-        } else if (data?.type === 'kindred_relay') {
-          window.__navigateTo?.('messages');
-        } else if (data?.type === 'video_call' && data.conversationId) {
-          window.__pendingConversation = data.conversationId;
-          window.__navigateTo?.('messages');
-        } else if (data?.page) {
-          window.__navigateTo?.(data.page);
-        }
+        // v1.97.0 — central router (see above)
+        if (window.__handlePushNavigate) window.__handlePushNavigate(data || {});
+        else if (data?.page) window.__navigateTo?.(data.page);
       });
     }).catch(() => {});
   } catch (err) {

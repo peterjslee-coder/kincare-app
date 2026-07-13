@@ -1530,8 +1530,12 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                         <div key={n.id} className="activity-new-shimmer" onClick={() => {
                           markNotificationsRead([n.id]);
                           if (nData.sessionId && typeof setVisitDetailSessionId === 'function') setVisitDetailSessionId(nData.sessionId);
-                          else if (nData.type === 'message' && onNavigate) onNavigate('messages');
                           else if (['payment', 'manual_payment'].includes(nData.type) && onNavigate) onNavigate('payments');
+                          // v1.97.0 — everything else routes through the central
+                          // deep-link handler: reimbursements land on the approve
+                          // view, messages open the conversation, etc.
+                          else if (window.__handlePushNavigate) window.__handlePushNavigate(nData);
+                          else if (nData.type === 'message' && onNavigate) onNavigate('messages');
                         }} style={{
                           marginBottom: 6, padding: '12px 14px', cursor: 'pointer', borderRadius: 10,
                           border: '2px solid #4a90d9',

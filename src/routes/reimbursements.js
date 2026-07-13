@@ -22,6 +22,30 @@ const MAX_RECEIPTS = 5;
 const MAX_RECEIPT_BYTES = 5 * 1024 * 1024; // 5MB decoded
 const ALLOWED_MIMES = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
 const PAID_METHODS = ["venmo", "zelle", "check", "cash", "bank", "other"];
+// v1.97.0 — how the requester wants to be paid back (the "to" address).
+// "ach" = bank transfer the family runs from their own banking app; the app
+// stores a LABEL only (bank nickname + last 4), never account/routing numbers.
+const PAYOUT_METHODS = ["venmo", "zelle", "ach", "check", "cash", "other"];
+
+// Reject anything that looks like a full account/routing number in bank labels.
+// (Zelle details legitimately contain 10-digit phone numbers, so this guard
+// only applies to bank/ACH labels and funding-account labels.)
+function assertLabelOnly(value, what) {
+  if (value && /\d{8,}/.test(value.replace(/[\s-]/g, ""))) {
+    throw Object.assign(new Error(`${what} looks like a full account number — use a nickname and the last 4 digits only (e.g. "Truist checking ****4321"). InPlace never stores account numbers.`), { status: 400 });
+  }
+}
+
+// Parse the optional "to" payout fields from a request/edit body.
+function parsePayout(body) {
+  let payoutMethod = null, payoutDetails = null;
+  if (body.payoutMethod && PAYOUT_METHODS.includes(body.payoutMethod)) {
+    payoutMethod = body.payoutMethod;
+    payoutDetails = (typeof body.payoutDetails === "string" ? body.payoutDetails.trim() : "").slice(0, 120) || null;
+    if (payoutMethod === "ach") assertLabelOnly(payoutDetails, "Bank details");
+  }
+  return { payoutMethod, payoutDetails };
+}
 
 // ── Access helpers ──
 // Returns { team, role, isRecipient, canView, canSubmit, isApprover } or null.
@@ -95,13 +119,14 @@ async function insertReimbursement(db, fields, receipts) {
     INSERT INTO reimbursements
       (id, care_team_id, care_recipient_id, requested_by, payee_user_id, amount, description,
        category, expense_date, status, self_recorded, approved_by, approved_at,
-       paid_at, paid_method, paid_reference, paid_by)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       paid_at, paid_method, paid_reference, paid_by, payout_method, payout_details)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id, fields.careTeamId, fields.careRecipientId, fields.requestedBy, fields.payeeUserId,
     fields.amount, fields.description, fields.category, fields.expenseDate,
     fields.status, fields.selfRecorded ? 1 : 0, fields.approvedBy || null, fields.approvedAt || null,
-    fields.paidAt || null, fields.paidMethod || null, fields.paidReference || null, fields.paidBy || null
+    fields.paidAt || null, fields.paidMethod || null, fields.paidReference || null, fields.paidBy || null,
+    fields.payoutMethod || null, fields.payoutDetails || null
   );
   for (const r of receipts) {
     // v1.91.0 — with R2 configured, the blob goes to object storage and the
@@ -149,6 +174,7 @@ router.post("/", async (req, res) => {
 
     const core = validateCore(req.body);
     const receipts = parseReceipts(req.body.receipts);
+    const payout = parsePayout(req.body);
 
     // Optional: save the requester's payout details for the settlement step
     if (typeof req.body.venmoHandle === "string" && req.body.venmoHandle.trim()) {
@@ -159,11 +185,15 @@ router.post("/", async (req, res) => {
       const zelle = req.body.zelleContact.trim().slice(0, 100);
       await db.prepare("UPDATE users SET zelle_contact = ? WHERE id = ?").run(zelle, req.user.id);
     }
+    // v1.97.0 — remember the bank LABEL for next time (never account numbers)
+    if (payout.payoutMethod === "ach" && payout.payoutDetails) {
+      await db.prepare("UPDATE users SET bank_contact = ? WHERE id = ?").run(payout.payoutDetails, req.user.id);
+    }
 
     const id = await insertReimbursement(db, {
       careTeamId: access.team.id, careRecipientId: access.team.care_recipient_id,
       requestedBy: req.user.id, payeeUserId: req.user.id,
-      ...core, status: "pending", selfRecorded: false,
+      ...core, ...payout, status: "pending", selfRecorded: false,
     }, receipts);
 
     audit(req, "reimbursement_requested", { id, amount: core.amount, receipts: receipts.length });
@@ -172,13 +202,13 @@ router.post("/", async (req, res) => {
     await feedEntry(db, access.team, "Reimbursement requested",
       `${rName} requested $${core.amount.toFixed(2)} — ${core.description}`);
 
-    // Notify the approver
+    // Notify the approver — deep-links straight to the approval (v1.97.0)
     const approverId = access.team.billing_user_id
       || (await db.prepare("SELECT user_id FROM care_team_members WHERE care_team_id = ? AND role = 'leader' LIMIT 1").get(access.team.id))?.user_id;
     if (approverId && approverId !== req.user.id) {
-      notify(req, approverId, "Reimbursement request",
-        `${rName} requested $${core.amount.toFixed(2)} — ${core.description}`,
-        { type: "reimbursement_request", reimbursementId: id, careTeamId: access.team.id, page: "careteam" });
+      notify(req, approverId, "Reimbursement request — tap to review",
+        `${rName} requested $${core.amount.toFixed(2)} — ${core.description}. Tap to approve or decline.`,
+        { type: "reimbursement_request", reimbursementId: id, careTeamId: access.team.id, page: "care-team", focus: `reimbursement:${id}` });
     }
 
     res.status(201).json({ id, message: "Reimbursement request submitted" });
@@ -234,8 +264,8 @@ router.post("/record", async (req, res) => {
 router.get("/my-payout-info", async (req, res) => {
   try {
     const db = await getDb();
-    const u = await db.prepare("SELECT venmo_handle, zelle_contact FROM users WHERE id = ?").get(req.user.id);
-    res.json({ venmoHandle: u?.venmo_handle || "", zelleContact: u?.zelle_contact || "" });
+    const u = await db.prepare("SELECT venmo_handle, zelle_contact, bank_contact FROM users WHERE id = ?").get(req.user.id);
+    res.json({ venmoHandle: u?.venmo_handle || "", zelleContact: u?.zelle_contact || "", bankContact: u?.bank_contact || "" });
   } catch (err) {
     captureException(err, { where: "reimbursements: payout info" });
     res.status(500).json({ error: "Failed to load payout info" });
@@ -274,9 +304,11 @@ router.get("/team/:teamId", async (req, res) => {
       SELECT r.id, r.amount, r.description, r.category, r.expense_date, r.status,
              r.self_recorded, r.created_at, r.approved_at, r.declined_reason,
              r.paid_at, r.paid_method, r.paid_reference,
+             r.payout_method, r.payout_details, r.paid_from_label,
              r.requested_by, ru.first_name AS requester_first_name, ru.last_name AS requester_last_name,
              r.payee_user_id, pu.first_name AS payee_first_name, pu.last_name AS payee_last_name,
              pu.venmo_handle AS payee_venmo_handle, pu.zelle_contact AS payee_zelle_contact,
+             pu.bank_contact AS payee_bank_contact,
              r.approved_by, au.first_name AS approver_first_name, au.last_name AS approver_last_name
       FROM reimbursements r
       JOIN users ru ON r.requested_by = ru.id
@@ -346,21 +378,73 @@ async function loadForApprover(db, req, res) {
   return { row, access };
 }
 
+// Human label for the requester's chosen "to" address.
+function payoutLabel(row) {
+  const d = row.payout_details;
+  switch (row.payout_method) {
+    case "venmo": return d ? `Venmo @${d.replace(/^@/, "")}` : "Venmo";
+    case "zelle": return d ? `Zelle ${d}` : "Zelle";
+    case "ach": return d ? `bank transfer (ACH) — ${d}` : "bank transfer (ACH)";
+    case "check": return "check";
+    case "cash": return "cash";
+    default: return row.payout_method || null;
+  }
+}
+
+// v1.97.0 — "we all get notified": payee + team leader + billing contact,
+// minus whoever performed the action. Every notification deep-links to the item.
+async function notifyParties(db, req, ctx, title, body, type) {
+  const targets = new Set([ctx.row.payee_user_id]);
+  try {
+    const leader = await db.prepare(
+      "SELECT user_id FROM care_team_members WHERE care_team_id = ? AND role = 'leader' LIMIT 1"
+    ).get(ctx.row.care_team_id);
+    if (leader?.user_id) targets.add(leader.user_id);
+  } catch {}
+  if (ctx.access.team.billing_user_id) targets.add(ctx.access.team.billing_user_id);
+  targets.delete(req.user.id);
+  for (const uid of targets) {
+    notify(req, uid, title, body,
+      { type, reimbursementId: ctx.row.id, careTeamId: ctx.row.care_team_id, page: "care-team", focus: `reimbursement:${ctx.row.id}` });
+  }
+}
+
 router.post("/:id/approve", async (req, res) => {
   try {
     const db = await getDb();
     const ctx = await loadForApprover(db, req, res);
     if (!ctx) return;
     if (ctx.row.status !== "pending") return res.status(400).json({ error: `Cannot approve a ${ctx.row.status} request` });
-    await db.prepare("UPDATE reimbursements SET status = 'approved', approved_by = ?, approved_at = NOW(), updated_at = NOW() WHERE id = ? AND status = 'pending'")
-      .run(req.user.id, req.params.id);
-    audit(req, "reimbursement_approved", { id: req.params.id, amount: ctx.row.amount });
-    await feedEntry(db, ctx.access.team, "Reimbursement approved", `$${Number(ctx.row.amount).toFixed(2)} — ${ctx.row.description}`);
-    notify(req, ctx.row.payee_user_id, "Reimbursement approved",
-      `Your $${Number(ctx.row.amount).toFixed(2)} request was approved — payment on its way`,
-      { type: "reimbursement_approved", reimbursementId: req.params.id, page: "careteam" });
-    res.json({ message: "Approved" });
+
+    // v1.97.0 — the approver confirms the "from" account (e.g. "Mom's checking")
+    let fromAccountId = null, fromLabel = null;
+    if (req.body.fromAccountId) {
+      const acct = await db.prepare(
+        "SELECT id, label FROM team_funding_accounts WHERE id = ? AND care_team_id = ?"
+      ).get(req.body.fromAccountId, ctx.row.care_team_id);
+      if (!acct) return res.status(400).json({ error: "Funding account not found for this team" });
+      fromAccountId = acct.id; fromLabel = acct.label;
+    } else if (typeof req.body.fromLabel === "string" && req.body.fromLabel.trim()) {
+      fromLabel = req.body.fromLabel.trim().slice(0, 80);
+      assertLabelOnly(fromLabel, "The from-account label");
+    }
+
+    await db.prepare(`
+      UPDATE reimbursements SET status = 'approved', approved_by = ?, approved_at = NOW(),
+        paid_from_account_id = ?, paid_from_label = ?, updated_at = NOW()
+      WHERE id = ? AND status = 'pending'
+    `).run(req.user.id, fromAccountId, fromLabel, req.params.id);
+
+    audit(req, "reimbursement_approved", { id: req.params.id, amount: ctx.row.amount, fromLabel });
+    await feedEntry(db, ctx.access.team, "Reimbursement approved",
+      `$${Number(ctx.row.amount).toFixed(2)} — ${ctx.row.description}${fromLabel ? ` (from ${fromLabel})` : ""}`);
+    const toLabel = payoutLabel(ctx.row);
+    await notifyParties(db, req, ctx, "Reimbursement approved",
+      `$${Number(ctx.row.amount).toFixed(2)} approved${toLabel ? ` — paying via ${toLabel}` : ""}${fromLabel ? ` from ${fromLabel}` : ""}`,
+      "reimbursement_approved");
+    res.json({ message: "Approved", fromLabel });
   } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
     console.error("Approve reimbursement error:", err);
     captureException(err, { where: "reimbursements: approve" });
     res.status(500).json({ error: "Failed to approve" });
@@ -377,9 +461,9 @@ router.post("/:id/decline", async (req, res) => {
     await db.prepare("UPDATE reimbursements SET status = 'declined', approved_by = ?, declined_reason = ?, updated_at = NOW() WHERE id = ? AND status = 'pending'")
       .run(req.user.id, reason, req.params.id);
     audit(req, "reimbursement_declined", { id: req.params.id, reason });
-    notify(req, ctx.row.payee_user_id, "Reimbursement declined",
-      reason ? `Declined: ${reason}` : "Your reimbursement request was declined",
-      { type: "reimbursement_declined", reimbursementId: req.params.id, page: "careteam" });
+    await notifyParties(db, req, ctx, "Reimbursement declined",
+      reason ? `Declined: ${reason}` : "The reimbursement request was declined",
+      "reimbursement_declined");
     res.json({ message: "Declined" });
   } catch (err) {
     console.error("Decline reimbursement error:", err);
@@ -396,17 +480,32 @@ router.post("/:id/mark-paid", async (req, res) => {
     if (!["approved", "pending"].includes(ctx.row.status)) return res.status(400).json({ error: `Cannot mark a ${ctx.row.status} request paid` });
     const method = PAID_METHODS.includes(req.body.method) ? req.body.method : "other";
     const reference = (req.body.reference || "").slice(0, 200) || null;
+
+    // Optional "from" account at payment time (kept if already set at approval)
+    let fromAccountId = null, fromLabel = null;
+    if (req.body.fromAccountId) {
+      const acct = await db.prepare(
+        "SELECT id, label FROM team_funding_accounts WHERE id = ? AND care_team_id = ?"
+      ).get(req.body.fromAccountId, ctx.row.care_team_id);
+      if (acct) { fromAccountId = acct.id; fromLabel = acct.label; }
+    }
+
     await db.prepare(`
       UPDATE reimbursements SET status = 'paid', paid_at = NOW(), paid_method = ?, paid_reference = ?, paid_by = ?,
-        approved_by = COALESCE(approved_by, ?), approved_at = COALESCE(approved_at, NOW()), updated_at = NOW()
+        approved_by = COALESCE(approved_by, ?), approved_at = COALESCE(approved_at, NOW()),
+        paid_from_account_id = COALESCE(?, paid_from_account_id),
+        paid_from_label = COALESCE(?, paid_from_label), updated_at = NOW()
       WHERE id = ? AND status IN ('approved', 'pending')
-    `).run(method, reference, req.user.id, req.user.id, req.params.id);
-    audit(req, "reimbursement_paid", { id: req.params.id, amount: ctx.row.amount, method, reference });
+    `).run(method, reference, req.user.id, req.user.id, fromAccountId, fromLabel, req.params.id);
+
+    const finalFrom = fromLabel || ctx.row.paid_from_label;
+    const methodLabel = method === "bank" ? "bank transfer (ACH)" : method;
+    audit(req, "reimbursement_paid", { id: req.params.id, amount: ctx.row.amount, method, reference, fromLabel: finalFrom });
     await feedEntry(db, ctx.access.team, "Reimbursement paid",
-      `$${Number(ctx.row.amount).toFixed(2)} — ${ctx.row.description} (via ${method})`);
-    notify(req, ctx.row.payee_user_id, "Reimbursement paid",
-      `$${Number(ctx.row.amount).toFixed(2)} sent via ${method}`,
-      { type: "reimbursement_paid", reimbursementId: req.params.id, page: "careteam" });
+      `$${Number(ctx.row.amount).toFixed(2)} — ${ctx.row.description} (via ${methodLabel}${finalFrom ? ` from ${finalFrom}` : ""})`);
+    await notifyParties(db, req, ctx, "Reimbursement paid",
+      `$${Number(ctx.row.amount).toFixed(2)} sent via ${methodLabel}${finalFrom ? ` from ${finalFrom}` : ""}`,
+      "reimbursement_paid");
     res.json({ message: "Marked paid" });
   } catch (err) {
     console.error("Mark-paid reimbursement error:", err);
@@ -431,6 +530,122 @@ router.post("/:id/cancel", async (req, res) => {
     console.error("Cancel reimbursement error:", err);
     captureException(err, { where: "reimbursements: cancel" });
     res.status(500).json({ error: "Failed to cancel" });
+  }
+});
+
+// ── PUT /:id — requester edits a still-pending request (v1.97.0) ──
+// Amount, description, category, expense date, and the "to" payout choice can
+// change until the approver acts — no more withdraw-and-resubmit. Receipts are
+// unchanged by edits (withdraw and resubmit if the receipt itself is wrong).
+router.put("/:id", async (req, res) => {
+  try {
+    const db = await getDb();
+    const row = await db.prepare("SELECT * FROM reimbursements WHERE id = ?").get(req.params.id);
+    if (!row) return res.status(404).json({ error: "Reimbursement not found" });
+    if (row.requested_by !== req.user.id) return res.status(403).json({ error: "Only the requester can edit" });
+    if (row.status !== "pending") return res.status(400).json({ error: `Cannot edit a ${row.status} request — only pending ones` });
+
+    const core = validateCore(req.body);
+    const payout = parsePayout(req.body);
+    await db.prepare(`
+      UPDATE reimbursements SET amount = ?, description = ?, category = ?, expense_date = ?,
+        payout_method = ?, payout_details = ?, updated_at = NOW()
+      WHERE id = ? AND status = 'pending'
+    `).run(core.amount, core.description, core.category, core.expenseDate,
+      payout.payoutMethod, payout.payoutDetails, req.params.id);
+
+    // Remember payout details for next time (labels only, never account numbers)
+    if (payout.payoutMethod === "venmo" && payout.payoutDetails) {
+      await db.prepare("UPDATE users SET venmo_handle = ? WHERE id = ?").run(payout.payoutDetails.replace(/^@/, ""), req.user.id);
+    } else if (payout.payoutMethod === "zelle" && payout.payoutDetails) {
+      await db.prepare("UPDATE users SET zelle_contact = ? WHERE id = ?").run(payout.payoutDetails, req.user.id);
+    } else if (payout.payoutMethod === "ach" && payout.payoutDetails) {
+      await db.prepare("UPDATE users SET bank_contact = ? WHERE id = ?").run(payout.payoutDetails, req.user.id);
+    }
+
+    audit(req, "reimbursement_updated", { id: req.params.id, amount: core.amount, payoutMethod: payout.payoutMethod });
+    // Tell the approver the pending request changed (deep-linked)
+    const access = await teamAccess(db, row.care_team_id, req.user.id);
+    const approverId = access?.team?.billing_user_id
+      || (await db.prepare("SELECT user_id FROM care_team_members WHERE care_team_id = ? AND role = 'leader' LIMIT 1").get(row.care_team_id))?.user_id;
+    if (approverId && approverId !== req.user.id) {
+      const requester = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(req.user.id);
+      const rName = requester ? `${requester.first_name} ${requester.last_name}` : "A team member";
+      notify(req, approverId, "Reimbursement request updated — tap to review",
+        `${rName} updated their request: $${core.amount.toFixed(2)} — ${core.description}`,
+        { type: "reimbursement_request", reimbursementId: req.params.id, careTeamId: row.care_team_id, page: "care-team", focus: `reimbursement:${req.params.id}` });
+    }
+    res.json({ message: "Request updated" });
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    console.error("Edit reimbursement error:", err);
+    captureException(err, { where: "reimbursements: edit" });
+    res.status(500).json({ error: "Failed to update request" });
+  }
+});
+
+// ═══ Team funding accounts (v1.97.0) ═══
+// The approver's named "from" addresses ("Mom's checking ****1234").
+// Labels only — InPlace never stores account or routing numbers; the actual
+// transfer happens in the family's own banking app.
+const FUNDING_TYPES = ["bank", "venmo", "zelle", "card", "other"];
+
+router.get("/accounts/:teamId", async (req, res) => {
+  try {
+    const db = await getDb();
+    const access = await teamAccess(db, req.params.teamId, req.user.id);
+    if (!access || !access.canView) return res.status(404).json({ error: "Care team not found" });
+    if (!access.isApprover && access.role !== "leader") return res.status(403).json({ error: "Only the billing contact or team leader can view funding accounts" });
+    const accounts = await db.prepare(
+      "SELECT id, label, type, is_default, created_at FROM team_funding_accounts WHERE care_team_id = ? ORDER BY is_default DESC, created_at ASC"
+    ).all(req.params.teamId);
+    res.json({ accounts });
+  } catch (err) {
+    captureException(err, { where: "reimbursements: accounts list" });
+    res.status(500).json({ error: "Failed to load funding accounts" });
+  }
+});
+
+router.post("/accounts/:teamId", async (req, res) => {
+  try {
+    const db = await getDb();
+    const access = await teamAccess(db, req.params.teamId, req.user.id);
+    if (!access || !access.canView) return res.status(404).json({ error: "Care team not found" });
+    if (!access.isApprover) return res.status(403).json({ error: "Only the billing contact (or team leader) can add funding accounts" });
+    const label = (req.body.label || "").trim().slice(0, 80);
+    if (!label) return res.status(400).json({ error: "A label is required (e.g. \"Mom's checking ****1234\")" });
+    assertLabelOnly(label, "The account label");
+    const type = FUNDING_TYPES.includes(req.body.type) ? req.body.type : "bank";
+    const id = uuid();
+    if (req.body.isDefault) {
+      await db.prepare("UPDATE team_funding_accounts SET is_default = 0 WHERE care_team_id = ?").run(req.params.teamId);
+    }
+    await db.prepare(
+      "INSERT INTO team_funding_accounts (id, care_team_id, label, type, is_default, created_by) VALUES (?, ?, ?, ?, ?, ?)"
+    ).run(id, req.params.teamId, label, type, req.body.isDefault ? 1 : 0, req.user.id);
+    audit(req, "funding_account_added", { id, teamId: req.params.teamId, label, type });
+    res.status(201).json({ id, label, type });
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    captureException(err, { where: "reimbursements: accounts add" });
+    res.status(500).json({ error: "Failed to add funding account" });
+  }
+});
+
+router.delete("/accounts/:accountId", async (req, res) => {
+  try {
+    const db = await getDb();
+    const acct = await db.prepare("SELECT * FROM team_funding_accounts WHERE id = ?").get(req.params.accountId);
+    if (!acct) return res.status(404).json({ error: "Funding account not found" });
+    const access = await teamAccess(db, acct.care_team_id, req.user.id);
+    if (!access || !access.isApprover) return res.status(403).json({ error: "Only the billing contact (or team leader) can remove funding accounts" });
+    // Past reimbursements keep their paid_from_label snapshot
+    await db.prepare("DELETE FROM team_funding_accounts WHERE id = ?").run(req.params.accountId);
+    audit(req, "funding_account_removed", { id: req.params.accountId, label: acct.label });
+    res.json({ message: "Removed" });
+  } catch (err) {
+    captureException(err, { where: "reimbursements: accounts delete" });
+    res.status(500).json({ error: "Failed to remove funding account" });
   }
 });
 
@@ -516,7 +731,7 @@ async function generateRecurringReimbursements() {
           sendPushToUser(approverId, {
             title: "Recurring reimbursement due",
             body: `$${Number(sch.amount).toFixed(2)} to ${pName} — ${sch.description} (pre-approved, ready to pay)`,
-            data: { type: "reimbursement_recurring", reimbursementId: occurrenceId, page: "careteam" },
+            data: { type: "reimbursement_recurring", reimbursementId: occurrenceId, careTeamId: sch.care_team_id, page: "care-team", focus: `reimbursement:${occurrenceId}` },
           }, "reimbursement_recurring").catch(() => {});
         }
       } catch (e) { captureException(e, { where: "reimbursements: recurring notify" }); }
@@ -556,7 +771,7 @@ router.post("/schedules", async (req, res) => {
     if (approverId && approverId !== req.user.id) {
       notify(req, approverId, "Recurring reimbursement request",
         `${rName} wants $${core.amount.toFixed(2)}/month on day ${day} — ${core.description}`,
-        { type: "reimbursement_schedule_request", scheduleId: id, careTeamId: access.team.id, page: "careteam" });
+        { type: "reimbursement_schedule_request", scheduleId: id, careTeamId: access.team.id, page: "care-team", focus: `schedule:${id}` });
     }
     res.status(201).json({ id, message: "Recurring reimbursement submitted for approval" });
   } catch (err) {
@@ -611,7 +826,7 @@ router.post("/schedules/:id/approve", async (req, res) => {
       `$${Number(ctx.sch.amount).toFixed(2)}/month — ${ctx.sch.description}`);
     notify(req, ctx.sch.payee_user_id, "Recurring reimbursement approved",
       `$${Number(ctx.sch.amount).toFixed(2)}/month for ${ctx.sch.description} — first on ${next}`,
-      { type: "reimbursement_schedule_approved", scheduleId: req.params.id, page: "careteam" });
+      { type: "reimbursement_schedule_approved", scheduleId: req.params.id, careTeamId: ctx.sch.care_team_id, page: "care-team", focus: `schedule:${req.params.id}` });
     res.json({ message: "Series approved", nextRunDate: next });
   } catch (err) {
     console.error("Approve schedule error:", err);
@@ -633,7 +848,7 @@ router.post("/schedules/:id/decline", async (req, res) => {
     audit(req, "reimbursement_schedule_declined", { id: req.params.id, reason });
     notify(req, ctx.sch.payee_user_id, "Recurring reimbursement declined",
       reason ? `Declined: ${reason}` : "Your recurring reimbursement was declined",
-      { type: "reimbursement_schedule_declined", scheduleId: req.params.id, page: "careteam" });
+      { type: "reimbursement_schedule_declined", scheduleId: req.params.id, careTeamId: ctx.sch.care_team_id, page: "care-team", focus: `schedule:${req.params.id}` });
     res.json({ message: "Declined" });
   } catch (err) {
     console.error("Decline schedule error:", err);
@@ -690,6 +905,7 @@ router.get("/money/:teamId", async (req, res) => {
       SELECT r.id, r.amount, r.description, r.category, r.expense_date, r.status,
              r.self_recorded, r.created_at, r.approved_at, r.declined_reason,
              r.paid_at, r.paid_method, r.paid_reference,
+             r.payout_method, r.payout_details, r.paid_from_label,
              r.requested_by, ru.first_name AS requester_first_name, ru.last_name AS requester_last_name,
              r.payee_user_id, pu.first_name AS payee_first_name, pu.last_name AS payee_last_name,
              r.approved_by, au.first_name AS approver_first_name, au.last_name AS approver_last_name
@@ -762,3 +978,5 @@ router.get("/money/:teamId", async (req, res) => {
 
 module.exports = router;
 module.exports.generateRecurringReimbursements = generateRecurringReimbursements;
+// v1.97.0 — exported for unit tests only
+module.exports._test = { parsePayout, assertLabelOnly, payoutLabel };

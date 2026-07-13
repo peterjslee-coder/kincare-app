@@ -105,26 +105,33 @@ router.get("/status", authenticate, async (req, res) => {
 // ─── POST /api/push/subscribe ───
 // Save push subscription for current user
 router.post("/subscribe", authenticate, async (req, res) => {
+  // v1.97.0 — NEVER register push during admin impersonation. The browser's
+  // push endpoint belongs to the ADMIN's device; saving it under the
+  // impersonated user leaks their notifications to the admin's browser
+  // (July 13 trace: "Sara's web push" was actually Pete's Chrome).
+  if (req.user.impersonatedBy) {
+    return res.json({ success: true, skipped: "impersonation" });
+  }
+
   const { subscription } = req.body;
   if (!subscription || !subscription.endpoint) {
     return res.status(400).json({ error: "Push subscription object required" });
   }
 
   const db = await getDb();
-  const existing = await db.prepare(
-    "SELECT id FROM push_subscriptions WHERE user_id = ? AND endpoint = ?"
-  ).get(req.user.id, subscription.endpoint);
 
-  if (existing) {
-    // Update existing subscription
-    await db.prepare(
-      "UPDATE push_subscriptions SET subscription_json = ?, updated_at = NOW() WHERE id = ?"
-    ).run(JSON.stringify(subscription), existing.id);
-  } else {
-    await db.prepare(
-      "INSERT INTO push_subscriptions (id, user_id, endpoint, subscription_json) VALUES (?, ?, ?, ?)"
-    ).run(uuid(), req.user.id, subscription.endpoint, JSON.stringify(subscription));
-  }
+  // Reclaim: a push endpoint identifies exactly one browser profile — if it's
+  // parked under another user (stale impersonation-era row, account switch on
+  // a shared device), it moves to whoever the browser is logged in as now.
+  await db.prepare(
+    "DELETE FROM push_subscriptions WHERE endpoint = ? AND user_id != ?"
+  ).run(subscription.endpoint, req.user.id);
+
+  // Race-proof upsert (unique index on user_id+endpoint since v1.97.0)
+  await db.prepare(`
+    INSERT INTO push_subscriptions (id, user_id, endpoint, subscription_json) VALUES (?, ?, ?, ?)
+    ON CONFLICT (user_id, endpoint) DO UPDATE SET subscription_json = EXCLUDED.subscription_json, updated_at = NOW()
+  `).run(uuid(), req.user.id, subscription.endpoint, JSON.stringify(subscription));
 
   console.log(`  Push: subscription saved for user ${req.user.id}`);
   res.json({ success: true });
@@ -133,6 +140,11 @@ router.post("/subscribe", authenticate, async (req, res) => {
 // ─── POST /api/push/subscribe-native ───
 // Save native push token (FCM/APNS) for current user
 router.post("/subscribe-native", authenticate, async (req, res) => {
+  // v1.97.0 — same impersonation guard as /subscribe (see comment there)
+  if (req.user.impersonatedBy) {
+    return res.json({ success: true, skipped: "impersonation" });
+  }
+
   const { token, platform } = req.body;
   if (!token) {
     return res.status(400).json({ error: "Push token required" });
@@ -152,24 +164,23 @@ router.post("/subscribe-native", authenticate, async (req, res) => {
   };
 
   const db = await getDb();
-  const existing = await db.prepare(
-    "SELECT id FROM push_subscriptions WHERE user_id = ? AND endpoint = ?"
-  ).get(req.user.id, endpoint);
 
-  if (existing) {
-    await db.prepare(
-      "UPDATE push_subscriptions SET subscription_json = ?, updated_at = NOW() WHERE id = ?"
-    ).run(JSON.stringify(subscriptionObj), existing.id);
-  } else {
-    // Also clean up any old native tokens for this user+platform (device may have rotated tokens)
-    await db.prepare(
-      "DELETE FROM push_subscriptions WHERE user_id = ? AND endpoint LIKE ?"
-    ).run(req.user.id, `native://${nativePlatform}/%`);
+  // A device token identifies one physical device — reclaim from other users
+  // (last login wins on a shared device), and drop this user's rotated tokens
+  // for the same platform.
+  await db.prepare(
+    "DELETE FROM push_subscriptions WHERE endpoint = ? AND user_id != ?"
+  ).run(endpoint, req.user.id);
+  await db.prepare(
+    "DELETE FROM push_subscriptions WHERE user_id = ? AND endpoint LIKE ? AND endpoint != ?"
+  ).run(req.user.id, `native://${nativePlatform}/%`, endpoint);
 
-    await db.prepare(
-      "INSERT INTO push_subscriptions (id, user_id, endpoint, subscription_json) VALUES (?, ?, ?, ?)"
-    ).run(uuid(), req.user.id, endpoint, JSON.stringify(subscriptionObj));
-  }
+  // Race-proof upsert — v1.96 double-inserted when the register and
+  // token-refresh listeners both fired (Sara got duplicate iOS rows)
+  await db.prepare(`
+    INSERT INTO push_subscriptions (id, user_id, endpoint, subscription_json) VALUES (?, ?, ?, ?)
+    ON CONFLICT (user_id, endpoint) DO UPDATE SET subscription_json = EXCLUDED.subscription_json, updated_at = NOW()
+  `).run(uuid(), req.user.id, endpoint, JSON.stringify(subscriptionObj));
 
   console.log(`  Push: native ${nativePlatform} token saved for user ${req.user.id}`);
   res.json({ success: true });

@@ -1321,6 +1321,30 @@ async function initializeDatabase() {
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS venmo_handle TEXT`,
     // v1.73.0 — Zelle contact (email or phone) for off-platform reimbursement settlement
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS zelle_contact TEXT`,
+    // v1.97.0 — "to / from" settlement model (Pete's letter metaphor):
+    // the requester picks HOW they want to be paid back (the "to" address),
+    // the approver picks WHICH account it comes from (the "from" address).
+    // bank_contact is a LABEL ONLY (e.g. "Truist checking ****4321") — full
+    // account/routing numbers are never stored; the actual transfer happens
+    // in the family's own banking app.
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS bank_contact TEXT`,
+    `ALTER TABLE reimbursements ADD COLUMN IF NOT EXISTS payout_method TEXT`,
+    `ALTER TABLE reimbursements ADD COLUMN IF NOT EXISTS payout_details TEXT`,
+    `ALTER TABLE reimbursements ADD COLUMN IF NOT EXISTS paid_from_account_id TEXT`,
+    `ALTER TABLE reimbursements ADD COLUMN IF NOT EXISTS paid_from_label TEXT`,
+    // v1.97.0 — named funding sources the billing contact pays from
+    // ("Mom's checking ****1234"). Labels only — never account numbers.
+    `CREATE TABLE IF NOT EXISTS team_funding_accounts (
+      id TEXT PRIMARY KEY,
+      care_team_id TEXT NOT NULL REFERENCES care_teams(id),
+      label TEXT NOT NULL,
+      type TEXT DEFAULT 'bank',
+      is_default INTEGER DEFAULT 0,
+      created_by TEXT REFERENCES users(id),
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_team_funding_team ON team_funding_accounts(care_team_id)`,
 
     // v1.67.0 — hot FK indexes (codebase review H3)
     // messages list: WHERE conversation_id = ? ORDER BY created_at DESC
@@ -1476,6 +1500,28 @@ async function initializeDatabase() {
       id: "002_observed_concerns",
       statements: [
         `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS observed_concerns TEXT`,
+      ],
+    },
+    {
+      // v1.97.0 — push subscription hygiene (July 13 forensic trace):
+      // (a) duplicate rows for the same (user_id, endpoint) — subscribe-native
+      //     raced against the token-refresh listener and double-inserted
+      //     (Sara had 2 identical iOS tokens → double pushes);
+      // (b) the same endpoint parked under MULTIPLE users — admin impersonation
+      //     sessions auto-subscribed the admin's browser under the impersonated
+      //     user, so "Sara's web push" was actually Pete's Chrome.
+      // Dedupe keeping the newest row per (user_id, endpoint), then enforce
+      // uniqueness so the race can never re-create dupes. Cross-user endpoint
+      // squatting self-heals via the reclaim logic in /api/push/subscribe.
+      id: "003_push_subscription_dedupe",
+      statements: [
+        `DELETE FROM push_subscriptions p1
+         USING push_subscriptions p2
+         WHERE p1.user_id = p2.user_id AND p1.endpoint = p2.endpoint
+           AND (p1.updated_at < p2.updated_at
+                OR (p1.updated_at = p2.updated_at AND p1.id < p2.id))`,
+        `CREATE UNIQUE INDEX IF NOT EXISTS idx_push_subs_user_endpoint
+         ON push_subscriptions(user_id, endpoint)`,
       ],
     },
   ];

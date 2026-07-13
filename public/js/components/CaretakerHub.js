@@ -2603,7 +2603,11 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               {unread.length > 1 && <button onClick={() => markRead(unread.map(n => n.id))} style={{ padding: '4px 10px', background: 'transparent', color: 'var(--text-muted)', border: '1px solid var(--border-color)', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>Mark all read</button>}
             </div>
             {unread.slice(0, 5).map(n => (
-              <div key={n.id} className="activity-new-shimmer" onClick={() => markRead([n.id])} style={{
+              <div key={n.id} className="activity-new-shimmer" onClick={() => {
+                markRead([n.id]);
+                // v1.97.0 — tap goes to the item itself via the central deep-link router
+                try { const d = n.data ? (typeof n.data === 'string' ? JSON.parse(n.data) : n.data) : null; if (d && window.__handlePushNavigate) window.__handlePushNavigate(d); } catch {}
+              }} style={{
                 padding: '10px 12px', marginBottom: 6, borderRadius: 8, cursor: 'pointer',
                 border: '1.5px solid #4a90d9', background: 'rgba(74, 144, 217, 0.04)', position: 'relative', overflow: 'hidden',
               }}>

@@ -1,6 +1,6 @@
 // InPlace Service Worker — v1.57.14
-const CACHE_NAME = 'inplace-build-41bc2a54-mrim5v0e';
-const SW_VERSION = 'build-41bc2a54-mrim5v0e';
+const CACHE_NAME = 'inplace-build-f29beff8-mrj6j1ij';
+const SW_VERSION = 'build-f29beff8-mrj6j1ij';
 const STATIC_ASSETS = [
   '/',
   '/css/styles.css',
@@ -224,23 +224,27 @@ self.addEventListener('notificationclick', (event) => {
 
   const data = event.notification.data || {};
   let targetUrl = '/?page=dashboard';
-  if (data.type === 'message' && data.conversationId) {
+  const type = String(data.type || '');
+  if (type === 'message' && data.conversationId) {
     targetUrl = `/?conversation=${data.conversationId}`;
-  } else if (data.type === 'care_request' || data.type === 'care_request_accepted') {
-    targetUrl = '/?page=schedule';
-  } else if (data.type === 'check_in_reminder' || data.type === 'check_out_reminder' || data.type === 'caregiver_arriving') {
+  } else if (type.startsWith('reimbursement')) {
+    // v1.97.0 — straight to the item: page + team + focus token
+    targetUrl = `/?page=care-team${data.careTeamId ? `&careTeamId=${encodeURIComponent(data.careTeamId)}` : ''}${data.focus ? `&focus=${encodeURIComponent(data.focus)}` : ''}`;
+  } else if (type === 'care_request' || type === 'care_request_accepted') {
+    targetUrl = `/?page=schedule${data.sessionId ? `&focus=${encodeURIComponent('session:' + data.sessionId)}` : ''}`;
+  } else if (type === 'check_in_reminder' || type === 'check_out_reminder' || type === 'caregiver_arriving') {
     targetUrl = '/?page=dashboard';
-  } else if (data.type === 'video_call' && data.conversationId) {
+  } else if (type === 'video_call' && data.conversationId) {
     targetUrl = `/?conversation=${data.conversationId}`;
-  } else if (data.type === 'new_job') {
+  } else if (type === 'new_job') {
     targetUrl = '/?page=find-work';
-  } else if (data.type === 'kindred_relay') {
+  } else if (type === 'kindred_relay') {
     targetUrl = '/?page=messages';
-  } else if (data.type === 'admin_setting_change') {
+  } else if (type === 'admin_setting_change') {
     targetUrl = '/?page=dashboard';
   } else if (data.page) {
-    // Generic deep-link (e.g. team_note / observation_attention → lovedone)
-    targetUrl = `/?page=${encodeURIComponent(data.page)}`;
+    // Generic deep-link — carry the item focus and team through cold start
+    targetUrl = `/?page=${encodeURIComponent(data.page)}${data.careTeamId ? `&careTeamId=${encodeURIComponent(data.careTeamId)}` : ''}${data.focus ? `&focus=${encodeURIComponent(data.focus)}` : ''}`;
   }
 
   event.waitUntil(
