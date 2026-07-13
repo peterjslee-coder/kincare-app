@@ -500,6 +500,44 @@ const App = () => {
     }
   }, [currentPage, appState]);
 
+  // v1.97.0 — ONE router for every notification tap: web push (via the service
+  // worker's PUSH_NAVIGATE), native iOS/Android push taps, and clicks on the
+  // in-app notification list all land here. Payload convention:
+  // {type, page?, focus?, careTeamId?, conversationId?, sessionId?}.
+  // `page` picks the SPA page; `focus` scrolls to / opens the specific item
+  // (e.g. "reimbursement:<id>" auto-opens the approve modal for approvers).
+  // Defined in its own UNCONDITIONAL effect — the session-restore effect above
+  // early-returns for fresh sessions, so nothing tap-critical can live there.
+  useEffect(() => {
+    window.__handlePushNavigate = (d) => {
+      if (!d) return;
+      if (d.focus) window.__pendingFocus = d.focus;
+      if (d.careTeamId) setSelectedCareTeamId(d.careTeamId);
+      const t = String(d.type || '');
+      if ((t === 'message' || t === 'video_call') && d.conversationId) {
+        window.__pendingConversation = d.conversationId;
+        setCurrentPage('messages');
+      } else if (t.startsWith('reimbursement')) {
+        setCurrentPage('care-team');
+      } else if (t === 'care_request' || t === 'care_request_accepted' || t === 'time_change' || t === 'time_change_accepted' || t === 'time_proposal' || t === 'proposal_accepted' || t === 'proposal_declined' || t === 'proposal_expired') {
+        if (d.sessionId && !d.focus) window.__pendingFocus = `session:${d.sessionId}`;
+        setCurrentPage((window.__currentRole || 'family') === 'caregiver' ? 'find-work' : 'schedule');
+      } else if (t === 'new_job') {
+        setCurrentPage('find-work');
+      } else if (t === 'check_in_reminder' || t === 'check_out_reminder' || t === 'caregiver_arriving' || t === 'caregiver_arriving_recipient' || t === 'session_in_progress' || t === 'session_complete') {
+        if (d.sessionId && !d.focus) window.__pendingFocus = `session:${d.sessionId}`;
+        setCurrentPage('dashboard');
+      } else if (t === 'kindred_relay') {
+        setCurrentPage('messages');
+      } else if (t === 'admin_setting_change') {
+        setCurrentPage('dashboard');
+      } else if (d.page) {
+        // Generic deep-link (e.g. team_note / observation_attention → care-profile)
+        setCurrentPage(d.page);
+      }
+    };
+  }, []);
+
   // Expose modal opener and navigation for child components
   useEffect(() => {
     window.__openRequestCareModal = (prefillDate, prefillCaregiver) => {
@@ -1028,40 +1066,6 @@ const App = () => {
       window.history.replaceState({}, '', window.location.pathname);
     }
 
-    // v1.97.0 — ONE router for every notification tap: web push (via the
-    // service worker's PUSH_NAVIGATE), native iOS/Android push taps, and
-    // clicks on the in-app notification list all land here. Payload
-    // convention: {type, page?, focus?, careTeamId?, conversationId?, sessionId?}.
-    // `page` picks the SPA page; `focus` scrolls to / opens the specific item
-    // (e.g. "reimbursement:<id>" auto-opens the approve modal for approvers).
-    window.__handlePushNavigate = (d) => {
-      if (!d) return;
-      if (d.focus) window.__pendingFocus = d.focus;
-      if (d.careTeamId) setSelectedCareTeamId(d.careTeamId);
-      const t = String(d.type || '');
-      if ((t === 'message' || t === 'video_call') && d.conversationId) {
-        window.__pendingConversation = d.conversationId;
-        setCurrentPage('messages');
-      } else if (t.startsWith('reimbursement')) {
-        setCurrentPage('care-team');
-      } else if (t === 'care_request' || t === 'care_request_accepted' || t === 'time_change' || t === 'time_change_accepted' || t === 'time_proposal' || t === 'proposal_accepted' || t === 'proposal_declined' || t === 'proposal_expired') {
-        if (d.sessionId && !d.focus) window.__pendingFocus = `session:${d.sessionId}`;
-        setCurrentPage(role === 'caregiver' ? 'find-work' : 'schedule');
-      } else if (t === 'new_job') {
-        setCurrentPage('find-work');
-      } else if (t === 'check_in_reminder' || t === 'check_out_reminder' || t === 'caregiver_arriving' || t === 'caregiver_arriving_recipient' || t === 'session_in_progress' || t === 'session_complete') {
-        if (d.sessionId && !d.focus) window.__pendingFocus = `session:${d.sessionId}`;
-        setCurrentPage('dashboard');
-      } else if (t === 'kindred_relay') {
-        setCurrentPage('messages');
-      } else if (t === 'admin_setting_change') {
-        setCurrentPage('dashboard');
-      } else if (d.page) {
-        // Generic deep-link (e.g. team_note / observation_attention → care-profile)
-        setCurrentPage(d.page);
-      }
-    };
-
     // Listen for messages from service worker
     if ('serviceWorker' in navigator) {
       // Respond to SW asking if user is viewing a specific conversation (for push suppression)
@@ -1397,6 +1401,7 @@ const App = () => {
   }
 
   const role = activeRole || currentUser?.role || 'family';
+  window.__currentRole = role; // v1.97.0 — read by __handlePushNavigate (defined pre-auth, so no closure over role)
 
   // ─── Role-specific color theming ───
   // Changes sidebar active color, role switcher accent, and other themed elements per role
