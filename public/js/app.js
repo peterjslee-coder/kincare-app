@@ -462,7 +462,15 @@ const App = () => {
     return 'splash';
   });
   const [currentUser, setCurrentUser] = useState(null);
-  const [currentPage, setCurrentPage] = useState('dashboard');
+  const [currentPage, _setCurrentPageRaw] = useState('dashboard');
+  // TEMP (v1.98.7) — trace every page change + caller to find the deep-link clobber
+  const setCurrentPage = (p) => {
+    try {
+      window.__navTrace = window.__navTrace || [];
+      if (window.__navTrace.length < 80) window.__navTrace.push({ p, t: Date.now(), pend: window.__pendingPage || null, from: ((new Error().stack || '').split('\n')[2] || '').trim().slice(0, 120) });
+    } catch {}
+    _setCurrentPageRaw(p);
+  };
   const [pageNavCount, setPageNavCount] = useState(0);
   const [showRequestCareModal, setShowRequestCareModal] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
