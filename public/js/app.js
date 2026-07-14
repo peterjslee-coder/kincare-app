@@ -462,15 +462,20 @@ const App = () => {
     return 'splash';
   });
   const [currentUser, setCurrentUser] = useState(null);
-  const [currentPage, _setCurrentPageRaw] = useState('dashboard');
-  // TEMP (v1.98.7) — trace every page change + caller to find the deep-link clobber
-  const setCurrentPage = (p) => {
+  // v1.98.8 — capture the notification/cold-start deep link HERE, in the state
+  // initializer, because it runs on first render BEFORE the effect at ~line 585
+  // strips the URL query with replaceState (that strip was eating page/focus/
+  // careTeamId, so the tap always fell back to Home — the "top of the hero" bug).
+  const [currentPage, setCurrentPage] = useState(() => {
     try {
-      window.__navTrace = window.__navTrace || [];
-      if (window.__navTrace.length < 80) window.__navTrace.push({ p, t: Date.now(), pend: window.__pendingPage || null, from: ((new Error().stack || '').split('\n')[2] || '').trim().slice(0, 120) });
+      const p = new URLSearchParams(window.location.search);
+      const focus = p.get('focus'); if (focus) window.__pendingFocus = focus;
+      const team = p.get('careTeamId'); if (team) window.__pendingTeam = team;
+      const conv = p.get('conversation'); if (conv) { window.__pendingConversation = conv; window.__pendingPage = 'messages'; return 'messages'; }
+      const page = p.get('page'); if (page) { window.__pendingPage = page; return page; }
     } catch {}
-    _setCurrentPageRaw(p);
-  };
+    return 'dashboard';
+  });
   const [pageNavCount, setPageNavCount] = useState(0);
   const [showRequestCareModal, setShowRequestCareModal] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -867,7 +872,9 @@ const App = () => {
   const [inviteInfo, setInviteInfo] = useState(null); // { email, role, teamName, recipientName, inviterName }
   const [acceptingInvite, setAcceptingInvite] = useState(false); // True while invite acceptance is in-flight
   const [platformInviteToken, setPlatformInviteToken] = useState(null);
-  const [selectedCareTeamId, setSelectedCareTeamId] = useState(null);
+  const [selectedCareTeamId, setSelectedCareTeamId] = useState(() => {
+    try { return new URLSearchParams(window.location.search).get('careTeamId') || null; } catch { return null; }
+  });
   // Email-first signup: prefilled from signup intent token
   const [signupPrefill, setSignupPrefill] = useState(null); // { email, role, signupToken }
 
