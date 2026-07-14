@@ -70,10 +70,14 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
     if (!it) return;
     window.__pendingFocus = null;
     setHighlightId(id);
-    setTimeout(() => {
+    // v1.98.9 — retry the scroll across several ticks. The Care Team page is
+    // long and lays out (avatars, billing card, receipts) after this effect
+    // first runs, so a single early scroll lands on a stale position. Re-scroll
+    // until it settles.
+    [200, 500, 900, 1400].forEach((ms) => setTimeout(() => {
       try { document.querySelector(`[data-reimb-id="${id}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch {}
-    }, 150);
-    setTimeout(() => setHighlightId(null), 4000);
+    }, ms));
+    setTimeout(() => setHighlightId(null), 4500);
     if (meta.isApprover && it.status === 'pending') openApprove(it);
   }, [loading, items, meta.isApprover]);
 
