@@ -70,14 +70,23 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
     if (!it) return;
     window.__pendingFocus = null;
     setHighlightId(id);
-    // v1.98.9 — retry the scroll across several ticks. The Care Team page is
-    // long and lays out (avatars, billing card, receipts) after this effect
-    // first runs, so a single early scroll lands on a stale position. Re-scroll
-    // until it settles.
-    [200, 500, 900, 1400].forEach((ms) => setTimeout(() => {
-      try { document.querySelector(`[data-reimb-id="${id}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch {}
-    }, ms));
-    setTimeout(() => setHighlightId(null), 4500);
+    // v1.98.10 — the Care Team page keeps laying out async sections (team,
+    // billing, receipts) AFTER this effect first runs, which pushes the target
+    // row down and defeats a one-shot scroll. Re-scroll on a short interval
+    // until the row's position stabilizes (or we give up after ~4s).
+    let lastTop = null, tries = 0;
+    const settle = setInterval(() => {
+      const node = document.querySelector(`[data-reimb-id="${id}"]`);
+      tries += 1;
+      if (node) {
+        node.scrollIntoView({ behavior: tries === 1 ? 'smooth' : 'auto', block: 'center' });
+        const top = Math.round(node.getBoundingClientRect().top);
+        if (top === lastTop) { clearInterval(settle); }
+        lastTop = top;
+      }
+      if (tries >= 16) clearInterval(settle);
+    }, 250);
+    setTimeout(() => setHighlightId(null), 5000);
     if (meta.isApprover && it.status === 'pending') openApprove(it);
   }, [loading, items, meta.isApprover]);
 
