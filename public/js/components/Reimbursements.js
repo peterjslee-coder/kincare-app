@@ -43,6 +43,15 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
   const [payoutStatus, setPayoutStatus] = useState(null); // {onboarded, bankLabel, started, available}
   const [payoutBusy, setPayoutBusy] = useState(false);
   const [payAchId, setPayAchId] = useState(null); // reimbursement currently being sent
+  // v1.98.12 — approval clarity so the approver can ALWAYS tell what happened:
+  // confirmPayId = the row showing an inline (non-native-dialog) pay confirmation;
+  // actionResult = a DURABLE per-row banner ({id: {kind:'ok'|'err', text}}) that
+  // stays put after an approve/pay/decline instead of a toast that vanishes — so a
+  // silently-failed tap becomes visible and a success is unambiguous.
+  const [confirmPayId, setConfirmPayId] = useState(null);
+  const [actionResult, setActionResult] = useState({});
+  const setRowResult = (id, kind, text) => setActionResult((m) => ({ ...m, [id]: { kind, text } }));
+  const clearRowResult = (id) => setActionResult((m) => { const n = { ...m }; delete n[id]; return n; });
 
   const fetchList = async () => {
     try {
@@ -270,8 +279,9 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
         method: 'POST', body: JSON.stringify(fromAccountId ? { fromAccountId } : {}),
       });
       if (res?.ok) {
+        setRowResult(approveTarget.id, 'ok', `✓ Approved — ${approveTarget.payee_first_name} was notified. It now shows “Approved — awaiting payment.”`);
         showToast(`Approved — ${approveTarget.payee_first_name} was notified`, 'success');
-        setApproveTarget(null); fetchList();
+        setApproveTarget(null); await fetchList();
       } else { const d = await res.json().catch(() => ({})); setApproveError(d.error || 'Approval failed'); }
     } catch { setApproveError('Approval failed — check your connection and try again'); }
     setBusyId(null);
@@ -279,34 +289,88 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
 
   // v1.98.0 — approver sends the money in-app via ACH
   const payViaAch = async (it) => {
-    if (!confirm(`Send $${Number(it.amount).toFixed(2)} to ${it.payee_first_name} now through InPlace? Your saved payment method (bank or card) will be charged $${Number(it.amount).toFixed(2)} plus the processing fee. Bank transfers land in ~1\u20133 business days.`)) return;
+    setConfirmPayId(null);
+    clearRowResult(it.id);
     setPayAchId(it.id); setBusyId(it.id);
     try {
       const res = await apiFetch(`/api/reimbursements/${it.id}/pay-ach`, { method: 'POST', body: JSON.stringify({}) });
       const d = await res.json().catch(() => ({}));
       if (res?.ok && d.ok) {
+        setRowResult(it.id, 'ok', `✓ Sent $${Number(it.amount).toFixed(2)} to ${it.payee_first_name} — depositing to their bank (1–3 business days).`);
         showToast(`Sent — $${Number(it.amount).toFixed(2)} is on its way to ${it.payee_first_name}`, 'success');
-        fetchList();
+        await fetchList();
       } else if (d.code === 'needs_payer_method' || d.code === 'needs_payer_bank') {
+        setRowResult(it.id, 'err', 'You need a payment method to pay from first — opening your Payments settings.');
         showToast('Add a payment method to pay from first — opening your Payments settings.', 'info');
         window.__accountTab = 'payments';
         if (window.__navigateTo) window.__navigateTo('account');
       } else if (d.code === 'payee_not_ready') {
+        setRowResult(it.id, 'err', d.error || `${it.payee_first_name} hasn\u2019t finished direct-deposit setup yet.`);
         showToast(d.error || 'They haven\u2019t set up direct deposit yet', 'error');
       } else {
+        setRowResult(it.id, 'err', `That didn’t go through${d.error ? ` — ${d.error}` : ''}. Nothing was charged — tap “Pay” to try again.`);
         showToast(d.error || 'Payment failed', 'error');
       }
-    } catch { showToast('Payment failed — check your connection and try again', 'error'); }
+    } catch {
+      setRowResult(it.id, 'err', 'That didn’t go through — check your connection. Nothing was charged — tap “Pay” to try again.');
+      showToast('Payment failed — check your connection and try again', 'error');
+    }
     setPayAchId(null); setBusyId(null);
+  };
+
+  // v1.98.12 — inline two-tap pay confirmation (replaces the native confirm()).
+  // First tap arms it ("Confirm — send $X" / "Cancel"); second tap actually sends.
+  // No blocking dialog that can silently no-op on mobile.
+  const renderPayControl = (it) => {
+    const amt = Number(it.amount).toFixed(2);
+    if (payAchId === it.id) {
+      return (
+        <button disabled style={{ padding: '6px 14px', background: '#2e7d32', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'wait' }}>
+          Sending…
+        </button>
+      );
+    }
+    if (confirmPayId === it.id) {
+      return (
+        <span style={{ display: 'inline-flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <button disabled={busyId === it.id} onClick={() => payViaAch(it)}
+            style={{ padding: '6px 14px', background: '#2e7d32', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+            {`Confirm — send $${amt}`}
+          </button>
+          <button onClick={() => setConfirmPayId(null)}
+            style={{ padding: '6px 12px', background: 'none', border: '1px solid var(--border-light)', color: 'var(--text-secondary)', borderRadius: 8, fontSize: 13, cursor: 'pointer' }}>
+            Cancel
+          </button>
+          <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{`Your payment method is charged $${amt} + fee`}</span>
+        </span>
+      );
+    }
+    return (
+      <button disabled={busyId === it.id} onClick={() => { clearRowResult(it.id); setConfirmPayId(it.id); }}
+        style={{ padding: '6px 14px', background: '#2e7d32', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: busyId === it.id ? 'wait' : 'pointer' }}>
+        {`💸 Pay $${amt} via InPlace`}
+      </button>
+    );
   };
 
   const act = async (id, path, body) => {
     setBusyId(id);
+    clearRowResult(id);
     try {
       const res = await apiFetch(`/api/reimbursements/${id}/${path}`, { method: 'POST', body: JSON.stringify(body || {}) });
-      if (res?.ok) fetchList();
-      else { const d = await res.json().catch(() => ({})); showToast(d.error || 'Action failed', 'error'); }
-    } catch { showToast('Action failed', 'error'); }
+      if (res?.ok) {
+        if (path === 'decline') setRowResult(id, 'ok', '✓ Declined — the requester was notified.');
+        else if (path === 'mark-paid') setRowResult(id, 'ok', '✓ Marked as paid — the requester was notified.');
+        await fetchList();
+      } else {
+        const d = await res.json().catch(() => ({}));
+        setRowResult(id, 'err', `That didn’t go through${d.error ? ` — ${d.error}` : ''}. Try again.`);
+        showToast(d.error || 'Action failed', 'error');
+      }
+    } catch {
+      setRowResult(id, 'err', 'That didn’t go through — check your connection and try again.');
+      showToast('Action failed', 'error');
+    }
     setBusyId(null); setPayingId(null);
   };
 
@@ -641,6 +705,22 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
               <div style={{ textAlign: 'right' }}>{statusChip(it)}</div>
             </div>
 
+            {/* v1.98.12 — DURABLE outcome banner: stays put so the approver can always
+                tell what actually happened (a vanishing toast was the whole problem). */}
+            {actionResult[it.id] && (
+              <div style={{
+                marginTop: 8, padding: '8px 12px', borderRadius: 8, fontSize: 13, fontWeight: 600,
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+                background: actionResult[it.id].kind === 'ok' ? '#e8f5e9' : '#fdecea',
+                color: actionResult[it.id].kind === 'ok' ? '#1b5e20' : '#b71c1c',
+                border: `1px solid ${actionResult[it.id].kind === 'ok' ? '#a5d6a7' : '#f5c6cb'}`,
+              }}>
+                <span>{actionResult[it.id].text}</span>
+                <button onClick={() => clearRowResult(it.id)} aria-label="Dismiss"
+                  style={{ background: 'none', border: 'none', color: 'inherit', fontSize: 16, cursor: 'pointer', lineHeight: 1, padding: '0 2px' }}>×</button>
+              </div>
+            )}
+
             {/* Approver: how to pay the payee */}
             {meta.isApprover && ['pending', 'approved'].includes(it.status) && (
               <div style={{ fontSize: 12, marginTop: 6, color: payToLabel(it) ? 'var(--text-secondary)' : '#e65100' }}>
@@ -662,12 +742,7 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
             {meta.isApprover && it.status === 'pending' && (
               <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
                 {/* v1.98.0 — one-tap approve+pay when the payee can receive in-app */}
-                {it.payee_payout_ready ? (
-                  <button disabled={busyId === it.id} onClick={() => payViaAch(it)}
-                    style={{ padding: '6px 14px', background: '#2e7d32', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: busyId === it.id ? 'wait' : 'pointer' }}>
-                    {payAchId === it.id ? 'Sending…' : `💸 Pay $${Number(it.amount).toFixed(2)} via InPlace`}
-                  </button>
-                ) : null}
+                {it.payee_payout_ready ? renderPayControl(it) : null}
                 <button disabled={busyId === it.id} onClick={() => openApprove(it)}
                   style={{ padding: '6px 14px', background: it.payee_payout_ready ? 'none' : 'var(--role-color)', color: it.payee_payout_ready ? 'var(--role-color)' : 'var(--text-on-primary)', border: it.payee_payout_ready ? '1px solid var(--role-color)' : 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
                   {it.payee_payout_ready ? 'Approve only' : 'Approve…'}
@@ -683,12 +758,7 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
             )}
             {meta.isApprover && it.status === 'approved' && (
               <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                {it.payee_payout_ready && it.payout_status !== 'processing' && it.payout_status !== 'succeeded' && (
-                  <button disabled={busyId === it.id} onClick={() => payViaAch(it)}
-                    style={{ padding: '6px 14px', background: '#2e7d32', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: busyId === it.id ? 'wait' : 'pointer' }}>
-                    {payAchId === it.id ? 'Sending…' : `💸 Pay $${Number(it.amount).toFixed(2)} via InPlace`}
-                  </button>
-                )}
+                {it.payee_payout_ready && it.payout_status !== 'processing' && it.payout_status !== 'succeeded' && renderPayControl(it)}
                 {venmoLink(it) && (
                   <a href={venmoLink(it)} target="_blank" rel="noopener"
                     style={{ padding: '6px 14px', background: '#008CFF', color: '#fff', borderRadius: 8, fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>
