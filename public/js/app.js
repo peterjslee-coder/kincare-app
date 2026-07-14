@@ -438,6 +438,38 @@ const AdminPanelLazy = (props) => {
   return <AP {...props} />;
 };
 
+// ── Session-active flag helpers (v1.98.11) ────────────────────────────────
+// Controls silent auto-restore. "Remember this device" → persistent flag in
+// localStorage (survives browser/app close). Unchecked (default) → flag lives
+// in sessionStorage only, so closing the browser/app ends the session and an
+// unknown device (e.g. a shared phone) won't silently auto-log the user back in.
+window.__setSessionActive = function (remember) {
+  try {
+    if (remember) {
+      localStorage.setItem('inplace_session_active', '1');
+      sessionStorage.removeItem('inplace_session_active');
+    } else {
+      sessionStorage.setItem('inplace_session_active', '1');
+      localStorage.removeItem('inplace_session_active');
+    }
+  } catch {}
+};
+window.__hasActiveSession = function () {
+  try {
+    return localStorage.getItem('inplace_session_active')
+      || sessionStorage.getItem('inplace_session_active');
+  } catch { return null; }
+};
+window.__sessionIsPersistent = function () {
+  try { return !!localStorage.getItem('inplace_session_active'); } catch { return false; }
+};
+window.__clearSessionActive = function () {
+  try {
+    localStorage.removeItem('inplace_session_active');
+    sessionStorage.removeItem('inplace_session_active');
+  } catch {}
+};
+
 const App = () => {
   // Detect URL params at init — BEFORE any useEffect or auto-login can race
   // Capture verify token BEFORE any replaceState can strip the URL
@@ -886,10 +918,13 @@ const App = () => {
     // fresh cookies that the exchange just set, causing immediate re-logout.
     if (appState === 'reset-password' || appState === 'consent-response' || appState === 'login') return;
 
-    // Auto-restore if user has an active session (persists until explicit logout or 7-day cookie expiry).
-    // Uses localStorage so sessions survive browser/app restarts (important for native Capacitor app).
+    // Auto-restore only if user has an active session flag.
+    // Persistent flag (localStorage) survives browser/app restarts — set when the
+    // user checked "Keep me signed in on this device". Session-only flag
+    // (sessionStorage) is cleared when the browser/app closes, so a shared/unknown
+    // device won't silently auto-log the user back in. (v1.98.11)
     // Invite links bypass this check so the accept-invite flow still works.
-    const hasActiveSession = localStorage.getItem('inplace_session_active');
+    const hasActiveSession = window.__hasActiveSession();
     const hasInviteToken = new URLSearchParams(window.location.search).get('invite')
       || new URLSearchParams(window.__originalSearch || '').get('invite')
       || localStorage.getItem('pendingInviteToken');
@@ -946,8 +981,9 @@ const App = () => {
               const a11y = data.user.accessibility_prefs ? JSON.parse(data.user.accessibility_prefs) : {};
               if (a11y.textSize && typeof applyTextSize === 'function') applyTextSize(a11y.textSize);
             } catch {}
-            // Session successfully restored — keep flag active for this tab
-            localStorage.setItem('inplace_session_active', '1');
+            // Session successfully restored — re-assert the flag in whichever
+            // storage it already lived in (preserve persistent vs session-only).
+            window.__setSessionActive(window.__sessionIsPersistent());
             setAppState('app');
             // If returning user has a pending invite token, accept it now
             // Check URL, __originalSearch, and localStorage (survives approval gate)
@@ -1128,10 +1164,12 @@ const App = () => {
     }
   }, []);
 
-  const handleLogin = (user) => {
-    // Mark this tab as having an active session so refreshes auto-restore,
-    // but closing the browser requires re-authentication.
-    localStorage.setItem('inplace_session_active', '1');
+  const handleLogin = (user, remember = true) => {
+    // Mark this session active. remember=true → persistent (survives close);
+    // remember=false → session-only (ends when browser/app closes). Defaults to
+    // true so OAuth/passkey flows (which don't pass a value) stay persistent as
+    // before; email/password passes the "Keep me signed in" checkbox value.
+    window.__setSessionActive(remember);
     // Clear stale active role from any previous session
     window.setActiveRole(null);
     setActiveRoleState(null);
@@ -1249,8 +1287,8 @@ const App = () => {
   };
 
   const handleLogout = async () => {
-    // Clear session-active flag so next page load requires re-authentication
-    localStorage.removeItem('inplace_session_active');
+    // Clear session-active flag (both storages) so next load requires re-auth
+    window.__clearSessionActive();
     // Clear server-side session: revoke refresh token + clear httpOnly cookies
     // v1.74.4 — awaited (3s cap) so navigation can't cancel the cookie clear
     AUTH_TOKEN = null;

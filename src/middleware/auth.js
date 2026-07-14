@@ -147,15 +147,19 @@ function requireAdmin(req, res, next) {
 }
 
 // Set JWT as httpOnly cookie (used by login, register, OAuth exchange)
-function setAuthCookie(res, token) {
+// remember=false → session cookie (no maxAge): browser clears it on close, so a
+// shared/unknown device won't silently re-auth. Defaults true (persistent) for
+// callers that don't opt in (OAuth, register, refresh). (v1.98.11)
+function setAuthCookie(res, token, remember = true) {
   const isProduction = process.env.NODE_ENV === "production";
-  res.cookie("auth_token", token, {
+  const opts = {
     httpOnly: true,
     secure: isProduction,
     sameSite: "lax",
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days (matches JWT expiry)
     path: "/",
-  });
+  };
+  if (remember) opts.maxAge = 7 * 24 * 60 * 60 * 1000; // 7 days (matches JWT expiry)
+  res.cookie("auth_token", token, opts);
 }
 
 // Refresh tokens — long-lived, revocable, stored hashed in DB
@@ -172,15 +176,16 @@ async function generateRefreshToken(userId) {
   return rawToken;
 }
 
-function setRefreshCookie(res, refreshToken) {
+function setRefreshCookie(res, refreshToken, remember = true) {
   const isProduction = process.env.NODE_ENV === "production";
-  res.cookie("refresh_token", refreshToken, {
+  const opts = {
     httpOnly: true,
     secure: isProduction,
     sameSite: "lax",
-    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
     path: "/api/auth/refresh", // only sent to refresh endpoint
-  });
+  };
+  if (remember) opts.maxAge = 30 * 24 * 60 * 60 * 1000; // 30 days
+  res.cookie("refresh_token", refreshToken, opts);
 }
 
 async function revokeRefreshToken(rawToken) {
@@ -205,16 +210,17 @@ function clearAuthCookie(res) {
 // CSRF protection — double-submit cookie pattern
 // Server sets a JS-readable csrf_token cookie; frontend reads it and sends as X-CSRF-Token header.
 // Server compares header to cookie. An attacker on a different origin can't read the cookie.
-function setCsrfCookie(res) {
+function setCsrfCookie(res, remember = true) {
   const token = crypto.randomBytes(32).toString("hex");
   const isProduction = process.env.NODE_ENV === "production";
-  res.cookie("csrf_token", token, {
+  const opts = {
     httpOnly: false, // must be readable by frontend JS
     secure: isProduction,
     sameSite: "lax",
-    maxAge: 7 * 24 * 60 * 60 * 1000,
     path: "/",
-  });
+  };
+  if (remember) opts.maxAge = 7 * 24 * 60 * 60 * 1000;
+  res.cookie("csrf_token", token, opts);
   return token;
 }
 

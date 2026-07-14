@@ -304,7 +304,11 @@ router.post("/register", validateRegister, async (req, res) => {
 // ─── POST /api/auth/login ───
 router.post("/login", validateLogin, async (req, res) => {
   try {
-    const { email, password, deviceFingerprint } = req.body;
+    const { email, password, deviceFingerprint, keepSignedIn } = req.body;
+    // Persist cookies across browser/app close only when the user opted in
+    // ("Keep me signed in on this device"). Otherwise issue session cookies so a
+    // shared/unknown device won't silently re-auth after close. (v1.98.11)
+    const remember = !!keepSignedIn;
 
     const db = await getDb();
 
@@ -409,10 +413,10 @@ router.post("/login", validateLogin, async (req, res) => {
       responseData.mustChangePassword = true;
     }
 
-    setAuthCookie(res, token);
-    setCsrfCookie(res);
+    setAuthCookie(res, token, remember);
+    setCsrfCookie(res, remember);
     const refreshToken = await generateRefreshToken(user.id);
-    setRefreshCookie(res, refreshToken);
+    setRefreshCookie(res, refreshToken, remember);
 
     // NOTE: Do NOT auto-trust admin IPs on login.
     // Unknown IPs should trigger a passkey challenge in the admin panel

@@ -9,6 +9,12 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBa
   const [googleAvailable, setGoogleAvailable] = useState(false);
   const [appleAvailable, setAppleAvailable] = useState(false);
 
+  // "Keep me signed in on this device" — controls session persistence (silent
+  // auto-restore). Default OFF so a shared/unknown device (e.g. a family member's
+  // phone) does NOT silently log the user back in after the browser/app closes.
+  // Distinct from the 2FA "remember device" (which skips 2FA), below. (v1.98.11)
+  const [keepSignedIn, setKeepSignedIn] = useState(false);
+
   // 2FA state
   const [show2FA, setShow2FA] = useState(false);
   const [tempToken, setTempToken] = useState(null);
@@ -122,7 +128,7 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBa
     try {
       const response = await apiFetch('/api/auth/login', {
         method: 'POST',
-        body: JSON.stringify({ email, password, deviceFingerprint: getDeviceFingerprint() })
+        body: JSON.stringify({ email, password, deviceFingerprint: getDeviceFingerprint(), keepSignedIn })
       });
       if (!response) throw new Error('Login failed');
       const data = await response.json();
@@ -156,7 +162,7 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBa
       if (data.token && data.user) {
         trackAuthEvent('login', 'login_success', { email, role: data.user.role });
         setAuthToken(data.token);
-        onLogin(data.user);
+        onLogin(data.user, keepSignedIn);
       }
     } catch (err) {
       const newCount = failCount + 1;
@@ -179,7 +185,7 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBa
         body: JSON.stringify({
           tempToken, code: twoFACode,
           deviceFingerprint: rememberDevice ? getDeviceFingerprint() : null,
-          rememberDevice,
+          rememberDevice, keepSignedIn,
         })
       });
       if (!response) throw new Error('Verification failed');
@@ -188,7 +194,7 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBa
       if (data.token && data.user) {
         trackAuthEvent('login', '2fa_success', { email, rememberDevice });
         setAuthToken(data.token);
-        onLogin(data.user);
+        onLogin(data.user, keepSignedIn);
       }
     } catch (err) {
       trackAuthEvent('login', 'error', { email, error: err.message, source: '2fa_verify' });
@@ -211,7 +217,7 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBa
       const data = await response.json();
       if (!response.ok) throw new Error(data?.error || 'Password change failed');
       trackAuthEvent('login', 'password_changed', { email });
-      onLogin(pendingUser);
+      onLogin(pendingUser, keepSignedIn);
     } catch (err) {
       trackAuthEvent('login', 'error', { email, error: err.message, source: 'password_change' });
       setError(err.message);
@@ -500,10 +506,14 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBa
             <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>Email</label>
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" required style={inputStyle} />
           </div>
-          <div className="form-group" style={{ marginBottom: 16 }}>
+          <div className="form-group" style={{ marginBottom: 12 }}>
             <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>Password</label>
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required style={inputStyle} />
           </div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, fontSize: 13, color: 'var(--text-secondary)', cursor: 'pointer' }}>
+            <input type="checkbox" checked={keepSignedIn} onChange={(e) => setKeepSignedIn(e.target.checked)} />
+            Keep me signed in on this device
+          </label>
           <button type="submit" disabled={loading} style={{ ...primaryBtn, opacity: loading ? 0.6 : 1 }}>{loading ? 'Signing in...' : 'Sign In'}</button>
         </form>
 

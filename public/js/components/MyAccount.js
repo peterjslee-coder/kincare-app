@@ -928,7 +928,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
         new Promise((resolve) => setTimeout(resolve, 3000)),
       ]);
     } catch (e) { /* still reload — worst case the cookie survives one more cycle */ }
-    try { localStorage.removeItem('inplace_session_active'); } catch (e) {}
+    try { (window.__clearSessionActive ? window.__clearSessionActive() : (localStorage.removeItem('inplace_session_active'), sessionStorage.removeItem('inplace_session_active'))); } catch (e) {}
     if (typeof disconnectSocket === 'function') disconnectSocket();
     window.location.reload();
   };

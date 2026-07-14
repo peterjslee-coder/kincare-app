@@ -121,7 +121,7 @@ router.post("/verify-setup", authenticate, async (req, res) => {
 // ─── POST /api/auth/2fa/verify ─── Verify TOTP code during login (uses tempToken, not JWT)
 router.post("/verify", async (req, res) => {
   try {
-    const { tempToken, code, deviceFingerprint, rememberDevice } = req.body;
+    const { tempToken, code, deviceFingerprint, rememberDevice, keepSignedIn } = req.body;
     if (!tempToken || !code) {
       return res.status(400).json({ error: "Temporary token and verification code required" });
     }
@@ -191,10 +191,12 @@ router.post("/verify", async (req, res) => {
       ).run(deviceId, decoded.id, deviceFingerprint, deviceName, expiresAt);
     }
 
-    setAuthCookie(res, token);
-    setCsrfCookie(res);
+    // Session-persistence opt-in (distinct from trusted-device rememberDevice above)
+    const remember = !!keepSignedIn;
+    setAuthCookie(res, token, remember);
+    setCsrfCookie(res, remember);
     const refreshTk = await generateRefreshToken(decoded.id);
-    setRefreshCookie(res, refreshTk);
+    setRefreshCookie(res, refreshTk, remember);
     res.json({
       user: {
         id: user.id,
