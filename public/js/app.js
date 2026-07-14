@@ -538,17 +538,29 @@ const App = () => {
     };
   }, []);
 
-  // v1.98.5 — Apply a stashed cold-start deep link AFTER the app is ready.
-  // The async /auth/me restore lands the user on 'dashboard' by default, which
-  // otherwise clobbers a notification tap's target page ("top of the hero" bug).
-  // Re-applying here — after appState flips to 'app' — wins the race, and the
-  // target component's focus effect then consumes window.__pendingFocus to
-  // scroll to / open the exact item.
+  // v1.98.5/.6 — Apply a stashed cold-start deep link AFTER the app is ready.
+  // The async /auth/me restore (and invite/oauth paths) land on 'dashboard' by
+  // default, and those setters can fire across SEVERAL ticks — clobbering a
+  // notification tap's target page ("top of the hero" bug). A single re-apply
+  // loses to a later clobber, so we re-assert the target through the restore
+  // window (~1.8s), then release. The target component's focus effect then
+  // consumes window.__pendingFocus to scroll to / open the exact item.
   useEffect(() => {
     if (appState !== 'app' || !window.__pendingPage) return;
-    if (window.__pendingTeam) { setSelectedCareTeamId(window.__pendingTeam); window.__pendingTeam = null; }
-    setCurrentPage(window.__pendingPage);
-    window.__pendingPage = null;
+    const target = window.__pendingPage;
+    if (window.__pendingTeam) setSelectedCareTeamId(window.__pendingTeam);
+    setCurrentPage(target);
+    let ticks = 0;
+    const iv = setInterval(() => {
+      ticks += 1;
+      setCurrentPage(target); // re-assert to beat late 'dashboard' defaults
+      if (ticks >= 9) {
+        clearInterval(iv);
+        window.__pendingPage = null;
+        window.__pendingTeam = null;
+      }
+    }, 200);
+    return () => clearInterval(iv);
   }, [appState, currentUser]);
 
   // Expose modal opener and navigation for child components
