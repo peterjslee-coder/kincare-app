@@ -904,8 +904,11 @@ router.post("/:id/pay-ach", async (req, res) => {
       const arrival = isInstant
         ? "— it's confirmed and heading to their bank (usually a couple business days)"
         : "— arrives in ~1–3 business days";
-      await notifyParties(db, req, ctx, "Reimbursement sent",
-        `$${(baseCents / 100).toFixed(2)} is on its way to ${payee.first_name} through InPlace ${arrival}.`,
+      // v1.98.13 — the one-tap "Pay via InPlace" approves AND pays in a single
+      // action, so the notification says BOTH explicitly (the requester asked to be
+      // told when it's approved and when it's paid; here that's one event).
+      await notifyParties(db, req, ctx, "Reimbursement approved & paid",
+        `Your $${(baseCents / 100).toFixed(2)} reimbursement for "${ctx.row.description}" was approved and sent through InPlace ${arrival}.`,
         "reimbursement_paid");
       return res.json({ ok: true, status: intent.status, method, feeCents, totalCents });
     }
