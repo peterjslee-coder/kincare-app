@@ -559,27 +559,49 @@ const App = () => {
       if (d.focus) window.__pendingFocus = d.focus;
       if (d.careTeamId) setSelectedCareTeamId(d.careTeamId);
       const t = String(d.type || '');
+      // Compute the destination page, then route through applyTarget() below so
+      // EVERY tap (web push, native push, in-app list) gets the same clobber
+      // protection the web-URL cold path already has.
+      let target = null;
       if ((t === 'message' || t === 'video_call') && d.conversationId) {
         window.__pendingConversation = d.conversationId;
-        setCurrentPage('messages');
+        target = 'messages';
       } else if (t.startsWith('reimbursement')) {
-        setCurrentPage('care-team');
+        target = 'care-team';
       } else if (t === 'care_request' || t === 'care_request_accepted' || t === 'time_change' || t === 'time_change_accepted' || t === 'time_proposal' || t === 'proposal_accepted' || t === 'proposal_declined' || t === 'proposal_expired') {
         if (d.sessionId && !d.focus) window.__pendingFocus = `session:${d.sessionId}`;
-        setCurrentPage((window.__currentRole || 'family') === 'caregiver' ? 'find-work' : 'schedule');
+        target = (window.__currentRole || 'family') === 'caregiver' ? 'find-work' : 'schedule';
       } else if (t === 'new_job') {
-        setCurrentPage('find-work');
+        target = 'find-work';
       } else if (t === 'check_in_reminder' || t === 'check_out_reminder' || t === 'caregiver_arriving' || t === 'caregiver_arriving_recipient' || t === 'session_in_progress' || t === 'session_complete') {
         if (d.sessionId && !d.focus) window.__pendingFocus = `session:${d.sessionId}`;
-        setCurrentPage('dashboard');
+        target = 'dashboard';
       } else if (t === 'kindred_relay') {
-        setCurrentPage('messages');
+        target = 'messages';
       } else if (t === 'admin_setting_change') {
-        setCurrentPage('dashboard');
+        target = 'dashboard';
       } else if (d.page) {
         // Generic deep-link (e.g. team_note / observation_attention → care-profile)
-        setCurrentPage(d.page);
+        target = d.page;
       }
+      if (!target) return;
+      // v1.98.14 — stash + self-re-assert. On a native/cold push tap the router
+      // fires while the async /auth/me restore is still landing on 'dashboard';
+      // a one-shot setCurrentPage loses that race and the tap "falls to Home"
+      // (the messages-push-goes-to-homepage bug). Stashing __pendingPage also lets
+      // the appState/currentUser re-assert effect protect it, and this local loop
+      // covers the already-warm case. Cleared once the window closes.
+      window.__pendingPage = target;
+      setCurrentPage(target);
+      let ticks = 0;
+      const iv = setInterval(() => {
+        ticks += 1;
+        setCurrentPage(target);
+        if (ticks >= 9) {
+          clearInterval(iv);
+          if (window.__pendingPage === target) window.__pendingPage = null;
+        }
+      }, 200);
     };
   }, []);
 
