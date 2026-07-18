@@ -336,13 +336,14 @@ router.post("/webhook", express.raw({ type: "application/json" }), async (req, r
             await db.prepare(
               "UPDATE reimbursements SET payout_status = 'succeeded', status = 'paid', updated_at = NOW() WHERE id = ?"
             ).run(rid);
+            // v1.98.15 — coalesce with any approve/pay pushes from the same sitting
+            // (card settles instantly, so all three events land within seconds);
+            // a genuinely-later ACH settlement fires as its own digest days later.
             try {
-              const { sendPushToUser } = require("./push");
-              sendPushToUser(row.payee_user_id, {
-                title: "Reimbursement confirmed",
-                body: `$${Number(row.amount).toFixed(2)} for "${row.description}" is confirmed and on its way to your bank — usually a couple business days (the first deposit can take a bit longer).`,
-                data: { type: "reimbursement_paid", reimbursementId: rid, careTeamId: row.care_team_id, page: "care-team", focus: `reimbursement:${rid}` },
-              }, "reimbursement_paid").catch(() => {});
+              const { enqueueReimbursementDigest } = require("../services/reimbursementDigest");
+              await enqueueReimbursementDigest(db, {
+                userId: row.payee_user_id, reimbursementId: rid, careTeamId: row.care_team_id,
+              });
             } catch {}
             console.log(`✅ Reimbursement ACH settled: ${rid}`);
           }

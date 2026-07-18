@@ -350,7 +350,7 @@ app.use("/api/legal", require("./routes/legal"));
 app.use("/api/media", require("./routes/media"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.98.14";
+const APP_VERSION = "1.98.15";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });
@@ -885,6 +885,21 @@ async function start() {
     }
   }), NOTIFICATION_POLL_INTERVAL);
   console.log("  Accountability poller started (payment auth, late check-ins, no-shows)");
+
+  // ─── Reimbursement push digest sweeper (v1.98.15) ───
+  // Sends coalesced reimbursement pushes once their ~2-minute debounce window
+  // elapses, so approve + pay + confirm in one sitting become a single push.
+  const { sweepReimbursementDigests } = require("./services/reimbursementDigest");
+  setInterval(guardedPoller(104, async () => {
+    try {
+      await sweepReimbursementDigests();
+    } catch (err) {
+      if (err.message && !err.message.includes("relation") && !err.message.includes("column")) {
+        console.error("  Reimbursement digest sweeper error:", err.message);
+      }
+    }
+  }), 30 * 1000); // every 30s (window is 2 min)
+  console.log("  Reimbursement digest sweeper started (coalesces approve/pay/confirm pushes)");
 
   // ─── Kindred Reminder Delivery Poller ───
   setInterval(guardedPoller(104, async () => {

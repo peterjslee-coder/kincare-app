@@ -449,6 +449,12 @@ function payoutLabel(row) {
 
 // v1.97.0 — "we all get notified": payee + team leader + billing contact,
 // minus whoever performed the action. Every notification deep-links to the item.
+// v1.98.15 — instead of pushing each event immediately, enqueue a coalescing
+// digest per recipient. A burst of approve → pay → confirm within ~2 minutes
+// collapses into ONE push reflecting the final state (see services/
+// reimbursementDigest.js). title/body/type are no longer used here — the digest
+// composes the message from the reimbursement's live state at fire time — but the
+// signature is kept so callers read clearly at each event site.
 async function notifyParties(db, req, ctx, title, body, type) {
   const targets = new Set([ctx.row.payee_user_id]);
   try {
@@ -459,9 +465,11 @@ async function notifyParties(db, req, ctx, title, body, type) {
   } catch {}
   if (ctx.access.team.billing_user_id) targets.add(ctx.access.team.billing_user_id);
   targets.delete(req.user.id);
+  const { enqueueReimbursementDigest } = require("../services/reimbursementDigest");
   for (const uid of targets) {
-    notify(req, uid, title, body,
-      { type, reimbursementId: ctx.row.id, careTeamId: ctx.row.care_team_id, page: "care-team", focus: `reimbursement:${ctx.row.id}` });
+    await enqueueReimbursementDigest(db, {
+      userId: uid, reimbursementId: ctx.row.id, careTeamId: ctx.row.care_team_id,
+    });
   }
 }
 

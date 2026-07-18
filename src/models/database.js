@@ -1551,6 +1551,30 @@ async function initializeDatabase() {
         `ALTER TABLE reimbursements ADD COLUMN IF NOT EXISTS payout_verified INTEGER DEFAULT 0`,
       ],
     },
+    {
+      // v1.98.15 — coalesce reimbursement pushes. When the approver approves,
+      // pays, and the charge confirms in one sitting, the requester used to get
+      // 3 separate pushes. Instead we enqueue a per-(recipient, reimbursement)
+      // digest with a rolling ~2-minute fire time; a sweeper sends ONE push that
+      // reflects the reimbursement's final state. A partial unique index keeps a
+      // single PENDING digest per pair while allowing sent history rows (so a
+      // later, genuinely separate ACH settlement can still notify).
+      id: "007_reimbursement_push_digests",
+      statements: [
+        `CREATE TABLE IF NOT EXISTS reimbursement_push_digests (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          reimbursement_id TEXT NOT NULL,
+          care_team_id TEXT,
+          fire_at TIMESTAMPTZ NOT NULL,
+          sent INTEGER DEFAULT 0,
+          sent_at TIMESTAMPTZ,
+          created_at TIMESTAMPTZ DEFAULT NOW()
+        )`,
+        `CREATE UNIQUE INDEX IF NOT EXISTS uq_reimb_digest_pending ON reimbursement_push_digests(user_id, reimbursement_id) WHERE sent = 0`,
+        `CREATE INDEX IF NOT EXISTS idx_reimb_digest_due ON reimbursement_push_digests(sent, fire_at)`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;
