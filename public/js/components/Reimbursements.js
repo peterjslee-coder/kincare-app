@@ -592,8 +592,11 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
           )}
           <div style={{ marginBottom: 8, display: (recurringMode || editingId) ? 'none' : 'block' }}>
             <label style={{ display: 'inline-block', padding: '8px 14px', background: 'var(--bg-card)', border: '1px dashed var(--border-light)', borderRadius: 8, fontSize: 13, cursor: 'pointer', color: 'var(--text-secondary)' }}>
-              📷 Add receipt photo / PDF
-              <input type="file" accept="image/*,application/pdf" multiple capture="environment" onChange={handleFiles} style={{ display: 'none' }} />
+              📎 Add receipt — photo, screenshot, or PDF
+              {/* v1.98.16 — no capture="environment": that forced the camera. Without
+                  it the OS shows its full picker (Take Photo / Photo Library / Files),
+                  so a screenshot, a saved image, or a PDF all work. */}
+              <input type="file" accept="image/*,application/pdf" multiple onChange={handleFiles} style={{ display: 'none' }} />
             </label>
             {receipts.map((r, i) => (
               <span key={i} style={{ fontSize: 12, marginLeft: 8, color: 'var(--text-secondary)' }}>
