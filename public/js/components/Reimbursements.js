@@ -433,6 +433,9 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
 
   const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
   const fmtDateFull = (d) => d ? new Date(d).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : '';
+  // Stripe payout arrival_date is a UTC calendar date; format it in UTC so it
+  // matches the date shown on the bank statement (not shifted back a day in EST).
+  const fmtDepositDate = (ms) => ms ? new Date(ms).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }) : '';
   const money = (n) => `$${Number(n || 0).toFixed(2)}`;
   const inputStyle = { padding: '10px 12px', border: '1px solid var(--border-light)', borderRadius: 8, fontSize: 14, background: 'var(--bg-card)', color: 'var(--text-primary)' };
 
@@ -506,7 +509,7 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
                       {payoutStatusChip(p.status)}
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>
-                      {p.status === 'paid' ? 'Deposited' : p.status === 'pending' || p.status === 'in_transit' ? 'Expected' : ''} {fmtDateFull(p.arrivalDate)}
+                      {p.status === 'paid' ? 'Deposited' : p.status === 'pending' || p.status === 'in_transit' ? 'Expected' : ''} {fmtDepositDate(p.arrivalDate)}
                     </div>
                     <div style={{ borderTop: '1px solid var(--border-light)', paddingTop: 8 }}>
                       {p.items.length === 0 ? (
