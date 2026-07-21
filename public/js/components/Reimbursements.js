@@ -32,6 +32,17 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
   const [markMethod, setMarkMethod] = useState('venmo');
   const [error, setError] = useState('');
   const [showMoney, setShowMoney] = useState(false); // v1.96.0 — Money view (leader + billing contact)
+  // v1.98.17 — Bank deposits view: groups received reimbursements into the actual
+  // Stripe payout batches so the number on the bank statement ties to requests.
+  const [showPayouts, setShowPayouts] = useState(false);
+  const [payoutData, setPayoutData] = useState(null);
+  const [payoutsLoading, setPayoutsLoading] = useState(false);
+  const openPayouts = async () => {
+    setShowPayouts(true); setPayoutsLoading(true);
+    try { const r = await apiFetch('/api/reimbursements/payouts'); if (r?.ok) setPayoutData(await r.json()); else setPayoutData({ error: true }); }
+    catch { setPayoutData({ error: true }); }
+    setPayoutsLoading(false);
+  };
   // v1.97.0 — approve modal: confirm the "from" account before approving
   const [approveTarget, setApproveTarget] = useState(null); // the item being approved
   const [fundingAccounts, setFundingAccounts] = useState([]);
@@ -421,7 +432,111 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
   };
 
   const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+  const fmtDateFull = (d) => d ? new Date(d).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : '';
+  const money = (n) => `$${Number(n || 0).toFixed(2)}`;
   const inputStyle = { padding: '10px 12px', border: '1px solid var(--border-light)', borderRadius: 8, fontSize: 14, background: 'var(--bg-card)', color: 'var(--text-primary)' };
+
+  // v1.98.17 — Bank deposits panel: each Stripe payout (one bank deposit) with the
+  // exact reimbursements that make it up, so the statement number always ties back.
+  const payoutStatusChip = (s) => {
+    const map = {
+      paid:       { label: 'Deposited', bg: '#e8f5e9', fg: '#1b5e20' },
+      in_transit: { label: 'On the way', bg: '#e3f2fd', fg: '#1565c0' },
+      pending:    { label: 'Pending', bg: '#fff3e0', fg: '#e65100' },
+      canceled:   { label: 'Canceled', bg: '#f5f5f5', fg: '#616161' },
+      failed:     { label: 'Failed', bg: '#fdecea', fg: '#b71c1c' },
+    };
+    const c = map[s] || { label: s || '—', bg: '#f5f5f5', fg: '#616161' };
+    return <span style={{ fontSize: 12, fontWeight: 700, color: c.fg, background: c.bg, padding: '3px 10px', borderRadius: 12 }}>{c.label}</span>;
+  };
+
+  const renderPayouts = () => {
+    const d = payoutData;
+    return (
+      <div onClick={() => setShowPayouts(false)}
+        style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1000, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', overflowY: 'auto', padding: '5vh 12px' }}>
+        <div onClick={(e) => e.stopPropagation()}
+          style={{ background: 'var(--bg-surface)', borderRadius: 14, maxWidth: 560, width: '100%', boxShadow: '0 8px 40px rgba(0,0,0,0.25)', overflow: 'hidden' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 18px', borderBottom: '1px solid var(--border-light)' }}>
+            <div>
+              <div style={{ fontSize: 16, fontWeight: 700 }}>🏦 Bank deposits</div>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>How your reimbursements land in your bank</div>
+            </div>
+            <button onClick={() => setShowPayouts(false)} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: 'var(--text-muted)', lineHeight: 1 }}>×</button>
+          </div>
+          <div style={{ padding: 16, maxHeight: '78vh', overflowY: 'auto' }}>
+            {payoutsLoading ? (
+              <div style={{ color: 'var(--text-muted)', fontSize: 14, padding: 12, textAlign: 'center' }}>Loading your deposits…</div>
+            ) : !d || d.error ? (
+              <div style={{ color: '#c62828', fontSize: 14, padding: 12 }}>Couldn't load your deposits right now. Please try again.</div>
+            ) : !d.onboarded ? (
+              <div style={{ color: 'var(--text-secondary)', fontSize: 14, padding: 12 }}>
+                Set up direct deposit first (in the reimbursement form) and your bank deposits will show up here, each tied to the requests that make it up.
+              </div>
+            ) : (d.payouts.length === 0 && d.upcoming.length === 0) ? (
+              <div style={{ color: 'var(--text-secondary)', fontSize: 14, padding: 12 }}>
+                No InPlace deposits yet. When someone reimburses you in-app, the bank deposit and the requests behind it appear here.
+              </div>
+            ) : (
+              <>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12, lineHeight: 1.5 }}>
+                  {'Your bank batches multiple reimbursements into one deposit. Each card below is a single deposit on your statement, with the exact requests that add up to it.'}
+                </div>
+
+                {d.upcoming.length > 0 && (
+                  <div style={{ border: '1px dashed var(--border-light)', borderRadius: 10, padding: 12, marginBottom: 14, background: 'var(--bg-card)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: '#e65100' }}>On the way — not yet deposited</span>
+                      <span style={{ fontSize: 15, fontWeight: 700 }}>{money(d.upcomingTotal)}</span>
+                    </div>
+                    {d.upcoming.map((it) => (
+                      <div key={it.reimbursementId} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '3px 0', color: 'var(--text-secondary)' }}>
+                        <span>{it.description}{it.state === 'in_balance' ? ' · clearing' : ' · processing'}</span>
+                        <span>{money(it.amount)}</span>
+                      </div>
+                    ))}
+                    <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 6 }}>Usually deposits 1–3 business days after payment, batched into your next deposit.</div>
+                  </div>
+                )}
+
+                {d.payouts.map((p) => (
+                  <div key={p.id} style={{ border: '1px solid var(--border-light)', borderRadius: 10, padding: 12, marginBottom: 12 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                      <span style={{ fontSize: 20, fontWeight: 700 }}>{money(p.amount)}</span>
+                      {payoutStatusChip(p.status)}
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>
+                      {p.status === 'paid' ? 'Deposited' : p.status === 'pending' || p.status === 'in_transit' ? 'Expected' : ''} {fmtDateFull(p.arrivalDate)}
+                    </div>
+                    <div style={{ borderTop: '1px solid var(--border-light)', paddingTop: 8 }}>
+                      {p.items.length === 0 ? (
+                        <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>Deposit details unavailable.</div>
+                      ) : p.items.map((it) => (
+                        <div key={it.reimbursementId} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '3px 0' }}>
+                          <span style={{ color: 'var(--text-primary)' }}>{it.description}<span style={{ color: 'var(--text-tertiary)' }}> · {fmtDate(it.paidAt)}</span></span>
+                          <span style={{ fontWeight: 600 }}>{money(it.amount)}</span>
+                        </div>
+                      ))}
+                      {p.otherAmount > 0.01 && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '3px 0', color: 'var(--text-tertiary)' }}>
+                          <span>Other</span><span>{money(p.otherAmount)}</span>
+                        </div>
+                      )}
+                      {p.items.length > 1 && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, paddingTop: 6, marginTop: 4, borderTop: '1px dashed var(--border-light)', fontWeight: 700 }}>
+                          <span>{p.items.length} requests</span><span>{money(p.itemsTotal)}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="card" style={{ marginTop: 16 }}>
@@ -432,6 +547,12 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
             <button onClick={() => setShowMoney(true)}
               style={{ padding: '6px 14px', background: 'var(--bg-card)', color: 'var(--role-color)', border: '1px solid var(--role-color)', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
               💰 Money view
+            </button>
+          )}
+          {!showForm && (
+            <button onClick={openPayouts}
+              style={{ padding: '6px 14px', background: 'var(--bg-card)', color: 'var(--role-color)', border: '1px solid var(--role-color)', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+              🏦 Bank deposits
             </button>
           )}
           {meta.canSubmit && !showForm && (
@@ -814,6 +935,8 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
       {showMoney && typeof MoneyView !== 'undefined' && (
         <MoneyView careTeamId={careTeamId} onClose={() => setShowMoney(false)} />
       )}
+
+      {showPayouts && renderPayouts()}
 
       {/* v1.97.0 — approve modal: like addressing a letter, the requester set
           the "to" address; the approver confirms the "from" account here. */}

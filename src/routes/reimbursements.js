@@ -763,6 +763,108 @@ router.get("/payout/status", async (req, res) => {
   }
 });
 
+// GET /api/reimbursements/payouts — group the current user's RECEIVED in-app
+// reimbursements into the actual Stripe bank-deposit batches (v1.98.17). Stripe
+// pays a connected account's balance out ~daily, so several reimbursements can
+// land as one bank deposit; this ties each deposit back to specific requests.
+//
+// Mapping: platform PaymentIntent → its charge → charge.transfer (tr_). On the
+// connected account, each payout's constituent balance transactions have a
+// source charge whose source_transfer is that same tr_. We cache tr_ per
+// reimbursement (stripe_transfer_id) so this is a lookup, not a re-derivation.
+router.get("/payouts", async (req, res) => {
+  try {
+    const db = await getDb();
+    let stripe;
+    try { stripe = require("./payments").getStripe(); }
+    catch { return res.json({ onboarded: false, payouts: [], upcoming: [] }); }
+
+    const u = await db.prepare("SELECT stripe_account_id FROM users WHERE id = ?").get(req.user.id);
+    if (!u?.stripe_account_id) return res.json({ onboarded: false, payouts: [], upcoming: [] });
+    const acct = u.stripe_account_id;
+
+    // The user's in-app ACH reimbursements — these are the ones that flow to the bank.
+    const rows = await db.prepare(`
+      SELECT id, amount, description, paid_at, care_team_id, stripe_payment_intent, stripe_transfer_id, payout_status
+      FROM reimbursements
+      WHERE payee_user_id = ? AND paid_method = 'ach_inplace' AND stripe_payment_intent IS NOT NULL
+      ORDER BY paid_at DESC
+      LIMIT 200
+    `).all(req.user.id);
+
+    // Resolve + cache the platform transfer id (tr_) for any row missing it.
+    const byTransfer = new Map();
+    for (const r of rows) {
+      if (!r.stripe_transfer_id) {
+        try {
+          const pi = await stripe.paymentIntents.retrieve(r.stripe_payment_intent, { expand: ["latest_charge"] });
+          const tr = pi?.latest_charge?.transfer;
+          const trId = typeof tr === "string" ? tr : (tr && tr.id);
+          if (trId) {
+            r.stripe_transfer_id = trId;
+            await db.prepare("UPDATE reimbursements SET stripe_transfer_id = ? WHERE id = ?").run(trId, r.id);
+          }
+        } catch { /* still settling / unavailable — leaves it in "upcoming" */ }
+      }
+      if (r.stripe_transfer_id) byTransfer.set(r.stripe_transfer_id, r);
+    }
+
+    // Walk the connected account's payouts and their constituent transactions.
+    const matched = new Set();
+    const payouts = [];
+    let poList = { data: [] };
+    try { poList = await stripe.payouts.list({ limit: 24 }, { stripeAccount: acct }); } catch { /* none */ }
+    for (const po of poList.data) {
+      const items = [];
+      try {
+        const txns = await stripe.balanceTransactions.list(
+          { payout: po.id, limit: 100, expand: ["data.source"] },
+          { stripeAccount: acct }
+        );
+        for (const bt of txns.data) {
+          const src = bt.source;
+          const tr = src && (typeof src.source_transfer === "string" ? src.source_transfer : src.source_transfer?.id);
+          const r = tr && byTransfer.get(tr);
+          if (r) {
+            matched.add(r.id);
+            items.push({ reimbursementId: r.id, amount: Number(r.amount), description: r.description, paidAt: r.paid_at, careTeamId: r.care_team_id });
+          }
+        }
+      } catch { /* skip this payout's items */ }
+      const itemsTotal = items.reduce((s, i) => s + i.amount, 0);
+      payouts.push({
+        id: po.id,
+        amountCents: po.amount,
+        amount: po.amount / 100,
+        currency: po.currency,
+        status: po.status, // paid | pending | in_transit | canceled | failed
+        arrivalDate: po.arrival_date ? po.arrival_date * 1000 : null, // → ms
+        created: po.created ? po.created * 1000 : null,
+        items,
+        itemsTotal,
+        // Anything in the deposit not accounted for by matched reimbursements
+        // (rare for a reimbursement-only account) — surfaced as "other".
+        otherAmount: Math.round((po.amount / 100 - itemsTotal) * 100) / 100,
+      });
+    }
+
+    // Paid in-app but not yet in a listed payout → still on the way to the bank.
+    const upcoming = rows
+      .filter((r) => !matched.has(r.id))
+      .map((r) => ({
+        reimbursementId: r.id, amount: Number(r.amount), description: r.description,
+        paidAt: r.paid_at, careTeamId: r.care_team_id,
+        state: r.payout_status === "succeeded" ? "in_balance" : "processing",
+      }));
+    const upcomingTotal = upcoming.reduce((s, i) => s + i.amount, 0);
+
+    res.json({ onboarded: true, payouts, upcoming, upcomingTotal });
+  } catch (err) {
+    captureException(err, { where: "reimbursements: payouts" });
+    res.status(500).json({ error: "Failed to load bank deposits" });
+  }
+});
+
 // POST /api/reimbursements/payout/onboard-link — create/continue Connect onboarding
 // Returns a Stripe-hosted onboarding URL (identity + payout bank + ToS).
 router.post("/payout/onboard-link", async (req, res) => {

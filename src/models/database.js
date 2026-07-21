@@ -1575,6 +1575,19 @@ async function initializeDatabase() {
         `CREATE INDEX IF NOT EXISTS idx_reimb_digest_due ON reimbursement_push_digests(sent, fire_at)`,
       ],
     },
+    {
+      // v1.98.17 — Bank deposits view. Stripe batches a connected account's
+      // balance into one payout per day, so several reimbursements land as a
+      // single bank deposit. The connected-account charge carries source_transfer
+      // = the platform transfer id (tr_); the platform PaymentIntent's charge
+      // carries the same tr_. Caching that tr_ per reimbursement lets us map each
+      // Stripe payout back to the exact requests it paid, without re-deriving it
+      // from the PaymentIntent on every load.
+      id: "008_reimbursement_transfer_id",
+      statements: [
+        `ALTER TABLE reimbursements ADD COLUMN IF NOT EXISTS stripe_transfer_id TEXT`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;
