@@ -1650,6 +1650,15 @@ async function initializeDatabase() {
         )`,
       ],
     },
+    {
+      // v1.98.19 — optional "purpose" tag so reimbursements can be bucketed for
+      // outside accounts (real-estate taxes, FSA/HSA, Medicaid, etc.), filtered,
+      // and exported. Distinct from the expense `category` (what was bought).
+      id: "010_reimbursement_purpose",
+      statements: [
+        `ALTER TABLE reimbursements ADD COLUMN IF NOT EXISTS purpose TEXT`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

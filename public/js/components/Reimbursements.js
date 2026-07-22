@@ -2,6 +2,19 @@
 // Family expense ledger: submit receipts, billing contact approves, settlement
 // happens outside the platform (Venmo deep link / Zelle / check / cash) and is
 // recorded here. Visible to the whole care team.
+// v1.98.19 — optional "purpose" tags for bucketing reimbursements toward outside
+// accounts (taxes, FSA/HSA, Medicaid…). Kept separate from the expense category.
+const PURPOSE_OPTIONS = [
+  { value: 'real_estate_tax', label: 'Real estate taxes' },
+  { value: 'fsa_hsa', label: 'FSA / HSA' },
+  { value: 'medicaid', label: 'Medicaid' },
+  { value: 'home_repairs', label: 'Home / repairs' },
+  { value: 'medical', label: 'Medical' },
+  { value: 'personal', label: 'Personal' },
+  { value: 'other', label: 'Other' },
+];
+const PURPOSE_LABEL = (v) => (PURPOSE_OPTIONS.find((o) => o.value === v) || {}).label || '';
+
 const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId }) => {
   const { showToast } = useToast();
   const [items, setItems] = useState([]);
@@ -15,6 +28,7 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('other');
+  const [purpose, setPurpose] = useState(''); // v1.98.19 — optional purpose tag
   const [expenseDate, setExpenseDate] = useState('');
   // v1.97.0 — the requester's "to" address: method + details (letter metaphor)
   const [payoutMethod, setPayoutMethod] = useState('venmo');
@@ -42,6 +56,25 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
     try { const r = await apiFetch('/api/reimbursements/payouts'); if (r?.ok) setPayoutData(await r.json()); else setPayoutData({ error: true }); }
     catch { setPayoutData({ error: true }); }
     setPayoutsLoading(false);
+  };
+  // v1.98.19 — Reports & export + purpose tagging on any row (incl. paid ones).
+  const [showReports, setShowReports] = useState(false);
+  const [rptFrom, setRptFrom] = useState('');
+  const [rptTo, setRptTo] = useState('');
+  const [rptPurpose, setRptPurpose] = useState('');
+  const [rptCategory, setRptCategory] = useState('');
+  const [rptPerson, setRptPerson] = useState('');
+  const [rptStatus, setRptStatus] = useState('');
+  const [purposeSavingId, setPurposeSavingId] = useState(null);
+  const setRowPurpose = async (id, value) => {
+    setPurposeSavingId(id);
+    // Optimistic local update so the tag sticks even before the refetch lands.
+    setItems((prev) => prev.map((x) => x.id === id ? { ...x, purpose: value || null } : x));
+    try {
+      const r = await apiFetch(`/api/reimbursements/${id}/purpose`, { method: 'PUT', body: JSON.stringify({ purpose: value || null }) });
+      if (!r?.ok) { showToast('Could not save purpose', 'error'); fetchList(); }
+    } catch { showToast('Could not save purpose', 'error'); fetchList(); }
+    setPurposeSavingId(null);
   };
   // v1.97.0 — approve modal: confirm the "from" account before approving
   const [approveTarget, setApproveTarget] = useState(null); // the item being approved
@@ -151,7 +184,7 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
   };
 
   const resetForm = () => {
-    setAmount(''); setDescription(''); setCategory('other'); setExpenseDate('');
+    setAmount(''); setDescription(''); setCategory('other'); setPurpose(''); setExpenseDate('');
     setPayoutMethod('venmo'); setPayoutDetails(''); setEditingId(null);
     setReceipts([]); setPayeeUserId(''); setError(''); setShowForm(false); setRecordMode(false); setRecurringMode(false); setDayOfMonth('1');
   };
@@ -200,7 +233,7 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
     setShowForm(true); setRecordMode(false); setRecurringMode(false);
     setEditingId(it.id);
     fetchPayoutStatus();
-    setAmount(String(it.amount)); setDescription(it.description); setCategory(it.category || 'other');
+    setAmount(String(it.amount)); setDescription(it.description); setCategory(it.category || 'other'); setPurpose(it.purpose || '');
     setExpenseDate(it.expense_date || '');
     setPayoutMethod(it.payout_method || (it.payee_venmo_handle ? 'venmo' : it.payee_zelle_contact ? 'zelle' : 'venmo'));
     setPayoutDetails(it.payout_details || it.payee_venmo_handle || it.payee_zelle_contact || '');
@@ -221,7 +254,7 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
     e.preventDefault();
     setBusy(true); setError('');
     try {
-      const body = { careTeamId, amount: parseFloat(amount), description, category, expenseDate: expenseDate || undefined, receipts };
+      const body = { careTeamId, amount: parseFloat(amount), description, category, purpose: purpose || undefined, expenseDate: expenseDate || undefined, receipts };
       let url = '/api/reimbursements';
       let method = 'POST';
       if (recurringMode) {
@@ -541,6 +574,166 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
     );
   };
 
+  // ── v1.98.19 — Reports & export ──────────────────────────────────────────
+  const personName = (it, role) => role === 'payee'
+    ? `${it.payee_first_name || ''} ${it.payee_last_name || ''}`.trim()
+    : `${it.requester_first_name || ''} ${it.requester_last_name || ''}`.trim();
+  const rptFiltered = () => {
+    return items.filter((it) => {
+      if (it.status === 'cancelled') return false;
+      const d = (it.expense_date || it.created_at || '').slice(0, 10);
+      if (rptFrom && d && d < rptFrom) return false;
+      if (rptTo && d && d > rptTo) return false;
+      if (rptPurpose && (it.purpose || '') !== rptPurpose) return false;
+      if (rptCategory && (it.category || '') !== rptCategory) return false;
+      if (rptStatus && it.status !== rptStatus) return false;
+      if (rptPerson && it.requested_by !== rptPerson && it.payee_user_id !== rptPerson) return false;
+      return true;
+    });
+  };
+  const csvCell = (v) => {
+    const s = (v === null || v === undefined) ? '' : String(v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const downloadCsv = () => {
+    const rows = rptFiltered();
+    const header = ['Expense date', 'Requested', 'Description', 'Category', 'Purpose', 'Amount', 'Fronted by', 'Paid to', 'Status', 'Approved by', 'Approved on', 'Paid on', 'Paid method', 'Paid from', 'Reimbursement ID'];
+    const lines = [header.map(csvCell).join(',')];
+    for (const it of rows) {
+      lines.push([
+        (it.expense_date || '').slice(0, 10),
+        (it.created_at || '').slice(0, 10),
+        it.description,
+        it.category || '',
+        PURPOSE_LABEL(it.purpose),
+        Number(it.amount).toFixed(2),
+        personName(it, 'requester'),
+        personName(it, 'payee'),
+        it.status,
+        `${it.approver_first_name || ''} ${it.approver_last_name || ''}`.trim(),
+        (it.approved_at || '').slice(0, 10),
+        (it.paid_at || '').slice(0, 10),
+        it.paid_method === 'ach_inplace' ? 'InPlace direct deposit' : (it.paid_method || ''),
+        it.paid_from_label || '',
+        it.id,
+      ].map(csvCell).join(','));
+    }
+    const total = rows.reduce((s, it) => s + Number(it.amount), 0);
+    lines.push(['', '', 'TOTAL', '', '', total.toFixed(2), '', '', '', '', '', '', '', '', ''].map(csvCell).join(','));
+    const blob = new Blob([lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const stamp = new Date().toISOString().slice(0, 10);
+    const tag = rptPurpose ? `-${rptPurpose}` : '';
+    a.href = url; a.download = `reimbursements${tag}-${stamp}.csv`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    showToast(`Exported ${rows.length} reimbursement${rows.length === 1 ? '' : 's'}`, 'success');
+  };
+
+  const renderReports = () => {
+    const rows = rptFiltered();
+    const total = rows.reduce((s, it) => s + Number(it.amount), 0);
+    // Per-person: fronted (as requester) vs reimbursed (as payee)
+    const people = {};
+    const bump = (id, name, key, amt) => {
+      if (!id) return;
+      people[id] = people[id] || { name, fronted: 0, frontedN: 0, reimbursed: 0, reimbursedN: 0 };
+      people[id][key] += amt; people[id][key + 'N'] += 1;
+    };
+    rows.forEach((it) => {
+      bump(it.requested_by, personName(it, 'requester'), 'fronted', Number(it.amount));
+      if (it.status === 'paid') bump(it.payee_user_id, personName(it, 'payee'), 'reimbursed', Number(it.amount));
+    });
+    const peopleArr = Object.values(people).sort((a, b) => b.fronted - a.fronted);
+    // By purpose
+    const byPurpose = {};
+    rows.forEach((it) => { const k = it.purpose || '_none'; byPurpose[k] = (byPurpose[k] || 0) + Number(it.amount); });
+    const purposeArr = Object.entries(byPurpose).sort((a, b) => b[1] - a[1]);
+    const selStyle = { ...inputStyle, padding: '7px 8px', fontSize: 13 };
+
+    return (
+      <div onClick={() => setShowReports(false)}
+        style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1000, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', overflowY: 'auto', padding: '4vh 12px' }}>
+        <div onClick={(e) => e.stopPropagation()}
+          style={{ background: 'var(--bg-surface)', borderRadius: 14, maxWidth: 620, width: '100%', boxShadow: '0 8px 40px rgba(0,0,0,0.25)', overflow: 'hidden' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 18px', borderBottom: '1px solid var(--border-light)' }}>
+            <div>
+              <div style={{ fontSize: 16, fontWeight: 700 }}>📊 Reports & export</div>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>Filter, see who's fronting/reimbursed, and export a CSV</div>
+            </div>
+            <button onClick={() => setShowReports(false)} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: 'var(--text-muted)', lineHeight: 1 }}>×</button>
+          </div>
+          <div style={{ padding: 16, maxHeight: '80vh', overflowY: 'auto' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
+              <label style={{ fontSize: 12, color: 'var(--text-secondary)' }}>From<input type="date" value={rptFrom} onChange={(e) => setRptFrom(e.target.value)} style={{ ...selStyle, width: '100%' }} /></label>
+              <label style={{ fontSize: 12, color: 'var(--text-secondary)' }}>To<input type="date" value={rptTo} onChange={(e) => setRptTo(e.target.value)} style={{ ...selStyle, width: '100%' }} /></label>
+              <select value={rptPurpose} onChange={(e) => setRptPurpose(e.target.value)} style={selStyle}>
+                <option value="">All purposes</option>
+                {PURPOSE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+              <select value={rptCategory} onChange={(e) => setRptCategory(e.target.value)} style={selStyle}>
+                <option value="">All categories</option>
+                {['pharmacy', 'groceries', 'medical', 'supplies', 'transport', 'other'].map((c) => <option key={c} value={c}>{c[0].toUpperCase() + c.slice(1)}</option>)}
+              </select>
+              <select value={rptPerson} onChange={(e) => setRptPerson(e.target.value)} style={selStyle}>
+                <option value="">Anyone</option>
+                {(members || []).map((m) => <option key={m.userId} value={m.userId}>{m.firstName} {m.lastName}</option>)}
+              </select>
+              <select value={rptStatus} onChange={(e) => setRptStatus(e.target.value)} style={selStyle}>
+                <option value="">All statuses</option>
+                <option value="pending">Pending</option>
+                <option value="approved">Approved</option>
+                <option value="paid">Paid</option>
+                <option value="declined">Declined</option>
+              </select>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-card)', borderRadius: 10, padding: '10px 12px', marginBottom: 12 }}>
+              <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{rows.length} request{rows.length === 1 ? '' : 's'}</span>
+              <span style={{ fontSize: 18, fontWeight: 700 }}>{money(total)}</span>
+            </div>
+
+            <button onClick={downloadCsv} disabled={rows.length === 0}
+              style={{ width: '100%', padding: '10px 14px', background: rows.length ? 'var(--role-color)' : 'var(--text-muted)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: rows.length ? 'pointer' : 'not-allowed', marginBottom: 16 }}>
+              ⬇ Download CSV{rptPurpose ? ` — ${PURPOSE_LABEL(rptPurpose)}` : ''}
+            </button>
+
+            {peopleArr.length > 0 && (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Who's fronting & getting reimbursed</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: '4px 12px', fontSize: 13 }}>
+                  <span style={{ color: 'var(--text-tertiary)', fontSize: 11 }}>Person</span>
+                  <span style={{ color: 'var(--text-tertiary)', fontSize: 11, textAlign: 'right' }}>Fronted</span>
+                  <span style={{ color: 'var(--text-tertiary)', fontSize: 11, textAlign: 'right' }}>Reimbursed</span>
+                  {peopleArr.map((p, i) => (
+                    <React.Fragment key={i}>
+                      <span>{p.name || 'Unknown'}</span>
+                      <span style={{ textAlign: 'right' }}>{money(p.fronted)} <span style={{ color: 'var(--text-tertiary)', fontSize: 11 }}>({p.frontedN})</span></span>
+                      <span style={{ textAlign: 'right' }}>{money(p.reimbursed)} <span style={{ color: 'var(--text-tertiary)', fontSize: 11 }}>({p.reimbursedN})</span></span>
+                    </React.Fragment>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {purposeArr.length > 0 && (
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>By purpose</div>
+                {purposeArr.map(([k, v]) => (
+                  <div key={k} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '3px 0' }}>
+                    <span style={{ color: k === '_none' ? 'var(--text-tertiary)' : 'var(--text-primary)' }}>{k === '_none' ? 'Untagged' : PURPOSE_LABEL(k)}</span>
+                    <span style={{ fontWeight: 600 }}>{money(v)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="card" style={{ marginTop: 16 }}>
       <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -556,6 +749,12 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
             <button onClick={openPayouts}
               style={{ padding: '6px 14px', background: 'var(--bg-card)', color: 'var(--role-color)', border: '1px solid var(--role-color)', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
               🏦 Bank deposits
+            </button>
+          )}
+          {!showForm && (
+            <button onClick={() => setShowReports(true)}
+              style={{ padding: '6px 14px', background: 'var(--bg-card)', color: 'var(--role-color)', border: '1px solid var(--role-color)', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+              📊 Reports
             </button>
           )}
           {meta.canSubmit && !showForm && (
@@ -603,6 +802,10 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
               <option value="supplies">Supplies</option>
               <option value="transport">Transport</option>
               <option value="other">Other</option>
+            </select>
+            <select value={purpose} onChange={(e) => setPurpose(e.target.value)} title="Optional: tag for an outside account (taxes, FSA/HSA, Medicaid…)" style={{ ...inputStyle, flex: '0 0 160px', color: purpose ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+              <option value="">Purpose (optional)</option>
+              {PURPOSE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
             {!recurringMode && (
               <input type="date" value={expenseDate} onChange={(e) => setExpenseDate(e.target.value)} style={{ ...inputStyle, flex: '0 0 150px' }} />
@@ -828,6 +1031,18 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
                     ))}
                   </div>
                 )}
+                {/* v1.98.19 — purpose tag, editable on any status (incl. paid) by team participants */}
+                {(meta.canSubmit || meta.isApprover) && (
+                  <div style={{ marginTop: 5, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>🏷️ Purpose:</span>
+                    <select value={it.purpose || ''} disabled={purposeSavingId === it.id}
+                      onChange={(e) => setRowPurpose(it.id, e.target.value)}
+                      style={{ fontSize: 12, padding: '2px 6px', borderRadius: 6, border: '1px solid var(--border-light)', background: 'var(--bg-card)', color: it.purpose ? 'var(--text-secondary)' : 'var(--text-muted)', cursor: 'pointer' }}>
+                      <option value="">— none —</option>
+                      {PURPOSE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                  </div>
+                )}
               </div>
               <div style={{ textAlign: 'right' }}>{statusChip(it)}</div>
             </div>
@@ -940,6 +1155,7 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
       )}
 
       {showPayouts && renderPayouts()}
+      {showReports && renderReports()}
 
       {/* v1.97.0 — approve modal: like addressing a letter, the requester set
           the "to" address; the approver confirms the "from" account here. */}

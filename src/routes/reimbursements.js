@@ -161,22 +161,27 @@ function validateCore(body) {
   if (!description) throw Object.assign(new Error("Description is required (what was purchased?)"), { status: 400 });
   const category = ["pharmacy", "groceries", "medical", "supplies", "transport", "other"].includes(body.category)
     ? body.category : "other";
+  // v1.98.19 — optional purpose tag for outside-account tracking (taxes, FSA/HSA…)
+  const purpose = PURPOSES.includes(body.purpose) ? body.purpose : null;
   let expenseDate = null;
   if (body.expenseDate && /^\d{4}-\d{2}-\d{2}$/.test(body.expenseDate)) expenseDate = body.expenseDate;
-  return { amount, description: description.slice(0, 500), category, expenseDate };
+  return { amount, description: description.slice(0, 500), category, purpose, expenseDate };
 }
+
+// Preset purpose tags (v1.98.19). Values stored; labels live in the client.
+const PURPOSES = ["real_estate_tax", "fsa_hsa", "medicaid", "home_repairs", "medical", "personal", "other"];
 
 async function insertReimbursement(db, fields, receipts) {
   const id = uuid();
   await db.prepare(`
     INSERT INTO reimbursements
       (id, care_team_id, care_recipient_id, requested_by, payee_user_id, amount, description,
-       category, expense_date, status, self_recorded, approved_by, approved_at,
+       category, purpose, expense_date, status, self_recorded, approved_by, approved_at,
        paid_at, paid_method, paid_reference, paid_by, payout_method, payout_details, payout_verified)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id, fields.careTeamId, fields.careRecipientId, fields.requestedBy, fields.payeeUserId,
-    fields.amount, fields.description, fields.category, fields.expenseDate,
+    fields.amount, fields.description, fields.category, fields.purpose || null, fields.expenseDate,
     fields.status, fields.selfRecorded ? 1 : 0, fields.approvedBy || null, fields.approvedAt || null,
     fields.paidAt || null, fields.paidMethod || null, fields.paidReference || null, fields.paidBy || null,
     fields.payoutMethod || null, fields.payoutDetails || null, fields.payoutVerified ? 1 : 0
@@ -356,7 +361,7 @@ router.get("/team/:teamId", async (req, res) => {
     if (!access || !access.canView) return res.status(404).json({ error: "Care team not found" });
 
     const rows = await db.prepare(`
-      SELECT r.id, r.amount, r.description, r.category, r.expense_date, r.status,
+      SELECT r.id, r.amount, r.description, r.category, r.purpose, r.expense_date, r.status,
              r.self_recorded, r.created_at, r.approved_at, r.declined_reason,
              r.paid_at, r.paid_method, r.paid_reference,
              r.payout_method, r.payout_details, r.paid_from_label, r.payout_verified, r.payout_status,
@@ -613,10 +618,10 @@ router.put("/:id", async (req, res) => {
     const payout = parsePayout(req.body);
     const payoutVerified = await isVerifiedPayout(db, req.user.id, payout);
     await db.prepare(`
-      UPDATE reimbursements SET amount = ?, description = ?, category = ?, expense_date = ?,
+      UPDATE reimbursements SET amount = ?, description = ?, category = ?, purpose = ?, expense_date = ?,
         payout_method = ?, payout_details = ?, payout_verified = ?, updated_at = NOW()
       WHERE id = ? AND status = 'pending'
-    `).run(core.amount, core.description, core.category, core.expenseDate,
+    `).run(core.amount, core.description, core.category, core.purpose || null, core.expenseDate,
       payout.payoutMethod, payout.payoutDetails, payoutVerified, req.params.id);
 
     // Remember payout details for next time (labels only, never account numbers)
@@ -646,6 +651,31 @@ router.put("/:id", async (req, res) => {
     console.error("Edit reimbursement error:", err);
     captureException(err, { where: "reimbursements: edit" });
     res.status(500).json({ error: "Failed to update request" });
+  }
+});
+
+// PUT /api/reimbursements/:id/purpose — set/clear the bookkeeping purpose tag on
+// ANY reimbursement regardless of status (v1.98.19). Unlike editing a request,
+// this is a pure accounting label, so any participating team member (requester,
+// payee, approver, or leader) can set it — including on already-paid items, so
+// Sara can bucket historical reimbursements for FSA/taxes/Medicaid after the fact.
+router.put("/:id/purpose", async (req, res) => {
+  try {
+    const db = await getDb();
+    const row = await db.prepare("SELECT care_team_id FROM reimbursements WHERE id = ?").get(req.params.id);
+    if (!row) return res.status(404).json({ error: "Reimbursement not found" });
+    const access = await teamAccess(db, row.care_team_id, req.user.id);
+    if (!access || !(access.canSubmit || access.isApprover)) {
+      return res.status(403).json({ error: "You don't have access to tag this reimbursement" });
+    }
+    const purpose = PURPOSES.includes(req.body.purpose) ? req.body.purpose : null;
+    await db.prepare("UPDATE reimbursements SET purpose = ?, updated_at = NOW() WHERE id = ?").run(purpose, req.params.id);
+    audit(req, "reimbursement_purpose_set", { id: req.params.id, purpose });
+    res.json({ message: "Purpose updated", purpose });
+  } catch (err) {
+    console.error("Set purpose error:", err);
+    captureException(err, { where: "reimbursements: set purpose" });
+    res.status(500).json({ error: "Failed to set purpose" });
   }
 });
 
@@ -1288,7 +1318,7 @@ router.get("/money/:teamId", async (req, res) => {
 
     // Full reimbursement ledger (same shape as the team endpoint, deeper limit)
     const reimbursements = await db.prepare(`
-      SELECT r.id, r.amount, r.description, r.category, r.expense_date, r.status,
+      SELECT r.id, r.amount, r.description, r.category, r.purpose, r.expense_date, r.status,
              r.self_recorded, r.created_at, r.approved_at, r.declined_reason,
              r.paid_at, r.paid_method, r.paid_reference,
              r.payout_method, r.payout_details, r.paid_from_label,
