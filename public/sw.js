@@ -1,11 +1,6 @@
 // InPlace Service Worker — v1.57.14
-<<<<<<< HEAD
-const CACHE_NAME = 'inplace-build-16228a67-mrw0auoc';
-const SW_VERSION = 'build-16228a67-mrw0auoc';
-=======
-const CACHE_NAME = 'inplace-build-184b9f2b-mrw07z14';
-const SW_VERSION = 'build-184b9f2b-mrw07z14';
->>>>>>> 1155d34 (v1.98.19 — Reimbursement reports: purpose tags, filtered CSV export, audit summary)
+const CACHE_NAME = 'inplace-build-16228a67-mrw6s1bk';
+const SW_VERSION = 'build-16228a67-mrw6s1bk';
 const STATIC_ASSETS = [
   '/',
   '/css/styles.css',
