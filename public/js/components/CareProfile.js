@@ -1183,6 +1183,11 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
         )}
       </div>
 
+      {/* ─── Care Tasks (v1.99.0): recurring med/care tracking definitions.
+           Completing tasks happens on the dashboard's Next Up — this card is
+           for setting them up: what, when, how often, whose job. ─── */}
+      {profile?.id && <CareTasksSection recipientId={profile.id} recipientFirstName={profile.first_name} />}
+
       {/* ─── 5. Care Notes (collapsible) ─── */}
       <div className="card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}

@@ -1,6 +1,6 @@
 // Module-level cache: survives component remounts (nav away and back)
 // Shows stale data instantly while fresh fetch runs in background
-const _dashCache = { data: null, user: null, careTeams: null, ts: 0 };
+const _dashCache = { data: null, user: null, careTeams: null, careTasks: null, ts: 0 };
 
 const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
   const { showToast } = useToast();
@@ -30,6 +30,9 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
   const [awaitingExpanded, setAwaitingExpanded] = useState(false);
   const [proposalActionLoading, setProposalActionLoading] = useState(null);
   const [nextUpExpanded, setNextUpExpanded] = useState(false);
+  // ─── Care Tasks (v1.99.0): today's occurrences, inline in Next Up ───
+  const [careTasksToday, setCareTasksToday] = useState(_dashCache.careTasks);
+  const [taskSheet, setTaskSheet] = useState(null); // { occ, group } → CareTaskCheckSheet
   const [finishedExpanded, setFinishedExpanded] = useState(false);
   // Tick counter for live countdown on in-progress and imminent sessions (re-renders every 30-60s)
   const [tick, setTick] = useState(0);
@@ -118,6 +121,35 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
       setError(true);
     }
     setLoading(false);
+  };
+
+  const fetchCareTasks = async () => {
+    try {
+      const res = await apiFetch('/api/care-tasks/today');
+      if (res?.ok) {
+        const d = await res.json();
+        _dashCache.careTasks = d;
+        setCareTasksToday(d);
+      }
+    } catch {}
+  };
+
+  // One-tap on the circle = done, recorded as the tapper. The sheet handles
+  // "who did it" attribution and notes; both land back here.
+  const quickCheckTask = async (occ) => {
+    try {
+      const res = await apiFetch(`/api/care-tasks/occurrences/${occ.id}/check`, {
+        method: 'POST', body: JSON.stringify({ status: 'done' }),
+      });
+      if (res?.ok) { showToast('Checked off ✓', 'success'); fetchCareTasks(); }
+      else { const d = await res.json().catch(() => ({})); showToast(d.error || 'Could not check off', 'error'); fetchCareTasks(); }
+    } catch { showToast('Could not check off', 'error'); }
+  };
+  const undoTask = async (occ) => {
+    try {
+      const res = await apiFetch(`/api/care-tasks/occurrences/${occ.id}/undo`, { method: 'POST' });
+      if (res?.ok) fetchCareTasks();
+    } catch {}
   };
 
   const fetchUser = async () => {
@@ -271,7 +303,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
   };
 
   useEffect(() => {
-    fetchDashboard(); fetchUser(); fetchCareTeams(); fetchAnalytics(); fetchPendingReviews(); fetchPendingInvites(); fetchNotifications();
+    fetchDashboard(); fetchUser(); fetchCareTeams(); fetchAnalytics(); fetchPendingReviews(); fetchPendingInvites(); fetchNotifications(); fetchCareTasks();
 
     // ─── Handle return from Stripe checkout ───
     const hash = window.location.hash;
@@ -1581,7 +1613,14 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
         // Sort all upcoming by date+time — exclude unclaimed open requests (shown separately below)
         // Also exclude the imminent hero session (already shown above Betty card)
         const confirmed = upcoming.filter(s => !((['open', 'requested'].includes(s.status)) && !s.caregiverName) && s.id !== imminentId);
-        const sorted = [...confirmed].sort((a, b) => {
+        // Care tasks (v1.99.0): today's occurrences slot into the same
+        // chronological list as sessions — no digging to complete a task.
+        const careTaskItems = (careTasksToday?.groups || []).flatMap(g =>
+          g.occurrences.map(o => ({
+            __careTask: true, id: `ct-${o.id}`, occ: o, group: g,
+            date: o.due_date, time: o.due_time || '', status: 'care_task',
+          })));
+        const sorted = [...confirmed, ...careTaskItems].sort((a, b) => {
           const ak = ((a.date || '').split('T')[0]) + (a.time || '');
           const bk = ((b.date || '').split('T')[0]) + (b.time || '');
           return ak.localeCompare(bk);
@@ -1589,6 +1628,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
 
         // Cap at 10 sessions within 2 weeks
         const allNextUp = sorted.filter(s => {
+          if (s.__careTask) return true; // today by construction
           const sDate = (s.date || '').split('T')[0];
           const sessionDT = TimezoneHelper.buildDateTime(sDate, s.time || '00:00', tz);
           return sessionDT <= twoWeeksOut || s.status === 'in_progress';
@@ -1605,7 +1645,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
         if (nextUp.length === 0) return (
           <div style={{ marginBottom: 16, border: '2px solid var(--border-color)', borderRadius: 14, padding: '20px 18px', textAlign: 'center' }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>Next Up</div>
-            <div style={{ fontSize: 14, color: 'var(--text-tertiary)' }}>No sessions scheduled</div>
+            <div style={{ fontSize: 14, color: 'var(--text-tertiary)' }}>No sessions or tasks scheduled</div>
             {showConsentGate ? (
               <button onClick={() => { if (onNavigate) { window.__accountTab = 'documents'; window.__documentsTab = 'consent'; onNavigate('account'); } }} style={{
                 marginTop: 10, padding: '8px 20px', background: 'var(--border-light)', color: 'var(--text-tertiary)', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer',
@@ -1636,6 +1676,14 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
             </div>
             <div style={{ position: 'relative' }}>
             {visible.map((s, idx) => {
+              if (s.__careTask) {
+                return (
+                  <CareTaskNextUpRow key={s.id} occ={s.occ} group={s.group}
+                    onQuickCheck={() => quickCheckTask(s.occ)}
+                    onUndo={() => undoTask(s.occ)}
+                    onOpenSheet={() => setTaskSheet({ occ: s.occ, group: s.group })} />
+                );
+              }
               const dayLabel = TimezoneHelper.getDateLabel((s.date || '').split('T')[0], tz);
               const timeLabel = TimezoneHelper.formatTime(s.time);
               const isActive = s.status === 'in_progress';
@@ -2308,6 +2356,10 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
       })()}
 
       {/* Visit Detail Modal */}
+      {taskSheet && (
+        <CareTaskCheckSheet occ={taskSheet.occ} group={taskSheet.group}
+          onClose={() => setTaskSheet(null)} onDone={() => fetchCareTasks()} />
+      )}
       {visitDetailSessionId && (
         <VisitDetailModal sessionId={visitDetailSessionId} role="family" onClose={() => setVisitDetailSessionId(null)} onRefresh={() => fetchDashboard()} onTimeChange={(session, isReview) => {
           if (isReview) {

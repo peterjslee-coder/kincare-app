@@ -576,6 +576,8 @@ const App = () => {
       } else if (t === 'check_in_reminder' || t === 'check_out_reminder' || t === 'caregiver_arriving' || t === 'caregiver_arriving_recipient' || t === 'session_in_progress' || t === 'session_complete') {
         if (d.sessionId && !d.focus) window.__pendingFocus = `session:${d.sessionId}`;
         target = 'dashboard';
+      } else if (t.startsWith('care_task')) {
+        target = 'dashboard';
       } else if (t === 'kindred_relay') {
         target = 'messages';
       } else if (t === 'admin_setting_change') {
@@ -1507,6 +1509,7 @@ const App = () => {
 
   const role = activeRole || currentUser?.role || 'family';
   window.__currentRole = role; // v1.97.0 — read by __handlePushNavigate (defined pre-auth, so no closure over role)
+  window.__currentUserId = currentUser?.id; // v1.99.0 — read by CareTaskCheckSheet's who-did-it picker
 
   // ─── Role-specific color theming ───
   // Changes sidebar active color, role switcher accent, and other themed elements per role

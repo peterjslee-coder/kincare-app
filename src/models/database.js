@@ -1588,6 +1588,68 @@ async function initializeDatabase() {
         `ALTER TABLE reimbursements ADD COLUMN IF NOT EXISTS stripe_transfer_id TEXT`,
       ],
     },
+    {
+      // v1.99.0 — Care Tasks: flexible recurring care-task engine (medication
+      // tracking first; bathroom visits/baths/anything next — the engine does
+      // not care what the task is). Design: Care_Tasks_Plan_2026-07-22.md.
+      //  - care_tasks = the definition ("give Betty her evening medication,
+      //    nightly 7pm through Sept 30, assigned to Pete, 45-min grace").
+      //  - care_task_occurrences = one row per due instance, lazily
+      //    materialized by the poller/routes (UNIQUE task+due_date makes
+      //    materialization idempotent). THIS is the record of what was done
+      //    and what wasn't. Attribution: completed_by_user_id (an app user)
+      //    XOR completed_by_name (a manually-entered helper, e.g. a neighbor);
+      //    recorded_by = who tapped. /* PHI: details, note */
+      //  - care_task_helpers = remembered manual names per recipient, so the
+      //    "who did it" picker pre-fills people like Peggy who aren't users.
+      id: "009_care_tasks",
+      statements: [
+        `CREATE TABLE IF NOT EXISTS care_tasks (
+          id TEXT PRIMARY KEY,
+          care_recipient_id TEXT NOT NULL REFERENCES care_recipients(id),
+          created_by TEXT NOT NULL REFERENCES users(id),
+          title TEXT NOT NULL,
+          task_type TEXT NOT NULL DEFAULT 'custom',
+          details TEXT /* PHI — JSON: med name, dose, instructions */,
+          recurrence TEXT NOT NULL DEFAULT 'daily',
+          recurrence_days TEXT,
+          due_time TEXT NOT NULL,
+          tz TEXT,
+          start_date TEXT NOT NULL,
+          end_date TEXT,
+          assigned_user_id TEXT REFERENCES users(id),
+          grace_minutes INTEGER NOT NULL DEFAULT 45,
+          is_active INTEGER NOT NULL DEFAULT 1,
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          updated_at TIMESTAMPTZ DEFAULT NOW()
+        )`,
+        `CREATE INDEX IF NOT EXISTS idx_care_tasks_recipient ON care_tasks(care_recipient_id, is_active)`,
+        `CREATE TABLE IF NOT EXISTS care_task_occurrences (
+          id TEXT PRIMARY KEY,
+          task_id TEXT NOT NULL REFERENCES care_tasks(id),
+          due_date TEXT NOT NULL,
+          due_at TIMESTAMPTZ NOT NULL,
+          status TEXT NOT NULL DEFAULT 'pending',
+          completed_at TIMESTAMPTZ,
+          recorded_by TEXT REFERENCES users(id),
+          completed_by_user_id TEXT REFERENCES users(id),
+          completed_by_name TEXT,
+          note TEXT /* PHI */,
+          reminders_sent TEXT NOT NULL DEFAULT '',
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          UNIQUE (task_id, due_date)
+        )`,
+        `CREATE INDEX IF NOT EXISTS idx_cto_status_due ON care_task_occurrences(status, due_at)`,
+        `CREATE INDEX IF NOT EXISTS idx_cto_task_date ON care_task_occurrences(task_id, due_date DESC)`,
+        `CREATE TABLE IF NOT EXISTS care_task_helpers (
+          id TEXT PRIMARY KEY,
+          care_recipient_id TEXT NOT NULL REFERENCES care_recipients(id),
+          name TEXT NOT NULL,
+          last_used_at TIMESTAMPTZ DEFAULT NOW(),
+          UNIQUE (care_recipient_id, name)
+        )`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

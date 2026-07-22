@@ -315,6 +315,7 @@ app.use("/api/passkeys", require("./routes/passkeys"));
 app.use("/api/oauth", require("./routes/oauth"));
 app.use("/api/care-teams", require("./routes/careTeams"));
 const reimbursementsRouter = require("./routes/reimbursements");
+const careTasksRouter = require("./routes/careTasks");
 app.use("/api/reimbursements", reimbursementsRouter);
 app.use("/api/geocode", require("./routes/geocode"));
 app.use("/api/waitlist", require("./routes/waitlist"));
@@ -346,11 +347,12 @@ app.use("/api/scheduling", require("./routes/nlScheduling"));
 app.use("/api/ipai", require("./routes/ipaiChat"));
 app.use("/api/referrals", require("./routes/referrals"));
 app.use("/api/kindred", require("./routes/kindred"));
+app.use("/api/care-tasks", careTasksRouter);
 app.use("/api/legal", require("./routes/legal"));
 app.use("/api/media", require("./routes/media"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.98.18";
+const APP_VERSION = "1.99.0";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });
@@ -1058,6 +1060,26 @@ async function start() {
   // optimistic lock on next_run_date, so restarts/overlaps can't double-generate.
   setTimeout(guardedPoller(106, () => reimbursementsRouter.generateRecurringReimbursements()), 90 * 1000);
   setInterval(guardedPoller(106, () => reimbursementsRouter.generateRecurringReimbursements()), 60 * 60 * 1000);
+
+  // ─── Care Tasks poller (v1.99.0) ───
+  // Every 60s: materialize today's occurrences, push the assignee at due
+  // time, escalate to the whole care team after the task's grace window,
+  // and roll yesterday's still-pending occurrences to 'missed'. A missed
+  // dose must never fail silently. Timezone-aware per recipient, same
+  // pattern as the session reminder poller above.
+  {
+    const { sendPushToUser: careTaskPush } = require("./routes/push");
+    setInterval(guardedPoller(107, async () => {
+      try {
+        await careTasksRouter.pollCareTasks(careTaskPush);
+      } catch (err) {
+        if (err.message && !err.message.includes("relation") && !err.message.includes("column")) {
+          console.error("  Care tasks poller error:", err.message);
+        }
+      }
+    }), 60 * 1000);
+    console.log("  Care tasks poller started (materialize, remind, escalate, missed)");
+  }
 
   server.listen(PORT, "0.0.0.0", () => {
     console.log(`\n  InPlace v${APP_VERSION} running on port ${PORT}\n`);
