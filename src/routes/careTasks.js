@@ -101,7 +101,7 @@ async function accessibleRecipients(db, userId) {
 // Used for the who-did-it picker and by the poller for escalation fan-out.
 async function teamUserIds(db, recipientId) {
   const rows = await db.prepare(`
-    SELECT DISTINCT u.id, u.first_name, u.last_name
+    SELECT DISTINCT u.id, u.first_name, u.last_name, u.role, u.roles
     FROM users u
     WHERE u.id IN (
       SELECT family_user_id FROM care_recipients WHERE id = ?
@@ -114,6 +114,22 @@ async function teamUserIds(db, recipientId) {
     ) AND COALESCE(u.is_active, 1) = 1
   `).all(recipientId, recipientId, recipientId);
   return rows;
+}
+
+// v1.99.2 — Pete's rule (7/22): task notices are FAMILY-ONLY for now.
+// Caregiver-role users can still check tasks off and be attributed, but they
+// don't receive due/escalation pushes until the caregiver-side surface ships.
+// A user with a family or care_for role anywhere in their roles list (e.g.
+// Pete = family+caregiver) still gets notified.
+function isFamilyNotifiable(member) {
+  const FAMILY_ROLES = ["family", "care_for"];
+  if (FAMILY_ROLES.includes(member.role)) return true;
+  try {
+    const roles = JSON.parse(member.roles || "[]");
+    return Array.isArray(roles) && roles.some((r) => FAMILY_ROLES.includes(r));
+  } catch {
+    return false;
+  }
 }
 
 async function helpersFor(db, recipientId) {
@@ -515,6 +531,10 @@ async function pollCareTasks(sendPushToUser) {
       if (t.owner_is_demo) continue;
 
       const team = await teamUserIds(db, t.care_recipient_id);
+      // Family-only notices (v1.99.2). If the assignee is a caregiver-only
+      // user, the due push falls back to the notifiable family members so
+      // the reminder never goes nowhere.
+      const notifiable = team.filter(isFamilyNotifiable);
       const sent = occ.reminders_sent || "";
       const detail = (() => {
         try { const d = JSON.parse(t.details || "null"); return d?.med_name ? ` (${d.med_name}${d.dose ? `, ${d.dose}` : ""})` : ""; } catch { return ""; }
@@ -532,7 +552,8 @@ async function pollCareTasks(sendPushToUser) {
       // still shows as pending in the app either way.
       const staleMs = 6 * 60 * 60000;
       if (!sent.includes("due") && now - dueAt < staleMs) {
-        const targets = t.assigned_user_id ? [t.assigned_user_id] : team.map((m) => m.id);
+        const assignee = t.assigned_user_id ? notifiable.find((m) => m.id === t.assigned_user_id) : null;
+        const targets = assignee ? [assignee.id] : notifiable.map((m) => m.id);
         for (const uid of targets) {
           sendPushToUser(uid, {
             title: `${t.title}`,
@@ -548,7 +569,7 @@ async function pollCareTasks(sendPushToUser) {
       // Escalation → whole team once the grace window has passed.
       const graceMs = (t.grace_minutes ?? 45) * 60000;
       if (!sent.includes("escalated") && now - dueAt >= graceMs && now - dueAt < staleMs + graceMs) {
-        for (const m of team) {
+        for (const m of notifiable) {
           sendPushToUser(m.id, {
             title: `Still not done: ${t.title}`,
             body: `${t.recipient_first_name}'s ${occ.due_date} task hasn't been checked off. Can anyone confirm it happened?`,

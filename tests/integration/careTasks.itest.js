@@ -151,6 +151,42 @@ describe("care task lifecycle", () => {
     expect(pushes.every((p) => p.payload.data.type === "care_task_due")).toBe(true);
   });
 
+  test("pushes are family-only: caregiver team member gets no due/escalation push (v1.99.2)", async () => {
+    const { pollCareTasks } = require("../../src/routes/careTasks");
+    const caregiver = await h.createUser({ roles: ["caregiver"], firstName: "Edwina" });
+    await h.addTeamMember(teamId, caregiver.user.id, "member");
+
+    // Unassigned task due right now (current minute in ET — keeps the due
+    // push inside the poller's 6h stale cutoff no matter when CI runs) →
+    // due push fans out to the team, minus caregiver-role users.
+    const nowET = new Intl.DateTimeFormat("en-GB", {
+      timeZone: "America/New_York", hour: "2-digit", minute: "2-digit", hour12: false,
+    }).format(new Date()).replace("24:", "00:");
+    const create = await h.request.post("/api/care-tasks").set(h.auth(family.token)).send({
+      care_recipient_id: recipientId, title: "Family-only push check", task_type: "checkin",
+      recurrence: "daily", due_time: nowET, start_date: todayStr(), grace_minutes: 1440,
+    });
+    expect(create.status).toBe(201);
+    const tId = create.body.task.id;
+
+    const pushes = [];
+    await pollCareTasks(async (uid, payload) => { pushes.push({ uid, type: payload.data.type }); });
+
+    const duePushes = pushes.filter((p) => p.type === "care_task_due");
+    const pushedIds = duePushes.map((p) => p.uid);
+    expect(pushedIds).toEqual(expect.arrayContaining([family.user.id, teamMember.user.id]));
+    expect(pushedIds).not.toContain(caregiver.user.id);
+
+    // caregiver can still check it off and be attributed
+    const occ = await h.db.prepare(
+      "SELECT id FROM care_task_occurrences WHERE task_id = ? AND status = 'pending'"
+    ).get(tId);
+    const check = await h.request.post(`/api/care-tasks/occurrences/${occ.id}/check`)
+      .set(h.auth(caregiver.token)).send({ status: "done" });
+    expect(check.status).toBe(200);
+    expect(check.body.occurrence.completed_by_user_id).toBe(caregiver.user.id);
+  });
+
   test("pausing the task removes today's pending occurrence from the feed", async () => {
     // fresh task due later today, then pause it
     const create = await h.request.post("/api/care-tasks").set(h.auth(family.token)).send({
