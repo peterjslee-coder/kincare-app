@@ -10,7 +10,7 @@ const { v4: uuid } = require("uuid");
 const { initializeDatabase, getDb } = require("./models/database");
 
 // Bump this whenever seed data changes — triggers auto-reseed on deploy
-const DEMO_SEED_VERSION = '1.58.76';
+const DEMO_SEED_VERSION = '1.100.0'; // bumped: Barbara demo care events (v1.100.0)
 
 async function seed({ force = false, demoOnly = false } = {}) {
   console.log("🌱 Seeding InPlace database...\n");
