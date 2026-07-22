@@ -131,6 +131,12 @@ async function seed({ force = false, demoOnly = false } = {}) {
         await trySavepoint(() => db.prepare(`DELETE FROM verification_attempts WHERE care_recipient_id IN (${crp})`).run(...demoCrIds));
         await trySavepoint(() => db.prepare(`DELETE FROM attestations WHERE care_recipient_id IN (${crp})`).run(...demoCrIds));
         await trySavepoint(() => db.prepare(`DELETE FROM authorization_documents WHERE care_recipient_id IN (${crp})`).run(...demoCrIds));
+        // v1.99.1 — Care Tasks tables reference care_recipients AND users
+        // (created_by / assigned_user_id / recorded_by / completed_by_user_id);
+        // without these deletes the recipient + user deletes below FK-fail.
+        await trySavepoint(() => db.prepare(`DELETE FROM care_task_occurrences WHERE task_id IN (SELECT id FROM care_tasks WHERE care_recipient_id IN (${crp}))`).run(...demoCrIds));
+        await trySavepoint(() => db.prepare(`DELETE FROM care_tasks WHERE care_recipient_id IN (${crp})`).run(...demoCrIds));
+        await trySavepoint(() => db.prepare(`DELETE FROM care_task_helpers WHERE care_recipient_id IN (${crp})`).run(...demoCrIds));
       }
 
       // Care recipients owned by demo family users
