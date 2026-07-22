@@ -576,7 +576,7 @@ const App = () => {
       } else if (t === 'check_in_reminder' || t === 'check_out_reminder' || t === 'caregiver_arriving' || t === 'caregiver_arriving_recipient' || t === 'session_in_progress' || t === 'session_complete') {
         if (d.sessionId && !d.focus) window.__pendingFocus = `session:${d.sessionId}`;
         target = 'dashboard';
-      } else if (t.startsWith('care_task')) {
+      } else if (t.startsWith('care_task') || t.startsWith('care_event')) {
         target = 'dashboard';
       } else if (t === 'kindred_relay') {
         target = 'messages';

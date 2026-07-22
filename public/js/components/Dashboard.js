@@ -1,6 +1,6 @@
 // Module-level cache: survives component remounts (nav away and back)
 // Shows stale data instantly while fresh fetch runs in background
-const _dashCache = { data: null, user: null, careTeams: null, careTasks: null, ts: 0 };
+const _dashCache = { data: null, user: null, careTeams: null, careTasks: null, careEvents: null, ts: 0 };
 
 const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
   const { showToast } = useToast();
@@ -34,6 +34,10 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
   const [careTasksToday, setCareTasksToday] = useState(_dashCache.careTasks);
   const [taskSheet, setTaskSheet] = useState(null); // { occ, group } → CareTaskCheckSheet
   const [showTaskCreate, setShowTaskCreate] = useState(false); // '+ Task' pill → CareTaskQuickCreate
+  // ─── Care Events (v1.100.0): upcoming events, inline in Next Up ───
+  const [careEventsUpcoming, setCareEventsUpcoming] = useState(_dashCache.careEvents);
+  const [eventSheet, setEventSheet] = useState(null); // ev → CareEventSheet
+  const [eventEditing, setEventEditing] = useState(null); // ev → CareEventFormModal
   const [finishedExpanded, setFinishedExpanded] = useState(false);
   // Tick counter for live countdown on in-progress and imminent sessions (re-renders every 30-60s)
   const [tick, setTick] = useState(0);
@@ -131,6 +135,17 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
         const d = await res.json();
         _dashCache.careTasks = d;
         setCareTasksToday(d);
+      }
+    } catch {}
+  };
+
+  const fetchCareEvents = async () => {
+    try {
+      const res = await apiFetch('/api/care-events/upcoming');
+      if (res?.ok) {
+        const d = await res.json();
+        _dashCache.careEvents = d;
+        setCareEventsUpcoming(d);
       }
     } catch {}
   };
@@ -304,7 +319,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
   };
 
   useEffect(() => {
-    fetchDashboard(); fetchUser(); fetchCareTeams(); fetchAnalytics(); fetchPendingReviews(); fetchPendingInvites(); fetchNotifications(); fetchCareTasks();
+    fetchDashboard(); fetchUser(); fetchCareTeams(); fetchAnalytics(); fetchPendingReviews(); fetchPendingInvites(); fetchNotifications(); fetchCareTasks(); fetchCareEvents();
 
     // ─── Handle return from Stripe checkout ───
     const hash = window.location.hash;
@@ -1621,7 +1636,13 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
             __careTask: true, id: `ct-${o.id}`, occ: o, group: g,
             date: o.due_date, time: o.due_time || '', status: 'care_task',
           })));
-        const sorted = [...confirmed, ...careTaskItems].sort((a, b) => {
+        // Care events (v1.100.0): upcoming appointments/outings slot into the
+        // same chronological list — situational awareness, no digging.
+        const careEventItems = (careEventsUpcoming?.events || []).map(ev => ({
+          __careEvent: true, id: `ce-${ev.id}`, ev,
+          date: ev.event_date, time: ev.event_time || '', status: 'care_event',
+        }));
+        const sorted = [...confirmed, ...careTaskItems, ...careEventItems].sort((a, b) => {
           const ak = ((a.date || '').split('T')[0]) + (a.time || '');
           const bk = ((b.date || '').split('T')[0]) + (b.time || '');
           return ak.localeCompare(bk);
@@ -1630,6 +1651,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
         // Cap at 10 sessions within 2 weeks
         const allNextUp = sorted.filter(s => {
           if (s.__careTask) return true; // today by construction
+          if (s.__careEvent) return true; // next 14 days by construction (server-filtered)
           const sDate = (s.date || '').split('T')[0];
           const sessionDT = TimezoneHelper.buildDateTime(sDate, s.time || '00:00', tz);
           return sessionDT <= twoWeeksOut || s.status === 'in_progress';
@@ -1699,6 +1721,12 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                     onQuickCheck={() => quickCheckTask(s.occ)}
                     onUndo={() => undoTask(s.occ)}
                     onOpenSheet={() => setTaskSheet({ occ: s.occ, group: s.group })} />
+                );
+              }
+              if (s.__careEvent) {
+                return (
+                  <CareEventNextUpRow key={s.id} ev={s.ev}
+                    onOpenSheet={() => setEventSheet(s.ev)} />
                 );
               }
               const dayLabel = TimezoneHelper.getDateLabel((s.date || '').split('T')[0], tz);
@@ -2380,6 +2408,17 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
       {showTaskCreate && (
         <CareTaskQuickCreate recipients={data?.careRecipients || []}
           onClose={() => setShowTaskCreate(false)} onCreated={() => fetchCareTasks()} />
+      )}
+      {eventSheet && (
+        <CareEventSheet ev={eventSheet} canManage={!!eventSheet.canManage}
+          onClose={() => setEventSheet(null)} onChanged={() => fetchCareEvents()}
+          onEdit={() => { setEventEditing(eventSheet); setEventSheet(null); }} />
+      )}
+      {eventEditing && (
+        <CareEventFormModal recipientId={eventEditing.care_recipient_id}
+          recipientFirstName={eventEditing.recipientFirstName} timezone={eventEditing.timezone}
+          existing={eventEditing}
+          onClose={() => setEventEditing(null)} onSaved={() => fetchCareEvents()} />
       )}
       {visitDetailSessionId && (
         <VisitDetailModal sessionId={visitDetailSessionId} role="family" onClose={() => setVisitDetailSessionId(null)} onRefresh={() => fetchDashboard()} onTimeChange={(session, isReview) => {

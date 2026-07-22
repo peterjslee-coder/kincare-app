@@ -137,6 +137,8 @@ async function seed({ force = false, demoOnly = false } = {}) {
         await trySavepoint(() => db.prepare(`DELETE FROM care_task_occurrences WHERE task_id IN (SELECT id FROM care_tasks WHERE care_recipient_id IN (${crp}))`).run(...demoCrIds));
         await trySavepoint(() => db.prepare(`DELETE FROM care_tasks WHERE care_recipient_id IN (${crp})`).run(...demoCrIds));
         await trySavepoint(() => db.prepare(`DELETE FROM care_task_helpers WHERE care_recipient_id IN (${crp})`).run(...demoCrIds));
+        // v1.100.0 — Care Events references care_recipients + users (created_by)
+        await trySavepoint(() => db.prepare(`DELETE FROM care_events WHERE care_recipient_id IN (${crp})`).run(...demoCrIds));
       }
 
       // Care recipients owned by demo family users
@@ -775,6 +777,23 @@ async function seed({ force = false, demoOnly = false } = {}) {
        special_instructions, estimated_cost)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(id, recipId, famId, cgId, type, status, date, time, hours, notes, cost);
+  }
+
+  // ─── Care Events (Barbara — v1.100.0 situational awareness) ───
+  // Upcoming appointments the care team should just *know* about. Not
+  // sessions, not tasks — awareness rows that render inline in Next Up.
+  const { zonedDateTimeToInstant: _evBuild } = require("./utils/timezone");
+  const demoEvents = [
+    [uuid(), bettyId, peteId, "Cardiology — Dr. Patel", "medical", _d(3), "14:00", "Carilion Clinic, Radford", "Bring the medication list. Fasting not required."],
+    [uuid(), bettyId, peteId, "Peggy's birthday dinner", "social", _d(9), null, "Peggy's house", null],
+  ];
+  for (const [id, recipId, createdBy, title, category, date, time, location, details] of demoEvents) {
+    const startsAt = _evBuild(date, time || "00:00", "America/New_York");
+    await db.prepare(`
+      INSERT INTO care_events (id, care_recipient_id, created_by, title, category,
+        event_date, event_time, tz, starts_at, location, details, reminders_sent)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'America/New_York', ?, ?, ?, 'day_before,same_day')
+    `).run(id, recipId, createdBy, title, category, date, time, startsAt.toISOString(), location, details);
   }
 
   // ─── Care Sessions (Maria/Carlos — Maria's brother) ───

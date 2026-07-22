@@ -1659,6 +1659,44 @@ async function initializeDatabase() {
         `ALTER TABLE reimbursements ADD COLUMN IF NOT EXISTS purpose TEXT`,
       ],
     },
+    {
+      // v1.100.0 — Care Events (see Care_Events_Plan_2026-07-22.md).
+      // Lightweight situational-awareness events ("Betty has cardiology with
+      // Dr. Patel Tuesday 2pm"). Deliberately NOT a calendar: no recurrence
+      // (recurring = care_tasks), no sync, no escalation/missed — an event is
+      // awareness, not an obligation. Renders inline in Next Up; family-only
+      // reminder pushes; one-tap .ics export to the user's own calendar.
+      //  - event_date/event_time are naive care-location strings (house
+      //    timezone rule, same as care_sessions); event_time NULL = all-day.
+      //  - starts_at is the derived TIMESTAMPTZ used by the poller and sorts.
+      //  - source/source_meta = provenance ('manual' now; 'email' when the
+      //    forward-to-iPAi ingestion ships in Phase 2). Never the raw email.
+      id: "011_care_events",
+      statements: [
+        `CREATE TABLE IF NOT EXISTS care_events (
+          id TEXT PRIMARY KEY,
+          care_recipient_id TEXT NOT NULL REFERENCES care_recipients(id),
+          created_by TEXT REFERENCES users(id),
+          title TEXT NOT NULL,
+          category TEXT NOT NULL DEFAULT 'other',
+          event_date TEXT NOT NULL,
+          event_time TEXT,
+          end_time TEXT,
+          tz TEXT,
+          starts_at TIMESTAMPTZ NOT NULL,
+          location TEXT,
+          details TEXT /* PHI — appointment context is health context */,
+          source TEXT NOT NULL DEFAULT 'manual',
+          source_meta TEXT,
+          reminders_sent TEXT NOT NULL DEFAULT '',
+          is_active INTEGER NOT NULL DEFAULT 1,
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          updated_at TIMESTAMPTZ DEFAULT NOW()
+        )`,
+        `CREATE INDEX IF NOT EXISTS idx_care_events_recipient ON care_events(care_recipient_id, is_active, event_date)`,
+        `CREATE INDEX IF NOT EXISTS idx_care_events_active_start ON care_events(is_active, starts_at)`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

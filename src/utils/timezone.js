@@ -52,6 +52,39 @@ function buildDateTimeInZone(dateStr, timeStr, tz = DEFAULT_TIMEZONE) {
 }
 
 /**
+ * Build the TRUE UTC instant for a wall-clock date + time in a timezone.
+ *
+ * Contrast with buildDateTimeInZone above, which returns a Date in a
+ * *shifted frame* (its getHours() match the care timezone) — correct for
+ * comparing against getNowInZone(), but NOT a real instant: storing its
+ * .toISOString() or comparing it against a plain `new Date()` is wrong by
+ * the server's UTC offset (v1.100.0 lesson — care task due pushes would
+ * have fired 4h early on Railway's UTC clock).
+ *
+ * Use THIS whenever the value will be stored as a timestamp, compared to
+ * Date.now(), or exported (.ics files need real UTC).
+ */
+function zonedDateTimeToInstant(dateStr, timeStr, tz = DEFAULT_TIMEZONE) {
+  const [y, mo, d] = dateStr.split("-").map(Number);
+  const [h, mi] = (timeStr || "00:00").split(":").map(Number);
+  const want = Date.UTC(y, mo - 1, d, h, mi);
+  let ts = want; // first guess: pretend the wall clock IS UTC
+  // Refine: see what wall clock that instant shows in tz; shift by the error.
+  // Two passes handle every fixed offset + DST transition.
+  for (let i = 0; i < 3; i++) {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", hour12: false,
+    }).formatToParts(new Date(ts)).reduce((acc, p) => ((acc[p.type] = p.value), acc), {});
+    const shownHour = parts.hour === "24" ? 0 : Number(parts.hour);
+    const shown = Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day), shownHour, Number(parts.minute));
+    if (shown === want) break;
+    ts += want - shown;
+  }
+  return new Date(ts);
+}
+
+/**
  * Format a session time for display: "8:00 AM"
  */
 function formatTimeForDisplay(timeStr) {
@@ -96,6 +129,7 @@ module.exports = {
   getNowInZone,
   getTodayStringInZone,
   buildDateTimeInZone,
+  zonedDateTimeToInstant,
   formatTimeForDisplay,
   formatDateRelative,
 };

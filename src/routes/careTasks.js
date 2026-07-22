@@ -21,7 +21,7 @@ const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { authenticate } = require("../middleware/auth");
 const { captureException } = require("../utils/sentry");
-const { getTodayStringInZone, buildDateTimeInZone } = require("../utils/timezone");
+const { getTodayStringInZone, zonedDateTimeToInstant } = require("../utils/timezone");
 const { isDueOn, validateTaskInput } = require("../utils/careTaskSchedule");
 
 const router = express.Router();
@@ -72,15 +72,24 @@ function taskTz(task, recipientTz) {
 }
 
 // Idempotently create the occurrence row for `dateStr` if the task is due.
+// v1.100.0: due_at is a TRUE instant (zonedDateTimeToInstant, not the
+// shifted-frame buildDateTimeInZone) — the poller and the client both
+// compare it against the real clock. The old frame-mixed value made due
+// pushes fire 4h early on Railway's UTC server.
 async function materializeOccurrence(db, task, recipientTz, dateStr) {
   if (!isDueOn(task, dateStr)) return;
   const tz = taskTz(task, recipientTz);
-  const dueAt = buildDateTimeInZone(dateStr, task.due_time, tz);
+  const dueAt = zonedDateTimeToInstant(dateStr, task.due_time, tz);
   await db.prepare(`
     INSERT INTO care_task_occurrences (id, task_id, due_date, due_at)
     VALUES (?, ?, ?, ?)
     ON CONFLICT (task_id, due_date) DO NOTHING
   `).run(uuid(), task.id, dateStr, dueAt.toISOString());
+  // Self-heal: pending rows created before the frame fix (or after a
+  // due_time edit that raced) get their due_at corrected in place.
+  await db.prepare(
+    "UPDATE care_task_occurrences SET due_at = ? WHERE task_id = ? AND due_date = ? AND status = 'pending' AND due_at <> ?"
+  ).run(dueAt.toISOString(), task.id, dateStr, dueAt.toISOString());
 }
 
 // Care recipients this user can see tasks for (owner + shares + team member).
@@ -310,7 +319,7 @@ router.put("/:id", async (req, res) => {
     const today = getTodayStringInZone(tz);
     if (updated.is_active && isDueOn(updated, today)) {
       await materializeOccurrence(db, updated, cr?.timezone, today);
-      const dueAt = buildDateTimeInZone(today, updated.due_time, tz);
+      const dueAt = zonedDateTimeToInstant(today, updated.due_time, tz);
       await db.prepare(
         "UPDATE care_task_occurrences SET due_at = ? WHERE task_id = ? AND due_date = ? AND status = 'pending'"
       ).run(dueAt.toISOString(), updated.id, today);
@@ -588,3 +597,6 @@ async function pollCareTasks(sendPushToUser) {
 
 module.exports = router;
 module.exports.pollCareTasks = pollCareTasks;
+// Shared access/team helpers — reused by careEvents.js (v1.100.0) so the
+// access model stays defined in exactly one place.
+module.exports._shared = { hasAccess, canManage, accessibleRecipients, teamUserIds, isFamilyNotifiable };

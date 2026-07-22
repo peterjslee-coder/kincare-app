@@ -35,6 +35,7 @@ const scripts = [
   "js/components/ForgotPasswordPage.js",
   "js/components/ResetPasswordPage.js",
   "js/components/CareTasks.js",
+  "js/components/CareEvents.js",
   "js/components/Dashboard.js",
   "js/components/CareProfile.js",
   "js/components/Schedule.js",

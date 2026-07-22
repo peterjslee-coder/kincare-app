@@ -316,6 +316,7 @@ app.use("/api/oauth", require("./routes/oauth"));
 app.use("/api/care-teams", require("./routes/careTeams"));
 const reimbursementsRouter = require("./routes/reimbursements");
 const careTasksRouter = require("./routes/careTasks");
+const careEventsRouter = require("./routes/careEvents");
 app.use("/api/reimbursements", reimbursementsRouter);
 app.use("/api/geocode", require("./routes/geocode"));
 app.use("/api/waitlist", require("./routes/waitlist"));
@@ -348,11 +349,12 @@ app.use("/api/ipai", require("./routes/ipaiChat"));
 app.use("/api/referrals", require("./routes/referrals"));
 app.use("/api/kindred", require("./routes/kindred"));
 app.use("/api/care-tasks", careTasksRouter);
+app.use("/api/care-events", careEventsRouter);
 app.use("/api/legal", require("./routes/legal"));
 app.use("/api/media", require("./routes/media"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.99.5";
+const APP_VERSION = "1.100.0";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });
@@ -1079,6 +1081,24 @@ async function start() {
       }
     }), 60 * 1000);
     console.log("  Care tasks poller started (materialize, remind, escalate, missed)");
+  }
+
+  // ─── Care Events poller (v1.100.0) ───
+  // Every 60s: family-only day-before + same-day reminder pushes for
+  // upcoming events (appointments, visits, outings). Events are awareness,
+  // not obligations — no escalation, nothing goes "missed".
+  {
+    const { sendPushToUser: careEventPush } = require("./routes/push");
+    setInterval(guardedPoller(108, async () => {
+      try {
+        await careEventsRouter.pollCareEvents(careEventPush);
+      } catch (err) {
+        if (err.message && !err.message.includes("relation") && !err.message.includes("column")) {
+          console.error("  Care events poller error:", err.message);
+        }
+      }
+    }), 60 * 1000);
+    console.log("  Care events poller started (day-before + same-day notices, family-only)");
   }
 
   server.listen(PORT, "0.0.0.0", () => {
