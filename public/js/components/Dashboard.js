@@ -33,6 +33,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
   // ─── Care Tasks (v1.99.0): today's occurrences, inline in Next Up ───
   const [careTasksToday, setCareTasksToday] = useState(_dashCache.careTasks);
   const [taskSheet, setTaskSheet] = useState(null); // { occ, group } → CareTaskCheckSheet
+  const [showTaskCreate, setShowTaskCreate] = useState(false); // '+ Task' pill → CareTaskQuickCreate
   const [finishedExpanded, setFinishedExpanded] = useState(false);
   // Tick counter for live countdown on in-progress and imminent sessions (re-renders every 30-60s)
   const [tick, setTick] = useState(0);
@@ -1641,6 +1642,16 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
 
         const hasBookableRecipient = data?.careRecipients?.some(cr => !cr.consent_status || cr.consent_status === 'verified');
         const showConsentGate = data?.careRecipients?.length > 0 && !hasBookableRecipient;
+        // v1.99.3 — "+ Task" pill: complementary teal (family role color) next
+        // to the orange "+ Request Care" so task creation is obvious on open.
+        const showTaskPill = (data?.careRecipients?.length || 0) > 0;
+        const taskPillBtn = (pad) => (
+          <button onClick={() => setShowTaskCreate(true)} style={{
+            padding: pad, background: 'var(--role-color)', color: 'var(--text-on-primary)',
+            border: 'none', borderRadius: pad === '8px 20px' ? 8 : 6, fontSize: pad === '8px 20px' ? 13 : 11,
+            fontWeight: 700, cursor: 'pointer',
+          }}>+ Task</button>
+        );
 
         if (nextUp.length === 0) return (
           <div style={{ marginBottom: 16, border: '2px solid var(--border-color)', borderRadius: 14, padding: '20px 18px', textAlign: 'center' }}>
@@ -1651,9 +1662,12 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                 marginTop: 10, padding: '8px 20px', background: 'var(--border-light)', color: 'var(--text-tertiary)', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer',
               }}>⚠️ Complete consent verification to book</button>
             ) : (
-              <button onClick={() => { if (window.__navigateTo) window.__navigateTo('schedule'); }} style={{
-                marginTop: 10, padding: '8px 20px', background: 'var(--accent-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer',
-              }}>+ Request Care</button>
+              <div style={{ marginTop: 10, display: 'flex', gap: 8, justifyContent: 'center' }}>
+                <button onClick={() => { if (window.__navigateTo) window.__navigateTo('schedule'); }} style={{
+                  padding: '8px 20px', background: 'var(--accent-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                }}>+ Request Care</button>
+                {showTaskPill && taskPillBtn('8px 20px')}
+              </div>
             )}
           </div>
         );
@@ -1669,9 +1683,12 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                   padding: '4px 12px', background: 'var(--border-light)', color: 'var(--text-tertiary)', border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer',
                 }}>⚠️ Verify consent first</button>
               ) : (
-                <button onClick={() => { if (window.__navigateTo) window.__navigateTo('schedule'); }} style={{
-                  padding: '4px 12px', background: 'var(--accent-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer',
-                }}>+ Request Care</button>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button onClick={() => { if (window.__navigateTo) window.__navigateTo('schedule'); }} style={{
+                    padding: '4px 12px', background: 'var(--accent-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                  }}>+ Request Care</button>
+                  {showTaskPill && taskPillBtn('4px 12px')}
+                </div>
               )}
             </div>
             <div style={{ position: 'relative' }}>
@@ -2359,6 +2376,10 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
       {taskSheet && (
         <CareTaskCheckSheet occ={taskSheet.occ} group={taskSheet.group}
           onClose={() => setTaskSheet(null)} onDone={() => fetchCareTasks()} />
+      )}
+      {showTaskCreate && (
+        <CareTaskQuickCreate recipients={data?.careRecipients || []}
+          onClose={() => setShowTaskCreate(false)} onCreated={() => fetchCareTasks()} />
       )}
       {visitDetailSessionId && (
         <VisitDetailModal sessionId={visitDetailSessionId} role="family" onClose={() => setVisitDetailSessionId(null)} onRefresh={() => fetchDashboard()} onTimeChange={(session, isReview) => {

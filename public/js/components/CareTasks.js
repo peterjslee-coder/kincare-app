@@ -329,6 +329,54 @@ const CareTaskFormModal = ({ recipientId, recipientFirstName, teamMembers, exist
   );
 };
 
+// ─── Quick-create from the dashboard "+ Task" pill (v1.99.3) ───
+// Pete: task creation must be obvious to someone just opening the app — a
+// "+ Task" pill lives next to "+ Request Care" in Next Up. This wrapper
+// picks the recipient (auto if there's only one), pulls the team for the
+// assignee dropdown, then hands off to the same CareTaskFormModal the
+// profile card uses.
+const CareTaskQuickCreate = window.CareTaskQuickCreate = ({ recipients, onClose, onCreated }) => {
+  const list = (recipients || []).map(r => ({
+    id: r.id, firstName: r.first_name || r.firstName || 'your loved one',
+    name: `${r.first_name || r.firstName || ''} ${r.last_name || r.lastName || ''}`.trim(),
+  }));
+  const [chosen, setChosen] = useState(list.length === 1 ? list[0] : null);
+  const [teamMembers, setTeamMembers] = useState(null);
+
+  useEffect(() => {
+    if (!chosen) return;
+    (async () => {
+      try {
+        const res = await apiFetch(`/api/care-tasks/recipient/${chosen.id}`);
+        if (res?.ok) { const d = await res.json(); setTeamMembers(d.teamMembers || []); return; }
+      } catch {}
+      setTeamMembers([]);
+    })();
+  }, [chosen?.id]);
+
+  if (!chosen) {
+    return (
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+        <div onClick={(e) => e.stopPropagation()} style={{ background: 'var(--bg-card)', borderRadius: 16, width: '100%', maxWidth: 380, padding: 20 }}>
+          <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--text-primary)', marginBottom: 12 }}>New task — for whom?</div>
+          {list.map(r => (
+            <button key={r.id} onClick={() => setChosen(r)} style={{
+              display: 'block', width: '100%', textAlign: 'left', padding: '12px 14px', marginBottom: 8,
+              borderRadius: 10, border: '1px solid var(--border-color)', background: 'var(--bg-surface)',
+              color: 'var(--text-primary)', fontSize: 14, fontWeight: 600, cursor: 'pointer',
+            }}>{r.name}</button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+  if (teamMembers === null) return null; // one paint while the team loads
+  return (
+    <CareTaskFormModal recipientId={chosen.id} recipientFirstName={chosen.firstName}
+      teamMembers={teamMembers} existing={null} onClose={onClose} onSaved={onCreated} />
+  );
+};
+
 // ─── Recipient-profile card: manage task definitions ───
 const CareTasksSection = window.CareTasksSection = ({ recipientId, recipientFirstName }) => {
   const { showToast } = useToast();
