@@ -38,6 +38,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
   const [careEventsUpcoming, setCareEventsUpcoming] = useState(_dashCache.careEvents);
   const [eventSheet, setEventSheet] = useState(null); // ev → CareEventSheet
   const [eventEditing, setEventEditing] = useState(null); // ev → CareEventFormModal
+  const [doneTodayExpanded, setDoneTodayExpanded] = useState(false); // "Done earlier today" strip
   const [finishedExpanded, setFinishedExpanded] = useState(false);
   // Tick counter for live countdown on in-progress and imminent sessions (re-renders every 30-60s)
   const [tick, setTick] = useState(0);
@@ -1650,17 +1651,30 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
         const confirmed = upcoming.filter(s => !((['open', 'requested'].includes(s.status)) && !s.caregiverName) && s.id !== imminentId);
         // Care tasks (v1.99.0): today's occurrences slot into the same
         // chronological list as sessions — no digging to complete a task.
-        const careTaskItems = (careTasksToday?.groups || []).flatMap(g =>
+        // v1.102.0 (Pete): a checked-off task shouldn't hold the top slot for
+        // hours. Done/skipped rows stay inline ~30 min (acknowledgment + easy
+        // undo), then fold into the compact "Done earlier today" strip below.
+        const DONE_LINGER_MS = 30 * 60000;
+        const allTaskItems = (careTasksToday?.groups || []).flatMap(g =>
           g.occurrences.map(o => ({
             __careTask: true, id: `ct-${o.id}`, occ: o, group: g,
             date: o.due_date, time: o.due_time || '', status: 'care_task',
           })));
+        const isFolded = (o) => (o.status === 'done' || o.status === 'skipped')
+          && o.completed_at && (nowMs - new Date(o.completed_at).getTime() > DONE_LINGER_MS);
+        const careTaskItems = allTaskItems.filter(it => !isFolded(it.occ));
+        const doneEarlier = allTaskItems.filter(it => isFolded(it.occ));
         // Care events (v1.100.0): upcoming appointments/outings slot into the
         // same chronological list — situational awareness, no digging.
-        const careEventItems = (careEventsUpcoming?.events || []).map(ev => ({
-          __careEvent: true, id: `ce-${ev.id}`, ev,
-          date: ev.event_date, time: ev.event_time || '', status: 'care_event',
-        }));
+        // v1.102.0: a timed event that started >1h ago is over — drop it, the
+        // feed should always point at the NEXT thing. (All-day events keep
+        // their day; starts_at is a true instant as of v1.100.0.)
+        const careEventItems = (careEventsUpcoming?.events || [])
+          .filter(ev => ev.all_day || !ev.starts_at || nowMs - new Date(ev.starts_at).getTime() < 60 * 60000)
+          .map(ev => ({
+            __careEvent: true, id: `ce-${ev.id}`, ev,
+            date: ev.event_date, time: ev.event_time || '', status: 'care_event',
+          }));
         const sorted = [...confirmed, ...careTaskItems, ...careEventItems].sort((a, b) => {
           const ak = ((a.date || '').split('T')[0]) + (a.time || '');
           const bk = ((b.date || '').split('T')[0]) + (b.time || '');
@@ -1683,6 +1697,37 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
 
         const hasBookableRecipient = data?.careRecipients?.some(cr => !cr.consent_status || cr.consent_status === 'verified');
         const showConsentGate = data?.careRecipients?.length > 0 && !hasBookableRecipient;
+        // v1.102.0 — compact record of what already happened today, out of
+        // the way of what's next. Undo still one tap away.
+        const doneStrip = doneEarlier.length > 0 ? (
+          <div style={{ marginTop: 4 }}>
+            <div onClick={() => setDoneTodayExpanded(!doneTodayExpanded)}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', padding: '6px 4px' }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-success)' }}>✓</span>
+              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-tertiary)' }}>
+                Done earlier today ({doneEarlier.length}) {doneTodayExpanded ? '▴' : '▾'}
+              </span>
+            </div>
+            {doneTodayExpanded && doneEarlier.map(it => (
+              <div key={it.id} style={{
+                display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 8,
+                background: 'var(--bg-card)', border: '1px solid var(--border-light)', marginBottom: 4, opacity: 0.75,
+              }}>
+                <span style={{ fontSize: 13, color: it.occ.status === 'done' ? 'var(--color-success)' : 'var(--text-muted)' }}>
+                  {it.occ.status === 'done' ? '✓' : '—'}
+                </span>
+                <span style={{ flex: 1, fontSize: 13, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {it.occ.title} · {it.occ.status === 'done' ? 'done' : 'skipped'} · {careTaskDoneBy(it.occ, true)} · for {it.group.recipientFirstName}
+                </span>
+                <button onClick={() => undoTask(it.occ)}
+                  style={{ padding: '2px 8px', borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--bg-surface)', color: 'var(--text-tertiary)', fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>
+                  Undo
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : null;
+
         // v1.99.3 — "+ Task" pill: complementary teal (family role color) next
         // to the orange "+ Request Care" so task creation is obvious on open.
         const showTaskPill = (data?.careRecipients?.length || 0) > 0;
@@ -1695,7 +1740,8 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
         );
 
         if (nextUp.length === 0) return (
-          <div style={{ marginBottom: 16, border: '2px solid var(--border-color)', borderRadius: 14, padding: '20px 18px', textAlign: 'center' }}>
+          <div style={{ marginBottom: 16 }}>
+          <div style={{ border: '2px solid var(--border-color)', borderRadius: 14, padding: '20px 18px', textAlign: 'center' }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>Next Up</div>
             <div style={{ fontSize: 14, color: 'var(--text-tertiary)' }}>No sessions or tasks scheduled</div>
             {showConsentGate ? (
@@ -1710,6 +1756,8 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                 {showTaskPill && taskPillBtn('8px 20px')}
               </div>
             )}
+          </div>
+          {doneStrip}
           </div>
         );
 
@@ -1915,6 +1963,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                 </div>
               )}
             </div>
+            {doneStrip}
           </div>
         );
       })()}
