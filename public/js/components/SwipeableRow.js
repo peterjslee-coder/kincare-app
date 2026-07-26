@@ -22,13 +22,17 @@ const SwipeableRow = window.SwipeableRow = ({ actions, children, marginBottom = 
   const [dx, setDx] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
   const drag = useRef(null); // { x, y, base, horiz, moved, pointerId }
+  // dxRef mirrors dx: pointerup often fires before React re-renders, so the
+  // handler closure's `dx` is stale — a fast flick would snap back closed.
+  const dxRef = useRef(0);
 
   const enabled = Array.isArray(actions) && actions.length > 0;
   const W = enabled ? actions.length * 92 : 0;
 
   if (!enabled) return <div style={{ marginBottom }}>{children}</div>;
 
-  const settle = (open) => { setIsOpen(open); setDx(open ? -W : 0); };
+  const moveTo = (v) => { dxRef.current = v; setDx(v); };
+  const settle = (open) => { setIsOpen(open); moveTo(open ? -W : 0); };
 
   const onPointerDown = (e) => {
     // Ignore secondary buttons; let taps through untouched.
@@ -50,20 +54,20 @@ const SwipeableRow = window.SwipeableRow = ({ actions, children, marginBottom = 
     if (!d.horiz) return;
     d.moved = true;
     // Left swipe only; small rubber-band past the action tray.
-    setDx(Math.max(-W - 24, Math.min(0, d.base + mx)));
+    moveTo(Math.max(-W - 24, Math.min(0, d.base + mx)));
   };
 
   const onPointerEnd = () => {
     const d = drag.current;
     drag.current = null;
     if (!d || !d.moved) return;
-    settle(dx < -W / 2);
+    settle(dxRef.current < -W / 2);
   };
 
   // A row that's swiped open shouldn't fire its normal tap action —
   // first tap just closes the tray (standard iOS behavior).
   const onClickCapture = (e) => {
-    if (isOpen || dx !== 0) {
+    if (isOpen || dxRef.current !== 0) {
       e.stopPropagation();
       e.preventDefault();
       settle(false);
