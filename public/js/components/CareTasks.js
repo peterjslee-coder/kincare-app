@@ -36,7 +36,7 @@ const careTaskDoneBy = (occ, short) => {
 // ─── Next Up row (rendered inside Dashboard's Next Up list) ───
 // v1.101.0: swipe left (or mouse-drag) reveals ✓ Done / Dismiss. Dismiss maps
 // to the existing 'skipped' status — on the record, attributed, undoable.
-const CareTaskNextUpRow = window.CareTaskNextUpRow = ({ occ, group, onQuickCheck, onOpenSheet, onUndo, onDismiss }) => {
+const CareTaskNextUpRow = window.CareTaskNextUpRow = ({ occ, group, onQuickCheck, onOpenSheet, onUndo, onDismiss, onClear }) => {
   const done = occ.status === 'done';
   const skipped = occ.status === 'skipped';
   const nowMs = Date.now();
@@ -51,10 +51,15 @@ const CareTaskNextUpRow = window.CareTaskNextUpRow = ({ occ, group, onQuickCheck
   const bg = isLate ? 'linear-gradient(135deg, var(--color-error-bg) 0%, var(--bg-card) 100%)'
     : isDue ? 'linear-gradient(135deg, var(--color-warning-bg) 0%, var(--bg-card) 100%)' : 'var(--bg-card)';
 
+  // Pending rows: ✓ Done / Dismiss. Done or skipped rows: Clear — Pete's
+  // "meds were done hours ago" swipe folds the row into the Done-earlier
+  // strip immediately instead of waiting out the 30-min linger (v1.103.0).
   const swipeActions = (!done && !skipped) ? [
     { label: '✓ Done', background: 'var(--color-success)', onTap: onQuickCheck },
     ...(onDismiss ? [{ label: 'Dismiss', background: 'var(--text-muted)', onTap: onDismiss }] : []),
-  ] : null;
+  ] : (onClear ? [
+    { label: 'Clear', background: 'var(--text-muted)', onTap: onClear },
+  ] : null);
 
   return (
     <SwipeableRow actions={swipeActions} marginBottom={8}>

@@ -39,6 +39,9 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
   const [eventSheet, setEventSheet] = useState(null); // ev → CareEventSheet
   const [eventEditing, setEventEditing] = useState(null); // ev → CareEventFormModal
   const [doneTodayExpanded, setDoneTodayExpanded] = useState(false); // "Done earlier today" strip
+  // v1.103.0 — occurrence ids the user swiped "Clear" on: fold into the
+  // Done-earlier strip right now instead of waiting out the 30-min linger.
+  const [clearedNow, setClearedNow] = useState(() => new Set());
   const [finishedExpanded, setFinishedExpanded] = useState(false);
   // Tick counter for live countdown on in-progress and imminent sessions (re-renders every 30-60s)
   const [tick, setTick] = useState(0);
@@ -817,34 +820,20 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
         </div>
       )}
 
-      {/* Latest Status — only show when there's something actionable */}
+      {/* Latest Status — v1.103.0 consolidation (Pete: "one place to
+          acknowledge, not five"): this tile no longer counts sessions or
+          notifications — Next Up owns the future, the Activity card owns the
+          past. It survives only as the new-user "Get started" nudge. */}
       {!isNewUser && (() => {
-        const upcomingCount = upcoming.length;
-        const unreadCount = stats.unreadNotifications || 0;
-        let statusIcon, statusText, borderColor;
+        if (!(stats.assignedCaregivers === 0 && !parent)) return null;
+        const statusIcon = '🔍';
+        const statusText = 'Get started by adding a loved one and finding caregivers in your area.';
+        const borderColor = 'var(--accent-color)';
 
-        if (upcomingCount > 0) {
-          statusIcon = '📅';
-          statusText = `You have ${upcomingCount} upcoming session${upcomingCount > 1 ? 's' : ''} this week.`;
-          if (unreadCount > 0) statusText += ` ${unreadCount} unread notification${unreadCount > 1 ? 's' : ''}.`;
-          borderColor = 'var(--role-color)';
-        } else if (unreadCount > 0) {
-          statusIcon = '🔔';
-          statusText = `You have ${unreadCount} unread notification${unreadCount > 1 ? 's' : ''}.`;
-          borderColor = 'var(--role-color)';
-        } else if (stats.assignedCaregivers === 0 && !parent) {
-          statusIcon = '🔍';
-          statusText = 'Get started by adding a loved one and finding caregivers in your area.';
-          borderColor = 'var(--accent-color)';
-        } else {
-          // Nothing actionable — don't show the tile
-          return null;
-        }
-
-        const latestFingerprint = `${upcomingCount}-${unreadCount}-${stats.assignedCaregivers}`;
+        const latestFingerprint = `getstarted-${stats.assignedCaregivers}`;
         if (isTileDismissed('latest', latestFingerprint)) return null;
 
-        const latestClickTarget = upcomingCount > 0 ? 'schedule' : (unreadCount > 0 ? 'activity' : (!parent ? 'recipients' : (stats.assignedCaregivers === 0 ? 'caregivers' : 'schedule')));
+        const latestClickTarget = 'recipients';
         return (
           <div className="card" style={{ marginBottom: 16, borderLeft: `4px solid ${borderColor}`, display: 'flex', alignItems: 'center', gap: 12, position: 'relative', cursor: 'pointer' }}
             onClick={() => onNavigate && onNavigate(latestClickTarget)}>
@@ -1545,98 +1534,6 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
         </div>
       )}
 
-      {/* Recent Activity — unread in-app notifications (v1.56.0) */}
-      {/* Filter out 'message' type — messages already have their own tab in bottom nav */}
-      {(() => {
-        const unread = notifications.filter(n => !n.read && n.type !== 'message');
-        if (unread.length === 0) return null;
-        const typeIcons = {
-          care_request_accepted: '\u2705',
-          message: '\u{1F4AC}',
-          payment: '\u{1F4B3}',
-          manual_payment: '\u{1F4B5}',
-          time_proposal: '\u{1F552}',
-          proposal_accepted: '\u{1F91D}',
-          proposal_declined: '\u274C',
-          check_in: '\u{1F3E0}',
-          check_out: '\u{1F44B}',
-          missing_address: '\u{1F4CD}',
-          general: '\u{1F514}',
-        };
-        const getIcon = (type) => typeIcons[type] || typeIcons.general;
-        const timeAgo = (dateStr) => {
-          const diff = Date.now() - new Date(dateStr).getTime();
-          const mins = Math.floor(diff / 60000);
-          if (mins < 1) return 'Just now';
-          if (mins < 60) return `${mins}m ago`;
-          const hrs = Math.floor(mins / 60);
-          if (hrs < 24) return `${hrs}h ago`;
-          return `${Math.floor(hrs / 24)}d ago`;
-        };
-        return (
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: '#4a90d9', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                {'\u{1F514}'} Recent Activity ({unread.length})
-              </div>
-              {unread.length > 1 && (
-                <button onClick={() => markNotificationsRead(unread.map(n => n.id))} style={{
-                  padding: '4px 12px', background: 'transparent', color: 'var(--text-muted)', border: '1px solid var(--border-color)', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer',
-                }}>Mark all read</button>
-              )}
-            </div>
-            {(() => {
-              const notifExpanded = notificationsExpanded;
-              const visibleNotifs = notifExpanded ? unread.slice(0, 8) : unread.slice(0, 2);
-              const hasMoreNotifs = unread.length > 2;
-              return (
-                <>
-                  <div style={{ position: 'relative' }}>
-                    {visibleNotifs.map(n => {
-                      const nData = n.data ? (typeof n.data === 'string' ? JSON.parse(n.data) : n.data) : {};
-                      return (
-                        <div key={n.id} className="activity-new-shimmer" onClick={() => {
-                          markNotificationsRead([n.id]);
-                          if (nData.sessionId && typeof setVisitDetailSessionId === 'function') setVisitDetailSessionId(nData.sessionId);
-                          else if (['payment', 'manual_payment'].includes(nData.type) && onNavigate) onNavigate('payments');
-                          // v1.97.0 — everything else routes through the central
-                          // deep-link handler: reimbursements land on the approve
-                          // view, messages open the conversation, etc.
-                          else if (window.__handlePushNavigate) window.__handlePushNavigate(nData);
-                          else if (nData.type === 'message' && onNavigate) onNavigate('messages');
-                        }} style={{
-                          marginBottom: 6, padding: '12px 14px', cursor: 'pointer', borderRadius: 10,
-                          border: '2px solid #4a90d9',
-                          background: 'linear-gradient(135deg, rgba(74, 144, 217, 0.06) 0%, var(--bg-card) 100%)',
-                          boxShadow: '0 1px 6px rgba(74, 144, 217, 0.10)',
-                          position: 'relative', overflow: 'hidden',
-                        }}>
-                          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                            <span style={{ fontSize: 18, flexShrink: 0, marginTop: 1 }}>{getIcon(n.type)}</span>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>{n.title}</div>
-                              {n.body && <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{n.body}</div>}
-                            </div>
-                            <div style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0, marginTop: 2 }}>{timeAgo(n.created_at)}</div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                    {!notifExpanded && hasMoreNotifs && (
-                      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 48, background: 'linear-gradient(transparent, var(--bg-surface))', pointerEvents: 'none' }} />
-                    )}
-                  </div>
-                  {hasMoreNotifs && (
-                    <div onClick={() => setNotificationsExpanded(!notifExpanded)} style={{ textAlign: 'center', padding: '8px 0 2px', cursor: 'pointer', fontSize: 12, color: '#4a90d9', fontWeight: 600 }}>
-                      {notifExpanded ? 'Show less' : `Show ${Math.min(unread.length, 8) - 2} more`}
-                    </div>
-                  )}
-                </>
-              );
-            })()}
-          </div>
-        );
-      })()}
 
       {/* Next Up — up to 10 sessions within 2 weeks, collapsed to 2 cards with fade */}
       {(() => {
@@ -1661,7 +1558,8 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
             date: o.due_date, time: o.due_time || '', status: 'care_task',
           })));
         const isFolded = (o) => (o.status === 'done' || o.status === 'skipped')
-          && o.completed_at && (nowMs - new Date(o.completed_at).getTime() > DONE_LINGER_MS);
+          && (clearedNow.has(o.id) ||
+              (o.completed_at && (nowMs - new Date(o.completed_at).getTime() > DONE_LINGER_MS)));
         const careTaskItems = allTaskItems.filter(it => !isFolded(it.occ));
         const doneEarlier = allTaskItems.filter(it => isFolded(it.occ));
         // Care events (v1.100.0): upcoming appointments/outings slot into the
@@ -1788,6 +1686,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                     onQuickCheck={() => quickCheckTask(s.occ)}
                     onUndo={() => undoTask(s.occ)}
                     onDismiss={() => dismissTask(s.occ)}
+                    onClear={() => setClearedNow(prev => new Set([...prev, s.occ.id]))}
                     onOpenSheet={() => setTaskSheet({ occ: s.occ, group: s.group })} />
                 );
               }
@@ -1968,6 +1867,108 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
         );
       })()}
 
+      {/* Activity — THE one place to see and acknowledge what already happened
+          (v1.103.0, Pete: "one place to acknowledge it, not five"). Consolidates
+          the Latest-tile counts, the unread-notifications card, the yellow
+          unread banner, and the Recent Activity card. Rule going forward:
+          Next Up = future (act there); Activity = past (acknowledge HERE);
+          nothing appears in both; new features announce with a line here,
+          never a new banner. */}
+      {(() => {
+        const unread = notifications.filter(n => !n.read && n.type !== 'message');
+        const typeIcons = {
+          care_request_accepted: '✅', message: '\u{1F4AC}', payment: '\u{1F4B3}',
+          manual_payment: '\u{1F4B5}', time_proposal: '\u{1F552}', proposal_accepted: '\u{1F91D}',
+          proposal_declined: '❌', check_in: '\u{1F3E0}', check_out: '\u{1F44B}',
+          missing_address: '\u{1F4CD}', care_task: '✅', care_event: '\u{1F4C5}', general: '\u{1F514}',
+        };
+        const getIcon = (type) => typeIcons[type] || typeIcons.general;
+        const timeAgo = (dateStr) => {
+          const diff = Date.now() - new Date(dateStr).getTime();
+          const mins = Math.floor(diff / 60000);
+          if (mins < 1) return 'Just now';
+          if (mins < 60) return `${mins}m ago`;
+          const hrs = Math.floor(mins / 60);
+          if (hrs < 24) return `${hrs}h ago`;
+          return `${Math.floor(hrs / 24)}d ago`;
+        };
+        // Read tail = recent activity that isn't already shown as an unread
+        // notification (same event often lands in both streams).
+        const unreadKeys = new Set(unread.map(n => (n.title || '').trim().toLowerCase()));
+        const readTail = activity.filter(a => !unreadKeys.has((a.title || '').trim().toLowerCase())).slice(0, 6);
+        if (unread.length === 0 && readTail.length === 0) return null;
+
+        const combined = [
+          ...unread.map(n => ({ kind: 'unread', it: n, key: `n-${n.id}` })),
+          ...readTail.map(a => ({ kind: 'read', it: a, key: `a-${a.id}` })),
+        ];
+        const expanded = notificationsExpanded;
+        const visibleItems = expanded ? combined.slice(0, 12) : combined.slice(0, 3);
+        const hasMore = combined.length > 3;
+
+        const openNotif = (n) => {
+          const nData = n.data ? (typeof n.data === 'string' ? JSON.parse(n.data) : n.data) : {};
+          markNotificationsRead([n.id]);
+          if (nData.sessionId && typeof setVisitDetailSessionId === 'function') setVisitDetailSessionId(nData.sessionId);
+          else if (['payment', 'manual_payment'].includes(nData.type) && onNavigate) onNavigate('payments');
+          else if (window.__handlePushNavigate) window.__handlePushNavigate(nData);
+        };
+
+        return (
+          <div className="card" style={{ marginBottom: 16 }}>
+            <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+              <span>
+                <span className="card-icon">📢</span>Activity
+                {unread.length > 0 && (
+                  <span style={{ background: 'var(--accent-color)', color: 'var(--text-on-primary)', borderRadius: 10, fontSize: 11, fontWeight: 700, padding: '1px 8px', marginLeft: 8, verticalAlign: 1 }}>
+                    {unread.length} new
+                  </span>
+                )}
+              </span>
+              <span style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                {unread.length > 0 && (
+                  <button onClick={() => markNotificationsRead(unread.map(n => n.id))} style={{
+                    padding: '4px 10px', background: 'var(--role-color-light)', color: 'var(--role-color)',
+                    border: 'none', borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                  }}>✓ Mark all read</button>
+                )}
+                <span onClick={() => onNavigate && onNavigate('activity')} style={{ fontSize: 12, color: 'var(--role-color)', cursor: 'pointer', fontWeight: 600 }}>View all →</span>
+              </span>
+            </div>
+            {visibleItems.map(({ kind, it, key }) => kind === 'unread' ? (
+              <div key={key} onClick={() => openNotif(it)} style={{ padding: '9px 0', borderBottom: '1px solid var(--border-light)', cursor: 'pointer' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 9 }}>
+                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--accent-color)', flexShrink: 0, marginTop: 6 }} />
+                  <span style={{ fontSize: 16, flexShrink: 0 }}>{getIcon(it.type)}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 650, fontSize: 13.5, color: 'var(--text-primary)' }}>{it.title}</div>
+                    {it.body && <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.body}</div>}
+                  </div>
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0, marginTop: 2 }}>{timeAgo(it.created_at)}</span>
+                </div>
+              </div>
+            ) : (
+              <div key={key} onClick={() => it.sessionId && setVisitDetailSessionId(it.sessionId)}
+                style={{ padding: '9px 0', borderBottom: '1px solid var(--border-light)', opacity: 0.6, cursor: it.sessionId ? 'pointer' : 'default' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 9 }}>
+                  <span style={{ width: 7, flexShrink: 0 }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 500, fontSize: 13, color: 'var(--text-primary)' }}>{it.title}</div>
+                    {it.message && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.message}</div>}
+                  </div>
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0, marginTop: 2 }}>{timeAgo(it.timestamp)}</span>
+                </div>
+              </div>
+            ))}
+            {hasMore && (
+              <div onClick={() => setNotificationsExpanded(!expanded)} style={{ textAlign: 'center', padding: '8px 0 2px', cursor: 'pointer', fontSize: 12, color: 'var(--role-color)', fontWeight: 600 }}>
+                {expanded ? 'Show less' : `Show ${Math.min(combined.length, 12) - 3} more`}
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
       {/* Recently Completed — recently completed sessions (faded, expandable) */}
       {(() => {
         const completed = data?.recentlyCompleted || [];
@@ -2059,13 +2060,8 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
 
       {/* Time Proposals moved to top — see above Awaiting Caregiver */}
 
-      {stats.unreadNotifications > 0 && (
-        <div style={{ background: 'var(--color-warning-bg)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '12px 16px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}
-          onClick={() => onNavigate && onNavigate('activity')}>
-          <span style={{ fontSize: '20px' }}>🔔</span>
-          <span style={{ fontSize: '14px', color: 'var(--color-warning)' }}>{stats.unreadNotifications} unread notification{stats.unreadNotifications > 1 ? 's' : ''}</span>
-        </div>
-      )}
+      {/* (v1.103.0) yellow unread-notifications banner removed — the Activity
+          card under Next Up is the one acknowledgment point. */}
 
       {/* Recent Visit Photos */}
       {data.recentPhotos && data.recentPhotos.length > 0 && (
@@ -2124,49 +2120,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
         </div>
       )}
 
-      {/* Recent Activity — fade after 2, expand to 5 */}
-      {activity.length > 0 && (() => {
-        const actExpanded = activityExpanded;
-        const visibleCount = actExpanded ? 5 : 2;
-        const items = activity.slice(0, visibleCount);
-        const hasMore = activity.length > 2;
-        return (
-          <div className="card">
-            <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span><span className="card-icon">📢</span>Recent Activity</span>
-              <span onClick={() => onNavigate && onNavigate('activity')} style={{ fontSize: 12, color: 'var(--role-color)', cursor: 'pointer', fontWeight: 600 }}>View All →</span>
-            </div>
-            <div style={{ position: 'relative' }}>
-              {items.map((a, idx) => (
-                <div key={idx}
-                  onClick={() => a.sessionId && setVisitDetailSessionId(a.sessionId)}
-                  style={{
-                    padding: '10px 0', borderBottom: idx < items.length - 1 ? '1px solid var(--border-light)' : 'none',
-                    cursor: a.sessionId ? 'pointer' : 'default', transition: 'background 0.15s',
-                    borderRadius: 4, margin: '0 -4px', paddingLeft: 4, paddingRight: 4,
-                  }}
-                  onMouseEnter={(e) => { if (a.sessionId) e.currentTarget.style.background = 'var(--bg-elevated)'; }}
-                  onMouseLeave={(e) => { if (a.sessionId) e.currentTarget.style.background = ''; }}>
-                  <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 13, marginBottom: 2 }}>
-                    {a.title}
-                    {a.sessionId && <span style={{ fontSize: 11, color: 'var(--role-color)', marginLeft: 6, fontWeight: 500 }}>View →</span>}
-                  </div>
-                  {a.message && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2, lineHeight: 1.4 }}>{a.message}</div>}
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3 }}>{formatActivityTime(a.timestamp)}</div>
-                </div>
-              ))}
-              {!actExpanded && hasMore && (
-                <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 48, background: 'linear-gradient(transparent, var(--bg-surface))', pointerEvents: 'none' }} />
-              )}
-            </div>
-            {hasMore && (
-              <div onClick={() => setActivityExpanded(!actExpanded)} style={{ textAlign: 'center', padding: '8px 0 2px', cursor: 'pointer', fontSize: 12, color: 'var(--role-color)', fontWeight: 600 }}>
-                {actExpanded ? 'Show less' : `Show ${Math.min(activity.length, 5) - 2} more`}
-              </div>
-            )}
-          </div>
-        );
-      })()}
+      {/* (v1.103.0) old bottom Recent Activity card removed — merged into the Activity card under Next Up. */}
 
       {/* Restore dismissed tiles — only when a tile is actually hidden right now
           (stale entries from previous days linger in localStorage and shouldn't show the pill) */}
