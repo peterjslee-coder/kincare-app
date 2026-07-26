@@ -43,12 +43,17 @@ const careEventGoogleUrl = (ev) => {
 };
 
 // ─── Next Up row (rendered inside Dashboard's Next Up list) ───
-const CareEventNextUpRow = window.CareEventNextUpRow = ({ ev, onOpenSheet }) => {
+// v1.101.0: swipe left reveals Remove (managers only) — events carry no
+// accountability, so removal needs no ceremony.
+const CareEventNextUpRow = window.CareEventNextUpRow = ({ ev, onOpenSheet, onRemove }) => {
   const tz = ev.timezone || TimezoneHelper.DEFAULT_TZ;
   const isToday = ev.event_date === TimezoneHelper.getToday(tz);
+  const swipeActions = (ev.canManage && onRemove)
+    ? [{ label: 'Remove', background: 'var(--color-error)', onTap: onRemove }] : null;
   return (
+    <SwipeableRow actions={swipeActions} marginBottom={8}>
     <div onClick={onOpenSheet} style={{
-      marginBottom: 8, padding: '12px 14px', borderRadius: 12, cursor: 'pointer',
+      padding: '12px 14px', borderRadius: 12, cursor: 'pointer', boxSizing: 'border-box',
       border: `2px dashed ${isToday ? 'var(--role-color, var(--accent-color))' : 'var(--border-color)'}`,
       background: 'var(--bg-card)', boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
     }}>
@@ -71,6 +76,7 @@ const CareEventNextUpRow = window.CareEventNextUpRow = ({ ev, onOpenSheet }) => 
         }}>Event</span>
       </div>
     </div>
+    </SwipeableRow>
   );
 };
 

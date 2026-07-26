@@ -34,7 +34,9 @@ const careTaskDoneBy = (occ, short) => {
 };
 
 // ─── Next Up row (rendered inside Dashboard's Next Up list) ───
-const CareTaskNextUpRow = window.CareTaskNextUpRow = ({ occ, group, onQuickCheck, onOpenSheet, onUndo }) => {
+// v1.101.0: swipe left (or mouse-drag) reveals ✓ Done / Dismiss. Dismiss maps
+// to the existing 'skipped' status — on the record, attributed, undoable.
+const CareTaskNextUpRow = window.CareTaskNextUpRow = ({ occ, group, onQuickCheck, onOpenSheet, onUndo, onDismiss }) => {
   const done = occ.status === 'done';
   const skipped = occ.status === 'skipped';
   const nowMs = Date.now();
@@ -49,11 +51,18 @@ const CareTaskNextUpRow = window.CareTaskNextUpRow = ({ occ, group, onQuickCheck
   const bg = isLate ? 'linear-gradient(135deg, var(--color-error-bg) 0%, var(--bg-card) 100%)'
     : isDue ? 'linear-gradient(135deg, var(--color-warning-bg) 0%, var(--bg-card) 100%)' : 'var(--bg-card)';
 
+  const swipeActions = (!done && !skipped) ? [
+    { label: '✓ Done', background: 'var(--color-success)', onTap: onQuickCheck },
+    ...(onDismiss ? [{ label: 'Dismiss', background: 'var(--text-muted)', onTap: onDismiss }] : []),
+  ] : null;
+
   return (
+    <SwipeableRow actions={swipeActions} marginBottom={8}>
     <div onClick={() => { if (!done && !skipped) onOpenSheet(); }} style={{
-      marginBottom: 8, padding: '12px 14px', borderRadius: 12, cursor: done || skipped ? 'default' : 'pointer',
+      padding: '12px 14px', borderRadius: 12, cursor: done || skipped ? 'default' : 'pointer',
       border: `2px solid ${borderColor}`, background: bg, opacity: skipped ? 0.7 : 1,
       boxShadow: isDue && !done ? '0 2px 12px rgba(245, 127, 23, 0.12)' : '0 1px 4px rgba(0,0,0,0.06)',
+      boxSizing: 'border-box',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         {/* One-tap check circle: tap = done, recorded as you. Row tap opens the who/note sheet. */}
@@ -99,6 +108,7 @@ const CareTaskNextUpRow = window.CareTaskNextUpRow = ({ occ, group, onQuickCheck
         </div>
       </div>
     </div>
+    </SwipeableRow>
   );
 };
 

@@ -167,6 +167,25 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
       if (res?.ok) fetchCareTasks();
     } catch {}
   };
+  // v1.101.0 — swipe-to-dismiss. Semantics (Pete's call): dismiss = the
+  // existing 'skipped' status, on the record and attributed — a reminder can
+  // leave the feed fast, but care state never vanishes silently.
+  const dismissTask = async (occ) => {
+    try {
+      const res = await apiFetch(`/api/care-tasks/occurrences/${occ.id}/check`, {
+        method: 'POST', body: JSON.stringify({ status: 'skipped' }),
+      });
+      if (res?.ok) { showToast('Dismissed — marked skipped (undo on the row)', 'success'); fetchCareTasks(); }
+      else { const d = await res.json().catch(() => ({})); showToast(d.error || 'Could not dismiss', 'error'); fetchCareTasks(); }
+    } catch { showToast('Could not dismiss', 'error'); }
+  };
+  const removeEvent = async (ev) => {
+    try {
+      const res = await apiFetch(`/api/care-events/${ev.id}`, { method: 'DELETE' });
+      if (res?.ok) { showToast('Event removed', 'success'); fetchCareEvents(); }
+      else showToast('Could not remove event', 'error');
+    } catch { showToast('Could not remove event', 'error'); }
+  };
 
   const fetchUser = async () => {
     try {
@@ -1720,12 +1739,14 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                   <CareTaskNextUpRow key={s.id} occ={s.occ} group={s.group}
                     onQuickCheck={() => quickCheckTask(s.occ)}
                     onUndo={() => undoTask(s.occ)}
+                    onDismiss={() => dismissTask(s.occ)}
                     onOpenSheet={() => setTaskSheet({ occ: s.occ, group: s.group })} />
                 );
               }
               if (s.__careEvent) {
                 return (
                   <CareEventNextUpRow key={s.id} ev={s.ev}
+                    onRemove={() => removeEvent(s.ev)}
                     onOpenSheet={() => setEventSheet(s.ev)} />
                 );
               }
