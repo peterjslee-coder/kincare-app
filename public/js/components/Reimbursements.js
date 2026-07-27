@@ -736,9 +736,25 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
 
   return (
     <div className="card" style={{ marginTop: 16 }}>
-      <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      {/* v1.103.1 — Pete's portrait-phone bug: this row had up to six buttons in
+          a non-wrapping flex, so "+ Request" fell off the right edge on mobile.
+          Now the row WRAPS, and + Request comes first — the primary action is
+          never the one that overflows. */}
+      <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', rowGap: 8 }}>
         <span>💵 Reimbursements</span>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          {meta.canSubmit && !showForm && (
+            <button onClick={openRequestForm}
+              style={{ padding: '6px 14px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+              + Request
+            </button>
+          )}
+          {meta.canSubmit && !showForm && (
+            <button onClick={() => { setShowForm(true); setRecordMode(false); setRecurringMode(true); }}
+              style={{ padding: '6px 14px', background: 'var(--bg-card)', color: 'var(--role-color)', border: '1px solid var(--role-color)', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+              ↻ Recurring
+            </button>
+          )}
           {(meta.isApprover || (members || []).some((m) => m.userId === myUserId && m.role === 'leader')) && !showForm && (
             <button onClick={() => setShowMoney(true)}
               style={{ padding: '6px 14px', background: 'var(--bg-card)', color: 'var(--role-color)', border: '1px solid var(--role-color)', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
@@ -755,18 +771,6 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
             <button onClick={() => setShowReports(true)}
               style={{ padding: '6px 14px', background: 'var(--bg-card)', color: 'var(--role-color)', border: '1px solid var(--role-color)', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
               📊 Reports
-            </button>
-          )}
-          {meta.canSubmit && !showForm && (
-            <button onClick={openRequestForm}
-              style={{ padding: '6px 14px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-              + Request
-            </button>
-          )}
-          {meta.canSubmit && !showForm && (
-            <button onClick={() => { setShowForm(true); setRecordMode(false); setRecurringMode(true); }}
-              style={{ padding: '6px 14px', background: 'var(--bg-card)', color: 'var(--role-color)', border: '1px solid var(--role-color)', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-              ↻ Recurring
             </button>
           )}
           {meta.isApprover && !showForm && (
