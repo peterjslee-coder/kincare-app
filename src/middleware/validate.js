@@ -240,6 +240,8 @@ function limitBodySize(maxBytes = 50000) {
     if (req.originalUrl?.startsWith("/api/self-onboarding")) return next();
     // Skip for reimbursements (receipt photos/PDFs as base64 — express.json 10mb limit applies)
     if (req.originalUrl?.startsWith("/api/reimbursements")) return next();
+    // v1.103.2 — skip for notes (observation photos as base64 — express.json 8mb + route-level 5MB photo check apply)
+    if (req.originalUrl?.startsWith("/api/notes")) return next();
     const contentLength = parseInt(req.headers["content-length"] || "0");
     if (contentLength > maxBytes) {
       return res.status(413).json({ error: "Request body too large" });

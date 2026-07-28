@@ -548,6 +548,15 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
           setNewNote('');
           showToast('Note saved offline — will sync when reconnected', 'success');
         } else { showToast('You\'re offline — try again later', 'error'); }
+      } else {
+        // v1.103.2 — failures used to fall through SILENTLY (spin → form
+        // resets, no explanation). Always say what happened.
+        const d = await res?.json().catch(() => ({}));
+        showToast(
+          res?.status === 413 ? 'That photo is too large — try a smaller one.'
+            : (d.error || 'Could not add the observation — please try again.'),
+          'error'
+        );
       }
     } catch (err) {
       if (!navigator.onLine && window.OfflineQueue) {

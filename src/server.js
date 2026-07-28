@@ -227,6 +227,9 @@ app.use("/api/auth/me/photo", express.json({ limit: "5mb" }));
 app.use("/api/care-recipients", express.json({ limit: "5mb" }));
 app.use("/api/self-onboarding", express.json({ limit: "10mb" }));
 app.use("/api/reimbursements", express.json({ limit: "10mb" })); // receipt photos/PDFs (base64)
+// v1.103.2 — observation notes accept a photo (client resizes to ≤1600px, route
+// enforces 5MB): the global 100kb JSON cap silently broke every photo note.
+app.use("/api/notes", express.json({ limit: "8mb" }));
 // Skip JSON parsing for webhooks that need raw body for signature verification
 app.use((req, res, next) => {
   if (req.originalUrl === '/api/payments/webhook' || req.originalUrl === '/api/checkr/webhook') return next();
@@ -354,7 +357,7 @@ app.use("/api/legal", require("./routes/legal"));
 app.use("/api/media", require("./routes/media"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.103.1";
+const APP_VERSION = "1.103.2";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });

@@ -107,6 +107,9 @@ router.get("/:careRecipientId", async (req, res) => {
 
 // POST /api/notes — create a note
 router.post("/", async (req, res) => {
+  // v1.103.2 — the whole handler is wrapped: an unhandled async throw in
+  // Express 4 leaves the request HANGING (the client just spins forever).
+  try {
   const db = await getDb();
   const { careRecipientId, content, noteType = "general", offlineTimestamp, offlineSync, needsAttention, photo } = req.body;
 
@@ -207,6 +210,11 @@ router.post("/", async (req, res) => {
     FROM recipient_notes rn JOIN users u ON rn.author_id = u.id WHERE rn.id = ?
   `).get(id);
   res.status(201).json({ note });
+  } catch (err) {
+    captureException(err, { where: "notes: create" });
+    console.error("Note create error:", err.message);
+    res.status(500).json({ error: "Failed to add note" });
+  }
 });
 
 // GET /api/notes/:id/photo — stream a note's photo (same access + visibility rules)
