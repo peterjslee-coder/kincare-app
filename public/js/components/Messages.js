@@ -2091,11 +2091,12 @@ const Messages = window.Messages = () => {
         )}
         <div className="msg-input-area">
           {/* Hidden file input for photo uploads */}
+          {/* v1.103.3 — no capture attr (forced camera-only); iOS now offers
+              the library/camera/file sheet */}
           <input
             ref={photoInputRef}
             type="file"
             accept="image/*"
-            capture="environment"
             style={{ display: 'none' }}
             onChange={handlePhotoUpload}
           />

@@ -1232,7 +1232,9 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                 </label>
                 <label style={{ fontSize: 13, color: notePhoto ? 'var(--role-color)' : 'var(--text-secondary)', cursor: 'pointer' }}>
                   {notePhoto ? '\uD83D\uDCCE ' + notePhoto.name + ' \u2715' : '\uD83D\uDCF7 Add photo'}
-                  <input type="file" accept="image/*" capture="environment" style={{ display: 'none' }}
+                  {/* v1.103.3 — no capture attr: it forced the camera. Without it,
+                      iOS offers Photo Library / Take Photo / Choose File. */}
+                  <input type="file" accept="image/*" style={{ display: 'none' }}
                     onClick={(e) => { if (notePhoto) { e.preventDefault(); setNotePhoto(null); } }}
                     onChange={(e) => {
                       const file = e.target.files && e.target.files[0];

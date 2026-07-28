@@ -1289,7 +1289,9 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                           </div>
                         ) : (
                           <>
-                            <input ref={idVerIdPhotoRef} type="file" accept="image/*" capture="environment"
+                            {/* v1.103.3 — button promises "Take or upload" but capture
+                                forced camera-only; removed so the library works too */}
+                            <input ref={idVerIdPhotoRef} type="file" accept="image/*"
                               onChange={(e) => handleIdVerFileSelect(e, 'id')}
                               style={{ display: 'none' }} />
                             <button onClick={() => idVerIdPhotoRef.current?.click()}
