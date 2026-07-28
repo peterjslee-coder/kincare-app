@@ -1,14 +1,12 @@
 const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmail, prefilledRole, signupToken, pendingInviteToken, sandboxMode, oauthSignupCode, prefilledFirstName, prefilledLastName }) => {
   // ─── State ───
   const [track, setTrack] = useState(prefilledRole === 'caregiver' ? 'caregiver' : prefilledRole === 'family' ? 'family' : prefilledRole === 'care_for' ? 'care_for' : null);
-  const [step, setStep] = useState(prefilledRole ? 2 : 1); // Step 1 = role picker, Step 2 = basic info, Step 3 = caregiver disclosures
+  const [step, setStep] = useState(prefilledRole ? 2 : 1); // Step 1 = role picker, Step 2 = basic info
   const isOAuthSignup = !!oauthSignupCode;
   const [formData, setFormData] = useState({
     firstName: prefilledFirstName || '', lastName: prefilledLastName || '', email: prefilledEmail || '', password: '',
     confirmPassword: '',
     phone: '',
-    // Caregiver disclosures
-    ackNoMedical: false, ackBgCheck: false, ackPayments: false,
   });
   const [authHint, setAuthHint] = useState(null); // 'tier2' or 'tier3' — set during family authorization question
   const [showFieldErrors, setShowFieldErrors] = useState(false);
@@ -73,10 +71,6 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
     if (!phone) return null;
     if (intlPhone) return phone.replace(/[^\d\+]/g, ''); // keep + and digits
     return phone.replace(/\D/g, '');
-  };
-
-  const isDisclosuresValid = () => {
-    return formData.ackNoMedical && formData.ackBgCheck && formData.ackPayments;
   };
 
   // ─── Navigation ───
@@ -352,9 +346,7 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
             <p style={{ margin: '0 0 4px' }}><strong>Role:</strong> {roleLabel}</p>
             {track === 'caregiver' && (
               <div style={{ borderTop: '1px solid #e0e0e0', marginTop: '8px', paddingTop: '8px' }}>
-                <p style={{ margin: '0 0 2px', color: 'var(--role-color)' }}>{'✓'} No-medical-care disclosure acknowledged</p>
-                <p style={{ margin: '0 0 2px', color: 'var(--role-color)' }}>{'✓'} Background check fee acknowledged</p>
-                <p style={{ margin: '0 0 2px', color: 'var(--role-color)' }}>{'✓'} Online payments acknowledged</p>
+                <p style={{ margin: '0 0 2px', color: 'var(--role-color)' }}>{'✓'} Disclosures & terms collected during caregiver onboarding</p>
               </div>
             )}
           </div>
@@ -362,7 +354,7 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
             <strong>Next:</strong> The user would land on their {roleLabel} dashboard with a First Steps checklist guiding them to complete their profile.
           </div>
           <div style={{ display: 'flex', gap: '12px' }}>
-            <button onClick={() => { setSandboxPreview(false); setTrack(null); setStep(1); setFormData({ firstName: '', lastName: '', email: '', password: '', confirmPassword: '', phone: '', ackNoMedical: false, ackBgCheck: false, ackPayments: false }); }} className="btn btn-outline" style={{ flex: 1 }}>Start Over</button>
+            <button onClick={() => { setSandboxPreview(false); setTrack(null); setStep(1); setFormData({ firstName: '', lastName: '', email: '', password: '', confirmPassword: '', phone: '' }); }} className="btn btn-outline" style={{ flex: 1 }}>Start Over</button>
             <button onClick={() => onNavigate('splash')} className="btn btn-primary" style={{ flex: 1 }}>Exit Sandbox</button>
           </div>
         </div>
@@ -531,11 +523,13 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
   }
 
   // ─── Screen 2: Basic Info (all roles) ───
-  // ─── Screen 3: Caregiver Disclosures ───
-  const totalSteps = track === 'caregiver' ? 3 : (track === 'family' && authHint) ? 3 : 2;
-  const stepLabels = track === 'caregiver'
-    ? ['Choose Your Path', 'Your Information', 'Quick Disclosures']
-    : (track === 'family' && authHint)
+  // v1.103.4 — caregiver track is 2 steps like everyone else. The old step-3
+  // "Quick Disclosures" screen was dead code (handleNext creates the account
+  // from step 2), so the indicator promised a step that never rendered.
+  // Caregiver disclosures are collected in the onboarding wizard (Step 2 of 9)
+  // and the post-approval Important Notice.
+  const totalSteps = (track === 'family' && authHint) ? 3 : 2;
+  const stepLabels = (track === 'family' && authHint)
     ? ['Choose Your Path', 'Care Authorization', 'Your Information']
     : ['Choose Your Path', 'Your Information'];
   // For family with authHint, step 2 (basic info) is visual step 3
@@ -648,49 +642,6 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
               <input type="password" value={formData.confirmPassword} onChange={(e) => { setFormData(p => ({ ...p, confirmPassword: e.target.value })); setShowFieldErrors(false); }} placeholder="Re-enter your password" style={showFieldErrors && (!formData.confirmPassword || formData.password !== formData.confirmPassword) ? { borderColor: 'var(--color-error)', background: 'var(--bg-accent-light)' } : formData.confirmPassword && formData.password === formData.confirmPassword ? { borderColor: 'var(--role-color)', background: 'var(--bg-highlight)' } : {}} />
               {formData.confirmPassword && formData.password === formData.confirmPassword && <div style={{ fontSize: '12px', color: 'var(--role-color)', marginTop: '4px' }}>Passwords match</div>}
               {formData.confirmPassword && formData.password !== formData.confirmPassword && <div style={{ fontSize: '12px', color: 'var(--color-error)', marginTop: '4px' }}>Passwords don't match</div>}
-            </div>
-          </>
-        )}
-
-        {/* ─── Step 3: Caregiver Disclosures ─── */}
-        {step === 3 && track === 'caregiver' && (
-          <>
-            <div style={{
-              padding: '12px 16px', borderRadius: '10px', marginBottom: '12px',
-              background: 'var(--color-warning-bg)', border: '1px solid #ffe0b2',
-            }}>
-              <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>
-                You are joining as a Caregiver
-              </div>
-              <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                You can add other roles later from your account settings.
-              </div>
-            </div>
-            <div style={{ background: 'var(--color-warning-bg)', border: '1px solid #ffe0a0', borderRadius: '10px', padding: '16px', marginBottom: '16px', fontSize: '13px', color: '#5d4037' }}>
-              <strong>Before we create your account</strong> — please review and acknowledge the following. These protect you and the families you'll work with.
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <label style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', cursor: 'pointer', padding: '14px', borderRadius: '10px', border: formData.ackNoMedical ? '2px solid #1b6b5a' : '2px solid #e0e0e0', background: formData.ackNoMedical ? 'var(--bg-highlight)' : 'var(--bg-card)', transition: 'all 0.2s' }}>
-                <input type="checkbox" checked={formData.ackNoMedical} onChange={(e) => setFormData(p => ({ ...p, ackNoMedical: e.target.checked }))} style={{ marginTop: '2px', flexShrink: 0 }} />
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-primary)', marginBottom: '4px' }}>No medical care</div>
-                  <div style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>InPlace does not provide at-home medical care in accordance with Virginia state law. Caregivers provide companionship, personal care, and household assistance only.</div>
-                </div>
-              </label>
-              <label style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', cursor: 'pointer', padding: '14px', borderRadius: '10px', border: formData.ackBgCheck ? '2px solid #1b6b5a' : '2px solid #e0e0e0', background: formData.ackBgCheck ? 'var(--bg-highlight)' : 'var(--bg-card)', transition: 'all 0.2s' }}>
-                <input type="checkbox" checked={formData.ackBgCheck} onChange={(e) => setFormData(p => ({ ...p, ackBgCheck: e.target.checked }))} style={{ marginTop: '2px', flexShrink: 0 }} />
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-primary)', marginBottom: '4px' }}>Background check required</div>
-                  <div style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>A comprehensive background check is required before you can accept jobs. The fee is $30 and is refunded after your first 10 completed sessions.</div>
-                </div>
-              </label>
-              <label style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', cursor: 'pointer', padding: '14px', borderRadius: '10px', border: formData.ackPayments ? '2px solid #1b6b5a' : '2px solid #e0e0e0', background: formData.ackPayments ? 'var(--bg-highlight)' : 'var(--bg-card)', transition: 'all 0.2s' }}>
-                <input type="checkbox" checked={formData.ackPayments} onChange={(e) => setFormData(p => ({ ...p, ackPayments: e.target.checked }))} style={{ marginTop: '2px', flexShrink: 0 }} />
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-primary)', marginBottom: '4px' }}>Online payments</div>
-                  <div style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>All payments are processed online through Stripe. You are an independent contractor, not an employee of InPlace. You'll set up Stripe after creating your account.</div>
-                </div>
-              </label>
             </div>
           </>
         )}

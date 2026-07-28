@@ -240,9 +240,11 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
   const RADIUS_OPTIONS = ['5', '10', '15', '25', '50'];
 
   // Pre-fill phone and name from user profile (avoids re-entering data from registration)
+  // v1.103.4 — no token guard: sessions restored from the httpOnly auth cookie
+  // have window.AUTH_TOKEN unset, which silently skipped this prefill (Julia
+  // trap-run: phone had to be typed twice). The fetch rides the cookie; a 401
+  // in the pre-auth invite flow just resolves null and prefills nothing.
   useEffect(() => {
-    const token = authToken || window.AUTH_TOKEN;
-    if (!token) return;
     resilientFetch('/api/auth/me', {
       headers: authHeaders(),
     }).then(r => r.ok ? r.json() : null).then(data => {

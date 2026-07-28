@@ -117,7 +117,9 @@ const DisclaimerModal = window.DisclaimerModal = ({ onAccept, pendingDocs }) => 
 
   return (
     <div style={{
-      position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 10000,
+      // v1.103.4 — 10050 keeps the agree checkbox above the feedback FAB (zIndex
+      // 10000, rendered later in the DOM so it painted on top and swallowed taps)
+      position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 10050,
       background: 'var(--bg-primary)',
       display: 'flex', flexDirection: 'column',
     }}>
