@@ -177,6 +177,8 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
     if (!file) return;
     setDocUploading(docType);
     try {
+      // v1.104.0 — auto-downscale images (non-images pass through untouched)
+      file = await window.downscaleImageFile(file);
       const formData = new FormData();
       formData.append('documents', file);
       formData.append('types', JSON.stringify([docType]));
@@ -781,8 +783,10 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
     setSessionsThisMonth(monthSessions.length);
   }, [completedSessions]);
 
-  const handlePhotoSelect = (e) => {
-    const files = Array.from(e.target.files || []).slice(0, 5);
+  const handlePhotoSelect = async (e) => {
+    // v1.104.0 — auto-downscale at selection so visit photos never trip the 5MB cap
+    const raw = Array.from(e.target.files || []).slice(0, 5);
+    const files = await Promise.all(raw.map(f => window.downscaleImageFile(f)));
     setLogPhotos(prev => [...prev, ...files].slice(0, 5));
     // Generate preview URLs
     const newUrls = files.map(f => URL.createObjectURL(f));
@@ -797,8 +801,10 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
     });
   };
 
-  const handleCheckOutPhotoSelect = (e) => {
-    const files = Array.from(e.target.files || []).slice(0, 5);
+  const handleCheckOutPhotoSelect = async (e) => {
+    // v1.104.0 — auto-downscale at selection so check-out photos never trip the 5MB cap
+    const raw = Array.from(e.target.files || []).slice(0, 5);
+    const files = await Promise.all(raw.map(f => window.downscaleImageFile(f)));
     setCheckOutPhotos(prev => [...prev, ...files].slice(0, 5));
     const newUrls = files.map(f => URL.createObjectURL(f));
     setCheckOutPhotoUrls(prev => [...prev, ...newUrls].slice(0, 5));

@@ -116,6 +116,16 @@ const SelfOnboardingWizard = window.SelfOnboardingWizard = ({ user, careRecipien
 
     setLoading(true);
     try {
+      // v1.104.0 — downscale before storing: a raw phone photo as base64 in a
+      // JSON body can exceed the server's payload limit (Sentry INPLACE-1)
+      const dataUrl = await window.downscaleImage(file, { maxDim: 1600, quality: 0.85 });
+      if (dataUrl) {
+        setIdPhoto(dataUrl);
+        setLoading(false);
+        showToast('ID photo uploaded!', 'success');
+        return;
+      }
+      // Non-decodable image — fall back to raw read
       const reader = new FileReader();
       reader.onload = (ev) => {
         setIdPhoto(ev.target.result);

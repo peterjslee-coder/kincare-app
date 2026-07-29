@@ -773,3 +773,52 @@ const checkPushHealth = window.checkPushHealth = async () => {
     console.warn('Push health check error:', err.message);
   }
 };
+
+// ─── Automatic photo downscaling (v1.104.0, Sentry INPLACE-1) ───
+// Phone cameras produce 3–10MB photos; base64 in a JSON body inflates that by
+// ~33%, blowing past server body limits (the /api/notes 413s), and raw files
+// can exceed multer's 5MB multipart cap. Every photo upload path downscales
+// through here automatically so no user ever hits a size wall.
+//
+// downscaleImage(file, {maxDim, quality}) → Promise<dataURL|null>
+//   null = not a downscalable image (non-image, GIF, or decode failure) —
+//   caller decides whether to pass the original through or reject.
+// downscaleImageFile(file, {maxDim, quality}) → Promise<File>
+//   Always resolves: JPEG File when downscaling helps, otherwise the original
+//   untouched (never blocks an upload). Safe to map over mixed file lists.
+const downscaleImage = window.downscaleImage = (file, opts = {}) => new Promise((resolve) => {
+  const { maxDim = 1600, quality = 0.85 } = opts;
+  if (!file || !file.type || !file.type.startsWith('image/') || file.type === 'image/gif') {
+    return resolve(null); // GIFs skipped — canvas would strip animation
+  }
+  const img = new Image();
+  const url = URL.createObjectURL(file);
+  img.onload = () => {
+    URL.revokeObjectURL(url);
+    try {
+      let { width, height } = img;
+      if (width > maxDim || height > maxDim) {
+        const sc = maxDim / Math.max(width, height);
+        width = Math.round(width * sc);
+        height = Math.round(height * sc);
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width; canvas.height = height;
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    } catch (e) { resolve(null); }
+  };
+  img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+  img.src = url;
+});
+
+const downscaleImageFile = window.downscaleImageFile = async (file, opts = {}) => {
+  try {
+    const dataUrl = await downscaleImage(file, opts);
+    if (!dataUrl) return file;
+    const blob = await (await fetch(dataUrl)).blob();
+    if (blob.size >= file.size) return file; // already small/optimized — keep original
+    const name = (file.name || 'photo').replace(/\.[^.]+$/, '') + '.jpg';
+    return new File([blob], name, { type: 'image/jpeg' });
+  } catch (e) { return file; }
+};

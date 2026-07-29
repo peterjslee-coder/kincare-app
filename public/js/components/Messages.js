@@ -659,17 +659,19 @@ const Messages = window.Messages = () => {
 
   // ─── Photo upload ───
   const handlePhotoUpload = async (e) => {
-    const file = e.target.files?.[0];
+    let file = e.target.files?.[0];
     if (!file || !activeConvId) return;
     // Reset input so same file can be re-selected
     if (photoInputRef.current) photoInputRef.current.value = '';
 
-    if (file.size > 5 * 1024 * 1024) {
-      showToast('Photo must be under 5MB', 'error');
-      return;
-    }
     if (!file.type.startsWith('image/')) {
       showToast('Only image files are allowed', 'error');
+      return;
+    }
+    // v1.104.0 — auto-downscale so big camera photos never hit the 5MB wall
+    file = await window.downscaleImageFile(file);
+    if (file.size > 5 * 1024 * 1024) {
+      showToast('Photo must be under 5MB', 'error');
       return;
     }
 

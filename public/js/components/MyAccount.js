@@ -795,11 +795,13 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
 
   // Caregiver - Documents handlers
   const handleDocumentUpload = async (docType) => {
-    const file = acctDocInputRef.current?.files?.[0];
+    let file = acctDocInputRef.current?.files?.[0];
     if (!file) return;
 
     setDocUploading(docType);
     try {
+      // v1.104.0 — auto-downscale images (non-images pass through untouched)
+      file = await window.downscaleImageFile(file);
       const formData = new FormData();
       formData.append('documents', file);
       formData.append('types', JSON.stringify([docType]));
