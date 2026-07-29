@@ -71,6 +71,12 @@
 - [x] **Payment lockout enforcement.** ✅ Done v1.57.1–3 — When auto-pay fails, family is blocked from booking new sessions and caregiver can't check in. `payment_hold` status for confirmed sessions. `checkPaymentStanding()` gates on both POST /sessions (booking) and check-in. Only triggers on `payment_status = 'failed'`, not during pending/grace period. `restoreHeldSessions()` flips payment_hold → confirmed when family pays. Push notifications to both parties. 402 error handling in RequestCareModal and CaretakerHub. *(Pete — Mar 29)* **P1**
 - [x] **Kindred reminder poller crashing every 60s.** ✅ Fixed v1.57.7 — `operator does not exist: uuid = text` because `voice_reminders.care_recipient_id` is UUID but `care_recipients.id` is TEXT. Added `::text` cast on JOIN and family lookup query. Also added missing `cancel_reason` column to `care_sessions` (was only on interviews table), fixing the private-only expiry error. *(Found — Mar 29)* **P1**
 
+<!-- ── Triaged July 29, 2026 (feedback loop; Julia Huth real-signup thread) ── -->
+
+- [ ] **Test Mode impersonation may write to the admin, not the impersonated user.** While "Test Mode — Viewing as Julia" is active, the UI renders her view but `/api/auth/me` still returns the admin (Pete). **Unverified: whether profile/preference WRITES from impersonation land on the impersonated user or on the admin.** If they land on the admin, impersonation silently corrupts Pete's own record — and every "I edited it in Test Mode" observation from previous sessions is suspect. Verify before relying on editing from Test Mode; add a server-side guard so writes either target the impersonated user or are rejected outright. *(Found — Jul 29)* **P1**
+- [ ] **Passkey created on laptop didn't carry to phone (Julia).** Partly platform reality — a passkey only appears on another device if the same provider syncs it (iCloud Keychain within Apple ID; Google Password Manager within Chrome/Android); cross-ecosystem never syncs, you use cross-device QR/Bluetooth sign-in or register a second passkey. **Don't assume it's our bug until verified:** (a) check prod `RP_ID`/`ORIGIN` — per CLAUDE.md the #1 passkey failure; RP_ID must derive to yourinplace.com, ORIGIN from APP_URL, and must NOT be gated on `NODE_ENV` (Railway may not set it) — files `passkeys.js`, `admin.js`; (b) confirm a user can register an ADDITIONAL passkey per device and the UI invites it rather than implying one works everywhere; (c) confirm email/password fallback still works so nobody gets locked out; (d) fix the copy: "Passkeys are saved to this device (and synced only if your browser/OS syncs them)." *(Julia — Jul 29)* **P1**
+- [ ] **Lint baseline burn-down — 2 real bugs parked in the ignore list.** `scripts/lint-client.js` BASELINE documents 3 pre-existing findings; two are genuine bugs needing domain intent: **`savedToken`** (app.js invite-boot auth check) and **`loadAlerts`** (AdminPanel approve/reject refresh). The baseline is a ratchet — burn these down, never add to it. *(v1.104.6 — Jul 29)* **P1**
+
 ### P2
 
 - [ ] **Stripe Link UX deceptive for bank accounts.** Flow pushes Link, which has higher fees at no benefit. Check Stripe Checkout `payment_method_types` config. May need to disable Link or default to direct card/bank. *(Feedback `d63ed33e` — Pete, Apr 4)* **P2**
@@ -97,6 +103,15 @@
 - [x] **Messages input scrolls right instead of wrapping.** ✅ Fixed v1.57.18 — Replaced `<input type="text">` with auto-growing `<textarea>`. Grows from 1 line to max 3 lines (72px), then scrolls vertically. Enter sends, Shift+Enter inserts newline. CSS updated with line-height, max-height, and overflow-y. *(Feedback `4126e671` — Pete, Apr 1)* **P2**
 - [ ] **Admin Sessions tab — rethink as analytics dashboard.** Currently just shows missed sessions. Pete wants: tiles ranking care types by popularity, avg session duration, repeat caregiver rate, and an AI-generated insight summary that refreshes on tab open with KPI recommendations (retention, usage patterns, growth levers). *(Feedback `eff71717` — Pete, Mar 31)* **P2**
 - [x] **Kindred reminder announcements tied to calendar.** ✅ Done v1.51.42 — Added Reminders tab to Kindred admin panel in CareProfile.js. Family can create voice reminders with message, time picker, recurrence (one-time/daily/weekdays/weekends/custom days), and labels. Backend: new columns on voice_reminders (recurrence, recurrence_time, recurrence_days, label, source), GET/POST/PUT/DELETE endpoints. Delivery poller in server.js checks every 60s, delivers due reminders, auto-schedules next occurrence for recurring. Calendar auto-reminders added v1.51.48 — POST /api/kindred/reminders/sync-calendar creates reminders 30 min before upcoming sessions, "Sync Calendar" button in Reminders tab. *(Feedback — Pete, Mar 25)* **P2**
+
+<!-- ── Triaged July 29, 2026 (feedback loop; Julia Huth real-signup thread) ── -->
+
+- [ ] **No per-section edit affordance in MyAccount — Pete hit "where's the edit button?" 3×.** Root cause: editing hides behind a single top-level toggle per tab, so if you're not on the exact right tab the content looks un-editable. Known cases: **Care Preferences** (Account → Care Preferences; v1.104.8 made completed First Steps rows tappable with "Edit ›"), **Health & Safety** — pets/allergies/medical conditions live on Account → **Profile** and only become editable via the single "Edit Profile" button top-right of the "My Account" heading, which renders only when `activeTab==='profile' && !editing` (MyAccount.js ~949). **Fix:** one consistent affordance — a small Edit pencil per editable card (Profile, Health & Safety, address, …) or clearly tappable section headers. **Separate question:** that card shows care-recipient-style health fields on a *caregiver* profile — review whether it belongs there at all. *(Pete — Jul 29)* **P2**
+- [ ] **Notification toggles are broken three ways (Account → Settings → Notifications).** MyAccount.js ~1624–1656; `.toggle-input` in styles.css ~1735.
+  - **Knobs render misaligned** — the knob is drawn with `input.toggle-input::before`, a pseudo-element on an `appearance:none` checkbox. Unreliable everywhere, worst in iOS Safari/PWA (the "Reminder Emails" knob hangs off the left edge while others sit differently). **Fix:** stop using `::before` on the input — either draw the knob as a `background` radial-gradient on `.toggle-input` moved via `background-position` on `:checked` (CSS-only, iOS-safe, no markup change across the many `.toggle-label` usages), or switch to the label-wraps-hidden-checkbox + `.toggle-slider` span pattern.
+  - **Duplicate section** — the screen shows NotificationSettings' "Push Notifications — Enabled / Send Test Notification" block AND a separate per-event "Push Notifications" card below: two identical headers. Consolidate into one push section (master enable + per-event toggles together).
+  - **Dark-mode toggles unreadable — dead CSS, root cause confirmed.** The only dark-mode toggle rule is `[data-theme="dark"] .toggle-slider { background: var(--toggle-track) }` (styles.css ~225) — but **`.toggle-slider` is used nowhere**; the components use `.toggle-input`. The rule has never applied. Result: OFF track stays `--toggle-track: #3a3a4a` (dark grey) on near-black with a white knob — Pete: "two-tone black/grey vs white slider is incomprehensible." Repoint/remove the dead rule and give dark mode a distinctly lighter OFF track + clearly different ON color. **Same silent-failure class as the white screens, but in CSS — so also grep the whole dark-mode stylesheet for other rules targeting classes that don't exist.** *(Pete — Jul 29)* **P2**
+- [ ] **"Vouch for family" is hard to find, and can't reach caregivers who haven't onboarded.** Pete hunted for the vouch flow 3× (Admin → Background Checks → caregiver card → "Vouch for family…"). Two fixes: (a) a prominent "Vouch for a caregiver" entry with name/email **search that works independently of onboarding progress** — v1.104.9 made vouch-only caregivers appear, but the list is still sourced from onboarding data, so a signed-up-but-not-onboarded caregiver (Julia today) can't be found at all; (b) a persistent "Edit preferences" link on the caregiver dashboard after First Steps completes. *(Feedback `e54bc363` — Pete, Jul 29; residual after v1.104.9)* **P2**
 
 ### P3
 
@@ -497,6 +512,82 @@
   - **Pete's Mac setup (done Mar 27):** Homebrew installed, Node.js installed via brew, repo cloned, `npm install` + `npx cap sync` run. Xcode installed from App Store, iOS 26.4 Simulator downloading. Project opens in Xcode, signing team set (PETER JOHN, SHERWOOD LEE Personal Team), bundle ID `com.yourinplace.app`.
   - **Next step:** Finish iOS simulator download → hit Play in Xcode → InPlace runs in simulator. Then plug in iPhone for real device testing. Then Product → Archive → TestFlight for distributing to testers.
   - *(Pete — Mar 26, 2026)*
+
+## Companion Mode — Feature Track (July 14, 2026)
+
+> **Source of truth:** `/mnt/Claude Working Folder/Companion_Mode_Plan_2026-07-14.md`
+> **What it is:** Kindred reborn as a visual, remotely-managed simplified phone experience for care recipients with cognitive decline (Betty). Big photo buttons, iPAi Ask button, one Companion Manager controls, whole team monitors. Paid add-on per care recipient (up to 4 team members included, more cost extra) — second profit stream independent of caregiver transactions.
+> **Guardrails:** opt-in per recipient (care-for users are capable adults by default); iPAi cardinal rule (raw data only); no ElevenLabs voice cloning (that track stays killed); honest copy about what iOS Assistive Access does vs. what we do.
+
+### Phase 1 — Validate with Apple Assistive Access (no code)
+- [ ] **Pete: set up Assistive Access on Betty's iPhone** — trusted-contacts-only Calls, Photos, Camera; caregiver passcode; Find My via Family Sharing verified; charging dock as fixed home. Checklist in plan §2. *(Pete — Jul 14)* **P1**
+- [ ] **Observation notes → gap list (2–4 weeks)** — what Betty asks for that the screen doesn't offer; where Assistive Access falls short = Phase 2 requirements. Decision gate: if Assistive Access alone satisfies, pivot Phase 2 toward team-side monitoring. *(Pete/Edwina)* **P1**
+
+### Phase 2 — Companion Mode MVP (PWA, staging-first)
+- [ ] **Kindred asset audit** — what survives into `/companion`: kindredBrain identity/care-context/distress framework, /api/kindred endpoints, voice_reminders + poller, relay_message intent, CareProfile admin tabs. Strip voice-personality layer. **P1**
+- [ ] **Recipient device-pairing auth** — pairing code from Companion Manager → long-lived scoped recipient-device token, revocable; replaces token-in-URL Kindred hack. Betty needs no account. **P1**
+- [ ] **MVP recipient screens** — (a) big-button photo calling (tel: links, remotely managed contact list, recipient cannot add/remove/block); (b) iPAi Ask button (text + device TTS, grounded in raw data, relay intent). Design rules in plan §3. **P1**
+- [ ] **Companion tab (family side)** — evolve Kindred admin panel: edit tiles/contacts/boundaries, screen preview, one Companion Manager role (write) + team monitor access (read). **P1**
+- [ ] **Fast-follow: Today card** — next event incl. non-InPlace events (Peggy's dinner) with gentle advance alerts; reminders engine already exists. **P2**
+- [ ] **Apply for Apple critical-alert entitlement** — needed for "Ring Mom's phone" that sounds through silent mode; long lead time, apply early. **P2**
+
+### Phase 3 — Native + monitoring (paid differentiator)
+- [ ] **Native AssistiveAccess SwiftUI scene (iOS 26 SDK)** — InPlace tile inside Apple's Assistive Access; must be native (WebView won't render there). TestFlight Build 7+. **P2**
+- [ ] **Location tiers** — Tier 1: Find My setup guidance (ship now); Tier 2: Ring-her-phone critical alert; Tier 3: background location + geofence alerts — **GATED on lawyer clearance**. **P2**
+- [ ] **Device posture surface** — "Assistive Access active ✓, last seen, battery %" to the team; CallKit spam-blocking extension (framed as spam protection, never "call control"). **P3**
+- [ ] **Add-on billing** — Stripe subscription per care recipient, 4-member tier + per-seat beyond. Price TBD after Betty pilot. **P2**
+- [ ] **LAWYER (Jul 31): consent/authority for monitoring a cognitively impaired adult; Companion Manager standing; iPAi-to-recipient disclosure; data retention; external data monetization = hard stop pending review.** **P1**
+
+## Care Tasks — Feature Track (July 22, 2026)
+
+> **Source of truth:** `/mnt/Claude Working Folder/Care_Tasks_Plan_2026-07-22.md`
+> **What it is:** Flexible recurring-task engine for the care team; medication tracking first (Betty's nightly anxiety med, watched dose), bathroom visits/baths/anything next. Remind assignee at due time → escalate to team after grace window → record WHO did it (team members + remembered manual helpers like Peggy). Occurrences are the record; free-text observations flow into care notes.
+> **Settled 7/22:** general engine (not med-only); assignee-then-escalate reminders; attribution = team + manual names.
+> **Bones reused, nothing rebuilt:** hasAccess pattern, care_teams, push fan-out + deep-link tap router, guardedPoller setInterval pattern, MIGRATIONS_V2, recipient_notes, activity_feed.
+
+### Phase 1 — MVP  ✅ SHIPPED — v1.99.1 LIVE ON PROD + STAGING 7/22 (Pete approved on staging demo; 27 tests green; v1.99.1 = seed-cleanup FK fix for the new tables). Next: Betty's real task on prod, caregiver-side (CaretakerHub) checklist fast-follow
+- [x] **Schema (MIGRATIONS_V2):** `care_tasks` (title, type, details JSON /* PHI */, recurrence/days/due_time/tz, start/end date, assignee, grace_minutes), `care_task_occurrences` (UNIQUE task+due_date; status pending/done/skipped/missed; recorded_by + completed_by_user_id OR completed_by_name; note /* PHI */; reminders_sent), `care_task_helpers` (per-recipient remembered names). **P1**
+- [x] **Routes `src/routes/careTasks.js`:** CRUD + today/history + check-off (attribution picker data, helper memory); access = hasAccess (create/edit owner|edit, check-off any team member/assigned caregiver). **P1**
+- [x] **Poller (guardedPoller 107 in server.js):** materialize today's occurrences → due-time push to assignee (deep-linked) → team escalation after grace → midnight missed-marking; skip is_demo pushes. **P1**
+- [x] **Client (Pete's placement rule: tasks INLINE in Next Up, chronological with sessions — no digging):** dashboard Today checklist card + recipient Tasks tab (adherence strips, history) + create/edit form + check-off sheet (one-tap done; picker: team → helpers → "Someone else…"; optional note, never required). **P1**
+
+### Phase 2 — Medication roster + polish
+- [ ] **Medications section on recipient record** — derived from medication-type tasks + standalone entries; supersedes free-text `care_recipients.medications` over time (don't touch the field in Phase 1). **P2**
+- [ ] Missed-task morning digest to owner; pause/resume; note-nudge on check-off (skippable); weekly/monthly adherence views. **P2**
+
+### Phase 3 — Intelligence + Companion convergence
+- [ ] **careIntelligence insight card:** adherence series × recipient_notes/mood — family-facing only, labeled correlation-not-causation; NEVER fed into doctor reports (cardinal rule). Doctor report gets raw adherence counts only, via existing review-before-send. **P2**
+- [ ] **Companion Mode hook:** Betty-facing reminder tile reads same care_tasks tables; her tap = claimed, team still confirms watched meds. Long-term: voice_reminders converges onto care_tasks (freeze new voice_reminders features now, don't rebuild). **P3**
+- [ ] **Open (Pete):** ~~free core vs add-on~~ SETTLED 7/22: free core for now; ~~grace default~~ SETTLED 7/22: 45 min; owner morning notification on missed?; lawyer-agenda candidate — structured adherence records vs medical-device claims (NOT added to agenda unless Pete says so). **P2**
+
+## Care Events — Feature Track (July 22, 2026)
+
+> **Source of truth:** `/mnt/Claude Working Folder/Care_Events_Plan_2026-07-22.md`
+> **What it is:** Lightweight events layer for situational awareness (Sara books Betty's appointment → care team knows). NOT a calendar: no OAuth sync, no month-grid UI, no recurrence (recurring = Care Tasks). Events render inline in Next Up; family-only notices (day-before + same-day); one-tap export to the user's own Apple/Google calendar. Marquee: forward a clinic email to iPAi → event appears.
+> **Settled 7/22:** no full calendar integration (Pete agreed); email-forward-to-iPAi is the priority ingestion path; events ≠ tasks (no escalation/missed).
+> **Bones reused:** hasAccess, isFamilyNotifiable push filter (v1.99.2), guardedPoller, Next Up merge pattern, kindredBrain Haiku parsing, Resend (Inbound feature), MIGRATIONS_V2.
+
+### Phase 1 — Capture + surface + export  ✅ SHIPPED — v1.100.0 pushed to staging + prod 7/22 (verified on staging: Next Up row, detail sheet, ics export, Haiku parse; 99 unit + 45 integration green). Includes true-instant timezone fix (zonedDateTimeToInstant) that also fixes Care Tasks due pushes firing 4h early on UTC servers.
+- [x] **Schema (MIGRATIONS_V2):** `care_events` (title, category, starts_at/ends_at/all_day/tz, location, details /* PHI */, source manual|email|ics, source_meta provenance JSON, reminders_sent, is_active soft delete) + **seed.js demo-cleanup entry day one** (v1.99.1 lesson) + Barbara Lowe demo events. **P1**
+- [x] **Routes `src/routes/careEvents.js`:** /upcoming (14d, Next Up merge), /recipient/:id, POST/PUT/DELETE (soft), POST /parse (one-field NL quick-add via kindredBrain Haiku → prefilled confirm card). **P1**
+- [x] **Client:** `__careEvent` rows inline in Next Up chronological with sessions/tasks (no digging); detail sheet w/ edit/delete + "Add to my calendar" (`GET /:id/ics` signed URL + Google Calendar link). **P1**
+- [x] **Poller (guardedPoller 108):** day-before ~5pm ET + same-day ~2h-before pushes, FAMILY-ONLY (isFamilyNotifiable), no escalation/missed; skip is_demo. **P1**
+- [x] Tests: parse guardrails, ics gen, reminder windows, family-only push integration. **P1**
+
+### Phase 2 — Forward an email to iPAi (marquee — Pete wants this now)
+- [ ] **DNS:** Resend Inbound MX on **ipai.yourinplace.com subdomain — NEVER the apex** (would hijack peter@yourinplace.com). Catch-all routing by recipient address. **P1**
+- [ ] **Addressing:** per-recipient slug (betty-x7f2@ipai.yourinplace.com); "Email it to iPAi" copy-address row on recipient profile — Sara saves it as a contact once. **P1**
+- [ ] **Webhook `/api/webhooks/inbound-email`:** svix signature verify (raw-body exemption next to Stripe/Checkr in server.js), fetch body+attachments via Resend API, dedupe on Resend email id. **P1**
+- [ ] **Sender auth:** From must match an active user with access to that recipient; otherwise drop silently (admin log, no bounce). **P1**
+- [ ] **Parse ladder:** .ics attachment → node-ical deterministic; else Haiku extract from subject+body; no confident date → DON'T GUESS, reply w/ deep link to prefilled quick-add. **P1**
+- [ ] **Close the loop:** event (source='email') + activity_feed + family push naming sender + iPAi confirmation reply to sender (what/when/where, edit deep link). Privacy: parsed fields + provenance only, raw body NOT persisted. **P1**
+- [ ] **Acceptance (Sara trace):** Sara forwards real clinic confirmation → event in Next Up on Pete's phone + push → Sara gets iPAi reply → Pete's "Add to my calendar" lands it on his iPhone → day-before family-only reminder. **P1**
+
+### Phase 3 — When pulled
+- [ ] Team ICS subscribe feed (tokened read-only URL, revocable) — subscribe once in Apple/Google Calendar. **P2**
+- [ ] "Who's taking Betty?" claim chip on transport-needing events (same interaction as task check-off sheet). **P2**
+- [ ] iPAi context injection + doctor report "Upcoming appointments" (RAW FACTS ONLY — cardinal rule); Companion Mode today-tile reads same table. **P3**
+- [ ] **NOT building:** Google/Apple OAuth calendar sync (either direction), in-app calendar UI, event recurrence, apex-domain inbound. **—**
 
 ## iPAi Kindred — Feature Track
 
