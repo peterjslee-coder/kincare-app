@@ -602,7 +602,13 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
         }
       }).catch(() => {});
       apiFetch('/api/caregivers/me').then(async r => {
-        if (r?.ok) { const d = await r.json(); setCgCertifications(d.profile?.certifications || []); }
+        if (r?.ok) { const d = await r.json();
+          // v1.104.7 — coerce to array: older/other API shapes may hand back a
+          // JSON string or object; a non-array here white-screened the docs view.
+          let certs = d.profile?.certifications;
+          if (typeof certs === 'string') { try { certs = JSON.parse(certs); } catch { certs = []; } }
+          setCgCertifications(Array.isArray(certs) ? certs : []);
+        }
       }).catch(() => {});
     }
   }, [activeTab]);

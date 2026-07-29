@@ -259,6 +259,21 @@ router.get("/me", requireRole("caregiver"), async (req, res) => {
     if (!profile) return res.status(404).json({ error: "Caregiver profile not found" });
   }
 
+  // v1.104.7 — parse the JSON-TEXT columns to real arrays/objects before sending.
+  // Unlike the list endpoints (which JSON.parse), this handler returned the raw
+  // DB strings, so the client did `(certifications || []).filter(...)` on a
+  // STRING → ".filter is not a function" → caregiver Documents view white-screened
+  // (caught by the new ErrorBoundary beacon on Julia's account).
+  const parseJsonField = (v, fallback) => {
+    if (v == null) return fallback;
+    if (typeof v !== "string") return v; // already parsed
+    try { const p = JSON.parse(v); return p == null ? fallback : p; } catch { return fallback; }
+  };
+  profile.certifications = parseJsonField(profile.certifications, []);
+  profile.specialties = parseJsonField(profile.specialties, []);
+  profile.care_preferences = parseJsonField(profile.care_preferences, null);
+  profile.care_stoplight = parseJsonField(profile.care_stoplight, null);
+
   res.json({ profile });
 });
 
