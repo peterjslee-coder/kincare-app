@@ -243,7 +243,9 @@ router.get("/me", requireRole("caregiver"), async (req, res) => {
     const { v4: uuidv4 } = require("uuid");
     const newId = uuidv4();
     try {
-      await db.prepare(`INSERT INTO caregiver_profiles (id, user_id, hourly_rate) VALUES (?, ?, 0)`).run(newId, req.user.id);
+      // v1.104.2 — explicit is_available=0: a bare auto-created stub must never
+      // show as "Available for Jobs" in admin (Julia's signup surfaced this)
+      await db.prepare(`INSERT INTO caregiver_profiles (id, user_id, hourly_rate, is_available) VALUES (?, ?, 0, 0)`).run(newId, req.user.id);
     } catch (err) {
       console.error("Auto-create caregiver profile failed:", err);
       return res.status(500).json({ error: "Failed to create caregiver profile" });
@@ -451,6 +453,10 @@ router.post("/profile", requireRole("caregiver"), async (req, res) => {
           academic_program_year = COALESCE(?, academic_program_year),
           needs_hour_reports = COALESCE(?, needs_hour_reports),
           open_to_interview = COALESCE(?, open_to_interview),
+          /* v1.104.2 — completing the onboarding wizard (the only caller that
+             sends termsVersion) flips the caregiver to available. Ordinary
+             profile edits never touch the flag. */
+          is_available = CASE WHEN ? IS NOT NULL THEN 1 ELSE is_available END,
           updated_at = NOW()
         WHERE user_id = ?
       `).run(
@@ -470,6 +476,7 @@ router.post("/profile", requireRole("caregiver"), async (req, res) => {
         academicProgram || null, academicProgramYear || null,
         needsHourReports != null ? (needsHourReports ? 1 : 0) : null,
         openToInterview === true ? 1 : openToInterview === false ? 0 : null,
+        termsVersion || null, // is_available CASE — wizard completion signal
         req.user.id
       );
 
@@ -502,9 +509,10 @@ router.post("/profile", requireRole("caregiver"), async (req, res) => {
        date_of_birth, ssn_last4, address_line1, address_line2, zip,
        dl_number, dl_state, background_check_consent, background_check_consent_at,
        work_location_address, care_stoplight, terms_accepted_at, terms_version,
-       academic_program, academic_program_year, needs_hour_reports, open_to_interview)
+       academic_program, academic_program_year, needs_hour_reports, open_to_interview,
+       is_available /* v1.104.2 — wizard completion = available; column default is now 0 */)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${backgroundCheckConsent ? "NOW()" : "NULL"},
-       ?, ?, ?, ?, ?, ?, ?, ?)
+       ?, ?, ?, ?, ?, ?, ?, ?, 1)
     `).run(
       id, req.user.id, bio || null, yearsExperience || 0, hourlyRate,
       rateDaytime || hourlyRate, rateNighttime || hourlyRate, rateOvernight || hourlyRate,

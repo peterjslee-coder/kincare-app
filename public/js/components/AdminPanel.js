@@ -5616,7 +5616,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                   { key: 'stripeOnboardComplete', label: 'Stripe Connected', desc: 'Bank account linked via Stripe Connect' },
                   { key: 'backgroundCheckPaid', label: 'Background Check Paid', desc: 'Paid $30 fee for background check' },
                   { key: 'onboardingComplete', label: 'Onboarding Complete', desc: 'All registration steps finished' },
-                  { key: 'isAvailable', label: 'Available for Jobs', desc: 'Can see and accept care requests' },
+                  { key: 'isAvailable', label: 'Accepting Work (their own toggle)', desc: 'The caregiver’s availability switch — actually claiming a job still requires a background check or your family vouch' },
                 ].map(flag => (
                   <div key={flag.key} style={{
                     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
