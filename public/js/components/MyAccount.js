@@ -1801,7 +1801,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
               </div>
               <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>Instant payout fees are charged by Stripe, not InPlace. Manage your payout speed in Stripe.</p>
             </div>
-            <button onClick={handleOpenStripeDashboard}
+            <button onClick={handleStripeDashboard}
               style={{ marginTop: 12, padding: '8px 20px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
               Open Stripe Dashboard
             </button>

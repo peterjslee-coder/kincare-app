@@ -372,7 +372,7 @@ app.use("/api/legal", require("./routes/legal"));
 app.use("/api/media", require("./routes/media"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.104.2";
+const APP_VERSION = "1.104.3";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });
