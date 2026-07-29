@@ -509,6 +509,8 @@ const App = () => {
     return 'dashboard';
   });
   const [pageNavCount, setPageNavCount] = useState(0);
+  // v1.104.4 — expose the current page to the ErrorBoundary crash reporter
+  useEffect(() => { try { window.__currentPage = currentPage; } catch {} }, [currentPage]);
   const [showRequestCareModal, setShowRequestCareModal] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showDisclaimer, setShowDisclaimer] = useState(false);
@@ -2070,6 +2072,7 @@ const App = () => {
 };
 
 ReactDOM.render(
-  React.createElement(ToastProvider, null, React.createElement(App)),
+  React.createElement(ErrorBoundary, null,
+    React.createElement(ToastProvider, null, React.createElement(App))),
   document.getElementById('root')
 );

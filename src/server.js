@@ -321,6 +321,27 @@ app.use("/api/sessions", require("./routes/sessions"));
 app.use("/api/sessions", require("./routes/offers"));
 app.use("/api/caregivers", require("./routes/caregivers"));
 app.use("/api/activity", require("./routes/activity"));
+// v1.104.4 — client-side crash beacon. The ErrorBoundary POSTs render/lifecycle
+// throws here so a white-screen becomes a real Sentry event (the user_id tag is
+// already attached upstream by the JWT-decode middleware). No auth required —
+// a crash can happen before/around auth — but the payload is tiny and the
+// global 100kb body cap + rate limiter bound abuse.
+app.post("/api/client-error", (req, res) => {
+  try {
+    const b = req.body || {};
+    const err = new Error(`[client] ${String(b.message || "unknown").slice(0, 300)}`);
+    err.stack = String(b.stack || "").slice(0, 4000) || err.stack;
+    captureException(err, {
+      source: "client",
+      page: b.page, url: b.url, version: b.version,
+      standalone: b.standalone, userAgent: b.userAgent,
+      componentStack: String(b.componentStack || "").slice(0, 4000),
+    });
+    console.error(`  [client-error] v${b.version} page=${b.page} standalone=${b.standalone}: ${String(b.message).slice(0, 200)}`);
+  } catch (_) { /* never throw from the error sink */ }
+  res.status(204).end();
+});
+
 app.use("/api/dashboard", require("./routes/dashboard"));
 app.use("/api/messages", require("./routes/messages"));
 app.use("/api/notes", require("./routes/notes"));
@@ -372,7 +393,7 @@ app.use("/api/legal", require("./routes/legal"));
 app.use("/api/media", require("./routes/media"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.104.3";
+const APP_VERSION = "1.104.4";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });

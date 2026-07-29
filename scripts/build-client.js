@@ -25,6 +25,7 @@ const OUT_DIR = path.join(PUBLIC, "js-compiled");
 const scripts = [
   "js/offlineQueue.js",
   "js/utils.js",
+  "js/components/ErrorBoundary.js",
   "js/components/TimezoneHelper.js",
   "js/components/InPlaceIcon.js",
   "js/components/CareStoryWalkthrough.js",
