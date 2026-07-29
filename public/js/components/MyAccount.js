@@ -2269,7 +2269,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                             isAdmin: !!meData.user.is_admin,
                           });
                         }
-                        if (window.setActiveRole) window.setActiveRole(data.primaryRole || ur[0]);
+                        if (window.setActiveRole) window.setActiveRole(data.primaryRole || (meData.user.roles || [meData.user.role])[0]);
                       }
                       if (typeof showToast === 'function') showToast(`${label} role removed`, 'success');
                     } else {

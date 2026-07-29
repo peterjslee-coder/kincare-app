@@ -3446,7 +3446,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                 setCheckInStep('checkin');
               },
               style: {
-                width: '100%', padding: '16px', border: 'none', borderRadius: 14,
+                width: '100%', padding: '16px', borderRadius: 14,
                 fontSize: 16, fontWeight: 700, cursor: 'pointer',
                 background: briefingAcked
                   ? 'linear-gradient(135deg, var(--role-color), var(--color-success))'

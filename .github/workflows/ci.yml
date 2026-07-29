@@ -23,6 +23,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Catches the class of bug in-browser Babel can't: an undeclared identifier
+      # (e.g. an onClick wired to a function that doesn't exist) that ships silently
+      # and white-screens at render. Runs first — cheapest, fails fastest.
+      - name: Client lint (undeclared identifiers / dupe keys / dead code)
+        run: npm run lint:client
+
       - name: Unit tests
         run: npm test
 

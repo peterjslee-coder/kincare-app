@@ -412,7 +412,7 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
                 </div>
               </div>
               {isExpanded && canManage && (
-                <div style={{ padding: '0 0 14px', margin: '0 -16px', padding: '0 16px 14px', background: 'var(--bg-highlight)', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <div style={{ margin: '0 -16px', padding: '0 16px 14px', background: 'var(--bg-highlight)', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   <button onClick={(e) => { e.stopPropagation(); handleChangeRole(m.userId, 'member'); }}
                     style={{ padding: '6px 14px', background: m.role === 'member' ? 'var(--role-color)' : 'var(--bg-card)', color: m.role === 'member' ? 'var(--bg-card)' : 'var(--role-color)',
                       border: '1px solid #1b6b5a', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>

@@ -1341,8 +1341,9 @@ const Messages = window.Messages = () => {
                   handleSelectConversation(ipaiConv);
                 } else {
                   // No existing conversation — set placeholder, first message will create it
+                  // (v1.104.6 — removed setActiveConvName call: no such state setter
+                  // exists; it threw ReferenceError and crashed the iPAi conversation tap)
                   setActiveConvId('__ipai__');
-                  setActiveConvName('iPAi');
                 }
               }}
               style={{ borderBottom: '2px solid #e6f5f0', background: isActive ? 'var(--color-success-bg)' : '#f8fffe' }}>
