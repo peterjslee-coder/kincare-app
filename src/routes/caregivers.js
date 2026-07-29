@@ -609,60 +609,75 @@ router.put("/mark-onboarding-complete", async (req, res) => {
     return res.status(403).json({ error: "Caregiver role required" });
   }
 
-  const db = await getDb();
-  const profile = await db.prepare(`
-    SELECT cp.*, u.avatar_url
-    FROM caregiver_profiles cp
-    JOIN users u ON cp.user_id = u.id
-    WHERE cp.user_id = ?
-  `).get(req.user.id);
+  // v1.105.0: this handler had no try/catch. Express 4 does not catch async
+  // route errors, so the SQL bug below rejected unhandled and the request HUNG
+  // — the caregiver sat on an infinite spinner at the last step of onboarding
+  // with nothing to click. Every async handler needs this wrapper.
+  try {
+    const db = await getDb();
+    const profile = await db.prepare(`
+      SELECT cp.*, u.avatar_url
+      FROM caregiver_profiles cp
+      JOIN users u ON cp.user_id = u.id
+      WHERE cp.user_id = ?
+    `).get(req.user.id);
 
-  if (!profile) {
-    return res.status(404).json({ error: "Caregiver profile not found" });
+    if (!profile) {
+      return res.status(404).json({ error: "Caregiver profile not found" });
+    }
+
+    // Check availability rules.
+    // v1.105.0 (Sentry INPLACE-5): this queried `WHERE user_id = ?`, but the
+    // availability table has no user_id column — its FK is caregiver_id →
+    // caregiver_profiles(id) (database.js:230). Postgres threw
+    // 'column "user_id" does not exist' on EVERY caregiver's final onboarding
+    // step, so no caregiver could finish onboarding. Every other availability
+    // query in the codebase already keys on caregiver_id.
+    const availRules = await db.prepare("SELECT id FROM availability WHERE caregiver_id = ?").all(profile.id);
+
+    // Verify core criteria (always required) + conditional criteria (when configured)
+    const missing = [];
+    if (!profile.bio || !profile.hourly_rate) missing.push("Profile (bio & hourly rate)");
+    if (!availRules || availRules.length === 0) missing.push("Availability");
+    if (!profile.care_stoplight && !profile.care_preferences) missing.push("Care preferences");
+    if (!profile.avatar_url) missing.push("Profile photo");
+
+    // Conditional gates: only required when the service is configured
+    const stripeConfigured = !!(process.env.STRIPE_SECRET_KEY || process.env.stripe_secret_key);
+    const checkrConfigured = !!process.env.CHECKR_API_KEY;
+
+    if (stripeConfigured && !profile.stripe_onboard_complete) missing.push("Stripe payments");
+    // v1.64.0: an active admin vouch satisfies this step — the caregiver can work
+    // for their vouched family without Checkr. (A real check is still required to
+    // work for anyone else; the UI says so.)
+    const cgVouches = await activeVouchesFor(db, req.user.id);
+    if (checkrConfigured && !profile.background_check_paid && !profile.is_background_checked && cgVouches.length === 0) {
+      missing.push("Background check");
+    }
+
+    // Identity verification (selfie + ID) — hard gate, requires admin approval
+    const idDoc = await db.prepare(
+      `SELECT status FROM verified_documents
+       WHERE owner_id = ? AND owner_type = 'caregiver' AND category = 'identity' AND document_type != 'selfie'
+       ORDER BY created_at DESC LIMIT 1`
+    ).get(profile.id);
+    if (!idDoc) {
+      missing.push("Identity verification (selfie + ID photo)");
+    } else if (idDoc.status !== 'approved') {
+      missing.push("Identity verification (pending admin review)");
+    }
+
+    if (missing.length > 0) {
+      return res.status(400).json({ error: "Incomplete onboarding", missing });
+    }
+
+    await db.prepare("UPDATE caregiver_profiles SET onboarding_complete = 1 WHERE user_id = ?").run(req.user.id);
+
+    res.json({ onboarding_complete: 1, message: "Onboarding complete! You're ready to accept care requests." });
+  } catch (err) {
+    console.error("[caregivers] mark-onboarding-complete failed:", err);
+    res.status(500).json({ error: "Could not complete onboarding. Please try again." });
   }
-
-  // Check availability rules
-  const availRules = await db.prepare("SELECT id FROM availability WHERE user_id = ?").all(req.user.id);
-
-  // Verify core criteria (always required) + conditional criteria (when configured)
-  const missing = [];
-  if (!profile.bio || !profile.hourly_rate) missing.push("Profile (bio & hourly rate)");
-  if (!availRules || availRules.length === 0) missing.push("Availability");
-  if (!profile.care_stoplight && !profile.care_preferences) missing.push("Care preferences");
-  if (!profile.avatar_url) missing.push("Profile photo");
-
-  // Conditional gates: only required when the service is configured
-  const stripeConfigured = !!(process.env.STRIPE_SECRET_KEY || process.env.stripe_secret_key);
-  const checkrConfigured = !!process.env.CHECKR_API_KEY;
-
-  if (stripeConfigured && !profile.stripe_onboard_complete) missing.push("Stripe payments");
-  // v1.64.0: an active admin vouch satisfies this step — the caregiver can work
-  // for their vouched family without Checkr. (A real check is still required to
-  // work for anyone else; the UI says so.)
-  const cgVouches = await activeVouchesFor(db, req.user.id);
-  if (checkrConfigured && !profile.background_check_paid && !profile.is_background_checked && cgVouches.length === 0) {
-    missing.push("Background check");
-  }
-
-  // Identity verification (selfie + ID) — hard gate, requires admin approval
-  const idDoc = await db.prepare(
-    `SELECT status FROM verified_documents
-     WHERE owner_id = ? AND owner_type = 'caregiver' AND category = 'identity' AND document_type != 'selfie'
-     ORDER BY created_at DESC LIMIT 1`
-  ).get(profile.id);
-  if (!idDoc) {
-    missing.push("Identity verification (selfie + ID photo)");
-  } else if (idDoc.status !== 'approved') {
-    missing.push("Identity verification (pending admin review)");
-  }
-
-  if (missing.length > 0) {
-    return res.status(400).json({ error: "Incomplete onboarding", missing });
-  }
-
-  await db.prepare("UPDATE caregiver_profiles SET onboarding_complete = 1 WHERE user_id = ?").run(req.user.id);
-
-  res.json({ onboarding_complete: 1, message: "Onboarding complete! You're ready to accept care requests." });
 });
 
 // ─── GET /api/caregivers/platform-config ───

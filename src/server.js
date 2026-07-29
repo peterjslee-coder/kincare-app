@@ -245,6 +245,11 @@ app.use("/api/reimbursements", express.json({ limit: "10mb" })); // receipt phot
 // v1.103.2 — observation notes accept a photo (client resizes to ≤1600px, route
 // enforces 5MB): the global 100kb JSON cap silently broke every photo note.
 app.use("/api/notes", express.json({ limit: "8mb" }));
+// v1.105.0 (Sentry INPLACE-1) — feedback accepts a base64 screenshot (v1.104.8
+// added the client picker; the route enforces its own 2MB cap). It shipped
+// without a route-scoped limit, so the global 100kb cap 413'd every screenshot.
+// Same rule as notes above: BOTH this and a limitBodySize exemption are needed.
+app.use("/api/feedback", express.json({ limit: "4mb" }));
 // Skip JSON parsing for webhooks that need raw body for signature verification
 app.use((req, res, next) => {
   if (req.originalUrl === '/api/payments/webhook' || req.originalUrl === '/api/checkr/webhook') return next();
@@ -393,7 +398,7 @@ app.use("/api/legal", require("./routes/legal"));
 app.use("/api/media", require("./routes/media"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.104.9";
+const APP_VERSION = "1.105.0";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });
