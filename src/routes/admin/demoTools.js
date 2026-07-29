@@ -46,7 +46,7 @@ router.post("/reseed", async (req, res) => {
     console.log(`🔄 Admin-triggered demo reseed: ${demoCount.count} demo users to refresh, ${realCount.count} real user(s) preserved`);
 
     // Proceed with demo-only reseed — real data untouched
-    const { seed } = require("../seed");
+    const { seed } = require("../../seed");
     await seed({ demoOnly: true });
 
     console.log("✅ Admin-triggered demo reseed complete");
@@ -359,7 +359,7 @@ router.post("/repair-demo", async (req, res) => {
 router.post("/reseed-demo", authenticate, checkAdmin, requireAdmin, async (req, res) => {
   try {
     console.log("🔄 Admin triggered demo-only reseed...");
-    const { seed } = require("../seed");
+    const { seed } = require("../../seed");
     await seed({ demoOnly: true });
     console.log("✅ Demo reseed complete");
     res.json({ ok: true, message: "Demo data fully reseeded with all rich data (sessions, messages, notes, reviews, care teams, etc.)" });

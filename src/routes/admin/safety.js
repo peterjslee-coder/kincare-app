@@ -134,7 +134,7 @@ router.post("/message/:userId", authenticate, checkAdmin, requireAdmin, async (r
 
     // Send push notification
     try {
-      const { sendPushToUser } = require("../utils/push");
+      const { sendPushToUser } = require("../../utils/push");
       if (sendPushToUser) {
         await sendPushToUser(db, req.params.userId, "InPlace Support", message.trim().substring(0, 100), { conversationId: convId });
       }
@@ -519,7 +519,7 @@ router.post("/safety-flags/:id/message/:userId", authenticate, checkAdmin, requi
       });
     }
     try {
-      const { sendPushToUser } = require("./push");
+      const { sendPushToUser } = require("../push");
       sendPushToUser(targetUserId, {
         title: "InPlace Support",
         body: message.trim().substring(0, 100),

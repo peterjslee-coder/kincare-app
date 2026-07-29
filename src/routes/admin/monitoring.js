@@ -117,7 +117,7 @@ router.get("/security/dashboard", requireAdmin, async (req, res) => {
     `).all();
 
     // Anomaly flags from in-memory tracker
-    const { failedLogins: failedLoginTracker } = require("../middleware/auditLog");
+    const { failedLogins: failedLoginTracker } = require("../../middleware/auditLog");
     const activeThreats = [];
     for (const [ip, data] of failedLoginTracker) {
       if (data.count >= 5) {

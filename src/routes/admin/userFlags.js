@@ -243,7 +243,7 @@ router.put("/users/:id/tester", async (req, res) => {
 
     // Notify the user
     try {
-      const { sendPushToUser } = require("./push");
+      const { sendPushToUser } = require("../push");
       const statusText = newValue ? "enabled" : "removed";
       await sendPushToUser(req.params.id, {
         title: "Account Updated",
@@ -271,7 +271,7 @@ router.put("/users/:id/companion-access", async (req, res) => {
 
     // Notify the user
     try {
-      const { sendPushToUser } = require("./push");
+      const { sendPushToUser } = require("../push");
       const statusText = newValue ? "enabled" : "removed";
       await sendPushToUser(req.params.id, {
         title: "Account Updated",

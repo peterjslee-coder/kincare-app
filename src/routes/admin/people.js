@@ -657,7 +657,7 @@ router.post("/users/:id/reset-password", async (req, res) => {
 
     const crypto = require("crypto");
     const bcrypt = require("bcryptjs");
-    const { sendEmail, brandedHtml } = require("../utils/email");
+    const { sendEmail, brandedHtml } = require("../../utils/email");
 
     // 1. Invalidate old password — set to random hash so old password stops working immediately
     const randomPw = crypto.randomBytes(32).toString("hex");

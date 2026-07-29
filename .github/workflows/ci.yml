@@ -29,6 +29,14 @@ jobs:
       - name: Client lint (undeclared identifiers / dupe keys / dead code)
         run: npm run lint:client
 
+      # The server-side twin of the above. A require() inside a function body
+      # doesn't fail at boot — it fails the first time that line runs, and inside
+      # a try/catch it fails silently forever. That's how Sentry INPLACE-3 hid
+      # twelve dropped push notifications, and how eleven more broken paths
+      # survived the v1.92.0 admin split (incl. admin document preview 500ing).
+      - name: Server require paths resolve
+        run: npm run lint:requires
+
       - name: Unit tests
         run: npm test
 
