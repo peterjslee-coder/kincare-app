@@ -243,6 +243,11 @@ function verifyCsrf(req, res, next) {
   if (publicAuthPaths.some(p => fullPath === p || fullPath.startsWith(p + "?"))) return next();
   // Skip for webhook endpoints (server-to-server, no cookie/CSRF)
   if (fullPath.startsWith("/api/checkr/webhook") || fullPath.startsWith("/api/payments/webhook")) return next();
+  // Skip for the client-crash beacon (v1.104.5): a fire-and-forget telemetry
+  // sink with no state change and no CSRF token available at crash time. Without
+  // this, a logged-in user's ErrorBoundary report is rejected 403 — exactly the
+  // white-screens we're trying to capture would be the ones we never see.
+  if (fullPath.startsWith("/api/client-error")) return next();
   // Skip for Kindred (separate PWA, uses JWT + companion_access gate instead)
   if (fullPath.startsWith("/api/kindred")) return next();
   // Skip if no auth cookie present
