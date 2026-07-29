@@ -40,6 +40,8 @@
       --input-bg: #ffffff;
       --input-border: #e0e0e0;
       --toggle-track: #ccc;
+      /* v1.105.2 — ON colour follows the active role (set per-role by app.js). */
+      --toggle-on: var(--role-color);
       --nav-bg: #ffffff;
       --nav-inactive: #9ca3af;
       --badge-muted-bg: #f0f0f0;
@@ -112,7 +114,13 @@
       --shadow-brand: 0 4px 12px rgba(27, 107, 90, 0.4);
       --input-bg: #262636;
       --input-border: #2a2a3a;
-      --toggle-track: #3a3a4a;
+      /* v1.105.2 — was #3a3a4a: nearly invisible against --bg-card #1e1e2a, so an
+         OFF toggle looked like a smudge with a floating white dot. Lightened so the
+         track itself is clearly a track, and ON uses the brightened role colour
+         (--role-color-bright, set per-role by app.js) because the base role colours
+         (#1b6b5a / #2e5984 / #7b5ea7) are all too dark to read on a dark card. */
+      --toggle-track: #55556b;
+      --toggle-on: var(--role-color-bright, #2f9e85);
       --nav-bg: #1a1a24;
       --nav-inactive: #5a5a6e;
       --badge-muted-bg: #262636;
@@ -178,8 +186,13 @@
       color: var(--text-primary) !important;
     }
 
-    /* Form elements */
-    [data-theme="dark"] input,
+    /* Form elements.
+       v1.105.2 — checkbox/radio are EXCLUDED. This used the `background` SHORTHAND with
+       !important, which reset background-image and background-position too, so in dark
+       mode the toggle knob was not merely low-contrast — it was ERASED, leaving a flat
+       #262636 pill identical in both states. It also can't do anything useful for a
+       native checkbox, whose appearance is drawn by the platform. */
+    [data-theme="dark"] input:not([type="checkbox"]):not([type="radio"]),
     [data-theme="dark"] select,
     [data-theme="dark"] textarea {
       background: var(--input-bg) !important;
@@ -221,10 +234,13 @@
       background: var(--bg-primary) !important;
     }
 
-    /* Toggle switches */
-    [data-theme="dark"] .toggle-slider {
-      background: var(--toggle-track) !important;
-    }
+    /* Toggle switches — v1.105.2: this block used to target .toggle-slider, a class
+       that exists in NO markup (the components use .toggle-input), so it had never
+       applied. Dark mode was left with an OFF track of #3a3a4a against a near-black
+       card and a white knob — Pete: "two-tone black/grey vs white slider is
+       incomprehensible." Both track colours now live in the theme variable blocks
+       (--toggle-track / --toggle-on), so no dark-mode-specific selector is needed
+       here at all. Left as a comment rather than a dead rule. */
 
     /* Scrollbar styling */
     [data-theme="dark"] ::-webkit-scrollbar-track {
@@ -1497,6 +1513,66 @@
       gap: 12px;
     }
 
+    /* v1.105.2 — per-card edit affordance. Editing used to hide behind ONE button at
+       the top of the page, next to the "My Account" heading, which only appeared on the
+       profile tab. Standing in front of the Health & Safety card there was nothing
+       suggesting it was editable at all — Pete hunted for it three separate times.
+       `margin-left:auto` parks it at the right end of the flex .card-header without
+       needing per-card justify-content overrides. */
+    .card-edit-btn {
+      margin-left: auto;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 12px;
+      min-height: 32px;
+      font-size: 13px;
+      font-weight: 600;
+      font-family: inherit;
+      color: var(--role-color);
+      background: var(--role-color-light);
+      border: 1px solid transparent;
+      border-radius: 999px;
+      cursor: pointer;
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
+    .card-edit-btn:hover { border-color: var(--role-color); }
+    .card-edit-btn:focus-visible { outline: 2px solid var(--role-color); outline-offset: 2px; }
+
+    /* Save/Cancel follows you down the page. The old buttons lived only at the very top,
+       so on a phone you'd edit Health & Safety near the bottom and have to scroll all
+       the way back up to find Save. */
+    .edit-save-bar {
+      position: sticky;
+      bottom: 12px;
+      z-index: 500;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      padding: 12px 14px;
+      margin-top: 16px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      box-shadow: var(--shadow-md);
+    }
+    .edit-save-bar .esb-hint {
+      margin-right: auto;
+      font-size: 12px;
+      color: var(--text-tertiary);
+    }
+    @media (max-width: 768px) {
+      /* Clear the fixed bottom nav (z-index 900) — a sticky bar at bottom:0 would
+         slide underneath it and Save would be unreachable, which is the bug this
+         bar exists to fix. */
+      .edit-save-bar {
+        bottom: calc(env(safe-area-inset-bottom, 0px) + 84px);
+      }
+      .edit-save-bar .esb-hint { display: none; }
+    }
+
     .info-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -1728,43 +1804,53 @@
       display: flex;
       align-items: center;
       gap: 12px;
-      margin-bottom: 12px;
+      margin-bottom: 8px;
       cursor: pointer;
+      /* The control is only 26px tall, so the ROW carries the 44px tap target. */
+      min-height: 44px;
     }
 
+    /* v1.105.2 — the knob is a BACKGROUND LAYER, not a ::before pseudo-element.
+       Pseudo-elements on appearance:none form controls are unreliable (inputs are
+       replaced elements) and iOS Safari/PWA rendered the knob misaligned — the
+       "Reminder Emails" knob hung off the left edge while its neighbours sat
+       differently. background-position is animatable and renders identically
+       everywhere. Geometry: 48x26 track, 20px knob (r=10), centre travels
+       13px -> 35px, leaving a 3px inset at both ends. */
     .toggle-input {
       width: 48px;
       height: 26px;
+      min-height: 26px;   /* defend the track against broad `input {}` rules */
+      max-height: 26px;
+      box-sizing: border-box;
       border-radius: 13px;
       border: none;
-      background: var(--toggle-track);
+      background-color: var(--toggle-track);
+      background-image:
+        radial-gradient(circle 10px at 13px 13px, #ffffff 0 98%, transparent 100%),
+        radial-gradient(circle 10px at 13px 14.5px, rgba(0, 0, 0, 0.28) 0 98%, transparent 100%);
+      background-repeat: no-repeat;
+      background-position: 0 0;
       cursor: pointer;
       appearance: none;
       -webkit-appearance: none;
-      position: relative;
-      transition: background-color 0.2s ease;
       flex-shrink: 0;
-    }
-
-    .toggle-input::before {
-      content: '';
-      position: absolute;
-      top: 3px;
-      left: 3px;
-      width: 20px;
-      height: 20px;
-      border-radius: 50%;
-      background: #ffffff;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-      transition: transform 0.2s ease;
+      transition: background-color 0.2s ease, background-position 0.2s ease;
     }
 
     .toggle-input:checked {
-      background-color: var(--role-color);
+      background-color: var(--toggle-on);
+      background-position: 22px 0;
     }
 
-    .toggle-input:checked::before {
-      transform: translateX(22px);
+    /* Keyboard users need to see which toggle is focused. */
+    .toggle-input:focus-visible {
+      outline: 2px solid var(--toggle-on);
+      outline-offset: 2px;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .toggle-input { transition: none; }
     }
 
     /* Earnings */
@@ -2361,7 +2447,12 @@
         padding: 14px 12px;
       }
 
-      input, textarea, select {
+      /* v1.105.2 — checkbox/radio EXCLUDED. This is an iOS-zoom + touch-target rule for
+         text fields, but it also stretched the 48x26 toggle track to 48x44 on every
+         phone. The old knob was pinned `top: 3px` inside a now-44px-tall pill, so it
+         floated high and rows looked inconsistent — the "knob hangs off the edge" bug.
+         Toggle rows get their tap target from .toggle-label's min-height instead. */
+      input:not([type="checkbox"]):not([type="radio"]), textarea, select {
         font-size: 16px !important; /* prevent iOS auto-zoom */
         min-height: 44px;
       }

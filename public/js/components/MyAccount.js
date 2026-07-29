@@ -1037,7 +1037,14 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
           </div>
 
           <div className="card">
-            <div className="card-header">Profile Information</div>
+            <div className="card-header">
+              <span>Profile Information</span>
+              {!editing && (
+                <button className="card-edit-btn" onClick={startEditing} aria-label="Edit profile information">
+                  <span aria-hidden="true">✏️</span> Edit
+                </button>
+              )}
+            </div>
             {editing ? (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(220px, 100%), 1fr))', gap: 16 }}>
                 <div>
@@ -1330,14 +1337,32 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
           </div>
 
           <div className="card">
-            <div className="card-header">Health & Safety</div>
+            <div className="card-header">
+              <span>Health & Safety</span>
+              {!editing && (
+                <button className="card-edit-btn" onClick={startEditing} aria-label="Edit health and safety details">
+                  <span aria-hidden="true">✏️</span> Edit
+                </button>
+              )}
+            </div>
+            {/* v1.105.2 — these fields are about the ACCOUNT HOLDER, not the care
+                recipient (a recipient's pets and conditions live on their own record).
+                Unlabelled, they read like care-recipient fields, which made the card
+                look misplaced on a caregiver's profile. It isn't: matching a caregiver
+                who's allergic to cats into a house with two of them is exactly what
+                this prevents. So the copy now says whose details these are, and why. */}
+            <p style={{ marginTop: -8, marginBottom: 14, fontSize: 13, color: 'var(--text-tertiary)', lineHeight: 1.5 }}>
+              {isCaregiver
+                ? 'About you — so we never match you with a home that would be a problem for you.'
+                : 'About you — so a caregiver coming to your home knows what to expect.'}
+            </p>
             {editing ? (
               <div style={{ display: 'grid', gap: 10 }}>
                 {[
-                  { key: 'pets', label: 'Pets (type, count)', ph: 'e.g., 1 dog — golden retriever' },
-                  { key: 'petAllergies', label: 'Pet Allergies', ph: 'e.g., allergic to cats' },
-                  { key: 'foodAllergies', label: 'Food Allergies', ph: 'e.g., nuts, dairy' },
-                  { key: 'medicalConditions', label: 'Medical Conditions', ph: 'e.g., asthma, diabetes' },
+                  { key: 'pets', label: 'Your pets (type, count)', ph: 'e.g., 1 dog — golden retriever' },
+                  { key: 'petAllergies', label: 'Your pet allergies', ph: 'e.g., allergic to cats' },
+                  { key: 'foodAllergies', label: 'Your food allergies', ph: 'e.g., nuts, dairy' },
+                  { key: 'medicalConditions', label: 'Your medical conditions (optional)', ph: 'e.g., asthma, diabetes' },
                 ].map(f => (
                   <div key={f.key}>
                     <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>{f.label}</label>
@@ -1349,24 +1374,42 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
             ) : (
               <div className="info-grid">
                 <div className="info-item">
-                  <div className="info-label">Pets</div>
+                  <div className="info-label">Your pets</div>
                   <div className="info-value">{user?.pets || 'Not specified'}</div>
                 </div>
                 <div className="info-item">
-                  <div className="info-label">Pet Allergies</div>
+                  <div className="info-label">Your pet allergies</div>
                   <div className="info-value">{user?.pet_allergies || 'None'}</div>
                 </div>
                 <div className="info-item">
-                  <div className="info-label">Food Allergies</div>
+                  <div className="info-label">Your food allergies</div>
                   <div className="info-value">{user?.food_allergies || 'None'}</div>
                 </div>
                 <div className="info-item">
-                  <div className="info-label">Medical Conditions</div>
+                  <div className="info-label">Your medical conditions</div>
                   <div className="info-value">{user?.medical_conditions || 'Not specified'}</div>
                 </div>
               </div>
             )}
           </div>
+
+          {/* v1.105.2 — Save/Cancel that follows you down the page. Previously these
+              lived only at the top of the screen, so editing Health & Safety (the last
+              card) meant scrolling all the way back up to save. The mobile rule in
+              styles.css lifts this above the fixed bottom nav. */}
+          {editing && (
+            <div className="edit-save-bar">
+              <span className="esb-hint">Editing your profile</span>
+              <button onClick={cancelEditing}
+                style={{ padding: '9px 16px', background: 'var(--bg-surface)', color: 'var(--text-secondary)', border: '1px solid var(--border-color)', borderRadius: 8, fontWeight: 600, fontSize: 14, fontFamily: 'inherit', cursor: 'pointer' }}>
+                Cancel
+              </button>
+              <button onClick={saveProfile} disabled={saving}
+                style={{ padding: '9px 20px', background: saving ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, fontFamily: 'inherit', cursor: saving ? 'wait' : 'pointer' }}>
+                {saving ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -1625,22 +1668,22 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
           <div style={{ borderTop: '2px solid var(--border-color)', paddingTop: 16, marginTop: 16 }}>
             <h3 style={{ margin: '0 0 12px', fontSize: 16, color: 'var(--text-primary)' }}>Notifications</h3>
           </div>
-          {typeof NotificationSettings !== 'undefined' && React.createElement(NotificationSettings, null)}
+          {/* v1.105.2 — ONE push section. This screen used to show the
+              NotificationSettings block (headed "🔔 Push Notifications") and then a
+              separate per-event card also headed "Push Notifications" — two identical
+              headers on one screen, with the master enable divorced from the per-event
+              switches it governs. Now: master state + per-event toggles in one card,
+              push first (it's the primary channel on a phone), email second. */}
           <div className="card">
             <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span>Email Notifications</span>
+              <span>🔔 Push Notifications</span>
               {savingNotifs && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Saving...</span>}
             </div>
-            {['sessionUpdates', 'caregiverMessages', 'healthAlerts', 'reminderEmails'].map(key => (
-              <label key={key} className="toggle-label">
-                <input type="checkbox" className="toggle-input" checked={notifications[key]} onChange={(e) => handleNotificationChange(key, e.target.checked)} />
-                <span>{key.replace(/([A-Z])/g, ' $1').trim()}</span>
-              </label>
-            ))}
-          </div>
-          <div className="card" style={{ marginTop: 16 }}>
-            <div className="card-header">Push Notifications</div>
-            <p style={{ padding: '0 16px', fontSize: 13, color: 'var(--text-tertiary)', margin: '0 0 8px' }}>Choose which events send push notifications to your phone.</p>
+            {typeof NotificationSettings !== 'undefined' && React.createElement(NotificationSettings, { embedded: true })}
+            {/* .card already pads 24px; the old copy added another 16px, so the
+                helper text sat 40px in while the toggle rows sat at 24px. Aligned now. */}
+            <div style={{ borderTop: '1px solid var(--border-light)', margin: '4px 0 12px' }}></div>
+            <p style={{ fontSize: 13, color: 'var(--text-tertiary)', margin: '0 0 10px' }}>Choose which events send a push to your phone.</p>
             {[
               { key: 'push_messages', label: 'New messages' },
               { key: 'push_team_note', label: 'New care notes & observations from your care team' },
@@ -1652,6 +1695,18 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
               <label key={key} className="toggle-label">
                 <input type="checkbox" className="toggle-input" checked={notifications[key] !== false} onChange={(e) => handleNotificationChange(key, e.target.checked)} />
                 <span>{label}</span>
+              </label>
+            ))}
+          </div>
+          <div className="card" style={{ marginTop: 16 }}>
+            <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>✉️ Email Notifications</span>
+              {savingNotifs && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Saving...</span>}
+            </div>
+            {['sessionUpdates', 'caregiverMessages', 'healthAlerts', 'reminderEmails'].map(key => (
+              <label key={key} className="toggle-label">
+                <input type="checkbox" className="toggle-input" checked={notifications[key]} onChange={(e) => handleNotificationChange(key, e.target.checked)} />
+                <span>{key.replace(/([A-Z])/g, ' $1').trim()}</span>
               </label>
             ))}
           </div>

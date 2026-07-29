@@ -229,11 +229,18 @@ app.use(require("cookie-parser")());
 // still never leave the server (see utils/sentry.js beforeSend).
 app.use((req, res, next) => {
   try {
-    const raw = req.cookies?.auth_token
-      || ((req.headers.authorization || "").startsWith("Bearer ") ? req.headers.authorization.slice(7) : null);
+    // v1.105.2 — token precedence MUST match middleware/auth.js:57, which reads the
+    // Bearer header first and falls back to the cookie. This block had them the other
+    // way round, so during admin "Test Mode" the request ran as the impersonated user
+    // (Bearer) while Sentry tagged the admin (cookie). Every impersonated error was
+    // filed against Pete: INPLACE-5 was tagged user_role=family on a caregiver-only
+    // endpoint, which is impossible and is what gave the mismatch away.
+    const header = req.headers.authorization || "";
+    const raw = (header.startsWith("Bearer ") ? header.slice(7) : null)
+      || req.cookies?.auth_token;
     if (raw) {
       const payload = require("jsonwebtoken").verify(raw, process.env.JWT_SECRET);
-      tagRequestUser(payload.id, payload.role);
+      tagRequestUser(payload.id, payload.role, payload.impersonatedBy);
     }
   } catch (_) { /* invalid/expired token — event just goes untagged */ }
   next();
@@ -398,7 +405,7 @@ app.use("/api/legal", require("./routes/legal"));
 app.use("/api/media", require("./routes/media"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.105.1";
+const APP_VERSION = "1.105.2";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });

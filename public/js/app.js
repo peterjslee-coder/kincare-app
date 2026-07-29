@@ -866,16 +866,21 @@ const App = () => {
   // ─── Role-color CSS custom properties ───
   // Must be here (before any early returns) to satisfy Rules of Hooks
   useEffect(() => {
+    // v1.105.2 — `bright` is the role colour lifted enough to read on a dark
+    // background. The three `main` values are all dark, so in dark mode a filled
+    // control (a checked toggle) was nearly indistinguishable from an empty one.
+    // Dark mode maps --toggle-on to this; light mode keeps using `main`.
     const roleColors = {
-      family:    { main: '#1b6b5a', light: '#e0f2e9', dark: '#0f4238' },
-      caregiver: { main: '#2e5984', light: '#dce8f3', dark: '#1a3a5c' },
-      care_for:  { main: '#7b5ea7', light: '#f3e5f5', dark: '#4a2d7a' },
+      family:    { main: '#1b6b5a', light: '#e0f2e9', dark: '#0f4238', bright: '#2f9e85' },
+      caregiver: { main: '#2e5984', light: '#dce8f3', dark: '#1a3a5c', bright: '#5b93cc' },
+      care_for:  { main: '#7b5ea7', light: '#f3e5f5', dark: '#4a2d7a', bright: '#a98ad1' },
     };
     const rc = roleColors[activeRole] || roleColors.family;
     const root = document.documentElement;
     root.style.setProperty('--role-color', rc.main);
     root.style.setProperty('--role-color-light', rc.light);
     root.style.setProperty('--role-color-dark', rc.dark);
+    root.style.setProperty('--role-color-bright', rc.bright);
     window.ROLE_COLOR = rc.main;
     window.ROLE_COLOR_LIGHT = rc.light;
   }, [activeRole]);

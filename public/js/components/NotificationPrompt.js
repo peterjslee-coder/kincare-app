@@ -254,7 +254,11 @@ const NotificationPrompt = window.NotificationPrompt = ({ onSubscribed }) => {
 };
 
 // Notification settings section for MyAccount page
-const NotificationSettings = window.NotificationSettings = () => {
+// v1.105.2 — `embedded` drops this component's own card chrome and heading so it can
+// sit INSIDE MyAccount's single "Push Notifications" card. Before, the settings screen
+// rendered this block (heading: "🔔 Push Notifications") immediately above a separate
+// per-event card also headed "Push Notifications" — two identical headers, one screen.
+const NotificationSettings = window.NotificationSettings = ({ embedded = false } = {}) => {
   const [permState, setPermState] = useState('unknown');
   const [subCount, setSubCount] = useState(null);
   const [vapidReady, setVapidReady] = useState(null);
@@ -353,15 +357,17 @@ const NotificationSettings = window.NotificationSettings = () => {
                      permState === 'unsupported' ? 'Not Supported' : 'Not Enabled';
 
   return React.createElement('div', {
-    style: {
-      background: 'var(--bg-surface)',
-      borderRadius: '12px',
-      padding: '20px',
-      border: '1px solid #e5e7eb',
-      marginBottom: '16px',
-    },
+    style: embedded
+      ? { padding: 0 }   /* the host .card already pads 24px — don't double-inset */
+      : {
+          background: 'var(--bg-surface)',
+          borderRadius: '12px',
+          padding: '20px',
+          border: '1px solid var(--border-color)',
+          marginBottom: '16px',
+        },
   },
-    React.createElement('h3', {
+    !embedded && React.createElement('h3', {
       style: { margin: '0 0 16px 0', fontSize: '16px', fontWeight: 600, color: 'var(--role-color)' },
     }, '🔔 Push Notifications'),
 

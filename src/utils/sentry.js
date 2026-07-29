@@ -58,7 +58,10 @@ function captureException(err, extra) {
 // ACCOUNT (look the UUID up in the admin panel). PHI posture is unchanged:
 // beforeSend still strips event.user, bodies, headers, and cookies — the bare
 // UUID is only meaningful inside our own database.
-function tagRequestUser(userId, role) {
+// v1.105.2 — `impersonatedBy` is the admin's UUID when this request is running under
+// an admin "Test Mode" token. Without it, impersonated traffic is indistinguishable
+// from the real user's own traffic, and "whose account failed?" gets answered wrong.
+function tagRequestUser(userId, role, impersonatedBy) {
   try {
     if (!Sentry) return;
     const scope = typeof Sentry.getIsolationScope === "function"
@@ -66,6 +69,10 @@ function tagRequestUser(userId, role) {
       : Sentry.getCurrentScope();
     if (userId) scope.setTag("user_id", userId);
     if (role) scope.setTag("user_role", role);
+    if (impersonatedBy) {
+      scope.setTag("impersonated", "yes");
+      scope.setTag("impersonated_by", impersonatedBy);
+    }
   } catch (_) { /* never let monitoring break the app */ }
 }
 

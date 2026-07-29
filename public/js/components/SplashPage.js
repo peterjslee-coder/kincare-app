@@ -152,7 +152,15 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
       </section>
 
       {/* ── Audience router (v1.88): every visitor self-selects in one screen ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px', maxWidth: '860px', margin: '0 auto', padding: '20px 24px 4px' }}>
+      {/* v1.105.2 — `minmax(220px, 1fr)` put a HARD 220px floor under each track. This
+          grid is a child of `.splash-page`, which is a column flex container, so the
+          grid was sized by its min-content: 3 x 220px + gaps + padding = 732px. On a
+          420px phone the whole DOCUMENT became 732px wide, two of the three cards sat
+          off-screen, and any horizontal swipe panned the entire page — which read as a
+          broken carousel. It was never a carousel; it's a grid that couldn't reflow.
+          `min(220px, 100%)` lets the floor shrink on narrow screens, so the cards stack
+          at one per row on phones and keep the 3-across row on desktop. */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(220px, 100%), 1fr))', gap: '12px', width: '100%', minWidth: 0, maxWidth: '860px', margin: '0 auto', padding: '20px 24px 4px', boxSizing: 'border-box' }}>
         {[
           { tab: 'families', icon: '\uD83D\uDC65', label: "I'm looking after someone", sub: 'Find trusted help for a parent or loved one' },
           { tab: 'recipients', icon: '\uD83C\uDFE0', label: 'I could use a hand myself', sub: 'A little help around the house, on your terms' },
