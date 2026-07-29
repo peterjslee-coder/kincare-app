@@ -12,6 +12,11 @@ const FeedbackButton = window.FeedbackButton = ({ currentPage, userRole, current
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState(null);
+  // v1.104.8 — optional screenshot attachment (server already accepts a base64
+  // `screenshot` field, ≤2MB; this adds the client picker)
+  const [screenshot, setScreenshot] = useState(null);
+  const [shotBusy, setShotBusy] = useState(false);
+  const shotInputRef = React.useRef(null);
 
   // Dragging state
   const [pos, setPos] = useState(() => {
@@ -189,6 +194,38 @@ const FeedbackButton = window.FeedbackButton = ({ currentPage, userRole, current
     setMood(null);
     setError(null);
     setSubmitted(false);
+    setScreenshot(null);
+    setShotBusy(false);
+  };
+
+  // v1.104.8 — downscale the picked image (reuses the shared helper) so the
+  // base64 stays under the server's 2MB feedback-screenshot cap.
+  const handleShotPick = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (shotInputRef.current) shotInputRef.current.value = '';
+    if (!file || !file.type.startsWith('image/')) return;
+    setShotBusy(true);
+    setError(null);
+    try {
+      const dataUrl = (typeof window.downscaleImage === 'function')
+        ? await window.downscaleImage(file, { maxDim: 1400, quality: 0.7 })
+        : null;
+      if (!dataUrl) { setError("Couldn't process that image — try another."); setShotBusy(false); return; }
+      if (dataUrl.length > 2 * 1024 * 1024) {
+        // Retry smaller before giving up
+        const smaller = await window.downscaleImage(file, { maxDim: 1000, quality: 0.6 });
+        if (!smaller || smaller.length > 2 * 1024 * 1024) {
+          setError('That screenshot is too large even after resizing — try cropping it.');
+          setShotBusy(false); return;
+        }
+        setScreenshot(smaller);
+      } else {
+        setScreenshot(dataUrl);
+      }
+    } catch (_) {
+      setError("Couldn't attach that screenshot.");
+    }
+    setShotBusy(false);
   };
 
   const handleOpen = () => {
@@ -215,6 +252,7 @@ const FeedbackButton = window.FeedbackButton = ({ currentPage, userRole, current
         description: description.trim(),
         mood,
         pageContext,
+        ...(screenshot ? { screenshot } : {}),
       };
 
       let res;
@@ -534,6 +572,31 @@ const FeedbackButton = window.FeedbackButton = ({ currentPage, userRole, current
                     }, m.emoji)
                   )
                 )
+              ),
+
+              // Screenshot (optional) — v1.104.8
+              React.createElement('div', { style: { marginBottom: 20 } },
+                React.createElement('label', { style: { display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 } },
+                  'Screenshot ', React.createElement('span', { style: { color: 'var(--text-muted)', fontWeight: 400 } }, '(optional)')
+                ),
+                React.createElement('input', {
+                  ref: shotInputRef, type: 'file', accept: 'image/*',
+                  style: { display: 'none' }, onChange: handleShotPick,
+                }),
+                screenshot
+                  ? React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 12 } },
+                      React.createElement('img', { src: screenshot, alt: 'Attached screenshot', style: { width: 64, height: 64, objectFit: 'cover', borderRadius: 8, border: '1px solid #ddd' } }),
+                      React.createElement('span', { style: { fontSize: 13, color: 'var(--role-color)', fontWeight: 600 } }, '✓ Attached'),
+                      React.createElement('button', {
+                        onClick: () => setScreenshot(null),
+                        style: { marginLeft: 'auto', padding: '6px 12px', background: 'var(--bg-primary)', color: 'var(--color-error)', border: '1px solid #ddd', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' },
+                      }, 'Remove')
+                    )
+                  : React.createElement('button', {
+                      onClick: () => shotInputRef.current && shotInputRef.current.click(),
+                      disabled: shotBusy,
+                      style: { display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: 'var(--bg-primary)', color: 'var(--text-secondary)', border: '1px dashed #bbb', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: shotBusy ? 'default' : 'pointer', width: '100%', justifyContent: 'center' },
+                    }, shotBusy ? 'Processing…' : '📷 Add a screenshot')
               ),
 
               // Error

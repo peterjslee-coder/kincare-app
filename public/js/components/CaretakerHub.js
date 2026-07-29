@@ -1485,7 +1485,11 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
           <div style={{ display: 'grid', gap: '8px' }}>
             {firstSteps.map((s, idx) => (
               <div key={s.id} onClick={() => {
-                if (s.done) return;
+                // v1.104.8 — completed steps stay tappable so caregivers can EDIT
+                // what they've already entered (care preferences, availability &
+                // rates, photo, etc.). Every target below just opens a settings tab,
+                // so re-opening a done step is safe. (Previously `if (s.done) return`
+                // locked them, leaving no edit path once a step was complete.)
                 if (s.id === 'photo') { window.__accountTab = 'profile'; window.__navigateTo && window.__navigateTo('account'); }
                 if (s.id === 'avail-rates') { window.__findWorkTab = 'availability'; window.__navigateTo && window.__navigateTo('find-work'); }
                 if (s.id === 'security') {
@@ -1501,7 +1505,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                 display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '12px 14px',
                 borderRadius: '10px', border: s.done ? '1px solid #c8e6c9' : '1px solid #eee',
                 background: s.done ? '#f1f8f1' : 'var(--bg-card)',
-                cursor: s.done ? 'default' : 'pointer',
+                cursor: 'pointer', // v1.104.8 — done steps are editable too
                 transition: 'all 0.15s',
               }}>
                 <div style={{
@@ -1531,7 +1535,9 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                     </div>
                   )}
                 </div>
-                {!s.done && <span style={{ color: 'var(--text-muted)', fontSize: '18px', marginTop: '3px' }}>{'\u203A'}</span>}
+                {s.done
+                  ? <span style={{ color: 'var(--role-color)', fontSize: '12px', fontWeight: 700, marginTop: '5px', whiteSpace: 'nowrap' }}>{'Edit \u203A'}</span>
+                  : <span style={{ color: 'var(--text-muted)', fontSize: '18px', marginTop: '3px' }}>{'\u203A'}</span>}
               </div>
             ))}
           </div>
