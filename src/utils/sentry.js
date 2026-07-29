@@ -53,4 +53,20 @@ function captureException(err, extra) {
   } catch (_) { /* never let monitoring break the app */ }
 }
 
-module.exports = { initSentry, setupSentryErrorHandler, captureException };
+// v1.104.1 — pseudonymous attribution. Tag the current request's events with
+// the authenticated user's UUID + role so support can identify the affected
+// ACCOUNT (look the UUID up in the admin panel). PHI posture is unchanged:
+// beforeSend still strips event.user, bodies, headers, and cookies — the bare
+// UUID is only meaningful inside our own database.
+function tagRequestUser(userId, role) {
+  try {
+    if (!Sentry) return;
+    const scope = typeof Sentry.getIsolationScope === "function"
+      ? Sentry.getIsolationScope()
+      : Sentry.getCurrentScope();
+    if (userId) scope.setTag("user_id", userId);
+    if (role) scope.setTag("user_role", role);
+  } catch (_) { /* never let monitoring break the app */ }
+}
+
+module.exports = { initSentry, setupSentryErrorHandler, captureException, tagRequestUser };

@@ -1,6 +1,6 @@
 require("dotenv").config();
 
-const { initSentry, setupSentryErrorHandler, captureException } = require("./utils/sentry");
+const { initSentry, setupSentryErrorHandler, captureException, tagRequestUser } = require("./utils/sentry");
 initSentry();
 
 const express = require("express");
@@ -223,6 +223,21 @@ app.use(cors({
   allowedHeaders: ["Content-Type", "Authorization", "X-Active-Role", "x-admin-api-key", "x-csrf-token"],
 }));
 app.use(require("cookie-parser")());
+// v1.104.1 — Sentry attribution: decode the JWT (cookie or Bearer) BEFORE the
+// body parsers so even 413s thrown inside body-parser carry the user's UUID
+// tag. Sentry answers "whose account failed?" with a UUID; names/emails/PHI
+// still never leave the server (see utils/sentry.js beforeSend).
+app.use((req, res, next) => {
+  try {
+    const raw = req.cookies?.auth_token
+      || ((req.headers.authorization || "").startsWith("Bearer ") ? req.headers.authorization.slice(7) : null);
+    if (raw) {
+      const payload = require("jsonwebtoken").verify(raw, process.env.JWT_SECRET);
+      tagRequestUser(payload.id, payload.role);
+    }
+  } catch (_) { /* invalid/expired token — event just goes untagged */ }
+  next();
+});
 app.use("/api/auth/me/photo", express.json({ limit: "5mb" }));
 app.use("/api/care-recipients", express.json({ limit: "5mb" }));
 app.use("/api/self-onboarding", express.json({ limit: "10mb" }));
@@ -357,7 +372,7 @@ app.use("/api/legal", require("./routes/legal"));
 app.use("/api/media", require("./routes/media"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.104.0";
+const APP_VERSION = "1.104.1";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });
