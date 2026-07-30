@@ -33,6 +33,22 @@
 	</array>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<!-- v1.105.12 — export compliance. Without this key, App Store Connect stops EVERY
+	     upload to ask the export-compliance question by hand, and an unanswered build
+	     cannot be submitted or sent to TestFlight testers.
+
+	     `false` is the accurate answer, not a convenience. It asserts the app uses no
+	     NON-exempt encryption. Everything InPlace does falls inside a published exemption:
+	       - HTTPS/TLS to the API — standard encryption provided by the OS.
+	       - bcryptjs password hashing and TOTP/HMAC — hashing and authentication, which
+	         are not "encryption" for export purposes at all.
+	       - JWT signing — signing, not confidentiality.
+	       - WebAuthn/passkeys — performed by the Secure Enclave and the platform.
+	     If InPlace ever ships its OWN crypto (custom key exchange, proprietary cipher,
+	     end-to-end encrypted messaging with app-managed keys), this must flip to true and
+	     a CCATS/self-classification report becomes required. Revisit then, not before. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<!-- v1.105.7 — location is a SAFETY feature: check-in/out proves the caregiver was at

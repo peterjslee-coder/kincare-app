@@ -120,6 +120,16 @@ describe("iOS configuration", () => {
     expect(m[1]).toMatch(/check in|check out|visit/i);
   });
 
+  // v1.105.12 — without this key App Store Connect halts every upload on the export
+  // compliance question, and an unanswered build can't ship to TestFlight or review.
+  test("export compliance is declared, and declared as exempt", () => {
+    expect(plist).toMatch(/<key>ITSAppUsesNonExemptEncryption<\/key>\s*<false\/>/);
+    // Guard the opposite mistake too: <true/> here obliges a CCATS / self-classification
+    // report and year-end reporting. If someone flips it, that must be a deliberate act
+    // accompanied by the paperwork — not a silent edit.
+    expect(plist).not.toMatch(/<key>ITSAppUsesNonExemptEncryption<\/key>\s*<true\/>/);
+  });
+
   test("location is declared in the privacy manifest too", () => {
     // The plist string, the privacy manifest, the App Store Connect labels and the published
     // Privacy Policy all have to say the same thing. This pins the two that live in the repo.
