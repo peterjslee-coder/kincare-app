@@ -1725,6 +1725,79 @@ async function initializeDatabase() {
         `ALTER TABLE users ADD COLUMN IF NOT EXISTS date_of_birth DATE`,
       ],
     },
+    {
+      // ─── v1.105.13 — App Review guideline 1.2: report content, block users ───
+      //
+      // Three tables, because these are three genuinely different acts and conflating them
+      // is how safety features go wrong:
+      //
+      //   user_blocks     — LOUD. Mutual, disclosed to both parties, reversible. "I don't
+      //                     want to deal with this person." Cancels future visits.
+      //   content_reports — QUIET. Never disclosed to the reported party, ever. Goes to
+      //                     admin. "This person frightened me." Telling an abuser they were
+      //                     reported is how you get someone hurt, so this must never notify.
+      //   block_requests  — a managed care recipient (someone whose account another person
+      //                     administers) asking their care team leader to block on their
+      //                     behalf. careRecipients.js already TELLS recipients that "some
+      //                     actions may require care team approval" — this is the first
+      //                     mechanism that makes that sentence true.
+      //
+      // safety_flags is deliberately NOT reused. It looks like a report table but has no
+      // reporter column at all: its user_id is the AUTHOR of the offending message, and it
+      // is written only by the AI screener. Bolting a human reporter onto it would overload
+      // one column with two opposite meanings.
+      id: "014_user_blocks_and_reports",
+      statements: [
+        `CREATE TABLE IF NOT EXISTS user_blocks (
+          id TEXT PRIMARY KEY,
+          blocker_user_id TEXT NOT NULL REFERENCES users(id),
+          blocked_user_id TEXT NOT NULL REFERENCES users(id),
+          reason TEXT,
+          created_at TIMESTAMPTZ DEFAULT NOW()
+        )`,
+        // A block is a set membership, not an event log: re-blocking must be idempotent
+        // rather than accumulating duplicate rows that the unblock path would then miss.
+        `CREATE UNIQUE INDEX IF NOT EXISTS user_blocks_pair
+           ON user_blocks (blocker_user_id, blocked_user_id)`,
+        // Blocking is SYMMETRIC in effect, so every filter has to ask "did either of us
+        // block the other". That means lookups by blocked_user_id are as hot as lookups by
+        // blocker_user_id, and both need an index.
+        `CREATE INDEX IF NOT EXISTS user_blocks_blocked ON user_blocks (blocked_user_id)`,
+        `CREATE TABLE IF NOT EXISTS content_reports (
+          id TEXT PRIMARY KEY,
+          reporter_user_id TEXT NOT NULL REFERENCES users(id),
+          reported_user_id TEXT REFERENCES users(id),
+          message_id TEXT,
+          conversation_id TEXT,
+          category TEXT NOT NULL,
+          details TEXT,
+          content_snapshot TEXT,
+          status TEXT NOT NULL DEFAULT 'pending',
+          reviewed_by TEXT REFERENCES users(id),
+          reviewed_at TIMESTAMPTZ,
+          admin_notes TEXT,
+          created_at TIMESTAMPTZ DEFAULT NOW()
+        )`,
+        // content_snapshot exists because a reported message can be deleted (messages
+        // support is_deleted) between the report and the admin reading it. Without a copy
+        // taken at report time, the reviewer sees an empty thread and the report is
+        // unactionable — which is the same as having no report feature.
+        `CREATE INDEX IF NOT EXISTS content_reports_status ON content_reports (status, created_at)`,
+        `CREATE TABLE IF NOT EXISTS block_requests (
+          id TEXT PRIMARY KEY,
+          requester_user_id TEXT NOT NULL REFERENCES users(id),
+          target_user_id TEXT NOT NULL REFERENCES users(id),
+          care_team_id TEXT REFERENCES care_teams(id),
+          reason TEXT,
+          status TEXT NOT NULL DEFAULT 'pending',
+          decided_by TEXT REFERENCES users(id),
+          decided_at TIMESTAMPTZ,
+          created_at TIMESTAMPTZ DEFAULT NOW()
+        )`,
+        `CREATE INDEX IF NOT EXISTS block_requests_open
+           ON block_requests (care_team_id, status)`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;
