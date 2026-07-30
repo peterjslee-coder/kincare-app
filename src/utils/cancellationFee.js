@@ -1,43 +1,51 @@
-// ─── Late-cancellation fee (v1.105.15) ───
+// ─── Late-cancellation fee (v1.105.17) ───
 //
-// The published Client Services Agreement at yourinplace.com/client-services says:
+// The published Client Services Agreement and Caregiver Agreement now say:
 //
-//   >24h, either party cancels        → "Client shall be entitled to a full refund"
-//   <24h, CLIENT cancels              → "Client shall be charged a cancellation fee at the
-//                                        then-current rate posted on IPC's platform at the
-//                                        time of cancellation"
-//   <24h, CAREGIVER cancels or no-shows → "Client shall be entitled to a full refund"
+//   >24h, either party cancels          → Client entitled to a full refund
+//   <24h, CLIENT cancels                → Client charged 100% of the amount AUTHORIZED for
+//                                          that appointment; Caregiver receives the same
+//                                          share they would have had the visit happened,
+//                                          net of the Platform Fee
+//   <24h, CAREGIVER cancels or no-shows → Client entitled to a full refund
 //
-// Two things follow from the exact wording, and both shape this file.
+// v1.105.15 read an earlier draft that charged "a cancellation fee at the then-current rate
+// posted on IPC's platform", which defined the charge by reference to a rate that had never
+// been posted anywhere — so this file defaulted to 0 and released every hold. The agreements
+// now state the number outright, so the default states it too. The platform_settings
+// override remains for changing the rate later without a contract amendment, which the
+// clause expressly permits (prospectively only).
 //
-// FIRST: the contract does not say "the client has paid for the visit". It says a
-// cancellation FEE at a rate POSTED ON THE PLATFORM. The charge is defined by reference to
-// something external, so charging any amount that has never been posted is not supported
-// by the agreement the client signed — including charging 100%. That makes the posted rate
-// a real dependency, not a config nicety, which is why the rate lives in platform_settings
-// (a value an admin can set and the app can display) rather than as a constant in code.
+// TWO THINGS THE WORDING STILL DICTATES.
 //
-// SECOND: the asymmetry is the whole point. Only a CLIENT cancelling late pays. A caregiver
-// cancelling late — or simply not turning up — owes the client a full refund. Any code that
-// treats "late cancellation" as one condition without asking who did it gets this exactly
-// backwards for the party the clause is written to protect.
+// The asymmetry. Only a CLIENT cancelling late pays. A caregiver cancelling late — or simply
+// not turning up — owes the client a full refund. Code that treats "late cancellation" as one
+// condition without asking WHO did it charges the family for the caregiver's no-show, which
+// is exactly backwards from what the clause protects against.
 //
-// Mechanically this is a partial capture, not a charge-then-refund. Nobody pre-pays: the
-// hold is placed 23-25h before the visit with capture_method:'manual'. So a late cancel is
-// "capture part of the hold, release the rest", which Stripe does natively — and which is
-// why the 24h contractual boundary and the 25h authorization window nearly coincide.
+// "Of the amount AUTHORIZED", not of the session price. Those differ: the authorization
+// includes any short-notice surcharge and excludes anything added at check-out. The
+// authorized amount is also the only figure that can actually be captured, so pinning the fee
+// to it keeps the contract and the mechanism describing the same number.
+//
+// Mechanically this is a capture of the existing hold, not a charge-then-refund. Nobody
+// pre-pays: the hold is placed 23-25h out with capture_method:'manual', which is why the 24h
+// contractual boundary and the 25h authorization window nearly coincide.
+//
+// ⚠️ PARTIAL captures are not safe yet. accountability.js sets application_fee_amount at
+// AUTHORIZATION time against the full amount, and Stripe does not prorate it on a partial
+// capture — so capturing 50% would take the platform's whole fee out of half the money and
+// short the caregiver's contractual share. At 100% the arithmetic is unchanged, which is why
+// only 100 is safe to post today. Prorate the application fee before posting anything lower.
 
-const DEFAULT_FEE_PERCENT = 0;
+const DEFAULT_FEE_PERCENT = 100;
 
 /**
  * The posted cancellation fee percentage.
  *
- * Defaults to ZERO, deliberately, even though the intended business policy is higher.
- * Until a rate is actually posted there is no "then-current rate posted on IPC's platform"
- * for the contract to point at, and charging a card under a clause whose operative number
- * does not exist is the one outcome worse than not charging at all. An admin setting the
- * value is what makes the clause enforceable; this default is what keeps a silent
- * mis-charge impossible before then.
+ * Defaults to the rate written into the agreements (100). An admin can post a different rate
+ * in platform_settings, which the clause permits — but see the partial-capture warning above
+ * before posting anything below 100.
  */
 async function getCancellationFeePercent(db) {
   try {
@@ -45,14 +53,19 @@ async function getCancellationFeePercent(db) {
       "SELECT value FROM platform_settings WHERE key = 'cancellation_fee_percent'"
     ).get();
     if (!row) return DEFAULT_FEE_PERCENT;
-    const pct = Number(row.value);
+    // A blank value is corruption, not a decision. Number("") is 0 and Number(" ") is 0,
+    // both finite — so without this check an empty settings row would silently switch
+    // late-cancel charging off and look exactly like a deliberate 0.
+    const raw = String(row.value ?? "").trim();
+    if (!raw) return DEFAULT_FEE_PERCENT;
+    const pct = Number(raw);
     if (!Number.isFinite(pct) || pct < 0) return DEFAULT_FEE_PERCENT;
     // Cap at 100: a fee above the authorized amount cannot be captured from the hold
     // anyway, and Stripe would reject the capture outright — turning a config typo into a
     // failed cancellation rather than an overcharge.
     return Math.min(pct, 100);
   } catch (e) {
-    console.error("[cancellationFee] lookup failed, defaulting to no fee:", e.message);
+    console.error("[cancellationFee] lookup failed, falling back to the agreement rate:", e.message);
     return DEFAULT_FEE_PERCENT;
   }
 }
@@ -87,8 +100,9 @@ async function decideCancellationCharge(db, {
   }
 
   const feePercent = await getCancellationFeePercent(db);
+  // An admin can still post 0 to switch late-cancel charging off without a code change.
   if (feePercent <= 0) {
-    return { action: "void", feePercent: 0, reason: "no_posted_rate" };
+    return { action: "void", feePercent: 0, reason: "rate_set_to_zero" };
   }
 
   const amountCents = Math.round((authorizedAmountCents || 0) * (feePercent / 100));

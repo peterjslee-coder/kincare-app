@@ -25,12 +25,55 @@ const HOLD = {
 };
 
 describe("the posted rate", () => {
-  test("defaults to ZERO when nothing is posted", async () => {
-    // The clause charges "a cancellation fee at the then-current rate posted on IPC's
-    // platform". If no rate is posted there is nothing for the clause to point at, so
-    // there is no supportable amount to charge — including 100%.
-    expect(DEFAULT_FEE_PERCENT).toBe(0);
-    expect(await getCancellationFeePercent(settingsDb(undefined))).toBe(0);
+  test("defaults to the rate written into the agreements", async () => {
+    // v1.105.15 defaulted to 0 because the clause charged "the then-current rate posted on
+    // IPC's platform" and no rate had ever been posted — the charge referenced a number
+    // that did not exist. v1.105.17 amended both agreements to state 100% outright, so the
+    // default states it too. If this ever drops below 100, check the partial-capture
+    // warning in cancellationFee.js first: the application fee is not prorated.
+    expect(DEFAULT_FEE_PERCENT).toBe(100);
+    expect(await getCancellationFeePercent(settingsDb(undefined))).toBe(100);
+  });
+
+  test("the agreements and the code state the SAME number", async () => {
+    // The whole point of this release. If someone edits one and not the other, the app
+    // charges an amount the signed document does not authorise.
+    const fs = require("fs");
+    const path = require("path");
+    for (const doc of [
+      "public/legal/source/IPC_Client_Services_Agreement_AMENDED.md",
+      "public/legal/source/IPC_Caregiver_Agreement_AMENDED.md",
+      "public/legal/terms.html",
+      "public/legal/terms-merged.html",
+    ]) {
+      const text = fs.readFileSync(path.join(__dirname, "..", doc), "utf8");
+      expect(text).toMatch(/one hundred percent \(100%\)/);
+      // The superseded caps must be gone, not merely outnumbered.
+      expect(text).not.toMatch(/fifty percent \(50%\)/);
+    }
+  });
+
+  test("no document still defers to an unposted rate", async () => {
+    const fs = require("fs");
+    const path = require("path");
+    for (const doc of [
+      "public/legal/source/IPC_Client_Services_Agreement_AMENDED.md",
+      "public/legal/source/IPC_Caregiver_Agreement_AMENDED.md",
+    ]) {
+      const text = fs.readFileSync(path.join(__dirname, "..", doc), "utf8");
+      expect(text).not.toMatch(/cancellation fee at the then-current rate posted/);
+    }
+  });
+
+  test("both agreements say SHALL, not may — they used to disagree", async () => {
+    // The Client Agreement said "shall be charged" and the Caregiver Agreement said "may be
+    // charged" for the same event. Two signed documents describing one transaction
+    // differently is the kind of gap that gets read against the drafter.
+    const fs = require("fs");
+    const path = require("path");
+    const cg = fs.readFileSync(path.join(__dirname, "..", "public/legal/source/IPC_Caregiver_Agreement_AMENDED.md"), "utf8");
+    expect(cg).toMatch(/the Client shall be charged a cancellation fee/);
+    expect(cg).not.toMatch(/the Client may be charged a cancellation fee/);
   });
 
   test("reads the posted rate once an admin sets one", async () => {
@@ -44,14 +87,14 @@ describe("the posted rate", () => {
     expect(await getCancellationFeePercent(settingsDb(150))).toBe(100);
   });
 
-  test("garbage and negatives fall back to no fee, never to a charge", async () => {
+  test("garbage and negatives fall back to the agreement rate, not to an arbitrary number", async () => {
     for (const bad of ["", "abc", -20, null]) {
-      expect(await getCancellationFeePercent(settingsDb(bad))).toBe(0);
+      expect(await getCancellationFeePercent(settingsDb(bad))).toBe(100);
     }
   });
 
-  test("a settings failure means no fee", async () => {
-    expect(await getCancellationFeePercent(settingsDb(100, { fail: true }))).toBe(0);
+  test("a settings failure falls back to the agreement rate", async () => {
+    expect(await getCancellationFeePercent(settingsDb(100, { fail: true }))).toBe(100);
   });
 });
 
@@ -99,15 +142,21 @@ describe("what the contract says happens", () => {
     expect(d.amountCents).toBe(5000);
   });
 
-  test("client cancels late but NO rate is posted → release, do not charge", async () => {
-    // The single most important case. The intended business policy is to charge; the
-    // contract only permits charging a posted rate. Until one is posted, releasing is the
-    // behaviour that matches what the client actually signed.
+  test("client cancels late with no override posted → charges the agreement rate", async () => {
     const d = await decideCancellationCharge(settingsDb(undefined), {
       cancelledBy: "family", isLateCancel: true, ...HOLD,
     });
+    expect(d.action).toBe("capture");
+    expect(d.amountCents).toBe(10000);
+  });
+
+  test("an admin can still post 0 to switch late-cancel charging off", async () => {
+    // Kept as an explicit escape hatch: turning the charge off must not require a deploy.
+    const d = await decideCancellationCharge(settingsDb(0), {
+      cancelledBy: "family", isLateCancel: true, ...HOLD,
+    });
     expect(d.action).toBe("void");
-    expect(d.reason).toBe("no_posted_rate");
+    expect(d.reason).toBe("rate_set_to_zero");
   });
 });
 
