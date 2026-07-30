@@ -71,3 +71,77 @@ describe("slug map", () => {
     expect(SLUGS["terms"]).toBe("terms");
   });
 });
+
+// ─── Route-level tests with a stubbed DB ───
+// staging's `legal_documents` table is EMPTY (the schema creates it but seed.js
+// never populates it — documents only exist where an admin published them, i.e.
+// prod). So the render path can't be exercised on staging, and these pages are
+// store-facing and legally visible. Stub the DB and test the wiring here rather
+// than discovering a problem on production.
+
+describe("public legal routes", () => {
+  const DOC = {
+    doc_type: "privacy",
+    version: "2026-07-07",
+    title: "Privacy Policy",
+    published_at: "2026-07-07T00:00:00.000Z",
+    content: "PRIVACY POLICY\n\nCedar Rock Holdings, LLC\n\nWe use <Stripe> for payments.",
+  };
+
+  function appWith(rows) {
+    jest.resetModules();
+    jest.doMock("../src/models/database", () => ({
+      getDb: async () => ({ prepare: () => ({ all: async () => rows, get: async () => rows[0] }) }),
+    }));
+    jest.doMock("../src/utils/sentry", () => ({ captureException: () => {} }));
+    const express = require("express");
+    const app = express();
+    app.use(require("../src/routes/publicLegal"));
+    app.get("*", (req, res) => res.status(200).send("SPA_SHELL"));
+    return app;
+  }
+
+  const request = require("supertest");
+
+  test("renders the active document, with no login", async () => {
+    const res = await request(appWith([DOC])).get("/privacy");
+    expect(res.status).toBe(200);
+    expect(res.text).toContain("<h1>Privacy Policy</h1>");
+    expect(res.text).toContain("Version 2026-07-07");
+    expect(res.text).toContain("<h2>PRIVACY POLICY</h2>");
+    expect(res.text).not.toContain("SPA_SHELL");
+  });
+
+  test("document content is escaped, not injected", async () => {
+    const res = await request(appWith([DOC])).get("/privacy");
+    expect(res.text).toContain("&lt;Stripe&gt;");
+    expect(res.text).not.toContain("<Stripe>");
+  });
+
+  test("a type with no active document falls through to the app, not an empty page", async () => {
+    // This is exactly what staging does today, and what prod did for /liability.
+    const res = await request(appWith([DOC])).get("/liability");
+    expect(res.status).toBe(200);
+    expect(res.text).toBe("SPA_SHELL");
+  });
+
+  test("an empty table falls through for every slug (staging's real state)", async () => {
+    const app = appWith([]);
+    for (const slug of ["/terms", "/privacy", "/caregiver-agreement", "/client-services", "/legal"]) {
+      const res = await request(app).get(slug);
+      expect(res.text).toBe("SPA_SHELL");
+    }
+  });
+
+  test("/legal indexes what is published and links to it", async () => {
+    const res = await request(appWith([DOC, { ...DOC, doc_type: "terms", title: "Terms of Use" }])).get("/legal");
+    expect(res.status).toBe(200);
+    expect(res.text).toContain('href="/privacy"');
+    expect(res.text).toContain('href="/terms"');
+  });
+
+  test("pages are cacheable but not for long (policies change)", async () => {
+    const res = await request(appWith([DOC])).get("/privacy");
+    expect(res.headers["cache-control"]).toMatch(/max-age=300/);
+  });
+});
