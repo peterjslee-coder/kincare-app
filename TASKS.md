@@ -774,12 +774,15 @@
 Pete wants family minors on care teams: a grandchild or his own 14-year-old logging notes, and
 eventually **being paid**. Two cases that look alike and are not.
 
-- [ ] **P1 — there is NO AGE GATE in the product today.** No date of birth is collected anywhere at
-  signup and no minimum age is enforced (`auth.js` / `validate.js` have nothing). The Privacy
-  Policy says under-13s are not intended users, but nothing makes that true. **This has to be
-  settled before declaring an age rating to either store**, because the rating is a statement about
-  who can use the app. Recommended: **minimum age 13, declared 13+**, which keeps clear of COPPA and
-  Google Play's Families policy — and happens to match Stripe's own floor.
+- [x] **P1 — AGE GATE SHIPPED (v1.105.8). Minimum 13, enforced server-side on every signup door.**
+  - `src/utils/age.js` — calendar arithmetic on Y/M/D integers, **not** millisecond subtraction: ms-based age is wrong across leap years, and `new Date("2013-07-30")` parses as UTC midnight, which is the previous day in US timezones. Non-existent dates (`2025-02-30`) are rejected rather than silently rolled forward by `Date`. 20 unit tests including the day-before/day-of birthday boundary and a Feb-29 birthday turning 13 on Mar 1.
+  - **Three doors, all gated and pinned by tests:** `/api/auth/register`, OAuth `complete-signup`, and the caregiver wizard.
+  - **⚠️ NEAR-MISS WORTH REMEMBERING:** `CaregiverOnboarding` collects a date of birth only at the **Checkr step (4)**, which runs **after** account creation at step 1 — so gating `/api/auth/register` without touching it would have **blocked caregiver signup outright**, the same barrier-to-entry class as the v1.105.0 bug that stopped Julia. Fixed by adding the field to step 1 under the **same form key**, so the Checkr step now arrives pre-filled instead of asking twice.
+  - Migration `012_users_date_of_birth`, **nullable on purpose** — existing accounts predate this and are not locked out.
+  - The under-13 message **points somewhere** rather than just refusing: a parent or guardian can record a younger family member as a **named non-user helper** (Care Tasks) with no account at all.
+  - **Staging-verified live:** no DOB → 400, under-13 → 400 with the helpful message, **exactly 13 → 201**, garbage → 400, future date → 400.
+  - Apple's updated rating system explicitly supports **setting a higher minimum age to match your app's own** — so declaring **13+** is now a true statement, not an aspiration.
+
 - [ ] **P2 — Case A: minor logs notes, UNPAID.** The cheap path already exists and needs no account
   at all: Care Tasks supports a **named non-user helper** (`care_task_helpers`) recorded as having
   done something. A 13+ care-team member account is the heavier version. Lawyer questions logged.
