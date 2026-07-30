@@ -141,3 +141,51 @@ describe("when there is no hold at all", () => {
     expect(d.action).toBe("void");
   });
 });
+
+// ─── the preview must not be a second implementation ───
+const fs = require("fs");
+const path = require("path");
+const rd = (p) => fs.readFileSync(path.join(__dirname, "..", p), "utf8");
+
+describe("cancel preview", () => {
+  const sessions = rd("src/routes/sessions.js");
+
+  test("the preview endpoint exists", () => {
+    expect(sessions).toMatch(/router\.get\("\/:id\/cancel-preview"/);
+  });
+
+  test("the preview uses the SAME decision function as the charge", () => {
+    // A preview that computes the number a second way will eventually disagree with the
+    // charge, and the failure mode is quoting someone $0 and taking $120. Both call sites
+    // must route through decideCancellationCharge.
+    expect((sessions.match(/decideCancellationCharge\(/g) || []).length).toBeGreaterThanOrEqual(2);
+  });
+
+  test("the preview never mutates anything", () => {
+    const start = sessions.indexOf('router.get("/:id/cancel-preview"');
+    const preview = sessions.slice(start, sessions.indexOf('router.put("/:id/cancel"'));
+    for (const forbidden of ["captureSessionPayment", "voidSessionPayment", "UPDATE care_sessions"]) {
+      expect(preview).not.toContain(forbidden);
+    }
+  });
+
+  test("only the two parties to the session can preview it", () => {
+    const start = sessions.indexOf('router.get("/:id/cancel-preview"');
+    const preview = sessions.slice(start, sessions.indexOf('router.put("/:id/cancel"'));
+    expect(preview).toMatch(/Not your session/);
+  });
+});
+
+describe("the client tells the user before charging them", () => {
+  test("Dashboard no longer hardcodes the charge claim", () => {
+    // It used to say "You will still be charged for this session" — wrong twice: the
+    // contract charges a posted FEE, not the session price, and nothing was ever taken.
+    const dash = rd("public/js/components/Dashboard.js");
+    expect(dash).not.toMatch(/You will still be charged for this session/);
+    expect(dash).toMatch(/cancel-preview/);
+  });
+
+  test("the session detail modal previews before confirming", () => {
+    expect(rd("public/js/components/VisitDetailModal.js")).toMatch(/cancel-preview/);
+  });
+});

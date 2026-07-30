@@ -790,6 +790,52 @@ router.put("/platform-fee", async (req, res) => {
   }
 });
 
+// ─── GET /api/admin/financials/cancellation-fee ───
+// v1.105.15 — the rate the Client Services Agreement points at.
+//
+// The clause charges "a cancellation fee at the then-current rate posted on IPC's platform
+// at the time of cancellation". Until a rate is set here there is nothing for that clause
+// to reference, so late cancellations release the hold instead of charging. This endpoint
+// is what makes the clause enforceable — which is why 0 is the default and not 100.
+router.get("/cancellation-fee", async (req, res) => {
+  try {
+    const db = await getDb();
+    const row = await db.prepare("SELECT value FROM platform_settings WHERE key = 'cancellation_fee_percent'").get();
+    const pct = row ? parseFloat(row.value) : 0;
+    res.json({
+      cancellationFeePercent: Number.isFinite(pct) ? pct : 0,
+      isPosted: !!row,
+      // Surfaced so the admin screen can say WHY nothing is being charged, rather than
+      // showing a silent 0 that reads like a working setting.
+      note: row
+        ? null
+        : "No rate is posted, so late cancellations currently release the hold in full. The Client Services Agreement can only charge a rate that has been posted.",
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch cancellation fee" });
+  }
+});
+
+// ─── PUT /api/admin/financials/cancellation-fee ───
+router.put("/cancellation-fee", async (req, res) => {
+  const { cancellationFeePercent } = req.body;
+  const pct = Number(cancellationFeePercent);
+  // 0-100. Above 100 is uncapturable — the hold is the ceiling — and a negative fee would
+  // mean paying the client to cancel.
+  if (!Number.isFinite(pct) || pct < 0 || pct > 100) {
+    return res.status(400).json({ error: "cancellationFeePercent must be between 0 and 100" });
+  }
+  try {
+    const db = await getDb();
+    await db.prepare(
+      "INSERT INTO platform_settings (key, value) VALUES ('cancellation_fee_percent', ?) ON CONFLICT (key) DO UPDATE SET value = ?, updated_at = NOW()"
+    ).run(String(pct), String(pct));
+    res.json({ cancellationFeePercent: pct });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to update cancellation fee" });
+  }
+});
+
 // ─── GET /api/admin/financials/payments-enabled ───
 // Check if real payments are enabled
 router.get("/payments-enabled", async (req, res) => {

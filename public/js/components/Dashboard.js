@@ -17,6 +17,10 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
   // Cancel + review state
   const [cancellingId, setCancellingId] = useState(null);
   const [cancelReason, setCancelReason] = useState('');
+  // v1.105.15 — what this cancellation actually costs, computed server-side by the SAME
+  // rule the cancel endpoint applies. Never derived client-side: a second implementation
+  // is a second answer, and the failure mode is showing $0 and charging $120.
+  const [cancelPreview, setCancelPreview] = useState(null);
   const [cancelLoading, setCancelLoading] = useState(false);
   const [reviewSession, setReviewSession] = useState(null); // session that can be reviewed after late cancel
   const [reviewRating, setReviewRating] = useState(0);
@@ -272,6 +276,19 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
     setAcceptingInviteId(null);
   };
 
+  useEffect(() => {
+    if (!cancellingId) { setCancelPreview(null); return; }
+    let stale = false;
+    (async () => {
+      try {
+        const res = await apiFetch(`/api/sessions/${cancellingId}/cancel-preview`);
+        if (!stale && res?.ok) setCancelPreview(await res.json());
+        else if (!stale) setCancelPreview({ unavailable: true });
+      } catch { if (!stale) setCancelPreview({ unavailable: true }); }
+    })();
+    return () => { stale = true; };
+  }, [cancellingId]);
+
   const handleCancel = async (sessionId) => {
     setCancelLoading(true);
     try {
@@ -283,6 +300,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
         const d = await res.json();
         setCancellingId(null);
         setCancelReason('');
+        setCancelPreview(null);
         fetchDashboard();
         // If caregiver late-cancelled, prompt for review (won't happen for family cancel, but check anyway)
         if (d.canReview) {
@@ -2231,9 +2249,17 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                       No caregiver assigned yet — free to cancel with no fee.
                     </div>
                   )}
+                  {/* v1.105.15 — this used to hardcode "You will still be charged for this
+                      session", which was wrong twice over: the contract charges a posted
+                      cancellation FEE rather than the session price, and no fee was ever
+                      actually taken. Now it states whatever the server will really do. */}
                   {isLate && (
                     <div style={{ padding: '10px 14px', background: 'var(--color-warning-bg)', borderRadius: 8, border: '1px solid #ffe082', marginBottom: 12, fontSize: 13, color: 'var(--color-warning)' }}>
-                      This is a <strong>late cancellation</strong> (less than 24 hours before the session). You will still be charged for this session.
+                      {cancelPreview && !cancelPreview.unavailable
+                        ? cancelPreview.message
+                        : cancelPreview?.unavailable
+                          ? <span>This is a <strong>late cancellation</strong> (less than 24 hours before the session). We could not check whether a cancellation fee applies.</span>
+                          : <span>Checking whether a cancellation fee applies\u2026</span>}
                     </div>
                   )}
                   <div style={{ marginBottom: 12 }}>

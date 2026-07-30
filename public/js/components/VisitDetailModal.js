@@ -593,7 +593,26 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, 
             <button disabled={cancelling} onClick={async () => {
               const ss = data.session;
               const otherParty = role === 'caregiver' ? (ss.recipient_name || 'this client') : (ss.caregiver_name || 'the caregiver');
-              const confirmMsg = role === 'caregiver' ? `Cancel your session with ${otherParty}? The job will go back to the open pool.` : `Cancel this session with ${otherParty}?`;
+              // v1.105.15 — ask the server what this cancellation costs BEFORE confirming.
+              // The Client Services Agreement charges the fee "posted at the time of
+              // cancellation"; a charge nobody was shown isn't posted to them at all.
+              // Failing to reach the preview must not block the cancel — the visit still
+              // needs cancelling — but then we say so honestly instead of implying it's free.
+              let costLine = '';
+              try {
+                const pv = await apiFetch(`/api/sessions/${sessionId}/cancel-preview`);
+                if (pv?.ok) {
+                  const p = await pv.json();
+                  costLine = `\n\n${p.message}`;
+                } else {
+                  costLine = '\n\nWe could not check whether a cancellation fee applies.';
+                }
+              } catch {
+                costLine = '\n\nWe could not check whether a cancellation fee applies.';
+              }
+              const confirmMsg = role === 'caregiver'
+                ? `Cancel your session with ${otherParty}? The job will go back to the open pool.${costLine}`
+                : `Cancel this session with ${otherParty}?${costLine}`;
               if (!confirm(confirmMsg)) return;
               setCancelling(true);
               try {

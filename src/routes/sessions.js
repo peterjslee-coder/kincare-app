@@ -2528,6 +2528,77 @@ router.put("/:id/on-my-way", async (req, res) => {
 
 // ─── PUT /api/sessions/:id/cancel ───
 // Cancel a confirmed/pending session with late-cancel tracking
+// ─── GET /api/sessions/:id/cancel-preview ───
+//
+// v1.105.15 — what cancelling right now would cost, BEFORE confirming.
+//
+// The Client Services Agreement charges the fee "posted on IPC's platform at the time of
+// cancellation". A charge the person was never shown is not posted to them in any
+// meaningful sense, and is a chargeback with extra steps.
+//
+// This deliberately calls the SAME decideCancellationCharge the cancel handler calls,
+// rather than reimplementing the rule for display. A preview that computes the number a
+// second way is a preview that will eventually disagree with the charge — and the failure
+// mode is quoting someone $0 and taking $120.
+router.get("/:id/cancel-preview", async (req, res) => {
+  try {
+    const db = await getDb();
+    const userId = req.user.id;
+    const activeRole = req.user.activeRole || req.user.role;
+
+    const session = await db.prepare(`
+      SELECT cs.*, cp.user_id AS caregiver_user_id, cr.timezone AS care_timezone
+      FROM care_sessions cs
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+      WHERE cs.id = ?
+    `).get(req.params.id);
+    if (!session) return res.status(404).json({ error: "Session not found" });
+
+    const isCaregiver = activeRole === "caregiver" || userId === session.caregiver_user_id;
+    const isFamily = userId === session.family_user_id;
+    if (!isCaregiver && !isFamily) return res.status(403).json({ error: "Not your session" });
+    const cancelledBy = isCaregiver ? "caregiver" : "family";
+
+    const tz = session.care_timezone || "America/New_York";
+    const startsAt = buildDateTimeInZone(
+      session.scheduled_date.split("T")[0], session.scheduled_time || "00:00", tz
+    );
+    const hoursUntil = (startsAt - getNowInZone(tz)) / 3600000;
+    const isLateCancel = !!session.caregiver_id && hoursUntil < 24;
+
+    const charge = await decideCancellationCharge(db, {
+      cancelledBy,
+      isLateCancel,
+      paymentIntentId: session.stripe_payment_intent_id,
+      paymentStatus: session.payment_status,
+      authorizedAmountCents: session.authorized_amount,
+    });
+
+    res.json({
+      cancelledBy,
+      isLateCancel,
+      hoursUntilSession: Math.round(hoursUntil * 10) / 10,
+      willCharge: charge.action === "capture",
+      chargeCents: charge.action === "capture" ? charge.amountCents : 0,
+      feePercent: charge.feePercent,
+      // One sentence the client can show verbatim. Built here so every cancel surface —
+      // Dashboard, VisitDetailModal, CaretakerHub, FindWork — says the same thing rather
+      // than four components each inventing their own wording for a contractual charge.
+      message: charge.action === "capture"
+        ? `This is a late cancellation (under 24 hours). You will be charged a ${charge.feePercent}% cancellation fee of $${(charge.amountCents / 100).toFixed(2)}.`
+        : cancelledBy === "caregiver"
+          ? "The job will go back to the open pool. The family will not be charged."
+          : isLateCancel
+            ? "This is a late cancellation (under 24 hours). You will not be charged."
+            : "You will not be charged.",
+    });
+  } catch (err) {
+    console.error("Cancel preview error:", err);
+    res.status(500).json({ error: "Failed to preview cancellation" });
+  }
+});
+
 router.put("/:id/cancel", async (req, res) => {
   try {
     const db = await getDb();
