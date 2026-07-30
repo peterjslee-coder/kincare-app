@@ -801,6 +801,38 @@ eventually **being paid**. Two cases that look alike and are not.
   verifiable-parental-consent obligations onto a product holding health data. Use the named-helper
   route for younger children.
 
+### ⚠️ AI GUIDANCE RULE (Pete, 2026-07-30) — applies to every AI-generated care output
+
+> **The app must NEVER generate medical or treatment information without the user explicitly
+> acknowledging that this is not medical care, and that it can only reflect information provided
+> to it. Any health or routine guidance follows the same principles.**
+>
+> Stated while answering Apple's age-rating question. Pete's reason: **Claude can hallucinate, and
+> that risk is being actively managed rather than assumed away.** In a product holding a dementia
+> patient's medications and adherence history, a fabricated line is not cosmetic.
+>
+> **This is BROADER than the existing iPAi cardinal rule.** That one covers AI artifacts *leaving
+> the platform* (human review + explicit sender responsibility). This covers **anything generated at
+> all** — chat answers, insight cards, care suggestions, routine guidance, summaries. Both things
+> must be present **at the point of generation**, not buried in the policy: (a) this is not medical
+> care, (b) it reflects only what you gave it.
+>
+> **This also underwrites a store answer.** The age-rating questionnaire was answered
+> **Medical or Treatment Information = Infrequent** on the basis that InPlace *records and displays*
+> rather than *advises*. That answer is only defensible while this rule holds — if the app starts
+> generating unacknowledged medical guidance, the honest answer becomes **Frequent**, which triggers
+> the **Regulated Medical Device declaration**.
+
+- [ ] **P1 — audit every AI generation surface against the rule above.** Confirm each carries the
+  not-medical-care acknowledgment AND the reflects-only-what-you-provided constraint, in the prompt
+  *and* visibly to the user: `src/utils/ipaiChat.js`, `src/utils/careIntelligence.js`,
+  `public/js/components/IPAiInsightsCard.js`, and the doctor-report path (which already has the
+  acknowledged-send flow — use it as the reference implementation). Report which surfaces are
+  already compliant and which need copy or prompt changes.
+- [ ] **P2 — hallucination mitigations:** Pete noted this is being addressed. Capture what's in place
+  (grounding in raw records only, no external medical knowledge, refusal behaviour) so the answer to
+  "how do you prevent fabrication" is written down before a reviewer, a lawyer, or a family asks.
+
 ### Store rules audit — re-checked against the LIVE guidelines 2026-07-30
 
 > Previous entries in this section were written against 2025-era rules. Everything below was
