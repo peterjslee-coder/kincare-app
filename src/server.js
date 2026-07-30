@@ -405,9 +405,10 @@ app.use("/api/care-tasks", careTasksRouter);
 app.use("/api/care-events", careEventsRouter);
 app.use("/api/legal", require("./routes/legal"));
 app.use("/api/media", require("./routes/media"));
+app.use("/api/safety", require("./routes/safety"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.105.17";
+const APP_VERSION = "1.105.18";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });

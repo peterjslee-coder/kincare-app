@@ -217,7 +217,12 @@ const Messages = window.Messages = () => {
   // Delete a conversation (permanent, server-side)
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
   const [deleting, setDeleting] = useState(false);
-  const [contextMenu, setContextMenu] = useState(null); // { x, y, convId }
+  const [contextMenu, setContextMenu] = useState(null);
+  // v1.105.18 — guideline 1.2. Report is silent; block is loud and reversible.
+  const [reportFor, setReportFor] = useState(null);
+  const [reportCategory, setReportCategory] = useState('');
+  const [reportDetails, setReportDetails] = useState('');
+  const [reportBusy, setReportBusy] = useState(false); // { x, y, convId }
 
   const handleDelete = async (convId) => {
     setDeleting(true);
@@ -1243,6 +1248,56 @@ const Messages = window.Messages = () => {
   );
 
   // ─── Conversation List ───
+  // ─── v1.105.18 — report and block ───
+  // The other participant of a 1:1 thread, or null for group/care-team threads. Both acts
+  // are person-to-person, so they only make sense where there is exactly one other person.
+  const soloPartner = (conv) => {
+    const others = (conv?.members || []).filter(m => m.id !== currentUser?.id);
+    return others.length === 1 ? others[0] : null;
+  };
+
+  const handleBlock = async (conv) => {
+    const partner = soloPartner(conv);
+    if (!partner) return;
+    // Ask the server what blocking would actually do rather than describing it here. How
+    // many visits get cancelled, and whether a care team has to approve it, are facts about
+    // this particular pair of people — prose in the client drifts away from them.
+    let lines = [];
+    try {
+      const res = await apiFetch('/api/safety/block-preview/' + partner.id);
+      if (res?.ok) { const p = await res.json(); lines = p.consequences || []; }
+    } catch { /* fall through to the generic wording */ }
+    const name = ((partner.first_name || '') + ' ' + (partner.last_name || '')).trim() || 'this person';
+    const body = lines.length
+      ? lines.map(l => '\u2022 ' + l).join('\n')
+      : '\u2022 They will be told that you blocked them.\n\u2022 Upcoming visits together will be cancelled.\n\u2022 You can unblock them at any time.';
+    if (!confirm('Block ' + name + '?\n\n' + body)) return;
+    try {
+      const res = await apiFetch('/api/safety/block', { method: 'POST', body: JSON.stringify({ userId: partner.id }) });
+      const d = await res.json().catch(() => ({}));
+      if (res?.ok) { showToast(d.message || 'Blocked.', 'success'); fetchConversations(); setActiveConvId(null); }
+      else showToast(d.error || 'Could not block that person', 'error');
+    } catch { showToast('Could not block that person', 'error'); }
+  };
+
+  const submitReport = async () => {
+    if (!reportCategory || !reportFor) return;
+    setReportBusy(true);
+    try {
+      const res = await apiFetch('/api/safety/report', {
+        method: 'POST',
+        body: JSON.stringify({
+          reportedUserId: reportFor.userId, messageId: reportFor.messageId || null,
+          conversationId: reportFor.convId || null, category: reportCategory, details: reportDetails,
+        }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (res?.ok) { showToast(d.message || 'Report sent to our safety team.', 'success'); setReportFor(null); setReportCategory(''); setReportDetails(''); }
+      else showToast(d.error || 'Could not send the report', 'error');
+    } catch { showToast('Could not send the report', 'error'); }
+    setReportBusy(false);
+  };
+
   const renderConversationList = () => (
     <div className="msg-panel" style={{ display: 'flex', flexDirection: 'column', height: isMobile ? 'auto' : '100%', flex: isMobile ? '1 1 0%' : undefined, minHeight: isMobile ? 0 : undefined, overflow: 'hidden' }}>
       <div className="msg-list-header" style={isMobile ? { paddingTop: 16 } : undefined}>
@@ -1618,6 +1673,26 @@ const Messages = window.Messages = () => {
               onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
               <span style={{ fontSize: 16 }}>&#128465;</span> Delete
             </div>
+            {(() => {
+              const c = conversations.find(x => x.id === contextMenu.convId);
+              const partner = soloPartner(c);
+              if (!partner) return null;
+              const pname = ((partner.first_name || '') + ' ' + (partner.last_name || '')).trim();
+              return [
+                <div key="sep" style={{ height: 1, background: 'var(--border-color)', margin: '4px 0' }} />,
+                // Report is listed BEFORE Block and worded as the safe option. Someone
+                // frightened of a caregiver should reach for this one, because reporting is
+                // the act that never tells the other person.
+                <div key="report" onClick={() => { setReportFor({ userId: partner.id, name: pname, convId: c.id }); setContextMenu(null); }}
+                  style={{ padding: '10px 14px', fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 16 }}>&#9873;</span> Report
+                </div>,
+                <div key="block" onClick={() => { const cc = c; setContextMenu(null); handleBlock(cc); }}
+                  style={{ padding: '10px 14px', fontSize: 14, cursor: 'pointer', color: 'var(--color-error)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 16 }}>&#128683;</span> Block
+                </div>,
+              ];
+            })()}
           </div>
         </div>
       )}
@@ -2372,6 +2447,54 @@ const Messages = window.Messages = () => {
         {renderIncomingCallBanner()}
         {callOverlay}
         {renderPhotoLightbox()}
+        {/* ─── v1.105.18 — report dialog (guideline 1.2) ───
+            Rendered at the top level, not inside the conversation list, so it survives the
+            list/chat view switch on mobile. The copy states plainly that the reported person
+            is not told: that reassurance is the whole reason someone frightened of a
+            caregiver would use this instead of doing nothing. */}
+        {reportFor && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10001, padding: 16 }}
+            onClick={() => !reportBusy && setReportFor(null)}>
+            <div onClick={e => e.stopPropagation()} style={{ background: 'var(--bg-surface)', borderRadius: 16, padding: 24, width: '100%', maxWidth: 400, maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}>
+              <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 6 }}>Report {reportFor.name || 'this person'}</div>
+              <div style={{ fontSize: 13, color: 'var(--text-tertiary)', marginBottom: 16, lineHeight: 1.5 }}>
+                Our safety team reviews reports within 24 hours. <strong>{reportFor.name ? reportFor.name.split(' ')[0] : 'They'} will not be told that you reported them.</strong>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
+                {[
+                  ['safety_concern', "I'm worried about someone's safety"],
+                  ['harassment', 'Harassment or abusive behaviour'],
+                  ['inappropriate', 'Inappropriate content'],
+                  ['scam', 'Scam or fraud'],
+                  ['impersonation', 'Pretending to be someone else'],
+                  ['spam', 'Spam'],
+                  ['other', 'Something else'],
+                ].map(([val, label]) => (
+                  <button key={val} onClick={() => setReportCategory(val)}
+                    style={{ textAlign: 'left', padding: '10px 12px', borderRadius: 10, fontSize: 13.5, cursor: 'pointer',
+                      border: '1px solid ' + (reportCategory === val ? 'var(--color-primary)' : 'var(--border-color)'),
+                      background: reportCategory === val ? 'var(--color-primary-bg, rgba(27,107,90,0.08))' : 'var(--bg-surface)',
+                      fontWeight: reportCategory === val ? 600 : 400 }}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <textarea value={reportDetails} onChange={e => setReportDetails(e.target.value)}
+                placeholder="Anything else we should know? (optional)"
+                style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border-color)', fontSize: 13, minHeight: 70, resize: 'vertical', marginBottom: 14, boxSizing: 'border-box' }} />
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                <button disabled={reportBusy} onClick={() => { setReportFor(null); setReportCategory(''); setReportDetails(''); }}
+                  style={{ padding: '9px 16px', borderRadius: 9, border: '1px solid var(--border-color)', background: 'var(--bg-surface)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                  Cancel
+                </button>
+                <button disabled={!reportCategory || reportBusy} onClick={submitReport}
+                  style={{ padding: '9px 18px', borderRadius: 9, border: 'none', background: reportCategory ? 'var(--color-error)' : 'var(--border-color)', color: '#fff', fontSize: 13, fontWeight: 700, cursor: reportCategory ? 'pointer' : 'not-allowed' }}>
+                  {reportBusy ? 'Sending…' : 'Send report'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         {messagingLimited && !activeConvId && (
           <div style={{ padding: '10px 16px', background: 'var(--color-warning-bg)', borderBottom: '1px solid #ffe082', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
             <span style={{ fontSize: 16 }}>🔒</span>

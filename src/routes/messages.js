@@ -4,6 +4,7 @@ const { userPhotoUrl } = require("./media");
 const multer = require("multer");
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
+const { getBlockedIds, isBlockedBetween } = require("../utils/blocks");
 const { authenticate } = require("../middleware/auth");
 const { sendPushToUser } = require("./push");
 const { screenMessage } = require("../utils/messageSafety");
@@ -76,7 +77,7 @@ router.get("/conversations", async (req, res) => {
     ORDER BY c.updated_at DESC
   `).all(userId);
 
-  const conversations = [];
+  let conversations = []; // reassigned by the v1.105.18 block filter below
   for (const conv of convRows) {
     // Get last message
     const lastMsg = await db.prepare(`
@@ -208,6 +209,24 @@ router.get("/conversations", async (req, res) => {
     const bTime = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
     return bTime - aTime;
   });
+
+  // ─── v1.105.18 — drop conversations with anyone either party has blocked ───
+  // Filtering here rather than in SQL follows the uncleared-caregiver precedent below, and
+  // covers BOTH the real and the legacy virtual conversations in one place — they are built
+  // by separate code paths above and a WHERE clause would only have caught one of them.
+  // The last-message preview and the unread badge ride on these objects, so removing the
+  // conversation removes the leak through those too.
+  const blockedIds = await getBlockedIds(db, userId);
+  if (blockedIds.size) {
+    conversations = conversations.filter((conv) => {
+      // Group and care-team threads survive: a block is between two people, and silently
+      // ejecting someone from their family's care coordination is a much bigger act than
+      // they asked for. Direct threads with a blocked person go.
+      const others = (conv.members || []).filter((m) => m.id !== userId);
+      if (others.length !== 1) return true;
+      return !blockedIds.has(others[0].id);
+    });
+  }
 
   // Uncleared caregivers can only see conversations with admin/support
   if (!cleared) {
@@ -642,6 +661,20 @@ router.post("/conversations/:id", sendLimiter, async (req, res) => {
   const { content, replyToId } = req.body;
 
   if (!content || !content.trim()) return res.status(400).json({ error: "Message content is required" });
+
+  // ─── v1.105.18 — refuse to send into a blocked direct conversation ───
+  // The read filters above hide the thread, but hiding is not the same as preventing: a
+  // client holding a stale conversation id, or simply retrying, would otherwise still
+  // deliver a message — and delivery fires the push, which is the part that reaches a
+  // blocked person's lock screen.
+  try {
+    const others = await db.prepare(
+      "SELECT user_id FROM conversation_members WHERE conversation_id = ? AND user_id != ?"
+    ).all(convId, userId);
+    if (others.length === 1 && await isBlockedBetween(db, userId, others[0].user_id)) {
+      return res.status(403).json({ error: "You can't message this person.", blocked: true });
+    }
+  } catch (e) { console.error("[messages] block check failed on send:", e.message); }
 
   // Uncleared caregivers can only message in conversations with admin
   const cleared = await isCaregiverCleared(db, req.user);
