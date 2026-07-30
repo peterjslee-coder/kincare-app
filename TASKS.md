@@ -727,14 +727,22 @@
 >
 > **Do not build anything that breaks the PWA.** Every feature must work on web first. Native enhancements are additive — detect the platform and upgrade the experience when running inside Capacitor.
 
-### Phase 1 — Foundation (must complete before any app store submission)
+### Phase 1 — Foundation  ✅ COMPLETE (status corrected 7/30 — every item below was already done; this section had gone stale and still listed them as TODO)
 
-- [ ] **Capacitor project setup.** Initialize Capacitor in the repo (`npx cap init`), add iOS and Android platforms. Configure `capacitor.config.ts` to load the bundled web assets. Verify the app opens in Xcode simulator and Android emulator with current functionality intact. PWA must remain untouched.
-- [ ] **Token-based auth for native.** httpOnly cookies are unreliable in WebViews. Add a platform detection check: if running inside Capacitor, store JWT tokens via Capacitor Preferences (or SecureStorage plugin) and send them as `Authorization: Bearer` headers. If running in browser, keep current cookie flow. The `apiFetch()` wrapper is the single place this needs to change. CSRF flow needs rethinking for native since it's cookie-dependent.
-- [ ] **Native push notifications (FCM + APNs).** Replace Web Push API with Capacitor Push Notifications plugin. Server-side: detect device type from push subscription, route through FCM (Android) or APNs (iOS) accordingly. This fixes the longstanding iOS push notification problem. Web Push stays as fallback for browser users. Update `push.js` to handle both subscription types.
-- [ ] **Deep links / Universal Links.** Register `yourinplace.com` URL patterns with iOS (Associated Domains + apple-app-site-association file) and Android (App Links + assetlinks.json). Invite URLs, password reset links, and consent outreach emails should open in-app when the native app is installed, fall back to browser when it's not. Add `/.well-known/apple-app-site-association` and `/.well-known/assetlinks.json` routes to server.js.
-- [ ] **Account deletion endpoint.** Apple requires full account deletion capability (not just deactivation). Add `DELETE /api/auth/account` that purges all user PII, cascading through care teams, messages, sessions, documents, activity feed, etc. Keep a tombstone record for audit. Surface in MyAccount settings. This is a hard App Store rejection if missing.
-- [ ] **Privacy policy & Terms of Service pages.** Both stores require publicly accessible URLs. Add `/privacy` and `/terms` routes (can be simple static pages or markdown-rendered). Link from registration flow, app settings, and store listing metadata.
+- [x] **Capacitor project setup.** Done — iOS + Android scaffolded, TestFlight Build 6 live (Google sign-in verified), Android internal testing live (versionCode 17). ⚠️ NOTE: `capacitor.config.ts` currently sets `server.url = https://yourinplace.com`, i.e. it loads the app REMOTELY rather than from bundled assets. That is the one outstanding piece — see "Bundled-asset migration" below.
+- [x] **Native push notifications.** Done — iOS uses **direct APNs**, NOT Firebase (the app registers raw APNs tokens, which FCM rejects). Key "InPlace Push" F3WH2QV9XY, verified 5/5 on prod 7/13. Android would use FCM (unconfigured). Web Push remains the browser fallback.
+- [x] **Deep links / Universal Links.** Done and VERIFIED LIVE on prod 7/30: `/.well-known/apple-app-site-association` → 200 `application/json`, `/.well-known/assetlinks.json` → 200 `application/json`.
+- [x] **Account deletion endpoint.** Done — `DELETE /api/auth/me` anonymises PII and deactivates, retaining messages/sessions/payments/activity for legal audit, and it IS surfaced in the UI (`DeleteAccountSection` in MyAccount). This is a hard Apple rejection if missing, so worth knowing it's covered.
+- [x] **Privacy policy & Terms of Service pages.** ✅ Fixed v1.105.4 — `/terms`, `/privacy`, `/caregiver-agreement`, `/client-services` and a `/legal` index now render the **lawyer-reviewed 2026-07-07 documents** straight from `legal_documents` (`src/routes/publicLegal.js`), publicly, no login. **Previously `/privacy` served a static page last updated April 2 2026 that described the Kindred voice companion — killed in the July 7 review — named ElevenLabs, and omitted almost every processor; that stale page was the URL registered with Google Play. And `/terms` returned HTTP 200 while serving the SPA shell, so a reviewer pasting it saw the app, not the terms.**
+- [ ] **Token-based auth for native.** NOT done, and it is part of the bundled-asset migration rather than a standalone task — httpOnly cookies are unreliable in a WebView once the origin is no longer yourinplace.com. `apiFetch()` is the single place this changes. CSRF needs rethinking for native since it is cookie-dependent. **P1 for launch.**
+
+### Phase 1b — Bundled-asset migration (THE remaining engineering project)
+
+- [ ] **Load the app from bundled assets instead of `server.url`.** Comment out `server.url` in `capacitor.config.ts` so the WebView serves local files. This is probably not optional: an app that loads its entire UI from a remote URL is squarely in App Store guideline 4.2 / 2.5.2 territory. TestFlight review is much lighter than full App Store review, so Build 6 passing TestFlight is NOT evidence this will pass submission. **Three coupled changes:**
+  - **`API_BASE`** — the client must call `https://yourinplace.com/api/...` absolutely instead of same-origin relative paths.
+  - **Bearer auth** — WebView origin becomes `capacitor://localhost`, so cookies stop being sent. Store the JWT in Capacitor Preferences/SecureStorage and send `Authorization: Bearer`. Change `apiFetch()` only. Rethink CSRF (the double-submit cookie pattern doesn't survive this).
+  - **CORS** — 🚨 every API call becomes CROSS-ORIGIN. Add `capacitor://localhost` (+ the Android equivalent) to `allowedOrigins` in `src/utils/env.js`. **Do NOT add a bare `http://localhost`** — with `credentials: true` that would let anything running on a user's machine make authenticated requests to prod. A test in `tests/env.test.js` asserts it never appears. See the v1.105.3 entry under Recently Completed.
+- [ ] **Re-verify after migrating:** push notification registration, Google/Apple sign-in redirects (custom scheme), deep links, passkeys (WebAuthn origin changes — RP_ID/ORIGIN come from `APP_URL`, and Android already has `apk-key-hash` origins registered in `passkeys.js`), and photo upload.
 
 ### Phase 2 — Native Experience Polish
 
@@ -746,8 +754,8 @@
 
 ### Phase 3 — Store Submission
 
-- [ ] **Apple Developer Program enrollment.** $99/year. Requires D-U-N-S number if submitting as an organization (recommended over individual for a care platform). Pete needs to enroll at developer.apple.com.
-- [ ] **Google Play Developer account.** $25 one-time. Register at play.google.com/console.
+- [x] **Apple Developer Program enrollment.** Done — Cedar Rock Holdings LLC, Team 7964RAMZJL, ASC app ID 6761841087, bundle com.yourinplace.app.
+- [x] **Google Play Developer account.** Done — Cedar Rock Holdings org, internal testing track live (versionCode 17).
 - [ ] **App Store screenshots & metadata.** Both stores need: app name, subtitle, description, keywords, screenshots (multiple device sizes), category selection. Category: "Health & Fitness" or "Lifestyle." Age rating questionnaire (both stores).
 - [ ] **TestFlight / internal testing track.** Before public release, deploy to TestFlight (iOS) and Google Play internal testing track. Get Debbie, Cathyrine, and a few caregivers testing the native builds. Iterate on any WebView-specific bugs.
 - [ ] **App review preparation.** Apple review is strict — have a demo account ready (they need to test without creating a real account). Document any features that require specific setup (location, push permissions). Prepare responses for common rejection reasons: login requirement justification, data collection justification, in-app purchase policy compliance.
@@ -755,9 +763,9 @@
 
 ### Pete's Action Items — App Store
 
-- [ ] **Apple Developer Program** — Enrollment submitted, under review. D-U-N-S 106784345, registering as organization. Apple review typically takes 1-2 business days; may request a phone call to verify.
+- [x] **Apple Developer Program** — Enrolled. (D-U-N-S 106784345.)
 - [ ] **Google Play Console** — Register at play.google.com/console ($25 one-time).
-- [ ] **Privacy policy page** — Can be a Google Doc or hosted page for now. Both stores need the URL during submission. Must cover: what data is collected, how it's used, third-party sharing (Stripe, Checkr, Resend), data retention, deletion rights.
+- [x] **Privacy policy page** — Live at https://yourinplace.com/privacy (v1.105.4), rendering the lawyer-reviewed 2026-07-07 policy. ⚠️ ONE GAP FOR THE LAWYER: that policy predates **Cloudflare R2** going live on 7/11, so it does not name R2 as a storage processor — and R2 is where ID photos and selfies are stored. It DOES already disclose Stripe, Checkr, Resend, Twilio, Sentry, Firebase, Anthropic, Google, Apple and Railway. On the 7/31 agenda.
 - [ ] **App Store screenshots** — Need iPhone 6.7" (Pro Max), 6.1" (Pro), and iPad if supporting tablet. Google needs phone screenshots. Can use simulator captures or a tool like Fastlane snapshot.
 
 ### Dev Guidelines — What Not to Do

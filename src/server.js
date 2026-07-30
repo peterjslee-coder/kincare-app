@@ -407,7 +407,7 @@ app.use("/api/legal", require("./routes/legal"));
 app.use("/api/media", require("./routes/media"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.105.3";
+const APP_VERSION = "1.105.4";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });
@@ -496,10 +496,17 @@ app.get("/kindred", async (req, res) => {
   }
 });
 
-// ─── Privacy policy (required by Google Play for RECORD_AUDIO permission) ───
-app.get("/privacy", (req, res) => {
-  res.sendFile(path.join(__dirname, "../public/privacy.html"));
-});
+// ─── Public legal pages (v1.105.4) ───
+// /terms, /privacy, /caregiver-agreement, /client-services, /legal — rendered from
+// the lawyer-reviewed `legal_documents` rows users already accept in-app. Both app
+// stores need a policy URL a reviewer can open with no session.
+//
+// This REPLACES a static public/privacy.html last updated April 2 2026, which
+// described the Kindred voice companion (killed in the July 7 review), named
+// ElevenLabs, and omitted nearly every processor the platform actually uses. That
+// stale page was the URL registered with Google Play. Mounted before the SPA
+// catch-all; any type with no active document falls through to the app.
+app.use(require("./routes/publicLegal"));
 
 // ─── Catch-all: serve frontend for any non-API route ───
 app.get("*", (req, res) => {
