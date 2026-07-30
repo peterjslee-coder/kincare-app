@@ -760,6 +760,36 @@
 - [ ] **Camera & photo library access.** Current photo upload uses `<input type="file">`. Upgrade to Capacitor Camera plugin for native — gives direct camera access, photo library picker, and built-in crop/resize. This addresses the "photo upload crop + auto-resize" bug in the backlog.
 - [ ] **Offline support / graceful degradation.** The service worker handles caching for PWA, but Capacitor apps should handle airplane mode gracefully. Queue failed API calls and retry on reconnect. Show clear "offline" indicators. Messages could queue locally and send when back online.
 
+### Store rules audit — re-checked against the LIVE guidelines 2026-07-30
+
+> Previous entries in this section were written against 2025-era rules. Everything below was
+> checked against Apple's and Google's current published requirements on 7/30/2026, and against
+> this repo. Sources are in `Store_Review_Plan_2026-07-30.md`.
+
+**Platform deadlines — where we actually stand**
+
+| Requirement | Deadline | Status |
+|---|---|---|
+| Google Play target API 36 (Android 16) | **Aug 31, 2026** (extension to Nov 1 available) | ✅ **MET** — `android/variables.gradle` already has `targetSdkVersion = 36`, `compileSdkVersion = 36` |
+| Apple: build with **Xcode 26 / iOS 26 SDK** | **In force since Apr 28, 2026** | ⚠️ **LIKELY met — CONFIRM.** `project.pbxproj` has `LastUpgradeCheck = 2640` (Xcode 26.4), so the project has been opened in Xcode 26. Needs Pete to confirm the Xcode version that will produce the upload build. |
+| Apple: respond to **updated age-rating questions** | **Jan 31, 2026 — PASSED** | ❌ **UNVERIFIED, possibly blocking.** Apple's wording: developers must respond "to avoid submission interruptions." Pete's hands, App Store Connect. |
+| Play: **Health apps declaration** | Aug 31, 2024 — long passed | ❌ **NEEDS UPDATING.** Mandatory for *every* app including closed-testing tracks, so one probably exists — but **Care Tasks (v1.99, July) added medication scheduling/reminders/adherence, which triggers Play's "Medication and Treatment Management" category.** The declaration must be re-answered. |
+| iOS deployment target | n/a | ✅ `IPHONEOS_DEPLOYMENT_TARGET = 15.0` — that's the minimum OS supported, unrelated to the SDK mandate. No action. |
+| Capacitor version | n/a | ✅ 8.3.0, current generation. |
+
+**New gaps found in this audit**
+
+- [ ] **P1 — `PrivacyInfo.xcprivacy` is missing at the app level.** Required-reason API declarations have been mandatory since May 1 2024, and a missing manifest is what produces the **ITMS-91053 "Missing API declaration"** email after upload. `@capacitor/ios` ships two manifests (`Capacitor/` and `CapacitorCordova/`) but **both declare empty arrays** — they cover nothing. The app has no manifest of its own and `PrivacyInfo` appears **zero** times in `project.pbxproj`. Add an app-level manifest declaring `NSPrivacyAccessedAPITypes` (UserDefaults is the usual one for this stack) plus `NSPrivacyCollectedDataTypes`, and add it to the App target's Copy Bundle Resources. Cheap to add, annoying to discover after an upload.
+- [ ] **P2 — EU trader status (Digital Services Act).** Apps without verified trader status are removed from EU storefronts. **Scope decision: a US-only first release avoids this entirely.** Decide territory before submitting rather than after.
+- [ ] **P2 — verify the D-U-N-S business-name problem is resolved.** An older handoff recorded D-U-N-S 106784345 as having the wrong business name and blocking Google Play. Apple enrolment has since completed, which suggests it was fixed, but confirm in Play Console before relying on it.
+
+**Rules re-confirmed in our favour — do not spend engineering time here**
+
+- **Payments are correct as built.** Guideline **3.1.3(e)** is not merely permissive, it is *mandatory*: "If your app enables people to purchase physical goods or services that will be consumed outside of the app, you **must use purchase methods other than in-app purchase**." Care visits are real-world services, so Stripe is the required approach, not a tolerated one. Say so plainly in the reviewer notes; misreading this is a common reviewer error, not a defect in the app.
+- **4.8 Login Services** requires an alternative that "allows users to keep their email address private." That is exactly the Hide My Email path, and it is exactly what v1.105.5 fixed — this would have been a rejection.
+- **5.1.1(v)** requires in-app account deletion where accounts can be created. Present, with UI.
+- **⚠️ CORRECTION to an earlier note in this file:** the bundled-asset migration was described as "probably required for approval" under 4.2 / 2.5.2. **That was overstated.** 4.2 asks for "features, content, and UI that elevate it beyond a repackaged website" — and this app already has direct-APNs push, universal links, passkeys/biometrics and camera integration, which is precisely what distinguishes it from a web wrapper. 2.5.2 targets downloading and executing code, which is not what loading a remote URL means here. The migration is still worth doing (offline behaviour, launch performance, and better optics for a reviewer who pokes at it) but it is **not** the gate it was made out to be, and it should not block submission.
+
 ### Phase 3 — Store Submission
 
 - [x] **Apple Developer Program enrollment.** Done — Cedar Rock Holdings LLC, Team 7964RAMZJL, ASC app ID 6761841087, bundle com.yourinplace.app.

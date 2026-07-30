@@ -73,6 +73,29 @@ describe("iOS configuration", () => {
     for (const s of strings) expect(s.length).toBeGreaterThan(40);
   });
 
+  test("a privacy manifest exists and is well-formed", () => {
+    // Required-reason API declarations are mandatory since 2024-05-01; a missing manifest is
+    // what triggers the ITMS-91053 "Missing API declaration" email after upload. Note that
+    // @capacitor/ios ships two manifests of its own but both declare EMPTY arrays, so they
+    // cover nothing — the app needs its own.
+    const manifest = read("ios/App/App/PrivacyInfo.xcprivacy");
+    expect(manifest).toContain("NSPrivacyAccessedAPICategoryUserDefaults");
+    expect(manifest).toContain("CA92.1");
+    expect(manifest).toContain("NSPrivacyCollectedDataTypeHealth");
+    expect(manifest).toMatch(/<key>NSPrivacyTracking<\/key>\s*<false\/>/);
+  });
+
+  // ⚠️ OPEN ITEM — PETE'S HANDS, one drag in Xcode.
+  // A manifest sitting in the folder is NOT shipped: it has to be a member of the App
+  // target's "Copy Bundle Resources" build phase, or the upload still gets ITMS-91053 —
+  // the exact silent-failure shape this repo keeps hitting. Adding it means editing
+  // project.pbxproj, which is not worth hand-patching from a sandbox (a malformed pbxproj
+  // means Xcode won't open the project at all). So: drag PrivacyInfo.xcprivacy into the App
+  // target in Xcode, then delete the `.skip` below and this comment.
+  test.skip("privacy manifest is a member of the App target (pending Xcode step)", () => {
+    expect(pbxproj).toContain("PrivacyInfo.xcprivacy");
+  });
+
   // ⚠️ OPEN ITEM (A2 in the plan) — deliberately skipped, not deleted.
   // The client calls navigator.geolocation in SIX places (AreaMap, Caregivers, and four
   // sites in CaretakerHub including GPS check-in), but NSLocationWhenInUseUsageDescription
