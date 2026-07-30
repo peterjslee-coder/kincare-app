@@ -10,6 +10,7 @@ const { calculateSessionCost, isShortNotice } = require("../utils/rateCalculator
 const { getNowInZone, getTodayStringInZone, buildDateTimeInZone } = require("../utils/timezone");
 const { geofenceEvidence } = require("../utils/geocode");
 const { hasActiveVouch } = require("../utils/vouches");
+const { decideCancellationCharge } = require("../utils/cancellationFee");
 const { MODEL_HAIKU } = require("../utils/aiModels");
 
 const router = express.Router();
@@ -2654,22 +2655,43 @@ router.put("/:id/cancel", async (req, res) => {
     // When that policy is real, this becomes a PARTIAL capture rather than a void:
     // captureSessionPayment(id, feeCents) already supports it, because manual capture is
     // exactly the right primitive for "keep some of the hold, release the rest".
-    if (session.stripe_payment_intent_id && session.payment_status === "authorized") {
+    // v1.105.15 — the published Client Services Agreement decides this, not this handler.
+    // See src/utils/cancellationFee.js for the clauses and why only a CLIENT cancelling
+    // late is ever charged.
+    let charge = { action: "none", feePercent: 0, reason: "not_evaluated" };
+    try {
+      charge = await decideCancellationCharge(db, {
+        cancelledBy,
+        isLateCancel,
+        paymentIntentId: session.stripe_payment_intent_id,
+        paymentStatus: session.payment_status,
+        authorizedAmountCents: session.authorized_amount,
+      });
+    } catch (e) {
+      console.error("[sessions] cancellation charge decision failed:", e.message);
+      captureException(e, { where: "sessions: cancellation charge decision", sessionId: req.params.id });
+      // Fall through with action 'none': leave the hold alone rather than guess. An
+      // untouched hold expires on its own in about a week. A guessed capture takes money.
+    }
+
+    if (charge.action !== "none") {
       try {
         // Lazy require: accountability.js pulls in this router's siblings, and a top-level
         // require here creates a cycle. Same pattern as the capture call at check-out.
-        const { voidSessionPayment } = require("./accountability");
-        const voided = await voidSessionPayment(req.params.id);
-        if (voided?.error) {
-          // Don't fail the cancellation over this. The session IS cancelled; the hold will
-          // expire by itself. Losing the cancel because Stripe hiccuped would be worse —
-          // the caregiver would still be expected at the door.
-          console.warn(`[sessions] Hold not released for ${req.params.id.slice(0, 8)}: ${voided.error}`);
-          captureException(new Error(`void-on-cancel failed: ${voided.error}`), { sessionId: req.params.id });
+        const { voidSessionPayment, captureSessionPayment } = require("./accountability");
+        const result = charge.action === "capture"
+          ? await captureSessionPayment(req.params.id, charge.amountCents)
+          : await voidSessionPayment(req.params.id);
+        if (result?.error) {
+          // Don't fail the cancellation over this. The session IS cancelled; an untouched
+          // hold expires by itself. Losing the cancel because Stripe hiccuped would be
+          // worse — the caregiver would still be expected at the door.
+          console.warn(`[sessions] ${charge.action} failed for ${req.params.id.slice(0, 8)}: ${result.error}`);
+          captureException(new Error(`cancel-${charge.action} failed: ${result.error}`), { sessionId: req.params.id });
         }
       } catch (e) {
-        console.error("[sessions] voidSessionPayment threw on cancel:", e.message);
-        captureException(e, { where: "sessions: void on cancel", sessionId: req.params.id });
+        console.error(`[sessions] ${charge.action} threw on cancel:`, e.message);
+        captureException(e, { where: "sessions: hold settlement on cancel", sessionId: req.params.id });
       }
     }
 
@@ -2719,7 +2741,11 @@ router.put("/:id/cancel", async (req, res) => {
       // the response so the client can warn "this is a late cancellation", NOT so it can
       // claim money is owed. Do not wire a charge to this without a stated policy.
       chargeApplies: cancelledBy === "family" && isLateCancel,
-      holdReleased: !!(session.stripe_payment_intent_id && session.payment_status === "authorized"),
+      // What actually happened to the hold, so the client can tell the truth in the
+      // confirmation screen instead of guessing from chargeApplies.
+      holdAction: charge.action,
+      cancellationFeePercent: charge.feePercent,
+      cancellationFeeCents: charge.action === "capture" ? charge.amountCents : 0,
     });
   } catch (err) {
     console.error("Cancel session error:", err);

@@ -39,10 +39,19 @@ describe("cancelling a session releases the payment hold", () => {
     expect(cancelHandler).toMatch(/voidSessionPayment/);
   });
 
-  test("it only voids when a hold actually exists", () => {
+  test("it only touches Stripe when there is something to settle", () => {
     // Calling void unconditionally would throw for the common case — a session cancelled
-    // more than 25 hours out, which never had a PaymentIntent at all.
-    expect(cancelHandler).toMatch(/stripe_payment_intent_id\s*&&\s*session\.payment_status === "authorized"/);
+    // more than 25 hours out, which never had a PaymentIntent at all. The 'none' action
+    // covers that case and the already-settled ones.
+    expect(cancelCode).toMatch(/charge\.action !== "none"/);
+  });
+
+  test("the handler does NOT decide the charge itself", () => {
+    // v1.105.15: the decision is a contract question, not a routing question. It lives in
+    // cancellationFee.js next to the quoted clauses so the rule and its source stay
+    // together. If someone reintroduces an inline `isLateCancel ? capture : void` here,
+    // the contract asymmetry (only a CLIENT pays) is exactly what gets lost.
+    expect(cancelCode).toMatch(/decideCancellationCharge/);
   });
 
   test("a Stripe failure does not abort the cancellation", () => {
@@ -53,11 +62,17 @@ describe("cancelling a session releases the payment hold", () => {
     expect(voidBlock).toMatch(/captureException/);
   });
 
-  test("nothing is charged on a late cancel", () => {
-    // There is a 24h late-cancel rule here, but no stated policy behind it. Until there is,
-    // the hold is released for everyone. If this ever becomes a partial capture, that must
-    // be a deliberate change with a policy attached — not a quiet edit.
-    expect(cancelCode).not.toMatch(/captureSessionPayment/);
+  test("a capture is possible, but only via the contract decision", () => {
+    // v1.105.14 asserted the opposite — that nothing could ever be captured here — because
+    // at that point no stated policy existed to charge under. The published Client Services
+    // Agreement does state one, so this now asserts the narrower and more useful thing:
+    // capture is reachable, and only through decideCancellationCharge.
+    expect(cancelCode).toMatch(/captureSessionPayment/);
+    const captureIdx = cancelCode.indexOf("captureSessionPayment");
+    const decideIdx = cancelCode.indexOf("decideCancellationCharge");
+    expect(decideIdx).toBeGreaterThan(-1);
+    expect(decideIdx).toBeLessThan(captureIdx);
+    expect(cancelCode).toMatch(/charge\.action === "capture"/);
   });
 });
 
