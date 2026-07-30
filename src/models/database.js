@@ -1710,6 +1710,17 @@ async function initializeDatabase() {
         `ALTER TABLE caregiver_profiles ALTER COLUMN is_available SET DEFAULT 0`,
       ],
     },
+    {
+      // v1.105.8 — signup age gate. The app collected no date of birth anywhere and
+      // enforced no minimum age, while the Privacy Policy claimed under-13s weren't
+      // intended users. Both app stores make you DECLARE an age rating, which is a
+      // statement about who can use the app, so it has to be true before it's declared.
+      // Nullable on purpose: existing accounts predate this and must not be locked out.
+      id: "012_users_date_of_birth",
+      statements: [
+        `ALTER TABLE users ADD COLUMN IF NOT EXISTS date_of_birth DATE`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

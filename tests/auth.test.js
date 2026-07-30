@@ -23,6 +23,7 @@ describe('Auth Routes', () => {
           password: 'SecurePass1!',
           firstName: 'Test',
           lastName: 'User',
+          dateOfBirth: '1985-06-15',
           role: 'family',
         });
 
@@ -52,6 +53,7 @@ describe('Auth Routes', () => {
           password: 'SecurePass1!',
           firstName: 'Test',
           lastName: 'User',
+          dateOfBirth: '1985-06-15',
         });
 
       expect(res.status).toBe(400);
@@ -65,6 +67,7 @@ describe('Auth Routes', () => {
           password: '123',
           firstName: 'Test',
           lastName: 'User',
+          dateOfBirth: '1985-06-15',
         });
 
       expect(res.status).toBe(400);
@@ -90,6 +93,7 @@ describe('Auth Routes', () => {
           password: 'SecurePass1!',
           firstName: 'Test',
           lastName: 'User',
+          dateOfBirth: '1985-06-15',
         });
 
       expect(res.status).toBe(409);
@@ -104,6 +108,7 @@ describe('Auth Routes', () => {
           password: 'SecurePass1!',
           firstName: 'Test',
           lastName: 'User',
+          dateOfBirth: '1985-06-15',
           role: 'admin',
         });
 
@@ -121,6 +126,7 @@ describe('Auth Routes', () => {
           password: 'SecurePass1!',
           firstName: 'Verify',
           lastName: 'Me',
+          dateOfBirth: '1985-06-15',
         });
 
       // Fire-and-forget, so give it a tick
@@ -203,6 +209,7 @@ describe('Auth Routes', () => {
           password: 'SecurePass1!',
           firstName: 'Me',
           lastName: 'User',
+          dateOfBirth: '1985-06-15',
         });
 
       const token = regRes.body.token;
@@ -242,6 +249,7 @@ describe('Auth Routes', () => {
           password: 'SecurePass1!',
           firstName: 'Original',
           lastName: 'Name',
+          dateOfBirth: '1985-06-15',
         });
 
       const token = regRes.body.token;
@@ -265,6 +273,7 @@ describe('Auth Routes', () => {
           password: 'SecurePass1!',
           firstName: 'Empty',
           lastName: 'Update',
+          dateOfBirth: '1985-06-15',
         });
 
       const res = await request(app)

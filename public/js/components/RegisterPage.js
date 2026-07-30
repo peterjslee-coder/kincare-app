@@ -4,7 +4,7 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
   const [step, setStep] = useState(prefilledRole ? 2 : 1); // Step 1 = role picker, Step 2 = basic info
   const isOAuthSignup = !!oauthSignupCode;
   const [formData, setFormData] = useState({
-    firstName: prefilledFirstName || '', lastName: prefilledLastName || '', email: prefilledEmail || '', password: '',
+    firstName: prefilledFirstName || '', lastName: prefilledLastName || '', email: prefilledEmail || '', password: '', dateOfBirth: '',
     confirmPassword: '',
     phone: '',
   });
@@ -51,6 +51,7 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
     const errs = [];
     if (!formData.firstName.trim()) errs.push('First name');
     if (!formData.lastName.trim()) errs.push('Last name');
+    if (!formData.dateOfBirth) errs.push('Date of birth');
     if (!formData.email.trim() || !isValidEmail(formData.email)) errs.push('Valid email');
     if (!formData.phone.trim()) errs.push('Phone number');
     if (formData.password.length < 8 || !/[A-Z]/.test(formData.password) || !/[0-9]/.test(formData.password) || !/[^A-Za-z0-9]/.test(formData.password)) errs.push('Password must meet all requirements');
@@ -60,7 +61,7 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
   };
 
   const isBasicInfoValid = () => {
-    return formData.firstName.trim() && formData.lastName.trim() &&
+    return formData.firstName.trim() && formData.lastName.trim() && formData.dateOfBirth &&
            isValidEmail(formData.email) && formData.phone.trim() &&
            formData.password.length >= 8 && /[A-Z]/.test(formData.password) && /[0-9]/.test(formData.password) && /[^A-Za-z0-9]/.test(formData.password) &&
            formData.confirmPassword && formData.password === formData.confirmPassword;
@@ -113,8 +114,8 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
     try {
       const endpoint = isOAuthSignup ? '/api/oauth/complete-signup' : '/api/auth/register';
       const payload = isOAuthSignup
-        ? { code: oauthSignupCode, role, firstName: formData.firstName, lastName: formData.lastName, phone: normalizePhone(formData.phone), password: formData.password }
-        : { email: formData.email, password: formData.password, firstName: formData.firstName, lastName: formData.lastName, phone: normalizePhone(formData.phone), role, ...(authHint ? { authHint } : {}), ...(signupToken ? { signupToken } : {}) };
+        ? { code: oauthSignupCode, role, firstName: formData.firstName, lastName: formData.lastName, phone: normalizePhone(formData.phone), password: formData.password, dateOfBirth: formData.dateOfBirth }
+        : { email: formData.email, password: formData.password, firstName: formData.firstName, lastName: formData.lastName, phone: normalizePhone(formData.phone), dateOfBirth: formData.dateOfBirth, role, ...(authHint ? { authHint } : {}), ...(signupToken ? { signupToken } : {}) };
       const response = await apiFetch(endpoint, {
         method: 'POST',
         body: JSON.stringify(payload)
@@ -354,7 +355,7 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
             <strong>Next:</strong> The user would land on their {roleLabel} dashboard with a First Steps checklist guiding them to complete their profile.
           </div>
           <div style={{ display: 'flex', gap: '12px' }}>
-            <button onClick={() => { setSandboxPreview(false); setTrack(null); setStep(1); setFormData({ firstName: '', lastName: '', email: '', password: '', confirmPassword: '', phone: '' }); }} className="btn btn-outline" style={{ flex: 1 }}>Start Over</button>
+            <button onClick={() => { setSandboxPreview(false); setTrack(null); setStep(1); setFormData({ firstName: '', lastName: '', email: '', password: '', confirmPassword: '', phone: '', dateOfBirth: '' }); }} className="btn btn-outline" style={{ flex: 1 }}>Start Over</button>
             <button onClick={() => onNavigate('splash')} className="btn btn-primary" style={{ flex: 1 }}>Exit Sandbox</button>
           </div>
         </div>
@@ -606,6 +607,16 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
             <div className="form-group">
               <label>Last Name {showFieldErrors && !formData.lastName.trim() && <span style={{ color: 'var(--color-error)', fontSize: 12 }}>*required</span>}</label>
               <input type="text" value={formData.lastName} onChange={(e) => { setFormData(p => ({ ...p, lastName: e.target.value })); setShowFieldErrors(false); }} placeholder="Your last name" style={showFieldErrors && !formData.lastName.trim() ? { borderColor: 'var(--color-error)', background: 'var(--bg-accent-light)' } : {}} />
+            </div>
+            {/* v1.105.8 — age gate. The app collected no date of birth anywhere and enforced no
+                minimum age, while claiming under-13s weren't intended users. Both app stores make
+                you declare an age rating, so it has to be true. Server enforces; this is the form. */}
+            <div className="form-group">
+              <label>Date of Birth {showFieldErrors && !formData.dateOfBirth && <span style={{ color: 'var(--color-error)', fontSize: 12 }}>*required</span>}</label>
+              <input type="date" value={formData.dateOfBirth} onChange={(e) => { setFormData(p => ({ ...p, dateOfBirth: e.target.value })); setShowFieldErrors(false); }} style={showFieldErrors && !formData.dateOfBirth ? { borderColor: 'var(--color-error)', background: 'var(--bg-accent-light)' } : {}} />
+              <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>
+                You must be at least 13 to have an InPlace account. A parent or guardian can add a younger family member to a care team without an account.
+              </div>
             </div>
             <div className="form-group">
               <label>Email {showFieldErrors && (!formData.email.trim() || !isValidEmail(formData.email)) && <span style={{ color: 'var(--color-error)', fontSize: 12 }}>*required</span>}</label>

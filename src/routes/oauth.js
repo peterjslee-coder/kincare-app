@@ -594,6 +594,15 @@ router.post("/complete-signup", async (req, res) => {
     return res.status(400).json({ error: "Invalid role" });
   }
 
+  // v1.105.8 — the age gate has to cover EVERY door that creates a user, not just
+  // /api/auth/register. Signing up with Google or Apple lands here, and an ungated
+  // second entrance would make the store age declaration untrue.
+  const { checkSignupAge } = require("../utils/age");
+  const ageCheck = checkSignupAge(req.body.dateOfBirth);
+  if (!ageCheck.ok) {
+    return res.status(400).json({ error: ageCheck.message, reason: ageCheck.reason });
+  }
+
   try {
     const db = await getDb();
     const bcrypt = require("bcryptjs");
@@ -606,9 +615,9 @@ router.post("/complete-signup", async (req, res) => {
     // Email is already verified by Google/Apple — no confirmation email needed.
     // But account_approved defaults to false — admin must still approve.
     await db.prepare(`
-      INSERT INTO users (id, email, password_hash, role, roles, first_name, last_name, phone, avatar_url, email_verified, email_verified_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW())
-    `).run(userId, data.email, passwordHash, role, roles, finalFirst, finalLast, phone || null, data.avatarUrl);
+      INSERT INTO users (id, email, password_hash, role, roles, first_name, last_name, phone, avatar_url, email_verified, email_verified_at, date_of_birth)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW(), ?)
+    `).run(userId, data.email, passwordHash, role, roles, finalFirst, finalLast, phone || null, data.avatarUrl, req.body.dateOfBirth || null);
 
     // Link OAuth account
     await db.prepare(

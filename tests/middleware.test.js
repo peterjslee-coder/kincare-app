@@ -109,9 +109,33 @@ describe('Validation Middleware', () => {
         password: 'StrongPass1!',
         firstName: 'Test',
         lastName: 'User',
+        dateOfBirth: '1985-06-15',
       });
       validateRegister(req, res, next);
       expect(next).toHaveBeenCalled();
+    });
+
+    // v1.105.8 — age gate. Pinned here as well as in age.test.js because THIS is the
+    // middleware every /api/auth/register call passes through.
+    it('should reject registration with no date of birth', () => {
+      const { req, res, next } = mockReqRes({
+        email: 'test@example.com', password: 'StrongPass1!', firstName: 'Test', lastName: 'User',
+      });
+      validateRegister(req, res, next);
+      expect(next).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(400);
+    });
+
+    it('should reject a signup under 13', () => {
+      const tooYoung = new Date();
+      tooYoung.setFullYear(tooYoung.getFullYear() - 12);
+      const { req, res, next } = mockReqRes({
+        email: 'kid@example.com', password: 'StrongPass1!', firstName: 'Too', lastName: 'Young',
+        dateOfBirth: tooYoung.toISOString().slice(0, 10),
+      });
+      validateRegister(req, res, next);
+      expect(next).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(400);
     });
 
     it('should reject missing email', () => {
@@ -141,6 +165,7 @@ describe('Validation Middleware', () => {
         password: 'StrongPass1!',
         firstName: 'Test',
         lastName: 'User',
+        dateOfBirth: '1985-06-15',
       });
       validateRegister(req, res, next);
       expect(next).toHaveBeenCalled();

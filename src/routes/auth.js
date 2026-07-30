@@ -203,9 +203,9 @@ router.post("/register", validateRegister, async (req, res) => {
 
     const roles = JSON.stringify([role]);
     await db.prepare(`
-      INSERT INTO users (id, email, password_hash, role, roles, first_name, last_name, phone, email_verified, is_tester)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(id, email, passwordHash, role, roles, firstName, lastName, phone || null, isTestAccount ? 1 : 0, isTestAccount ? 1 : 0);
+      INSERT INTO users (id, email, password_hash, role, roles, first_name, last_name, phone, email_verified, is_tester, date_of_birth)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, email, passwordHash, role, roles, firstName, lastName, phone || null, isTestAccount ? 1 : 0, isTestAccount ? 1 : 0, req.body.dateOfBirth || null);
 
     const user = { id, email, role, roles: [role], firstName, lastName, emailVerified: isTestAccount };
     const token = generateToken(user);

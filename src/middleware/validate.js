@@ -71,10 +71,18 @@ function isValidLength(str, max) {
  * Middleware: validate registration input
  */
 function validateRegister(req, res, next) {
-  const { email, password, firstName, lastName, phone } = req.body;
+  const { email, password, firstName, lastName, phone, dateOfBirth } = req.body;
 
   if (!email || !password || !firstName || !lastName) {
     return res.status(400).json({ error: "Missing required fields: email, password, firstName, lastName" });
+  }
+
+  // v1.105.8 — age gate. See src/utils/age.js for why the floor is 13. Enforced on the
+  // SERVER, not just in the form: the client field is a convenience, this is the rule.
+  const { checkSignupAge } = require("../utils/age");
+  const ageCheck = checkSignupAge(dateOfBirth);
+  if (!ageCheck.ok) {
+    return res.status(400).json({ error: ageCheck.message, reason: ageCheck.reason });
   }
 
   if (!isValidEmail(email)) {

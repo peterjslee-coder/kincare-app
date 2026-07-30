@@ -309,6 +309,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
       if (!form.firstName.trim()) errs.firstName = 'Required';
       if (!form.lastName.trim()) errs.lastName = 'Required';
       if (!form.email.trim()) errs.email = 'Required';
+      if (!form.dateOfBirth) errs.dateOfBirth = 'Required';
       if (!form.password || form.password.length < 8) errs.password = 'Minimum 8 characters';
       if (form.password !== form.confirmPassword) errs.confirmPassword = 'Passwords do not match';
     }
@@ -372,6 +373,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
       const regBody = {
         email: form.email, password: form.password,
         firstName: form.firstName, lastName: form.lastName,
+        dateOfBirth: form.dateOfBirth,   // v1.105.8 — age gate; server enforces >= 13
         role: inviteInfo.role || 'caregiver',
       };
       if (signupToken) regBody.signupToken = signupToken;
@@ -972,6 +974,19 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
                 <input type="password" style={errors.confirmPassword ? inputErrorStyle : inputStyle} value={form.confirmPassword}
                   onChange={(e) => updateForm('confirmPassword', e.target.value)} placeholder="Confirm" />
                 {errors.confirmPassword && <div style={errorStyle}>{errors.confirmPassword}</div>}
+              </div>
+            </div>
+            {/* v1.105.8 — age gate. Account creation happens HERE, but the Checkr step (step 4)
+                was the only place asking for a date of birth, so gating /api/auth/register on it
+                would have broken caregiver signup outright. Same `dateOfBirth` form key, so the
+                later step arrives pre-filled rather than asking twice. */}
+            <div style={fieldGroup}>
+              <label style={labelStyle}>Date of Birth *</label>
+              <input type="date" style={errors.dateOfBirth ? inputErrorStyle : inputStyle}
+                value={form.dateOfBirth} onChange={(e) => updateForm('dateOfBirth', e.target.value)} />
+              {errors.dateOfBirth && <div style={errorStyle}>{errors.dateOfBirth}</div>}
+              <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>
+                You must be at least 13 to have an InPlace account.
               </div>
             </div>
             {errors.submit && <div style={{ ...errorStyle, marginBottom: '12px' }}>{errors.submit}</div>}
