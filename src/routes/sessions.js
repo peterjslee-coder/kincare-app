@@ -2634,6 +2634,79 @@ router.put("/:id/cancel", async (req, res) => {
       }
     }
 
+    // ─── v1.105.14 — release the payment hold ───
+    //
+    // Nobody pre-pays for care. `authorizeSessionPayment` creates the PaymentIntent with
+    // capture_method:'manual' — a HOLD — and a poller places it 23–25 hours before the
+    // visit (accountability.js). Capture happens only at check-out. So a session cancelled
+    // more than a day out has no money attached at all, and one cancelled inside that
+    // window has an uncaptured authorization sitting on the family's card.
+    //
+    // Until now nothing released it. voidSessionPayment existed but was called from
+    // exactly one place: the caregiver-no-show poller. A family who cancelled the evening
+    // before a visit was left staring at a pending charge on their card for care that
+    // never happened, for the ~7 days Stripe takes to expire the hold on its own.
+    //
+    // We void on EVERY cancellation, including late ones. There is a 24-hour late-cancel
+    // rule in this handler, but it computes `chargeApplies` and `feeCents` and nothing
+    // anywhere reads either — it is a policy that exists only as a variable name. Charging
+    // someone under a policy the product has never stated is worse than not charging them.
+    // When that policy is real, this becomes a PARTIAL capture rather than a void:
+    // captureSessionPayment(id, feeCents) already supports it, because manual capture is
+    // exactly the right primitive for "keep some of the hold, release the rest".
+    if (session.stripe_payment_intent_id && session.payment_status === "authorized") {
+      try {
+        // Lazy require: accountability.js pulls in this router's siblings, and a top-level
+        // require here creates a cycle. Same pattern as the capture call at check-out.
+        const { voidSessionPayment } = require("./accountability");
+        const voided = await voidSessionPayment(req.params.id);
+        if (voided?.error) {
+          // Don't fail the cancellation over this. The session IS cancelled; the hold will
+          // expire by itself. Losing the cancel because Stripe hiccuped would be worse —
+          // the caregiver would still be expected at the door.
+          console.warn(`[sessions] Hold not released for ${req.params.id.slice(0, 8)}: ${voided.error}`);
+          captureException(new Error(`void-on-cancel failed: ${voided.error}`), { sessionId: req.params.id });
+        }
+      } catch (e) {
+        console.error("[sessions] voidSessionPayment threw on cancel:", e.message);
+        captureException(e, { where: "sessions: void on cancel", sessionId: req.params.id });
+      }
+    }
+
+    // ─── v1.105.14 — actually TELL the other person ───
+    //
+    // This handler wrote an activity-feed row and emitted a websocket event, and that was
+    // all. The websocket only reaches someone with the app open. So a caregiver with their
+    // phone in their pocket, already driving, got nothing — and arrived at the home of a
+    // vulnerable person who was not expecting them. That is the failure this fixes; it
+    // matters more than the money above.
+    //
+    // Deliberately NOT wrapped in the emitToUser check: the whole point is that push is
+    // the channel that works when the socket isn't connected.
+    const pushUserId = cancelledBy === "caregiver" ? session.family_user_id : session.caregiver_user_id;
+    if (pushUserId) {
+      const when = (() => {
+        try {
+          const d = new Date(session.scheduled_date.split("T")[0] + "T12:00:00");
+          const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+          const t = session.scheduled_time ? ` at ${session.scheduled_time}` : "";
+          return `${months[d.getMonth()]} ${d.getDate()}${t}`;
+        } catch { return "your upcoming visit"; }
+      })();
+
+      // The caregiver-facing copy says "do not travel" explicitly. A cancellation notice
+      // that only states a fact leaves the reader to work out the action; when the action
+      // is "turn the car around", say it.
+      const isForCaregiver = cancelledBy !== "caregiver";
+      sendPushToUser(pushUserId, {
+        title: isForCaregiver ? "Visit cancelled" : "Caregiver cancelled",
+        body: isForCaregiver
+          ? `The family cancelled the ${when} visit. Please do not travel to the home.`
+          : `Your caregiver cancelled the ${when} visit.${isLateCancel ? " We're finding a replacement." : ""}`,
+        data: { type: "session_cancelled", sessionId: req.params.id, cancelledBy },
+      }, "session_cancelled").catch(() => {});
+    }
+
     res.json({
       session: updated,
       cancelledBy,
@@ -2642,8 +2715,11 @@ router.put("/:id/cancel", async (req, res) => {
       // Family can review caregiver if caregiver late-cancelled
       canReview: cancelledBy === "caregiver" && isLateCancel,
       cancelledCaregiverId: cancelledBy === "caregiver" ? session.caregiver_id : null,
-      // Family still owes payment if they late-cancelled (only if caregiver was assigned)
+      // ⚠️ ADVISORY ONLY — nothing charges on this, and the hold is voided above. Kept in
+      // the response so the client can warn "this is a late cancellation", NOT so it can
+      // claim money is owed. Do not wire a charge to this without a stated policy.
       chargeApplies: cancelledBy === "family" && isLateCancel,
+      holdReleased: !!(session.stripe_payment_intent_id && session.payment_status === "authorized"),
     });
   } catch (err) {
     console.error("Cancel session error:", err);
