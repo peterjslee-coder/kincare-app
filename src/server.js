@@ -30,9 +30,11 @@ if (!JWT_SECRET) {
 }
 
 // ─── Socket.io Setup ───
-const ALLOWED_ORIGINS = process.env.NODE_ENV === "production"
-  ? ["https://yourinplace.com", "https://www.yourinplace.com"]
-  : ["http://localhost:3001", "http://localhost:3000", "http://127.0.0.1:3001"];
+// v1.105.3 — this used to read NODE_ENV, which is NOT set on Railway, so PRODUCTION
+// was running with the localhost allowlist. Used by BOTH express cors() (below) and
+// Socket.io. Nothing broke only because every caller is same-origin today; see
+// utils/env.js for the derivation and for the App Store / Capacitor caveat.
+const { allowedOrigins: ALLOWED_ORIGINS } = require("./utils/env");
 const io = new Server(server, { cors: { origin: ALLOWED_ORIGINS, credentials: true } });
 
 // JWT auth middleware for socket connections
@@ -405,7 +407,7 @@ app.use("/api/legal", require("./routes/legal"));
 app.use("/api/media", require("./routes/media"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.105.2";
+const APP_VERSION = "1.105.3";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });
@@ -413,10 +415,18 @@ app.get("/api/version", (req, res) => {
 
 // ─── Health check ───
 app.get("/api/health", (req, res) => {
+  const { environment, cookiesSecure } = require("./utils/env");
   res.json({
     status: "ok",
     service: "InPlace API",
     version: APP_VERSION,
+    // v1.105.3 — surfaced deliberately. The NODE_ENV bug went unnoticed for months
+    // because the deployment's own idea of "am I production?" was invisible from
+    // outside. These two booleans make it checkable in one request, forever.
+    // Neither is a secret: `environment` is a label, `secureCookies` says whether
+    // the Secure flag is being set — anyone can already observe that in DevTools.
+    environment,
+    secureCookies: cookiesSecure,
     timestamp: new Date().toISOString(),
   });
 });

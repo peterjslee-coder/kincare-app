@@ -6,6 +6,7 @@ const { getDb } = require("../models/database");
 const { generateToken, setAuthCookie, setCsrfCookie, generateRefreshToken, setRefreshCookie } = require("../middleware/auth");
 const { notifyAdmins } = require("./push");
 const { captureException } = require("../utils/sentry");
+const { cookiesSecure } = require("../utils/env");  // v1.105.3 — NODE_ENV is unset on Railway
 
 const router = express.Router();
 
@@ -81,7 +82,7 @@ router.get("/google", (req, res) => {
   const state = crypto.randomBytes(16).toString("hex") + fromAppStateSuffix(req.query.from_app);
 
   // Store state in a short-lived cookie for CSRF protection
-  const isProduction = process.env.NODE_ENV === "production";
+  const isProduction = cookiesSecure;  // v1.105.3 — see utils/env.js
   res.cookie("oauth_state", state, { httpOnly: true, maxAge: 600000, sameSite: "lax", secure: isProduction });
 
   const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GOOGLE_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${scope}&state=${state}&prompt=select_account`;

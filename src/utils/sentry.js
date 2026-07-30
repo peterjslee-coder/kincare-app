@@ -16,7 +16,11 @@ function initSentry() {
     Sentry = require("@sentry/node");
     Sentry.init({
       dsn,
-      environment: process.env.NODE_ENV || "development",
+      // v1.105.3 — was `process.env.NODE_ENV || "development"`, so every PRODUCTION
+      // event arrived tagged `development` (which is how we caught the whole class
+      // of NODE_ENV bugs). Now derived from APP_URL, and it tells prod from staging
+      // instead of merging them. See utils/env.js.
+      environment: require("./env").environment,
       sendDefaultPii: false,
       tracesSampleRate: 0, // errors only, no performance tracing
       beforeSend(event) {

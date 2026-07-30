@@ -1,5 +1,7 @@
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
+// v1.105.3 — deployment shape derived from APP_URL, NOT NODE_ENV (unset on Railway).
+const { cookiesSecure } = require("../utils/env");
 
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) throw new Error("JWT_SECRET environment variable is required");
@@ -151,7 +153,7 @@ function requireAdmin(req, res, next) {
 // shared/unknown device won't silently re-auth. Defaults true (persistent) for
 // callers that don't opt in (OAuth, register, refresh). (v1.98.11)
 function setAuthCookie(res, token, remember = true) {
-  const isProduction = process.env.NODE_ENV === "production";
+  const isProduction = cookiesSecure;  // v1.105.3 — see utils/env.js: NODE_ENV is unset on Railway
   const opts = {
     httpOnly: true,
     secure: isProduction,
@@ -177,7 +179,7 @@ async function generateRefreshToken(userId) {
 }
 
 function setRefreshCookie(res, refreshToken, remember = true) {
-  const isProduction = process.env.NODE_ENV === "production";
+  const isProduction = cookiesSecure;  // v1.105.3 — see utils/env.js: NODE_ENV is unset on Railway
   const opts = {
     httpOnly: true,
     secure: isProduction,
@@ -212,7 +214,7 @@ function clearAuthCookie(res) {
 // Server compares header to cookie. An attacker on a different origin can't read the cookie.
 function setCsrfCookie(res, remember = true) {
   const token = crypto.randomBytes(32).toString("hex");
-  const isProduction = process.env.NODE_ENV === "production";
+  const isProduction = cookiesSecure;  // v1.105.3 — see utils/env.js: NODE_ENV is unset on Railway
   const opts = {
     httpOnly: false, // must be readable by frontend JS
     secure: isProduction,
