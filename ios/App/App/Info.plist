@@ -35,6 +35,13 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<!-- v1.105.7 — location is a SAFETY feature: check-in/out proves the caregiver was at
+	     the home. WHEN-IN-USE only, deliberately: there is no background location, no
+	     NSLocationAlwaysAndWhenInUseUsageDescription, and no background mode. Declaring the
+	     minimum is both honest and the easiest thing to defend in review.
+	     Until this key existed, calling navigator.geolocation on iOS TERMINATED the app. -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>InPlace records your location when you check in and out of a care visit, so the family knows their caregiver arrived at the home. Your location is never collected in the background or when you are not on a visit.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>InPlace uses the camera to photograph receipts, care documents, and your ID for identity verification, and for video calls with your care team.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

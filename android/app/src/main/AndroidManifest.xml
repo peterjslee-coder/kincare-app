@@ -57,6 +57,16 @@
 
     <!-- Permissions -->
 
+    <!-- v1.105.7 — location for visit check-in/out (safety: proves the caregiver was at the
+         home). Capacitor's BridgeWebChromeClient.onGeolocationPermissionsShowPrompt bridges
+         the WebView's navigator.geolocation to a runtime permission request, but it can only
+         request permissions that are DECLARED here — without these two, the WebView call just
+         failed. Foreground only: no ACCESS_BACKGROUND_LOCATION. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <!-- required="false" on purpose: marking GPS hardware as required would REMOVE the app from
+         Play for any device without it. Coarse location is enough to confirm arrival. -->
+    <uses-feature android:name="android.hardware.location.gps" android:required="false" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />

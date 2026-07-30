@@ -96,14 +96,53 @@ describe("iOS configuration", () => {
     expect(pbxproj).toContain("PrivacyInfo.xcprivacy");
   });
 
-  // ⚠️ OPEN ITEM (A2 in the plan) — deliberately skipped, not deleted.
-  // The client calls navigator.geolocation in SIX places (AreaMap, Caregivers, and four
-  // sites in CaretakerHub including GPS check-in), but NSLocationWhenInUseUsageDescription
-  // is absent from Info.plist and Android declares no location permission. On iOS that is
-  // a hard crash, not a soft failure. Enable this test once the declare-or-guard decision
-  // is made: either add the string, or gate those calls off on native.
-  test.skip("location usage string is declared (A2 — pending decision)", () => {
+  // v1.105.7 — Pete's decision: DECLARE location. It's core to the app's safety claim
+  // (check-in/out evidences that the caregiver was at the home). Until this existed,
+  // calling navigator.geolocation on iOS terminated the app.
+  test("location usage string is declared, and foreground-only", () => {
     expect(plist).toContain("NSLocationWhenInUseUsageDescription");
+    // Deliberately NOT requesting Always/background: no background mode, no Always key.
+    // Both would invite much heavier review scrutiny for no feature benefit.
+    // Assert on the <key> form, not the bare name — the file's own comments mention these
+    // names, and a substring check would match the prose rather than a real declaration.
+    expect(plist).not.toMatch(/<key>NSLocationAlwaysAndWhenInUseUsageDescription<\/key>/);
+    expect(plist).not.toMatch(/<key>UIBackgroundModes<\/key>/);
+  });
+
+  test("the location usage string explains the safety purpose, not just the need", () => {
+    const m = plist.match(/NSLocationWhenInUseUsageDescription<\/key>\s*<string>([^<]*)</);
+    expect(m).toBeTruthy();
+    expect(m[1].length).toBeGreaterThan(80);
+    expect(m[1]).toMatch(/check in|check out|visit/i);
+  });
+
+  test("location is declared in the privacy manifest too", () => {
+    // The plist string, the privacy manifest, the App Store Connect labels and the published
+    // Privacy Policy all have to say the same thing. This pins the two that live in the repo.
+    expect(read("ios/App/App/PrivacyInfo.xcprivacy")).toContain("NSPrivacyCollectedDataTypePreciseLocation");
+  });
+});
+
+describe("Android configuration", () => {
+  const manifest = read("android/app/src/main/AndroidManifest.xml");
+
+  test("location permissions are declared", () => {
+    // Capacitor's BridgeWebChromeClient bridges the WebView's navigator.geolocation to a
+    // runtime permission request — but it can only request what's DECLARED here. Without
+    // these, the WebView call simply failed.
+    expect(manifest).toContain("android.permission.ACCESS_COARSE_LOCATION");
+    expect(manifest).toContain("android.permission.ACCESS_FINE_LOCATION");
+  });
+
+  test("no background location", () => {
+    // Match a real declaration, not the word appearing in a comment.
+    expect(manifest).not.toMatch(/<uses-permission[^>]*ACCESS_BACKGROUND_LOCATION/);
+  });
+
+  test("GPS hardware is not marked required", () => {
+    // Marking it required removes the app from Play for any device without GPS. Coarse
+    // location is enough to confirm arrival.
+    expect(manifest).toMatch(/android\.hardware\.location\.gps"\s+android:required="false"/);
   });
 });
 

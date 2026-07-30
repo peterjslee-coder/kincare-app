@@ -116,6 +116,28 @@
         <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
       </array>
     </dict>
+    <!--
+      v1.105.7 — Location. Collected only at visit check-in/check-out, to evidence that the
+      caregiver was at the home; it is a safety feature, not analytics. Foreground only (the
+      app declares NSLocationWhenInUseUsageDescription and no background mode). Declared as
+      PreciseLocation because navigator.geolocation may return a precise fix; purpose is app
+      functionality, never tracking or advertising.
+      ⚠️ This must stay consistent with the App Store Connect App Privacy labels and the
+      published Privacy Policy — the policy predates this and does not yet describe location
+      collection, which is a lawyer item.
+    -->
+    <dict>
+      <key>NSPrivacyCollectedDataType</key>
+      <string>NSPrivacyCollectedDataTypePreciseLocation</string>
+      <key>NSPrivacyCollectedDataTypeLinked</key>
+      <true/>
+      <key>NSPrivacyCollectedDataTypeTracking</key>
+      <false/>
+      <key>NSPrivacyCollectedDataTypePurposes</key>
+      <array>
+        <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+      </array>
+    </dict>
     <dict>
       <key>NSPrivacyCollectedDataType</key>
       <string>NSPrivacyCollectedDataTypePhotosorVideos</string>
