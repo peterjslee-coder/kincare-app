@@ -91,8 +91,12 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBa
         });
     }
     if (oauthError) {
+      // v1.105.5 — 'apple_hidden_email' is no longer emitted: Hide My Email addresses now
+      // create accounts normally (Apple requires supporting them; see oauth.js). The branch
+      // stays only so an in-flight redirect from an older build doesn't fall through to a
+      // generic message, and the copy no longer asks anyone to reveal their real address.
       const errorMsg = oauthError === 'apple_hidden_email'
-        ? 'Apple "Hide My Email" is not supported. Please sign in with Apple again and choose "Share My Email", or use your email and password.'
+        ? 'That sign-in didn\'t complete. Please try Sign in with Apple again.'
         : oauthError === 'apple_already_linked'
         ? 'This Apple ID is already linked to a different account.'
         : oauthError === 'link_expired'

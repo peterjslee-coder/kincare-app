@@ -454,11 +454,26 @@ router.post("/apple/callback", express.urlencoded({ extended: false }), async (r
         return failTo("account_disabled");
       }
     } else {
-      // No existing OAuth link — try to match by email
-      // Apple "Hide My Email" generates a @privaterelay.appleid.com address
-      // that won't match the user's real account — don't auto-create in that case
-      const isRelayEmail = email && email.endsWith("@privaterelay.appleid.com");
-
+      // No existing OAuth link — try to match by email.
+      //
+      // v1.105.5 — Apple "Hide My Email" addresses (@privaterelay.appleid.com) used to be
+      // BLOCKED here for new signups: the user was bounced with `apple_hidden_email` and told
+      // to sign in again choosing "Share My Email". Apple REQUIRES Hide My Email support —
+      // pushing users to reveal a real address is exactly what App Review guideline 4.8 /
+      // 5.1.1(v) prohibits, and it would very likely have been a rejection. It also only
+      // affected NEW account creation, which is precisely the path a reviewer walks.
+      //
+      // A relay address is a real, deliverable address that Apple forwards, so it needs no
+      // special case at all: it now follows the same "redirect to registration with Apple
+      // info pre-filled" path as any other new Apple user. Returning users are unaffected
+      // either way because the lookup above keys on `provider_user_id` (Apple's stable `sub`),
+      // not the email — which matters because Apple only sends the email on the FIRST
+      // authorization.
+      //
+      // ⚠️ OPERATIONAL DEPENDENCY: mail only reaches @privaterelay.appleid.com if the sending
+      // domain is registered under "Sign in with Apple for Email Communication" in the Apple
+      // Developer portal. Until FROM_EMAIL's domain is registered there, these users receive
+      // NOTHING — no verification mail, no welcome-call email, no notifications.
       const existingUser = email
         ? await db.prepare("SELECT * FROM users WHERE LOWER(email) = LOWER(?) AND is_active = 1").get(email)
         : null;
@@ -473,11 +488,6 @@ router.post("/apple/callback", express.urlencoded({ extended: false }), async (r
         if (email_verified && !user.email_verified) {
           await db.prepare("UPDATE users SET email_verified = 1, email_verified_at = NOW() WHERE id = ?").run(user.id);
         }
-      } else if (isRelayEmail) {
-        // Apple Hide My Email — relay address doesn't match any existing user.
-        // Don't auto-create an orphan account. Tell the user to share their real email.
-        console.log(`[Apple OAuth] Blocked new account for relay email ${email} — user should retry with real email or sign in first`);
-        return failTo("apple_hidden_email");
       } else if (email) {
         // No existing account — redirect to registration with Apple info pre-filled
         const signupCode = crypto.randomBytes(32).toString("hex");
