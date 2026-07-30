@@ -18,3 +18,12 @@ android/app/build/
 android/build/
 inplace-care-firebase-adminsdk-fbsvc-*.json
 FEEDBACK_INBOX.md
+
+# ─── Secrets that must never be committed (v1.105.10) ───
+# ios/AuthKey_F3WH2QV9XY.p8 (the APNs signing key) was sitting UNTRACKED and UNIGNORED
+# in the working tree — one `git add .` away from being published to GitHub. Apple signing
+# keys cannot be re-downloaded, only revoked and reissued.
+*.p8
+*.mobileprovision
+*.p12
+*.cer
