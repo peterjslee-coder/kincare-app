@@ -158,7 +158,9 @@
 - [ ] **A2b — iOS may still need `@capacitor/geolocation`. VERIFY ON DEVICE BEFORE SUBMITTING.** The plist string is necessary but may not be sufficient. Capacitor's **Android** bridge explicitly handles WebView geolocation (`BridgeWebChromeClient`); **its iOS bridge contains no geolocation or Core Location code at all** (verified by grepping `node_modules/@capacitor/ios`). WKWebView will only satisfy `navigator.geolocation` when the host app already holds Core Location authorization, and nothing in this app ever calls `CLLocationManager.requestWhenInUseAuthorization()`. **Test GPS check-in on a real iPhone.** If no prompt appears or the call fails, install `@capacitor/geolocation` and call `Geolocation.requestPermissions()` on native (then add `NSLocationAlwaysAndWhenInUseUsageDescription`, which that plugin requires even without background use). Also note: `navigator.geolocation` needs a **secure context** — fine today at `https://yourinplace.com`, but worth re-checking after any bundled-asset migration, when the origin becomes `capacitor://localhost`.
 - [ ] **A2c — the Privacy Policy does not describe location collection.** The 2026-07-07 policy predates this. Add to the lawyer list alongside the Cloudflare R2 item, and keep four things consistent: the plist string, `PrivacyInfo.xcprivacy`, the App Store Connect labels, and the published policy.
 
-- [ ] **B2 — Android declares `RECORD_AUDIO`, probably left over from the Kindred voice feature killed on July 7.** The old public privacy page existed specifically to satisfy Play's RECORD_AUDIO requirement. Confirm whether in-app voice/video calling actually ships; if not, remove the permission — an unnecessary sensitive permission triggers Play's declaration flow for no benefit.
+- [x] **B2 — Android `RECORD_AUDIO`: KEEP IT (decided 7/30). No complication — it is legitimately used.** I was wrong to suspect it was Kindred debris: in-app **video calling is actually shipped** — `public/js/components/VideoCallOverlay.js`, `src/routes/videoCall.js` (Twilio token endpoint), and the `call_invite`/`call_accept`/`call_decline`/`call_hangup` socket signalling in server.js, entered from `Messages.js`. So the permission maps to a real, shipped feature, and iOS's `NSMicrophoneUsageDescription` ("video calls with your care team") is already accurate. Microphone is an ordinary runtime permission — **not** one of Play's *restricted* permissions (SMS / call log), so it does not trigger a permissions declaration form. Nothing to do. Pete also wants it retained for a possible future audio-recording safety feature and an eventual Kindred revival.
+  - ⚠️ **Data-safety nuance:** for video calls, audio/video is *transmitted* through Twilio rather than stored by us. Play's Data Safety form distinguishes collected from ephemeral-processed — declare accordingly, and remember Twilio is already named in the Privacy Policy.
+  - ⚠️ **Future audio RECORDING is a different animal, not a permission question.** Recording a conversation involving a person with dementia raises consent-capacity issues, and state wiretap law differs (Virginia is one-party; several states are all-party). Flagged on the 7/31 lawyer agenda. Do not build it on the strength of the permission already being there.
 
 - [x] **v1.105.2: three user-reported UX bugs, all the same root pattern — a broad CSS/layout rule silently clobbering a specific component (Jul 29).** Same family as the white screens and the dead dark-mode rule: nothing errors, it just quietly renders wrong.
   - **Splash "carousel" that dragged the whole page.** It was never a carousel. The audience-router grid used `minmax(220px, 1fr)` — a HARD 220px floor — and lives inside `.splash-page`, a **column flex container**, so it was sized by min-content: 3 × 220px + gaps + padding = **732px**. On a 420px phone the whole DOCUMENT became 732px wide, two of the three role cards sat off-screen, and any horizontal swipe panned the entire page. `min(220px, 100%)` lets the floor shrink. Verified **0 horizontal overflow at 360/390/420px across all four audience tabs**, desktop unchanged at 3-across. **Rule: `minmax(Npx, 1fr)` inside a flex container is a page-overflow bug waiting to happen — always `minmax(min(Npx, 100%), 1fr)`.**
@@ -767,6 +769,35 @@
 - [ ] **Camera & photo library access.** Current photo upload uses `<input type="file">`. Upgrade to Capacitor Camera plugin for native — gives direct camera access, photo library picker, and built-in crop/resize. This addresses the "photo upload crop + auto-resize" bug in the backlog.
 - [ ] **Offline support / graceful degradation.** The service worker handles caching for PWA, but Capacitor apps should handle airplane mode gracefully. Queue failed API calls and retry on reconnect. Show clear "offline" indicators. Messages could queue locally and send when back online.
 
+### Minors on care teams — Pete's intent, scoped 2026-07-30 (NOT built)
+
+Pete wants family minors on care teams: a grandchild or his own 14-year-old logging notes, and
+eventually **being paid**. Two cases that look alike and are not.
+
+- [ ] **P1 — there is NO AGE GATE in the product today.** No date of birth is collected anywhere at
+  signup and no minimum age is enforced (`auth.js` / `validate.js` have nothing). The Privacy
+  Policy says under-13s are not intended users, but nothing makes that true. **This has to be
+  settled before declaring an age rating to either store**, because the rating is a statement about
+  who can use the app. Recommended: **minimum age 13, declared 13+**, which keeps clear of COPPA and
+  Google Play's Families policy — and happens to match Stripe's own floor.
+- [ ] **P2 — Case A: minor logs notes, UNPAID.** The cheap path already exists and needs no account
+  at all: Care Tasks supports a **named non-user helper** (`care_task_helpers`) recorded as having
+  done something. A 13+ care-team member account is the heavier version. Lawyer questions logged.
+- [ ] **P3 — Case B: minor is PAID. Do not build until the lawyer clears it.** **The payment
+  plumbing is not the blocker** — Stripe permits an account from **age 13** and requires an adult
+  **Representative** (parent or legal guardian) on the account for anyone under 18, so Pete could be
+  Representative on his own child's account. The blockers are everywhere else: **child labor law**
+  (FLSA/Virginia limits on 14–15-year-olds — permitted occupations, hours, not during school hours),
+  **capacity to contract** (a minor cannot be meaningfully bound by the Caregiver Agreement),
+  **Checkr will not check a minor** and a minor cannot give FCRA consent, **liability insurance**
+  (not in place yet, and will very likely exclude minors), **worker classification** (1099 to a minor
+  in an employee-presumption state), and underneath all of it **a minor with unsupervised access to a
+  vulnerable adult** — which may be lawful and still not defensible. All on the 7/31 agenda.
+- [ ] **P3 — under-13 is a hard no as designed.** Stripe will not open an account below 13, so a
+  younger grandchild cannot be paid at all; and permitting under-13 accounts would pull COPPA
+  verifiable-parental-consent obligations onto a product holding health data. Use the named-helper
+  route for younger children.
+
 ### Store rules audit — re-checked against the LIVE guidelines 2026-07-30
 
 > Previous entries in this section were written against 2025-era rules. Everything below was
@@ -787,7 +818,7 @@
 **New gaps found in this audit**
 
 - [ ] **P1 — `PrivacyInfo.xcprivacy` is missing at the app level.** Required-reason API declarations have been mandatory since May 1 2024, and a missing manifest is what produces the **ITMS-91053 "Missing API declaration"** email after upload. `@capacitor/ios` ships two manifests (`Capacitor/` and `CapacitorCordova/`) but **both declare empty arrays** — they cover nothing. The app has no manifest of its own and `PrivacyInfo` appears **zero** times in `project.pbxproj`. Add an app-level manifest declaring `NSPrivacyAccessedAPITypes` (UserDefaults is the usual one for this stack) plus `NSPrivacyCollectedDataTypes`, and add it to the App target's Copy Bundle Resources. Cheap to add, annoying to discover after an upload.
-- [ ] **P2 — EU trader status (Digital Services Act).** Apps without verified trader status are removed from EU storefronts. **Scope decision: a US-only first release avoids this entirely.** Decide territory before submitting rather than after.
+- [x] **P2 — EU trader status (DSA): N/A. US-ONLY release decided 7/30.** Set territory to United States only in App Store Connect and Play Console at submission, and the DSA trader-verification requirement never applies. Revisit only if international distribution is ever wanted.
 - [ ] **P2 — verify the D-U-N-S business-name problem is resolved.** An older handoff recorded D-U-N-S 106784345 as having the wrong business name and blocking Google Play. Apple enrolment has since completed, which suggests it was fixed, but confirm in Play Console before relying on it.
 
 **Rules re-confirmed in our favour — do not spend engineering time here**
