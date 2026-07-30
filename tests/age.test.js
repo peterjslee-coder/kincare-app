@@ -119,7 +119,7 @@ describe("signup age gate covers every door", () => {
   });
 
   test("there is a migration adding the column", () => {
-    expect(rd("src/models/database.js")).toMatch(/012_users_date_of_birth/);
+    expect(rd("src/models/database.js")).toMatch(/013_users_date_of_birth/);
     expect(rd("src/models/database.js")).toMatch(/ALTER TABLE users ADD COLUMN IF NOT EXISTS date_of_birth DATE/);
   });
 });

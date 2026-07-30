@@ -24,6 +24,8 @@ const CREDS = {
   password: "SecurePass1!",
   firstName: "Auth",
   lastName: "ITest",
+  // v1.105.8 — signup age gate (minimum 13). Required by validateRegister.
+  dateOfBirth: "1985-06-15",
   role: "family",
 };
 let token;
@@ -34,6 +36,31 @@ describe("register + login", () => {
     expect(res.status).toBe(201);
     expect(res.body.token).toBeTruthy();
     expect(res.body.user.email).toBe(CREDS.email);
+  });
+
+  // v1.105.8 — the age gate against the real router and real database. The unit tests
+  // cover the date maths; this covers the wiring.
+  test("refuses a signup with no date of birth", async () => {
+    const res = await h.request.post("/api/auth/register")
+      .send({ ...CREDS, email: "nodob@itest.local", dateOfBirth: undefined });
+    expect(res.status).toBe(400);
+  });
+
+  test("refuses a signup under 13", async () => {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() - 12);
+    const res = await h.request.post("/api/auth/register")
+      .send({ ...CREDS, email: "under13@itest.local", dateOfBirth: d.toISOString().slice(0, 10) });
+    expect(res.status).toBe(400);
+    expect(res.body.reason).toBe("under_age");
+  });
+
+  test("accepts a signup at exactly 13", async () => {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() - 13);
+    const res = await h.request.post("/api/auth/register")
+      .send({ ...CREDS, email: "exactly13@itest.local", dateOfBirth: d.toISOString().slice(0, 10) });
+    expect(res.status).toBe(201);
   });
 
   test("rejects login for non-existent email", async () => {

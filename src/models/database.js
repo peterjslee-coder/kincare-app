@@ -1716,7 +1716,11 @@ async function initializeDatabase() {
       // intended users. Both app stores make you DECLARE an age rating, which is a
       // statement about who can use the app, so it has to be true before it's declared.
       // Nullable on purpose: existing accounts predate this and must not be locked out.
-      id: "012_users_date_of_birth",
+      // Numbered 013 because 012 was already taken by 012_caregiver_available_default.
+      // Keying is by exact id string so a duplicate prefix would still have applied, but two
+      // 012s is a trip hazard for whoever adds 014. The statement is IF NOT EXISTS, so the
+      // renumber replays harmlessly on any database that already ran the 012-named version.
+      id: "013_users_date_of_birth",
       statements: [
         `ALTER TABLE users ADD COLUMN IF NOT EXISTS date_of_birth DATE`,
       ],
