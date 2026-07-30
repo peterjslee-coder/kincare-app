@@ -85,15 +85,19 @@ describe("iOS configuration", () => {
     expect(manifest).toMatch(/<key>NSPrivacyTracking<\/key>\s*<false\/>/);
   });
 
-  // ⚠️ OPEN ITEM — PETE'S HANDS, one drag in Xcode.
-  // A manifest sitting in the folder is NOT shipped: it has to be a member of the App
-  // target's "Copy Bundle Resources" build phase, or the upload still gets ITMS-91053 —
-  // the exact silent-failure shape this repo keeps hitting. Adding it means editing
-  // project.pbxproj, which is not worth hand-patching from a sandbox (a malformed pbxproj
-  // means Xcode won't open the project at all). So: drag PrivacyInfo.xcprivacy into the App
-  // target in Xcode, then delete the `.skip` below and this comment.
-  test.skip("privacy manifest is a member of the App target (pending Xcode step)", () => {
-    expect(pbxproj).toContain("PrivacyInfo.xcprivacy");
+  // Done in Xcode 2026-07-30 and verified against the real project file.
+  // A manifest sitting in the folder is NOT shipped — it has to be a member of the App
+  // target's Copy Bundle Resources phase, or the upload still gets ITMS-91053. So assert on
+  // the PBXBuildFile "in Resources" entry, NOT merely on a PBXFileReference: a file can sit
+  // in the project navigator and still never reach the bundle, which is exactly the silent
+  // failure this whole file exists to catch.
+  test("privacy manifest is a member of the App target's Copy Bundle Resources", () => {
+    expect(pbxproj).toMatch(/PrivacyInfo\.xcprivacy in Resources \*\/ = \{isa = PBXBuildFile/);
+    const resourcesPhase = pbxproj.slice(
+      pbxproj.indexOf("Begin PBXResourcesBuildPhase"),
+      pbxproj.indexOf("End PBXResourcesBuildPhase")
+    );
+    expect(resourcesPhase).toContain("PrivacyInfo.xcprivacy");
   });
 
   // v1.105.7 — Pete's decision: DECLARE location. It's core to the app's safety claim
