@@ -2,7 +2,9 @@
 
 ## What This Is
 
-InPlace is an on-demand care coordination platform connecting families with professional caregivers for elderly/parent care. The primary user is Pete Lee, who is managing care for his mother Betty Lee (78, early-stage dementia, mild arthritis) in Blacksburg, VA.
+InPlace is an on-demand care coordination platform connecting families with professional caregivers for elderly/parent care. Built by Pete Lee, who is managing care for his own mother in Blacksburg, VA — that is the
+real-world case the product is designed against. The seeded DEMO family is Paul Lowe caring
+for Barbara Lowe; see the demo accounts table below.
 
 ## Live Demo
 
@@ -52,7 +54,7 @@ https://yourinplace.com
 │           ├── ActivityFeed.js         ← Notification stream with mark-as-read
 │           ├── Messages.js             ← Real-time chat (database-backed conversations)
 │           ├── MyAccount.js            ← Settings & notification preferences (wired to PUT /api/auth/me)
-│           ├── CaredForView.js         ← Betty's month calendar (pink=seeking help, blue=confirmed) + care request form + notes
+│           ├── CaredForView.js         ← Care recipient's month calendar (pink=seeking help, blue=confirmed) + care request form + notes
 │           ├── CaretakerHub.js         ← Caregiver dashboard (schedule, families, earnings breakdown, reviews)
 │           ├── AvailabilityTab.js      ← Month calendar for caregiver availability management (day-click editing)
 │           ├── CaregiverCalendar.js    ← Weekly calendar with availability overlay + care request accept flow
@@ -64,7 +66,7 @@ https://yourinplace.com
 │           ├── CareTeamPage.js         ← Care team listing/navigation wrapper
 │           ├── EmailVerificationBanner.js ← Banner prompting unverified users to check email
 │           ├── Analytics.js            ← Family dashboard analytics (bar charts, donut chart, utilization)
-│           ├── DemoPickerPage.js       ← Demo account selector (Pete/Maria/Betty)
+│           ├── DemoPickerPage.js       ← Demo account selector (Paul/Maria/Barbara)
 │           ├── ForgotPasswordPage.js   ← Password reset request form
 │           ├── ResetPasswordPage.js    ← Password reset confirmation form
 │           ├── CaregiverOnboarding.js  ← 5-step caregiver registration wizard
@@ -88,7 +90,7 @@ https://yourinplace.com
         ├── activity.js        ← Activity feed, mark-read, visit log submission
         ├── dashboard.js       ← Aggregated stats & upcoming sessions
         ├── messages.js        ← Send/receive messages, conversation list
-        ├── notes.js           ← Care recipient notes (Betty's personal notes)
+        ├── notes.js           ← Care recipient notes
         ├── assignments.js     ← Caregiver-to-recipient assignments, favorites
         ├── photos.js          ← Visit photo upload (multer), retrieval by visit log or session
         ├── careTeams.js       ← Care team CRUD, invite flow, member management
@@ -136,13 +138,24 @@ const MyComponent = window.MyComponent = ({ prop1, prop2 }) => {
 
 The app supports three login roles, each with a different sidebar and dashboard:
 
+These are the accounts `npm run seed` actually creates. Verified against `src/seed.js`
+on 2026-07-31 — the previous version of this table listed `pete@`, `betty@` and
+`*.lee@` addresses that the seed has not created for some time, which sent a
+screenshot run down the wrong path before anyone noticed.
+
 | Role | User | Email | View |
 |------|------|-------|------|
-| Care Team (family) | Pete Lee | pete@inplace.care | Full dashboard, scheduling, caregiver management, care profile |
-| Sibling (family) | David Lee | david.lee@inplace.care | Same dashboard, manages Betty's care alongside Pete |
-| Sibling (family) | Susan Lee | susan.lee@inplace.care | Same dashboard, manages Betty's care alongside Pete |
+| Care Team (family) | Paul Lowe | paul@inplace.care | Full dashboard, scheduling, caregiver management, care profile |
+| Sibling (family) | David Lowe | david.lowe@inplace.care | Same dashboard, manages Barbara's care alongside Paul |
+| Sibling (family) | Susan Lowe | susan.lowe@inplace.care | Same dashboard, manages Barbara's care alongside Paul |
 | Caretaker (caregiver) | Maria Santos | maria@inplace.care | CaretakerHub with schedule, families, earnings, area map |
-| Cared-For (recipient) | Betty Lee | betty@inplace.care | CaredForView with calendar and personal notes |
+| Cared-For (recipient) | Barbara Lowe | barbara@inplace.care | CaredForView with calendar and personal notes |
+
+Additional seeded caregivers (browse/search results, no separate login flow worth
+documenting): James Okafor, Sarah Chen, David Kim — `james@`, `sarah@`, `david@inplace.care`.
+
+⚠️ Note `david@inplace.care` (caregiver David Kim) and `david.lowe@inplace.care`
+(sibling David Lowe) are two different people. Easy to mix up.
 
 All demo passwords: `inplace123`
 
@@ -458,7 +471,7 @@ The server uses Socket.io for real-time updates. Express is wrapped in `http.cre
 
 **Implementation (v1.50.21, Mar 19 — P0 fix complete):** Session dates/times are stored as naive TEXT strings (`scheduled_date` = "2026-02-26", `scheduled_time` = "08:00"). The `care_recipients.timezone` column (default `'America/New_York'`) determines the timezone for all session logic. Backend utilities `getNowInZone(tz)` and `buildDateTimeInZone(date, time, tz)` in `src/utils/timezone.js` handle all conversions. Frontend mirror: `TimezoneHelper.js`. All time-sensitive backend code (notification poller, check-in/check-out, accountability pollers, cancellation) now JOINs `care_recipients` and passes `cr.timezone` to these utilities. The notification poller date filter uses a range (earliest US tz to latest) to catch cross-timezone edge cases. No more hardcoded single-timezone assumptions in any time-critical path.
 
-**Real-world failures (Mar 19, now fixed):** (1) Pete was in Texas (CST). Betty's 8am EST appointment triggered Pete's push notification at 7:45am CST instead of 6:45am CST — the notification poller used default timezone without per-session lookup. Fixed: poller now reads `cr.timezone` per session. (2) Cary's phone clock was 1 hour behind EST. She checked out 1 hour early from a 4-hour session, but the app showed 2 hours early because it used naive date parsing. Fixed: `earlyMinutes` now uses `buildDateTimeInZone` with care recipient's timezone.
+**Real-world failures (Mar 19, now fixed — names are the accounts as they existed then):** (1) Pete was in Texas (CST). Betty's 8am EST appointment triggered Pete's push notification at 7:45am CST instead of 6:45am CST — the notification poller used default timezone without per-session lookup. Fixed: poller now reads `cr.timezone` per session. (2) Cary's phone clock was 1 hour behind EST. She checked out 1 hour early from a 4-hour session, but the app showed 2 hours early because it used naive date parsing. Fixed: `earlyMinutes` now uses `buildDateTimeInZone` with care recipient's timezone.
 
 **Rules for any new date/time code:**
 - Never use `new Date().toISOString().split('T')[0]` for "today" — that returns UTC date
@@ -486,12 +499,12 @@ These rules apply to every session. Do not skip them.
 
 6. **Trust user bug reports — investigate code first.** When Pete reports a bug, look at the code before suggesting it might be caching or user error. He's usually right.
 
-7. **NEVER trigger real payments from demo/seed data.** Stripe is live with real keys. Demo accounts (pete@inplace.care, maria@inplace.care, betty@inplace.care, etc.) do NOT have real Stripe Connect accounts. Never write code that creates Stripe Checkout Sessions, PaymentIntents, or transfers using demo/seed user data. Never seed `stripe_account_id` on demo caregiver profiles. Any payment-related code changes must be reviewed for demo safety — if a code path could reach Stripe's API with fake data, it's a bug. When testing payment flows, use Stripe's test mode keys locally, never the live keys.
+7. **NEVER trigger real payments from demo/seed data.** Stripe is live with real keys. Demo accounts (paul@inplace.care, maria@inplace.care, barbara@inplace.care, etc.) do NOT have real Stripe Connect accounts. Never write code that creates Stripe Checkout Sessions, PaymentIntents, or transfers using demo/seed user data. Never seed `stripe_account_id` on demo caregiver profiles. Any payment-related code changes must be reviewed for demo safety — if a code path could reach Stripe's API with fake data, it's a bug. When testing payment flows, use Stripe's test mode keys locally, never the live keys.
 
 ## Known Limitations
 
-1. Stripe is live (real keys on Railway). Demo accounts have no Stripe Connect accounts and must never trigger real charges. See Dev Rule #7.
-2. Sibling users each have separate care_recipient records for Betty (no shared access model yet)
+1. Stripe is live (real keys on Railway). Demo accounts have no Stripe Connect accounts and must never trigger real charges. See Dev Rule #7. As of v1.105.20 this is enforced at the Stripe boundary itself (`isDemoSession` in accountability.js), not only by the poller's SQL filter — `is_demo` is a mutable column and a harness cleared it once already.
+2. Sibling users each have separate care_recipient records for the care recipient (no shared access model yet)
 3. Email delivery requires domain verification in Resend — sandbox sender only delivers to account owner
 4. Visit photos stored as base64 in PostgreSQL — works for demo but won't scale to production (use S3/R2 later)
 5. Geocoding uses Nominatim (OSM) — less accurate for residential addresses than Google Maps. Swap path documented in `src/utils/geocode.js`.
