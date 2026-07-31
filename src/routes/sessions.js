@@ -8,7 +8,7 @@ const availabilityRouter = require("./availability");
 const { sendPushToUser, notifyAdmins, sendSessionReminders } = require("./push");
 const { calculateSessionCost, isShortNotice } = require("../utils/rateCalculator");
 const { getNowInZone, getTodayStringInZone, buildDateTimeInZone } = require("../utils/timezone");
-const { geofenceEvidence } = require("../utils/geocode");
+const { geofenceEvidence, coarsenCoordinate } = require("../utils/geocode");
 const { hasActiveVouch } = require("../utils/vouches");
 const { decideCancellationCharge, CANCEL_FEE_WINDOW_HOURS } = require("../utils/cancellationFee");
 const { MODEL_HAIKU } = require("../utils/aiModels");
@@ -1489,7 +1489,7 @@ router.post("/:id/check-in", async (req, res) => {
     await db.prepare(`
       INSERT INTO visit_logs (id, session_id, caregiver_id, check_in_time, arrival_mood, check_in_latitude, check_in_longitude, check_in_distance_ft, check_in_geo_flag, briefing_acknowledged_at, offline_sync, is_test, created_at)
       VALUES (?, ?, ?, ${checkInTimeSQL}, ?, ?, ?, ?, ?, ${briefingAcknowledged ? 'NOW()' : 'NULL'}, ?, ?, NOW())
-    `).run(visitId, req.params.id, session.caregiver_id, arrivalMood ? (Array.isArray(arrivalMood) ? JSON.stringify(arrivalMood) : arrivalMood) : null, checkInLatitude || null, checkInLongitude || null, ciGeo.distanceFt, ciGeo.flag, isOfflineSync ? 1 : 0, isTestMode ? 1 : 0);
+    `).run(visitId, req.params.id, session.caregiver_id, arrivalMood ? (Array.isArray(arrivalMood) ? JSON.stringify(arrivalMood) : arrivalMood) : null, coarsenCoordinate(checkInLatitude), coarsenCoordinate(checkInLongitude), ciGeo.distanceFt, ciGeo.flag, isOfflineSync ? 1 : 0, isTestMode ? 1 : 0);
 
     // Get special instructions and recent notes for the caregiver
     // v1.76.0 — caregivers get family observations via the AI-digested briefing,
@@ -1607,8 +1607,10 @@ router.post("/:id/check-in", async (req, res) => {
         id: visitId,
         checkInTime: effectiveCheckInTime.toISOString(),
         arrivalMood,
-        checkInLatitude: checkInLatitude || null,
-        checkInLongitude: checkInLongitude || null,
+        // Echo what was STORED, not what was received. Returning five decimals for a row
+        // that holds two would have the client display a precision the record does not have.
+        checkInLatitude: coarsenCoordinate(checkInLatitude),
+        checkInLongitude: coarsenCoordinate(checkInLongitude),
         offlineSync: isOfflineSync,
       },
       specialInstructions: session.special_instructions,
@@ -1810,8 +1812,8 @@ router.post("/:id/check-out", async (req, res) => {
         departureMood ? (Array.isArray(departureMood) ? JSON.stringify(departureMood) : departureMood) : null,
         earlyMinutes > 15 ? (earlyDepartureReason || null) : null,
         earlyMinutes > 15 ? Math.round(earlyMinutes) : null,
-        checkOutLatitude || null,
-        checkOutLongitude || null,
+        coarsenCoordinate(checkOutLatitude),
+        coarsenCoordinate(checkOutLongitude),
         coGeo.distanceFt,
         coGeo.flag,
         visitLog.id

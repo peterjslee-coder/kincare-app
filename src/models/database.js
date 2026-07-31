@@ -1827,6 +1827,33 @@ async function initializeDatabase() {
            ON care_sessions (cancel_fee_status, cancel_fee_deadline)`,
       ],
     },
+    {
+      // ─── v1.105.23 — coarsen stored check-in/out coordinates ───
+      //
+      // The forward fix in geocode.js only helps future visits. Every row already written
+      // holds a five-decimal fix on the home of an elderly person, timestamped, which is
+      // the actual exposure — a rule change does not un-store what is already stored.
+      //
+      // Proof-of-presence is carried by check_in_distance_ft and check_in_geo_flag, which
+      // are computed from the full-precision reading before it is rounded and are NOT
+      // touched here. Nothing about the audit trail weakens; what disappears is the ability
+      // to point at a house.
+      //
+      // 2 decimal places is a cell of roughly 1.1 km by 0.9 km at Virginia's latitude, both
+      // larger than the 1,750-foot line Washington's My Health My Data Act draws around
+      // "precise location". Irreversible on purpose.
+      id: "016_coarsen_visit_coordinates",
+      statements: [
+        `UPDATE visit_logs SET
+           check_in_latitude  = ROUND(check_in_latitude::numeric, 2),
+           check_in_longitude = ROUND(check_in_longitude::numeric, 2)
+         WHERE check_in_latitude IS NOT NULL`,
+        `UPDATE visit_logs SET
+           check_out_lat = ROUND(check_out_lat::numeric, 2),
+           check_out_lng = ROUND(check_out_lng::numeric, 2)
+         WHERE check_out_lat IS NOT NULL`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

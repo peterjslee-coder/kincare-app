@@ -97,4 +97,37 @@ function geofenceEvidence(pointLat, pointLng, homeLat, homeLng, geofenceFt = 100
   return { distanceFt, flag: distanceFt <= geofenceFt ? 'ok' : 'far' };
 }
 
-module.exports = { geocodeAddress, buildAddressString, haversineDistance, geofenceEvidence };
+
+// ─── v1.105.23 — store an approximate point, not a precise one ───
+//
+// Check-in location is the app's proof that a caregiver was at the home. That claim is
+// carried by check_in_distance_ft and check_in_geo_flag, which are computed here at FULL
+// precision. The raw latitude/longitude were stored alongside them and prove nothing extra:
+// distance-to-home is the evidence; the coordinate is just the place a vulnerable person
+// lives, recorded on a schedule.
+//
+// It is also a regulated category. Washington's My Health My Data Act treats precise
+// location — defined as identifying a location within 1,750 feet — as consumer health data
+// when it indicates receipt of health services, which is exactly what a care visit is. That
+// act has a private right of action and no volume threshold. California, Virginia,
+// Connecticut, Maryland and Oregon all treat precise geolocation as sensitive on similar
+// terms.
+//
+// Rounding to 2 decimal places puts a point on a grid roughly 1.1 km on a side in latitude
+// and, at Virginia's latitude, about 0.9 km in longitude. Both cells are larger than the
+// 1,750-foot (533 m) line, so the stored value no longer identifies a location within it.
+//
+// Deliberately NOT dropped entirely: an approximate point still lets an admin sanity-check
+// a disputed visit ("was this even in the right town?") and still lets a real dispute be
+// investigated. What it no longer does is record where someone's mother lives to five
+// decimal places.
+const COARSE_DECIMALS = 2;
+
+function coarsenCoordinate(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  return Math.round(n * 10 ** COARSE_DECIMALS) / 10 ** COARSE_DECIMALS;
+}
+
+module.exports = { geocodeAddress, buildAddressString, haversineDistance, geofenceEvidence, coarsenCoordinate, COARSE_DECIMALS };
