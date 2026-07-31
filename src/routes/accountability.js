@@ -44,6 +44,13 @@ function getStripe() {
  * Returns { success, paymentIntentId } or { error }.
  */
 async function authorizeSessionPayment(sessionId) {
+  {
+    const dbGuard = await getDb();
+    if (await isDemoSession(dbGuard, sessionId)) {
+      console.warn(`[accountability] BLOCKED authorize for demo session ${String(sessionId).slice(0, 8)} — Dev Rule #7`);
+      return { error: "demo_session_blocked" };
+    }
+  }
   try {
     const db = await getDb();
     const stripe = getStripe();
@@ -146,6 +153,13 @@ async function authorizeSessionPayment(sessionId) {
  * Can capture a partial amount if session was shortened.
  */
 async function captureSessionPayment(sessionId, captureAmountCents = null) {
+  {
+    const dbGuard = await getDb();
+    if (await isDemoSession(dbGuard, sessionId)) {
+      console.warn(`[accountability] BLOCKED capture for demo session ${String(sessionId).slice(0, 8)} — Dev Rule #7`);
+      return { error: "demo_session_blocked" };
+    }
+  }
   try {
     const db = await getDb();
     const stripe = getStripe();
@@ -186,6 +200,13 @@ async function captureSessionPayment(sessionId, captureAmountCents = null) {
  * Void (cancel) an authorized payment — called for no-shows, cancellations.
  */
 async function voidSessionPayment(sessionId) {
+  {
+    const dbGuard = await getDb();
+    if (await isDemoSession(dbGuard, sessionId)) {
+      console.warn(`[accountability] BLOCKED void for demo session ${String(sessionId).slice(0, 8)} — Dev Rule #7`);
+      return { error: "demo_session_blocked" };
+    }
+  }
   try {
     const db = await getDb();
     const stripe = getStripe();
@@ -609,6 +630,47 @@ router.put("/disputes/:id/resolve", requireRole("family"), async (req, res) => {
  * Check for sessions 24 hours out that need payment authorization.
  * Called every poll cycle from server.js.
  */
+
+// ─── v1.105.20 — demo data must never reach Stripe (Dev Rule #7) ───
+//
+// pollPaymentAuthorizations already filters on users.is_demo. That guard is real, and it
+// is also not enough, for two reasons found the hard way on 7/31:
+//
+//   1. It lives in ONE caller. captureSessionPayment and voidSessionPayment are invoked
+//      directly from check-out, from the cancellation-fee poller, and from the caregiver
+//      waive route. None of those pass through the poller's WHERE clause.
+//   2. is_demo is a mutable column. The screenshot harness cleared it to hide the demo
+//      persona bar, and the poller immediately began authorising seeded sessions. Nothing
+//      reached Stripe only because the keys were blanked. A flag that another process can
+//      turn off is not a safety boundary.
+//
+// So the check moves to the boundary itself: the functions that talk to Stripe refuse demo
+// data, whoever calls them. The email-domain test is deliberate redundancy — @inplace.care
+// is the seed's own domain, and unlike is_demo nothing in the app ever rewrites it.
+const DEMO_EMAIL_DOMAIN = "@inplace.care";
+
+async function isDemoSession(db, sessionId) {
+  try {
+    const row = await db.prepare(`
+      SELECT fam.is_demo AS fam_demo, fam.email AS fam_email,
+             cu.is_demo AS cg_demo, cu.email AS cg_email
+      FROM care_sessions cs
+      LEFT JOIN users fam ON cs.family_user_id = fam.id
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      LEFT JOIN users cu ON cp.user_id = cu.id
+      WHERE cs.id = ?
+    `).get(sessionId);
+    if (!row) return true; // unknown session: refuse. Fail toward not charging.
+    const demoish = (isDemo, email) =>
+      !!isDemo || String(email || "").toLowerCase().endsWith(DEMO_EMAIL_DOMAIN);
+    return demoish(row.fam_demo, row.fam_email) || demoish(row.cg_demo, row.cg_email);
+  } catch (e) {
+    // A failed lookup must not become permission to charge a real card with fake data.
+    console.error("[accountability] demo check failed, refusing Stripe call:", e.message);
+    return true;
+  }
+}
+
 async function pollPaymentAuthorizations() {
   try {
     const db = await getDb();
