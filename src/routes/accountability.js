@@ -1083,6 +1083,68 @@ module.exports.authorizeSessionPayment = authorizeSessionPayment;
 module.exports.captureSessionPayment = captureSessionPayment;
 module.exports.voidSessionPayment = voidSessionPayment;
 module.exports.pollPaymentAuthorizations = pollPaymentAuthorizations;
+
+// ─── v1.105.19 — settle cancellation fees whose window has closed ───
+//
+// "Silence is consent." Nobody acted, so the rules run. This is the poller that makes the
+// zero-action default actually be the default rather than an aspiration.
+//
+// Two clocks, opposite directions:
+//   pending  past its 24h deadline        → CAPTURE. What both parties signed up for.
+//   disputed past the 5-day backstop      → VOID. If InPlace could not review a dispute in
+//                                           five days, the family should not pay for that.
+//                                           Failing toward not charging is the only
+//                                           defensible direction when we are the ones late.
+async function pollCancellationFees() {
+  const { DISPUTE_BACKSTOP_HOURS } = require("../utils/cancellationFee");
+  try {
+    const db = await getDb();
+
+    const due = await db.prepare(`
+      SELECT id, cancel_fee_cents FROM care_sessions
+      WHERE cancel_fee_status = 'pending' AND cancel_fee_deadline <= NOW()
+      LIMIT 50
+    `).all();
+    for (const s of due) {
+      try {
+        const r = await captureSessionPayment(s.id, s.cancel_fee_cents);
+        if (r?.error) {
+          console.warn(`[accountability] cancel-fee capture failed for ${s.id.slice(0,8)}: ${r.error}`);
+          continue; // leave pending; retried next tick until the authorization dies
+        }
+        await db.prepare(
+          "UPDATE care_sessions SET cancel_fee_status = 'charged', cancel_fee_decided_at = NOW() WHERE id = ?"
+        ).run(s.id);
+        console.log(`[accountability] cancellation fee charged for ${s.id.slice(0,8)}`);
+      } catch (e) {
+        console.error(`[accountability] cancel-fee capture threw for ${s.id.slice(0,8)}:`, e.message);
+      }
+    }
+
+    const stale = await db.prepare(`
+      SELECT id FROM care_sessions
+      WHERE cancel_fee_status = 'disputed'
+        AND cancel_fee_decided_at <= NOW() - INTERVAL '${DISPUTE_BACKSTOP_HOURS} hours'
+      LIMIT 50
+    `).all();
+    for (const s of stale) {
+      try {
+        await voidSessionPayment(s.id);
+        await db.prepare(
+          "UPDATE care_sessions SET cancel_fee_status = 'dropped', cancel_fee_decided_at = NOW() WHERE id = ?"
+        ).run(s.id);
+        console.log(`[accountability] disputed cancellation fee dropped unreviewed for ${s.id.slice(0,8)}`);
+      } catch (e) {
+        console.error(`[accountability] backstop void failed for ${s.id.slice(0,8)}:`, e.message);
+      }
+    }
+  } catch (err) {
+    console.error("[accountability] pollCancellationFees error:", err.message);
+  }
+}
+
+module.exports.pollCancellationFees = pollCancellationFees;
+
 module.exports.pollLateCheckIns = pollLateCheckIns;
 module.exports.pollCaregiverNoShows = pollCaregiverNoShows;
 module.exports.pollLateResolutionDefaults = pollLateResolutionDefaults;

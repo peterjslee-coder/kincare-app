@@ -1798,6 +1798,35 @@ async function initializeDatabase() {
            ON block_requests (care_team_id, status)`,
       ],
     },
+    {
+      // ─── v1.105.19 — the 24-hour reconcile window on a late-cancellation fee ───
+      //
+      // Pete's rule (7/31): "24 hours to reconcile or escalate, otherwise handled by the
+      // rules. Silence is consent." The default outcome requires zero action from anybody;
+      // deviating from what they signed up for is what costs someone a tap.
+      //
+      // Why the fee is not captured the instant a family cancels late: the money IS the
+      // caregiver's lost wage — that is the entire reason it is a pass-through and not a
+      // liquidated damage under the Virginia Consumer Protection Act. So the person with
+      // standing to forgive it is the CAREGIVER, not InPlace. This window is where they
+      // decide, and where a family can escalate a charge they think is wrong.
+      //
+      // The whole window has to close inside Stripe's authorization lifetime (~7 days) or
+      // the hold evaporates and there is nothing left to capture. 24h leaves ample room,
+      // and the dispute backstop below is deliberately well inside it.
+      id: "015_cancel_fee_window",
+      statements: [
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS cancel_fee_status TEXT`,
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS cancel_fee_cents INTEGER`,
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS cancel_fee_deadline TIMESTAMPTZ`,
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS cancel_fee_decided_at TIMESTAMPTZ`,
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS cancel_fee_decided_by TEXT`,
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS cancel_fee_note TEXT`,
+        // The poller scans on exactly this pair, and it runs on every tick.
+        `CREATE INDEX IF NOT EXISTS care_sessions_cancel_fee_due
+           ON care_sessions (cancel_fee_status, cancel_fee_deadline)`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

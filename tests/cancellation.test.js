@@ -62,16 +62,26 @@ describe("cancelling a session releases the payment hold", () => {
     expect(voidBlock).toMatch(/captureException/);
   });
 
-  test("a capture is possible, but only via the contract decision", () => {
+  test("a capture is DEFERRED, not taken on the spot", () => {
+    // v1.105.19: the fee is the caregiver's lost wage, so the caregiver is the only party
+    // with standing to forgive it. Capturing here would take the money before they were
+    // asked. The handler records it and the poller settles after the 24-hour window.
+    expect(cancelCode).toMatch(/cancel_fee_status = 'pending'/);
+    expect(cancelCode).not.toMatch(/captureSessionPayment/);
+  });
+
+  test("a VOID is not deferred", () => {
+    // Releasing a hold harms nobody and nobody needs a day to think about it. Deferring it
+    // would park a pending charge on a family's card for 24h for no reason.
+    expect(cancelCode).toMatch(/voidSessionPayment/);
+  });
+
+  test("the decision still comes from the contract", () => {
     // v1.105.14 asserted the opposite — that nothing could ever be captured here — because
     // at that point no stated policy existed to charge under. The published Client Services
     // Agreement does state one, so this now asserts the narrower and more useful thing:
     // capture is reachable, and only through decideCancellationCharge.
-    expect(cancelCode).toMatch(/captureSessionPayment/);
-    const captureIdx = cancelCode.indexOf("captureSessionPayment");
-    const decideIdx = cancelCode.indexOf("decideCancellationCharge");
-    expect(decideIdx).toBeGreaterThan(-1);
-    expect(decideIdx).toBeLessThan(captureIdx);
+    expect(cancelCode).toMatch(/decideCancellationCharge/);
     expect(cancelCode).toMatch(/charge\.action === "capture"/);
   });
 });

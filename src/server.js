@@ -408,7 +408,7 @@ app.use("/api/media", require("./routes/media"));
 app.use("/api/safety", require("./routes/safety"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.105.18";
+const APP_VERSION = "1.105.19";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });
@@ -941,6 +941,7 @@ async function start() {
     pollLateCheckIns,
     pollCaregiverNoShows,
     pollLateResolutionDefaults,
+    pollCancellationFees,
     setEmitToUser: setAccountabilityEmit,
   } = require("./routes/accountability");
   setAccountabilityEmit(emitToUser);
@@ -951,6 +952,7 @@ async function start() {
       await pollLateCheckIns();
       await pollCaregiverNoShows();
       await pollLateResolutionDefaults();
+      await pollCancellationFees();
     } catch (err) {
       if (err.message && !err.message.includes("relation") && !err.message.includes("column")) {
         console.error("  Accountability poller error:", err.message);

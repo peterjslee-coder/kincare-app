@@ -4032,7 +4032,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               {/* Policy disclosure for caregiver reviewing family's late proposal */}
               {proposedByFamily && p.is_within_24h === 1 && (
                 <div style={{ padding: '8px 10px', background: 'var(--color-purple-bg)', borderRadius: 8, marginBottom: 14, fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                  <strong style={{ color: 'var(--color-purple)' }}>Late change policy:</strong> This change was requested within 24 hours of the session. You may decline and cancel, and you'll be compensated for {p.cancel_fee_hours ? `${p.cancel_fee_hours} hour${p.cancel_fee_hours !== 1 ? 's' : ''}` : 'time'} outside the original window{feeAmount ? ` ($${feeAmount})` : ''}.
+                  <strong style={{ color: 'var(--color-purple)' }}>Late change policy:</strong> This change was requested within 24 hours of the session. If you decline, it counts as a late cancellation by the family and you're paid in full for the visit. You'll get a notification with the option to waive it if you'd rather.
                 </div>
               )}
               <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
@@ -4063,7 +4063,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                         method: 'PUT', body: JSON.stringify({ action: 'cancel_with_review' }),
                       });
                       if (r?.ok) {
-                        showToast(`Session cancelled — you'll receive ${feeAmount ? '$' + feeAmount : 'partial'} compensation`, 'info');
+                        showToast("Session cancelled — you'll be paid in full for this visit", 'info');
                         setTimeChangeProposal(null);
                         try { const dr = await apiFetch('/api/dashboard'); if (dr?.ok) setData(await dr.json()); } catch {}
                       }
@@ -4071,7 +4071,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                     setTcRespondLoading(false);
                   }}
                     style={{ padding: '8px 14px', borderRadius: 8, border: 'none', background: 'var(--color-error)', color: 'var(--text-on-primary)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-                    Cancel + Collect Fee
+                    Decline + Cancel
                   </button>
                 )}
                 {/* Accept the new time */}

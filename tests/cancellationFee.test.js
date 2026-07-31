@@ -210,18 +210,23 @@ describe("cancel preview", () => {
     expect((sessions.match(/decideCancellationCharge\(/g) || []).length).toBeGreaterThanOrEqual(2);
   });
 
-  test("the preview never mutates anything", () => {
+  // Slice to the NEXT route, not to the cancel handler: v1.105.19 inserted the cancel-fee
+  // waive/dispute routes between them, and those legitimately call voidSessionPayment.
+  const previewOnly = (() => {
     const start = sessions.indexOf('router.get("/:id/cancel-preview"');
-    const preview = sessions.slice(start, sessions.indexOf('router.put("/:id/cancel"'));
+    const next = sessions.indexOf("\nrouter.", start + 10);
+    return sessions.slice(start, next === -1 ? sessions.length : next);
+  })();
+
+  test("the preview never mutates anything", () => {
+    const preview = previewOnly;
     for (const forbidden of ["captureSessionPayment", "voidSessionPayment", "UPDATE care_sessions"]) {
       expect(preview).not.toContain(forbidden);
     }
   });
 
   test("only the two parties to the session can preview it", () => {
-    const start = sessions.indexOf('router.get("/:id/cancel-preview"');
-    const preview = sessions.slice(start, sessions.indexOf('router.put("/:id/cancel"'));
-    expect(preview).toMatch(/Not your session/);
+    expect(previewOnly).toMatch(/Not your session/);
   });
 });
 

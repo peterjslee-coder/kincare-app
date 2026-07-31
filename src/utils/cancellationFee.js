@@ -114,4 +114,35 @@ async function decideCancellationCharge(db, {
   return { action: "capture", amountCents, feePercent, reason: "late_client_cancel" };
 }
 
-module.exports = { DEFAULT_FEE_PERCENT, getCancellationFeePercent, decideCancellationCharge };
+// ─── The 24-hour reconcile window (v1.105.19) ───
+//
+// Pete's rule (7/31): "24 hours to reconcile or escalate, otherwise handled by the rules.
+// Silence is consent." The design goal is that the correct outcome needs ZERO action from
+// anybody. Acting is what it costs to deviate from what you signed up for — "I shouldn't
+// have to pay this", "that was a software problem, not mine". Otherwise it flows.
+//
+// So a late-cancellation fee is NOT captured the moment a family cancels. It is recorded,
+// both parties are told, and 24 hours later the rules execute themselves.
+//
+// Who can do what in the window:
+//   CAREGIVER  → waive. The fee is their lost wage; they are the only party with standing
+//                to forgive it. This is also what keeps the contract coherent: the client
+//                SHALL be charged, and the caregiver MAY waive. No hidden platform
+//                discretion, no contradiction between the document and the code.
+//   FAMILY     → dispute. Pauses the automatic capture and puts it in front of an admin.
+//   NOBODY     → the rules run. Capture.
+//
+// DISPUTE_BACKSTOP_HOURS exists because a paused fee cannot pause forever: the Stripe
+// authorization dies at roughly 7 days and the money simply evaporates. At the backstop we
+// VOID rather than capture — if InPlace has not managed to review a dispute in five days,
+// the person who raised it should not pay for that.
+const CANCEL_FEE_WINDOW_HOURS = 24;
+const DISPUTE_BACKSTOP_HOURS = 24 * 5;
+
+module.exports = {
+  DEFAULT_FEE_PERCENT,
+  CANCEL_FEE_WINDOW_HOURS,
+  DISPUTE_BACKSTOP_HOURS,
+  getCancellationFeePercent,
+  decideCancellationCharge,
+};

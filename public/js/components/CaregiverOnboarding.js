@@ -1029,7 +1029,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
 
             {disclosureCheck('acceptRefundPolicy',
               'Refund & Cancellation Policy',
-              'After completing 10 sessions, your background check fee will be refunded. If a family cancels within 24 hours of a session, you will still be compensated unless you agree to a grace cancellation.'
+              'After completing 10 sessions, your background check fee will be refunded. If a family cancels within 24 hours of a session, you are paid in full for that visit — it is your time they blocked out. You always have the option to waive that fee if you would rather let it go.'
             )}
 
             {disclosureCheck('acceptTransportation',

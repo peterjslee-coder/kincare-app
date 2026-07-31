@@ -10,7 +10,7 @@ const { calculateSessionCost, isShortNotice } = require("../utils/rateCalculator
 const { getNowInZone, getTodayStringInZone, buildDateTimeInZone } = require("../utils/timezone");
 const { geofenceEvidence } = require("../utils/geocode");
 const { hasActiveVouch } = require("../utils/vouches");
-const { decideCancellationCharge } = require("../utils/cancellationFee");
+const { decideCancellationCharge, CANCEL_FEE_WINDOW_HOURS } = require("../utils/cancellationFee");
 const { MODEL_HAIKU } = require("../utils/aiModels");
 
 const router = express.Router();
@@ -2242,10 +2242,18 @@ router.put("/:id/time-change/:proposalId/respond", async (req, res) => {
         });
 
       } else if (proposal.proposed_by === "family" && isResponderCaregiver) {
-        // Family proposed, caregiver cancels → caregiver gets partial/full fee
+        // ─── v1.105.19 — one cancellation policy, not two ───
+        //
+        // This branch used to compute its OWN fee — cancel_fee_hours x hourly_rate — show it
+        // to the caregiver as "you'll be compensated $X", label the button "Cancel + Collect
+        // Fee", and then never call Stripe. Not once, on any path. Since v1.57.11 (March)
+        // caregivers have been shown a dollar figure and paid nothing.
+        //
+        // Pete's intent (7/31): there is no separate cancellation fee. A family moving a
+        // visit inside 24 hours, which the caregiver then declines, IS a late client
+        // cancellation. So it goes through the same decision and the same 24-hour reconcile
+        // window as every other one, and the money actually moves.
         const feeHours = proposal.cancel_fee_hours || 0;
-        const hourlyRate = session.hourly_rate || 28;
-        const feeCents = Math.round(feeHours * hourlyRate * 100);
 
         await db.prepare(
           "UPDATE time_change_proposals SET status = 'cancelled_with_fee', acknowledged_by_user_id = ?, acknowledged_at = NOW() WHERE id = ?"
@@ -2258,17 +2266,44 @@ router.put("/:id/time-change/:proposalId/respond", async (req, res) => {
           WHERE id = ?
         `).run(cancelReason || "Cancelled due to family time change", isWithin24h ? 1 : 0, req.params.id);
 
+        // Record the standard fee under the standard rules. isLateCancel is the family's
+        // late time-change, and cancelledBy is 'family' because the family is the party
+        // that moved it — the caregiver only declined a change they did not ask for.
+        let tcCharge = { action: "none", feePercent: 0 };
+        try {
+          tcCharge = await decideCancellationCharge(db, {
+            cancelledBy: "family",
+            isLateCancel: !!isWithin24h,
+            paymentIntentId: session.stripe_payment_intent_id,
+            paymentStatus: session.payment_status,
+            authorizedAmountCents: session.authorized_amount,
+          });
+          if (tcCharge.action === "capture") {
+            await db.prepare(`
+              UPDATE care_sessions SET cancel_fee_status = 'pending', cancel_fee_cents = ?,
+                cancel_fee_deadline = NOW() + INTERVAL '${CANCEL_FEE_WINDOW_HOURS} hours'
+              WHERE id = ?
+            `).run(tcCharge.amountCents, req.params.id);
+          } else if (tcCharge.action === "void") {
+            const { voidSessionPayment } = require("./accountability");
+            await voidSessionPayment(req.params.id);
+          }
+        } catch (e) {
+          console.error("[sessions] time-change cancellation charge failed:", e.message);
+          captureException(e, { where: "sessions: time-change cancel fee", sessionId: req.params.id });
+        }
+
         if (emitToUser) {
           emitToUser(session.family_user_id, "session_update", {
             sessionId: req.params.id, status: "open", cancelledBy: "caregiver",
             reason: "Caregiver declined your time change",
-            feeHours, feeCents,
+            feeHours, feeCents: tcCharge.action === 'capture' ? tcCharge.amountCents : 0,
           });
         }
 
         res.json({
           ok: true, action: "cancelled", cancelledBy: "caregiver",
-          feeHours, feeCents, hourlyRate,
+          feeHours, feeCents: tcCharge.action === 'capture' ? tcCharge.amountCents : 0, hourlyRate,
           chargeApplies: feeHours > 0,
         });
 
@@ -2599,6 +2634,134 @@ router.get("/:id/cancel-preview", async (req, res) => {
   }
 });
 
+// ─── The 24-hour reconcile window on a cancellation fee (v1.105.19) ───
+//
+// Two actions, deliberately asymmetric, because the parties are not symmetric.
+//
+// The CAREGIVER can waive. The fee is their lost wage — that is the whole reason it is a
+// pass-through and not a liquidated damage — so they are the only party with standing to
+// forgive it. This is also what makes "the Client shall be charged" true in the contract
+// while still letting a real human say no harm, no foul: the discretion belongs to the
+// caregiver, not to InPlace.
+//
+// The FAMILY can dispute. That does not cancel the charge; it pauses it and puts it in
+// front of a person. "I shouldn't have to pay this" and "that was a software problem" are
+// exactly the cases Pete wanted to leave room for, and they need a human, not a button
+// that silently zeroes the caregiver's money.
+
+// ─── GET /api/sessions/:id/cancel-fee ───
+router.get("/:id/cancel-fee", async (req, res) => {
+  try {
+    const db = await getDb();
+    const row = await db.prepare(`
+      SELECT cs.id, cs.cancel_fee_status, cs.cancel_fee_cents, cs.cancel_fee_deadline,
+             cs.cancel_fee_note, cs.family_user_id, cp.user_id AS caregiver_user_id
+      FROM care_sessions cs
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      WHERE cs.id = ?
+    `).get(req.params.id);
+    if (!row) return res.status(404).json({ error: "Session not found" });
+    const isCaregiver = req.user.id === row.caregiver_user_id;
+    const isFamily = req.user.id === row.family_user_id;
+    if (!isCaregiver && !isFamily) return res.status(403).json({ error: "Not your session" });
+    res.json({
+      status: row.cancel_fee_status || "none",
+      amountCents: row.cancel_fee_cents || 0,
+      deadline: row.cancel_fee_deadline,
+      note: row.cancel_fee_note,
+      canWaive: isCaregiver && row.cancel_fee_status === "pending",
+      canDispute: isFamily && row.cancel_fee_status === "pending",
+    });
+  } catch (err) {
+    console.error("Cancel fee read error:", err);
+    res.status(500).json({ error: "Failed to load the cancellation fee" });
+  }
+});
+
+// ─── POST /api/sessions/:id/cancel-fee/waive ─── caregiver only
+router.post("/:id/cancel-fee/waive", async (req, res) => {
+  try {
+    const db = await getDb();
+    const row = await db.prepare(`
+      SELECT cs.id, cs.cancel_fee_status, cs.cancel_fee_cents, cs.family_user_id,
+             cp.user_id AS caregiver_user_id
+      FROM care_sessions cs LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      WHERE cs.id = ?
+    `).get(req.params.id);
+    if (!row) return res.status(404).json({ error: "Session not found" });
+    // Only the caregiver. An admin waiving on their behalf would be InPlace giving away
+    // someone else's wage, which is precisely the discretion the contract does not grant.
+    if (req.user.id !== row.caregiver_user_id) {
+      return res.status(403).json({ error: "Only the caregiver can waive their own cancellation fee." });
+    }
+    if (row.cancel_fee_status !== "pending") {
+      return res.status(400).json({ error: `This fee is already ${row.cancel_fee_status || "settled"}.` });
+    }
+
+    const { voidSessionPayment } = require("./accountability");
+    const voided = await voidSessionPayment(req.params.id);
+    if (voided?.error) {
+      // Do NOT mark it waived if the money did not actually get released — that would tell
+      // a caregiver they had forgiven a charge the family is still about to pay.
+      console.error("[sessions] waive failed to void:", voided.error);
+      captureException(new Error(`cancel-fee waive void failed: ${voided.error}`), { sessionId: req.params.id });
+      return res.status(502).json({ error: "We couldn't release the charge just now. Try again in a moment." });
+    }
+    await db.prepare(`
+      UPDATE care_sessions SET cancel_fee_status = 'waived', cancel_fee_decided_at = NOW(),
+        cancel_fee_decided_by = ?, cancel_fee_note = ? WHERE id = ?
+    `).run(req.user.id, (req.body?.note || "").slice(0, 500), req.params.id);
+
+    sendPushToUser(row.family_user_id, {
+      title: "Cancellation fee waived",
+      body: "Your caregiver waived the late cancellation fee. You haven't been charged.",
+      data: { type: "cancel_fee_waived", sessionId: req.params.id },
+    }, "cancel_fee_waived").catch(() => {});
+    res.json({ status: "waived" });
+  } catch (err) {
+    console.error("Cancel fee waive error:", err);
+    res.status(500).json({ error: "Failed to waive the fee" });
+  }
+});
+
+// ─── POST /api/sessions/:id/cancel-fee/dispute ─── family only
+router.post("/:id/cancel-fee/dispute", async (req, res) => {
+  try {
+    const db = await getDb();
+    const row = await db.prepare(
+      "SELECT id, cancel_fee_status, cancel_fee_cents, family_user_id FROM care_sessions WHERE id = ?"
+    ).get(req.params.id);
+    if (!row) return res.status(404).json({ error: "Session not found" });
+    if (req.user.id !== row.family_user_id) return res.status(403).json({ error: "Not your session" });
+    if (row.cancel_fee_status !== "pending") {
+      return res.status(400).json({ error: `This fee is already ${row.cancel_fee_status || "settled"}.` });
+    }
+    const reason = (req.body?.reason || "").trim();
+    if (reason.length < 5) return res.status(400).json({ error: "Tell us briefly what's wrong." });
+
+    await db.prepare(`
+      UPDATE care_sessions SET cancel_fee_status = 'disputed', cancel_fee_decided_at = NOW(),
+        cancel_fee_decided_by = ?, cancel_fee_note = ? WHERE id = ?
+    `).run(req.user.id, reason.slice(0, 2000), req.params.id);
+
+    notifyAdmins("cancel_fee_disputed", {
+      title: "Cancellation fee disputed",
+      body: `A family disputed a $${((row.cancel_fee_cents || 0) / 100).toFixed(2)} cancellation fee.`,
+      data: { type: "cancel_fee_disputed", sessionId: req.params.id },
+    }).catch(() => {});
+
+    res.json({
+      status: "disputed",
+      // Say the backstop out loud. A dispute that quietly expires into "no charge" is a
+      // fine outcome, but only if the person was told it might happen.
+      message: "Thanks — we've paused the charge and a person will look at this. If we haven't resolved it within five days, the charge is dropped automatically.",
+    });
+  } catch (err) {
+    console.error("Cancel fee dispute error:", err);
+    res.status(500).json({ error: "Failed to raise the dispute" });
+  }
+});
+
 router.put("/:id/cancel", async (req, res) => {
   try {
     const db = await getDb();
@@ -2706,29 +2869,21 @@ router.put("/:id/cancel", async (req, res) => {
       }
     }
 
-    // ─── v1.105.14 — release the payment hold ───
+    // ─── v1.105.19 — settle the payment hold ───
     //
-    // Nobody pre-pays for care. `authorizeSessionPayment` creates the PaymentIntent with
-    // capture_method:'manual' — a HOLD — and a poller places it 23–25 hours before the
-    // visit (accountability.js). Capture happens only at check-out. So a session cancelled
-    // more than a day out has no money attached at all, and one cancelled inside that
-    // window has an uncaptured authorization sitting on the family's card.
+    // Nobody pre-pays. authorizeSessionPayment uses capture_method:'manual' and a poller
+    // places the hold 23-25 hours before the visit; capture happens at check-out. So a
+    // session cancelled more than a day out has no money attached at all, and one cancelled
+    // inside that window has an uncaptured authorization on the family's card.
     //
-    // Until now nothing released it. voidSessionPayment existed but was called from
-    // exactly one place: the caregiver-no-show poller. A family who cancelled the evening
-    // before a visit was left staring at a pending charge on their card for care that
-    // never happened, for the ~7 days Stripe takes to expire the hold on its own.
+    // Before v1.105.14 nothing released it: voidSessionPayment existed but was called from
+    // exactly one place, the caregiver-no-show poller. A family cancelling the evening
+    // before was left with a pending charge for ~7 days until Stripe expired it.
     //
-    // We void on EVERY cancellation, including late ones. There is a 24-hour late-cancel
-    // rule in this handler, but it computes `chargeApplies` and `feeCents` and nothing
-    // anywhere reads either — it is a policy that exists only as a variable name. Charging
-    // someone under a policy the product has never stated is worse than not charging them.
-    // When that policy is real, this becomes a PARTIAL capture rather than a void:
-    // captureSessionPayment(id, feeCents) already supports it, because manual capture is
-    // exactly the right primitive for "keep some of the hold, release the rest".
-    // v1.105.15 — the published Client Services Agreement decides this, not this handler.
-    // See src/utils/cancellationFee.js for the clauses and why only a CLIENT cancelling
-    // late is ever charged.
+    // What happens to that hold is decided by the published agreements, not by this handler.
+    // See src/utils/cancellationFee.js for the clauses, for why only a CLIENT cancelling
+    // late is ever charged, and for the 24-hour reconcile window that a capture now waits
+    // out before it fires.
     let charge = { action: "none", feePercent: 0, reason: "not_evaluated" };
     try {
       charge = await decideCancellationCharge(db, {
@@ -2745,14 +2900,49 @@ router.put("/:id/cancel", async (req, res) => {
       // untouched hold expires on its own in about a week. A guessed capture takes money.
     }
 
-    if (charge.action !== "none") {
+    // ─── v1.105.19 — a fee is RECORDED, not charged on the spot ───
+    //
+    // "24 hours to reconcile or escalate, otherwise handled by the rules. Silence is
+    // consent." The caregiver may waive (it is their lost wage), the family may dispute,
+    // and if neither acts the poller captures. Capturing here instead would take the money
+    // before the only person entitled to forgive it had been asked.
+    //
+    // Voids are NOT deferred. Releasing a hold has no downside to anybody and no one needs
+    // a window to think about it — deferring it would leave a pending charge sitting on a
+    // family's card for a day for no reason at all.
+    if (charge.action === "capture") {
+      try {
+        await db.prepare(`
+          UPDATE care_sessions SET
+            cancel_fee_status = 'pending',
+            cancel_fee_cents = ?,
+            cancel_fee_deadline = NOW() + INTERVAL '${CANCEL_FEE_WINDOW_HOURS} hours'
+          WHERE id = ?
+        `).run(charge.amountCents, req.params.id);
+
+        const amt = `$${(charge.amountCents / 100).toFixed(2)}`;
+        if (session.caregiver_user_id) {
+          sendPushToUser(session.caregiver_user_id, {
+            title: "Late cancellation — you're owed " + amt,
+            body: `The family cancelled inside 24 hours. You'll be paid ${amt} automatically tomorrow. Tap if you'd rather waive it.`,
+            data: { type: "cancel_fee_pending", sessionId: req.params.id, amountCents: charge.amountCents },
+          }, "cancel_fee_pending").catch(() => {});
+        }
+        sendPushToUser(session.family_user_id, {
+          title: "Cancellation fee — " + amt,
+          body: `Cancelling inside 24 hours means the caregiver still gets paid. ${amt} will be charged tomorrow unless something's wrong — tap to tell us.`,
+          data: { type: "cancel_fee_notice", sessionId: req.params.id, amountCents: charge.amountCents },
+        }, "cancel_fee_notice").catch(() => {});
+      } catch (e) {
+        console.error("[sessions] could not record the cancellation fee:", e.message);
+        captureException(e, { where: "sessions: record cancel fee", sessionId: req.params.id });
+      }
+    } else if (charge.action !== "none") {
       try {
         // Lazy require: accountability.js pulls in this router's siblings, and a top-level
         // require here creates a cycle. Same pattern as the capture call at check-out.
-        const { voidSessionPayment, captureSessionPayment } = require("./accountability");
-        const result = charge.action === "capture"
-          ? await captureSessionPayment(req.params.id, charge.amountCents)
-          : await voidSessionPayment(req.params.id);
+        const { voidSessionPayment } = require("./accountability");
+        const result = await voidSessionPayment(req.params.id);
         if (result?.error) {
           // Don't fail the cancellation over this. The session IS cancelled; an untouched
           // hold expires by itself. Losing the cancel because Stripe hiccuped would be
