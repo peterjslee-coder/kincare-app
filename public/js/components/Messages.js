@@ -222,7 +222,8 @@ const Messages = window.Messages = () => {
   const [reportFor, setReportFor] = useState(null);
   const [reportCategory, setReportCategory] = useState('');
   const [reportDetails, setReportDetails] = useState('');
-  const [reportBusy, setReportBusy] = useState(false); // { x, y, convId }
+  const [reportBusy, setReportBusy] = useState(false);
+  const [headerMenu, setHeaderMenu] = useState(false); // mobile-reachable report/block // { x, y, convId }
 
   const handleDelete = async (convId) => {
     setDeleting(true);
@@ -1829,7 +1830,44 @@ const Messages = window.Messages = () => {
             }}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
           </button>
+
+          {/* ─── v1.105.22 — report/block, reachable on a phone ───
+              Until now these lived only in the desktop RIGHT-CLICK menu on the conversation
+              list. On an iPhone-only submission that is nowhere: there is no right-click,
+              and a reviewer checking guideline 1.2 opens a chat and looks for an overflow.
+              So it goes in the header, next to the call buttons, on every device. */}
+          {activeConv && soloPartner(activeConv) && (
+            <button onClick={() => setHeaderMenu(v => !v)} aria-label="More options"
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '6px 8px', color: 'var(--role-color)', fontSize: 20, lineHeight: 1 }}>
+              ⋯
+            </button>
+          )}
         </div>
+
+        {headerMenu && activeConv && soloPartner(activeConv) && (
+          <div style={{ position: 'fixed', inset: 0, zIndex: 9998 }} onClick={() => setHeaderMenu(false)}>
+            <div onClick={e => e.stopPropagation()} style={{
+              position: 'absolute', top: 58, right: 10, minWidth: 180, zIndex: 9999,
+              background: 'var(--bg-surface)', borderRadius: 10, padding: '4px 0',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.18)',
+            }}>
+              {/* Report first, and worded as the safe option — someone frightened of a
+                  caregiver should reach for the one that never tells the other person. */}
+              <div onClick={() => {
+                  const pn = soloPartner(activeConv);
+                  setHeaderMenu(false);
+                  setReportFor({ userId: pn.id, name: `${pn.first_name || ''} ${pn.last_name || ''}`.trim(), convId: activeConv.id });
+                }}
+                style={{ padding: '12px 16px', fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 16 }}>&#9873;</span> Report
+              </div>
+              <div onClick={() => { const c = activeConv; setHeaderMenu(false); handleBlock(c); }}
+                style={{ padding: '12px 16px', fontSize: 14, cursor: 'pointer', color: 'var(--color-error)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 16 }}>&#128683;</span> Block
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="msg-messages-area">
           {messages.length === 0 ? (

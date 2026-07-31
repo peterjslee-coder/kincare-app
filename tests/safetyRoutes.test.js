@@ -184,3 +184,28 @@ describe("admin report queue", () => {
     expect(code("public/js/components/AdminPanel.js")).toMatch(/ContentReportsTab/);
   });
 });
+
+
+describe("report/block is reachable without a right-click", () => {
+  const ui = raw("public/js/components/Messages.js");
+
+  test("there is a chat-header overflow menu", () => {
+    // The desktop context menu is invoked by onContextMenu — a phone has no right-click, so
+    // on an iPhone-only submission that path is unreachable. A reviewer checking 1.2 opens
+    // a conversation and looks for an overflow control.
+    expect(ui).toMatch(/headerMenu/);
+    expect(ui).toMatch(/aria-label="More options"/);
+  });
+
+  test("the header menu offers BOTH report and block", () => {
+    const menu = ui.slice(ui.indexOf("{headerMenu && activeConv"));
+    expect(menu.slice(0, 2500)).toMatch(/setReportFor/);
+    expect(menu.slice(0, 2500)).toMatch(/handleBlock/);
+  });
+
+  test("it only appears on one-to-one threads", () => {
+    // A block is between two people; offering it on a care-team thread implies something
+    // the feature cannot do.
+    expect(ui).toMatch(/activeConv && soloPartner\(activeConv\)/);
+  });
+});
