@@ -182,6 +182,82 @@ router.post("/caregivers/:userId/freeze", authenticate, checkAdmin, requireAdmin
 });
 
 // ─── GET /api/admin/safety-flags — List all safety flags for review ───
+// ─── v1.105.21 — the user-report queue (App Review guideline 1.2) ───
+//
+// Reporting shipped in v1.105.18 and told every reporter "we review reports within 24
+// hours". Nothing rendered them. A promise with no queue behind it is not a moderation
+// system, it is a sentence — and it is the sentence a reviewer will read in the app.
+//
+// Kept separate from safety_flags on purpose. Those are AI-screener output about a message
+// AUTHOR and have no reporter; these are human reports with a reporter, a category, and a
+// snapshot. Merging them would lose the distinction between "a model flagged this" and "a
+// frightened person told us".
+router.get("/content-reports", authenticate, checkAdmin, requireAdmin, async (req, res) => {
+  try {
+    const db = await getDb();
+    const status = ["pending", "reviewed", "actioned", "dismissed"].includes(req.query.status)
+      ? req.query.status : "pending";
+    const rows = await db.prepare(`
+      SELECT cr.id, cr.category, cr.details, cr.content_snapshot, cr.status,
+             cr.created_at, cr.reviewed_at, cr.admin_notes, cr.message_id, cr.conversation_id,
+             r.first_name AS reporter_first, r.last_name AS reporter_last, r.id AS reporter_id,
+             t.first_name AS reported_first, t.last_name AS reported_last, t.id AS reported_id,
+             t.role AS reported_role
+      FROM content_reports cr
+      JOIN users r ON r.id = cr.reporter_user_id
+      LEFT JOIN users t ON t.id = cr.reported_user_id
+      WHERE cr.status = ?
+      ORDER BY cr.created_at ASC
+      LIMIT 200
+    `).all(status);
+
+    // Oldest first, and surface the age, because the 24-hour commitment is the thing being
+    // measured. A queue sorted newest-first hides exactly the report that is about to
+    // breach it.
+    const counts = await db.prepare(
+      "SELECT status, COUNT(*) AS n FROM content_reports GROUP BY status"
+    ).all();
+    const overdue = await db.prepare(
+      "SELECT COUNT(*) AS n FROM content_reports WHERE status = 'pending' AND created_at < NOW() - INTERVAL '24 hours'"
+    ).get();
+
+    res.json({
+      reports: rows.map((r) => ({
+        ...r,
+        snapshot: r.content_snapshot ? JSON.parse(r.content_snapshot) : null,
+        ageHours: Math.floor((Date.now() - new Date(r.created_at).getTime()) / 3600000),
+      })),
+      counts: Object.fromEntries(counts.map((c) => [c.status, Number(c.n)])),
+      overdue: Number(overdue?.n || 0),
+    });
+  } catch (err) {
+    console.error("Content reports error:", err);
+    res.status(500).json({ error: "Failed to load reports" });
+  }
+});
+
+router.put("/content-reports/:id", authenticate, checkAdmin, requireAdmin, async (req, res) => {
+  try {
+    const db = await getDb();
+    const { status, adminNotes } = req.body || {};
+    if (!["reviewed", "actioned", "dismissed"].includes(status)) {
+      return res.status(400).json({ error: "status must be reviewed, actioned or dismissed" });
+    }
+    await db.prepare(`
+      UPDATE content_reports SET status = ?, reviewed_by = ?, reviewed_at = NOW(),
+        admin_notes = ? WHERE id = ?
+    `).run(status, req.user.id, (adminNotes || "").slice(0, 4000), req.params.id);
+    await logAdminAction(req, `content_report_${status}`, "content_report", req.params.id, { adminNotes });
+    // Deliberately no notification to the reported user, at any status. Reporting is silent
+    // end to end; telling someone an admin actioned a report identifies the reporter just
+    // as surely as naming them.
+    res.json({ status });
+  } catch (err) {
+    console.error("Content report update error:", err);
+    res.status(500).json({ error: "Failed to update the report" });
+  }
+});
+
 router.get("/safety-flags", authenticate, checkAdmin, requireAdmin, async (req, res) => {
   try {
     const db = await getDb();

@@ -137,3 +137,50 @@ describe("blocks are actually honoured in messaging", () => {
     expect(messages).toMatch(/others\.length !== 1/);
   });
 });
+
+
+// ─── v1.105.21 — the queue that makes the 24-hour promise real ───
+describe("admin report queue", () => {
+  const admin = code("src/routes/admin/safety.js");
+
+  test("reports can be listed and decided", () => {
+    expect(admin).toMatch(/router\.get\("\/content-reports"/);
+    expect(admin).toMatch(/router\.put\("\/content-reports\/:id"/);
+  });
+
+  test("it is admin-gated like every other safety route", () => {
+    const q = admin.slice(admin.indexOf('router.get("/content-reports"'));
+    expect(q.slice(0, 200)).toMatch(/authenticate, checkAdmin, requireAdmin/);
+  });
+
+  test("the queue is OLDEST first", () => {
+    // The 24-hour commitment is what is being measured, so the report closest to breaching
+    // it must be on top. Newest-first hides exactly the item that matters.
+    const q = admin.slice(admin.indexOf('router.get("/content-reports"'));
+    expect(q.slice(0, 2000)).toMatch(/ORDER BY cr\.created_at ASC/);
+  });
+
+  test("it counts what is already past 24 hours", () => {
+    expect(admin).toMatch(/INTERVAL '24 hours'/);
+  });
+
+  test("deciding a report still notifies nobody", () => {
+    // Reporting is silent end to end. Telling someone an admin actioned a report identifies
+    // the reporter as surely as naming them.
+    const d = admin.slice(admin.indexOf('router.put("/content-reports/:id"'));
+    const body = d.slice(0, d.indexOf("});"));
+    expect(body).not.toMatch(/sendPushToUser/);
+  });
+
+  test("the UI shows the snapshot, not the live message", () => {
+    // A reported message can be soft-deleted, and the person reported has an obvious motive.
+    const ui = raw("public/js/components/ContentReportsTab.js");
+    expect(ui).toMatch(/captured at report time/i);
+    expect(ui).toMatch(/snapshot/);
+  });
+
+  test("the tab is in the admin bundle and rendered", () => {
+    expect(code("scripts/build-client.js")).toMatch(/ContentReportsTab\.js/);
+    expect(code("public/js/components/AdminPanel.js")).toMatch(/ContentReportsTab/);
+  });
+});

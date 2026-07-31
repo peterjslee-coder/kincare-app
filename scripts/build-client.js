@@ -88,6 +88,7 @@ const scripts = [
 const ADMIN_SCRIPTS = [
   "js/components/AdminFinancials.js",
   "js/components/SafetyFlagsTab.js",
+  "js/components/ContentReportsTab.js",
   "js/components/AdminPanel.js",
 ];
 

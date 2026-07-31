@@ -5986,6 +5986,16 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
           : React.createElement('div', { style: { padding: 40, textAlign: 'center', color: 'var(--text-tertiary)' } }, 'Safety flags component loading... Please refresh the page.')
       )}
 
+      {/* v1.105.21 — human reports live alongside the AI flags but stay a separate list.
+          safety_flags are screener output about a message AUTHOR and carry no reporter;
+          these have a reporter, a category and a snapshot. Merging them would lose the
+          difference between "a model flagged this" and "a frightened person told us". */}
+      {activeTab === 'safety' && (
+        typeof ContentReportsTab === 'function'
+          ? React.createElement(ContentReportsTab, { apiFetch, showToast })
+          : null
+      )}
+
       {/* ── CLIENT VERSIONS TAB ── */}
       {activeTab === 'client-versions' && (
         <div>
