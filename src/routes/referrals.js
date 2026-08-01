@@ -57,15 +57,11 @@ router.get("/qr", authenticate, async (req, res) => {
     const db = await getDb();
     const code = await ensureReferralCode(db, req.user.id);
     const link = `${process.env.BASE_URL || "https://yourinplace.com"}/register?ref=${code}&role=caregiver`;
-    const QRCode = require("qrcode");
-    const svg = await QRCode.toString(link, {
-      type: "svg",
-      // High correction — ~30% can be obscured by a thumb, a fold or screen glare and it
-      // still decodes. The realistic failure here is someone holding a phone at an angle.
-      errorCorrectionLevel: "H",
-      margin: 2,
-      color: { dark: "#1b6b5a", light: "#FFFFFF" },
-    });
+    // Shared with the committed homepage asset, so the brand mark can never differ between
+    // the two. Correction level H plus a badge sized well under the recoverable budget —
+    // see src/utils/qr.js for why that is safe and where the limit is.
+    const { qrSvgWithBadge } = require("../utils/qr");
+    const svg = await qrSvgWithBadge(link);
     res.type("image/svg+xml");
     // Per-user content: must never land in a shared cache.
     res.set("Cache-Control", "private, max-age=3600");

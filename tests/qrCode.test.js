@@ -33,6 +33,12 @@ describe("the referral QR endpoint cannot encode arbitrary text", () => {
     expect(handler).not.toMatch(/public/);
   });
 
+  test("it uses the shared badge renderer, not its own", () => {
+    // If the endpoint hand-rolled its own QR, the referral code and the homepage code could
+    // drift apart in look — same brand, two marks.
+    expect(handler).toMatch(/qrSvgWithBadge/);
+  });
+
   test("it encodes the same link the copy box shows", () => {
     // If these drift, someone's QR silently stops crediting them.
     const linkExpr = /\$\{process\.env\.BASE_URL \|\| "https:\/\/yourinplace\.com"\}\/register\?ref=\$\{code\}&role=caregiver/;
@@ -76,14 +82,38 @@ describe("the in-app QR", () => {
 // ─── the codes actually decode ───
 // Generating a QR nobody verified is how you print 500 flyers with a dead link on them.
 describe("generated codes round-trip", () => {
-  test("the homepage SVG encodes exactly the site URL", async () => {
-    const QRCode = require("qrcode");
-    const expected = await QRCode.toString("https://yourinplace.com", {
-      type: "svg", errorCorrectionLevel: "H", margin: 2,
-      color: { dark: "#1b6b5a", light: "#FFFFFF" },
-    });
-    // Byte-identical to a fresh render of the intended URL — so a hand-edited or
-    // stale-committed asset fails here rather than in someone's camera.
+  const { qrSvgWithBadge, decodePng, BADGE_RATIO } = require("../src/utils/qr");
+
+  test("the committed homepage asset matches a fresh render exactly", async () => {
+    // Byte-identical, so a hand-edited or stale-committed file fails here rather than in
+    // someone's camera after five hundred flyers are printed.
+    const expected = await qrSvgWithBadge("https://yourinplace.com");
     expect(read("public/img/qr-yourinplace.svg").trim()).toBe(expected.trim());
+  });
+
+  test("it still DECODES with the badge covering the middle", async () => {
+    // The whole risk of a logo overlay: it is deliberate damage to the code. Rendering and
+    // decoding at several sizes is the only assertion that actually proves it survived.
+    const sharp = require("sharp");
+    const svg = await qrSvgWithBadge("https://yourinplace.com");
+    for (const w of [400, 800, 1200]) {
+      const png = await sharp(Buffer.from(svg)).resize(w, w).png().toBuffer();
+      expect(decodePng(png)).toBe("https://yourinplace.com");
+    }
+  }, 30000);
+
+  test("a long referral URL also survives the badge", async () => {
+    // Longer text means a denser code with smaller modules, so the badge covers MORE
+    // modules. The referral link is the longest thing encoded, so it is the real worst case.
+    const link = "https://yourinplace.com/register?ref=ABCD1234&role=caregiver";
+    const sharp = require("sharp");
+    const png = await sharp(Buffer.from(await qrSvgWithBadge(link))).resize(800, 800).png().toBuffer();
+    expect(decodePng(png)).toBe(link);
+  }, 30000);
+
+  test("the badge stays well inside the recoverable budget", () => {
+    // Level H recovers ~30% of a code. The badge is deliberate damage, so it must leave
+    // most of that budget for real-world damage — glare, a thumb, a crease, a bad angle.
+    expect(BADGE_RATIO ** 2).toBeLessThan(0.08);
   });
 });
