@@ -23,6 +23,25 @@ function initSentry() {
       environment: require("./env").environment,
       sendDefaultPii: false,
       tracesSampleRate: 0, // errors only, no performance tracing
+      // ─── v1.105.24 — don't page us for other people's port scans ───
+      //
+      // INPLACE-6 was `URIError: Failed to decode param '/%c0'` — GET /%c0 from a cloud
+      // host. %c0 is an invalid UTF-8 lead byte and the front half of the classic %c0%af
+      // overlong-encoding path-traversal probe. Express's decode_param calls
+      // decodeURIComponent, which throws, and Express answers 400. That is the CORRECT
+      // outcome: the request was malformed, the app rejected it, nothing broke. The
+      // stacktrace contains zero first-party frames — every one is express or node.
+      //
+      // Reporting it is worse than useless. A scanner walks thousands of malformed paths,
+      // so this is an unbounded source of identical alerts, and an alert channel that cries
+      // wolf is one nobody reads when something real happens. Filtered at the SDK, not by
+      // resolving it in the UI, because resolving only silences the paths seen so far.
+      ignoreErrors: [
+        // Express decode_param on a malformed percent-escape. Always a 400, never a bug.
+        /Failed to decode param/,
+        // Same class, thrown by decodeURIComponent directly elsewhere in the stack.
+        /^URIError: URI malformed$/,
+      ],
       beforeSend(event) {
         // PHI/PII scrub — belt and suspenders on top of sendDefaultPii:false
         if (event.request) {
@@ -32,6 +51,13 @@ function initSentry() {
           delete event.request.query_string;
         }
         delete event.user;
+
+        // ignoreErrors matches on the message; this catches the same thing by TYPE, for
+        // the case where the message wording changes across Express versions. Belt and
+        // braces, same as the PHI scrub above.
+        const ex = event.exception?.values?.[0];
+        if (ex?.type === "URIError" && /decode|malformed|URI/i.test(ex.value || "")) return null;
+
         return event;
       },
     });
