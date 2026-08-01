@@ -484,6 +484,50 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
               </div>
             ))}
           </div>
+
+          {/* ── v1.105.25 — what the AI does NOT do ──
+              Placed here on purpose: the section above says AI is involved at every step,
+              which is exactly the moment a caregiver wonders whether it is quietly working
+              out the least they will accept, and a family wonders whether they are being
+              quoted more than their neighbour.
+
+              Every claim below is checked against the code, and there is a test that fails
+              if any of it stops being true:
+                - caregivers write their own hourly_rate (routes/caregivers.js)
+                - calculateSessionCost is arithmetic — their rate, time-of-day bands, and a
+                  constant short-notice percentage. No model, no demand signal, no per-user
+                  input of any kind.
+                - PLATFORM_FEE_PERCENT is a hardcoded 20 for everybody
+                - SURCHARGE_PLATFORM_SHARE is 0.25, so 75% of a short-notice surcharge is
+                  the caregiver's
+                - the AI modules contain no pricing code at all
+              The surcharge is named rather than glossed over. Claiming "no surcharges"
+              would be the same class of untrue-copy problem this file is trying to avoid. */}
+          <div style={{
+            marginTop: '36px', padding: '28px 32px', borderRadius: '14px',
+            background: 'var(--bg-surface)', border: '1px solid var(--border-color)',
+            maxWidth: '760px', marginLeft: 'auto', marginRight: 'auto',
+          }}>
+            <div style={{ fontSize: '17px', fontWeight: 700, color: 'var(--role-color)', marginBottom: '10px' }}>
+              What our AI does not do: set prices, or set wages.
+            </div>
+            <p style={{ fontSize: '14.5px', color: 'var(--text-secondary)', lineHeight: 1.7, marginBottom: '12px' }}>
+              Caregivers name their own rate, and that is the rate they are paid. Our commission is
+              a flat 20% for everyone. It does not go up because you booked at 6pm on a Sunday,
+              because you have booked before, or because something decided you would probably pay
+              more. There is no surge pricing and no personalized pricing.
+            </p>
+            <p style={{ fontSize: '14.5px', color: 'var(--text-secondary)', lineHeight: 1.7, marginBottom: '12px' }}>
+              One exception, stated plainly: visits booked inside 24 hours carry a short-notice
+              surcharge. It is a fixed published percentage, the same for everybody, and
+              three-quarters of it goes to the caregiver who rearranged their day — not to us.
+            </p>
+            <p style={{ fontSize: '14.5px', color: 'var(--text-secondary)', lineHeight: 1.7, margin: 0 }}>
+              AI here reads care notes and spots patterns. It never touches what anyone charges or
+              earns. Software that quietly finds the lowest wage a caregiver will accept is a real
+              thing in this industry, and it is not what we are building.
+            </p>
+          </div>
         </div>
       </section>
 
