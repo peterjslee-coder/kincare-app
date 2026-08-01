@@ -64,6 +64,41 @@ describe("the homepage QR", () => {
   });
 });
 
+describe("every role can reach a QR, not just caregivers", () => {
+  // The gap this closes: the referral QR lives in CaretakerHub and encodes a
+  // role=caregiver signup link. A family member looking after a parent never sees that
+  // screen — and would not want it if they did, because the friend asking "what's that?"
+  // has their own mother to look after, not a job to apply for.
+  const account = read("public/js/components/MyAccount.js");
+
+  test("Account has a share card with the QR", () => {
+    expect(account).toMatch(/Share inPlace/);
+    expect(account).toMatch(/qr-yourinplace\.svg/);
+    expect(account).toMatch(/alt="QR code linking to yourinplace\.com"/);
+  });
+
+  test("it points at the plain site, not at caregiver signup", () => {
+    // A family user sharing this must not send someone to role=caregiver.
+    const card = account.slice(account.indexOf("Share inPlace"));
+    const body = card.slice(0, 2500);
+    expect(body).not.toMatch(/role=caregiver/);
+    expect(body).toMatch(/https:\/\/yourinplace\.com/);
+  });
+
+  test("Account is not role-gated", () => {
+    // app.js routes every role to MyAccount for 'account', so the card is reachable by
+    // family, caregiver and care recipient alike.
+    expect(strip(read("public/js/app.js"))).toMatch(/currentPage === 'account'\) return <MyAccount/);
+  });
+
+  test("it offers the native share sheet where one exists", () => {
+    // On a phone that is the difference between "send this to my sister" being one tap or
+    // a copy-paste chore.
+    expect(account).toMatch(/navigator\.share/);
+    expect(account).toMatch(/navigator\.clipboard/);
+  });
+});
+
 describe("the in-app QR", () => {
   const hub = read("public/js/components/CaretakerHub.js");
 

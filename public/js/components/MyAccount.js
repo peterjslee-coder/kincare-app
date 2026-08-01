@@ -1036,6 +1036,46 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 10 }}>JPG, PNG, or GIF — any size, we'll resize it for you.</div>
           </div>
 
+          {/* ─── v1.105.28 — "someone asked what I'm using" ───
+              The referral QR in CaretakerHub is caregiver-only, and its link points at
+              role=caregiver signup. A family member managing a parent's care never sees
+              that screen, and would not want to send a friend to a caregiver sign-up
+              anyway — the friend has their own mother to look after.
+              So this lives in Account, which every role has, and points at the plain site
+              where a visitor picks their own role. Static asset: no auth, no per-user
+              fetch, works offline once the service worker has it. */}
+          <div className="card">
+            <div className="card-header">Share inPlace</div>
+            <div style={{ padding: '4px 16px 18px', display: 'flex', gap: 18, alignItems: 'center', flexWrap: 'wrap' }}>
+              <img src="/img/qr-yourinplace.svg" alt="QR code linking to yourinplace.com"
+                width="116" height="116"
+                style={{ background: '#fff', padding: 8, borderRadius: 10, border: '1px solid var(--border-color)', flexShrink: 0 }} />
+              <div style={{ flex: 1, minWidth: 200 }}>
+                <div style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 10 }}>
+                  If someone asks what you're using, hold this up. They point their camera at it
+                  and land on inPlace, where they can sign up as a family or as a caregiver.
+                </div>
+                <button onClick={() => {
+                  const url = 'https://yourinplace.com';
+                  // Native share sheet where there is one — on a phone that is the difference
+                  // between "send this to my sister" being one tap or a copy-paste chore.
+                  if (navigator.share) {
+                    navigator.share({ title: 'inPlace', text: 'Care coordination for looking after a parent at home.', url }).catch(() => {});
+                  } else {
+                    navigator.clipboard?.writeText(url);
+                    showToast?.('Link copied', 'success');
+                  }
+                }} style={{
+                  padding: '8px 16px', borderRadius: 8, border: 'none',
+                  background: 'var(--role-color)', color: 'var(--text-on-primary)',
+                  fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                }}>
+                  Share a link instead
+                </button>
+              </div>
+            </div>
+          </div>
+
           <div className="card">
             <div className="card-header">
               <span>Profile Information</span>
