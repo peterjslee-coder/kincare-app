@@ -42,6 +42,40 @@ router.get("/my-code", authenticate, async (req, res) => {
   }
 });
 
+// ─── GET /api/referrals/qr — this user's referral link, as a scannable SVG ───
+//
+// Deliberately takes NO input. An endpoint that renders a QR for arbitrary text is a
+// small open redirect with extra steps: anyone could mint an official-looking
+// yourinplace.com QR pointing anywhere they liked, and the whole value of a QR is that
+// people scan it without reading the URL first. This one can only ever encode the
+// authenticated caller's own referral link.
+//
+// SVG rather than PNG so it stays crisp printed on a flyer or blown up on a laptop held
+// across a table, and so it costs ~2KB instead of ~40KB on a phone connection.
+router.get("/qr", authenticate, async (req, res) => {
+  try {
+    const db = await getDb();
+    const code = await ensureReferralCode(db, req.user.id);
+    const link = `${process.env.BASE_URL || "https://yourinplace.com"}/register?ref=${code}&role=caregiver`;
+    const QRCode = require("qrcode");
+    const svg = await QRCode.toString(link, {
+      type: "svg",
+      // High correction — ~30% can be obscured by a thumb, a fold or screen glare and it
+      // still decodes. The realistic failure here is someone holding a phone at an angle.
+      errorCorrectionLevel: "H",
+      margin: 2,
+      color: { dark: "#1b6b5a", light: "#FFFFFF" },
+    });
+    res.type("image/svg+xml");
+    // Per-user content: must never land in a shared cache.
+    res.set("Cache-Control", "private, max-age=3600");
+    res.send(svg);
+  } catch (err) {
+    console.error("Referral QR error:", err);
+    res.status(500).json({ error: "Failed to generate the QR code" });
+  }
+});
+
 // ─── POST /api/referrals/send — Send a referral email ───
 router.post("/send", authenticate, async (req, res) => {
   try {

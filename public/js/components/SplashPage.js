@@ -607,6 +607,31 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
 
       {/* ── Bottom CTA ── */}
       <section style={{ padding: '56px 32px', textAlign: 'center', background: 'var(--bg-surface)' }}>
+        {/* v1.105.26 — scan to continue on a phone.
+            A QR on a homepage pointing at that same homepage sounds circular, but it is the
+            one thing a desktop visitor cannot do easily: get this onto the device they will
+            actually use it on. It is also what you hold up when you are telling someone
+            about it in person, which is how this spreads at the scale it is at now.
+            Static file, not generated — the URL never changes, so there is nothing to
+            compute and nothing to break. */}
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '20px',
+          flexWrap: 'wrap', marginBottom: '28px',
+        }}>
+          <img src="/img/qr-yourinplace.svg" alt="QR code linking to yourinplace.com"
+            width="132" height="132"
+            style={{ borderRadius: '10px', background: '#fff', padding: '8px', border: '1px solid var(--border-color)' }} />
+          <div style={{ textAlign: 'left', maxWidth: '260px' }}>
+            <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--role-color)', marginBottom: '4px' }}>
+              Scan to open on your phone
+            </div>
+            <div style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+              Point your camera at this. On a phone you can add inPlace to your home screen and
+              it works like any other app — no download needed.
+            </div>
+          </div>
+        </div>
+
         <h2 style={{ fontSize: '28px', color: 'var(--role-color)', marginBottom: '10px' }}>Ready to Get Started?</h2>
         <p style={{ fontSize: '16px', color: 'var(--text-secondary)', marginBottom: '24px' }}>
           Whether you need care for a loved one or want to provide care, we'd love to have you.

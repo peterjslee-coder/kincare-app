@@ -156,6 +156,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
 
   // Referral & milestone state
   const [referralData, setReferralData] = useState(null);
+  const [showReferralQr, setShowReferralQr] = useState(false); // v1.105.26
   const [referralList, setReferralList] = useState([]);
   const [refName, setRefName] = useState('');
   const [refEmail, setRefEmail] = useState('');
@@ -2793,6 +2794,31 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                   }}>Copy</button>
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Share this link — anyone who signs up through it is automatically credited to you.</div>
+
+                {/* v1.105.26 — the same link, scannable.
+                    Copy-paste works when the other person is somewhere else. In person it
+                    does not: you end up reading a URL aloud or spelling out a code. This is
+                    for the conversation that happens standing in a kitchen or a break room,
+                    which at this stage is how most caregivers will actually hear about it.
+                    Encodes the SAME referral link, so credit still lands. */}
+                <button onClick={() => setShowReferralQr(v => !v)} style={{
+                  marginTop: 10, padding: '6px 12px', background: 'var(--bg-surface)',
+                  border: '1px solid var(--border-color)', borderRadius: 6, fontSize: 12,
+                  fontWeight: 600, color: 'var(--role-color)', cursor: 'pointer',
+                }}>
+                  {showReferralQr ? 'Hide QR code' : 'Show QR code'}
+                </button>
+                {showReferralQr && (
+                  <div style={{ marginTop: 12, textAlign: 'center' }}>
+                    <img src="/api/referrals/qr" alt="QR code for your referral link"
+                      width="200" height="200"
+                      style={{ background: '#fff', padding: 10, borderRadius: 10, border: '1px solid var(--border-color)' }} />
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
+                      Hold this up — they scan it with their camera and land on sign-up with your
+                      referral already applied.
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
