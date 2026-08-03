@@ -8,10 +8,17 @@
 const fs = require("fs");
 const path = require("path");
 const read = (p) => fs.readFileSync(path.join(__dirname, "..", p), "utf8");
-const strip = (t) => t.replace(/\/\*[\s\S]*?\*\//g, "").split("\n").filter((l) => !l.trim().startsWith("//")).join("\n");
+// Delegates to the shared reader. The obvious one-liner —
+//   t.replace(/\/\*[\s\S]*?\*\//g, "")
+// — treats the `/*` inside `accept="image/*,application/pdf"` as a comment opener and
+// deletes ~9,000 characters of real code, which makes every "must NOT appear" assertion
+// below pass vacuously. See tests/helpers/source.js.
+const { code: readCode } = require("./helpers/source");
+const strip = (t) => t; // kept for call sites that already hold raw text
+const stripFile = (rel) => readCode(rel);
 
 describe("the referral QR endpoint cannot encode arbitrary text", () => {
-  const ref = strip(read("src/routes/referrals.js"));
+  const ref = stripFile("src/routes/referrals.js");
   const handler = ref.slice(ref.indexOf('router.get("/qr"'), ref.indexOf('router.post("/send"'));
 
   test("it exists and requires auth", () => {
@@ -88,7 +95,7 @@ describe("every role can reach a QR, not just caregivers", () => {
   test("Account is not role-gated", () => {
     // app.js routes every role to MyAccount for 'account', so the card is reachable by
     // family, caregiver and care recipient alike.
-    expect(strip(read("public/js/app.js"))).toMatch(/currentPage === 'account'\) return <MyAccount/);
+    expect(stripFile("public/js/app.js")).toMatch(/currentPage === 'account'\) return <MyAccount/);
   });
 
   test("it offers the native share sheet where one exists", () => {

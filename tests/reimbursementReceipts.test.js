@@ -12,7 +12,14 @@
 const fs = require("fs");
 const path = require("path");
 const read = (p) => fs.readFileSync(path.join(__dirname, "..", p), "utf8");
-const strip = (t) => t.replace(/\/\*[\s\S]*?\*\//g, "").split("\n").filter((l) => !l.trim().startsWith("//")).join("\n");
+// Delegates to the shared reader. The obvious one-liner —
+//   t.replace(/\/\*[\s\S]*?\*\//g, "")
+// — treats the `/*` inside `accept="image/*,application/pdf"` as a comment opener and
+// deletes ~9,000 characters of real code, which makes every "must NOT appear" assertion
+// below pass vacuously. See tests/helpers/source.js.
+const { code: readCode } = require("./helpers/source");
+const strip = (t) => t; // kept for call sites that already hold raw text
+const stripFile = (rel) => readCode(rel);
 
 describe("an absent receipt is stated, not implied by silence", () => {
   test("the reimbursement list says so", () => {
@@ -26,7 +33,7 @@ describe("an absent receipt is stated, not implied by silence", () => {
   });
 
   test("the empty case is a real branch, not a conditional that renders nothing", () => {
-    const src = strip(read("public/js/components/Reimbursements.js"));
+    const src = stripFile("public/js/components/Reimbursements.js");
     // The old shape was `{it.receipts.length > 0 && (...)}` — truthy-guard, empty otherwise.
     expect(src).not.toMatch(/\{it\.receipts\.length > 0 && \(/);
     expect(src).toMatch(/it\.receipts\.length > 0 \?/);
@@ -34,7 +41,7 @@ describe("an absent receipt is stated, not implied by silence", () => {
 });
 
 describe("you can ask for the missing receipt from inside the app", () => {
-  const routes = strip(read("src/routes/reimbursements.js"));
+  const routes = stripFile("src/routes/reimbursements.js");
   const handler = routes.slice(
     routes.indexOf('router.post("/:id/request-receipt"'),
     routes.indexOf('router.post("/:id/approve"')
@@ -74,7 +81,7 @@ describe("you can ask for the missing receipt from inside the app", () => {
     // v1.105.30 restructured this: if you can attach (requester, payee or approver) you get
     // "Attach receipt"; otherwise you get "Ask for it". The two must be exclusive, or the
     // approver ends up nudging themselves.
-    const ui = strip(read("public/js/components/Reimbursements.js"));
+    const ui = stripFile("public/js/components/Reimbursements.js");
     expect(ui).toMatch(/it\.requested_by === myUserId \|\| it\.payee_user_id === myUserId \|\| meta\.isApprover/);
     expect(ui).toMatch(/request-receipt/);
     // ask sits in the else branch, after the attach branch
@@ -91,7 +98,7 @@ describe("receipts remain optional", () => {
     // become mandatory above some dollar threshold: "It remains optional." Recorded here
     // so the question is not re-opened as if it were an oversight — a large request with
     // no receipt is a known, accepted state, answered by the nudge rather than a block.
-    const routes = strip(read("src/routes/reimbursements.js"));
+    const routes = stripFile("src/routes/reimbursements.js");
     const create = routes.slice(routes.indexOf('router.post("/", async'), routes.indexOf('router.post("/record"'));
     expect(create).not.toMatch(/receipts\.length === 0/);
     expect(create).not.toMatch(/Receipt (is )?required/i);
@@ -104,7 +111,7 @@ describe("receipts remain optional", () => {
 // "Ask for it" is theatre unless the requester can attach one afterwards. They could not:
 // PUT /:id never touched receipts, and the client deleted them from the edit payload.
 describe("receipts can be attached to a request that already exists", () => {
-  const routes = strip(read("src/routes/reimbursements.js"));
+  const routes = stripFile("src/routes/reimbursements.js");
   const handler = routes.slice(
     routes.indexOf('router.post("/:id/receipts"'),
     routes.indexOf('router.post("/:id/request-receipt"')
@@ -154,7 +161,7 @@ describe("receipts can be attached to a request that already exists", () => {
 });
 
 describe("the client can actually attach one", () => {
-  const ui = strip(read("public/js/components/Reimbursements.js"));
+  const ui = stripFile("public/js/components/Reimbursements.js");
 
   test("rows offer an attach control", () => {
     expect(ui).toMatch(/Attach receipt/);

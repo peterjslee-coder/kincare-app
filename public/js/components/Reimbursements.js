@@ -42,6 +42,19 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
   const [receipts, setReceipts] = useState([]); // { data, name }
   const [receiptAskId, setReceiptAskId] = useState(null); // v1.105.29
   const [attachingId, setAttachingId] = useState(null);   // v1.105.30 — row currently uploading
+  // v1.105.31 — the settled tail collapses. Persisted per care team, so the choice survives
+  // a refresh; a preference you have to re-make every visit is not much of a preference.
+  const [showSettled, setShowSettled] = useState(() => {
+    try { return localStorage.getItem(`inplace.reimb.showSettled.${careTeamId}`) !== '0'; }
+    catch { return true; }
+  });
+  const toggleSettled = () => {
+    setShowSettled((v) => {
+      const next = !v;
+      try { localStorage.setItem(`inplace.reimb.showSettled.${careTeamId}`, next ? '1' : '0'); } catch {}
+      return next;
+    });
+  };
   const attachInputRef = useRef(null);
   const attachTargetRef = useRef(null);
   const [busy, setBusy] = useState(false);
@@ -1056,7 +1069,22 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
           // v1.97.0 — the approver's to-dos float to the top, everything else below
           const needsAction = meta.isApprover ? items.filter((x) => ['pending', 'approved'].includes(x.status)) : [];
           const rest = meta.isApprover ? items.filter((x) => !['pending', 'approved'].includes(x.status)) : items;
-          const ordered = [...needsAction, ...rest];
+
+          // ─── v1.105.31 — collapse the settled tail ───
+          //
+          // Collapsing by STATUS rather than by date or by a blanket "hide the list": the
+          // reason the ledger is long is that finished business never leaves it, and
+          // finished business is exactly what nobody needs to look at.
+          //
+          // Anything still live — pending, approved-but-unpaid — is NEVER collapsed, for
+          // either role. Hiding a request someone is waiting on you to approve, or one you
+          // are waiting to be paid for, would make the tidier screen actively worse than
+          // the cluttered one. The collapse only ever swallows paid, declined and
+          // cancelled rows.
+          const SETTLED = ['paid', 'declined', 'cancelled'];
+          const live = rest.filter((x) => !SETTLED.includes(x.status));
+          const settled = rest.filter((x) => SETTLED.includes(x.status));
+          const ordered = [...needsAction, ...live, ...(showSettled ? settled : [])];
           return (
             <>
               {needsAction.length > 0 && (
@@ -1228,6 +1256,26 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
             )}
           </div>
               ))}
+              {/* v1.105.31 — the toggle sits at the BOTTOM, where the tail begins.
+                  A control at the top would ask you to decide before you have seen what is
+                  there; here it reads as "…and 9 finished ones", which is the question you
+                  actually have at that point in the list. Totals stay visible either way, so
+                  collapsing never hides how much money is involved. */}
+              {settled.length > 0 && (
+                <button onClick={toggleSettled}
+                  style={{ width: '100%', marginTop: 8, padding: '8px 12px', borderRadius: 8,
+                    border: '1px dashed var(--border-light)', background: 'transparent',
+                    color: 'var(--text-secondary)', fontSize: 13, cursor: 'pointer', textAlign: 'left' }}>
+                  {showSettled ? '▾' : '▸'}{' '}
+                  {showSettled
+                    ? `Hide ${settled.length} settled ${settled.length === 1 ? 'request' : 'requests'}`
+                    : `Show ${settled.length} settled ${settled.length === 1 ? 'request' : 'requests'}`}
+                  <span style={{ color: 'var(--text-muted)', marginLeft: 6 }}>
+                    (${settled.reduce((t, x) => t + Number(x.amount || 0), 0).toFixed(2)} — paid, declined or cancelled)
+                  </span>
+                </button>
+              )}
+
             </>
           );
         })()
