@@ -40,6 +40,7 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
   const [payeeUserId, setPayeeUserId] = useState('');
   const [paidMethod, setPaidMethod] = useState('venmo');
   const [receipts, setReceipts] = useState([]); // { data, name }
+  const [receiptAskId, setReceiptAskId] = useState(null); // v1.105.29
   const [busy, setBusy] = useState(false);
   const [busyId, setBusyId] = useState(null);
   const [payingId, setPayingId] = useState(null); // row showing the mark-paid method picker
@@ -66,6 +67,20 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
   const [rptPerson, setRptPerson] = useState('');
   const [rptStatus, setRptStatus] = useState('');
   const [purposeSavingId, setPurposeSavingId] = useState(null);
+  // v1.105.29 — nudge whoever filed it to add the receipt, rather than chasing them in
+  // another app. Deliberately available to any team member, not just the approver: a
+  // sibling watching the family's money is often the one who spots a bare number.
+  const askForReceipt = async (id) => {
+    setReceiptAskId(id);
+    try {
+      const res = await apiFetch(`/api/reimbursements/${id}/request-receipt`, { method: 'POST' });
+      const d = await res.json().catch(() => ({}));
+      if (res?.ok) showToast(d.message || 'Asked for the receipt', 'success');
+      else showToast(d.error || 'Could not send that request', 'error');
+    } catch { showToast('Could not send that request', 'error'); }
+    setReceiptAskId(null);
+  };
+
   const setRowPurpose = async (id, value) => {
     setPurposeSavingId(id);
     // Optimistic local update so the tag sticks even before the refetch lands.
@@ -1025,16 +1040,31 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
                   {it.expense_date ? ` · ${it.expense_date}` : ''} · requested {fmtDate(it.created_at)}
                   {!!it.self_recorded && <span style={{ color: '#7b5ea7', fontWeight: 600 }}> · recorded by approver</span>}
                 </div>
-                {it.receipts.length > 0 && (
-                  <div style={{ marginTop: 4 }}>
-                    {it.receipts.map((rc) => (
-                      <a key={rc.id} href={`/api/reimbursements/receipt/${rc.id}`} target="_blank" rel="noopener"
-                        style={{ fontSize: 12, color: 'var(--role-color)', marginRight: 10 }}>
-                        📎 {rc.file_name || 'receipt'}
-                      </a>
-                    ))}
-                  </div>
-                )}
+                {/* v1.105.29 — say when there is NO receipt, not just when there is one.
+                    Rendering nothing for an empty list looks identical to a permissions
+                    problem: you cannot tell "they did not attach one" from "the app is not
+                    showing it to me". On a $655 request that ambiguity is the difference
+                    between approving and going to ask in another app. */}
+                <div style={{ marginTop: 4 }}>
+                  {it.receipts.length > 0 ? it.receipts.map((rc) => (
+                    <a key={rc.id} href={`/api/reimbursements/receipt/${rc.id}`} target="_blank" rel="noopener"
+                      style={{ fontSize: 12, color: 'var(--role-color)', marginRight: 10 }}>
+                      📎 {rc.file_name || 'receipt'}
+                    </a>
+                  )) : (
+                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                      No receipt attached
+                      {it.requested_by !== myUserId && (
+                        <button onClick={() => askForReceipt(it.id)} disabled={receiptAskId === it.id}
+                          style={{ marginLeft: 8, fontSize: 12, padding: '1px 8px', borderRadius: 6,
+                            border: '1px solid var(--border-light)', background: 'var(--bg-card)',
+                            color: 'var(--role-color)', cursor: 'pointer' }}>
+                          {receiptAskId === it.id ? 'Asking…' : 'Ask for it'}
+                        </button>
+                      )}
+                    </span>
+                  )}
+                </div>
                 {/* v1.98.19 — purpose tag, editable on any status (incl. paid) by team participants */}
                 {(meta.canSubmit || meta.isApprover) && (
                   <div style={{ marginTop: 5, display: 'flex', alignItems: 'center', gap: 6 }}>

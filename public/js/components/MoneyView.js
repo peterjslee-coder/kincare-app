@@ -158,6 +158,13 @@ const MoneyView = window.MoneyView = ({ careTeamId, onClose }) => {
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
                     {noteFor(r)}
+                    {/* v1.105.29 — an empty receipt list must READ as empty. Rendering nothing is
+                        indistinguishable from a permissions problem, and on a large number that is
+                        the difference between approving and going to ask somewhere else. */}
+                    {(r.receipts || []).length === 0 && (
+                      <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>No receipt attached</span>
+                    )}
+
                     {(r.receipts || []).map((rc) => (
                       <a key={rc.id} href={`/api/reimbursements/receipt/${rc.id}`} target="_blank" rel="noopener"
                         style={{ marginLeft: 8, color: 'var(--role-color)', textDecoration: 'none', fontSize: 12 }}>

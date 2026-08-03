@@ -478,6 +478,49 @@ async function notifyParties(db, req, ctx, title, body, type) {
   }
 }
 
+// ── POST /api/reimbursements/:id/request-receipt — ask for a missing receipt ──
+//
+// The gap this closes (7/31, Pete): a $655 request arrives with no receipt, and the row
+// renders NOTHING where a receipt link would be. That silence is unreadable — an approver
+// cannot tell "they did not attach one" from "the app is not showing it to me", and the
+// only recourse was to go ask in another app entirely.
+//
+// Receipts stay optional, which is right: someone reimbursing $6 of parking should not be
+// blocked. But optional means sometimes-absent, and an absence you can act on beats an
+// absence you have to interpret.
+router.post("/:id/request-receipt", async (req, res) => {
+  try {
+    const db = await getDb();
+    const row = await db.prepare(
+      "SELECT id, care_team_id, requested_by, amount, description FROM reimbursements WHERE id = ?"
+    ).get(req.params.id);
+    if (!row) return res.status(404).json({ error: "Request not found" });
+
+    const access = await teamAccess(db, row.care_team_id, req.user.id);
+    if (!access || !access.canView) return res.status(404).json({ error: "Request not found" });
+    // Anyone on the team can ask, not only the approver. A sibling paying attention to the
+    // family's money is exactly the person who notices a large number with nothing behind it.
+    if (req.user.id === row.requested_by) {
+      return res.status(400).json({ error: "That's your own request." });
+    }
+
+    const asker = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(req.user.id);
+    const askerName = asker ? `${asker.first_name} ${asker.last_name}`.trim() : "A care team member";
+
+    notify(req, row.requested_by, "Receipt requested",
+      `${askerName} asked for the receipt on your $${Number(row.amount).toFixed(2)} request — ${row.description}. Tap to add it.`,
+      { type: "reimbursement_receipt_requested", reimbursementId: row.id, careTeamId: row.care_team_id,
+        page: "care-team", focus: `reimbursement:${row.id}` });
+
+    audit(req, "reimbursement_receipt_requested", { id: row.id, amount: row.amount });
+    res.json({ message: "We've asked them to add the receipt." });
+  } catch (err) {
+    console.error("Request receipt error:", err);
+    captureException(err, { where: "reimbursements: request receipt" });
+    res.status(500).json({ error: "Failed to send the request" });
+  }
+});
+
 router.post("/:id/approve", async (req, res) => {
   try {
     const db = await getDb();
