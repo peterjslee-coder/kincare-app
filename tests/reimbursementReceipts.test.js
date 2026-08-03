@@ -81,6 +81,11 @@ describe("receipts remain optional", () => {
   test("nothing blocks a request without one", () => {
     // Deliberate: someone reimbursing $6 of parking should not be stopped. The fix is
     // making the absence legible and actionable, not adding a gate.
+    //
+    // Pete confirmed this explicitly on 2026-07-31, when asked whether a receipt should
+    // become mandatory above some dollar threshold: "It remains optional." Recorded here
+    // so the question is not re-opened as if it were an oversight — a large request with
+    // no receipt is a known, accepted state, answered by the nudge rather than a block.
     const routes = strip(read("src/routes/reimbursements.js"));
     const create = routes.slice(routes.indexOf('router.post("/", async'), routes.indexOf('router.post("/record"'));
     expect(create).not.toMatch(/receipts\.length === 0/);
