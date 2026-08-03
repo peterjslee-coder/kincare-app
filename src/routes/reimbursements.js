@@ -488,6 +488,92 @@ async function notifyParties(db, req, ctx, title, body, type) {
 // Receipts stay optional, which is right: someone reimbursing $6 of parking should not be
 // blocked. But optional means sometimes-absent, and an absence you can act on beats an
 // absence you have to interpret.
+// ── POST /api/reimbursements/:id/receipts — attach receipts to an EXISTING request ──
+//
+// The other half of the 7/31 gap. "No receipt attached" plus an "Ask for it" button is only
+// useful if the person asked can actually act on it — and they could not: PUT /:id never
+// touched receipts, and the client explicitly deleted them from the edit payload.
+//
+// A separate endpoint rather than widening the edit, for two reasons.
+//
+// ADD-ONLY, NEVER REPLACE. Receipts are evidence for money someone else approves. Letting
+// them be swapped or removed after the fact would make the audit trail worth less than no
+// trail at all, because it would look complete while being editable. Adding a photo can
+// only ever make a request better documented.
+//
+// ALLOWED PAST 'pending'. PUT is pending-only, and rightly so — changing the AMOUNT after
+// approval would be changing what was agreed. Attaching a receipt does not change the ask,
+// so it stays available on approved and paid requests too: a family reconstructing what
+// they spent on a parent's care six months later is a real thing, and the receipt is worth
+// having whenever it turns up. Cancelled and declined are closed; nothing to document.
+router.post("/:id/receipts", async (req, res) => {
+  try {
+    const db = await getDb();
+    const row = await db.prepare(
+      "SELECT id, care_team_id, requested_by, payee_user_id, amount, description, status FROM reimbursements WHERE id = ?"
+    ).get(req.params.id);
+    if (!row) return res.status(404).json({ error: "Request not found" });
+
+    const access = await teamAccess(db, row.care_team_id, req.user.id);
+    if (!access || !access.canView) return res.status(404).json({ error: "Request not found" });
+
+    // The requester, the person being paid, or the approver. The approver is included on
+    // purpose: the realistic path is the requester texting a photo to whoever is chasing it,
+    // and uploaded_by records who actually attached it either way.
+    const mayAttach = req.user.id === row.requested_by
+      || req.user.id === row.payee_user_id
+      || access.isApprover;
+    if (!mayAttach) return res.status(403).json({ error: "Only the requester or the approver can attach receipts." });
+
+    if (["cancelled", "declined"].includes(row.status)) {
+      return res.status(400).json({ error: `This request was ${row.status} — there's nothing left to document.` });
+    }
+
+    const receipts = parseReceipts(req.body.receipts);
+    if (!receipts.length) return res.status(400).json({ error: "No receipt supplied." });
+
+    // MAX_RECEIPTS is a per-request cap, not a per-upload one, so count what is already
+    // there. Otherwise five uploads of five would quietly store twenty-five.
+    const existing = await db.prepare(
+      "SELECT COUNT(*) AS n FROM reimbursement_receipts WHERE reimbursement_id = ?"
+    ).get(req.params.id);
+    if (Number(existing?.n || 0) + receipts.length > MAX_RECEIPTS) {
+      return res.status(400).json({ error: `At most ${MAX_RECEIPTS} receipts per request.` });
+    }
+
+    for (const r of receipts) {
+      const stored = await storage.storeFileData("receipts", r.data);
+      await db.prepare(
+        "INSERT INTO reimbursement_receipts (id, reimbursement_id, file_data, file_name, mime_type, file_size, uploaded_by) VALUES (?, ?, ?, ?, ?, ?, ?)"
+      ).run(uuid(), req.params.id, stored, r.name, r.mime, r.size, req.user.id);
+    }
+
+    audit(req, "reimbursement_receipts_added", { id: req.params.id, count: receipts.length, status: row.status });
+
+    // Tell whoever is waiting on it. If the approver attached it themselves there is nobody
+    // to tell — they are the one who wanted it.
+    if (!access.isApprover || req.user.id === row.requested_by) {
+      const approverId = access.team.billing_user_id
+        || (await db.prepare("SELECT user_id FROM care_team_members WHERE care_team_id = ? AND role = 'leader' LIMIT 1").get(row.care_team_id))?.user_id;
+      if (approverId && approverId !== req.user.id) {
+        const who = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(req.user.id);
+        const wName = who ? `${who.first_name} ${who.last_name}`.trim() : "A team member";
+        notify(req, approverId, "Receipt added",
+          `${wName} attached a receipt to the $${Number(row.amount).toFixed(2)} request — ${row.description}.`,
+          { type: "reimbursement_request", reimbursementId: row.id, careTeamId: row.care_team_id,
+            page: "care-team", focus: `reimbursement:${row.id}` });
+      }
+    }
+
+    res.json({ added: receipts.length, message: receipts.length === 1 ? "Receipt attached" : `${receipts.length} receipts attached` });
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    console.error("Attach receipt error:", err);
+    captureException(err, { where: "reimbursements: attach receipts" });
+    res.status(500).json({ error: "Failed to attach the receipt" });
+  }
+});
+
 router.post("/:id/request-receipt", async (req, res) => {
   try {
     const db = await getDb();

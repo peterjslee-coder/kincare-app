@@ -70,10 +70,15 @@ describe("you can ask for the missing receipt from inside the app", () => {
     expect(handler).toMatch(/audit\(req, "reimbursement_receipt_requested"/);
   });
 
-  test("the UI offers it only on requests that are not yours", () => {
+  test("the UI offers ASK only when you are not the one who could attach it", () => {
+    // v1.105.30 restructured this: if you can attach (requester, payee or approver) you get
+    // "Attach receipt"; otherwise you get "Ask for it". The two must be exclusive, or the
+    // approver ends up nudging themselves.
     const ui = strip(read("public/js/components/Reimbursements.js"));
-    expect(ui).toMatch(/it\.requested_by !== myUserId/);
+    expect(ui).toMatch(/it\.requested_by === myUserId \|\| it\.payee_user_id === myUserId \|\| meta\.isApprover/);
     expect(ui).toMatch(/request-receipt/);
+    // ask sits in the else branch, after the attach branch
+    expect(ui.indexOf("Attach receipt")).toBeLessThan(ui.indexOf("Ask for it"));
   });
 });
 
@@ -90,5 +95,86 @@ describe("receipts remain optional", () => {
     const create = routes.slice(routes.indexOf('router.post("/", async'), routes.indexOf('router.post("/record"'));
     expect(create).not.toMatch(/receipts\.length === 0/);
     expect(create).not.toMatch(/Receipt (is )?required/i);
+  });
+});
+
+
+// ─── v1.105.30 — the person asked can actually act on it ───
+//
+// "Ask for it" is theatre unless the requester can attach one afterwards. They could not:
+// PUT /:id never touched receipts, and the client deleted them from the edit payload.
+describe("receipts can be attached to a request that already exists", () => {
+  const routes = strip(read("src/routes/reimbursements.js"));
+  const handler = routes.slice(
+    routes.indexOf('router.post("/:id/receipts"'),
+    routes.indexOf('router.post("/:id/request-receipt"')
+  );
+
+  test("the endpoint exists and is team-gated", () => {
+    expect(routes).toMatch(/router\.post\("\/:id\/receipts"/);
+    expect(handler).toMatch(/teamAccess\(db, row\.care_team_id, req\.user\.id\)/);
+  });
+
+  test("it is ADD-ONLY — nothing deletes or replaces a receipt", () => {
+    // Receipts are evidence for money someone else approves. Editable evidence is worse
+    // than none: it looks complete while being changeable after the fact.
+    expect(handler).not.toMatch(/DELETE FROM reimbursement_receipts/);
+    expect(handler).not.toMatch(/UPDATE reimbursement_receipts/);
+    expect(handler).toMatch(/INSERT INTO reimbursement_receipts/);
+  });
+
+  test("it works past 'pending', unlike editing", () => {
+    // Changing the AMOUNT after approval changes what was agreed; attaching a receipt does
+    // not. Only closed states are refused.
+    expect(handler).toMatch(/\["cancelled", "declined"\]\.includes\(row\.status\)/);
+    expect(handler).not.toMatch(/status !== "pending"/);
+  });
+
+  test("the per-request cap counts what is already stored", () => {
+    // A per-upload cap would let five uploads of five quietly store twenty-five.
+    expect(handler).toMatch(/SELECT COUNT\(\*\) AS n FROM reimbursement_receipts WHERE reimbursement_id/);
+    expect(handler).toMatch(/> MAX_RECEIPTS/);
+  });
+
+  test("provenance is recorded — uploaded_by is the person who attached it", () => {
+    // The approver may attach a photo the requester texted them. Who filed the request and
+    // who supplied the paperwork are different facts and both are worth keeping.
+    expect(handler).toMatch(/uploaded_by\) VALUES[\s\S]{0,200}req\.user\.id/);
+  });
+
+  test("it goes through the same validation as a new request", () => {
+    // parseReceipts enforces MIME allow-list, size cap AND magic-byte check. Skipping it
+    // here would make this endpoint the soft way in.
+    expect(handler).toMatch(/parseReceipts\(req\.body\.receipts\)/);
+  });
+
+  test("it is audited", () => {
+    expect(handler).toMatch(/audit\(req, "reimbursement_receipts_added"/);
+  });
+});
+
+describe("the client can actually attach one", () => {
+  const ui = strip(read("public/js/components/Reimbursements.js"));
+
+  test("rows offer an attach control", () => {
+    expect(ui).toMatch(/Attach receipt/);
+    expect(ui).toMatch(/reimbursements\/\$\{id\}\/receipts/);
+  });
+
+  test("photos are resized before upload, same as the new-request form", () => {
+    // A raw modern-phone photo would blow the 5MB server cap on exactly the device most
+    // likely to be taking the picture.
+    const h = ui.slice(ui.indexOf("const onAttachPicked"));
+    expect(h.slice(0, 1600)).toMatch(/processFile\(f\)/);
+  });
+
+  test("the picker resets so a failed file can be retried", () => {
+    const h = ui.slice(ui.indexOf("const onAttachPicked"));
+    expect(h.slice(0, 800)).toMatch(/e\.target\.value = ''/);
+  });
+
+  test("attach stays available once a receipt exists", () => {
+    // A till roll and the card slip are commonly two photos.
+    expect(ui).toMatch(/Add another/);
   });
 });

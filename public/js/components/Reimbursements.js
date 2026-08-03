@@ -41,6 +41,9 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
   const [paidMethod, setPaidMethod] = useState('venmo');
   const [receipts, setReceipts] = useState([]); // { data, name }
   const [receiptAskId, setReceiptAskId] = useState(null); // v1.105.29
+  const [attachingId, setAttachingId] = useState(null);   // v1.105.30 — row currently uploading
+  const attachInputRef = useRef(null);
+  const attachTargetRef = useRef(null);
   const [busy, setBusy] = useState(false);
   const [busyId, setBusyId] = useState(null);
   const [payingId, setPayingId] = useState(null); // row showing the mark-paid method picker
@@ -67,6 +70,36 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
   const [rptPerson, setRptPerson] = useState('');
   const [rptStatus, setRptStatus] = useState('');
   const [purposeSavingId, setPurposeSavingId] = useState(null);
+  // v1.105.30 — attach a receipt to a request that already exists.
+  // Reuses processFile, so a 5MB phone photo is resized client-side the same way it is on
+  // the original form. Uploading the raw camera file would hit the 5MB server cap on
+  // exactly the modern phone most likely to be taking the picture.
+  const onAttachPicked = async (e) => {
+    const id = attachTargetRef.current;
+    const files = Array.from(e.target.files || []).slice(0, 5);
+    e.target.value = ''; // let the same file be picked again after a failure
+    if (!id || !files.length) return;
+    setAttachingId(id);
+    try {
+      const processed = [];
+      for (const f of files) {
+        try { processed.push(await processFile(f)); }
+        catch { showToast(`Could not read ${f.name || 'that file'}`, 'error'); }
+      }
+      if (processed.length) {
+        const res = await apiFetch(`/api/reimbursements/${id}/receipts`, {
+          method: 'POST', body: JSON.stringify({ receipts: processed }),
+        });
+        const d = await res.json().catch(() => ({}));
+        if (res?.ok) { showToast(d.message || 'Receipt attached', 'success'); fetchList(); }
+        else showToast(d.error || 'Could not attach that receipt', 'error');
+      }
+    } catch { showToast('Could not attach that receipt', 'error'); }
+    setAttachingId(null);
+  };
+
+  const pickReceiptFor = (id) => { attachTargetRef.current = id; attachInputRef.current?.click(); };
+
   // v1.105.29 — nudge whoever filed it to add the receipt, rather than chasing them in
   // another app. Deliberately available to any team member, not just the approver: a
   // sibling watching the family's money is often the one who spots a bare number.
@@ -943,6 +976,9 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
                   it the OS shows its full picker (Take Photo / Photo Library / Files),
                   so a screenshot, a saved image, or a PDF all work. */}
               <input type="file" accept="image/*,application/pdf" multiple onChange={handleFiles} style={{ display: 'none' }} />
+              {/* v1.105.30 — one hidden picker reused by every row; attachTargetRef says which. */}
+              <input type="file" ref={attachInputRef} accept="image/*,application/pdf" multiple
+                style={{ display: 'none' }} onChange={onAttachPicked} />
             </label>
             {receipts.map((r, i) => (
               <span key={i} style={{ fontSize: 12, marginLeft: 8, color: 'var(--text-secondary)' }}>
@@ -1052,9 +1088,24 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
                       📎 {rc.file_name || 'receipt'}
                     </a>
                   )) : (
-                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                      No receipt attached
-                      {it.requested_by !== myUserId && (
+                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>No receipt attached</span>
+                  )}
+                  {/* v1.105.30 — the two halves of the same problem, side by side.
+                      If it is yours (or you approve it) you can add one; if it is someone
+                      else's you can ask. Attach stays available once a receipt exists —
+                      an itemised till roll and the card slip are often two photos — and on
+                      approved or paid rows, because a family reconstructing what they spent
+                      months later still wants the paperwork attached to the right line. */}
+                  {(it.requested_by === myUserId || it.payee_user_id === myUserId || meta.isApprover)
+                    ? !['cancelled', 'declined'].includes(it.status) && (
+                        <button onClick={() => pickReceiptFor(it.id)} disabled={attachingId === it.id}
+                          style={{ marginLeft: it.receipts.length ? 0 : 8, fontSize: 12, padding: '1px 8px', borderRadius: 6,
+                            border: '1px solid var(--border-light)', background: 'var(--bg-card)',
+                            color: 'var(--role-color)', cursor: 'pointer' }}>
+                          {attachingId === it.id ? 'Attaching…' : (it.receipts.length ? '+ Add another' : '+ Attach receipt')}
+                        </button>
+                      )
+                    : it.receipts.length === 0 && (
                         <button onClick={() => askForReceipt(it.id)} disabled={receiptAskId === it.id}
                           style={{ marginLeft: 8, fontSize: 12, padding: '1px 8px', borderRadius: 6,
                             border: '1px solid var(--border-light)', background: 'var(--bg-card)',
@@ -1062,8 +1113,6 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
                           {receiptAskId === it.id ? 'Asking…' : 'Ask for it'}
                         </button>
                       )}
-                    </span>
-                  )}
                 </div>
                 {/* v1.98.19 — purpose tag, editable on any status (incl. paid) by team participants */}
                 {(meta.canSubmit || meta.isApprover) && (
