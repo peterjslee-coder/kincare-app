@@ -248,52 +248,113 @@ The consent_outreach table tracks emails sent + recipient responses. Attestation
 
 ## Last Session Handoff (updated each session)
 
-**Date:** March 19, 2026 | **Version:** v1.50.35 | **Session type:** Checkr Partner Certification compliance + middle name collection + doc updates
+**Date:** August 4, 2026 | **Version:** v1.105.31 | **Session arc:** App Store / Play submission prep, the cancellation-policy reconciliation, guideline 1.2, privacy triage after the lawyer call, and the reimbursement ledger
 
-### What was done this session:
+> The previous entry here sat at March 19 / v1.50.35 for four months. If you are reading this
+> and the date is stale again, trust `git log` over this section.
 
-**Checkr Partner Certification Compliance (v1.50.29–v1.50.32):**
-- Full re-audit of 14-page Checkr Partner Certification Requirements PDF against codebase
-- Fixed `report.result` vs `report.status` usage in status polling endpoint
-- Added ETA tracking from `report.updated` and `invitation.completed` webhooks
-- Added ETA display in admin panel ("~X days remaining")
-- Added re-initiation support for candidates with expired/canceled/rejected/did_not_pass status
-- Added all 12+ required webhook handlers
-- Dynamic GET /packages and GET /nodes endpoints confirmed working
-- POST /candidates with custom_id, phone, middle_name/no_middle_name confirmed
-- POST /invitations with node and work_locations confirmed
+### Where the product actually is
 
-**Middle Name Collection (v1.50.33):**
-- Added `legal_middle_name` column to caregiver_profiles (v1.50.32 migration)
-- Added middle name input + "I don't have a middle name" checkbox to CaregiverOnboarding Step 4
-- Wired through caregivers.js API (save/load) and dashboard.js (profile response)
-- Checkr POST /candidates already used middle_name/no_middle_name — now actually collected
+Store submission is the whole game right now. The code side of it is done; what remains is
+four things that need Pete in a browser, not a commit. See "Open" below.
 
-**Multi-test-account attempt + revert (v1.50.34–v1.50.35):**
-- v1.50.34: Added email exception for peter@yourinplace.com to allow multiple registrations
-- v1.50.35: FULLY REVERTED — Cary's account uses the same email (peter@yourinplace.com). Using +alias emails (peter+nick@yourinplace.com) instead for test accounts.
+**What shipped in the v1.105.x run (chronological, `git log` has the detail):**
 
-### PRIORITY FOR NEXT SESSION:
-1. **Early checkout prompt + pay logic** — Build the checkout modal warning and 15-min block pay calculation (see TASKS.md spec). Server-side duration computation now enabled by timezone fix.
-2. **Test timezone fix in production** — Deploy and verify push notifications arrive at the right time.
-3. **Checkr test candidates** — Roll Tide and Camo Time candidates still need to be completed in sandbox.
+- **Store review invariants** (`.5`–`.12`) — Apple "Hide My Email" unblocked, iPad dropped for
+  the first submission, iOS privacy manifest added AND made a member of the App target's Copy
+  Bundle Resources (a manifest sitting in the folder does not ship), location declared
+  foreground-only, export compliance declared exempt. All pinned in `tests/storeReview.test.js`
+  — these are requirements that are invisible at runtime and only surface as a rejection weeks
+  later, so they get asserted rather than remembered.
+- **Guideline 1.2 — report/block** (`.13`, `.18`, `.21`, `.22`). Schema, UI reachable without a
+  right-click, and the admin queue that makes the 24-hour promise real. `src/utils/blocks.js`
+  fails OPEN on lookup error and fails toward ASKING on ambiguity.
+- **Cancellation policy reconciliation** (`.14`–`.17`, `.19`). Ten months of drift across the
+  terms document, the app copy and the code, reconciled to one rule. See "Do not re-litigate."
+- **Demo safety at the Stripe boundary** (`.20`). Dev Rule #7 was enforced in the poller's SQL
+  only; a screenshot harness cleared `is_demo` and the poller began authorising seeded sessions.
+  Now `isDemoSession()` guards every function that talks to Stripe, and keys on the seed's email
+  domain (`@inplace.care`) as well as the mutable flag.
+- **Privacy** (`.23`, `.24`) — check-in stores a coarsened coordinate (2 decimals, ~1.1km) rather
+  than a precise one; Sentry stops reporting other people's port scans as our errors.
+- **Copy** (`.25`) — states plainly that the AI does not set prices or wages. Pete's ask; verified
+  against `calculateSessionCost` and the AI modules before writing it, and it is true.
+- **QR codes** (`.26`–`.28`) — `src/utils/qr.js`, iP badge in the middle, and a route a *family*
+  member can hand to someone who asks what they're doing.
+- **Reimbursements** (`.29`–`.31`) — a missing receipt now reads as "No receipt attached" with a
+  request button, receipts can be added to a request that already exists, and the settled tail
+  (paid/declined/cancelled) collapses. `pending` and `approved` never collapse: `approved` means
+  agreed but not yet paid, so someone is still owed money.
 
-### What was discovered / still open:
-- **Cary's email is peter@yourinplace.com** — same as Pete's. Any special-casing of that email risks Cary's account. Use +alias emails for test accounts.
-- Dashboard `getNowInZone()` calls still use default timezone for aggregate views — acceptable for family-view aggregates
-- Frontend `RequestCareModal.js` line 38 still uses naive date parsing for short-notice detection — low priority display hint
-- DUNS number (106784345) has wrong business name — blocking Google Play. D&B requires 8-day verification.
-- "Tester" last name convention: last name ending in "Tester" auto-verifies email + gets is_tester flag
+### Open — all four need Pete at a browser, not code
 
-### Key decisions made (this session):
-- **Checkr `result` vs `status`:** `result` = finding (clear/consider), `status` = lifecycle (pending/complete). Always use `result` for pass/fail.
-- **Re-initiation statuses:** Only `invitation_expired`, `invitation_canceled`, `rejected`, `did_not_pass` allow re-initiation. All others block with "already_initiated".
-- **No multi-account exception for shared emails.** Reverted because Cary shares peter@yourinplace.com. +alias approach is safe.
+1. **App Store Connect → Primary Category = Lifestyle.** Decided, not yet set. His session expired
+   mid-walkthrough. (Not Health & Fitness — that invites a heavier review posture than this app
+   needs for a first submission.)
+2. **Play Health apps declaration — re-answer it.** One probably exists, but Care Tasks (v1.99)
+   added medication scheduling/reminders/adherence, which trips Play's "Medication and Treatment
+   Management" category. TASKS.md:849.
+3. **Reconcile the store privacy declarations, and name Cloudflare R2 in the Privacy Policy.**
+   Four things must say the same thing: the plist string, `PrivacyInfo.xcprivacy`, the App Store
+   Connect labels, and the published policy. The lawyer-reviewed 2026-07-07 policy predates R2
+   going live on 7/11, and R2 is where ID photos and selfies live. TASKS.md:159, :879.
+4. **September lawyer packet** — ongoing. Carry the questions below into it.
 
-### New tables/columns this session:
-- `caregiver_profiles.legal_middle_name` TEXT (v1.50.32)
-- `caregiver_profiles.checkr_eta` TIMESTAMPTZ (v1.50.32)
-- `visit_logs.early_checkout_reason` (planned — not yet added to DB, captured in TASKS.md spec)
+### Open legal questions (for the September session, not for us to answer)
+
+- **L1 — who needs the licence?** Va. Code § 32.1-162.7 puts personal care (ADLs) *inside* the
+  licensed "home care organization" definition; 12VAC5-381-30 exempts homemaker/chore/companion
+  only. Pete's sharpening of the question is the right one and should be asked in these words:
+  **is it InPlace that needs licensing, or the people providing care in the home?**
+- **L2 — BIPA before any out-of-state expansion.** Illinois BIPA has no volume threshold and a
+  private right of action at $1,000/$5,000 per person. It is *not* a Virginia problem: VCDPA is
+  AG-only with thresholds far above current volume. Do not describe the AI face-comparison as a
+  current showstopper — it is a gate on expansion, not on shipping.
+- **may/shall** pass over the published agreements.
+
+### Do not re-litigate — these were settled, some the hard way
+
+- **Nobody pre-pays for a care session.** Stripe runs `capture_method: 'manual'`. The poller
+  places an authorization 23–25h before the visit; capture happens at check-out. I asserted the
+  opposite mid-session and Pete corrected me; he was right. Any reasoning that starts "the family
+  has already paid, so…" is wrong.
+- **The cancellation rule, in one line:** inside 24 hours the client pays **100%**. If the
+  *caregiver* cancels they simply don't get paid — but they can be reviewed. The asymmetry is the
+  point: only a client ever pays a fee. It lives in `src/utils/cancellationFee.js` next to the
+  quoted contract clauses, deliberately, so the rule and its source stay together. Never
+  reintroduce an inline `isLateCancel ? capture : void` in the route handler.
+- **A late-cancel capture is DEFERRED, not taken on the spot** (24h to reconcile or escalate,
+  silence is consent). The fee is the caregiver's lost wage, so the caregiver is the only party
+  with standing to forgive it. Capturing in the handler would take the money before they were asked.
+- **Reimbursement receipts stay OPTIONAL.** Pete was explicit. Requests are editable so a
+  member can attach one after the fact; nothing blocks on their absence.
+- **`application_fee_amount`** is set at authorization against the full amount and is **not**
+  prorated on a partial capture. Known, not yet addressed.
+
+### Gotchas a fresh session will otherwise rediscover
+
+- **Tests that assert "X must NOT appear in the source" must read stripped source; tests that
+  assert "X is on the page" must read raw.** Use `tests/helpers/source.js` — never a local
+  `replace(/\/\*[\s\S]*?\*\//g, "")`. That one-liner reads the `/*` inside
+  `accept="image/*,application/pdf"` as a comment opener and deletes ~9,000 characters of real
+  code, which makes negative assertions pass **vacuously**. The comment-in-source trap has bitten
+  four times; the helper bug once. `tests/sourceHelper.test.js` pins it.
+- **Migrations must be appended in numeric order** in `src/models/database.js`. Inserting one
+  ahead of its predecessor split the previous migration object twice in this session.
+- **`npm test` excludes `tests/integration`.** Integration needs `runuser -u claude -- npm run
+  test:integration`. Run both before a release.
+- **This session lost GitHub *write* access mid-run** (reads fine, `git push` 403s at the sandbox
+  proxy — not a token problem; the token authenticates as `peterjslee-coder`). It did not recover
+  across a container restart, so it is session-scoped. If a new session hits it: commit as normal,
+  `git bundle create f.bundle main --not <origin/main sha>`, deliver it plus a `.command` wrapper
+  to Pete's Desktop, and he double-clicks to push. Check whether push works *before* promising a
+  deploy.
+
+### Demo accounts
+
+The seed creates Paul/Barbara Lowe, not Pete/Betty. The "Pete and Betty" demo personas were
+removed this session as confusing. See the Three User Roles table above, which was verified
+against `src/seed.js`.
 
 ## Local Development
 
@@ -500,6 +561,8 @@ These rules apply to every session. Do not skip them.
 6. **Trust user bug reports — investigate code first.** When Pete reports a bug, look at the code before suggesting it might be caching or user error. He's usually right.
 
 7. **NEVER trigger real payments from demo/seed data.** Stripe is live with real keys. Demo accounts (paul@inplace.care, maria@inplace.care, barbara@inplace.care, etc.) do NOT have real Stripe Connect accounts. Never write code that creates Stripe Checkout Sessions, PaymentIntents, or transfers using demo/seed user data. Never seed `stripe_account_id` on demo caregiver profiles. Any payment-related code changes must be reviewed for demo safety — if a code path could reach Stripe's API with fake data, it's a bug. When testing payment flows, use Stripe's test mode keys locally, never the live keys.
+
+8. **A test that reads source must pick raw or stripped deliberately.** Use `tests/helpers/source.js`: `raw()` for "this is on the page", `code()` for "this must NOT appear". Never hand-roll `replace(/\/\*[\s\S]*?\*\//g, "")` — the `/*` inside a string literal like `accept="image/*,application/pdf"` opens a phantom block comment and swallows thousands of characters of real code. A positive assertion fails loudly when that happens; a negative assertion passes silently, having verified nothing. A test that cannot fail is worse than no test.
 
 ## Known Limitations
 
