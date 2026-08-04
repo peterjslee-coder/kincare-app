@@ -55,6 +55,20 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
       return next;
     });
   };
+  // v1.105.32 — the size of the settled tail, hoisted to component scope so the card
+  // header can offer the same switch. Pete's point, and it is the right one: a control
+  // that only renders *after* every row is a control nobody finds — you have to scroll
+  // the entire ledger to discover you could have shortened it. The bottom toggle stays
+  // (there it reads as "…and 9 finished ones", which is the question you have at that
+  // exact point); this is the same switch, surfaced where the eye already is.
+  const SETTLED_STATUSES = ['paid', 'declined', 'cancelled'];
+  const settledSummary = useMemo(() => {
+    // Mirrors the list's own partition: for an approver the pending/approved rows are
+    // lifted out as to-dos first, so they are never part of the tail for either role.
+    const rest = meta.isApprover ? items.filter((x) => !['pending', 'approved'].includes(x.status)) : items;
+    const s = rest.filter((x) => SETTLED_STATUSES.includes(x.status));
+    return { count: s.length, total: s.reduce((t, x) => t + Number(x.amount || 0), 0) };
+  }, [items, meta.isApprover]);
   const attachInputRef = useRef(null);
   const attachTargetRef = useRef(null);
   const [busy, setBusy] = useState(false);
@@ -840,6 +854,19 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
               Record paid
             </button>
           )}
+          {/* v1.105.32 — the settled-tail switch, up here where it can be found.
+              Deliberately dashed and in secondary text rather than outlined in the role
+              colour: everything else in this row DOES something to the ledger, and this
+              only changes what you are looking at. Same control as the one at the foot of
+              the list, same persisted preference — pressing either moves both. */}
+          {!showForm && settledSummary.count > 0 && (
+            <button onClick={toggleSettled}
+              aria-expanded={showSettled}
+              title={`${settledSummary.count} settled ${settledSummary.count === 1 ? 'request' : 'requests'} — $${settledSummary.total.toFixed(2)} paid, declined or cancelled`}
+              style={{ padding: '6px 14px', background: 'transparent', color: 'var(--text-secondary)', border: '1px dashed var(--border-light)', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+              {showSettled ? '▾' : '▸'} {settledSummary.count} settled
+            </button>
+          )}
         </div>
       </div>
 
@@ -1081,9 +1108,9 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
           // are waiting to be paid for, would make the tidier screen actively worse than
           // the cluttered one. The collapse only ever swallows paid, declined and
           // cancelled rows.
-          const SETTLED = ['paid', 'declined', 'cancelled'];
-          const live = rest.filter((x) => !SETTLED.includes(x.status));
-          const settled = rest.filter((x) => SETTLED.includes(x.status));
+          // v1.105.32 — one definition of "settled", shared with the header chip's count.
+          const live = rest.filter((x) => !SETTLED_STATUSES.includes(x.status));
+          const settled = rest.filter((x) => SETTLED_STATUSES.includes(x.status));
           const ordered = [...needsAction, ...live, ...(showSettled ? settled : [])];
           return (
             <>
@@ -1256,11 +1283,13 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
             )}
           </div>
               ))}
-              {/* v1.105.31 — the toggle sits at the BOTTOM, where the tail begins.
-                  A control at the top would ask you to decide before you have seen what is
-                  there; here it reads as "…and 9 finished ones", which is the question you
-                  actually have at that point in the list. Totals stay visible either way, so
-                  collapsing never hides how much money is involved. */}
+              {/* v1.105.31 — this toggle sits at the BOTTOM, where the tail begins: here it
+                  reads as "…and 9 finished ones", which is the question you actually have at
+                  that point in the list. Totals stay visible either way, so collapsing never
+                  hides how much money is involved.
+                  v1.105.32 — but the bottom is ALSO where nobody looks, so the header carries
+                  a twin of this control. Both call toggleSettled; there is one piece of state
+                  and one localStorage key, so they can never disagree. */}
               {settled.length > 0 && (
                 <button onClick={toggleSettled}
                   style={{ width: '100%', marginTop: 8, padding: '8px 12px', borderRadius: 8,

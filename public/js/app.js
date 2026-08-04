@@ -1073,15 +1073,24 @@ const App = () => {
         .then(data => {
           if (data?.invite) {
             setInviteInfo(data.invite);
-            // Only show invite page if user is NOT already logged in
-            if (!AUTH_TOKEN) {
+            // Only show invite page if user is NOT already logged in.
+            // v1.105.32 — asks the session flag, not AUTH_TOKEN. Auth here is an httpOnly
+            // cookie; AUTH_TOKEN is populated only once /api/auth/me comes back, so a
+            // signed-in member following an invite link could lose the race and get
+            // bounced to the invite page.
+            if (!window.__hasActiveSession()) {
               setAppState('invite');
             }
           }
         })
         .catch(() => {});
-      // Show invite page immediately (inviteInfo populates async)
-      if (!savedToken) setAppState('invite');
+      // Show invite page immediately (inviteInfo populates async).
+      // v1.105.32 — this read an identifier that was never declared anywhere in the
+      // bundle (`savedToken`), so on EVERY invite-link arrival it threw a ReferenceError
+      // and abandoned the rest of this effect — the platform-invite, signup-confirmation
+      // and password-reset branches below it never ran. Same question as above, same
+      // synchronous answer: the session flag.
+      if (!window.__hasActiveSession()) setAppState('invite');
     }
 
     // Check for platform (onboarding) invite token

@@ -806,6 +806,25 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
     setApprovalLoading(null);
   };
 
+  // v1.105.32 — the alert-panel loader, which until now existed only as an inline block
+  // inside the mount effect below. Three places already called `loadAlerts()` — safety-flag
+  // review, BG-check approve and BG-check reject — and every one of them threw a
+  // ReferenceError, so the row you had just actioned stayed on screen (and the rest of that
+  // handler stopped) until the page was reloaded. Now there is a function to call.
+  // safetyFlagCount is deliberately NOT set here: loadSafetyFlags() is authoritative for it,
+  // because this endpoint returns deltas that can read 0 while flags still exist.
+  const loadAlerts = async () => {
+    try {
+      const r = await apiFetch('/api/admin/alerts');
+      const d = r?.ok ? await r.json() : null;
+      if (d) {
+        setNewFeedbackCount(d.newFeedback || 0);
+        setCheckrAlertCount(d.checkrAlerts || 0);
+        setBgCheckActionItems(d.bgCheckActionItems || []);
+      }
+    } catch {}
+  };
+
   useEffect(() => {
     loadStats();
     fetchPendingApprovals();
@@ -813,16 +832,8 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
     loadSafetyFlags();
     // Fetch pending doc review count for badge
     loadPendingDocsCount();
-    // Fetch new feedback count for tab badge
-    apiFetch('/api/admin/alerts').then(r => r?.ok ? r.json() : null).then(d => {
-      if (d) {
-        setNewFeedbackCount(d.newFeedback || 0);
-        // Note: safetyFlagCount is set authoritatively by loadSafetyFlags() above
-        // (alerts endpoint returns deltas which can be 0 even when flags exist)
-        setCheckrAlertCount(d.checkrAlerts || 0);
-        setBgCheckActionItems(d.bgCheckActionItems || []);
-      }
-    }).catch(() => {});
+    // Feedback badge, Checkr alert count and the BG-check action items
+    loadAlerts();
     // Fetch admin users for ticket assignment
     apiFetch('/api/admin/users?role=&demo=all&search=').then(r => r?.ok ? r.json() : null).then(d => {
       if (d?.users) setAdminUsers(d.users.filter(u => u.admin_role));

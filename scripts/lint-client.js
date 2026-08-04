@@ -85,9 +85,11 @@ const EXTERNAL_GLOBALS = {
 //    (admin refresh / invite-boot flows). The gate fails on any NEW finding but
 //    not these — burn the list down over time; never add to it to dodge a fix.
 //    Matched by file + rule + identifier (line-independent, so it survives edits).
+//    v1.105.32 — `savedToken` and `loadAlerts` burned down. Both were real crashes, not
+//    style: the first threw on every invite-link arrival and abandoned the rest of the boot
+//    effect; the second threw on every admin BG-check approve/reject and safety-flag review.
+//    One entry left, and it is the only genuinely safe one — it is typeof-guarded.
 const BASELINE = [
-  { file: "js/app.js", rule: "no-undef", id: "savedToken" },              // invite-boot auth check — TODO verify intended auth signal
-  { file: "js/components/AdminPanel.js", rule: "no-undef", id: "loadAlerts" }, // admin approve/reject refresh — TODO wire to real loader
   { file: "js/components/CareRecipients.js", rule: "no-undef", id: "onNavigate" }, // typeof-guarded (safe); prop not threaded to this subtree
 ];
 function isBaselined(file, rule, message) {
