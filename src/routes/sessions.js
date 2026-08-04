@@ -2,6 +2,7 @@ const express = require("express");
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { authenticate, requireRole } = require("../middleware/auth");
+const { sessionAccess } = require("../utils/access"); // v1.105.35
 const { validateSession } = require("../middleware/validate");
 const { captureException } = require("../utils/sentry");
 const availabilityRouter = require("./availability");
@@ -1142,6 +1143,10 @@ router.get("/cost-preview", async (req, res) => {
 
 // ─── PUT /api/sessions/:id/status ───
 // Update session status (caregiver check-in, complete, cancel)
+// v1.105.35 — was authenticate-only, so any logged-in user could cancel a stranger's
+// confirmed visit or drive it to `completed` (which fires milestone + payout logic and the
+// family's session_update socket event). Managing a session means being the booking family,
+// the assigned caregiver, an owner/editor on the recipient, or an admin.
 router.put("/:id/status", async (req, res) => {
   const { status } = req.body;
   const validTransitions = {
@@ -1155,9 +1160,10 @@ router.put("/:id/status", async (req, res) => {
   };
 
   const db = await getDb();
-  const session = await db.prepare("SELECT * FROM care_sessions WHERE id = ?").get(req.params.id);
-
-  if (!session) return res.status(404).json({ error: "Session not found" });
+  const access = await sessionAccess(db, req.params.id, req.user.id);
+  if (!access) return res.status(404).json({ error: "Session not found" });
+  if (!access.canManage) return res.status(403).json({ error: "Not authorized to change this session" });
+  const session = access.session;
 
   const allowed = validTransitions[session.status];
   if (!allowed || !allowed.includes(status)) {
@@ -3184,9 +3190,15 @@ router.get("/:id/tip", async (req, res) => {
 });
 
 // ─── GET /api/sessions/:id ───
+// v1.105.35 — was authenticate-only. This response carries the recipient's HOME ADDRESS,
+// the visit log (arrival mood, condition tags, care feedback) and the visit photos, so any
+// logged-in stranger holding a session id could read another family's private care record.
+// 404 rather than 403 on failure: "not yours" and "not there" should look identical.
 router.get("/:id", async (req, res) => {
   const db = await getDb();
-  const session = await db.prepare(`
+  const access = await sessionAccess(db, req.params.id, req.user.id);
+  if (!access) return res.status(404).json({ error: "Session not found" });
+  const session0 = await db.prepare(`
     SELECT cs.*,
       cr.first_name || ' ' || cr.last_name AS recipient_name,
       cr.location_address, cr.location_city, cr.location_state,
@@ -3201,6 +3213,7 @@ router.get("/:id", async (req, res) => {
     LEFT JOIN users bu ON cs.family_user_id = bu.id
     WHERE cs.id = ?
   `).get(req.params.id);
+  const session = session0;
 
   if (!session) return res.status(404).json({ error: "Session not found" });
 

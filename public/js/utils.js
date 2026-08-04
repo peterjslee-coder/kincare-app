@@ -56,11 +56,20 @@ const setAuthToken = window.setAuthToken = (token) => {
 const getAuthToken = window.getAuthToken = () => AUTH_TOKEN;
 
 // Active role for dual-role users (which view/mode they're in)
-let ACTIVE_ROLE = localStorage.getItem('active_role') || null;
+// v1.105.35 — guarded. This runs at MODULE SCOPE in the 2nd file of the concatenated
+// bundle, so a throw here stops the single shared scope from ever defining a component or
+// app.js: a blank page, before React exists, with no ErrorBoundary to catch it. Storage
+// throws in Safari private mode and in locked-down webviews, which is exactly the
+// population least able to tell us what they saw.
+let ACTIVE_ROLE = (() => { try { return localStorage.getItem('active_role') || null; } catch { return null; } })();
 const setActiveRole = window.setActiveRole = (role) => {
   ACTIVE_ROLE = role;
-  if (role) localStorage.setItem('active_role', role);
-  else localStorage.removeItem('active_role');
+  // v1.105.35 — the in-memory value is what the app actually reads; persistence is a
+  // convenience. Losing it must never cost the user the click.
+  try {
+    if (role) localStorage.setItem('active_role', role);
+    else localStorage.removeItem('active_role');
+  } catch {}
 };
 const getActiveRole = window.getActiveRole = () => ACTIVE_ROLE;
 
@@ -123,11 +132,14 @@ const _onVisibilityRefresh = async () => {
 // ─── Admin Impersonation (View As) ───
 // When set, apiFetch uses this token instead of the admin's own token.
 // This makes all API calls return data as the impersonated user would see it.
-let IMPERSONATION_TOKEN = sessionStorage.getItem('inplace_impersonation_token') || null;
+// v1.105.35 — guarded for the same reason as ACTIVE_ROLE above (module scope, no boundary).
+let IMPERSONATION_TOKEN = (() => { try { return sessionStorage.getItem('inplace_impersonation_token') || null; } catch { return null; } })();
 const setImpersonationToken = window.setImpersonationToken = (token) => {
   IMPERSONATION_TOKEN = token;
-  if (token) sessionStorage.setItem('inplace_impersonation_token', token);
-  else sessionStorage.removeItem('inplace_impersonation_token');
+  try {
+    if (token) sessionStorage.setItem('inplace_impersonation_token', token);
+    else sessionStorage.removeItem('inplace_impersonation_token');
+  } catch {}
 };
 const getImpersonationToken = window.getImpersonationToken = () => IMPERSONATION_TOKEN;
 

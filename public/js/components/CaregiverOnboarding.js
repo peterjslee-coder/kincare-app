@@ -614,16 +614,32 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
   // Clean up camera on unmount
   useEffect(() => { return () => { if (cameraStream) cameraStream.getTracks().forEach(t => t.stop()); }; }, [cameraStream]);
 
-  const handleIdFileUpload = (type, e) => {
+  // v1.105.35 — downscale before encoding, the same way every other photo path in the app
+  // does. A phone-camera JPEG is 3–5MB and base64 adds a third on top, so posting two raw
+  // ones was megabytes of body for an image that gets looked at, not printed. The server
+  // gained a 10mb limit in the same version (it had none, so every submission 413'd), but a
+  // caregiver on a rural connection still should not upload 12MB to prove who they are.
+  // downscaleImage returns null for anything it cannot handle (non-image, GIF, decode
+  // failure) — fall back to the original rather than blocking the upload.
+  const handleIdFileUpload = async (type, e) => {
     const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      if (type === 'selfie') setIdSelfie(ev.target.result);
-      else setIdPhoto(ev.target.result);
-    };
-    reader.readAsDataURL(file);
     e.target.value = '';
+    if (!file) return;
+    let dataUrl = null;
+    try {
+      if (typeof downscaleImage === 'function') dataUrl = await downscaleImage(file, { maxDim: 1600, quality: 0.85 });
+    } catch { dataUrl = null; }
+    if (!dataUrl) {
+      dataUrl = await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (ev) => resolve(ev.target.result);
+        reader.onerror = () => resolve(null);
+        reader.readAsDataURL(file);
+      });
+    }
+    if (!dataUrl) { setErrors({ identity: 'That file could not be read. Try another photo.' }); return; }
+    if (type === 'selfie') setIdSelfie(dataUrl);
+    else setIdPhoto(dataUrl);
   };
 
   const handleVerifyIdentity = async () => {

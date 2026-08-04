@@ -249,8 +249,12 @@ router.put("/:id", async (req, res) => {
   const existing = await db.prepare("SELECT * FROM recipient_notes WHERE id = ?").get(req.params.id);
   if (!existing) return res.status(404).json({ error: "Note not found" });
 
-  // Author can edit their own, family can edit any (for spelling/clarity)
-  if (existing.author_id !== req.user.id && !(req.user.roles || [req.user.role]).includes("family")) {
+  // v1.105.35 — this used to read "author, OR anyone holding the family role", which is
+  // every family user on the platform, on every note about every recipient. The correct
+  // helper was already defined 230 lines above and used by the GET on this same router.
+  const access = await hasAccess(db, existing.care_recipient_id, req.user.id);
+  const canEdit = existing.author_id === req.user.id || access === "owner" || access === "edit" || access === "admin";
+  if (!canEdit) {
     return res.status(403).json({ error: "Not authorized to edit this note" });
   }
 
@@ -272,7 +276,10 @@ router.delete("/:id", async (req, res) => {
   const existing = await db.prepare("SELECT * FROM recipient_notes WHERE id = ?").get(req.params.id);
   if (!existing) return res.status(404).json({ error: "Note not found" });
 
-  if (existing.author_id !== req.user.id && !(req.user.roles || [req.user.role]).includes("family")) {
+  // v1.105.35 — same fix as the edit above: scoped to this recipient, not to the role.
+  const access = await hasAccess(db, existing.care_recipient_id, req.user.id);
+  const canDelete = existing.author_id === req.user.id || access === "owner" || access === "edit" || access === "admin";
+  if (!canDelete) {
     return res.status(403).json({ error: "Not authorized" });
   }
 

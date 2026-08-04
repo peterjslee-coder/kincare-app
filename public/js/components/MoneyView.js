@@ -31,7 +31,10 @@ const MoneyView = window.MoneyView = ({ careTeamId, onClose }) => {
 
   const statusBadge = (status) => {
     const map = {
-      pending: { label: 'Pending', bg: '#fff3e0', fg: '#e65100' },
+      // v1.105.35 — the v1.105.34 unification missed this one, and it is the worst place
+      // to miss it: the note on a row says "Awaiting approval" while the badge on that SAME
+      // row said "Pending", in the same colour.
+      pending: { label: 'Awaiting approval', bg: '#fff3e0', fg: '#e65100' },
       approved: { label: 'Approved — awaiting payment', bg: '#e3f2fd', fg: '#1565c0' },
       paid: { label: 'Paid', bg: '#e8f5e9', fg: '#2e7d32' },
       declined: { label: 'Declined', bg: '#ffebee', fg: '#c62828' },
@@ -127,8 +130,8 @@ const MoneyView = window.MoneyView = ({ careTeamId, onClose }) => {
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
               <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={selStyle}>
                 <option value="all">All statuses</option>
-                <option value="pending">Pending</option>
-                <option value="approved">Awaiting payment</option>
+                <option value="pending">Awaiting approval</option>
+                <option value="approved">Approved — awaiting payment</option>
                 <option value="paid">Paid</option>
                 <option value="declined">Declined</option>
                 <option value="cancelled">Cancelled</option>

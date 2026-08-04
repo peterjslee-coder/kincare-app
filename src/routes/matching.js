@@ -11,6 +11,7 @@
 const express = require('express');
 const { getDb } = require('../models/database');
 const { authenticate } = require('../middleware/auth');
+const { sessionAccess } = require('../utils/access'); // v1.105.35
 const { scoreMatch } = require('../utils/aiMatching');
 
 const router = express.Router();
@@ -32,6 +33,13 @@ router.get('/score', async (req, res) => {
     }
 
     const db = await getDb();
+
+    // v1.105.35 — sessionId arrives in the QUERY STRING and was trusted. Matching returns
+    // the recipient's name alongside a ranked caregiver list, so this was readable for any
+    // session by anyone with an account.
+    if (!(await sessionAccess(db, sessionId, req.user.id))) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
 
     // Fetch session
     const session = await db.prepare(`
@@ -126,6 +134,11 @@ router.get('/ranked', async (req, res) => {
     const db = await getDb();
     const limitNum = Math.min(parseInt(limit) || 10, 50); // Cap at 50
     const shouldIncludeInsights = includeInsights === 'true';
+
+    // v1.105.35 — same untrusted query-string sessionId as /score above.
+    if (!(await sessionAccess(db, sessionId, req.user.id))) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
 
     // Fetch session and recipient
     const session = await db.prepare(`

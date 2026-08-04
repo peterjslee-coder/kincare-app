@@ -252,6 +252,9 @@ function limitBodySize(maxBytes = 50000) {
     if (req.originalUrl?.startsWith("/api/notes")) return next();
     // v1.105.0 — skip for feedback (optional base64 screenshot — express.json 4mb + route-level 2MB screenshot check apply)
     if (req.originalUrl?.startsWith("/api/feedback")) return next();
+    // v1.105.35 — caregiver ID verification (base64 government ID + selfie; express.json
+    // 10mb applies and the route enforces its own per-image cap)
+    if (req.originalUrl?.startsWith("/api/caregiver-onboarding")) return next();
     const contentLength = parseInt(req.headers["content-length"] || "0");
     if (contentLength > maxBytes) {
       return res.status(413).json({ error: "Request body too large" });

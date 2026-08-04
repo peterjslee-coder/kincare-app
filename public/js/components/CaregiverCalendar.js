@@ -702,11 +702,19 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
                           if (sDate && sTime && !earlyCheckInAllowed) {
                             // All times are care-location times — use TimezoneHelper
                             const tz = s.timezone || TimezoneHelper.DEFAULT_TZ;
-                            const etNow = TimezoneHelper.getNow(tz);
+                            // v1.105.35 — this compared getNow(tz), which is a
+                            // SHIFTED-FRAME date (it re-parses a formatted string in the
+                            // BROWSER's zone), against buildDateTime, which is a true UTC
+                            // epoch. The gap between them is the viewer's own offset: a
+                            // caregiver on Pacific time saw "Check-in opens 3h before" and
+                            // the button withheld for three extra hours — standing at the
+                            // door, locked out, by a clock that was lying. realNowMs() is
+                            // the only safe right-hand side for a buildDateTime epoch.
+                            const nowMs = TimezoneHelper.realNowMs();
                             const sessionStartET = TimezoneHelper.buildDateTime(sDate.split('T')[0], sTime, tz);
-                            const earliest = new Date(sessionStartET.getTime() - 15 * 60000);
-                            if (etNow < earliest) {
-                              const minsUntil = Math.ceil((earliest.getTime() - etNow.getTime()) / 60000);
+                            const earliestMs = sessionStartET.getTime() - 15 * 60000;
+                            if (nowMs < earliestMs) {
+                              const minsUntil = Math.ceil((earliestMs - nowMs) / 60000);
                               return React.createElement('div', { style: { fontSize: 10, color: 'var(--text-muted)', padding: '4px 0', textAlign: 'right', maxWidth: 110 } },
                                 '\u23F0 Check-in opens ' + (minsUntil > 60 ? Math.ceil(minsUntil / 60) + 'h' : minsUntil + 'min') + ' before'
                               );

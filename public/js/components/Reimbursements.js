@@ -762,8 +762,8 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
               </select>
               <select value={rptStatus} onChange={(e) => setRptStatus(e.target.value)} style={selStyle}>
                 <option value="">All statuses</option>
-                <option value="pending">Pending</option>
-                <option value="approved">Approved</option>
+                <option value="pending">Awaiting approval</option>
+                <option value="approved">Approved — awaiting payment</option>
                 <option value="paid">Paid</option>
                 <option value="declined">Declined</option>
               </select>

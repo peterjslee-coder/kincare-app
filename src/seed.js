@@ -109,6 +109,12 @@ async function seed({ force = false, demoOnly = false } = {}) {
       const teamIds = demoTeams.map(t => t.id);
       if (teamIds.length > 0) {
         const tp = teamIds.map(() => '?').join(',');
+        // v1.105.35 — these reference care_teams with no ON DELETE; without them the
+        // care_teams delete below FK-fails and takes the whole reseed transaction with it.
+        await trySavepoint(() => db.prepare(`DELETE FROM reimbursement_receipts WHERE reimbursement_id IN (SELECT id FROM reimbursements WHERE care_team_id IN (${tp}))`).run(...teamIds));
+        await trySavepoint(() => db.prepare(`DELETE FROM reimbursements WHERE care_team_id IN (${tp})`).run(...teamIds));
+        await trySavepoint(() => db.prepare(`DELETE FROM reimbursement_schedules WHERE care_team_id IN (${tp})`).run(...teamIds));
+        await trySavepoint(() => db.prepare(`DELETE FROM team_funding_accounts WHERE care_team_id IN (${tp})`).run(...teamIds));
         await db.prepare(`DELETE FROM care_team_invites WHERE care_team_id IN (${tp})`).run(...teamIds);
         await db.prepare(`DELETE FROM care_team_members WHERE care_team_id IN (${tp})`).run(...teamIds);
         await db.prepare(`DELETE FROM care_teams WHERE id IN (${tp})`).run(...teamIds);
@@ -139,6 +145,15 @@ async function seed({ force = false, demoOnly = false } = {}) {
         await trySavepoint(() => db.prepare(`DELETE FROM care_task_helpers WHERE care_recipient_id IN (${crp})`).run(...demoCrIds));
         // v1.100.0 — Care Events references care_recipients + users (created_by)
         await trySavepoint(() => db.prepare(`DELETE FROM care_events WHERE care_recipient_id IN (${crp})`).run(...demoCrIds));
+        // v1.105.35 — reimbursements reference care_recipients AND care_teams with no
+        // ON DELETE, and had no cleanup at all. One demo reimbursement was enough to
+        // FK-fail the care_teams/care_recipients deletes below — and because the whole
+        // seed runs in ONE transaction, "Reseed Demo" then rolled back entirely and
+        // reported a 500 with nothing changed. The rule this keeps proving: every new
+        // table referencing care_recipients or users needs an entry here.
+        await trySavepoint(() => db.prepare(`DELETE FROM reimbursement_receipts WHERE reimbursement_id IN (SELECT id FROM reimbursements WHERE care_recipient_id IN (${crp}))`).run(...demoCrIds));
+        await trySavepoint(() => db.prepare(`DELETE FROM reimbursements WHERE care_recipient_id IN (${crp})`).run(...demoCrIds));
+        await trySavepoint(() => db.prepare(`DELETE FROM reimbursement_schedules WHERE care_recipient_id IN (${crp})`).run(...demoCrIds));
       }
 
       // Care recipients owned by demo family users

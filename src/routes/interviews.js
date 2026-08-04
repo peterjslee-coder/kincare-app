@@ -2,6 +2,7 @@ const express = require("express");
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { authenticate } = require("../middleware/auth");
+const { recipientAccess } = require("../utils/access"); // v1.105.35
 const { sendPushToUser } = require("./push");
 
 const router = express.Router();
@@ -15,6 +16,13 @@ router.get("/care-history/:caregiverId/:recipientId", async (req, res) => {
     const db = await getDb();
     const { caregiverId, recipientId } = req.params;
     const limit = parseInt(req.query.limit) || 5;
+
+    // v1.105.35 — was authenticate-only. The visits below carry arrival/departure mood,
+    // condition tags and care feedback for a named recipient: health information about
+    // someone else's parent, readable by anyone with an account and a uuid.
+    if (!(await recipientAccess(db, recipientId, req.user.id))) {
+      return res.json({ visits: [], totalCount: 0 });
+    }
 
     // Get the caregiver profile ID from user ID
     const cgProfile = await db.prepare(
@@ -89,6 +97,12 @@ router.get("/family-visit-counts/:recipientId", async (req, res) => {
   try {
     const db = await getDb();
     const { recipientId } = req.params;
+
+    // v1.105.35 — see above: this enumerates every caregiver who has ever visited a
+    // recipient, by full name.
+    if (!(await recipientAccess(db, recipientId, req.user.id))) {
+      return res.json({ counts: [] });
+    }
 
     const rows = await db.prepare(`
       SELECT cs.caregiver_id, cp.user_id AS caregiver_user_id,
