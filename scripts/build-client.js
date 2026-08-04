@@ -37,6 +37,7 @@ const scripts = [
   "js/components/ResetPasswordPage.js",
   "js/components/SwipeableRow.js",
   "js/components/AttachmentViewer.js",
+  "js/components/FamilyVisitLog.js",
   "js/components/CareTasks.js",
   "js/components/CareEvents.js",
   "js/components/Dashboard.js",

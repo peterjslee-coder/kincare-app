@@ -1854,6 +1854,47 @@ async function initializeDatabase() {
          WHERE check_out_lat IS NOT NULL`,
       ],
     },
+    {
+      // ─── v1.105.38 — Family visits ───
+      //
+      // Betty's real care includes Pete, and Peggy bringing dinner most nights. None of
+      // that is a paid session, so none of it existed in the record — while the doctor
+      // report and iPAi can only reflect what is recorded. A month with eight family
+      // visits and two caregiver visits read as a month with two visits.
+      //
+      // A SEPARATE TABLE, deliberately, rather than nullable columns on visit_logs.
+      // visit_logs.session_id and .caregiver_id are both NOT NULL and fifteen files read
+      // that table — most of them JOINing care_sessions. Relaxing those columns would make
+      // family rows vanish from some queries and silently appear in others, and the worst
+      // version of that is a doctor report implying a nurse observed something a son did.
+      // With a separate table every consumer opts IN, labelled; forgetting one means
+      // family visits don't show up yet, not that they show up misattributed.
+      //
+      // Coordinates are COARSENED before they ever arrive here (~1.1km, same as check-in).
+      // The geofence decision is made at full precision on the device and thrown away.
+      id: "017_family_visits",
+      statements: [
+        `CREATE TABLE IF NOT EXISTS family_visits (
+           id                TEXT PRIMARY KEY,
+           care_recipient_id TEXT NOT NULL REFERENCES care_recipients(id),
+           user_id           TEXT NOT NULL REFERENCES users(id),
+           visited_at        TIMESTAMPTZ NOT NULL,
+           duration_minutes  INTEGER,
+           summary           TEXT,   /* PHI */
+           mood_rating       TEXT,   /* PHI */
+           activities        TEXT,
+           latitude          REAL,
+           longitude         REAL,
+           distance_ft       INTEGER,
+           geo_flag          TEXT,
+           logged_via        TEXT NOT NULL DEFAULT 'manual',
+           created_at        TIMESTAMPTZ DEFAULT NOW(),
+           updated_at        TIMESTAMPTZ DEFAULT NOW()
+         )`,
+        `CREATE INDEX IF NOT EXISTS idx_family_visits_recipient
+           ON family_visits(care_recipient_id, visited_at DESC)`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

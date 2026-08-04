@@ -11,6 +11,7 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
   const [editingLabel, setEditingLabel] = useState(false);
   const [labelText, setLabelText] = useState('');
   const [expandedMember, setExpandedMember] = useState(null);
+  const [showTaskCreate, setShowTaskCreate] = useState(false); // v1.105.38 — '+ Task' moved here from the dashboard
   const [recentVisits, setRecentVisits] = useState([]);
   const [visitDetailSessionId, setVisitDetailSessionId] = useState(null);
   const [smsPhone, setSmsPhone] = useState('');
@@ -300,7 +301,23 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
             + Invite
           </button>
         )}
+        {/* v1.105.38 — "+ Task" lives here now. It used to sit on the dashboard beside
+            "+ Request Care", and that slot went to "+ Log Visit": Pete is far likelier to
+            log a visit than to add a task, and the dashboard has one slot's worth of
+            attention. Nothing was removed from the app — task creation moved to where the
+            team and its recipient are already in view. */}
+        <button onClick={() => setShowTaskCreate(true)}
+          style={{ padding: '8px 20px', background: 'var(--bg-card)', color: 'var(--role-color)', border: '1px solid var(--role-color)', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+          + Task
+        </button>
       </div>
+
+      {showTaskCreate && typeof CareTaskQuickCreate !== 'undefined' && (
+        <CareTaskQuickCreate
+          recipients={[{ id: team.care_recipient_id, first_name: team.recipient_first_name, last_name: team.recipient_last_name }]}
+          onClose={() => setShowTaskCreate(false)}
+          onCreated={() => setShowTaskCreate(false)} />
+      )}
 
       {/* My Relationship Label */}
       <div className="card" style={{ marginBottom: 16, padding: '12px 16px' }}>

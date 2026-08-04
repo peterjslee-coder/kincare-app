@@ -37,7 +37,9 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
   // ─── Care Tasks (v1.99.0): today's occurrences, inline in Next Up ───
   const [careTasksToday, setCareTasksToday] = useState(_dashCache.careTasks);
   const [taskSheet, setTaskSheet] = useState(null); // { occ, group } → CareTaskCheckSheet
-  const [showTaskCreate, setShowTaskCreate] = useState(false); // '+ Task' pill → CareTaskQuickCreate
+  const [showTaskCreate, setShowTaskCreate] = useState(false); // kept: CareTeamManage opens this via window.__openTaskCreate
+  const [showLogVisit, setShowLogVisit] = useState(null); // v1.105.38 — { recipientId, position }
+  const [visitsToday, setVisitsToday] = useState(false);  // suppresses the nudge once you've logged
   // ─── Care Events (v1.100.0): upcoming events, inline in Next Up ───
   const [careEventsUpcoming, setCareEventsUpcoming] = useState(_dashCache.careEvents);
   const [eventSheet, setEventSheet] = useState(null); // ev → CareEventSheet
@@ -758,6 +760,15 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
       <div className="page-header">
         <h1 className="greeting">{isNewUser ? `Welcome, ${firstName}!` : `Welcome back, ${firstName}!`}</h1>
       </div>
+
+      {/* v1.105.38 — the nudge, when you're already at the house. Pete: "we're nudging
+          here, not nagging" — so it's a dismissible card, never a modal, and it never asks
+          the OS for location. If permission isn't already granted it stays silent forever.
+          Everything about it degrades to nothing; the "+ Log Visit" pill is unaffected. */}
+      {typeof VisitNudgeCard !== 'undefined' && (
+        <VisitNudgeCard recipients={data?.careRecipients || []} alreadyLoggedToday={visitsToday}
+          onLog={(recipientId, position) => setShowLogVisit({ recipientId, position })} />
+      )}
 
       {/* Payment lockout banner — only show for FAILED payments, not pending/processing */}
       {(() => {
@@ -1651,15 +1662,19 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
           </div>
         ) : null;
 
-        // v1.99.3 — "+ Task" pill: complementary teal (family role color) next
-        // to the orange "+ Request Care" so task creation is obvious on open.
+        // v1.99.3 — a second pill in complementary teal, next to the orange "+ Request Care".
+        // v1.105.38 — that slot is now "+ Log Visit". Pete: "I'm FAR more likely to log a
+        // visit than I am to add a task." The dashboard has one slot's worth of attention
+        // and it should go to the thing done most; "+ Task" moved to the care team page,
+        // where task management already lives. This is a ranking decision, not a demotion —
+        // nothing was removed from the app.
         const showTaskPill = (data?.careRecipients?.length || 0) > 0;
         const taskPillBtn = (pad) => (
-          <button onClick={() => setShowTaskCreate(true)} style={{
+          <button onClick={() => setShowLogVisit({ recipientId: null, position: null })} style={{
             padding: pad, background: 'var(--role-color)', color: 'var(--text-on-primary)',
             border: 'none', borderRadius: pad === '8px 20px' ? 8 : 6, fontSize: pad === '8px 20px' ? 13 : 11,
             fontWeight: 700, cursor: 'pointer',
-          }}>+ Task</button>
+          }}>+ Log Visit</button>
         );
 
         if (nextUp.length === 0) return (
@@ -2468,6 +2483,12 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
       {showTaskCreate && (
         <CareTaskQuickCreate recipients={data?.careRecipients || []}
           onClose={() => setShowTaskCreate(false)} onCreated={() => fetchCareTasks()} />
+      )}
+      {showLogVisit && typeof LogVisitSheet !== 'undefined' && (
+        <LogVisitSheet recipients={data?.careRecipients || []}
+          presetRecipientId={showLogVisit.recipientId} position={showLogVisit.position}
+          onClose={() => setShowLogVisit(null)}
+          onSaved={() => { setVisitsToday(true); fetchDashboard(); }} />
       )}
       {eventSheet && (
         <CareEventSheet ev={eventSheet} canManage={!!eventSheet.canManage}

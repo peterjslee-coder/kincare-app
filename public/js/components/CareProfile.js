@@ -7,6 +7,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
   const [notes, setNotes] = useState([]);
+  const [familyVisits, setFamilyVisits] = useState([]); // v1.105.38
   const [newNote, setNewNote] = useState('');
   const [addingNote, setAddingNote] = useState(false);
   const [notesOpen, setNotesOpen] = useState(true); // v1.76.0 — observations are a first-class feature, not buried
@@ -522,6 +523,16 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
     input.click();
   };
 
+  // v1.105.38 — family visits are a SEPARATE record, merged at read time. Never duplicated
+  // into recipient_notes: one event, two rows, and they drift the moment anyone edits.
+  const fetchFamilyVisits = async (recipientId) => {
+    try {
+      const res = await apiFetch(`/api/family-visits/${recipientId}`);
+      if (res?.ok) { const d = await res.json(); setFamilyVisits(d.visits || []); }
+      else setFamilyVisits([]);
+    } catch { setFamilyVisits([]); }
+  };
+
   const fetchNotes = async (recipientId) => {
     try {
       const res = await apiFetch(`/api/notes/${recipientId}`);
@@ -542,7 +553,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
       if (res?.ok) {
         setNewNote(''); setNoteUrgent(false); setNotePhoto(null);
         showToast('Observation added', 'success');
-        fetchNotes(profile.id);
+        fetchNotes(profile.id); fetchFamilyVisits(profile.id);
       } else if (res?.status === 503 || !navigator.onLine) {
         if (window.OfflineQueue) {
           await window.OfflineQueue.queueNote(notePayload);
@@ -596,7 +607,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
               setAiSummary(rawSummary);
               setAiSummaryDate(first.ai_care_summary_updated_at);
             }
-            fetchNotes(first.id);
+            fetchNotes(first.id); fetchFamilyVisits(first.id);
           }
         }
       } catch (error) {
@@ -815,7 +826,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
       {allRecipients.length > 1 && (
         <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
           {allRecipients.map(r => (
-            <button key={r.id} onClick={() => { setProfile(r); fetchNotes(r.id); setEditing(false); setPermTier(r.permission_tier || 'full'); try { setVisSettings(r.visibility_settings ? JSON.parse(r.visibility_settings) : null); } catch { setVisSettings(null); } }}
+            <button key={r.id} onClick={() => { setProfile(r); fetchNotes(r.id); fetchFamilyVisits(r.id); setEditing(false); setPermTier(r.permission_tier || 'full'); try { setVisSettings(r.visibility_settings ? JSON.parse(r.visibility_settings) : null); } catch { setVisSettings(null); } }}
               style={{ padding: '6px 14px', borderRadius: 20, border: r.id === profile?.id ? '2px solid #1b6b5a' : '1px solid #d0d0d0', background: r.id === profile?.id ? 'var(--role-color-light)' : 'var(--bg-card)', color: r.id === profile?.id ? 'var(--role-color)' : 'var(--text-secondary)', fontSize: 13, fontWeight: r.id === profile?.id ? 600 : 400, cursor: 'pointer' }}>
               {r.first_name} {r.last_name}
             </button>
@@ -1260,6 +1271,32 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                 <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Visible to your care team {'\u00B7'} iPAi files it into their care picture</span>
               </div>
             </div>
+            {/* v1.105.38 — family visits, interleaved but never blended. The label is the
+                point: a doctor report that implies a nurse observed something a son did is
+                the derivation-chain failure from the v1.93 post-mortem. Source is always
+                visible, here and everywhere downstream. */}
+            {familyVisits.map((v) => (
+              <div key={v.id} style={{ padding: '10px 0', borderBottom: '1px solid #f0f0f0' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                  <span style={{ fontSize: 13, fontWeight: 650 }}>{v.authorFirstName || v.authorName}</span>
+                  <span style={{ fontSize: 10, fontWeight: 750, color: 'var(--role-color)', background: '#E8F8F0', padding: '1.5px 7px', borderRadius: 9 }}>FAMILY VISIT</span>
+                </div>
+                {v.summary && (
+                  <div style={{ fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{v.summary}</div>
+                )}
+                {Array.isArray(v.activities) && v.activities.length > 0 && (
+                  <div style={{ marginTop: 5, display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                    {v.activities.map((a) => {
+                      const found = (typeof VISIT_ACTIVITIES !== 'undefined' ? VISIT_ACTIVITIES : []).find((x) => x.id === a);
+                      return <span key={a} style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--role-color)', background: '#E8F8F0', padding: '2px 8px', borderRadius: 10 }}>{found ? found.label : a}</span>;
+                    })}
+                  </div>
+                )}
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                  {TimezoneHelper.formatTimestamp(v.visitedAt, profile?.timezone, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) || ''}
+                </div>
+              </div>
+            ))}
             {notes.length > 0 ? notes.map((n) => (
               <div key={n.id} style={{ padding: '10px 0', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
                 <div style={{ flex: 1 }}>
@@ -1303,7 +1340,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                     e.stopPropagation();
                     if (!confirm('Delete this note?')) return;
                     const res = await apiFetch(`/api/notes/${n.id}`, { method: 'DELETE' });
-                    if (res?.ok) fetchNotes(profile.id);
+                    if (res?.ok) fetchNotes(profile.id); fetchFamilyVisits(profile.id);
                   }} style={{ padding: '3px 8px', background: 'none', border: '1px solid #fdd', borderRadius: 4, cursor: 'pointer', fontSize: 11, color: 'var(--color-red-strong)', whiteSpace: 'nowrap', flexShrink: 0 }}>Delete</button>
                 )}
               </div>

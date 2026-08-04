@@ -154,6 +154,11 @@ async function seed({ force = false, demoOnly = false } = {}) {
         await trySavepoint(() => db.prepare(`DELETE FROM reimbursement_receipts WHERE reimbursement_id IN (SELECT id FROM reimbursements WHERE care_recipient_id IN (${crp}))`).run(...demoCrIds));
         await trySavepoint(() => db.prepare(`DELETE FROM reimbursements WHERE care_recipient_id IN (${crp})`).run(...demoCrIds));
         await trySavepoint(() => db.prepare(`DELETE FROM reimbursement_schedules WHERE care_recipient_id IN (${crp})`).run(...demoCrIds));
+        // v1.105.38 — family_visits references care_recipients AND users. Third time this
+        // rule has been learned (care tasks v1.99.1, reimbursements v1.105.35): every new
+        // table pointing at care_recipients or users needs a line here, or the parent
+        // DELETE FK-fails and rolls back the whole single-transaction reseed.
+        await trySavepoint(() => db.prepare(`DELETE FROM family_visits WHERE care_recipient_id IN (${crp})`).run(...demoCrIds));
       }
 
       // Care recipients owned by demo family users
