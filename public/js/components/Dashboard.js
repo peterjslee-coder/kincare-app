@@ -674,6 +674,13 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
     const tz0 = data.upcomingSessions[0]?.timezone || TimezoneHelper.DEFAULT_TZ;
     for (const s of data.upcomingSessions) {
       if (s.status !== 'in_progress' || !s.durationHours) continue;
+      // v1.105.33 — this one KEEPS the check-in anchor, deliberately, and it is the only
+      // place that still does. The countdown labels answer "when was this meant to end"
+      // (see below), but this is an alarm: it decides whether to tell a family their
+      // caregiver is overdue. A caregiver who arrived 45 minutes late and is still working
+      // their booked hours is not overdue, and raising the alarm on them would be a false
+      // one — about the worst kind of notification this app can send. Different questions,
+      // so different anchors on purpose. Do not "fix" the inconsistency without asking Pete.
       let startMs;
       if (s.checkInTime) {
         startMs = new Date(s.checkInTime).getTime();
@@ -1308,14 +1315,14 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
         let countdownStr = '';
         let countdownColor = 'var(--role-color)';
         if (isActive) {
-          // Show remaining time for in-progress
-          let startMs;
-          if (hero.checkInTime) {
-            startMs = new Date(hero.checkInTime).getTime();
-          } else {
-            startMs = sessionDT.getTime();
-          }
-          const endMs = startMs + ((hero.durationHours || 2) * 3600000);
+          // Show remaining time for in-progress.
+          // v1.105.33 — counts down to the SCHEDULED end, not check-in + booked hours.
+          // The old anchor made a late arrival silently move the finish line: check in 45
+          // minutes late on a 10–12 visit and at 11:45 this read "1h 15m remaining", past
+          // the noon the family was told. Pay is still computed server-side from the real
+          // check-in and check-out — this number answers "when was this supposed to end",
+          // which is the only question anyone is asking it.
+          const endMs = sessionDT.getTime() + ((hero.durationHours || 2) * 3600000);
           const leftMs = endMs - Date.now();
           if (leftMs > 0) {
             const totalSec = Math.floor(leftMs / 1000);
@@ -1723,14 +1730,10 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
               let remainingLabel = null;
               if (isActive && s.durationHours) {
                 const tz = s.timezone || TimezoneHelper.DEFAULT_TZ;
-                // Use check-in time if available, otherwise scheduled start
-                let startMs;
-                if (s.checkInTime) {
-                  startMs = new Date(s.checkInTime).getTime();
-                } else {
-                  const sDate = (s.date || '').split('T')[0];
-                  startMs = TimezoneHelper.buildDateTime(sDate, s.time || '00:00', tz).getTime();
-                }
+                // v1.105.33 — the scheduled start, always. Anchoring on checkInTime moved
+                // the finish line whenever someone arrived late. See the hero card above.
+                const sDate = (s.date || '').split('T')[0];
+                const startMs = TimezoneHelper.buildDateTime(sDate, s.time || '00:00', tz).getTime();
                 const endMs = startMs + (s.durationHours * 3600000);
                 const leftMs = endMs - Date.now();
                 if (leftMs > 0) {

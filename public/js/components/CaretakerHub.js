@@ -1934,8 +1934,13 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
                     <div style={{ flex: 1, minWidth: '180px' }}>
                       {isActive && (() => {
-                        const startMs = s.checkInTime ? new Date(s.checkInTime).getTime() : sessionStartET.getTime();
-                        const endMs = startMs + ((duration || 2) * 3600000);
+                        // v1.105.33 — the SCHEDULED end, not check-in + booked hours. The
+                        // caregiver's own card is where this matters most: it should show
+                        // the time the family is expecting them to finish, not a finish
+                        // line that quietly slid because they arrived late. Pay is
+                        // unaffected — that is computed server-side from real check-in and
+                        // check-out, in 15-minute blocks.
+                        const endMs = sessionStartET.getTime() + ((duration || 2) * 3600000);
                         const leftMs = endMs - Date.now();
                         const totalSec = Math.max(0, Math.floor(leftMs / 1000));
                         const hrs = Math.floor(totalSec / 3600);
