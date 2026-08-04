@@ -12,6 +12,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
   const [notesOpen, setNotesOpen] = useState(true); // v1.76.0 — observations are a first-class feature, not buried
   const [noteUrgent, setNoteUrgent] = useState(false);
   const [notePhoto, setNotePhoto] = useState(null); // { data, name }
+  const [viewingAttachments, setViewingAttachments] = useState(null); // v1.105.34 — { list, index }
   const [photoUploading, setPhotoUploading] = useState(false);
   const [permTier, setPermTier] = useState('full');
   const [visSettings, setVisSettings] = useState(null);
@@ -1278,8 +1279,19 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                       {n.ai_highlights.actionables.map((a, i) => (<div key={i}>{'\u2192'} {a}</div>))}
                     </div>
                   )}
+                  {/* v1.105.34 \u2014 the photo itself, not a link to it. Same
+                      unauthenticated-navigation bug as the reimbursement receipts (see
+                      AttachmentViewer.js): `target="_blank"` in the native app hands the URL
+                      to the system browser, which has no session, so a caregiver's photo
+                      rendered as "Authentication required". */}
                   {!!n.has_photo && (
-                    <a href={`/api/notes/${n.id}/photo`} target="_blank" rel="noopener" style={{ fontSize: 12, color: 'var(--role-color)', display: 'inline-block', marginTop: 5 }}>{'\uD83D\uDCCE'} View photo</a>
+                    <div style={{ marginTop: 6 }}>
+                      <AttachmentThumb size={64}
+                        attachment={{ path: `/api/notes/${n.id}/photo`, name: 'Care note photo', mime: '' }}
+                        onOpen={() => setViewingAttachments({
+                          list: [{ path: `/api/notes/${n.id}/photo`, name: 'Care note photo', mime: '' }], index: 0,
+                        })} />
+                    </div>
                   )}
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
                     {n.author_first_name} {n.author_last_name}
@@ -2179,6 +2191,11 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
           </div>
           <span style={{ fontSize: 20, color: 'var(--text-muted)' }}>›</span>
         </div>
+      )}
+
+      {viewingAttachments && typeof AttachmentViewer !== 'undefined' && (
+        <AttachmentViewer attachments={viewingAttachments.list} startIndex={viewingAttachments.index}
+          onClose={() => setViewingAttachments(null)} />
       )}
     </>
   );

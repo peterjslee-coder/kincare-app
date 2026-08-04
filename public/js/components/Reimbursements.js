@@ -77,6 +77,7 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
   const [markMethod, setMarkMethod] = useState('venmo');
   const [error, setError] = useState('');
   const [showMoney, setShowMoney] = useState(false); // v1.96.0 — Money view (leader + billing contact)
+  const [viewingAttachments, setViewingAttachments] = useState(null); // v1.105.34 — { list, index }
   // v1.98.17 — Bank deposits view: groups received reimbursements into the actual
   // Stripe payout batches so the number on the bank statement ties to requests.
   const [showPayouts, setShowPayouts] = useState(false);
@@ -529,7 +530,11 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
       return <span style={{ fontSize: 12, fontWeight: 600, color: '#1565c0', background: '#e3f2fd', padding: '3px 10px', borderRadius: 12 }}>{'Sent — depositing (1–3 business days)'}</span>;
     }
     const map = {
-      pending:   { label: 'Pending approval', bg: '#fff3e0', fg: '#e65100' },
+      // v1.105.34 — "Awaiting approval", matching the Money view and the recurring-schedule
+      // chip. Pete saw his own requests reading "Pending approval" and Dan's reading
+      // "Awaiting approval" and reasonably assumed they were different states. They are the
+      // same state — the app just had three names for it across three surfaces. One name.
+      pending:   { label: 'Awaiting approval', bg: '#fff3e0', fg: '#e65100' },
       approved:  { label: `Approved — awaiting payment${it.paid_from_label ? ` from ${it.paid_from_label}` : ''}`, bg: '#e3f2fd', fg: '#1565c0' },
       paid:      { label: it.paid_method ? `Paid via ${paidLabel}${it.paid_method !== 'ach_inplace' && it.paid_from_label ? ` from ${it.paid_from_label}` : ''}` : 'Paid', bg: '#e8f5e9', fg: '#2e7d32' },
       declined:  { label: it.declined_reason ? `Declined — ${it.declined_reason}` : 'Declined', bg: '#ffebee', fg: '#c62828' },
@@ -1136,12 +1141,19 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
                     problem: you cannot tell "they did not attach one" from "the app is not
                     showing it to me". On a $655 request that ambiguity is the difference
                     between approving and going to ask in another app. */}
-                <div style={{ marginTop: 4 }}>
-                  {it.receipts.length > 0 ? it.receipts.map((rc) => (
-                    <a key={rc.id} href={`/api/reimbursements/receipt/${rc.id}`} target="_blank" rel="noopener"
-                      style={{ fontSize: 12, color: 'var(--role-color)', marginRight: 10 }}>
-                      📎 {rc.file_name || 'receipt'}
-                    </a>
+                <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  {/* v1.105.34 — a thumbnail you tap, not a link that navigates.
+                      The raw `<a href="/api/…" target="_blank">` this replaces was an
+                      UNAUTHENTICATED request: the Railway log shows `hasCookie: false,
+                      cookieKeys:` — an empty jar — because in the native app _blank hands
+                      the URL to the system browser, which has no session. It failed for
+                      every family member on a phone. AttachmentThumb fetches through apiFetch
+                      and shows the picture in the app. */}
+                  {it.receipts.length > 0 ? it.receipts.map((rc, i) => (
+                    <AttachmentThumb key={rc.id} attachment={receiptAttachment(rc)}
+                      onOpen={() => setViewingAttachments({
+                        list: it.receipts.map(receiptAttachment), index: i,
+                      })} />
                   )) : (
                     <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>No receipt attached</span>
                   )}
@@ -1308,6 +1320,11 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
             </>
           );
         })()
+      )}
+
+      {viewingAttachments && typeof AttachmentViewer !== 'undefined' && (
+        <AttachmentViewer attachments={viewingAttachments.list} startIndex={viewingAttachments.index}
+          onClose={() => setViewingAttachments(null)} />
       )}
 
       {showMoney && typeof MoneyView !== 'undefined' && (

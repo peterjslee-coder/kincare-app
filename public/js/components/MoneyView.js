@@ -7,6 +7,7 @@ const MoneyView = window.MoneyView = ({ careTeamId, onClose }) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [viewingAttachments, setViewingAttachments] = useState(null); // v1.105.34 — { list, index }
   const [statusFilter, setStatusFilter] = useState('all');
   const [personFilter, setPersonFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
@@ -165,12 +166,19 @@ const MoneyView = window.MoneyView = ({ careTeamId, onClose }) => {
                       <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>No receipt attached</span>
                     )}
 
-                    {(r.receipts || []).map((rc) => (
-                      <a key={rc.id} href={`/api/reimbursements/receipt/${rc.id}`} target="_blank" rel="noopener"
-                        style={{ marginLeft: 8, color: 'var(--role-color)', textDecoration: 'none', fontSize: 12 }}>
-                        📎 {rc.file_name || 'receipt'}
-                      </a>
-                    ))}
+                    {/* v1.105.34 — thumbnails, not raw links. See AttachmentViewer.js: an
+                        `<a href="/api/…" target="_blank">` is an UNAUTHENTICATED request and
+                        401'd for anyone opening it from the native app. */}
+                    {(r.receipts || []).length > 0 && (
+                      <span style={{ display: 'inline-flex', gap: 6, marginLeft: 8, verticalAlign: 'middle' }}>
+                        {(r.receipts || []).map((rc, i) => (
+                          <AttachmentThumb key={rc.id} size={40} attachment={receiptAttachment(rc)}
+                            onOpen={() => setViewingAttachments({
+                              list: (r.receipts || []).map(receiptAttachment), index: i,
+                            })} />
+                        ))}
+                      </span>
+                    )}
                   </div>
                 </div>
                 <div style={{ flex: '0 0 80px', fontWeight: 700, fontSize: 14, textAlign: 'right' }}>{fmt(r.amount)}</div>
@@ -197,6 +205,11 @@ const MoneyView = window.MoneyView = ({ careTeamId, onClose }) => {
           </>
         )}
       </div>
+
+      {viewingAttachments && typeof AttachmentViewer !== 'undefined' && (
+        <AttachmentViewer attachments={viewingAttachments.list} startIndex={viewingAttachments.index}
+          onClose={() => setViewingAttachments(null)} />
+      )}
     </div>
   );
 };

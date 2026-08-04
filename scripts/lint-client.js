@@ -96,6 +96,62 @@ function isBaselined(file, rule, message) {
   return BASELINE.some((b) => b.file === file && b.rule === rule && message.includes(`'${b.id}'`));
 }
 
+// ── v1.105.34: undefined JSX components ──
+//
+// `no-undef` does NOT see JSX element names. Renaming ReceiptViewer → AttachmentViewer left
+// `<ReceiptThumb>` behind in Reimbursements.js and every gate stayed green: the lint passed,
+// 378 unit tests passed, the bundle built. It would have shipped a component that throws
+// "ReceiptThumb is not defined" on render — a white screen on the money page — and the
+// `typeof X !== 'undefined'` guard next to it would have silently rendered nothing forever.
+//
+// Same silent-failure family as the lazy requires and the dead dark-mode CSS: invisible in
+// source, invisible to tests, only visible when a user opens the page. So: every capitalised
+// JSX element in the bundle must resolve to something the bundle actually declares.
+function findUndefinedJsxComponents(combinedSource, locate) {
+  // Scan with line-owning comments blanked, not removed: a file's own prose names components
+  // it does not use (`Promise<File>` in a utils.js doc comment was the first false positive),
+  // and deleting the lines outright would shift every reported line number.
+  //
+  // Blanking, and only for lines that OWN the comment, is deliberate. A global
+  // `/\*[\s\S]*?\*\//` replace would read the `/*` inside `accept="image/*,application/pdf"`
+  // as a comment opener and swallow ~9,000 characters of real code — see
+  // tests/helpers/source.js, which learned this the hard way.
+  let inBlock = false;
+  const scannable = combinedSource.split("\n").map((line) => {
+    const t = line.trim();
+    if (inBlock) { if (t.includes("*/")) inBlock = false; return ""; }
+    if (t.startsWith("//")) return "";
+    if (t.startsWith("/*") || t.startsWith("{/*")) { if (!t.includes("*/")) inBlock = true; return ""; }
+    return line;
+  }).join("\n");
+
+  const declared = new Set(Object.keys(EXTERNAL_GLOBALS));
+  // `const Foo = ...`, `function Foo(`, `class Foo`, `window.Foo = ...`
+  for (const re of [
+    /(?:const|let|var)\s+([A-Z][A-Za-z0-9_]*)\s*=/g,
+    /function\s+([A-Z][A-Za-z0-9_]*)\s*\(/g,
+    /class\s+([A-Z][A-Za-z0-9_]*)\b/g,
+    /window\.([A-Z][A-Za-z0-9_]*)\s*=/g,
+  ]) {
+    let m;
+    while ((m = re.exec(scannable))) declared.add(m[1]);
+  }
+  // React.Fragment shorthand, namespaced members (React.x, Recharts.y) and lowercase HTML
+  // tags are all fine; only bare capitalised names can dangle.
+  const used = new Map();
+  const useRe = /<([A-Z][A-Za-z0-9_]*)(?=[\s/>])/g;
+  let u;
+  while ((u = useRe.exec(scannable))) {
+    const name = u[1];
+    if (!used.has(name)) used.set(name, scannable.slice(0, u.index).split("\n").length);
+  }
+  const missing = [];
+  for (const [name, line] of used) {
+    if (!declared.has(name)) missing.push({ name, loc: locate(line) });
+  }
+  return missing;
+}
+
 async function main() {
   const eslint = new ESLint({
     useEslintrc: false,
@@ -123,14 +179,24 @@ async function main() {
 
   const baseNote = baselined.length ? ` (${baselined.length} known baseline finding(s) ignored — see BASELINE in lint-client.js)` : "";
 
-  if (errors.length === 0) {
-    console.log(`  [lint] ✓ ${files.length} client files, no NEW undeclared identifiers / dupe keys / dead code${baseNote}`);
+  const missingJsx = findUndefinedJsxComponents(combined, locate);
+
+  if (errors.length === 0 && missingJsx.length === 0) {
+    console.log(`  [lint] ✓ ${files.length} client files, no NEW undeclared identifiers / dupe keys / dead code / undefined JSX components${baseNote}`);
     return 0;
   }
 
-  console.error(`\n  [lint] ✗ ${errors.length} NEW error(s) in the client bundle${baseNote}:\n`);
-  for (const e of errors) {
-    console.error(`    ${e.loc.file}:${e.loc.line}  ${e.ruleId}  ${e.message}`);
+  if (errors.length) {
+    console.error(`\n  [lint] ✗ ${errors.length} NEW error(s) in the client bundle${baseNote}:\n`);
+    for (const e of errors) {
+      console.error(`    ${e.loc.file}:${e.loc.line}  ${e.ruleId}  ${e.message}`);
+    }
+  }
+  if (missingJsx.length) {
+    console.error(`\n  [lint] ✗ ${missingJsx.length} JSX component(s) used but never declared — these throw on render:\n`);
+    for (const m of missingJsx) {
+      console.error(`    ${m.loc.file}:${m.loc.line}  <${m.name}> is not defined anywhere in the bundle`);
+    }
   }
   console.error("");
   return 1;
