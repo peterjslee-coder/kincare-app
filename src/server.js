@@ -4,6 +4,16 @@ const { initSentry, setupSentryErrorHandler, captureException, tagRequestUser } 
 initSentry();
 
 const express = require("express");
+
+// v1.105.37 — install BEFORE any route module is required. Route files register their
+// handlers at require time, so anything loaded above this line would keep unwrapped
+// handlers. Express 4 does not catch a rejected promise from an async handler: the request
+// HANGS, with no status, no log and no Sentry event. The Aug 4 audit counted 87 handlers
+// with an await outside try/catch. See src/utils/asyncRoutes.js for what is and is not
+// wrapped, and why.
+const { installAsyncRouteSafety } = require("./utils/asyncRoutes");
+installAsyncRouteSafety(express);
+
 const http = require("http");
 const cors = require("cors");
 const helmet = require("helmet");
@@ -413,7 +423,7 @@ app.use("/api/media", require("./routes/media"));
 app.use("/api/safety", require("./routes/safety"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.105.36";
+const APP_VERSION = "1.105.37";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });

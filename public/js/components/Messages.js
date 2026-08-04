@@ -568,6 +568,15 @@ const Messages = window.Messages = () => {
           memberIds: selectedContacts.map(c => c.id),
         }),
       });
+      if (!res?.ok) {
+        // v1.105.37 — this failed silently AND stranded the screen: the two setters that
+        // exit group-creation mode live inside the ok branch below, so on failure the user
+        // was left in a half-built group with no message.
+        const d = await res?.json().catch(() => ({}));
+        showToast((d && d.error) || 'Could not create the group — please try again', 'error');
+        setCreatingGroup(false);
+        return;
+      }
       if (res?.ok) {
         const data = await res.json();
         setShowNewChat(false);
@@ -1736,6 +1745,12 @@ const Messages = window.Messages = () => {
   // ─── Chat View ───
   const renderChatView = () => {
     const isGroup = isGroupConv(activeConv);
+    // v1.105.37 — iPAi GENERATES text, so it carries the acknowledgment (see IPAiBadge.js).
+    // A person-to-person thread does not.
+    const isIPAiThread = activeConvId === '__ipai__'
+      || activeConv?.name === 'iPAi'
+      || activeConv?.otherName === 'iPAi Assistant'
+      || activeConv?.otherName === 'iPAi';
     return (
       <div className={`msg-panel ${isMobile ? 'msg-panel-mobile' : ''}`} style={{ display: 'flex', flexDirection: 'column', height: isMobile ? 'auto' : '100%', flex: isMobile ? '1 1 0%' : undefined, minHeight: isMobile ? 0 : undefined, overflow: 'hidden' }}>
         <div className="msg-chat-header" style={isMobile ? { paddingTop: 12 } : undefined}>
@@ -2204,6 +2219,11 @@ const Messages = window.Messages = () => {
               ×
             </button>
           </div>
+        )}
+        {/* v1.105.37 — sits with the composer rather than only on the empty state, so it is
+            on screen at the moment someone reads an answer, not just before they ask. */}
+        {isIPAiThread && typeof IPAiDisclaimer !== 'undefined' && (
+          <div style={{ padding: '0 12px 6px' }}><IPAiDisclaimer /></div>
         )}
         <div className="msg-input-area">
           {/* Hidden file input for photo uploads */}

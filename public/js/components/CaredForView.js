@@ -2,6 +2,7 @@
 // Same power as family dashboard: upcoming sessions, care team, activity, calendar, notes
 const CaredForView = window.CaredForView = () => {
   const [data, setData] = useState(null);
+  const [noteError, setNoteError] = useState('');  // v1.105.37
   const [loading, setLoading] = useState(true);
   const [sessions, setSessions] = useState([]);
   const [activeTab, setActiveTab] = useState('home');
@@ -157,16 +158,20 @@ const CaredForView = window.CaredForView = () => {
     setSaving(true);
     try {
       const res = await apiFetch(`/api/notes/${noteId}`, { method: 'PUT', body: JSON.stringify({ content: editContent }) });
-      if (res?.ok) { setEditingNote(null); setEditContent(''); await fetchData(); }
-    } catch (err) { console.error('Edit note error:', err); }
+      // v1.105.37 — a silent no-op here looked identical to a save. The note stays on
+      // screen either way, so the user has no way to tell.
+      if (res?.ok) { setEditingNote(null); setEditContent(''); setNoteError(''); await fetchData(); }
+      else setNoteError("That didn't save — please try again.");
+    } catch (err) { console.error('Edit note error:', err); setNoteError("That didn't save — check your connection."); }
     setSaving(false);
   };
 
   const handleDeleteNote = async (noteId) => {
     try {
       const res = await apiFetch(`/api/notes/${noteId}`, { method: 'DELETE' });
-      if (res?.ok) await fetchData();
-    } catch (err) { console.error('Delete note error:', err); }
+      if (res?.ok) { setNoteError(''); await fetchData(); }
+      else setNoteError("That didn't delete — please try again.");
+    } catch (err) { console.error('Delete note error:', err); setNoteError("That didn't delete — check your connection."); }
   };
 
   if (loading) return <LoadingSpinner text="Loading your dashboard..." />;
@@ -775,6 +780,13 @@ const CaredForView = window.CaredForView = () => {
       {/* ═══════════════ NOTES TAB ═══════════════ */}
       {activeTab === 'notes' && (
         <div>
+          {/* v1.105.37 — edit and delete used to no-op in silence, which on a screen where
+              the note stays visible either way is indistinguishable from success. */}
+          {noteError && (
+            <div role="alert" style={{ marginBottom: '12px', fontSize: 13, color: 'var(--color-error)', background: 'var(--bg-error-light)', border: '1px solid var(--color-error)', borderRadius: 8, padding: '8px 12px' }}>
+              {noteError}
+            </div>
+          )}
           {canAddNotes && (
             <div className="card" style={{ marginBottom: '16px' }}>
               <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '8px' }}>Write a new note</div>

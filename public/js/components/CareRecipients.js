@@ -481,6 +481,10 @@ const CareRecipients = window.CareRecipients = () => {
     if (res?.ok) {
       showToast('Photo removed', 'success');
       await fetchRecipients();
+    } else {
+      // v1.105.37 — the photo stayed on screen with no explanation.
+      const d = await res?.json().catch(() => ({}));
+      showToast((d && d.error) || 'Could not remove the photo — please try again', 'error');
     }
   };
 

@@ -224,6 +224,11 @@ const IPAiInsightsCard = window.IPAiInsightsCard = ({ recipientId, recipientName
               )}
             </div>
 
+            {/* v1.105.37 — Pete's rule: nothing generated goes on screen without saying,
+                right there, that it is not medical care and reflects only what was given
+                to it. See IPAiBadge.js for why this is also a store-answer dependency. */}
+            <IPAiDisclaimer style={{ marginTop: 12 }} />
+
             {/* Footer */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, paddingTop: 8, borderTop: '1px solid #e5e7eb' }}>
               <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>

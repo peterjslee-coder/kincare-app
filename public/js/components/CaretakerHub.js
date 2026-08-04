@@ -858,9 +858,17 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         // Refresh data
         const refreshRes = await apiFetch('/api/dashboard');
         if (refreshRes?.ok) setData(await refreshRes.json());
+      } else {
+        // v1.105.37 — the visit log is what gets a caregiver paid. Failing silently left
+        // the modal open with her text still in it and no way to tell whether it saved.
+        // The nested photo upload above already toasted on failure, so the OUTER failure
+        // was quieter than the inner one.
+        const d = await res?.json().catch(() => ({}));
+        showToast((d && d.error) || 'Your visit log did not save — please try again', 'error');
       }
     } catch (err) {
       console.error('Visit log error:', err);
+      showToast('Your visit log did not save — check your connection and try again', 'error');
     }
     setSubmittingLog(false);
   };

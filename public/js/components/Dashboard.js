@@ -2425,8 +2425,15 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                           setReviewSession({ id: s.id, caregiverId: d.cancelledCaregiverId, caregiverName: s.caregiverName, recipientName: s.recipientName, date: s.date });
                         }
                         fetchDashboard();
+                      } else {
+                        // v1.105.37 — silence here let the family believe the session was
+                        // cancelled while it stayed booked and billable.
+                        const d = await r?.json().catch(() => ({}));
+                        showToast((d && d.error) || 'That did not go through — the session is still booked', 'error');
                       }
-                    } catch {}
+                    } catch {
+                      showToast('That did not go through — the session is still booked', 'error');
+                    }
                     setTcRespondLoading(false);
                   }}
                     style={{ padding: '8px 14px', borderRadius: 8, border: 'none', background: 'var(--color-error)', color: 'var(--text-on-primary)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>

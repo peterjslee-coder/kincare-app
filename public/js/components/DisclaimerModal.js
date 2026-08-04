@@ -9,6 +9,7 @@ const DisclaimerModal = window.DisclaimerModal = ({ onAccept, pendingDocs }) => 
   const [accepting, setAccepting] = useState(false);
   const [currentIdx, setCurrentIdx] = useState(0);
   const [copiedAI, setCopiedAI] = useState(false);
+  const [acceptError, setAcceptError] = useState('');  // v1.105.37
   const contentRef = useRef(null);
 
   // If no pendingDocs provided, fall back to legacy disclaimer
@@ -48,6 +49,7 @@ const DisclaimerModal = window.DisclaimerModal = ({ onAccept, pendingDocs }) => 
   }, []);
 
   const handleAccept = async () => {
+    setAcceptError('');
     setAccepting(true);
     try {
       if (currentDoc) {
@@ -65,14 +67,22 @@ const DisclaimerModal = window.DisclaimerModal = ({ onAccept, pendingDocs }) => 
           } else {
             onAccept();
           }
+        } else {
+          // v1.105.37 — say something. This is the blocking gate into the app: with no
+          // terminal else the button simply re-enabled, so the user tapped "I Accept"
+          // again and again and could never get in, with nothing on screen to explain it.
+          const d = await res?.json().catch(() => ({}));
+          setAcceptError((d && d.error) || "We couldn't record your acceptance. Check your connection and try again.");
         }
       } else {
         // Legacy disclaimer fallback
         const res = await apiFetch('/api/auth/me/disclaimer', { method: 'PUT' });
         if (res?.ok) onAccept();
+        else setAcceptError("We couldn't record your acceptance. Check your connection and try again.");
       }
     } catch (err) {
       console.error('Legal accept error:', err);
+      setAcceptError("We couldn't record your acceptance. Check your connection and try again.");
     }
     setAccepting(false);
   };
@@ -263,6 +273,14 @@ const DisclaimerModal = window.DisclaimerModal = ({ onAccept, pendingDocs }) => 
                 I have read and agree to the {title.toLowerCase()}{isUpdate ? ' (updated)' : ''}
               </span>
             </label>
+          )}
+          {/* v1.105.37 — this is the blocking gate into the app. Without a visible failure
+              the button just re-enabled, so the user tapped "I Agree" repeatedly and could
+              never get in, with nothing on screen to explain why. */}
+          {acceptError && (
+            <div role="alert" style={{ fontSize: 13, color: 'var(--color-error)', background: 'var(--bg-error-light)', border: '1px solid var(--color-error)', borderRadius: 8, padding: '8px 12px', textAlign: 'center' }}>
+              {acceptError}
+            </div>
           )}
           <button onClick={handleAccept} disabled={!scrolledToBottom || !checked || accepting} style={{
             width: '100%', padding: '14px', background: (scrolledToBottom && checked) ? 'var(--role-color)' : 'var(--border-light)',

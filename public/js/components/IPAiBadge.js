@@ -52,3 +52,35 @@ const IPAiBadge = window.IPAiBadge = ({ size = 'sm', style: customStyle }) => {
     </span>
   );
 };
+
+// ─── The acknowledgment that has to sit with anything iPAi generates (v1.105.37) ───
+//
+// Pete's rule, stated while answering Apple's age-rating questionnaire:
+//
+//   "The app must NEVER generate medical or treatment information without the user
+//    explicitly acknowledging that this is not medical care, and that it can only reflect
+//    information provided to it."
+//
+// His reason: Claude can hallucinate, and in a product holding a dementia patient's
+// medications and adherence history a fabricated line is not cosmetic.
+//
+// It also underwrites a store answer. Apple's questionnaire was answered *Medical or
+// Treatment Information = Infrequent*, on the grounds that InPlace records and displays
+// rather than advises. That answer holds only while this does — if the app starts
+// generating unacknowledged medical guidance, the honest answer becomes *Frequent*, which
+// pulls in the Regulated Medical Device declaration.
+//
+// Both halves must be present AT THE POINT OF GENERATION, not buried in the policy:
+// (a) this is not medical care, (b) it only reflects what you gave it.
+const IPAI_NOT_MEDICAL = window.IPAI_NOT_MEDICAL =
+  'iPAi does not provide medical care. It can only reflect what your care team has recorded.';
+
+const IPAiDisclaimer = window.IPAiDisclaimer = ({ style }) => (
+  <div role="note" style={{
+    fontSize: 11, lineHeight: 1.45, color: 'var(--text-muted)',
+    padding: '6px 10px', borderRadius: 6, background: 'var(--bg-primary)',
+    border: '1px solid var(--border-light)', ...(style || {}),
+  }}>
+    {IPAI_NOT_MEDICAL}
+  </div>
+);

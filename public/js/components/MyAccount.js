@@ -491,8 +491,13 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
       if (res?.ok) {
         showToast('Passkey removed', 'success');
         fetchPasskeys();
+      } else {
+        // v1.105.37 — believing you removed a sign-in credential when you did not is worse
+        // than most silent failures on this list.
+        const d = await res?.json().catch(() => ({}));
+        showToast((d && d.error) || 'Could not remove that passkey — please try again', 'error');
       }
-    } catch {}
+    } catch { showToast('Could not remove that passkey — check your connection', 'error'); }
   };
 
   const handleRenamePasskey = async (pkId, newName) => {
