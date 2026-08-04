@@ -7,9 +7,13 @@
 
 const fs = require("fs");
 const path = require("path");
-const raw = (p) => fs.readFileSync(path.join(__dirname, "..", p), "utf8");
-const code = (p) =>
-  raw(p).replace(/\/\*[\s\S]*?\*\//g, "").split("\n").filter((l) => !l.trim().startsWith("//")).join("\n");
+// v1.105.36 — reads source through tests/helpers/source.js. The hand-rolled strip this
+// replaces used a GLOBAL /* … */ regex, which reads the `/*` inside a string literal as a
+// comment opener: on src/server.js the `https://*.tile.openstreetmap.org` entry in the CSP
+// swallowed 1,184 characters of real config, and on src/models/database.js it lost 770.
+// A positive assertion fails loudly when that happens; a NEGATIVE one passes silently,
+// having verified nothing.
+const { raw, code } = require("./helpers/source");
 
 describe("guideline 1.2: both mechanisms exist and are reachable", () => {
   const safety = code("src/routes/safety.js");
@@ -167,8 +171,16 @@ describe("admin report queue", () => {
   test("deciding a report still notifies nobody", () => {
     // Reporting is silent end to end. Telling someone an admin actioned a report identifies
     // the reporter as surely as naming them.
+    // v1.105.36 — this used to slice to the first `});`, which is the closing brace of the
+    // 400-guard five lines in: it inspected 345 characters of an 865-character handler and
+    // called that "the handler". Everything that actually decides the report — the UPDATE,
+    // the audit log, the response — sat outside the window, so a push added there passed
+    // green. Verified by mutation: injecting sendPushToUser after logAdminAction did not
+    // fail this test. Slice to the NEXT ROUTE, the way cancellationFee.test.js does.
     const d = admin.slice(admin.indexOf('router.put("/content-reports/:id"'));
-    const body = d.slice(0, d.indexOf("});"));
+    const nextRoute = d.indexOf("\nrouter.", 1);
+    const body = nextRoute === -1 ? d : d.slice(0, nextRoute);
+    expect(body.length).toBeGreaterThan(500); // the slice must actually cover the handler
     expect(body).not.toMatch(/sendPushToUser/);
   });
 

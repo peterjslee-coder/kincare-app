@@ -10,8 +10,13 @@
 
 const fs = require("fs");
 const path = require("path");
-const read = (p) => fs.readFileSync(path.join(__dirname, "..", p), "utf8");
-const strip = (t) => t.replace(/\/\*[\s\S]*?\*\//g, "").split("\n").filter((l) => !l.trim().startsWith("//")).join("\n");
+// v1.105.36 — reads source through tests/helpers/source.js. The hand-rolled strip this
+// replaces used a GLOBAL /* … */ regex, which reads the `/*` inside a string literal as a
+// comment opener: on src/server.js the `https://*.tile.openstreetmap.org` entry in the CSP
+// swallowed 1,184 characters of real config, and on src/models/database.js it lost 770.
+// A positive assertion fails loudly when that happens; a NEGATIVE one passes silently,
+// having verified nothing.
+const { raw: read, code: readStripped } = require("./helpers/source");
 
 describe("the promise is on the page", () => {
   const splash = read("public/js/components/SplashPage.js");
@@ -19,7 +24,7 @@ describe("the promise is on the page", () => {
   // why it does not claim "no surcharges" — and that explanation contains the phrase. This
   // has now bitten three times in this codebase (Android background location, the
   // cancellation capture, here), so: raw for "is it on the page", stripped for "is it NOT".
-  const splashCode = strip(splash);
+  const splashCode = readStripped("public/js/components/SplashPage.js");
 
   test("it states that AI sets neither prices nor wages", () => {
     expect(splash).toMatch(/does not do: set prices, or set wages/i);
@@ -42,8 +47,8 @@ describe("...and the code still backs it", () => {
   test("the platform fee is a constant, identical for everyone", () => {
     // "a flat 20% for everyone" — if this ever becomes a lookup, per-user or per-tier, the
     // word "flat" stops being true.
-    expect(strip(read("src/routes/payments.js"))).toMatch(/const PLATFORM_FEE_PERCENT = 20;/);
-    expect(strip(read("src/routes/accountability.js"))).toMatch(/const PLATFORM_FEE_PERCENT = 20;/);
+    expect(readStripped("src/routes/payments.js")).toMatch(/const PLATFORM_FEE_PERCENT = 20;/);
+    expect(readStripped("src/routes/accountability.js")).toMatch(/const PLATFORM_FEE_PERCENT = 20;/);
   });
 
   test("three-quarters of the surcharge really is the caregiver's", () => {
@@ -58,7 +63,7 @@ describe("...and the code still backs it", () => {
   test("caregivers set their own rate — nothing else writes it", () => {
     // The rate the caregiver types is the rate that is stored. If some other system starts
     // writing hourly_rate, "caregivers name their own rate" needs re-examining.
-    expect(strip(read("src/routes/caregivers.js"))).toMatch(/updates\.push\("hourly_rate = \?"\)/);
+    expect(readStripped("src/routes/caregivers.js")).toMatch(/updates\.push\("hourly_rate = \?"\)/);
   });
 
   test("the AI modules contain no pricing logic at all", () => {
@@ -66,7 +71,7 @@ describe("...and the code still backs it", () => {
     // has no access to price fields". The only 'rate' in ipaiChat is API rate-limiting, so
     // match on the field names rather than the word.
     for (const f of ["src/utils/careIntelligence.js", "src/utils/kindredBrain.js", "src/routes/ipaiChat.js"]) {
-      const src = strip(read(f));
+      const src = readStripped(f);
       expect(src).not.toMatch(/hourly_rate|agreed_rate|PLATFORM_FEE|surchargePercent|calculateSessionCost/);
     }
   });
@@ -74,7 +79,7 @@ describe("...and the code still backs it", () => {
   test("session cost is arithmetic on declared inputs, with no per-user signal", () => {
     // No demand, no history, no willingness-to-pay. Just their rates, the clock, and a
     // constant. Asserting the SIGNATURE is what stops a 'userId' quietly appearing.
-    const rc = strip(read("src/utils/rateCalculator.js"));
+    const rc = readStripped("src/utils/rateCalculator.js");
     expect(rc).toMatch(/function calculateSessionCost\(startTime, endTime, rates, options = \{\}\)/);
     expect(rc).not.toMatch(/userId|customerId|demand|willingness|priceElasticity/i);
   });

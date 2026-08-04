@@ -13,8 +13,15 @@
 
 const fs = require("fs");
 const path = require("path");
-const raw = fs.readFileSync(path.join(__dirname, "..", "src/routes/accountability.js"), "utf8");
-const code = raw.replace(/\/\*[\s\S]*?\*\//g, "").split("\n").filter((l) => !l.trim().startsWith("//")).join("\n");
+// v1.105.36 — reads source through tests/helpers/source.js. The hand-rolled strip this
+// replaces used a GLOBAL /* … */ regex, which reads the `/*` inside a string literal as a
+// comment opener: on src/server.js the `https://*.tile.openstreetmap.org` entry in the CSP
+// swallowed 1,184 characters of real config, and on src/models/database.js it lost 770.
+// A positive assertion fails loudly when that happens; a NEGATIVE one passes silently,
+// having verified nothing.
+const src = require("./helpers/source");
+const raw = src.raw("src/routes/accountability.js");
+const code = src.code("src/routes/accountability.js");
 
 // Slice each Stripe-touching function from its declaration to the next one, so a guard on
 // a neighbour cannot satisfy an assertion about this one.

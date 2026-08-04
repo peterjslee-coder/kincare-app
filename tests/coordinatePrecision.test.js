@@ -74,11 +74,16 @@ describe("the evidence is unaffected", () => {
 // ─── the call sites, and the rows already written ───
 const fs = require("fs");
 const path = require("path");
-const read = (p) => fs.readFileSync(path.join(__dirname, "..", p), "utf8");
-const strip = (t) => t.replace(/\/\*[\s\S]*?\*\//g, "").split("\n").filter((l) => !l.trim().startsWith("//")).join("\n");
+// v1.105.36 — reads source through tests/helpers/source.js. The hand-rolled strip this
+// replaces used a GLOBAL /* … */ regex, which reads the `/*` inside a string literal as a
+// comment opener: on src/server.js the `https://*.tile.openstreetmap.org` entry in the CSP
+// swallowed 1,184 characters of real config, and on src/models/database.js it lost 770.
+// A positive assertion fails loudly when that happens; a NEGATIVE one passes silently,
+// having verified nothing.
+const { raw: read, code: readStripped } = require("./helpers/source");
 
 describe("both write paths coarsen", () => {
-  const sessions = strip(read("src/routes/sessions.js"));
+  const sessions = readStripped("src/routes/sessions.js");
 
   test("check-in stores a coarsened point", () => {
     const insert = sessions.slice(sessions.indexOf("INSERT INTO visit_logs"));
@@ -101,7 +106,7 @@ describe("both write paths coarsen", () => {
 });
 
 describe("existing rows are backfilled", () => {
-  const schema = strip(read("src/models/database.js"));
+  const schema = readStripped("src/models/database.js");
 
   test("migration 016 exists and rounds both pairs", () => {
     // A forward-only fix leaves the real exposure in place: every visit already recorded.

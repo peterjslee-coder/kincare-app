@@ -43,9 +43,17 @@ describe("code() does not treat string contents as comments", () => {
   });
 
   test("a multi-line block comment is removed entirely", () => {
-    // The JSX explanatory blocks in these components span many lines.
+    // v1.105.36 — this asserted on "collapse the settled tail", which lives in a `//` LINE
+    // comment. Breaking code()'s BLOCK-comment branch left the test green, so the branch
+    // every migrated negative assertion depends on had no coverage at all. Verified by
+    // mutation. These two phrases sit inside multi-line `{/* … */}` JSX blocks; the first
+    // is on the block's OPENING line, the second several lines in, so a strip that only
+    // drops the opener would still fail.
     const good = code("public/js/components/Reimbursements.js");
-    expect(good).not.toMatch(/collapse the settled tail/);
+    const raw_ = raw("public/js/components/Reimbursements.js");
+    expect(raw_).toMatch(/\{\/\* v1\.105\.30 — the two halves of the same problem/);
+    expect(good).not.toMatch(/the two halves of the same problem/);
+    expect(good).not.toMatch(/an itemised till roll and the card slip are often two photos/);
   });
 
   test("code sharing a line with a trailing comment is kept", () => {

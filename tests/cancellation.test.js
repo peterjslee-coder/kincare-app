@@ -28,11 +28,17 @@ const cancelHandler = (() => {
 // those assertions forbid, so matching raw source makes the test fail on its own prose.
 // This has now bitten twice (the Android background-location assertion was the first), so
 // it gets fixed once, here, rather than patched per line.
-const cancelCode = cancelHandler
-  .replace(/\/\*[\s\S]*?\*\//g, "")
-  .split("\n")
-  .filter((l) => !l.trim().startsWith("//"))
-  .join("\n");
+// v1.105.36 — strip the WHOLE FILE with the shared reader, then slice the handler out of
+// the stripped text. Stripping a slice with a local regex is how the `/*` inside a string
+// literal gets read as a comment opener.
+const cancelCode = (() => {
+  const stripped = require("./helpers/source").code("src/routes/sessions.js");
+  const start = stripped.indexOf('router.put("/:id/cancel"');
+  if (start === -1) throw new Error("cancel handler not found in stripped source");
+  const rest = stripped.slice(start + 1);
+  const end = rest.indexOf("\nrouter.");
+  return stripped.slice(start, end === -1 ? undefined : start + 1 + end);
+})();
 
 describe("cancelling a session releases the payment hold", () => {
   test("the cancel handler voids the authorization", () => {
