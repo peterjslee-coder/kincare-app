@@ -195,9 +195,13 @@ router.post("/", async (req, res) => {
       const eventType = needsAttention ? "observation_attention" : "team_note";
       const { sendPushToUser } = require("./push");
       for (const userId of notifyIds) {
+        // v1.105.39 — the note itself never leaves the app. recipient_notes.content is
+        // marked /* PHI */ in the schema, and a push body renders on a LOCKED screen:
+        // "confused about where she was, wouldn't take her evening pill" was readable by
+        // anyone who picked up the phone. Pete: "no phi on lock screens."
         sendPushToUser(userId, {
           title,
-          body: `${authorName}: ${String(content).slice(0, 120)}`,
+          body: `${authorName} — tap to read`,
           tag: `note-${id.slice(0, 8)}`,
           data: { type: eventType, careRecipientId, noteId: id, page: "care-profile" },
         }, eventType).catch(() => {});

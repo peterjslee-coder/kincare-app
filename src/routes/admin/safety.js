@@ -598,7 +598,8 @@ router.post("/safety-flags/:id/message/:userId", authenticate, checkAdmin, requi
       const { sendPushToUser } = require("../push");
       sendPushToUser(targetUserId, {
         title: "InPlace Support",
-        body: message.trim().substring(0, 100),
+        // v1.105.39 — support messages are free text and can quote the user's own report.
+        body: "You have a message from InPlace Support. Tap to read.",
         data: { type: "message", conversationId: convId },
       }).catch(() => {});
     } catch (e) { captureException(e, { where: "admin: support push (legacy)" }); }

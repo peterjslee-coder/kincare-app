@@ -334,11 +334,13 @@ async function pollCareEvents(sendPushToUser) {
       const timeLabel = ev.event_time
         ? new Date(ev.starts_at).toLocaleTimeString("en-US", { timeZone: tz, hour: "numeric", minute: "2-digit" })
         : null;
-      const where = ev.location ? ` · ${ev.location}` : "";
-      const title = stage === "day_before" ? `Tomorrow: ${ev.title}` : `Today: ${ev.title}`;
+      // v1.105.39 — an event title is usually the appointment ("Dr. Patel — neurology")
+      // and the location names the clinic. Both were on the lock screen. Time and first
+      // name are enough to act on; the rest is one tap away. Pete: "no phi on lock screens."
+      const title = stage === "day_before" ? "Appointment tomorrow" : "Appointment today";
       const body = ev.event_time
-        ? `${stage === "day_before" ? "Tomorrow" : "Today"} at ${timeLabel} for ${ev.recipient_first_name}${where}.`
-        : `${stage === "day_before" ? "Tomorrow" : "Today"} for ${ev.recipient_first_name}${where}.`;
+        ? `${stage === "day_before" ? "Tomorrow" : "Today"} at ${timeLabel} for ${ev.recipient_first_name}. Tap for details.`
+        : `${stage === "day_before" ? "Tomorrow" : "Today"} for ${ev.recipient_first_name}. Tap for details.`;
 
       for (const m of notifiable) {
         sendPushToUser(m.id, {

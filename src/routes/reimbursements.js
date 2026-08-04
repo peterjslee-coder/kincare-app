@@ -1275,7 +1275,9 @@ async function generateRecurringReimbursements() {
           const { sendPushToUser } = require("./push");
           sendPushToUser(approverId, {
             title: "Recurring reimbursement due",
-            body: `$${Number(sch.amount).toFixed(2)} to ${pName} — ${sch.description} (pre-approved, ready to pay)`,
+            // v1.105.39 — the description is free text and routinely names what the money
+            // was for ("pharmacy", "incontinence supplies"). Amount and payee are enough.
+            body: `$${Number(sch.amount).toFixed(2)} to ${pName} — pre-approved, ready to pay`,
             data: { type: "reimbursement_recurring", reimbursementId: occurrenceId, careTeamId: sch.care_team_id, page: "care-team", focus: `reimbursement:${occurrenceId}` },
           }, "reimbursement_recurring").catch(() => {});
         }

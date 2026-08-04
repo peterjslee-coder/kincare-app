@@ -141,7 +141,15 @@ describe("care event lifecycle", () => {
     expect(ids).toEqual(expect.arrayContaining([family.user.id, teamMember.user.id]));
     expect(ids).not.toContain(caregiver.user.id);
     expect(mine[0].payload.data.type).toBe("care_event");
-    expect(mine[0].payload.title).toContain("Today:");
+    // v1.105.39 — the title used to be `Today: ${ev.title}`, which put "Eye exam" on every
+    // family member's LOCK SCREEN. Pete: "no phi on lock screens." The notice now says
+    // when and for whom; what it is for is one tap away inside the app.
+    expect(mine[0].payload.title).toBe("Appointment today");
+    expect(mine[0].payload.title).not.toContain("Eye exam");
+    expect(mine[0].payload.body).not.toContain("Eye exam");
+    expect(mine[0].payload.body).toContain("Tap for details");
+    // …and the event id still travels in `data`, so the tap lands in the right place.
+    expect(mine[0].payload.data.eventId).toBe(evId);
 
     const row = await h.db.prepare("SELECT reminders_sent FROM care_events WHERE id = ?").get(evId);
     expect(row.reminders_sent).toContain("same_day");

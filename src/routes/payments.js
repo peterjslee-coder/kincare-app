@@ -159,7 +159,9 @@ router.post("/webhook", express.raw({ type: "application/json" }), async (req, r
               const payoutMsg = payoutExpectedDate ? ` Expected in your bank by ${new Date(payoutExpectedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}.` : '';
               sendPushToUser(caregiver.user_id, {
                 title: `You received a payment`,
-                body: `You received $${(amountCents / 100).toFixed(2)} from ${familyUser?.first_name || 'a family'}${note ? `: "${note}"` : ''}${payoutMsg}`,
+                // v1.105.39 — the note is free text and routinely names what the money was
+                // for ("pharmacy copay"), which is health information on a lock screen.
+                body: `You received $${(amountCents / 100).toFixed(2)} from ${familyUser?.first_name || 'a family'}${payoutMsg}`,
                 data: { type: 'manual_payment_received', caregiverId, page: 'earnings' },
               }, 'manual_payment_received').catch(() => {});
             }

@@ -564,9 +564,13 @@ async function pollCareTasks(sendPushToUser) {
         const assignee = t.assigned_user_id ? notifiable.find((m) => m.id === t.assigned_user_id) : null;
         const targets = assignee ? [assignee.id] : notifiable.map((m) => m.id);
         for (const uid of targets) {
+          // v1.105.39 — `t.title` is user-authored and routinely names a condition or a
+          // medication ("Evening anxiety medication"), and `detail` was literally
+          // ` (med_name, dose)`. Both were rendering on locked screens. The task is still
+          // one tap away; the lock screen just stops naming the drug.
           sendPushToUser(uid, {
-            title: `${t.title}`,
-            body: `Due now for ${t.recipient_first_name}${detail}. Tap to check it off.`,
+            title: "Care task due",
+            body: `Something's due now for ${t.recipient_first_name}. Tap to check it off.`,
             data: pushData,
           }, "care_task").catch(() => {});
         }
@@ -579,8 +583,9 @@ async function pollCareTasks(sendPushToUser) {
       const graceMs = (t.grace_minutes ?? 45) * 60000;
       if (!sent.includes("escalated") && now - dueAt >= graceMs && now - dueAt < staleMs + graceMs) {
         for (const m of notifiable) {
+          // v1.105.39 — same: the title named the medication.
           sendPushToUser(m.id, {
-            title: `Still not done: ${t.title}`,
+            title: "Care task not checked off",
             body: `${t.recipient_first_name}'s ${occ.due_date} task hasn't been checked off. Can anyone confirm it happened?`,
             data: pushData,
           }, "care_task").catch(() => {});

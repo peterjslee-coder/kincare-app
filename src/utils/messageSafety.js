@@ -184,7 +184,8 @@ async function screenMessage(messageContent, senderId, conversationId, senderInf
         for (const admin of admins) {
           sendPushToUser(admin.id, {
             title: alertTitle,
-            body: alertMsg.substring(0, 100),
+            // v1.105.39 — the excerpt was the flagged message itself, on a lock screen.
+            body: "Tap to review in InPlace.",
             data: { type: "safety_flag", conversationId },
           }).catch(() => {});
         }

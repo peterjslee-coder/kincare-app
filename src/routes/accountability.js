@@ -1038,7 +1038,10 @@ router.post("/incident", async (req, res) => {
       try {
         await sendPushToUser(admin.id, {
           title: '🚨 Incident Report Filed',
-          body: `${reporterName} reported: ${incidentType.replace(/_/g, ' ')}`,
+          // v1.105.39 — the incident TYPE is health information about the care recipient
+          // ("fall", "medication error"). It went to admins' lock screens. The queue is one
+          // tap away and this is a 24-hour-response commitment, not a glance-and-forget.
+          body: `${reporterName} filed an incident report. Tap to review.`,
           data: { url: '/admin?tab=safety' },
         });
       } catch (e) { /* best-effort push */ }
