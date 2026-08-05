@@ -751,6 +751,38 @@ const initNativeTokenRefresh = window.initNativeTokenRefresh = () => {
 
 // Check push subscription health and re-sync if needed
 // Call periodically (e.g., every 30 min) to keep subscriptions fresh
+// ─── App-icon badge (v1.105.40) ───
+//
+// Pete: "notification on the app icon when there are unread events that need attention.
+// For instance, if Sara needs to approve reimbursements."
+//
+// A push carries the number down (see sw.js and utils/apns.js), but the thing people
+// actually notice is the badge NOT clearing after they've dealt with something. So the app
+// re-asks the server whenever it comes to the front, which is exactly when a stale badge
+// would be visible and annoying.
+//
+// Installed PWA only — setAppBadge is a no-op in a plain browser tab, and undefined in
+// older WebViews. The native iOS app will need @capacitor/badge to do the same on resume;
+// that lands with the next TestFlight build.
+const refreshAppBadge = window.refreshAppBadge = async () => {
+  try {
+    if (typeof navigator === 'undefined' || typeof navigator.setAppBadge !== 'function') return;
+    const res = await apiFetch('/api/push/attention');
+    if (!res?.ok) return;
+    const { total } = await res.json();
+    if (Number(total) > 0) await navigator.setAppBadge(Number(total));
+    else await navigator.clearAppBadge();
+  } catch { /* a badge must never be load-bearing */ }
+};
+
+// Re-check when the tab becomes visible again. Cheap: one small query, and only for
+// installed apps that can actually show a badge.
+if (typeof document !== 'undefined' && typeof navigator !== 'undefined' && typeof navigator.setAppBadge === 'function') {
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') refreshAppBadge();
+  });
+}
+
 const checkPushHealth = window.checkPushHealth = async () => {
   try {
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;

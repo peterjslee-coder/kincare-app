@@ -71,6 +71,14 @@ function sendApnsNotification(deviceToken, payload) {
       aps: {
         alert: { title: payload.title || "InPlace", body: payload.body || "" },
         sound: "default",
+        // v1.105.40 — the app-icon badge. iOS SETS the icon to this number, it does not
+        // add to it, so the server sending the current total is exactly right: the badge
+        // is corrected on every push, including downward. 0 clears it.
+        // ⚠️ Clearing it when the user READS things still needs the app to set it on
+        // open/resume — that requires @capacitor/badge, which is not installed yet, so it
+        // waits for the next native build. Until then the number only moves when a push
+        // arrives, which is honest but lags.
+        ...(Number.isFinite(payload.badgeCount) ? { badge: payload.badgeCount } : {}),
         ...(payload.tag ? { "thread-id": payload.tag } : {}),
       },
       // Custom keys ride at the top level; the Capacitor plugin surfaces them as notification.data

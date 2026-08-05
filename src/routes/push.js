@@ -403,6 +403,21 @@ const MAX_FAIL_COUNT = 5;
 
 // ─── Utility: Send push to a user ───
 // Used internally by other routes (sessions, messages, etc.)
+// ─── GET /api/push/attention — the badge number, and what makes it up ───
+// v1.105.40. One canonical count (src/utils/attention.js) so the icon, the push payload and
+// any future in-app dot can never disagree.
+router.get("/attention", async (req, res) => {
+  try {
+    const db = await getDb();
+    const { attentionCountFor } = require("../utils/attention");
+    res.json(await attentionCountFor(db, req.user.id));
+  } catch (err) {
+    console.error("Attention count error:", err);
+    // A badge is a convenience. Never fail the caller over it.
+    res.json({ total: 0, reimbursements: 0, timeChanges: 0, careTasks: 0, messages: 0 });
+  }
+});
+
 // Optional eventType param — if provided, checks user's notification_prefs before sending
 async function sendPushToUser(userId, payload, eventType) {
   // NEVER send push notifications to demo users — prevents demo data from
@@ -446,11 +461,22 @@ async function sendPushToUser(userId, payload, eventType) {
 
     if (subs.length === 0) return; // no subscriptions for this user
 
+    // v1.105.40 — every push carries the recipient's CURRENT attention count, because a
+    // push always means something changed. `badge` here is the monochrome ICON for the web
+    // notification (an existing, unrelated field); `badgeCount` is the number for the app
+    // icon. Named apart on purpose — collapsing them is an easy and confusing mistake.
+    let badgeCount = 0;
+    try {
+      const { attentionCountFor } = require("../utils/attention");
+      badgeCount = (await attentionCountFor(db, userId)).total;
+    } catch { /* a wrong badge must never block a real notification */ }
+
     const notificationPayload = JSON.stringify({
       title: payload.title || "InPlace",
       body: payload.body || "",
       icon: "/icons/icon-192.png",
       badge: "/icons/icon-maskable-96.png",
+      badgeCount,
       tag: payload.tag || undefined, // same tag → OS replaces previous notification
       data: payload.data || {},
     });

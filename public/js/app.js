@@ -1279,6 +1279,9 @@ const App = () => {
       // Web: re-sync VAPID subscription if already granted
       subscribeToPush().catch(() => {});
     }
+    // v1.105.40 — set the app-icon badge from the server's count as soon as we know who
+    // this is. Without this the badge only ever moved when a push arrived.
+    if (typeof refreshAppBadge === 'function') refreshAppBadge();
     // Start periodic push health check (every 30 min) to keep subscriptions fresh
     if (typeof checkPushHealth === 'function') {
       // Clear any existing timer (handles re-login without refresh)

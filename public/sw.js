@@ -1,6 +1,6 @@
 // InPlace Service Worker — v1.57.14
-const CACHE_NAME = 'inplace-build-9a9ed1cc-msf7fzvv';
-const SW_VERSION = 'build-9a9ed1cc-msf7fzvv';
+const CACHE_NAME = 'inplace-build-8f2dd4f6-msfcge9c';
+const SW_VERSION = 'build-8f2dd4f6-msfcge9c';
 const STATIC_ASSETS = [
   '/',
   '/css/styles.css',
@@ -185,6 +185,19 @@ self.addEventListener('push', (event) => {
           }
         }
       }
+
+      // v1.105.40 — the app-icon badge for the INSTALLED PWA (home-screen app). Works on
+      // iOS 16.4+ and desktop Chrome/Edge; a no-op in a plain browser tab, which is fine.
+      // The number is computed server-side and rides on every push, so the badge is
+      // corrected on every notification — including downward, and including to 0.
+      // The native iOS app gets the same number via aps.badge instead; see utils/apns.js.
+      try {
+        if (self.registration && typeof self.navigator?.setAppBadge === 'function') {
+          const n = Number(data.badgeCount);
+          if (Number.isFinite(n) && n > 0) await self.navigator.setAppBadge(n);
+          else if (Number.isFinite(n)) await self.navigator.clearAppBadge();
+        }
+      } catch { /* badging is a bonus — never block the notification */ }
 
       const actions = [
         { action: 'open', title: 'Open' },
