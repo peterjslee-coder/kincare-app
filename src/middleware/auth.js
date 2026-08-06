@@ -119,6 +119,16 @@ async function authenticate(req, res, next) {
     }
 
     req.user = decoded;
+
+    // v1.105.44 — correct the app-icon badge AFTER this request has done its work.
+    // On `finish`, not here: reading a conversation sets last_read_at inside the HANDLER,
+    // so running now would push the very number the icon is already showing. Debounced
+    // per user, silent unless the count changed — see utils/badgeSync.js.
+    try {
+      const { touchBadge } = require("../utils/badgeSync");
+      res.on("finish", () => touchBadge(decoded.id));
+    } catch { /* a badge is never load-bearing */ }
+
     next();
   } catch (err) {
     const isExpired = err.name === 'TokenExpiredError';

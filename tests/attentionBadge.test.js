@@ -245,9 +245,12 @@ describe("opening the app corrects the icon, without waiting for a native build"
   });
 
   test("it only sends when the number actually changed", () => {
-    // A background push on every foreground return would be throttled by Apple, deservedly.
-    expect(push).toMatch(/if \(sub\.last_badge === n\) continue;/);
-    expect(push).toMatch(/UPDATE push_subscriptions SET last_badge = \? WHERE id = \?/);
+    // v1.105.44 — syncBadgeToDevices lives in utils/badgeSync.js now, because tying the
+    // correction to one endpoint is what left the icon stuck. Behaviour is covered in
+    // tests/badgeSync.test.js; the migration it depends on is pinned here.
+    const sync = code("src/utils/badgeSync.js");
+    expect(sync).toMatch(/if \(sub\.last_badge === n\) continue;/);
+    expect(sync).toMatch(/UPDATE push_subscriptions SET last_badge = \? WHERE id = \?/);
     expect(db).toMatch(/id: "018_push_last_badge"/);
     expect(db).toMatch(/ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS last_badge INTEGER/);
   });
@@ -257,12 +260,12 @@ describe("opening the app corrects the icon, without waiting for a native build"
   });
 
   test("web-push subscriptions are left alone — the service worker already handles them", () => {
-    const sync = push.slice(push.indexOf("async function syncBadgeToDevices"));
+    const sync = code("src/utils/badgeSync.js");
     expect(sync).toMatch(/subObj\.type !== "native" \|\| subObj\.platform !== "ios"\) continue;/);
   });
 
   test("a dead token is pruned, and nothing else escapes", () => {
-    const sync = push.slice(push.indexOf("async function syncBadgeToDevices"));
+    const sync = code("src/utils/badgeSync.js");
     expect(sync).toMatch(/statusCode === 410/);
     expect(sync).toMatch(/DELETE FROM push_subscriptions WHERE id = \?/);
   });

@@ -424,43 +424,11 @@ router.get("/attention", async (req, res) => {
   }
 });
 
-// ─── Push the true badge to a user's iOS devices (v1.105.42) ───
-//
-// Pete, 8/6: a red 78 on the icon and "I don't know how to clear any of them."
-//
-// The count itself was wrong (see utils/attention.js) — but fixing the count does not fix
-// the ICON. iOS redraws the badge only when a push carries a new value, so a stale number
-// survives until the next notification happens to arrive, which for a quiet day is never.
-// The real fix, the app zeroing its own badge on resume, needs @capacitor/badge and a
-// TestFlight build. This is the half that ships without one.
-//
-// Silent, badge-only, and only when the number CHANGED — a background push per foreground
-// return would be throttled by Apple and deserve to be. Web-push subscriptions are skipped
-// entirely: the service worker already sets the badge from the page.
-async function syncBadgeToDevices(db, userId, total) {
-  const apns = require("../utils/apns");
-  if (!apns.isConfigured()) return;
-  const n = Math.max(0, Number(total) || 0);
-
-  const subs = await db.prepare(
-    "SELECT id, subscription_json, last_badge FROM push_subscriptions WHERE user_id = ?"
-  ).all(userId);
-
-  for (const sub of subs) {
-    try {
-      const subObj = JSON.parse(sub.subscription_json);
-      if (subObj.type !== "native" || subObj.platform !== "ios") continue;
-      if (sub.last_badge === n) continue; // already showing the right number
-      await apns.sendApnsBadge(subObj.token, n);
-      await db.prepare("UPDATE push_subscriptions SET last_badge = ? WHERE id = ?").run(n, sub.id);
-    } catch (e) {
-      if (e && e.statusCode === 410) {
-        try { await db.prepare("DELETE FROM push_subscriptions WHERE id = ?").run(sub.id); } catch {}
-      }
-      // Otherwise swallow: a badge is never worth a failed request.
-    }
-  }
-}
+// v1.105.44 — syncBadgeToDevices moved to utils/badgeSync.js. It is no longer tied to this
+// endpoint: every authenticated request corrects the badge on `finish` (middleware/auth.js).
+// Hanging the correction off ONE endpoint is what left Pete's icon stuck at 2 — tap a push,
+// land in Messages, read it, and nothing ever asked the server for the new number.
+const { syncBadgeToDevices } = require("../utils/badgeSync");
 
 // Optional eventType param — if provided, checks user's notification_prefs before sending
 async function sendPushToUser(userId, payload, eventType) {
