@@ -132,17 +132,26 @@ function sendApnsNotification(deviceToken, payload) {
 // arrive. The proper fix — the app setting its own badge to 0 on open — needs
 // @capacitor/badge and a TestFlight build, which is not something the server can do today.
 //
-// This is the half that ships without one. A badge-only push: no alert, no sound, nothing
-// on the lock screen — just `badge`, which iOS applies on receipt. It goes out when the
-// app asks for its count (GET /api/push/attention, which the web layer already calls on
-// launch and on every return to foreground), so opening the app corrects the icon within
-// seconds. `content-available` makes it a background push, so Apple delivers it silently;
-// priority 5 is required for that type and is also the polite one.
+// This is the half that ships without one. A badge-only push: an `aps` dictionary
+// containing nothing but `badge`. With no alert, no sound and no body, iOS displays
+// nothing at all — it just redraws the icon.
+//
+// ⚠️ v1.105.43 — this was FIRST written as a background push (`content-available: 1`,
+// push-type background, priority 5) and it silently did nothing. Pete's badge sat at 78
+// through the whole of v1.105.42. Background notifications require the app to declare
+// UIBackgroundModes → remote-notification in Info.plist, and InPlace does not (only
+// aps-environment is set, in App.entitlements). APNs accepts the request and returns 200;
+// iOS then drops it on arrival. A 200 from Apple means "queued", never "shown" — there is
+// no delivery receipt to check, which is exactly why this needed a real device to catch.
+//
+// A badge-only ALERT push has no such requirement: push-type alert covers anything that
+// changes what the user sees — alert, sound, OR badge — and priority 10 is the documented
+// choice for those. Nothing is displayed because there is nothing to display.
 function sendApnsBadge(deviceToken, count) {
   const body = JSON.stringify({
-    aps: { badge: Math.max(0, Number(count) || 0), "content-available": 1 },
+    aps: { badge: Math.max(0, Number(count) || 0) },
   });
-  return _post(deviceToken, body, { "apns-push-type": "background", "apns-priority": "5" });
+  return _post(deviceToken, body, { "apns-push-type": "alert", "apns-priority": "10" });
 }
 
 module.exports = { isConfigured, sendApnsNotification, sendApnsBadge, _providerToken, _resetTokenCache };

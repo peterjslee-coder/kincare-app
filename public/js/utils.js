@@ -761,26 +761,38 @@ const initNativeTokenRefresh = window.initNativeTokenRefresh = () => {
 // re-asks the server whenever it comes to the front, which is exactly when a stale badge
 // would be visible and annoying.
 //
-// Installed PWA only — setAppBadge is a no-op in a plain browser tab, and undefined in
-// older WebViews. The native iOS app will need @capacitor/badge to do the same on resume;
-// that lands with the next TestFlight build.
+// ⚠️ v1.105.43 — this used to return early unless navigator.setAppBadge existed, and that
+// was the second reason Pete's icon stayed at 78. iOS WKWebView has no Badging API at all,
+// so inside the native app this function bailed on its first line: it never called the
+// endpoint, so the server never learned the app was open, so the silent badge correction
+// added in v1.105.42 never fired. The guard was written for a browser tab, where doing
+// nothing is right, and it quietly disabled the one platform that needed it most.
+//
+// So: ALWAYS ask the server. That call is what triggers the server-side correction for
+// native (see routes/push.js syncBadgeToDevices). Only the local setAppBadge — the part
+// that genuinely needs the API — is conditional.
 const refreshAppBadge = window.refreshAppBadge = async () => {
   try {
-    if (typeof navigator === 'undefined' || typeof navigator.setAppBadge !== 'function') return;
     const res = await apiFetch('/api/push/attention');
     if (!res?.ok) return;
     const { total } = await res.json();
+    if (typeof navigator === 'undefined' || typeof navigator.setAppBadge !== 'function') return;
     if (Number(total) > 0) await navigator.setAppBadge(Number(total));
     else await navigator.clearAppBadge();
   } catch { /* a badge must never be load-bearing */ }
 };
 
-// Re-check when the tab becomes visible again. Cheap: one small query, and only for
-// installed apps that can actually show a badge.
-if (typeof document !== 'undefined' && typeof navigator !== 'undefined' && typeof navigator.setAppBadge === 'function') {
+// Re-check whenever the app comes back to the front — installed PWA, browser tab, or
+// native WebView alike. That is exactly when a stale badge is on screen, and on iOS it is
+// the only signal the server gets that the app is open. Registered unconditionally for the
+// same reason the guard came out of refreshAppBadge above.
+if (typeof document !== 'undefined') {
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') refreshAppBadge();
   });
+  // Capacitor fires 'resume' on the document when the native app returns to the
+  // foreground. On iOS this is more reliable than visibilitychange in a WKWebView.
+  document.addEventListener('resume', () => { refreshAppBadge(); });
 }
 
 const checkPushHealth = window.checkPushHealth = async () => {

@@ -1905,6 +1905,19 @@ async function initializeDatabase() {
         `ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS last_badge INTEGER`,
       ],
     },
+    {
+      // v1.105.43 — forget every badge v1.105.42 thinks it delivered.
+      //
+      // That version sent the correction as a BACKGROUND push, which iOS drops unless the
+      // app declares UIBackgroundModes → remote-notification (InPlace does not). APNs
+      // still answered 200 — "queued", not "shown" — so we recorded a last_badge the phone
+      // never displayed. Left alone, the `last_badge === n` guard would now suppress the
+      // very first correct push on every device that was live during .42.
+      id: "019_reset_last_badge",
+      statements: [
+        `UPDATE push_subscriptions SET last_badge = NULL`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

@@ -132,6 +132,20 @@ describe("the number reaches the icon by every route we have", () => {
     expect(utils).toMatch(/document\.visibilityState === 'visible'/);
   });
 
+  test("the server is asked even where the browser can't draw a badge", () => {
+    // v1.105.43 — the other half of the 78. This used to bail on its first line unless
+    // navigator.setAppBadge existed, and iOS WKWebView has no Badging API at all. Inside
+    // the native app it therefore never called the endpoint, so the server never learned
+    // the app was open and the correction never fired. The fetch must come FIRST; only
+    // the local setAppBadge is allowed to be conditional.
+    const fn = utils.slice(utils.indexOf("const refreshAppBadge"), utils.indexOf("const checkPushHealth"));
+    expect(fn.indexOf("apiFetch('/api/push/attention')"))
+      .toBeLessThan(fn.indexOf("typeof navigator.setAppBadge !== 'function'"));
+    // ...and the listener can't be gated on it either.
+    expect(fn).toMatch(/if \(typeof document !== 'undefined'\) \{/);
+    expect(fn).toMatch(/document\.addEventListener\('resume'/); // Capacitor foreground
+  });
+
   test("it is inert where badging isn't supported, rather than throwing", () => {
     // A plain browser tab, or an older WebView, has no setAppBadge at all.
     expect(utils).toMatch(/typeof navigator\.setAppBadge !== 'function'\) return;/);
@@ -188,11 +202,34 @@ describe("opening the app corrects the icon, without waiting for a native build"
   const db = code("src/models/database.js");
 
   test("there is a silent, badge-only APNs send", () => {
-    // No alert, no sound — iOS applies `badge` on receipt and shows nothing.
+    // Nothing but `badge` in the aps dictionary: no alert, no sound, no body — so iOS
+    // redraws the icon and displays nothing.
     expect(apns).toMatch(/function sendApnsBadge/);
-    expect(apns).toMatch(/aps: \{ badge: Math\.max\(0, Number\(count\) \|\| 0\), "content-available": 1 \}/);
-    expect(apns).toMatch(/"apns-push-type": "background"/);
-    expect(apns).toMatch(/"apns-priority": "5"/);
+    expect(apns).toMatch(/aps: \{ badge: Math\.max\(0, Number\(count\) \|\| 0\) \}/);
+  });
+
+  test("it is NOT a background push — this app can't receive those", () => {
+    // v1.105.43. Sent as `content-available: 1` / push-type background, it did nothing at
+    // all: iOS drops background notifications unless the app declares UIBackgroundModes →
+    // remote-notification, and InPlace's Info.plist has no UIBackgroundModes key (only
+    // aps-environment, in App.entitlements). APNs answered 200 the whole time, because 200
+    // means queued, not shown. Pete's badge sat at 78 through all of v1.105.42.
+    const fn = apns.slice(apns.indexOf("function sendApnsBadge"));
+    expect(fn).not.toMatch(/content-available/);
+    expect(fn).not.toMatch(/"apns-push-type": "background"/);
+    expect(fn).toMatch(/"apns-push-type": "alert"/);
+    expect(fn).toMatch(/"apns-priority": "10"/);
+
+    // And the reason holds: if someone adds the background mode later, this test should
+    // be the thing that makes them reconsider rather than a silent regression.
+    const plist = require("fs").readFileSync(
+      require("path").join(__dirname, "..", "ios/App/App/Info.plist"), "utf8");
+    expect(plist).not.toMatch(/UIBackgroundModes/);
+  });
+
+  test("badges recorded by v1.105.42 are forgotten, or the first real push is suppressed", () => {
+    expect(db).toMatch(/id: "019_reset_last_badge"/);
+    expect(db).toMatch(/UPDATE push_subscriptions SET last_badge = NULL/);
   });
 
   test("it fires when the app asks for its count", () => {
