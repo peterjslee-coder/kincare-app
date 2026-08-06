@@ -770,6 +770,13 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
           onLog={(recipientId, position) => setShowLogVisit({ recipientId, position })} />
       )}
 
+      {/* v1.105.42 — the app-icon badge, itemised. Pete saw 78: "I don't know how to clear
+          any of them and I don't know what they are." The second half of that survives
+          fixing the count — a badge with no list behind it is a number you can only
+          ignore. Reads the same endpoint the icon does, so the two cannot disagree, and
+          each row goes where you clear it. Renders nothing when nothing is waiting. */}
+      {typeof AttentionCard !== 'undefined' && <AttentionCard onNavigate={onNavigate} />}
+
       {/* Payment lockout banner — only show for FAILED payments, not pending/processing */}
       {(() => {
         const overdue = pendingReviews.filter(pr => {

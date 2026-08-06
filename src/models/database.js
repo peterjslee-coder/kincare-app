@@ -1895,6 +1895,16 @@ async function initializeDatabase() {
            ON family_visits(care_recipient_id, visited_at DESC)`,
       ],
     },
+    {
+      // v1.105.42 — remember the last app-icon badge pushed to each device, so the silent
+      // badge-correction push only goes out when the number actually CHANGED. Without it
+      // every return to the foreground would fire an APNs background push, and Apple
+      // throttles those (rightly).
+      id: "018_push_last_badge",
+      statements: [
+        `ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS last_badge INTEGER`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

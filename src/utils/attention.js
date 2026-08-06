@@ -76,27 +76,55 @@ async function attentionCountFor(db, userId) {
   // ── A care task assigned to me that is already due ──
   // Assigned to me specifically: an unassigned task is the team's, not mine, and badging
   // everyone for it is how a badge becomes noise.
+  //
+  // v1.105.42 — `t.is_active = 1`. The nightly sweeper rolls yesterday's still-pending
+  // occurrences to 'missed', and that is what keeps this bounded to today — but it only
+  // sweeps occurrences of ACTIVE tasks (routes/careTasks.js). Delete or pause a task and
+  // its pending occurrences are orphaned: still 'pending', still counted here, and no
+  // longer reachable anywhere in the UI. Unclearable by construction.
   const careTasks = await safe("careTasks", async () => {
     const row = await db.prepare(`
       SELECT COUNT(*) AS count
       FROM care_task_occurrences occ
       JOIN care_tasks t ON t.id = occ.task_id
       WHERE occ.status = 'pending'
+        AND t.is_active = 1
         AND t.assigned_user_id = ?
         AND occ.due_at <= NOW()
     `).get(userId);
     return parseInt(row?.count || 0, 10);
   });
 
-  // ── Unread direct messages ──
+  // ── Unread messages ──
+  //
+  // v1.105.42 — this is the query that put 78 on Pete's icon.
+  //
+  // It used to read `COALESCE(m.is_read, 0) = 0`. But `messages.is_read` is only ever
+  // written for LEGACY direct messages — every UPDATE that sets it ends with
+  // `AND conversation_id IS NULL` (routes/messages.js). Conversation messages keep
+  // is_read = 0 for life. Joining conversation_members means every row counted here IS a
+  // conversation message, so that filter was vacuously true: the count was every message
+  // ever sent in every conversation he belongs to, by anyone, forever. Reading them
+  // changed nothing — which is exactly what he reported: "I don't know how to clear any
+  // of them."
+  //
+  // The app's own unread badge uses last_read_at, and always has. This is now a copy of
+  // that query (routes/messages.js GET /conversations) so the icon and the in-app count
+  // cannot disagree: newer than my last read, not mine, not the Kindred relay (which the
+  // user reads in Kindred chat instead), and not in a conversation I archived or deleted.
+  // An unread you cannot see is an unread you cannot clear.
   const messages = await safe("messages", async () => {
     const row = await db.prepare(`
       SELECT COUNT(*) AS count
       FROM messages m
-      JOIN conversation_members cm ON cm.conversation_id = m.conversation_id
-      WHERE cm.user_id = ?
-        AND m.sender_id IS DISTINCT FROM ?
-        AND COALESCE(m.is_read, 0) = 0
+      JOIN conversation_members cm
+        ON cm.conversation_id = m.conversation_id AND cm.user_id = ?
+      JOIN conversations c ON c.id = cm.conversation_id
+      WHERE m.sender_id IS DISTINCT FROM ?
+        AND m.created_at > COALESCE(cm.last_read_at, '1970-01-01'::TIMESTAMPTZ)
+        AND cm.archived_at IS NULL
+        AND (cm.deleted_at IS NULL OR c.updated_at > cm.deleted_at)
+        AND m.sender_id NOT IN (SELECT id FROM users WHERE email = 'kindred@yourinplace.com')
     `).get(userId, userId);
     return parseInt(row?.count || 0, 10);
   });

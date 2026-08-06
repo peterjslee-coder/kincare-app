@@ -139,7 +139,130 @@ describe("the number reaches the icon by every route we have", () => {
   });
 
   test("the endpoint answers zero rather than failing the caller", () => {
-    const endpoint = push.slice(push.indexOf('router.get("/attention"'), push.indexOf("// Optional eventType"));
+    const endpoint = push.slice(push.indexOf('router.get("/attention"'), push.indexOf("async function syncBadgeToDevices"));
     expect(endpoint).toMatch(/res\.json\(\{ total: 0/);
+  });
+});
+
+// ─── v1.105.42 — the 78 ───
+//
+// Pete sent a screenshot of a red 78 on the icon: "I don't know how to clear any of them
+// and I don't know what they are." Every test above passed the whole time, because they
+// run against a fake db — and a fake db cannot tell you that a WHERE clause is always
+// true. The behavioural proof now lives in tests/integration/attention.itest.js; what
+// belongs here is the SHAPE of the fixes, so none of them can be quietly undone.
+describe("the count has to be clearable, or it is just wallpaper", () => {
+  const util = code("src/utils/attention.js");
+
+  test("unread is decided by last_read_at, not by the flag the app never sets", () => {
+    // `messages.is_read` is only ever written for LEGACY direct messages — every UPDATE
+    // that touches it ends `AND conversation_id IS NULL`. Joined against
+    // conversation_members, `is_read = 0` was vacuously true, so the badge counted every
+    // message ever sent in every conversation he belonged to. Forever.
+    expect(util).toMatch(/m\.created_at > COALESCE\(cm\.last_read_at/);
+    expect(util).not.toMatch(/COALESCE\(m\.is_read, 0\) = 0/);
+  });
+
+  test("it counts only what you could actually reach and clear", () => {
+    expect(util).toMatch(/cm\.archived_at IS NULL/);   // out of sight → out of count
+    expect(util).toMatch(/cm\.deleted_at IS NULL/);
+    expect(util).toMatch(/kindred@yourinplace\.com/);  // read in Kindred chat instead
+    expect(util).toMatch(/t\.is_active = 1/);          // orphaned occurrences of a paused
+                                                       // or deleted task
+  });
+
+  test("it is the same definition the in-app unread count uses", () => {
+    // The v1.105.40 promise was that the icon, the push payload and the in-app count can
+    // never disagree. That only holds if they run the same query.
+    const conversations = code("src/routes/messages.js");
+    for (const clause of [/created_at > COALESCE/, /kindred@yourinplace\.com/]) {
+      expect(util).toMatch(clause);
+      expect(conversations).toMatch(clause);
+    }
+  });
+});
+
+describe("opening the app corrects the icon, without waiting for a native build", () => {
+  const push = code("src/routes/push.js");
+  const apns = code("src/utils/apns.js");
+  const db = code("src/models/database.js");
+
+  test("there is a silent, badge-only APNs send", () => {
+    // No alert, no sound — iOS applies `badge` on receipt and shows nothing.
+    expect(apns).toMatch(/function sendApnsBadge/);
+    expect(apns).toMatch(/aps: \{ badge: Math\.max\(0, Number\(count\) \|\| 0\), "content-available": 1 \}/);
+    expect(apns).toMatch(/"apns-push-type": "background"/);
+    expect(apns).toMatch(/"apns-priority": "5"/);
+  });
+
+  test("it fires when the app asks for its count", () => {
+    // GET /api/push/attention is already called on launch and on every return to the
+    // foreground, so that is the moment we know the app is open and can correct the icon.
+    expect(push).toMatch(/syncBadgeToDevices\(db, req\.user\.id, counts\.total\)/);
+  });
+
+  test("answering the caller never waits on Apple", () => {
+    const endpoint = push.slice(push.indexOf('router.get("/attention"'), push.indexOf("async function syncBadgeToDevices"));
+    expect(endpoint.indexOf("res.json(counts)")).toBeLessThan(endpoint.indexOf("syncBadgeToDevices"));
+    expect(endpoint).toMatch(/syncBadgeToDevices\([^)]*\)\.catch\(\(\) => \{\}\)/);
+  });
+
+  test("it only sends when the number actually changed", () => {
+    // A background push on every foreground return would be throttled by Apple, deservedly.
+    expect(push).toMatch(/if \(sub\.last_badge === n\) continue;/);
+    expect(push).toMatch(/UPDATE push_subscriptions SET last_badge = \? WHERE id = \?/);
+    expect(db).toMatch(/id: "018_push_last_badge"/);
+    expect(db).toMatch(/ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS last_badge INTEGER/);
+  });
+
+  test("a real notification records the badge it just set, so the corrector stays quiet", () => {
+    expect(push).toMatch(/last_success_at = NOW\(\), last_badge = \? WHERE id = \?/);
+  });
+
+  test("web-push subscriptions are left alone — the service worker already handles them", () => {
+    const sync = push.slice(push.indexOf("async function syncBadgeToDevices"));
+    expect(sync).toMatch(/subObj\.type !== "native" \|\| subObj\.platform !== "ios"\) continue;/);
+  });
+
+  test("a dead token is pruned, and nothing else escapes", () => {
+    const sync = push.slice(push.indexOf("async function syncBadgeToDevices"));
+    expect(sync).toMatch(/statusCode === 410/);
+    expect(sync).toMatch(/DELETE FROM push_subscriptions WHERE id = \?/);
+  });
+});
+
+describe("the number says what it is made of", () => {
+  const card = code("public/js/components/AttentionCard.js");
+  const dash = code("public/js/components/Dashboard.js");
+
+  test("the card reads the same endpoint the icon does", () => {
+    // "I don't know what they are" survives fixing the count. A badge with no list behind
+    // it is a number you can only ignore.
+    expect(card).toMatch(/apiFetch\('\/api\/push\/attention'\)/);
+  });
+
+  test("every category is a row, and every row goes where you clear it", () => {
+    for (const key of ["reimbursements", "timeChanges", "careTasks", "messages"]) {
+      expect(card).toMatch(new RegExp(`key: '${key}'`));
+    }
+    expect(card).toMatch(/onNavigate && onNavigate\(r\.page\)/);
+  });
+
+  test("nothing waiting draws nothing at all", () => {
+    // The dashboard is crowded — his word — and "you're all caught up" is decoration.
+    expect(card).toMatch(/if \(!counts \|\| !counts\.total\) return null;/);
+  });
+
+  test("it refreshes on return, like the badge does", () => {
+    expect(card).toMatch(/visibilitychange/);
+    expect(card).toMatch(/removeEventListener\('visibilitychange'/);
+  });
+
+  test("it is on the dashboard, guarded so a missing component can't white-screen it", () => {
+    expect(dash).toMatch(/typeof AttentionCard !== 'undefined' && <AttentionCard onNavigate=\{onNavigate\} \/>/);
+  });
+
+  test("it is in the bundle — an unbundled component is an undefined one", () => {
+    expect(code("scripts/build-client.js")).toMatch(/js\/components\/AttentionCard\.js/);
   });
 });

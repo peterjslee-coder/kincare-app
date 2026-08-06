@@ -153,9 +153,138 @@ describe("the other three queries actually match the schema", () => {
 
     expect((await attentionCountFor(db, leader.user.id)).messages).toBe(1);
     expect((await attentionCountFor(db, member.user.id)).messages).toBe(0);
+  });
+});
 
-    await db.prepare(`UPDATE messages SET is_read = 1`).run();
-    expect((await attentionCountFor(db, leader.user.id)).messages).toBe(0);
+// ─── v1.105.42 — the 78 ───
+//
+// Pete's icon read 78 and nothing he did moved it. The count used `messages.is_read`,
+// which the app only ever writes for LEGACY direct messages (every UPDATE that sets it
+// ends `AND conversation_id IS NULL`). Joined against conversation_members, the filter
+// was vacuously true and the badge was "every message ever sent in any conversation you
+// are in". The v1.105.40 unit tests passed throughout, because a fake db cannot tell you
+// that a WHERE clause is always true.
+//
+// These tests are the ones that would have caught it: real rows, real reads, and the
+// number has to come back DOWN.
+describe("the 78 — reading a message must actually clear it", () => {
+  let convId, reader, writer;
+
+  beforeAll(async () => {
+    reader = await h.createUser({ firstName: "Pete", lastName: "Reader" });
+    writer = await h.createUser({ firstName: "Sara", lastName: "Writer" });
+    convId = uuid();
+    await db.prepare(`INSERT INTO conversations (id, created_at, updated_at) VALUES (?, NOW(), NOW())`).run(convId);
+    for (const u of [reader, writer]) {
+      await db.prepare(`
+        INSERT INTO conversation_members (id, conversation_id, user_id, role, joined_at)
+        VALUES (?, ?, ?, 'member', NOW() - INTERVAL '10 days')
+      `).run(uuid(), convId, u.user.id);
+    }
+    // Ten days of conversation nobody has opened yet.
+    for (let i = 0; i < 10; i++) {
+      await db.prepare(`
+        INSERT INTO messages (id, conversation_id, sender_id, recipient_id, content, is_read, created_at)
+        VALUES (?, ?, ?, ?, 'hi', 0, NOW() - INTERVAL '1 day' * ?)
+      `).run(uuid(), convId, writer.user.id, reader.user.id, i);
+    }
+  });
+
+  test("before opening the thread, all ten count", async () => {
+    expect((await attentionCountFor(db, reader.user.id)).messages).toBe(10);
+  });
+
+  test("opening the thread drops it to zero — THE regression", async () => {
+    // This is what the app does when you open a conversation (routes/messages.js).
+    // Under the old query this number stayed at 10 forever.
+    await db.prepare(
+      "UPDATE conversation_members SET last_read_at = NOW() WHERE conversation_id = ? AND user_id = ?"
+    ).run(convId, reader.user.id);
+    expect((await attentionCountFor(db, reader.user.id)).messages).toBe(0);
+  });
+
+  test("a new message after that read counts again — exactly one", async () => {
+    await db.prepare(`
+      INSERT INTO messages (id, conversation_id, sender_id, recipient_id, content, is_read, created_at)
+      VALUES (?, ?, ?, ?, 'one more', 0, NOW() + INTERVAL '1 second')
+    `).run(uuid(), convId, writer.user.id, reader.user.id);
+    expect((await attentionCountFor(db, reader.user.id)).messages).toBe(1);
+  });
+
+  test("is_read is NOT what decides it — the flag the app never sets for conversations", async () => {
+    // Pin the actual root cause: flipping is_read must change nothing, because the app
+    // does not flip it for conversation messages and never did.
+    await db.prepare("UPDATE messages SET is_read = 1 WHERE conversation_id = ?").run(convId);
+    expect((await attentionCountFor(db, reader.user.id)).messages).toBe(1);
+  });
+
+  test("an archived conversation stops counting — you can't clear what you can't see", async () => {
+    await db.prepare(
+      "UPDATE conversation_members SET archived_at = NOW() WHERE conversation_id = ? AND user_id = ?"
+    ).run(convId, reader.user.id);
+    expect((await attentionCountFor(db, reader.user.id)).messages).toBe(0);
+    await db.prepare(
+      "UPDATE conversation_members SET archived_at = NULL WHERE conversation_id = ? AND user_id = ?"
+    ).run(convId, reader.user.id);
+  });
+
+  test("Kindred relay messages don't badge — they're read in Kindred chat", async () => {
+    const kindredId = uuid();
+    await db.prepare(`
+      INSERT INTO users (id, email, password_hash, first_name, last_name, role, roles,
+                         is_active, is_admin, account_approved, email_verified, created_at)
+      VALUES (?, 'kindred@yourinplace.com', 'x', 'Kindred', 'Relay', 'family', '["family"]', 1, 0, 1, 1, NOW())
+    `).run(kindredId);
+    await db.prepare(`
+      INSERT INTO conversation_members (id, conversation_id, user_id, role, joined_at)
+      VALUES (?, ?, ?, 'member', NOW())
+    `).run(uuid(), convId, kindredId);
+    const before = (await attentionCountFor(db, reader.user.id)).messages;
+    await db.prepare(`
+      INSERT INTO messages (id, conversation_id, sender_id, recipient_id, content, is_read, created_at)
+      VALUES (?, ?, ?, ?, 'relayed', 0, NOW() + INTERVAL '2 seconds')
+    `).run(uuid(), convId, kindredId, reader.user.id);
+    expect((await attentionCountFor(db, reader.user.id)).messages).toBe(before);
+  });
+
+  test("the badge agrees with the app's own unread count, message for message", async () => {
+    // The stated goal in v1.105.40 was that the icon, the push payload and the in-app
+    // count can never disagree. That only holds if they run the SAME definition — so run
+    // the conversations-list query here and compare.
+    const cm = await db.prepare(
+      "SELECT last_read_at FROM conversation_members WHERE conversation_id = ? AND user_id = ?"
+    ).get(convId, reader.user.id);
+    const inApp = await db.prepare(`
+      SELECT COUNT(*) AS count FROM messages
+      WHERE conversation_id = ? AND sender_id != ?
+        AND created_at > COALESCE(?::TIMESTAMPTZ, '1970-01-01'::TIMESTAMPTZ)
+        AND sender_id NOT IN (SELECT id FROM users WHERE email = 'kindred@yourinplace.com')
+    `).get(convId, reader.user.id, cm.last_read_at);
+    expect((await attentionCountFor(db, reader.user.id)).messages)
+      .toBe(parseInt(inApp.count, 10));
+  });
+});
+
+describe("a task you can no longer see must not badge you", () => {
+  test("occurrences of a deactivated task stop counting", async () => {
+    // The nightly sweeper rolls yesterday's pending occurrences to 'missed', but only for
+    // ACTIVE tasks. Pause or delete a task and its pending rows are orphaned: invisible in
+    // the UI, permanently 'pending', and — before this version — permanently counted.
+    const owner = await h.createUser({ firstName: "Task", lastName: "Owner" });
+    const taskId = uuid();
+    await db.prepare(`
+      INSERT INTO care_tasks (id, care_recipient_id, created_by, title, task_type,
+                              due_time, start_date, assigned_user_id, is_active, created_at)
+      VALUES (?, ?, ?, 'Ghost task', 'other', '09:00', '2026-08-01', ?, 1, NOW())
+    `).run(taskId, recipientId, leader.user.id, owner.user.id);
+    await db.prepare(`
+      INSERT INTO care_task_occurrences (id, task_id, due_date, due_at, status)
+      VALUES (?, ?, '2026-08-02', NOW() - INTERVAL '3 hours', 'pending')
+    `).run(uuid(), taskId);
+    expect((await attentionCountFor(db, owner.user.id)).careTasks).toBe(1);
+
+    await db.prepare("UPDATE care_tasks SET is_active = 0 WHERE id = ?").run(taskId);
+    expect((await attentionCountFor(db, owner.user.id)).careTasks).toBe(0);
   });
 });
 

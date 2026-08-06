@@ -61,29 +61,11 @@ function _resetTokenCache() { _cachedJwt = null; _cachedJwtAt = 0; }
 // payload: { title, body, tag, data } (same shape push.js builds for web push)
 // Throws { statusCode: 410 } for permanently-dead tokens so push.js prunes them;
 // other failures throw normal errors (push.js retries transient ones).
-function sendApnsNotification(deviceToken, payload) {
+function _post(deviceToken, body, extraHeaders) {
   return new Promise((resolve, reject) => {
     const host = (process.env.APNS_ENVIRONMENT === "sandbox")
       ? "https://api.sandbox.push.apple.com"
       : "https://api.push.apple.com";
-
-    const body = JSON.stringify({
-      aps: {
-        alert: { title: payload.title || "InPlace", body: payload.body || "" },
-        sound: "default",
-        // v1.105.40 — the app-icon badge. iOS SETS the icon to this number, it does not
-        // add to it, so the server sending the current total is exactly right: the badge
-        // is corrected on every push, including downward. 0 clears it.
-        // ⚠️ Clearing it when the user READS things still needs the app to set it on
-        // open/resume — that requires @capacitor/badge, which is not installed yet, so it
-        // waits for the next native build. Until then the number only moves when a push
-        // arrives, which is honest but lags.
-        ...(Number.isFinite(payload.badgeCount) ? { badge: payload.badgeCount } : {}),
-        ...(payload.tag ? { "thread-id": payload.tag } : {}),
-      },
-      // Custom keys ride at the top level; the Capacitor plugin surfaces them as notification.data
-      ...(payload.data || {}),
-    });
 
     const client = http2.connect(host);
     client.on("error", (err) => { client.close(); reject(err); });
@@ -93,12 +75,10 @@ function sendApnsNotification(deviceToken, payload) {
       ":path": `/3/device/${deviceToken}`,
       "authorization": `bearer ${_providerToken()}`,
       "apns-topic": BUNDLE_ID,
-      "apns-push-type": "alert",
-      "apns-priority": "10",
       "apns-expiration": String(Math.floor(Date.now() / 1000) + 86400), // 24h, matches web push TTL
       "content-type": "application/json",
+      ...extraHeaders,
     };
-    if (payload.tag) headers["apns-collapse-id"] = String(payload.tag).slice(0, 64);
 
     const req = client.request(headers);
     let status = 0;
@@ -122,4 +102,47 @@ function sendApnsNotification(deviceToken, payload) {
   });
 }
 
-module.exports = { isConfigured, sendApnsNotification, _providerToken, _resetTokenCache };
+function sendApnsNotification(deviceToken, payload) {
+  const body = JSON.stringify({
+    aps: {
+      alert: { title: payload.title || "InPlace", body: payload.body || "" },
+      sound: "default",
+      // v1.105.40 — the app-icon badge. iOS SETS the icon to this number, it does not add
+      // to it, so the server sending the current total is exactly right: the badge is
+      // corrected on every push, including downward. 0 clears it.
+      ...(Number.isFinite(payload.badgeCount) ? { badge: payload.badgeCount } : {}),
+      ...(payload.tag ? { "thread-id": payload.tag } : {}),
+    },
+    // Custom keys ride at the top level; the Capacitor plugin surfaces them as notification.data
+    ...(payload.data || {}),
+  });
+  const extra = { "apns-push-type": "alert", "apns-priority": "10" };
+  if (payload.tag) extra["apns-collapse-id"] = String(payload.tag).slice(0, 64);
+  return _post(deviceToken, body, extra);
+}
+
+// ─── Silent badge correction (v1.105.42) ───
+//
+// Pete, 8/6, with a screenshot of a red 78 on the icon: "I don't know how to clear any of
+// them and I don't know what they are."
+//
+// Two bugs made that number, and both are fixed in utils/attention.js. But a corrected
+// count does not by itself correct the ICON: iOS only redraws the badge when a push
+// carries a new one, so a stale number sits there until the next notification happens to
+// arrive. The proper fix — the app setting its own badge to 0 on open — needs
+// @capacitor/badge and a TestFlight build, which is not something the server can do today.
+//
+// This is the half that ships without one. A badge-only push: no alert, no sound, nothing
+// on the lock screen — just `badge`, which iOS applies on receipt. It goes out when the
+// app asks for its count (GET /api/push/attention, which the web layer already calls on
+// launch and on every return to foreground), so opening the app corrects the icon within
+// seconds. `content-available` makes it a background push, so Apple delivers it silently;
+// priority 5 is required for that type and is also the polite one.
+function sendApnsBadge(deviceToken, count) {
+  const body = JSON.stringify({
+    aps: { badge: Math.max(0, Number(count) || 0), "content-available": 1 },
+  });
+  return _post(deviceToken, body, { "apns-push-type": "background", "apns-priority": "5" });
+}
+
+module.exports = { isConfigured, sendApnsNotification, sendApnsBadge, _providerToken, _resetTokenCache };

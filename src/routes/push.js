@@ -410,13 +410,57 @@ router.get("/attention", async (req, res) => {
   try {
     const db = await getDb();
     const { attentionCountFor } = require("../utils/attention");
-    res.json(await attentionCountFor(db, req.user.id));
+    const counts = await attentionCountFor(db, req.user.id);
+    res.json(counts);
+    // v1.105.42 — and correct the icon. The web layer calls this on launch and on every
+    // return to the foreground, so this is the moment we know the app is open and can
+    // push the true number to the phone. Answer first, then sync: the caller waits on
+    // nothing. See syncBadgeToDevices.
+    syncBadgeToDevices(db, req.user.id, counts.total).catch(() => {});
   } catch (err) {
     console.error("Attention count error:", err);
     // A badge is a convenience. Never fail the caller over it.
     res.json({ total: 0, reimbursements: 0, timeChanges: 0, careTasks: 0, messages: 0 });
   }
 });
+
+// ─── Push the true badge to a user's iOS devices (v1.105.42) ───
+//
+// Pete, 8/6: a red 78 on the icon and "I don't know how to clear any of them."
+//
+// The count itself was wrong (see utils/attention.js) — but fixing the count does not fix
+// the ICON. iOS redraws the badge only when a push carries a new value, so a stale number
+// survives until the next notification happens to arrive, which for a quiet day is never.
+// The real fix, the app zeroing its own badge on resume, needs @capacitor/badge and a
+// TestFlight build. This is the half that ships without one.
+//
+// Silent, badge-only, and only when the number CHANGED — a background push per foreground
+// return would be throttled by Apple and deserve to be. Web-push subscriptions are skipped
+// entirely: the service worker already sets the badge from the page.
+async function syncBadgeToDevices(db, userId, total) {
+  const apns = require("../utils/apns");
+  if (!apns.isConfigured()) return;
+  const n = Math.max(0, Number(total) || 0);
+
+  const subs = await db.prepare(
+    "SELECT id, subscription_json, last_badge FROM push_subscriptions WHERE user_id = ?"
+  ).all(userId);
+
+  for (const sub of subs) {
+    try {
+      const subObj = JSON.parse(sub.subscription_json);
+      if (subObj.type !== "native" || subObj.platform !== "ios") continue;
+      if (sub.last_badge === n) continue; // already showing the right number
+      await apns.sendApnsBadge(subObj.token, n);
+      await db.prepare("UPDATE push_subscriptions SET last_badge = ? WHERE id = ?").run(n, sub.id);
+    } catch (e) {
+      if (e && e.statusCode === 410) {
+        try { await db.prepare("DELETE FROM push_subscriptions WHERE id = ?").run(sub.id); } catch {}
+      }
+      // Otherwise swallow: a badge is never worth a failed request.
+    }
+  }
+}
 
 // Optional eventType param — if provided, checks user's notification_prefs before sending
 async function sendPushToUser(userId, payload, eventType) {
@@ -522,11 +566,13 @@ async function sendPushToUser(userId, payload, eventType) {
         });
 
         sent++;
-        // Reset fail_count on success
+        // Reset fail_count on success. v1.105.42 — also record the badge this push just
+        // put on the icon, so the silent corrector (syncBadgeToDevices) knows the device
+        // is already showing the right number and stays quiet.
         if (sub.fail_count > 0) {
-          await db.prepare("UPDATE push_subscriptions SET fail_count = 0, last_success_at = NOW() WHERE id = ?").run(sub.id);
+          await db.prepare("UPDATE push_subscriptions SET fail_count = 0, last_success_at = NOW(), last_badge = ? WHERE id = ?").run(badgeCount, sub.id);
         } else {
-          await db.prepare("UPDATE push_subscriptions SET last_success_at = NOW() WHERE id = ?").run(sub.id);
+          await db.prepare("UPDATE push_subscriptions SET last_success_at = NOW(), last_badge = ? WHERE id = ?").run(badgeCount, sub.id);
         }
       } catch (err) {
         const code = err.statusCode || err.code;
