@@ -265,8 +265,11 @@ router.post("/", async (req, res) => {
     const approverId = access.team.billing_user_id
       || (await db.prepare("SELECT user_id FROM care_team_members WHERE care_team_id = ? AND role = 'leader' LIMIT 1").get(access.team.id))?.user_id;
     if (approverId && approverId !== req.user.id) {
+      // v1.105.41 — no description on the lock screen. "Pharmacy — memantine refill" is
+      // PHI about Betty, and it was reaching the approver's locked phone. Who and how
+      // much is enough to decide whether to unlock; the rest is one tap away.
       notify(req, approverId, "Reimbursement request — tap to review",
-        `${rName} requested $${core.amount.toFixed(2)} — ${core.description}. Tap to approve or decline.`,
+        `${rName} requested $${core.amount.toFixed(2)}. Tap to approve or decline.`,
         { type: "reimbursement_request", reimbursementId: id, careTeamId: access.team.id, page: "care-team", focus: `reimbursement:${id}` });
     }
 
@@ -559,7 +562,7 @@ router.post("/:id/receipts", async (req, res) => {
         const who = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(req.user.id);
         const wName = who ? `${who.first_name} ${who.last_name}`.trim() : "A team member";
         notify(req, approverId, "Receipt added",
-          `${wName} attached a receipt to the $${Number(row.amount).toFixed(2)} request — ${row.description}.`,
+          `${wName} attached a receipt to the $${Number(row.amount).toFixed(2)} request.`,
           { type: "reimbursement_request", reimbursementId: row.id, careTeamId: row.care_team_id,
             page: "care-team", focus: `reimbursement:${row.id}` });
       }
@@ -594,7 +597,7 @@ router.post("/:id/request-receipt", async (req, res) => {
     const askerName = asker ? `${asker.first_name} ${asker.last_name}`.trim() : "A care team member";
 
     notify(req, row.requested_by, "Receipt requested",
-      `${askerName} asked for the receipt on your $${Number(row.amount).toFixed(2)} request — ${row.description}. Tap to add it.`,
+      `${askerName} asked for the receipt on your $${Number(row.amount).toFixed(2)} request. Tap to add it.`,
       { type: "reimbursement_receipt_requested", reimbursementId: row.id, careTeamId: row.care_team_id,
         page: "care-team", focus: `reimbursement:${row.id}` });
 
@@ -771,7 +774,7 @@ router.put("/:id", async (req, res) => {
       const requester = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(req.user.id);
       const rName = requester ? `${requester.first_name} ${requester.last_name}` : "A team member";
       notify(req, approverId, "Reimbursement request updated — tap to review",
-        `${rName} updated their request: $${core.amount.toFixed(2)} — ${core.description}`,
+        `${rName} updated their request — now $${core.amount.toFixed(2)}. Tap to review.`,
         { type: "reimbursement_request", reimbursementId: req.params.id, careTeamId: row.care_team_id, page: "care-team", focus: `reimbursement:${req.params.id}` });
     }
     res.json({ message: "Request updated" });
@@ -1176,8 +1179,11 @@ router.post("/:id/pay-ach", async (req, res) => {
       // v1.98.13 — the one-tap "Pay via InPlace" approves AND pays in a single
       // action, so the notification says BOTH explicitly (the requester asked to be
       // told when it's approved and when it's paid; here that's one event).
+      // The digest composes the real body per reader (see services/reimbursementDigest);
+      // this string is documentation of the event, not the message. Kept description-free
+      // and reader-neutral so re-wiring it can't reintroduce v1.105.41's two bugs.
       await notifyParties(db, req, ctx, "Reimbursement approved & paid",
-        `Your $${(baseCents / 100).toFixed(2)} reimbursement for "${ctx.row.description}" was approved and sent through InPlace ${arrival}.`,
+        `$${(baseCents / 100).toFixed(2)} was approved and sent through InPlace ${arrival}.`,
         "reimbursement_paid");
       return res.json({ ok: true, status: intent.status, method, feeCents, totalCents });
     }
@@ -1317,7 +1323,7 @@ router.post("/schedules", async (req, res) => {
       || (await db.prepare("SELECT user_id FROM care_team_members WHERE care_team_id = ? AND role = 'leader' LIMIT 1").get(access.team.id))?.user_id;
     if (approverId && approverId !== req.user.id) {
       notify(req, approverId, "Recurring reimbursement request",
-        `${rName} wants $${core.amount.toFixed(2)}/month on day ${day} — ${core.description}`,
+        `${rName} wants $${core.amount.toFixed(2)}/month on day ${day}. Tap to review.`,
         { type: "reimbursement_schedule_request", scheduleId: id, careTeamId: access.team.id, page: "care-team", focus: `schedule:${id}` });
     }
     res.status(201).json({ id, message: "Recurring reimbursement submitted for approval" });
@@ -1372,7 +1378,7 @@ router.post("/schedules/:id/approve", async (req, res) => {
     await feedEntry(db, ctx.access.team, "Recurring reimbursement approved",
       `$${Number(ctx.sch.amount).toFixed(2)}/month — ${ctx.sch.description}`);
     notify(req, ctx.sch.payee_user_id, "Recurring reimbursement approved",
-      `$${Number(ctx.sch.amount).toFixed(2)}/month for ${ctx.sch.description} — first on ${next}`,
+      `$${Number(ctx.sch.amount).toFixed(2)}/month approved — first on ${next}. Tap for details.`,
       { type: "reimbursement_schedule_approved", scheduleId: req.params.id, careTeamId: ctx.sch.care_team_id, page: "care-team", focus: `schedule:${req.params.id}` });
     res.json({ message: "Series approved", nextRunDate: next });
   } catch (err) {

@@ -37,18 +37,35 @@ function srcFiles(dir) {
 const FORBIDDEN = [
   "content", "preview", "memberPreview", "legacyPreview", "caption",
   "summary", "alertMsg", "incidentType", "med_name", "detail",
-  "sch.description", "t.title", "ev.title", "note",
+  "description", "declined_reason", "t.title", "ev.title", "note",
 ];
 
-// Pull the `title:` and `body:` lines out of every sendPushToUser / notifyAdmins payload.
+// v1.105.41 — the scanner missed three real leaks, so it is wider now.
+//
+// It used to look only for `title:` / `body:` KEYS following a literal `sendPushToUser(`.
+// A route that wraps the send in a local helper and passes the text POSITIONALLY was
+// therefore invisible to it — and routes/reimbursements.js does exactly that, via
+// `notify(req, userId, title, body, data)`. Three reimbursement descriptions were reaching
+// lock screens for the whole time v1.105.39's gate was green.
+//
+// So: recognise the local wrappers too, and treat any message-shaped line inside the call —
+// keyed or positional — as push text. Scanning stops at the `data` object, whose contents
+// are handed to the app rather than drawn on the glass.
+const PUSH_CALL = /\b(sendPushToUser|notifyAdmins|sendPushToAdmins|notify|notifyParties)\s*\(/;
+
 function pushTextLines(src) {
   const lines = src.split("\n");
   const out = [];
   for (let i = 0; i < lines.length; i++) {
-    if (!/sendPushToUser\(|notifyAdmins\(|sendPushToAdmins\(/.test(lines[i])) continue;
-    // The payload object follows within a handful of lines.
+    if (!PUSH_CALL.test(lines[i])) continue;
+    if (/^\s*(async\s+)?function\s+\w+\s*\(/.test(lines[i])) continue; // the wrapper's own definition
     for (let j = i; j < Math.min(i + 12, lines.length); j++) {
-      if (/^\s*(title|body):/.test(lines[j])) out.push({ line: j + 1, text: lines[j] });
+      const L = lines[j];
+      if (/\{?\s*type:\s*["'`]/.test(L)) break;                    // reached the data payload
+      if (j > i && /\}\s*catch|db\.prepare\(|INSERT INTO|res\.(json|status)\(/.test(L)) break; // call is over
+      const keyed = /^\s*(title|body):/.test(L);
+      const positional = L.includes("`");
+      if (keyed || positional) out.push({ line: j + 1, text: L });
     }
   }
   return out;
