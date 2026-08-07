@@ -90,10 +90,57 @@ describe("location: decided on the device, coarsened before storage, never shown
 
 describe("the nudge nudges, it does not nag", () => {
   test("it never triggers a cold OS location prompt", () => {
-    // Demanding a new permission for a prompt nobody asked for is exactly nagging.
-    expect(client).toMatch(/navigator\.permissions\?\.query/);
-    expect(client).toMatch(/if \(st\.state !== 'granted'\) return;/);
-    expect(client).toMatch(/return; \/\/ can't tell → assume not granted/);
+    // Demanding a new permission for a prompt nobody asked for is exactly nagging. The only
+    // getCurrentPosition that can raise one is behind the opt-in button.
+    expect(client).toMatch(/const ok = await visitGeoAllowed\(\);/);
+    expect(client).toMatch(/if \(!ok \|\| cancelled\) return;/);
+  });
+
+  // ─── v1.105.45 ───
+  // The original gate was `navigator.permissions.query({name:'geolocation'})` with a bare
+  // `return` when unavailable. WebKit doesn't implement that query, so on iOS the nudge
+  // bailed on its third line and has never run — and the previous version of this test
+  // asserted the bail-out as though it were the feature. Same shape as the setAppBadge bug
+  // in v1.105.43: a Chrome-shaped capability check that silently kills the feature on the
+  // only platform with the hardware.
+  test("a missing Permissions API no longer means the feature is dead", () => {
+    expect(client).toMatch(/const visitGeoAllowed/);
+    expect(client).toMatch(/VISIT_GEO_OPTIN_KEY\) === '1'\) return true;/);
+    expect(client).toMatch(/catch \{ return false; \}/); // WebKit rejection → opt-in, not death
+  });
+
+  test("when there's no permission to act on, it offers instead of doing nothing", () => {
+    // Rendering nothing is indistinguishable from being broken — which is exactly how this
+    // went unnoticed from v1.105.38 until Pete asked to try it.
+    expect(client).toMatch(/const VisitGeoInvite/);
+    expect(client).toMatch(/allowed === false && !alreadyLoggedToday/);
+    expect(client).toMatch(/onEnabled=\{\(\) => setRetry/);
+  });
+
+  test("the prompt is raised by a tap, never by a page load", () => {
+    const invite = client.slice(client.indexOf("const VisitGeoInvite"), client.indexOf("const VisitNudgeCard"));
+    expect(invite).toMatch(/const enable = async \(\) => \{/);
+    expect(invite).toMatch(/onClick=\{enable\}/);
+    expect(invite).toMatch(/lsSet\(VISIT_GEO_OPTIN_KEY, '1'\)/);
+  });
+
+  test("declining hides the invite for good", () => {
+    expect(client).toMatch(/VISIT_GEO_INVITE_KEY/);
+    expect(client).toMatch(/lsSet\(VISIT_GEO_INVITE_KEY, '1'\)/);
+  });
+
+  test("it reports the distance, so 'is this even working' has an answer", () => {
+    // Otherwise the only way to test a geofence is to drive to the house and hope.
+    const invite = client.slice(client.indexOf("const VisitGeoInvite"), client.indexOf("const VisitNudgeCard"));
+    expect(invite).toMatch(/haversineFeet\(latitude, longitude, r\.latitude, r\.longitude\)/);
+    expect(invite).toMatch(/it appears within 1,000 ft/);
+    expect(invite).not.toMatch(/apiFetch|fetch\(/); // decided on the device, sent nowhere
+  });
+
+  test("no pinned address, no invite — there'd be nothing to compare against", () => {
+    const invite = client.slice(client.indexOf("const VisitGeoInvite"), client.indexOf("const VisitNudgeCard"));
+    expect(invite).toMatch(/r\.latitude != null && r\.longitude != null/);
+    expect(invite).toMatch(/if \(hidden \|\| !withCoords\.length \|\| !navigator\.geolocation\) return null;/);
   });
 
   test("it is dismissible and stays dismissed for a while", () => {

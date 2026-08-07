@@ -189,14 +189,128 @@ const LogVisitSheet = window.LogVisitSheet = ({ recipients, presetRecipientId, p
 // Pete: "we're assuming if I'm at Betty's house that she's there, i have something to say
 // or observe, and we're nudging here, not nagging."
 //
-// So: a dismissible CARD, never a modal, never blocking. And it never asks the OS for
-// location — if permission isn't already granted it stays silent forever, because
-// demanding a new permission for a nudge nobody asked for is exactly nagging.
+// So: a dismissible CARD, never a modal, never blocking, and never a location prompt the
+// person didn't ask for.
+//
+// ─── v1.105.45 — why this never fired on an iPhone ───
+//
+// The original gate was `navigator.permissions.query({ name: 'geolocation' })`, and it
+// returned if that wasn't available. WebKit doesn't implement the Permissions API for
+// geolocation — Safari and WKWebView either lack navigator.permissions or reject that
+// specific query — so on iOS this bailed on its third line, and the feature has never once
+// run there. Same shape as the setAppBadge bug in v1.105.43: a capability check written
+// against Chrome that silently disables a feature on the only platform that has the
+// hardware for it.
+//
+// The instinct behind the gate was right — a cold OS location prompt for a nudge nobody
+// asked for IS nagging. So the fix isn't to drop it, it's to replace a check we cannot
+// perform with a decision the person makes on purpose: an explicit, one-time opt-in. After
+// that, the grant is remembered on this device. Before it, the invite is a card you can
+// decline forever, and no prompt is ever raised.
 const VISIT_NUDGE_DISMISS_KEY = 'inplace.visitNudge.dismissedUntil';
+const VISIT_GEO_OPTIN_KEY = 'inplace.visitNudge.optIn';         // '1' once they say yes
+const VISIT_GEO_INVITE_KEY = 'inplace.visitNudge.inviteHidden'; // '1' once they say no
+
+const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
+
+// Can we read the person's location without springing a prompt on them?
+// Opt-in wins — they asked for this, on this device. Otherwise ask the Permissions API
+// where it genuinely works. Never assume.
+const visitGeoAllowed = window.__visitGeoAllowed = async () => {
+  if (lsGet(VISIT_GEO_OPTIN_KEY) === '1') return true;
+  if (navigator.permissions?.query) {
+    try {
+      const st = await navigator.permissions.query({ name: 'geolocation' });
+      return st.state === 'granted';
+    } catch { return false; } // WebKit rejects 'geolocation' — the opt-in covers it
+  }
+  return false;
+};
+
+const getPosition = (opts) => new Promise((resolve) => {
+  if (!navigator.geolocation) return resolve(null);
+  navigator.geolocation.getCurrentPosition((p) => resolve(p), () => resolve(null), opts);
+});
+
+// ─── The invite ───
+// Shown only when there is somewhere to be near, we have no permission we can act on, and
+// they haven't already said no. Tapping "Yes" is what raises the OS prompt — user-initiated,
+// which is the whole difference between asking and nagging.
+//
+// It also answers the question Pete would otherwise have to guess at: it reports the
+// distance once, so "is this thing even working?" has an answer that isn't "stand in the
+// kitchen and hope". That number is computed on the device and never sent anywhere.
+const VisitGeoInvite = ({ recipients, onEnabled }) => {
+  const [hidden, setHidden] = useState(() => lsGet(VISIT_GEO_INVITE_KEY) === '1');
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null); // { ok, text }
+
+  const withCoords = (recipients || []).filter((r) => r.latitude != null && r.longitude != null);
+  if (hidden || !withCoords.length || !navigator.geolocation) return null;
+
+  const nameOf = (r) => r.first_name || r.firstName || 'them';
+
+  const enable = async () => {
+    setBusy(true);
+    const pos = await getPosition({ enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
+    setBusy(false);
+    if (!pos) {
+      setResult({ ok: false, text: "Couldn't get a location fix. If iOS asked and you said no, turn it back on in Settings › Privacy › Location Services › InPlace." });
+      return;
+    }
+    lsSet(VISIT_GEO_OPTIN_KEY, '1');
+    const { latitude, longitude } = pos.coords;
+    let best = null;
+    for (const r of withCoords) {
+      const ft = haversineFeet(latitude, longitude, r.latitude, r.longitude);
+      if (!best || ft < best.ft) best = { ft, r };
+    }
+    setResult({
+      ok: true,
+      text: best.ft <= 1000
+        ? `You're about ${best.ft} ft from ${nameOf(best.r)}'s — close enough. The nudge will offer to log a visit.`
+        : `Saved. You're ${best.ft > 5280 ? `${(best.ft / 5280).toFixed(1)} miles` : `${best.ft} ft`} from ${nameOf(best.r)}'s right now, so no nudge — it appears within 1,000 ft.`,
+    });
+    if (onEnabled) onEnabled();
+  };
+
+  return (
+    <div className="card" style={{ border: '1px solid var(--border-light)', marginBottom: 12 }}>
+      <div style={{ fontWeight: 700, fontSize: 14.5, marginBottom: 3 }}>
+        Notice when you're at {nameOf(withCoords[0])}'s?
+      </div>
+      <div style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>
+        InPlace can offer to log a visit when you're at the house. Your location is checked on
+        this phone only, and nothing is sent unless you choose to log something.
+      </div>
+      {result && (
+        <div style={{ fontSize: 12.5, marginTop: 9, color: result.ok ? 'var(--text-primary)' : 'var(--color-error)' }}>
+          {result.text}
+        </div>
+      )}
+      {!result?.ok && (
+        <div style={{ display: 'flex', gap: 8, marginTop: 11, flexWrap: 'wrap' }}>
+          <button onClick={enable} disabled={busy} style={{
+            padding: '9px 15px', background: 'var(--role-color)', color: 'var(--text-on-primary)',
+            border: 'none', borderRadius: 9, fontSize: 13, fontWeight: 650,
+            cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1,
+          }}>{busy ? 'Checking…' : 'Yes, notice'}</button>
+          <button onClick={() => { setHidden(true); lsSet(VISIT_GEO_INVITE_KEY, '1'); }} style={{
+            padding: '9px 15px', background: 'var(--bg-card)', color: 'var(--text-secondary)',
+            border: '1px solid var(--border-light)', borderRadius: 9, fontSize: 13, cursor: 'pointer',
+          }}>No thanks</button>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const VisitNudgeCard = window.VisitNudgeCard = ({ recipients, alreadyLoggedToday, onLog }) => {
   const [match, setMatch] = useState(null); // { recipient, position }
   const [dismissed, setDismissed] = useState(false);
+  const [allowed, setAllowed] = useState(null); // null = still deciding
+  const [retry, setRetry] = useState(0);        // bumped when the opt-in is accepted
 
   useEffect(() => {
     let cancelled = false;
@@ -213,22 +327,13 @@ const VisitNudgeCard = window.VisitNudgeCard = ({ recipients, alreadyLoggedToday
         if (withCoords.length === 0) return;
         if (!navigator.geolocation) return;
 
-        // Never trigger a cold OS prompt for this. Only proceed if already granted.
-        if (navigator.permissions?.query) {
-          try {
-            const st = await navigator.permissions.query({ name: 'geolocation' });
-            if (st.state !== 'granted') return;
-          } catch { return; }
-        } else {
-          return; // can't tell → assume not granted rather than risk the prompt
-        }
+        // Never trigger a cold OS prompt for this. Proceed only on an explicit opt-in, or a
+        // permission the browser will actually tell us about. See visitGeoAllowed.
+        const ok = await visitGeoAllowed();
+        if (!cancelled) setAllowed(ok);
+        if (!ok || cancelled) return;
 
-        const pos = await new Promise((resolve) => {
-          navigator.geolocation.getCurrentPosition(
-            (p) => resolve(p), () => resolve(null),
-            { enableHighAccuracy: false, timeout: 8000, maximumAge: 120000 }
-          );
-        });
+        const pos = await getPosition({ enableHighAccuracy: false, timeout: 8000, maximumAge: 120000 });
         if (!pos || cancelled) return;
 
         // Decide HERE, at full precision. Only a coarsened point is ever sent, and only if
@@ -245,7 +350,14 @@ const VisitNudgeCard = window.VisitNudgeCard = ({ recipients, alreadyLoggedToday
     };
     run();
     return () => { cancelled = true; };
-  }, [recipients, alreadyLoggedToday]);
+  }, [recipients, alreadyLoggedToday, retry]);
+
+  // No usable permission yet → offer the opt-in instead of silently doing nothing. This is
+  // the branch iOS has always landed in; before v1.105.45 it rendered nothing, and there was
+  // no way to tell the feature apart from a broken one.
+  if (allowed === false && !alreadyLoggedToday) {
+    return <VisitGeoInvite recipients={recipients} onEnabled={() => setRetry((n) => n + 1)} />;
+  }
 
   if (!match || dismissed) return null;
   const first = match.recipient.first_name || match.recipient.firstName || 'them';
