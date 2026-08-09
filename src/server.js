@@ -202,6 +202,21 @@ app.set("emitToUser", emitToUser);
 // ─── Middleware ───
 app.set("trust proxy", 1); // Trust first proxy (Cloudflare/Railway) for X-Forwarded-For
 
+// v1.105.55 — a malformed percent-escape in the path (INPLACE-6: GET /%c0, an overlong
+// UTF-8 sequence from a path-traversal scanner) makes Express's own router throw URIError
+// out of decodeURIComponent, which lands in the error handler and Sentry as an application
+// error. It isn't one: it is a garbage URL and the answer is 400. Catching it here keeps a
+// scanner from writing noise into the same place real failures are reported — which is the
+// only reason anyone would look there.
+app.use((req, res, next) => {
+  try {
+    decodeURIComponent(req.path);
+    return next();
+  } catch {
+    return res.status(400).json({ error: "Malformed URL" });
+  }
+});
+
 // Security headers via Helmet
 app.use(helmet({
   contentSecurityPolicy: {
@@ -424,7 +439,7 @@ app.use("/api/media", require("./routes/media"));
 app.use("/api/safety", require("./routes/safety"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.105.54";
+const APP_VERSION = "1.105.55";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });
