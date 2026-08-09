@@ -228,9 +228,32 @@ const visitGeoAllowed = window.__visitGeoAllowed = async () => {
   return false;
 };
 
+// v1.105.47 — geolocation's own `timeout` does NOT bound the part that actually hangs.
+//
+// Pete: "the notice at Betty's thing, now that I'm gone, still just says 'checking' and
+// seems stuck." My own code from an hour ago, with the same disease as everything else
+// today: an unbounded wait and no error path.
+//
+// Per spec, `options.timeout` limits how long acquiring a FIX may take — the clock starts
+// after permission is decided. While the OS prompt is on screen, or if WKWebView never
+// resolves it (dismissed, Location Services off, a webview that silently drops the
+// request), NEITHER callback is ever invoked. The promise never settles, `busy` stays
+// true, and the button reads "Checking…" until the app is killed.
+//
+// So we hold our own deadline and always settle. A null answer is a real answer.
 const getPosition = (opts) => new Promise((resolve) => {
   if (!navigator.geolocation) return resolve(null);
-  navigator.geolocation.getCurrentPosition((p) => resolve(p), () => resolve(null), opts);
+  let settled = false;
+  const finish = (v) => { if (!settled) { settled = true; resolve(v); } };
+  // Generous: the person may genuinely be reading the OS permission dialog.
+  const timer = setTimeout(() => finish(null), (opts?.timeout || 15000) + 15000);
+  try {
+    navigator.geolocation.getCurrentPosition(
+      (p) => { clearTimeout(timer); finish(p); },
+      () => { clearTimeout(timer); finish(null); },
+      opts
+    );
+  } catch { clearTimeout(timer); finish(null); } // some webviews throw outright
 });
 
 // ─── The invite ───
@@ -256,7 +279,7 @@ const VisitGeoInvite = ({ recipients, onEnabled }) => {
     const pos = await getPosition({ enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
     setBusy(false);
     if (!pos) {
-      setResult({ ok: false, text: "Couldn't get a location fix. If iOS asked and you said no, turn it back on in Settings › Privacy › Location Services › InPlace." });
+      setResult({ ok: false, text: "Couldn't get a location fix — that's usually Location Services being off for InPlace (Settings › Privacy › Location Services › InPlace › While Using). Tap to try again." });
       return;
     }
     lsSet(VISIT_GEO_OPTIN_KEY, '1');

@@ -117,6 +117,25 @@ describe("the nudge nudges, it does not nag", () => {
     expect(client).toMatch(/onEnabled=\{\(\) => setRetry/);
   });
 
+  test("asking for a position always settles, even if neither callback fires", () => {
+    // v1.105.47. geolocation's own `timeout` only bounds ACQUIRING a fix — the clock starts
+    // after permission is decided. While the OS dialog is up, or in a webview that silently
+    // drops the request, neither callback is ever called and the promise never settles. That
+    // is what left the button reading "Checking…" forever.
+    const fn = client.slice(client.indexOf("const getPosition"), client.indexOf("const VisitGeoInvite"));
+    expect(fn).toMatch(/let settled = false;/);
+    expect(fn).toMatch(/const timer = setTimeout\(\(\) => finish\(null\), \(opts\?\.timeout \|\| 15000\) \+ 15000\);/);
+    expect(fn).toMatch(/clearTimeout\(timer\); finish\(p\);/);
+    expect(fn).toMatch(/catch \{ clearTimeout\(timer\); finish\(null\); \}/);
+  });
+
+  test("a failed check leaves the buttons tappable, not a dead spinner", () => {
+    const invite = client.slice(client.indexOf("const VisitGeoInvite"), client.indexOf("const VisitNudgeCard"));
+    expect(invite).toMatch(/setBusy\(false\);/);
+    expect(invite).toMatch(/\{!result\?\.ok && \(/); // buttons stay while it hasn't succeeded
+    expect(invite).toMatch(/Tap to try again/);
+  });
+
   test("the prompt is raised by a tap, never by a page load", () => {
     const invite = client.slice(client.indexOf("const VisitGeoInvite"), client.indexOf("const VisitNudgeCard"));
     expect(invite).toMatch(/const enable = async \(\) => \{/);
