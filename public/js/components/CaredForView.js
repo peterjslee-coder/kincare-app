@@ -141,9 +141,14 @@ const CaredForView = window.CaredForView = () => {
     try {
       const notePayload = { careRecipientId: data.careRecipientId, content: newNote, noteType: 'personal' };
       const res = await apiFetch('/api/notes', { method: 'POST', body: JSON.stringify(notePayload) });
+      // v1.105.51 — there was no final else, so a rejected note left the text in the box,
+      // the spinner off and no message. Its siblings handleEditNote/handleDeleteNote were
+      // fixed with setNoteError; this one was skipped.
       if (res?.ok) { setNewNote(''); await fetchData(); }
       else if ((res?.status === 503 || !navigator.onLine) && window.OfflineQueue) {
         await window.OfflineQueue.queueNote(notePayload); setNewNote('');
+      } else {
+        setNoteError("That didn't save — please try again.");
       }
     } catch (err) {
       if (!navigator.onLine && window.OfflineQueue) {

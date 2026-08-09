@@ -224,19 +224,40 @@ function _notifyPendingChange() {
   }).catch(() => {});
 }
 
-// Auto-sync when device comes back online
+// Auto-sync when the device comes back online.
+//
+// v1.105.51 — the 'online' event was the ONLY replay trigger, and it only fires while the
+// page is alive and listening. sw.js has a Background Sync handler, but WebKit implements
+// no Background Sync API and nothing ever called registration.sync.register() anyway — so
+// a caregiver who checked in from a basement with no signal had that check-in sit in
+// IndexedDB until they happened to reopen the app with the tab still loaded. The record of
+// whether someone showed up is not something to leave to chance.
+//
+// So: also replay whenever the app comes back to the foreground — the same signal the badge
+// uses, including Capacitor's 'resume', which is what fires in the native shell.
 if (typeof window !== 'undefined') {
+  let _syncing = false;
+  const runSync = (why) => {
+    if (_syncing || !navigator.onLine) return;
+    _syncing = true;
+    syncOfflineActions()
+      .then((result) => {
+        if (result.synced > 0) {
+          console.log(`[OfflineQueue] Sync complete (${why}): ${result.synced} synced, ${result.failed} failed`);
+        }
+      })
+      .catch(() => {})
+      .finally(() => { _syncing = false; });
+  };
+
   window.addEventListener('online', () => {
     console.log('[OfflineQueue] Back online — starting sync...');
-    // Small delay to let network stabilize
-    setTimeout(() => {
-      syncOfflineActions().then(result => {
-        if (result.synced > 0) {
-          console.log(`[OfflineQueue] Sync complete: ${result.synced} synced, ${result.failed} failed`);
-        }
-      });
-    }, 2000);
+    setTimeout(() => runSync('online'), 2000); // let the network settle
   });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') runSync('foreground');
+  });
+  document.addEventListener('resume', () => runSync('resume')); // Capacitor, native shell
 }
 
 // ─── High-level helpers for specific action types ───

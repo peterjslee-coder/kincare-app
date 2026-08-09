@@ -26,7 +26,8 @@ function parseMoodDisplay(val) {
  */
 async function callClaude(apiKey, model, maxTokens, messages, system) {
   const Anthropic = require("@anthropic-ai/sdk");
-  const client = new Anthropic({ apiKey });
+  // v1.105.51 — SDK default is a 10-minute timeout with 2 retries (~30 min held).
+  const client = new Anthropic({ apiKey, timeout: 30000, maxRetries: 1 });
   const params = { model, max_tokens: maxTokens, messages };
   if (system) params.system = system;
   const result = await client.messages.create(params);

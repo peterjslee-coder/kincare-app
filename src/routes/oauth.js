@@ -118,6 +118,8 @@ router.get("/google/callback", async (req, res) => {
     const redirectUri = `${APP_URL}/api/oauth/google/callback`;
     const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
+      // v1.105.51 — untimed. A hang here strands the whole sign-in flow with no error.
+      signal: AbortSignal.timeout(8000),
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
         code,
@@ -137,6 +139,7 @@ router.get("/google/callback", async (req, res) => {
 
     // Get user info from Google
     const userInfoResponse = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
+      signal: AbortSignal.timeout(8000), // v1.105.51
       headers: { Authorization: `Bearer ${tokens.access_token}` },
     });
 
@@ -249,7 +252,7 @@ async function getApplePublicKeys() {
   if (appleKeysCache && Date.now() - appleKeysCacheTime < APPLE_KEYS_TTL) {
     return appleKeysCache;
   }
-  const res = await fetch("https://appleid.apple.com/auth/keys");
+  const res = await fetch("https://appleid.apple.com/auth/keys", { signal: AbortSignal.timeout(8000) }); // v1.105.51
   if (!res.ok) throw new Error("Failed to fetch Apple JWKS");
   const data = await res.json();
   appleKeysCache = data.keys;

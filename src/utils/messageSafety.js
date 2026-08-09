@@ -119,7 +119,8 @@ async function screenMessage(messageContent, senderId, conversationId, senderInf
 
     // Call Claude Haiku for contextual analysis
     const Anthropic = require("@anthropic-ai/sdk");
-    const client = new Anthropic({ apiKey });
+    // v1.105.51 — SDK default is a 10-minute timeout with 2 retries (~30 min held).
+    const client = new Anthropic({ apiKey, timeout: 30000, maxRetries: 1 });
     const result = await client.messages.create({
       model: MODEL_HAIKU,
       max_tokens: 200,

@@ -6,6 +6,10 @@ const FindWork = window.FindWork = () => {
     return 'jobs';
   }); // 'jobs' | 'availability' | 'rates' | 'families'
   const [openRequests, setOpenRequests] = useState([]);
+  // v1.105.51 — a failed load left this empty and the UI said "No open requests in the next
+  // N days". This is a caregiver's income feed; "the request failed" and "there is no work"
+  // must not look the same.
+  const [jobsLoadFailed, setJobsLoadFailed] = useState(false);
   const [upcomingSessions, setUpcomingSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [claimingId, setClaimingId] = useState(null);
@@ -62,11 +66,17 @@ const FindWork = window.FindWork = () => {
     setAvailLoading(false);
   };
 
+  // v1.105.51 — none of these calls were checked, and the modal closed regardless. A
+  // rejected save shut the sheet as if it had worked and the rule silently never appeared.
+  // Availability decides which jobs a caregiver is even offered, so a rule that quietly
+  // didn't save costs them work they never knew existed. `failed` collects the loops too.
   const handleSaveRule = async () => {
+    let failed = 0;
+    const track = (r) => { if (!r?.ok) failed++; return r; };
     try {
       if (editingRule) {
         const body = { dayOfWeek: parseInt(ruleForm.dayOfWeek), startTime: ruleForm.startTime, endTime: ruleForm.endTime, isRecurring: ruleForm.isRecurring, specificDate: ruleForm.isRecurring ? null : ruleForm.specificDate || null, type: ruleForm.type, note: ruleForm.note || null };
-        await apiFetch(`/api/availability/${editingRule.id}`, { method: 'PUT', body: JSON.stringify(body) });
+        track(await apiFetch(`/api/availability/${editingRule.id}`, { method: 'PUT', body: JSON.stringify(body) }));
       } else if (ruleForm._batchDays && ruleForm._batchDays.length > 0) {
         // Batch creation from drag-to-select (specific dates)
         const cm = ruleForm._batchMonth || { year: new Date().getFullYear(), month: new Date().getMonth() };
@@ -74,29 +84,43 @@ const FindWork = window.FindWork = () => {
           const dateStr = `${cm.year}-${String(cm.month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
           const d = new Date(dateStr + 'T12:00:00');
           const body = { dayOfWeek: d.getDay(), startTime: ruleForm.startTime, endTime: ruleForm.endTime, isRecurring: false, specificDate: dateStr, type: ruleForm.type, note: ruleForm.note || null };
-          await apiFetch('/api/availability', { method: 'POST', body: JSON.stringify(body) });
+          track(await apiFetch('/api/availability', { method: 'POST', body: JSON.stringify(body) }));
         }
       } else if (ruleForm.isRecurring && ruleForm.selectedDays && ruleForm.selectedDays.length > 0) {
         for (const dow of ruleForm.selectedDays) {
           const body = { dayOfWeek: parseInt(dow), startTime: ruleForm.startTime, endTime: ruleForm.endTime, isRecurring: true, specificDate: null, type: ruleForm.type, note: ruleForm.note || null };
-          await apiFetch('/api/availability', { method: 'POST', body: JSON.stringify(body) });
+          track(await apiFetch('/api/availability', { method: 'POST', body: JSON.stringify(body) }));
         }
       } else {
         const body = { dayOfWeek: parseInt(ruleForm.dayOfWeek), startTime: ruleForm.startTime, endTime: ruleForm.endTime, isRecurring: ruleForm.isRecurring, specificDate: ruleForm.isRecurring ? null : ruleForm.specificDate || null, type: ruleForm.type, note: ruleForm.note || null };
-        await apiFetch('/api/availability', { method: 'POST', body: JSON.stringify(body) });
+        track(await apiFetch('/api/availability', { method: 'POST', body: JSON.stringify(body) }));
+      }
+      if (failed) {
+        showToast(failed === 1
+          ? "That didn't save — please try again."
+          : `${failed} of those didn't save — please check your availability.`, 'error');
+        fetchAvailability(); // show whatever DID land, rather than a stale form
+        return;
       }
       setShowAddRule(false);
       setEditingRule(null);
       setRuleForm({ type: 'available', dayOfWeek: 1, startTime: '08:00', endTime: '17:00', isRecurring: true, specificDate: '', note: '', selectedDays: [] });
       fetchAvailability();
-    } catch (err) { console.error('Save rule error:', err); }
+    } catch (err) {
+      console.error('Save rule error:', err);
+      showToast("That didn't save — check your connection and try again.", 'error');
+    }
   };
 
   const handleDeleteRule = async (id) => {
     try {
-      await apiFetch(`/api/availability/${id}`, { method: 'DELETE' });
+      const res = await apiFetch(`/api/availability/${id}`, { method: 'DELETE' });
+      if (!res?.ok) { showToast("Couldn't remove that — please try again.", 'error'); return; }
       fetchAvailability();
-    } catch (err) { console.error('Delete rule error:', err); }
+    } catch (err) {
+      console.error('Delete rule error:', err);
+      showToast("Couldn't remove that — check your connection.", 'error');
+    }
   };
 
   const startEditRule = (rule) => {
@@ -209,7 +233,9 @@ const FindWork = window.FindWork = () => {
     try {
       // Use dashboard API for enriched data (match quality, distance, health tags, care summary)
       const res = await apiFetch('/api/dashboard');
+      if (!res?.ok) setJobsLoadFailed(true);
       if (res?.ok) {
+        setJobsLoadFailed(false);
         const d = await res.json();
         setAccountPaused(!!d?.profile?.accountPaused);
         setCaregiverCleared(!!d?.profile?.caregiverCleared);
@@ -821,8 +847,12 @@ const FindWork = window.FindWork = () => {
 
           {filteredRequests.length === 0 && (
             <div className="card" style={{ textAlign: 'center', padding: '24px 20px', marginTop: 12 }}>
-              <div style={{ fontSize: 32, marginBottom: 8 }}>📭</div>
-              <p style={{ color: 'var(--text-tertiary)', fontSize: 13, margin: 0 }}>No open requests in the next {rangeDays} days</p>
+              <div style={{ fontSize: 32, marginBottom: 8 }}>{jobsLoadFailed ? '⚠️' : '📭'}</div>
+              <p style={{ color: 'var(--text-tertiary)', fontSize: 13, margin: 0 }}>
+                {jobsLoadFailed
+                  ? "Couldn't load open requests — check your connection and pull to refresh."
+                  : `No open requests in the next ${rangeDays} days`}
+              </p>
             </div>
           )}
         </div>
@@ -1036,8 +1066,12 @@ const FindWork = window.FindWork = () => {
             </div>
           ) : (
             <div className="card" style={{ textAlign: 'center', padding: '32px 20px' }}>
-              <div style={{ fontSize: 40, marginBottom: 12 }}>📭</div>
-              <h3 style={{ margin: '0 0 8px', color: 'var(--text-primary)', fontSize: 16 }}>No open requests in the next {rangeDays} days</h3>
+              <div style={{ fontSize: 40, marginBottom: 12 }}>{jobsLoadFailed ? '⚠️' : '📭'}</div>
+              <h3 style={{ margin: '0 0 8px', color: 'var(--text-primary)', fontSize: 16 }}>
+                {jobsLoadFailed
+                  ? "Couldn't load open requests"
+                  : `No open requests in the next ${rangeDays} days`}
+              </h3>
               <p style={{ color: 'var(--text-tertiary)', fontSize: 13, margin: '0 0 12px' }}>
                 Care requests from families in your area will appear here automatically.
               </p>

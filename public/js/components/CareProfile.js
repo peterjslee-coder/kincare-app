@@ -415,8 +415,17 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
         setNewReminderLabel('');
         fetchKindredReminders(profile.id);
         if (typeof showToast === 'function') showToast('Reminder saved!', 'success');
+      } else {
+        // v1.105.51 — no else. The modal stayed open with the button un-spun and nothing
+        // said, so a family believed a medication reminder existed that was never created.
+        let msg = 'Could not save the reminder';
+        try { const d = await res?.json(); if (d?.error) msg = d.error; } catch {}
+        if (typeof showToast === 'function') showToast(msg, 'error');
       }
-    } catch (err) { console.error('Save reminder error:', err); }
+    } catch (err) {
+      console.error('Save reminder error:', err);
+      if (typeof showToast === 'function') showToast('Could not save the reminder', 'error');
+    }
     setSavingReminder(false);
   };
 

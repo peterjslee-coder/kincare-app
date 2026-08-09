@@ -129,6 +129,16 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
     fetchVisits();
   }, [team?.careRecipientId]);
 
+  // v1.105.51 — every handler below this except handleInvite was `if (res?.ok) { … }` with
+  // no else, so a server REJECTION produced no feedback at all: the last-admin guard, a
+  // permission denial, an expired invite. The tap simply did nothing. handleInvite already
+  // read the error body; this makes the rest do the same.
+  const failToast = async (res, fallback) => {
+    let msg = fallback;
+    try { const d = await res?.json(); if (d?.error) msg = d.error; } catch { /* not JSON */ }
+    showToast(msg, 'error');
+  };
+
   const handleInvite = async (e) => {
     e.preventDefault();
     if (!inviteEmail.trim()) return;
@@ -157,10 +167,9 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
     if (!confirm(`Remove ${name} from the care team?`)) return;
     try {
       const res = await apiFetch(`/api/care-teams/${careTeamId}/members/${userId}`, { method: 'DELETE' });
-      if (res?.ok) {
-        showToast(`${name} removed from team`, 'success');
-        fetchTeam();
-      }
+      if (!res?.ok) return failToast(res, 'Failed to remove member');
+      showToast(`${name} removed from team`, 'success');
+      fetchTeam();
     } catch {
       showToast('Failed to remove member', 'error');
     }
@@ -169,10 +178,9 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
   const handleCancelInvite = async (inviteId) => {
     try {
       const res = await apiFetch(`/api/care-teams/${careTeamId}/invite/${inviteId}`, { method: 'DELETE' });
-      if (res?.ok) {
-        showToast('Invite cancelled', 'success');
-        fetchTeam();
-      }
+      if (!res?.ok) return failToast(res, 'Failed to cancel invite');
+      showToast('Invite cancelled', 'success');
+      fetchTeam();
     } catch {
       showToast('Failed to cancel invite', 'error');
     }
@@ -181,10 +189,9 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
   const handleResendInvite = async (inviteId, email) => {
     try {
       const res = await apiFetch(`/api/care-teams/${careTeamId}/invite/${inviteId}/resend`, { method: 'POST' });
-      if (res?.ok) {
-        showToast(`Invite resent to ${email}`, 'success');
-        fetchTeam();
-      }
+      if (!res?.ok) return failToast(res, 'Failed to resend invite');
+      showToast(`Invite resent to ${email}`, 'success');
+      fetchTeam();
     } catch {
       showToast('Failed to resend invite', 'error');
     }
@@ -197,12 +204,17 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
         method: 'PUT',
         body: JSON.stringify({ name: newName.trim() }),
       });
-      if (res?.ok) {
-        showToast('Team name updated', 'success');
-        fetchTeam();
+      if (!res?.ok) {
+        // The editor stays OPEN on failure — it used to close regardless, so the typed
+        // name disappeared and the old one was still there, with no explanation.
+        await failToast(res, 'Failed to update team name');
+        return;
       }
+      showToast('Team name updated', 'success');
+      fetchTeam();
     } catch {
       showToast('Failed to update team name', 'error');
+      return;
     }
     setEditingName(false);
   };
@@ -213,10 +225,9 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
         method: 'PUT',
         body: JSON.stringify({ role: newRole }),
       });
-      if (res?.ok) {
-        showToast('Role updated', 'success');
-        fetchTeam();
-      }
+      if (!res?.ok) return failToast(res, 'Failed to change role');
+      showToast('Role updated', 'success');
+      fetchTeam();
     } catch {
       showToast('Failed to change role', 'error');
     }
@@ -228,11 +239,10 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
         method: 'PUT',
         body: JSON.stringify({ relationshipLabel: labelText.trim() }),
       });
-      if (res?.ok) {
-        showToast('Relationship updated', 'success');
-        setEditingLabel(false);
-        fetchTeam();
-      }
+      if (!res?.ok) return failToast(res, 'Failed to update');
+      showToast('Relationship updated', 'success');
+      setEditingLabel(false);
+      fetchTeam();
     } catch {
       showToast('Failed to update', 'error');
     }

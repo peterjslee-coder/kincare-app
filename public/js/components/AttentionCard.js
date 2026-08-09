@@ -30,13 +30,20 @@ const ATTENTION_ROWS = [
 
 const AttentionCard = window.AttentionCard = ({ onNavigate }) => {
   const [counts, setCounts] = React.useState(null);
+  // v1.105.51 — a failed load used to render exactly nothing, which on this card means
+  // "you're all caught up". That is the one lie this component cannot afford: the app icon
+  // may be showing a number while the card that is supposed to itemise it isn't there.
+  // (Also `res.ok` not `res?.ok` — apiFetch returns null on its 401 path, which threw
+  // straight into the same silent catch.)
+  const [loadFailed, setLoadFailed] = React.useState(false);
 
   const load = React.useCallback(async () => {
     try {
       const res = await apiFetch('/api/push/attention');
-      if (!res.ok) { setCounts(null); return; }
+      if (!res?.ok) { setLoadFailed(true); return; }
       setCounts(await res.json());
-    } catch { setCounts(null); }
+      setLoadFailed(false);
+    } catch { setLoadFailed(true); }
   }, []);
 
   React.useEffect(() => {
@@ -47,6 +54,24 @@ const AttentionCard = window.AttentionCard = ({ onNavigate }) => {
     document.addEventListener('visibilitychange', onVis);
     return () => document.removeEventListener('visibilitychange', onVis);
   }, [load]);
+
+  if (loadFailed && !counts) {
+    return (
+      <div style={{
+        background: 'var(--card-bg, #fff)', border: '1px solid var(--border-color, #e0e0e0)',
+        borderRadius: 12, padding: '12px 16px', marginBottom: 16,
+        display: 'flex', alignItems: 'center', gap: 10,
+      }}>
+        <span style={{ flex: 1, fontSize: 13, color: 'var(--text-secondary)' }}>
+          Couldn't load what needs you.
+        </span>
+        <button onClick={load} style={{
+          background: 'none', border: 'none', color: 'var(--accent-color)',
+          font: 'inherit', fontSize: 13, fontWeight: 650, cursor: 'pointer', padding: 0,
+        }}>Retry</button>
+      </div>
+    );
+  }
 
   if (!counts || !counts.total) return null; // nothing waiting → nothing drawn
 

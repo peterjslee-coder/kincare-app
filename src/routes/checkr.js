@@ -61,6 +61,9 @@ async function checkrRequest(method, path, body = null) {
   const key = getCheckrKey();
   const opts = {
     method,
+    // v1.105.51 — every Checkr call was untimed, inside a request handler: a slow vendor
+    // held the socket and a worker slot indefinitely and the caregiver saw a spinner.
+    signal: AbortSignal.timeout(8000),
     headers: {
       "Authorization": "Basic " + Buffer.from(key + ":").toString("base64"),
       "Content-Type": "application/json",

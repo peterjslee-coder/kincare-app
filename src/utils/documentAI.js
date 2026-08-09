@@ -71,7 +71,8 @@ async function classifyDocument(base64Data, mimeType, expectedType) {
 
   try {
     const Anthropic = require("@anthropic-ai/sdk");
-    const client = new Anthropic({ apiKey });
+    // v1.105.51 — SDK default is a 10-minute timeout with 2 retries (~30 min held).
+    const client = new Anthropic({ apiKey, timeout: 30000, maxRetries: 1 });
 
     // Strip data URI prefix if present to get raw base64
     const rawBase64 = base64Data.replace(/^data:[^;]+;base64,/, "");

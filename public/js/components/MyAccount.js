@@ -855,7 +855,11 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
         method: 'PUT',
         body: JSON.stringify({ rateDaytime: editRates.daytime, rateNighttime: editRates.nighttime, rateOvernight: editRates.overnight })
       });
+      // v1.105.51 — no else. On failure the spinner stopped, the form stayed open with the
+      // typed numbers, and nothing was said, so a caregiver couldn't tell whether their pay
+      // rates had saved. FindWork's twin of this handler already had the else branch.
       if (res?.ok) { showToast('Rates updated', 'success'); setEditRates(null); }
+      else { showToast('Failed to save rates', 'error'); }
     } catch (err) { showToast('Failed to save rates', 'error'); }
     setSavingRates(false);
   };

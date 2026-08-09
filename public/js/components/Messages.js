@@ -538,22 +538,29 @@ const Messages = window.Messages = () => {
       return;
     }
 
-    // Direct message — find or create conversation
-    setShowNewChat(false);
+    // Direct message — find or create conversation.
+    // v1.105.51 — setShowNewChat(false) used to run BEFORE the request, and there was no
+    // else, so a failure closed the sheet and dropped you back on the conversation list
+    // with nothing opened and no explanation. handleCreateGroup right below was already
+    // fixed for exactly this; this one was left.
     try {
       const res = await apiFetch('/api/messages/conversations', {
         method: 'POST',
         body: JSON.stringify({ type: 'direct', memberIds: [contact.id] }),
       });
-      if (res?.ok) {
-        const data = await res.json();
-        setActiveConvId(data.conversationId);
-        setActiveConvType('direct');
-        fetchMessages(data.conversationId);
-        fetchConversations();
+      if (!res?.ok) {
+        showToast("Couldn't open that conversation — please try again.", 'error');
+        return;
       }
+      const data = await res.json();
+      setShowNewChat(false);
+      setActiveConvId(data.conversationId);
+      setActiveConvType('direct');
+      fetchMessages(data.conversationId);
+      fetchConversations();
     } catch (err) {
       console.error('Create conversation error:', err);
+      showToast("Couldn't open that conversation — check your connection.", 'error');
     }
   };
 

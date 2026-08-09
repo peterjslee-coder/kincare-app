@@ -273,7 +273,11 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
     } catch (err) { console.error('Reviews fetch error:', err); }
   };
 
+  // v1.105.51 — twin of FindWork.handleSaveRule; same fix. Nothing was checked and the
+  // sheet closed regardless, so a rejected availability rule vanished without a word.
   const handleSaveRule = async () => {
+    let failed = 0;
+    const track = (r) => { if (!r?.ok) failed++; return r; };
     try {
       if (editingRule) {
         // Editing: single day update
@@ -286,7 +290,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
           type: ruleForm.type,
           note: ruleForm.note || null,
         };
-        await apiFetch(`/api/availability/${editingRule.id}`, { method: 'PUT', body: JSON.stringify(body) });
+        track(await apiFetch(`/api/availability/${editingRule.id}`, { method: 'PUT', body: JSON.stringify(body) }));
       } else if (ruleForm.isRecurring && ruleForm.selectedDays && ruleForm.selectedDays.length > 0) {
         // New recurring rule with multiple days selected
         for (const dow of ruleForm.selectedDays) {
@@ -299,7 +303,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
             type: ruleForm.type,
             note: ruleForm.note || null,
           };
-          await apiFetch('/api/availability', { method: 'POST', body: JSON.stringify(body) });
+          track(await apiFetch('/api/availability', { method: 'POST', body: JSON.stringify(body) }));
         }
       } else {
         // Single day (specific date or single recurring day)
@@ -312,20 +316,34 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
           type: ruleForm.type,
           note: ruleForm.note || null,
         };
-        await apiFetch('/api/availability', { method: 'POST', body: JSON.stringify(body) });
+        track(await apiFetch('/api/availability', { method: 'POST', body: JSON.stringify(body) }));
+      }
+      if (failed) {
+        showToast(failed === 1
+          ? "That didn't save — please try again."
+          : `${failed} of those didn't save — please check your availability.`, 'error');
+        fetchAvailability();
+        return;
       }
       setShowAddRule(false);
       setEditingRule(null);
       setRuleForm({ type: 'available', dayOfWeek: 1, startTime: '08:00', endTime: '17:00', isRecurring: true, specificDate: '', note: '', selectedDays: [] });
       fetchAvailability();
-    } catch (err) { console.error('Save rule error:', err); }
+    } catch (err) {
+      console.error('Save rule error:', err);
+      showToast("That didn't save — check your connection and try again.", 'error');
+    }
   };
 
   const handleDeleteRule = async (id) => {
     try {
-      await apiFetch(`/api/availability/${id}`, { method: 'DELETE' });
+      const res = await apiFetch(`/api/availability/${id}`, { method: 'DELETE' });
+      if (!res?.ok) { showToast("Couldn't remove that — please try again.", 'error'); return; }
       fetchAvailability();
-    } catch (err) { console.error('Delete rule error:', err); }
+    } catch (err) {
+      console.error('Delete rule error:', err);
+      showToast("Couldn't remove that — check your connection.", 'error');
+    }
   };
 
   const startEditRule = (rule) => {
@@ -1142,15 +1160,22 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
     if (avatarInputRef.current) avatarInputRef.current.value = '';
   };
 
+  // v1.105.51 — the response used to be thrown away and the editor closed regardless. A
+  // 400 or 403 doesn't throw, so the new values sat on screen looking saved until a reload
+  // quietly reverted them.
   const saveStoplight = async () => {
     try {
-      await apiFetch('/api/caregivers/profile', {
+      const res = await apiFetch('/api/caregivers/profile', {
         method: 'POST',
         body: JSON.stringify({ hourlyRate: profile.hourlyRate > 0 ? profile.hourlyRate : 25, careStoplight: stoplightForm }),
       });
+      if (!res?.ok) { showToast("That didn't save — please try again.", 'error'); return; }
       setStoplightData(stoplightForm);
       setEditingStoplight(false);
-    } catch (err) { console.error('Stoplight save error:', err); }
+    } catch (err) {
+      console.error('Stoplight save error:', err);
+      showToast("That didn't save — check your connection and try again.", 'error');
+    }
   };
 
   // Navigate to a tab and scroll the tab content into view with a highlight pulse
@@ -1169,14 +1194,18 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const saveOnboardingProfile = async () => {
     setProfileSaving(true);
     try {
+      // v1.105.51 — all three of these were awaited and discarded, then "Profile saved!"
+      // fired unconditionally. A rejected save told the caregiver it had worked and moved
+      // them on to the next step.
       const dayRate = parseFloat(profileForm.rateDaytime) || parseFloat(profileForm.hourlyRate) || 25;
-      await apiFetch('/api/caregivers/profile', {
+      const r1 = await apiFetch('/api/caregivers/profile', {
         method: 'POST',
         body: JSON.stringify({ bio: profileForm.bio, hourlyRate: dayRate }),
       });
+      if (!r1?.ok) { showToast('Failed to save profile', 'error'); setProfileSaving(false); return; }
       // Save tiered rates if any were entered
       if (profileForm.rateDaytime || profileForm.rateNighttime || profileForm.rateOvernight) {
-        await apiFetch('/api/caregivers/rates', {
+        const r2 = await apiFetch('/api/caregivers/rates', {
           method: 'PUT',
           body: JSON.stringify({
             rateDaytime: parseFloat(profileForm.rateDaytime) || dayRate,
@@ -1184,11 +1213,13 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
             rateOvernight: parseFloat(profileForm.rateOvernight) || dayRate,
           }),
         });
+        if (!r2?.ok) { showToast('Your rates didn\'t save — please try again.', 'error'); setProfileSaving(false); return; }
       }
-      await apiFetch('/api/auth/me', {
+      const r3 = await apiFetch('/api/auth/me', {
         method: 'PUT',
         body: JSON.stringify({ foodAllergies: profileForm.foodAllergies, medicalConditions: profileForm.medicalConditions }),
       });
+      if (!r3?.ok) { showToast('Failed to save profile', 'error'); setProfileSaving(false); return; }
       const res = await apiFetch('/api/dashboard');
       if (res?.ok) { const d = await res.json(); setData(d); }
       showToast('Profile saved!', 'success');
@@ -1204,10 +1235,13 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
     }
     setLocSaving(true);
     try {
-      await apiFetch('/api/caregivers/profile', {
+      // v1.105.51 — result discarded, then an unconditional "Work location updated!".
+      // Work location decides which jobs a caregiver is offered at all.
+      const saveRes = await apiFetch('/api/caregivers/profile', {
         method: 'POST',
         body: JSON.stringify({ city: locCity.trim(), state: locState.trim(), zip: locZip.trim() }),
       });
+      if (!saveRes?.ok) { showToast('Failed to update location', 'error'); setLocSaving(false); return; }
       const res = await apiFetch('/api/dashboard');
       if (res?.ok) { const d = await res.json(); setData(d); }
       showToast('Work location updated!', 'success');

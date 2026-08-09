@@ -33,6 +33,7 @@ const Caregivers = window.Caregivers = () => {
   const [searchRadius, setSearchRadius] = useState(25);
   const [searchCenter, setSearchCenter] = useState(null);
   const [locationResults, setLocationResults] = useState([]);
+  const [searchFailed, setSearchFailed] = useState(false); // v1.105.51
   const [locationLoading, setLocationLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
 
@@ -137,14 +138,22 @@ const Caregivers = window.Caregivers = () => {
         address: searchAddress,
         radius: searchRadius.toString(),
       });
+      // v1.105.51 — a failed search left locationResults untouched and the panel said "No
+      // caregivers found in this area." A family looking for help was told nobody was
+      // nearby when the search had simply failed.
       const res = await apiFetch(`/api/caregivers?${params}`);
-      if (res?.ok) {
+      if (!res?.ok) {
+        setSearchFailed(true);
+        showToast('Search failed — please try again', 'error');
+      } else {
         const data = await res.json();
+        setSearchFailed(false);
         setLocationResults(data.caregivers || []);
         setSearchCenter(data.searchCenter);
       }
     } catch (err) {
       console.error('Location search error:', err);
+      setSearchFailed(true);
       showToast('Search failed', 'error');
     }
     setLocationLoading(false);
@@ -615,7 +624,9 @@ const Caregivers = window.Caregivers = () => {
               <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '10px' }}>
                 {locationResults.length > 0
                   ? `${locationResults.length} caregiver${locationResults.length !== 1 ? 's' : ''} within ${searchRadius} miles`
-                  : 'No caregivers found in this area. Try expanding the search radius.'
+                  : searchFailed
+                    ? "That search didn't go through. Check your connection and try again."
+                    : 'No caregivers found in this area. Try expanding the search radius.'
                 }
               </div>
               {locationResults.map((cg, idx) => (
