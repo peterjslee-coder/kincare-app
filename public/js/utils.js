@@ -176,6 +176,24 @@ const API_UPLOAD_TIMEOUT_MS = 120000;
 // anything was actually shown.
 const showLocalNotification = window.showLocalNotification = async (title, options = {}) => {
   try {
+    // v1.105.54 — the native shell first, when the build has @capacitor/local-notifications.
+    // v1.105.49 routed these through the service worker because `new Notification` throws on
+    // iOS; but a WKWebView may have no usable service-worker notification path either, so
+    // an incoming call could still be silent there. This is the one that definitely works.
+    const ln = _capPlugin('LocalNotifications');
+    if (ln?.schedule) {
+      try {
+        await ln.schedule({
+          notifications: [{
+            id: Math.abs((options.tag || title).split('').reduce((a, c) => ((a << 5) - a + c.charCodeAt(0)) | 0, 0)) % 2147483647,
+            title,
+            body: options.body || '',
+            extra: options.data || {},
+          }],
+        });
+        return true;
+      } catch { /* fall through */ }
+    }
     if (typeof Notification === 'function' && Notification.permission !== 'granted') return false;
     const reg = await navigator.serviceWorker?.getRegistration?.();
     if (reg?.showNotification) {
@@ -199,6 +217,108 @@ const closeLocalNotification = window.closeLocalNotification = async (tag) => {
     const open = await reg?.getNotifications?.({ tag });
     (open || []).forEach((n) => n.close());
   } catch { /* nothing to do */ }
+};
+
+// ─── v1.105.54 — one way to ask this phone where it is ───
+//
+// Pete's diagnostic, from the card that now reports itself:
+//     web:ceiling:timeout → watch:ceiling:timeout in 42s
+//
+// "ceiling" is OUR outer deadline, which means neither the success NOR the error callback
+// was ever invoked — by getCurrentPosition or by watchPosition — for 42 seconds. A denial
+// would have come back as denied(1); a real failure as timeout(3). Nothing came back at
+// all. That is the signature of a stub: Capacitor's WKWebView does not connect the browser
+// Geolocation API to Core Location, and @capacitor/geolocation — the plugin that does —
+// is not installed. Not permission, not signal, not GPS, not indoors. The API is scenery.
+//
+// This matters well beyond the visit nudge. Caregiver CHECK-IN and CHECK-OUT called
+// navigator.geolocation directly too, so the location evidence that proves a caregiver
+// was at the home has never been captured on an iPhone — it just sat there with a null
+// location and no error, which is why nobody noticed.
+//
+// So: one helper, used everywhere. It prefers the native plugin when a build provides one,
+// falls back to the browser API, and always answers — with the reason and a trace of what
+// it tried, so the next failure explains itself instead of being inferred from a photo.
+const _geoReason = (err) => {
+  if (!err) return 'timeout';
+  if (err.code === 1) return 'denied';       // PERMISSION_DENIED
+  if (err.code === 2) return 'unavailable';  // POSITION_UNAVAILABLE
+  if (err.code === 3) return 'timeout';      // TIMEOUT
+  if (/denied|permission/i.test(err.message || '')) return 'denied';
+  return 'unknown';
+};
+
+const _capPlugin = (name) => {
+  try {
+    if (!window.Capacitor?.isNativePlatform?.()) return null;
+    return window.Capacitor?.Plugins?.[name] || null;
+  } catch { return null; }
+};
+window.__capPlugin = _capPlugin;
+
+const _geoWeb = (options, ceilingMs, useWatch) => new Promise((resolve) => {
+  const api = navigator.geolocation;
+  const stage = useWatch ? 'watch' : 'web';
+  if (!api || (useWatch && !api.watchPosition)) return resolve({ pos: null, reason: 'unsupported', stage: `${stage}:absent` });
+  let settled = false, id = null;
+  const done = (v) => {
+    if (settled) return;
+    settled = true;
+    clearTimeout(timer);
+    if (id !== null) { try { api.clearWatch(id); } catch {} }
+    resolve(v);
+  };
+  const timer = setTimeout(() => done({ pos: null, reason: 'timeout', stage: `${stage}:ceiling` }), ceilingMs);
+  const ok = (p) => done({ pos: p, reason: null, stage });
+  const bad = (e) => done({ pos: null, reason: _geoReason(e), stage, code: e?.code, detail: e?.message });
+  try {
+    if (useWatch) id = api.watchPosition(ok, bad, options);
+    else api.getCurrentPosition(ok, bad, options);
+  } catch (e) { done({ pos: null, reason: 'unsupported', stage: `${stage}:threw`, detail: e?.message }); }
+});
+
+const _geoNative = async (options, ceilingMs) => {
+  const plugin = _capPlugin('Geolocation');
+  if (!plugin?.getCurrentPosition) return { pos: null, reason: 'unsupported', stage: 'native:absent' };
+  try {
+    const p = await Promise.race([
+      plugin.getCurrentPosition(options),
+      new Promise((r) => setTimeout(() => r(null), ceilingMs)),
+    ]);
+    if (p?.coords) return { pos: p, reason: null, stage: 'native' };
+    return { pos: null, reason: 'timeout', stage: 'native:ceiling' };
+  } catch (e) {
+    return { pos: null, reason: _geoReason(e), stage: 'native', detail: e?.message };
+  }
+};
+
+// Can this device be asked at all? Note this must NOT be a bare `navigator.geolocation`
+// check: that object EXISTS in the native webview (it's the stub that never answers), and
+// conversely a plugin build could answer without it. Ask about both.
+const canAskLocation = window.canAskLocation = () =>
+  !!(_capPlugin('Geolocation') || (typeof navigator !== 'undefined' && navigator.geolocation));
+
+/**
+ * Ask this device where it is. Always settles.
+ * @returns {{pos: GeolocationPosition|null, reason: string|null, tried: string[], elapsedMs: number}}
+ */
+const getDeviceLocation = window.getDeviceLocation = async ({ highAccuracy = false, timeoutMs = 20000 } = {}) => {
+  const started = Date.now();
+  const tried = [];
+  const opts = { enableHighAccuracy: highAccuracy, timeout: timeoutMs, maximumAge: 60000 };
+  const record = (r) => {
+    tried.push(`${r.stage}:${r.reason || 'ok'}${r.code ? `(${r.code})` : ''}`);
+    return { ...r, tried, elapsedMs: Date.now() - started };
+  };
+
+  if (_capPlugin('Geolocation')) {
+    const n = record(await _geoNative(opts, timeoutMs + 2000));
+    if (n.pos || n.reason === 'denied') return n;
+  }
+  const first = record(await _geoWeb(opts, timeoutMs + 2000, false));
+  if (first.pos || first.reason === 'denied' || first.reason === 'unsupported') return first;
+  // A watch sometimes answers where getCurrentPosition won't — though not on a stubbed API.
+  return record(await _geoWeb(opts, timeoutMs, true));
 };
 
 // ─── v1.105.49 — opening an external URL that was fetched first ───
@@ -253,6 +373,27 @@ const saveBlob = window.saveBlob = async (blob, filename) => {
       setTimeout(() => URL.revokeObjectURL(url), 1000);
       return true;
     } catch { return false; }
+  }
+  // v1.105.54 — the native shell, when the build has @capacitor/filesystem and
+  // @capacitor/share: write the file, then hand it to the OS share sheet. This is what
+  // actually makes "Save" and "Export CSV" produce a file on an iPhone.
+  const fs = _capPlugin('Filesystem');
+  const share = _capPlugin('Share');
+  if (fs?.writeFile && share?.share) {
+    try {
+      const b64 = await new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onerror = () => reject(new Error('read failed'));
+        r.onload = () => resolve(String(r.result).split(',')[1] || '');
+        r.readAsDataURL(blob);
+      });
+      const written = await fs.writeFile({ path: filename, data: b64, directory: 'CACHE' });
+      await share.share({ title: filename, url: written?.uri, dialogTitle: filename });
+      return true;
+    } catch (e) {
+      if (e?.message && /cancel/i.test(e.message)) return false;
+      /* fall through to the Web Share API */
+    }
   }
   try {
     const file = new File([blob], filename, { type: blob.type || 'application/octet-stream' });
@@ -949,8 +1090,20 @@ const refreshAppBadge = window.refreshAppBadge = async () => {
     const res = await apiFetch('/api/push/attention');
     if (!res?.ok) return;
     const { total } = await res.json();
+    const n = Number(total) || 0;
+    // v1.105.54 — the native shell, when the build provides @capacitor/badge. This is the
+    // half of the badge fix that has been waiting on a build since v1.105.42: it sets the
+    // icon directly on open/resume, instead of depending on a push arriving to correct it.
+    const badgePlugin = _capPlugin('Badge');
+    if (badgePlugin) {
+      try {
+        if (n > 0) await badgePlugin.set({ count: n });
+        else await badgePlugin.clear();
+        return;
+      } catch { /* fall through to the web API */ }
+    }
     if (typeof navigator === 'undefined' || typeof navigator.setAppBadge !== 'function') return;
-    if (Number(total) > 0) await navigator.setAppBadge(Number(total));
+    if (n > 0) await navigator.setAppBadge(n);
     else await navigator.clearAppBadge();
   } catch { /* a badge must never be load-bearing */ }
 };

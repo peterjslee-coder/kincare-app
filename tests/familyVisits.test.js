@@ -117,79 +117,28 @@ describe("the nudge nudges, it does not nag", () => {
     expect(client).toMatch(/onEnabled=\{\(\) => setRetry/);
   });
 
-  test("asking for a position always settles, even if neither callback fires", () => {
-    // v1.105.47. geolocation's own `timeout` only bounds ACQUIRING a fix — the clock starts
-    // after permission is decided. While the OS dialog is up, or in a webview that drops the
-    // request, neither callback is ever called and the promise never settles. That is what
-    // left the button reading "Checking…" forever.
-    const fn = client.slice(client.indexOf("const attemptPosition"), client.indexOf("const VisitGeoInvite"));
-    expect(fn).toMatch(/let settled = false/);
-    expect(fn).toMatch(/const timer = setTimeout\(\(\) => done\(\{ pos: null, reason: 'timeout', stage: 'web:ceiling' \}\), ceilingMs\);/);
-    expect(fn).toMatch(/catch \(e\) \{ done\(\{ pos: null, reason: 'unsupported', stage: 'web:threw'/);
+  // v1.105.54 — the acquisition stack moved to getDeviceLocation() in utils.js, because
+  // caregiver check-in and check-out called the same dead API and had the same problem
+  // invisibly. tests/nativeShell.test.js covers it; what stays here is this card's wording.
+  test("the card delegates to the one shared location helper", () => {
+    expect(client).toMatch(/const getPosition = \(\) => getDeviceLocation\(\{ timeoutMs: 20000 \}\);/);
+    expect(client).not.toMatch(/navigator\.geolocation/);
   });
 
-  // ─── v1.105.52 ───
-  // Pete tapped "Yes, notice" and got "Couldn't get a location fix — that's usually Location
-  // Services being off." His status bar showed the location arrow ACTIVE: iOS was working on
-  // it. Two of my own mistakes, both this week's habit.
-  test("a 1,000 ft geofence doesn't demand a GPS-grade fix", () => {
-    // enableHighAccuracy + maximumAge:0 forces a fresh satellite fix, which indoors often
-    // never arrives. A wifi/cell fix answers this question in about a second.
-    const fn = client.slice(client.indexOf("const getPosition = async"), client.indexOf("const VisitGeoInvite"));
-    expect(fn).toMatch(/enableHighAccuracy: false, timeout: 20000, maximumAge: 60000/);
-    expect(client).not.toMatch(/enableHighAccuracy: true/);
-  });
-
-  test("it falls back to watchPosition, which iOS often answers when getCurrentPosition won't", () => {
-    expect(client).toMatch(/const watchOncePosition/);
-    expect(client).toMatch(/navigator\.geolocation\.clearWatch\(id\)/);
-    const fn = client.slice(client.indexOf("const getPosition = async"), client.indexOf("const VisitGeoInvite"));
-    expect(fn).toMatch(/await watchOncePosition\(20000\)/);
-    // ...but never after an outright denial: retrying that just re-reports the same no.
-    expect(fn).toMatch(/first\.reason === 'denied'/);
-  });
-
-  // ─── v1.105.53 ───
-  // Pete, on the timeout copy: "So it won't use WiFi to judge location?" He's right — iOS
-  // positions from wifi and cell towers too, so "that's common indoors, try near a window"
-  // was GPS advice for something that isn't a GPS problem. Third wrong cause I've written
-  // for this one feature.
   test("the timeout message no longer blames the weather", () => {
-    const msgs = client.slice(client.indexOf("const GEO_MESSAGES"), client.indexOf("const nativeGeo"));
+    // Pete: "So it won't use WiFi to judge location?" He was right — iOS positions from
+    // wifi and cell too, so "common indoors, try near a window" was GPS advice for
+    // something that was never a GPS problem.
+    const msgs = client.slice(client.indexOf("const GEO_MESSAGES"), client.indexOf("const getPosition"));
     expect(msgs).not.toMatch(/indoors|near a window|outside/);
+    expect(msgs).toMatch(/timeout: "Your phone didn't answer with a location/);
+    // Only the genuine permission-denied case may send someone into Settings.
+    expect((msgs.match(/Location Services/g) || []).length).toBe(1);
   });
 
   test("it reports the failure instead of me guessing at it a fourth time", () => {
-    // Which stage ran, what each answered, how long it took — shown to the person and sent
-    // to Sentry. The next failure describes itself.
-    expect(client).toMatch(/const record = \(r\) =>/);
-    expect(client).toMatch(/tried: \[\]|const tried = \[\];/);
     expect(client).toMatch(/reportClientError\(new Error\(`\[geo\] \$\{reason\}: \$\{diag\}`\)/);
     expect(client).toMatch(/result\.diag &&/);
-  });
-
-  test("the native plugin is used when a build provides one", () => {
-    // Capacitor's WKWebView doesn't wire the browser Geolocation API to Core Location on
-    // its own — that's what @capacitor/geolocation is for, and it isn't installed. Calling
-    // it now means the day that build ships, this works with no further change.
-    expect(client).toMatch(/const nativeGeo = \(\) => \{/);
-    expect(client).toMatch(/window\.Capacitor\?\.Plugins\?\.Geolocation/);
-    expect(client).toMatch(/const attemptNativePosition/);
-  });
-
-  test("the failure says what actually happened instead of guessing", () => {
-    // The error callback's `code` was thrown away and a cause invented — which sent Pete
-    // into Settings to fix something that wasn't broken. Worse than silence.
-    expect(client).toMatch(/const geoReason = \(err\) => \{/);
-    expect(client).toMatch(/if \(err\.code === 1\) return 'denied';/);
-    expect(client).toMatch(/if \(err\.code === 2\) return 'unavailable';/);
-    expect(client).toMatch(/if \(err\.code === 3\) return 'timeout';/);
-    expect(client).toMatch(/GEO_MESSAGES\[reason\] \|\| GEO_MESSAGES\.unknown/);
-    // Only the genuine permission-denied case may send someone into Settings.
-    // Only the denied message may send someone to Settings.
-    const msgs = client.slice(client.indexOf("const GEO_MESSAGES"), client.indexOf("const nativeGeo"));
-    expect((msgs.match(/Location Services/g) || []).length).toBe(1);
-    expect(msgs).toMatch(/timeout: "Your phone didn't answer with a location/);
   });
 
   test("a failed check leaves the buttons tappable, not a dead spinner", () => {
@@ -224,7 +173,9 @@ describe("the nudge nudges, it does not nag", () => {
   test("no pinned address, no invite — there'd be nothing to compare against", () => {
     const invite = client.slice(client.indexOf("const VisitGeoInvite"), client.indexOf("const VisitNudgeCard"));
     expect(invite).toMatch(/r\.latitude != null && r\.longitude != null/);
-    expect(invite).toMatch(/if \(hidden \|\| !withCoords\.length \|\| !navigator\.geolocation\) return null;/);
+    // v1.105.54 — canAskLocation(), not `navigator.geolocation`: that object EXISTS in the
+    // native webview (it is the stub that never answers), so the bare check proved nothing.
+    expect(invite).toMatch(/if \(hidden \|\| !withCoords\.length \|\| !canAskLocation\(\)\) return null;/);
   });
 
   test("it is dismissible and stays dismissed for a while", () => {

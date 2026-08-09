@@ -228,47 +228,17 @@ const visitGeoAllowed = window.__visitGeoAllowed = async () => {
   return false;
 };
 
-// ─── Asking the phone where it is (v1.105.52) ───
+// ─── Asking the phone where it is ───
 //
-// Third attempt, and the previous two were both my own mistakes.
+// Three wrong causes for one failure before the code was made to report itself. The answer
+// came back as `web:ceiling:timeout → watch:ceiling:timeout in 42s` — our own outer
+// deadline both times, meaning NEITHER callback ever fired. Not denied, not failed: the
+// browser Geolocation API is a stub in Capacitor's WKWebView without @capacitor/geolocation.
 //
-// v1.105.47 fixed a real hang: geolocation's `options.timeout` only bounds acquiring a FIX
-// — the clock starts after permission is decided — so while the OS dialog is up, or in a
-// webview that drops the request, NEITHER callback fires and the promise never settles.
-// That deadline stays.
-//
-// But then Pete tapped "Yes, notice" and got "Couldn't get a location fix — that's usually
-// Location Services being off." His status bar showed the location arrow ACTIVE at that
-// moment: iOS was working on it. Two things were wrong, and both are the same habit this
-// week has been about.
-//
-//   1. I asked for `enableHighAccuracy: true, maximumAge: 0` — a fresh GPS-grade fix — for
-//      a 1,000-FOOT geofence. Indoors that routinely takes longer than the timeout or never
-//      arrives. A wifi/cell fix is plenty here and comes back in about a second.
-//
-//   2. The error callback's `code` tells you exactly what went wrong, and I threw it away
-//      and then INVENTED a cause in the message. Blaming a setting the person hasn't
-//      touched sends them into Settings to fix something that isn't broken. Worse than
-//      silence, and the same class of thing as a toast that says "Exported!" when nothing
-//      was written.
-//
-// So: coarse first, and if that fails fall back to watchPosition — on iOS a watch often
-// delivers a first fix when getCurrentPosition sits there. And the real reason comes back
-// with the answer.
-const geoReason = (err) => {
-  if (!err) return 'timeout';
-  if (err.code === 1) return 'denied';       // PERMISSION_DENIED
-  if (err.code === 2) return 'unavailable';  // POSITION_UNAVAILABLE
-  if (err.code === 3) return 'timeout';      // TIMEOUT
-  return 'unknown';
-};
-
-// v1.105.53 — Pete, on the previous timeout copy: "So it won't use WiFi to judge location?"
-// He is right and the message was wrong. iOS positions from wifi and cell towers as well as
-// GPS; on a connected phone a coarse fix should come back in about a second, indoors or not.
-// Telling him to stand near a window was GPS advice for something that isn't a GPS problem —
-// the third time in this feature I've written a cause I didn't actually know. So the copy
-// now says only what we know, and the code collects what we don't.
+// v1.105.54 — the acquisition logic moved to getDeviceLocation() in utils.js, because
+// caregiver check-in and check-out were calling the same dead API and had the same problem
+// invisibly. What stays here is what is specific to this card: the wording, and showing
+// the diagnostic.
 const GEO_MESSAGES = {
   denied: "iOS is blocking location for InPlace. Turn it on in Settings › Privacy › Location Services › InPlace › While Using, then tap again.",
   timeout: "Your phone didn't answer with a location. This looks like the app itself rather than your phone or your signal — I've logged the details.",
@@ -277,104 +247,7 @@ const GEO_MESSAGES = {
   unknown: "Couldn't get a location fix. Tap to try again.",
 };
 
-// The native shell's own geolocation, IF the build has it.
-//
-// Capacitor's WKWebView does not wire the browser Geolocation API to Core Location on its
-// own — that is what @capacitor/geolocation exists for, and this project does not have it
-// installed (see package.json). That is the most likely reason getCurrentPosition sits
-// there and times out on Pete's phone while the status-bar arrow is lit: iOS is asked, and
-// the answer never finds its way back to the page.
-//
-// I cannot install a native plugin from here; it needs `npm i @capacitor/geolocation`,
-// `npx cap sync` and a TestFlight build. But wiring the call now means the day that build
-// happens, this starts working with no further change — and until then it costs nothing.
-const nativeGeo = () => {
-  try {
-    if (!window.Capacitor?.isNativePlatform?.()) return null;
-    return window.Capacitor?.Plugins?.Geolocation || null;
-  } catch { return null; }
-};
-
-const attemptNativePosition = async (ceilingMs) => {
-  const plugin = nativeGeo();
-  if (!plugin?.getCurrentPosition) return { pos: null, reason: 'unsupported', stage: 'native:absent' };
-  try {
-    const p = await Promise.race([
-      plugin.getCurrentPosition({ enableHighAccuracy: false, timeout: ceilingMs, maximumAge: 60000 }),
-      new Promise((r) => setTimeout(() => r(null), ceilingMs + 2000)),
-    ]);
-    if (p?.coords) return { pos: p, reason: null, stage: 'native' };
-    return { pos: null, reason: 'timeout', stage: 'native' };
-  } catch (e) {
-    const denied = /denied|permission/i.test(e?.message || '');
-    return { pos: null, reason: denied ? 'denied' : 'unavailable', stage: 'native', detail: e?.message };
-  }
-};
-
-// One attempt, always settling, with OUR deadline on top of the browser's.
-const attemptPosition = (options, ceilingMs) => new Promise((resolve) => {
-  if (!navigator.geolocation) return resolve({ pos: null, reason: 'unsupported', stage: 'web:absent' });
-  let settled = false;
-  const done = (v) => { if (settled) return; settled = true; clearTimeout(timer); resolve(v); };
-  const timer = setTimeout(() => done({ pos: null, reason: 'timeout', stage: 'web:ceiling' }), ceilingMs);
-  try {
-    navigator.geolocation.getCurrentPosition(
-      (p) => done({ pos: p, reason: null, stage: 'web' }),
-      (e) => done({ pos: null, reason: geoReason(e), stage: 'web', detail: e?.message, code: e?.code }),
-      options
-    );
-  } catch (e) { done({ pos: null, reason: 'unsupported', stage: 'web:threw', detail: e?.message }); }
-});
-
-// Fallback: take the first update from a watch, then stop watching.
-const watchOncePosition = (ceilingMs) => new Promise((resolve) => {
-  if (!navigator.geolocation?.watchPosition) return resolve({ pos: null, reason: 'unsupported', stage: 'watch:absent' });
-  let settled = false, id = null;
-  const done = (v) => {
-    if (settled) return;
-    settled = true;
-    clearTimeout(timer);
-    if (id !== null) { try { navigator.geolocation.clearWatch(id); } catch {} }
-    resolve(v);
-  };
-  const timer = setTimeout(() => done({ pos: null, reason: 'timeout', stage: 'watch:ceiling' }), ceilingMs);
-  try {
-    id = navigator.geolocation.watchPosition(
-      (p) => done({ pos: p, reason: null, stage: 'watch' }),
-      (e) => done({ pos: null, reason: geoReason(e), stage: 'watch', detail: e?.message, code: e?.code }),
-      { enableHighAccuracy: false, maximumAge: 60000, timeout: ceilingMs }
-    );
-  } catch (e) { done({ pos: null, reason: 'unsupported', stage: 'watch:threw', detail: e?.message }); }
-});
-
-// Returns { pos, reason }. `pos` null means it genuinely didn't work, and `reason` says why
-// rather than guessing.
-const getPosition = async () => {
-  const started = Date.now();
-  const tried = [];
-  const record = (r) => { tried.push(`${r.stage}:${r.reason || 'ok'}${r.code ? `(${r.code})` : ''}`); return r; };
-
-  // 1. The native plugin, when the build has one. Absent today; free when it lands.
-  const plugin = nativeGeo();
-  if (plugin) {
-    const n = record(await attemptNativePosition(20000));
-    if (n.pos || n.reason === 'denied') return { ...n, tried, elapsedMs: Date.now() - started };
-  }
-
-  // 2. A cached fix from the last minute is fine for a 1,000 ft question, and on a phone
-  //    with wifi it should be near-instant. Given the person tapped and is waiting, the
-  //    ceiling is generous rather than tidy.
-  const first = record(await attemptPosition(
-    { enableHighAccuracy: false, timeout: 20000, maximumAge: 60000 }, 22000
-  ));
-  if (first.pos || first.reason === 'denied' || first.reason === 'unsupported') {
-    return { ...first, tried, elapsedMs: Date.now() - started };
-  }
-
-  // 3. A watch sometimes delivers where getCurrentPosition won't.
-  const second = record(await watchOncePosition(20000));
-  return { ...second, tried, elapsedMs: Date.now() - started };
-};
+const getPosition = () => getDeviceLocation({ timeoutMs: 20000 });
 
 // ─── The invite ───
 // Shown only when there is somewhere to be near, we have no permission we can act on, and
@@ -390,7 +263,7 @@ const VisitGeoInvite = ({ recipients, onEnabled }) => {
   const [result, setResult] = useState(null); // { ok, text }
 
   const withCoords = (recipients || []).filter((r) => r.latitude != null && r.longitude != null);
-  if (hidden || !withCoords.length || !navigator.geolocation) return null;
+  if (hidden || !withCoords.length || !canAskLocation()) return null;
 
   const nameOf = (r) => r.first_name || r.firstName || 'them';
 
@@ -483,7 +356,7 @@ const VisitNudgeCard = window.VisitNudgeCard = ({ recipients, alreadyLoggedToday
 
         const withCoords = (recipients || []).filter((r) => r.latitude != null && r.longitude != null);
         if (withCoords.length === 0) return;
-        if (!navigator.geolocation) return;
+        if (!canAskLocation()) return;
 
         // Never trigger a cold OS prompt for this. Proceed only on an explicit opt-in, or a
         // permission the browser will actually tell us about. See visitGeoAllowed.

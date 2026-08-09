@@ -200,15 +200,13 @@ const Caregivers = window.Caregivers = () => {
       }
 
       // If no search center, try recipient coords or browser geolocation as fallback
-      if (!searchCenter && navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          (pos) => {
-            const { latitude, longitude } = pos.coords;
-            if (leafletMap.current) leafletMap.current.setView([latitude, longitude], 12);
-          },
-          () => {},
-          { timeout: 5000, maximumAge: 300000 }
-        );
+      if (!searchCenter) {
+        // v1.105.54 — plugin-first; see getDeviceLocation.
+        getDeviceLocation({ timeoutMs: 5000 }).then(({ pos }) => {
+          if (pos && leafletMap.current) {
+            leafletMap.current.setView([pos.coords.latitude, pos.coords.longitude], 12);
+          }
+        });
       }
     }, 100);
 

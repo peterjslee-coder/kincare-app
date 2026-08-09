@@ -2111,14 +2111,17 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                           // Start geolocation early (skip in test mode)
                           if (window.getImpersonationToken && window.getImpersonationToken()) {
                             setCheckInLocation({ lat: 0, lng: 0, accuracy: 0, testMode: true });
-                          } else if (navigator.geolocation) {
-                            navigator.geolocation.getCurrentPosition(
-                              (pos) => setCheckInLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy }),
-                              (err) => { console.warn('Geolocation error:', err.message); setLocationError(err.message); },
-                              { timeout: 8000, enableHighAccuracy: false }
-                            );
                           } else {
-                            setLocationError('Geolocation not supported');
+                            // v1.105.54 — plugin-first; see getDeviceLocation.
+                            getDeviceLocation({ timeoutMs: 8000 }).then(({ pos, reason }) => {
+                              if (pos) {
+                                setCheckInLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy });
+                              } else {
+                                setLocationError(reason === 'denied'
+                                  ? 'Location is off for InPlace — turn it on in Settings to record your arrival.'
+                                  : "Couldn't get your location. You can still check in.");
+                              }
+                            });
                           }
                           setCheckInSession(s);
                           // Fetch care briefing
@@ -2146,10 +2149,9 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                               // Get current location for ETA calculation
                               let body = {};
                               try {
-                                const pos = await new Promise((resolve, reject) =>
-                                  navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000, enableHighAccuracy: false })
-                                );
-                                body = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+                                // v1.105.54 — plugin-first, and it always settles.
+                                const { pos } = await getDeviceLocation({ timeoutMs: 5000 });
+                                if (pos) body = { lat: pos.coords.latitude, lng: pos.coords.longitude };
                               } catch {} // location optional — still send on-my-way
                               const r = await apiFetch(`/api/sessions/${s.id}/on-my-way`, {
                                 method: 'PUT',
@@ -3019,14 +3021,22 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               // Skip GPS when admin is impersonating (test mode)
               if (window.getImpersonationToken && window.getImpersonationToken()) {
                 setCheckInLocation({ lat: 0, lng: 0, accuracy: 0, testMode: true });
-              } else if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(
-                  (pos) => setCheckInLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy }),
-                  (err) => { console.warn('Geolocation error:', err.message); setLocationError(err.message); },
-                  { timeout: 8000, enableHighAccuracy: false }
-                );
               } else {
-                setLocationError('Geolocation not supported');
+                // v1.105.54 — was navigator.geolocation directly, whose callbacks NEVER
+                // fire in this webview (see getDeviceLocation): check-in location — the
+                // evidence that a caregiver was actually at the home — has never been
+                // captured on an iPhone. It sat at null with no error, which is exactly
+                // why nobody noticed. Now plugin-first, and it always answers.
+                getDeviceLocation({ timeoutMs: 8000 }).then(({ pos, reason, tried }) => {
+                  if (pos) {
+                    setCheckInLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy });
+                  } else {
+                    console.warn('Geolocation failed:', reason, tried);
+                    setLocationError(reason === 'denied'
+                      ? 'Location is off for InPlace — turn it on in Settings to record your arrival.'
+                      : "Couldn't get your location. You can still check in.");
+                  }
+                });
               }
               setCheckInSession(s);
             } else if (s.action === 'check-out') {
@@ -3043,12 +3053,11 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               // Capture GPS at check-out (skip in test mode)
               if (window.getImpersonationToken && window.getImpersonationToken()) {
                 setCheckOutLocation({ lat: 0, lng: 0, accuracy: 0, testMode: true });
-              } else if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(
-                  (pos) => setCheckOutLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy }),
-                  () => {},
-                  { timeout: 8000, enableHighAccuracy: false }
-                );
+              } else {
+                // v1.105.54 — same fix as check-in above.
+                getDeviceLocation({ timeoutMs: 8000 }).then(({ pos }) => {
+                  if (pos) setCheckOutLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy });
+                });
               }
               setCheckOutSession(s);
             } else {

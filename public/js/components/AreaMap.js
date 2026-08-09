@@ -84,16 +84,13 @@ const AreaMap = window.AreaMap = () => {
     if (!leafletMap.current) return;
     if (profileCenter) {
       leafletMap.current.setView(profileCenter, 13);
-    } else if (!loading && navigator.geolocation) {
-      // Only use browser geolocation as last resort when profile has no coordinates
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const { latitude, longitude } = pos.coords;
-          if (leafletMap.current) leafletMap.current.setView([latitude, longitude], 13);
-        },
-        () => {},
-        { timeout: 5000, maximumAge: 300000 }
-      );
+    } else if (!loading) {
+      // v1.105.54 — plugin-first; the raw browser API never answers in the native shell.
+      getDeviceLocation({ timeoutMs: 5000 }).then(({ pos }) => {
+        if (pos && leafletMap.current) {
+          leafletMap.current.setView([pos.coords.latitude, pos.coords.longitude], 13);
+        }
+      });
     }
   }, [profileCenter, loading]);
 
