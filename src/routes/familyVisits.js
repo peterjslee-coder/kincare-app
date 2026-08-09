@@ -80,6 +80,18 @@ router.post("/", async (req, res) => {
       }
     }
 
+    // v1.105.46 — a retry after a lost response must not create a second visit.
+    // The client now gives up at 25s, so the honest failure mode is "we don't know whether
+    // it landed", and the natural human response is to tap Save again. Same person, same
+    // recipient, same minute is one visit, not two.
+    const dupe = await db.prepare(`
+      SELECT id FROM family_visits
+      WHERE care_recipient_id = ? AND user_id = ? AND visited_at = ?
+        AND created_at > NOW() - INTERVAL '10 minutes'
+      LIMIT 1
+    `).get(careRecipientId, req.user.id, visited.toISOString());
+    if (dupe) return res.status(201).json({ visit: await getOne(db, dupe.id) });
+
     const id = uuid();
     await db.prepare(`
       INSERT INTO family_visits

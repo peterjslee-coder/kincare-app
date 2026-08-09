@@ -143,6 +143,43 @@ const setImpersonationToken = window.setImpersonationToken = (token) => {
 };
 const getImpersonationToken = window.getImpersonationToken = () => IMPERSONATION_TOKEN;
 
+// ─── v1.105.46 — every request gets a deadline ───
+//
+// Pete, standing in Betty's kitchen: "I clicked ok, but it's just loading." Nothing in
+// Sentry, nothing in the server logs — because the request never arrived. A phone on one
+// bar opens a socket that never answers, and `fetch` has NO default timeout: it waits
+// essentially forever. So the spinner spins forever, no catch block runs, no error is
+// reported, and the person is left holding a phone that is doing nothing and saying
+// nothing. Every save in this app could do that; the visit log is just where he found it.
+//
+// A deadline turns an invisible hang into an ordinary error that existing catch blocks
+// already handle ("check your connection and try again"). Uploads get a long one — a
+// receipt photo on cellular legitimately takes a while — and a caller can override.
+const API_TIMEOUT_MS = 25000;
+const API_UPLOAD_TIMEOUT_MS = 120000;
+
+// Report a client-side problem to the server's Sentry sink. Raw fetch on purpose — routing
+// this through apiFetch would let a timeout report time out. keepalive so it survives the
+// view being torn down.
+const reportClientError = window.reportClientError = (err, extra = {}) => {
+  try {
+    fetch(API_BASE + '/api/client-error', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      keepalive: true,
+      body: JSON.stringify({
+        message: String(err?.message || err || 'unknown').slice(0, 300),
+        stack: String(err?.stack || '').slice(0, 4000),
+        version: window.APP_VERSION || null,
+        userAgent: navigator?.userAgent || null,
+        url: (window.location.hash || window.location.pathname) || null,
+        ...extra,
+      }),
+    }).catch(() => {});
+  } catch {}
+};
+
 const apiFetch = window.apiFetch = async (url, options = {}) => {
   // For FormData (file uploads), don't set Content-Type — browser sets multipart boundary automatically
   const isFormData = options.body instanceof FormData;
@@ -154,7 +191,35 @@ const apiFetch = window.apiFetch = async (url, options = {}) => {
   if (window.APP_VERSION) headers['X-App-Version'] = window.APP_VERSION;
   const csrf = getCsrfToken();
   if (csrf) headers['X-CSRF-Token'] = csrf;
-  const response = await fetch(API_BASE + url, { ...options, headers, credentials: 'same-origin' });
+
+  // Respect a signal the caller already supplied; otherwise impose our own deadline.
+  const timeoutMs = options.timeoutMs || (isFormData ? API_UPLOAD_TIMEOUT_MS : API_TIMEOUT_MS);
+  let timer = null;
+  let controller = null;
+  if (!options.signal && typeof AbortController === 'function') {
+    controller = new AbortController();
+    timer = setTimeout(() => controller.abort(), timeoutMs);
+  }
+
+  let response;
+  try {
+    response = await fetch(API_BASE + url, {
+      ...options, headers, credentials: 'same-origin',
+      ...(controller ? { signal: controller.signal } : {}),
+    });
+  } catch (err) {
+    if (timer) clearTimeout(timer);
+    // An abort is our deadline firing, not a bug in the caller. Make it legible in the
+    // logs, since a hang like this leaves no trace anywhere else.
+    if (err?.name === 'AbortError') {
+      const e = new Error(`Request timed out after ${Math.round(timeoutMs / 1000)}s: ${url}`);
+      e.name = 'ApiTimeoutError';
+      try { reportClientError(e, { page: url }); } catch {}
+      throw e;
+    }
+    throw err;
+  }
+  if (timer) clearTimeout(timer);
 
   // ─── IP Verification Challenge ───
   // If admin endpoint returns 403 with IP_VERIFICATION_REQUIRED, trigger passkey re-auth
