@@ -263,32 +263,72 @@ const geoReason = (err) => {
   return 'unknown';
 };
 
+// v1.105.53 — Pete, on the previous timeout copy: "So it won't use WiFi to judge location?"
+// He is right and the message was wrong. iOS positions from wifi and cell towers as well as
+// GPS; on a connected phone a coarse fix should come back in about a second, indoors or not.
+// Telling him to stand near a window was GPS advice for something that isn't a GPS problem —
+// the third time in this feature I've written a cause I didn't actually know. So the copy
+// now says only what we know, and the code collects what we don't.
 const GEO_MESSAGES = {
   denied: "iOS is blocking location for InPlace. Turn it on in Settings › Privacy › Location Services › InPlace › While Using, then tap again.",
-  timeout: "Your phone couldn't get a location fix in time — that's common indoors. Tap to try again, ideally near a window or outside.",
+  timeout: "Your phone didn't answer with a location. This looks like the app itself rather than your phone or your signal — I've logged the details.",
   unavailable: "Your phone couldn't work out where it is right now. Tap to try again.",
   unsupported: "This device can't share its location with InPlace.",
   unknown: "Couldn't get a location fix. Tap to try again.",
 };
 
+// The native shell's own geolocation, IF the build has it.
+//
+// Capacitor's WKWebView does not wire the browser Geolocation API to Core Location on its
+// own — that is what @capacitor/geolocation exists for, and this project does not have it
+// installed (see package.json). That is the most likely reason getCurrentPosition sits
+// there and times out on Pete's phone while the status-bar arrow is lit: iOS is asked, and
+// the answer never finds its way back to the page.
+//
+// I cannot install a native plugin from here; it needs `npm i @capacitor/geolocation`,
+// `npx cap sync` and a TestFlight build. But wiring the call now means the day that build
+// happens, this starts working with no further change — and until then it costs nothing.
+const nativeGeo = () => {
+  try {
+    if (!window.Capacitor?.isNativePlatform?.()) return null;
+    return window.Capacitor?.Plugins?.Geolocation || null;
+  } catch { return null; }
+};
+
+const attemptNativePosition = async (ceilingMs) => {
+  const plugin = nativeGeo();
+  if (!plugin?.getCurrentPosition) return { pos: null, reason: 'unsupported', stage: 'native:absent' };
+  try {
+    const p = await Promise.race([
+      plugin.getCurrentPosition({ enableHighAccuracy: false, timeout: ceilingMs, maximumAge: 60000 }),
+      new Promise((r) => setTimeout(() => r(null), ceilingMs + 2000)),
+    ]);
+    if (p?.coords) return { pos: p, reason: null, stage: 'native' };
+    return { pos: null, reason: 'timeout', stage: 'native' };
+  } catch (e) {
+    const denied = /denied|permission/i.test(e?.message || '');
+    return { pos: null, reason: denied ? 'denied' : 'unavailable', stage: 'native', detail: e?.message };
+  }
+};
+
 // One attempt, always settling, with OUR deadline on top of the browser's.
 const attemptPosition = (options, ceilingMs) => new Promise((resolve) => {
-  if (!navigator.geolocation) return resolve({ pos: null, reason: 'unsupported' });
+  if (!navigator.geolocation) return resolve({ pos: null, reason: 'unsupported', stage: 'web:absent' });
   let settled = false;
   const done = (v) => { if (settled) return; settled = true; clearTimeout(timer); resolve(v); };
-  const timer = setTimeout(() => done({ pos: null, reason: 'timeout' }), ceilingMs);
+  const timer = setTimeout(() => done({ pos: null, reason: 'timeout', stage: 'web:ceiling' }), ceilingMs);
   try {
     navigator.geolocation.getCurrentPosition(
-      (p) => done({ pos: p, reason: null }),
-      (e) => done({ pos: null, reason: geoReason(e) }),
+      (p) => done({ pos: p, reason: null, stage: 'web' }),
+      (e) => done({ pos: null, reason: geoReason(e), stage: 'web', detail: e?.message, code: e?.code }),
       options
     );
-  } catch { done({ pos: null, reason: 'unsupported' }); }
+  } catch (e) { done({ pos: null, reason: 'unsupported', stage: 'web:threw', detail: e?.message }); }
 });
 
 // Fallback: take the first update from a watch, then stop watching.
 const watchOncePosition = (ceilingMs) => new Promise((resolve) => {
-  if (!navigator.geolocation?.watchPosition) return resolve({ pos: null, reason: 'unsupported' });
+  if (!navigator.geolocation?.watchPosition) return resolve({ pos: null, reason: 'unsupported', stage: 'watch:absent' });
   let settled = false, id = null;
   const done = (v) => {
     if (settled) return;
@@ -297,25 +337,43 @@ const watchOncePosition = (ceilingMs) => new Promise((resolve) => {
     if (id !== null) { try { navigator.geolocation.clearWatch(id); } catch {} }
     resolve(v);
   };
-  const timer = setTimeout(() => done({ pos: null, reason: 'timeout' }), ceilingMs);
+  const timer = setTimeout(() => done({ pos: null, reason: 'timeout', stage: 'watch:ceiling' }), ceilingMs);
   try {
     id = navigator.geolocation.watchPosition(
-      (p) => done({ pos: p, reason: null }),
-      (e) => done({ pos: null, reason: geoReason(e) }),
+      (p) => done({ pos: p, reason: null, stage: 'watch' }),
+      (e) => done({ pos: null, reason: geoReason(e), stage: 'watch', detail: e?.message, code: e?.code }),
       { enableHighAccuracy: false, maximumAge: 60000, timeout: ceilingMs }
     );
-  } catch { done({ pos: null, reason: 'unsupported' }); }
+  } catch (e) { done({ pos: null, reason: 'unsupported', stage: 'watch:threw', detail: e?.message }); }
 });
 
 // Returns { pos, reason }. `pos` null means it genuinely didn't work, and `reason` says why
 // rather than guessing.
 const getPosition = async () => {
-  // A cached fix from the last minute is fine for a 1,000 ft question.
-  const first = await attemptPosition(
-    { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }, 12000
-  );
-  if (first.pos || first.reason === 'denied' || first.reason === 'unsupported') return first;
-  return watchOncePosition(20000);
+  const started = Date.now();
+  const tried = [];
+  const record = (r) => { tried.push(`${r.stage}:${r.reason || 'ok'}${r.code ? `(${r.code})` : ''}`); return r; };
+
+  // 1. The native plugin, when the build has one. Absent today; free when it lands.
+  const plugin = nativeGeo();
+  if (plugin) {
+    const n = record(await attemptNativePosition(20000));
+    if (n.pos || n.reason === 'denied') return { ...n, tried, elapsedMs: Date.now() - started };
+  }
+
+  // 2. A cached fix from the last minute is fine for a 1,000 ft question, and on a phone
+  //    with wifi it should be near-instant. Given the person tapped and is waiting, the
+  //    ceiling is generous rather than tidy.
+  const first = record(await attemptPosition(
+    { enableHighAccuracy: false, timeout: 20000, maximumAge: 60000 }, 22000
+  ));
+  if (first.pos || first.reason === 'denied' || first.reason === 'unsupported') {
+    return { ...first, tried, elapsedMs: Date.now() - started };
+  }
+
+  // 3. A watch sometimes delivers where getCurrentPosition won't.
+  const second = record(await watchOncePosition(20000));
+  return { ...second, tried, elapsedMs: Date.now() - started };
 };
 
 // ─── The invite ───
@@ -338,10 +396,20 @@ const VisitGeoInvite = ({ recipients, onEnabled }) => {
 
   const enable = async () => {
     setBusy(true);
-    const { pos, reason } = await getPosition();
+    const { pos, reason, tried, elapsedMs, detail } = await getPosition();
     setBusy(false);
     if (!pos) {
-      setResult({ ok: false, text: GEO_MESSAGES[reason] || GEO_MESSAGES.unknown });
+      // v1.105.53 — I have now guessed at this failure twice and been wrong twice. So it
+      // reports itself: which stage was tried, what each one answered, and how long it took.
+      // Shown to the person (small, muted — they can read it to me) and sent to Sentry.
+      const diag = `${(tried || []).join(' → ')} in ${Math.round((elapsedMs || 0) / 100) / 10}s${detail ? ` — ${detail}` : ''}`;
+      try {
+        reportClientError(new Error(`[geo] ${reason}: ${diag}`), {
+          page: 'visit-geo-optin',
+          standalone: !!window.Capacitor?.isNativePlatform?.(),
+        });
+      } catch {}
+      setResult({ ok: false, text: GEO_MESSAGES[reason] || GEO_MESSAGES.unknown, diag });
       return;
     }
     lsSet(VISIT_GEO_OPTIN_KEY, '1');
@@ -372,6 +440,11 @@ const VisitGeoInvite = ({ recipients, onEnabled }) => {
       {result && (
         <div style={{ fontSize: 12.5, marginTop: 9, color: result.ok ? 'var(--text-primary)' : 'var(--color-error)' }}>
           {result.text}
+          {result.diag && (
+            <div style={{ fontSize: 11, marginTop: 5, color: 'var(--text-tertiary)', fontFamily: 'ui-monospace, monospace' }}>
+              {result.diag}
+            </div>
+          )}
         </div>
       )}
       {!result?.ok && (

@@ -124,8 +124,8 @@ describe("the nudge nudges, it does not nag", () => {
     // left the button reading "Checking…" forever.
     const fn = client.slice(client.indexOf("const attemptPosition"), client.indexOf("const VisitGeoInvite"));
     expect(fn).toMatch(/let settled = false/);
-    expect(fn).toMatch(/const timer = setTimeout\(\(\) => done\(\{ pos: null, reason: 'timeout' \}\), ceilingMs\);/);
-    expect(fn).toMatch(/catch \{ done\(\{ pos: null, reason: 'unsupported' \}\); \}/);
+    expect(fn).toMatch(/const timer = setTimeout\(\(\) => done\(\{ pos: null, reason: 'timeout', stage: 'web:ceiling' \}\), ceilingMs\);/);
+    expect(fn).toMatch(/catch \(e\) \{ done\(\{ pos: null, reason: 'unsupported', stage: 'web:threw'/);
   });
 
   // ─── v1.105.52 ───
@@ -136,7 +136,7 @@ describe("the nudge nudges, it does not nag", () => {
     // enableHighAccuracy + maximumAge:0 forces a fresh satellite fix, which indoors often
     // never arrives. A wifi/cell fix answers this question in about a second.
     const fn = client.slice(client.indexOf("const getPosition = async"), client.indexOf("const VisitGeoInvite"));
-    expect(fn).toMatch(/enableHighAccuracy: false, timeout: 10000, maximumAge: 60000/);
+    expect(fn).toMatch(/enableHighAccuracy: false, timeout: 20000, maximumAge: 60000/);
     expect(client).not.toMatch(/enableHighAccuracy: true/);
   });
 
@@ -144,9 +144,37 @@ describe("the nudge nudges, it does not nag", () => {
     expect(client).toMatch(/const watchOncePosition/);
     expect(client).toMatch(/navigator\.geolocation\.clearWatch\(id\)/);
     const fn = client.slice(client.indexOf("const getPosition = async"), client.indexOf("const VisitGeoInvite"));
-    expect(fn).toMatch(/return watchOncePosition\(20000\);/);
+    expect(fn).toMatch(/await watchOncePosition\(20000\)/);
     // ...but never after an outright denial: retrying that just re-reports the same no.
     expect(fn).toMatch(/first\.reason === 'denied'/);
+  });
+
+  // ─── v1.105.53 ───
+  // Pete, on the timeout copy: "So it won't use WiFi to judge location?" He's right — iOS
+  // positions from wifi and cell towers too, so "that's common indoors, try near a window"
+  // was GPS advice for something that isn't a GPS problem. Third wrong cause I've written
+  // for this one feature.
+  test("the timeout message no longer blames the weather", () => {
+    const msgs = client.slice(client.indexOf("const GEO_MESSAGES"), client.indexOf("const nativeGeo"));
+    expect(msgs).not.toMatch(/indoors|near a window|outside/);
+  });
+
+  test("it reports the failure instead of me guessing at it a fourth time", () => {
+    // Which stage ran, what each answered, how long it took — shown to the person and sent
+    // to Sentry. The next failure describes itself.
+    expect(client).toMatch(/const record = \(r\) =>/);
+    expect(client).toMatch(/tried: \[\]|const tried = \[\];/);
+    expect(client).toMatch(/reportClientError\(new Error\(`\[geo\] \$\{reason\}: \$\{diag\}`\)/);
+    expect(client).toMatch(/result\.diag &&/);
+  });
+
+  test("the native plugin is used when a build provides one", () => {
+    // Capacitor's WKWebView doesn't wire the browser Geolocation API to Core Location on
+    // its own — that's what @capacitor/geolocation is for, and it isn't installed. Calling
+    // it now means the day that build ships, this works with no further change.
+    expect(client).toMatch(/const nativeGeo = \(\) => \{/);
+    expect(client).toMatch(/window\.Capacitor\?\.Plugins\?\.Geolocation/);
+    expect(client).toMatch(/const attemptNativePosition/);
   });
 
   test("the failure says what actually happened instead of guessing", () => {
@@ -157,10 +185,11 @@ describe("the nudge nudges, it does not nag", () => {
     expect(client).toMatch(/if \(err\.code === 2\) return 'unavailable';/);
     expect(client).toMatch(/if \(err\.code === 3\) return 'timeout';/);
     expect(client).toMatch(/GEO_MESSAGES\[reason\] \|\| GEO_MESSAGES\.unknown/);
+    // Only the genuine permission-denied case may send someone into Settings.
     // Only the denied message may send someone to Settings.
-    const msgs = client.slice(client.indexOf("const GEO_MESSAGES"), client.indexOf("const attemptPosition"));
+    const msgs = client.slice(client.indexOf("const GEO_MESSAGES"), client.indexOf("const nativeGeo"));
     expect((msgs.match(/Location Services/g) || []).length).toBe(1);
-    expect(msgs).toMatch(/timeout: "Your phone couldn't get a location fix in time/);
+    expect(msgs).toMatch(/timeout: "Your phone didn't answer with a location/);
   });
 
   test("a failed check leaves the buttons tappable, not a dead spinner", () => {
@@ -168,7 +197,7 @@ describe("the nudge nudges, it does not nag", () => {
     expect(invite).toMatch(/setBusy\(false\);/);
     expect(invite).toMatch(/\{!result\?\.ok && \(/); // buttons stay while it hasn't succeeded
     // v1.105.52 — the retry wording lives in GEO_MESSAGES now, one per actual cause.
-    const msgs = client.slice(client.indexOf("const GEO_MESSAGES"), client.indexOf("const attemptPosition"));
+    const msgs = client.slice(client.indexOf("const GEO_MESSAGES"), client.indexOf("const nativeGeo"));
     expect((msgs.match(/[Tt]ap to try again|tap again/g) || []).length).toBeGreaterThanOrEqual(3);
   });
 
