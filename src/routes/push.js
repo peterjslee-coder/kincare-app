@@ -527,7 +527,10 @@ async function sendPushToUser(userId, payload, eventType) {
             if (!delivered) throw new Error("Native push not configured");
           } else if (webpush) {
             // Standard Web Push subscription — set TTL for reliability
-            await webpush.sendNotification(subObj, notificationPayload, { TTL: 86400 }); // 24h TTL
+            // v1.105.50 — web-push supports options.timeout and it was unset, so the underlying
+            // https.request had no socket timeout. Inside a retry loop inside a poller, one
+            // dead push service could wedge an entire sweep.
+            await webpush.sendNotification(subObj, notificationPayload, { TTL: 86400, timeout: 10000 }); // 24h TTL
           } else {
             throw new Error("Web push not configured");
           }

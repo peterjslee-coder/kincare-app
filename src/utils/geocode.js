@@ -32,7 +32,13 @@ async function geocodeAddress(address) {
       countrycodes: "us",
     })}`;
 
+    // v1.105.50 — a deadline. This is awaited INLINE in save handlers (creating or editing
+    // a care recipient, a caregiver profile), so an unresponsive free public API meant the
+    // request hung with no timeout at all — the server-side twin of the fetch bug that left
+    // Pete's phone spinning in Betty's kitchen. routes/geocode.js already got this right;
+    // this copy didn't. The catch below returns null, so degrading is free.
     const response = await fetch(url, {
+      signal: AbortSignal.timeout(4000),
       headers: {
         "User-Agent": "InPlace-CareApp/1.0 (peterjslee@gmail.com)",
       },

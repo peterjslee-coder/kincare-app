@@ -124,10 +124,15 @@ async function authenticate(req, res, next) {
     // On `finish`, not here: reading a conversation sets last_read_at inside the HANDLER,
     // so running now would push the very number the icon is already showing. Debounced
     // per user, silent unless the count changed — see utils/badgeSync.js.
-    try {
-      const { touchBadge } = require("../utils/badgeSync");
-      res.on("finish", () => touchBadge(decoded.id));
-    } catch { /* a badge is never load-bearing */ }
+    // Not under test: the debounce's trailing timer outlives an integration run and fires
+    // after the harness has torn down its database, which surfaces as an unrelated suite
+    // failing. A badge is not what those tests are testing; badgeSync has its own.
+    if (process.env.NODE_ENV !== "test") {
+      try {
+        const { touchBadge } = require("../utils/badgeSync");
+        res.on("finish", () => touchBadge(decoded.id));
+      } catch { /* a badge is never load-bearing */ }
+    }
 
     next();
   } catch (err) {

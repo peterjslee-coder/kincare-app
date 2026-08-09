@@ -64,8 +64,9 @@ async function syncBadgeToDevices(db, userId, total) {
 
 async function _run(userId) {
   try {
-    const { isConfigured } = require("./apns");
-    if (!isConfigured()) return; // no iOS delivery configured — don't even touch the db
+    const apns = require("./apns");
+    // Defensive: under jest's module registry this can be a partial/mocked object.
+    if (typeof apns.isConfigured !== "function" || !apns.isConfigured()) return;
     const { getDb } = require("../models/database");
     const { attentionCountFor } = require("./attention");
     const db = await getDb();

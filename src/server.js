@@ -424,7 +424,7 @@ app.use("/api/media", require("./routes/media"));
 app.use("/api/safety", require("./routes/safety"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.105.49";
+const APP_VERSION = "1.105.50";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });
@@ -993,7 +993,11 @@ async function start() {
   console.log("  Reimbursement digest sweeper started (coalesces approve/pay/confirm pushes)");
 
   // ─── Kindred Reminder Delivery Poller ───
-  setInterval(guardedPoller(104, async () => {
+  // v1.105.50 — was ALSO lock key 104, the same key as the reimbursement digest sweeper
+  // directly above. Two unrelated pollers competing for one lock: whichever ticked first
+  // blocked the other, so Kindred reminders and reimbursement pushes were each silently
+  // skipping turns, and a hang in either killed both. Its own key now.
+  setInterval(guardedPoller(109, async () => {
     try {
       const now = new Date();
       const fiveMinAgo = new Date(now.getTime() - 5 * 60000).toISOString();
@@ -1187,6 +1191,17 @@ async function start() {
     }), 60 * 1000);
     console.log("  Care events poller started (day-before + same-day notices, family-only)");
   }
+
+  // v1.105.50 — bound the inbound side too. Node's defaults leave `server.timeout` at 0,
+  // so a handler that never responds holds its socket, its worker slot and any pool client
+  // it took, indefinitely, logging nothing. That is the same shape as the client-side hang
+  // Pete hit, seen from the other end.
+  server.headersTimeout = 20000;   // headers only — nothing legitimate is slow here
+  // Generous on purpose: this bounds RECEIVING the whole request, and a caregiver
+  // uploading an ID photo or a receipt over weak cellular legitimately needs minutes.
+  // Cutting that to something tidy would trade one silent failure for another.
+  server.requestTimeout = 180000;
+  server.keepAliveTimeout = 65000;
 
   server.listen(PORT, "0.0.0.0", () => {
     console.log(`\n  InPlace v${APP_VERSION} running on port ${PORT}\n`);

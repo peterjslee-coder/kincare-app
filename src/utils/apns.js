@@ -19,6 +19,8 @@ const crypto = require("crypto");
 const http2 = require("http2");
 
 const BUNDLE_ID = process.env.APNS_BUNDLE_ID || "com.yourinplace.app";
+// v1.105.50 — nothing here was time-bounded before; see _post.
+const APNS_TIMEOUT_MS = 10000;
 
 function isConfigured() {
   return !!(process.env.APNS_KEY && process.env.APNS_KEY_ID && process.env.APNS_TEAM_ID);
@@ -67,8 +69,28 @@ function _post(deviceToken, body, extraHeaders) {
       ? "https://api.sandbox.push.apple.com"
       : "https://api.push.apple.com";
 
+    // v1.105.50 — a deadline on the whole exchange.
+    //
+    // There was no connect, session or stream timeout here. If TLS established and Apple
+    // never sent a response, this promise NEVER settled and client.close() (only called on
+    // `end`/`error`) never ran — a leaked http2 session and socket, per attempt. It is
+    // reached from every poller and, since v1.105.44, from badgeSync on authenticated
+    // requests, so the leak was steady. Combined with the old poller lock, one hung Apple
+    // connection could stop a sweeper permanently.
+    let settled = false;
+    const finish = (fn, arg) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      try { client.close(); } catch { /* already gone */ }
+      fn(arg);
+    };
     const client = http2.connect(host);
-    client.on("error", (err) => { client.close(); reject(err); });
+    const timer = setTimeout(() => {
+      try { client.destroy(); } catch { /* already gone */ }
+      finish(reject, new Error("APNs timeout"));
+    }, APNS_TIMEOUT_MS);
+    client.on("error", (err) => finish(reject, err));
 
     const headers = {
       ":method": "POST",
@@ -87,17 +109,16 @@ function _post(deviceToken, body, extraHeaders) {
     req.on("response", (h) => { status = h[":status"]; });
     req.on("data", (chunk) => { respBody += chunk; });
     req.on("end", () => {
-      client.close();
-      if (status === 200) return resolve({ success: true });
+      if (status === 200) return finish(resolve, { success: true });
       let reason = "";
       try { reason = JSON.parse(respBody).reason || ""; } catch {}
       // Permanently-dead tokens → 410 so the caller prunes the subscription
       if (status === 410 || reason === "BadDeviceToken" || reason === "Unregistered" || reason === "DeviceTokenNotForTopic") {
-        return reject({ statusCode: 410, message: `APNs: ${reason || status}` });
+        return finish(reject, { statusCode: 410, message: `APNs: ${reason || status}` });
       }
-      reject(new Error(`APNs ${status}: ${reason || respBody || "unknown error"}`));
+      finish(reject, new Error(`APNs ${status}: ${reason || respBody || "unknown error"}`));
     });
-    req.on("error", (err) => { client.close(); reject(err); });
+    req.on("error", (err) => finish(reject, err));
     req.end(body);
   });
 }

@@ -27,6 +27,14 @@ function getPool() {
       max: 10, // explicit (pg default) — raise deliberately, with data (review H4)
       idleTimeoutMillis: 30000, // recycle idle clients
       connectionTimeoutMillis: 10000, // fail loudly if the pool is exhausted instead of queueing forever
+      // v1.105.50 — the backstop for the failure this version is about: a transaction left
+      // open across a hung network call, holding one of ten pool clients forever. Ten of
+      // those is a total outage, and nothing in the app would have said why.
+      //
+      // Deliberately NOT setting statement_timeout: migrations and index builds run through
+      // this same pool at boot and can legitimately take minutes. This setting only fires
+      // on a transaction that is open and IDLE, which no healthy path here ever is.
+      idle_in_transaction_session_timeout: 30000,
     });
   }
   return pool;
@@ -2207,16 +2215,48 @@ async function initializeDatabase() {
  * survives crashes, no-op cost at a single instance. Returns false if another
  * instance holds the lock.
  */
+// v1.105.50 — the lock is no longer held by an open transaction.
+//
+// This used to be pg_try_advisory_xact_lock inside db.transaction, with the ENTIRE poller
+// body running inside it. Every poller does unbounded network I/O — APNs, web push, Stripe,
+// Twilio — so a single hung outbound call left a pool client stuck `idle in transaction`
+// forever (pool max is 10) AND never released the advisory lock, which meant that poller
+// never ran again until someone restarted the process. No error, no log, no alert: the
+// reminders simply stopped. Exactly the failure mode we have spent this week removing.
+//
+// Now: a session-level lock on a dedicated client, the work outside any transaction, an
+// explicit deadline, and release in `finally` so it comes back even if the body throws or
+// times out.
+const POLLER_DEADLINE_MS = 120000;
+
 async function withPollerLock(lockKey, fn) {
-  const db = await getDb();
-  let ran = false;
-  await db.transaction(async (tx) => {
-    const row = await tx.prepare("SELECT pg_try_advisory_xact_lock(?) AS got").get(lockKey);
-    if (!row || row.got !== true) return;
-    ran = true;
-    await fn();
-  });
-  return ran;
+  const client = await getPool().connect();
+  let held = false;
+  try {
+    const res = await client.query("SELECT pg_try_advisory_lock($1) AS got", [lockKey]);
+    if (res.rows[0]?.got !== true) return false; // another instance (or a still-running tick)
+    held = true;
+
+    let timer;
+    const deadline = new Promise((_, reject) => {
+      timer = setTimeout(
+        () => reject(new Error(`poller ${lockKey} exceeded ${POLLER_DEADLINE_MS}ms`)),
+        POLLER_DEADLINE_MS
+      );
+    });
+    try {
+      await Promise.race([fn(), deadline]);
+    } finally {
+      clearTimeout(timer);
+    }
+    return true;
+  } finally {
+    if (held) {
+      // Must release on the SAME connection that took it.
+      try { await client.query("SELECT pg_advisory_unlock($1)", [lockKey]); } catch { /* released on disconnect */ }
+    }
+    client.release();
+  }
 }
 
 function resetDb() {
