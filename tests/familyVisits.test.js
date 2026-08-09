@@ -119,21 +119,57 @@ describe("the nudge nudges, it does not nag", () => {
 
   test("asking for a position always settles, even if neither callback fires", () => {
     // v1.105.47. geolocation's own `timeout` only bounds ACQUIRING a fix — the clock starts
-    // after permission is decided. While the OS dialog is up, or in a webview that silently
-    // drops the request, neither callback is ever called and the promise never settles. That
-    // is what left the button reading "Checking…" forever.
-    const fn = client.slice(client.indexOf("const getPosition"), client.indexOf("const VisitGeoInvite"));
-    expect(fn).toMatch(/let settled = false;/);
-    expect(fn).toMatch(/const timer = setTimeout\(\(\) => finish\(null\), \(opts\?\.timeout \|\| 15000\) \+ 15000\);/);
-    expect(fn).toMatch(/clearTimeout\(timer\); finish\(p\);/);
-    expect(fn).toMatch(/catch \{ clearTimeout\(timer\); finish\(null\); \}/);
+    // after permission is decided. While the OS dialog is up, or in a webview that drops the
+    // request, neither callback is ever called and the promise never settles. That is what
+    // left the button reading "Checking…" forever.
+    const fn = client.slice(client.indexOf("const attemptPosition"), client.indexOf("const VisitGeoInvite"));
+    expect(fn).toMatch(/let settled = false/);
+    expect(fn).toMatch(/const timer = setTimeout\(\(\) => done\(\{ pos: null, reason: 'timeout' \}\), ceilingMs\);/);
+    expect(fn).toMatch(/catch \{ done\(\{ pos: null, reason: 'unsupported' \}\); \}/);
+  });
+
+  // ─── v1.105.52 ───
+  // Pete tapped "Yes, notice" and got "Couldn't get a location fix — that's usually Location
+  // Services being off." His status bar showed the location arrow ACTIVE: iOS was working on
+  // it. Two of my own mistakes, both this week's habit.
+  test("a 1,000 ft geofence doesn't demand a GPS-grade fix", () => {
+    // enableHighAccuracy + maximumAge:0 forces a fresh satellite fix, which indoors often
+    // never arrives. A wifi/cell fix answers this question in about a second.
+    const fn = client.slice(client.indexOf("const getPosition = async"), client.indexOf("const VisitGeoInvite"));
+    expect(fn).toMatch(/enableHighAccuracy: false, timeout: 10000, maximumAge: 60000/);
+    expect(client).not.toMatch(/enableHighAccuracy: true/);
+  });
+
+  test("it falls back to watchPosition, which iOS often answers when getCurrentPosition won't", () => {
+    expect(client).toMatch(/const watchOncePosition/);
+    expect(client).toMatch(/navigator\.geolocation\.clearWatch\(id\)/);
+    const fn = client.slice(client.indexOf("const getPosition = async"), client.indexOf("const VisitGeoInvite"));
+    expect(fn).toMatch(/return watchOncePosition\(20000\);/);
+    // ...but never after an outright denial: retrying that just re-reports the same no.
+    expect(fn).toMatch(/first\.reason === 'denied'/);
+  });
+
+  test("the failure says what actually happened instead of guessing", () => {
+    // The error callback's `code` was thrown away and a cause invented — which sent Pete
+    // into Settings to fix something that wasn't broken. Worse than silence.
+    expect(client).toMatch(/const geoReason = \(err\) => \{/);
+    expect(client).toMatch(/if \(err\.code === 1\) return 'denied';/);
+    expect(client).toMatch(/if \(err\.code === 2\) return 'unavailable';/);
+    expect(client).toMatch(/if \(err\.code === 3\) return 'timeout';/);
+    expect(client).toMatch(/GEO_MESSAGES\[reason\] \|\| GEO_MESSAGES\.unknown/);
+    // Only the denied message may send someone to Settings.
+    const msgs = client.slice(client.indexOf("const GEO_MESSAGES"), client.indexOf("const attemptPosition"));
+    expect((msgs.match(/Location Services/g) || []).length).toBe(1);
+    expect(msgs).toMatch(/timeout: "Your phone couldn't get a location fix in time/);
   });
 
   test("a failed check leaves the buttons tappable, not a dead spinner", () => {
     const invite = client.slice(client.indexOf("const VisitGeoInvite"), client.indexOf("const VisitNudgeCard"));
     expect(invite).toMatch(/setBusy\(false\);/);
     expect(invite).toMatch(/\{!result\?\.ok && \(/); // buttons stay while it hasn't succeeded
-    expect(invite).toMatch(/Tap to try again/);
+    // v1.105.52 — the retry wording lives in GEO_MESSAGES now, one per actual cause.
+    const msgs = client.slice(client.indexOf("const GEO_MESSAGES"), client.indexOf("const attemptPosition"));
+    expect((msgs.match(/[Tt]ap to try again|tap again/g) || []).length).toBeGreaterThanOrEqual(3);
   });
 
   test("the prompt is raised by a tap, never by a page load", () => {

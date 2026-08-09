@@ -228,33 +228,95 @@ const visitGeoAllowed = window.__visitGeoAllowed = async () => {
   return false;
 };
 
-// v1.105.47 — geolocation's own `timeout` does NOT bound the part that actually hangs.
+// ─── Asking the phone where it is (v1.105.52) ───
 //
-// Pete: "the notice at Betty's thing, now that I'm gone, still just says 'checking' and
-// seems stuck." My own code from an hour ago, with the same disease as everything else
-// today: an unbounded wait and no error path.
+// Third attempt, and the previous two were both my own mistakes.
 //
-// Per spec, `options.timeout` limits how long acquiring a FIX may take — the clock starts
-// after permission is decided. While the OS prompt is on screen, or if WKWebView never
-// resolves it (dismissed, Location Services off, a webview that silently drops the
-// request), NEITHER callback is ever invoked. The promise never settles, `busy` stays
-// true, and the button reads "Checking…" until the app is killed.
+// v1.105.47 fixed a real hang: geolocation's `options.timeout` only bounds acquiring a FIX
+// — the clock starts after permission is decided — so while the OS dialog is up, or in a
+// webview that drops the request, NEITHER callback fires and the promise never settles.
+// That deadline stays.
 //
-// So we hold our own deadline and always settle. A null answer is a real answer.
-const getPosition = (opts) => new Promise((resolve) => {
-  if (!navigator.geolocation) return resolve(null);
+// But then Pete tapped "Yes, notice" and got "Couldn't get a location fix — that's usually
+// Location Services being off." His status bar showed the location arrow ACTIVE at that
+// moment: iOS was working on it. Two things were wrong, and both are the same habit this
+// week has been about.
+//
+//   1. I asked for `enableHighAccuracy: true, maximumAge: 0` — a fresh GPS-grade fix — for
+//      a 1,000-FOOT geofence. Indoors that routinely takes longer than the timeout or never
+//      arrives. A wifi/cell fix is plenty here and comes back in about a second.
+//
+//   2. The error callback's `code` tells you exactly what went wrong, and I threw it away
+//      and then INVENTED a cause in the message. Blaming a setting the person hasn't
+//      touched sends them into Settings to fix something that isn't broken. Worse than
+//      silence, and the same class of thing as a toast that says "Exported!" when nothing
+//      was written.
+//
+// So: coarse first, and if that fails fall back to watchPosition — on iOS a watch often
+// delivers a first fix when getCurrentPosition sits there. And the real reason comes back
+// with the answer.
+const geoReason = (err) => {
+  if (!err) return 'timeout';
+  if (err.code === 1) return 'denied';       // PERMISSION_DENIED
+  if (err.code === 2) return 'unavailable';  // POSITION_UNAVAILABLE
+  if (err.code === 3) return 'timeout';      // TIMEOUT
+  return 'unknown';
+};
+
+const GEO_MESSAGES = {
+  denied: "iOS is blocking location for InPlace. Turn it on in Settings › Privacy › Location Services › InPlace › While Using, then tap again.",
+  timeout: "Your phone couldn't get a location fix in time — that's common indoors. Tap to try again, ideally near a window or outside.",
+  unavailable: "Your phone couldn't work out where it is right now. Tap to try again.",
+  unsupported: "This device can't share its location with InPlace.",
+  unknown: "Couldn't get a location fix. Tap to try again.",
+};
+
+// One attempt, always settling, with OUR deadline on top of the browser's.
+const attemptPosition = (options, ceilingMs) => new Promise((resolve) => {
+  if (!navigator.geolocation) return resolve({ pos: null, reason: 'unsupported' });
   let settled = false;
-  const finish = (v) => { if (!settled) { settled = true; resolve(v); } };
-  // Generous: the person may genuinely be reading the OS permission dialog.
-  const timer = setTimeout(() => finish(null), (opts?.timeout || 15000) + 15000);
+  const done = (v) => { if (settled) return; settled = true; clearTimeout(timer); resolve(v); };
+  const timer = setTimeout(() => done({ pos: null, reason: 'timeout' }), ceilingMs);
   try {
     navigator.geolocation.getCurrentPosition(
-      (p) => { clearTimeout(timer); finish(p); },
-      () => { clearTimeout(timer); finish(null); },
-      opts
+      (p) => done({ pos: p, reason: null }),
+      (e) => done({ pos: null, reason: geoReason(e) }),
+      options
     );
-  } catch { clearTimeout(timer); finish(null); } // some webviews throw outright
+  } catch { done({ pos: null, reason: 'unsupported' }); }
 });
+
+// Fallback: take the first update from a watch, then stop watching.
+const watchOncePosition = (ceilingMs) => new Promise((resolve) => {
+  if (!navigator.geolocation?.watchPosition) return resolve({ pos: null, reason: 'unsupported' });
+  let settled = false, id = null;
+  const done = (v) => {
+    if (settled) return;
+    settled = true;
+    clearTimeout(timer);
+    if (id !== null) { try { navigator.geolocation.clearWatch(id); } catch {} }
+    resolve(v);
+  };
+  const timer = setTimeout(() => done({ pos: null, reason: 'timeout' }), ceilingMs);
+  try {
+    id = navigator.geolocation.watchPosition(
+      (p) => done({ pos: p, reason: null }),
+      (e) => done({ pos: null, reason: geoReason(e) }),
+      { enableHighAccuracy: false, maximumAge: 60000, timeout: ceilingMs }
+    );
+  } catch { done({ pos: null, reason: 'unsupported' }); }
+});
+
+// Returns { pos, reason }. `pos` null means it genuinely didn't work, and `reason` says why
+// rather than guessing.
+const getPosition = async () => {
+  // A cached fix from the last minute is fine for a 1,000 ft question.
+  const first = await attemptPosition(
+    { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }, 12000
+  );
+  if (first.pos || first.reason === 'denied' || first.reason === 'unsupported') return first;
+  return watchOncePosition(20000);
+};
 
 // ─── The invite ───
 // Shown only when there is somewhere to be near, we have no permission we can act on, and
@@ -276,10 +338,10 @@ const VisitGeoInvite = ({ recipients, onEnabled }) => {
 
   const enable = async () => {
     setBusy(true);
-    const pos = await getPosition({ enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
+    const { pos, reason } = await getPosition();
     setBusy(false);
     if (!pos) {
-      setResult({ ok: false, text: "Couldn't get a location fix — that's usually Location Services being off for InPlace (Settings › Privacy › Location Services › InPlace › While Using). Tap to try again." });
+      setResult({ ok: false, text: GEO_MESSAGES[reason] || GEO_MESSAGES.unknown });
       return;
     }
     lsSet(VISIT_GEO_OPTIN_KEY, '1');
@@ -356,7 +418,7 @@ const VisitNudgeCard = window.VisitNudgeCard = ({ recipients, alreadyLoggedToday
         if (!cancelled) setAllowed(ok);
         if (!ok || cancelled) return;
 
-        const pos = await getPosition({ enableHighAccuracy: false, timeout: 8000, maximumAge: 120000 });
+        const { pos } = await getPosition();
         if (!pos || cancelled) return;
 
         // Decide HERE, at full precision. Only a coarsened point is ever sent, and only if
