@@ -833,26 +833,25 @@ const App = () => {
     const cleanup = onSocketEvent('call_incoming', (data) => {
       // If on Messages page, the Messages component handles the banner UI
       // But always fire browser notification if tab is hidden/unfocused
-      if ('Notification' in window && Notification.permission === 'granted') {
-        const typeLabel = data.callType === 'video' ? 'Video' : 'Voice';
-        const n = new Notification(`Incoming ${typeLabel} Call`, {
-          body: `${data.callerName || 'Someone'} is calling you on InPlace`,
-          icon: '/icons/icon-192x192.png',
-          tag: 'incoming-call-global',
-          requireInteraction: true,
-        });
-        n.onclick = () => {
-          window.focus();
-          setCurrentPage('messages');
-          n.close();
-        };
-        // Auto-close after 30s
-        setTimeout(() => n.close(), 30000);
-      }
-      // If not on Messages page, navigate there
+      // v1.105.49 — navigate FIRST. This used to come after `new Notification(...)`, which
+      // throws on iOS, so an incoming call on an iPhone did nothing whatsoever: no alert,
+      // and the app didn't even switch to Messages. Ordering it this way means a
+      // notification problem can never cost the navigation again.
       if (currentPage !== 'messages') {
         setCurrentPage('messages');
       }
+      const typeLabel = data.callType === 'video' ? 'Video' : 'Voice';
+      // Clicks route through sw.js's notificationclick handler via data.page — no onclick
+      // handle needed, which is also what makes this work on iOS.
+      showLocalNotification(`Incoming ${typeLabel} Call`, {
+        body: `${data.callerName || 'Someone'} is calling you on InPlace`,
+        icon: '/icons/icon-192x192.png',
+        tag: 'incoming-call-global',
+        requireInteraction: true,
+        data: { type: 'video_call', page: 'messages', conversationId: data.conversationId },
+      });
+      // A ringing call is stale after 30 seconds.
+      setTimeout(() => closeLocalNotification('incoming-call-global'), 30000);
     });
     // Request notification permission on first load
     // Guard typeof check: some browsers (older Android WebView) have Notification

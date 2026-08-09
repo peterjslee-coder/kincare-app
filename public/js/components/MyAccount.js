@@ -791,7 +791,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
       if (res?.ok) {
         const data = await res.json();
         if (data.url) {
-          window.open(data.url, '_blank');
+          openExternalUrl(data.url); // v1.105.49 — popup-blocked on Safari after an await
         }
       } else {
         const err = await res?.json().catch(() => ({}));
@@ -1978,7 +1978,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                           return;
                         }
                         if (data.invitationUrl) {
-                          window.open(data.invitationUrl, '_blank');
+                          openExternalUrl(data.invitationUrl); // v1.105.49
                           setBgCheckPaid(true);
                           setCheckrStatus('invitation_created');
                         } else if (data.status === 'already_initiated') {
@@ -2047,7 +2047,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                         return;
                       }
                       if (data.invitationUrl) {
-                        window.open(data.invitationUrl, '_blank');
+                        openExternalUrl(data.invitationUrl); // v1.105.49
                         setCheckrStatus('invitation_created');
                       } else if (data.status === 'already_initiated') {
                         setCheckrStatus('in_progress');

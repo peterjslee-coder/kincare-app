@@ -585,7 +585,12 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
       { icon: '👥', label: 'Invite family to help coordinate care', action: () => onNavigate && onNavigate('care-team'), actionText: 'Care Team' },
       { icon: '🔍', label: 'Browse caregivers in your area', action: () => onNavigate && onNavigate('caregivers'), actionText: 'Find Caregivers' },
       { icon: '👤', label: 'Complete your profile with phone and address', action: () => onNavigate && onNavigate('account'), actionText: 'My Profile', done: hasProfile },
-      { icon: '📱', label: 'Install InPlace on your phone for notifications', action: () => setShowPwaGuide(true), actionText: 'Set Up', done: !!(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || !!localStorage.getItem('pwa_setup_done') },
+      { icon: '📱', label: 'Install InPlace on your phone for notifications', action: () => setShowPwaGuide(true), actionText: 'Set Up', done: !!(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || !!window.Capacitor?.isNativePlatform?.() || !!localStorage.getItem('pwa_setup_done') },
+      // ^ v1.105.49 — WKWebView reports display-mode: browser and exposes no
+      //   navigator.standalone, so someone who installed InPlace from the App Store had
+      //   "Install InPlace on your phone" pinned in First Steps forever, and tapping it
+      //   showed Safari Add-to-Home-Screen instructions for an app they already had.
+      //   NotificationPrompt and app.js already append the Capacitor check; this was missed.
     ].filter(s => !s.done);
 
     return (

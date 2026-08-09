@@ -675,7 +675,7 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
     const s = (v === null || v === undefined) ? '' : String(v);
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
-  const downloadCsv = () => {
+  const downloadCsv = async () => {
     const rows = rptFiltered();
     const header = ['Expense date', 'Requested', 'Description', 'Category', 'Purpose', 'Amount', 'Fronted by', 'Paid to', 'Status', 'Approved by', 'Approved on', 'Paid on', 'Paid method', 'Paid from', 'Reimbursement ID'];
     const lines = [header.map(csvCell).join(',')];
@@ -701,14 +701,18 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
     const total = rows.reduce((s, it) => s + Number(it.amount), 0);
     lines.push(['', '', 'TOTAL', '', '', total.toFixed(2), '', '', '', '', '', '', '', '', ''].map(csvCell).join(','));
     const blob = new Blob([lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
     const stamp = new Date().toISOString().slice(0, 10);
     const tag = rptPurpose ? `-${rptPurpose}` : '';
-    a.href = url; a.download = `reimbursements${tag}-${stamp}.csv`;
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-    showToast(`Exported ${rows.length} reimbursement${rows.length === 1 ? '' : 's'}`, 'success');
+    // v1.105.49 — the success toast used to fire unconditionally on the next line, while
+    // `<a download>` silently did nothing in the iOS app. People were told they had
+    // exported their reimbursement ledger — the thing you export precisely because someone
+    // else needs to see it — and no file existed anywhere on the phone.
+    const saved = await saveBlob(blob, `reimbursements${tag}-${stamp}.csv`);
+    if (saved) {
+      showToast(`Exported ${rows.length} reimbursement${rows.length === 1 ? '' : 's'}`, 'success');
+    } else {
+      showToast("Couldn't save the file on this device — try exporting from a browser.", 'error');
+    }
   };
 
   const renderReports = () => {

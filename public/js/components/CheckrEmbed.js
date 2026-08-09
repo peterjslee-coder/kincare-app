@@ -114,7 +114,7 @@ const CheckrEmbed = window.CheckrEmbed = ({ onComplete, onError }) => {
             const res = await apiFetch('/api/checkr/initiate', { method: 'POST' });
             const data = await res.json();
             if (data.invitationUrl) {
-              window.open(data.invitationUrl, '_blank');
+              openExternalUrl(data.invitationUrl); // v1.105.49 — background check was unreachable on iPhone
             } else if (data.status === 'already_initiated') {
               if (typeof showToast === 'function') showToast('Background check already in progress', 'info');
             } else {

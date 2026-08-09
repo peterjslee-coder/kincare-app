@@ -896,24 +896,27 @@ const Messages = window.Messages = () => {
   useEffect(() => {
     if (!incomingCall) return;
     // Request notification permission and show notification if tab is not focused
-    if (document.hidden && 'Notification' in window) {
-      if (Notification.permission === 'granted') {
-        const typeLabel = incomingCall.callType === 'video' ? 'Video' : 'Voice';
-        const n = new Notification(`Incoming ${typeLabel} Call`, {
-          body: `${incomingCall.callerName || 'Someone'} is calling you`,
-          icon: '/icons/icon-192x192.png',
-          tag: 'incoming-call',
-          requireInteraction: true,
-        });
-        n.onclick = () => { window.focus(); n.close(); };
-        // Auto-close when call dismissed
-        const checkInterval = setInterval(() => {
-          if (!incomingCall) { n.close(); clearInterval(checkInterval); }
-        }, 500);
-        return () => { n.close(); clearInterval(checkInterval); };
-      } else if (Notification.permission !== 'denied') {
-        Notification.requestPermission();
+    // v1.105.49 — this called `new Notification(...)` directly. That constructor throws on
+    // iOS, and because the throw happened inside a useEffect body it reached the
+    // ErrorBoundary: a call arriving while the app was backgrounded replaced the user's
+    // whole message thread with "Something went wrong / Reload". showLocalNotification goes
+    // through the service worker — which WebKit does support — and never throws.
+    if (document.hidden) {
+      if (typeof Notification === 'function'
+          && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
+        try { Notification.requestPermission(); } catch { /* not available in this webview */ }
+        return;
       }
+      const typeLabel = incomingCall.callType === 'video' ? 'Video' : 'Voice';
+      showLocalNotification(`Incoming ${typeLabel} Call`, {
+        body: `${incomingCall.callerName || 'Someone'} is calling you`,
+        icon: '/icons/icon-192x192.png',
+        tag: 'incoming-call',
+        requireInteraction: true,
+        data: { type: 'video_call', page: 'messages' },
+      });
+      // Cleanup runs when the call ends or the component unmounts.
+      return () => { closeLocalNotification('incoming-call'); };
     }
   }, [incomingCall]);
 

@@ -1,4 +1,5 @@
 const Documents = window.Documents = ({ onNavigate }) => {
+  const { showToast } = useToast(); // v1.105.49 — downloads now report their outcome
   // Tabs: 'documents', 'consent', 'audit'
   const [activeTab, setActiveTab] = useState(() => {
     if (window.__documentsTab) { const t = window.__documentsTab; delete window.__documentsTab; return t; }
@@ -405,24 +406,29 @@ const Documents = window.Documents = ({ onNavigate }) => {
     }
   };
 
-  const handleDownload = async (document) => {
+  // v1.105.49 — this was broken on EVERY platform, not only iOS. The parameter was named
+  // `document`, shadowing the global, so `document.createElement` was looked up on the file
+  // object and threw: downloading a care document has never worked, anywhere. The
+  // `if (response.ok)` with no else hid the server's half too — a 403 or 404 did nothing
+  // at all, silently. Parameter renamed, and both outcomes are now reported.
+  const handleDownload = async (doc) => {
     try {
-      const response = await fetch(`/api/documents/${document.id}/download`, {
+      const response = await fetch(`/api/documents/${doc.id}/download`, {
         credentials: 'include',
       });
-      if (response.ok) {
-        const blob = await response.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = document.filename || `document_${document.id}`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+      if (!response.ok) {
+        showToast(response.status === 403
+          ? "You don't have access to that document."
+          : "Couldn't download that document — please try again.", 'error');
+        return;
+      }
+      const blob = await response.blob();
+      const saved = await saveBlob(blob, doc.filename || `document_${doc.id}`);
+      if (!saved) {
+        showToast("Couldn't save the file on this device — try opening InPlace in a browser.", 'error');
       }
     } catch (error) {
-      alert('Failed to download document: ' + error.message);
+      showToast('Failed to download document: ' + error.message, 'error');
     }
   };
 

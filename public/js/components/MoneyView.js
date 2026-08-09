@@ -4,6 +4,7 @@
 // declined, with notes + receipts), and care-session payments. Filterable,
 // with CSV export. From Pete's 7/12 feedback; folds in "Payments page v2".
 const MoneyView = window.MoneyView = ({ careTeamId, onClose }) => {
+  const { showToast } = useToast(); // v1.105.49 — the export now reports its outcome
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -66,7 +67,7 @@ const MoneyView = window.MoneyView = ({ careTeamId, onClose }) => {
     return '';
   };
 
-  const exportCsv = () => {
+  const exportCsv = async () => {
     const esc = (v) => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`;
     const lines = [
       ['Date', 'Type', 'Person', 'Description', 'Category', 'Amount', 'Status', 'Notes'].map(esc).join(','),
@@ -81,11 +82,12 @@ const MoneyView = window.MoneyView = ({ careTeamId, onClose }) => {
       ].map(esc).join(',')),
     ];
     const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `inplace-money-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(a.href);
+    // v1.105.49 — `<a download>` is a no-op in the iOS app, so this button did nothing at
+    // all there and said nothing about it. saveBlob reports whether the file really landed.
+    const saved = await saveBlob(blob, `inplace-money-${new Date().toISOString().slice(0, 10)}.csv`);
+    if (!saved && typeof showToast === 'function') {
+      showToast("Couldn't save the file on this device — try exporting from a browser.", 'error');
+    }
   };
 
   const tile = (label, value, sub) => (

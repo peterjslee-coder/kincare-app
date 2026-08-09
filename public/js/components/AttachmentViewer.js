@@ -28,6 +28,19 @@
 const ATTACHMENT_CACHE_LIMIT = 30;
 const __attachmentBlobCache = window.__attachmentBlobCache = new Map(); // url → { url, mime }
 
+// v1.105.49 — Safari and every iOS browser are WebKit, and WebKit refuses to render a PDF
+// in a subframe. Detect the engine, not the browser name: Chrome on iOS is WebKit too.
+const isWebKitLike = () => {
+  try {
+    if (window.Capacitor?.isNativePlatform?.()) return true;
+    const ua = navigator.userAgent || '';
+    if (/iPad|iPhone|iPod/.test(ua)) return true;
+    // iPadOS 13+ reports as Macintosh; touch points give it away.
+    if (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1) return true;
+    return /^((?!chrome|android|crios|fxios).)*safari/i.test(ua);
+  } catch { return false; }
+};
+
 const loadAuthedBlob = window.loadAuthedBlob = async (path) => {
   const hit = __attachmentBlobCache.get(path);
   if (hit) return hit;
@@ -38,7 +51,8 @@ const loadAuthedBlob = window.loadAuthedBlob = async (path) => {
     throw new Error(msg);
   }
   const blob = await res.blob();
-  const entry = { url: URL.createObjectURL(blob), mime: blob.type || '' };
+  // v1.105.49 — keep the blob itself: Save needs it (WKWebView has no <a download>).
+  const entry = { url: URL.createObjectURL(blob), mime: blob.type || '', blob };
   __attachmentBlobCache.set(path, entry);
   while (__attachmentBlobCache.size > ATTACHMENT_CACHE_LIMIT) {
     const oldestKey = __attachmentBlobCache.keys().next().value;
@@ -221,9 +235,16 @@ const AttachmentViewer = window.AttachmentViewer = ({ attachments, startIndex = 
           {list.length > 1 && <span style={{ opacity: 0.6, fontWeight: 400 }}>{`  ${idx + 1} of ${list.length}`}</span>}
         </div>
         {!pdf && view.scale > 1 && <button onClick={reset} style={btn}>Reset</button>}
-        {/* A blob URL carries no credentials, so this works everywhere the raw API link did
-            not — including the system browser the native app opens links in. */}
-        {entry && <a href={entry.url} download={current.name} style={{ ...btn, textDecoration: 'none' }}>Save</a>}
+        {/* v1.105.49 — this was an <a download>, and the comment above it claimed a blob URL
+            made Save "work everywhere". It doesn't: WKWebView installs no download handler,
+            so in the iOS app the button highlighted and nothing was saved, with no error.
+            saveBlob hands off through the OS share sheet there and reports the truth. */}
+        {entry && (
+          <button onClick={async () => {
+            const ok = await saveBlob(entry.blob || await fetch(entry.url).then((r) => r.blob()), current.name);
+            if (!ok) setError("Couldn't save that file on this device. Try opening InPlace in a browser.");
+          }} style={btn}>Save</button>
+        )}
         <button onClick={onClose} aria-label="Close" style={{ ...btn, fontSize: 18, lineHeight: 1, padding: '6px 12px' }}>✕</button>
       </div>
 
@@ -240,8 +261,24 @@ const AttachmentViewer = window.AttachmentViewer = ({ attachments, startIndex = 
         ) : !entry ? (
           <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: 14 }}>Loading…</div>
         ) : pdf ? (
-          <iframe title={current.name} src={entry.url}
-            style={{ width: '100%', height: '100%', border: 'none', background: '#fff' }} />
+          // v1.105.49 — WebKit will not render a PDF inside a subframe; it only does so on
+          // top-level navigation. On iOS this iframe painted a full-size white rectangle
+          // with no error and no "Loading…", so a tapped receipt looked like a broken app.
+          // Give those users something that actually works instead.
+          isWebKitLike() ? (
+            <div style={{ color: '#fff', padding: 24, textAlign: 'center', fontSize: 14 }}>
+              <div style={{ marginBottom: 14 }}>{current.name}</div>
+              <div style={{ opacity: 0.7, fontSize: 13, marginBottom: 16 }}>
+                PDFs can't be previewed inside the app on this device.
+              </div>
+              <button onClick={() => openExternalUrl(entry.url)} style={{
+                ...btn, padding: '10px 18px', fontSize: 14, fontWeight: 650,
+              }}>Open PDF</button>
+            </div>
+          ) : (
+            <iframe title={current.name} src={entry.url}
+              style={{ width: '100%', height: '100%', border: 'none', background: '#fff' }} />
+          )
         ) : (
           <img src={entry.url} alt={current.name} draggable="false"
             style={{

@@ -55,9 +55,18 @@ describe("the viewer fetches through apiFetch", () => {
     expect(viewer).toMatch(/const res = await apiFetch\(path\)/);
   });
 
-  test("it renders a blob URL, so Save works without credentials", () => {
+  test("it renders a blob URL, so the view carries no credentials", () => {
     expect(viewer).toMatch(/URL\.createObjectURL\(blob\)/);
-    expect(viewer).toMatch(/href=\{entry\.url\} download=/);
+  });
+
+  test("Save goes through saveBlob, because <a download> is a no-op in WKWebView", () => {
+    // v1.105.49 — this test used to assert `href={entry.url} download=`, i.e. it pinned the
+    // bug in place. Capacitor installs no download delegate, so in the iOS app that link
+    // highlighted and saved nothing, silently. The blob is kept on the cache entry so Save
+    // doesn't have to re-fetch it.
+    expect(viewer).not.toMatch(/href=\{entry\.url\} download=/);
+    expect(viewer).toMatch(/await saveBlob\(/);
+    expect(viewer).toMatch(/mime: blob\.type \|\| '', blob \}/);
   });
 
   test("object URLs are revoked — a cache that never evicts is a leak", () => {

@@ -703,7 +703,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       const res = await apiFetch('/api/payments/connect/dashboard');
       if (res?.ok) {
         const d = await res.json();
-        if (d.url) window.open(d.url, '_blank');
+        if (d.url) openExternalUrl(d.url); // v1.105.49 — Stripe dashboard was unreachable on iPhone
       } else {
         setStripeError('Could not open Stripe dashboard. Please try again.');
       }
@@ -2127,7 +2127,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                                 showToast('Care team notified — you\'re on your way!', 'success');
                                 // Open maps for directions
                                 if (loc) {
-                                  window.open(`https://maps.google.com/?q=${encodeURIComponent(loc)}&navigate=yes`, '_blank');
+                                  openExternalUrl(`https://maps.google.com/?q=${encodeURIComponent(loc)}&navigate=yes`); // v1.105.49
                                 }
                               } else {
                                 const err = await r?.json().catch(() => ({}));

@@ -158,6 +158,114 @@ const getImpersonationToken = window.getImpersonationToken = () => IMPERSONATION
 const API_TIMEOUT_MS = 25000;
 const API_UPLOAD_TIMEOUT_MS = 120000;
 
+// ─── v1.105.49 — showing a notification from the page, safely ───
+//
+// `new Notification(...)` is not implemented on iOS. Not "returns false" — the constructor
+// is absent in WKWebView and, in an iOS 16.4+ home-screen web app, `'Notification' in
+// window` is TRUE and permission can be 'granted' while constructing one still throws.
+// So the usual guard passes and the call blows up, taking the rest of the handler with it.
+//
+// That cost two real things: an incoming call fired nothing on iPhone AND skipped the
+// navigation on the line after it; and inside a useEffect the throw reached the
+// ErrorBoundary, so a call arriving while the app was backgrounded replaced the message
+// thread with "Something went wrong".
+//
+// The portable path is the service worker's showNotification, which WebKit does support in
+// an installed app — and it routes clicks through sw.js's existing notificationclick
+// handler, so pass `data.page` rather than an onclick. Never throws; returns whether
+// anything was actually shown.
+const showLocalNotification = window.showLocalNotification = async (title, options = {}) => {
+  try {
+    if (typeof Notification === 'function' && Notification.permission !== 'granted') return false;
+    const reg = await navigator.serviceWorker?.getRegistration?.();
+    if (reg?.showNotification) {
+      await reg.showNotification(title, options);
+      return true;
+    }
+    // No service worker (a plain tab, a dev page) — the constructor is fine there.
+    if (typeof Notification === 'function' && Notification.permission === 'granted') {
+      new Notification(title, options);
+      return true;
+    }
+  } catch { /* a notification is never worth taking the view down */ }
+  return false;
+};
+
+// Close whatever we opened under a tag. Needed because showNotification hands back no
+// handle — you have to go and find it again.
+const closeLocalNotification = window.closeLocalNotification = async (tag) => {
+  try {
+    const reg = await navigator.serviceWorker?.getRegistration?.();
+    const open = await reg?.getNotifications?.({ tag });
+    (open || []).forEach((n) => n.close());
+  } catch { /* nothing to do */ }
+};
+
+// ─── v1.105.49 — opening an external URL that was fetched first ───
+//
+// `window.open(url, '_blank')` after an `await` is silently blocked on Safari and in
+// WKWebView: the transient user activation from the tap is spent by the time the URL comes
+// back from the server. Chrome is far more permissive, which is why this pattern passed
+// review and then did nothing on the platform most of these users are on. The casualties
+// were the Stripe payout dashboard and the background-check invitation — i.e. a caregiver
+// could not finish getting paid or get vetted from an iPhone, with no error to report.
+//
+// The native shell has @capacitor/browser (already used for OAuth); everywhere else,
+// navigating the current window is not subject to the popup blocker.
+const openExternalUrl = window.openExternalUrl = (url) => {
+  if (!url) return false;
+  try {
+    if (window.Capacitor?.isNativePlatform?.() && window.Capacitor?.Plugins?.Browser) {
+      window.Capacitor.Plugins.Browser.open({ url, presentationStyle: 'popover' });
+      return true;
+    }
+    const w = window.open(url, '_blank');
+    if (w) return true;
+    // Blocked (Safari after an await) — go there in this window instead of doing nothing.
+    window.location.href = url;
+    return true;
+  } catch {
+    try { window.location.href = url; return true; } catch { return false; }
+  }
+};
+
+// ─── v1.105.49 — saving a file, and knowing whether it worked ───
+//
+// `<a download>` is not implemented in WKWebView. Capacitor installs no download delegate,
+// so the click is dropped on the floor — and every export in this app then showed a green
+// "Exported 34 reimbursements" toast on the very next line. That is the worst version of
+// a silent failure: the app actively asserting something happened that didn't.
+//
+// Returns TRUE only if the file was really handed off. Callers must gate their success
+// message on it. On the native shell the honest route is the OS share sheet; if that isn't
+// available we say so rather than pretending.
+const saveBlob = window.saveBlob = async (blob, filename) => {
+  const isNative = !!window.Capacitor?.isNativePlatform?.();
+  if (!isNative) {
+    try {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      return true;
+    } catch { return false; }
+  }
+  try {
+    const file = new File([blob], filename, { type: blob.type || 'application/octet-stream' });
+    if (navigator.canShare?.({ files: [file] })) {
+      await navigator.share({ files: [file], title: filename });
+      return true;
+    }
+  } catch (e) {
+    if (e?.name === 'AbortError') return false; // they closed the share sheet; not an error
+  }
+  return false;
+};
+
 // Report a client-side problem to the server's Sentry sink. Raw fetch on purpose — routing
 // this through apiFetch would let a timeout report time out. keepalive so it survives the
 // view being torn down.
@@ -862,6 +970,30 @@ if (typeof document !== 'undefined') {
 
 const checkPushHealth = window.checkPushHealth = async () => {
   try {
+    // ─── v1.105.49 — the native branch, which never existed ───
+    //
+    // The two guards below are the setAppBadge bug again, twenty lines from the comment
+    // warning about it. `PushManager` and `Notification` are both absent in WKWebView, so
+    // inside the iOS app this function returned on its first line — every 30 minutes,
+    // forever. And it is the ONLY thing that notices the server has no devices for you and
+    // re-registers. So an iPhone whose APNs token rotated or got pruned stopped receiving
+    // notifications entirely and never recovered, short of a fresh login.
+    //
+    // Native devices don't have a PushManager subscription to inspect; the check that makes
+    // sense for them is "does the server still know about a device for me", and the repair
+    // is to re-register the token.
+    if (window.Capacitor?.isNativePlatform?.()) {
+      if (!AUTH_TOKEN) return;
+      const res = await apiFetch('/api/push/status');
+      if (!res?.ok) return;
+      const status = await res.json();
+      if (status.userSubscriptions === 0 && typeof subscribeNativePush === 'function') {
+        console.log('Push health: server has no devices for this user — re-registering native token');
+        await subscribeNativePush();
+      }
+      return;
+    }
+
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
     if (!('Notification' in window) || Notification.permission !== 'granted') return;
 
