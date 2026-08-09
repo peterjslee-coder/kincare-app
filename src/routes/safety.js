@@ -212,6 +212,7 @@ router.post("/block", async (req, res) => {
     // caregiver to the door of someone who just blocked them.
     const sessions = await futureSessionsBetween(db, req.user.id, targetId);
     let cancelled = 0;
+    let voidFailures = 0; // v1.105.48 — see the void check below
     for (const s of sessions) {
       try {
         const cancelledBy = s.family_user_id === req.user.id ? "family" : "caregiver";
@@ -229,9 +230,19 @@ router.post("/block", async (req, res) => {
           paymentStatus: s.payment_status,
           authorizedAmountCents: s.authorized_amount,
         });
+        // v1.105.48 — this result used to be discarded, and thirty lines below we tell the
+        // person "You have not been charged." If the void failed that sentence was false
+        // and the authorization hold was still sitting on their card. The ordinary cancel
+        // path already checks `voided?.error`; this one didn't.
         if (charge.action === "void") {
           const { voidSessionPayment } = require("./accountability");
-          await voidSessionPayment(s.id);
+          const voided = await voidSessionPayment(s.id);
+          if (voided?.error) {
+            voidFailures++;
+            captureException(new Error(`Void failed on block-cancel: ${voided.error}`), {
+              where: "safety: block cancel void", sessionId: s.id,
+            });
+          }
         }
         const other = s.family_user_id === req.user.id ? s.caregiver_user_id : s.family_user_id;
         if (other) {
@@ -256,7 +267,14 @@ router.post("/block", async (req, res) => {
     res.json({
       status: "blocked",
       cancelledVisits: cancelled,
-      message: `${target.first_name} has been blocked and told. ${cancelled ? `${cancelled} upcoming visit${cancelled === 1 ? " was" : "s were"} cancelled. ` : ""}You have not been charged. You can unblock them from Account settings.`,
+      // v1.105.48 — only promise what actually happened. If a hold could not be released
+      // we say so, because the alternative is the app telling someone they weren't charged
+      // while the hold sits on their statement.
+      message: `${target.first_name} has been blocked and told. ${cancelled ? `${cancelled} upcoming visit${cancelled === 1 ? " was" : "s were"} cancelled. ` : ""}${
+        voidFailures
+          ? "We couldn't release one of the payment holds — we're on it, and you won't be charged for a cancelled visit."
+          : "You have not been charged."
+      } You can unblock them from Account settings.`,
     });
   } catch (err) {
     console.error("Block error:", err);

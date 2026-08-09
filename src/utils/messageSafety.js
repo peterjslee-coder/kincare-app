@@ -195,8 +195,14 @@ async function screenMessage(messageContent, senderId, conversationId, senderInf
     console.warn(`[MessageSafety] ${severity.toUpperCase()} ${flagType} flagged for user ${senderId}: "${messageContent.substring(0, 100)}" — ${analysis.reason}`);
 
   } catch (err) {
-    // Never let safety screening errors break message delivery
+    // Never let safety screening errors break message delivery — that part is right.
+    // v1.105.48 — but one console line used to be the whole story. If the safety_flags
+    // INSERT or the admin feed writes throw, an AI-detected abuse, neglect or exploitation
+    // signal is detected and then lost: no flag stored, no admin alerted, nothing anyone
+    // would think to look at. Every caller adds `.catch(() => {})` on top of this, so there
+    // is no outer net either. Delivery still succeeds; the loss is no longer invisible.
     console.error("[MessageSafety] Screening error:", err.message);
+    captureException(err, { where: "messageSafety: screening" });
   }
 }
 

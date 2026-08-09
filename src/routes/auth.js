@@ -854,26 +854,43 @@ router.post("/remove-role", authenticate, async (req, res) => {
       return res.status(400).json({ error: "You must keep at least one role. To fully remove your account, use Delete Account instead." });
     }
 
-    // Remove the role
+    // ─── v1.105.48 — this handler had three separate defects and always 500'd ───
+    //
+    //   • `DELETE FROM availability WHERE caregiver_id = ?` was passed user.id, but that
+    //     column holds a caregiver_profiles.id (see routes/availability.js). It matched
+    //     zero rows, every time, leaving the person's availability behind.
+    //   • `caregiver_assignments.caregiver_id` does not exist — it is
+    //     caregiver_profile_id — so that line threw.
+    //   • activity_feed has family_user_id / event_type / message, not
+    //     user_id / type / body, so the log line threw too.
+    //
+    // And because the UPDATE below ran outside a transaction, the role was already gone by
+    // the time the throw produced "Failed to remove role": the user was told it failed
+    // while it had half happened. All of it now runs as one transaction.
     const newRoles = currentRoles.filter(r => r !== removeRole);
     const newPrimaryRole = newRoles[0];
-    await db.prepare("UPDATE users SET roles = ?, role = ? WHERE id = ?").run(JSON.stringify(newRoles), newPrimaryRole, user.id);
 
-    // Clean up role-specific data
-    if (removeRole === "caregiver") {
-      // Remove caregiver profile, availability, and assignments
-      await db.prepare("DELETE FROM availability WHERE caregiver_id = ?").run(user.id);
-      await db.prepare("DELETE FROM caregiver_assignments WHERE caregiver_id = ?").run(user.id);
-      await db.prepare("DELETE FROM caregiver_profiles WHERE user_id = ?").run(user.id);
-    }
+    await db.transaction(async (tx) => {
+      await tx.prepare("UPDATE users SET roles = ?, role = ? WHERE id = ?")
+        .run(JSON.stringify(newRoles), newPrimaryRole, user.id);
+
+      if (removeRole === "caregiver") {
+        // availability and assignments are keyed by the PROFILE, so resolve it first.
+        const profile = await tx.prepare("SELECT id FROM caregiver_profiles WHERE user_id = ?").get(user.id);
+        if (profile?.id) {
+          await tx.prepare("DELETE FROM availability WHERE caregiver_id = ?").run(profile.id);
+          await tx.prepare("DELETE FROM caregiver_assignments WHERE caregiver_profile_id = ?").run(profile.id);
+        }
+        await tx.prepare("DELETE FROM caregiver_profiles WHERE user_id = ?").run(user.id);
+      }
+
+      await tx.prepare(
+        "INSERT INTO activity_feed (id, family_user_id, event_type, title, message, created_at) VALUES (?, ?, 'role_removed', ?, ?, NOW())"
+      ).run(uuid(), user.id, "Role Removed", `Removed ${removeRole} role from account`);
+    });
 
     // Generate new token with updated roles
     const token = generateToken({ ...user, role: newPrimaryRole, roles: newRoles });
-
-    // Log the removal
-    await db.prepare(
-      "INSERT INTO activity_feed (id, user_id, type, title, body, created_at) VALUES (?, ?, 'role_removed', ?, ?, NOW())"
-    ).run(uuid(), user.id, "Role Removed", `Removed ${removeRole} role from account`);
 
     setAuthCookie(res, token);
     setCsrfCookie(res);
@@ -1068,7 +1085,13 @@ router.delete("/me", authenticate, async (req, res) => {
       // 3. Retain personal documents for fraud/audit protection (don't delete)
       await tx.prepare("UPDATE caregiver_documents SET retained_from_deleted = 1, deleted_user_email = ? WHERE user_id = ?").run(user.email, userId);
       await tx.prepare("UPDATE verified_documents SET retained_from_deleted = 1, deleted_user_email = ? WHERE uploaded_by = ?").run(user.email, userId);
-      await tx.prepare("UPDATE authorization_documents SET retained_from_deleted = 1, deleted_user_email = ? WHERE uploaded_by_user_id = ?").run(user.email, userId);
+      // v1.105.48 — was `uploaded_by_user_id`, a column that has never existed on this
+      // table (it is `submitted_by` — database.js:571). The statement is inside the delete
+      // TRANSACTION, so it threw, rolled the whole thing back and answered 500: "Delete my
+      // account" has never once worked, for anyone, and no PII was ever anonymised. The
+      // line directly above gets the same idea right for verified_documents.uploaded_by,
+      // which is likely where the wrong name came from.
+      await tx.prepare("UPDATE authorization_documents SET retained_from_deleted = 1, deleted_user_email = ? WHERE submitted_by = ?").run(user.email, userId);
 
       // 4. Remove from active teams & connections (but keep invite history)
       await tx.prepare("DELETE FROM care_team_members WHERE user_id = ?").run(userId);

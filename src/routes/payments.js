@@ -318,7 +318,12 @@ router.post("/webhook", express.raw({ type: "application/json" }), async (req, r
                   data: { type: "reimbursement_payment_failed", reimbursementId: rid, careTeamId: row.care_team_id, page: "care-team", focus: `reimbursement:${rid}` },
                 }, "reimbursement_payment_failed").catch(() => {});
               }
-            } catch {}
+            } catch (e) {
+              // v1.105.48 — was a bare `catch {}`. The money did NOT move, and this push is
+              // the only thing that tells anyone. Losing it silently leaves the payee
+              // waiting on a deposit that will never arrive, while Stripe gets a 200.
+              captureException(e, { where: "payments: ACH-failed notify", reimbursementId: rid });
+            }
           }
           console.log(`❌ Reimbursement ACH failed: ${rid} — ${intent.last_payment_error?.message || 'returned'}`);
         }
@@ -346,7 +351,12 @@ router.post("/webhook", express.raw({ type: "application/json" }), async (req, r
               await enqueueReimbursementDigest(db, {
                 userId: row.payee_user_id, reimbursementId: rid, careTeamId: row.care_team_id,
               });
-            } catch {}
+            } catch (e) {
+              // v1.105.48 — was a bare `catch {}`. This is a DB write, not a best-effort
+              // send: lose it and the reimbursement is marked paid while the payee is never
+              // told their money landed.
+              captureException(e, { where: "payments: ACH-settled digest", reimbursementId: rid });
+            }
             console.log(`✅ Reimbursement ACH settled: ${rid}`);
           }
         }

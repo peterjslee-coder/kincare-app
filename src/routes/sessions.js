@@ -520,11 +520,16 @@ router.put("/:id/claim", async (req, res) => {
 
   // Notify all care team members for this care recipient (siblings, etc.)
   try {
+    // v1.105.48 — dropped `AND ctm.status = 'active'`: care_team_members has no `status`
+    // column (database.js), so this query threw on every accepted care request and the
+    // catch below turned it into a console line. Nobody on the care team — siblings, the
+    // other adult children — was ever told a caregiver had accepted. Only the person who
+    // booked it found out. Membership rows ARE the membership; there is nothing to filter.
     const teamMembers = await db.prepare(`
       SELECT DISTINCT ctm.user_id FROM care_team_members ctm
       JOIN care_teams ct ON ctm.care_team_id = ct.id
       JOIN care_recipients cr ON ct.care_recipient_id = cr.id
-      WHERE cr.id = ? AND ctm.user_id != ? AND ctm.status = 'active'
+      WHERE cr.id = ? AND ctm.user_id != ?
     `).all(session.care_recipient_id, session.family_user_id || '');
     for (const member of teamMembers) {
       if (emitToUser) emitToUser(member.user_id, "session_update", { sessionId: req.params.id, status: "confirmed" });
@@ -1758,6 +1763,31 @@ router.post("/:id/check-out", async (req, res) => {
     // Skip when admin is impersonating (test mode) — don't charge real money
     const isTestCheckout = !!req.user.impersonatedBy;
     if (!isTestCheckout) {
+      // ─── v1.105.48 — a failed capture used to end its life in a console.warn ───
+      //
+      // Not failing check-out over a payment problem is right: the visit happened, and the
+      // caregiver shouldn't be held at the door by Stripe. But the session then kept
+      // payment_status = 'authorized', and NOTHING retries that state — the auto-pay
+      // sweeper takes only NULL or 'pending' (payments.js), and the family lockout banner
+      // fires only on 'failed'. So the money never moved: caregiver never paid, family
+      // never charged, no dunning, no banner, nothing in Sentry, and the authorization
+      // quietly expired about a week later. Nobody was positioned to notice.
+      //
+      // A failure now hands the session to the retry path AND raises an alert.
+      const failCapture = async (why) => {
+        try {
+          await db.prepare(`
+            UPDATE care_sessions SET payment_status = 'pending'
+            WHERE id = ? AND (payment_status = 'authorized' OR payment_status IS NULL)
+          `).run(req.params.id);
+        } catch (e) {
+          captureException(e, { where: "checkout: mark capture for retry", sessionId: req.params.id });
+        }
+        captureException(new Error(`Session payment capture failed: ${why}`), {
+          where: "checkout: capture", sessionId: req.params.id,
+        });
+      };
+
       // If payment was pre-authorized, capture the appropriate amount now
       try {
         const { captureSessionPayment } = require("./accountability");
@@ -1766,11 +1796,13 @@ router.post("/:id/check-out", async (req, res) => {
           const captureResult = await captureSessionPayment(req.params.id, captureAmountCents);
           if (captureResult.error) {
             console.warn(`[checkout] Payment capture skipped: ${captureResult.error}`);
+            await failCapture(captureResult.error);
           }
         }
       } catch (captureErr) {
-        // Non-blocking — don't fail checkout if capture fails
+        // Still non-blocking for check-out itself — but no longer invisible.
         console.error("[checkout] Payment capture error (non-blocking):", captureErr.message);
+        await failCapture(captureErr.message);
       }
     } else {
       console.log(`[checkout] TEST MODE — skipping payment capture for session ${req.params.id.slice(0,8)}`);

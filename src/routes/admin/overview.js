@@ -394,13 +394,21 @@ router.get("/users/:id/detail", async (req, res) => {
     // Safety flags involving this user
     let safetyFlags = [];
     try {
+      // v1.105.48 — every column named here except id/flag_type/status/severity/created_at
+      // was invented. safety_flags has `user_id` and `user_message`; there is no
+      // reporter_user_id, flagged_user_id, caregiver_user_id or description. The query threw
+      // on every call and the empty catch turned that into an empty array — so an admin
+      // opening someone's drawer to check whether they had ever been reported saw a clean
+      // record. For every user. Including the ones with flags.
       safetyFlags = await db.prepare(`
-        SELECT id, flag_type, description, status, severity, created_at
+        SELECT id, flag_type, user_message, status, severity, created_at
         FROM safety_flags
-        WHERE reporter_user_id = ? OR flagged_user_id = ? OR caregiver_user_id = ?
+        WHERE user_id = ?
         ORDER BY created_at DESC LIMIT 10
-      `).all(userId, userId, userId);
-    } catch (e) { /* */ }
+      `).all(userId);
+    } catch (e) {
+      captureException(e, { where: "admin/overview: safety flags", userId });
+    }
 
     // ─── All uploaded documents (unified across all 3 tables) ───
     let allDocuments = [];

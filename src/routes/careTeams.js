@@ -743,7 +743,10 @@ router.put("/:teamId/member-prefs/:userId", authenticate, async (req, res) => {
 
     // Verify caller is a family member of this team
     const callerMember = await db.prepare(
-      "SELECT * FROM care_team_members WHERE care_team_id = ? AND user_id = ? AND status = 'accepted'"
+      // v1.105.48 — care_team_members has no `status` column, so this threw and the route
+      // always 500'd: setting a care recipient's accessibility prefs (text size and the
+      // like) has never worked. A membership row IS the membership.
+      "SELECT * FROM care_team_members WHERE care_team_id = ? AND user_id = ?"
     ).get(teamId, req.user.id);
     if (!callerMember) {
       return res.status(403).json({ error: "Not a member of this care team" });
@@ -757,7 +760,7 @@ router.put("/:teamId/member-prefs/:userId", authenticate, async (req, res) => {
 
     // Also check if they're a care_for role member of the team (fallback)
     const targetMember = !linkedRecipient ? await db.prepare(
-      "SELECT ctm.*, u.role FROM care_team_members ctm JOIN users u ON ctm.user_id = u.id WHERE ctm.care_team_id = ? AND ctm.user_id = ? AND ctm.status = 'accepted'"
+      "SELECT ctm.*, u.role FROM care_team_members ctm JOIN users u ON ctm.user_id = u.id WHERE ctm.care_team_id = ? AND ctm.user_id = ?"
     ).get(teamId, targetUserId) : null;
 
     if (!linkedRecipient && (!targetMember || targetMember.role !== 'care_for')) {

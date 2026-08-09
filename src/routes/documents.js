@@ -585,13 +585,26 @@ router.get("/audit/:recipientId", authenticate, async (req, res) => {
       return res.status(403).json({ error: "You do not have access to this care recipient's audit trail" });
     }
 
-    // Fetch consent status from care_recipients
+    // Fetch consent status from care_recipients.
+    // v1.105.48 — attestation_signer / attestation_relationship / attestation_signed_at are
+    // NOT columns on care_recipients; they are aliases admin/verification.js builds from the
+    // `attestations` table. Selecting them off cr threw, so GET /api/documents/audit/:id has
+    // always answered 500 and the consent audit trail on the Documents page has never loaded
+    // for anyone. Join the table the aliases came from.
     const recipient = await db.prepare(`
       SELECT cr.authorization_tier, cr.consent_status, cr.consent_method,
         cr.consent_verified_at, cr.permission_tier, cr.managed_by_user_id,
-        cr.managed_reason, cr.managed_at, cr.attestation_signer,
-        cr.attestation_relationship, cr.attestation_signed_at
-      FROM care_recipients cr WHERE cr.id = ?
+        cr.managed_reason, cr.managed_at,
+        att.signature_name AS attestation_signer,
+        att.relationship_to_recipient AS attestation_relationship,
+        att.signed_at AS attestation_signed_at
+      FROM care_recipients cr
+      LEFT JOIN LATERAL (
+        SELECT signature_name, relationship_to_recipient, signed_at
+        FROM attestations WHERE care_recipient_id = cr.id
+        ORDER BY signed_at DESC LIMIT 1
+      ) att ON TRUE
+      WHERE cr.id = ?
     `).get(recipientId);
 
     // Resolve managed_by user name if present

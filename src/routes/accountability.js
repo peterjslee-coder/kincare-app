@@ -869,8 +869,16 @@ async function pollCaregiverNoShows() {
             WHERE id = ?
           `).run(s.id);
 
-          // Void the payment authorization if it exists
-          await voidSessionPayment(s.id);
+          // Void the payment authorization if it exists.
+          // v1.105.48 — the result used to be dropped, and the family push below promises
+          // "no payment will be charged". If the void failed that promise was false and the
+          // hold stayed on the card, with only a console line recording it.
+          const voidedNoShow = await voidSessionPayment(s.id);
+          if (voidedNoShow?.error) {
+            captureException(new Error(`Void failed on no-show cancel: ${voidedNoShow.error}`), {
+              where: "accountability: no-show void", sessionId: s.id,
+            });
+          }
 
           // ─── Notify caregiver that session was marked no-show ───
           const recipientName = s.recipient_name || 'your client';
@@ -1194,7 +1202,16 @@ async function pollCancellationFees() {
     `).all();
     for (const s of stale) {
       try {
-        await voidSessionPayment(s.id);
+        // v1.105.48 — this used to mark the fee 'dropped' whether or not the void worked,
+        // so the record could say the fee was released while the hold stayed live on the
+        // family's card. Only write 'dropped' once it actually is.
+        const voidedStale = await voidSessionPayment(s.id);
+        if (voidedStale?.error) {
+          captureException(new Error(`Backstop void failed: ${voidedStale.error}`), {
+            where: "accountability: dispute backstop void", sessionId: s.id,
+          });
+          continue; // leave it 'disputed' so the next sweep retries it
+        }
         await db.prepare(
           "UPDATE care_sessions SET cancel_fee_status = 'dropped', cancel_fee_decided_at = NOW() WHERE id = ?"
         ).run(s.id);

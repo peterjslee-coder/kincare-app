@@ -308,9 +308,13 @@ router.put("/safety-flags/:id", authenticate, checkAdmin, requireAdmin, async (r
     // Log status change as audit event
     await db.prepare(
       "INSERT INTO safety_flag_events (id, safety_flag_id, event_type, actor_id, actor_label, content, created_at) VALUES (?, ?, ?, ?, ?, ?, NOW())"
+    // v1.105.48 — was `.catch(() => {})`. This row IS the accountability record for who
+    // resolved or dismissed an abuse flag and why; dropping it silently while answering
+    // {success:true} means the audit trail has holes nobody can see. Let it fail loudly:
+    // the route's own 500 handler is the right outcome.
     ).run(uuid(), req.params.id, `status_${status}`, req.user.id, "Admin",
       admin_notes ? `Status changed to ${status}. Notes: ${admin_notes}` : `Status changed to ${status}`
-    ).catch(() => {});
+    );
 
     res.json({ success: true });
   } catch (err) {
@@ -409,9 +413,11 @@ router.put("/safety-flags/:id/verified", authenticate, checkAdmin, requireAdmin,
 
     await db.prepare(
       "INSERT INTO safety_flag_events (id, safety_flag_id, event_type, actor_id, actor_label, content, created_at) VALUES (?, ?, ?, ?, ?, ?, NOW())"
+    // v1.105.48 — same as above, and more so: the entire point of this passkey-verified
+    // route is provenance. An audit write that can vanish defeats it.
     ).run(uuid(), req.params.id, `status_${status}`, req.user.id, "Admin (passkey verified)",
       admin_notes ? `Status changed to ${status} (passkey verified). Notes: ${admin_notes}` : `Status changed to ${status} (passkey verified)`
-    ).catch(() => {});
+    );
 
     res.json({ success: true });
   } catch (err) {
