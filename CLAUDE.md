@@ -248,9 +248,9 @@ The consent_outreach table tracks emails sent + recipient responses. Attestation
 
 ## Last Session Handoff (updated each session)
 
-**Date:** August 11, 2026 | **Version:** v1.105.59 | **Session arc:** the app-icon "78", a
-codebase-wide sweep for silent failures, the first native-plugin TestFlight build, and the
-geofence opt-in that never confirmed itself
+**Date:** August 11, 2026 | **Version:** v1.105.60 | **Session arc:** a five-way silent-failure
+sweep of the whole codebase — five fixes shipped, ~35 more findings triaged into TASKS.md — and
+a session that could not push
 
 > If the date above is stale, trust `git log` over this section. It sat four months out of
 > date once already.
@@ -258,91 +258,119 @@ geofence opt-in that never confirmed itself
 ### Read this before touching anything
 
 **1. Check for a container rollback.** The sandbox has silently reverted the working tree to
-an older commit four times in two days. It is not a git operation — the files simply go back.
+an older commit several times. It is not a git operation — the files simply go back.
 
 ```bash
 git log --oneline -1
 grep -n 'APP_VERSION = ' src/server.js | head -1
-ls tests/*.test.js | wc -l     # 42 at v1.105.58+; 36 or 37 means you have been rolled back
+ls tests/*.test.js | wc -l     # 43 at v1.105.60; fewer means you have been rolled back
 ```
 
 Recovery is `git fetch origin && git reset --hard origin/main`. Nothing is ever lost provided
 every version is pushed the moment it ships. **Push early and often.**
 
-**2. Confirm push access before doing real work.** On 8/11 the git proxy began refusing
-pushes mid-session (403, *"not in this session's authorized repository set"*) while `fetch`
-kept working. A finished, tested commit could not be delivered. If push is dead, say so
-immediately and hand Pete a `git format-patch` file rather than accumulating work.
+**2. Confirm push access before doing real work.** This is now the second session in a row where
+the git proxy refused writes:
+
+```
+remote: access denied by the git proxy: peterjslee-coder/kincare-app is not in
+this session's authorized repository set, so the proxy will not inject a
+credential for it.
+```
+
+**Reads are unaffected** — `clone` and `fetch` work fine on the same connection in the same
+second, which is how you tell this apart from a network problem. It is also NOT the flaky
+sandbox classifier (that denies inconsistently and the same bare command succeeds a minute
+later); this is the same message every time, with a stated reason. A PAT does not help: the
+proxy refuses before the credential is used. **Test it with `git push --dry-run` in the first
+five minutes** and tell Pete immediately if it fails — do not accumulate an hour of work first.
+
+The fallback that works: finish and test in the sandbox, `git format-patch -1 --stdout`, deliver
+the file, and Pete runs one command in his own checkout. Nothing about the work is degraded —
+only delivery. There is no documented way to add a repo to a Cowork project's sources (the
+project Context panel takes local folders, chat projects and URLs, not repos), so this is a
+support question, not a setting either of you can toggle.
 
 ### The theme, and the lens to keep
 
-The whole v1.105.4x–5x run was one bug family: **features that fail silently and look
-identical to features that are switched off.** Nearly every fix was "make it report itself."
+Unchanged and still paying out: **features that fail silently and look identical to features
+that are switched off.** Round two found roughly forty more instances of it. Recurring causes,
+in the order they keep appearing:
 
-Recurring root causes, worth pattern-matching on:
+- **Wrong column or table names** that throw into a `catch` which logs "(non-blocking)" and
+  returns `[]`. Six features in this codebase have *never worked once*, and the only evidence is
+  a line in a log nobody reads. **This is now the single largest category.**
+- **Capability guards written against Chrome.** `navigator.permissions.query`, `setAppBadge`,
+  `<a download>`, `window.open('', '_blank')`, `window.print()`, subframe PDFs — all silently
+  dead on WebKit, the platform most of the users are on.
+- **Vacuous SQL predicates.** A `NOT LIKE` on a nullable column excludes every NULL row. A
+  status literal nobody writes. `COALESCE(x, 0) = 0` on a column nothing sets.
+- **Unbounded waits.** Node's global `fetch` has no default timeout; the Anthropic SDK's is
+  ~30 minutes with retries.
+- **Empty states that mean "the request failed"**, on both sides of the wire.
+- **Discarded results** — a value computed, then dropped.
 
-- **Capability guards written against Chrome.** `navigator.permissions.query({name:'geolocation'})`
-  and `setAppBadge` both silently disabled features on WebKit — the only platform with the
-  hardware. This killed the visit nudge *and* caregiver check-in GPS, invisibly, forever.
-- **Vacuous SQL predicates.** `COALESCE(m.is_read, 0) = 0` on a column nothing ever writes.
-  Filters nothing, reads as a filter. That one produced the app-icon "78".
-- **Unbounded waits.** No connect/session/stream timeout on APNs; the SDK default of 10
-  minutes × 2 retries on the safety screener. One hung call wedged a poller permanently.
-- **Empty states that actually mean "the request failed."**
-- **Discarded results** — a value computed and then dropped.
+**The method that works:** trace the producer AND the consumer before believing a finding, and
+check whether the codebase already solved it somewhere else. Four of the five fixes this session
+had a correct implementation sitting in a sibling file.
 
-### What shipped (v1.105.40 → .59; `git log` has the detail)
+### What shipped — v1.105.60
 
-- **The badge** (`.40`–`.44`, `.57`) — `src/utils/attention.js` counts only actionable items,
-  using the app's real unread definition (`cm.last_read_at`), not the dead `is_read` column.
-  `src/utils/badgeSync.js` + a `res.on("finish")` hook in `src/middleware/auth.js` correct the
-  icon after any authenticated request. Note: a badge-only push must be `apns-push-type: alert`;
-  as a background push it is accepted with a 200 and then silently dropped, because the app
-  does not declare `UIBackgroundModes`.
-- **Reimbursement digest** (`src/services/reimbursementDigest.js`) — pushes said "she confirmed
-  **my** request" when it was someone else's. `composeDigest` now takes the reader's identity;
-  returns null when reader === actor. Description and decline reason removed as PHI.
-- **The silent-failure sweep** — account deletion had **never worked for anyone** (wrong column
-  inside a transaction → 500, no PII anonymized); Stripe capture failures silently stranded
-  payments; the admin Safety Flags panel queried four nonexistent columns so every user looked
-  clean; care teams were never notified of accepted care requests; two pollers shared lock key
-  104 and held a pg transaction across network I/O.
-- **iOS native plugins** (`.57`) — `@capacitor/geolocation`, `@capawesome/capacitor-badge`,
-  `@capacitor/local-notifications`, `@capacitor/filesystem`, `@capacitor/share`. There is no
-  official `@capacitor/badge`; that name 404s. The community one registers as `Badge`, which is
-  what `_capPlugin('Badge')` asks for.
-- **`public/js/utils.js`** gained `getDeviceLocation()` (plugin-first, web fallback, watch as
-  last resort, **always settles**, returns `{pos, reason, tried, elapsedMs}`),
-  `showLocalNotification()`, `saveBlob()`, `openExternalUrl()`, `reportClientError()`, and
-  apiFetch AbortController timeouts (25s JSON / 120s uploads).
-- **Stripe onboarding** (`.56`) — two hardcoded `https://inplace.care` literals were sending
-  new caregivers to a dead domain during signup, which reads as "this company is not real."
-  Now `${appUrl}/business`, with a repair pass on `business_profile.url` before
-  `accountLinks.create`. `public/business.html` is server-rendered, no JS, mounted before the
-  SPA catch-all.
-- **ITMS-90683** (`.58`) — `@capacitor/geolocation`'s binary references
-  `NSLocationAlwaysAndWhenInUseUsageDescription`, so Apple's static analysis demands the key
-  even though `GeolocationPlugin.swift` never calls `requestAlwaysAuthorization`. The string is
-  present and honest. `tests/storeReview.test.js` previously asserted the key's **absence** and
-  had to be inverted.
-- **The geofence opt-in** (`.59`) — see below.
+Five that were live, silent, and looked like features nobody turned on. Full reasoning is in the
+commit message; the short version:
 
-### v1.105.59, the most recent fix
+- **The doctor report has never read a single visit.** `JOIN users u ON vl.caregiver_id = u.id`
+  joins across two ID spaces — that column references `caregiver_profiles(id)`. As an INNER JOIN
+  it matched nothing, so `visitSummaries` was always `""` and every doctor report ever generated
+  was written from notes alone. The July v1.93 post-mortem was about a report asserting more than
+  the record supported; this is the same rule failing in the other direction.
+- **The family dashboard answered 200 with `isNewUser: true` on any internal error**, so a family
+  with an active care team was shown the new-user welcome and auto-navigated into the
+  add-a-loved-one wizard. Five screens read that endpoint. The client's own retry-then-error
+  handling was being defeated by `res.ok` being true. **An error is not a shape.**
+- **`GET /api/push/attention` answered 200 `{total: 0}` on error**, which does not decline to
+  answer — it answers "nothing needs you". `refreshAppBadge` then *clears* a correct badge. The
+  v1.105.51 AttentionCard fix was right and the server was overriding it.
+- **The Apple-link branch called `generateRefreshToken(user)`** — no await, wrong argument. The
+  cookie became `refresh_token=j:{}` (silent sign-out at JWT expiry) and the FK violation
+  rejected unhandled, which on Node 18+ terminates the process.
+- **Block requests from managed recipients were filed with a NULL `care_team_id`**, and the only
+  reader INNER JOINs on it — invisible to every leader forever, while the requester was told
+  "We've asked your care team to review this." Now it resolves the team from the requester, and
+  refuses honestly if it can't.
 
-Pete tapped "Yes, notice" three days before a visit, got the OS prompt, then saw nothing.
-The confirmation existed for about one frame: `VisitGeoInvite.enable()` set its message and
-called `onEnabled()`, which bumped `retry` in `VisitNudgeCard`; the effect re-ran,
-`visitGeoAllowed()` was now true, the parent's `allowed === false` branch stopped matching,
-and it fell through to `return null` — unmounting the card holding the message. Out of range
-there was nothing to render in its place, so success and failure looked identical.
+20 new tests in `tests/silentFailures.test.js`, each verified to fail against the unfixed code.
+`tests/attentionBadge.test.js:155` was **inverted** — it had been pinning the zero-answer as
+correct.
 
-- `onEnabled()` now fires only within 1,000 ft, where the parent has a nudge card to show.
-- New `VisitGeoStatus`: one muted line with the last measured distance and a "check now"
-  link. That branch used to render `null`.
-- Distance recorded on every check (`VISIT_GEO_LAST_KEY`), localStorage only, never sent.
-- Copy now says the check happens while the app is open and **never in the background** —
-  which is the truth. There is no OS geofence registration and no `UIBackgroundModes`; the
-  check runs when the dashboard mounts. The phone is not waiting for anyone to arrive.
+### ⚠️ Bounds-check every source slice in a test
+
+`tests/familyVisits.test.js:81` — the guard that stops `latitude`/`geo_flag` reaching the
+team-visible list, i.e. the whole surveillance line — has been asserting **nothing** since
+v1.105.46 moved a marker and reversed its slice bounds. Three more slices resolve to `-1` and
+pass by luck (`apiTimeout.test.js:40` uses a `//` comment as a marker, which `code()` strips, so
+it can never work). `tests/silentFailures.test.js` has a `region()` helper that asserts both
+markers exist and are ordered before slicing. **Use it.** A negative assertion over an empty
+string is worse than no test: it reports safety it never checked.
+
+### The backlog from this sweep
+
+**~35 verified findings are written up in TASKS.md** under "Aug 11 2026 — silent-failure sweep,
+round two", ranked P0–P2 with file:line and the user-visible consequence for each. Do not
+re-derive them. The headline items:
+
+1. **Six features that have never worked** (nlScheduling 500s on every request; iPAi coaching;
+   Kindred visit context; admin restore-session and force-check-in; the admin iPAi toggle).
+2. **`withPollerLock` can charge a family twice** — `Promise.race` doesn't cancel the work, so
+   the deadline releases the lock while the tick is still running, and the auto-pay poller
+   creates a Stripe PaymentIntent with **no idempotency key** before writing its own re-entry
+   guard.
+3. **Untimed outbound calls**, including eleven `new Anthropic()` route sites at a ~30-minute
+   effective ceiling and a **forgot-password flow that hangs forever** on Resend.
+4. **14 client fetches** where medication reminders and care tasks silently vanish, including two
+   cards that disappear entirely rather than showing an empty state.
+5. **PDF documents are a blank white box on every iPhone** — and the fix already exists in
+   `AttachmentViewer.js`.
 
 ### iOS / TestFlight — state and hard-won facts
 
@@ -365,9 +393,16 @@ there was nothing to render in its place, so success and failure looked identica
    iOS, silently, for every visit ever logged — same dead WKWebView API as the geofence.
    Confirm a real iPhone check-in writes coordinates to the visit log.
 2. **Badge** — clear something on the laptop, open the phone app, icon self-corrects.
-3. **Incoming call** — background the app, have someone call; it should ring.
+3. **Incoming call** — background the app, have someone call; it should ring. (Note the sweep
+   found a second reason it may not: `Messages.js:910` permanently disables the notification for
+   anyone whose permission is still `'default'`.)
 4. **Export CSV** — Reimbursements → Export; expect an iOS share sheet and a real file.
 5. **Geofence** — retest after v1.105.59 reaches prod.
+
+Sentry is quiet: two unresolved issues, neither actionable. INPLACE-7 is the geolocation
+diagnostic firing from a **1.105.55** bundle in the home-screen PWA (pre-plugin, pre-.59) —
+check the reporting `version` extra before treating it as live. INPLACE-6 is a malformed-URL
+scan from before v1.105.55 made that a 400.
 
 ### Open, and needing Pete in a browser rather than a commit
 
@@ -379,10 +414,14 @@ there was nothing to render in its place, so success and failure looked identica
    Four artefacts must agree: the plist string, `PrivacyInfo.xcprivacy`, the ASC labels, and
    the published policy. The lawyer-reviewed 2026-07-07 policy predates R2 going live on 7/11,
    and R2 is where ID photos and selfies live. TASKS.md:159, :879.
+4. **`src/routes/notes.js:200` still puts note text on lock screens.** Flagged as a copy
+   decision in v1.105.38 and still unchanged. The family-visit push was deliberately built to
+   say nothing for exactly this reason.
 
 ### Deferred, deliberately
 
-- ~230 background-read `if (res.ok)` blocks with no `else`. Real, low individual severity.
+- ~262 background-read `if (res.ok)` blocks with no `else`. Real, low individual severity. (The
+  14 that are *not* deferrable are itemised in TASKS.md.)
 - A handful of CSS items.
 - **Android push** — blocked on FCM configuration; no notification work reaches an Android
   device until that exists.
@@ -406,8 +445,11 @@ there was nothing to render in its place, so success and failure looked identica
   (`web:ceiling:timeout → watch:ceiling:timeout in 42s`) answered it in one round trip.
 - He pushes back when a diagnosis smells wrong, and he has been right. When he says a claim is
   wrong, re-check before restating it.
-- He treats bad failure messaging as a trust bug, not a cosmetic one. "This URL couldn't be
-  reached" on a signup screen was a real defect.
+- **Don't route around a broken tool silently.** When push failed he asked, reasonably, to just
+  commit and push as always. The right answer was to show him the actual error, say plainly that
+  it wasn't connectivity and wouldn't clear on its own, and offer the one-command fallback — not
+  to quietly build an elaborate workaround (which cost an hour on Aug 4) and not to keep retrying
+  something with a stated policy reason.
 
 ## Local Development
 

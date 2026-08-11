@@ -25,6 +25,245 @@
   - **Real-world example (Mar 19):** Cary checked out early from a 4-hour session in Virginia. Her phone clock was 1 hour behind EST. The app computed duration using naive date parsing, making it look like she left 2 hours early instead of 1. Now fixed — check-out duration uses `buildDateTimeInZone` with care recipient's timezone.
   - **Core rule: All timing is anchored to where care happens.** Push notifications, check-in/check-out gates, session duration calculations, pay calculations, and dashboard displays must all use the care recipient's timezone. The caregiver's or family member's device timezone is irrelevant for session timing.
 
+
+> **Aug 11 2026 — silent-failure sweep, round two.** Five parallel audits over `src/` and
+> `public/js/`, one per recurring root cause from the v1.105.4x–5x run. Every finding below was
+> verified against the code — the producer AND the consumer traced — before being written down.
+> **Five shipped as v1.105.60** (doctor-report visit join, family-dashboard 200-on-error,
+> badge-clearing 200-on-error, the Apple-link unhandled rejection, invisible block requests).
+> The rest are listed here rather than fixed, so nobody re-derives them at 2am.
+>
+> The through-line, again: **a broken feature and a switched-off feature look identical.** None
+> of these logged anything a user would see. Several have been live since the feature shipped.
+
+- [ ] **⛔ Features that have never once worked, and nobody can tell.** Each is a wrong column or
+      table name that throws on every call into a `catch` that logs and returns empty. To a user
+      the feature simply isn't there. All are one-line fixes; the work is verifying the intended
+      column, not writing the change. **P0 as a group — this is what "silent" costs.**
+  - `src/utils/nlScheduling.js:38,189–199` — **five** nonexistent columns (`cr.family_id` →
+    `family_user_id`, `cp.experience_summary`, `cp.skills`, `av.user_id` → `caregiver_id`,
+    `av.date` → `specific_date`, `u.status` → `is_active`). `POST /api/scheduling/natural` 500s
+    on **every** request; it is mounted at `server.js:431`. Also `av.type != 'unavailable'` is
+    vacuous — the column only ever holds `'available'` or `'blocked'`, so blocked slots would
+    read as available even once the names are fixed.
+  - `src/utils/careIntelligence.js:659` — `cr.mobility` does not exist. **iPAi caregiver
+    coaching has never been generated for any visit**; `visit_logs.ai_coaching` is always NULL
+    and the `ipai_coaching` socket event never fires. Swallowed at `sessions.js:1993` as
+    "(non-blocking)".
+  - `src/utils/kindredBrain.js:96` — `cs.care_type` does not exist (`care_sessions` has
+    `service_type`). Kindred never has scheduled-visit context; ask it when a caregiver is
+    coming and it answers as though nothing is booked.
+  - `src/routes/admin/sessionOps.js:89,250` — `UPDATE visit_logs SET … updated_at = NOW()`;
+    there is no `updated_at` on that table. Admin **restore session** and **force check-in**
+    500 whenever a visit log already exists.
+  - `src/routes/kindred.js:1382,1388` — `users.ipai_access` does not exist (it is
+    `companion_access`). The admin iPAi-access toggle always 500s.
+  - `src/utils/careIntelligence.js:88` — `reviews.reviewer_id` does not exist. Log noise only
+    today, since the `reviews` result is never used in a prompt — but it is a wasted round trip
+    on every call and the next person to use that variable inherits an always-empty array.
+
+- [ ] **⛔ `withPollerLock` can charge a family twice.** `src/models/database.js:2236–2259` races
+      the tick against a 120s deadline with `Promise.race`, which does **not** cancel the work.
+      On timeout the `finally` releases the advisory lock while the original tick is still
+      running — overlap protection is void in exactly the case it exists for. Poller 105 is
+      auto-pay: `processOverduePayments` creates a Stripe PaymentIntent *before* inserting the
+      `payments` row its own re-entry guard reads, Stripe's default is 80s/attempt with retries,
+      and **there is no idempotency key on the PaymentIntent**. Reported only as
+      `console.error`, never `captureException`, so it would not reach Sentry. **P0.**
+  - Related, same helper: the release itself is an unbounded `await client.query(pg_advisory_unlock)`
+    in the `finally`. A half-open connection means the client is never released (pool of 10) and
+    the lock is never freed — that poller is dead until the process restarts, silently.
+    `idle_in_transaction_session_timeout` does not cover it: the session is idle, not in a
+    transaction.
+
+- [ ] **⛔ Untimed outbound calls — the same bug already fixed in `src/utils/`, still live in
+      `src/routes/`.** Node's global `fetch` has no default timeout at all, and the Anthropic
+      SDK default is 600s × 2 retries ≈ **30 minutes**. The user-visible result is an infinite
+      spinner indistinguishable from a dead feature, and nothing logs during the wait. **P0 for
+      the auth-path ones, P1 for the rest.**
+  - **Raw `fetch`, unbounded forever:** `src/utils/aiMatching.js:357` (called in a loop from
+    `GET /api/matching/ranked` — "find me a caregiver" never returns) and
+    `src/utils/nlScheduling.js:69` (which `ipaiChat.js:55` calls *after* correctly setting a 30s
+    client timeout, bypassing it entirely).
+  - **`new Anthropic()` with no `timeout`/`maxRetries` at eleven route sites:**
+    `careRecipients.js:565,739,884` (doctor report + questions + care profile),
+    `caregiveronboarding.js:179` and `selfOnboarding.js:28` (**identity verification**, vision,
+    two base64 images), `sessions.js:1288` (pre-check-in briefing), `careEvents.js:161`,
+    `ipaiChat.js:291`, `kindred.js:963` (the summarizer that raises **abuse flags**),
+    `careIntelligence.js:157,221`. Every file in `src/utils/` already passes
+    `{ timeout: 30000, maxRetries: 1 }` — copy that.
+  - **Resend has no default timeout** (`src/utils/email.js:67`) and is awaited inline on
+    `passwordReset.js:39` — **forgot password hangs forever** and the user never learns whether
+    the mail was sent. Same at `careTeams.js:364,444`, `consent.js:284,664`, `waitlist.js:14`,
+    `reports.js:241`, `careRecipients.js:1079`, `admin/people.js:679`.
+  - ElevenLabs ×5 (`src/utils/voiceService.js`) — the companion goes silent with no error, and
+    `kindred.js:376` throws away an already-completed Claude answer while it hangs.
+  - R2/S3 client built with no `requestTimeout`/`connectionTimeout` (`src/utils/storage.js:49`,
+    AWS SDK v3 defaults to unlimited + 3 retries) — reached by every document, receipt and ID
+    upload/download. Env-gated, which is the only reason it hasn't bitten.
+  - `payments.js:1541` — an untimed loopback `fetch` to our own `/api/checkr/initiate`, awaited
+    **after the card is charged**, with a comment claiming it is non-blocking.
+  - No handler-level deadline anywhere: `server.js`'s `requestTimeout` bounds *receiving* a
+    request, not producing the response. One `res.setTimeout` would convert this whole class
+    from "infinite spinner" into "visible error".
+
+- [ ] **Predicates that read like filters and filter nothing.** Same family as the `is_read`
+      column that produced the app-icon 78. **P1.**
+  - `src/routes/accountability.js:814` — `cs.notifications_sent NOT LIKE '%no_show_flagged%'`
+    on a nullable column with no default. `NULL NOT LIKE` is NULL, so the row is excluded: the
+    **no-show poller never fires** for a confirmed session that never got a reminder (confirmed
+    inside the 15-min window, or after start time, or while the poller was down). The four
+    sibling queries in `server.js` all guard this with `IS NULL OR …`; this one doesn't.
+  - `src/routes/admin/reviews.js:438` — counts `action = 'login_failed'`, which is **never
+    written** (`auditLog.js:14` writes `login_attempt` and escalates severity). The admin
+    briefing's "failed logins (24h)" is hard zero forever — a credential-stuffing run reports
+    as a clean night.
+  - `src/routes/admin/monitoring.js:93,187,222` — filters `severity IN ('critical','error')`
+    but 14 call sites write `'warning'` (`checkr.js` ×5, `admin/access.js`). Background-check
+    flags, expirations, suspensions, disputes and admin access grants are written to
+    `audit_log` and never surface in Admin → Monitoring. The security panel looks quiet.
+  - `src/routes/admin/overview.js:32` — `consent_status = 'attestation_pending'` is never
+    written. The consent-review badge counts untouched recipients and **never counts the ones
+    who have actually attested and are waiting on admin verification** — the queue that needs
+    action. `admin/verification.js:342` gets this right; copy it.
+  - `src/routes/admin/reviews.js:418` — `0 AS flagged_pending`, hardcoded, then tested with
+    `> 0` at `:510`. The briefing can never mention flagged reviews. The real number is
+    computed correctly 200 lines earlier at `:185`.
+  - `src/routes/financials.js:233` — `status IN ('completed','confirmed','checked_in','scheduled')`;
+    the last two are never written. The admin sessions-per-day chart silently omits every
+    `in_progress`, `pending`, `open` and `negotiating` session — a visit being delivered right
+    now is not counted.
+
+- [ ] **A test that asserts nothing, guarding the surveillance line.**
+      `tests/familyVisits.test.js:81` slices `route.indexOf("SELECT fv.id")` →
+      `route.indexOf("FROM family_visits")`, and since v1.105.46 added a dedupe query earlier in
+      the file the **end marker now precedes the start** — `listQuery` is `""` and the assertion
+      is vacuous. It is the guard that stops `latitude`/`geo_flag` reaching the team-visible
+      list. The route is correct today; adding a column would ship green. Three more slices are
+      `-1` and currently passing by luck: `tests/apiTimeout.test.js:40` (uses a `//` comment as
+      a marker, which `code()` strips — structurally guaranteed to fail),
+      `tests/attentionBadge.test.js:156,242`, `tests/familyVisits.test.js:149`. **Bounds-check
+      every source slice**; `tests/silentFailures.test.js` has a `region()` helper that does.
+      **P1.**
+
+- [ ] **Errors that render as reassurance — the server half.** Same shape as the two fixed in
+      v1.105.60. Each answers 200 with an empty or zeroed body on an internal error. **P1,
+      safety-relevant ones first.**
+  - `src/utils/attention.js:25–34` — `safe()` swallows each of four sub-queries to `0` and sums
+    them. One failing query means a **smaller badge number**, pushed to the phone as
+    authoritative and written to `push_subscriptions.last_badge`, where it sticks. "3 care tasks
+    are due" becomes silence.
+  - `src/routes/push.js:883` — notifications → `200 {notifications: [], unreadCount: 0}`. Care
+    alerts and no-show notices vanish into "nothing new".
+  - `src/routes/careRecipients.js:767` — doctor-report clarifying questions → `200 {questions: []}`,
+    which reads as "iPAi reviewed the notes and had none". That step exists specifically to
+    catch sparse-data bias before a doctor-facing document is drafted.
+  - `src/routes/dashboard.js:238` — pending **time proposals** `.catch(() => [])`. The family
+    never sees the caregiver's schedule-change request and the 2-hour window expires without
+    them. `:619` does the same to the caregiver's own sent proposals.
+  - `src/routes/matching.js:200` — a caregiver that fails to score is `continue`d out, and the
+    partial list is then `.slice(0, limit)` and presented as complete.
+  - Money/cosmetic tier: `payments.js:605` (tells a family with a card on file to set up
+    payments), `reimbursements.js:942`, `geocode.js:77`, `ipaiChat.js:328`,
+    `admin/overview.js:146–180`, `admin/reviews.js:366–409`.
+
+- [ ] **Errors that render as reassurance — the client half.** 276 `if (res.ok)`-with-no-else
+      blocks exist; ~262 are the background reads we deliberately deferred. **These 14 are not
+      deferrable** — they are safety data or the entire content of a screen someone navigated to
+      on purpose. **P1.**
+  - Cards that **vanish entirely** on failure (worse than an empty state — the profile looks
+    like one where the feature was never set up): `CareTasks.js:403` (**medication reminders**)
+    and `CareEvents.js:285`. Both servers return a correct 500; the client throws it away.
+  - `Dashboard.js:141,152` — today's care tasks and upcoming events drop out of **Next Up** with
+    no row, no badge, no toast. A due medication reminder is simply not there.
+  - Screens whose only content is the failed fetch, rendering a reassuring empty state:
+    `Schedule.js:30` ("No care sessions scheduled yet" — a family checking whether anyone is
+    coming tomorrow), `ActivityFeed.js:10` ("No activity yet"), `CaredForView.js:35` (the
+    recipient's own view), `CaregiverCalendar.js:66` (explicit `setCareRequests([])` on both
+    failure paths — a caregiver doesn't claim a shift that was waiting), `CareTeamPage.js:8`.
+  - `CareProfile.js:538,550` — notes and family visits both collapse to "No notes yet. Add one
+    to share care observations with your team." These are the observations the doctor report is
+    generated from.
+  - `Documents.js:155,186` — per-recipient fetches swallowed **inside a loop**, so recipient A's
+    POA and advance directive are absent while B's are present, with nothing marking the
+    difference. Consent likewise reads as none-on-file.
+  - `ConsentVerification.js:52` — an already-uploaded authorization document reads as never
+    uploaded, and the UI offers to upload it again.
+  - `MyAccount.js:625` — `setPreferences({})` on three paths renders **every notification
+    toggle off**, including `med_reminders`; saving from that screen then persists it.
+  - `AdminPanel.js:150` — safety flags → "No flags match this filter."
+  - `Messages.js:1286` — block-preview consequences fall back to generic prose.
+  - `FindWork.js:232` — sets `jobsLoadFailed` on `!res.ok` but **not in the catch**, so an
+    offline/DNS failure takes the ⚠️ path's opposite branch and the caregiver reads "No open
+    requests." The correct UI already exists at `:850`; it is one line.
+
+- [ ] **Capability guards written against Chrome — the WebKit tail.** Same root cause as the
+      geolocation and `setAppBadge` misses. **P1.**
+  - `Documents.js:1523` — **PDF care documents render as a blank white box on every iPhone**
+    (insurance card, POA, DNR, med list). WebKit will not render a PDF in a subframe. The fix
+    already exists in this codebase: `AttachmentViewer.js:30` has `isWebKitLike()` and an
+    "Open PDF" button, added v1.105.49, and the two files share a bundle scope. Same blank box
+    in the admin document modal, `AdminPanel.js:4929`. Secondary: `handlePreview` never resets
+    `previewFileUrl`, so a failed fetch shows the **previous document**.
+  - `AttachmentViewer.js:274` — that iOS fallback is itself dead **inside the native app**: it
+    hands a `blob:` URL to `Browser.open`, and SFSafariViewController accepts only http/https.
+    `openExternalUrl` returns `true` so neither fallback runs, and the return value is
+    discarded. The "Save" button beside it works — offer that instead.
+  - `TwoFactorSetup.js:55` — the **2FA backup-codes** copy button. Its fallback targets
+    `#backup-codes-text`, an element that **does not exist anywhere in the repo**, and
+    `navigator.clipboard` is dereferenced unguarded so it throws synchronously before `.catch`
+    can run. These are the only way back into an account whose authenticator is lost.
+    `DisclaimerModal.js:111` has the correct shape.
+  - Three clipboard writes that toast success unconditionally, one line after an unawaited or
+    optional-chained call: `CaretakerHub.js:2838` (the referral link — the caregiver pastes
+    nothing and loses the credit), `CareProfile.js:1067` (the drafted doctor report),
+    `MyAccount.js:1069` (whose `.catch(() => {})` also hides a real share failure behind
+    user-cancel).
+  - `HourReports.js:70` — `window.print()` is a **no-op in both native shells**, under copy
+    promising "you can download it as a PDF". A caregiver's school-credit hours.
+  - `AdminPanel.js:1617` — the one export `saveBlob` missed (waitlist CSV): `<a download>` is
+    not implemented in WKWebView, and `revokeObjectURL` fires synchronously on the next line,
+    racing the download even on desktop. `:6656` — `window.open('', '_blank')` returns `null`
+    in the WebView with **no else**, so tapping a caregiver's uploaded ID does nothing at all.
+  - `Messages.js:910` — an **incoming call never rings** for anyone whose permission is
+    `'default'` (i.e. anyone who dismissed the prompt). It calls `Notification.requestPermission()`
+    from a hidden document, which has no user activation, so the state never changes and the
+    `return` on the next line skips the notification on every subsequent call, forever.
+  - `navigator.storage.persist()` is never called, so the IndexedDB offline check-in queue is
+    evictable under iOS's 7-day policy in a non-installed PWA.
+
+- [ ] **Work computed and thrown away.** **P2 unless noted.**
+  - `FamilyVisitLog.js:388` — "check now" destructures only `pos` from `getDeviceLocation()`,
+    discarding `reason`/`tried`/`detail`. With Location Services off it flips to "checking…",
+    flips back, and changes nothing — no message, no Sentry report. `VisitGeoInvite.enable()`
+    sixty lines above does it correctly. This is the v1.105.59 failure family on the component
+    v1.105.59 added. **P1.**
+  - `src/routes/careTeams.js:364,444` — `sendEmail`'s `{success, error}` discarded, then
+    "Invite resent to …" printed regardless. The **resend** endpoint exists because the first
+    one didn't arrive, and it reports success on a second failure too. `careRecipients.js:1079`
+    and `consent.js:284` do this correctly. **P1.**
+  - `src/routes/familyVisits.js:96–108` — `latitude`, `longitude`, `distance_ft`, `geo_flag`,
+    `logged_via` are written on every insert and **read by nothing** — `shape()` strips them,
+    no admin screen, no export, no report. Coarsened home-proximity coordinates for family
+    members retained indefinitely for no feature. (`visit_logs.check_out_distance_ft` and
+    `check_out_geo_flag` likewise.) Either wire a consumer or stop writing them; this is the
+    kind of thing the lawyer list exists for. **P1 — retention, not correctness.**
+  - Socket events emitted with no client listener: all five `interview_*`, plus `checkin_nudge`,
+    `family_no_show`, `late_resolution`, `proposal_expired`, `reminder_delivered`,
+    `ipai_coaching`, `ipai_session_summary`, `new_feedback`. Declining, completing or cancelling
+    an interview updates nothing on the other party's screen until reload. All are paired with a
+    push, so only the real-time half is dead.
+  - `src/middleware/validate.js:164` — `validateMessage` is defined, exported, and mounted on no
+    route. `MAX_LENGTHS.text` (2000) is never enforced; message length is bounded only by the
+    global body limit. A validator that looks installed and isn't.
+
+- [ ] **Still owed from v1.105.38: `src/routes/notes.js:200` puts real PHI on lock screens.**
+      `body: \`${authorName}: ${content.slice(0,120)}\`` — the note text itself. The family-visit
+      push was deliberately built to say nothing ("Pete added a note about Betty — Tap to read")
+      for exactly this reason, and the existing note push was flagged to Pete as a copy decision
+      rather than changed unilaterally. Still unchanged. **P1 — decide it.**
+
+
 ### P1
 
 - [x] **Async route handlers hang instead of erroring — FIXED v1.105.37 for all 87 at once.** Express 4 does not catch a rejected promise from an `async` handler: no 500, no log, no Sentry event — the request HANGS and the client spins to its own timeout. `src/utils/asyncRoutes.js` wraps the router methods once at boot so a rejection becomes `next(err)` and lands in the existing error handler. Deliberately does not wrap 4-arg error handlers (Express reads arity) or routers (mounting needs their properties). 16 tests against a real express app, including "a handler that already responded then rejects must not double-send". Individual try/catch still wins where a handler wants its own message — this is the floor, not a replacement.
