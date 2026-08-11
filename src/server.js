@@ -540,6 +540,29 @@ app.get("/kindred", async (req, res) => {
 // catch-all; any type with no active document falls through to the app.
 app.use(require("./routes/publicLegal"));
 
+// ─── /business — a page a crawler can actually read (v1.105.56) ───
+//
+// Pete: "when someone signs up for the website and it says it can't reach the domain,
+// something appears wrong." He's right, and the trust cost lands at the exact moment we're
+// asking a caregiver for their bank details.
+//
+// Two separate faults produced that screen. The first was ours and is fixed in
+// routes/payments.js — we handed Stripe a domain that has never resolved. The second is
+// this: index.html is `<div id="root"></div>` and everything else is drawn by JavaScript.
+// Stripe's verification fetches the URL and reads HTML. It sees an empty shell and a
+// one-line meta description — indistinguishable from the "placeholder or under-construction
+// site" its own task text says it will not accept. Pointing it at yourinplace.com alone
+// would very likely have failed review a second time, and I'd have called it fixed.
+//
+// So: one server-rendered page, no JavaScript required, describing what the business is,
+// what it sells, what it charges and how caregivers are paid. Every word is Pete's own
+// copy from the splash page — a business-information page is the wrong place to invent
+// claims about a business.
+app.get("/business", (req, res) => {
+  res.set("Cache-Control", "public, max-age=300");
+  res.sendFile(path.join(__dirname, "../public/business.html"));
+});
+
 // ─── Catch-all: serve frontend for any non-API route ───
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "../public/index.html"));

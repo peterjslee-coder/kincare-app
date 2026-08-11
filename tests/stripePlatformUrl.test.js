@@ -26,7 +26,37 @@ const payments = code("src/routes/payments.js");
 describe("what we tell Stripe about ourselves", () => {
   test("the platform URL is derived from APP_URL, not hardcoded", () => {
     expect(payments).toMatch(/const \{ appUrl \} = require\("\.\.\/utils\/env"\);/);
-    expect(payments).toMatch(/const PLATFORM_URL = appUrl;/);
+    expect(payments).toMatch(/const PLATFORM_URL = `\$\{appUrl\}\/business`;/);
+  });
+
+  test("it points at the server-rendered page, not the app shell", () => {
+    // index.html is `<div id="root"></div>` and everything else is drawn by JavaScript.
+    // Stripe's verification reads HTML: the app root looks exactly like the "placeholder or
+    // under-construction site" its own task text says it won't accept. Sending it there
+    // would very likely have failed review a second time.
+    const server = code("src/server.js");
+    expect(server).toMatch(/app\.get\("\/business", \(req, res\) => \{/);
+    expect(server).toMatch(/business\.html/);
+    // ...and it must be mounted BEFORE the SPA catch-all, or it never runs.
+    expect(server.indexOf('app.get("/business"')).toBeLessThan(server.indexOf('app.get("*"'));
+  });
+
+  test("the page says what the business sells, charges and pays", () => {
+    // Stripe's requirement is "detailed information about your business and the products
+    // you sell" — a landing page with a tagline does not clear that bar.
+    const page = require("fs").readFileSync(
+      require("path").join(__dirname, "..", "public", "business.html"), "utf8"
+    );
+    for (const needed of [
+      "Companionship", "Respite care", "Transportation",
+      "20% commission", "keep 80%", "$45 to $85",
+      "support@yourinplace.com", "New River Valley",
+    ]) {
+      expect([needed, page.includes(needed)]).toEqual([needed, true]);
+    }
+    // No JavaScript required to read it — that is the entire point.
+    expect(page).not.toMatch(/<script/i);
+    expect(page).not.toMatch(/id="root"/);
   });
 
   test("no connected account is created with a dead domain", () => {

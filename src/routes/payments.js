@@ -20,8 +20,12 @@ const { captureException } = require("../utils/sentry");
 //
 // Derived from APP_URL now (utils/env.js) — the same source of truth the app already uses
 // for WebAuthn and CORS — so it cannot drift from wherever the app is actually served.
+// ⚠️ /business, not the app root. The root is a client-rendered React shell — a crawler
+// fetching it gets `<div id="root"></div>` and nothing else, which reads to Stripe exactly
+// like the "placeholder or under-construction site" it says it won't accept. /business is
+// server-rendered HTML describing the business, its services and its fees (see server.js).
 const { appUrl } = require("../utils/env");
-const PLATFORM_URL = appUrl;
+const PLATFORM_URL = `${appUrl}/business`;
 const { calculateSessionCost, isShortNotice, SURCHARGE_CAREGIVER_SHARE, SURCHARGE_PLATFORM_SHARE } = require("../utils/rateCalculator");
 
 const router = express.Router();
