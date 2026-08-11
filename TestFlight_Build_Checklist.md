@@ -1,92 +1,83 @@
-# TestFlight build — everything batched
+# TestFlight build — v1.1 (8)
 
-**As of v1.105.54, all four native gaps are wired in the web layer.** Every call
-feature-detects its plugin and falls back to today's behaviour, so nothing changes until
-you install them. Install the four packages, ship **one** build, and all of it turns on.
+Everything in the repo is done and pushed. What's left is Xcode and App Store
+Connect, which only you can run.
 
 ---
 
-## The commands
+## On your Mac
 
 ```bash
-npm i @capacitor/geolocation @capacitor/badge @capacitor/local-notifications @capacitor/filesystem @capacitor/share
-npx cap sync ios
-npx cap open ios
+cd <your kincare-app checkout>
+git pull
+npm install          # picks up the five new plugins
+npx cap sync ios     # already committed, but harmless and confirms your copy matches
+npx cap open ios     # opens Xcode
 ```
 
-Then archive and upload to TestFlight as usual.
+## In Xcode
 
-`npx cap sync` registers the plugins with the native project. No Swift to write — the web
-code already calls each one through `window.Capacitor.Plugins.*`.
+1. Select **Any iOS Device (arm64)** as the destination — not a simulator, or Archive is greyed out.
+2. **Product → Archive**.
+3. When the Organizer opens: **Distribute App → App Store Connect → Upload**.
+4. Let it manage signing automatically unless you've set it up otherwise.
+
+Version is already bumped for you: **1.1, build 8** (was 1.0, build 7). TestFlight
+rejects a repeated build number, so this is the bit that most often bounces a re-upload —
+if you ever need a second attempt, bump `CURRENT_PROJECT_VERSION` again.
+
+## In App Store Connect
+
+Processing usually takes 5–15 minutes. Then add the build to your TestFlight testers.
+Export compliance is already declared in Info.plist (`ITSAppUsesNonExemptEncryption = false`),
+so it shouldn't stop to ask.
 
 ---
 
-## What each one fixes
+## What was added
 
-### 1. `@capacitor/geolocation` — the one you're chasing
+| Package | Turns on |
+|---|---|
+| `@capacitor/geolocation` | The geofence nudge **and** caregiver check-in/check-out location |
+| `@capawesome/capacitor-badge` | App icon corrects itself on open |
+| `@capacitor/local-notifications` | Incoming calls can ring on iOS |
+| `@capacitor/filesystem` + `@capacitor/share` | Save and Export CSV produce a real file |
 
-**The evidence.** The card reported its own failure:
+There is no official `@capacitor/badge` — that name 404s on npm. Badge is a community
+plugin, and the one that matters is that `@capawesome/capacitor-badge` registers under the
+name `Badge`, which is what the web code asks for.
 
-```
-web:ceiling:timeout → watch:ceiling:timeout in 42s
-```
+This project uses **Swift Package Manager**, not CocoaPods, so there's no `pod install`.
+`Package.swift` now lists all ten plugins and is committed.
 
-`ceiling` is our outer deadline, hit twice. That means **neither the success nor the error
-callback was ever invoked** by `getCurrentPosition` or `watchPosition`. A denial would read
-`denied(1)`; a genuine failure `timeout(3)`. Nothing came back at all.
-
-Capacitor's WKWebView does not connect the browser Geolocation API to Core Location. The
-object exists; it just never answers. Not permission, not signal, not GPS, not indoors —
-which is why my first three explanations were all wrong.
-
-**Fixes, in one go:**
-- "Notice when you're at Betty's" — the geofence nudge.
-- **Caregiver check-in and check-out location.** This is the bigger one. Those called the
-  same dead API, so the evidence that a caregiver was physically at the home has *never*
-  been captured on an iPhone — it sat at `null` with no error, so nobody noticed. Worth
-  checking your `visit_logs` for how many iOS check-ins have coordinates.
-- The "On My Way" ETA, and map centering on the caregiver and family map views.
-
-### 2. `@capacitor/badge` — the app icon clears itself
-
-Waiting since v1.105.42. Today the icon only changes when a push arrives; the app can't set
-it. After this build it sets the number directly on open and resume, so dealing with
-something on your laptop no longer leaves a stale badge on your phone.
-
-### 3. `@capacitor/local-notifications` — incoming calls ring
-
-`new Notification()` throws on iOS (v1.105.49 fixed that), but the service-worker path it
-now uses may not be available in the WebView either, so a call could still arrive silently.
-This is the path that definitely works.
-
-### 4. `@capacitor/filesystem` + `@capacitor/share` — Save and Export produce a file
-
-`<a download>` is a no-op in WKWebView — Capacitor installs no download handler. Until
-v1.105.49 the CSV export even showed "Exported 34 reimbursements" while writing nothing.
-These two write the bytes and hand the OS a real share sheet.
+No `Info.plist` changes were needed. `NSLocationWhenInUseUsageDescription` is already
+there, and none of the other four require a usage string.
 
 ---
 
-## How to verify, in order
+## Verify after installing, in this order
 
 1. **Geofence** — dashboard → "Notice when you're at Betty's?" → **Yes, notice**.
-   Expect a distance, e.g. *"You're 12.4 miles from Betty's right now, so no nudge — it
-   appears within 1,000 ft."* If it fails, the grey diagnostic line under the message names
-   the stage; send me that line.
-2. **At Betty's** — the green *"Looks like you're with Betty"* card with **Log this visit**.
-3. **Check-in** — have a caregiver check in on an iPhone and confirm the visit log now
-   carries coordinates.
-4. **Badge** — clear something on the laptop, then open the phone app: the icon should
-   correct within a second or two, without a push.
-5. **Export** — Reimbursements → Export CSV: an iOS share sheet, and a real file.
+   Expect a distance: *"You're 12.4 miles from Betty's right now, so no nudge — it appears
+   within 1,000 ft."* If it fails, the grey diagnostic line under the message names the
+   stage; send me that line.
+2. **Check-in location** — the important one. Have a caregiver check in on an iPhone, then
+   confirm the visit log carries coordinates. This has never worked on iOS, so it is worth
+   checking against a real check-in rather than assuming.
+3. **Badge** — clear something on your laptop, then open the phone app. The icon should
+   correct within a second or two, with no push involved.
+4. **Incoming call** — background the app and have someone call you. It should ring.
+5. **Export** — Reimbursements → Export CSV. An iOS share sheet, and a real file.
+
+If any of these still fails, it now fails *out loud* — every one of them reports a reason
+rather than doing nothing. That's the difference from last week.
 
 ---
 
-## Also worth doing while you're in the native project
+## Still outstanding, unrelated to this build
 
-- `NSLocationWhenInUseUsageDescription` is already in `Info.plist` — no change needed.
-- If you ever want silent background badge pushes, that needs
-  `UIBackgroundModes → remote-notification`. Not required for anything above; the badge
-  push is an alert-type push precisely because that entitlement is absent.
-- Android push still needs FCM configured before any of the notification work reaches an
-  Android device.
+- **Android push** needs FCM configured before any notification work reaches an Android
+  device.
+- **`inplace.care`** returns a Cloudflare 525 (SSL handshake failure with the origin).
+  Nothing depends on it any more — Stripe now points at `yourinplace.com/business` — but
+  the domain is broken if you meant to use it.
