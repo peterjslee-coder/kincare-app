@@ -210,9 +210,25 @@ const LogVisitSheet = window.LogVisitSheet = ({ recipients, presetRecipientId, p
 const VISIT_NUDGE_DISMISS_KEY = 'inplace.visitNudge.dismissedUntil';
 const VISIT_GEO_OPTIN_KEY = 'inplace.visitNudge.optIn';         // '1' once they say yes
 const VISIT_GEO_INVITE_KEY = 'inplace.visitNudge.inviteHidden'; // '1' once they say no
+// v1.105.59 — the last distance we measured, so "is this on, and how far am I?" has an
+// answer that survives a re-render and a reopen. Device-only; never sent anywhere.
+const VISIT_GEO_LAST_KEY = 'inplace.visitNudge.lastCheck';      // { ft, name, at }
 
 const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
+
+const prettyFeet = (ft) => (ft > 5280 ? `${(ft / 5280).toFixed(1)} miles` : `${ft} ft`);
+
+const recordLastCheck = (ft, name) => {
+  lsSet(VISIT_GEO_LAST_KEY, JSON.stringify({ ft, name, at: Date.now() }));
+};
+
+const readLastCheck = () => {
+  try {
+    const v = JSON.parse(lsGet(VISIT_GEO_LAST_KEY) || 'null');
+    return v && Number.isFinite(v.ft) ? v : null;
+  } catch { return null; }
+};
 
 // Can we read the person's location without springing a prompt on them?
 // Opt-in wins — they asked for this, on this device. Otherwise ask the Permissions API
@@ -292,13 +308,24 @@ const VisitGeoInvite = ({ recipients, onEnabled }) => {
       const ft = haversineFeet(latitude, longitude, r.latitude, r.longitude);
       if (!best || ft < best.ft) best = { ft, r };
     }
+    recordLastCheck(best.ft, nameOf(best.r));
     setResult({
       ok: true,
       text: best.ft <= 1000
         ? `You're about ${best.ft} ft from ${nameOf(best.r)}'s — close enough. The nudge will offer to log a visit.`
-        : `Saved. You're ${best.ft > 5280 ? `${(best.ft / 5280).toFixed(1)} miles` : `${best.ft} ft`} from ${nameOf(best.r)}'s right now, so no nudge — it appears within 1,000 ft.`,
+        : `Saved. You're ${prettyFeet(best.ft)} from ${nameOf(best.r)}'s right now, so no nudge — it appears within 1,000 ft.`,
     });
-    if (onEnabled) onEnabled();
+    // v1.105.59 — Pete, 8/11: "there was no 'ok, I'll ask you next time' toast."
+    //
+    // There WAS one — for about one frame. onEnabled() bumps `retry` in the parent, the
+    // effect re-runs, visitGeoAllowed() is now true, so the parent stops rendering this
+    // card and (with no match, because he was three days early) renders null. The
+    // confirmation destroyed itself the instant it was set.
+    //
+    // So: hand off to the parent only when the handoff is to something the person can
+    // SEE — the nudge card, i.e. when we're actually in range. Out of range, this card
+    // stays put with the distance on it, and VisitGeoStatus carries the number afterwards.
+    if (onEnabled && best.ft <= 1000) onEnabled();
   };
 
   return (
@@ -307,8 +334,9 @@ const VisitGeoInvite = ({ recipients, onEnabled }) => {
         Notice when you're at {nameOf(withCoords[0])}'s?
       </div>
       <div style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>
-        InPlace can offer to log a visit when you're at the house. Your location is checked on
-        this phone only, and nothing is sent unless you choose to log something.
+        When you open InPlace at the house, it can offer to log a visit. It checks only while
+        the app is open — never in the background. Your location is worked out on this phone,
+        and nothing is sent unless you choose to log something.
       </div>
       {result && (
         <div style={{ fontSize: 12.5, marginTop: 9, color: result.ok ? 'var(--text-primary)' : 'var(--color-error)' }}>
@@ -333,6 +361,54 @@ const VisitGeoInvite = ({ recipients, onEnabled }) => {
           }}>No thanks</button>
         </div>
       )}
+    </div>
+  );
+};
+
+// ─── The quiet status line (v1.105.59) ───
+//
+// Pete, 8/11: "Best I can tell there's no way to know how far I am from Betty's (not that
+// I want to be pushed that info often)."
+//
+// Exactly right on both halves — so this is one muted line, no colour, no card chrome, and
+// it never pushes anything. It shows what the last check found and offers to redo it on
+// demand. It also says out loud that the check happens on open, which is the honest
+// description of what this feature is.
+const VisitGeoStatus = ({ recipients }) => {
+  const [last, setLast] = useState(readLastCheck);
+  const [busy, setBusy] = useState(false);
+
+  const withCoords = (recipients || []).filter((r) => r.latitude != null && r.longitude != null);
+  if (!withCoords.length) return null;
+
+  const nameOf = (r) => r.first_name || r.firstName || 'them';
+
+  const recheck = async () => {
+    setBusy(true);
+    const { pos } = await getPosition();
+    setBusy(false);
+    if (!pos) return;
+    const { latitude, longitude } = pos.coords;
+    let best = null;
+    for (const r of withCoords) {
+      const ft = haversineFeet(latitude, longitude, r.latitude, r.longitude);
+      if (!best || ft < best.ft) best = { ft, r };
+    }
+    recordLastCheck(best.ft, nameOf(best.r));
+    setLast(readLastCheck());
+  };
+
+  return (
+    <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)', marginBottom: 10, lineHeight: 1.5 }}>
+      {last
+        ? `${prettyFeet(last.ft)} from ${last.name}'s at last check. InPlace looks when you open it — the nudge appears within 1,000 ft.`
+        : 'InPlace will check how close you are to the house when you open it.'}
+      {' '}
+      <button onClick={recheck} disabled={busy} style={{
+        background: 'none', border: 'none', padding: 0, font: 'inherit',
+        color: 'var(--text-secondary)', textDecoration: 'underline',
+        cursor: busy ? 'default' : 'pointer',
+      }}>{busy ? 'checking…' : 'check now'}</button>
     </div>
   );
 };
@@ -370,12 +446,16 @@ const VisitNudgeCard = window.VisitNudgeCard = ({ recipients, alreadyLoggedToday
         // Decide HERE, at full precision. Only a coarsened point is ever sent, and only if
         // the person actually chooses to log.
         const { latitude, longitude } = pos.coords;
+        let best = null;
         for (const r of withCoords) {
           const ft = haversineFeet(latitude, longitude, r.latitude, r.longitude);
-          if (ft <= 1000) {
-            if (!cancelled) setMatch({ recipient: r, position: { latitude, longitude } });
-            return;
-          }
+          if (!best || ft < best.ft) best = { ft, r };
+        }
+        // v1.105.59 — record it every time, so the status line is current rather than
+        // frozen at whatever the opt-in happened to measure.
+        if (best) recordLastCheck(best.ft, best.r.first_name || best.r.firstName || 'them');
+        if (best && best.ft <= 1000) {
+          if (!cancelled) setMatch({ recipient: best.r, position: { latitude, longitude } });
         }
       } catch { /* the nudge is a bonus; it never breaks the dashboard */ }
     };
@@ -388,6 +468,13 @@ const VisitNudgeCard = window.VisitNudgeCard = ({ recipients, alreadyLoggedToday
   // no way to tell the feature apart from a broken one.
   if (allowed === false && !alreadyLoggedToday) {
     return <VisitGeoInvite recipients={recipients} onEnabled={() => setRetry((n) => n + 1)} />;
+  }
+
+  // v1.105.59 — opted in, but not near the house (or dismissed). This used to be `null`:
+  // the feature was on and looked identical to the feature being broken, which is the
+  // whole complaint. One muted line instead.
+  if (allowed === true && (!match || dismissed) && !alreadyLoggedToday) {
+    return <VisitGeoStatus recipients={recipients} />;
   }
 
   if (!match || dismissed) return null;

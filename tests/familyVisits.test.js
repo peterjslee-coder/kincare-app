@@ -277,3 +277,48 @@ describe("the activity chips are the approved straw man", () => {
     expect(route).toMatch(/ACTIVITIES\.includes\(a\)/);
   });
 });
+
+// ─── v1.105.59 — the confirmation that destroyed itself ───
+//
+// Pete, 8/11, three days early for a visit: "I clicked that I did want to check in next
+// time at Betty's… and then there was no 'ok, I'll ask you for notes the next time you're
+// at Betty's' toast. Best I can tell there's no way to know how far I am from Betty's."
+//
+// The toast existed and rendered for roughly one frame. onEnabled() bumped `retry` in the
+// parent, the effect re-ran, visitGeoAllowed() was now true, and the parent's opt-in branch
+// (`allowed === false`) no longer matched — so it fell through to `return null` and unmounted
+// the card holding the message. Success looked exactly like nothing happening, which is the
+// same failure family as the rest of this sweep: a working feature indistinguishable from a
+// broken one.
+describe("saying yes to the nudge says something back", () => {
+  test("the hand-off to the parent only happens when there is something to hand off to", () => {
+    // Bare `onEnabled()` on every success is the bug. It may fire only in range, where the
+    // parent has a nudge card to render in this card's place.
+    expect(client).toMatch(/if \(onEnabled && best\.ft <= 1000\) onEnabled\(\)/);
+    expect(client).not.toMatch(/\n\s*if \(onEnabled\) onEnabled\(\);/);
+  });
+
+  test("opted in and nowhere near the house renders a status line, never null", () => {
+    expect(client).toMatch(/const VisitGeoStatus = /);
+    expect(client).toMatch(/allowed === true && \(!match \|\| dismissed\)[\s\S]{0,80}<VisitGeoStatus/);
+  });
+
+  test("the distance is recorded on every check, not just at opt-in", () => {
+    // Two call sites beyond the definition: the opt-in, and the effect that runs on each
+    // dashboard open.
+    expect(client.match(/recordLastCheck\(/g).length).toBeGreaterThanOrEqual(3);
+  });
+
+  test("the distance never leaves the device", () => {
+    expect(client).toMatch(/VISIT_GEO_LAST_KEY = 'inplace\.visitNudge\.lastCheck'/);
+    expect(client).not.toMatch(/apiFetch\([^)]*lastCheck/);
+  });
+});
+
+describe("the card describes what the feature actually does", () => {
+  test("it says the check happens while the app is open", () => {
+    // There is no background geofence and no background location mode — see Info.plist.
+    // Copy that implies the phone is watching for you would be a promise nothing keeps.
+    expect(raw("public/js/components/FamilyVisitLog.js")).toMatch(/never in the background/);
+  });
+});

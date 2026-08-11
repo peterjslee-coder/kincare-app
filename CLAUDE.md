@@ -248,113 +248,166 @@ The consent_outreach table tracks emails sent + recipient responses. Attestation
 
 ## Last Session Handoff (updated each session)
 
-**Date:** August 4, 2026 | **Version:** v1.105.31 | **Session arc:** App Store / Play submission prep, the cancellation-policy reconciliation, guideline 1.2, privacy triage after the lawyer call, and the reimbursement ledger
+**Date:** August 11, 2026 | **Version:** v1.105.59 | **Session arc:** the app-icon "78", a
+codebase-wide sweep for silent failures, the first native-plugin TestFlight build, and the
+geofence opt-in that never confirmed itself
 
-> The previous entry here sat at March 19 / v1.50.35 for four months. If you are reading this
-> and the date is stale again, trust `git log` over this section.
+> If the date above is stale, trust `git log` over this section. It sat four months out of
+> date once already.
 
-### Where the product actually is
+### Read this before touching anything
 
-Store submission is the whole game right now. The code side of it is done; what remains is
-four things that need Pete in a browser, not a commit. See "Open" below.
+**1. Check for a container rollback.** The sandbox has silently reverted the working tree to
+an older commit four times in two days. It is not a git operation — the files simply go back.
 
-**What shipped in the v1.105.x run (chronological, `git log` has the detail):**
+```bash
+git log --oneline -1
+grep -n 'APP_VERSION = ' src/server.js | head -1
+ls tests/*.test.js | wc -l     # 42 at v1.105.58+; 36 or 37 means you have been rolled back
+```
 
-- **Store review invariants** (`.5`–`.12`) — Apple "Hide My Email" unblocked, iPad dropped for
-  the first submission, iOS privacy manifest added AND made a member of the App target's Copy
-  Bundle Resources (a manifest sitting in the folder does not ship), location declared
-  foreground-only, export compliance declared exempt. All pinned in `tests/storeReview.test.js`
-  — these are requirements that are invisible at runtime and only surface as a rejection weeks
-  later, so they get asserted rather than remembered.
-- **Guideline 1.2 — report/block** (`.13`, `.18`, `.21`, `.22`). Schema, UI reachable without a
-  right-click, and the admin queue that makes the 24-hour promise real. `src/utils/blocks.js`
-  fails OPEN on lookup error and fails toward ASKING on ambiguity.
-- **Cancellation policy reconciliation** (`.14`–`.17`, `.19`). Ten months of drift across the
-  terms document, the app copy and the code, reconciled to one rule. See "Do not re-litigate."
-- **Demo safety at the Stripe boundary** (`.20`). Dev Rule #7 was enforced in the poller's SQL
-  only; a screenshot harness cleared `is_demo` and the poller began authorising seeded sessions.
-  Now `isDemoSession()` guards every function that talks to Stripe, and keys on the seed's email
-  domain (`@inplace.care`) as well as the mutable flag.
-- **Privacy** (`.23`, `.24`) — check-in stores a coarsened coordinate (2 decimals, ~1.1km) rather
-  than a precise one; Sentry stops reporting other people's port scans as our errors.
-- **Copy** (`.25`) — states plainly that the AI does not set prices or wages. Pete's ask; verified
-  against `calculateSessionCost` and the AI modules before writing it, and it is true.
-- **QR codes** (`.26`–`.28`) — `src/utils/qr.js`, iP badge in the middle, and a route a *family*
-  member can hand to someone who asks what they're doing.
-- **Reimbursements** (`.29`–`.31`) — a missing receipt now reads as "No receipt attached" with a
-  request button, receipts can be added to a request that already exists, and the settled tail
-  (paid/declined/cancelled) collapses. `pending` and `approved` never collapse: `approved` means
-  agreed but not yet paid, so someone is still owed money.
+Recovery is `git fetch origin && git reset --hard origin/main`. Nothing is ever lost provided
+every version is pushed the moment it ships. **Push early and often.**
 
-### Open — all four need Pete at a browser, not code
+**2. Confirm push access before doing real work.** On 8/11 the git proxy began refusing
+pushes mid-session (403, *"not in this session's authorized repository set"*) while `fetch`
+kept working. A finished, tested commit could not be delivered. If push is dead, say so
+immediately and hand Pete a `git format-patch` file rather than accumulating work.
 
-1. **App Store Connect → Primary Category = Lifestyle.** Decided, not yet set. His session expired
-   mid-walkthrough. (Not Health & Fitness — that invites a heavier review posture than this app
-   needs for a first submission.)
-2. **Play Health apps declaration — re-answer it.** One probably exists, but Care Tasks (v1.99)
-   added medication scheduling/reminders/adherence, which trips Play's "Medication and Treatment
-   Management" category. TASKS.md:849.
+### The theme, and the lens to keep
+
+The whole v1.105.4x–5x run was one bug family: **features that fail silently and look
+identical to features that are switched off.** Nearly every fix was "make it report itself."
+
+Recurring root causes, worth pattern-matching on:
+
+- **Capability guards written against Chrome.** `navigator.permissions.query({name:'geolocation'})`
+  and `setAppBadge` both silently disabled features on WebKit — the only platform with the
+  hardware. This killed the visit nudge *and* caregiver check-in GPS, invisibly, forever.
+- **Vacuous SQL predicates.** `COALESCE(m.is_read, 0) = 0` on a column nothing ever writes.
+  Filters nothing, reads as a filter. That one produced the app-icon "78".
+- **Unbounded waits.** No connect/session/stream timeout on APNs; the SDK default of 10
+  minutes × 2 retries on the safety screener. One hung call wedged a poller permanently.
+- **Empty states that actually mean "the request failed."**
+- **Discarded results** — a value computed and then dropped.
+
+### What shipped (v1.105.40 → .59; `git log` has the detail)
+
+- **The badge** (`.40`–`.44`, `.57`) — `src/utils/attention.js` counts only actionable items,
+  using the app's real unread definition (`cm.last_read_at`), not the dead `is_read` column.
+  `src/utils/badgeSync.js` + a `res.on("finish")` hook in `src/middleware/auth.js` correct the
+  icon after any authenticated request. Note: a badge-only push must be `apns-push-type: alert`;
+  as a background push it is accepted with a 200 and then silently dropped, because the app
+  does not declare `UIBackgroundModes`.
+- **Reimbursement digest** (`src/services/reimbursementDigest.js`) — pushes said "she confirmed
+  **my** request" when it was someone else's. `composeDigest` now takes the reader's identity;
+  returns null when reader === actor. Description and decline reason removed as PHI.
+- **The silent-failure sweep** — account deletion had **never worked for anyone** (wrong column
+  inside a transaction → 500, no PII anonymized); Stripe capture failures silently stranded
+  payments; the admin Safety Flags panel queried four nonexistent columns so every user looked
+  clean; care teams were never notified of accepted care requests; two pollers shared lock key
+  104 and held a pg transaction across network I/O.
+- **iOS native plugins** (`.57`) — `@capacitor/geolocation`, `@capawesome/capacitor-badge`,
+  `@capacitor/local-notifications`, `@capacitor/filesystem`, `@capacitor/share`. There is no
+  official `@capacitor/badge`; that name 404s. The community one registers as `Badge`, which is
+  what `_capPlugin('Badge')` asks for.
+- **`public/js/utils.js`** gained `getDeviceLocation()` (plugin-first, web fallback, watch as
+  last resort, **always settles**, returns `{pos, reason, tried, elapsedMs}`),
+  `showLocalNotification()`, `saveBlob()`, `openExternalUrl()`, `reportClientError()`, and
+  apiFetch AbortController timeouts (25s JSON / 120s uploads).
+- **Stripe onboarding** (`.56`) — two hardcoded `https://inplace.care` literals were sending
+  new caregivers to a dead domain during signup, which reads as "this company is not real."
+  Now `${appUrl}/business`, with a repair pass on `business_profile.url` before
+  `accountLinks.create`. `public/business.html` is server-rendered, no JS, mounted before the
+  SPA catch-all.
+- **ITMS-90683** (`.58`) — `@capacitor/geolocation`'s binary references
+  `NSLocationAlwaysAndWhenInUseUsageDescription`, so Apple's static analysis demands the key
+  even though `GeolocationPlugin.swift` never calls `requestAlwaysAuthorization`. The string is
+  present and honest. `tests/storeReview.test.js` previously asserted the key's **absence** and
+  had to be inverted.
+- **The geofence opt-in** (`.59`) — see below.
+
+### v1.105.59, the most recent fix
+
+Pete tapped "Yes, notice" three days before a visit, got the OS prompt, then saw nothing.
+The confirmation existed for about one frame: `VisitGeoInvite.enable()` set its message and
+called `onEnabled()`, which bumped `retry` in `VisitNudgeCard`; the effect re-ran,
+`visitGeoAllowed()` was now true, the parent's `allowed === false` branch stopped matching,
+and it fell through to `return null` — unmounting the card holding the message. Out of range
+there was nothing to render in its place, so success and failure looked identical.
+
+- `onEnabled()` now fires only within 1,000 ft, where the parent has a nudge card to show.
+- New `VisitGeoStatus`: one muted line with the last measured distance and a "check now"
+  link. That branch used to render `null`.
+- Distance recorded on every check (`VISIT_GEO_LAST_KEY`), localStorage only, never sent.
+- Copy now says the check happens while the app is open and **never in the background** —
+  which is the truth. There is no OS geofence registration and no `UIBackgroundModes`; the
+  check runs when the dashboard mounts. The phone is not waiting for anyone to arrive.
+
+### iOS / TestFlight — state and hard-won facts
+
+- **On Pete's phone:** version **1.1, build 8**, installed as himself, working. Getting there
+  took hours. Do not casually suggest reinstalling.
+- **Build 9** (v1.105.58, the ITMS-90683 fix) is committed but **not yet archived or
+  uploaded**. Required before App Store submission; build 8 is fine for TestFlight.
+  `MARKETING_VERSION = 1.1`, `CURRENT_PROJECT_VERSION = 9` in `project.pbxproj`.
+- **Internal TestFlight testers must already be App Store Connect *users*.** The "Add Testers"
+  picker has no free-text field. Pete's ASC account is `peter@yourinplace.com`; his phone's
+  Apple ID is `peterjslee@gmail.com`. That mismatch caused the entire invite ordeal.
+- **An invite binds to the Apple ID that redeems it**, not the address it was mailed to.
+- **Internal groups need no beta review; external groups need review per build** — which is
+  why only 1.0 was ever installable through the external group.
+- iOS here uses **Swift Package Manager**, not CocoaPods. There is no `pod install`.
+
+### Not yet verified on a real device — in priority order
+
+1. **Caregiver check-in / check-out GPS.** The highest-value check. This has *never* worked on
+   iOS, silently, for every visit ever logged — same dead WKWebView API as the geofence.
+   Confirm a real iPhone check-in writes coordinates to the visit log.
+2. **Badge** — clear something on the laptop, open the phone app, icon self-corrects.
+3. **Incoming call** — background the app, have someone call; it should ring.
+4. **Export CSV** — Reimbursements → Export; expect an iOS share sheet and a real file.
+5. **Geofence** — retest after v1.105.59 reaches prod.
+
+### Open, and needing Pete in a browser rather than a commit
+
+1. **App Store Connect → Primary Category = Lifestyle.** Decided, not yet set. (Not Health &
+   Fitness — that invites a heavier review posture than a first submission needs.)
+2. **Play Health apps declaration — re-answer it.** Care Tasks added medication scheduling and
+   adherence, which trips Play's "Medication and Treatment Management" category. TASKS.md:849.
 3. **Reconcile the store privacy declarations, and name Cloudflare R2 in the Privacy Policy.**
-   Four things must say the same thing: the plist string, `PrivacyInfo.xcprivacy`, the App Store
-   Connect labels, and the published policy. The lawyer-reviewed 2026-07-07 policy predates R2
-   going live on 7/11, and R2 is where ID photos and selfies live. TASKS.md:159, :879.
-4. **September lawyer packet** — ongoing. Carry the questions below into it.
+   Four artefacts must agree: the plist string, `PrivacyInfo.xcprivacy`, the ASC labels, and
+   the published policy. The lawyer-reviewed 2026-07-07 policy predates R2 going live on 7/11,
+   and R2 is where ID photos and selfies live. TASKS.md:159, :879.
 
-### Open legal questions (for the September session, not for us to answer)
+### Deferred, deliberately
 
-- **L1 — who needs the licence?** Va. Code § 32.1-162.7 puts personal care (ADLs) *inside* the
-  licensed "home care organization" definition; 12VAC5-381-30 exempts homemaker/chore/companion
-  only. Pete's sharpening of the question is the right one and should be asked in these words:
-  **is it InPlace that needs licensing, or the people providing care in the home?**
-- **L2 — BIPA before any out-of-state expansion.** Illinois BIPA has no volume threshold and a
-  private right of action at $1,000/$5,000 per person. It is *not* a Virginia problem: VCDPA is
-  AG-only with thresholds far above current volume. Do not describe the AI face-comparison as a
-  current showstopper — it is a gate on expansion, not on shipping.
-- **may/shall** pass over the published agreements.
+- ~230 background-read `if (res.ok)` blocks with no `else`. Real, low individual severity.
+- A handful of CSS items.
+- **Android push** — blocked on FCM configuration; no notification work reaches an Android
+  device until that exists.
+- **`inplace.care`** returns a Cloudflare 525. Nothing depends on it since Stripe was pointed
+  at `yourinplace.com/business`, but the domain is broken.
 
-### Do not re-litigate — these were settled, some the hard way
+### Do not re-litigate — Pete's recorded decisions
 
-- **Nobody pre-pays for a care session.** Stripe runs `capture_method: 'manual'`. The poller
-  places an authorization 23–25h before the visit; capture happens at check-out. I asserted the
-  opposite mid-session and Pete corrected me; he was right. Any reasoning that starts "the family
-  has already paid, so…" is wrong.
-- **The cancellation rule, in one line:** inside 24 hours the client pays **100%**. If the
-  *caregiver* cancels they simply don't get paid — but they can be reviewed. The asymmetry is the
-  point: only a client ever pays a fee. It lives in `src/utils/cancellationFee.js` next to the
-  quoted contract clauses, deliberately, so the rule and its source stay together. Never
-  reintroduce an inline `isLateCancel ? capture : void` in the route handler.
-- **A late-cancel capture is DEFERRED, not taken on the spot** (24h to reconcile or escalate,
-  silence is consent). The fee is the caregiver's lost wage, so the caregiver is the only party
-  with standing to forgive it. Capturing in the handler would take the money before they were asked.
-- **Reimbursement receipts stay OPTIONAL.** Pete was explicit. Requests are editable so a
-  member can attach one after the fact; nothing blocks on their absence.
-- **`application_fee_amount`** is set at authorization against the full amount and is **not**
-  prorated on a partial capture. Known, not yet addressed.
+- **No PHI on lock screens.** Push bodies say "Tap to review in InPlace." and nothing more.
+  There is a scanner test; it was widened once already after it missed local `notify()`
+  wrappers taking positional args.
+- **The admin impersonation no-passkey bypass stays.** Recorded decision, not an oversight.
+- **Peggy's future magic link must be write-only** — it never opens the care record.
 
-### Gotchas a fresh session will otherwise rediscover
+### Working with Pete
 
-- **Tests that assert "X must NOT appear in the source" must read stripped source; tests that
-  assert "X is on the page" must read raw.** Use `tests/helpers/source.js` — never a local
-  `replace(/\/\*[\s\S]*?\*\//g, "")`. That one-liner reads the `/*` inside
-  `accept="image/*,application/pdf"` as a comment opener and deletes ~9,000 characters of real
-  code, which makes negative assertions pass **vacuously**. The comment-in-source trap has bitten
-  four times; the helper bug once. `tests/sourceHelper.test.js` pins it.
-- **Migrations must be appended in numeric order** in `src/models/database.js`. Inserting one
-  ahead of its predecessor split the previous migration object twice in this session.
-- **`npm test` excludes `tests/integration`.** Integration needs `runuser -u claude -- npm run
-  test:integration`. Run both before a release.
-- **This session lost GitHub *write* access mid-run** (reads fine, `git push` 403s at the sandbox
-  proxy — not a token problem; the token authenticates as `peterjslee-coder`). It did not recover
-  across a container restart, so it is session-scoped. If a new session hits it: commit as normal,
-  `git bundle create f.bundle main --not <origin/main sha>`, deliver it plus a `.command` wrapper
-  to Pete's Desktop, and he double-clicks to push. Check whether push works *before* promising a
-  deploy.
-
-### Demo accounts
-
-The seed creates Paul/Barbara Lowe, not Pete/Betty. The "Pete and Betty" demo personas were
-removed this session as confusing. See the Three User Roles table above, which was verified
-against `src/seed.js`.
+- He pastes commands **literally**. Never leave a placeholder path in one. His checkout is at
+  `"/Users/peterlee/Documents/Claude Working Folder/kincare-repo"` — spaces, so quote it.
+- When something fails, **instrument it rather than guessing**. Three consecutive wrong guesses
+  about the geolocation failure cost real time; making the code report its own stage
+  (`web:ceiling:timeout → watch:ceiling:timeout in 42s`) answered it in one round trip.
+- He pushes back when a diagnosis smells wrong, and he has been right. When he says a claim is
+  wrong, re-check before restating it.
+- He treats bad failure messaging as a trust bug, not a cosmetic one. "This URL couldn't be
+  reached" on a signup screen was a real defect.
 
 ## Local Development
 
