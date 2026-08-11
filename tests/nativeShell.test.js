@@ -88,6 +88,11 @@ describe("the other three things waiting on a build", () => {
     const fn = utils.slice(utils.indexOf("const showLocalNotification"), utils.indexOf("const closeLocalNotification"));
     expect(fn).toMatch(/_capPlugin\('LocalNotifications'\)/);
     expect(fn).toMatch(/ln\.schedule/);
+    // v1.105.57 — and it checks authorization first: iOS accepts schedule() from an
+    // unauthorized app and displays nothing, so a resolved promise is not proof of a
+    // notification. Returning true off it would be the "Exported!" toast all over again.
+    expect(fn).toMatch(/const perm = await ln\.checkPermissions\(\);/);
+    expect(fn).toMatch(/if \(perm\?\.display !== 'granted'\) return false;/);
     expect(fn.indexOf("_capPlugin('LocalNotifications')")).toBeLessThan(fn.indexOf("reg?.showNotification"));
   });
 
@@ -101,6 +106,54 @@ describe("the other three things waiting on a build", () => {
     expect(fn).toMatch(/share\.share\(\{ title: filename, url: written\?\.uri/);
     // A cancelled share sheet is not a failure to report.
     expect(fn).toMatch(/if \(e\?\.message && \/cancel\/i\.test\(e\.message\)\) return false;/);
+  });
+});
+
+describe("the plugins the build actually installs", () => {
+  const pkg = JSON.parse(require("fs").readFileSync(
+    require("path").join(__dirname, "..", "package.json"), "utf8"
+  ));
+
+  test("all five are dependencies, so `npx cap sync` finds them", () => {
+    for (const dep of [
+      "@capacitor/geolocation",
+      "@capacitor/local-notifications",
+      "@capacitor/filesystem",
+      "@capacitor/share",
+      "@capawesome/capacitor-badge", // there is no official @capacitor/badge
+    ]) {
+      expect([dep, !!pkg.dependencies[dep]]).toEqual([dep, true]);
+    }
+  });
+
+  test("the badge package registers under the name the code asks for", () => {
+    // The community plugin registers as 'Badge'; _capPlugin('Badge') has to match it, and
+    // a mismatch would fail exactly the way everything else this week did — silently.
+    const src = require("fs").readFileSync(
+      require("path").join(__dirname, "..", "node_modules", "@capawesome", "capacitor-badge", "dist", "esm", "index.js"), "utf8"
+    );
+    expect(src).toMatch(/registerPlugin\('Badge'/);
+    expect(utils).toMatch(/_capPlugin\('Badge'\)/);
+  });
+
+  test("the iOS project lists every plugin", () => {
+    const swift = require("fs").readFileSync(
+      require("path").join(__dirname, "..", "ios", "App", "CapApp-SPM", "Package.swift"), "utf8"
+    );
+    for (const name of [
+      "CapacitorGeolocation", "CapacitorLocalNotifications",
+      "CapacitorFilesystem", "CapacitorShare", "CapawesomeCapacitorBadge",
+    ]) {
+      expect([name, swift.includes(name)]).toEqual([name, true]);
+    }
+  });
+
+  test("the build number moved — TestFlight rejects a repeat", () => {
+    const proj = require("fs").readFileSync(
+      require("path").join(__dirname, "..", "ios", "App", "App.xcodeproj", "project.pbxproj"), "utf8"
+    );
+    expect(proj).not.toMatch(/CURRENT_PROJECT_VERSION = 7;/);
+    expect(proj).toMatch(/CURRENT_PROJECT_VERSION = 8;/);
   });
 });
 

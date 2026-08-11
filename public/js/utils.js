@@ -183,6 +183,14 @@ const showLocalNotification = window.showLocalNotification = async (title, optio
     const ln = _capPlugin('LocalNotifications');
     if (ln?.schedule) {
       try {
+        // v1.105.57 — authorization first. iOS accepts schedule() from an unauthorized app
+        // and simply displays nothing, so returning true off a resolved promise would be
+        // this week's "Exported!" toast again: reporting success for something the person
+        // never saw. Falls through to the service-worker path rather than lying.
+        if (ln.checkPermissions) {
+          const perm = await ln.checkPermissions();
+          if (perm?.display !== 'granted') return false;
+        }
         await ln.schedule({
           notifications: [{
             id: Math.abs((options.tag || title).split('').reduce((a, c) => ((a << 5) - a + c.charCodeAt(0)) | 0, 0)) % 2147483647,
