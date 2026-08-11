@@ -105,12 +105,27 @@ describe("iOS configuration", () => {
   // calling navigator.geolocation on iOS terminated the app.
   test("location usage string is declared, and foreground-only", () => {
     expect(plist).toContain("NSLocationWhenInUseUsageDescription");
-    // Deliberately NOT requesting Always/background: no background mode, no Always key.
-    // Both would invite much heavier review scrutiny for no feature benefit.
     // Assert on the <key> form, not the bare name — the file's own comments mention these
     // names, and a substring check would match the prose rather than a real declaration.
-    expect(plist).not.toMatch(/<key>NSLocationAlwaysAndWhenInUseUsageDescription<\/key>/);
+    //
+    // v1.105.58 — this used to assert the ABSENCE of the Always key, and that assertion is
+    // now wrong. Build 8 came back with ITMS-90683: @capacitor/geolocation's binary
+    // references NSLocationAlwaysAndWhenInUseUsageDescription, so Apple's static analysis
+    // requires the string whether or not we use the capability. Verified in the plugin
+    // source before conceding: it only READS .authorisedAlways as an already-granted
+    // state and never calls requestAlwaysAuthorization.
+    //
+    // The original intent — do not ACT like a background-location app — is unchanged and
+    // is what the two assertions below now protect: no background mode, and a string that
+    // does not claim background tracking. A declared key we never request costs nothing at
+    // review; a background mode would.
+    expect(plist).toMatch(/<key>NSLocationAlwaysAndWhenInUseUsageDescription<\/key>/);
     expect(plist).not.toMatch(/<key>UIBackgroundModes<\/key>/);
+
+    const always = plist.match(/NSLocationAlwaysAndWhenInUseUsageDescription<\/key>\s*<string>([^<]*)</);
+    expect(always).toBeTruthy();
+    expect(always[1]).toMatch(/does not track your location in the background/i);
+    expect(always[1]).toMatch(/only uses your location while you are using the app/i);
   });
 
   test("the location usage string explains the safety purpose, not just the need", () => {

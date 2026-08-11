@@ -1,4 +1,4 @@
-# TestFlight build — v1.1 (8)
+# TestFlight build — v1.1 (9)
 
 Everything in the repo is done and pushed. What's left is Xcode and App Store
 Connect, which only you can run.
@@ -22,7 +22,7 @@ npx cap open ios     # opens Xcode
 3. When the Organizer opens: **Distribute App → App Store Connect → Upload**.
 4. Let it manage signing automatically unless you've set it up otherwise.
 
-Version is already bumped for you: **1.1, build 8** (was 1.0, build 7). TestFlight
+Version is already bumped for you: **1.1, build 9** (build 8 was uploaded but came back with ITMS-90683 — see below). TestFlight
 rejects a repeated build number, so this is the bit that most often bounces a re-upload —
 if you ever need a second attempt, bump `CURRENT_PROJECT_VERSION` again.
 

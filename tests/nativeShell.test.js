@@ -148,12 +148,39 @@ describe("the plugins the build actually installs", () => {
     }
   });
 
+  test("every location purpose string Apple demands is present", () => {
+    // v1.105.58 — build 8 came back with ITMS-90683. @capacitor/geolocation's binary
+    // references NSLocationAlwaysAndWhenInUseUsageDescription, so Apple's static analysis
+    // requires the string even though the plugin never calls requestAlwaysAuthorization —
+    // it only reads .authorisedAlways as an already-granted state.
+    //
+    // Worth a test because of HOW that failure arrives: an email saying "delivery was
+    // successful" with the problem in the body. Nothing in TestFlight looks wrong. It is
+    // the same shape as everything else this week — a failure with no visible symptom —
+    // and it would surface as a rejection later, at submission, when it costs more.
+    const plist = require("fs").readFileSync(
+      require("path").join(__dirname, "..", "ios", "App", "App", "Info.plist"), "utf8"
+    );
+    for (const key of [
+      "NSLocationWhenInUseUsageDescription",
+      "NSLocationAlwaysAndWhenInUseUsageDescription",
+      "NSCameraUsageDescription",
+      "NSPhotoLibraryUsageDescription",
+      "NSMicrophoneUsageDescription",
+    ]) {
+      expect([key, plist.includes(`<key>${key}</key>`)]).toEqual([key, true]);
+    }
+    // The Always string must not claim background tracking we don't do.
+    const always = plist.split("<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>")[1];
+    expect(always).toMatch(/does not track your location in the background/);
+  });
+
   test("the build number moved — TestFlight rejects a repeat", () => {
     const proj = require("fs").readFileSync(
       require("path").join(__dirname, "..", "ios", "App", "App.xcodeproj", "project.pbxproj"), "utf8"
     );
-    expect(proj).not.toMatch(/CURRENT_PROJECT_VERSION = 7;/);
-    expect(proj).toMatch(/CURRENT_PROJECT_VERSION = 8;/);
+    expect(proj).not.toMatch(/CURRENT_PROJECT_VERSION = [78];/);
+    expect(proj).toMatch(/CURRENT_PROJECT_VERSION = 9;/);
   });
 });
 

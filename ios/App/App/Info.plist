@@ -52,12 +52,25 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<!-- v1.105.7 — location is a SAFETY feature: check-in/out proves the caregiver was at
-	     the home. WHEN-IN-USE only, deliberately: there is no background location, no
-	     NSLocationAlwaysAndWhenInUseUsageDescription, and no background mode. Declaring the
-	     minimum is both honest and the easiest thing to defend in review.
-	     Until this key existed, calling navigator.geolocation on iOS TERMINATED the app. -->
+	     the home. WHEN-IN-USE only: there is no background location and no background mode.
+	     Until this key existed, calling navigator.geolocation on iOS TERMINATED the app.
+
+	     v1.105.58 — the Always key is now present too, and that is NOT a change of
+	     behaviour. Build 8 came back with ITMS-90683: @capacitor/geolocation's binary
+	     references NSLocationAlwaysAndWhenInUseUsageDescription, so Apple's static analysis
+	     demands the string whether or not we use it. Verified in the plugin source before
+	     adding it: GeolocationPlugin.swift only ever READS .authorisedAlways as an
+	     already-granted state (lines 95, 139, 239); there is no requestAlwaysAuthorization
+	     call anywhere in it. The app still asks for when-in-use and nothing more, so this
+	     prompt should never actually appear — but the string has to be honest in case it
+	     ever does, and it must not claim a capability we don't use.
+
+	     Declaring the minimum was the right instinct and still is; this is the minimum that
+	     ships. -->
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>InPlace records your location when you check in and out of a care visit, so the family knows their caregiver arrived at the home. Your location is never collected in the background or when you are not on a visit.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>InPlace only uses your location while you are using the app, to record check in and check out at a care visit so the family knows their caregiver arrived at the home. InPlace does not track your location in the background.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>InPlace uses the camera to photograph receipts, care documents, and your ID for identity verification, and for video calls with your care team.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
