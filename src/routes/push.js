@@ -419,8 +419,15 @@ router.get("/attention", async (req, res) => {
     syncBadgeToDevices(db, req.user.id, counts.total).catch(() => {});
   } catch (err) {
     console.error("Attention count error:", err);
-    // A badge is a convenience. Never fail the caller over it.
-    res.json({ total: 0, reimbursements: 0, timeChanges: 0, careTasks: 0, messages: 0 });
+    // v1.105.60 — "a badge is a convenience, never fail the caller over it" was right about the
+    // caller and wrong about the number. Answering 200 with zeros does not decline to report a
+    // badge; it reports that there is nothing to attend to. AttentionCard renders that as
+    // "you're all caught up" and refreshAppBadge CLEARS the icon — so an internal error actively
+    // erased a correct badge that was flagging an overdue care task or a reimbursement waiting
+    // on approval. Both callers already handle a non-OK response correctly and leave the
+    // existing badge alone (utils.js: `if (!res?.ok) return`), which is what we want: on error,
+    // change nothing rather than assert zero.
+    res.status(500).json({ error: "Could not load your attention count." });
   }
 });
 

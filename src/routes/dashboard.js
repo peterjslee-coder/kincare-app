@@ -400,16 +400,19 @@ async function familyDashboard(db, userId, res) {
     });
   } catch (err) {
     console.error("Family dashboard error:", err);
-    // Return a valid response even on error so frontend doesn't break
-    res.json({
-      role: "family",
-      parent: null,
-      isNewUser: true,
-      careRecipients: [],
-      stats: { sessionsThisMonth: 0, totalHours: 0, monthlySpend: 0, avgCaregiverRating: 0, unreadNotifications: 0, assignedCaregivers: 0 },
-      upcomingSessions: [],
-      recentActivity: [],
-    });
+    // v1.105.60 — this used to answer 200 with `isNewUser: true, careRecipients: []`, on the
+    // reasoning that a valid shape keeps the frontend from breaking. What it actually did was
+    // tell a family whose mother has an active care team, medications and a caregiver arriving
+    // today that they have no loved one — and then Dashboard.js auto-navigated them into the
+    // add-a-loved-one wizard, because that is the correct thing to do for a genuinely new user.
+    //
+    // The client already handles this properly: two silent retries, then a real "Something went
+    // wrong / Try Again" screen. A 200 defeated all of it, because res.ok was true. Five screens
+    // read from this endpoint (Dashboard, FindWork, CaredForView, ActivityFeed, Caregivers) and
+    // every one of them showed a reassuring empty state instead of an error.
+    //
+    // An error is not a shape. Say so, and let the client do what it already knows how to do.
+    res.status(500).json({ error: "Could not load your dashboard." });
   }
 }
 

@@ -834,11 +834,22 @@ router.post("/:id/doctor-report", async (req, res) => {
     const ratingLabels = { 0: 'Not needed', 1: 'Nice to have', 2: 'Important', 3: 'Must have' };
 
     // Visits (last 30 for deeper pattern analysis)
+    //
+    // v1.105.60 — this read `JOIN users u ON vl.caregiver_id = u.id`, which joins across two
+    // different ID spaces: visit_logs.caregiver_id references caregiver_profiles(id), not
+    // users(id). As an INNER JOIN it matched nothing, so `visits` was ALWAYS empty and every
+    // doctor report ever generated was written from notes alone. Silently — an empty visit
+    // history reads exactly like a recipient who has had few visits. Every other site in the
+    // codebase hops through caregiver_profiles (dashboard.js, photos.js, admin/sessionOps.js).
+    //
+    // The name hops are LEFT joins deliberately: a visit whose caregiver profile is missing
+    // still belongs in the report. Losing the name is cosmetic; losing the visit is the bug.
     const visits = await db.prepare(`
       SELECT vl.*, cs.scheduled_date, u.first_name AS cg_first, u.last_name AS cg_last
       FROM visit_logs vl
       JOIN care_sessions cs ON vl.session_id = cs.id
-      JOIN users u ON vl.caregiver_id = u.id
+      LEFT JOIN caregiver_profiles cp ON vl.caregiver_id = cp.id
+      LEFT JOIN users u ON cp.user_id = u.id
       WHERE cs.care_recipient_id = ? AND vl.check_out_time IS NOT NULL
       ORDER BY vl.check_in_time DESC LIMIT 30
     `).all(req.params.id);

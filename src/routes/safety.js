@@ -25,7 +25,7 @@ const express = require("express");
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { authenticate } = require("../middleware/auth");
-const { canBlockDirectly, findApprover, getOutgoingBlocks, isBlockedBetween } = require("../utils/blocks");
+const { canBlockDirectly, findApproverForRequester, getOutgoingBlocks, isBlockedBetween } = require("../utils/blocks");
 const { decideCancellationCharge } = require("../utils/cancellationFee");
 const { sendPushToUser, notifyAdmins } = require("./push");
 
@@ -178,12 +178,28 @@ router.post("/block", async (req, res) => {
     // Managed accounts route to the care team leader instead of acting.
     const permission = await canBlockDirectly(db, req.user.id, req.user.activeRole || req.user.role);
     if (!permission.allowed) {
-      const approver = permission.recipientId ? await findApprover(db, permission.recipientId) : null;
+      // v1.105.60 — `permission.recipientId ? … : null` skipped the lookup entirely on the
+      // canBlockDirectly catch path (reason: "unknown"), which carries no recipientId by
+      // design. findApproverForRequester resolves the team from the requester in that case.
+      const approver = await findApproverForRequester(db, req.user.id, permission.recipientId);
+
+      // v1.105.60 — this used to insert with `care_team_id: null` and still answer
+      // "We've asked your care team to review this." Nothing had been asked. The only reader
+      // of block_requests joins care_team_members on care_team_id, so a NULL-team row is
+      // invisible to every leader and every admin, permanently. A care recipient asking to
+      // block someone is exactly the moment not to say a thing we haven't done.
+      if (!approver?.careTeamId) {
+        console.error(`[safety] Block request from ${req.user.id.slice(0, 8)} has no resolvable care team — refusing to file a request nobody can see.`);
+        return res.status(503).json({
+          error: `We couldn't reach your care team to ask about this, so nothing has been sent yet and ${target.first_name} has not been told. Please tell someone on your care team directly. If this person is bothering you in messages, reply in that conversation and a person here will read it.`,
+        });
+      }
+
       const reqId = uuid();
       await db.prepare(`
         INSERT INTO block_requests (id, requester_user_id, target_user_id, care_team_id, reason, status)
         VALUES (?, ?, ?, ?, ?, 'pending')
-      `).run(reqId, req.user.id, targetId, approver?.careTeamId || null, (reason || "").slice(0, 2000));
+      `).run(reqId, req.user.id, targetId, approver.careTeamId, (reason || "").slice(0, 2000));
 
       if (approver?.userId) {
         sendPushToUser(approver.userId, {
@@ -328,7 +344,14 @@ router.get("/block-requests", async (req, res) => {
       FROM block_requests br
       JOIN users ru ON ru.id = br.requester_user_id
       JOIN users tu ON tu.id = br.target_user_id
-      JOIN care_team_members ctm ON ctm.care_team_id = br.care_team_id
+      -- v1.105.60 — rows written before this version can carry a NULL care_team_id, which an
+      -- INNER JOIN drops silently: the request exists, the requester was told their team would
+      -- review it, and no leader can see it. Resolve the team from the requester for those.
+      -- New rows always carry a team (the POST now refuses rather than filing an orphan), so
+      -- this fallback is for the backlog and costs nothing once it is empty.
+      LEFT JOIN care_recipients cr ON cr.linked_user_id = br.requester_user_id
+      LEFT JOIN care_teams ct ON ct.care_recipient_id = cr.id
+      JOIN care_team_members ctm ON ctm.care_team_id = COALESCE(br.care_team_id, ct.id)
       WHERE br.status = 'pending' AND ctm.user_id = ? AND ctm.role = 'leader'
       ORDER BY br.created_at DESC
     `).all(req.user.id);

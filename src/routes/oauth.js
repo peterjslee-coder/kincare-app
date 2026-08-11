@@ -445,7 +445,15 @@ router.post("/apple/callback", express.urlencoded({ extended: false }), async (r
       oauthCodes.set(authCode, { token, user: { id: user.id, email: user.email, role: user.role }, expiresAt: Date.now() + 60000 });
       setAuthCookie(res, token);
       setCsrfCookie(res);
-      const refreshToken = generateRefreshToken(user);
+      // v1.105.60 — was `generateRefreshToken(user)`: no await, and the whole user object where
+      // a user id belongs. Two failures compounded. Un-awaited, `refreshToken` was a Promise, and
+      // res.cookie JSON-encodes objects, so the browser was handed `refresh_token=j:{}` — a
+      // garbage cookie, meaning the user is silently signed out when the 7-day JWT expires with
+      // no way to refresh. And passing `user` to a TEXT column with a FK to users(id) made pg
+      // serialize the object, violating the constraint; nothing awaited the promise and nothing
+      // caught it, so on Node 18+ an unhandled rejection terminates the process — taking every
+      // other in-flight request with it. The other six call sites all await and pass an id.
+      const refreshToken = await generateRefreshToken(user.id);
       setRefreshCookie(res, refreshToken);
       return res.redirect(`${APP_URL}?oauth_code=${authCode}&apple_linked=1`);
     }

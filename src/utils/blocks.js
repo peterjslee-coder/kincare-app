@@ -166,6 +166,34 @@ async function findApprover(db, recipientId) {
   }
 }
 
+/**
+ * The approving team for a block request, resolved even when canBlockDirectly could not say
+ * which recipient the requester is.
+ *
+ * v1.105.60. canBlockDirectly's catch path deliberately returns { allowed: false,
+ * reason: "unknown" } with no recipientId — fail toward asking a human rather than toward
+ * acting. But the caller then had nothing to look the team up with, filed the request with a
+ * NULL care_team_id, and told the user their care team had been asked. It had not: the only
+ * query that reads block_requests joins care_team_members on care_team_id, so a NULL-team row
+ * is invisible to every leader, forever. Falling back to the requester's own recipient record
+ * closes that hole without weakening the fail-toward-asking default.
+ */
+async function findApproverForRequester(db, userId, recipientId) {
+  if (recipientId) {
+    const direct = await findApprover(db, recipientId);
+    if (direct) return direct;
+  }
+  try {
+    const rec = await db.prepare(
+      "SELECT id FROM care_recipients WHERE linked_user_id = ?"
+    ).get(userId);
+    return rec ? await findApprover(db, rec.id) : null;
+  } catch (e) {
+    console.error("[blocks] findApproverForRequester failed:", e.message);
+    return null;
+  }
+}
+
 module.exports = {
   uuid,
   getBlockedIds,
@@ -173,4 +201,5 @@ module.exports = {
   getOutgoingBlocks,
   canBlockDirectly,
   findApprover,
+  findApproverForRequester,
 };

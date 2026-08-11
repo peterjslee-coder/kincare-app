@@ -152,9 +152,31 @@ describe("the number reaches the icon by every route we have", () => {
     expect(sw).toMatch(/typeof self\.navigator\?\.setAppBadge === 'function'/);
   });
 
-  test("the endpoint answers zero rather than failing the caller", () => {
-    const endpoint = push.slice(push.indexOf('router.get("/attention"'), push.indexOf("async function syncBadgeToDevices"));
-    expect(endpoint).toMatch(/res\.json\(\{ total: 0/);
+  test("the endpoint declines to answer rather than asserting zero", () => {
+    // v1.105.60 — INVERTED. This used to read "the endpoint answers zero rather than failing
+    // the caller", and it was pinning a bug in place.
+    //
+    // "A badge is a convenience, never fail the caller over it" is right about the caller and
+    // wrong about the number. 200 {total: 0} does not decline to answer — it answers "nothing
+    // needs you". AttentionCard renders that as caught-up and refreshAppBadge CLEARS the icon,
+    // so an internal error erased a correct badge that was flagging an overdue care task, and
+    // the card that would have itemised it agreed that all was well. That is precisely the
+    // failure this suite's own v1.105.42 note is about, arriving by a different door.
+    //
+    // Both callers already handle a non-OK response by leaving the existing badge alone, which
+    // is the behaviour we actually wanted all along: on error, change nothing.
+    //
+    // The slice boundary was wrong too: "async function syncBadgeToDevices" moved to
+    // utils/badgeSync.js in v1.105.44, so indexOf returned -1 and this "endpoint" was really
+    // everything from the route to the end of the file. Bounds-checked now.
+    const start = push.indexOf('router.get("/attention"');
+    const end = push.indexOf("const { syncBadgeToDevices } = require", start);
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    const endpoint = push.slice(start, end);
+
+    expect(endpoint).toMatch(/res\.status\(500\)/);
+    expect(endpoint).not.toMatch(/res\.json\(\{ total: 0/);
   });
 });
 
