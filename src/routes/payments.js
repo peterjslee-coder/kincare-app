@@ -3,6 +3,25 @@ const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { authenticate, requireRole } = require("../middleware/auth");
 const { captureException } = require("../utils/sentry");
+
+// ─── v1.105.56 — the URL we hand Stripe has to be one that answers ───
+//
+// Pete, hitting caregiver signup: Stripe's onboarding showed a PAST DUE task, "Provide
+// information about your business website", and under the field, "This URL couldn't be
+// reached."
+//
+// It was ours. `business_profile.url` was hardcoded to "https://inplace.care" at both
+// places a connected account is created, and that domain returns a Cloudflare 525 — an SSL
+// handshake failure with the origin. It has never served anything; the live product is at
+// yourinplace.com. Stripe fetches the URL during verification, can't reach it, and hands
+// the CAREGIVER a blocking task about a domain that isn't theirs and that they have no
+// possible way to fix. Every caregiver reaching payout onboarding hit this, and the only
+// visible symptom was a Stripe screen that looked like their own problem.
+//
+// Derived from APP_URL now (utils/env.js) — the same source of truth the app already uses
+// for WebAuthn and CORS — so it cannot drift from wherever the app is actually served.
+const { appUrl } = require("../utils/env");
+const PLATFORM_URL = appUrl;
 const { calculateSessionCost, isShortNotice, SURCHARGE_CAREGIVER_SHARE, SURCHARGE_PLATFORM_SHARE } = require("../utils/rateCalculator");
 
 const router = express.Router();
@@ -738,7 +757,7 @@ router.post("/connect/onboard", requireRole("caregiver"), requirePaymentsEnabled
         },
         business_profile: {
           mcc: "8099",
-          url: "https://inplace.care",
+          url: PLATFORM_URL,
         },
         metadata: {
           inplace_user_id: req.user.id,
@@ -820,7 +839,7 @@ router.post("/connect/link", requireRole("caregiver"), requirePaymentsEnabled, a
         },
         business_profile: {
           mcc: "8099",
-          url: "https://inplace.care",
+          url: PLATFORM_URL,
         },
         metadata: { inplace_user_id: req.user.id },
       });
@@ -832,6 +851,25 @@ router.post("/connect/link", requireRole("caregiver"), requirePaymentsEnabled, a
       console.error("Stripe account creation error:", err);
       return res.status(500).json({ error: "Failed to create Stripe account" });
     }
+  }
+
+  // v1.105.56 — repair accounts already carrying the dead URL.
+  //
+  // Fixing the create call only helps accounts made from now on. Everyone who already
+  // reached onboarding has "https://inplace.care" stored at Stripe and a Past Due task they
+  // cannot clear — including the account in Pete's screenshot. Opening onboarding is exactly
+  // when we know who they are, so mend it here. Best-effort: a failed repair must never
+  // block the link that lets them continue.
+  try {
+    const acct = await stripe.accounts.retrieve(stripeAccountId);
+    if (acct?.business_profile?.url && acct.business_profile.url !== PLATFORM_URL) {
+      await stripe.accounts.update(stripeAccountId, {
+        business_profile: { url: PLATFORM_URL },
+      });
+      console.log(`[stripe] repaired business_profile.url for ${stripeAccountId}`);
+    }
+  } catch (err) {
+    captureException(err, { where: "payments: repair business_profile.url", stripeAccountId });
   }
 
   try {
