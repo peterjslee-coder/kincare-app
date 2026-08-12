@@ -59,10 +59,30 @@ async function attentionCountFor(db, userId) {
   });
 
   // ── A session time change waiting on my answer ──
-  // Table is `time_proposals`; the caregiver proposes, the booking family answers. Expired
-  // proposals don't count — there is nothing left to do about them.
+  //
+  // There are TWO proposal tables and they are different things:
+  //
+  //   time_proposals         a caregiver offering a time for an OPEN request. Has expires_at,
+  //                          and expireStaleProposals sweeps it — an expired one is back in the
+  //                          open pool, so there is nothing left for anyone to do about it.
+  //   time_change_proposals  a change to an ALREADY-BOOKED session. Either side can propose;
+  //                          the other side answers.
+  //
+  // v1.105.62 — only the first was counted. The second is the one Pete asked to add, and it is
+  // the more urgent of the two: **it has no expires_at and nothing sweeps it.** A pending time
+  // change sits there indefinitely, and the visit it belongs to is already on the calendar with
+  // a caregiver expecting to work it. Nobody is coming to resolve that but the person it is
+  // waiting on — which is the badge's whole definition.
+  //
+  // Counted for the COUNTERPARTY only: you are not the blocker on your own proposal.
+  //
+  // Gated on `cs.pending_time_change_id = tcp.id` rather than status alone, for the reason
+  // recorded against careTasks below: the UI surfaces a time change through that pointer
+  // (dashboard.js), so a pending row the pointer no longer references cannot be acted on from
+  // anywhere in the app. Badging it would be unclearable by construction. Terminal sessions are
+  // excluded for the same reason — there is no answering a change to a cancelled visit.
   const timeChanges = await safe("timeChanges", async () => {
-    const row = await db.prepare(`
+    const offers = await db.prepare(`
       SELECT COUNT(*) AS count
       FROM time_proposals tp
       JOIN care_sessions cs ON cs.id = tp.session_id
@@ -70,7 +90,22 @@ async function attentionCountFor(db, userId) {
         AND cs.family_user_id = ?
         AND (tp.expires_at IS NULL OR tp.expires_at > NOW())
     `).get(userId);
-    return parseInt(row?.count || 0, 10);
+
+    const changes = await db.prepare(`
+      SELECT COUNT(*) AS count
+      FROM time_change_proposals tcp
+      JOIN care_sessions cs
+        ON cs.id = tcp.session_id AND cs.pending_time_change_id = tcp.id
+      LEFT JOIN caregiver_profiles cp ON cp.id = cs.caregiver_id
+      WHERE tcp.status = 'pending'
+        AND cs.status NOT IN ('cancelled', 'completed', 'disputed')
+        AND (
+          (tcp.proposed_by = 'caregiver' AND cs.family_user_id = ?)
+          OR (tcp.proposed_by = 'family' AND cp.user_id = ?)
+        )
+    `).get(userId, userId);
+
+    return parseInt(offers?.count || 0, 10) + parseInt(changes?.count || 0, 10);
   });
 
   // ── A care task assigned to me that is already due ──

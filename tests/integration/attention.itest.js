@@ -105,6 +105,59 @@ describe("the other three queries actually match the schema", () => {
     expect((await attentionCountFor(db, leader.user.id)).timeChanges).toBe(0);
   });
 
+  // v1.105.62 — the SECOND proposal table. time_change_proposals is a change to an
+  // already-booked session, and until now the badge ignored it entirely. It is the more
+  // urgent of the two: it has no expires_at and nothing sweeps it, so it sits pending
+  // forever while the visit stays on the calendar with a caregiver expecting to work it.
+  // Pete's call to count it.
+  test("a pending change to a BOOKED session counts for whoever must answer", async () => {
+    const sessionId = uuid();
+    const cg = await h.createUser({ firstName: "Book", lastName: "Ed", roles: ["caregiver"] });
+    const profileId = uuid();
+    await db.prepare(`
+      INSERT INTO caregiver_profiles (id, user_id, hourly_rate, created_at) VALUES (?, ?, 25, NOW())
+    `).run(profileId, cg.user.id);
+    await db.prepare(`
+      INSERT INTO care_sessions (id, care_recipient_id, family_user_id, caregiver_id, service_type,
+                                 status, scheduled_date, scheduled_time, duration_hours, created_at)
+      VALUES (?, ?, ?, ?, 'companionship', 'confirmed', '2026-09-02', '10:00', 2, NOW())
+    `).run(sessionId, recipientId, leader.user.id, profileId);
+
+    const propId = uuid();
+    await db.prepare(`
+      INSERT INTO time_change_proposals (id, session_id, proposed_by, proposed_by_user_id,
+        original_time, original_duration, proposed_time, proposed_duration, status, created_at)
+      VALUES (?, ?, 'caregiver', ?, '10:00', 2, '13:00', 2, 'pending', NOW())
+    `).run(propId, sessionId, cg.user.id);
+    await db.prepare(`UPDATE care_sessions SET pending_time_change_id = ? WHERE id = ?`).run(propId, sessionId);
+
+    // The caregiver proposed, so the family is the blocker.
+    expect((await attentionCountFor(db, leader.user.id)).timeChanges).toBe(1);
+    // You are never the blocker on your own proposal.
+    expect((await attentionCountFor(db, cg.user.id)).timeChanges).toBe(0);
+    // Nor is anyone outside it.
+    expect((await attentionCountFor(db, outsider.user.id)).timeChanges).toBe(0);
+
+    // The other direction: family proposes, caregiver answers.
+    await db.prepare(`UPDATE time_change_proposals SET proposed_by = 'family', proposed_by_user_id = ? WHERE id = ?`)
+      .run(leader.user.id, propId);
+    expect((await attentionCountFor(db, cg.user.id)).timeChanges).toBe(1);
+    expect((await attentionCountFor(db, leader.user.id)).timeChanges).toBe(0);
+
+    // A change to a cancelled visit is not answerable, so it must not badge anyone.
+    await db.prepare(`UPDATE care_sessions SET status = 'cancelled' WHERE id = ?`).run(sessionId);
+    expect((await attentionCountFor(db, cg.user.id)).timeChanges).toBe(0);
+    await db.prepare(`UPDATE care_sessions SET status = 'confirmed' WHERE id = ?`).run(sessionId);
+
+    // And one the UI can no longer reach — the session's pointer cleared while the row stays
+    // 'pending' — is unclearable by construction. Same rule as the orphaned care task below.
+    await db.prepare(`UPDATE care_sessions SET pending_time_change_id = NULL WHERE id = ?`).run(sessionId);
+    expect((await attentionCountFor(db, cg.user.id)).timeChanges).toBe(0);
+
+    // Clean up so later assertions in this file start from zero.
+    await db.prepare(`UPDATE time_change_proposals SET status = 'rejected' WHERE id = ?`).run(propId);
+  });
+
   test("an overdue task assigned to me counts; an unassigned one counts for nobody", async () => {
     const taskId = uuid();
     await db.prepare(`
