@@ -406,7 +406,22 @@ const MAX_FAIL_COUNT = 5;
 // ─── GET /api/push/attention — the badge number, and what makes it up ───
 // v1.105.40. One canonical count (src/utils/attention.js) so the icon, the push payload and
 // any future in-app dot can never disagree.
-router.get("/attention", async (req, res) => {
+//
+// v1.105.61 — `authenticate` was missing here, and ONLY here. push.js authenticates per route
+// rather than with a blanket router.use, and this one was added in v1.105.40 without it. So
+// `req.user` was undefined on every call, `req.user.id` threw a TypeError, and the old catch
+// answered 200 {total: 0}. Which means: **the badge has never worked for anyone, ever.**
+//
+// Every /api/push/attention call since v1.105.40 returned zeros, and refreshAppBadge dutifully
+// called clearAppBadge on them. The badge project built to fix Pete's stuck "78" was dead from
+// the day it shipped, and it looked exactly like "you have nothing to attend to" — which is why
+// six versions of badge work went by without anyone noticing the endpoint behind it never ran.
+// syncBadgeToDevices never ran either, so the icon was corrected only by the res.on("finish")
+// hook in middleware/auth.js — which then fought the next foreground refresh that cleared it.
+//
+// v1.105.60 turned the 200-with-zeros into a 500, which is the only reason this was findable at
+// all: the very first staging request after that deploy failed loudly and Railway had the stack.
+router.get("/attention", authenticate, async (req, res) => {
   try {
     const db = await getDb();
     const { attentionCountFor } = require("../utils/attention");
