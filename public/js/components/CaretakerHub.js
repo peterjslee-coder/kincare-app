@@ -543,15 +543,28 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
     };
     checkStripe();
 
-    // Also check identity verification status
+    // Identity verification status.
+    //
+    // v1.105.64 — this used to ask /api/payments/identity/status, which is STRIPE Identity: a
+    // third system that writes caregiver_profiles.identity_verified and that nothing in the
+    // app gates on. The result was then assigned to `idVerified` and never rendered — computed
+    // and dropped. So the one hard gate on caregiver onboarding had no representation anywhere
+    // a caregiver could see, and the status we did fetch was the wrong system's.
+    //
+    // /api/caregiver-onboarding/identity-status is the one the gate reads (and, since
+    // v1.105.64, it accepts a My Account submission too — see src/utils/identity.js).
     const checkIdentity = async () => {
       try {
-        const res = await apiFetch('/api/payments/identity/status');
+        const res = await apiFetch('/api/caregiver-onboarding/identity-status');
         if (res?.ok) {
           const d = await res.json();
-          setIdVerification(d);
+          setIdVerification({ submitted: !!d.submitted, status: d.status, verified: d.status === 'approved' });
+        } else {
+          setIdVerification({ submitted: false, status: null, verified: false, loadFailed: true });
         }
-      } catch (err) { /* Identity not configured yet — that's ok */ }
+      } catch (err) {
+        setIdVerification({ submitted: false, status: null, verified: false, loadFailed: true });
+      }
     };
     checkIdentity();
   }, [activeTab]);
@@ -1262,7 +1275,10 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   // v1.105.63 — an admin granted the fee rather than the caregiver paying it. Same flag on the
   // profile; only the payments table knows which. See routes/dashboard.js.
   const feeWaived = !!profile.backgroundCheckFeeWaived;
-  const idVerified = idVerification.verified;
+  // v1.105.64 — these drive the 'identity' First Step below. `idVerified` used to be computed
+  // here and used nowhere at all.
+  const idSubmitted = !!idVerification.submitted;
+  const idApproved = !!idVerification.verified;
   // Check if user has set any care preferences (values are green/yellow/red, 'none' means unset)
   const hasPreferences = !!stoplightData && Object.keys(stoplightData).length > 0 &&
     Object.values(stoplightData).some(v => v === 'green' || v === 'yellow' || v === 'red');
@@ -1302,6 +1318,25 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
           : (bgCheckSubmitted && profile.checkrStatus === 'disputed'
             ? 'Your dispute is being reviewed. We\'ll notify you when there\'s an update.'
             : null)) },
+    // v1.105.64 — the hardest gate in caregiver onboarding, and until now it appeared on this
+    // list nowhere. mark-onboarding-complete refuses without an APPROVED identity document, so
+    // a caregiver could finish every visible step, sit at 6 of 6, and stay permanently
+    // incomplete with nothing telling them why or where to go. `idVerified` was already being
+    // computed a few lines above and thrown away.
+    { id: 'identity',
+      label: 'Verify your identity',
+      desc: 'A selfie and a photo of your government-issued ID. Families are inviting you into their home — this is the step that lets them know who you are. A person reviews it.',
+      done: idApproved,
+      missing: idVerification.loadFailed
+        ? 'Couldn’t check your verification status — tap to try again'
+        : (!idSubmitted ? 'Take a selfie and photo of your ID' : (idApproved ? null : null)),
+      warning: idVerification.loadFailed
+        ? null
+        : (idSubmitted && !idApproved
+            ? (idVerification.status === 'rejected'
+                ? 'Your ID could not be verified. Tap to submit a clearer photo.'
+                : 'Submitted — waiting on a person to review it. You don’t need to do anything else.')
+            : null) },
     { id: 'security', label: 'Make your account more secure', desc: 'Set up two-factor authentication or biometrics to protect your account', done: securityReviewed, missing: !securityReviewed ? 'Enable 2FA or biometrics in Settings' : null },
     { id: 'preferences', label: 'Select your care preferences', desc: 'Your selections help us match you to compatible clients and allow you to voice your availability for different types of clients', done: hasPreferences, missing: !hasPreferences ? 'Select all preferences and save' : null },
     { id: 'avail-rates', label: 'Set your availability and rates', desc: 'Tell families when you\'re free and what you charge', done: hasAvailability && hasRates, missing: (() => { const m = []; if (!hasAvailability) m.push('set at least one availability rule'); if (!hasRates) m.push('save your rates'); return m.length > 0 ? 'Still needed: ' + m.join(' and ') : null; })() },
@@ -1555,6 +1590,10 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                 if (s.id === 'stripe-bg') { window.__accountTab = 'payments'; window.__navigateTo && window.__navigateTo('account'); }
                 if (s.id === 'background-check') { window.__accountTab = 'payments'; window.__navigateTo && window.__navigateTo('account'); }
                 if (s.id === 'preferences') { window.__accountTab = 'preferences'; window.__navigateTo && window.__navigateTo('account'); }
+                // v1.105.64 — the selfie + ID capture lives in My Account's profile tab. It is
+                // the one place a caregiver can reach it after the signup wizard, which is why
+                // the step has to point there rather than at the wizard they have already left.
+                if (s.id === 'identity') { window.__accountTab = 'profile'; window.__navigateTo && window.__navigateTo('account'); }
               }} style={{
                 display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '12px 14px',
                 borderRadius: '10px', border: s.done ? '1px solid #c8e6c9' : '1px solid #eee',

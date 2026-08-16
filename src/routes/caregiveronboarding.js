@@ -320,14 +320,14 @@ router.get("/identity-status", async (req, res) => {
     const profile = await db.prepare("SELECT id FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
     if (!profile) return res.json({ submitted: false, status: null });
 
-    const idDoc = await db.prepare(
-      `SELECT id, status, is_verified, ai_confidence, created_at FROM verified_documents
-       WHERE owner_id = ? AND owner_type = 'caregiver' AND category = 'identity' AND document_type != 'selfie'
-       ORDER BY created_at DESC LIMIT 1`
-    ).get(profile.id);
+    // v1.105.64 — the caregiver's First Steps reads this, so it must agree with the gate in
+    // caregivers.js and with the admin panel. All three now resolve through
+    // src/utils/identity.js, which accepts a My Account submission as well as a wizard one.
+    const { caregiverIdentityDoc } = require("../utils/identity");
+    const idDoc = await caregiverIdentityDoc(db, req.user.id, profile.id);
 
     if (!idDoc) return res.json({ submitted: false, status: null });
-    res.json({ submitted: true, status: idDoc.status, isVerified: !!idDoc.is_verified, confidence: idDoc.ai_confidence, documentId: idDoc.id });
+    res.json({ submitted: true, status: idDoc.status, isVerified: !!idDoc.is_verified, documentId: idDoc.id });
   } catch (err) {
     console.error("Identity status error:", err);
     res.status(500).json({ error: "Failed to check identity status" });

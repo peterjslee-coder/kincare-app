@@ -101,11 +101,11 @@ router.get("/users/:id/onboarding", async (req, res) => {
     let identityVerified = false;
     let identityStatus = null;
     if (profile) {
-      const idDoc = await db.prepare(
-        `SELECT status, is_verified FROM verified_documents
-         WHERE owner_id = ? AND owner_type = 'caregiver' AND category = 'identity' AND document_type != 'selfie'
-         ORDER BY created_at DESC LIMIT 1`
-      ).get(profile.id);
+      // v1.105.64 — accepts a document submitted from My Account as well as one from the
+      // onboarding wizard. Before this, a caregiver could be verified and displaying a blue
+      // check while this panel said "not submitted". See src/utils/identity.js.
+      const { caregiverIdentityDoc } = require("../../utils/identity");
+      const idDoc = await caregiverIdentityDoc(db, user.id, profile.id);
       if (idDoc) {
         identityVerified = idDoc.status === 'approved';
         identityStatus = idDoc.status; // 'pending', 'approved', 'rejected'
@@ -177,9 +177,11 @@ router.put("/users/:id/onboarding", async (req, res) => {
 
     // Identity verification is stored in verified_documents, not caregiver_profiles
     if (identityVerified !== undefined) {
-      const idDoc = await db.prepare(
-        `SELECT id FROM verified_documents WHERE owner_id = ? AND owner_type = 'caregiver' AND category = 'identity' AND document_type != 'selfie' ORDER BY created_at DESC LIMIT 1`
-      ).get(profile.id);
+      // v1.105.64 — approve the document they actually submitted, from either door. This used
+      // to miss a My Account submission and silently create an admin_override placeholder
+      // beside it, leaving a real, unreviewed ID document sitting in the table.
+      const { caregiverIdentityDoc } = require("../../utils/identity");
+      const idDoc = await caregiverIdentityDoc(db, req.params.id, profile.id);
       if (idDoc) {
         await db.prepare(
           "UPDATE verified_documents SET status = ?, is_verified = ?, admin_reviewed_by = ?, admin_reviewed_at = NOW() WHERE id = ?"

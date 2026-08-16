@@ -655,12 +655,13 @@ router.put("/mark-onboarding-complete", async (req, res) => {
       missing.push("Background check");
     }
 
-    // Identity verification (selfie + ID) — hard gate, requires admin approval
-    const idDoc = await db.prepare(
-      `SELECT status FROM verified_documents
-       WHERE owner_id = ? AND owner_type = 'caregiver' AND category = 'identity' AND document_type != 'selfie'
-       ORDER BY created_at DESC LIMIT 1`
-    ).get(profile.id);
+    // Identity verification (selfie + ID) — hard gate, requires admin approval.
+    // v1.105.64 — this used to look only for owner_type='caregiver', the shape written by the
+    // onboarding wizard. A caregiver who verified from My Account instead files under
+    // owner_type='user', gets a blue check confirming it, and was still blocked here forever
+    // with no way to find out why. See src/utils/identity.js.
+    const { caregiverIdentityDoc } = require("../utils/identity");
+    const idDoc = await caregiverIdentityDoc(db, req.user.id, profile.id);
     if (!idDoc) {
       missing.push("Identity verification (selfie + ID photo)");
     } else if (idDoc.status !== 'approved') {
