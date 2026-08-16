@@ -1259,6 +1259,9 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const stripeConnected = stripeStatus?.status === 'active';
   const bgPaid = !!profile.background_check_paid || !!profile.isBackgroundChecked;
   const bgCheckSubmitted = !!profile.isBackgroundChecked || (profile.checkrStatus && profile.checkrStatus !== 'pending' && profile.checkrStatus !== 'not_initiated');
+  // v1.105.63 — an admin granted the fee rather than the caregiver paying it. Same flag on the
+  // profile; only the payments table knows which. See routes/dashboard.js.
+  const feeWaived = !!profile.backgroundCheckFeeWaived;
   const idVerified = idVerification.verified;
   // Check if user has set any care preferences (values are green/yellow/red, 'none' means unset)
   const hasPreferences = !!stoplightData && Object.keys(stoplightData).length > 0 &&
@@ -1279,7 +1282,15 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       missing: !(stripeConnected || stripeOverride) ? 'Connect Stripe to continue' : null },
     { id: 'background-check',
       label: 'Start your background check',
-      desc: 'A background check is required to participate on InPlace. This is a one-time $30 fee that is refunded after 10 completed sessions. Your report is reviewed fairly — you\'ll be given a chance to provide context on anything that comes up, and a real person is always in the loop.',
+      // v1.105.63 — the fee sentence is the first thing this step says, and it used to say it
+      // whether or not the caregiver owed anything. Someone whose fee an admin had waived read
+      // "one-time $30 fee" directly above a warning telling them to act, and reasonably
+      // concluded they were being asked for money. Say which of the two is true.
+      desc: 'A background check is required to participate on InPlace. '
+        + (feeWaived
+            ? 'The $30 fee has been waived for you — you don\'t owe anything. '
+            : 'This is a one-time $30 fee that is refunded after 10 completed sessions. ')
+        + 'Your report is reviewed fairly — you\'ll be given a chance to provide context on anything that comes up, and a real person is always in the loop.',
       done: bgCheckSubmitted || bgOverride,
       missing: !(bgCheckSubmitted || bgOverride) ? (bgPaid ? 'Complete the background check form' : ((stripeConnected || stripeOverride) ? 'Pay for background check ($30)' : 'Complete Stripe setup first')) : null,
       warning: (!profile.isBackgroundChecked && adminVouches.length > 0 && !bgCheckSubmitted)

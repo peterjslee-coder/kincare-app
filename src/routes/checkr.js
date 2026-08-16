@@ -1069,6 +1069,20 @@ router.get("/admin/candidates", authenticate, async (req, res) => {
           OR COALESCE(cp.bg_check_admin_approved, 0) = 1
           OR cp.onboarding_complete = 1
           OR cp.legal_first_name IS NOT NULL
+          /* v1.105.63 — two more ways to be a real caregiver rather than a stub.
+             The v1.104.9 note above got the problem right and the fix half-right: it
+             reached people who had TYPED THEIR LEGAL NAME, which is collected inside the
+             background-check step. So the only route onto this page ran through the very
+             pipeline a vouch exists to keep someone OUT of — to waive a caregiver's
+             background check you first had to make them start one.
+             The real case: a caregiver whose fee an admin had waived, with Stripe
+             connected, was invisible here — so there was no card to vouch on, and the
+             waiver the admin had already granted did nothing but push her one step
+             further into Checkr. Paying the fee (or being granted a waiver of it) and
+             connecting a bank account are both unambiguous signals of a real person.
+             Empty auto-created stubs still have none of these. */
+          OR cp.background_check_paid = 1
+          OR cp.stripe_onboard_complete = 1
           OR EXISTS (SELECT 1 FROM bg_admin_vouches v WHERE v.caregiver_user_id = cp.user_id AND v.revoked_at IS NULL)
         )
       ORDER BY cp.updated_at DESC

@@ -679,6 +679,13 @@ async function caregiverDashboard(db, userId, res) {
       onboardingComplete: !!profile.onboarding_complete,
       earlyCheckInAllowed: !!profile.early_check_in_allowed,
       background_check_paid: !!profile.background_check_paid,
+      // v1.105.63 — whether the caregiver actually paid or an admin waived it for them.
+      // Same flag either way; only background_check_payments knows if money moved. The
+      // caregiver's First Steps copy explains the $30 fee, which reads as a bill to
+      // someone whose fee was waived on their behalf and never told.
+      backgroundCheckFeeWaived: !!profile.background_check_paid && !(await db.prepare(
+        "SELECT id FROM background_check_payments WHERE user_id = ? AND status = 'completed' LIMIT 1"
+      ).get(userId).catch(() => null)),
       isBackgroundChecked: !!profile.is_background_checked,
       checkrStatus: profile.is_background_checked ? 'clear' : (profile.checkr_status || 'pending'),
       adminVouches: (await activeVouchesFor(db, userId)).map((v) => ({ familyName: v.family_name })),

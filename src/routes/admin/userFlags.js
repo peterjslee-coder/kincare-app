@@ -112,13 +112,36 @@ router.get("/users/:id/onboarding", async (req, res) => {
       }
     }
 
+    // v1.105.63 — "Background Check Paid" is the only control that looks like a fee waiver,
+    // and granting it wrote a flag whose label says the caregiver PAID $30. An admin waiving
+    // the fee for a friend-of-the-family therefore read back as a $30 payment that never
+    // happened — and pushed the caregiver one step further into the Checkr pipeline they were
+    // being exempted from. The flag is the same either way; what differs is whether money
+    // actually moved, and only background_check_payments knows that.
+    let feePaidForReal = false;
+    if (profile) {
+      const paidRow = await db.prepare(
+        "SELECT id FROM background_check_payments WHERE user_id = ? AND status = 'completed' LIMIT 1"
+      ).get(user.id).catch(() => null);
+      feePaidForReal = !!paidRow;
+    }
+
+    // v1.105.63 — vouches belong on this screen. Vouching used to be reachable only from
+    // Admin → BG Checks, whose candidate list a never-started caregiver cannot appear on, so
+    // the one person an admin most wants to exempt from Checkr was the one person they could
+    // not exempt. This is the screen an admin is already on when they ask the question.
+    const vouches = profile ? await activeVouchesFor(db, user.id).catch(() => []) : [];
+
     res.json({
       user: { id: user.id, email: user.email, role: user.role, name: `${user.first_name || ''} ${user.last_name || ''}`.trim() },
       profile: profile || null,
       documents: docs || [],
+      vouches,
       flags: profile ? {
         backgroundCheckCleared: !!profile.is_background_checked,
         backgroundCheckPaid: !!profile.background_check_paid,
+        // 'paid' = money moved. 'waived' = an admin granted it. 'none' = neither.
+        backgroundCheckFee: !profile.background_check_paid ? 'none' : (feePaidForReal ? 'paid' : 'waived'),
         backgroundCheckConsent: !!profile.background_check_consent,
         stripeOnboardComplete: !!profile.stripe_onboard_complete,
         onboardingComplete: !!profile.onboarding_complete,

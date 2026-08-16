@@ -1460,6 +1460,51 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
     } catch (err) { console.error('Toggle flag error:', err); }
   };
 
+  // ─── Vouching from the People screen (v1.105.63) ───
+  //
+  // A vouch is the ONLY control that waives a background check — the fee flag above waives
+  // only the $30. But vouching lived exclusively on Admin → BG Checks, and that page lists
+  // caregivers who have entered the Checkr pipeline. Someone who never started one isn't on
+  // it, so waiving their check required first making them begin the check. That circle is
+  // the bug; this button is the way out of it.
+  //
+  // Deliberately the same prompt/confirm flow as the BG Checks card, including the wording
+  // that a vouch is NOT a background check and covers one family only.
+  const vouchFromPeople = async () => {
+    if (!onboardingModal) return;
+    const who = onboardingModal.user?.name || onboardingModal.user?.email || 'this caregiver';
+    try {
+      const r = await apiFetch('/api/admin/users?role=family&limit=100');
+      if (!r?.ok) { alert('Failed to load families'); return; }
+      const d = await r.json();
+      const fams = (d.users || d || []).filter(u => !u.is_demo);
+      if (!fams.length) { alert('No family accounts found'); return; }
+      const listing = fams.map((f, i) => `${i + 1}. ${f.first_name} ${f.last_name} (${f.email})`).join('\n');
+      const pick = prompt(`Vouch for ${who} with which family?\n\n${listing}\n\nEnter number:`);
+      if (!pick) return;
+      const fam = fams[parseInt(pick, 10) - 1];
+      if (!fam) { alert('Invalid selection'); return; }
+      const note = prompt(`Optional note — why can you vouch for ${who} with ${fam.first_name} ${fam.last_name}'s family?`) || '';
+      if (!confirm(`Vouch for ${who} to work with ${fam.first_name} ${fam.last_name}'s family ONLY?\n\nThis is NOT a background check and will never display as one. That family sees: "Approved by admin — no background check."`)) return;
+      const res = await apiFetch('/api/admin/vouches', {
+        method: 'POST',
+        body: JSON.stringify({ caregiverUserId: onboardingModal.userId, familyUserId: fam.id, note }),
+      });
+      if (res?.ok) { openOnboardingModal(onboardingModal.userId); }
+      else { const e = res ? await res.json().catch(() => ({})) : {}; alert(e.error || 'Failed to vouch'); }
+    } catch (err) { console.error('Vouch from People error:', err); alert('Failed to vouch'); }
+  };
+
+  const revokeVouchFromPeople = async (vouch) => {
+    if (!onboardingModal) return;
+    if (!confirm(`Revoke the vouch with ${vouch.family_name}'s family? They will no longer be able to claim that family's jobs.`)) return;
+    try {
+      const res = await apiFetch(`/api/admin/vouches/${vouch.id}`, { method: 'DELETE' });
+      if (res?.ok) { openOnboardingModal(onboardingModal.userId); }
+      else { alert('Failed to revoke'); }
+    } catch (err) { console.error('Revoke vouch error:', err); alert('Failed to revoke'); }
+  };
+
   // Help/FAQ management functions
   const loadHelpArticles = async () => {
     setHelpLoading(true);
@@ -5625,7 +5670,19 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                 {[
                   { key: 'identityVerified', label: 'Identity Verified', desc: `Selfie + ID photo (${onboardingModal.flags?.identityStatus || 'not submitted'})` },
                   { key: 'stripeOnboardComplete', label: 'Stripe Connected', desc: 'Bank account linked via Stripe Connect' },
-                  { key: 'backgroundCheckPaid', label: 'Background Check Paid', desc: 'Paid $30 fee for background check' },
+                  // v1.105.63 — this used to read "Background Check Paid / Paid $30 fee" in every
+                  // state, including the one where an admin had granted it as a WAIVER and no
+                  // money had moved. Granting a waiver recorded a payment that never happened.
+                  // Two further things this label never said, and both bit: the flag satisfies
+                  // the FEE only — it does not waive the background check, and granting it moves
+                  // the caregiver on to the Checkr consent form. The vouch is what waives a check.
+                  { key: 'backgroundCheckPaid',
+                    label: onboardingModal.flags?.backgroundCheckFee === 'waived' ? 'Background Check Fee — Waived' : 'Background Check Fee',
+                    desc: onboardingModal.flags?.backgroundCheckFee === 'paid'
+                      ? 'Caregiver paid the $30 fee'
+                      : onboardingModal.flags?.backgroundCheckFee === 'waived'
+                        ? 'Waived by an admin — no payment was taken. This covers the fee only; they are still asked to complete the check. Use a vouch to waive the check itself.'
+                        : 'Unpaid. Granting this waives the $30 fee — it does not waive the background check.' },
                   { key: 'onboardingComplete', label: 'Onboarding Complete', desc: 'All registration steps finished' },
                   { key: 'isAvailable', label: 'Accepting Work (their own toggle)', desc: 'The caregiver’s availability switch — actually claiming a job still requires a background check or your family vouch' },
                 ].map(flag => (
@@ -5651,6 +5708,40 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                     </button>
                   </div>
                 ))}
+
+                {/* Family vouches (v1.105.63) — the control that actually waives a background
+                    check, on the screen an admin is already standing on. */}
+                <div style={{ marginTop: '8px', padding: '12px', background: 'var(--bg-primary)', borderRadius: '8px', fontSize: '13px' }}>
+                  <div style={{ fontWeight: 600, marginBottom: '6px', color: 'var(--text-secondary)' }}>Family Vouches</div>
+                  {(onboardingModal.vouches || []).length > 0 ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '10px' }}>
+                      {onboardingModal.vouches.map(v => (
+                        <div key={v.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                          <span style={{ background: 'var(--color-info-bg, #e3f2fd)', borderRadius: '999px', padding: '3px 10px', fontSize: '12px', fontWeight: 600 }}>
+                            {'\u{1F91D}'} Vouched for {v.family_name}
+                          </span>
+                          <button
+                            onClick={() => revokeVouchFromPeople(v)}
+                            style={{ background: 'none', border: 'none', color: 'var(--color-error, #c62828)', fontSize: '12px', cursor: 'pointer', padding: '2px 4px', textDecoration: 'underline' }}>
+                            Revoke
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ color: 'var(--text-tertiary)', marginBottom: '10px' }}>
+                      No vouches. A vouch waives the background check for one family — the fee flag above does not.
+                    </div>
+                  )}
+                  <button
+                    onClick={vouchFromPeople}
+                    style={{
+                      padding: '8px 14px', borderRadius: '8px', border: 'none', background: 'var(--role-color)',
+                      color: 'var(--text-on-primary)', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
+                    }}>
+                    {'\u{1F91D}'} Vouch for family{'…'}
+                  </button>
+                </div>
 
                 {/* Extra info */}
                 <div style={{ marginTop: '8px', padding: '12px', background: 'var(--bg-primary)', borderRadius: '8px', fontSize: '13px' }}>
