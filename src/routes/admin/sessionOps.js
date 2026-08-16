@@ -86,7 +86,10 @@ router.post("/sessions/:id/restore", async (req, res) => {
     if (checkInTime && session.caregiver_profile_id) {
       const existingLog = await db.prepare("SELECT id FROM visit_logs WHERE session_id = ?").get(req.params.id);
       if (existingLog) {
-        await db.prepare("UPDATE visit_logs SET check_in_time = ?, updated_at = NOW() WHERE session_id = ?")
+        // v1.105.65 — this used to set updated_at, which visit_logs does not have. Admin
+        // "restore session" and "force check-in" both 500'd whenever a visit log already
+        // existed, which is precisely the case they exist to repair.
+        await db.prepare("UPDATE visit_logs SET check_in_time = ? WHERE session_id = ?")
           .run(checkInTime, req.params.id);
       } else {
         const { v4: uuidv4 } = require("uuid");
@@ -247,7 +250,7 @@ router.post("/sessions/:id/force-check-in", async (req, res) => {
     const { v4: uuidv4 } = require("uuid");
     const existing = await db.prepare("SELECT id FROM visit_logs WHERE session_id = ?").get(req.params.id);
     if (existing) {
-      await db.prepare("UPDATE visit_logs SET check_in_time = ?, updated_at = NOW() WHERE session_id = ?")
+      await db.prepare("UPDATE visit_logs SET check_in_time = ? WHERE session_id = ?")
         .run(now.toISOString(), req.params.id);
     } else {
       await db.prepare(`

@@ -12,6 +12,7 @@
     "test": "jest --forceExit --detectOpenHandles --testPathIgnorePatterns tests/integration",
     "lint:client": "node scripts/lint-client.js",
     "lint:requires": "node scripts/lint-requires.js",
+    "lint:sql-columns": "node scripts/lint-sql-columns.js",
     "collect-feedback": "node scripts/collect-feedback.js",
     "test:integration": "jest --forceExit --runInBand --testMatch \"**/tests/integration/**/*.itest.js\""
   },

@@ -85,7 +85,9 @@ async function gatherVisitData(careRecipientId) {
         u.first_name AS reviewer_first
       FROM reviews r
       JOIN care_sessions cs ON r.session_id = cs.id
-      LEFT JOIN users u ON r.reviewer_id = u.id
+      /* v1.105.65 — was r.reviewer_id, which is not a column on reviews. The query threw on
+         every call and the catch below logged it, so reviews was permanently empty. */
+      LEFT JOIN users u ON r.family_user_id = u.id
       WHERE cs.care_recipient_id = ?
       ORDER BY r.created_at DESC
       LIMIT 20
@@ -341,7 +343,6 @@ Age: ${recipient.age || "unknown"}
 Diagnosed conditions (formal medical diagnoses): ${healthConditions.join(", ") || "none listed"}
 Observed concerns (family observations — NOT diagnoses; never present these as diagnosed illnesses): ${observedConcerns.join(", ") || "none listed"}
 Medications: ${medications.join(", ") || "none listed"}
-Mobility: ${recipient.mobility || "unknown"}
 
 VISIT DATA (${analysis.stats.totalVisits} visits${analysis.stats.dateRange ? `, ${analysis.stats.dateRange}` : ""}):
 ${visitSummaries || "No visits recorded yet."}
@@ -561,7 +562,6 @@ Age: ${recipient.age || "unknown"}
 Diagnosed conditions (formal medical diagnoses): ${healthConditions.join(", ") || "none listed"}
 Observed concerns (family observations — NOT diagnoses; never present these as diagnosed illnesses): ${observedConcerns.join(", ") || "none listed"}
 Medications: ${medications.join(", ") || "none listed"}
-Mobility: ${recipient.mobility || "unknown"}
 
 VISIT DATA (${analysis.stats.totalVisits} visits):
 ${visitSummaries || "No visits yet."}
@@ -657,8 +657,13 @@ async function generateCaregiverCoaching(sessionId) {
   const db = await getDb();
 
   const session = await db.prepare(`
+    /* v1.105.65 — cr.mobility is not a column and never has been, so this query threw on
+       every call. Both callers swallow it (sessions.js logs "non-blocking"), which means iPAi
+       caregiver coaching has NEVER been generated for a single visit: visit_logs.ai_coaching is
+       always NULL and the ipai_coaching socket event has never fired. observed_concerns is the
+       field that actually carries this kind of context. */
     SELECT cs.*, cr.first_name AS recipient_name, cr.health_conditions,
-      cr.medications, cr.age, cr.mobility,
+      cr.medications, cr.age, cr.observed_concerns,
       u.first_name AS caregiver_name,
       vl.arrival_mood, vl.departure_mood, vl.condition_tags,
       vl.care_feedback, vl.service_feedback, vl.summary
@@ -695,6 +700,10 @@ async function generateCaregiverCoaching(sessionId) {
   const conditions = (() => { try { return JSON.parse(session.health_conditions || "[]"); } catch { return []; } })();
   const tags = (() => { try { return JSON.parse(session.condition_tags || "[]"); } catch { return []; } })();
   const meds = (() => { try { return JSON.parse(session.medications || "[]"); } catch { return []; } })();
+  // v1.105.65 — replaces the "Mobility" line, which read a column that does not exist and so
+  // rendered as "unknown" in every coaching prompt this app has ever built. Labelled as family
+  // observations rather than diagnoses, matching how the doctor-report prompt presents it.
+  const coachingConcerns = (() => { try { return JSON.parse(session.observed_concerns || "[]"); } catch { return []; } })();
 
   const pastContext = pastVisits.map(v => {
     const t = (() => { try { return JSON.parse(v.condition_tags || "[]"); } catch { return []; } })();
@@ -711,7 +720,7 @@ CARE RECIPIENT:
 - Name: ${session.recipient_name}, Age: ${session.age || "unknown"}
 - Conditions: ${conditions.join(", ") || "none listed"}
 - Medications: ${meds.join(", ") || "none listed"}
-- Mobility: ${session.mobility || "unknown"}
+- Observed concerns (family observations — NOT diagnoses): ${coachingConcerns.join(", ") || "none listed"}
 
 TODAY'S SESSION:
 - Arrival mood: ${parseMoodDisplay(session.arrival_mood) || "not recorded"}

@@ -1378,13 +1378,15 @@ router.put("/admin/ipai-access/:userId", requireAdmin, async (req, res) => {
     }
 
     // Update user's iPAi access
+    // v1.105.65 — was users.ipai_access, which does not exist; the column is companion_access.
+    // The admin iPAi-access toggle has therefore 500'd on every use since it shipped.
     await db.prepare(`
-      UPDATE users SET ipai_access = ?, updated_at = NOW()
+      UPDATE users SET companion_access = ?, updated_at = NOW()
       WHERE id = ?
     `).run(enabled ? 1 : 0, userId);
 
     const user = await db.prepare(
-      "SELECT id, email, first_name, last_name, ipai_access FROM users WHERE id = ?"
+      "SELECT id, email, first_name, last_name, companion_access FROM users WHERE id = ?"
     ).get(userId);
 
     return res.json({ user });

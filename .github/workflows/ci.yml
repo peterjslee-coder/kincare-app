@@ -37,6 +37,16 @@ jobs:
       - name: Server require paths resolve
         run: npm run lint:requires
 
+      # The third member of the same family. A column that does not exist raises a perfectly
+      # clear Postgres error — which nobody ever sees, because these call sites sit inside a
+      # catch that logs "(non-blocking)" and returns []. The Aug 11 sweep found SIX features
+      # that had never worked once in production for exactly this reason: iPAi coaching,
+      # Kindred's visit context, natural-language scheduling, the admin iPAi toggle, and two
+      # admin session repairs. Tests cannot catch these — the unit suites use a fake db, which
+      # will happily return rows for a column that isn't there.
+      - name: SQL columns exist
+        run: npm run lint:sql-columns
+
       - name: Unit tests
         run: npm test
 

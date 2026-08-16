@@ -91,9 +91,13 @@ async function loadCareContext(careRecipientId) {
     try {
       upcomingVisits = await db
         .prepare(
+          /* v1.105.65 — was cs.care_type; the column is service_type. The catch below logs
+             "(non-fatal)" and leaves upcomingVisits empty, so Kindred has never known about a
+             single scheduled visit: ask it when a caregiver is coming and it answers as though
+             nothing is booked. */
           `SELECT cs.id, cs.caregiver_id, u.first_name, u.last_name, cs.scheduled_date,
                   cs.scheduled_time, cs.duration_hours, cs.status, cs.special_instructions,
-                  cs.care_type
+                  cs.service_type
            FROM care_sessions cs
            LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
            LEFT JOIN users u ON cp.user_id = u.id
@@ -225,7 +229,7 @@ function buildKindredPrompt(careContext, voiceOwnerName, careRecipientName, care
           })
         : "time TBD";
       const status = v.status === "confirmed" ? "" : ` (${v.status} — not yet confirmed)`;
-      const careType = v.care_type ? ` [${v.care_type}]` : "";
+      const careType = v.service_type ? ` [${v.service_type}]` : "";
       return `- ${v.first_name || "Caregiver TBD"} on ${date} at ${time}${careType}${status}`;
     })
     .join("\n");

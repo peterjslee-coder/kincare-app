@@ -2000,16 +2000,15 @@ async function initializeDatabase() {
     if (killed.changes > 0) console.log(`  ✅ Killed bogus $15.60 payment record for Cary session`);
   } catch (e) { /* already killed */ }
 
-  // ─── v1.56.6/9 — One-time: force-complete Cary's $0.70 session (Pete confirmed paid via Stripe) ───
-  try {
-    const sessionId = '8126e816-6f95-4986-94cb-eb7ab511c949';
-    const cs = await db.prepare("SELECT payment_status FROM care_sessions WHERE id = ?").get(sessionId);
-    if (cs && cs.payment_status !== 'paid') {
-      await db.prepare("UPDATE care_sessions SET payment_status = 'paid', updated_at = NOW() WHERE id = ?").run(sessionId);
-      await db.prepare("UPDATE payments SET status = 'completed', updated_at = NOW() WHERE session_id = ? AND status != 'completed'").run(sessionId);
-      console.log(`  ✅ Force-completed Cary's session ${sessionId} — payment_status → paid`);
-    }
-  } catch (e) { /* already done */ }
+  // ─── v1.56.6/9 — REMOVED v1.105.65 ───
+  // A one-time boot repair for a single hardcoded March session that never completed. The
+  // payments table has no updated_at column (that was the whole point of the v1.56.21 webhook
+  // fix), so the second UPDATE threw on every boot — but the FIRST one had already set
+  // care_sessions.payment_status = 'paid'. It half-ran, marking the session paid while leaving
+  // its payments row un-completed, then reported nothing because the catch says "already done".
+  // Deleting rather than repairing: fixing the column name would execute, on prod, at boot, a
+  // data mutation that has never once run. That is Pete's call to make deliberately, not a
+  // side effect of a linter fix.
 
   // ─── v1.56.13 — One-time: create a test session for today (March 29) to verify webhook payment flow ───
   try {
@@ -2146,7 +2145,8 @@ async function initializeDatabase() {
     const row = await db.prepare("SELECT payment_status FROM care_sessions WHERE id = ?").get(freshId);
     if (row && row.payment_status !== 'paid') {
       await db.prepare("UPDATE care_sessions SET payment_status = 'paid', updated_at = NOW() WHERE id = ?").run(freshId);
-      await db.prepare("UPDATE payments SET status = 'completed', updated_at = NOW() WHERE session_id = ? AND status IN ('processing','pending')").run(freshId);
+      // v1.105.65 — the payments UPDATE that used to sit here referenced a nonexistent
+      // updated_at column and threw on every boot. Same half-run shape as the block above.
       console.log(`  ✅ Force-completed payment for ${freshId} (webhook was failing due to duplicate destinations)`);
     }
   } catch (e) { console.error("  Force-complete error:", e.message); }

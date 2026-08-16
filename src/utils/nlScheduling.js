@@ -32,10 +32,13 @@ async function parseSchedulingIntent(text, userId) {
 
   // Get user's care recipients to help with name matching
   const db = await getDb();
+  // v1.105.65 — was cr.family_id, which is not a column (it is family_user_id). Nothing here
+  // catches the throw, so POST /api/scheduling/natural has returned a 500 on every request it
+  // has ever received.
   const userRecipients = await db.prepare(`
     SELECT cr.id, cr.first_name, cr.last_name
     FROM care_recipients cr
-    WHERE cr.family_id = ?
+    WHERE cr.family_user_id = ?
     ORDER BY cr.created_at DESC
   `).all(userId);
 
@@ -186,17 +189,26 @@ async function suggestMatches(intent, userId) {
   }
 
   // Query available caregivers for the requested date/time
+  // v1.105.65 — five nonexistent columns and one vacuous predicate, all in one query:
+  //   cp.experience_summary, cp.skills  ->  cp.years_experience, cp.specialties
+  //   av.user_id  ->  av.caregiver_id   (availability keys on caregiver_profiles.id, not users.id)
+  //   av.date     ->  av.specific_date
+  //   u.status = 'active'  ->  u.is_active = 1  (there is no users.status column)
+  // And `av.type != 'unavailable'` excluded nothing: the only values ever written are
+  // 'available' and 'blocked', so a BLOCKED slot read as available. Even once the column
+  // names were right, this query would have offered families caregivers who had marked
+  // themselves unavailable.
   const query = `
     SELECT DISTINCT cp.id, cp.user_id, u.first_name, u.last_name, u.profile_photo,
-      cp.hourly_rate, cp.bio, cp.experience_summary, cp.skills,
+      cp.hourly_rate, cp.bio, cp.years_experience, cp.specialties,
       av.type as availability_type
     FROM caregiver_profiles cp
     JOIN users u ON cp.user_id = u.id
-    LEFT JOIN availability av ON u.id = av.user_id
-      AND av.date = ?
-      AND av.type != 'unavailable'
+    LEFT JOIN availability av ON cp.id = av.caregiver_id
+      AND av.specific_date = ?
+      AND av.type = 'available'
     WHERE cp.account_paused = 0
-      AND u.status = 'active'
+      AND u.is_active = 1
     ORDER BY u.created_at DESC
     LIMIT 20
   `;
