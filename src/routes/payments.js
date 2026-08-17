@@ -1490,6 +1490,11 @@ router.post("/background-check", requireRole("caregiver"), requirePaymentsEnable
         inplace_user_id: req.user.id,
         caregiver_name: `${user.first_name} ${user.last_name}`,
       },
+    }, {
+      // v1.105.66 — a double-tap on "pay the fee" created two $30 intents. This is
+      // authorize-only so nothing is captured twice, but it left orphan intents and a
+      // confusing trail. One caregiver, one background-check fee.
+      idempotencyKey: `inplace_bgcheck_${req.user.id}`,
     });
 
     const paymentId = uuid();
@@ -1680,6 +1685,26 @@ async function processOverduePayments(pushFn) {
             inplace_tip_reason: s.pending_tip_reason || "",
           },
           description: `Auto-pay: ${s.service_type} on ${s.scheduled_date} with ${s.caregiver_name || 'Caregiver'}${tipCents > 0 ? ` (includes $${(tipCents/100).toFixed(2)} tip)` : ''}`,
+        }, {
+          // v1.105.66 — THE double-charge guard.
+          //
+          // This call has `confirm: true, off_session: true`: the family's card is charged the
+          // moment it returns. The re-entry guard that stops a session being charged twice is
+          // the `payments` row inserted BELOW — after the money has already moved. Between
+          // those two lines there is no protection at all, and the window is however long
+          // Stripe takes to answer.
+          //
+          // That window is reachable. withPollerLock used to release its advisory lock when a
+          // tick passed its deadline while the tick itself kept running (Promise.race does not
+          // cancel anything), so a slow auto-pay run could be overlapped by the next one, find
+          // the same not-yet-recorded session, and charge it again. That is fixed in
+          // models/database.js this release — but overlap protection should never be the ONLY
+          // thing standing between a family and a duplicate charge.
+          //
+          // Keyed on session + exact amount: a retry of the same charge is idempotent at
+          // Stripe, while a genuinely different amount is genuinely a different charge. Stripe
+          // remembers keys for 24 hours, which covers every retry path we have.
+          idempotencyKey: `inplace_autopay_${s.id}_${totalCents}`,
         });
 
         // Record payment (v1.79.0: card details from the saved payment method — no extra API call)

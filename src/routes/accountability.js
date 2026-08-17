@@ -127,6 +127,11 @@ async function authorizeSessionPayment(sessionId) {
       confirm: true,
       payment_method: undefined, // will use customer's default
       off_session: true,
+    }, {
+      // v1.105.66 — this is an authorization hold on a family's card, placed by a poller.
+      // Duplicate holds tie up real money in someone's account even though only one is ever
+      // captured. Keyed on the session and the authorized amount.
+      idempotencyKey: `inplace_authhold_${sessionId}_${totalCents}`,
     });
 
     // Store authorization on session

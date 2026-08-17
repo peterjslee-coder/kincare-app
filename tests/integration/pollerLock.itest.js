@@ -85,24 +85,66 @@ describe("the lock does its job", () => {
   });
 });
 
-describe("a poller that hangs is cut off", () => {
-  test("the body is bounded, and the lock comes back", async () => {
-    // Rather than wait out the real 120s deadline, prove the shape: a body that never
-    // settles must not leave the lock held once the call has returned.
-    // NB: no jest.resetModules() here — it orphans this file's connection pool, whose
-    // clients then die when the harness stops postgres and surface as an unrelated suite
-    // "failing to run". Cost 20 minutes to track down; not worth repeating.
-    const dbMod = require("../../src/models/database");
+describe("a poller that overruns keeps its lock", () => {
+  // v1.105.66 — INVERTED. This test used to assert that release lives in `finally` "so it runs
+  // on the timeout path too". That was the bug, pinned in place as if it were the requirement.
+  //
+  // Promise.race does not cancel the loser. Releasing on the timeout path handed the lock back
+  // while the abandoned tick was still running, so the next scheduled run started against the
+  // same rows. For poller 105 (auto-pay) that is a family charged twice: the PaymentIntent is
+  // created and CONFIRMED before the `payments` row that would stop a second attempt exists.
+  //
+  // NB: no jest.resetModules() here — it orphans this file's connection pool, whose clients
+  // then die when the harness stops postgres and surface as an unrelated suite "failing to
+  // run". Cost 20 minutes to track down; not worth repeating.
+
+  test("a second tick cannot start while the first is still working", async () => {
+    // The property that matters, against a real Postgres advisory lock.
+    let releaseWork;
+    const gate = new Promise((r) => { releaseWork = r; });
+
+    let secondResult = null;
+    const first = withPollerLock(KEY, async () => { await gate; });
+
+    // Give the first call time to actually take the lock.
+    await new Promise((r) => setTimeout(r, 150));
+    secondResult = await withPollerLock(KEY, async () => {
+      throw new Error("must not run — the lock was held");
+    });
+    expect(secondResult).toBe(false);
+
+    releaseWork();
+    expect(await first).toBe(true);
+
+    // And once it is genuinely finished, the lock is available again.
+    let ran = false;
+    expect(await withPollerLock(KEY, async () => { ran = true; })).toBe(true);
+    expect(ran).toBe(true);
+  });
+
+  test("the release is deferred rather than run from the deadline path", () => {
     const src = require("fs").readFileSync(
       require("path").join(__dirname, "../../src/models/database.js"), "utf8"
     );
     expect(src).toMatch(/POLLER_DEADLINE_MS/);
-    expect(src).toMatch(/Promise\.race\(\[fn\(\), deadline\]\)/);
     expect(src).toMatch(/pg_advisory_unlock/);
-    // release lives in `finally`, so it runs on the timeout path too
+
     const fn = src.slice(src.indexOf("async function withPollerLock"), src.indexOf("function resetDb"));
-    expect(fn.indexOf("} finally {")).toBeGreaterThan(-1);
-    expect(fn.indexOf("pg_advisory_unlock")).toBeGreaterThan(fn.indexOf("} finally {"));
+
+    // The old shape, which released whatever happened.
+    expect(fn).not.toMatch(/Promise\.race\(\[fn\(\), deadline\]\)/);
+
+    // The new shape: the work is started once, kept, and the outer release is conditional.
+    expect(fn).toMatch(/const work = \(async \(\) => fn\(\)\)\(\)/);
+    expect(fn).toMatch(/await Promise\.race\(\[work, deadline\]\)/);
+    expect(fn).toMatch(/if \(!releaseDeferred\)/);
+
+    // And on overrun, release is attached to the WORK settling, not to this call returning.
+    expect(fn).toMatch(/work\.catch\(\(\) => \{\}\)\.finally\(\(\) => \{ releasePollerLock\(client, lockKey\); \}\)/);
+  });
+
+  test("withPollerLock is still exported and callable", () => {
+    const dbMod = require("../../src/models/database");
     expect(typeof dbMod.withPollerLock).toBe("function");
   });
 });

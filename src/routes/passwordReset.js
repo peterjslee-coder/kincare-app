@@ -36,7 +36,18 @@ router.post("/request", async (req, res) => {
     const baseUrl = (process.env.APP_URL || "https://yourinplace.com").replace(/\/$/, "");
     const resetUrl = `${baseUrl}/?reset=${token}`;
 
-    await sendEmail({
+    // v1.105.66 — was awaited, so the response waited on Resend. Before utils/email.js grew a
+    // timeout, a hang there hung this request forever: someone locked out of their account got
+    // a spinner that never resolved and no way to tell whether anything had happened.
+    //
+    // Waiting at all is wrong here regardless. The token is already written; whether the mail
+    // server is fast has nothing to do with whether the request succeeded. And this answer must
+    // be indistinguishable from the "no such user" branch above — if a registered address takes
+    // fifteen seconds while an unregistered one returns instantly, the timing alone reveals
+    // which addresses have accounts, which is exactly what that branch exists to prevent.
+    //
+    // sendEmail never throws; it returns { success: false }. Hence the explicit check.
+    sendEmail({
       to: user.email,
       subject: "Reset your InPlace password",
       html: brandedHtml({
@@ -47,7 +58,9 @@ router.post("/request", async (req, res) => {
         ctaText: "Reset Password",
         footnote: "This link expires in 1 hour. If you didn't request a reset, you can safely ignore this email.",
       }),
-    });
+    }).then((r) => {
+      if (!r?.success) console.error(`[password-reset] email to user ${user.id.slice(0, 8)} failed: ${r?.error}`);
+    }).catch((e) => console.error("[password-reset] email threw:", e.message));
 
     res.json({ message: "If that email is registered, you'll receive a reset link shortly." });
   } catch (err) {

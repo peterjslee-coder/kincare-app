@@ -13,6 +13,32 @@
 
 const { Resend } = require("resend");
 
+// v1.105.66 — the Resend SDK has NO default timeout, and sendEmail is awaited inline on paths a
+// person is sitting in front of. Forgot-password is the worst of them: passwordReset.js awaits
+// this before responding, so a hang at Resend hangs the request, the spinner never resolves, and
+// someone locked out of their account is told nothing at all — indistinguishable from the app
+// being broken. Ten other call sites share this helper (invitations, consent outreach, admin
+// notices, waitlist, doctor reports), so the bound belongs here rather than at each caller.
+//
+// 15s: comfortably above a healthy Resend call, far below a user's patience.
+const SEND_TIMEOUT_MS = 15000;
+
+/**
+ * Reject if `promise` has not settled within `ms`.
+ *
+ * Note what this does NOT do: it cannot cancel the underlying request. The email may still be
+ * delivered after we stop waiting. That is the right trade for every caller here — a duplicate
+ * or late email is a far smaller harm than a request that never returns — but it does mean
+ * "timed out" must never be reported to a user as "not sent".
+ */
+function withTimeout(promise, ms, label) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 let resendClient = null;
 
 function getResend() {
@@ -64,7 +90,7 @@ async function sendEmail({ to, subject, html, replyTo }) {
   try {
     const payload = { from, to, subject, html };
     if (replyTo) payload.reply_to = replyTo;
-    const result = await resend.emails.send(payload);
+    const result = await withTimeout(resend.emails.send(payload), SEND_TIMEOUT_MS, "Resend");
     console.log(`  [email] ✅ Sent "${subject}" to ${to} (id: ${result.data?.id || "unknown"})`);
     return { success: true, id: result.data?.id };
   } catch (err) {

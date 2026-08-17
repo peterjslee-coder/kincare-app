@@ -2229,13 +2229,42 @@ async function initializeDatabase() {
 // times out.
 const POLLER_DEADLINE_MS = 120000;
 
+/** Release the advisory lock on the connection that took it, then return that connection. */
+async function releasePollerLock(client, lockKey) {
+  try {
+    await client.query("SELECT pg_advisory_unlock($1)", [lockKey]);
+  } catch { /* released on disconnect */ }
+  try { client.release(); } catch { /* already returned */ }
+}
+
 async function withPollerLock(lockKey, fn) {
   const client = await getPool().connect();
   let held = false;
+  let releaseDeferred = false;
   try {
     const res = await client.query("SELECT pg_try_advisory_lock($1) AS got", [lockKey]);
     if (res.rows[0]?.got !== true) return false; // another instance (or a still-running tick)
     held = true;
+
+    // v1.105.66 — the deadline used to release the lock while the work was still running.
+    //
+    // Promise.race does not cancel the loser. On timeout this function returned, the `finally`
+    // released the advisory lock, and the abandoned tick carried on mid-flight. Overlap
+    // protection was therefore void in precisely the case it exists for — a slow tick — and the
+    // next scheduled run would start against the same rows.
+    //
+    // For poller 105 (auto-pay) that means a family charged twice: processOverduePayments
+    // creates and CONFIRMS a Stripe PaymentIntent before inserting the `payments` row that
+    // would stop a second attempt. Stripe idempotency keys now backstop that
+    // (routes/payments.js), but the lock has to hold as well — belt and braces, because the
+    // failure being guarded against is taking money from someone twice.
+    //
+    // Now: still bound how long the CALLER waits, still report the overrun — but hold the lock
+    // until the work genuinely settles. The connection stays out of the pool for as long as the
+    // tick runs. That is the honest cost, and it is much cheaper than the alternative.
+    const work = (async () => fn())();
+    let settled = false;
+    work.then(() => { settled = true; }, () => { settled = true; });
 
     let timer;
     const deadline = new Promise((_, reject) => {
@@ -2244,18 +2273,34 @@ async function withPollerLock(lockKey, fn) {
         POLLER_DEADLINE_MS
       );
     });
+
     try {
-      await Promise.race([fn(), deadline]);
+      await Promise.race([work, deadline]);
+      return true;
+    } catch (err) {
+      if (settled) throw err; // the work itself failed — that belongs to the caller
+
+      // Overran. This used to be entirely invisible.
+      console.error(`[poller ${lockKey}] ${err.message} — still running; lock held until it finishes`);
+      try {
+        require("../utils/sentry").captureException(err, { where: `withPollerLock:${lockKey}` });
+      } catch { /* sentry is optional here */ }
+
+      releaseDeferred = true;
+      work.catch(() => {}).finally(() => { releasePollerLock(client, lockKey); });
+      return true;
     } finally {
       clearTimeout(timer);
     }
-    return true;
   } finally {
-    if (held) {
-      // Must release on the SAME connection that took it.
-      try { await client.query("SELECT pg_advisory_unlock($1)", [lockKey]); } catch { /* released on disconnect */ }
+    // When the release is deferred, the detached handler above owns both the lock and the
+    // connection. Touching either here is what caused the original bug.
+    if (!releaseDeferred) {
+      if (held) {
+        try { await client.query("SELECT pg_advisory_unlock($1)", [lockKey]); } catch { /* released on disconnect */ }
+      }
+      client.release();
     }
-    client.release();
   }
 }
 

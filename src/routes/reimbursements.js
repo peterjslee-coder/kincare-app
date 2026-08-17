@@ -1142,6 +1142,12 @@ router.post("/:id/pay-ach", async (req, res) => {
           inplace_payee_user_id: payee.id,
         },
         description: `InPlace reimbursement: $${(baseCents / 100).toFixed(2)} — ${ctx.row.description}`.slice(0, 200),
+      }, {
+        // v1.105.66 — confirm:true charges the approver immediately. A double-tap on Pay, or a
+        // retry after a timeout the client saw but Stripe did not, would send the money twice.
+        // Keyed on the reimbursement and the exact total, so a retry is idempotent while a
+        // genuinely different amount is a genuinely different payment.
+        idempotencyKey: `inplace_reimb_${ctx.row.id}_${totalCents}`,
       });
     } catch (stripeErr) {
       console.error("pay-ach PaymentIntent error:", stripeErr.message, stripeErr.code);
