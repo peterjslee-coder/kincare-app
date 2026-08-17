@@ -332,6 +332,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
   const [authzActionLoading, setAuthzActionLoading] = useState(null);
   const [docPreview, setDocPreview] = useState(null); // { fileData, mimeType, fileName }
   const [docPreviewLoading, setDocPreviewLoading] = useState(false);
+  const [docPreviewError, setDocPreviewError] = useState(null); // v1.105.67 — a failed load used to say nothing
   const [rejectModal, setRejectModal] = useState(null); // { id, name }
   const [rejectNotes, setRejectNotes] = useState('');
   // Customer service — flagged reviews
@@ -1248,14 +1249,58 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
 
   const handleDocPreview = async (docId) => {
     setDocPreviewLoading(true);
+    // v1.105.67 — two faults. The modal rendered a PDF in a bare <iframe>, which WebKit refuses
+    // to do, so every ID document and authorization PDF was a white rectangle on an iPhone. And
+    // `if (res?.ok)` had no else: a failed load left the button looking inert, with nothing said.
+    //
+    // file_data arrives as a base64 data: URI. PdfPreview's native path needs a real Blob (the
+    // OS share sheet cannot take a data: URI any more than it can take a blob:), so convert once
+    // here rather than making every consumer deal with it.
+    setDocPreviewError(null);
     try {
       const res = await apiFetch(`/api/admin/documents/${docId}`);
       if (res?.ok) {
         const data = await res.json();
-        setDocPreview({ fileData: data.document.file_data, mimeType: data.document.mime_type, fileName: data.document.file_name });
+        const raw = data.document.file_data;
+        let blob = null, blobUrl = null;
+        try {
+          if (typeof raw === 'string' && raw.startsWith('data:')) {
+            const [, mime, b64] = raw.match(/^data:([^;]+);base64,(.*)$/s) || [];
+            if (b64) {
+              const bin = atob(b64);
+              const bytes = new Uint8Array(bin.length);
+              for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+              blob = new Blob([bytes], { type: mime || data.document.mime_type || 'application/octet-stream' });
+              blobUrl = URL.createObjectURL(blob);
+            }
+          }
+        } catch (e) { console.error('Doc preview decode failed:', e); }
+        setDocPreview({
+          fileData: raw,
+          blob,
+          blobUrl: blobUrl || raw,
+          mimeType: data.document.mime_type,
+          fileName: data.document.file_name,
+        });
+      } else {
+        setDocPreviewError('That document could not be loaded.');
       }
-    } catch (err) { console.error('Doc preview error:', err); }
+    } catch (err) {
+      console.error('Doc preview error:', err);
+      setDocPreviewError('That document could not be loaded. Check your connection and try again.');
+    }
     setDocPreviewLoading(false);
+  };
+
+  // v1.105.67 — revoke the object URL on close; one preview, one blob, otherwise they pile up
+  // for as long as the admin session lasts.
+  const closeDocPreview = () => {
+    setDocPreview((prev) => {
+      if (prev?.blobUrl && prev.blobUrl.startsWith('blob:')) {
+        try { URL.revokeObjectURL(prev.blobUrl); } catch { /* already revoked */ }
+      }
+      return null;
+    });
   };
 
   const handleRejectWithNotes = async () => {
@@ -4959,19 +5004,39 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
             </div>
           )}
 
+          {/* v1.105.67 — a failed load used to render nothing at all: the Preview button looked
+              inert and the admin had no idea whether the document was missing, the request had
+              failed, or they had mis-tapped. */}
+          {docPreviewError && !docPreview && (
+            <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              onClick={() => setDocPreviewError(null)}>
+              <div style={{ background: 'var(--bg-surface)', borderRadius: '12px', padding: '24px', maxWidth: '420px', width: '90%' }}
+                onClick={e => e.stopPropagation()}>
+                <div style={{ fontSize: '15px', marginBottom: '16px', color: 'var(--color-error)' }}>{docPreviewError}</div>
+                <button onClick={() => setDocPreviewError(null)}
+                  style={{ padding: '8px 16px', borderRadius: '8px', border: 'none', background: 'var(--role-color)', color: 'var(--text-on-primary)', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>
+                  Close
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Document Preview Modal */}
           {docPreview && (
             <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-              onClick={() => setDocPreview(null)}>
+              onClick={() => closeDocPreview()}>
               <div style={{ background: 'var(--bg-surface)', borderRadius: '12px', padding: '24px', maxWidth: '800px', width: '90%', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}
                 onClick={e => e.stopPropagation()}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                   <h3 style={{ margin: 0, fontSize: '16px' }}>{'\u{1F4C4}'} {docPreview.fileName}</h3>
-                  <button onClick={() => setDocPreview(null)} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: 'var(--text-muted)' }}>{'\u2715'}</button>
+                  <button onClick={() => closeDocPreview()} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: 'var(--text-muted)' }}>{'\u2715'}</button>
                 </div>
                 <div style={{ flex: 1, overflow: 'auto', minHeight: '300px' }}>
                   {docPreview.mimeType === 'application/pdf' ? (
-                    <iframe src={docPreview.fileData} style={{ width: '100%', height: '60vh', border: '1px solid #e0e0e0', borderRadius: '8px' }} title="Document preview" />
+                    /* v1.105.67 — was a bare iframe; WebKit will not render a PDF in a subframe,
+                       so on an iPhone this was a white rectangle. Shared with the Documents
+                       preview and the attachment viewer. */
+                    <PdfPreview blobUrl={docPreview.blobUrl} blob={docPreview.blob} name={docPreview.fileName} height="60vh" />
                   ) : (
                     <img src={docPreview.fileData} alt={docPreview.fileName} style={{ maxWidth: '100%', maxHeight: '60vh', borderRadius: '8px', border: '1px solid #e0e0e0' }} />
                   )}

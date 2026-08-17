@@ -17,6 +17,11 @@ const Documents = window.Documents = ({ onNavigate }) => {
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [previewDocument, setPreviewDocument] = useState(null);
   const [previewFileUrl, setPreviewFileUrl] = useState(null);
+  // v1.105.67 — the blob itself, because the native share sheet needs it (a blob: URL is not
+  // openable inside the app), and an explicit failure state so a load error stops rendering as
+  // an empty modal.
+  const [previewBlob, setPreviewBlob] = useState(null);
+  const [previewError, setPreviewError] = useState(null);
 
   // Upload Modal State
   const [uploadRecipientId, setUploadRecipientId] = useState('');
@@ -376,19 +381,34 @@ const Documents = window.Documents = ({ onNavigate }) => {
 
   const handlePreview = async (document) => {
     setPreviewDocument(document);
+    // v1.105.67 — four faults here, and they compounded.
+    //
+    // 1. previewFileUrl was never cleared. A failed load left the PREVIOUS document's blob on
+    //    screen beneath the NEW document's name, category and status. In a folder holding a
+    //    POA, a DNR and an advance directive, that is the worst version of this bug: the
+    //    header says one document and the page shows another.
+    // 2. The object URL was never revoked — one leak per preview.
+    // 3. `if (response.ok)` with no else, so a failure rendered as an empty modal.
+    // 4. Raw fetch with credentials:'include' instead of apiFetch: it carried the cookie but
+    //    not the Bearer token. The v1.105.34 receipt-link lesson, in a shape that test's
+    //    href="/api/…" scan does not cover.
+    setPreviewFileUrl((prev) => { if (prev) { try { URL.revokeObjectURL(prev); } catch { /* already revoked */ } } return null; });
+    setPreviewBlob(null);
+    setPreviewError(null);
+    setShowPreviewModal(true);
     try {
-      const response = await fetch(`/api/documents/${document.id}/download`, {
-        credentials: 'include',
-      });
-      if (response.ok) {
+      const response = await apiFetch(`/api/documents/${document.id}/download`);
+      if (response?.ok) {
         const blob = await response.blob();
-        const url = URL.createObjectURL(blob);
-        setPreviewFileUrl(url);
+        setPreviewBlob(blob);
+        setPreviewFileUrl(URL.createObjectURL(blob));
+      } else {
+        setPreviewError('This document could not be loaded. Please try again.');
       }
     } catch (error) {
       console.error('Failed to load preview:', error);
+      setPreviewError('This document could not be loaded. Check your connection and try again.');
     }
-    setShowPreviewModal(true);
   };
 
   const handleDelete = async (docId) => {
@@ -1519,16 +1539,32 @@ const Documents = window.Documents = ({ onNavigate }) => {
             </div>
 
             {/* Preview Content */}
+            {previewError && (
+              <div style={{
+                marginBottom: '16px', padding: '14px', borderRadius: '6px', fontSize: '14px',
+                background: 'var(--color-error-bg)', color: 'var(--color-error)',
+              }}>
+                {previewError}
+              </div>
+            )}
+            {!previewError && !previewFileUrl && (
+              <div style={{ marginBottom: '16px', padding: '14px', fontSize: '14px', color: 'var(--text-secondary)' }}>
+                Loading document…
+              </div>
+            )}
             {previewFileUrl && (
               <div style={{ marginBottom: '16px', border: '1px solid #e2e8f0', borderRadius: '6px', overflow: 'hidden' }}>
                 {previewDocument.filename && previewDocument.filename.toLowerCase().endsWith('.pdf') ? (
-                  <iframe
-                    src={previewFileUrl}
-                    style={{
-                      width: '100%',
-                      height: '500px',
-                      border: 'none',
-                    }}
+                  // v1.105.67 — this was a bare iframe, and WebKit will not render a PDF in a
+                  // subframe. Every PDF care document — POA, DNR, advance directive, med list,
+                  // insurance card — was a 500px white rectangle on every iPhone, with no error
+                  // and nothing to tap. PdfPreview (AttachmentViewer.js) has handled this since
+                  // v1.105.49; it just wasn't being used here.
+                  <PdfPreview
+                    blobUrl={previewFileUrl}
+                    blob={previewBlob}
+                    name={previewDocument.filename}
+                    height="500px"
                   />
                 ) : (
                   <img

@@ -41,6 +41,76 @@ const isWebKitLike = () => {
   } catch { return false; }
 };
 
+// ─── v1.105.67 — one way to show a PDF, used everywhere ───
+//
+// v1.105.49 taught THIS component that WebKit will not render a PDF in a subframe. Two other
+// places kept doing it anyway: the care Documents preview and the admin document modal. So on
+// every iPhone, a tapped POA, DNR, advance directive, med list or insurance card painted a
+// plain white rectangle — no error, no spinner, nothing to react to. The knowledge existed in
+// this file the whole time; it simply wasn't reachable from the other two.
+//
+// The escape hatch has to actually work, too. `openExternalUrl(blobUrl)` looks right and is
+// dead inside the native app: SFSafariViewController accepts http/https only, so Browser.open
+// does nothing with a blob: URL — and openExternalUrl returns true regardless, so neither of
+// its own fallbacks ran either, and the return value was discarded anyway. On native the route
+// that works is saveBlob: write the file, hand it to the OS share sheet (Quick Look, Books,
+// Files).
+//
+// blob is optional but required for the native path — without it we say so rather than
+// pretending to open something.
+const PdfPreview = window.PdfPreview = ({ blobUrl, blob, name, height = '500px', dark = false }) => {
+  const [busy, setBusy] = React.useState(false);
+  const [err, setErr] = React.useState(null);
+
+  if (!isWebKitLike()) {
+    return React.createElement('iframe', {
+      title: name || 'Document',
+      src: blobUrl,
+      style: { width: '100%', height, border: 'none', background: '#fff' },
+    });
+  }
+
+  const open = async () => {
+    setBusy(true);
+    setErr(null);
+    try {
+      if (window.Capacitor?.isNativePlatform?.()) {
+        if (!blob) { setErr('This document could not be opened on this device.'); return; }
+        const ok = await saveBlob(blob, name || 'document.pdf');
+        if (!ok) setErr('Could not open the document. Try again, or open it on a computer.');
+        return;
+      }
+      // Mobile Safari: a blob URL opened as a top-level page renders fine.
+      if (!openExternalUrl(blobUrl)) setErr('Your browser blocked opening the document.');
+    } catch {
+      setErr('Could not open the document.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const fg = dark ? '#fff' : 'var(--text-primary)';
+  const sub = dark ? 'rgba(255,255,255,0.7)' : 'var(--text-secondary)';
+  return React.createElement('div', {
+    style: { padding: 24, textAlign: 'center', fontSize: 14, color: fg },
+  },
+    name ? React.createElement('div', { style: { marginBottom: 14, fontWeight: 600 } }, name) : null,
+    React.createElement('div', { style: { color: sub, fontSize: 13, marginBottom: 16 } },
+      "PDFs can't be shown inside the app on this device."),
+    React.createElement('button', {
+      onClick: open,
+      disabled: busy,
+      style: {
+        padding: '10px 18px', fontSize: 14, fontWeight: 650, borderRadius: 8, border: 'none',
+        cursor: busy ? 'default' : 'pointer', background: 'var(--role-color)', color: 'var(--text-on-primary)',
+      },
+    }, busy ? 'Opening…' : 'Open PDF'),
+    err ? React.createElement('div', {
+      style: { marginTop: 12, fontSize: 13, color: dark ? '#ffb4b4' : 'var(--color-error)' },
+    }, err) : null,
+  );
+};
+
 const loadAuthedBlob = window.loadAuthedBlob = async (path) => {
   const hit = __attachmentBlobCache.get(path);
   if (hit) return hit;
@@ -265,20 +335,13 @@ const AttachmentViewer = window.AttachmentViewer = ({ attachments, startIndex = 
           // top-level navigation. On iOS this iframe painted a full-size white rectangle
           // with no error and no "Loading…", so a tapped receipt looked like a broken app.
           // Give those users something that actually works instead.
-          isWebKitLike() ? (
-            <div style={{ color: '#fff', padding: 24, textAlign: 'center', fontSize: 14 }}>
-              <div style={{ marginBottom: 14 }}>{current.name}</div>
-              <div style={{ opacity: 0.7, fontSize: 13, marginBottom: 16 }}>
-                PDFs can't be previewed inside the app on this device.
-              </div>
-              <button onClick={() => openExternalUrl(entry.url)} style={{
-                ...btn, padding: '10px 18px', fontSize: 14, fontWeight: 650,
-              }}>Open PDF</button>
-            </div>
-          ) : (
-            <iframe title={current.name} src={entry.url}
-              style={{ width: '100%', height: '100%', border: 'none', background: '#fff' }} />
-          )
+          // v1.105.67 — this branch used to inline its own copy of the fallback, and that copy's
+          // "Open PDF" handed a blob: URL to openExternalUrl. Inside the native app that reaches
+          // Browser.open, which accepts http/https only: it did nothing, returned true, and the
+          // result was discarded — so neither of openExternalUrl's own fallbacks ran either. The
+          // button was as dead as the iframe it replaced. Shared with the Documents and admin
+          // previews now, and the native path goes through saveBlob's share sheet.
+          <PdfPreview blobUrl={entry.url} blob={entry.blob} name={current.name} height="100%" dark />
         ) : (
           <img src={entry.url} alt={current.name} draggable="false"
             style={{

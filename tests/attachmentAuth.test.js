@@ -93,7 +93,11 @@ describe("the viewer fetches through apiFetch", () => {
   });
 
   test("PDFs render inline rather than falling back to a download", () => {
-    expect(viewer).toMatch(/<iframe title=\{current\.name\} src=\{entry\.url\}/);
+    // v1.105.67 — the inline <iframe> moved into the shared PdfPreview component, which the
+    // Documents and admin previews now use too. Same property, one implementation: on a
+    // non-WebKit engine the PDF renders in place rather than becoming a download.
+    expect(viewer).toMatch(/<PdfPreview blobUrl=\{entry\.url\} blob=\{entry\.blob\}/);
+    expect(viewer).toMatch(/if \(!isWebKitLike\(\)\) \{[\s\S]{0,220}React\.createElement\('iframe'/);
   });
 });
 

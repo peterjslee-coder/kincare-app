@@ -90,9 +90,13 @@ describe("PDFs and external links behave on WebKit", () => {
   test("a PDF is not rendered in a subframe on WebKit", () => {
     // WebKit renders PDFs only on top-level navigation; in an iframe it paints a white
     // rectangle with no error, so a tapped receipt looked like a broken app.
+    // v1.105.67 — the branch moved into the shared PdfPreview component. It now guards the
+    // Documents and admin previews as well, both of which were rendering bare iframes and so
+    // showed a white rectangle for every PDF care document on every iPhone.
     expect(viewer).toMatch(/const isWebKitLike = \(\) => \{/);
-    expect(viewer).toMatch(/isWebKitLike\(\) \? \(/);
+    expect(viewer).toMatch(/if \(!isWebKitLike\(\)\) \{/);
     expect(viewer).toMatch(/Open PDF/);
+    expect(viewer).toMatch(/const PdfPreview = window\.PdfPreview =/);
   });
 
   test("external URLs fetched behind an await don't hit the popup blocker", () => {
