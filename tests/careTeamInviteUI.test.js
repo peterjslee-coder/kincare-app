@@ -99,3 +99,29 @@ describe("the promises the screen makes", () => {
     expect(ui).toMatch(/privacy statement before they can join/);
   });
 });
+
+describe("the member badge says what they can actually do (v1.105.85)", () => {
+  test("it is derived from capabilities, not the role word", () => {
+    // Pete, looking at Julia after she accepted: "it said 'member'. do i need to change her to
+    // view only or is she just a member with limited capabilities?" She was full access —
+    // role 'member' gives share permission 'edit', which maps to all eight capabilities.
+    //
+    // The trap was the NEXT step: "Change access" writes capabilities and not the role word,
+    // so a viewer would have kept reading "Member". One source of truth, and it is the
+    // capability set.
+    expect(ui).toMatch(/const memberAccessLabel = \(m\) => \{/);
+    expect(ui).toMatch(/return capsLabel\(m\.capabilities, m\.role\);/);
+  });
+
+  test("the raw role word is no longer rendered as the access label", () => {
+    expect(uiCode).not.toMatch(/\{roleLabels\[m\.role\] \|\| m\.role\}/);
+  });
+
+  test("a leader is still shown as the leader", () => {
+    expect(ui).toMatch(/if \(m\.role === 'leader'\) return 'Team Leader';/);
+  });
+
+  test("the server sends each member's capabilities for it to use", () => {
+    expect(route).toMatch(/capabilities: require\("\.\.\/utils\/capabilities"\)\.capabilitiesFor\(/);
+  });
+});

@@ -30,6 +30,21 @@ const CAP_PRESET_COPY = {
   viewer: ['Viewer', 'Reads the record and logs their own visits. Nothing to do with medication.'],
   helper: ['Helper', 'Leaves a note and records that they were there. Sees nothing about their health.'],
 };
+// v1.105.85 — what a MEMBER can do, named from their capability set rather than the role word.
+//
+// Pete, looking at Julia after she accepted: "it said 'member'. do i need to change her to view
+// only or is she just a member with limited capabilities?" She was a full member — role 'member'
+// gives the share permission 'edit', which maps to all eight capabilities. The badge was honest
+// there. But the moment you use "Change access" the picker writes capabilities and NOT the role
+// word, so a viewer would keep reading "Member" — a role word drifting from real access, which
+// is the exact problem the whole capability model was built to end.
+//
+// So the badge is derived. There is one source of truth and it is what she can actually do.
+const memberAccessLabel = (m) => {
+  if (m.role === 'leader') return 'Team Leader';
+  return capsLabel(m.capabilities, m.role);
+};
+
 const capsLabel = (caps, role) => {
   if (!Array.isArray(caps) || caps.length === 0) return role === 'viewer' ? 'Viewer' : role === 'care_recipient' ? 'Care Recipient' : 'Full access';
   const key = JSON.stringify([...caps].sort());
@@ -627,15 +642,15 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
                   <div>
                     <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>{m.firstName} {m.lastName}</div>
                     <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 1 }}>
-                      {m.relationshipLabel ? <span style={{ color: 'var(--text-secondary)' }}>{m.relationshipLabel}</span> : <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>{roleLabels[m.role] || m.role}</span>}
+                      {m.relationshipLabel ? <span style={{ color: 'var(--text-secondary)' }}>{m.relationshipLabel}</span> : <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>{memberAccessLabel(m)}</span>}
                     </div>
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: roleColors[m.role],
-                    background: m.role === 'leader' ? 'var(--role-color-light)' : m.role === 'viewer' ? 'var(--bg-primary)' : '#e8f0fe',
+                  <span style={{ fontSize: 12, fontWeight: 600, color: roleColors[m.role] || 'var(--text-secondary)',
+                    background: m.role === 'leader' ? 'var(--role-color-light)' : 'var(--bg-primary)',
                     padding: '4px 10px', borderRadius: 12 }}>
-                    {roleLabels[m.role] || m.role}
+                    {memberAccessLabel(m)}
                   </span>
                   {canManage && <span style={{ fontSize: 14, color: 'var(--text-muted)', transition: 'transform 0.2s', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0)' }}>▾</span>}
                 </div>

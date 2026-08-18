@@ -1,6 +1,6 @@
 // InPlace Service Worker — v1.57.14
-const CACHE_NAME = 'inplace-build-5590800c-msz10vzn';
-const SW_VERSION = 'build-5590800c-msz10vzn';
+const CACHE_NAME = 'inplace-build-fa089cd5-msz220sc';
+const SW_VERSION = 'build-fa089cd5-msz220sc';
 const STATIC_ASSETS = [
   '/',
   '/css/styles.css',
