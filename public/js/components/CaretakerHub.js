@@ -148,6 +148,12 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   // asked" must not render as "you haven't submitted". That conflation is the same shape as the
   // selfie's 0% in v1.105.73 — an absent value rendered as a verdict.
   const [idVerification, setIdVerification] = useState({ verified: false, status: 'unknown', loaded: false });
+  // v1.105.82 — a care-team invite waiting on this caregiver. The banner for these has existed
+  // since care teams shipped, on Dashboard — the FAMILY home screen. A caregiver lands on this
+  // component and never sees Dashboard, so Julia clicked her invite email, opened the app, and
+  // there was nothing there. Pete: "it's gone. can't find it."
+  const [pendingInvites, setPendingInvites] = useState([]);
+  const [acceptingInviteId, setAcceptingInviteId] = useState(null);
   const [idVerLoading, setIdVerLoading] = useState(false);
   const [idVerError, setIdVerError] = useState(null);
 
@@ -427,10 +433,42 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       } catch (err) { /* Stripe not configured yet — that's ok */ }
     };
 
+    const checkInvites = async () => {
+      try {
+        const res = await apiFetch('/api/care-teams/my-pending-invites');
+        if (!cancelled && res?.ok) { const d = await res.json(); setPendingInvites(d.invites || []); }
+      } catch { /* the hub still works without it */ }
+    };
+
     checkIdentity();
     checkStripe();
+    checkInvites();
     return () => { cancelled = true; };
   }, []);
+
+  const acceptInvite = async (invite) => {
+    setAcceptingInviteId(invite.id);
+    try {
+      const res = await apiFetch('/api/care-teams/accept-invite', {
+        method: 'POST',
+        body: JSON.stringify({ token: invite.token }),
+      });
+      const d = await res?.json().catch(() => ({}));
+      if (res?.ok) {
+        showToast(`You're on ${invite.recipient_first_name || 'the'} care team`, 'success');
+        setPendingInvites((prev) => prev.filter((i) => i.id !== invite.id));
+      } else if (res?.status === 409 && d?.needsLegalAcceptance) {
+        // v1.105.78 gates joining on the privacy statement. Say which document, rather than
+        // failing with something generic.
+        showToast(d.error || 'Please accept the privacy statement first', 'error');
+      } else {
+        showToast(d?.error || 'Could not accept that invite', 'error');
+      }
+    } catch {
+      showToast('Could not accept that invite — check your connection', 'error');
+    }
+    setAcceptingInviteId(null);
+  };
 
   useEffect(() => {
     if (activeTab !== 'earnings') return;
@@ -1045,7 +1083,15 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   ];
   const firstStepsDone = firstSteps.filter(s => s.done).length;
   // Show checklist whenever steps remain — disappears when ALL done (or admin overrides all fields)
-  const showFirstSteps = firstStepsDone < firstSteps.length;
+  //
+  // v1.105.82 — ...but not until we KNOW. Two of the seven steps (identity, Stripe) are decided
+  // by fetches that resolve after the first paint, so between mount and their arrival the
+  // checklist rendered with those steps unticked and then corrected itself. Julia saw the
+  // onboarding panel flash on every single page change. v1.105.75 stopped the checklist being
+  // permanently wrong; this stops it being briefly wrong, which is the same bug at a different
+  // timescale — a value that has not arrived is not a value of "no".
+  const firstStepsResolved = idVerification.loaded && stripeStatus !== null;
+  const showFirstSteps = firstStepsResolved && firstStepsDone < firstSteps.length;
   // Expose to parent (app.js) so bottom nav can grey out Find Work
   window.__caregiverFirstStepsRemain = showFirstSteps;
   // NEVER gate/blur the dashboard — checklist is motivational, not a lock
@@ -1109,6 +1155,36 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
           </div>
         </div>
       </div>
+
+      {/* ─── Needs your attention: a care-team invite (v1.105.82) ─── */}
+      {/*
+          Top of the feed, above everything including First Steps, and it does not go away
+          until she acts on it. Pete: "needs to be a lingering TOP OF THE FEED NEEDS YOUR
+          ATTENTION step". The equivalent banner has existed on Dashboard since care teams
+          shipped — but Dashboard is the FAMILY home screen, and a caregiver never sees it.
+      */}
+      {pendingInvites.map((inv) => (
+        <div key={inv.id} style={{
+          marginBottom: 16, padding: '14px 16px', borderRadius: 12,
+          background: 'var(--color-warning-bg)', border: '1px solid var(--color-warning)',
+        }}>
+          <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.4, color: 'var(--text-brown)', marginBottom: 5 }}>
+            NEEDS YOUR ATTENTION
+          </div>
+          <div style={{ fontSize: 14.5, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.4 }}>
+            {inv.inviter_first_name || 'Someone'} invited you to {inv.recipient_first_name ? `${inv.recipient_first_name}'s` : 'a'} care team
+          </div>
+          <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', marginTop: 4, lineHeight: 1.5 }}>
+            You{'\u2019'}ll be able to see what you{'\u2019'}ve been given access to, and nothing else.
+          </div>
+          <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+            <button onClick={() => acceptInvite(inv)} disabled={acceptingInviteId === inv.id}
+              style={{ flex: 1, padding: '10px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 9, fontSize: 13.5, fontWeight: 700, cursor: acceptingInviteId === inv.id ? 'wait' : 'pointer' }}>
+              {acceptingInviteId === inv.id ? 'Joining\u2026' : 'Accept invitation'}
+            </button>
+          </div>
+        </div>
+      ))}
 
       {/* Welcome subtitle — shown during onboarding */}
       {showFirstSteps && (
