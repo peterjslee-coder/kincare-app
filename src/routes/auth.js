@@ -616,14 +616,38 @@ router.get("/me", authenticate, async (req, res) => {
   // Check identity verification status (selfie + ID in verified_documents)
   let identityVerified = false;
   let identityStatus = 'not_started'; // 'not_started' | 'pending' | 'verified' | 'rejected'
+  //
+  // v1.105.80 — three separate faults lived in this block, and together they are the most
+  // likely reason Julia's My Account still read "Not Verified" after v1.105.70 fixed the
+  // client and v1.105.76 fixed the five other places that dropped the field.
+  //
+  // 1. ORDER BY created_at DESC LIMIT 1 — the NEWEST document won. The app spent the whole
+  //    v1.105.6x saga telling her she was unverified and offering to redo it; if she took
+  //    that offer, a second submission sitting at 'pending' silently overrode her APPROVED
+  //    one, and she reads as unverified again. An approval is not undone by a later
+  //    resubmission — only by a rejection. So: prefer an approved document, and fall back to
+  //    the newest only when there is no approval.
+  //
+  // 2. The catch was completely silent, with a comment about the table not existing yet —
+  //    stale since v1.36. ANY error here left identityStatus at 'not_started', which the UI
+  //    renders as a confident "Not Verified" about someone's government ID. That is the
+  //    fourth time this week a swallow turned an error into a false statement of fact.
+  //
+  // 3. It matched on uploaded_by only, while every OTHER surface resolves identity through
+  //    utils/identity.js, which also accepts owner_type='caregiver' + owner_id=profile id.
+  //    One fact computed two ways is what the whole saga was about.
   try {
-    // Check docs uploaded BY this user or docs owned by their care recipient record
     const idDoc = await db.prepare(
       `SELECT status, is_verified FROM verified_documents
        WHERE category = 'identity' AND document_type != 'selfie'
-         AND (uploaded_by = ? ${careRecipientId ? `OR owner_id = ?` : ''})
-       ORDER BY created_at DESC LIMIT 1`
-    ).get(...[req.user.id, ...(careRecipientId ? [careRecipientId] : [])]);
+         AND (
+           uploaded_by = ?
+           OR (owner_type = 'caregiver' AND owner_id IN (SELECT id FROM caregiver_profiles WHERE user_id = ?))
+           ${careRecipientId ? `OR owner_id = ?` : ''}
+         )
+       ORDER BY (status = 'approved' OR is_verified = 1) DESC, created_at DESC
+       LIMIT 1`
+    ).get(...[req.user.id, req.user.id, ...(careRecipientId ? [careRecipientId] : [])]);
     if (idDoc) {
       if (idDoc.status === 'approved' || idDoc.is_verified) {
         identityVerified = true;
@@ -634,7 +658,12 @@ router.get("/me", authenticate, async (req, res) => {
         identityStatus = 'pending';
       }
     }
-  } catch (e) { /* verified_documents table may not exist yet */ }
+  } catch (e) {
+    // Say so. 'not_started' is a claim about someone's identity documents, and it must never
+    // be the silent result of a failed query.
+    console.error('identity status lookup failed for user', req.user.id, e.message);
+    captureException(e, { where: 'auth: identity status', userId: req.user.id });
+  }
 
   // Check for pending legal documents that need acceptance
   let pendingLegalDocs = [];
