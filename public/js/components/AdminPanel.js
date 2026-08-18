@@ -1275,12 +1275,28 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
             }
           }
         } catch (e) { console.error('Doc preview decode failed:', e); }
+        // v1.105.71 — carry the AI's analysis through, not just the picture. An admin approving
+        // a government ID should see what the model extracted and what it was unsure about.
+        const parseMaybe = (v) => {
+          if (!v) return null;
+          if (typeof v === 'object') return v;
+          try { return JSON.parse(v); } catch { return null; }
+        };
         setDocPreview({
           fileData: raw,
           blob,
           blobUrl: blobUrl || raw,
           mimeType: data.document.mime_type,
           fileName: data.document.file_name,
+          docType: data.document.document_type,
+          status: data.document.status,
+          createdAt: data.document.created_at,
+          adminNotes: data.document.admin_notes,
+          reviewedByHuman: !!data.document.admin_reviewed_by,
+          ai: parseMaybe(data.document.ai_classification),
+          extracted: parseMaybe(data.document.extracted_data),
+          aiConfidence: data.document.ai_confidence,
+          aiConcerns: parseMaybe(data.document.ai_concerns),
         });
       } else {
         setDocPreviewError('That document could not be loaded.');
@@ -1314,6 +1330,18 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
 
   // v1.105.67 — revoke the object URL on close; one preview, one blob, otherwise they pile up
   // for as long as the admin session lasts.
+  // v1.105.71 — small readers for the AI analysis shown in the document preview.
+  const aiExtractedRows = (dp) => {
+    const f = (dp.ai && dp.ai.extractedFields) || dp.extracted;
+    if (!f || typeof f !== 'object') return [];
+    return Object.entries(f).filter(([, v]) => v !== null && v !== undefined && v !== '');
+  };
+  const aiConcernList = (dp) => {
+    const c = dp.aiConcerns || (dp.ai && dp.ai.concerns);
+    return Array.isArray(c) ? c : (c ? [c] : []);
+  };
+  const humanizeFieldLabel = (k) => String(k).replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase());
+
   const closeDocPreview = () => {
     setDocPreview((prev) => {
       if (prev?.blobUrl && prev.blobUrl.startsWith('blob:')) {
@@ -5026,47 +5054,6 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
             </div>
           )}
 
-          {/* v1.105.67 — a failed load used to render nothing at all: the Preview button looked
-              inert and the admin had no idea whether the document was missing, the request had
-              failed, or they had mis-tapped. */}
-          {docPreviewError && !docPreview && (
-            <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-              onClick={() => setDocPreviewError(null)}>
-              <div style={{ background: 'var(--bg-surface)', borderRadius: '12px', padding: '24px', maxWidth: '420px', width: '90%' }}
-                onClick={e => e.stopPropagation()}>
-                <div style={{ fontSize: '15px', marginBottom: '16px', color: 'var(--color-error)' }}>{docPreviewError}</div>
-                <button onClick={() => setDocPreviewError(null)}
-                  style={{ padding: '8px 16px', borderRadius: '8px', border: 'none', background: 'var(--role-color)', color: 'var(--text-on-primary)', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>
-                  Close
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Document Preview Modal */}
-          {docPreview && (
-            <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-              onClick={() => closeDocPreview()}>
-              <div style={{ background: 'var(--bg-surface)', borderRadius: '12px', padding: '24px', maxWidth: '800px', width: '90%', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}
-                onClick={e => e.stopPropagation()}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                  <h3 style={{ margin: 0, fontSize: '16px' }}>{'\u{1F4C4}'} {docPreview.fileName}</h3>
-                  <button onClick={() => closeDocPreview()} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: 'var(--text-muted)' }}>{'\u2715'}</button>
-                </div>
-                <div style={{ flex: 1, overflow: 'auto', minHeight: '300px' }}>
-                  {docPreview.mimeType === 'application/pdf' ? (
-                    /* v1.105.67 — was a bare iframe; WebKit will not render a PDF in a subframe,
-                       so on an iPhone this was a white rectangle. Shared with the Documents
-                       preview and the attachment viewer. */
-                    <PdfPreview blobUrl={docPreview.blobUrl} blob={docPreview.blob} name={docPreview.fileName} height="60vh" />
-                  ) : (
-                    <img src={docPreview.fileData} alt={docPreview.fileName} style={{ maxWidth: '100%', maxHeight: '60vh', borderRadius: '8px', border: '1px solid #e0e0e0' }} />
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
           {/* Reject Reason Modal */}
           {rejectModal && (
             <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
@@ -5743,6 +5730,110 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
         );
       })()}
       {/* Onboarding Override Modal */}
+      {/* ─── Document preview (v1.105.71) ───
+          These two modals used to live INSIDE `{activeTab === 'authorizations' && (...)}`.
+          The View button on a caregiver's record sets docPreview, the fetch succeeds, the state
+          updates — and nothing renders, because the modal that renders it exists only on a
+          different tab. Clicking View from Admin → People did nothing whatsoever, which is how
+          an admin came to be unable to see the government ID he was being asked to approve.
+          Top level now, so a document opens from wherever it is listed. */}
+      {/* v1.105.67 — a failed load used to render nothing at all: the Preview button looked
+          inert and the admin had no idea whether the document was missing, the request had
+          failed, or they had mis-tapped. */}
+      {docPreviewError && !docPreview && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={() => setDocPreviewError(null)}>
+          <div style={{ background: 'var(--bg-surface)', borderRadius: '12px', padding: '24px', maxWidth: '420px', width: '90%' }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: '15px', marginBottom: '16px', color: 'var(--color-error)' }}>{docPreviewError}</div>
+            <button onClick={() => setDocPreviewError(null)}
+              style={{ padding: '8px 16px', borderRadius: '8px', border: 'none', background: 'var(--role-color)', color: 'var(--text-on-primary)', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Document Preview Modal */}
+      {docPreview && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={() => closeDocPreview()}>
+          <div style={{ background: 'var(--bg-surface)', borderRadius: '12px', padding: '24px', maxWidth: '800px', width: '90%', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3 style={{ margin: 0, fontSize: '16px' }}>{'\u{1F4C4}'} {docPreview.fileName}</h3>
+              <button onClick={() => closeDocPreview()} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: 'var(--text-muted)' }}>{'\u2715'}</button>
+            </div>
+            {/* v1.105.71 — the AI's analysis, the same one the POA review has always shown.
+                It was not visible here at all: an admin could not see what the model read off a
+                government ID, how confident it was, or what it flagged — while that same model
+                had already approved the document outright. */}
+            {(docPreview.ai || docPreview.aiConcerns || docPreview.status) && (
+              <div style={{ marginBottom: 14, padding: '12px 14px', background: 'var(--bg-primary)', borderRadius: 8, fontSize: 13 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+                  <span style={{ fontWeight: 700 }}>AI Analysis</span>
+                  {docPreview.status && (
+                    <span style={{
+                      fontSize: 11, padding: '2px 8px', borderRadius: 999,
+                      background: docPreview.status === 'approved' ? 'var(--color-success-bg)' : docPreview.status === 'rejected' ? 'var(--color-error-bg)' : 'var(--color-warning-bg)',
+                      color: docPreview.status === 'approved' ? 'var(--role-color)' : docPreview.status === 'rejected' ? 'var(--color-error)' : 'var(--text-brown)',
+                    }}>{docPreview.status}</span>
+                  )}
+                  {!docPreview.reviewedByHuman && docPreview.status === 'approved' && (
+                    <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 999, background: 'var(--color-warning-bg)', color: 'var(--text-brown)' }}>
+                      approved by AI {'\u2014'} no person has reviewed it
+                    </span>
+                  )}
+                </div>
+                {docPreview.ai && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 16px', marginBottom: 8 }}>
+                    <div><span style={{ color: 'var(--text-secondary)' }}>Classification:</span> <strong>{(docPreview.ai.classification || '').replace(/_/g, ' ')}</strong></div>
+                    <div><span style={{ color: 'var(--text-secondary)' }}>Confidence:</span> <strong>{Math.round(((docPreview.ai.confidence != null ? docPreview.ai.confidence : docPreview.aiConfidence) || 0) * 100)}%</strong></div>
+                    <div><span style={{ color: 'var(--text-secondary)' }}>Valid document:</span> <strong>{docPreview.ai.isValid ? 'Yes' : 'No'}</strong></div>
+                    <div><span style={{ color: 'var(--text-secondary)' }}>Matches claimed type:</span> <strong>{docPreview.ai.matchesClaimed ? 'Yes' : 'No'}</strong></div>
+                  </div>
+                )}
+                {aiExtractedRows(docPreview).length > 0 && (
+                  <div style={{ marginBottom: 8 }}>
+                    <div style={{ color: 'var(--text-secondary)', marginBottom: 4 }}>Read from the document</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px' }}>
+                      {aiExtractedRows(docPreview).map(([k, v]) => (
+                        <div key={k}>
+                          <span style={{ color: 'var(--text-tertiary)' }}>{humanizeFieldLabel(k)}:</span> <strong>{String(v)}</strong>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {aiConcernList(docPreview).length > 0 && (
+                  <div>
+                    <div style={{ color: 'var(--text-secondary)', marginBottom: 4 }}>What the AI was unsure about</div>
+                    <ul style={{ margin: 0, paddingLeft: 18, color: 'var(--text-brown)' }}>
+                      {aiConcernList(docPreview).map((x, i) => <li key={i} style={{ marginBottom: 2 }}>{String(x)}</li>)}
+                    </ul>
+                  </div>
+                )}
+                {docPreview.adminNotes && (
+                  <div style={{ marginTop: 8 }}>
+                    <span style={{ color: 'var(--text-secondary)' }}>Admin notes:</span> {docPreview.adminNotes}
+                  </div>
+                )}
+              </div>
+            )}
+            <div style={{ flex: 1, overflow: 'auto', minHeight: '300px' }}>
+              {docPreview.mimeType === 'application/pdf' ? (
+                /* v1.105.67 — was a bare iframe; WebKit will not render a PDF in a subframe,
+                   so on an iPhone this was a white rectangle. Shared with the Documents
+                   preview and the attachment viewer. */
+                <PdfPreview blobUrl={docPreview.blobUrl} blob={docPreview.blob} name={docPreview.fileName} height="60vh" />
+              ) : (
+                <img src={docPreview.fileData} alt={docPreview.fileName} style={{ maxWidth: '100%', maxHeight: '60vh', borderRadius: '8px', border: '1px solid #e0e0e0' }} />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {onboardingModal && (
         <div className="modal-overlay" onClick={() => setOnboardingModal(null)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480, maxHeight: '80vh', overflow: 'auto' }}>

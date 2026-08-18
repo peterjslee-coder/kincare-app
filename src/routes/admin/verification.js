@@ -87,6 +87,13 @@ router.get("/documents/:docId", requireAdmin, async (req, res) => {
       doc = await db.prepare(`
         SELECT id, owner_type, owner_id, uploaded_by, document_type, file_data, file_name, file_size, mime_type,
           status, category, ai_classification, admin_notes, expires_at, created_at,
+          /* v1.105.71 — the AI writes all of these when it reviews a document, and the preview
+             returned only two of them. An admin approving someone's government ID could not see
+             what the AI extracted, how confident it was, or what it was unsure about — the same
+             analysis the POA review has shown all along. is_verified/verified_at and the admin
+             review stamp say whether a person has ever actually looked. */
+          extracted_data, ai_confidence, ai_concerns, is_verified, verified_at,
+          admin_reviewed_by, admin_reviewed_at,
           'verified_documents' AS source_table
         FROM verified_documents WHERE id = ?
       `).get(docId).catch(() => null);
