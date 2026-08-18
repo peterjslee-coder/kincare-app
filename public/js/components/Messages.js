@@ -3,6 +3,7 @@ const Messages = window.Messages = () => {
   const [activeConvId, setActiveConvId] = useState(null);
   const [activeConvType, setActiveConvType] = useState('direct');
   const [messages, setMessages] = useState([]);
+  const [hiddenBefore, setHiddenBefore] = useState(0);
   const [inputText, setInputText] = useState('');
   // Drafts persist to localStorage so they survive page navigation
   const DRAFTS_KEY = 'inplace_msg_drafts';
@@ -120,6 +121,9 @@ const Messages = window.Messages = () => {
         const data = await res.json();
         setMessages(data.messages || []);
         setActiveConvType(data.conversationType || 'direct');
+        // v1.105.92 — how many messages predate this person joining. Shown as a line at the
+        // top of the thread so it reads as a boundary rather than a broken load.
+        setHiddenBefore(data.hiddenBefore || 0);
       }
     } catch (err) {
       console.error('Fetch messages error:', err);
@@ -1936,7 +1940,17 @@ const Messages = window.Messages = () => {
               )}
             </div>
           ) : (
-            messages.map((m, i) => {
+            <React.Fragment>
+            {/* v1.105.92 — the thread starts where you joined. Say so, rather than opening
+                mid-conversation and letting the reader assume something failed to load. */}
+            {hiddenBefore > 0 && (
+              <div style={{ textAlign: 'center', margin: '4px 0 14px' }}>
+                <span style={{ display: 'inline-block', padding: '5px 12px', borderRadius: 999, background: 'var(--bg-primary)', border: '1px solid var(--border-light)', fontSize: 11.5, color: 'var(--text-tertiary)', lineHeight: 1.4 }}>
+                  Earlier messages aren{'\u2019'}t shown {'\u2014'} this conversation starts when you joined
+                </span>
+              </div>
+            )}
+            {messages.map((m, i) => {
               const isSent = m.type === 'sent';
               const showSenderName = isGroup && !isSent;
               const prevMsg = i > 0 ? messages[i - 1] : null;
@@ -2150,7 +2164,8 @@ const Messages = window.Messages = () => {
                   </div>
                 </React.Fragment>
               );
-            })
+            })}
+            </React.Fragment>
           )}
           {/* Typing indicator */}
           {activeConvId && typingUsers[activeConvId] && Object.keys(typingUsers[activeConvId]).length > 0 && (() => {

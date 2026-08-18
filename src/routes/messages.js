@@ -69,7 +69,9 @@ router.get("/conversations", async (req, res) => {
   // Get conversations from the conversations table (new model)
   const convRows = await db.prepare(`
     SELECT c.id, c.type, c.name, c.care_team_id, c.created_at,
-      cm.last_read_at, cm.archived_at
+      cm.last_read_at, cm.archived_at,
+      /* v1.105.92 — when THIS person joined. Everything below is cut at it. */
+      COALESCE(cm.joined_at, c.created_at) AS history_from
     FROM conversation_members cm
     JOIN conversations c ON cm.conversation_id = c.id
     WHERE cm.user_id = ?
@@ -80,18 +82,24 @@ router.get("/conversations", async (req, res) => {
   let conversations = []; // reassigned by the v1.105.18 block filter below
   for (const conv of convRows) {
     // Get last message
+    // v1.105.92 — the preview is a message body on a list screen. Cutting the thread but
+    // leaving the preview would have leaked the very thing being hidden, one line at a time.
     const lastMsg = await db.prepare(`
       SELECT content, sender_id, created_at FROM messages
-      WHERE conversation_id = ? ORDER BY created_at DESC LIMIT 1
-    `).get(conv.id);
+      WHERE conversation_id = ? AND created_at >= ?
+      ORDER BY created_at DESC LIMIT 1
+    `).get(conv.id, conv.history_from);
 
     // Get unread count (exclude Kindred relay messages — user sees those in Kindred chat)
     const unreadRow = await db.prepare(`
       SELECT COUNT(*) AS count FROM messages
       WHERE conversation_id = ? AND sender_id != ?
         AND created_at > COALESCE(?::TIMESTAMPTZ, '1970-01-01'::TIMESTAMPTZ)
+        /* v1.105.92 — never count messages from before they joined: an unread badge you
+           cannot clear by opening the thread is its own small bug. */
+        AND created_at >= ?
         AND sender_id NOT IN (SELECT id FROM users WHERE email = 'kindred@yourinplace.com')
-    `).get(conv.id, userId, conv.last_read_at);
+    `).get(conv.id, userId, conv.last_read_at, conv.history_from);
 
     // Get members
     const members = await db.prepare(`
@@ -501,12 +509,31 @@ router.get("/conversations/:id", async (req, res) => {
 
   // Verify membership
   const membership = await db.prepare(
-    "SELECT id FROM conversation_members WHERE conversation_id = ? AND user_id = ?"
+    "SELECT id, joined_at FROM conversation_members WHERE conversation_id = ? AND user_id = ?"
   ).get(convId, userId);
   if (!membership) return res.status(403).json({ error: "Not a member of this conversation" });
 
   // Get conversation info
-  const conv = await db.prepare("SELECT type, name, care_team_id FROM conversations WHERE id = ?").get(convId);
+  const conv = await db.prepare("SELECT type, name, care_team_id, created_at FROM conversations WHERE id = ?").get(convId);
+
+  // ─── v1.105.92: you see the conversation from the day you joined it ───
+  //
+  // Pete: "i only want new members of the care team to get messages whilst they are part of
+  // the team...not all messages in the history."
+  //
+  // Adding someone to a care team put them in its conversation and handed them everything ever
+  // said in it. For Betty's team that is months of family discussion about her health, visible
+  // in full to a neighbour who joined to help with dinner. Nobody chose that; it was simply
+  // what "add to the conversation" did.
+  //
+  // conversation_members.joined_at has been recorded accurately since the table was created —
+  // DEFAULT NOW(), never written explicitly — so the cut needs no migration and no backfill.
+  // Anyone who was there from the start joined at creation and loses nothing.
+  //
+  // Falls back to the conversation's own created_at rather than the epoch: if joined_at were
+  // ever NULL, defaulting to "the beginning of time" would quietly reopen the whole history,
+  // which is the failure direction that matters here.
+  const historyFrom = membership.joined_at || conv?.created_at || new Date(0).toISOString();
 
   // Get messages with reply-to info
   const messages = await db.prepare(`
@@ -519,8 +546,9 @@ router.get("/conversations/:id", async (req, res) => {
     LEFT JOIN messages rm ON m.reply_to_id = rm.id
     LEFT JOIN users ru ON rm.sender_id = ru.id
     WHERE m.conversation_id = ?
+      AND m.created_at >= ?
     ORDER BY m.created_at ASC
-  `).all(convId);
+  `).all(convId, historyFrom);
 
   // Get reactions for all messages in this conversation
   const msgIds = messages.map(m => m.id);
@@ -562,7 +590,21 @@ router.get("/conversations/:id", async (req, res) => {
     reactions: reactionsMap[m.id] || [],
   }));
 
-  res.json({ messages: enriched, conversationType: conv?.type || "direct" });
+  // v1.105.92 — tell the client where the person's view of this thread begins, and whether
+  // anything sits above it. A thread that simply starts mid-conversation with no explanation is
+  // the same silent absence as a hidden job or a missing invite: the reader assumes something
+  // is broken. The COUNT is of existence only; no content crosses the wire.
+  const earlier = await db.prepare(
+    "SELECT COUNT(*) AS c FROM messages WHERE conversation_id = ? AND created_at < ?"
+  ).get(convId, historyFrom);
+  const hiddenBefore = parseInt(earlier?.c || 0, 10);
+
+  res.json({
+    messages: enriched,
+    conversationType: conv?.type || "direct",
+    historyFrom,
+    hiddenBefore,
+  });
 });
 
 // ─── POST /api/messages/conversations/:id/photo ─── Upload a photo in a conversation
