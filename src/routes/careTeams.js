@@ -23,6 +23,37 @@ router.get("/invite-info", async (req, res) => {
     ).get(token);
 
     if (!invite) return res.status(404).json({ error: "Invalid or expired invite" });
+
+    // ─── v1.105.78: nobody reaches a health record without the privacy statement ───
+    //
+    // This endpoint did not check legal acceptance at all. Accepting a care-team invite is the
+    // moment a person gains access to another human's health record — notes, conditions,
+    // medications — and it was possible to cross that line having agreed to nothing. Pete:
+    // "we need to make sure that anyone invited has already read the privacy statement."
+    //
+    // The machinery already existed (/api/legal/pending, /accept, and pendingLegalDocs gates
+    // the app on first open); the invite path simply never consulted it. 409 rather than 403
+    // so the client can tell "you must accept this first" apart from "this isn't yours", and
+    // the response names the documents so it can show them.
+    const outstanding = await db.prepare(`
+      SELECT ld.doc_type, ld.version, ld.title
+      FROM legal_documents ld
+      WHERE ld.is_active = 1
+        AND NOT EXISTS (
+          SELECT 1 FROM user_legal_acceptances ula
+          WHERE ula.user_id = ? AND ula.doc_type = ld.doc_type AND ula.version = ld.version
+        )
+    `).all(req.user.id);
+    // No .catch here, deliberately. If this query fails we must NOT fall through and let the
+    // person in — a privacy gate that fails open is worse than no gate, because it looks like
+    // one. The outer try/catch answers 500 and they simply retry.
+    if (outstanding && outstanding.length > 0) {
+      return res.status(409).json({
+        error: "Please review and accept the privacy statement before joining a care team.",
+        needsLegalAcceptance: true,
+        documents: outstanding.map((d) => ({ docType: d.doc_type, version: d.version, title: d.title })),
+      });
+    }
     if (new Date(invite.expires_at) < new Date()) return res.status(400).json({ error: "This invite has expired" });
 
     const inviter = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(invite.invited_by);
@@ -607,6 +638,14 @@ router.post("/accept-invite", authenticate, async (req, res) => {
         await db.prepare(
           "INSERT INTO care_recipient_shares (id, care_recipient_id, shared_with_user_id, permission, shared_by_user_id) VALUES (?, ?, ?, ?, ?)"
         ).run(uuid(), team.care_recipient_id, req.user.id, invite.role === "viewer" ? "view" : "edit", invite.invited_by);
+        // v1.105.78 — if the invite carried an explicit capability set, it wins over the role.
+        // What the owner ticked when sending is what the share gets, rather than being
+        // re-derived from a role name here.
+        if (invite.capabilities) {
+          await db.prepare(
+            "UPDATE care_recipient_shares SET capabilities = ? WHERE care_recipient_id = ? AND shared_with_user_id = ?"
+          ).run(invite.capabilities, team.care_recipient_id, req.user.id).catch(() => {});
+        }
       }
     }
 

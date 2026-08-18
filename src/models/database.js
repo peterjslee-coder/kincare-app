@@ -1939,6 +1939,26 @@ async function initializeDatabase() {
         `ALTER TABLE family_visits ADD COLUMN IF NOT EXISTS photo TEXT`,
       ],
     },
+    {
+      // v1.105.78 — per-invitation capabilities, replacing the view/edit string.
+      //
+      // Additive and nullable on purpose: a NULL capabilities column means "fall back to the
+      // permission string", so every existing share keeps working untouched and the migration
+      // can never revoke anyone's access on deploy. utils/capabilities.js does the resolving.
+      //
+      // The invite carries them too, so what the owner ticks when sending is exactly what the
+      // share gets at accept time — rather than being re-derived from a role name later.
+      id: "021_share_capabilities",
+      statements: [
+        `ALTER TABLE care_recipient_shares ADD COLUMN IF NOT EXISTS capabilities TEXT`,
+        `ALTER TABLE care_team_invites ADD COLUMN IF NOT EXISTS capabilities TEXT`,
+        // Who accepted which privacy statement, and when, at the moment they joined a team.
+        // POST /accept-invite did not check this at all: someone could join a care team and
+        // reach a health record without ever being shown the privacy statement.
+        `ALTER TABLE care_team_invites ADD COLUMN IF NOT EXISTS legal_accepted_at TIMESTAMPTZ`,
+        `ALTER TABLE care_team_invites ADD COLUMN IF NOT EXISTS legal_version TEXT`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

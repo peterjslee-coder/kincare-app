@@ -17,6 +17,7 @@
  * warnings, no medical guidance of any kind. We record that care happened.
  */
 const express = require("express");
+const { can, CAP } = require("../utils/capabilities");
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { authenticate } = require("../middleware/auth");
@@ -38,9 +39,11 @@ async function hasAccess(db, recipientId, userId) {
   ).get(recipientId, userId);
   if (owned) return "owner";
   const shared = await db.prepare(
-    "SELECT permission FROM care_recipient_shares WHERE care_recipient_id = ? AND shared_with_user_id = ?"
+    "SELECT permission, capabilities FROM care_recipient_shares WHERE care_recipient_id = ? AND shared_with_user_id = ?"
   ).get(recipientId, userId);
-  if (shared) return shared.permission;
+  // v1.105.78 — return the capability LIST, not the level. can() accepts either, so the
+  // canManage/canCheckOff guards below work for both shapes during the transition.
+  if (shared) return require("../utils/capabilities").capabilitiesFor(shared.capabilities, shared.permission);
   const teamMember = await db.prepare(`
     SELECT ctm.role FROM care_team_members ctm
     JOIN care_teams ct ON ctm.care_team_id = ct.id
@@ -59,11 +62,19 @@ async function hasAccess(db, recipientId, userId) {
 }
 
 // Manage (create/edit/pause) = owner, admin, edit/leader, or full share.
-const canManage = (access) => ["owner", "admin", "edit", "full"].includes(access);
+const canManage = (access) => Array.isArray(access) ? can(access, CAP.MANAGE) : ["owner", "admin", "edit", "full"].includes(access);
 // Check off = anyone with access at all — any team member, shared user, or
 // assigned caregiver can record that care happened (Pete's rule: "Peggy
 // watched her take it, I'm logging it").
-const canCheckOff = (access) => !!access;
+// v1.105.78 — this was `(access) => !!access`: ANY share, including a plain 'view', could tick
+// off a medication task. A guard that reads like a permission check and admits everyone is the
+// same shape as the vacuous predicates in v1.105.77.
+//
+// It now asks for the capability. The legacy mapping still grants CHECK_TASKS to 'view', so
+// nobody loses access the day this ships — but a share created with the new invite UI can
+// withhold it, which is the point: Peggy is granted medication tasks deliberately, Julia is not.
+const canCheckOff = (caps) => can(caps, CAP.CHECK_TASKS);
+const canSeeTasks = (caps) => can(caps, CAP.READ_TASKS);
 
 // ─── Shared helpers ───
 
@@ -203,6 +214,9 @@ router.get("/recipient/:recipientId", async (req, res) => {
     const db = await getDb();
     const access = await hasAccess(db, req.params.recipientId, req.user.id);
     if (!access) return res.status(403).json({ error: "Access denied" });
+    // v1.105.78 — seeing Betty's medication schedule is its own grant. A helper who is on the
+    // team to leave a note and record a visit does not get the health record thrown in.
+    if (!canSeeTasks(access)) return res.status(403).json({ error: "Access denied" });
     const tasks = await db.prepare(`
       SELECT t.*, au.first_name AS assignee_first_name, au.last_name AS assignee_last_name
       FROM care_tasks t

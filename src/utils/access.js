@@ -31,8 +31,10 @@ async function recipientAccess(db, recipientId, userId) {
   ).get(recipientId, userId);
   if (owned) return "owner";
 
+  // v1.105.78 — returns the legacy level string, unchanged, so every existing caller behaves
+  // exactly as before. Callers that need the finer grain use recipientCapabilities() below.
   const shared = await db.prepare(
-    "SELECT permission FROM care_recipient_shares WHERE care_recipient_id = ? AND shared_with_user_id = ?"
+    "SELECT permission, capabilities FROM care_recipient_shares WHERE care_recipient_id = ? AND shared_with_user_id = ?"
   ).get(recipientId, userId);
   if (shared) return shared.permission;
 
@@ -54,6 +56,55 @@ async function recipientAccess(db, recipientId, userId) {
   if (assignedCg) return "view";
 
   return null;
+}
+
+/**
+ * The capability list for this user against this recipient (v1.105.78).
+ *
+ * Deliberately separate from recipientAccess() rather than replacing it: ten route files read
+ * that function, and a big-bang change to all of them is how a permission bug ships. Callers
+ * move over one at a time, and until they do the legacy mapping in utils/capabilities.js keeps
+ * them behaving identically.
+ *
+ * @returns {Promise<string[]>} empty array when the user has no access at all
+ */
+async function recipientCapabilities(db, recipientId, userId) {
+  const { capabilitiesFor, LEGACY } = require("./capabilities");
+  if (!recipientId || !userId) return [];
+
+  const user = await db.prepare("SELECT is_admin FROM users WHERE id = ?").get(userId);
+  if (user?.is_admin) return [...LEGACY.admin];
+
+  const owned = await db.prepare(
+    "SELECT id FROM care_recipients WHERE id = ? AND family_user_id = ?"
+  ).get(recipientId, userId);
+  if (owned) return [...LEGACY.owner];
+
+  // A share is the only thing that can carry an explicit capability set today.
+  const shared = await db.prepare(
+    "SELECT permission, capabilities FROM care_recipient_shares WHERE care_recipient_id = ? AND shared_with_user_id = ?"
+  ).get(recipientId, userId);
+  if (shared) return capabilitiesFor(shared.capabilities, shared.permission);
+
+  // Everything below has no per-person grant, so it maps through the legacy levels — which is
+  // what these paths already resolved to.
+  const teamMember = await db.prepare(`
+    SELECT ctm.role FROM care_team_members ctm
+    JOIN care_teams ct ON ctm.care_team_id = ct.id
+    WHERE ct.care_recipient_id = ? AND ctm.user_id = ?
+  `).get(recipientId, userId);
+  if (teamMember) return capabilitiesFor(null, teamMember.role === "leader" ? "edit" : "view");
+
+  const assignedCg = await db.prepare(`
+    SELECT cs.id FROM care_sessions cs
+    JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+    WHERE cs.care_recipient_id = ? AND cp.user_id = ?
+      AND cs.status IN ('confirmed', 'in_progress')
+    LIMIT 1
+  `).get(recipientId, userId);
+  if (assignedCg) return capabilitiesFor(null, "view");
+
+  return [];
 }
 
 /**
@@ -103,4 +154,5 @@ async function sessionAccess(db, sessionId, userId) {
   };
 }
 
-module.exports = { recipientAccess, sessionAccess };
+module.exports = {
+  recipientCapabilities, recipientAccess, sessionAccess };
