@@ -6,6 +6,28 @@ const OFFLINE_DB_NAME = 'inplace-offline';
 const OFFLINE_DB_VERSION = 1;
 const STORE_NAME = 'pendingActions';
 
+// ─── v1.105.69 — ask the browser to keep this data ───
+//
+// Everything queued here is care that has already happened: a check-in, a check-out, a note
+// written at someone's kitchen table with no signal. iOS evicts IndexedDB for a non-installed
+// PWA after roughly seven days of no use, and Safari will clear it under storage pressure at
+// any time — so a caregiver's unsynced visit could simply disappear, and the first anyone would
+// know is a visit missing from the record and a shift that looks unworked.
+//
+// navigator.storage.persist() asks the browser not to. It is best-effort by design: installed
+// PWAs and engaged sites usually get it, a fresh browser tab usually does not, and Safari may
+// grant it silently. Requesting costs nothing and it was never being asked for at all.
+async function requestPersistentStorage() {
+  try {
+    if (!navigator.storage?.persist) return false;
+    if (await navigator.storage.persisted?.()) return true;
+    const granted = await navigator.storage.persist();
+    if (!granted) console.warn('[offline] persistent storage not granted — queued actions may be evicted under storage pressure');
+    return granted;
+  } catch { return false; }
+}
+if (typeof navigator !== 'undefined') requestPersistentStorage();
+
 // ─── IndexedDB helpers ───
 
 function openOfflineDB() {

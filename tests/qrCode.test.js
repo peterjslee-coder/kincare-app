@@ -102,7 +102,10 @@ describe("every role can reach a QR, not just caregivers", () => {
     // On a phone that is the difference between "send this to my sister" being one tap or
     // a copy-paste chore.
     expect(account).toMatch(/navigator\.share/);
-    expect(account).toMatch(/navigator\.clipboard/);
+    // v1.105.69 — the clipboard fallback moved to the shared copyText helper, which reports
+    // whether the copy actually happened instead of toasting success regardless. Same property:
+    // where there is no share sheet, there is still a copy path.
+    expect(account).toMatch(/copyText\(url\)/);
   });
 });
 

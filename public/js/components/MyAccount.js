@@ -1071,8 +1071,8 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                   if (navigator.share) {
                     navigator.share({ title: 'inPlace', text: 'Care coordination for looking after a parent at home.', url }).catch(() => {});
                   } else {
-                    navigator.clipboard?.writeText(url);
-                    showToast?.('Link copied', 'success');
+                    // v1.105.69 — the write was discarded and the toast fired regardless.
+                    copyText(url).then((ok) => showToast?.(ok ? 'Link copied' : 'Could not copy the link', ok ? 'success' : 'error'));
                   }
                 }} style={{
                   padding: '8px 16px', borderRadius: 8, border: 'none',

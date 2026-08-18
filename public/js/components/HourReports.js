@@ -67,7 +67,15 @@ const HourReports = window.HourReports = ({ profileName, academicProgram }) => {
     setSending(false);
   };
 
+  // v1.105.69 — window.print() is a NO-OP in both native shells: nothing happens, no error, no
+  // dialog. The copy above promises "you can download it as a PDF", and a caregiver's
+  // school-credit hours are what is at stake. In the app, say what is true and offer the route
+  // that works — email the report to yourself or your school.
   const handlePrint = () => {
+    if (window.Capacitor?.isNativePlatform?.()) {
+      showToast('Printing isn\'t available in the app — use "Email report" to send it to yourself or your school.', 'error');
+      return;
+    }
     window.print();
   };
 
@@ -93,7 +101,7 @@ const HourReports = window.HourReports = ({ profileName, academicProgram }) => {
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-header"><span className="card-icon">📊</span>Generate Hour Report</div>
         <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '0 0 16px' }}>
-          Generate a verified report of your completed care hours. You can download it as a PDF or email it directly to your school.
+          Generate a verified report of your completed care hours. Email it directly to your school, or save it as a PDF from a computer.
         </p>
 
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 16 }}>

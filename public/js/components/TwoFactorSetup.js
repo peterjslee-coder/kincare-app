@@ -52,16 +52,20 @@ const TwoFactorSetup = window.TwoFactorSetup = ({ onComplete, onCancel }) => {
     setLoading(false);
   };
 
-  const copyBackupCodes = () => {
-    const text = backupCodes.join('\n');
-    navigator.clipboard.writeText(text).then(() => {
+  // v1.105.69 — these codes are the only way back into an account whose authenticator is lost,
+  // and this handler could fail three ways at once. `navigator.clipboard.writeText` throws a
+  // TypeError synchronously when clipboard is undefined (insecure context, older WebView), so
+  // the .catch never attached and the fallback never ran — and that fallback selected
+  // `#backup-codes-text`, an element that exists NOWHERE in this repo. On failure the user was
+  // told nothing and left believing codes they never received were safely copied.
+  const copyBackupCodes = async () => {
+    const ok = await copyText(backupCodes.join('\n'));
+    if (ok) {
       setCopiedBackup(true);
       setTimeout(() => setCopiedBackup(false), 2000);
-    }).catch(() => {
-      // Fallback: select text
-      const el = document.getElementById('backup-codes-text');
-      if (el) { el.select(); document.execCommand('copy'); setCopiedBackup(true); }
-    });
+      return;
+    }
+    setError('Could not copy the codes. Write them down before continuing — they are the only way back in if you lose your authenticator.');
   };
 
   const handleDone = () => {
@@ -108,7 +112,14 @@ const TwoFactorSetup = window.TwoFactorSetup = ({ onComplete, onCancel }) => {
         </div>
 
         <div
-          onClick={() => { navigator.clipboard?.writeText(secret).then(() => showToast('Code copied!', 'success')).catch(() => {}); }}
+          onClick={async () => {
+            // v1.105.69 — was `navigator.clipboard?.writeText(x).then(...)`. The optional chain
+            // guards the PROPERTY, not the call: where clipboard is undefined the whole
+            // expression is undefined and .then throws a TypeError, so the .catch beside it
+            // never ran because nothing was ever attached to anything.
+            const ok = await copyText(secret);
+            showToast(ok ? 'Code copied!' : 'Could not copy — type the code into your authenticator', ok ? 'success' : 'error');
+          }}
           style={{ background: 'var(--bg-primary)', borderRadius: 8, padding: 12, marginBottom: 20, cursor: 'pointer', transition: 'background 0.15s' }}
           onMouseEnter={e => e.currentTarget.style.background = 'var(--color-success-bg)'}
           onMouseLeave={e => e.currentTarget.style.background = 'var(--bg-primary)'}

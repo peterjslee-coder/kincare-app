@@ -367,6 +367,44 @@ const openExternalUrl = window.openExternalUrl = (url) => {
 // Returns TRUE only if the file was really handed off. Callers must gate their success
 // message on it. On the native shell the honest route is the OS share sheet; if that isn't
 // available we say so rather than pretending.
+// ─── v1.105.69 — copying text, and knowing whether it worked ───
+//
+// Four sites did this by hand and all four could lie. `navigator.clipboard` is undefined in a
+// non-secure context and in older WebViews, so `navigator.clipboard.writeText(...)` throws a
+// TypeError SYNCHRONOUSLY — before any .then/.catch is attached, which means an attached
+// fallback never runs. Two sites used `navigator.clipboard?.writeText(url)` instead: no throw,
+// but the promise is discarded and a success toast fires on the very next line regardless.
+//
+// The 2FA backup codes were the worst of them. Its fallback selected `#backup-codes-text`, an
+// element that exists nowhere in this repo, and those codes are the only way back into an
+// account whose authenticator is lost.
+//
+// Returns true only when the text is actually on the clipboard.
+const copyText = window.copyText = async (text) => {
+  if (!text) return false;
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch { /* fall through — permission denied, insecure context, or no user activation */ }
+  // execCommand('copy') is deprecated and still the only thing that works in some WebViews.
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.top = '0';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    ta.setSelectionRange(0, text.length); // iOS ignores select() alone
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    return !!ok;
+  } catch { return false; }
+};
+
 const saveBlob = window.saveBlob = async (blob, filename) => {
   const isNative = !!window.Capacitor?.isNativePlatform?.();
   if (!isNative) {

@@ -1064,7 +1064,15 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                   <div style={{ marginTop: 12 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                       <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>Draft Report {'\u2014'} review and edit before sending</span>
-                      <button onClick={() => { navigator.clipboard.writeText(doctorReport); if (typeof showToast === 'function') showToast('Report copied to clipboard', 'success'); }}
+                      {/* v1.105.69 — the toast fired one line after an unawaited write that
+                          throws synchronously where clipboard is undefined. It claimed the
+                          doctor report was copied whether or not it was. */}
+                      <button onClick={async () => {
+                        const ok = await copyText(doctorReport);
+                        if (typeof showToast === 'function') {
+                          showToast(ok ? 'Report copied to clipboard' : 'Could not copy — select the text and copy it manually', ok ? 'success' : 'error');
+                        }
+                      }}
                         style={{ padding: '4px 10px', borderRadius: 5, border: '1px solid #ddd', background: 'var(--bg-surface)', fontSize: 11, cursor: 'pointer', color: 'var(--text-secondary)' }}>
                         Copy
                       </button>

@@ -1716,7 +1716,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
     } catch (err) { setInviteMsg({ type: 'error', text: 'Failed to cancel' }); }
   };
 
-  const exportWaitlistCSV = () => {
+  const exportWaitlistCSV = async () => {
     if (!waitlist.length) return;
     const headers = ['Email', 'Name', 'Role', 'Source', 'Date'];
     const rows = waitlist.map(w => [
@@ -1725,10 +1725,12 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
     ]);
     const csv = [headers, ...rows].map(r => r.map(c => `"${(c || '').replace(/"/g, '""')}"`).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = `inplace-waitlist-${new Date().toISOString().slice(0,10)}.csv`;
-    a.click(); URL.revokeObjectURL(url);
+    // v1.105.69 — the one export saveBlob missed. `<a download>` is not implemented in
+    // WKWebView, so the click was dropped on the floor; and revokeObjectURL fired synchronously
+    // on the next statement, racing the download even on a desktop where the click DOES work.
+    // saveBlob handles both, and reports whether a file was actually produced.
+    const ok = await saveBlob(blob, `inplace-waitlist-${new Date().toISOString().slice(0, 10)}.csv`);
+    showToast(ok ? `Exported ${waitlist.length} waitlist entries` : 'Could not save the file on this device', ok ? 'success' : 'error');
   };
 
   const formatDate = (d) => {
@@ -6859,8 +6861,13 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                                 const d = data.document;
                                 if (d.file_data) {
                                   // file_data is base64 data URI — open in new tab
+                                  // v1.105.69 — window.open returns null in the native WebView
+                                  // (and whenever a popup blocker fires), and there was no else:
+                                  // tapping a caregiver's uploaded ID did nothing whatsoever.
                                   const w = window.open('', '_blank');
-                                  if (w) {
+                                  if (!w) {
+                                    handleDocPreview(doc.id);
+                                  } else if (w) {
                                     if (d.file_data.startsWith('data:application/pdf') || (d.mime_type || '').includes('pdf')) {
                                       w.document.write(`<html><body style="margin:0"><iframe src="${d.file_data}" style="width:100%;height:100vh;border:none"></iframe></body></html>`);
                                     } else {

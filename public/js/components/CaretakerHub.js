@@ -2892,9 +2892,11 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                   <input type="text" readOnly value={referralData.referralLink || ''} style={{
                     flex: 1, padding: '8px 10px', border: '1px solid #ddd', borderRadius: 6, fontSize: 12, color: 'var(--text-secondary)', background: 'var(--bg-surface)',
                   }} />
-                  <button onClick={() => {
-                    navigator.clipboard?.writeText(referralData.referralLink || '');
-                    showToast('Link copied!', 'success');
+                  {/* v1.105.69 — the write was discarded and the toast fired unconditionally.
+                      A caregiver pasted nothing, sent nothing, and lost the referral credit. */}
+                  <button onClick={async () => {
+                    const ok = await copyText(referralData.referralLink || '');
+                    showToast(ok ? 'Link copied!' : 'Could not copy — press and hold the link to copy it', ok ? 'success' : 'error');
                   }} style={{
                     padding: '8px 14px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
                   }}>Copy</button>

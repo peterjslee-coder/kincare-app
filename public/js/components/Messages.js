@@ -909,9 +909,23 @@ const Messages = window.Messages = () => {
     // whole message thread with "Something went wrong / Reload". showLocalNotification goes
     // through the service worker — which WebKit does support — and never throws.
     if (document.hidden) {
+      // v1.105.69 — this used to `return` after requesting permission, and that return was
+      // permanent for anyone whose permission is 'default' (i.e. everyone who dismissed the
+      // prompt rather than answering it). requestPermission() called from a HIDDEN document has
+      // no user activation, so the browser resolves it without asking and the state stays
+      // 'default' — meaning the next call takes the same branch, and the next, forever. An
+      // incoming call never rang for those users and never would.
+      //
+      // The permission request stays (harmless, and it occasionally lands), but it no longer
+      // gates the notification. showLocalNotification goes through the service worker, which
+      // does not depend on the Notification constructor's permission state in the same way,
+      // and never throws — so attempting it is strictly better than returning.
       if (typeof Notification === 'function'
           && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
         try { Notification.requestPermission(); } catch { /* not available in this webview */ }
+      }
+      if (typeof Notification === 'function' && Notification.permission === 'denied') {
+        // Genuinely refused. Nothing to do — do not pretend otherwise.
         return;
       }
       const typeLabel = incomingCall.callType === 'video' ? 'Video' : 'Voice';
