@@ -1,4 +1,5 @@
 const express = require("express");
+const { ALL: ALL_CAPS, PRESETS } = require("../utils/capabilities");
 const crypto = require("crypto");
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
@@ -173,11 +174,19 @@ router.get("/:id", requireRole("family"), async (req, res) => {
     `).get(req.params.id);
 
     // Get members
+    // v1.105.79 — the member's actual capability set comes along, so the UI can show what
+    // each person can really do instead of a role word that has been lying. crs.capabilities
+    // is NULL for anyone predating v1.105.78; the client resolves that through the same legacy
+    // mapping the server uses.
     const members = await db.prepare(`
       SELECT ctm.id AS membership_id, ctm.role, ctm.joined_at, ctm.relationship_label,
-        u.id AS user_id, u.first_name, u.last_name, u.email, u.avatar_url
+        u.id AS user_id, u.first_name, u.last_name, u.email, u.avatar_url,
+        crs.capabilities AS capabilities, crs.permission AS share_permission
       FROM care_team_members ctm
       JOIN users u ON ctm.user_id = u.id
+      LEFT JOIN care_teams ct2 ON ct2.id = ctm.care_team_id
+      LEFT JOIN care_recipient_shares crs
+        ON crs.care_recipient_id = ct2.care_recipient_id AND crs.shared_with_user_id = ctm.user_id
       WHERE ctm.care_team_id = ?
       ORDER BY ctm.role = 'leader' DESC, ctm.joined_at ASC
     `).all(req.params.id);
@@ -196,6 +205,10 @@ router.get("/:id", requireRole("family"), async (req, res) => {
         myRole: membership.role,
         myUserId: req.user.id,
         members: members.map(m => ({
+          capabilities: require("../utils/capabilities").capabilitiesFor(
+            m.capabilities,
+            m.role === "leader" ? "edit" : (m.share_permission || "view")
+          ),
           membershipId: m.membership_id,
           userId: m.user_id,
           firstName: m.first_name,
@@ -330,6 +343,71 @@ router.put("/:id/billing", requireRole("family"), async (req, res) => {
 });
 
 // ─── POST /api/care-teams/:id/invite ─── Invite someone to the care team (leader only)
+// ─── GET /api/care-teams/:id/invite-search?q= — who can I add? (v1.105.79) ───
+//
+// Deliberately NOT /api/connections/search, which matches every active user on the platform
+// by name. This search is the doorway to another person's health record, and a global name
+// lookup would let anyone enumerate who has an InPlace account. Pete's call: only people you
+// already have a relationship with.
+//
+// "Connected" means an accepted connection, or someone you already share a care team with.
+// Anyone else can still be invited — by typing their full email address, which proves you
+// already know it.
+router.get("/:id/invite-search", requireRole("family"), async (req, res) => {
+  try {
+    const db = await getDb();
+    const membership = await db.prepare(
+      "SELECT role FROM care_team_members WHERE care_team_id = ? AND user_id = ?"
+    ).get(req.params.id, req.user.id);
+    if (!membership) return res.status(404).json({ error: "Care team not found" });
+    if (membership.role !== "leader") return res.status(403).json({ error: "Only the team leader can invite members" });
+
+    const q = (req.query.q || "").trim().toLowerCase();
+    if (q.length < 2) return res.json({ people: [] });
+    const term = `%${q}%`;
+
+    const people = await db.prepare(`
+      SELECT DISTINCT u.id, u.first_name, u.last_name, u.email, u.profile_photo, u.avatar_url,
+             EXISTS (
+               SELECT 1 FROM care_team_members m WHERE m.care_team_id = ? AND m.user_id = u.id
+             ) AS already_on_team
+      FROM users u
+      WHERE u.id != ?
+        AND COALESCE(u.is_demo, 0) = 0
+        AND COALESCE(u.is_active, 1) = 1
+        AND (LOWER(u.first_name || ' ' || u.last_name) LIKE ? OR LOWER(u.email) = ?)
+        AND (
+          EXISTS (
+            SELECT 1 FROM connections c
+            WHERE c.status = 'accepted'
+              AND ((c.requester_id = ? AND c.recipient_id = u.id) OR (c.recipient_id = ? AND c.requester_id = u.id))
+          )
+          OR EXISTS (
+            SELECT 1 FROM care_team_members mine
+            JOIN care_team_members theirs ON theirs.care_team_id = mine.care_team_id
+            WHERE mine.user_id = ? AND theirs.user_id = u.id
+          )
+        )
+      ORDER BY u.first_name ASC
+      LIMIT 20
+    `).all(req.params.id, req.user.id, term, q, req.user.id, req.user.id, req.user.id);
+
+    res.json({
+      people: people.map((p) => ({
+        id: p.id,
+        firstName: p.first_name,
+        lastName: p.last_name,
+        email: p.email,
+        photo: p.profile_photo || p.avatar_url || null,
+        alreadyOnTeam: p.already_on_team === true || p.already_on_team === 1,
+      })),
+    });
+  } catch (err) {
+    console.error("Invite search error:", err);
+    res.status(500).json({ error: "Could not search for people" });
+  }
+});
+
 router.post("/:id/invite", requireRole("family"), async (req, res) => {
   try {
     const db = await getDb();
@@ -339,9 +417,20 @@ router.post("/:id/invite", requireRole("family"), async (req, res) => {
     if (!membership) return res.status(404).json({ error: "Care team not found" });
     if (membership.role !== "leader") return res.status(403).json({ error: "Only the team leader can invite members" });
 
-    const { email, role = "member" } = req.body;
+    const { email, role = "member", capabilities } = req.body;
     if (!email) return res.status(400).json({ error: "Email is required" });
     if (!["member", "viewer", "care_recipient"].includes(role)) return res.status(400).json({ error: "Role must be member, viewer, or care_recipient" });
+
+    // v1.105.79 — the owner ticks capabilities when sending, and the invite carries them, so
+    // the share created at accept is exactly what was chosen rather than re-derived from the
+    // role word. Unknown values are dropped rather than trusted: this list is the difference
+    // between reading a health record and not.
+    let capsJson = null;
+    if (Array.isArray(capabilities)) {
+      const clean = capabilities.filter((c) => ALL_CAPS.includes(c));
+      if (clean.length === 0) return res.status(400).json({ error: "Choose what this person can do" });
+      capsJson = JSON.stringify(clean);
+    }
 
     // v1.71.0 claim-by-invite: a care_recipient invite lets the person receiving care
     // claim this profile (unique token + exact email match at accept — never name matching).
@@ -383,8 +472,8 @@ router.post("/:id/invite", requireRole("family"), async (req, res) => {
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(); // 7 days
 
     await db.prepare(
-      "INSERT INTO care_team_invites (id, care_team_id, invited_email, invited_by, role, token, status, expires_at) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)"
-    ).run(inviteId, req.params.id, email, req.user.id, role, token, expiresAt);
+      "INSERT INTO care_team_invites (id, care_team_id, invited_email, invited_by, role, token, status, expires_at, capabilities) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)"
+    ).run(inviteId, req.params.id, email, req.user.id, role, token, expiresAt, capsJson);
 
     // Send invite email
     const appUrl = process.env.APP_URL || "https://yourinplace.com";
@@ -735,13 +824,36 @@ router.put("/:id/members/:userId", requireRole("family"), async (req, res) => {
     ).get(req.params.id, req.user.id);
     if (!membership || membership.role !== "leader") return res.status(403).json({ error: "Only the team leader can change roles" });
 
-    const { role } = req.body;
-    if (!["member", "viewer"].includes(role)) return res.status(400).json({ error: "Role must be member or viewer" });
+    const { role, capabilities } = req.body;
+    if (role && !["member", "viewer"].includes(role)) return res.status(400).json({ error: "Role must be member or viewer" });
 
-    await db.prepare("UPDATE care_team_members SET role = ? WHERE care_team_id = ? AND user_id = ?")
-      .run(role, req.params.id, req.params.userId);
+    if (role) {
+      await db.prepare("UPDATE care_team_members SET role = ? WHERE care_team_id = ? AND user_id = ?")
+        .run(role, req.params.id, req.params.userId);
+    }
 
-    res.json({ message: "Role updated" });
+    // v1.105.79 — this is the upgrade path Pete asked for: change what someone can do without
+    // creating a second anything. The share row is keyed on (recipient, user), so promoting a
+    // viewer to full access is an UPDATE, never an INSERT.
+    if (Array.isArray(capabilities)) {
+      const clean = capabilities.filter((c) => ALL_CAPS.includes(c));
+      if (clean.length === 0) return res.status(400).json({ error: "Choose what this person can do" });
+      const team = await db.prepare("SELECT care_recipient_id FROM care_teams WHERE id = ?").get(req.params.id);
+      if (!team) return res.status(404).json({ error: "Care team not found" });
+      const existing = await db.prepare(
+        "SELECT id FROM care_recipient_shares WHERE care_recipient_id = ? AND shared_with_user_id = ?"
+      ).get(team.care_recipient_id, req.params.userId);
+      if (existing) {
+        await db.prepare("UPDATE care_recipient_shares SET capabilities = ? WHERE id = ?")
+          .run(JSON.stringify(clean), existing.id);
+      } else {
+        await db.prepare(
+          "INSERT INTO care_recipient_shares (id, care_recipient_id, shared_with_user_id, permission, capabilities, shared_by_user_id) VALUES (?, ?, ?, ?, ?, ?)"
+        ).run(uuid(), team.care_recipient_id, req.params.userId, "view", JSON.stringify(clean), req.user.id);
+      }
+    }
+
+    res.json({ message: "Updated" });
   } catch (err) {
     console.error("Change role error:", err);
     res.status(500).json({ error: "Failed to change role" });

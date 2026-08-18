@@ -1,9 +1,50 @@
 // ─── CareTeamManage — View and manage care team members & invites ───
+
+// v1.105.79 — mirrors src/utils/capabilities.js. Kept as plain data so the labels stay in one
+// place and the copy below cannot drift from what the server actually enforces.
+//
+// The old role blurb claimed View Only was "read-only access... cannot make changes". That has
+// been untrue since Care Tasks shipped: a viewer could log visits AND tick off a medication
+// task, because careTasks.js gated check-off on `!!access`. Every line here is what the server
+// grants, written out.
+const CAP_LABELS = [
+  ['read_profile', "See " + "their health profile", 'Conditions, medications, the care summary.'],
+  ['read_notes',   'Read care notes',               'What the team has written about how things are going.'],
+  ['write_notes',  'Leave a note',                  'Add their own observations.'],
+  ['read_visits',  'See visit history',             'Who has been round, and when.'],
+  ['write_visits', 'Log a visit',                   'Record that they were there.'],
+  ['read_tasks',   'See care tasks',                'Including medication reminders.'],
+  ['check_tasks',  'Tick off a care task',          'Including recording that medication was given.'],
+  ['manage',       'Manage the care profile',       'Create and edit tasks, edit the profile.'],
+];
+const CAP_PRESETS = {
+  member: CAP_LABELS.map((c) => c[0]),
+  viewer: ['read_profile', 'read_notes', 'write_notes', 'read_visits', 'write_visits'],
+  helper: ['write_notes', 'write_visits'],
+};
+const CAP_PRESET_COPY = {
+  member: ['Full access', 'Everything below \u2014 the same as another family organiser.'],
+  viewer: ['Viewer', 'Reads the record and logs their own visits. Nothing to do with medication.'],
+  helper: ['Helper', 'Leaves a note and records that they were there. Sees nothing about their health.'],
+};
+
 const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
   const [team, setTeam] = useState(null);
   const [loading, setLoading] = useState(true);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState('member');
+  // v1.105.79 — the capability picker. Presets first because this is used on a phone; the
+  // checkboxes are one tap away for the cases a preset does not cover (Peggy plus medication).
+  const [invitePreset, setInvitePreset] = useState('viewer');
+  const [inviteCaps, setInviteCaps] = useState(CAP_PRESETS.viewer);
+  const [showCustomCaps, setShowCustomCaps] = useState(false);
+  const [inviteQuery, setInviteQuery] = useState('');
+  const [inviteResults, setInviteResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [pickedPerson, setPickedPerson] = useState(null);
+  const [editingCapsFor, setEditingCapsFor] = useState(null);
+  const [memberCaps, setMemberCaps] = useState([]);
+  const [savingCaps, setSavingCaps] = useState(false);
   const [inviting, setInviting] = useState(false);
   const [showInviteForm, setShowInviteForm] = useState(false);
   const [editingName, setEditingName] = useState(false);
@@ -139,19 +180,66 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
     showToast(msg, 'error');
   };
 
+  // Debounced lookup, scoped server-side to people you already know (see the route comment).
+  React.useEffect(() => {
+    const q = inviteQuery.trim();
+    if (q.length < 2 || pickedPerson) { setInviteResults([]); return; }
+    let cancelled = false;
+    setSearching(true);
+    const t = setTimeout(async () => {
+      try {
+        const res = await apiFetch(`/api/care-teams/${careTeamId}/invite-search?q=${encodeURIComponent(q)}`);
+        if (cancelled) return;
+        if (res?.ok) { const d = await res.json(); setInviteResults(d.people || []); }
+        else setInviteResults([]);
+      } catch { if (!cancelled) setInviteResults([]); }
+      if (!cancelled) setSearching(false);
+    }, 300);
+    return () => { cancelled = true; clearTimeout(t); setSearching(false); };
+  }, [inviteQuery, pickedPerson, careTeamId]);
+
+  const applyPreset = (name) => {
+    setInvitePreset(name);
+    setInviteCaps(CAP_PRESETS[name]);
+    setInviteRole(name === 'member' ? 'member' : 'viewer');
+  };
+  const toggleCap = (capsSetter, caps, cap) =>
+    capsSetter(caps.includes(cap) ? caps.filter((c) => c !== cap) : [...caps, cap]);
+
+  const resetInvite = () => {
+    setInviteEmail(''); setInviteQuery(''); setPickedPerson(null);
+    setInviteResults([]); setShowCustomCaps(false); applyPreset('viewer');
+  };
+
+  const handleSaveMemberCaps = async (userId) => {
+    if (memberCaps.length === 0) { showToast('Choose what this person can do', 'error'); return; }
+    setSavingCaps(true);
+    try {
+      const res = await apiFetch(`/api/care-teams/${careTeamId}/members/${userId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ capabilities: memberCaps }),
+      });
+      if (res?.ok) { showToast('Access updated', 'success'); setEditingCapsFor(null); fetchTeam(); }
+      else { const d = await res?.json().catch(() => ({})); showToast(d?.error || 'Could not update access', 'error'); }
+    } catch { showToast('Could not update access', 'error'); }
+    setSavingCaps(false);
+  };
+
   const handleInvite = async (e) => {
     e.preventDefault();
-    if (!inviteEmail.trim()) return;
+    const target = pickedPerson ? pickedPerson.email : inviteEmail.trim();
+    if (!target) return;
+    if (inviteCaps.length === 0) { showToast('Choose what this person can do', 'error'); return; }
     setInviting(true);
     try {
       const res = await apiFetch(`/api/care-teams/${careTeamId}/invite`, {
         method: 'POST',
-        body: JSON.stringify({ email: inviteEmail.trim(), role: inviteRole }),
+        body: JSON.stringify({ email: target, role: inviteRole, capabilities: inviteCaps }),
       });
       const data = await res?.json();
       if (res?.ok) {
-        showToast(`Invite sent to ${inviteEmail}`, 'success');
-        setInviteEmail('');
+        showToast(`Invite sent to ${target}`, 'success');
+        resetInvite();
         setShowInviteForm(false);
         fetchTeam();
       } else {
@@ -373,25 +461,95 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
             <button onClick={() => setShowInviteForm(false)} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: 'var(--text-muted)' }}>&times;</button>
           </div>
           <form onSubmit={handleInvite}>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <input type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)}
-                placeholder="Enter email address" style={{ ...inputStyle, flex: '1 1 200px' }} required />
-              <select value={inviteRole} onChange={(e) => setInviteRole(e.target.value)}
-                style={{ ...inputStyle, flex: '0 0 120px' }}>
-                <option value="member">Member</option>
-                <option value="viewer">Viewer</option>
-                <option value="care_recipient">Care Recipient</option>
-              </select>
-              <button type="submit" disabled={inviting}
-                style={{ padding: '10px 20px', background: inviting ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: inviting ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>
-                {inviting ? 'Sending...' : 'Send Invite'}
-              </button>
+            {/* 1 — who. Search is scoped server-side to people you already know; anyone else
+                 is reachable by typing their full email, which proves you already have it. */}
+            {pickedPerson ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--bg-primary)', borderRadius: 8, marginBottom: 10 }}>
+                <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--role-color)', color: 'var(--text-on-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 13 }}>
+                  {(pickedPerson.firstName || '?')[0]}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 650, fontSize: 14 }}>{pickedPerson.firstName} {pickedPerson.lastName}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis' }}>{pickedPerson.email}</div>
+                </div>
+                <button type="button" onClick={() => { setPickedPerson(null); setInviteQuery(''); }}
+                  style={{ background: 'none', border: 'none', color: 'var(--accent-color)', font: 'inherit', fontSize: 13, cursor: 'pointer' }}>Change</button>
+              </div>
+            ) : (
+              <div style={{ marginBottom: 10 }}>
+                <input value={inviteQuery} onChange={(e) => { setInviteQuery(e.target.value); setInviteEmail(e.target.value); }}
+                  placeholder="Search by name, or type their email" style={{ ...inputStyle, width: '100%' }} />
+                {searching && <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 6 }}>Searching{'\u2026'}</div>}
+                {inviteResults.length > 0 && (
+                  <div style={{ border: '1px solid var(--border-light)', borderRadius: 8, marginTop: 6, overflow: 'hidden' }}>
+                    {inviteResults.map((p) => (
+                      <button key={p.id} type="button" disabled={p.alreadyOnTeam}
+                        onClick={() => { setPickedPerson(p); setInviteResults([]); }}
+                        style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '9px 12px', background: 'var(--bg-card)', border: 'none', borderBottom: '1px solid var(--border-light)', cursor: p.alreadyOnTeam ? 'default' : 'pointer', textAlign: 'left', opacity: p.alreadyOnTeam ? 0.5 : 1 }}>
+                        <span style={{ flex: 1, minWidth: 0 }}>
+                          <span style={{ display: 'block', fontSize: 13.5, fontWeight: 600 }}>{p.firstName} {p.lastName}</span>
+                          <span style={{ display: 'block', fontSize: 11.5, color: 'var(--text-tertiary)' }}>{p.email}</span>
+                        </span>
+                        {p.alreadyOnTeam && <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>already on the team</span>}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {/* The duplication risk is human, not structural: invite an address they do not
+                    use and you have created a second person as far as the app is concerned. */}
+                {inviteQuery.trim().length >= 2 && !searching && inviteResults.length === 0 && (
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 6, lineHeight: 1.5 }}>
+                    Nobody you know by that name. If they{'\u2019'}re not on InPlace yet, type the
+                    email address they{'\u2019'}ll sign up with {'\u2014'} a different address makes a separate account.
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 2 — what they can do. */}
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-secondary)', margin: '4px 0 6px' }}>What can they do?</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 8 }}>
+              {['viewer', 'helper', 'member'].map((name) => (
+                <button key={name} type="button" onClick={() => applyPreset(name)}
+                  style={{
+                    textAlign: 'left', padding: '10px 12px', borderRadius: 9, cursor: 'pointer',
+                    border: `1px solid ${invitePreset === name && !showCustomCaps ? 'var(--role-color)' : 'var(--border-light)'}`,
+                    background: invitePreset === name && !showCustomCaps ? 'var(--bg-primary)' : 'var(--bg-card)',
+                  }}>
+                  <div style={{ fontSize: 13.5, fontWeight: 700 }}>{CAP_PRESET_COPY[name][0]}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2, lineHeight: 1.45 }}>{CAP_PRESET_COPY[name][1]}</div>
+                </button>
+              ))}
             </div>
-            <div style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '10px 0 0', background: 'var(--bg-primary)', padding: '10px 12px', borderRadius: 8, lineHeight: 1.6 }}>
-              <div style={{ marginBottom: 4 }}><strong style={{ color: 'var(--role-color)' }}>Leader</strong> — Full control: manage members, edit care profile, schedule sessions, assign caregivers, manage payments.</div>
-              <div style={{ marginBottom: 4 }}><strong style={{ color: '#0066cc' }}>Member</strong> — View and coordinate: see the schedule, send messages, request care, view care notes. Cannot invite/remove members.</div>
-              <div><strong style={{ color: 'var(--text-tertiary)' }}>View Only</strong> — Read-only access: see the schedule and care notes, but cannot make changes or send messages on behalf of the team.</div>
-              <div style={{ marginTop: 4 }}><strong style={{ color: '#7b5ea7' }}>Care Recipient</strong> — For the person receiving care. When they accept (with this exact email), their account is securely linked to this care profile so they can see their own schedule and team.</div>
+
+            <button type="button" onClick={() => setShowCustomCaps((v) => !v)}
+              style={{ background: 'none', border: 'none', padding: 0, font: 'inherit', fontSize: 12.5, fontWeight: 650, color: 'var(--accent-color)', cursor: 'pointer', marginBottom: showCustomCaps ? 8 : 12 }}>
+              {showCustomCaps ? 'Hide details' : 'Customise\u2026'}
+            </button>
+
+            {showCustomCaps && (
+              <div style={{ border: '1px solid var(--border-light)', borderRadius: 9, padding: '4px 12px', marginBottom: 12 }}>
+                {CAP_LABELS.map(([cap, label, desc]) => (
+                  <label key={cap} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '9px 0', borderBottom: '1px solid var(--border-light)', cursor: 'pointer' }}>
+                    <input type="checkbox" checked={inviteCaps.includes(cap)}
+                      onChange={() => toggleCap(setInviteCaps, inviteCaps, cap)}
+                      style={{ marginTop: 2, flexShrink: 0 }} />
+                    <span>
+                      <span style={{ display: 'block', fontSize: 13, fontWeight: 600 }}>{label}</span>
+                      <span style={{ display: 'block', fontSize: 11.5, color: 'var(--text-tertiary)', lineHeight: 1.4 }}>{desc}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            )}
+
+            <button type="submit" disabled={inviting || (!pickedPerson && !inviteEmail.trim())}
+              style={{ width: '100%', padding: '11px', background: inviting ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 9, fontWeight: 700, fontSize: 14, cursor: inviting ? 'wait' : 'pointer' }}>
+              {inviting ? 'Sending\u2026' : 'Send invite'}
+            </button>
+
+            <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)', marginTop: 8, lineHeight: 1.5 }}>
+              They{'\u2019'}ll be asked to read and accept the privacy statement before they can join.
             </div>
           </form>
         </div>
@@ -438,8 +596,55 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
                   {canManage && <span style={{ fontSize: 14, color: 'var(--text-muted)', transition: 'transform 0.2s', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0)' }}>▾</span>}
                 </div>
               </div>
-              {isExpanded && canManage && (
+              {isExpanded && canManage && editingCapsFor === m.userId && (
+                <div style={{ margin: '0 -16px', padding: '0 16px 14px', background: 'var(--bg-highlight)' }}>
+                  {/* v1.105.79 — the upgrade path. Changing what someone can do is an UPDATE on
+                      the existing share row, so promoting a viewer never creates a second
+                      anything: same user, same share, different capabilities. */}
+                  <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-secondary)', margin: '0 0 6px' }}>
+                    What {m.firstName} can do
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+                    {['viewer', 'helper', 'member'].map((name) => (
+                      <button key={name} onClick={(e) => { e.stopPropagation(); setMemberCaps(CAP_PRESETS[name]); }}
+                        style={{ padding: '5px 12px', borderRadius: 999, fontSize: 12, fontWeight: 650, cursor: 'pointer',
+                          border: '1px solid var(--border-light)', background: 'var(--bg-card)', color: 'var(--text-secondary)' }}>
+                        {CAP_PRESET_COPY[name][0]}
+                      </button>
+                    ))}
+                  </div>
+                  <div style={{ border: '1px solid var(--border-light)', borderRadius: 9, padding: '2px 12px', background: 'var(--bg-card)', marginBottom: 10 }}>
+                    {CAP_LABELS.map(([cap, label, desc]) => (
+                      <label key={cap} onClick={(e) => e.stopPropagation()}
+                        style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '8px 0', borderBottom: '1px solid var(--border-light)', cursor: 'pointer' }}>
+                        <input type="checkbox" checked={memberCaps.includes(cap)}
+                          onChange={() => toggleCap(setMemberCaps, memberCaps, cap)} style={{ marginTop: 2, flexShrink: 0 }} />
+                        <span>
+                          <span style={{ display: 'block', fontSize: 13, fontWeight: 600 }}>{label}</span>
+                          <span style={{ display: 'block', fontSize: 11.5, color: 'var(--text-tertiary)', lineHeight: 1.4 }}>{desc}</span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button disabled={savingCaps} onClick={(e) => { e.stopPropagation(); handleSaveMemberCaps(m.userId); }}
+                      style={{ flex: 1, padding: '9px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: savingCaps ? 'wait' : 'pointer' }}>
+                      {savingCaps ? 'Saving\u2026' : 'Save access'}
+                    </button>
+                    <button onClick={(e) => { e.stopPropagation(); setEditingCapsFor(null); }}
+                      style={{ padding: '9px 16px', background: 'var(--bg-card)', color: 'var(--text-secondary)', border: '1px solid var(--border-light)', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+              {isExpanded && canManage && editingCapsFor !== m.userId && (
                 <div style={{ margin: '0 -16px', padding: '0 16px 14px', background: 'var(--bg-highlight)', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <button onClick={(e) => { e.stopPropagation(); setEditingCapsFor(m.userId); setMemberCaps(m.capabilities || CAP_PRESETS.viewer); }}
+                    style={{ padding: '6px 14px', background: 'var(--role-color)', color: 'var(--text-on-primary)',
+                      border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 650, cursor: 'pointer' }}>
+                    Change access
+                  </button>
                   <button onClick={(e) => { e.stopPropagation(); handleChangeRole(m.userId, 'member'); }}
                     style={{ padding: '6px 14px', background: m.role === 'member' ? 'var(--role-color)' : 'var(--bg-card)', color: m.role === 'member' ? 'var(--bg-card)' : 'var(--role-color)',
                       border: '1px solid #1b6b5a', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
