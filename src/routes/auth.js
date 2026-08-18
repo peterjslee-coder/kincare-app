@@ -22,8 +22,18 @@ router.post("/signup-intent", async (req, res) => {
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return res.status(400).json({ error: "Valid email is required" });
     }
-    if (!["family", "caregiver", "care_for"].includes(role)) {
-      return res.status(400).json({ error: "Role must be 'family', 'caregiver', or 'care_for'" });
+    // v1.105.93 — 'helper' is a neighbour who leaves notes and records that they were there.
+    // Pete, on Peggy: "someone I can add to the care team. They don't need stripe, it's all
+    // vouch-for-neighbor type of approval... She won't use the app much, definitely won't give
+    // any info to me, but may leave notes. Probably great notes, honestly."
+    //
+    // Deliberately its own role rather than reusing 'family': the role decides which home
+    // screen you land on, and the family Dashboard is built around requesting care, payments
+    // and scheduling — none of which is hers, and most of which would render empty against a
+    // Helper capability set. What she can actually DO is still governed entirely by the
+    // capabilities on her share; the role only chooses the screen.
+    if (!["family", "caregiver", "care_for", "helper"].includes(role)) {
+      return res.status(400).json({ error: "Role must be 'family', 'caregiver', 'care_for', or 'helper'" });
     }
 
     const db = await getDb();
@@ -165,9 +175,15 @@ router.post("/register", validateRegister, async (req, res) => {
     if (!email || !password || !firstName || !lastName) {
       return res.status(400).json({ error: "Missing required fields: email, password, firstName, lastName" });
     }
+    // v1.105.93 — Pete's call: a helper's phone is REQUIRED, for password recovery and 2FA.
+    // She is the person who might be at the house when something is wrong, and an account
+    // she cannot recover is an account she stops using.
+    if (role === "helper" && !phone) {
+      return res.status(400).json({ error: "A phone number is required so you can recover your account." });
+    }
 
-    if (!["family", "caregiver", "care_for"].includes(role)) {
-      return res.status(400).json({ error: "Role must be 'family', 'caregiver', or 'care_for'" });
+    if (!["family", "caregiver", "care_for", "helper"].includes(role)) {
+      return res.status(400).json({ error: "Role must be 'family', 'caregiver', 'care_for', or 'helper'" });
     }
 
     const db = await getDb();

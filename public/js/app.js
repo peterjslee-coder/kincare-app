@@ -1709,6 +1709,10 @@ const App = () => {
 
     if (currentPage === 'dashboard') {
       if (role === 'caregiver') return <CaretakerHub key={pageKey} onNeedsOnboarding={() => setAppState('resume-onboarding')} />;
+      // v1.105.93 — a helper gets her own screen. Routing her to the family Dashboard would
+      // show a request-care flow, payments and a schedule that are not hers, most of it empty
+      // against a Helper capability set.
+      if (role === 'helper') return <HelperHub key={pageKey} />;
       if (role === 'care_for') {
         // Check if self-onboarding is complete
         const selfOnboardingDone = currentUser?.selfOnboardingComplete || currentUser?.self_onboarding_complete;

@@ -69,6 +69,8 @@ const scripts = [
   "js/components/CaregiverCalendar.js",
   "js/components/HourReports.js",
   "js/components/CaretakerHub.js",
+  // v1.105.93 — after FamilyVisitLog.js, which defines LogVisitSheet, used below.
+  "js/components/HelperHub.js",
   "js/components/AreaMap.js",
   "js/components/FindWork.js",
   "js/components/Analytics.js",
