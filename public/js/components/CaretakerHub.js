@@ -1597,7 +1597,15 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                       )}
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
-                      {profile.caregiverCleared ? (
+                      {/* v1.105.89 — your own family's request. Visible so you can see it went
+                          out, never acceptable: family paying family for the same visit is not
+                          something to reach by accident. */}
+                      {job.isOwnFamily ? (
+                        <div style={{ padding: '10px 14px', background: 'var(--bg-primary)', border: '1px solid var(--border-light)', borderRadius: 10, fontSize: 11.5, color: 'var(--text-secondary)', textAlign: 'center', maxWidth: 170, lineHeight: 1.45 }}>
+                          <strong style={{ display: 'block', color: 'var(--text-primary)', marginBottom: 2 }}>Your family{'\u2019'}s request</strong>
+                          You can{'\u2019'}t accept work for someone you{'\u2019'}re the family for.
+                        </div>
+                      ) : profile.caregiverCleared ? (
                       <button onClick={(e) => { if (!profile.accountPaused) handleClaimJob(job.id, e, effectiveTotal); }} disabled={claimingJobId === job.id || profile.accountPaused}
                         title={profile.accountPaused ? 'Your account is paused. Contact support for assistance.' : ''}
                         style={{
@@ -1608,16 +1616,16 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                       ) : (
                         <div style={{ padding: '8px 14px', background: 'var(--bg-primary)', borderRadius: 10, fontSize: 11, color: 'var(--text-tertiary)', textAlign: 'center', maxWidth: 140 }}>Complete setup to accept</div>
                       )}
-                      <button onClick={(e) => { e.stopPropagation(); openProposalModal(job); }}
+                      {!job.isOwnFamily && <button onClick={(e) => { e.stopPropagation(); openProposalModal(job); }}
                         style={{
                           padding: '7px 14px', background: 'var(--bg-surface)', color: 'var(--color-purple-light)', border: '2px solid #7c3aed',
                           borderRadius: '10px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
-                        }}>Propose Different Time</button>
-                      <button onClick={(e) => { e.stopPropagation(); setDecliningJob(job); setDeclineReason(''); }}
+                        }}>Propose Different Time</button>}
+                      {!job.isOwnFamily && <button onClick={(e) => { e.stopPropagation(); setDecliningJob(job); setDeclineReason(''); }}
                         style={{
                           padding: '7px 14px', background: 'none', color: 'var(--text-tertiary)', border: 'none',
                           fontSize: '12px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', textDecoration: 'underline',
-                        }}>Can't make it</button>
+                        }}>Can't make it</button>}
                     </div>
                   </div>
                 </div>
@@ -2313,7 +2321,13 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                         )}
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
-                        {profile.caregiverCleared ? (
+                        {/* v1.105.89 — see the other job card: shown, never acceptable. */}
+                        {job.isOwnFamily ? (
+                          <div style={{ padding: '10px 14px', background: 'var(--bg-primary)', border: '1px solid var(--border-light)', borderRadius: 10, fontSize: 11.5, color: 'var(--text-secondary)', textAlign: 'center', maxWidth: 170, lineHeight: 1.45 }}>
+                            <strong style={{ display: 'block', color: 'var(--text-primary)', marginBottom: 2 }}>Your family{'\u2019'}s request</strong>
+                            You can{'\u2019'}t accept work for someone you{'\u2019'}re the family for.
+                          </div>
+                        ) : profile.caregiverCleared ? (
                         <button onClick={(e) => { if (!profile.accountPaused) handleClaimJob(job.id, e, effectiveTotal); }} disabled={claimingJobId === job.id || profile.accountPaused}
                           title={profile.accountPaused ? 'Your account is paused. Contact support for assistance.' : ''}
                           style={{
@@ -2324,16 +2338,16 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                         ) : (
                           <div style={{ padding: '8px 14px', background: 'var(--bg-primary)', borderRadius: 10, fontSize: 11, color: 'var(--text-tertiary)', textAlign: 'center', maxWidth: 140 }}>Complete setup to accept</div>
                         )}
-                        <button onClick={(e) => { e.stopPropagation(); openProposalModal(job); }}
+                        {!job.isOwnFamily && <button onClick={(e) => { e.stopPropagation(); openProposalModal(job); }}
                           style={{
                             padding: '7px 14px', background: 'var(--bg-surface)', color: 'var(--role-color)', border: '2px solid #1b6b5a',
                             borderRadius: '10px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
-                          }}>Propose Different Time</button>
-                      <button onClick={(e) => { e.stopPropagation(); setDecliningJob(job); setDeclineReason(''); }}
+                          }}>Propose Different Time</button>}
+                      {!job.isOwnFamily && <button onClick={(e) => { e.stopPropagation(); setDecliningJob(job); setDeclineReason(''); }}
                         style={{
                           padding: '7px 14px', background: 'none', color: 'var(--text-tertiary)', border: 'none',
                           fontSize: '12px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', textDecoration: 'underline',
-                        }}>Can't make it</button>
+                        }}>Can't make it</button>}
                       </div>
                     </div>
                   );

@@ -458,6 +458,27 @@ router.put("/:id/claim", async (req, res) => {
   }
 
   const db = await getDb();
+  // ─── v1.105.89: the hard rule comes before the setup nags ───
+  //
+  // You may not accept work for someone you are the family for, whoever posted it. This ran
+  // AFTER the Stripe/preferences gates at first, so Pete — who can never take this job at all —
+  // was told "Please set your care preferences before accepting jobs". A true sentence that
+  // answers a question nobody asked, in place of the real reason. Same class as everything else
+  // fixed today: a message that is confidently about the wrong thing.
+  //
+  // It also has to live here rather than in the dashboard query. Hiding the job made the
+  // endpoint unreachable through the UI while leaving it open to anything that knew a session
+  // id — and as of this version the job is deliberately visible.
+  {
+    const s0 = await db.prepare("SELECT family_user_id, care_recipient_id FROM care_sessions WHERE id = ?").get(req.params.id);
+    if (s0) {
+      const recipient = await db.prepare("SELECT family_user_id FROM care_recipients WHERE id = ?").get(s0.care_recipient_id);
+      if (s0.family_user_id === req.user.id || recipient?.family_user_id === req.user.id) {
+        return res.status(403).json({ error: "You can't accept work for someone you're the family for." });
+      }
+    }
+  }
+
   const profile = await db.prepare("SELECT id, background_check_paid, is_background_checked, bg_check_admin_approved, stripe_onboard_complete, is_available, care_stoplight, care_preferences, account_paused FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
   if (!profile) return res.status(404).json({ error: "Caregiver profile not found" });
 

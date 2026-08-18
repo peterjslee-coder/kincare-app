@@ -478,6 +478,11 @@ async function caregiverDashboard(db, userId, res) {
       cr.latitude AS recipient_lat,
       cr.longitude AS recipient_lng,
       fu.first_name || ' ' || fu.last_name AS family_name,
+      /* v1.105.89 — you may never accept work for someone you are the family for, whoever
+         posted it. Pete's call: the conflict is with the CARE RECIPIENT, not with who happened
+         to press the button, so Sara posting for Betty is blocked for Pete too. Money moves on
+         these sessions; family-paying-family should not be reachable by accident. */
+      (cs.family_user_id = ? OR cr.family_user_id = ?) AS is_own_family,
       cp.hourly_rate AS cg_hourly_rate, cp.rate_daytime AS cg_rate_daytime,
       cp.rate_nighttime AS cg_rate_nighttime, cp.rate_overnight AS cg_rate_overnight,
       vl.check_in_time,
@@ -550,8 +555,12 @@ async function caregiverDashboard(db, userId, res) {
       AND COALESCE(fu.is_demo, 0) = ?
       /* Exclude today's sessions whose start time has already passed */
       AND NOT (cs.scheduled_date = ? AND cs.scheduled_time <= ?)
-      /* Exclude sessions requested by this same user (dual-role: can't accept your own request) */
-      AND cs.family_user_id != ?
+      /* v1.105.89 — NOT excluded any more, flagged instead. See ownFamily below.
+         Pete, a caregiver as well as a family user: "why can't i see the job i posted?" He
+         could not, because this line removed it from the list entirely — so a job he had just
+         posted was indistinguishable from a job that had failed to post. "Not there" and
+         "there but not for you" looked identical, which is the same silent absence that has
+         cost a day of debugging elsewhere in this app. */
       /* Exclude sessions exclusively offered to a DIFFERENT caregiver */
       AND (cs.offered_to_caregiver_id IS NULL OR cs.offered_to_caregiver_id = ?)
       /* Exclude sessions that have a pending or expired time proposal from this caregiver */
@@ -563,7 +572,7 @@ async function caregiverDashboard(db, userId, res) {
       )
     ORDER BY cs.scheduled_date ASC, cs.scheduled_time ASC
     LIMIT 30
-  `).all(profile.id, profile.id, today, fiveDayStr, isDemo, today, nowTimeStr, userId, profile.id, userId);
+  `).all(userId, userId, profile.id, profile.id, today, fiveDayStr, isDemo, today, nowTimeStr, profile.id, userId);
 
   // Recent reviews
   const reviews = await db.prepare(`
@@ -817,6 +826,9 @@ async function caregiverDashboard(db, userId, res) {
         // If background check not cleared, strip sensitive care recipient info
         results.push({
           id: s.id,
+          // v1.105.89 — shown, not hidden, and never acceptable. The client greys the card and
+          // drops the Accept/Propose buttons rather than leaving a gap where a job should be.
+          isOwnFamily: s.is_own_family === true || s.is_own_family === 1,
           date: s.scheduled_date,
           time: s.scheduled_time,
           serviceType: s.service_type,
