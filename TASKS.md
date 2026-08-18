@@ -294,6 +294,23 @@
 
 ### P1
 
+- [ ] **Caregivers can finish onboarding with no address, and then be findable by nobody.**
+      (Aug 18, from Pete trying to book Julia.) The booking picker offers people with a prior
+      session for this recipient, and people with coordinates in range. A caregiver who never
+      gave an address has neither, so she cannot receive a FIRST booking from anyone — a cold
+      start with no exit. v1.105.83 unblocks the case that matters most (an active
+      `bg_admin_vouches` row for this family now makes her bookable), but the general problem
+      stands for any caregiver a family has not vouched for.
+      Pete's steer: *"we might need to ask to register their phone's location if they want to
+      accept work around where they are otherwise...we may not get people's addresses in
+      onboarding."* So the options are roughly: ask for an address in onboarding; or ask for
+      device location with a clear purpose string and store a coarsened point (note
+      `coarsenCoordinate` already exists in utils/geocode.js and the family-visit nudge sets
+      the privacy precedent); or let a caregiver name a service area by town rather than a
+      precise point. Also relevant: this is the same population as the GPS P0 — location
+      permission on iOS is already unproven. **P1**
+
+
 > **Aug 18 2026 — feedback loop.** 5 new items, all from Pete on iOS native 1.105.71, all within
 > 100 minutes of each other while he was checking Julia's verification. Sentry swept as part of
 > the loop: 3 unresolved, all low-volume (2 geolocation failures that corroborate the GPS P0,

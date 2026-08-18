@@ -167,7 +167,29 @@ router.get("/suggestions", async (req, res) => {
       LEFT JOIN caregiver_assignments ca ON ca.caregiver_profile_id = cp.id
         AND ca.care_recipient_id = ? AND ca.family_user_id = ?
       LEFT JOIN reviews r ON r.caregiver_id = cp.id AND r.family_user_id = ?
-      WHERE (cs.id IS NOT NULL OR (ca.id IS NOT NULL AND ca.is_active = 1))
+      -- v1.105.83 — a caregiver you have VOUCHED for belongs in your list, even though she has
+      -- never worked a session for you.
+      --
+      -- Julia is the case. She is fully onboarded, ID approved, and Pete vouched for her — a
+      -- vouch being, per the schema, "an admin's approval of ONE caregiver working for ONE
+      -- family". The system therefore already considers her authorised to work for Betty. But
+      -- the booking picker only ever offered (a) people with a prior SESSION for this recipient
+      -- and (b) people with coordinates within range, and she has neither: no session because
+      -- she has never been booked, and no coordinates because onboarding does not require an
+      -- address.
+      --
+      -- That is a cold start with no exit. You need a booking to appear in the known list and
+      -- an address to appear in the nearby list, so a caregiver without an address can never
+      -- receive a first booking from anyone. Pete: "she's ready to go and I can't hire her
+      -- because I can't find her."
+      WHERE (
+          cs.id IS NOT NULL
+          OR (ca.id IS NOT NULL AND ca.is_active = 1)
+          OR EXISTS (
+            SELECT 1 FROM bg_admin_vouches v
+            WHERE v.caregiver_user_id = cp.user_id AND v.family_user_id = ? AND v.revoked_at IS NULL
+          )
+        )
         AND COALESCE(u.is_active, 1) = 1
         AND COALESCE(u.is_demo, 0) = ?
         AND COALESCE(cp.account_paused, 0) = 0
@@ -180,7 +202,7 @@ router.get("/suggestions", async (req, res) => {
         COALESCE(MAX(CASE WHEN ca.is_favorite = 1 THEN 1 ELSE 0 END), 0) DESC,
         COUNT(DISTINCT cs.id) DESC,
         MAX(cs.scheduled_date) DESC
-    `).all(recipientId, recipientId, userId, userId, isDemo) : [];
+    `).all(recipientId, recipientId, userId, userId, userId, isDemo) : [];
 
     const knownIds = new Set(knownCaregivers.map(c => c.caregiver_profile_id));
 

@@ -604,7 +604,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
               <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>Date</div>
               {date ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <div style={{ flex: 1, padding: '10px 14px', background: '#f0f7f5', border: '1px solid #d4edda', borderRadius: 10, fontSize: 15, fontWeight: 600, color: 'var(--role-color)' }}>
+                  <div style={{ flex: 1, padding: '10px 14px', background: 'var(--bg-primary)', border: '1px solid var(--border-light)', borderRadius: 10, fontSize: 15, fontWeight: 600, color: 'var(--role-color)' }}>
                     {(() => { const p = date.split('-').map(Number); return new Date(p[0], p[1]-1, p[2]).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }); })()}
                   </div>
                   <button type="button" onClick={() => { onClose(); if (window.__navigateTo) window.__navigateTo('schedule'); }}
@@ -623,7 +623,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
               )}
               {/* Show existing sessions for selected date */}
               {date && sessionsByDate[date] && sessionsByDate[date].length > 0 && (
-                <div style={{ marginTop: 8, padding: '8px 10px', background: 'var(--bg-highlight)', border: '1px solid #d4edda', borderRadius: 8 }}>
+                <div style={{ marginTop: 8, padding: '8px 10px', background: 'var(--bg-highlight)', border: '1px solid var(--border-light)', borderRadius: 8 }}>
                   <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--role-color)', marginBottom: 4 }}>Already scheduled:</div>
                   {sessionsByDate[date].sort((a, b) => (a.scheduled_time || '').localeCompare(b.scheduled_time || '')).map((s, si) => {
                     const t = s.scheduled_time ? (() => { const [h] = s.scheduled_time.split(':').map(Number); const ampm = h >= 12 ? 'p' : 'a'; const dh = h > 12 ? h - 12 : h === 0 ? 12 : h; return `${dh}${ampm}`; })() : '?';
@@ -789,8 +789,13 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
         {/* ═══════ STEP 2: Caregiver + Confirm ═══════ */}
         {step === 2 && (
           <>
-            {/* Compact booking summary at top */}
-            <div style={{ background: '#f0f7f5', padding: '10px 14px', borderRadius: 8, marginBottom: 16, fontSize: 13 }}>
+            {/* Compact booking summary at top.
+                v1.105.83 — this was a hardcoded '#f0f7f5' while the text uses
+                var(--text-primary), which is LIGHT in dark mode. Light on light: the whole
+                strip read as a blank white banner and hid what you were actually booking.
+                Both occurrences fixed, not just the reported one. Same family as the
+                v1.105.2 dark-mode CSS work — a colour that is only correct in one theme. */}
+            <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-light)', padding: '10px 14px', borderRadius: 8, marginBottom: 16, fontSize: 13 }}>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 16px', color: 'var(--text-primary)' }}>
                 <span><strong>{formatServiceType(resolvedServiceType)}</strong></span>
                 <span>{(() => { const p = date.split('-').map(Number); return new Date(p[0], p[1]-1, p[2]).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }); })()}</span>
