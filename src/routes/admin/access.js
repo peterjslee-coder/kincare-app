@@ -2,6 +2,7 @@
 // Route bodies are verbatim; registration ORDER across modules is preserved by
 // ./index.js. Shared state (passkey challenge store, helpers) lives in ./shared.js.
 const { v4: uuid } = require("uuid");
+const { SEVERITY } = require("../../utils/auditSeverity");
 const { getDb } = require("../../models/database");
 const { authenticate, requireAdmin } = require("../../middleware/auth");
 const { captureException } = require("../../utils/sentry");
@@ -159,7 +160,7 @@ router.post("/impersonate/:userId", async (req, res) => {
       method: 'POST', ipAddress: getClientIp(req),
       userAgent: (req.headers["user-agent"] || "").substring(0, 200),
       details: { targetUserId: target.id, targetEmail: target.email, targetName: `${target.first_name} ${target.last_name}` },
-      severity: 'warning',
+      severity: SEVERITY.WARNING,
     });
 
     console.log(`[admin] Impersonation started (passkey verified): admin ${req.user.id.slice(0,8)} → user ${target.id.slice(0,8)} (${target.first_name} ${target.last_name})`);

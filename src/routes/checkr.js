@@ -1,4 +1,5 @@
 const express = require("express");
+const { SEVERITY } = require("../utils/auditSeverity");
 const { activeVouchesFor } = require("../utils/vouches");
 const { getDb } = require("../models/database");
 const { authenticate, requireRole } = require("../middleware/auth");
@@ -656,7 +657,7 @@ router.post("/webhook", express.raw({ type: "application/json", limit: "100kb" }
           endpoint: "/api/checkr/webhook",
           method: "POST",
           details: { invitationId, candidateId: candidate_id },
-          severity: "warning",
+          severity: SEVERITY.WARNING,
         });
         break;
       }
@@ -703,7 +704,7 @@ router.post("/webhook", express.raw({ type: "application/json", limit: "100kb" }
           endpoint: "/api/checkr/webhook",
           method: "POST",
           details: { reportId, candidateId: candidate_id },
-          severity: "warning",
+          severity: SEVERITY.WARNING,
         });
         break;
       }
@@ -816,7 +817,7 @@ router.post("/webhook", express.raw({ type: "application/json", limit: "100kb" }
           endpoint: "/api/checkr/webhook",
           method: "POST",
           details: { reportId, candidateId: candidate_id },
-          severity: "warning",
+          severity: SEVERITY.WARNING,
         });
         break;
       }
@@ -961,7 +962,7 @@ router.post("/webhook", express.raw({ type: "application/json", limit: "100kb" }
           endpoint: "/api/checkr/webhook",
           method: "POST",
           details: { reportId, candidateId: candidate_id },
-          severity: "warning",
+          severity: SEVERITY.WARNING,
         });
         break;
       }

@@ -52,7 +52,7 @@
 > The through-line, again: **a broken feature and a switched-off feature look identical.** None
 > of these logged anything a user would see. Several have been live since the feature shipped.
 
-- [ ] **⛔ Features that have never once worked, and nobody can tell.** Each is a wrong column or
+- [x] **⛔ SHIPPED v1.105.65 — features that had never once worked.** All six wrong column/table names fixed; only the explanatory comments remain in the source. Verified against the code Aug 18. `lint:sql-columns` now guards the class. Each is a wrong column or
       table name that throws on every call into a `catch` that logs and returns empty. To a user
       the feature simply isn't there. All are one-line fixes; the work is verifying the intended
       column, not writing the change. **P0 as a group — this is what "silent" costs.**
@@ -78,7 +78,7 @@
     today, since the `reviews` result is never used in a prompt — but it is a wasted round trip
     on every call and the next person to use that variable inherits an always-empty array.
 
-- [ ] **⛔ `withPollerLock` can charge a family twice.** `src/models/database.js:2236–2259` races
+- [x] **⛔ SHIPPED v1.105.66 — `withPollerLock` double-charge.** Stripe PaymentIntents now carry an idempotency key (`payments.js`). Verified Aug 18. `src/models/database.js:2236–2259` races
       the tick against a 120s deadline with `Promise.race`, which does **not** cancel the work.
       On timeout the `finally` releases the advisory lock while the original tick is still
       running — overlap protection is void in exactly the case it exists for. Poller 105 is
@@ -123,7 +123,19 @@
     request, not producing the response. One `res.setTimeout` would convert this whole class
     from "infinite spinner" into "visible error".
 
-- [ ] **Predicates that read like filters and filter nothing.** Same family as the `is_read`
+- [x] **SHIPPED v1.105.77 — predicates that read like filters and filtered nothing.** The
+      no-show poller's `NULL NOT LIKE` (it had never fired for a session confirmed inside the
+      reminder window, after its start time, or while the poller was down); `login_failed`,
+      an action written nowhere, so "failed logins (24h)" was hard zero and credential stuffing
+      read as a clean night; the `warn`/`warning`/`error` vocabulary split that hid five audit
+      rows from Admin → Monitoring, now one constant in `src/utils/auditSeverity.js`;
+      hardcoded `0 AS flagged_pending`; and a sessions chart that omitted `in_progress`.
+      Pinned by `tests/vacuousPredicates.test.js`, which also sweeps for any new unguarded
+      `NOT LIKE` on a nullable column.
+      **Note:** the old entry claimed 14 `'warning'` call sites. Nine of those are business
+      insight objects in a `financials.js` API response, not `audit_log` rows. Five were real.
+
+- [ ] **(superseded) Predicates that read like filters and filter nothing.** Same family as the `is_read`
       column that produced the app-icon 78. **P1.**
   - `src/routes/accountability.js:814` — `cs.notifications_sent NOT LIKE '%no_show_flagged%'`
     on a nullable column with no default. `NULL NOT LIKE` is NULL, so the row is excluded: the
@@ -273,7 +285,7 @@
     route. `MAX_LENGTHS.text` (2000) is never enforced; message length is bounded only by the
     global body limit. A validator that looks installed and isn't.
 
-- [ ] **Still owed from v1.105.38: `src/routes/notes.js:200` puts real PHI on lock screens.**
+- [x] **SHIPPED v1.105.39 — PHI on lock screens.** The push body is now `"<author> — tap to read"`; note content never leaves the app. Verified Aug 18.
       `body: \`${authorName}: ${content.slice(0,120)}\`` — the note text itself. The family-visit
       push was deliberately built to say nothing ("Pete added a note about Betty — Tap to read")
       for exactly this reason, and the existing note push was flagged to Pete as a copy decision

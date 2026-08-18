@@ -2,6 +2,7 @@
 // Route bodies are verbatim; registration ORDER across modules is preserved by
 // ./index.js. Shared state (passkey challenge store, helpers) lives in ./shared.js.
 const { v4: uuid } = require("uuid");
+const { ELEVATED_SQL } = require("../../utils/auditSeverity");
 const { getDb } = require("../../models/database");
 const { authenticate, requireAdmin } = require("../../middleware/auth");
 const { captureException } = require("../../utils/sentry");
@@ -415,7 +416,10 @@ router.get("/briefing", requireAdmin, async (req, res) => {
           COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days') AS reviews_7d,
           ROUND(AVG(rating) FILTER (WHERE created_at > NOW() - INTERVAL '7 days'), 2) AS avg_rating_7d,
           ROUND(AVG(rating) FILTER (WHERE created_at > NOW() - INTERVAL '14 days' AND created_at <= NOW() - INTERVAL '7 days'), 2) AS avg_rating_prior_7d,
-          0 AS flagged_pending
+          -- v1.105.77 — this was hardcoded 0 and then tested with `> 0` at the consumer, so
+          -- the briefing could never mention a flagged review. The real predicate is the one
+          -- used by GET /reviews above: rating < 3 and still pending an admin decision.
+          COUNT(*) FILTER (WHERE rating < 3 AND COALESCE(admin_status, 'pending') = 'pending') AS flagged_pending
         FROM reviews
       `).get();
     } catch (e) { console.error("Briefing reviews:", e.message); briefing.reviews = {}; }
@@ -435,8 +439,14 @@ router.get("/briefing", requireAdmin, async (req, res) => {
     try {
       briefing.security = await db.prepare(`
         SELECT
-          COUNT(*) FILTER (WHERE action = 'login_failed' AND created_at > NOW() - INTERVAL '24 hours') AS failed_logins_24h,
-          COUNT(*) FILTER (WHERE severity IN ('critical', 'error') AND created_at > NOW() - INTERVAL '24 hours') AS critical_events_24h
+          -- v1.105.77 — this counted action = 'login_failed', which is NEVER WRITTEN. The
+          -- middleware records every login as action = 'login_attempt' and escalates the
+          -- severity on failure (auditLog.js: 'warn', or 'critical' past the brute-force
+          -- threshold). So "failed logins (24h)" has been hard zero since it shipped, and a
+          -- credential-stuffing run reported as a clean night. admin/monitoring.js has had
+          -- the correct predicate all along — this is it.
+          COUNT(*) FILTER (WHERE action = 'login_attempt' AND severity IN (${ELEVATED_SQL}) AND created_at > NOW() - INTERVAL '24 hours') AS failed_logins_24h,
+          COUNT(*) FILTER (WHERE severity IN (${ELEVATED_SQL}) AND created_at > NOW() - INTERVAL '24 hours') AS critical_events_24h
         FROM audit_log
       `).get();
     } catch (e) { console.error("Briefing security:", e.message); briefing.security = {}; }

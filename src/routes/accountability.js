@@ -816,7 +816,19 @@ async function pollCaregiverNoShows() {
         AND (cu.is_demo IS NULL OR cu.is_demo = 0)
         AND cs.scheduled_date IS NOT NULL
         AND cs.scheduled_time IS NOT NULL
-        AND cs.notifications_sent NOT LIKE '%no_show_flagged%'
+        -- v1.105.77 — notifications_sent is a bare nullable TEXT with no default, and in SQL
+        -- NULL NOT LIKE '...' evaluates to NULL, not TRUE. So this line did not filter out
+        -- sessions already flagged; it EXCLUDED every session that had never been notified.
+        --
+        -- Which is exactly the population this poller exists for: a visit confirmed inside the
+        -- 15-minute reminder window, or confirmed after its start time, or confirmed while the
+        -- poller was down, has notifications_sent = NULL. The no-show poller has never fired
+        -- for any of them. A caregiver not turning up is the failure the whole safety
+        -- proposition is about.
+        --
+        -- The four sibling queries in server.js (pre_check_in, pre_check_out, overdue_check_in)
+        -- all guard this correctly. This one was written without the guard.
+        AND (cs.notifications_sent IS NULL OR cs.notifications_sent NOT LIKE '%no_show_flagged%')
         AND NOT EXISTS (
           SELECT 1 FROM admin_audit_log
           WHERE target_id = cs.id::text AND action = 'restore_session'

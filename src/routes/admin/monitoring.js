@@ -2,6 +2,7 @@
 // Route bodies are verbatim; registration ORDER across modules is preserved by
 // ./index.js. Shared state (passkey challenge store, helpers) lives in ./shared.js.
 const { v4: uuid } = require("uuid");
+const { ELEVATED_SQL } = require("../../utils/auditSeverity");
 const { getDb } = require("../../models/database");
 const { authenticate, requireAdmin } = require("../../middleware/auth");
 const { captureException } = require("../../utils/sentry");
@@ -79,7 +80,7 @@ router.get("/security/dashboard", requireAdmin, async (req, res) => {
       SELECT ip_address, COUNT(*) as count, MAX(created_at) as last_attempt,
         MIN(created_at) as first_attempt, user_email
       FROM audit_log
-      WHERE action = 'login_attempt' AND severity IN ('warn', 'critical')
+      WHERE action = 'login_attempt' AND severity IN (${ELEVATED_SQL})
         AND created_at > NOW() - INTERVAL '24 hours'
       GROUP BY ip_address, user_email
       HAVING COUNT(*) >= 3
@@ -90,7 +91,7 @@ router.get("/security/dashboard", requireAdmin, async (req, res) => {
     // Critical/error events in last 7 days
     const criticalEvents = await db.prepare(`
       SELECT * FROM audit_log
-      WHERE severity IN ('critical', 'error')
+      WHERE severity IN (${ELEVATED_SQL})
         AND created_at > NOW() - INTERVAL '7 days'
       ORDER BY created_at DESC
       LIMIT 20
@@ -184,7 +185,7 @@ router.get("/security/insights", requireAdmin, async (req, res) => {
     const critEvents24h = await db.prepare(`
       SELECT id, user_id, user_email, ip_address, action, endpoint, severity, details, created_at
       FROM audit_log
-      WHERE severity IN ('critical', 'error') AND created_at > NOW() - INTERVAL '24 hours'
+      WHERE severity IN (${ELEVATED_SQL}) AND created_at > NOW() - INTERVAL '24 hours'
       ORDER BY created_at DESC
     `).all();
 
@@ -219,7 +220,7 @@ router.get("/security/insights", requireAdmin, async (req, res) => {
     const critWeek = await db.prepare(`
       SELECT DATE(created_at) as day, COUNT(*) as cnt
       FROM audit_log
-      WHERE severity IN ('critical', 'error') AND created_at > NOW() - INTERVAL '7 days'
+      WHERE severity IN (${ELEVATED_SQL}) AND created_at > NOW() - INTERVAL '7 days'
       GROUP BY DATE(created_at) ORDER BY day
     `).all();
     const totalCrit7d = critWeek.reduce((s, r) => s + Number(r.cnt), 0);
@@ -279,7 +280,7 @@ router.get("/security/insights", requireAdmin, async (req, res) => {
     const failedLogins24h = await db.prepare(`
       SELECT ip_address, user_email, COUNT(*) as cnt, MAX(created_at) as last_at
       FROM audit_log
-      WHERE action = 'login_attempt' AND severity IN ('warn', 'critical')
+      WHERE action = 'login_attempt' AND severity IN (${ELEVATED_SQL})
         AND created_at > NOW() - INTERVAL '24 hours'
       GROUP BY ip_address, user_email
       ORDER BY cnt DESC
@@ -303,12 +304,12 @@ router.get("/security/insights", requireAdmin, async (req, res) => {
       // Trend: compare to last 6h vs 6h before that
       const recent6h = await db.prepare(`
         SELECT COUNT(*) as cnt FROM audit_log
-        WHERE action = 'login_attempt' AND severity IN ('warn', 'critical')
+        WHERE action = 'login_attempt' AND severity IN (${ELEVATED_SQL})
           AND created_at > NOW() - INTERVAL '6 hours'
       `).get();
       const prior6h = await db.prepare(`
         SELECT COUNT(*) as cnt FROM audit_log
-        WHERE action = 'login_attempt' AND severity IN ('warn', 'critical')
+        WHERE action = 'login_attempt' AND severity IN (${ELEVATED_SQL})
           AND created_at BETWEEN NOW() - INTERVAL '12 hours' AND NOW() - INTERVAL '6 hours'
       `).get();
       const r6 = Number(recent6h?.cnt || 0);

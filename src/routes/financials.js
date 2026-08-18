@@ -230,7 +230,15 @@ router.get("/daily-snapshot", async (req, res) => {
       SELECT DATE(cs.scheduled_date) AS day, COUNT(*) AS cnt
       FROM care_sessions cs
       JOIN users u ON cs.family_user_id = u.id
-      WHERE cs.status IN ('completed', 'confirmed', 'checked_in', 'scheduled')
+      -- v1.105.77 — 'checked_in' and 'scheduled' are never written to care_sessions.status
+      -- (the schema default is 'pending'; the lifecycle is open → pending → accepted →
+      -- confirmed → in_progress → completed, plus cancelled/declined/expired). So two of the
+      -- four values here matched nothing, while 'in_progress' — a visit being delivered right
+      -- now — was omitted from the admin sessions-per-day chart entirely.
+      --
+      -- Counting a session that is HAPPENING is the point of the chart, so it is included.
+      -- Terminal-negative states (cancelled, declined, expired) stay out.
+      WHERE cs.status IN ('completed', 'confirmed', 'in_progress')
         AND cs.scheduled_date::date >= CURRENT_DATE - INTERVAL '55 days'
         AND COALESCE(u.is_demo, 0) = 0 ${NO_DEMO_CAREGIVER}
       GROUP BY DATE(cs.scheduled_date) ORDER BY day ASC

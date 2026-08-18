@@ -3,26 +3,27 @@
 // Writes to the audit_log table asynchronously (non-blocking).
 
 const { getDb } = require("../models/database");
+const { SEVERITY } = require("../utils/auditSeverity");
 
 // Endpoints that should be audit-logged, with severity and action labels
 const SENSITIVE_PATTERNS = [
   // Admin write operations — higher sensitivity
-  { pattern: /^\/api\/admin/, method: "POST|PUT|PATCH|DELETE", action: "admin_write", severity: "warn" },
+  { pattern: /^\/api\/admin/, method: "POST|PUT|PATCH|DELETE", action: "admin_write", severity: SEVERITY.WARNING },
   // Admin reads — normal info (loading dashboard, stats, etc.)
   { pattern: /^\/api\/admin/, action: "admin_access", severity: "info" },
   // Auth events
   { pattern: /^\/api\/auth\/login/, action: "login_attempt", severity: "info" },
   { pattern: /^\/api\/auth\/register/, action: "registration", severity: "info" },
   { pattern: /^\/api\/auth\/passkey/, action: "passkey_auth", severity: "info" },
-  { pattern: /^\/api\/auth\/reset/, action: "password_reset", severity: "warn" },
+  { pattern: /^\/api\/auth\/reset/, action: "password_reset", severity: SEVERITY.WARNING },
   // Sensitive data access
   { pattern: /^\/api\/caregivers\/.*\/profile/, action: "caregiver_profile_access", severity: "info" },
   { pattern: /^\/api\/care-recipients/, action: "care_recipient_access", severity: "info" },
   { pattern: /^\/api\/sessions\/.*\/(cancel|claim|check-in|check-out|checkout|review)/, action: "session_action", severity: "info" },
   // Accountability actions (nobody-home / no-show / disputes) — evidence-relevant
-  { pattern: /^\/api\/accountability\/(family-no-show|late-resolution|dispute)/, action: "accountability_action", severity: "warn" },
+  { pattern: /^\/api\/accountability\/(family-no-show|late-resolution|dispute)/, action: "accountability_action", severity: SEVERITY.WARNING },
   // Document writes (upload, delete, review) — higher sensitivity
-  { pattern: /^\/api\/documents/, method: "POST|PUT|DELETE", action: "document_write", severity: "warn" },
+  { pattern: /^\/api\/documents/, method: "POST|PUT|DELETE", action: "document_write", severity: SEVERITY.WARNING },
   // Document reads — normal info
   { pattern: /^\/api\/documents/, action: "document_access", severity: "info" },
   { pattern: /^\/api\/onboarding/, action: "onboarding_data", severity: "info" },
@@ -97,7 +98,7 @@ function auditLogMiddleware(req, res, next) {
 
     // Escalate severity for failures
     if (statusCode >= 400) {
-      severity = statusCode >= 500 ? "error" : "warn";
+      severity = statusCode >= 500 ? SEVERITY.CRITICAL : SEVERITY.WARNING;  // v1.105.77 — "error" was never read by any filter
     }
 
     // Track failed logins for anomaly detection
@@ -109,7 +110,7 @@ function auditLogMiddleware(req, res, next) {
       failedLogins.set(ip, existing);
 
       if (existing.count >= FAILED_LOGIN_THRESHOLD) {
-        severity = "critical";
+        severity = SEVERITY.CRITICAL;
         details.failedLoginCount = existing.count;
         details.failedLoginWindow = `${Math.round((existing.lastAt - existing.firstAt) / 1000)}s`;
         details.anomaly = "brute_force_suspect";
