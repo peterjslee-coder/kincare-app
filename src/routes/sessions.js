@@ -406,7 +406,19 @@ router.put("/:id/decline", async (req, res) => {
 
     // Only the caregiver it was actually sent to may decline it. An open request nobody was
     // named on is declined by simply not claiming it.
-    if (session.caregiver_id !== profile.id) {
+    //
+    // v1.105.91 — this checked ONLY caregiver_id, and a request directed at someone does not
+    // set that column. Booking a specific caregiver writes offered_to_caregiver_id
+    // (`isExclusive ? bookCaregiverId : null`) and leaves caregiver_id NULL until the job is
+    // claimed. So every real directed request answered "Care request not found" — Julia:
+    // "When I try to decline the request, it says it's not found."
+    //
+    // My integration test built the session by hand WITH caregiver_id set, so it tested the
+    // shape I assumed rather than the shape the app creates. It passed, and the feature never
+    // worked once. The test is corrected alongside this.
+    const isDirectedAtMe = session.caregiver_id === profile.id
+      || session.offered_to_caregiver_id === profile.id;
+    if (!isDirectedAtMe) {
       return res.status(404).json({ error: "Care request not found" });
     }
     if (!["requested", "open", "pending"].includes(session.status)) {
@@ -417,7 +429,7 @@ router.put("/:id/decline", async (req, res) => {
 
     await db.prepare(`
       UPDATE care_sessions
-         SET caregiver_id = NULL, status = 'declined',
+         SET caregiver_id = NULL, offered_to_caregiver_id = NULL, status = 'declined',
              declined_by = ?, declined_at = NOW(), decline_reason = ?, updated_at = NOW()
        WHERE id = ?
     `).run(req.user.id, reason, req.params.id);

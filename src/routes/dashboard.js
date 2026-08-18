@@ -767,7 +767,11 @@ async function caregiverDashboard(db, userId, res) {
         exclusiveUntil: s.exclusive_until || null,
         familyName: s.family_name || null,
         healthTags: (() => { try { return JSON.parse(s.cr_health_conditions || '[]').slice(0, 3); } catch { return []; } })(),
-        careSummary: s.cr_caregiver_briefing ? s.cr_caregiver_briefing.substring(0, 200) : null,
+        // v1.105.91 — sent in FULL. It was cut to 200 characters here, so v1.105.88's
+        // "Read more" could only ever expand to what the server had already thrown away.
+        // Julia: "Still doesn't show her full description when I click to see it. Only
+        // partly." I fixed the visible half and never checked the producer.
+        careSummary: s.cr_caregiver_briefing || null,
         recipientCity: s.location_city || null,
         recipientLat: s.recipient_lat || null,
         recipientLng: s.recipient_lng || null,
@@ -853,7 +857,8 @@ async function caregiverDashboard(db, userId, res) {
           offeredToCaregiverId: s.offered_to_caregiver_id || null,
           exclusiveUntil: s.exclusive_until || null,
           recipientAge: bgCleared ? (s.recipient_age || null) : null,
-          careSummary: bgCleared ? (s.cr_caregiver_briefing ? s.cr_caregiver_briefing.substring(0, 200) : null) : null,
+          // v1.105.91 — full text for a cleared caregiver; still withheld entirely otherwise.
+          careSummary: bgCleared ? (s.cr_caregiver_briefing || null) : null,
           healthTags: bgCleared ? (() => { try { return JSON.parse(s.cr_health_conditions || '[]').slice(0, 3); } catch { return []; } })() : [],
           recipientLat: bgCleared ? (s.recipient_lat || null) : null,
           recipientLng: bgCleared ? (s.recipient_lng || null) : null,

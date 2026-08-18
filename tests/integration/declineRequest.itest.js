@@ -22,7 +22,17 @@ beforeAll(async () => {
 });
 afterAll(async () => { await stopHarness(h); });
 
-async function directedRequest({ status = "pending" } = {}) {
+// v1.105.91 — build the session the way the APP builds it.
+//
+// The first version of this helper set caregiver_id directly. That is not what booking a
+// specific caregiver does: sessions.js writes `isExclusive ? bookCaregiverId : null` into
+// offered_to_caregiver_id and leaves caregiver_id NULL until the job is claimed. So the tests
+// exercised a shape that never occurs, passed, and the decline endpoint 404'd on every real
+// request. Julia found it in an hour.
+//
+// `directed` = offered_to_caregiver_id, the real shape. `claimed` = caregiver_id, which also
+// has to keep working.
+async function directedRequest({ status = "pending", shape = "directed" } = {}) {
   const db = await getDb();
   const family = await h.createUser({ firstName: "Pete", roles: ["family"] });
   const cg = await h.createUser({ firstName: "Julia", roles: ["caregiver"] });
@@ -32,9 +42,14 @@ async function directedRequest({ status = "pending" } = {}) {
   await db.prepare("INSERT INTO care_recipients (id, family_user_id, first_name, last_name) VALUES (?, ?, 'Betty', 'T')").run(recipientId, family.user.id);
   const sessionId = uuid();
   await db.prepare(`
-    INSERT INTO care_sessions (id, care_recipient_id, family_user_id, caregiver_id, service_type, status, scheduled_date, scheduled_time)
-    VALUES (?, ?, ?, ?, 'companionship', ?, '2026-08-19', '17:00')
-  `).run(sessionId, recipientId, family.user.id, profileId, status);
+    INSERT INTO care_sessions (id, care_recipient_id, family_user_id, caregiver_id, offered_to_caregiver_id, service_type, status, scheduled_date, scheduled_time)
+    VALUES (?, ?, ?, ?, ?, 'companionship', ?, '2026-08-19', '17:00')
+  `).run(
+    sessionId, recipientId, family.user.id,
+    shape === "claimed" ? profileId : null,
+    shape === "directed" ? profileId : null,
+    status
+  );
   return { db, family, cg, profileId, sessionId };
 }
 
@@ -47,9 +62,10 @@ describe("declining a request sent to you", () => {
     const res = await decline(cg.token, sessionId, { reason: "I'm away that week" });
     expect(res.status).toBe(200);
 
-    const row = await db.prepare("SELECT status, caregiver_id, declined_by, decline_reason FROM care_sessions WHERE id = ?").get(sessionId);
+    const row = await db.prepare("SELECT status, caregiver_id, offered_to_caregiver_id, declined_by, decline_reason FROM care_sessions WHERE id = ?").get(sessionId);
     expect(row.status).toBe("declined");
-    expect(row.caregiver_id).toBeNull();          // no longer hers
+    expect(row.caregiver_id).toBeNull();              // no longer hers
+    expect(row.offered_to_caregiver_id).toBeNull();   // and no longer offered to her
     expect(row.declined_by).toBe(cg.user.id);     // but we remember it was her
     expect(row.decline_reason).toBe("I'm away that week");
   });
@@ -97,5 +113,24 @@ describe("who may decline what", () => {
     const { cg, sessionId } = await directedRequest();
     expect((await decline(cg.token, sessionId)).status).toBe(200);
     expect((await decline(cg.token, sessionId)).status).toBe(404); // caregiver_id is now null
+  });
+});
+
+describe("the shape the app actually creates", () => {
+  test("a request DIRECTED at her (offered_to_caregiver_id) can be declined", async () => {
+    // The one that was broken: booking a specific caregiver never sets caregiver_id.
+    const { cg, sessionId } = await directedRequest({ shape: "directed" });
+    expect((await decline(cg.token, sessionId)).status).toBe(200);
+  });
+
+  test("a request she has already CLAIMED (caregiver_id) can still be declined", async () => {
+    const { cg, sessionId } = await directedRequest({ shape: "claimed" });
+    expect((await decline(cg.token, sessionId)).status).toBe(200);
+  });
+
+  test("an open request offered to nobody is still not declinable", async () => {
+    // You decline an open job by not claiming it.
+    const { cg, sessionId } = await directedRequest({ shape: "open" });
+    expect((await decline(cg.token, sessionId)).status).toBe(404);
   });
 });
