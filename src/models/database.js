@@ -43,7 +43,41 @@ function getPool() {
 // Convert SQLite-style ? params to PostgreSQL $1, $2, ...
 function convertParams(sql) {
   let idx = 0;
-  return sql.replace(/\?/g, () => `$${++idx}`);
+  // v1.105.90 — skip anything that is not actually a placeholder.
+  //
+  // This was a naive global replace, so EVERY `?` in the string became a bind parameter —
+  // including one inside a SQL comment. A comment quoting Pete ("why can't i see the job i
+  // posted?") silently became placeholder #11 on a 10-argument query, and every caregiver
+  // dashboard 500'd with "bind message supplies 10 parameters, but prepared statement requires
+  // 11". The query was correct; the comment was not code.
+  //
+  // Single-quoted literals are skipped for the same reason: a '?' inside one is data, and
+  // there are already queries in this codebase with LIKE patterns and punctuation in strings.
+  let out = "";
+  for (let i = 0; i < sql.length; i++) {
+    const two = sql.slice(i, i + 2);
+    if (two === "--") {                       // line comment
+      const nl = sql.indexOf("\n", i);
+      const end = nl === -1 ? sql.length : nl;
+      out += sql.slice(i, end); i = end - 1; continue;
+    }
+    if (two === "/*") {                       // block comment
+      const close = sql.indexOf("*/", i + 2);
+      const end = close === -1 ? sql.length : close + 2;
+      out += sql.slice(i, end); i = end - 1; continue;
+    }
+    if (sql[i] === "'") {                     // string literal, '' escapes a quote
+      let j = i + 1;
+      while (j < sql.length) {
+        if (sql[j] === "'" && sql[j + 1] === "'") { j += 2; continue; }
+        if (sql[j] === "'") break;
+        j++;
+      }
+      out += sql.slice(i, j + 1); i = j; continue;
+    }
+    out += sql[i] === "?" ? `$${++idx}` : sql[i];
+  }
+  return out;
 }
 
 /**

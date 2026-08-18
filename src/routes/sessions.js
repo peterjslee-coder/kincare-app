@@ -458,24 +458,25 @@ router.put("/:id/claim", async (req, res) => {
   }
 
   const db = await getDb();
-  // ─── v1.105.89: the hard rule comes before the setup nags ───
+  // ─── v1.105.90: you cannot accept a request you posted yourself ───
   //
-  // You may not accept work for someone you are the family for, whoever posted it. This ran
-  // AFTER the Stripe/preferences gates at first, so Pete — who can never take this job at all —
-  // was told "Please set your care preferences before accepting jobs". A true sentence that
-  // answers a question nobody asked, in place of the real reason. Same class as everything else
-  // fixed today: a message that is confidently about the wrong thing.
+  // Narrower than v1.105.89, which blocked any job for a recipient you are the family for.
+  // Pete: "if sara posts a job and i have to take it, I'll take the pay for it. do not
+  // prohibit members of the team from also doing things for money if they can't hire
+  // someone." Correct — the point of the team is that the work gets covered, and someone
+  // covering a shift nobody else will take should be paid for it.
   //
-  // It also has to live here rather than in the dashboard query. Hiding the job made the
-  // endpoint unreachable through the UI while leaving it open to anything that knew a session
-  // id — and as of this version the job is deliberately visible.
+  // What remains is only the incoherent case: accepting your own request means paying
+  // yourself for it.
+  //
+  // It lives here rather than in the dashboard query because hiding the job made the endpoint
+  // unreachable through the UI while leaving it open to anything that knew a session id — and
+  // the job is now deliberately visible. It runs BEFORE the Stripe/preferences gates so the
+  // reason given is the real one, not "set your care preferences".
   {
-    const s0 = await db.prepare("SELECT family_user_id, care_recipient_id FROM care_sessions WHERE id = ?").get(req.params.id);
-    if (s0) {
-      const recipient = await db.prepare("SELECT family_user_id FROM care_recipients WHERE id = ?").get(s0.care_recipient_id);
-      if (s0.family_user_id === req.user.id || recipient?.family_user_id === req.user.id) {
-        return res.status(403).json({ error: "You can't accept work for someone you're the family for." });
-      }
+    const s0 = await db.prepare("SELECT family_user_id FROM care_sessions WHERE id = ?").get(req.params.id);
+    if (s0 && s0.family_user_id === req.user.id) {
+      return res.status(403).json({ error: "You can't accept a request you posted yourself." });
     }
   }
 

@@ -1,5 +1,5 @@
 /**
- * v1.105.89 — your own family's job: visible, never acceptable.
+ * v1.105.90 — your own POSTED request: visible, and not acceptable by you.
  *
  * Pete is a caregiver as well as a family user: "i'm also a caregiver. why can't i see the job
  * i posted?" He could not, because the dashboard query removed it from the list entirely — so
@@ -48,16 +48,18 @@ describe("the server refuses the claim, not just the UI", () => {
     const { pete, sessionId } = await scenario();
     const res = await h.request.put(`/api/sessions/${sessionId}/claim`).set(h.auth(pete.token));
     expect(res.status).toBe(403);
-    expect(res.body.error).toMatch(/family for/i);
+    expect(res.body.error).toMatch(/posted yourself/i);
   });
 
-  test("Pete cannot claim it when SARA posted it either", async () => {
-    // Pete's call: the conflict is with the care recipient, not with who pressed the button.
-    // Before this version the exclusion was on family_user_id, so Sara posting for Betty would
-    // have let Pete accept and be paid for his own mother's visit.
-    const { pete, sessionId } = await scenario({ postedBy: "sara" });
+  test("Pete CAN claim it when Sara posted it, and gets paid", async () => {
+    // v1.105.90 reversed v1.105.89 here, on Pete's instruction: "if sara posts a job and i have
+    // to take it, I'll take the pay for it. do not prohibit members of the team from also doing
+    // things for money if they can't hire someone." The point of the team is that the work gets
+    // covered; someone covering a shift nobody else will take should be paid for it.
+    const { db, pete, sessionId } = await scenario({ postedBy: "sara" });
+    await db.prepare("UPDATE caregiver_profiles SET care_preferences = '{}' WHERE user_id = ?").run(pete.user.id);
     const res = await h.request.put(`/api/sessions/${sessionId}/claim`).set(h.auth(pete.token));
-    expect(res.status).toBe(403);
+    expect([200, 201]).toContain(res.status);
   });
 
   test("an unrelated caregiver can still claim it", async () => {

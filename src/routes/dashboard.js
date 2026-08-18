@@ -478,11 +478,6 @@ async function caregiverDashboard(db, userId, res) {
       cr.latitude AS recipient_lat,
       cr.longitude AS recipient_lng,
       fu.first_name || ' ' || fu.last_name AS family_name,
-      /* v1.105.89 — you may never accept work for someone you are the family for, whoever
-         posted it. Pete's call: the conflict is with the CARE RECIPIENT, not with who happened
-         to press the button, so Sara posting for Betty is blocked for Pete too. Money moves on
-         these sessions; family-paying-family should not be reachable by accident. */
-      (cs.family_user_id = ? OR cr.family_user_id = ?) AS is_own_family,
       cp.hourly_rate AS cg_hourly_rate, cp.rate_daytime AS cg_rate_daytime,
       cp.rate_nighttime AS cg_rate_nighttime, cp.rate_overnight AS cg_rate_overnight,
       vl.check_in_time,
@@ -542,7 +537,13 @@ async function caregiverDashboard(db, userId, res) {
       cr.health_conditions AS cr_health_conditions,
       cr.caregiver_briefing AS cr_caregiver_briefing,
       cr.age AS recipient_age,
-      fu.first_name || ' ' || fu.last_name AS family_name
+      fu.first_name || ' ' || fu.last_name AS family_name,
+      /* v1.105.90 — a request YOU posted. Shown rather than hidden, and not acceptable by you,
+         because accepting it would mean paying yourself. Nothing broader than that: Pete's
+         instruction is explicit — "do not prohibit members of the team from also doing things
+         for money if they can't hire someone." If Sara posts for Betty and nobody else takes
+         it, Pete takes it and gets paid. */
+      (cs.family_user_id = ?) AS is_own_request
     FROM care_sessions cs
     LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
     LEFT JOIN users fu ON cs.family_user_id = fu.id
@@ -572,7 +573,7 @@ async function caregiverDashboard(db, userId, res) {
       )
     ORDER BY cs.scheduled_date ASC, cs.scheduled_time ASC
     LIMIT 30
-  `).all(userId, userId, profile.id, profile.id, today, fiveDayStr, isDemo, today, nowTimeStr, profile.id, userId);
+  `).all(userId, profile.id, profile.id, today, fiveDayStr, isDemo, today, nowTimeStr, profile.id, userId);
 
   // Recent reviews
   const reviews = await db.prepare(`
@@ -828,7 +829,7 @@ async function caregiverDashboard(db, userId, res) {
           id: s.id,
           // v1.105.89 — shown, not hidden, and never acceptable. The client greys the card and
           // drops the Accept/Propose buttons rather than leaving a gap where a job should be.
-          isOwnFamily: s.is_own_family === true || s.is_own_family === 1,
+          isOwnRequest: s.is_own_request === true || s.is_own_request === 1,
           date: s.scheduled_date,
           time: s.scheduled_time,
           serviceType: s.service_type,
