@@ -271,7 +271,20 @@
 > the loop: 3 unresolved, all low-volume (2 geolocation failures that corroborate the GPS P0,
 > 1 bot probe). No hidden P0 this time.
 
-- [ ] **🔴 Julia is verified to the admin and unverified to herself — AGAIN, post-v1.105.70.**
+- [x] **🔴 FIXED v1.105.75 — Julia was verified to the admin and unverified to herself.**
+      Not two producers disagreeing: the client never asked. `checkIdentity()` and
+      `checkStripe()` sat inside a `useEffect` opening `if (activeTab !== 'earnings') return;`
+      and the hub opens on `'schedule'`, so on the landing screen both states held their
+      initial values and both initial values read as "no". First Steps told an approved
+      caregiver to photograph her ID and a connected caregiver to connect Stripe; `stripeStatus`
+      is also a term in `_autoStepCount`, so that count could never reach 6, `mark-onboarding-
+      complete` never fired, and `showFirstSteps` never went false — which is why the whole
+      panel never went away. Both fetches now run on mount, and an unanswered fetch no longer
+      renders as a denial. **Note for whoever reads this next: v1.105.68 fixed the VOUCH term of
+      that same count and did not notice a second term was only fetched on a tab most caregivers
+      never open. Check the other terms.**
+
+- [ ] **(superseded, kept for the trail) Julia verified to admin, unverified to herself.**
       (feedback 52cbb793) Pete: *"Julia shows is completely verified on my side. When I am
       personally as her, it still has lots of complete your profile verify your identity. Crap
       she has to deal with. It's very confusing for her."* He saw this **through Test Mode from

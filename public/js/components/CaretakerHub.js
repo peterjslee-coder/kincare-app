@@ -144,7 +144,10 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const [stripeError, setStripeError] = useState(null);
 
   // Stripe Identity Verification state
-  const [idVerification, setIdVerification] = useState({ verified: false, status: 'none' });
+  // v1.105.75 — `loaded` matters: before it is true we have not ASKED yet, and "we haven't
+  // asked" must not render as "you haven't submitted". That conflation is the same shape as the
+  // selfie's 0% in v1.105.73 — an absent value rendered as a verdict.
+  const [idVerification, setIdVerification] = useState({ verified: false, status: 'unknown', loaded: false });
   const [idVerLoading, setIdVerLoading] = useState(false);
   const [idVerError, setIdVerError] = useState(null);
 
@@ -372,6 +375,63 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   }, [activeTab]);
 
   // Fetch completed sessions when earnings tab is active
+  // ─── Account status the WHOLE hub depends on (v1.105.75) ───
+  //
+  // These two fetches used to live inside the effect below, behind
+  // `if (activeTab !== 'earnings') return;`. The hub opens on 'schedule'. So on the screen a
+  // caregiver actually lands on, neither had ever run, and both states sat at their initial
+  // values — which read as "no" everywhere:
+  //
+  //   idVerification  → First Steps told an APPROVED caregiver "Take a selfie and photo of
+  //                     your ID". That is what Julia saw, and what Pete saw impersonating her,
+  //                     while the admin panel (which asks the server directly) said verified.
+  //   stripeStatus    → First Steps said "Connect Stripe to continue" to someone already
+  //                     connected AND, worse, it is one of the six terms in _autoStepCount
+  //                     below. That count never reached 6, so the auto-complete effect never
+  //                     fired and onboarding stayed false forever. v1.105.68 fixed the VOUCH
+  //                     term of that same count for exactly this reason and did not notice
+  //                     that another term was only fetched on a tab most caregivers never open.
+  //
+  // Because the checklist could never complete, `showFirstSteps` never went false either — so
+  // the whole "complete your profile" panel stayed on screen permanently. Pete: "it still has
+  // lots of complete your profile verify your identity. Crap she has to deal with."
+  //
+  // Runs on mount, tab-independent. Nothing about identity or payouts is an earnings concern.
+  useEffect(() => {
+    let cancelled = false;
+
+    // v1.105.64 — this asks the endpoint the GATE reads. It used to ask
+    // /api/payments/identity/status, which is Stripe Identity: a third system nothing gates on.
+    const checkIdentity = async () => {
+      try {
+        const res = await apiFetch('/api/caregiver-onboarding/identity-status');
+        if (cancelled) return;
+        if (res?.ok) {
+          const d = await res.json();
+          if (!cancelled) setIdVerification({ submitted: !!d.submitted, status: d.status, verified: d.status === 'approved', loaded: true });
+        } else if (!cancelled) {
+          setIdVerification({ submitted: false, status: null, verified: false, loaded: true, loadFailed: true });
+        }
+      } catch (err) {
+        if (!cancelled) setIdVerification({ submitted: false, status: null, verified: false, loaded: true, loadFailed: true });
+      }
+    };
+
+    const checkStripe = async () => {
+      try {
+        const sRes = await apiFetch('/api/payments/connect/status');
+        if (sRes?.ok && !cancelled) {
+          const sData = await sRes.json();
+          if (!cancelled) setStripeStatus(sData);
+        }
+      } catch (err) { /* Stripe not configured yet — that's ok */ }
+    };
+
+    checkIdentity();
+    checkStripe();
+    return () => { cancelled = true; };
+  }, []);
+
   useEffect(() => {
     if (activeTab !== 'earnings') return;
     const fetchCompleted = async () => {
@@ -414,42 +474,6 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
     };
     fetchManualPayments();
 
-    // Also check Stripe Connect status
-    const checkStripe = async () => {
-      try {
-        const sRes = await apiFetch('/api/payments/connect/status');
-        if (sRes?.ok) {
-          const sData = await sRes.json();
-          setStripeStatus(sData);
-        }
-      } catch (err) { /* Stripe not configured yet — that's ok */ }
-    };
-    checkStripe();
-
-    // Identity verification status.
-    //
-    // v1.105.64 — this used to ask /api/payments/identity/status, which is STRIPE Identity: a
-    // third system that writes caregiver_profiles.identity_verified and that nothing in the
-    // app gates on. The result was then assigned to `idVerified` and never rendered — computed
-    // and dropped. So the one hard gate on caregiver onboarding had no representation anywhere
-    // a caregiver could see, and the status we did fetch was the wrong system's.
-    //
-    // /api/caregiver-onboarding/identity-status is the one the gate reads (and, since
-    // v1.105.64, it accepts a My Account submission too — see src/utils/identity.js).
-    const checkIdentity = async () => {
-      try {
-        const res = await apiFetch('/api/caregiver-onboarding/identity-status');
-        if (res?.ok) {
-          const d = await res.json();
-          setIdVerification({ submitted: !!d.submitted, status: d.status, verified: d.status === 'approved' });
-        } else {
-          setIdVerification({ submitted: false, status: null, verified: false, loadFailed: true });
-        }
-      } catch (err) {
-        setIdVerification({ submitted: false, status: null, verified: false, loadFailed: true });
-      }
-    };
-    checkIdentity();
   }, [activeTab]);
 
   // Stripe Connect embedded onboarding state
@@ -965,7 +989,9 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       label: 'Set up Stripe and connect your bank account',
       desc: 'Connect your bank account to receive payments for care sessions. Stripe handles everything securely.',
       done: stripeConnected || stripeOverride,
-      missing: !(stripeConnected || stripeOverride) ? 'Connect Stripe to continue' : null },
+      // v1.105.75 — stripeStatus starts null and only becomes real once /connect/status
+      // answers; null means "not asked yet", not "not connected".
+      missing: (stripeConnected || stripeOverride || stripeStatus === null) ? null : 'Connect Stripe to continue' },
     { id: 'background-check',
       label: 'Start your background check',
       // v1.105.63 — the fee sentence is the first thing this step says, and it used to say it
@@ -997,10 +1023,15 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       label: 'Verify your identity',
       desc: 'A selfie and a photo of your government-issued ID. Families are inviting you into their home — this is the step that lets them know who you are. A person reviews it.',
       done: idApproved,
-      missing: idVerification.loadFailed
-        ? 'Couldn’t check your verification status — tap to try again'
-        : (!idSubmitted ? 'Take a selfie and photo of your ID' : (idApproved ? null : null)),
-      warning: idVerification.loadFailed
+      // v1.105.75 — while the answer is still in flight, prompt for nothing. Telling an
+      // approved caregiver to photograph her ID because a fetch hasn't returned is how this
+      // step read for anyone who never opened the Earnings tab.
+      missing: !idVerification.loaded
+        ? null
+        : (idVerification.loadFailed
+            ? 'Couldn’t check your verification status — tap to try again'
+            : (!idSubmitted ? 'Take a selfie and photo of your ID' : null)),
+      warning: !idVerification.loaded || idVerification.loadFailed
         ? null
         : (idSubmitted && !idApproved
             ? (idVerification.status === 'rejected'
