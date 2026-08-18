@@ -155,6 +155,11 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   // render they never ran; on the next render they did, so React saw more hooks than the
   // previous render and threw. That is the white screen Julia hit. Hooks must be unconditional
   // and above every early return — mine were neither.
+  // v1.105.88 — Julia's first feedback: "When a job comes up, I should be able to click on
+  // the description and expand it. I can't as is." It was truncated at 150 characters with no
+  // way to see the rest — which is the part that tells her whether she wants the job.
+  const [expandedSummaryJobId, setExpandedSummaryJobId] = useState(null);
+
   const [decliningJob, setDecliningJob] = useState(null);
   const [declineReason, setDeclineReason] = useState('');
   const [decliningBusy, setDecliningBusy] = useState(false);
@@ -1579,7 +1584,15 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                       )}
                       {job.careSummary && (
                         <div style={{ marginTop: 6, padding: '6px 8px', background: 'var(--bg-accent-light)', borderLeft: '3px solid #7c3aed', borderRadius: 4, fontSize: 11, color: 'var(--text-primary)', lineHeight: 1.4 }}>
-                          {'\uD83D\uDCCB'} {job.careSummary.length > 150 ? job.careSummary.substring(0, 150) + '...' : job.careSummary}
+                          {'\uD83D\uDCCB'} {expandedSummaryJobId === job.id || job.careSummary.length <= 150
+                            ? job.careSummary
+                            : job.careSummary.substring(0, 150) + '\u2026'}
+                          {job.careSummary.length > 150 && (
+                            <button onClick={(e) => { e.stopPropagation(); setExpandedSummaryJobId(expandedSummaryJobId === job.id ? null : job.id); }}
+                              style={{ display: 'block', marginTop: 4, background: 'none', border: 'none', padding: 0, font: 'inherit', fontSize: 11, fontWeight: 700, color: 'var(--accent-color)', cursor: 'pointer' }}>
+                              {expandedSummaryJobId === job.id ? 'Show less' : 'Read more'}
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>
@@ -2287,7 +2300,15 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                         )}
                         {job.careSummary && (
                           <div style={{ marginTop: 6, padding: '6px 8px', background: '#f8f8f8', borderLeft: '3px solid #e8724a', borderRadius: 4, fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.4 }}>
-                            {'\uD83D\uDCCB'} {job.careSummary.length > 150 ? job.careSummary.substring(0, 150) + '...' : job.careSummary}
+                            {'\uD83D\uDCCB'} {expandedSummaryJobId === job.id || job.careSummary.length <= 150
+                            ? job.careSummary
+                            : job.careSummary.substring(0, 150) + '\u2026'}
+                          {job.careSummary.length > 150 && (
+                            <button onClick={(e) => { e.stopPropagation(); setExpandedSummaryJobId(expandedSummaryJobId === job.id ? null : job.id); }}
+                              style={{ display: 'block', marginTop: 4, background: 'none', border: 'none', padding: 0, font: 'inherit', fontSize: 11, fontWeight: 700, color: 'var(--accent-color)', cursor: 'pointer' }}>
+                              {expandedSummaryJobId === job.id ? 'Show less' : 'Read more'}
+                            </button>
+                          )}
                           </div>
                         )}
                       </div>
