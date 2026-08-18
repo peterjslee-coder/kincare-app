@@ -217,17 +217,24 @@ router.post("/verify-id", authenticate, async (req, res) => {
     );
 
     // Store selfie as a separate verified_document (for admin face comparison review)
+      // v1.105.73 — the selfie used to be inserted WITHOUT ai_confidence/ai_concerns, so the
+      // column fell to its DEFAULT of 0 and the admin preview rendered "0% confidence" next to
+      // the ID's 97%. Two different measurements, one of them never taken. The selfie's real
+      // number is the face-match similarity, so write it: the column and the JSON now agree,
+      // and `0` in this column means the faces genuinely did not match.
     if (selfieBase64) {
       const selfieDocId = uuid();
       const selfieMime = (selfieBase64.match(/^data:([^;]+);/) || [])[1] || 'image/jpeg';
       await db.prepare(
-        `INSERT INTO verified_documents (id, owner_id, owner_type, uploaded_by, category, document_type, file_data, mime_type, status, ai_classification, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO verified_documents (id, owner_id, owner_type, uploaded_by, category, document_type, file_data, mime_type, status, ai_classification, ai_confidence, ai_concerns, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).run(
         selfieDocId, ownerId, ownerType, req.user.id,
         'identity', 'selfie', await storage.storeFileData("identity", selfieBase64), selfieMime, // v1.91.0
         'approved',  // selfie itself doesn't need review — it's supporting evidence
         JSON.stringify({ linkedIdDocId: docId, faceComparison }),
+        faceComparison.skipped ? null : (typeof faceComparison.confidence === 'number' ? faceComparison.confidence : null),
+        JSON.stringify(faceComparison.skipped ? [] : (faceComparison.similar ? [] : [`Face comparison: ${faceComparison.explanation || 'faces did not match'}`])),
         new Date().toISOString()
       );
     }

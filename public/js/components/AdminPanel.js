@@ -1331,6 +1331,38 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
   // v1.105.67 — revoke the object URL on close; one preview, one blob, otherwise they pile up
   // for as long as the admin session lasts.
   // v1.105.71 — small readers for the AI analysis shown in the document preview.
+  // ─── v1.105.73 — a selfie is not a document that failed classification ───
+  //
+  // The two halves of an identity submission are stored by DIFFERENT inserts. The ID writes
+  // ai_confidence/ai_concerns/extracted_data; the selfie insert omits them, so ai_confidence
+  // falls to its column DEFAULT of 0. The selfie's ai_classification is only
+  // { linkedIdDocId, faceComparison } — no classification, isValid or matchesClaimed.
+  //
+  // Rendered through the ID's template, every one of those absences became an assertion:
+  // "Confidence 0%", "Valid document: No", "Matches claimed type: No" — about a photograph
+  // that was never scored on any of those axes. That is what an admin saw next to the ID's
+  // 97%, and the two numbers are not even the same measurement: the ID's is document
+  // CLASSIFICATION confidence ("is this a driver's licence"), the selfie's real number is FACE
+  // MATCH similarity, which was sitting unread on the same row the whole time.
+  //
+  // Nothing here needs a backfill: faceComparison has been stored on every selfie since the
+  // feature shipped. Read it.
+  const selfieFaceComparison = (dp) => {
+    const fc = dp && dp.ai && dp.ai.faceComparison;
+    return fc && typeof fc === 'object' ? fc : null;
+  };
+  const isSupportingPhoto = (dp) =>
+    !!dp && (dp.docType === 'selfie' || (!!selfieFaceComparison(dp) && !(dp.ai && dp.ai.classification)));
+
+  // Only true when the model actually produced a number. `0` is a real score; `undefined`,
+  // `null` and "the column default nobody wrote" are not, and must never render as 0%.
+  const scoredConfidence = (dp) => {
+    if (dp && dp.ai && typeof dp.ai.confidence === 'number') return dp.ai.confidence;
+    if (isSupportingPhoto(dp)) return null;   // the column default is not a verdict
+    return typeof dp.aiConfidence === 'number' ? dp.aiConfidence : null;
+  };
+  const pct = (v) => `${Math.round((v || 0) * 100)}%`;
+
   const aiExtractedRows = (dp) => {
     const f = (dp.ai && dp.ai.extractedFields) || dp.extracted;
     if (!f || typeof f !== 'object') return [];
@@ -4802,7 +4834,15 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                             <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8, color: 'var(--text-primary)' }}>AI Analysis</div>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px', fontSize: 13 }}>
                               <div><span style={{ color: 'var(--text-secondary)' }}>Classification:</span> <strong>{ai.classification?.replace(/_/g, ' ')}</strong></div>
-                              <div><span style={{ color: 'var(--text-secondary)' }}>Confidence:</span> <strong style={{ color: ai.confidence >= 0.8 ? '#27ae60' : ai.confidence >= 0.5 ? '#f39c12' : '#e74c3c' }}>{Math.round((ai.confidence || 0) * 100)}%</strong></div>
+                              {/* v1.105.73 — "Confidence" unqualified is what invited reading this
+                                  against the selfie's number as if they measured the same thing.
+                                  This is document classification confidence; the face match has
+                                  its own panel below. And an absent score is not a score of 0. */}
+                              <div><span style={{ color: 'var(--text-secondary)' }}>Document confidence:</span> {typeof ai.confidence === 'number' ? (
+                                <strong style={{ color: ai.confidence >= 0.8 ? '#27ae60' : ai.confidence >= 0.5 ? '#f39c12' : '#e74c3c' }}>{Math.round(ai.confidence * 100)}%</strong>
+                              ) : (
+                                <strong style={{ color: 'var(--text-secondary)' }}>not scored</strong>
+                              )}</div>
                               <div><span style={{ color: 'var(--text-secondary)' }}>Valid document:</span> <strong style={{ color: ai.isValid ? '#27ae60' : '#e74c3c' }}>{ai.isValid ? 'Yes' : 'No'}</strong></div>
                               <div><span style={{ color: 'var(--text-secondary)' }}>Matches claimed type:</span> <strong style={{ color: ai.matchesClaimed ? '#27ae60' : '#e74c3c' }}>{ai.matchesClaimed ? 'Yes' : 'No'}</strong></div>
                             </div>
@@ -5777,12 +5817,76 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                     </span>
                   )}
                 </div>
-                {docPreview.ai && (
+                {/* v1.105.73 — a selfie gets its OWN rows. It is supporting evidence for a face
+                    match, not a document that was classified, and rendering it through the ID's
+                    template turned four missing values into four false statements. */}
+                {docPreview.ai && isSupportingPhoto(docPreview) && (
+                  <div style={{ marginBottom: 8 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 16px' }}>
+                      <div><span style={{ color: 'var(--text-secondary)' }}>Type:</span> <strong>Selfie {'\u2014'} supporting evidence</strong></div>
+                      {selfieFaceComparison(docPreview) ? (
+                        <React.Fragment>
+                          <div>
+                            <span style={{ color: 'var(--text-secondary)' }}>Face match:</span>{' '}
+                            {selfieFaceComparison(docPreview).skipped ? (
+                              <strong style={{ color: 'var(--text-secondary)' }}>not run</strong>
+                            ) : (
+                              <strong style={{ color: selfieFaceComparison(docPreview).similar ? '#27ae60' : '#e74c3c' }}>
+                                {selfieFaceComparison(docPreview).similar ? 'Match' : 'No match'}
+                                {typeof selfieFaceComparison(docPreview).confidence === 'number'
+                                  ? ` ${'\u2014'} ${pct(selfieFaceComparison(docPreview).confidence)}`
+                                  : ''}
+                              </strong>
+                            )}
+                          </div>
+                          {selfieFaceComparison(docPreview).explanation && (
+                            <div style={{ gridColumn: '1 / -1', color: 'var(--text-tertiary)' }}>
+                              {selfieFaceComparison(docPreview).explanation}
+                            </div>
+                          )}
+                        </React.Fragment>
+                      ) : (
+                        <div><span style={{ color: 'var(--text-secondary)' }}>Face match:</span> <strong style={{ color: 'var(--text-secondary)' }}>no result recorded</strong></div>
+                      )}
+                    </div>
+                    {docPreview.ai.linkedIdDocId && (
+                      <div style={{ marginTop: 8 }}>
+                        <button
+                          onClick={() => handleDocPreview(docPreview.ai.linkedIdDocId)}
+                          style={{ background: 'none', border: 'none', padding: 0, font: 'inherit', fontSize: 13, fontWeight: 650, color: 'var(--accent-color)', cursor: 'pointer' }}
+                        >
+                          View the ID this selfie was compared against {'\u2192'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {docPreview.ai && !isSupportingPhoto(docPreview) && (
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 16px', marginBottom: 8 }}>
                     <div><span style={{ color: 'var(--text-secondary)' }}>Classification:</span> <strong>{(docPreview.ai.classification || '').replace(/_/g, ' ')}</strong></div>
-                    <div><span style={{ color: 'var(--text-secondary)' }}>Confidence:</span> <strong>{Math.round(((docPreview.ai.confidence != null ? docPreview.ai.confidence : docPreview.aiConfidence) || 0) * 100)}%</strong></div>
+                    <div>
+                      <span style={{ color: 'var(--text-secondary)' }}>Document confidence:</span>{' '}
+                      {scoredConfidence(docPreview) === null
+                        ? <strong style={{ color: 'var(--text-secondary)' }}>not scored</strong>
+                        : <strong>{pct(scoredConfidence(docPreview))}</strong>}
+                    </div>
                     <div><span style={{ color: 'var(--text-secondary)' }}>Valid document:</span> <strong>{docPreview.ai.isValid ? 'Yes' : 'No'}</strong></div>
                     <div><span style={{ color: 'var(--text-secondary)' }}>Matches claimed type:</span> <strong>{docPreview.ai.matchesClaimed ? 'Yes' : 'No'}</strong></div>
+                    {docPreview.ai.faceComparison && (
+                      <div style={{ gridColumn: '1 / -1' }}>
+                        <span style={{ color: 'var(--text-secondary)' }}>Face match against the selfie:</span>{' '}
+                        {docPreview.ai.faceComparison.skipped ? (
+                          <strong style={{ color: 'var(--text-secondary)' }}>not run</strong>
+                        ) : (
+                          <strong style={{ color: docPreview.ai.faceComparison.similar ? '#27ae60' : '#e74c3c' }}>
+                            {docPreview.ai.faceComparison.similar ? 'Match' : 'No match'}
+                            {typeof docPreview.ai.faceComparison.confidence === 'number'
+                              ? ` ${'\u2014'} ${pct(docPreview.ai.faceComparison.confidence)}`
+                              : ''}
+                          </strong>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
                 {aiExtractedRows(docPreview).length > 0 && (

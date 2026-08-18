@@ -266,6 +266,54 @@
 
 ### P1
 
+> **Aug 18 2026 — feedback loop.** 5 new items, all from Pete on iOS native 1.105.71, all within
+> 100 minutes of each other while he was checking Julia's verification. Sentry swept as part of
+> the loop: 3 unresolved, all low-volume (2 geolocation failures that corroborate the GPS P0,
+> 1 bot probe). No hidden P0 this time.
+
+- [ ] **🔴 Julia is verified to the admin and unverified to herself — AGAIN, post-v1.105.70.**
+      (feedback 52cbb793) Pete: *"Julia shows is completely verified on my side. When I am
+      personally as her, it still has lots of complete your profile verify your identity. Crap
+      she has to deal with. It's very confusing for her."* He saw this **through Test Mode from
+      his own device on 1.105.71**, so this is NOT her stale 1.105.64 bundle — v1.105.70 fixed
+      the two `setCurrentUser` sites in app.js and something ELSE is still telling her to verify.
+      Suspects, in order: the caregiver First Steps list in `CaretakerHub.js` (the 'identity'
+      step reads `idVerification.submitted` / `.verified` from
+      `/api/caregiver-onboarding/identity-status`, a different source than `user.identityStatus`
+      that MyAccount reads), and the impersonation token path. **Two surfaces disagreeing about
+      the same fact is the whole identity saga repeating.** Trace BOTH producers before touching
+      anything. **P0-adjacent — this is the one real caregiver's experience.**
+
+- [ ] **🔴 Admin identity review: the selfie says 0% confidence, the ID says 97%.**
+      (feedback 26c70f5a) Same submission, two documents, contradictory AI verdicts — and the
+      readout does not link to the selfie it is talking about. An admin cannot act on this: the
+      panel added in v1.105.71 (`aiExtractedRows`, `aiConcernList`) surfaces the AI's numbers,
+      and the numbers disagree with each other. Given the AI auto-approves government IDs with
+      no human asked, a 0%/97% split that nobody can reconcile is a liability, not a cosmetic
+      bug. Also in the same report: **the page cannot be scrolled** (only the picture scrolls),
+      and **"View photo" in Admin shows nothing** — Pete has to use View in People instead, and
+      does not know why the two differ. **P1**
+
+- [ ] **Admin page: cannot scroll to the danger zone; the ✕ hides behind the battery.**
+      (feedback 0cddfaab) Two separate unreachable-UI bugs on one screen. The ✕ is a safe-area
+      inset problem on iOS native — `env(safe-area-inset-top)`. The danger zone being
+      unreachable means an admin cannot get to destructive actions at all. Same family as the
+      scroll trap in 26c70f5a; likely the same root cause, check them together. **P1**
+
+- [ ] **Feedback screenshot picker can only attach a screenshot taken BEFORE opening feedback.**
+      (feedback 7800fca9) The picker offers camera or photo library. You cannot screenshot from
+      the camera, and the library only helps if you thought to capture the screen first — so the
+      one thing a user wants to attach (the screen they are complaining about) is the one thing
+      they cannot. Pete wants capture-the-screen-behind-the-modal. Worth checking what is
+      actually possible in a WKWebView before promising it. **P2**
+
+- [ ] **No way to attach a picture when quickly logging a visit.** (feedback e201c58c, mood
+      "terrible") The Family Visit Log quick-log path has no photo affordance. Photo notes exist
+      elsewhere (`src/routes/notes.js`), so this is wiring an existing capability into the quick
+      path, not new infrastructure. Remember the BODY-LIMIT RULE: any base64 endpoint needs BOTH
+      the route-scoped express.json limit and the limitBodySize exemption. **P2**
+
+
 > **Aug 18 2026 — the unreachable-function sweep (v1.105.72).** The Aug 18 handoff asked for a
 > gate on "fields the server computes and sends that no client ever reads." Tracing the five
 > known instances showed they were not one bug class but three: (a) a key the client never
