@@ -15,6 +15,22 @@
 > exactly one item, closed since March — which meant anyone opening this file saw an empty P0
 > and concluded nothing was urgent. These are the things that are.
 
+- [ ] **⛔ REMOVE THE GEO STATUS LINE FROM THE TOP OF THE DASHBOARD as part of fixing GPS.**
+      Pete, Aug 18: *"the gps checkin text at the top of my screen…it's not useful. if we need
+      to keep it there until we are able to fix the check in location, fine. but it's not
+      staying there long term."* His call: it stays for now, it does not stay permanently.
+      `VisitNudgeCard` (`FamilyVisitLog.js`) renders directly under the greeting in
+      `Dashboard.js`. When you are opted in but not within 1,000 ft it renders `VisitGeoStatus`
+      — *"N ft from <name>'s at last check… check now"* — and when permission is unavailable,
+      which is the branch iOS lands in, it renders the `VisitGeoInvite` opt-in card.
+      **Do not just delete it.** Both were added deliberately: v1.105.45 and v1.105.59, because
+      when it rendered nothing "the feature was on and looked identical to the feature being
+      broken, which is the whole complaint." It is a stand-in for a check-in that does not work
+      yet. The moment GPS check-in is genuinely working on a real device, the stand-in has no
+      job and comes off the home screen — move it into the Log Visit sheet or a settings row if
+      the diagnostic is still wanted. Removing it BEFORE GPS works would restore the exact
+      ambiguity .59 was written to kill. **Tied to the P0 below — same piece of work.**
+
 - [ ] **⛔ Verify GPS check-in actually works on a real iPhone before submitting.** `@capacitor/geolocation` is NOT in `package.json` or `node_modules`, and nothing calls `requestWhenInUseAuthorization()`. The Info.plist string alone may not satisfy `navigator.geolocation` in WKWebView. If it doesn't, **check-in — the app's entire safety proposition — is broken on every iPhone**, and you find out after submission. Needs Pete + a real device. **P0**
 - [x] **⛔ AI not-medical-care acknowledgment — SHIPPED v1.105.37.** One string defined once (`IPAI_NOT_MEDICAL` / `<IPAiDisclaimer>` in `IPAiBadge.js`) so the surfaces cannot drift apart: *"iPAi does not provide medical care. It can only reflect what your care team has recorded."* Carried by the care-intelligence card and the iPAi chat thread — in chat it sits with the COMPOSER, not only on the empty state, so it is on screen while an answer is being read rather than once before anyone asks. Person-to-person threads deliberately do not show it. The doctor-report path already had its acknowledged-send flow. Pinned by `tests/aiAcknowledgment.test.js`. **The age-rating answer *Medical or Treatment Information = Infrequent* is now defensible.**
 - [x] **🔒 No-passkey impersonation bypass — DECIDED Aug 4: leave it alone.** Pete's call, asked and answered. `src/routes/admin/access.js` grants a bypass when the admin has no passkey on file (logged, then proceeds). Closing it could lock him out of Test Mode on a device with no passkey registered, and that costs more than the gap does. **Do not re-raise this; it is a decision, not an oversight.**
