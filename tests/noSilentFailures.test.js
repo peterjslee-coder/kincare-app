@@ -24,14 +24,16 @@ const messages = code("public/js/components/Messages.js");
 const queue = code("public/js/offlineQueue.js");
 
 describe("a success message means it succeeded", () => {
-  test("the three CaretakerHub saves check the response first", () => {
+  test("the two live CaretakerHub saves check the response first", () => {
     // These awaited a POST, threw the result away, and then said "Profile saved!" /
     // "Work location updated!". A 400 or 403 doesn't throw, so the caregiver was told a
-    // save had happened that hadn't — and saveStoplight also left the new values on screen
-    // until a reload silently reverted them.
-    const stoplight = hub.slice(hub.indexOf("const saveStoplight"), hub.indexOf("const goToStep"));
-    expect(stoplight).toMatch(/if \(!res\?\.ok\)/);
-
+    // save had happened that hadn't.
+    //
+    // v1.105.72 — this test used to cover a third, saveStoplight, which was DELETED because
+    // nothing ever called it: care preferences are saved by MyAccount.handleSavePreferences.
+    // The assertion passed for months against a function no caregiver could reach, which is
+    // the same "looks like it works" shape the rest of this file exists to catch. A test
+    // pinning unreachable code proves nothing.
     const onboarding = hub.slice(hub.indexOf("const saveOnboardingProfile"), hub.indexOf("const saveWorkLocation"));
     expect(onboarding).toMatch(/if \(!r1\?\.ok\)/);
     expect(onboarding).toMatch(/if \(!r3\?\.ok\)/);
@@ -42,7 +44,10 @@ describe("a success message means it succeeded", () => {
 });
 
 describe("availability failures are visible — they decide what work you're offered", () => {
-  test.each([["FindWork", findWork], ["CaretakerHub", hub]])("%s tracks every rule that didn't save", (_n, src) => {
+  // v1.105.72 — CaretakerHub's copies of these three handlers were deleted: unreachable, and
+  // superseded by FindWork's, which the 'avail-rates' First Step already navigates to
+  // (CaretakerHub.js — window.__findWorkTab = 'availability'). Only the live copy is tested.
+  test.each([["FindWork", findWork]])("%s tracks every rule that didn't save", (_n, src) => {
     // Both versions fired several POSTs in a loop, checked none of them, and closed the
     // sheet regardless — so a rejected rule vanished and the caregiver lost shifts they
     // never knew were on offer.
@@ -52,7 +57,7 @@ describe("availability failures are visible — they decide what work you're off
     expect(fn).not.toMatch(/\n\s+await apiFetch\('\/api\/availability'/); // every call is tracked
   });
 
-  test.each([["FindWork", findWork], ["CaretakerHub", hub]])("%s reports a failed delete", (_n, src) => {
+  test.each([["FindWork", findWork]])("%s reports a failed delete", (_n, src) => {
     const fn = src.slice(src.indexOf("const handleDeleteRule"), src.indexOf("const startEditRule"));
     expect(fn).toMatch(/if \(!res\?\.ok\)/);
   });
@@ -102,7 +107,11 @@ describe("an empty list is an answer, not a shrug", () => {
 
 describe("the remaining silent saves", () => {
   test("pay rates report failure", () => {
-    expect(account).toMatch(/else \{ showToast\('Failed to save rates', 'error'\); \}/);
+    // v1.105.72 — this asserted against MyAccount, whose handleSaveRates was never wired to
+    // anything. v1.105.51 added the else branch to THAT copy, citing "FindWork's twin of this
+    // handler already had the else branch" — careful maintenance on code that cannot run, with
+    // a passing test on top of it. MyAccount's copy is deleted; FindWork's is the live one.
+    expect(findWork).toMatch(/showToast\('Failed to save rates', 'error'\)/);
   });
 
   test("a rejected note says so instead of leaving the text sitting there", () => {

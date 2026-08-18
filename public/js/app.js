@@ -1707,13 +1707,6 @@ const App = () => {
     { id: 'account', icon: '👤', label: 'My Account' },
   ];
 
-  // Role label for sidebar header
-  const getRoleLabel = () => {
-    if (role === 'caregiver') return 'Caregiver';
-    if (role === 'care_for') return 'Care Recipient';
-    return 'Care Team';
-  };
-
   const renderPage = () => {
     // Role-aware page rendering
     // key includes currentUser.id so demo account switches force full remount (fresh data fetch)

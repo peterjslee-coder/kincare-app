@@ -266,6 +266,66 @@
 
 ### P1
 
+> **Aug 18 2026 — the unreachable-function sweep (v1.105.72).** The Aug 18 handoff asked for a
+> gate on "fields the server computes and sends that no client ever reads." Tracing the five
+> known instances showed they were not one bug class but three: (a) a key the client never
+> mentions anywhere, (b) a relay object that rebuilds a payload field-by-field and drops fields
+> — how `identityStatus` and `idVerified` both went missing, and (c) a value computed on the
+> client and never rendered. (c) generalised into the one that shipped: **functions that are
+> written, maintained, and wired to nothing.** 22 found, all deleted; `lint:client` now fails on
+> a new one. What follows is what that sweep found and deliberately did NOT fix.
+
+- [ ] **Features whose code exists but whose UI never did.** Each was a complete, working
+      implementation with no entry point anywhere in the app — deleted in v1.105.72 because
+      unreachable code cannot be exercised, but the *capability* is genuinely missing and may be
+      wanted. Nothing regressed: no user could reach any of these.
+      - **Rename a passkey** — `MyAccount.handleRenamePasskey`. Passkeys can be added and removed
+        but never renamed, so a user with two devices sees two indistinguishable entries.
+      - **Edit the AI care summary** — `CareProfile.saveSummaryEdit`, plus `editingSummary` /
+        `editedSummary` / `savingSummary` state and a working `PUT /api/care-recipients/:id`.
+        Given the iPAi cardinal rule about AI-derived text being reviewed by a human, an edit
+        affordance here is arguably the point. **Worth a decision, not just a re-add.**
+      - **Delete a help article** — `AdminPanel.deleteHelpArticle`. Admin can create and edit
+        help articles but not remove them.
+      **P1**
+
+- [ ] **`AvailabilityTab.js` is an entire component that nothing renders.** `<AvailabilityTab`
+      appears nowhere in the codebase; it takes its handlers as props and no parent passes them.
+      CaretakerHub's copies of those handlers were the dead ones deleted in v1.105.72 — the live
+      availability editor is in `FindWork.js`, which the 'avail-rates' First Step already
+      navigates to. The file still ships in every user's bundle. Confirm nothing needs it, then
+      remove it from the `scripts` array in `build-client.js` and delete it. Not done in
+      v1.105.72 because deleting a whole component is a bigger call than deleting dead functions.
+      **P2**
+
+- [ ] **117 unused client values — the noisy half of the same sweep.** Enabling `no-unused-vars`
+      across the bundle reports 224; 77 are JSX-used components and 8 are `window.` exports
+      (both excused by the gate), 22 were the functions now deleted. The remaining ~117 are
+      mostly `useState` values whose setter is called and whose value is never read — state
+      being maintained that nothing displays. Some are harmless (`tick` counters that exist only
+      to force a re-render); some are real, e.g. `Dashboard`'s `tipAmount` / `tipCustom` /
+      `tipReason` / `tipSent`, which look like a tipping feature that computes state nothing
+      renders, and `CheckrEmbed`'s `status`. Not gated on today because the false-positive rate
+      would get the gate switched off. Reproduce with the rule enabled and the
+      function-name filter removed in `scripts/lint-client.js`. **P2**
+
+- [ ] **110 server response keys no client mentions.** The mechanism-(a) half of the sweep:
+      `res.json({...})` keys across `src/routes/` that appear nowhere in `public/`. Includes
+      whole payloads like `safety.js` (`needsApproval`, `upcomingVisits`, `cancelledVisits`),
+      `payments.js` (`achAvailable`, `sessionCost`, `manualPaymentTotal`, `pendingAmount`), and
+      `matching.js` (`reasons`, `rankedCount`). Some are legitimately internal or for external
+      callers; each needs the producer AND consumer traced before it means anything. **No gate
+      built** — too many false positives to fail CI on, and the identity cases proved this
+      mechanism is not the one that actually bit users. Triage as a list, not as a gate. **P2**
+
+- [ ] **A test can pin unreachable code and prove nothing.** `tests/noSilentFailures.test.js` had
+      four assertions against functions nobody could call, and they passed for months.
+      v1.105.51 went further and *edited* `MyAccount.handleSaveRates` to add an else branch —
+      careful maintenance on a dead function, with a green test on top. Repointed at the live
+      copies in v1.105.72. Worth a look at whether other source-matching tests assert against
+      code that is reachable. **P2**
+
+
 - [x] **Async route handlers hang instead of erroring — FIXED v1.105.37 for all 87 at once.** Express 4 does not catch a rejected promise from an `async` handler: no 500, no log, no Sentry event — the request HANGS and the client spins to its own timeout. `src/utils/asyncRoutes.js` wraps the router methods once at boot so a rejection becomes `next(err)` and lands in the existing error handler. Deliberately does not wrap 4-arg error handlers (Express reads arity) or routers (mounting needs their properties). 16 tests against a real express app, including "a handler that already responded then rejects must not double-send". Individual try/catch still wins where a handler wants its own message — this is the floor, not a replacement.
 - [x] **Silent mutations — the ones that mattered, FIXED v1.105.37.** ~240 `if (res.ok)` blocks have no `else`; most are background reads that correctly need none. These eight were user-initiated actions that failed with NO visible effect: the legal-acceptance gate (a silent lockout at the front door — the button re-enabled and nothing else happened), the caregiver's visit log (which gates their pay, and whose nested photo upload already toasted, so the outer failure was quieter than the inner one), cancel-with-review (family believes a session is cancelled while it is still booked and billable), group creation (which also stranded the UI mid-flow), care-recipient note edit and delete, remove-photo, and delete-passkey. The remaining ~230 are background reads — leave them.
 

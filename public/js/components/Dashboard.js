@@ -462,22 +462,6 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
     }
   }, [loading, data, user, acceptingInvite, invitesChecked, pendingInvites]);
 
-  const formatActivityTime = (createdAt) => {
-    if (!createdAt) return '';
-    const date = parseTimestamp(createdAt);
-    if (!date) return '';
-    const now = new Date();
-    const diffMs = now - date;
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffDays < 7) return `${diffDays}d ago`;
-    // Absolute dates render in the care-location timezone, never device time
-    return TimezoneHelper.formatTimestamp(date, data?.timezone, { month: 'short', day: 'numeric', year: 'numeric' });
-  };
-
   if (loading) return <LoadingSpinner text="Loading dashboard..." />;
 
   // Error state — API actually failed
@@ -1582,13 +1566,12 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
         </div>
       )}
 
-
       {/* Next Up — up to 10 sessions within 2 weeks, collapsed to 2 cards with fade */}
       {(() => {
         const tz = upcoming[0]?.timezone || TimezoneHelper.DEFAULT_TZ;
         const nowMs = TimezoneHelper.realNowMs();
         const todayStr = TimezoneHelper.getToday(tz);
-        const todayLocal = TimezoneHelper.parseDate(todayStr);
+
         const twoWeeksOut = new Date(nowMs + 14 * 24 * 3600000);
 
         // Sort all upcoming by date+time — exclude unclaimed open requests (shown separately below)

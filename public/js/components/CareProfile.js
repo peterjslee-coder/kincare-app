@@ -770,23 +770,6 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
     setGeneratingAI(false);
   };
 
-  const saveSummaryEdit = async () => {
-    if (!profile?.id) return;
-    setSavingSummary(true);
-    try {
-      const res = await apiFetch(`/api/care-recipients/${profile.id}`, {
-        method: 'PUT',
-        body: JSON.stringify({ aiCareSummary: editedSummary }),
-      });
-      if (res?.ok) {
-        setAiSummary(editedSummary);
-        setEditingSummary(false);
-        showToast('Care summary updated', 'success');
-      } else { showToast('Failed to save summary', 'error'); }
-    } catch { showToast('Failed to save summary', 'error'); }
-    setSavingSummary(false);
-  };
-
   if (loading) return <LoadingSpinner text="Loading care profile..." />;
   if (!profile) return <EmptyState icon="👵" title="No care recipient found" text="Add a care recipient to get started." actionLabel="+ Add Your Loved One" onAction={() => onNavigate && onNavigate('recipients')} />;
 

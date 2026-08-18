@@ -16,6 +16,7 @@
 const fs = require("fs");
 const path = require("path");
 const { ESLint } = require("eslint");
+const espree = require("espree");
 
 const ROOT = path.join(__dirname, "..");
 const PUBLIC = path.join(ROOT, "public");
@@ -107,6 +108,14 @@ function isBaselined(file, rule, message) {
 // Same silent-failure family as the lazy requires and the dead dark-mode CSS: invisible in
 // source, invisible to tests, only visible when a user opens the page. So: every capitalised
 // JSX element in the bundle must resolve to something the bundle actually declares.
+// Every capitalised name used as a JSX element anywhere in the bundle. Shared by the
+// undefined-JSX check and the unreachable-function filter.
+function collectJsxUsedNames(combinedSource) {
+  const out = new Set();
+  for (const m of combinedSource.matchAll(/<([A-Z][A-Za-z0-9_]*)(?=[\s/>])/g)) out.add(m[1]);
+  return out;
+}
+
 function findUndefinedJsxComponents(combinedSource, locate) {
   // Scan with line-owning comments blanked, not removed: a file's own prose names components
   // it does not use (`Promise<File>` in a utils.js doc comment was the first false positive),
@@ -152,6 +161,77 @@ function findUndefinedJsxComponents(combinedSource, locate) {
   return missing;
 }
 
+// ─── v1.105.72: functions that are written but never wired to anything ───
+//
+// A handler that no button calls and a feature nobody enabled look identical from the
+// outside. This is the client-side twin of the wrong-column-name class: the code is
+// present, correct, maintained — and unreachable.
+//
+// The four that prompted this, each confirmed by a repo-wide grep that found only the
+// definition:
+//
+//   CaretakerHub.handleIdentityVerify   the caregiver's own identity action — and it called
+//                                       STRIPE Identity, the third system v1.105.64 established
+//                                       nothing gates on
+//   CaretakerHub.handleStripeOnboard    payout setup, superseded by MyAccount.handleConnectStripe
+//   CaretakerHub.handleCancelJob        superseded by FindWork's live copy
+//   CaretakerHub.saveStoplight          superseded by MyAccount.handleSavePreferences
+//   MyAccount.handleSaveRates           twin of FindWork's wired copy — and v1.105.51 edited
+//                                       THIS one, the dead one, to add an else branch. A past
+//                                       session did careful maintenance on code that cannot run.
+//   CareProfile.saveSummaryEdit         an entire edit-care-summary feature, PUT call and all,
+//                                       with no entry point anywhere
+//
+// This is also exactly the handleOpenStripeDashboard incident named at the top of this file,
+// caught from the other direction: that one was CALLED but not DECLARED (no-undef), these are
+// DECLARED but never called.
+//
+// WHY FUNCTIONS ONLY. Enabling no-unused-vars wholesale reports 224 findings, 139 after
+// discounting JSX-used components and window exports. Most of the remainder are unused useState
+// values — real clutter, occasionally a real bug, but too noisy to gate on today and tracked
+// separately in TASKS.md. A gate that cries wolf gets switched off, and then it protects
+// nothing. Functions are the unambiguous case: a function nobody calls does nothing, always.
+//
+// Two escapes, both deliberate: a name used in JSX (`<Foo/>` — ESLint cannot see JSX without
+// the react plugin) and a name assigned to `window.` (the app's cross-file export mechanism).
+
+function collectFunctionNames(combinedSource) {
+  // Parse with the SAME parser and options ESLint just used, so the two agree on what the
+  // source even is. A name counts if it is bound directly to a function: `function foo()`,
+  // `const foo = () => {}`, `const foo = function () {}`.
+  let ast;
+  try {
+    ast = espree.parse(combinedSource, {
+      ecmaVersion: 2022, sourceType: "script", ecmaFeatures: { jsx: true }, loc: false,
+    });
+  } catch {
+    // If it will not parse, say nothing rather than guess. ESLint's own errors will surface.
+    return null;
+  }
+  const names = new Set();
+  const FN = new Set(["ArrowFunctionExpression", "FunctionExpression"]);
+  (function walk(node) {
+    if (!node || typeof node !== "object") return;
+    if (Array.isArray(node)) { node.forEach(walk); return; }
+    if (node.type === "FunctionDeclaration" && node.id) names.add(node.id.name);
+    if (node.type === "VariableDeclarator" && node.id && node.id.type === "Identifier" &&
+        node.init && FN.has(node.init.type)) names.add(node.id.name);
+    for (const k of Object.keys(node)) {
+      if (k === "parent") continue;
+      const v = node[k];
+      if (v && typeof v === "object") walk(v);
+    }
+  })(ast);
+  return names;
+}
+
+// Names the bundle exports across files via `window.Foo = ...` — used, just not lexically.
+function collectWindowExports(combinedSource) {
+  const out = new Set();
+  for (const m of combinedSource.matchAll(/window\.([A-Za-z0-9_$]+)\s*=/g)) out.add(m[1]);
+  return out;
+}
+
 async function main() {
   const eslint = new ESLint({
     useEslintrc: false,
@@ -166,13 +246,31 @@ async function main() {
         "no-undef": "error",
         "no-dupe-keys": "error",   // silent-overwrite bugs in object literals
         "no-unreachable": "error", // dead code after return/throw
+        // v1.105.72 — see findUnreachableFunctions. Reported here, then filtered down to
+        // function-valued bindings only; unused plain values are a separate (noisier) class.
+        "no-unused-vars": ["error", { args: "none", varsIgnorePattern: "^_", ignoreRestSiblings: true }],
       },
     },
   });
 
   const results = await eslint.lintText(combined, { filePath: path.join(PUBLIC, "js", "__combined__.js") });
   const messages = (results[0] && results[0].messages) || [];
-  const allErrors = messages.filter((m) => m.severity === 2).map((e) => ({ ...e, loc: locate(e.line) }));
+  let allErrors = messages.filter((m) => m.severity === 2).map((e) => ({ ...e, loc: locate(e.line) }));
+
+  // ── Narrow no-unused-vars down to unreachable FUNCTIONS (see collectFunctionNames) ──
+  const fnNames = collectFunctionNames(combined);
+  const jsxUsed = collectJsxUsedNames(combined);
+  const winExports = collectWindowExports(combined);
+  allErrors = allErrors.filter((e) => {
+    if (e.ruleId !== "no-unused-vars") return true;
+    const id = (e.message.match(/'([^']+)'/) || [])[1];
+    if (!id) return false;
+    if (fnNames === null) return false;       // parse failed — report nothing from this rule
+    if (!fnNames.has(id)) return false;       // not a function: the noisy class, tracked in TASKS.md
+    if (jsxUsed.has(id)) return false;        // <Foo/> — ESLint cannot see JSX references
+    if (winExports.has(id)) return false;     // window.Foo = ... — cross-file export
+    return true;
+  });
 
   const baselined = allErrors.filter((e) => isBaselined(e.loc.file, e.ruleId, e.message));
   const errors = allErrors.filter((e) => !isBaselined(e.loc.file, e.ruleId, e.message));
@@ -182,14 +280,17 @@ async function main() {
   const missingJsx = findUndefinedJsxComponents(combined, locate);
 
   if (errors.length === 0 && missingJsx.length === 0) {
-    console.log(`  [lint] ✓ ${files.length} client files, no NEW undeclared identifiers / dupe keys / dead code / undefined JSX components${baseNote}`);
+    console.log(`  [lint] ✓ ${files.length} client files, no NEW undeclared identifiers / dupe keys / dead code / undefined JSX components / unreachable functions${baseNote}`);
     return 0;
   }
 
   if (errors.length) {
     console.error(`\n  [lint] ✗ ${errors.length} NEW error(s) in the client bundle${baseNote}:\n`);
     for (const e of errors) {
-      console.error(`    ${e.loc.file}:${e.loc.line}  ${e.ruleId}  ${e.message}`);
+      const note = e.ruleId === "no-unused-vars"
+        ? "  ← declared but never called: wire it up or delete it"
+        : "";
+      console.error(`    ${e.loc.file}:${e.loc.line}  ${e.ruleId}  ${e.message}${note}`);
     }
   }
   if (missingJsx.length) {

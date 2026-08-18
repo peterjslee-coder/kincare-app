@@ -545,7 +545,7 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
   };
 
   const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
-  const fmtDateFull = (d) => d ? new Date(d).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : '';
+
   // Stripe payout arrival_date is a UTC calendar date; format it in UTC so it
   // matches the date shown on the bank statement (not shifted back a day in EST).
   const fmtDepositDate = (ms) => ms ? new Date(ms).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }) : '';

@@ -123,23 +123,6 @@ const NotificationPrompt = window.NotificationPrompt = ({ onSubscribed }) => {
     localStorage.setItem('push_prompt_dismissed', String(Date.now()));
   };
 
-  const handleSendTest = async () => {
-    setTestSending(true);
-    setTestResult(null);
-    try {
-      const res = await apiFetch('/api/push/test', { method: 'POST' });
-      if (res && res.ok) {
-        setTestResult({ type: 'success', message: 'Test notification sent! Check your notifications.' });
-      } else {
-        const data = res ? await res.json() : {};
-        setTestResult({ type: 'error', message: data.error || 'Failed to send test notification' });
-      }
-    } catch (err) {
-      setTestResult({ type: 'error', message: err.message });
-    }
-    setTestSending(false);
-  };
-
   if (!visible) return null;
 
   // iOS not installed as PWA — show install instructions

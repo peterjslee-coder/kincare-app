@@ -99,14 +99,6 @@ const Schedule = window.Schedule = () => {
     sessionsByDate[d].push(s);
   });
 
-  // ─── Saturation: 1hr = 25%, scales to 75% at 10+ hours ───
-  const getSaturation = (hours) => {
-    if (!hours || hours <= 0) return 0;
-    // Linear scale: 1hr → 25%, 10hr → 75%
-    const pct = Math.min(25 + (hours - 1) * (50 / 9), 75);
-    return pct;
-  };
-
   const todayStr = TimezoneHelper.getToday();
 
   const { year, month } = currentMonth;

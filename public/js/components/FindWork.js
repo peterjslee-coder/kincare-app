@@ -188,8 +188,6 @@ const FindWork = window.FindWork = () => {
     setSavingRates(false);
   };
 
-  const toLocal = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-
   // Check background check status + fetch caregiver profile location
   useEffect(() => {
     const init = async () => {

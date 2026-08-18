@@ -500,16 +500,6 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
     } catch { showToast('Could not remove that passkey — check your connection', 'error'); }
   };
 
-  const handleRenamePasskey = async (pkId, newName) => {
-    try {
-      await apiFetch('/api/passkeys/' + pkId, {
-        method: 'PUT',
-        body: JSON.stringify({ name: newName }),
-      });
-      fetchPasskeys();
-    } catch {}
-  };
-
   useEffect(() => {
     fetchUser();
     fetch2FAStatus();
@@ -844,24 +834,6 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
     }
     setDocUploading(null);
     if (acctDocInputRef.current) acctDocInputRef.current.value = '';
-  };
-
-  // Caregiver - Rate save handler
-  const handleSaveRates = async () => {
-    if (!editRates) return;
-    setSavingRates(true);
-    try {
-      const res = await apiFetch('/api/caregivers/me', {
-        method: 'PUT',
-        body: JSON.stringify({ rateDaytime: editRates.daytime, rateNighttime: editRates.nighttime, rateOvernight: editRates.overnight })
-      });
-      // v1.105.51 — no else. On failure the spinner stopped, the form stayed open with the
-      // typed numbers, and nothing was said, so a caregiver couldn't tell whether their pay
-      // rates had saved. FindWork's twin of this handler already had the else branch.
-      if (res?.ok) { showToast('Rates updated', 'success'); setEditRates(null); }
-      else { showToast('Failed to save rates', 'error'); }
-    } catch (err) { showToast('Failed to save rates', 'error'); }
-    setSavingRates(false);
   };
 
   // Caregiver - Document preview handler

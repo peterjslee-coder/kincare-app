@@ -1665,14 +1665,6 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
     } catch (err) { console.error('Toggle help published error:', err); }
   };
 
-  const deleteHelpArticle = async (id) => {
-    if (!confirm('Unpublish this article?')) return;
-    try {
-      const res = await apiFetch(`/api/help/${id}`, { method: 'DELETE' });
-      if (res?.ok) loadHelpArticles();
-    } catch (err) { console.error('Delete help article error:', err); }
-  };
-
   // Create FAQ from feedback item
   const createFaqFromFeedback = (feedbackItem) => {
     setHelpForm({

@@ -193,7 +193,6 @@ const FamilyPayments = window.FamilyPayments = () => {
     catch { return d; }
   };
 
-  const isRealLast4 = (v) => v && v !== 'link' && v !== '****' && v !== '0000' && !/^0+$/.test(v);
   const methodLabel = (m) => {
     if (m.isLink) return `Saved via Stripe Link${m.email ? ` (${m.email})` : ''}`;
     if (m.isBank) return `${m.brand} \u2022\u2022\u2022\u2022 ${m.last4}`;

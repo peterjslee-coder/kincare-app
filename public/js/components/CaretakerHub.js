@@ -174,41 +174,6 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const docInputRef = useRef(null);
   const [pendingDocType, setPendingDocType] = useState(null);
 
-  const handleDocUpload = async (file, docType) => {
-    if (!file) return;
-    setDocUploading(docType);
-    try {
-      // v1.104.0 — auto-downscale images (non-images pass through untouched)
-      file = await window.downscaleImageFile(file);
-      const formData = new FormData();
-      formData.append('documents', file);
-      formData.append('types', JSON.stringify([docType]));
-      formData.append('metadata', JSON.stringify([{}]));
-      const token = window.AUTH_TOKEN;
-      const _hdrs = {};
-      if (token) _hdrs['Authorization'] = `Bearer ${token}`;
-      const csrf = typeof getCsrfToken === 'function' ? getCsrfToken() : (window.getCsrfToken ? window.getCsrfToken() : null);
-      if (csrf) _hdrs['X-CSRF-Token'] = csrf;
-      const res = await fetch('/api/caregiver-onboarding/documents', {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: _hdrs,
-        body: formData,
-      });
-      if (res.ok) {
-        showToast('Document uploaded!', 'success');
-        fetchDocuments();
-      } else {
-        const d = await res.json().catch(() => ({}));
-        showToast(d.error || 'Upload failed', 'error');
-      }
-    } catch (err) {
-      console.error('Doc upload error:', err);
-      showToast('Upload failed', 'error');
-    }
-    setDocUploading(null);
-    setPendingDocType(null);
-  };
   const [visitDetailSessionId, setVisitDetailSessionId] = useState(null);
   const [expandedScheduledId, setExpandedScheduledId] = useState(null);
 
@@ -271,88 +236,6 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         setReviews(d.reviews || []);
       }
     } catch (err) { console.error('Reviews fetch error:', err); }
-  };
-
-  // v1.105.51 — twin of FindWork.handleSaveRule; same fix. Nothing was checked and the
-  // sheet closed regardless, so a rejected availability rule vanished without a word.
-  const handleSaveRule = async () => {
-    let failed = 0;
-    const track = (r) => { if (!r?.ok) failed++; return r; };
-    try {
-      if (editingRule) {
-        // Editing: single day update
-        const body = {
-          dayOfWeek: parseInt(ruleForm.dayOfWeek),
-          startTime: ruleForm.startTime,
-          endTime: ruleForm.endTime,
-          isRecurring: ruleForm.isRecurring,
-          specificDate: ruleForm.isRecurring ? null : ruleForm.specificDate || null,
-          type: ruleForm.type,
-          note: ruleForm.note || null,
-        };
-        track(await apiFetch(`/api/availability/${editingRule.id}`, { method: 'PUT', body: JSON.stringify(body) }));
-      } else if (ruleForm.isRecurring && ruleForm.selectedDays && ruleForm.selectedDays.length > 0) {
-        // New recurring rule with multiple days selected
-        for (const dow of ruleForm.selectedDays) {
-          const body = {
-            dayOfWeek: parseInt(dow),
-            startTime: ruleForm.startTime,
-            endTime: ruleForm.endTime,
-            isRecurring: true,
-            specificDate: null,
-            type: ruleForm.type,
-            note: ruleForm.note || null,
-          };
-          track(await apiFetch('/api/availability', { method: 'POST', body: JSON.stringify(body) }));
-        }
-      } else {
-        // Single day (specific date or single recurring day)
-        const body = {
-          dayOfWeek: parseInt(ruleForm.dayOfWeek),
-          startTime: ruleForm.startTime,
-          endTime: ruleForm.endTime,
-          isRecurring: ruleForm.isRecurring,
-          specificDate: ruleForm.isRecurring ? null : ruleForm.specificDate || null,
-          type: ruleForm.type,
-          note: ruleForm.note || null,
-        };
-        track(await apiFetch('/api/availability', { method: 'POST', body: JSON.stringify(body) }));
-      }
-      if (failed) {
-        showToast(failed === 1
-          ? "That didn't save — please try again."
-          : `${failed} of those didn't save — please check your availability.`, 'error');
-        fetchAvailability();
-        return;
-      }
-      setShowAddRule(false);
-      setEditingRule(null);
-      setRuleForm({ type: 'available', dayOfWeek: 1, startTime: '08:00', endTime: '17:00', isRecurring: true, specificDate: '', note: '', selectedDays: [] });
-      fetchAvailability();
-    } catch (err) {
-      console.error('Save rule error:', err);
-      showToast("That didn't save — check your connection and try again.", 'error');
-    }
-  };
-
-  const handleDeleteRule = async (id) => {
-    try {
-      const res = await apiFetch(`/api/availability/${id}`, { method: 'DELETE' });
-      if (!res?.ok) { showToast("Couldn't remove that — please try again.", 'error'); return; }
-      fetchAvailability();
-    } catch (err) {
-      console.error('Delete rule error:', err);
-      showToast("Couldn't remove that — check your connection.", 'error');
-    }
-  };
-
-  const startEditRule = (rule) => {
-    setEditingRule(rule);
-    setRuleForm({
-      type: rule.type, dayOfWeek: rule.dayOfWeek, startTime: rule.startTime, endTime: rule.endTime,
-      isRecurring: rule.isRecurring, specificDate: rule.specificDate || '', note: rule.note || '',
-    });
-    setShowAddRule(true);
   };
 
   // ─── Check-out draft: rehydrate when the modal opens for a session ───
@@ -569,177 +452,10 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
     checkIdentity();
   }, [activeTab]);
 
-  // Stripe Identity Verification handler — opens Stripe modal
-  const handleIdentityVerify = async () => {
-    setIdVerLoading(true);
-    setIdVerError(null);
-    try {
-      const res = await apiFetch('/api/payments/identity/create-session', { method: 'POST' });
-      if (res?.ok) {
-        const d = await res.json();
-        // Load Stripe.js and open the verification modal
-        const publishableKey = platformConfig.stripePublishableKey || window.STRIPE_PUBLISHABLE_KEY;
-        if (!publishableKey) {
-          // Fetch the publishable key if we don't have it
-          const configRes = await apiFetch('/api/payments/config');
-          if (configRes?.ok) {
-            const config = await configRes.json();
-            window.STRIPE_PUBLISHABLE_KEY = config.publishableKey;
-          }
-        }
-        const stripe = Stripe(window.STRIPE_PUBLISHABLE_KEY || publishableKey);
-        const { error } = await stripe.verifyIdentity(d.clientSecret);
-        if (error) {
-          console.error('Identity verification error:', error);
-          setIdVerError(error.message || 'Verification was not completed.');
-        } else {
-          // Verification submitted — check status
-          const statusRes = await apiFetch('/api/payments/identity/status');
-          if (statusRes?.ok) {
-            const statusData = await statusRes.json();
-            setIdVerification(statusData);
-          }
-        }
-      } else {
-        const err = await res?.json().catch(() => ({}));
-        if (err?.alreadyVerified) {
-          setIdVerification({ verified: true, status: 'verified' });
-        } else {
-          setIdVerError(err?.error || 'Failed to start identity verification.');
-        }
-      }
-    } catch (err) {
-      setIdVerError('Could not connect to verification service. Please try again later.');
-    }
-    setIdVerLoading(false);
-  };
-
   // Stripe Connect embedded onboarding state
   const [showStripeOnboarding, setShowStripeOnboarding] = useState(false);
   const stripeOnboardingRef = useRef(null);
   const stripeConnectInstanceRef = useRef(null);
-
-  // Stripe Connect onboarding handler — creates account + opens embedded onboarding in-app
-  const handleStripeOnboard = async () => {
-    setStripeLoading(true);
-    setStripeError(null);
-    try {
-      // Step 1: Ensure the caregiver has a Stripe Connect account
-      const res = await apiFetch('/api/payments/connect/onboard', { method: 'POST' });
-      if (!res?.ok) {
-        const err = await res?.json().catch(() => ({}));
-        const msg = err?.detail ? `${err.error}: ${err.detail}` : (err?.error || 'Failed to start Stripe onboarding. Please try again later.');
-        setStripeError(msg);
-        setStripeLoading(false);
-        return;
-      }
-
-      // Step 2: Show the embedded onboarding container
-      setShowStripeOnboarding(true);
-      setStripeLoading(false);
-
-      // Step 3: Initialize Connect.js and mount onboarding component (after DOM renders)
-      await new Promise(r => setTimeout(r, 200));
-
-      // Try embedded onboarding first, fall back to redirect-based (Account Links)
-      let useEmbedded = false;
-
-      // Wait for Stripe Connect.js to load (async script) — quick timeout
-      if (window.StripeConnect) {
-        useEmbedded = true;
-      } else {
-        useEmbedded = await new Promise((resolve) => {
-          let attempts = 0;
-          const interval = setInterval(() => {
-            attempts++;
-            if (window.StripeConnect) { clearInterval(interval); resolve(true); }
-            else if (attempts > 15) { clearInterval(interval); resolve(false); } // 3 seconds max
-          }, 200);
-        });
-      }
-
-      if (useEmbedded) {
-        const publishableKey = window.STRIPE_PUBLISHABLE_KEY || (await (async () => {
-          const configRes = await apiFetch('/api/payments/config');
-          if (configRes?.ok) {
-            const config = await configRes.json();
-            window.STRIPE_PUBLISHABLE_KEY = config.publishableKey;
-            return config.publishableKey;
-          }
-          return null;
-        })());
-
-        if (!publishableKey) {
-          setStripeError('Payment system not configured yet.');
-          return;
-        }
-
-        const fetchClientSecret = async () => {
-          const sessionRes = await apiFetch('/api/payments/connect/account-session', { method: 'POST' });
-          if (sessionRes?.ok) {
-            const d = await sessionRes.json();
-            return d.clientSecret;
-          }
-          throw new Error('Failed to create account session');
-        };
-
-        const connectInstance = window.StripeConnect.init({
-          publishableKey,
-          fetchClientSecret,
-          appearance: {
-            overlays: 'dialog',
-            variables: {
-              colorPrimary: 'var(--role-color)',
-              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-            },
-          },
-        });
-
-        stripeConnectInstanceRef.current = connectInstance;
-        const onboardingComponent = connectInstance.create('account-onboarding');
-        onboardingComponent.setOnExit(() => {
-          setShowStripeOnboarding(false);
-          apiFetch('/api/payments/connect/status').then(r => r?.ok && r.json().then(s => setStripeStatus(s))).catch(() => {});
-        });
-
-        if (stripeOnboardingRef.current) {
-          stripeOnboardingRef.current.innerHTML = '';
-          stripeOnboardingRef.current.appendChild(onboardingComponent);
-        }
-      } else {
-        // Fallback: redirect-based Stripe onboarding via Account Links
-        console.log('Connect.js not available, using redirect-based onboarding');
-        setShowStripeOnboarding(false);
-        const linkRes = await apiFetch('/api/payments/connect/link', { method: 'POST' });
-        if (linkRes?.ok) {
-          const linkData = await linkRes.json();
-          if (linkData.url) {
-            window.location.href = linkData.url;
-            return;
-          }
-        }
-        setStripeError('Could not start payment setup. Please try again.');
-      }
-    } catch (err) {
-      console.error('Stripe onboarding error:', err);
-      setStripeError('Could not connect to payment service. Please try again later.');
-      setStripeLoading(false);
-    }
-  };
-
-  // Open Stripe Express Dashboard
-  const handleStripeDashboard = async () => {
-    setStripeError(null);
-    try {
-      const res = await apiFetch('/api/payments/connect/dashboard');
-      if (res?.ok) {
-        const d = await res.json();
-        if (d.url) openExternalUrl(d.url); // v1.105.49 — Stripe dashboard was unreachable on iPhone
-      } else {
-        setStripeError('Could not open Stripe dashboard. Please try again.');
-      }
-    } catch (err) { setStripeError('Could not open Stripe dashboard. Please try again.'); }
-  };
 
   // Load care preferences from profile (try care_preferences first, fall back to care_stoplight)
   useEffect(() => {
@@ -1002,28 +718,6 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
     setClaimingJobId(null);
   };
 
-  const handleCancelJob = async (sessionId, recipName) => {
-    if (!confirm(`Cancel your session with ${recipName}? The job will go back to the open pool for other caregivers.`)) return;
-    setCancellingJobId(sessionId);
-    try {
-      const res = await apiFetch(`/api/sessions/${sessionId}/cancel`, {
-        method: 'PUT',
-        body: JSON.stringify({ reason: 'Caregiver cancelled from dashboard' }),
-      });
-      if (res?.ok) {
-        showToast && showToast('Session cancelled', 'success');
-        const dashRes = await apiFetch('/api/dashboard');
-        if (dashRes?.ok) setData(await dashRes.json());
-      } else {
-        const err = await res.json().catch(() => ({}));
-        showToast ? showToast(err.error || 'Failed to cancel', 'error') : alert(err.error || 'Failed to cancel');
-      }
-    } catch (err) {
-      console.error('Cancel job error:', err);
-    }
-    setCancellingJobId(null);
-  };
-
   const openProposalModal = (job) => {
     setProposingFor(job);
     setProposalDate(job.date || job.scheduled_date || '');
@@ -1124,7 +818,6 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
     'Dementia / Memory Care', 'Hospice / End-of-Life',
   ];
 
-
   const handleAvatarUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -1178,36 +871,6 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
     } catch (err) { console.error('Avatar upload error:', err); showToast(err.message || 'Failed to upload photo — try a JPG or PNG', 'error'); }
     setUploadingAvatar(false);
     if (avatarInputRef.current) avatarInputRef.current.value = '';
-  };
-
-  // v1.105.51 — the response used to be thrown away and the editor closed regardless. A
-  // 400 or 403 doesn't throw, so the new values sat on screen looking saved until a reload
-  // quietly reverted them.
-  const saveStoplight = async () => {
-    try {
-      const res = await apiFetch('/api/caregivers/profile', {
-        method: 'POST',
-        body: JSON.stringify({ hourlyRate: profile.hourlyRate > 0 ? profile.hourlyRate : 25, careStoplight: stoplightForm }),
-      });
-      if (!res?.ok) { showToast("That didn't save — please try again.", 'error'); return; }
-      setStoplightData(stoplightForm);
-      setEditingStoplight(false);
-    } catch (err) {
-      console.error('Stoplight save error:', err);
-      showToast("That didn't save — check your connection and try again.", 'error');
-    }
-  };
-
-  // Navigate to a tab and scroll the tab content into view with a highlight pulse
-  const goToStep = (tabId) => {
-    setActiveTab(tabId);
-    setHighlightTab(true);
-    setTimeout(() => {
-      if (tabContentRef.current) {
-        tabContentRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
-    }, 100);
-    setTimeout(() => setHighlightTab(false), 2000);
   };
 
   // Save inline profile (bio, rate, allergies, medical) during onboarding
@@ -2689,7 +2352,6 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         );
       })()}
 
-
       {/* Dashboard content — blurred when onboarding incomplete, lifts when working on a step */}
       <div className={shouldBlur ? 'onboarding-content-lock' : ''}>
         {shouldBlur && (
@@ -2699,7 +2361,6 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
           </div>
         )}
         <div className={shouldBlur ? 'lock-content' : ''}>
-
 
       {/* Earnings Summary — moved to main dashboard flow above */}
 
