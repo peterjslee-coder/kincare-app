@@ -243,9 +243,17 @@ router.post("/verify-id", authenticate, async (req, res) => {
     try {
       const { notifyAdmins } = require("./push");
       notifyAdmins("identity_submitted", {
-        title: "ID verification needs review",
-        body: `${req.user.firstName || "Someone"} submitted a selfie and photo ID.`,
-        data: { type: "identity_submitted", userId: req.user.id, documentId: docId },
+        // v1.105.70 — say WHICH outcome happened. The AI does not merely queue these: when the
+        // name, document validity, DOB and face all match it writes status='approved' outright
+        // and no human is ever asked. Julia's government ID was approved that way, and the admin
+        // learned of it only because he went looking days later. An automated approval of
+        // someone's identity is MORE worth telling a person about than one that stops for review,
+        // not less — it is the case where nobody chose.
+        title: needsHumanReview ? "ID verification needs review" : "ID auto-approved — worth a look",
+        body: needsHumanReview
+          ? `${req.user.firstName || "Someone"} submitted a selfie and photo ID.`
+          : `${req.user.firstName || "Someone"} submitted a selfie and photo ID, and it was approved automatically. No person has reviewed it.`,
+        data: { type: "identity_submitted", userId: req.user.id, documentId: docId, autoApproved: !needsHumanReview },
       });
     } catch (e) { console.error("[identity] admin notify failed:", e.message); }
 

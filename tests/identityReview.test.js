@@ -72,7 +72,8 @@ describe("there is a count of what is waiting", () => {
   test("it is part of the badge total, not just the payload", () => {
     // A count nobody adds up is a count nobody sees.
     expect(overview).toMatch(/pendingIdentity: Math\.max\(0, counts\.pendingIdentity - \(seen\.pendingIdentity \|\| 0\)\)/);
-    expect(overview).toMatch(/delta\.newFeedback \+ delta\.safetyFlags \+ delta\.pendingIdentity \+ delta\.checkrAlerts/);
+    // v1.105.70 added aiApprovedIdentity to the same sum.
+    expect(overview).toMatch(/delta\.newFeedback \+ delta\.safetyFlags \+ delta\.pendingIdentity \+ delta\.aiApprovedIdentity \+ delta\.checkrAlerts/);
   });
 
   test("and the badge tooltip names it", () => {
@@ -140,5 +141,55 @@ describe("a vouched caregiver can finish onboarding", () => {
     for (const cond of [/background_check_paid/, /isBackgroundChecked/, /adminVouches/]) {
       expect(block).toMatch(cond);
     }
+  });
+});
+
+describe("an AI decision about someone's identity is not silent", () => {
+  const cg = code("src/routes/caregiveronboarding.js");
+  const self = code("src/routes/selfOnboarding.js");
+  const overviewSrc = code("src/routes/admin/overview.js");
+  const appSrc = code("public/js/app.js");
+  const identity = code("src/utils/identity.js");
+
+  test("the notice says whether a human is needed or the AI already decided", () => {
+    // The AI does not merely queue these: matching name + valid document + matching DOB +
+    // matching face writes status='approved' outright, with nobody in the loop.
+    for (const [name, src] of [["wizard", cg], ["My Account", self]]) {
+      expect(`${name}: distinguishes`).toBe(
+        /needsHumanReview \? "ID verification needs review" : "ID auto-approved/.test(src)
+          ? `${name}: distinguishes` : `${name}: DOES NOT`
+      );
+      expect(src).toMatch(/No person has reviewed it/);
+      expect(src).toMatch(/autoApproved: !needsHumanReview/);
+    }
+  });
+
+  test("AI-approved documents nobody has checked are counted separately", () => {
+    // Counting only 'pending' missed these entirely — and they are the ones most deserving a
+    // human eye, because no human made the decision.
+    expect(overviewSrc).toMatch(/status = 'approved' AND admin_reviewed_by IS NULL/);
+    expect(overviewSrc).toMatch(/aiApprovedIdentity: parseInt\(aiApprovedIdentity\.count\) \|\| 0/);
+  });
+
+  test("and they count toward the badge, not just the payload", () => {
+    expect(overviewSrc).toMatch(/delta\.pendingIdentity \+ delta\.aiApprovedIdentity \+ delta\.checkrAlerts/);
+    expect(appSrc).toMatch(/AI-approved ID\$\{adminAlertDetails\.aiApprovedIdentity === 1 \? '' : 's'\} unchecked/);
+  });
+
+  test("the resolver no longer claims identity is a human-reviewed gate", () => {
+    // It said so in v1.105.64, and it was wrong: review is the exception, not the rule.
+    expect(identity).not.toMatch(/identity is a human-reviewed gate/);
+  });
+});
+
+describe("the app stops forgetting that an ID was verified", () => {
+  const appSrc = code("public/js/app.js");
+
+  test("identity status survives both ways currentUser is built", () => {
+    // /api/auth/me computes and sends identityVerified + identityStatus; both setCurrentUser
+    // sites dropped them, so MyAccount saw undefined on every fresh open and offered to verify
+    // an identity that was already on file and approved.
+    expect((appSrc.match(/identityStatus: data\.user\.identityStatus/g) || []).length).toBe(2);
+    expect((appSrc.match(/identityVerified: !!data\.user\.identityVerified/g) || []).length).toBe(2);
   });
 });

@@ -991,6 +991,14 @@ const App = () => {
               onboardingComplete: data.user.onboarding_complete,
               selfOnboardingComplete: data.user.selfOnboardingComplete,
               careRecipientId: data.user.careRecipientId,
+              // v1.105.70 — /api/auth/me computes and sends these, and this object dropped them.
+              // MyAccount's Identity Verification card reads user.identityStatus, so on every
+              // fresh app open it saw undefined and rendered "Verify your identity with a selfie
+              // and photo ID" — to someone whose ID was already on file and approved. Julia
+              // submitted hers, saw it succeed (MyAccount refetches straight afterwards), then
+              // reopened the app and was invited to do the whole thing again.
+              identityVerified: !!data.user.identityVerified,
+              identityStatus: data.user.identityStatus,
             });
             // Sync active role: use saved preference if valid, else default to first role
             const saved = getActiveRole();
@@ -1234,6 +1242,9 @@ const App = () => {
             onboardingComplete: data.user.onboarding_complete,
             selfOnboardingComplete: data.user.selfOnboardingComplete,
             careRecipientId: data.user.careRecipientId,
+            // v1.105.70 — see the boot path above; same fields, same omission.
+            identityVerified: !!data.user.identityVerified,
+            identityStatus: data.user.identityStatus,
           });
           // Sync activeRole to new user's primary role
           if (userRoles.length === 1) {
@@ -1912,6 +1923,8 @@ const App = () => {
                         // v1.105.68 — an ID waiting on review is a person who cannot finish
                         // onboarding until an admin looks at it. It counted for nothing here.
                         adminAlertDetails.pendingIdentity && `${adminAlertDetails.pendingIdentity} ID verification${adminAlertDetails.pendingIdentity === 1 ? '' : 's'} to review`,
+                        // v1.105.70 — the AI decided these by itself. Nobody has checked them.
+                        adminAlertDetails.aiApprovedIdentity && `${adminAlertDetails.aiApprovedIdentity} AI-approved ID${adminAlertDetails.aiApprovedIdentity === 1 ? '' : 's'} unchecked`,
                         adminAlertDetails.checkrAlerts && `${adminAlertDetails.checkrAlerts} background check updates`,
                       ].filter(Boolean).join(', ') : ''} style={{
                         marginLeft: 'auto', background: 'var(--color-error)', color: 'var(--bg-card)', borderRadius: 10,

@@ -27,8 +27,15 @@
 // genuinely submitting their own government ID, and which endpoint the UI happened to call
 // is an implementation detail the caregiver never chose.
 //
-// It does NOT accept shape 3: no document exists in that flow, so there is nothing for an
-// admin to review, and this codebase's rule is that identity is a human-reviewed gate.
+// It does NOT accept shape 3: no document exists in that flow, so there is nothing for anyone
+// to review or keep.
+//
+// v1.105.70 — an earlier version of this comment claimed identity is "a human-reviewed gate" in
+// this codebase. That is not true, and it matters. Both verify-id endpoints write
+// `status = needsHumanReview ? 'pending' : 'approved'`: when the extracted name matches, the
+// document classifies as valid, the DOB matches and the faces match, the AI approves someone's
+// government ID outright and no person is ever asked. Review is the EXCEPTION — what happens
+// when the AI is unsure — not the rule. Anything reasoning about this gate should know that.
 
 /**
  * The most recent non-selfie identity document belonging to this caregiver, under either

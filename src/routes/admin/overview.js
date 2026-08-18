@@ -26,7 +26,7 @@ module.exports = function register(router) {
 router.get("/alerts", async (req, res) => {
   try {
     const db = await getDb();
-    const [pendingUsers, pausedCaregivers, pendingConsent, newFeedback, safetyFlags, pendingIdentity, checkrAlerts, recentReferrals, recentMilestones, userRow] = await Promise.all([
+    const [pendingUsers, pausedCaregivers, pendingConsent, newFeedback, safetyFlags, pendingIdentity, aiApprovedIdentity, checkrAlerts, recentReferrals, recentMilestones, userRow] = await Promise.all([
       db.prepare(`SELECT COUNT(*) as count FROM users WHERE COALESCE(is_demo, 0) = 0 AND COALESCE(account_approved, 0) = 0 AND COALESCE(is_active, 1) = 1 AND created_at > '2026-02-20'`).get(),
       db.prepare(`SELECT COUNT(*) as count FROM caregiver_profiles WHERE account_paused = 1 AND COALESCE(checkr_status, 'pending') != 'rejected'`).get(),
       db.prepare(`SELECT COUNT(*) as count FROM care_recipients WHERE consent_status = 'pending' OR consent_status = 'attestation_pending'`).get(),
@@ -41,6 +41,16 @@ router.get("/alerts", async (req, res) => {
       db.prepare(`
         SELECT COUNT(*) as count FROM verified_documents
         WHERE category = 'identity' AND document_type != 'selfie' AND status = 'pending'
+      `).get().catch(() => ({ count: 0 })),
+      // v1.105.70 — identity documents the AI approved on its own, that no person has since
+      // looked at. Counting only 'pending' missed these entirely, and they are the ones that
+      // most deserve a human eye: an automated decision about whether someone is who they say
+      // they are, made with nobody in the loop. admin_reviewed_by is set whenever an admin
+      // grants or rejects, so this empties as they are checked.
+      db.prepare(`
+        SELECT COUNT(*) as count FROM verified_documents
+        WHERE category = 'identity' AND document_type != 'selfie'
+          AND status = 'approved' AND admin_reviewed_by IS NULL
       `).get().catch(() => ({ count: 0 })),
       // Unread Checkr webhook events in the last 7 days
       db.prepare(`SELECT COUNT(*) as count FROM activity_feed WHERE event_type IN ('checkr_submitted', 'checkr_cleared', 'checkr_flagged', 'checkr_expired', 'checkr_suspended', 'checkr_resumed', 'checkr_disputed') AND is_read = 0 AND created_at > NOW() - INTERVAL '7 days'`).get().catch(() => ({ count: 0 })),
@@ -59,6 +69,7 @@ router.get("/alerts", async (req, res) => {
       newFeedback: parseInt(newFeedback.count) || 0,
       safetyFlags: parseInt(safetyFlags.count) || 0,
       pendingIdentity: parseInt(pendingIdentity.count) || 0,
+      aiApprovedIdentity: parseInt(aiApprovedIdentity.count) || 0,
       checkrAlerts: parseInt(checkrAlerts.count) || 0,
       recentReferrals: parseInt(recentReferrals.count) || 0,
       recentMilestones: parseInt(recentMilestones.count) || 0,
@@ -74,11 +85,12 @@ router.get("/alerts", async (req, res) => {
       newFeedback: Math.max(0, counts.newFeedback - (seen.newFeedback || 0)),
       safetyFlags: Math.max(0, counts.safetyFlags - (seen.safetyFlags || 0)),
       pendingIdentity: Math.max(0, counts.pendingIdentity - (seen.pendingIdentity || 0)),
+      aiApprovedIdentity: Math.max(0, counts.aiApprovedIdentity - (seen.aiApprovedIdentity || 0)),
       checkrAlerts: Math.max(0, counts.checkrAlerts - (seen.checkrAlerts || 0)),
     };
 
     const total = delta.pendingUsers + delta.pausedCaregivers + delta.pendingConsent +
-      delta.newFeedback + delta.safetyFlags + delta.pendingIdentity + delta.checkrAlerts;
+      delta.newFeedback + delta.safetyFlags + delta.pendingIdentity + delta.aiApprovedIdentity + delta.checkrAlerts;
 
     // Fetch caregivers with BG check results needing admin action
     const bgCheckActionItems = await db.prepare(`
