@@ -759,6 +759,35 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
     });
   };
 
+  // v1.105.84 — the third answer. Accept and "propose a different time" were the only two,
+  // so a request she could not take had no exit and the family got no signal at all.
+  const [decliningJob, setDecliningJob] = useState(null);   // the job being declined
+  const [declineReason, setDeclineReason] = useState('');
+  const [decliningBusy, setDecliningBusy] = useState(false);
+
+  const submitDecline = async () => {
+    if (!decliningJob) return;
+    setDecliningBusy(true);
+    try {
+      const res = await apiFetch(`/api/sessions/${decliningJob.id}/decline`, {
+        method: 'PUT',
+        body: JSON.stringify({ reason: declineReason.trim() || null }),
+      });
+      if (res?.ok) {
+        showToast('Declined — the family has been told', 'info');
+        setDecliningJob(null);
+        setDeclineReason('');
+        try { const dr = await apiFetch('/api/dashboard'); if (dr?.ok) setData(await dr.json()); } catch {}
+      } else {
+        const d = await res?.json().catch(() => ({}));
+        showToast(d?.error || 'Could not decline that request', 'error');
+      }
+    } catch {
+      showToast('Could not decline that request — check your connection', 'error');
+    }
+    setDecliningBusy(false);
+  };
+
   const handleClaimJob = async (jobId, e, amount) => {
     const btnEl = e?.currentTarget || null;
     setClaimingJobId(jobId);
@@ -1567,6 +1596,11 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                           padding: '7px 14px', background: 'var(--bg-surface)', color: 'var(--color-purple-light)', border: '2px solid #7c3aed',
                           borderRadius: '10px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
                         }}>Propose Different Time</button>
+                      <button onClick={(e) => { e.stopPropagation(); setDecliningJob(job); setDeclineReason(''); }}
+                        style={{
+                          padding: '7px 14px', background: 'none', color: 'var(--text-tertiary)', border: 'none',
+                          fontSize: '12px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', textDecoration: 'underline',
+                        }}>Can't make it</button>
                     </div>
                   </div>
                 </div>
@@ -2270,6 +2304,11 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                             padding: '7px 14px', background: 'var(--bg-surface)', color: 'var(--role-color)', border: '2px solid #1b6b5a',
                             borderRadius: '10px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
                           }}>Propose Different Time</button>
+                      <button onClick={(e) => { e.stopPropagation(); setDecliningJob(job); setDeclineReason(''); }}
+                        style={{
+                          padding: '7px 14px', background: 'none', color: 'var(--text-tertiary)', border: 'none',
+                          fontSize: '12px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', textDecoration: 'underline',
+                        }}>Can't make it</button>
                       </div>
                     </div>
                   );
@@ -4045,6 +4084,37 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
             )) : (
               <p style={{ color: 'var(--text-tertiary)', fontSize: 14, textAlign: 'center', margin: '20px 0' }}>No reviews yet</p>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Decline a request (v1.105.84) — the reason is optional on purpose: requiring one
+           would make saying no harder than saying nothing, which is how you get silence. */}
+      {decliningJob && (
+        <div onClick={() => !decliningBusy && setDecliningJob(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }}>
+          <div onClick={(e) => e.stopPropagation()}
+            style={{ background: 'var(--bg-card)', borderRadius: 14, padding: 20, width: '100%', maxWidth: 400 }}>
+            <h3 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>Can{'\u2019'}t make it?</h3>
+            <p style={{ margin: '0 0 14px', fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+              We{'\u2019'}ll let the family know so they can find someone else. This request won{'\u2019'}t go to other caregivers unless they choose to.
+            </p>
+            <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 5 }}>
+              Anything you{'\u2019'}d like them to know? (optional)
+            </label>
+            <textarea value={declineReason} onChange={(e) => setDeclineReason(e.target.value)}
+              placeholder="e.g. I'm away that week"
+              style={{ width: '100%', minHeight: 64, padding: 10, border: '1px solid var(--border-light)', borderRadius: 9, fontSize: 13, resize: 'vertical', background: 'var(--bg-surface)', color: 'var(--text-primary)' }} />
+            <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+              <button onClick={() => setDecliningJob(null)} disabled={decliningBusy}
+                style={{ flex: 1, padding: '11px', background: 'var(--bg-surface)', color: 'var(--text-secondary)', border: '1px solid var(--border-light)', borderRadius: 9, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+                Never mind
+              </button>
+              <button onClick={submitDecline} disabled={decliningBusy}
+                style={{ flex: 1, padding: '11px', background: 'var(--color-error)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 9, fontSize: 14, fontWeight: 700, cursor: decliningBusy ? 'wait' : 'pointer' }}>
+                {decliningBusy ? 'Sending\u2026' : 'Decline request'}
+              </button>
+            </div>
           </div>
         </div>
       )}

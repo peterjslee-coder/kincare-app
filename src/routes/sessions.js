@@ -376,6 +376,80 @@ router.post("/request", async (req, res) => {
   res.status(201).json({ session });
 });
 
+// ─── PUT /api/sessions/:id/decline — Caregiver declines a request sent to her ───
+//
+// v1.105.84. Accept and "propose a different time" were the only two answers a caregiver could
+// give, so a request she simply could not take had no exit: it sat there, and the family got no
+// signal at all. Pete, after sending one to Julia: "it only allows her to accept or propose a
+// new time. not to decline."
+//
+// The request comes back to the FAMILY rather than going to the open pool. They chose this
+// person by name; broadcasting Betty's request to caregivers they did not pick is not a
+// decision a decline should make on their behalf. The session keeps its details and becomes
+// theirs to re-send, re-assign, or post openly.
+//
+// The reason is optional and free text. "Busy that day" tells a family to re-ask for a
+// different time; nothing tells them whether to bother. Requiring it would make saying no
+// harder than staying silent, which is how you end up with silence.
+router.put("/:id/decline", async (req, res) => {
+  try {
+    const db = await getDb();
+    if (!req.user.roles?.includes("caregiver") && req.user.role !== "caregiver") {
+      return res.status(403).json({ error: "Only caregivers can decline care requests" });
+    }
+    const profile = await db.prepare("SELECT id FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
+    if (!profile) return res.status(404).json({ error: "Caregiver profile not found" });
+
+    const session = await db.prepare("SELECT * FROM care_sessions WHERE id = ?").get(req.params.id);
+    // 404 rather than 403 — "not yours" and "not there" look identical to someone probing ids.
+    if (!session) return res.status(404).json({ error: "Care request not found" });
+
+    // Only the caregiver it was actually sent to may decline it. An open request nobody was
+    // named on is declined by simply not claiming it.
+    if (session.caregiver_id !== profile.id) {
+      return res.status(404).json({ error: "Care request not found" });
+    }
+    if (!["requested", "open", "pending"].includes(session.status)) {
+      return res.status(400).json({ error: "That request can no longer be declined (status: " + session.status + ")" });
+    }
+
+    const reason = req.body?.reason ? String(req.body.reason).slice(0, 500) : null;
+
+    await db.prepare(`
+      UPDATE care_sessions
+         SET caregiver_id = NULL, status = 'declined',
+             declined_by = ?, declined_at = NOW(), decline_reason = ?, updated_at = NOW()
+       WHERE id = ?
+    `).run(req.user.id, reason, req.params.id);
+
+    // Tell the family, by name and with the reason if there is one. Async and non-blocking:
+    // the decline itself has already happened and must not fail on a push.
+    (async () => {
+      try {
+        const me = await db.prepare("SELECT first_name FROM users WHERE id = ?").get(req.user.id);
+        const cr = await db.prepare("SELECT first_name FROM care_recipients WHERE id = ?").get(session.care_recipient_id);
+        const when = `${session.scheduled_date} ${session.scheduled_time}`;
+        const { sendPushToUser } = require("./push");
+        await sendPushToUser(session.family_user_id, {
+          title: `${me?.first_name || "A caregiver"} can't make it`,
+          body: reason
+            ? `${cr?.first_name || "Care"} on ${when} — "${reason}"`
+            : `${cr?.first_name || "Care"} on ${when}. Tap to choose someone else.`,
+          data: { type: "request_declined", page: "dashboard", sessionId: req.params.id },
+        }, "request_declined");
+      } catch (err) {
+        console.error("Decline notify error:", err.message);
+      }
+    })();
+
+    res.json({ success: true, status: "declined" });
+  } catch (err) {
+    console.error("Decline request error:", err);
+    captureException(err, { where: "sessions: decline" });
+    res.status(500).json({ error: "Could not decline that request" });
+  }
+});
+
 // ─── PUT /api/sessions/:id/claim — Caregiver claims a care request ───
 router.put("/:id/claim", async (req, res) => {
   const claimRoles = req.user.roles || [req.user.role];

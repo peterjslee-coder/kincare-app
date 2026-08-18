@@ -1959,6 +1959,23 @@ async function initializeDatabase() {
         `ALTER TABLE care_team_invites ADD COLUMN IF NOT EXISTS legal_version TEXT`,
       ],
     },
+    {
+      // v1.105.84 — a caregiver can decline a care request that was sent to her by name.
+      //
+      // Until now the only responses were Accept and Propose a different time. There was no
+      // way to say no, so a request she could not take just sat there, and the family had no
+      // signal at all. Pete, having sent one to Julia: "it only allows her to accept or
+      // propose a new time. not to decline."
+      //
+      // The request comes back to the FAMILY to decide rather than going to the open pool —
+      // they picked this person by name, so the next choice is theirs.
+      id: "022_request_decline",
+      statements: [
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS declined_by TEXT`,
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS declined_at TIMESTAMPTZ`,
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS decline_reason TEXT`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

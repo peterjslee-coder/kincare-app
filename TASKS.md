@@ -708,6 +708,30 @@
 
 ## Features — Up Next
 
+- [ ] **SWEEP: features that work correctly on a screen the person never reaches.** Three
+      instances found in one week, all on real users, none catchable by any existing gate —
+      the code is reachable, wired, tested and correct; the *audience* is wrong.
+      - v1.105.75 — `checkIdentity()` / `checkStripe()` sat inside a `useEffect` opening
+        `if (activeTab !== 'earnings') return;`. The hub opens on `'schedule'`, so on the screen
+        every caregiver lands on, neither had ever run. Julia read as unverified to herself for
+        weeks because of it, and `_autoStepCount` could never reach 6, so onboarding could never
+        auto-complete.
+      - v1.105.82 — the pending care-team invite banner lives in `Dashboard.js`, the FAMILY home
+        screen. `app.js` sends `role === 'caregiver'` to `CaretakerHub`. Julia clicked her invite
+        email, opened the app, and there was nothing there. `/api/care-teams/my-pending-invites`
+        had exactly one caller, on a screen she cannot reach.
+      - v1.105.83 — the Book Care picker only offered caregivers with a prior session or with
+        coordinates. A vouched caregiver with no address appears in neither, so the one screen
+        that could put her to work had no way to name her.
+      **What to look for:** a fetch behind a tab/route guard whose result is rendered outside
+      that guard; a feature rendered in one role's home component and not the other's; a list
+      whose membership conditions no real new user can satisfy. **Start by enumerating what
+      each role's home component actually mounts** — `Dashboard` vs `CaretakerHub` vs
+      `CaredForView` — and diffing the surfaces. The lint gates cannot see this class: every
+      identifier resolves and every query is valid. **P1.**
+
+
+
 - [ ] **Family-only care coordination tier — subscription (Pete's feedback, July 11).** A mode where NO caregivers are hired through the app: family members and friends alone use it for caretaking notes, bill/task coordination between family, doctor-visit coordination, and iPAi — for a nominal subscription fee. Strategic upside Pete flagged: builds the care-history background so the transition to hired care later is seamless. Needs product definition (what's gated behind the subscription, pricing, how it coexists with the marketplace tier) before any build. Candidate discussion topic for business development. **P1-discuss**
 
 
