@@ -228,7 +228,10 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
   const applyPreset = (name) => {
     setInvitePreset(name);
     setInviteCaps(CAP_PRESETS[name]);
-    setInviteRole(name === 'member' ? 'member' : 'viewer');
+    // v1.105.94 — the role on the invite is what the registration page reads to decide what
+    // KIND of account to create. Helper must send 'helper', or Peggy signs up as family and
+    // lands on a dashboard built for someone else's job.
+    setInviteRole(name === 'member' ? 'member' : name === 'helper' ? 'helper' : 'viewer');
   };
   const toggleCap = (capsSetter, caps, cap) =>
     capsSetter(caps.includes(cap) ? caps.filter((c) => c !== cap) : [...caps, cap]);

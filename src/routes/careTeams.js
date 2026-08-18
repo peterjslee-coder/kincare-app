@@ -434,7 +434,9 @@ router.post("/:id/invite", requireRole("family"), async (req, res) => {
 
     const { email, role = "member", capabilities } = req.body;
     if (!email) return res.status(400).json({ error: "Email is required" });
-    if (!["member", "viewer", "care_recipient"].includes(role)) return res.status(400).json({ error: "Role must be member, viewer, or care_recipient" });
+    // v1.105.94 — 'helper' joins the list. It is what the Helper preset sends, and it is what
+    // tells the REGISTRATION page to sign someone up as a helper rather than as family.
+    if (!["member", "viewer", "care_recipient", "helper"].includes(role)) return res.status(400).json({ error: "Role must be member, viewer, helper, or care_recipient" });
 
     // v1.105.79 — the owner ticks capabilities when sending, and the invite carries them, so
     // the share created at accept is exactly what was chosen rather than re-derived from the
@@ -759,7 +761,10 @@ router.post("/accept-invite", authenticate, async (req, res) => {
       const shareExists = await db.prepare(
         "SELECT id FROM care_recipient_shares WHERE care_recipient_id = ? AND shared_with_user_id = ?"
       ).get(team.care_recipient_id, req.user.id);
-      const grantedPermission = invite.role === "viewer" ? "view" : "edit";
+      // v1.105.94 — helper sits with viewer on the permission fallback. The capability set on
+      // the invite overrides this anyway, but if one were ever missing, a helper defaulting to
+      // 'edit' would hand a neighbour the run of the record.
+      const grantedPermission = ["viewer", "helper"].includes(invite.role) ? "view" : "edit";
       if (shareExists) {
         await db.prepare(
           "UPDATE care_recipient_shares SET permission = ?, capabilities = ? WHERE id = ?"

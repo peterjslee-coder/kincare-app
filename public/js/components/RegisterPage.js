@@ -35,14 +35,20 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
     } catch (e) {}
   }, []);
 
-  // For care team invites, auto-select family track and skip role picker
+  // For care team invites, skip the role picker — the invite already decided.
+  //
+  // v1.105.94 — this hardcoded 'family' for EVERY care-team invite, so a Helper invite created
+  // a family account and landed the person on the family Dashboard: request care, payments,
+  // schedule, none of it theirs. The helper role and its home screen shipped in v1.105.93 and
+  // nothing could reach them — the same "working feature on a screen nobody sees" class that is
+  // on the Up Next sweep, introduced one release after logging it.
   const isInviteFlow = !!pendingInviteToken;
   useEffect(() => {
     if (isInviteFlow && !track) {
-      setTrack('family');
+      setTrack(prefilledRole === 'helper' ? 'helper' : 'family');
       setStep(2);
     }
-  }, [isInviteFlow]);
+  }, [isInviteFlow, prefilledRole]);
 
   // ─── Validation ───
   const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -105,7 +111,13 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
 
     setRegistering(true);
     setRegError('');
-    const role = track === 'caregiver' ? 'caregiver' : track === 'care_for' ? 'care_for' : 'family';
+    // v1.105.94 — 'helper' was missing here, so even once the track was set correctly the
+    // POST still said 'family'. Three links in this chain and all three had to be right:
+    // the invite's role, the track it selects, and the role actually sent.
+    const role = track === 'caregiver' ? 'caregiver'
+      : track === 'care_for' ? 'care_for'
+      : track === 'helper' ? 'helper'
+      : 'family';
 
     if (typeof trackAuthEvent === 'function') {
       trackAuthEvent('registration', 'registration_submit', { email: formData.email, role });

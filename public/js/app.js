@@ -1519,7 +1519,7 @@ const App = () => {
       </div>
     </div>,
     login: <LoginPage onLogin={handleLogin} onNavigate={handleNavigate} banner={verifyMessage} onDismissBanner={() => setVerifyMessage(null)} inviteInfo={inviteInfo} />,
-    register: <RegisterPage onLogin={handleLogin} onNavigate={handleNavigate} prefilledEmail={signupPrefill?.email || inviteInfo?.email} prefilledRole={signupPrefill?.role || new URLSearchParams(window.location.search).get('role')} signupToken={signupPrefill?.signupToken} pendingInviteToken={pendingInviteToken} sandboxMode={!!window.__sandboxMode} oauthSignupCode={signupPrefill?.oauthSignupCode} prefilledFirstName={signupPrefill?.firstName} prefilledLastName={signupPrefill?.lastName} />,
+    register: <RegisterPage onLogin={handleLogin} onNavigate={handleNavigate} prefilledEmail={signupPrefill?.email || inviteInfo?.email} prefilledRole={signupPrefill?.role || (inviteInfo?.role === 'helper' ? 'helper' : null) || new URLSearchParams(window.location.search).get('role')} signupToken={signupPrefill?.signupToken} pendingInviteToken={pendingInviteToken} sandboxMode={!!window.__sandboxMode} oauthSignupCode={signupPrefill?.oauthSignupCode} prefilledFirstName={signupPrefill?.firstName} prefilledLastName={signupPrefill?.lastName} />,
     'forgot-password': <ForgotPasswordPage onNavigate={handleNavigate} />,
     'reset-password': <ResetPasswordPage token={resetToken} onNavigate={handleNavigate} />,
     'consent-response': <ConsentResponsePage token={consentResponseToken} />,
