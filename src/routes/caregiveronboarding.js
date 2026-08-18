@@ -298,6 +298,23 @@ router.post("/verify-id", async (req, res) => {
       new Date().toISOString()
     );
 
+
+    // v1.105.68 — tell someone. Submitting a selfie + government ID used to notify NOBODY:
+    // no push, no email, no entry in the admin alert counts, nothing in the activity feed. A
+    // caregiver sent in their ID, was told it worked, and waited — while the admin had no
+    // signal it had happened and no screen listing it. Onboarding cannot complete without an
+    // APPROVED identity document, so silence here is a hard stop on someone starting work.
+    //
+    // Fire-and-forget on purpose: the caregiver's result must not depend on a push succeeding.
+    try {
+      const { notifyAdmins } = require("./push");
+      notifyAdmins("identity_submitted", {
+        title: "ID verification needs review",
+        body: `${req.user.firstName || "A caregiver"} submitted a selfie and photo ID.`,
+        data: { type: "identity_submitted", userId: req.user.id, documentId: docId },
+      });
+    } catch (e) { console.error("[identity] admin notify failed:", e.message); }
+
     res.json({
       matched: isVerified, needsHumanReview,
       extractedName, registeredName, extractedDOB, expiryDate,

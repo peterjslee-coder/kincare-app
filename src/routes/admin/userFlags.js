@@ -89,10 +89,26 @@ router.get("/users/:id/onboarding", async (req, res) => {
       FROM caregiver_profiles WHERE user_id = ?
     `).get(req.params.id);
 
-    // Check for uploaded documents
-    const docs = await db.prepare(
-      "SELECT document_type, created_at FROM caregiver_documents WHERE user_id = ? ORDER BY created_at DESC"
+    // Check for uploaded documents.
+    //
+    // v1.105.68 — this read caregiver_documents, which is NOT where a selfie + ID goes. Both
+    // verify-id endpoints write verified_documents, so the one document an admin most needs to
+    // look at — the government ID they are being asked to approve — was the one document this
+    // modal could not show. Combined with there being no notification and no review queue, an
+    // admin's only option was to hit Grant without ever seeing what they were approving.
+    //
+    // Union both tables, and carry the id so the row can be previewed.
+    const legacyDocs = await db.prepare(
+      "SELECT id, document_type, created_at, 'caregiver_documents' AS source FROM caregiver_documents WHERE user_id = ? ORDER BY created_at DESC"
     ).all(req.params.id).catch(() => []);
+    const verifiedDocs = profile ? await db.prepare(`
+      SELECT id, document_type, category, status, created_at, 'verified_documents' AS source
+      FROM verified_documents
+      WHERE (owner_type = 'caregiver' AND owner_id = ?)
+         OR (owner_type = 'user' AND owner_id = ? AND uploaded_by = ?)
+      ORDER BY created_at DESC
+    `).all(profile.id, user.id, user.id).catch(() => []) : [];
+    const docs = [...verifiedDocs, ...legacyDocs];
 
     // Check photo from users table (profile_photo or avatar_url)
     const hasPhoto = !!(user.profile_photo || user.avatar_url);

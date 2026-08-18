@@ -233,6 +233,22 @@ router.post("/verify-id", authenticate, async (req, res) => {
     }
 
     // Return verification result
+    // v1.105.68 — tell someone. This is the door most people find (My Account → "Verify your
+    // identity"), and it notified NOBODY: no push, no email, no admin alert count, no activity
+    // feed entry. The person submits their government ID, sees it succeed, and waits. The admin
+    // gets no signal and has no screen listing what is waiting. For a caregiver that silence is
+    // a hard stop — onboarding cannot complete without an APPROVED identity document.
+    //
+    // Fire-and-forget on purpose: the submitter's result must not depend on a push succeeding.
+    try {
+      const { notifyAdmins } = require("./push");
+      notifyAdmins("identity_submitted", {
+        title: "ID verification needs review",
+        body: `${req.user.firstName || "Someone"} submitted a selfie and photo ID.`,
+        data: { type: "identity_submitted", userId: req.user.id, documentId: docId },
+      });
+    } catch (e) { console.error("[identity] admin notify failed:", e.message); }
+
     res.json({
       matched: isVerified,
       extractedName,

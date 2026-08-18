@@ -1292,6 +1292,26 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
     setDocPreviewLoading(false);
   };
 
+  // v1.105.68 — document_type values are stored as DL_Front, drivers_license, admin_override
+  // and so on. An admin deciding whether to approve someone's government ID should not have to
+  // read a column name.
+  const humanizeDocLabel = (t) => {
+    if (!t) return 'Document';
+    const known = {
+      DL_Front: "Driver's licence (front)",
+      DL_Back: "Driver's licence (back)",
+      dl_front: "Driver's licence (front)",
+      dl_back: "Driver's licence (back)",
+      drivers_license: "Driver's licence",
+      passport: 'Passport',
+      state_id: 'State ID',
+      selfie: 'Selfie',
+      admin_override: 'Approved by admin (no document submitted)',
+    };
+    if (known[t]) return known[t];
+    return String(t).replace(/[_-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  };
+
   // v1.105.67 — revoke the object URL on close; one preview, one blob, otherwise they pile up
   // for as long as the admin session lasts.
   const closeDocPreview = () => {
@@ -5827,9 +5847,39 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                       <span>{onboardingModal.flags.academicProgramYear || '—'}</span>
                     </>}
                   </div>
+                  {/* v1.105.68 — this listed `d.doc_type`, a field the query never selected (it
+                      is document_type), so every entry rendered as blank. And it read from
+                      caregiver_documents, which is not where a selfie + ID is stored — so the
+                      one document an admin is being asked to approve was the one this modal
+                      could not show. Now: the real documents, each previewable, identity first. */}
                   {onboardingModal.documents?.length > 0 && (
-                    <div style={{ marginTop: '8px' }}>
-                      <span style={{ color: 'var(--text-tertiary)' }}>Uploaded docs:</span> {onboardingModal.documents.map(d => d.doc_type).join(', ')}
+                    <div style={{ marginTop: '10px' }}>
+                      <div style={{ color: 'var(--text-tertiary)', marginBottom: '6px' }}>Uploaded documents</div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        {onboardingModal.documents.map(d => (
+                          <div key={`${d.source}-${d.id}`} style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                            <span style={{ fontWeight: d.category === 'identity' ? 700 : 400 }}>
+                              {humanizeDocLabel(d.document_type)}
+                            </span>
+                            {d.category === 'identity' && (
+                              <span style={{ fontSize: '11px', padding: '1px 7px', borderRadius: '999px', background: 'var(--color-purple-bg)', color: 'var(--color-indigo)' }}>
+                                identity
+                              </span>
+                            )}
+                            {d.status && (
+                              <span style={{
+                                fontSize: '11px', padding: '1px 7px', borderRadius: '999px',
+                                background: d.status === 'approved' ? 'var(--color-success-bg)' : d.status === 'rejected' ? 'var(--color-error-bg)' : 'var(--color-warning-bg)',
+                                color: d.status === 'approved' ? 'var(--role-color)' : d.status === 'rejected' ? 'var(--color-error)' : 'var(--text-brown)',
+                              }}>{d.status}</span>
+                            )}
+                            <button onClick={() => handleDocPreview(d.id)} disabled={docPreviewLoading}
+                              style={{ padding: '2px 9px', borderRadius: '4px', border: 'none', fontSize: '11px', fontWeight: 600, cursor: 'pointer', background: 'var(--color-purple-bg)', color: 'var(--color-indigo)' }}>
+                              {'\u{1F50D}'} View
+                            </button>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>

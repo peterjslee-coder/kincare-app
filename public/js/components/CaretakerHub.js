@@ -780,7 +780,14 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
     !!stoplightData,
     !!_autoP.avatar_url,
     stripeStatus?.status === 'active',
-    !!_autoP.background_check_paid || !!_autoP.isBackgroundChecked,
+    // v1.105.68 — an active admin vouch counts here, because it counts on the SERVER. The gate
+    // in routes/caregivers.js has accepted a vouch in place of a background check since
+    // v1.64.0; this counter never did. So a vouched caregiver — the friend-of-the-family case
+    // the vouch exists for — could satisfy every requirement, watch their checklist read
+    // complete, and never reach 6 here, so this effect never fired and
+    // mark-onboarding-complete was never called. Onboarding stayed false forever, with no
+    // screen anywhere explaining why.
+    !!_autoP.background_check_paid || !!_autoP.isBackgroundChecked || (_autoP.adminVouches || []).length > 0,
   ].filter(Boolean).length;
 
   useEffect(() => {

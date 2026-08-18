@@ -26,12 +26,22 @@ module.exports = function register(router) {
 router.get("/alerts", async (req, res) => {
   try {
     const db = await getDb();
-    const [pendingUsers, pausedCaregivers, pendingConsent, newFeedback, safetyFlags, checkrAlerts, recentReferrals, recentMilestones, userRow] = await Promise.all([
+    const [pendingUsers, pausedCaregivers, pendingConsent, newFeedback, safetyFlags, pendingIdentity, checkrAlerts, recentReferrals, recentMilestones, userRow] = await Promise.all([
       db.prepare(`SELECT COUNT(*) as count FROM users WHERE COALESCE(is_demo, 0) = 0 AND COALESCE(account_approved, 0) = 0 AND COALESCE(is_active, 1) = 1 AND created_at > '2026-02-20'`).get(),
       db.prepare(`SELECT COUNT(*) as count FROM caregiver_profiles WHERE account_paused = 1 AND COALESCE(checkr_status, 'pending') != 'rejected'`).get(),
       db.prepare(`SELECT COUNT(*) as count FROM care_recipients WHERE consent_status = 'pending' OR consent_status = 'attestation_pending'`).get(),
       db.prepare(`SELECT COUNT(*) as count FROM feedback WHERE status = 'new' AND created_at > NOW() - INTERVAL '30 days'`).get(),
       db.prepare(`SELECT COUNT(*) as count FROM safety_flags WHERE status IN ('pending', 'escalated')`).get().catch(() => ({ count: 0 })),
+      // v1.105.68 — identity documents waiting on a human. Submitting a selfie + ID notified
+      // NOBODY: not a push, not an email, not this list, not the activity feed. A caregiver
+      // could send in their government ID, be told it worked, and sit there indefinitely while
+      // the admin had no signal it had happened and no screen that listed it. Onboarding cannot
+      // complete without an APPROVED identity document, so this is a hard stop on someone
+      // starting work.
+      db.prepare(`
+        SELECT COUNT(*) as count FROM verified_documents
+        WHERE category = 'identity' AND document_type != 'selfie' AND status = 'pending'
+      `).get().catch(() => ({ count: 0 })),
       // Unread Checkr webhook events in the last 7 days
       db.prepare(`SELECT COUNT(*) as count FROM activity_feed WHERE event_type IN ('checkr_submitted', 'checkr_cleared', 'checkr_flagged', 'checkr_expired', 'checkr_suspended', 'checkr_resumed', 'checkr_disputed') AND is_read = 0 AND created_at > NOW() - INTERVAL '7 days'`).get().catch(() => ({ count: 0 })),
       // Referral stats (last 7 days)
@@ -48,6 +58,7 @@ router.get("/alerts", async (req, res) => {
       pendingConsent: parseInt(pendingConsent.count) || 0,
       newFeedback: parseInt(newFeedback.count) || 0,
       safetyFlags: parseInt(safetyFlags.count) || 0,
+      pendingIdentity: parseInt(pendingIdentity.count) || 0,
       checkrAlerts: parseInt(checkrAlerts.count) || 0,
       recentReferrals: parseInt(recentReferrals.count) || 0,
       recentMilestones: parseInt(recentMilestones.count) || 0,
@@ -62,11 +73,12 @@ router.get("/alerts", async (req, res) => {
       pendingConsent: Math.max(0, counts.pendingConsent - (seen.pendingConsent || 0)),
       newFeedback: Math.max(0, counts.newFeedback - (seen.newFeedback || 0)),
       safetyFlags: Math.max(0, counts.safetyFlags - (seen.safetyFlags || 0)),
+      pendingIdentity: Math.max(0, counts.pendingIdentity - (seen.pendingIdentity || 0)),
       checkrAlerts: Math.max(0, counts.checkrAlerts - (seen.checkrAlerts || 0)),
     };
 
     const total = delta.pendingUsers + delta.pausedCaregivers + delta.pendingConsent +
-      delta.newFeedback + delta.safetyFlags + delta.checkrAlerts;
+      delta.newFeedback + delta.safetyFlags + delta.pendingIdentity + delta.checkrAlerts;
 
     // Fetch caregivers with BG check results needing admin action
     const bgCheckActionItems = await db.prepare(`

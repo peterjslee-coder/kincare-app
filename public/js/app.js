@@ -1909,6 +1909,9 @@ const App = () => {
                         adminAlertDetails.pausedCaregivers && `${adminAlertDetails.pausedCaregivers} paused caregivers`,
                         adminAlertDetails.pendingConsent && `${adminAlertDetails.pendingConsent} pending consent`,
                         adminAlertDetails.newFeedback && `${adminAlertDetails.newFeedback} new feedback`,
+                        // v1.105.68 — an ID waiting on review is a person who cannot finish
+                        // onboarding until an admin looks at it. It counted for nothing here.
+                        adminAlertDetails.pendingIdentity && `${adminAlertDetails.pendingIdentity} ID verification${adminAlertDetails.pendingIdentity === 1 ? '' : 's'} to review`,
                         adminAlertDetails.checkrAlerts && `${adminAlertDetails.checkrAlerts} background check updates`,
                       ].filter(Boolean).join(', ') : ''} style={{
                         marginLeft: 'auto', background: 'var(--color-error)', color: 'var(--bg-card)', borderRadius: 10,
