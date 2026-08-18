@@ -195,7 +195,7 @@ router.get("/:id", requireRole("family"), async (req, res) => {
     let invites = [];
     if (membership.role === "leader") {
       invites = await db.prepare(
-        "SELECT id, invited_email, role, status, expires_at, created_at FROM care_team_invites WHERE care_team_id = ? AND status = 'pending' ORDER BY created_at DESC"
+        "SELECT id, invited_email, role, status, expires_at, created_at, capabilities FROM care_team_invites WHERE care_team_id = ? AND status = 'pending' ORDER BY created_at DESC"
       ).all(req.params.id);
     }
 
@@ -226,6 +226,8 @@ router.get("/:id", requireRole("family"), async (req, res) => {
           status: i.status,
           expiresAt: i.expires_at,
           createdAt: i.created_at,
+          // v1.105.81 — so the pending row can say "Viewer" rather than the role word.
+          capabilities: require("../utils/capabilities").capabilitiesFor(i.capabilities, null),
         })),
       },
     });

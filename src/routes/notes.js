@@ -177,14 +177,13 @@ router.post("/", async (req, res) => {
       const author = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(req.user.id);
       const authorName = author ? `${author.first_name} ${author.last_name}` : "A team member";
 
-      // Everyone on any care team for this recipient, plus the family owner as fallback
-      const teamRows = await db.prepare(`
-        SELECT DISTINCT ctm.user_id FROM care_team_members ctm
-        JOIN care_teams ct ON ctm.care_team_id = ct.id
-        WHERE ct.care_recipient_id = ?
-      `).all(careRecipientId);
-      const notifyIds = new Set(teamRows.map((r) => r.user_id));
-      if (cr.family_user_id) notifyIds.add(cr.family_user_id);
+      // v1.105.81 — only people who can READ a note are told one exists. This used to be
+      // every care_team_member, which with per-invitation capabilities means a helper who was
+      // deliberately denied the care record still got "New note — Betty" for a note she
+      // cannot open. Useless to her, and it leaks that something was written and about whom.
+      const { usersWithCapability } = require("../utils/access");
+      const { CAP } = require("../utils/capabilities");
+      const notifyIds = new Set(await usersWithCapability(db, careRecipientId, CAP.READ_NOTES));
       notifyIds.delete(req.user.id); // never notify the author
 
       const title = needsAttention

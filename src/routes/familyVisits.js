@@ -273,15 +273,11 @@ async function notifyTeam(db, req, { id, careRecipientId }) {
     ).get(careRecipientId);
     if (!cr) return;
 
-    const members = await db.prepare(`
-      SELECT DISTINCT ctm.user_id AS id
-      FROM care_team_members ctm
-      JOIN care_teams ct ON ct.id = ctm.care_team_id
-      WHERE ct.care_recipient_id = ?
-    `).all(careRecipientId);
-
-    const ids = new Set(members.map((m) => m.id));
-    if (cr.family_user_id) ids.add(cr.family_user_id);
+    // v1.105.81 — see notes.js: told only if you could go and read it. Someone who can log
+    // a visit but not read the history does not need a push about somebody else's.
+    const { usersWithCapability } = require("../utils/access");
+    const { CAP } = require("../utils/capabilities");
+    const ids = new Set(await usersWithCapability(db, careRecipientId, CAP.READ_VISITS));
     ids.delete(req.user.id); // never push your own visit back at you
     if (ids.size === 0) return;
 

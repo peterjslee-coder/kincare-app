@@ -22,11 +22,23 @@ const CAP_PRESETS = {
   viewer: ['read_profile', 'read_notes', 'write_notes', 'read_visits', 'write_visits'],
   helper: ['write_notes', 'write_visits'],
 };
+// v1.105.81 — name an invite's access from the capabilities it carries, so a pending row says
+// "Viewer" rather than the raw role word. Falls back to the role for invites sent before
+// v1.105.79, which have no capability set.
 const CAP_PRESET_COPY = {
   member: ['Full access', 'Everything below \u2014 the same as another family organiser.'],
   viewer: ['Viewer', 'Reads the record and logs their own visits. Nothing to do with medication.'],
   helper: ['Helper', 'Leaves a note and records that they were there. Sees nothing about their health.'],
 };
+const capsLabel = (caps, role) => {
+  if (!Array.isArray(caps) || caps.length === 0) return role === 'viewer' ? 'Viewer' : role === 'care_recipient' ? 'Care Recipient' : 'Full access';
+  const key = JSON.stringify([...caps].sort());
+  for (const name of ['member', 'viewer', 'helper']) {
+    if (JSON.stringify([...CAP_PRESETS[name]].sort()) === key) return CAP_PRESET_COPY[name][0];
+  }
+  return `Custom (${caps.length})`;
+};
+
 
 const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
   const [team, setTeam] = useState(null);
@@ -557,7 +569,39 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
 
       {/* Members */}
       <div className="card">
-        <div className="card-header">Team Members ({team.members?.length || 0})</div>
+        <div className="card-header">
+          Team Members ({team.members?.length || 0}{isLeader && team.invites?.length > 0 ? ` + ${team.invites.length} pending` : ''})
+        </div>
+
+        {/* v1.105.81 — Pete: "if I send an invite, I want to see 'pending - Viewer' under team
+            members". They used to live in a separate card below Recent Visits, which is not
+            where you look after sending one. Shown here, dimmed, with the access they will get
+            when they accept — named from the capabilities the invite carries, not the role word. */}
+        {isLeader && team.invites?.map((inv) => (
+          <div key={inv.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid #f0f0f0', opacity: 0.72 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+              <div style={{ width: 42, height: 42, borderRadius: '50%', border: '1px dashed var(--border-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, color: 'var(--text-muted)', flexShrink: 0 }}>
+                {'\u2709'}
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontWeight: 600, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{inv.invitedEmail || inv.email}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 1 }}>
+                  Pending {'\u00B7'} {capsLabel(inv.capabilities, inv.role)}
+                </div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+              <button onClick={() => handleResendInvite(inv.id, inv.invitedEmail || inv.email)}
+                style={{ padding: '4px 10px', background: 'var(--bg-surface)', color: 'var(--role-color)', border: '1px solid #1b6b5a', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                Resend
+              </button>
+              <button onClick={() => handleCancelInvite(inv.id)}
+                style={{ padding: '4px 10px', background: 'var(--bg-surface)', color: 'var(--color-error)', border: '1px solid #dc3545', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        ))}
         {team.members?.map((m) => {
           const isExpanded = expandedMember === m.userId;
           const canManage = isLeader && m.role !== 'leader';
@@ -813,32 +857,6 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
       )}
 
       {/* Pending Invites */}
-      {isLeader && team.invites?.length > 0 && (
-        <div className="card" style={{ marginTop: 16 }}>
-          <div className="card-header">Pending Invites ({team.invites.length})</div>
-          {team.invites.map((inv) => (
-            <div key={inv.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid #f0f0f0' }}>
-              <div>
-                <div style={{ fontWeight: 600, fontSize: 14 }}>{inv.email}</div>
-                <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
-                  Invited as {inv.role} · Expires {(parseTimestamp(inv.expiresAt) || new Date(0)).toLocaleDateString()}
-                </div>
-              </div>
-              <div style={{ display: 'flex', gap: 6 }}>
-                <button onClick={() => handleResendInvite(inv.id, inv.email)}
-                  style={{ padding: '4px 10px', background: 'var(--bg-surface)', color: 'var(--role-color)', border: '1px solid #1b6b5a', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-                  Resend
-                </button>
-                <button onClick={() => handleCancelInvite(inv.id)}
-                  style={{ padding: '4px 10px', background: 'var(--bg-surface)', color: 'var(--color-error)', border: '1px solid #dc3545', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-                  Cancel
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
       {/* Recent Visits */}
       {recentVisits.length > 0 && (
         <div style={{ marginTop: 24, background: 'var(--bg-surface)', borderRadius: 12, border: '1px solid #e0e0e0', padding: '16px 20px' }}>

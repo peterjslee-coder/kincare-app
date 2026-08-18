@@ -557,7 +557,16 @@ async function pollCareTasks(sendPushToUser) {
       // Family-only notices (v1.99.2). If the assignee is a caregiver-only
       // user, the due push falls back to the notifiable family members so
       // the reminder never goes nowhere.
-      const notifiable = team.filter(isFamilyNotifiable);
+      //
+      // v1.105.81 — and now also gated on READ_TASKS. Someone on the team who was not granted
+      // sight of the care tasks is not told a medication is due. Note this filters the PUSH
+      // only: teamUserIds still returns everyone, because the same list feeds the who-did-it
+      // picker and a helper must stay selectable as the person who gave the medication even
+      // though she is never notified about it.
+      const { usersWithCapability } = require("../utils/access");
+      const { CAP } = require("../utils/capabilities");
+      const canSee = new Set(await usersWithCapability(db, t.care_recipient_id, CAP.READ_TASKS));
+      const notifiable = team.filter((u) => isFamilyNotifiable(u) && canSee.has(u.id));
       const sent = occ.reminders_sent || "";
       const detail = (() => {
         try { const d = JSON.parse(t.details || "null"); return d?.med_name ? ` (${d.med_name}${d.dose ? `, ${d.dose}` : ""})` : ""; } catch { return ""; }

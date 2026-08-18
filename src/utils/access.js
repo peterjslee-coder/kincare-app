@@ -108,6 +108,52 @@ async function recipientCapabilities(db, recipientId, userId) {
 }
 
 /**
+ * Everyone who should be TOLD about something, given what they are allowed to see (v1.105.81).
+ *
+ * The note, care-task and family-visit fan-outs each selected every care_team_member for the
+ * recipient and pushed to all of them. With per-invitation capabilities that is wrong in a way
+ * that matters: Peggy is on the team to leave a note and record a visit, and is deliberately
+ * denied the care record — yet she would receive "New note — Betty" for a note she cannot open.
+ * A notification about something you are not allowed to see is both useless and a small leak:
+ * it tells you a thing happened, and to whom.
+ *
+ * The rule: you are only notified about what you could go and read.
+ *
+ * NOTE this is separate from teamUserIds() in careTasks.js, which feeds the who-did-it picker
+ * as well as the escalation push. That picker must keep listing everyone — Peggy needs to be
+ * selectable as the person who gave the medication even though she is not notified about it.
+ * Filtering there would have quietly removed her from the list.
+ *
+ * @returns {Promise<string[]>} user ids holding `cap`
+ */
+async function usersWithCapability(db, recipientId, cap) {
+  const { can } = require("./capabilities");
+  if (!recipientId || !cap) return [];
+
+  const rows = await db.prepare(`
+    SELECT DISTINCT u.id
+    FROM users u
+    WHERE COALESCE(u.is_active, 1) = 1
+      AND u.id IN (
+        SELECT family_user_id FROM care_recipients WHERE id = ?
+        UNION
+        SELECT ctm.user_id FROM care_team_members ctm
+        JOIN care_teams ct ON ctm.care_team_id = ct.id
+        WHERE ct.care_recipient_id = ?
+        UNION
+        SELECT shared_with_user_id FROM care_recipient_shares WHERE care_recipient_id = ?
+      )
+  `).all(recipientId, recipientId, recipientId);
+
+  const allowed = [];
+  for (const r of rows) {
+    const caps = await recipientCapabilities(db, recipientId, r.id);
+    if (can(caps, cap)) allowed.push(r.id);
+  }
+  return allowed;
+}
+
+/**
  * Access to one session. Returns null when the session does not exist OR the user has no
  * business with it — the caller cannot tell the two apart, and neither can an attacker.
  *
@@ -155,4 +201,4 @@ async function sessionAccess(db, sessionId, userId) {
 }
 
 module.exports = {
-  recipientCapabilities, recipientAccess, sessionAccess };
+  recipientCapabilities, usersWithCapability, recipientAccess, sessionAccess };
