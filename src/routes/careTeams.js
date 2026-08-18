@@ -735,21 +735,39 @@ router.post("/accept-invite", authenticate, async (req, res) => {
     // Also add to care_recipient_shares for backward compatibility
     const team = await db.prepare("SELECT care_recipient_id FROM care_teams WHERE id = ?").get(invite.care_team_id);
     if (team) {
+      // ─── v1.105.86: the access you granted is the access they get ───
+      //
+      // Pete: "if I go to the trouble to check off what i want her to be able to do and send
+      // the invitation, I don't want it to grant her full member privileges until I can go
+      // change her back to limited. It should establish her with the access i grant."
+      //
+      // Two ways that failed before, both of which erred toward MORE access than was granted:
+      //
+      //   1. The whole block sat behind `if (!shareExists)`. Anyone who already had a share —
+      //      a previous invite, an earlier share — kept their old access and the new invite's
+      //      capabilities were never applied at all. Silently.
+      //
+      //   2. The capability write was a separate UPDATE ending in `.catch(() => {})`. If it
+      //      failed, the row stayed on the permission derived from the role word, which for
+      //      anything but 'viewer' is 'edit' — every capability there is. A swallow that fails
+      //      OPEN on a permission grant is the worst possible direction, and it was mine.
+      //
+      // Now: the capability set is written in the INSERT itself, an existing share is UPDATED
+      // rather than skipped, and nothing is caught. If this cannot be written, the join fails
+      // and she retries — which is correct, because the alternative is quietly handing someone
+      // the run of a health record.
       const shareExists = await db.prepare(
         "SELECT id FROM care_recipient_shares WHERE care_recipient_id = ? AND shared_with_user_id = ?"
       ).get(team.care_recipient_id, req.user.id);
-      if (!shareExists) {
+      const grantedPermission = invite.role === "viewer" ? "view" : "edit";
+      if (shareExists) {
         await db.prepare(
-          "INSERT INTO care_recipient_shares (id, care_recipient_id, shared_with_user_id, permission, shared_by_user_id) VALUES (?, ?, ?, ?, ?)"
-        ).run(uuid(), team.care_recipient_id, req.user.id, invite.role === "viewer" ? "view" : "edit", invite.invited_by);
-        // v1.105.78 — if the invite carried an explicit capability set, it wins over the role.
-        // What the owner ticked when sending is what the share gets, rather than being
-        // re-derived from a role name here.
-        if (invite.capabilities) {
-          await db.prepare(
-            "UPDATE care_recipient_shares SET capabilities = ? WHERE care_recipient_id = ? AND shared_with_user_id = ?"
-          ).run(invite.capabilities, team.care_recipient_id, req.user.id).catch(() => {});
-        }
+          "UPDATE care_recipient_shares SET permission = ?, capabilities = ? WHERE id = ?"
+        ).run(grantedPermission, invite.capabilities || null, shareExists.id);
+      } else {
+        await db.prepare(
+          "INSERT INTO care_recipient_shares (id, care_recipient_id, shared_with_user_id, permission, capabilities, shared_by_user_id) VALUES (?, ?, ?, ?, ?, ?)"
+        ).run(uuid(), team.care_recipient_id, req.user.id, grantedPermission, invite.capabilities || null, invite.invited_by);
       }
     }
 
