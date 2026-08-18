@@ -148,6 +148,16 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   // asked" must not render as "you haven't submitted". That conflation is the same shape as the
   // selfie's 0% in v1.105.73 — an absent value rendered as a verdict.
   const [idVerification, setIdVerification] = useState({ verified: false, status: 'unknown', loaded: false });
+  // v1.105.84 — the third answer to a care request. Accept and "propose a different time" were
+  // the only two, so a request she could not take had no exit and the family got no signal.
+  //
+  // v1.105.87 — these three lived below `if (loading) return <LoadingSpinner/>`. On the loading
+  // render they never ran; on the next render they did, so React saw more hooks than the
+  // previous render and threw. That is the white screen Julia hit. Hooks must be unconditional
+  // and above every early return — mine were neither.
+  const [decliningJob, setDecliningJob] = useState(null);
+  const [declineReason, setDeclineReason] = useState('');
+  const [decliningBusy, setDecliningBusy] = useState(false);
   // v1.105.82 — a care-team invite waiting on this caregiver. The banner for these has existed
   // since care teams shipped, on Dashboard — the FAMILY home screen. A caregiver lands on this
   // component and never sees Dashboard, so Julia clicked her invite email, opened the app, and
@@ -758,12 +768,6 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       }, 700);
     });
   };
-
-  // v1.105.84 — the third answer. Accept and "propose a different time" were the only two,
-  // so a request she could not take had no exit and the family got no signal at all.
-  const [decliningJob, setDecliningJob] = useState(null);   // the job being declined
-  const [declineReason, setDeclineReason] = useState('');
-  const [decliningBusy, setDecliningBusy] = useState(false);
 
   const submitDecline = async () => {
     if (!decliningJob) return;

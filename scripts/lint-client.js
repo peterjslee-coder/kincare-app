@@ -232,6 +232,99 @@ function collectWindowExports(combinedSource) {
   return out;
 }
 
+// ─── v1.105.87: a hook after an early return ───
+//
+// CaretakerHub early-returns a spinner while it loads. v1.105.84 added three useState calls
+// BELOW that return. On the loading render they never ran; on the next render they did, so
+// React saw more hooks than the previous render and threw "Rendered more hooks than during the
+// previous render." Julia got a white screen, and Sentry had eight events inside six minutes.
+//
+// eslint-plugin-react-hooks cannot help here: every component in this codebase is declared as
+// `const Foo = window.Foo = (...) => {}`, so the rule sees the name "window.Foo", decides it is
+// not a component, and reports 1,467 false positives. This checks the precise thing that broke.
+//
+// It looks only at TOP-LEVEL statements of a function body: a return at that level ends the
+// render for good, so any hook after it is conditional by construction. Hooks inside nested
+// callbacks are somebody else's rule and are left alone.
+const HOOK_RE = /^(use[A-Z]\w*)$/;
+
+function findHooksAfterEarlyReturn(files, PUBLIC) {
+  const findings = [];
+
+  const hookNameOf = (node) => {
+    if (!node || node.type !== "CallExpression") return null;
+    const c = node.callee;
+    if (c.type === "Identifier" && HOOK_RE.test(c.name)) return c.name;
+    // React.useState(...)
+    if (c.type === "MemberExpression" && !c.computed && c.property.type === "Identifier" && HOOK_RE.test(c.property.name)) {
+      return `${c.object.name || "React"}.${c.property.name}`;
+    }
+    return null;
+  };
+
+  // A top-level statement that can return out of the function: `if (x) return y;`,
+  // `if (x) { return y; }`, a switch with returns. Nested functions are NOT counted — their
+  // returns end the callback, not the render.
+  const containsReturn = (node) => {
+    let found = false;
+    (function walk(n) {
+      if (found || !n || typeof n !== "object") return;
+      if (Array.isArray(n)) return n.forEach(walk);
+      if (n.type === "FunctionExpression" || n.type === "ArrowFunctionExpression" || n.type === "FunctionDeclaration") return;
+      if (n.type === "ReturnStatement") { found = true; return; }
+      for (const k of Object.keys(n)) { const v = n[k]; if (v && typeof v === "object") walk(v); }
+    })(node);
+    return found;
+  };
+
+  const scanBody = (body, file, onFinding) => {
+    if (!Array.isArray(body)) return;
+    let returnedAt = null;
+    for (const stmt of body) {
+      if (returnedAt !== null) {
+        // Look for hook calls anywhere inside this statement, but not through nested functions.
+        (function walk(n) {
+          if (!n || typeof n !== "object") return;
+          if (Array.isArray(n)) return n.forEach(walk);
+          if (n.type === "FunctionExpression" || n.type === "ArrowFunctionExpression" || n.type === "FunctionDeclaration") return;
+          const name = hookNameOf(n);
+          if (name) onFinding({ file, line: n.loc.start.line, name, returnedAt });
+          for (const k of Object.keys(n)) { const v = n[k]; if (v && typeof v === "object") walk(v); }
+        })(stmt);
+      } else if (stmt.type === "ReturnStatement") {
+        returnedAt = stmt.loc.start.line;
+      } else if (containsReturn(stmt)) {
+        // The case that actually broke: `if (loading) return <LoadingSpinner/>;`. A CONDITIONAL
+        // early return is the whole point — the first version of this gate only looked for a
+        // bare ReturnStatement, missed exactly the bug it was written for, and reported green
+        // against a deliberately planted regression.
+        returnedAt = stmt.loc.start.line;
+      }
+    }
+  };
+
+  for (const rel of files) {
+    const abs = path.join(PUBLIC, rel);
+    if (!fs.existsSync(abs)) continue;
+    let ast;
+    try {
+      ast = espree.parse(fs.readFileSync(abs, "utf8"), {
+        ecmaVersion: 2022, sourceType: "script", ecmaFeatures: { jsx: true }, loc: true,
+      });
+    } catch { continue; }   // a parse failure is lint:client's other checks' problem, not this one
+    (function walk(n) {
+      if (!n || typeof n !== "object") return;
+      if (Array.isArray(n)) return n.forEach(walk);
+      if ((n.type === "ArrowFunctionExpression" || n.type === "FunctionExpression" || n.type === "FunctionDeclaration")
+          && n.body && n.body.type === "BlockStatement") {
+        scanBody(n.body.body, rel, (f) => findings.push(f));
+      }
+      for (const k of Object.keys(n)) { const v = n[k]; if (v && typeof v === "object") walk(v); }
+    })(ast);
+  }
+  return findings;
+}
+
 async function main() {
   const eslint = new ESLint({
     useEslintrc: false,
@@ -278,9 +371,10 @@ async function main() {
   const baseNote = baselined.length ? ` (${baselined.length} known baseline finding(s) ignored — see BASELINE in lint-client.js)` : "";
 
   const missingJsx = findUndefinedJsxComponents(combined, locate);
+  const lateHooks = findHooksAfterEarlyReturn(files, PUBLIC);
 
-  if (errors.length === 0 && missingJsx.length === 0) {
-    console.log(`  [lint] ✓ ${files.length} client files, no NEW undeclared identifiers / dupe keys / dead code / undefined JSX components / unreachable functions${baseNote}`);
+  if (errors.length === 0 && missingJsx.length === 0 && lateHooks.length === 0) {
+    console.log(`  [lint] ✓ ${files.length} client files, no NEW undeclared identifiers / dupe keys / dead code / undefined JSX components / unreachable functions / late hooks${baseNote}`);
     return 0;
   }
 
@@ -297,6 +391,12 @@ async function main() {
     console.error(`\n  [lint] ✗ ${missingJsx.length} JSX component(s) used but never declared — these throw on render:\n`);
     for (const m of missingJsx) {
       console.error(`    ${m.loc.file}:${m.loc.line}  <${m.name}> is not defined anywhere in the bundle`);
+    }
+  }
+  if (lateHooks.length) {
+    console.error(`\n  [lint] \u2717 ${lateHooks.length} React hook(s) called AFTER an early return — these throw "Rendered more hooks than during the previous render":\n`);
+    for (const h of lateHooks) {
+      console.error(`    ${h.file}:${h.line}  ${h.name}() runs only when the function gets past the return on line ${h.returnedAt}`);
     }
   }
   console.error("");
