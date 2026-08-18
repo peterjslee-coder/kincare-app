@@ -1292,6 +1292,20 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                     })}
                   </div>
                 )}
+                {/* v1.105.74 — the list carries hasPhoto, never the blob: a 5MB data URI per
+                    row would make this feed unusable, so the image is fetched by id.
+                    AttachmentThumb rather than a bare <img src>, for the reason the note photo
+                    below documents — a plain src is an UNAUTHENTICATED request, and in the
+                    native app it renders "Authentication required". */}
+                {v.hasPhoto && (
+                  <div style={{ marginTop: 6 }}>
+                    <AttachmentThumb size={64}
+                      attachment={{ path: `/api/family-visits/${v.id}/photo`, name: 'Visit photo', mime: '' }}
+                      onOpen={() => setViewingAttachments({
+                        list: [{ path: `/api/family-visits/${v.id}/photo`, name: 'Visit photo', mime: '' }], index: 0,
+                      })} />
+                  </div>
+                )}
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
                   {TimezoneHelper.formatTimestamp(v.visitedAt, profile?.timezone, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) || ''}
                 </div>

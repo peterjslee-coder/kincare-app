@@ -19,6 +19,7 @@ const { getDb } = require("../models/database");
 const { authenticate } = require("../middleware/auth");
 const { recipientAccess } = require("../utils/access");
 const { coarsenCoordinate, geofenceEvidence } = require("../utils/geocode");
+const { validateMagicBytes } = require("../utils/fileValidation");
 const { captureException } = require("../utils/sentry");
 
 const router = express.Router();
@@ -35,16 +36,41 @@ function cleanActivities(input) {
   return [...new Set(input.filter((a) => ACTIVITIES.includes(a)))];
 }
 
+// ─── The photo (v1.105.74) ───
+//
+// Same contract as a photo note (notes.js, v1.76.0): a base64 data URI, an image mime we
+// actually accept, 5MB after decode, and magic bytes that agree with the claimed type — a
+// declared mime is a claim by the uploader, not a fact. Returns an error string or null.
+const PHOTO_MIMES = ["image/jpeg", "image/png", "image/webp"];
+function validatePhoto(photo) {
+  const m = typeof photo === "string" && photo.match(/^data:([^;]+);base64,(.+)$/s);
+  if (!m) return "Photo must be a base64 data URI";
+  const mime = m[1].toLowerCase();
+  if (!PHOTO_MIMES.includes(mime)) return "Photo must be JPEG, PNG, or WebP";
+  const buf = Buffer.from(m[2], "base64");
+  if (buf.length > 5 * 1024 * 1024) return "Photo too large (5MB max)";
+  if (!validateMagicBytes(buf, mime).valid) return "Photo content does not match its type";
+  return null;
+}
+
 // ─── POST /api/family-visits ───
 router.post("/", async (req, res) => {
   try {
     const db = await getDb();
     const {
       careRecipientId, summary, moodRating, activities,
-      visitedAt, durationMinutes, latitude, longitude, loggedVia,
+      visitedAt, durationMinutes, latitude, longitude, loggedVia, photo,
     } = req.body || {};
 
     if (!careRecipientId) return res.status(400).json({ error: "careRecipientId is required" });
+
+    // Validate before the access lookup: a malformed photo should not cost a DB round trip.
+    let photoData = null;
+    if (photo) {
+      const bad = validatePhoto(photo);
+      if (bad) return res.status(400).json({ error: bad });
+      photoData = photo;
+    }
 
     // 404 rather than 403: "not yours" and "not there" look identical to someone probing ids.
     const access = await recipientAccess(db, careRecipientId, req.user.id);
@@ -64,8 +90,10 @@ router.post("/", async (req, res) => {
     }
 
     const text = summary ? String(summary).slice(0, MAX_SUMMARY) : null;
-    if (!text && !moodRating && cleanActivities(activities).length === 0) {
-      return res.status(400).json({ error: "Add a note, a mood, or what you did — otherwise there's nothing to record" });
+    // v1.105.74 — a photo IS a record. Pete's ask was for the quick path, where a picture of
+    // the fridge or the swollen ankle may be the whole point and typing is the friction.
+    if (!text && !moodRating && cleanActivities(activities).length === 0 && !photoData) {
+      return res.status(400).json({ error: "Add a note, a mood, a photo, or what you did — otherwise there's nothing to record" });
     }
 
     // Geofence evidence is computed at FULL precision and then discarded; only the
@@ -96,8 +124,8 @@ router.post("/", async (req, res) => {
     await db.prepare(`
       INSERT INTO family_visits
         (id, care_recipient_id, user_id, visited_at, duration_minutes, summary, mood_rating,
-         activities, latitude, longitude, distance_ft, geo_flag, logged_via, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+         activities, latitude, longitude, distance_ft, geo_flag, logged_via, photo, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
     `).run(
       id, careRecipientId, req.user.id, visited.toISOString(),
       durationMinutes ? parseInt(durationMinutes, 10) : null,
@@ -106,6 +134,7 @@ router.post("/", async (req, res) => {
       longitude != null ? coarsenCoordinate(longitude) : null,
       geo.distanceFt, geo.flag,
       loggedVia === "geo_prompt" ? "geo_prompt" : "manual",
+      photoData,
     );
 
     notifyTeam(db, req, { id, careRecipientId }).catch(() => {});
@@ -130,6 +159,7 @@ router.get("/:careRecipientId", async (req, res) => {
     const rows = await db.prepare(`
       SELECT fv.id, fv.care_recipient_id, fv.user_id, fv.visited_at, fv.duration_minutes,
              fv.summary, fv.mood_rating, fv.activities, fv.created_at,
+             (fv.photo IS NOT NULL) AS has_photo,
              u.first_name AS author_first_name, u.last_name AS author_last_name
       FROM family_visits fv
       JOIN users u ON u.id = fv.user_id
@@ -146,6 +176,33 @@ router.get("/:careRecipientId", async (req, res) => {
     console.error("Family visit list error:", err);
     captureException(err, { where: "familyVisits: list" });
     res.status(500).json({ error: "Could not load visits" });
+  }
+});
+
+// ─── GET /api/family-visits/:id/photo — stream a visit photo ───
+//
+// Same access rule as the visit itself (recipientAccess), and a 404 rather than a 403 for
+// "not yours", so probing ids tells you nothing. Mirrors notes.js /:id/photo.
+//
+// Route order is safe either way: GET /:careRecipientId is one path segment and this is two,
+// so "/<id>/photo" can never fall through to the list route. Worth stating because the two
+// params look alike and are NOT the same id — that one is a recipient, this one is a visit.
+router.get("/:id/photo", async (req, res) => {
+  try {
+    const db = await getDb();
+    const row = await db.prepare("SELECT care_recipient_id, photo FROM family_visits WHERE id = ?").get(req.params.id);
+    if (!row || !row.photo) return res.status(404).json({ error: "Photo not found" });
+    const access = await recipientAccess(db, row.care_recipient_id, req.user.id);
+    if (!access) return res.status(404).json({ error: "Photo not found" });
+    const m = row.photo.match(/^data:([^;]+);base64,(.+)$/s);
+    if (!m) return res.status(500).json({ error: "Stored photo is corrupt" });
+    res.set("Content-Type", m[1]);
+    res.set("Cache-Control", "private, max-age=86400");
+    res.send(Buffer.from(m[2], "base64"));
+  } catch (err) {
+    console.error("Family visit photo error:", err);
+    captureException(err, { where: "familyVisits: photo" });
+    res.status(500).json({ error: "Could not load that photo" });
   }
 });
 
@@ -191,6 +248,9 @@ function shape(r) {
     moodRating: r.mood_rating,
     activities,
     createdAt: r.created_at,
+    // v1.105.74 — the flag, never the blob. `photo` is a data URI up to 5MB and a list of 50
+    // of them would be a quarter-gigabyte response; the client fetches /:id/photo on demand.
+    hasPhoto: r.has_photo === true || r.has_photo === 1 || (r.photo != null && r.has_photo === undefined),
   };
 }
 

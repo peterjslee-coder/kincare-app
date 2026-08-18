@@ -1926,6 +1926,19 @@ async function initializeDatabase() {
         `UPDATE push_subscriptions SET last_badge = NULL`,
       ],
     },
+    {
+      // v1.105.74 — a photo on a family visit. Pete, from his phone at his mother's house:
+      // "I need to be able to add a picture when I log a visit. There doesn't seem to be a
+      // way for me to add a picture when I am just quickly logging a visit."
+      //
+      // Same storage shape as recipient_notes.photo (v1.76.0): the base64 data URI itself,
+      // validated at the route for mime, size and magic bytes. Never returned in a list —
+      // has_photo only — because a 5MB blob per row would make the visit feed unusable.
+      id: "020_family_visit_photo",
+      statements: [
+        `ALTER TABLE family_visits ADD COLUMN IF NOT EXISTS photo TEXT`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

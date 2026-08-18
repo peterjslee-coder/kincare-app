@@ -255,6 +255,9 @@ function limitBodySize(maxBytes = 50000) {
     // v1.105.35 — caregiver ID verification (base64 government ID + selfie; express.json
     // 10mb applies and the route enforces its own per-image cap)
     if (req.originalUrl?.startsWith("/api/caregiver-onboarding")) return next();
+    // v1.105.74 — family visits (one optional base64 photo; express.json 8mb applies and the
+    // route enforces its own 5MB + magic-byte check)
+    if (req.originalUrl?.startsWith("/api/family-visits")) return next();
     const contentLength = parseInt(req.headers["content-length"] || "0");
     if (contentLength > maxBytes) {
       return res.status(413).json({ error: "Request body too large" });

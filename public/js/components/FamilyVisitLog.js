@@ -53,13 +53,37 @@ const LogVisitSheet = window.LogVisitSheet = ({ recipients, presetRecipientId, p
   const [when, setWhen] = useState(() => toLocalInput(new Date()));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  // v1.105.74 — Pete, from his phone: "I need to be able to add a picture when I log a visit.
+  // There doesn't seem to be a way for me to add a picture when I am just quickly logging a
+  // visit." Downscaled on this device before it ever hits the wire — an untouched iPhone photo
+  // is 3–5MB and the route caps at 5MB.
+  const [photo, setPhoto] = useState(null);       // data URI, already downscaled
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const photoInputRef = React.useRef(null);
+
+  const pickPhoto = async (file) => {
+    if (!file) return;
+    setPhotoBusy(true);
+    setError('');
+    try {
+      const dataUrl = await downscaleImage(file, { maxDim: 1600, quality: 0.85 });
+      if (!dataUrl) { setError('That image could not be read — try another'); }
+      else setPhoto(dataUrl);
+    } catch (e) {
+      console.error('Visit photo error:', e);
+      setError('That image could not be read — try another');
+    }
+    setPhotoBusy(false);
+    if (photoInputRef.current) photoInputRef.current.value = '';
+  };
 
   const toggle = (id) => setActs((a) => (a.includes(id) ? a.filter((x) => x !== id) : [...a, id]));
 
   const save = async () => {
     if (!chosen) { setError('Pick who you visited'); return; }
-    if (!summary.trim() && acts.length === 0) {
-      setError('Add a note or what you did — otherwise there’s nothing to record');
+    // A photo is a record on its own — that was the whole point of the request.
+    if (!summary.trim() && acts.length === 0 && !photo) {
+      setError('Add a note, a photo, or what you did — otherwise there’s nothing to record');
       return;
     }
     setSaving(true);
@@ -76,6 +100,7 @@ const LogVisitSheet = window.LogVisitSheet = ({ recipients, presetRecipientId, p
       // Only sent when the nudge supplied it. The server coarsens before storing, and the
       // geofence decision was already made on this device at full precision.
       if (position) { body.latitude = position.latitude; body.longitude = position.longitude; }
+      if (photo) body.photo = photo;
 
       const res = await apiFetch('/api/family-visits', { method: 'POST', body: JSON.stringify(body) });
       if (res?.ok) {
@@ -164,6 +189,28 @@ const LogVisitSheet = window.LogVisitSheet = ({ recipients, presetRecipientId, p
         <textarea id="fv-note" value={summary} onChange={(e) => setSummary(e.target.value)}
           placeholder="How they seemed, what you talked about, anything the team should know…"
           style={{ width: '100%', minHeight: 84, padding: 10, border: '1px solid var(--border-light)', borderRadius: 9, fontSize: 13, resize: 'vertical', background: 'var(--bg-card)', color: 'var(--text-primary)' }} />
+
+        {/* v1.105.74 — the photo. `capture` is deliberately NOT set: it would force the camera
+            and Pete's case is often a picture already in the roll. Both sources stay available. */}
+        <label style={label}>A photo (optional)</label>
+        {photo ? (
+          <div style={{ position: 'relative', marginBottom: 4 }}>
+            <img src={photo} alt="Attached to this visit" style={{ width: '100%', maxHeight: 220, objectFit: 'cover', borderRadius: 9, border: '1px solid var(--border-light)', display: 'block' }} />
+            <button onClick={() => setPhoto(null)} aria-label="Remove photo" style={{
+              position: 'absolute', top: 8, right: 8, width: 30, height: 30, borderRadius: '50%',
+              border: 'none', background: 'rgba(0,0,0,0.6)', color: '#fff', fontSize: 15, cursor: 'pointer', lineHeight: 1,
+            }}>{'\u2715'}</button>
+          </div>
+        ) : (
+          <button onClick={() => photoInputRef.current && photoInputRef.current.click()} disabled={photoBusy} style={{
+            width: '100%', padding: '11px', borderRadius: 9, fontSize: 13, fontWeight: 600,
+            border: '1px dashed var(--border-light)', background: 'var(--bg-card)',
+            color: photoBusy ? 'var(--text-tertiary)' : 'var(--text-secondary)',
+            cursor: photoBusy ? 'default' : 'pointer',
+          }}>{photoBusy ? 'Preparing photo\u2026' : '\uD83D\uDCF7  Add a photo'}</button>
+        )}
+        <input ref={photoInputRef} type="file" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }}
+          onChange={(e) => pickPhoto(e.target.files && e.target.files[0])} />
 
         {error && (
           <div role="alert" style={{ marginTop: 10, fontSize: 13, color: 'var(--color-error)', background: 'var(--bg-error-light)', border: '1px solid var(--color-error)', borderRadius: 8, padding: '8px 12px' }}>{error}</div>

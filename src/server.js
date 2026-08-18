@@ -289,6 +289,11 @@ app.use("/api/feedback", express.json({ limit: "4mb" }));
 // the global 100kb cap. Same failure as photo notes (v1.103.2) and feedback screenshots
 // (v1.105.0), on the one flow a caregiver cannot skip and a store reviewer walks.
 app.use("/api/caregiver-onboarding", express.json({ limit: "10mb" }));
+// v1.105.74 — a family visit can carry one photo (client downscales to ≤1600px, the route
+// enforces 5MB + magic bytes). Same rule as notes, feedback and caregiver-onboarding above:
+// BOTH a route-scoped express.json limit AND a limitBodySize exemption, or the global 100kb
+// cap 413s every photo. That has now been the same bug four times.
+app.use("/api/family-visits", express.json({ limit: "8mb" }));
 // Skip JSON parsing for webhooks that need raw body for signature verification
 app.use((req, res, next) => {
   if (req.originalUrl === '/api/payments/webhook' || req.originalUrl === '/api/checkr/webhook') return next();
@@ -439,7 +444,7 @@ app.use("/api/media", require("./routes/media"));
 app.use("/api/safety", require("./routes/safety"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.105.73";
+const APP_VERSION = "1.105.74";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });
