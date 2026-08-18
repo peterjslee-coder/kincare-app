@@ -248,181 +248,106 @@ The consent_outreach table tracks emails sent + recipient responses. Attestation
 
 ## Last Session Handoff (updated each session)
 
-**Date:** August 18, 2026 | **Version:** v1.105.71 | **Session arc:** the identity-verification
-saga — one real caregiver, five separate untrue things the app told her about her own documents,
-eleven versions shipped, every one of them by patch file
+**Date:** August 18, 2026 (second session) | **Version:** v1.105.72 | **Session arc:** the sweep
+that was offered and never started — and the discovery that it was the wrong sweep
 
-> If the date above is stale, trust `git log` over this section. It sat four months out of date
-> once already.
+> If the date above is stale, trust `git log` over this section.
 
-### First five minutes — and this part has changed
+### First five minutes
 
-Previous handoffs opened with "confirm push access before doing real work." That warning was
-about Cowork sessions running in **Anthropic's cloud sandbox**, where the git proxy refuses
-writes to this repo with a stated reason and a PAT does not help. If you are reading this from a
-task running **on Pete's Mac** — the "Run this task" picker in the desktop app, set to *On your
-computer* — none of that applies. You have his filesystem and his network. `git push` is just
-`git push`.
-
-Verify once, cheaply, before doing anything else:
+Push works from the Cowork sandbox. Not from inside Pete's checkout — from a **fresh clone**:
 
 ```bash
-git push --dry-run
-git log --oneline -1          # expect v1.105.71 or later
-ls tests/*.test.js | wc -l    # 52 at v1.105.71; fewer means a rollback
+PAT=$(grep -o 'github_pat_[A-Za-z0-9_]*' "<his repo>/.git/config" | head -1)
+git clone "https://x-access-token:${PAT}@github.com/peterjslee-coder/kincare-app.git" /tmp/kc
 ```
 
-If the push is refused with `access denied by the git proxy`, you are in the cloud after all.
-Say so **immediately** — do not accumulate an hour of work first. The fallback that works:
-finish and test, `git format-patch -1 --stdout`, deliver the file, Pete applies it.
+**Never run write-mode git against his checkout.** Not through the device bridge, not through the
+sandbox mount — both are FUSE and cannot unlink. The trap is that the command *succeeds*: git
+writes `.git/index.lock`, does the work, fails to remove the lock, and only warns. The orphan then
+blocks every later git command in that repo until Pete deletes it by hand. This session did it
+once, on the very first commit, after reading the previous handoff warning against it.
+Read-only git in the mount is fine: `git log`, `git diff`, `git status`, `git push --dry-run`.
 
-**Pete's stated preference is that you commit and push directly.** The patch-file loop is a
-degraded fallback, not a workflow. The Aug 18 session spent roughly forty minutes of his time on
-delivery mechanics rather than the product: a placeholder path left in a command he pasted, an
-orphaned `.git/index.lock`, a half-finished `git am` that left `.git/rebase-apply` behind, and a
-fresh Terminal window that had reset his working directory. Every one of those was avoidable.
+**Pete's preference is that you commit and push directly.** He said so plainly. Do not hand him
+shell commands unless something genuinely needs his hands.
 
-**If you must hand him shell commands:** always include the `cd`, always self-contained in one
-paste, always ending in a line that verifies the thing actually happened (`git log --oneline -1`,
-not "should be fine"). He will paste exactly what you write.
+### What shipped — v1.105.72
 
-**Never run git commands against his checkout through the device bridge.** The bridge cannot
-unlink files, so git creates `.git/index.lock`, fails to clean it up, and leaves an orphan that
-blocks every subsequent git command in that repo until he deletes it manually. This cost him a
-full lint-and-test run against an unpatched tree that silently proved nothing. Reading files
-through the bridge is fine; writing files is fine; **git is not**.
+Twenty-two client functions that were written, maintained, and wired to nothing.
 
-### The live user, and what is still owed her
+The handoff asked for a gate on "fields the server computes and sends that no client ever reads."
+Tracing the five known instances first showed they are **three different mechanisms**:
 
-**Julia Huth** — caregiver, user `6dab4a74-8d4b-4a58-a30b-5e3a6f616158` — is the first real
-caregiver onboarding outside the demo data. Nearly every fix from .63 through .71 came from
-watching her hit something real. She is not a test account. Check work against her record before
-believing it.
+  (a) a key the client never mentions anywhere — 110 exist; **no gate**, too many false
+      positives, and the identity cases proved this is not what bit users. Listed in TASKS.md.
+  (b) a relay object that rebuilds a payload field by field and drops fields — how BOTH
+      `identityStatus` and `idVerified` went missing.
+  (c) a value computed on the client and never rendered — and this generalises into something
+      worse than a stray field: **functions nothing calls.**
 
-Her state as of Aug 18: **still running client 1.105.64** on an iOS 18.7 **home-screen PWA**
-(user agent has no `Safari/` token — that is how you tell). The identity-status fix she needs
-shipped in .70, so what she sees is a stale bundle, not a live bug. The service worker
-deliberately does **not** call `skipWaiting`, so a pull-to-refresh will not activate the waiting
-worker — she must fully quit the app from the iOS app switcher and reopen, or tap the
-"Update ready — tap to refresh" pill (`swShowUpdatePill` in `public/index.html`).
+Six were on the caregiver's own home screen. `CaretakerHub` is live (`app.js`,
+`role === 'caregiver'`), and inside it `handleIdentityVerify`, `handleStripeOnboard`,
+`handleStripeDashboard`, `handleCancelJob`, `saveStoplight`, `handleDocUpload` and three
+availability-rule handlers could not be reached. All superseded by MyAccount and FindWork.
+`handleIdentityVerify` was worse than dead — it called **Stripe Identity**, the third system
+v1.105.64 established that nothing gates on.
 
-**You can look this up rather than guess.** The client sends `X-App-Version` on every request
-(`public/js/utils.js`), the server records it per user in `user_client_info`
-(`src/routes/auth.js`), and there is an admin endpoint that reads it back:
+**v1.105.51 did careful maintenance on a dead function.** It added an else branch to
+`MyAccount.handleSaveRates`, noting "FindWork's twin of this handler already had the else branch."
+FindWork's twin is the one that runs. `tests/noSilentFailures.test.js` asserted on the dead copy
+and passed for months. **A test can pin unreachable code and prove nothing** — worth checking
+whether other source-matching tests do the same.
 
-```
-GET /api/admin/client-versions   →  src/routes/admin/maintenance.js
-    { users: [ { id, first_name, last_name, email, app_version, platform, user_agent, last_seen_at } ] }
-```
+Two complete features had no way in and were deleted as unreachable, then logged in TASKS.md as
+capability gaps: `CareProfile.saveSummaryEdit` (edit the AI care summary) and
+`MyAccount.handleRenamePasskey`. The care-summary one is a **decision, not a re-add** — given the
+iPAi rule about human review of AI-derived text, an edit affordance there is arguably the point.
 
-That endpoint settled a question that had been pure speculation for two sessions. Use it
-whenever "is she on an old version?" comes up. Two accounts were still on the **1.58.x** line as
-of Aug 18 — a different major version entirely, never chased down.
+### The gate
 
-### What the identity saga actually taught
+`lint:client` gained `no-unused-vars`, narrowed to function-valued bindings via espree, with two
+deliberate escapes: JSX-used names and `window.*` exports. Baseline empty and test-enforced.
+`tests/unreachableFunctionLint.test.js` pins the gate, its escapes and the deletions.
 
-Five things the app stated as fact about Julia's documents, each untrue, each discovered by Pete
-rather than by any test:
-
-1. Admin said "Selfie + ID photo (not submitted)" while her own screen showed a blue check —
-   the same photographs, filed under a different `owner_type`.
-2. She was prompted to pay $30 for a background check Pete had already waived.
-3. Pete could not vouch for her because she did not appear in the candidates list at all — and
-   getting her to appear required *starting* the background check he was trying to waive.
-4. The "Background Check Paid" grant button was labelled as though money had changed hands. It
-   had not; Pete had waived the fee.
-5. Her ID was **auto-approved by the AI**, no human ever asked, and the app then forgot it had —
-   showing her "Not Verified" and offering to redo it, minutes after telling her she'd succeeded.
-
-**The one to carry forward:** `src/utils/identity.js` documents this, and the comment was itself
-wrong at first — it claimed identity is "a human-reviewed gate." It is not. Both `verify-id`
-endpoints write `status = needsHumanReview ? 'pending' : 'approved'`. When the extracted name
-matches, the document classifies as valid, the DOB matches and the faces match, **the AI approves
-a government ID outright and no person is ever asked.** Human review is the exception, not the
-rule. Anything reasoning about this gate must know that.
-
-> **Open item for the lawyer agenda:** AI auto-approval of government identity documents, with no
-> human in the loop and no notification to the admin, has not been reviewed by counsel. Raise it.
-
-### The theme, and the lens to keep
-
-Unchanged across three sweeps and still paying out: **a broken feature and a switched-off feature
-look identical.** Recurring causes, in the order they keep appearing:
-
-- **Wrong column or table names** thrown into a `catch` that logs "(non-blocking)" and returns
-  `[]`. Now guarded by a CI gate — see `lint:sql-columns` below.
-- **Capability guards written against Chrome.** `navigator.permissions.query`, `setAppBadge`,
-  `<a download>`, `window.open('', '_blank')`, `window.print()`, subframe PDFs, and
-  `navigator.clipboard` (undefined in insecure contexts) — all silently dead on WebKit, the
-  platform most users are on.
-- **Vacuous SQL predicates.** A `NOT LIKE` on a nullable column excludes every NULL row.
-- **Unbounded waits.** Node's global `fetch` has no default timeout; the Anthropic SDK's is
-  ~30 minutes with retries.
-- **Empty states that mean "the request failed"**, on both sides of the wire.
-- **Discarded results** — a value computed, sent, and never read. See the sweep below.
-
-**The method that works:** trace the producer AND the consumer before believing a finding, and
-check whether the codebase already solved it in a sibling file. It usually has.
-
-**And verify your own claims the same way.** This session produced a confident report that the
-`identityStatus` fix was missing from the production bundle. It was a false negative — minification
-renames the local variable, so the literal source string cannot match. Counting property names
-instead showed prod and local were identical. Grep against minified output proves nothing about
-absence.
-
-### What shipped — v1.105.61 through v1.105.71
-
-| Ver | What it was |
-| --- | --- |
-| .61 | The attention badge had **never worked once** since it shipped — `router.get("/attention")` in `src/routes/push.js` was missing the `authenticate` middleware, so `req.user` was undefined on every call |
-| .62 | Badge now counts changes to visits that are already booked |
-| .63 | You could not waive a background check without first starting one; "Background Check Paid" relabelled to stop claiming payment |
-| .64 | `src/utils/identity.js` — one resolver for the three doors to identity verification, accepting both `owner_type` shapes |
-| .65 | `scripts/lint-sql-columns.js` — CI gate that resolves every aliased column against the live schema. Walks source lexically, not by regex. **BASELINE is empty and test-enforced: it must stay that way** |
-| .66 | A family could be charged twice (`withPollerLock` raced a deadline that did not cancel the work; Stripe PaymentIntent had no idempotency key) and forgot-password could hang forever (`SEND_TIMEOUT_MS = 15000` in `src/utils/email.js`) |
-| .67 | Every PDF care document was a white rectangle on every iPhone — shared `PdfPreview` component in `AttachmentViewer.js` |
-| .68 | She sent in her ID, was told it worked, and nobody was told |
-| .69 | The rest of the WebKit tail |
-| .70 | The AI approved her ID by itself, and the app then forgot it had — both `setCurrentUser` sites in `public/js/app.js` now carry `identityVerified` and `identityStatus` |
-| .71 | The admin View button did nothing and the AI's extracted notes were never shown — document previews, `aiExtractedRows`, `aiConcernList` in `AdminPanel.js`; `src/routes/admin/verification.js` now returns `extracted_data, ai_confidence, ai_concerns` |
-
-Three CI lint gates now, all of which must pass before a push:
+Narrowed to functions **on purpose**: the rule reports 224 raw, 139 after the escapes; the rest
+are mostly unused `useState` values. A gate that cries wolf gets switched off.
 
 ```bash
 npm run lint:client && npm run lint:requires && npm run lint:sql-columns
-npx jest                       # 52 suites, ~753 tests, ~5s
+npx jest                       # 53 suites, 770 pass / 6 skipped, ~2s
 ```
 
-Note: `npm test -- <name>` does **not** filter. The test script already ends in
-`--testPathIgnorePatterns`, so the argument is appended to *that* flag and the named test is
-*excluded*. Use `npx jest tests/<name>` to run one file. This produced a green run that had
-silently skipped the very test it was meant to check.
+### Two method lessons, both learned the hard way here
+
+**Validate a detector in both directions, against a genuinely pre-fix commit.** The first two
+detectors this session built were WRONG, and only testing caught it. The first "validation" used
+v1.105.69 to check an `idVerified` fix that landed in **.64** — after it, not before. The gate is
+trustworthy because it flags `idVerified` at .63 and not at .71, flags a planted dead handler, and
+stays quiet on a JSX-only component. This is the same discipline as the minified-bundle false
+negative in the previous handoff.
+
+**Do not brace-count to delete code.** An early deletion script counted braces and removed single
+lines out of arrow functions, because `async (a, b) =>` opens and closes a paren before the body
+starts. It corrupted 22 files and had to be reverted. Use AST ranges.
 
 ### Where to pick up
 
-**1. Confirm Julia landed on .71.** Re-run the client-versions endpoint. If `app_version` moved
-off 1.105.64, the identity card should finally read correctly and the admin panel should show her
-selfie, her ID, and the AI's notes. If it did not move, the force-quit instruction did not reach
-her or did not work — that is a real finding about the update mechanism, worth chasing.
+**1. Julia is still the open thread.** Nothing this session touched her. Re-run
+`GET /api/admin/client-versions` — if she is still on 1.105.64 the force-quit instruction did not
+work, and that is a real finding about the PWA update mechanism. Two accounts were on the 1.58.x
+line as of Aug 18 and have never been chased down.
 
-**2. The sweep that was offered and never started:** *fields the server computes and sends that
-no client ever reads.* Five confirmed instances so far — the attention badge, the doctor report's
-visit summaries, `idVerified`, `identityStatus`, and `SW_UPDATED`. Each was live, silent, and
-looked like a feature nobody turned on. This is the same root cause as the column-name class but
-on the wire rather than in SQL, and there is no lint gate for it yet. **A gate would be worth more
-than the individual fixes.**
+**2. TASKS.md P1, new this session:** `AvailabilityTab.js` is an entire component nothing renders
+and it still ships in every bundle; ~117 unused client values (incl. `Dashboard`'s tipping state);
+110 unread server response keys.
 
-**3. TASKS.md backlog, still open:**
-- 14 client fetches where medication reminders vanish on failure
-- Vacuous SQL predicates — the no-show poller never fires; the admin security panel shows a clean
-  night regardless
-- Untimed Anthropic SDK clients in `src/routes/` (the same bug already fixed in `src/utils/`)
-- The P0 group in TASKS.md: six features that have never worked once, each a wrong column name
+**3. Still unverified since March: GPS check-in on a real iPhone.** Note the previous handoff said
+`@capacitor/geolocation` is not in `package.json` — **it is**, at `^8.2.1`. The rest of that P0
+still stands: nothing calls `requestWhenInUseAuthorization()`, and the native path is untested.
 
-**4. Still unverified since March:** GPS check-in on a real iPhone. `@capacitor/geolocation` is
-not in `package.json`. Pete hit `web:denied(1)` at his mother's house in the home-screen PWA,
-which is *not* the native path — so the native path remains untested. The app's entire safety
-proposition rests on it.
+**4. Lawyer agenda, still open:** AI auto-approval of government identity documents, no human in
+the loop, no admin notification.
 
 ## Local Development
 
