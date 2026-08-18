@@ -470,6 +470,47 @@ window.__clearSessionActive = function () {
   } catch {}
 };
 
+// ─── The one place /api/auth/me becomes the client's user object (v1.105.76) ───
+//
+// There were SEVEN hand-written copies of this mapping. v1.105.70 added identityVerified and
+// identityStatus to two of them — the boot restore and login — because MyAccount's Identity
+// Verification card reads user.identityStatus and was showing "Not Verified" to a caregiver
+// whose ID was approved. It fixed the two paths that were tested and left five untouched,
+// including the one Julia actually takes: finishing caregiver onboarding.
+//
+// So she completed onboarding, the app rebuilt her user object without the field, and the card
+// went back to "Not Verified" — the same bug, one commit after it was declared fixed, on a
+// different path. That is what a field-by-field copy guarantees: adding a field is a chore you
+// must remember to do N times, and nothing tells you when you miss one.
+//
+// Every setCurrentUser({...}) now goes through here. Per-site differences (a demo switch forces
+// isDemo, impersonation forces isAdmin false) are passed as overrides, so a NEW field is added
+// once and every path gets it. tests/clientUserShape.test.js fails the build if a raw object
+// literal reappears.
+const toClientUser = window.toClientUser = (u, overrides = {}) => {
+  const roles = u.roles || (u.role ? [u.role] : []);
+  return {
+    id: u.id, email: u.email, role: u.role, roles,
+    firstName: u.first_name || u.firstName, lastName: u.last_name || u.lastName,
+    first_name: u.first_name || u.firstName, last_name: u.last_name || u.lastName,
+    profilePhoto: u.profile_photo || u.profilePhoto || null,
+    emailVerified: !!u.email_verified,
+    isDemo: !!u.is_demo,
+    isAdmin: !!u.is_admin,
+    is_tester: !!u.is_tester,
+    account_approved: !!u.account_approved,
+    companionAccess: !!u.companion_access,
+    onboardingComplete: u.onboarding_complete,
+    selfOnboardingComplete: u.selfOnboardingComplete,
+    careRecipientId: u.careRecipientId,
+    // The two that started this. Anything the server computes about who this person IS belongs
+    // here, not in one caller.
+    identityVerified: !!u.identityVerified,
+    identityStatus: u.identityStatus,
+    ...overrides,
+  };
+};
+
 const App = () => {
   // Detect URL params at init — BEFORE any useEffect or auto-login can race
   // Capture verify token BEFORE any replaceState can strip the URL
@@ -979,27 +1020,7 @@ const App = () => {
             // Apply user's saved theme now that we know they're authenticated
             if (typeof window.__applyUserTheme === 'function') window.__applyUserTheme();
             const userRoles = data.user.roles || [data.user.role];
-            setCurrentUser({
-              id: data.user.id, email: data.user.email, role: data.user.role,
-              roles: userRoles,
-              firstName: data.user.first_name, lastName: data.user.last_name,
-              first_name: data.user.first_name, last_name: data.user.last_name,
-              profilePhoto: data.user.profile_photo || null,
-              emailVerified: !!data.user.email_verified, isDemo: !!data.user.is_demo,
-              isAdmin: !!data.user.is_admin, is_tester: !!data.user.is_tester,
-              account_approved: !!data.user.account_approved, companionAccess: !!data.user.companion_access,
-              onboardingComplete: data.user.onboarding_complete,
-              selfOnboardingComplete: data.user.selfOnboardingComplete,
-              careRecipientId: data.user.careRecipientId,
-              // v1.105.70 — /api/auth/me computes and sends these, and this object dropped them.
-              // MyAccount's Identity Verification card reads user.identityStatus, so on every
-              // fresh app open it saw undefined and rendered "Verify your identity with a selfie
-              // and photo ID" — to someone whose ID was already on file and approved. Julia
-              // submitted hers, saw it succeed (MyAccount refetches straight afterwards), then
-              // reopened the app and was invited to do the whole thing again.
-              identityVerified: !!data.user.identityVerified,
-              identityStatus: data.user.identityStatus,
-            });
+            setCurrentUser(toClientUser(data.user));
             // Sync active role: use saved preference if valid, else default to first role
             const saved = getActiveRole();
             const validRole = saved && userRoles.includes(saved) ? saved : userRoles[0];
@@ -1230,22 +1251,7 @@ const App = () => {
           let userRoles;
           try { userRoles = data.user.roles ? (typeof data.user.roles === 'string' ? JSON.parse(data.user.roles) : data.user.roles) : [data.user.role]; }
           catch { userRoles = [data.user.role]; }
-          setCurrentUser({
-            id: data.user.id, email: data.user.email, role: data.user.role,
-            roles: userRoles,
-            firstName: data.user.first_name, lastName: data.user.last_name,
-            first_name: data.user.first_name, last_name: data.user.last_name,
-            profilePhoto: data.user.profile_photo || null,
-            emailVerified: !!data.user.email_verified, isDemo: !!data.user.is_demo,
-            isAdmin: !!data.user.is_admin, is_tester: !!data.user.is_tester,
-            account_approved: !!data.user.account_approved, companionAccess: !!data.user.companion_access,
-            onboardingComplete: data.user.onboarding_complete,
-            selfOnboardingComplete: data.user.selfOnboardingComplete,
-            careRecipientId: data.user.careRecipientId,
-            // v1.105.70 — see the boot path above; same fields, same omission.
-            identityVerified: !!data.user.identityVerified,
-            identityStatus: data.user.identityStatus,
-          });
+          setCurrentUser(toClientUser(data.user));
           // Sync activeRole to new user's primary role
           if (userRoles.length === 1) {
             window.setActiveRole(userRoles[0]);
@@ -1379,17 +1385,11 @@ const App = () => {
     // (API returns snake_case: is_demo, first_name, etc.)
     const roles = Array.isArray(user.roles) ? user.roles : [user.role];
     const primaryRole = roles[0];
-    setCurrentUser({
-      id: user.id, email: user.email, role: user.role,
-      roles,
-      firstName: user.first_name || user.firstName,
-      lastName: user.last_name || user.lastName,
-      profilePhoto: user.profile_photo || user.profilePhoto || null,
-      emailVerified: true, isDemo: true,
-      isAdmin: false, is_tester: false,
-      account_approved: true,
-      onboardingComplete: true,
-    });
+    // A demo persona is asserted, not read: these values do not come from /api/auth/me.
+    setCurrentUser(toClientUser(user, {
+      roles, emailVerified: true, isDemo: true, isAdmin: false, is_tester: false,
+      account_approved: true, onboardingComplete: true,
+    }));
     // Sync active role to new demo user's primary role
     setActiveRoleState(primaryRole);
     window.setActiveRole(primaryRole);
@@ -1430,13 +1430,10 @@ const App = () => {
           if (r?.ok) {
             const data = await r.json();
             if (data.user) {
-              setCurrentUser({
-                id: data.user.id, email: data.user.email, role: data.user.role,
-                firstName: data.user.first_name, lastName: data.user.last_name,
-                profilePhoto: data.user.profile_photo || null,
-                emailVerified: !!data.user.email_verified, isDemo: false,
-                isAdmin: !!data.user.is_admin, is_tester: !!data.user.is_tester, companionAccess: !!data.user.companion_access,
-              });
+              // v1.105.76 — THIS is the path Julia takes. It used to rebuild her user object
+              // by hand and drop identityStatus, so the moment she finished onboarding her
+              // Identity Verification card went back to "Not Verified".
+              setCurrentUser(toClientUser(data.user, { isDemo: false }));
               if (data.user.pendingLegalDocs && data.user.pendingLegalDocs.length > 0) {
                 setPendingLegalDocs(data.user.pendingLegalDocs);
                 setShowDisclaimer(true);
@@ -1485,13 +1482,10 @@ const App = () => {
           if (r?.ok) {
             const data = await r.json();
             if (data.user) {
-              setCurrentUser({
-                id: data.user.id, email: data.user.email, role: data.user.role,
-                firstName: data.user.first_name, lastName: data.user.last_name,
-                profilePhoto: data.user.profile_photo || null,
-                emailVerified: !!data.user.email_verified, isDemo: false,
-                isAdmin: !!data.user.is_admin, is_tester: !!data.user.is_tester, companionAccess: !!data.user.companion_access,
-              });
+              // v1.105.76 — THIS is the path Julia takes. It used to rebuild her user object
+              // by hand and drop identityStatus, so the moment she finished onboarding her
+              // Identity Verification card went back to "Not Verified".
+              setCurrentUser(toClientUser(data.user, { isDemo: false }));
               if (data.user.pendingLegalDocs && data.user.pendingLegalDocs.length > 0) {
                 setPendingLegalDocs(data.user.pendingLegalDocs);
                 setShowDisclaimer(true);
@@ -1618,18 +1612,8 @@ const App = () => {
         const meData = await meRes.json();
         if (meData.user) {
           const userRoles = meData.user.roles || [meData.user.role];
-          setCurrentUser({
-            id: meData.user.id, email: meData.user.email, role: meData.user.role, roles: userRoles,
-            firstName: meData.user.first_name, lastName: meData.user.last_name,
-            first_name: meData.user.first_name, last_name: meData.user.last_name,
-            profilePhoto: meData.user.profile_photo || null,
-            emailVerified: !!meData.user.email_verified, isDemo: !!meData.user.is_demo,
-            isAdmin: false, is_tester: !!meData.user.is_tester,
-            account_approved: !!meData.user.account_approved, companionAccess: !!meData.user.companion_access,
-            onboardingComplete: meData.user.onboarding_complete,
-            selfOnboardingComplete: meData.user.selfOnboardingComplete,
-            careRecipientId: meData.user.careRecipientId,
-          });
+          // Impersonation never inherits admin, whatever the impersonated record says.
+          setCurrentUser(toClientUser(meData.user, { roles: userRoles, isAdmin: false }));
         }
       }
       setCurrentPage('dashboard');
@@ -1735,19 +1719,7 @@ const App = () => {
                         const data = await r.json();
                         if (data.user) {
                           const userRoles = data.user.roles || [data.user.role];
-                          setCurrentUser({
-                            id: data.user.id, email: data.user.email, role: data.user.role,
-                            roles: userRoles,
-                            firstName: data.user.first_name, lastName: data.user.last_name,
-                            first_name: data.user.first_name, last_name: data.user.last_name,
-                            profilePhoto: data.user.profile_photo || null,
-                            emailVerified: !!data.user.email_verified, isDemo: !!data.user.is_demo,
-                            isAdmin: !!data.user.is_admin, is_tester: !!data.user.is_tester,
-                            account_approved: !!data.user.account_approved, companionAccess: !!data.user.companion_access,
-                            onboardingComplete: data.user.onboarding_complete,
-                            selfOnboardingComplete: data.user.selfOnboardingComplete,
-                            careRecipientId: data.user.careRecipientId,
-                          });
+                          setCurrentUser(toClientUser(data.user, { roles: userRoles }));
                         }
                       }
                     });

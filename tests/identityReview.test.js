@@ -185,11 +185,20 @@ describe("an AI decision about someone's identity is not silent", () => {
 describe("the app stops forgetting that an ID was verified", () => {
   const appSrc = code("public/js/app.js");
 
-  test("identity status survives both ways currentUser is built", () => {
-    // /api/auth/me computes and sends identityVerified + identityStatus; both setCurrentUser
-    // sites dropped them, so MyAccount saw undefined on every fresh open and offered to verify
-    // an identity that was already on file and approved.
-    expect((appSrc.match(/identityStatus: data\.user\.identityStatus/g) || []).length).toBe(2);
-    expect((appSrc.match(/identityVerified: !!data\.user\.identityVerified/g) || []).length).toBe(2);
+  test("identity status survives every way currentUser is built", () => {
+    // v1.105.76 — this test used to assert the fields appeared EXACTLY TWICE, because v1.105.70
+    // added them to the two setCurrentUser sites it knew about. There were seven. The count of 2
+    // was not a safety property; it was the bug, written down and pinned green — and the five
+    // unpatched paths included the one Julia takes (finishing caregiver onboarding), so her
+    // card went back to "Not Verified" one commit after this was called fixed.
+    //
+    // The invariant is not "two copies carry it". It is "there is only one copy".
+    expect(appSrc).toMatch(/const toClientUser = window\.toClientUser/);
+    expect(appSrc).toMatch(/identityVerified: !!u\.identityVerified/);
+    expect(appSrc).toMatch(/identityStatus: u\.identityStatus/);
+
+    // And nothing may bypass it. See tests/clientUserShape.test.js for the full gate.
+    const codeOnly = appSrc.split("\n").filter((l) => !l.trim().startsWith("//")).join("\n");
+    expect(codeOnly.match(/setCurrentUser\(\s*\{/g) || []).toEqual([]);
   });
 });
