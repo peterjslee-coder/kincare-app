@@ -294,6 +294,21 @@
 
 ### P1
 
+- [ ] **Special rules for helpers under 18, before this goes beyond one family.** (Aug 18 2026.)
+      v1.105.93 lets a minor of 13+ be added as a `helper` with exactly the capabilities the
+      family owner ticks. Pete's deliberate call was no extra age handling for now: *"there may
+      need to be some special rules applied to someone under 18. but we can add that later. this
+      is just for my kids and their grandma at this point."* That is a sound call at this scale
+      and a bad one at any other, so it needs closing before a second family uses it.
+      What to consider when it comes back round: capping under-18s at write-only regardless of
+      what is ticked (the Helper preset already is, but nothing enforces it); recording the
+      parent's consent against the child's account rather than relying on the inviter being the
+      parent; showing on the roster that a member is a minor; and whether a note authored by a
+      minor should be annotated as such in the record.
+      **Blocked on counsel** — Case A in `Legal/Lawyer_Agenda_2026-07-31.md`, updated Aug 18
+      with the four sharpened questions now that a helper can be write-only. **P1.**
+
+
 - [ ] **Caregivers can finish onboarding with no address, and then be findable by nobody.**
       (Aug 18, from Pete trying to book Julia.) The booking picker offers people with a prior
       session for this recipient, and people with coordinates in range. A caregiver who never
