@@ -375,22 +375,35 @@ router.get("/:id/invite-search", requireRole("family"), async (req, res) => {
       WHERE u.id != ?
         AND COALESCE(u.is_demo, 0) = 0
         AND COALESCE(u.is_active, 1) = 1
-        AND (LOWER(u.first_name || ' ' || u.last_name) LIKE ? OR LOWER(u.email) = ?)
         AND (
-          EXISTS (
-            SELECT 1 FROM connections c
-            WHERE c.status = 'accepted'
-              AND ((c.requester_id = ? AND c.recipient_id = u.id) OR (c.recipient_id = ? AND c.requester_id = u.id))
+          -- Two ways in, and the relationship requirement applies to the NAME branch only.
+          -- An earlier version ANDed it across both, which silently killed the email escape
+          -- hatch the UI copy promises ("type the email address they'll sign up with").
+          --
+          -- Name search: only people you already know, so nobody can enumerate the user base.
+          (
+            LOWER(u.first_name || ' ' || u.last_name) LIKE ?
+            AND (
+              EXISTS (
+                SELECT 1 FROM connections c
+                WHERE c.status = 'accepted'
+                  AND ((c.requester_id = ? AND c.recipient_id = u.id) OR (c.recipient_id = ? AND c.requester_id = u.id))
+              )
+              OR EXISTS (
+                SELECT 1 FROM care_team_members mine
+                JOIN care_team_members theirs ON theirs.care_team_id = mine.care_team_id
+                WHERE mine.user_id = ? AND theirs.user_id = u.id
+              )
+            )
           )
-          OR EXISTS (
-            SELECT 1 FROM care_team_members mine
-            JOIN care_team_members theirs ON theirs.care_team_id = mine.care_team_id
-            WHERE mine.user_id = ? AND theirs.user_id = u.id
-          )
+          -- Exact email: knowing the whole address is itself the proof you know them. A
+          -- partial match would be enumeration by another route, so this is an equality test,
+          -- never LIKE.
+          OR LOWER(u.email) = ?
         )
       ORDER BY u.first_name ASC
       LIMIT 20
-    `).all(req.params.id, req.user.id, term, q, req.user.id, req.user.id, req.user.id);
+    `).all(req.params.id, req.user.id, term, req.user.id, req.user.id, req.user.id, q);
 
     res.json({
       people: people.map((p) => ({
