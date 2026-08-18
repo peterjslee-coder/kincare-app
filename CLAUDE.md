@@ -248,208 +248,181 @@ The consent_outreach table tracks emails sent + recipient responses. Attestation
 
 ## Last Session Handoff (updated each session)
 
-**Date:** August 11, 2026 | **Version:** v1.105.60 | **Session arc:** a five-way silent-failure
-sweep of the whole codebase — five fixes shipped, ~35 more findings triaged into TASKS.md — and
-a session that could not push
+**Date:** August 18, 2026 | **Version:** v1.105.71 | **Session arc:** the identity-verification
+saga — one real caregiver, five separate untrue things the app told her about her own documents,
+eleven versions shipped, every one of them by patch file
 
-> If the date above is stale, trust `git log` over this section. It sat four months out of
-> date once already.
+> If the date above is stale, trust `git log` over this section. It sat four months out of date
+> once already.
 
-### Read this before touching anything
+### First five minutes — and this part has changed
 
-**1. Check for a container rollback.** The sandbox has silently reverted the working tree to
-an older commit several times. It is not a git operation — the files simply go back.
+Previous handoffs opened with "confirm push access before doing real work." That warning was
+about Cowork sessions running in **Anthropic's cloud sandbox**, where the git proxy refuses
+writes to this repo with a stated reason and a PAT does not help. If you are reading this from a
+task running **on Pete's Mac** — the "Run this task" picker in the desktop app, set to *On your
+computer* — none of that applies. You have his filesystem and his network. `git push` is just
+`git push`.
+
+Verify once, cheaply, before doing anything else:
 
 ```bash
-git log --oneline -1
-grep -n 'APP_VERSION = ' src/server.js | head -1
-ls tests/*.test.js | wc -l     # 43 at v1.105.60; fewer means you have been rolled back
+git push --dry-run
+git log --oneline -1          # expect v1.105.71 or later
+ls tests/*.test.js | wc -l    # 52 at v1.105.71; fewer means a rollback
 ```
 
-Recovery is `git fetch origin && git reset --hard origin/main`. Nothing is ever lost provided
-every version is pushed the moment it ships. **Push early and often.**
+If the push is refused with `access denied by the git proxy`, you are in the cloud after all.
+Say so **immediately** — do not accumulate an hour of work first. The fallback that works:
+finish and test, `git format-patch -1 --stdout`, deliver the file, Pete applies it.
 
-**2. Confirm push access before doing real work.** This is now the second session in a row where
-the git proxy refused writes:
+**Pete's stated preference is that you commit and push directly.** The patch-file loop is a
+degraded fallback, not a workflow. The Aug 18 session spent roughly forty minutes of his time on
+delivery mechanics rather than the product: a placeholder path left in a command he pasted, an
+orphaned `.git/index.lock`, a half-finished `git am` that left `.git/rebase-apply` behind, and a
+fresh Terminal window that had reset his working directory. Every one of those was avoidable.
+
+**If you must hand him shell commands:** always include the `cd`, always self-contained in one
+paste, always ending in a line that verifies the thing actually happened (`git log --oneline -1`,
+not "should be fine"). He will paste exactly what you write.
+
+**Never run git commands against his checkout through the device bridge.** The bridge cannot
+unlink files, so git creates `.git/index.lock`, fails to clean it up, and leaves an orphan that
+blocks every subsequent git command in that repo until he deletes it manually. This cost him a
+full lint-and-test run against an unpatched tree that silently proved nothing. Reading files
+through the bridge is fine; writing files is fine; **git is not**.
+
+### The live user, and what is still owed her
+
+**Julia Huth** — caregiver, user `6dab4a74-8d4b-4a58-a30b-5e3a6f616158` — is the first real
+caregiver onboarding outside the demo data. Nearly every fix from .63 through .71 came from
+watching her hit something real. She is not a test account. Check work against her record before
+believing it.
+
+Her state as of Aug 18: **still running client 1.105.64** on an iOS 18.7 **home-screen PWA**
+(user agent has no `Safari/` token — that is how you tell). The identity-status fix she needs
+shipped in .70, so what she sees is a stale bundle, not a live bug. The service worker
+deliberately does **not** call `skipWaiting`, so a pull-to-refresh will not activate the waiting
+worker — she must fully quit the app from the iOS app switcher and reopen, or tap the
+"Update ready — tap to refresh" pill (`swShowUpdatePill` in `public/index.html`).
+
+**You can look this up rather than guess.** The client sends `X-App-Version` on every request
+(`public/js/utils.js`), the server records it per user in `user_client_info`
+(`src/routes/auth.js`), and there is an admin endpoint that reads it back:
 
 ```
-remote: access denied by the git proxy: peterjslee-coder/kincare-app is not in
-this session's authorized repository set, so the proxy will not inject a
-credential for it.
+GET /api/admin/client-versions   →  src/routes/admin/maintenance.js
+    { users: [ { id, first_name, last_name, email, app_version, platform, user_agent, last_seen_at } ] }
 ```
 
-**Reads are unaffected** — `clone` and `fetch` work fine on the same connection in the same
-second, which is how you tell this apart from a network problem. It is also NOT the flaky
-sandbox classifier (that denies inconsistently and the same bare command succeeds a minute
-later); this is the same message every time, with a stated reason. A PAT does not help: the
-proxy refuses before the credential is used. **Test it with `git push --dry-run` in the first
-five minutes** and tell Pete immediately if it fails — do not accumulate an hour of work first.
+That endpoint settled a question that had been pure speculation for two sessions. Use it
+whenever "is she on an old version?" comes up. Two accounts were still on the **1.58.x** line as
+of Aug 18 — a different major version entirely, never chased down.
 
-The fallback that works: finish and test in the sandbox, `git format-patch -1 --stdout`, deliver
-the file, and Pete runs one command in his own checkout. Nothing about the work is degraded —
-only delivery. There is no documented way to add a repo to a Cowork project's sources (the
-project Context panel takes local folders, chat projects and URLs, not repos), so this is a
-support question, not a setting either of you can toggle.
+### What the identity saga actually taught
+
+Five things the app stated as fact about Julia's documents, each untrue, each discovered by Pete
+rather than by any test:
+
+1. Admin said "Selfie + ID photo (not submitted)" while her own screen showed a blue check —
+   the same photographs, filed under a different `owner_type`.
+2. She was prompted to pay $30 for a background check Pete had already waived.
+3. Pete could not vouch for her because she did not appear in the candidates list at all — and
+   getting her to appear required *starting* the background check he was trying to waive.
+4. The "Background Check Paid" grant button was labelled as though money had changed hands. It
+   had not; Pete had waived the fee.
+5. Her ID was **auto-approved by the AI**, no human ever asked, and the app then forgot it had —
+   showing her "Not Verified" and offering to redo it, minutes after telling her she'd succeeded.
+
+**The one to carry forward:** `src/utils/identity.js` documents this, and the comment was itself
+wrong at first — it claimed identity is "a human-reviewed gate." It is not. Both `verify-id`
+endpoints write `status = needsHumanReview ? 'pending' : 'approved'`. When the extracted name
+matches, the document classifies as valid, the DOB matches and the faces match, **the AI approves
+a government ID outright and no person is ever asked.** Human review is the exception, not the
+rule. Anything reasoning about this gate must know that.
+
+> **Open item for the lawyer agenda:** AI auto-approval of government identity documents, with no
+> human in the loop and no notification to the admin, has not been reviewed by counsel. Raise it.
 
 ### The theme, and the lens to keep
 
-Unchanged and still paying out: **features that fail silently and look identical to features
-that are switched off.** Round two found roughly forty more instances of it. Recurring causes,
-in the order they keep appearing:
+Unchanged across three sweeps and still paying out: **a broken feature and a switched-off feature
+look identical.** Recurring causes, in the order they keep appearing:
 
-- **Wrong column or table names** that throw into a `catch` which logs "(non-blocking)" and
-  returns `[]`. Six features in this codebase have *never worked once*, and the only evidence is
-  a line in a log nobody reads. **This is now the single largest category.**
+- **Wrong column or table names** thrown into a `catch` that logs "(non-blocking)" and returns
+  `[]`. Now guarded by a CI gate — see `lint:sql-columns` below.
 - **Capability guards written against Chrome.** `navigator.permissions.query`, `setAppBadge`,
-  `<a download>`, `window.open('', '_blank')`, `window.print()`, subframe PDFs — all silently
-  dead on WebKit, the platform most of the users are on.
-- **Vacuous SQL predicates.** A `NOT LIKE` on a nullable column excludes every NULL row. A
-  status literal nobody writes. `COALESCE(x, 0) = 0` on a column nothing sets.
+  `<a download>`, `window.open('', '_blank')`, `window.print()`, subframe PDFs, and
+  `navigator.clipboard` (undefined in insecure contexts) — all silently dead on WebKit, the
+  platform most users are on.
+- **Vacuous SQL predicates.** A `NOT LIKE` on a nullable column excludes every NULL row.
 - **Unbounded waits.** Node's global `fetch` has no default timeout; the Anthropic SDK's is
   ~30 minutes with retries.
 - **Empty states that mean "the request failed"**, on both sides of the wire.
-- **Discarded results** — a value computed, then dropped.
+- **Discarded results** — a value computed, sent, and never read. See the sweep below.
 
 **The method that works:** trace the producer AND the consumer before believing a finding, and
-check whether the codebase already solved it somewhere else. Four of the five fixes this session
-had a correct implementation sitting in a sibling file.
+check whether the codebase already solved it in a sibling file. It usually has.
 
-### What shipped — v1.105.60
+**And verify your own claims the same way.** This session produced a confident report that the
+`identityStatus` fix was missing from the production bundle. It was a false negative — minification
+renames the local variable, so the literal source string cannot match. Counting property names
+instead showed prod and local were identical. Grep against minified output proves nothing about
+absence.
 
-Five that were live, silent, and looked like features nobody turned on. Full reasoning is in the
-commit message; the short version:
+### What shipped — v1.105.61 through v1.105.71
 
-- **The doctor report has never read a single visit.** `JOIN users u ON vl.caregiver_id = u.id`
-  joins across two ID spaces — that column references `caregiver_profiles(id)`. As an INNER JOIN
-  it matched nothing, so `visitSummaries` was always `""` and every doctor report ever generated
-  was written from notes alone. The July v1.93 post-mortem was about a report asserting more than
-  the record supported; this is the same rule failing in the other direction.
-- **The family dashboard answered 200 with `isNewUser: true` on any internal error**, so a family
-  with an active care team was shown the new-user welcome and auto-navigated into the
-  add-a-loved-one wizard. Five screens read that endpoint. The client's own retry-then-error
-  handling was being defeated by `res.ok` being true. **An error is not a shape.**
-- **`GET /api/push/attention` answered 200 `{total: 0}` on error**, which does not decline to
-  answer — it answers "nothing needs you". `refreshAppBadge` then *clears* a correct badge. The
-  v1.105.51 AttentionCard fix was right and the server was overriding it.
-- **The Apple-link branch called `generateRefreshToken(user)`** — no await, wrong argument. The
-  cookie became `refresh_token=j:{}` (silent sign-out at JWT expiry) and the FK violation
-  rejected unhandled, which on Node 18+ terminates the process.
-- **Block requests from managed recipients were filed with a NULL `care_team_id`**, and the only
-  reader INNER JOINs on it — invisible to every leader forever, while the requester was told
-  "We've asked your care team to review this." Now it resolves the team from the requester, and
-  refuses honestly if it can't.
+| Ver | What it was |
+| --- | --- |
+| .61 | The attention badge had **never worked once** since it shipped — `router.get("/attention")` in `src/routes/push.js` was missing the `authenticate` middleware, so `req.user` was undefined on every call |
+| .62 | Badge now counts changes to visits that are already booked |
+| .63 | You could not waive a background check without first starting one; "Background Check Paid" relabelled to stop claiming payment |
+| .64 | `src/utils/identity.js` — one resolver for the three doors to identity verification, accepting both `owner_type` shapes |
+| .65 | `scripts/lint-sql-columns.js` — CI gate that resolves every aliased column against the live schema. Walks source lexically, not by regex. **BASELINE is empty and test-enforced: it must stay that way** |
+| .66 | A family could be charged twice (`withPollerLock` raced a deadline that did not cancel the work; Stripe PaymentIntent had no idempotency key) and forgot-password could hang forever (`SEND_TIMEOUT_MS = 15000` in `src/utils/email.js`) |
+| .67 | Every PDF care document was a white rectangle on every iPhone — shared `PdfPreview` component in `AttachmentViewer.js` |
+| .68 | She sent in her ID, was told it worked, and nobody was told |
+| .69 | The rest of the WebKit tail |
+| .70 | The AI approved her ID by itself, and the app then forgot it had — both `setCurrentUser` sites in `public/js/app.js` now carry `identityVerified` and `identityStatus` |
+| .71 | The admin View button did nothing and the AI's extracted notes were never shown — document previews, `aiExtractedRows`, `aiConcernList` in `AdminPanel.js`; `src/routes/admin/verification.js` now returns `extracted_data, ai_confidence, ai_concerns` |
 
-20 new tests in `tests/silentFailures.test.js`, each verified to fail against the unfixed code.
-`tests/attentionBadge.test.js:155` was **inverted** — it had been pinning the zero-answer as
-correct.
+Three CI lint gates now, all of which must pass before a push:
 
-### ⚠️ Bounds-check every source slice in a test
+```bash
+npm run lint:client && npm run lint:requires && npm run lint:sql-columns
+npx jest                       # 52 suites, ~753 tests, ~5s
+```
 
-`tests/familyVisits.test.js:81` — the guard that stops `latitude`/`geo_flag` reaching the
-team-visible list, i.e. the whole surveillance line — has been asserting **nothing** since
-v1.105.46 moved a marker and reversed its slice bounds. Three more slices resolve to `-1` and
-pass by luck (`apiTimeout.test.js:40` uses a `//` comment as a marker, which `code()` strips, so
-it can never work). `tests/silentFailures.test.js` has a `region()` helper that asserts both
-markers exist and are ordered before slicing. **Use it.** A negative assertion over an empty
-string is worse than no test: it reports safety it never checked.
+Note: `npm test -- <name>` does **not** filter. The test script already ends in
+`--testPathIgnorePatterns`, so the argument is appended to *that* flag and the named test is
+*excluded*. Use `npx jest tests/<name>` to run one file. This produced a green run that had
+silently skipped the very test it was meant to check.
 
-### The backlog from this sweep
+### Where to pick up
 
-**~35 verified findings are written up in TASKS.md** under "Aug 11 2026 — silent-failure sweep,
-round two", ranked P0–P2 with file:line and the user-visible consequence for each. Do not
-re-derive them. The headline items:
+**1. Confirm Julia landed on .71.** Re-run the client-versions endpoint. If `app_version` moved
+off 1.105.64, the identity card should finally read correctly and the admin panel should show her
+selfie, her ID, and the AI's notes. If it did not move, the force-quit instruction did not reach
+her or did not work — that is a real finding about the update mechanism, worth chasing.
 
-1. **Six features that have never worked** (nlScheduling 500s on every request; iPAi coaching;
-   Kindred visit context; admin restore-session and force-check-in; the admin iPAi toggle).
-2. **`withPollerLock` can charge a family twice** — `Promise.race` doesn't cancel the work, so
-   the deadline releases the lock while the tick is still running, and the auto-pay poller
-   creates a Stripe PaymentIntent with **no idempotency key** before writing its own re-entry
-   guard.
-3. **Untimed outbound calls**, including eleven `new Anthropic()` route sites at a ~30-minute
-   effective ceiling and a **forgot-password flow that hangs forever** on Resend.
-4. **14 client fetches** where medication reminders and care tasks silently vanish, including two
-   cards that disappear entirely rather than showing an empty state.
-5. **PDF documents are a blank white box on every iPhone** — and the fix already exists in
-   `AttachmentViewer.js`.
+**2. The sweep that was offered and never started:** *fields the server computes and sends that
+no client ever reads.* Five confirmed instances so far — the attention badge, the doctor report's
+visit summaries, `idVerified`, `identityStatus`, and `SW_UPDATED`. Each was live, silent, and
+looked like a feature nobody turned on. This is the same root cause as the column-name class but
+on the wire rather than in SQL, and there is no lint gate for it yet. **A gate would be worth more
+than the individual fixes.**
 
-### iOS / TestFlight — state and hard-won facts
+**3. TASKS.md backlog, still open:**
+- 14 client fetches where medication reminders vanish on failure
+- Vacuous SQL predicates — the no-show poller never fires; the admin security panel shows a clean
+  night regardless
+- Untimed Anthropic SDK clients in `src/routes/` (the same bug already fixed in `src/utils/`)
+- The P0 group in TASKS.md: six features that have never worked once, each a wrong column name
 
-- **On Pete's phone:** version **1.1, build 8**, installed as himself, working. Getting there
-  took hours. Do not casually suggest reinstalling.
-- **Build 9** (v1.105.58, the ITMS-90683 fix) is committed but **not yet archived or
-  uploaded**. Required before App Store submission; build 8 is fine for TestFlight.
-  `MARKETING_VERSION = 1.1`, `CURRENT_PROJECT_VERSION = 9` in `project.pbxproj`.
-- **Internal TestFlight testers must already be App Store Connect *users*.** The "Add Testers"
-  picker has no free-text field. Pete's ASC account is `peter@yourinplace.com`; his phone's
-  Apple ID is `peterjslee@gmail.com`. That mismatch caused the entire invite ordeal.
-- **An invite binds to the Apple ID that redeems it**, not the address it was mailed to.
-- **Internal groups need no beta review; external groups need review per build** — which is
-  why only 1.0 was ever installable through the external group.
-- iOS here uses **Swift Package Manager**, not CocoaPods. There is no `pod install`.
-
-### Not yet verified on a real device — in priority order
-
-1. **Caregiver check-in / check-out GPS.** The highest-value check. This has *never* worked on
-   iOS, silently, for every visit ever logged — same dead WKWebView API as the geofence.
-   Confirm a real iPhone check-in writes coordinates to the visit log.
-2. **Badge** — clear something on the laptop, open the phone app, icon self-corrects.
-3. **Incoming call** — background the app, have someone call; it should ring. (Note the sweep
-   found a second reason it may not: `Messages.js:910` permanently disables the notification for
-   anyone whose permission is still `'default'`.)
-4. **Export CSV** — Reimbursements → Export; expect an iOS share sheet and a real file.
-5. **Geofence** — retest after v1.105.59 reaches prod.
-
-Sentry is quiet: two unresolved issues, neither actionable. INPLACE-7 is the geolocation
-diagnostic firing from a **1.105.55** bundle in the home-screen PWA (pre-plugin, pre-.59) —
-check the reporting `version` extra before treating it as live. INPLACE-6 is a malformed-URL
-scan from before v1.105.55 made that a 400.
-
-### Open, and needing Pete in a browser rather than a commit
-
-1. **App Store Connect → Primary Category = Lifestyle.** Decided, not yet set. (Not Health &
-   Fitness — that invites a heavier review posture than a first submission needs.)
-2. **Play Health apps declaration — re-answer it.** Care Tasks added medication scheduling and
-   adherence, which trips Play's "Medication and Treatment Management" category. TASKS.md:849.
-3. **Reconcile the store privacy declarations, and name Cloudflare R2 in the Privacy Policy.**
-   Four artefacts must agree: the plist string, `PrivacyInfo.xcprivacy`, the ASC labels, and
-   the published policy. The lawyer-reviewed 2026-07-07 policy predates R2 going live on 7/11,
-   and R2 is where ID photos and selfies live. TASKS.md:159, :879.
-4. **`src/routes/notes.js:200` still puts note text on lock screens.** Flagged as a copy
-   decision in v1.105.38 and still unchanged. The family-visit push was deliberately built to
-   say nothing for exactly this reason.
-
-### Deferred, deliberately
-
-- ~262 background-read `if (res.ok)` blocks with no `else`. Real, low individual severity. (The
-  14 that are *not* deferrable are itemised in TASKS.md.)
-- A handful of CSS items.
-- **Android push** — blocked on FCM configuration; no notification work reaches an Android
-  device until that exists.
-- **`inplace.care`** returns a Cloudflare 525. Nothing depends on it since Stripe was pointed
-  at `yourinplace.com/business`, but the domain is broken.
-
-### Do not re-litigate — Pete's recorded decisions
-
-- **No PHI on lock screens.** Push bodies say "Tap to review in InPlace." and nothing more.
-  There is a scanner test; it was widened once already after it missed local `notify()`
-  wrappers taking positional args.
-- **The admin impersonation no-passkey bypass stays.** Recorded decision, not an oversight.
-- **Peggy's future magic link must be write-only** — it never opens the care record.
-
-### Working with Pete
-
-- He pastes commands **literally**. Never leave a placeholder path in one. His checkout is at
-  `"/Users/peterlee/Documents/Claude Working Folder/kincare-repo"` — spaces, so quote it.
-- When something fails, **instrument it rather than guessing**. Three consecutive wrong guesses
-  about the geolocation failure cost real time; making the code report its own stage
-  (`web:ceiling:timeout → watch:ceiling:timeout in 42s`) answered it in one round trip.
-- He pushes back when a diagnosis smells wrong, and he has been right. When he says a claim is
-  wrong, re-check before restating it.
-- **Don't route around a broken tool silently.** When push failed he asked, reasonably, to just
-  commit and push as always. The right answer was to show him the actual error, say plainly that
-  it wasn't connectivity and wouldn't clear on its own, and offer the one-command fallback — not
-  to quietly build an elaborate workaround (which cost an hour on Aug 4) and not to keep retrying
-  something with a stated policy reason.
+**4. Still unverified since March:** GPS check-in on a real iPhone. `@capacitor/geolocation` is
+not in `package.json`. Pete hit `web:denied(1)` at his mother's house in the home-screen PWA,
+which is *not* the native path — so the native path remains untested. The app's entire safety
+proposition rests on it.
 
 ## Local Development
 
