@@ -717,6 +717,11 @@ async function caregiverDashboard(db, userId, res) {
       academicProgram: profile.academic_program || null,
       academicProgramYear: profile.academic_program_year || null,
       needsHourReports: !!profile.needs_hour_reports,
+      // v1.105.95 — the First Steps 'security' step is decided by a localStorage flag, so no
+      // amount of seeding can tick it: every fresh visitor to the demo saw Maria's dashboard
+      // with an onboarding panel telling THEM to enable 2FA on an account that isn't theirs.
+      // The demo account's security settings are not the visitor's to configure.
+      isDemo: !!isDemo,
     },
     assignments: assignments.map(a => ({
       ...a,

@@ -75,6 +75,33 @@ describe("the checklist no longer flashes on every page change", () => {
     // second...like it's trying to load it and then corrects itself." Two of the seven steps
     // are decided by fetches that land after the first paint.
     expect(hubCode).toMatch(/const firstStepsResolved = idVerification\.loaded && stripeStatus !== null;/);
-    expect(hubCode).toMatch(/const showFirstSteps = firstStepsResolved && firstStepsDone < firstSteps\.length;/);
+    expect(hubCode).toMatch(/const showFirstSteps = firstStepsResolved && firstStepsDone < firstSteps\.length && !profile\.isDemo;/);
+  });
+});
+
+describe("a demo account is not a signup in progress (v1.105.95)", () => {
+  test("First Steps never renders for a demo user", () => {
+    // Pete, looking at Maria's demo dashboard: "why is maria showing 'first steps' and stripe
+    // connect? This is demo data...not actual onboarding."
+    expect(hubCode).toMatch(/showFirstSteps = .*&& !profile\.isDemo;/);
+  });
+
+  test("isDemo actually reaches the client", () => {
+    // The flag is useless in CaretakerHub unless the dashboard payload carries it.
+    const dash = fs.readFileSync(path.join(__dirname, "..", "src", "routes", "dashboard.js"), "utf8");
+    expect(dash).toMatch(/isDemo: !!isDemo,/);
+  });
+
+  test("no fabricated identity document is seeded to tick the box", () => {
+    // Pete: "these characters don't have IDs." The demo must not manufacture a government
+    // document to satisfy a checklist — the checklist is what gives way.
+    const seed = fs.readFileSync(path.join(__dirname, "..", "src", "seed.js"), "utf8");
+    expect(seed).not.toMatch(/verified_documents/);
+  });
+
+  test("Barbara reaches her own home instead of the identity wizard", () => {
+    // app.js sends a care_for user to SelfOnboardingWizard until this flag is set.
+    const seed = fs.readFileSync(path.join(__dirname, "..", "src", "seed.js"), "utf8");
+    expect(seed).toMatch(/self_onboarding_complete = 1/);
   });
 });

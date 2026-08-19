@@ -10,7 +10,7 @@ const { v4: uuid } = require("uuid");
 const { initializeDatabase, getDb } = require("./models/database");
 
 // Bump this whenever seed data changes — triggers auto-reseed on deploy
-const DEMO_SEED_VERSION = '1.100.0'; // bumped: Barbara demo care events (v1.100.0)
+const DEMO_SEED_VERSION = '1.105.95'; // bumped: demo messages visible, real avatars, no fake onboarding
 
 async function seed({ force = false, demoOnly = false } = {}) {
   console.log("🌱 Seeding InPlace database...\n");
@@ -545,26 +545,92 @@ async function seed({ force = false, demoOnly = false } = {}) {
       workLocations[i], travelRadii[i], JSON.stringify(stoplights[stoplightKeys[i]]));
   }
 
-  // Set avatars for all demo users (consistent placeholder photos via i.pravatar.cc)
-  const avatarAssignments = [
-    [mariaUserId, "https://i.pravatar.cc/150?u=maria@inplace.care"],
-    [jamesUserId, "https://i.pravatar.cc/150?u=james@inplace.care"],
-    [sarahUserId, "https://i.pravatar.cc/150?u=sarah@inplace.care"],
-    [davidUserId, "https://i.pravatar.cc/150?u=david@inplace.care"],
-    [peteId, "https://i.pravatar.cc/150?u=paul@inplace.care"],
-    [bettyUserId, "https://i.pravatar.cc/150?u=barbara@inplace.care"],
-    [davidLeeId, "https://i.pravatar.cc/150?u=david.lowe@inplace.care"],
-    [susanLeeId, "https://i.pravatar.cc/150?u=susan.lowe@inplace.care"],
+  // ─── Demo avatars (v1.105.95) ───
+  //
+  // These were i.pravatar.cc URLs and every one of them rendered as a broken image. Two
+  // separate things had to be true for that:
+  //
+  //   1. media.js 302-redirects a remote avatar_url instead of proxying it, so the browser
+  //      ends up requesting i.pravatar.cc directly;
+  //   2. public/sw.js intercepts that request and re-issues it with the service worker's own
+  //      fetch(). A service worker's fetch is a *connect*, and our CSP connect-src does not
+  //      list any image host — img-src does. So the SW turned a request CSP permitted into
+  //      one CSP refused, for every cross-origin image in the app. (Fixed in sw.js too.)
+  //
+  // Rather than depend on a third-party image host at all, the seed now downloads each photo
+  // ONCE and stores it the same way a real user's uploaded photo is stored: a base64 data URL
+  // in users.profile_photo. media.js then serves real bytes from our own origin, no redirect,
+  // no external host, nothing for a service worker or a CSP to object to.
+  //
+  // If a download fails the remote URL is kept as-is — a demo photo is never worth failing a
+  // seed over, and media.js still knows what to do with a URL.
+  //
+  // Photos: Unsplash (free to use, no attribution required). Chosen to be plain head-and-
+  // shoulders portraits that match each character's age and name — nothing glamorous.
+  const DEMO_AVATAR_SOURCES = [
+    [mariaUserId,  "photo-1662850886700-4ec19bd30d11"], // Maria Santos, caregiver
+    [jamesUserId,  "photo-1507003211169-0a1dd7228f2d"], // James Okafor, caregiver
+    [sarahUserId,  "photo-1600481176431-47ad2ab2745d"], // Sarah Chen, caregiver
+    [davidUserId,  "photo-1611403119860-57c4937ef987"], // David Kim, caregiver
+    [peteId,       "photo-1764084052338-23a317e34ea1"], // Paul Lowe, family
+    [bettyUserId,  "photo-1525599428495-0441bd5c67de"], // Barbara Lowe, 78, care recipient
+    [davidLeeId,   "photo-1472099645785-5658abf4ff4e"], // David Lowe, sibling
+    [susanLeeId,   "photo-1770058428154-9eee8a6a1fbb"], // Susan Lowe, sibling
   ];
-  for (const [userId, avatarUrl] of avatarAssignments) {
-    await db.prepare(`UPDATE users SET avatar_url = ?, profile_photo = ? WHERE id = ?`).run(avatarUrl, avatarUrl, userId);
+
+  const avatarUrlFor = (photoId) =>
+    `https://images.unsplash.com/${photoId}?w=256&h=256&fit=crop&crop=faces&q=80`;
+
+  // Node 18+ global fetch. AbortSignal.timeout keeps a slow CDN from stalling boot: the seed
+  // runs inside server startup, so "the demo has no faces" must never become "the app is down".
+  const fetchAvatarDataUrl = async (url) => {
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
+      if (!res.ok) return null;
+      const type = res.headers.get("content-type") || "image/jpeg";
+      if (!type.startsWith("image/")) return null;
+      const buf = Buffer.from(await res.arrayBuffer());
+      if (buf.length === 0 || buf.length > 400 * 1024) return null;
+      return `data:${type};base64,${buf.toString("base64")}`;
+    } catch {
+      return null;
+    }
+  };
+
+  // In parallel, and never for longer than one timeout: this seed runs inside server startup
+  // on Railway, and eight sequential 8-second downloads is a boot slow enough to fail a health
+  // check. Eight small images the demo would be nicer for is not worth that trade.
+  const fetched = await Promise.all(
+    DEMO_AVATAR_SOURCES.map(async ([userId, photoId]) => {
+      const remote = avatarUrlFor(photoId);
+      return [userId, (await fetchAvatarDataUrl(remote)) || remote, remote];
+    })
+  );
+
+  let avatarsEmbedded = 0;
+  for (const [userId, stored, remote] of fetched) {
+    if (stored !== remote) avatarsEmbedded++;
+    await db.prepare(`UPDATE users SET avatar_url = ?, profile_photo = ? WHERE id = ?`)
+      .run(stored, stored, userId);
   }
+  console.log(`\u2705 Demo avatars set (${avatarsEmbedded}/${DEMO_AVATAR_SOURCES.length} embedded as data URLs)`);
 
   // Complete Maria's onboarding — she's the primary demo caregiver
+  //
+  // v1.105.95 — "fully onboarded" used to mean six of the seven things First Steps asks for.
+  // Stripe Connect and identity verification were never seeded, so the demo caregiver opened
+  // her own dashboard to an orange onboarding panel reading "Connect Stripe to continue" and
+  // "Take a selfie and photo of your ID". Pete, correctly: this is demo data, not actual
+  // onboarding. A demo account that still looks half-signed-up teaches the wrong thing about
+  // the product on the one screen everybody is shown first.
   await db.prepare(`
     UPDATE caregiver_profiles SET
       onboarding_complete = 1,
       checkr_status = 'clear',
+      stripe_account_id = 'acct_demo_maria_santos',
+      stripe_onboard_complete = 1,
+      identity_verified = 1,
+      identity_verified_at = NOW() - INTERVAL '28 days',
       legal_first_name = 'Maria',
       legal_last_name = 'Santos',
       date_of_birth = '1992-03-15',
@@ -573,6 +639,27 @@ async function seed({ force = false, demoOnly = false } = {}) {
       dl_state = 'VA'
     WHERE id = ?
   `).run(mariaId);
+
+
+  // ─── Barbara is not halfway through signing up (v1.105.95) ───
+  //
+  // Her demo account opened straight into the six-step self-onboarding wizard — "Confirm Your
+  // Identity… have a government-issued photo ID ready" — because care_recipients
+  // .self_onboarding_complete was never seeded. app.js routes a `care_for` user to the wizard
+  // until that flag is set, so the recipient persona could not reach her own home screen at all.
+  //
+  // Pete: for demo data it just has to look right; these characters don't have IDs. So this
+  // sets the completion the wizard would have set, and nothing pretends a document exists.
+  await db.prepare(`
+    UPDATE care_recipients SET
+      self_onboarding_complete = 1,
+      date_of_birth = '1948-04-22',
+      preferred_name = 'Barbara',
+      emergency_contact_relationship = 'Son',
+      terms_accepted_at = NOW() - INTERVAL '60 days',
+      terms_version = '1.0'
+    WHERE id = ?
+  `).run(bettyId);
 
   // James partially complete (in progress)
   await db.prepare(`
@@ -1133,6 +1220,19 @@ async function seed({ force = false, demoOnly = false } = {}) {
     ).run(id, type, name, careTeamId, createdBy);
   }
 
+  // ─── v1.105.95: demo members join BEFORE the demo messages were sent ───
+  //
+  // v1.105.92 made the conversation view start at `conversation_members.joined_at`, so a new
+  // care-team member no longer inherits months of family history. Correct rule — but the seed
+  // writes members at NOW() and writes every demo message backdated (-5 days, -3 days, ...).
+  // Every seeded message therefore sorted BEFORE the seeded membership and the demo chats
+  // rendered completely empty while the rows sat in the table the whole time.
+  //
+  // Backdating joined_at is the honest fix: these people really were in the conversation when
+  // those messages were sent. DEMO_MEMBER_JOINED_AT must stay older than the oldest seeded
+  // message; 90 days leaves plenty of room for longer threads later.
+  const DEMO_MEMBER_JOINED_AT = "-90 days";
+
   // Conversation members for direct chats
   const directMembers = [
     [convPeteMaria, peteId], [convPeteMaria, mariaUserId],
@@ -1144,8 +1244,8 @@ async function seed({ force = false, demoOnly = false } = {}) {
 
   for (const [convId, userId] of directMembers) {
     await db.prepare(
-      "INSERT INTO conversation_members (id, conversation_id, user_id, role, last_read_at) VALUES (?, ?, ?, 'member', NOW())"
-    ).run(uuid(), convId, userId);
+      "INSERT INTO conversation_members (id, conversation_id, user_id, role, joined_at, last_read_at) VALUES (?, ?, ?, 'member', NOW() + ?::interval, NOW())"
+    ).run(uuid(), convId, userId, DEMO_MEMBER_JOINED_AT);
   }
 
   console.log("✅ Direct conversations created (5)");
@@ -1265,8 +1365,8 @@ async function seed({ force = false, demoOnly = false } = {}) {
   // Paul ↔ iPAi conversation
   const convPaulIPAi = uuid();
   await db.prepare("INSERT INTO conversations (id, type, name, created_by) VALUES (?, 'direct', 'iPAi', ?)").run(convPaulIPAi, peteId);
-  await db.prepare("INSERT INTO conversation_members (id, conversation_id, user_id, role) VALUES (?, ?, ?, 'member')").run(uuid(), convPaulIPAi, peteId);
-  await db.prepare("INSERT INTO conversation_members (id, conversation_id, user_id, role) VALUES (?, ?, ?, 'member')").run(uuid(), convPaulIPAi, ipaiUserId);
+  await db.prepare("INSERT INTO conversation_members (id, conversation_id, user_id, role, joined_at) VALUES (?, ?, ?, 'member', NOW() + ?::interval)").run(uuid(), convPaulIPAi, peteId, DEMO_MEMBER_JOINED_AT);
+  await db.prepare("INSERT INTO conversation_members (id, conversation_id, user_id, role, joined_at) VALUES (?, ?, ?, 'member', NOW() + ?::interval)").run(uuid(), convPaulIPAi, ipaiUserId, DEMO_MEMBER_JOINED_AT);
 
   const ipaiMsgs = [
     [uuid(), peteId, ipaiUserId, convPaulIPAi, "Hey iPAi, when is Maria available this week?", null, "-3 days"],
@@ -1289,8 +1389,8 @@ async function seed({ force = false, demoOnly = false } = {}) {
   // Maria ↔ iPAi conversation (caregiver perspective)
   const convMariaIPAi = uuid();
   await db.prepare("INSERT INTO conversations (id, type, name, created_by) VALUES (?, 'direct', 'iPAi', ?)").run(convMariaIPAi, mariaUserId);
-  await db.prepare("INSERT INTO conversation_members (id, conversation_id, user_id, role) VALUES (?, ?, ?, 'member')").run(uuid(), convMariaIPAi, mariaUserId);
-  await db.prepare("INSERT INTO conversation_members (id, conversation_id, user_id, role) VALUES (?, ?, ?, 'member')").run(uuid(), convMariaIPAi, ipaiUserId);
+  await db.prepare("INSERT INTO conversation_members (id, conversation_id, user_id, role, joined_at) VALUES (?, ?, ?, 'member', NOW() + ?::interval)").run(uuid(), convMariaIPAi, mariaUserId, DEMO_MEMBER_JOINED_AT);
+  await db.prepare("INSERT INTO conversation_members (id, conversation_id, user_id, role, joined_at) VALUES (?, ?, ?, 'member', NOW() + ?::interval)").run(uuid(), convMariaIPAi, ipaiUserId, DEMO_MEMBER_JOINED_AT);
 
   const ipaiMariaMsgs = [
     [uuid(), mariaUserId, ipaiUserId, convMariaIPAi, "Any tips for my visit with Barbara tomorrow?", null, "-1 day"],
@@ -1414,8 +1514,8 @@ async function seed({ force = false, demoOnly = false } = {}) {
   // Add all 3 Lowe siblings to the care team conversation
   for (const [userId, role] of [[peteId, "admin"], [davidLeeId, "member"], [susanLeeId, "member"]]) {
     await db.prepare(
-      "INSERT INTO conversation_members (id, conversation_id, user_id, role, last_read_at) VALUES (?, ?, ?, ?, NOW())"
-    ).run(uuid(), bettyCareTeamConvId, userId, role);
+      "INSERT INTO conversation_members (id, conversation_id, user_id, role, joined_at, last_read_at) VALUES (?, ?, ?, ?, NOW() + ?::interval, NOW())"
+    ).run(uuid(), bettyCareTeamConvId, userId, role, DEMO_MEMBER_JOINED_AT);
   }
 
   // Seed group messages in the care team chat — more realistic family coordination

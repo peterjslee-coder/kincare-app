@@ -1,6 +1,6 @@
 // InPlace Service Worker — v1.57.14
-const CACHE_NAME = 'inplace-build-eaf58fd8-mszb3xtn';
-const SW_VERSION = 'build-eaf58fd8-mszb3xtn';
+const CACHE_NAME = 'inplace-build-094899af-msztolgy';
+const SW_VERSION = 'build-094899af-msztolgy';
 const STATIC_ASSETS = [
   '/',
   '/css/styles.css',
@@ -63,6 +63,22 @@ self.addEventListener('fetch', (event) => {
   // Map tiles: let browser handle natively (no SW interception)
   if (url.hostname.includes('tile.openstreetmap.org')) {
     return; // Don't call event.respondWith — browser fetches directly
+  }
+
+  // ─── v1.105.95: cross-origin images are the browser's business, not ours ───
+  //
+  // Every demo avatar rendered as a broken image, and the cause was here. An <img> pointing at
+  // another origin is governed by CSP img-src, which allows `https:`. But this worker caught
+  // that request and re-issued it with its own fetch() — and a service worker's fetch is a
+  // *connect*, judged by connect-src, which lists only our own origin and a handful of APIs.
+  // So the worker took a request the page was allowed to make and made one the page was not.
+  // Nothing logged; the image simply never arrived.
+  //
+  // The tile-server line directly above is the same exception, discovered the same way and
+  // written for one hostname. This is the general case: we have no caching story for other
+  // people's images, so there is nothing to gain by standing in front of them.
+  if (event.request.destination === 'image' && url.origin !== self.location.origin) {
+    return; // Don't call event.respondWith — browser fetches directly under img-src
   }
 
   // API calls: network-first, with offline-queueable awareness

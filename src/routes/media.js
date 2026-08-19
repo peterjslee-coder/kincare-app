@@ -13,7 +13,9 @@ router.use(authenticate);
 
 function sendDataUrl(res, dataUrl) {
   if (!dataUrl || typeof dataUrl !== "string") return res.status(404).end();
-  // Remote URL (e.g. demo pravatar) — redirect instead of proxying.
+  // Remote URL — redirect instead of proxying. Note this hands the fetch to the browser, so
+  // the URL must be reachable under the page's img-src. Demo avatars no longer rely on this
+  // path: seed.js downloads them once and stores real bytes as data URLs (v1.105.95).
   if (/^https?:\/\//i.test(dataUrl)) return res.redirect(302, dataUrl);
   const m = dataUrl.match(/^data:([^;]+);base64,(.+)$/s);
   if (!m) return res.status(404).end();

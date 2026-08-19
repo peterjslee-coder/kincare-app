@@ -1129,7 +1129,15 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   // permanently wrong; this stops it being briefly wrong, which is the same bug at a different
   // timescale — a value that has not arrived is not a value of "no".
   const firstStepsResolved = idVerification.loaded && stripeStatus !== null;
-  const showFirstSteps = firstStepsResolved && firstStepsDone < firstSteps.length;
+  // v1.105.95 — a demo account is not a signup in progress. Maria opened her dashboard to an
+  // orange onboarding panel telling the VISITOR to connect a bank account and photograph a
+  // government ID, on an account that is not theirs and for a person who does not exist. Pete:
+  // "this is demo data...not actual onboarding". Two of the seven steps can't be seeded away
+  // even in principle — 'security' is decided by a localStorage flag on whichever browser is
+  // looking, and 'identity' wants a real document these characters do not have — so the honest
+  // fix is not to fake the inputs but to stop asking a demo the question. Real caregivers are
+  // unaffected: isDemo comes from users.is_demo (dashboard.js).
+  const showFirstSteps = firstStepsResolved && firstStepsDone < firstSteps.length && !profile.isDemo;
   // Expose to parent (app.js) so bottom nav can grey out Find Work
   window.__caregiverFirstStepsRemain = showFirstSteps;
   // NEVER gate/blur the dashboard — checklist is motivational, not a lock
