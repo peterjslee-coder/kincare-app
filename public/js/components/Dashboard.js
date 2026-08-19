@@ -1526,7 +1526,18 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
             <div style={{ position: 'absolute', right: 16, top: 24, color: 'rgba(255,255,255,0.5)', fontSize: 18 }}>→</div>
           </div>
           {/* Care team nested inside Betty card */}
-          {!isDemo && careTeams.length > 0 && (() => {
+          {/* v1.105.96 — this said `!isDemo &&`, and that is the whole answer to "why doesn't
+              Paul Lowe have a care team?". He has one: three members, a group conversation, the
+              lot. This card — the only place on the family home screen that shows it, overlapping
+              member thumbnails and all — simply refused to render it for a demo account.
+
+              The `!isDemo` guard is correct three times directly above (lines ~888/910/925) and
+              wrong here, and the difference is what the guard is hiding. Those are onboarding
+              PROMPTS: "add your loved one", "finish your profile" — things a demo visitor cannot
+              and should not act on. This is CONTENT. Hiding it doesn't spare anyone a dead-end
+              task, it just deletes a feature from the demo and makes the product look like it
+              lacks one. Same idiom, opposite effect. */}
+          {careTeams.length > 0 && (() => {
             const team = careTeams[0];
             const members = team.members || [];
             const pendingCount = team.pendingInvites || 0;

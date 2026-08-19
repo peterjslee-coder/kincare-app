@@ -6,6 +6,7 @@ const { getDb } = require("../models/database");
 const { authenticate, requireRole } = require("../middleware/auth");
 const { captureException } = require("../utils/sentry");
 const { sendEmail, brandedHtml } = require("../utils/email");
+const { userPhotoUrl } = require("./media");
 
 const router = express.Router();
 
@@ -118,7 +119,7 @@ router.get("/", requireRole("family"), async (req, res) => {
     // Add member counts + member summaries (for avatar display)
     for (const team of teams) {
       const members = await db.prepare(`
-        SELECT ctm.role, u.first_name, u.last_name, u.avatar_url
+        SELECT ctm.role, u.id, u.first_name, u.last_name, u.avatar_url, u.profile_photo
         FROM care_team_members ctm
         JOIN users u ON ctm.user_id = u.id
         WHERE ctm.care_team_id = ?
@@ -128,7 +129,12 @@ router.get("/", requireRole("family"), async (req, res) => {
       team.members = members.map(m => ({
         firstName: m.first_name,
         lastName: m.last_name,
-        avatarUrl: m.avatar_url,
+        // v1.105.96 — this returned u.avatar_url raw, and a photo somebody UPLOADS lands in
+        // profile_photo, not avatar_url. So the member who had actually set a picture was the
+        // one who rendered as coloured initials, on every care team, for everyone. media.js has
+        // had userPhotoUrl() for exactly this since v1.66.0: it checks both columns and returns
+        // a cacheable endpoint instead of inlining base64 into a list payload (the C2 rule).
+        avatarUrl: userPhotoUrl(m),
         role: m.role,
       }));
       // Also get pending invite count
@@ -180,7 +186,7 @@ router.get("/:id", requireRole("family"), async (req, res) => {
     // mapping the server uses.
     const members = await db.prepare(`
       SELECT ctm.id AS membership_id, ctm.role, ctm.joined_at, ctm.relationship_label,
-        u.id AS user_id, u.first_name, u.last_name, u.email, u.avatar_url,
+        u.id AS user_id, u.first_name, u.last_name, u.email, u.avatar_url, u.profile_photo,
         crs.capabilities AS capabilities, crs.permission AS share_permission
       FROM care_team_members ctm
       JOIN users u ON ctm.user_id = u.id
@@ -214,7 +220,7 @@ router.get("/:id", requireRole("family"), async (req, res) => {
           firstName: m.first_name,
           lastName: m.last_name,
           email: m.email,
-          avatarUrl: m.avatar_url,
+          avatarUrl: userPhotoUrl({ id: m.user_id, avatar_url: m.avatar_url, profile_photo: m.profile_photo }),
           role: m.role,
           joinedAt: m.joined_at,
           relationshipLabel: m.relationship_label,

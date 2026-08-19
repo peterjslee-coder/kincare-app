@@ -7,10 +7,11 @@ require("dotenv").config();
 
 const bcrypt = require("bcryptjs");
 const { v4: uuid } = require("uuid");
+const { PRESETS } = require("./utils/capabilities");
 const { initializeDatabase, getDb } = require("./models/database");
 
 // Bump this whenever seed data changes — triggers auto-reseed on deploy
-const DEMO_SEED_VERSION = '1.105.95'; // bumped: demo messages visible, real avatars, no fake onboarding
+const DEMO_SEED_VERSION = '1.105.96'; // bumped: care team visible, Peggy, reimbursements, recipient photo
 
 async function seed({ force = false, demoOnly = false } = {}) {
   console.log("🌱 Seeding InPlace database...\n");
@@ -305,6 +306,18 @@ async function seed({ force = false, demoOnly = false } = {}) {
     VALUES (?, ?, ?, 'family', '["family"]', ?, ?, ?, 1)
   `).run(susanLeeId, "susan.lowe@inplace.care", passwordHash, "Susan", "Lowe", "(626) 555-0144");
 
+  // ─── Peggy Nolan — the neighbour (v1.105.96) ───
+  // Pete asked for "a friend named Peggy" on the care team, and she is the most true-to-life
+  // thing in this seed: the person who is simply THERE, who brings dinner, who nobody formally
+  // arranged. A care team made only of adult children misses that entirely. She is a `helper`:
+  // the role exists (v1.105.93) precisely for someone trusted in the house without being
+  // handed the whole medical record.
+  const peggyId = uuid();
+  await db.prepare(`
+    INSERT INTO users (id, email, password_hash, role, roles, first_name, last_name, phone, is_demo)
+    VALUES (?, ?, ?, 'helper', '["helper"]', ?, ?, ?, 1)
+  `).run(peggyId, "peggy@inplace.care", passwordHash, "Peggy", "Nolan", "(540) 555-0145");
+
   // ─── Real admin account (Pete's actual login) ───
   // In demoOnly mode, the real account already exists — don't re-insert
   let realPeteId;
@@ -318,14 +331,14 @@ async function seed({ force = false, demoOnly = false } = {}) {
         VALUES (?, ?, ?, 'family', '["family"]', ?, ?, ?, 0, 1, 1)
       `).run(realPeteId, "peterjslee@gmail.com", passwordHash, "Pete", "Lee", "(626) 555-0142");
     }
-    console.log("✅ Demo users created (9 — Paul, David, Susan, 4 caregivers, Barbara, 2 families). Real admin preserved.");
+    console.log("✅ Demo users created (10 — Paul, David, Susan, Peggy, 4 caregivers, Barbara, 2 families). Real admin preserved.");
   } else {
     realPeteId = uuid();
     await db.prepare(`
       INSERT INTO users (id, email, password_hash, role, roles, first_name, last_name, phone, is_demo, is_admin, email_verified)
       VALUES (?, ?, ?, 'family', '["family"]', ?, ?, ?, 0, 1, 1)
     `).run(realPeteId, "peterjslee@gmail.com", passwordHash, "Pete", "Lee", "(626) 555-0142");
-    console.log("✅ Users created (10 — Pete real + Paul demo, David, Susan, 4 caregivers, Barbara)");
+    console.log("✅ Users created (11 — Pete real + Paul demo, David, Susan, Peggy, 4 caregivers, Barbara)");
   }
 
   // ─── Additional Family Users (Maria's other clients) ───
@@ -576,6 +589,7 @@ async function seed({ force = false, demoOnly = false } = {}) {
     [bettyUserId,  "photo-1525599428495-0441bd5c67de"], // Barbara Lowe, 78, care recipient
     [davidLeeId,   "photo-1472099645785-5658abf4ff4e"], // David Lowe, sibling
     [susanLeeId,   "photo-1770058428154-9eee8a6a1fbb"], // Susan Lowe, sibling
+    [peggyId,      "photo-1734968758338-7534a4c8ea72"], // Peggy Nolan, neighbour
   ];
 
   const avatarUrlFor = (photoId) =>
@@ -607,12 +621,20 @@ async function seed({ force = false, demoOnly = false } = {}) {
     })
   );
 
+  // Barbara's care_recipients.photo was never seeded, so the hero card on Paul's home screen
+  // fell back to a tulip emoji — the person the whole product is about was the one face missing.
+  // Same portrait as her user avatar: she is one woman, and the demo should not imply otherwise.
+  const barbaraPortrait = DEMO_AVATAR_SOURCES.find(([id]) => id === bettyUserId)[1];
+
   let avatarsEmbedded = 0;
   for (const [userId, stored, remote] of fetched) {
     if (stored !== remote) avatarsEmbedded++;
     await db.prepare(`UPDATE users SET avatar_url = ?, profile_photo = ? WHERE id = ?`)
       .run(stored, stored, userId);
   }
+  const barbaraPhoto = (await fetchAvatarDataUrl(avatarUrlFor(barbaraPortrait))) || avatarUrlFor(barbaraPortrait);
+  await db.prepare(`UPDATE care_recipients SET photo = ? WHERE id = ?`).run(barbaraPhoto, bettyId);
+
   console.log(`\u2705 Demo avatars set (${avatarsEmbedded}/${DEMO_AVATAR_SOURCES.length} embedded as data URLs)`);
 
   // Complete Maria's onboarding — she's the primary demo caregiver
@@ -1475,6 +1497,72 @@ async function seed({ force = false, demoOnly = false } = {}) {
   await db.prepare(
     "INSERT INTO care_team_members (id, care_team_id, user_id, role, invited_by) VALUES (?, ?, ?, 'member', ?)"
   ).run(uuid(), bettyCareTeamId, susanLeeId, peteId);
+  await db.prepare(
+    "INSERT INTO care_team_members (id, care_team_id, user_id, role, invited_by, relationship_label) VALUES (?, ?, ?, 'helper', ?, ?)"
+  ).run(uuid(), bettyCareTeamId, peggyId, peteId, "Neighbour & family friend");
+
+  // Peggy sees Barbara's record on helper terms, not the family's. She is trusted in the house;
+  // that is not the same as being handed a dementia diagnosis and a medication list.
+  await db.prepare(
+    "INSERT INTO care_recipient_shares (id, care_recipient_id, shared_with_user_id, permission, capabilities, shared_by_user_id) VALUES (?, ?, ?, 'view', ?, ?)"
+  ).run(uuid(), bettyId, peggyId, JSON.stringify(PRESETS.helper), peteId);
+
+  // Paul is the billing contact — the one who approves what gets paid back.
+  await db.prepare("UPDATE care_teams SET billing_user_id = ? WHERE id = ?").run(peteId, bettyCareTeamId);
+
+  // ─── Reimbursements (v1.105.96) ───
+  //
+  // Not one row of this existed, so the ledger — the feature this whole care team exists to
+  // demonstrate — opened empty on the demo. These are the expenses a family actually argues
+  // about: the pharmacy run, the groceries, the neighbour who has been quietly buying things
+  // for months and never asked for the money back.
+  //
+  // Every state the ledger can be in is represented, because a demo of only-approved rows
+  // teaches nothing about what the product is FOR: the pending one is the ask, the declined one
+  // is the "this was already covered" conversation, the paid ones are the record that settles
+  // an argument a year later. Settlement happens off-platform and is recorded here — the copy
+  // says plainly where the money moved (Venmo, Zelle, check), because in-app transfers are
+  // still gated on Stripe and the lawyer.
+  //
+  // [payee, requestedBy, amount, description, category, purpose, daysAgo, status, paidMethod, paidRef]
+  const reimbursements = [
+    [susanLeeId, susanLeeId, 84.32, "CVS — Donepezil refill + pill organizer", "pharmacy", "medical", 2, "pending", null, null],
+    [peggyId,    peggyId,    46.18, "Groceries — milk, bread, the yogurt Barbara likes", "groceries", "personal", 3, "pending", null, null],
+    [davidLeeId, davidLeeId, 129.00, "Grab bars for the upstairs bathroom + install kit", "supplies", "home_repairs", 6, "approved", null, null],
+    [peggyId,    peggyId,    38.75, "Groceries — week of the 8th", "groceries", "personal", 11, "paid", "venmo", "Venmo @peggy-nolan"],
+    [susanLeeId, susanLeeId, 22.40, "Walgreens — Lisinopril copay", "pharmacy", "fsa_hsa", 16, "paid", "zelle", "Zelle (540) 555-0144"],
+    [davidLeeId, davidLeeId, 310.00, "Roof gutter repair after the storm", "other", "home_repairs", 24, "paid", "check", "Check #1042"],
+    [peggyId,    peggyId,    52.60, "Groceries + cat food for Whiskers and Mittens", "groceries", "personal", 33, "paid", "venmo", "Venmo @peggy-nolan"],
+    [susanLeeId, susanLeeId, 64.00, "Mileage — Dr. Patel appointment, Blacksburg round trip", "transport", "medical", 41, "paid", "zelle", "Zelle (540) 555-0144"],
+    [davidLeeId, davidLeeId, 18.99, "Amazon — non-slip bath mat", "supplies", "personal", 47, "declined", null, null],
+  ];
+
+  for (const [payee, requester, amount, description, category, purpose, daysAgo, status, paidMethod, paidRef] of reimbursements) {
+    const approved = status === "approved" || status === "paid";
+    await db.prepare(`
+      INSERT INTO reimbursements
+        (id, care_team_id, care_recipient_id, requested_by, payee_user_id, amount, description,
+         category, purpose, expense_date, status, approved_by, approved_at, declined_reason,
+         paid_at, paid_method, paid_reference, paid_by, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?,
+              (NOW() + ?::interval)::date::text, ?,
+              ?, ?, ?,
+              ?, ?, ?, ?,
+              NOW() + ?::interval, NOW() + ?::interval)
+    `).run(
+      uuid(), bettyCareTeamId, bettyId, requester, payee, amount, description,
+      category, purpose, `-${daysAgo} days`, status,
+      approved ? peteId : null,
+      approved ? new Date(Date.now() - (daysAgo - 1) * 86400000) : null,
+      status === "declined" ? "Already covered by the household account — no need to split this one." : null,
+      status === "paid" ? new Date(Date.now() - (daysAgo - 2) * 86400000) : null,
+      paidMethod, paidRef,
+      status === "paid" ? peteId : null,
+      `-${daysAgo} days`, `-${daysAgo} days`
+    );
+  }
+
+  console.log(`\u2705 Reimbursements created (${reimbursements.length} on Barbara's team — pending, approved, paid, declined)`);
 
   // Dorothy's Care Team (Linda is leader)
   const dorothyCareTeamId = uuid();
@@ -1512,7 +1600,7 @@ async function seed({ force = false, demoOnly = false } = {}) {
   ).run(bettyCareTeamConvId, "Barbara Lowe's Care Team", bettyCareTeamId, peteId);
 
   // Add all 3 Lowe siblings to the care team conversation
-  for (const [userId, role] of [[peteId, "admin"], [davidLeeId, "member"], [susanLeeId, "member"]]) {
+  for (const [userId, role] of [[peteId, "admin"], [davidLeeId, "member"], [susanLeeId, "member"], [peggyId, "member"]]) {
     await db.prepare(
       "INSERT INTO conversation_members (id, conversation_id, user_id, role, joined_at, last_read_at) VALUES (?, ?, ?, ?, NOW() + ?::interval, NOW())"
     ).run(uuid(), bettyCareTeamConvId, userId, role, DEMO_MEMBER_JOINED_AT);
@@ -1523,6 +1611,8 @@ async function seed({ force = false, demoOnly = false } = {}) {
     [uuid(), peteId, bettyCareTeamConvId, "Hey everyone — I set up this group chat so we can coordinate Barbara's care more easily. Let's use it for updates, scheduling, and anything urgent.", "-5 days"],
     [uuid(), davidLeeId, bettyCareTeamConvId, "Great idea Paul. I'm covering this week while you're traveling. Maria and I already connected — she'll send me daily updates.", "-5 days"],
     [uuid(), susanLeeId, bettyCareTeamConvId, "Love this! I'll handle the medication side — tracking refills and Dr. Patel appointments.", "-5 days"],
+    [uuid(), peggyId, bettyCareTeamConvId, "Paul added me — hope that's alright. I'm two doors down and I bring Barbara dinner most evenings anyway, so I'll say here if anything seems off.", "-5 days"],
+    [uuid(), peteId, bettyCareTeamConvId, "More than alright, Peggy. You've been doing this longer than any of us. Put the groceries through the reimbursement tab — please stop paying for Mom's shopping out of your own pocket.", "-5 days"],
     [uuid(), peteId, bettyCareTeamConvId, "Perfect division of labor. Quick update: Barbara's next appointment with Dr. Patel is March 3. I'll be back by then. Things to discuss: knee pain, sleep issues, Donepezil dosage review.", "-4 days"],
     [uuid(), davidLeeId, bettyCareTeamConvId, "Update from today: Maria said Barbara was in wonderful spirits. Ate a full lunch, did gentle stretches, and napped from 2-3. The kids video called her at 2pm and she was laughing the whole time.", "-2 days"],
     [uuid(), susanLeeId, bettyCareTeamConvId, "Can someone check if Barbara's Donepezil is running low? I want to call in the refill before the weekend.", "-2 days"],
