@@ -1,6 +1,18 @@
 // ─── Care Story Walkthrough ───
 // Shared interactive walkthrough used on SplashPage and DemoPickerPage.
-// Tells the fictional Rivera family story: profile → notes → AI → patterns → doctor report → email → doctor reply.
+// Tells the Lowe family story: profile → notes → AI → patterns → doctor report → email → doctor reply.
+//
+// v1.105.97 — this was the Rivera family: Maria in DC, her mother Elena, 78, in Richmond, with
+// a caregiver called Sarah and a podiatrist looking at Elena's left ankle. Not one of those
+// people exists in the product. A visitor read that story and clicked through to the live demo,
+// where they met Paul Lowe, his mother Barbara in Blacksburg, and a caregiver named Maria
+// Santos — a different family with a different illness, and a "Maria" who had changed both role
+// and generation on the way through the door.
+//
+// It is now the same family, town, conditions and medications as the seeded demo, and the knee
+// it describes is the knee Maria really does mention in Barbara's seeded messages. The marketing
+// story and the product agree, which is the least a story about keeping an accurate care record
+// can do.
 
 const CareStoryWalkthrough = window.CareStoryWalkthrough = ({ onNavigate, compact }) => {
   const [step, setStep] = React.useState(0);
@@ -15,11 +27,11 @@ const CareStoryWalkthrough = window.CareStoryWalkthrough = ({ onNavigate, compac
     { id: 'reply', icon: '\uD83D\uDC68\u200D\u2695\uFE0F', label: 'Doctor Replies' },
   ];
 
-  const rawNote = "Elena seemed a little off today. Didn\u2019t want lunch, just picked at her soup. Left ankle looks more swollen than last week \u2014 she said it\u2019s been hurting when she walks to the mailbox. We did her stretches but she stopped early. Mood was ok though, she wanted to watch her show and we talked about her garden. Reminded her about her pills at 2pm, she\u2019d forgotten again.";
+  const rawNote = "Barbara seemed a little off today. Didn\u2019t want lunch, just picked at her soup. She\u2019s rubbing her left knee more than last week \u2014 said it\u2019s been hurting when she walks out to the mailbox. We did her stretches but she stopped early. Mood was ok though, she wanted to watch her Hitchcock film and we talked about her garden. Reminded her about her evening pill, she\u2019d forgotten again.";
 
-  const aiSummary = "VISIT SUMMARY \u2014 March 18, 2026\n\nNUTRITION: Reduced appetite. Refused lunch, minimal soup intake. Monitor for pattern.\n\nMOBILITY & PAIN: Left ankle edema increased vs. prior week. Reports pain with ambulation (mailbox walk ~200ft). Physical therapy exercises attempted \u2014 discontinued early due to discomfort.\n\nCOGNITIVE: Medication reminder needed at 2:00 PM (Aricept) \u2014 patient had forgotten. This is the 3rd missed self-administration this month.\n\nMOOD & ENGAGEMENT: Stable. Engaged in preferred activities (TV, conversation about gardening). No signs of agitation or withdrawal.\n\nFLAGS: \u26A0\uFE0F Ankle swelling trend + appetite decline warrant mention at upcoming podiatry visit.";
+  const aiSummary = "VISIT SUMMARY \u2014 TUESDAY\n\nNUTRITION: Reduced appetite. Refused lunch, minimal soup intake. Monitor for pattern.\n\nMOBILITY & PAIN: Left knee pain increased vs. prior week. Reports pain with ambulation (mailbox walk ~200ft). Physical therapy exercises attempted \u2014 discontinued early due to discomfort.\n\nCOGNITIVE: Evening medication reminder needed (Donepezil) \u2014 patient had forgotten. This is the 3rd missed self-administration this month.\n\nMOOD & ENGAGEMENT: Stable. Engaged in preferred activities (old films, conversation about gardening). No signs of agitation or withdrawal.\n\nFLAGS: \u26A0\uFE0F Knee pain trend + appetite decline warrant mention at Barbara\u2019s next appointment with Dr. Patel.";
 
-  const doctorReport = "INPLACE CARE INTELLIGENCE REPORT\nPrepared for: Dr. Patel, Podiatry\nPatient: Elena Rivera, 78\nDate: March 20, 2026\n\nRELEVANT OBSERVATIONS (Last 30 Days):\nBased on 12 caregiver visits and daily care notes, the following patterns are relevant to Elena\u2019s upcoming podiatry appointment:\n\nANKLE & FOOT CONCERNS:\n\u2022 Left ankle edema noted in 8 of 12 visits, progressive worsening over 3 weeks\n\u2022 Patient reports increasing pain with weight-bearing activities\n\u2022 Walking distance has decreased from ~400ft to ~200ft before discomfort\n\u2022 Physical therapy exercises discontinued early in 4 of last 6 sessions due to ankle pain\n\u2022 No falls reported, but caregiver notes increased unsteadiness\n\nMOBILITY CONTEXT:\n\u2022 Uses walker consistently indoors (good compliance)\n\u2022 Refuses walker for short outdoor distances \u2014 fall risk\n\u2022 Morning stiffness lasting 20-30 min, improved from prior month\n\nMEDICATION RELEVANT TO VISIT:\n\u2022 Current: Meloxicam 7.5mg daily (NSAID)\n\u2022 Caregiver observation: Patient states pain relief \u201Cnot lasting as long\u201D\n\nWHAT CAREGIVERS ARE SEEING:\n\u201CShe used to love walking to the mailbox \u2014 now she asks me to get it. She won\u2019t say her ankle hurts but you can see her wince when she stands up from the couch.\u201D\n\nThis report was generated by inPlace AI from 30 days of structured caregiver observations. Data is encrypted and shared only with authorized care team members.";
+  const doctorReport = "INPLACE CARE INTELLIGENCE REPORT\nPrepared for: Dr. Patel\nPatient: Barbara Lowe, 78\nPrepared from the last 30 days of care\n\nRELEVANT OBSERVATIONS (Last 30 Days):\nBased on 12 caregiver visits and daily care notes, the following patterns are relevant to Barbara\u2019s upcoming appointment:\n\nKNEE & MOBILITY CONCERNS:\n\u2022 Left knee pain noted in 8 of 12 visits, progressive worsening over 3 weeks\n\u2022 Patient reports increasing pain with weight-bearing activities\n\u2022 Walking distance has decreased from ~400ft to ~200ft before discomfort\n\u2022 Physical therapy exercises discontinued early in 4 of last 6 sessions due to knee pain\n\u2022 No falls reported, but caregiver notes increased unsteadiness\n\nMOBILITY CONTEXT:\n\u2022 Uses walker consistently indoors (good compliance)\n\u2022 Refuses walker for short outdoor distances \u2014 fall risk\n\u2022 Morning stiffness lasting 20-30 min, improved from prior month\n\nMEDICATION RELEVANT TO VISIT:\n\u2022 Current: Ibuprofen 200mg as needed for knee pain\n\u2022 Caregiver observation: Patient states pain relief \u201Cnot lasting as long\u201D\n\nWHAT CAREGIVERS ARE SEEING:\n\u201CShe used to love walking to the mailbox \u2014 now she asks me to get it. She won\u2019t say her knee hurts but you can see her wince when she stands up from the couch.\u201D\n\nThis report was generated by inPlace AI from 30 days of structured caregiver observations. Data is encrypted and shared only with authorized care team members.";
 
   const goToStep = (s) => setStep(s);
 
@@ -44,7 +56,7 @@ const CareStoryWalkthrough = window.CareStoryWalkthrough = ({ onNavigate, compac
           <div style={{ display: 'inline-block', padding: '5px 14px', background: 'var(--color-success-bg)', border: '1px solid #c8e6c9', borderRadius: 20, fontSize: 11, fontWeight: 700, color: 'var(--color-success)', letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 10 }}>See It In Action</div>
           <h2 style={{ fontSize: compact ? 24 : 28, color: 'var(--role-color)', marginBottom: 8 }}>How Small Notes Become Powerful Insights</h2>
           <p style={{ fontSize: 15, color: 'var(--text-secondary)', maxWidth: 600, margin: '0 auto', lineHeight: 1.6 }}>
-            Follow the Rivera family. Maria lives in DC. Her mom Elena, 78, lives in Virginia with mild dementia and arthritis. Here's what happens when a care team actually uses inPlace.
+            Follow the Lowe family. Paul lives in DC. His mom Barbara, 78, lives in Blacksburg with early-stage dementia and arthritis in both knees. Here's what happens when a care team actually uses inPlace.
           </p>
         </div>
 
@@ -70,33 +82,33 @@ const CareStoryWalkthrough = window.CareStoryWalkthrough = ({ onNavigate, compac
         </div>
 
         {/* ── Step 0: Profile ── */}
-        {step === 0 && phoneFrame("Elena's Profile", (
+        {step === 0 && phoneFrame("Barbara's Profile", (
           <div>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>CARE RECIPIENT PROFILE</div>
             <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 14 }}>
               <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'var(--color-success-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>{'\uD83D\uDC75'}</div>
-              <div><div style={{ fontWeight: 700, color: 'var(--text-primary)' }}>Elena Rivera</div><div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>78 years old — Richmond, VA</div></div>
+              <div><div style={{ fontWeight: 700, color: 'var(--text-primary)' }}>Barbara Lowe</div><div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>78 years old — Blacksburg, VA</div></div>
             </div>
             <div style={{ background: 'var(--bg-neutral)', borderRadius: 8, padding: 10, marginBottom: 10, fontSize: 12, border: '1px solid #eee' }}>
               <div style={{ fontWeight: 600, color: 'var(--role-color)', marginBottom: 4 }}>Conditions</div>
-              <div>Mild cognitive impairment (early dementia) {'\u00B7'} Osteoarthritis {'\u00B7'} Hypertension</div>
+              <div>Early-stage dementia {'\u00B7'} Mild arthritis — both knees {'\u00B7'} High blood pressure (controlled)</div>
             </div>
             <div style={{ background: 'var(--bg-neutral)', borderRadius: 8, padding: 10, marginBottom: 10, fontSize: 12, border: '1px solid #eee' }}>
               <div style={{ fontWeight: 600, color: 'var(--role-color)', marginBottom: 4 }}>Medications</div>
-              <div>Aricept 10mg (memory) {'\u00B7'} Meloxicam 7.5mg (pain) {'\u00B7'} Lisinopril 20mg (BP)</div>
+              <div>Donepezil 10mg (evening) {'\u00B7'} Lisinopril 10mg (morning) {'\u00B7'} Ibuprofen 200mg as needed</div>
             </div>
             <div style={{ background: 'var(--bg-neutral)', borderRadius: 8, padding: 10, fontSize: 12, border: '1px solid #eee' }}>
               <div style={{ fontWeight: 600, color: 'var(--role-color)', marginBottom: 4 }}>Care Preferences</div>
               <div>{'\u2705'} Meal prep {'\u00B7'} {'\u2705'} Med reminders {'\u00B7'} {'\u2705'} Companionship {'\u00B7'} {'\u2705'} Transportation</div>
             </div>
-            <p style={{ fontSize: 11, color: 'var(--text-tertiary)', fontStyle: 'italic', marginTop: 10, marginBottom: 0 }}>Maria set this up in 10 minutes from her apartment in DC.</p>
+            <p style={{ fontSize: 11, color: 'var(--text-tertiary)', fontStyle: 'italic', marginTop: 10, marginBottom: 0 }}>Paul set this up in 10 minutes from his apartment in DC.</p>
           </div>
         ))}
 
         {/* ── Step 1: Raw note ── */}
         {step === 1 && phoneFrame('Visit Log', (
           <div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>CAREGIVER: SARAH M. — MARCH 18, 2:45 PM</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>CAREGIVER: MARIA SANTOS — TUESDAY, 2:45 PM</div>
             <div style={{ background: '#fffde7', borderRadius: 8, padding: 12, border: '1px solid #fff9c4', fontSize: 13, lineHeight: 1.7, color: 'var(--text-primary)', fontStyle: 'italic' }}>
               "{rawNote}"
             </div>
@@ -111,7 +123,7 @@ const CareStoryWalkthrough = window.CareStoryWalkthrough = ({ onNavigate, compac
         {step === 2 && (
           <div style={{ maxWidth: 800, margin: '0 auto' }}>
             <div style={{ textAlign: 'center', marginBottom: 16 }}>
-              <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 6 }}>Sarah's quick note becomes structured, searchable care data</div>
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 6 }}>Maria's quick note becomes structured, searchable care data</div>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 40px 1fr', gap: 0, alignItems: 'start' }}>
               <div style={{ background: '#fffde7', borderRadius: 12, padding: 16, border: '1px solid #fff9c4', fontSize: 12, lineHeight: 1.6, color: 'var(--text-secondary)', fontStyle: 'italic' }}>
@@ -141,7 +153,7 @@ const CareStoryWalkthrough = window.CareStoryWalkthrough = ({ onNavigate, compac
             </div>
             <div style={{ background: 'var(--bg-surface)', borderRadius: 14, border: '1px solid #e8e8e8', boxShadow: '0 2px 12px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
               {[
-                { flag: '\uD83D\uDD34', label: 'Ankle Swelling', detail: 'Noted in 8 of 12 visits — getting worse', trend: 'trending up' },
+                { flag: '\uD83D\uDD34', label: 'Left Knee Pain', detail: 'Noted in 8 of 12 visits — getting worse', trend: 'trending up' },
                 { flag: '\uD83D\uDFE1', label: 'Appetite', detail: 'Declined 3 of last 5 visits — new pattern', trend: 'declining' },
                 { flag: '\uD83D\uDFE1', label: 'Medication Compliance', detail: '3 missed self-administrations this month', trend: 'needs attention' },
                 { flag: '\uD83D\uDFE2', label: 'Mood & Engagement', detail: 'Consistently stable — enjoys gardening talk', trend: 'stable' },
@@ -159,7 +171,7 @@ const CareStoryWalkthrough = window.CareStoryWalkthrough = ({ onNavigate, compac
               ))}
             </div>
             <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--text-tertiary)', marginTop: 14, lineHeight: 1.5 }}>
-              None of this required Maria to do anything extra. Sarah logged her normal visit notes. AI did the rest. Now Maria sees exactly what's changing — and so can Elena's doctors.
+              None of this required Paul to do anything extra. Maria logged her normal visit notes. AI did the rest. Now Paul sees exactly what's changing — and so can Barbara's doctors.
             </p>
           </div>
         )}
@@ -168,12 +180,12 @@ const CareStoryWalkthrough = window.CareStoryWalkthrough = ({ onNavigate, compac
         {step === 4 && (
           <div style={{ maxWidth: 520, margin: '0 auto' }}>
             <div style={{ textAlign: 'center', marginBottom: 12 }}>
-              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>Elena has a podiatry appointment. Maria taps "Generate Report."</div>
-              <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>AI reads 30 days of care data and surfaces only what a podiatrist needs to see.</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>Barbara has an appointment with Dr. Patel. Paul taps "Generate Report."</div>
+              <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>AI reads 30 days of care data and surfaces only what the doctor needs to see.</div>
             </div>
             <div style={{ background: 'var(--bg-surface)', borderRadius: 14, border: '1px solid #e0e0e0', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', overflow: 'hidden' }}>
               <div style={{ background: 'var(--role-color)', color: 'var(--text-on-primary)', padding: '10px 16px', fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span>{'\uD83E\uDE7A'}</span> AI Doctor Report — Podiatry
+                <span>{'\uD83E\uDE7A'}</span> AI Doctor Report — Dr. Patel
               </div>
               <div style={{ padding: 16, fontSize: 11.5, lineHeight: 1.7, color: 'var(--text-primary)', whiteSpace: 'pre-wrap', maxHeight: 320, overflowY: 'auto', fontFamily: '-apple-system, sans-serif' }}>
                 {doctorReport}
@@ -189,14 +201,14 @@ const CareStoryWalkthrough = window.CareStoryWalkthrough = ({ onNavigate, compac
         {step === 5 && (
           <div style={{ maxWidth: 520, margin: '0 auto' }}>
             <div style={{ textAlign: 'center', marginBottom: 16 }}>
-              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>Maria enters Dr. Patel's email. One tap. Report delivered.</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>Paul enters Dr. Patel's email. One tap. Report delivered.</div>
             </div>
             <div style={{ background: 'var(--bg-primary)', borderRadius: 14, border: '1px solid #e0e0e0', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', overflow: 'hidden' }}>
               <div style={{ background: 'var(--bg-surface)', padding: '20px 24px', borderBottom: '1px solid #eee' }}>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>EMAIL PREVIEW</div>
                 <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 3 }}><strong>From:</strong> inPlace Care Intelligence &lt;reports@yourinplace.com&gt;</div>
-                <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 3 }}><strong>To:</strong> Dr. Patel &lt;patel@richmondpodiatry.com&gt;</div>
-                <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}><strong>Subject:</strong> Care Intelligence Report — Elena Rivera (Podiatry Visit)</div>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 3 }}><strong>To:</strong> Dr. Patel &lt;patel@nrvfamilymedicine.com&gt;</div>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}><strong>Subject:</strong> Care Intelligence Report — Barbara Lowe (upcoming visit)</div>
               </div>
               <div style={{ padding: '20px 24px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
@@ -209,12 +221,12 @@ const CareStoryWalkthrough = window.CareStoryWalkthrough = ({ onNavigate, compac
                   </div>
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--text-primary)', lineHeight: 1.6, marginBottom: 12 }}>
-                  Dr. Patel, the Rivera family has shared a care intelligence report for Elena's upcoming podiatry appointment. This report was generated from 30 days of structured caregiver observations across 12 home visits.
+                  Dr. Patel, the Lowe family has shared a care intelligence report ahead of Barbara's upcoming appointment. This report was generated from 30 days of structured caregiver observations across 12 home visits.
                 </div>
                 <div style={{ background: 'var(--bg-highlight)', borderRadius: 8, padding: 12, border: '1px solid #d0e8e3', fontSize: 11, color: 'var(--text-primary)', lineHeight: 1.5, marginBottom: 12 }}>
-                  <strong>Key findings relevant to your specialty:</strong> Progressive left ankle edema (8/12 visits), declining ambulatory distance, pain management concerns with current NSAID regimen, and detailed mobility observations from daily caregiving.
+                  <strong>Key findings:</strong> Progressive left knee pain (8/12 visits), declining walking distance, pain relief wearing off sooner on her current as-needed ibuprofen, and detailed mobility observations from daily caregiving.
                 </div>
-                <div style={{ fontSize: 11, color: 'var(--text-tertiary)', fontStyle: 'italic' }}>Full report attached. This data is encrypted and shared with explicit family authorization. Replies to this email are captured in Elena's care record.</div>
+                <div style={{ fontSize: 11, color: 'var(--text-tertiary)', fontStyle: 'italic' }}>Full report attached. This data is encrypted and shared with explicit family authorization. Replies to this email are captured in Barbara's care record.</div>
               </div>
             </div>
             <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--text-tertiary)', marginTop: 14, lineHeight: 1.5 }}>
@@ -227,7 +239,7 @@ const CareStoryWalkthrough = window.CareStoryWalkthrough = ({ onNavigate, compac
         {step === 6 && (
           <div style={{ maxWidth: 520, margin: '0 auto' }}>
             <div style={{ textAlign: 'center', marginBottom: 16 }}>
-              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>Dr. Patel replies. It goes straight into Elena's care record.</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>Dr. Patel replies. It goes straight into Barbara's care record.</div>
               <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>No phone tag. No lost sticky notes. Real medical guidance, captured forever.</div>
             </div>
             {/* Doctor reply */}
@@ -237,15 +249,15 @@ const CareStoryWalkthrough = window.CareStoryWalkthrough = ({ onNavigate, compac
               </div>
               <div style={{ padding: '16px 20px' }}>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
-                  From: Dr. Patel &lt;patel@richmondpodiatry.com&gt;<br/>
-                  Re: Care Intelligence Report — Elena Rivera
+                  From: Dr. Patel &lt;patel@nrvfamilymedicine.com&gt;<br/>
+                  Re: Care Intelligence Report — Barbara Lowe
                 </div>
                 <div style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.7, background: '#fafbff', borderRadius: 8, padding: 14, border: '1px solid #e8ecf4' }}>
-                  Thank you for this — incredibly helpful. A few notes for Elena's care team:<br/><br/>
+                  Thank you for this — incredibly helpful. A few notes for Barbara's care team:<br/><br/>
                   <strong>1.</strong> Keep her moving when possible. Short, frequent walks are better than one long one. If she'll do 5 minutes every hour, that's ideal for circulation.<br/><br/>
-                  <strong>2.</strong> Consider soaking her ankles in warm water before bed, especially if her nails are bothering her. This will help with the edema too.<br/><br/>
-                  <strong>3.</strong> Elevate feet above heart level when seated. Pillows under ankles on the couch would work.<br/><br/>
-                  <strong>4.</strong> I'm going to recommend we switch from Meloxicam to topical diclofenac — less GI risk. Will send the Rx to her pharmacy.<br/><br/>
+                  <strong>2.</strong> A warm compress on the knee before bed, and again before her stretches, should make the exercises easier to finish.<br/><br/>
+                  <strong>3.</strong> Elevate the leg when she's seated for a while. A pillow under the knee on the couch would work.<br/><br/>
+                  <strong>4.</strong> I'd like to move her from as-needed ibuprofen to a topical anti-inflammatory — less stomach risk at her age. I'll send the Rx to her pharmacy.<br/><br/>
                   See you Thursday.<br/>
                   — Dr. Patel
                 </div>
@@ -256,19 +268,19 @@ const CareStoryWalkthrough = window.CareStoryWalkthrough = ({ onNavigate, compac
             {/* Care record */}
             <div style={{ background: 'var(--bg-surface)', borderRadius: 14, border: '2px solid #1b6b5a', boxShadow: '0 4px 20px rgba(27,107,90,0.12)', overflow: 'hidden' }}>
               <div style={{ background: 'var(--role-color)', color: 'var(--text-on-primary)', padding: '10px 16px', fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span>{'\uD83D\uDCCB'}</span> Elena's Care Record — New Doctor Note
+                <span>{'\uD83D\uDCCB'}</span> Barbara's Care Record — New Doctor Note
               </div>
               <div style={{ padding: '14px 18px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
                   <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--color-info-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>{'\uD83D\uDC68\u200D\u2695\uFE0F'}</div>
                   <div>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>Dr. Patel, Podiatry</div>
-                    <div style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>March 20, 2026 — via email reply</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>Dr. Patel</div>
+                    <div style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>Today — via email reply</div>
                   </div>
                   <span style={{ marginLeft: 'auto', fontSize: 9, background: 'var(--color-info-bg)', color: 'var(--color-info)', padding: '2px 8px', borderRadius: 10, fontWeight: 600 }}>DOCTOR NOTE</span>
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--text-primary)', lineHeight: 1.6, borderLeft: '3px solid #4a5fa8', paddingLeft: 12 }}>
-                  Short frequent walks (5 min/hr for circulation). Warm ankle soaks before bed. Elevate feet above heart when seated. Switching from Meloxicam to topical diclofenac — Rx sent to pharmacy.
+                  Short frequent walks (5 min/hr). Warm compress on the knee before bed and before stretches. Elevate the leg when seated. Moving from as-needed ibuprofen to a topical anti-inflammatory — Rx sent to pharmacy.
                 </div>
                 <div style={{ marginTop: 10, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   <span style={{ fontSize: 10, background: 'var(--color-success-bg)', color: 'var(--color-success)', padding: '2px 8px', borderRadius: 10, fontWeight: 600 }}>Visible to care team</span>
@@ -280,7 +292,7 @@ const CareStoryWalkthrough = window.CareStoryWalkthrough = ({ onNavigate, compac
             <div style={{ textAlign: 'center', marginTop: 24 }}>
               <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--role-color)', marginBottom: 6 }}>This is what investing in long-term care looks like.</div>
               <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, maxWidth: 460, margin: '0 auto' }}>
-                Sarah wrote a quick note on her phone. AI turned it into a specialist-ready report. Maria emailed it to Dr. Patel. He replied with real medical guidance — and it landed right back in Elena's care record where the whole team can see it. No phone tag. No lost instructions. That's the power of staying on the platform and letting it work for your family over time.
+                Maria wrote a quick note on her phone. AI turned it into a doctor-ready report. Paul emailed it to Dr. Patel. He replied with real medical guidance — and it landed right back in Barbara's care record where the whole team can see it. No phone tag. No lost instructions. That's the power of staying on the platform and letting it work for your family over time.
               </p>
               {onNavigate && (
                 <button onClick={() => onNavigate('register')} style={{

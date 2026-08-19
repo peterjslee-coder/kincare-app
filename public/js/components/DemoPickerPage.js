@@ -91,17 +91,26 @@ const DemoPickerPage = window.DemoPickerPage = ({ onLogin, onNavigate }) => {
         </div>
       </nav>
 
-      {/* ── See It In Action walkthrough ── */}
-      <CareStoryWalkthrough onNavigate={onNavigate} compact={true} />
-
       {/* Content */}
+      {/* v1.105.97 — the walkthrough used to sit HERE, above the persona cards, and that is why
+          "View Live Demo" felt like it did nothing. Pete: "on the splash there's a 'view the live
+          demo' but that only takes you to the 'see it in action' page in which you can click
+          (again) on 'view the live demo'...which is confusing."
+
+          He was reading the screen correctly. Both pages opened with the same "See It In Action"
+          heading and the same seven-step story, so pressing the button appeared to land you back
+          where you started, with another button offering the thing you had just asked for. The
+          demo cards were real and below the fold.
+
+          A page called "View Live Demo" opens with the live demo. The walkthrough still follows,
+          for anyone who scrolled past it the first time. */}
       <div style={{ maxWidth: '800px', margin: '0 auto', padding: '48px 24px' }}>
         <div style={{ textAlign: 'center', marginBottom: '40px' }}>
           <h1 style={{ fontSize: '32px', color: 'var(--role-color)', marginBottom: '12px', fontWeight: 700 }}>
             Try the Live Demo
           </h1>
           <p style={{ fontSize: '17px', color: 'var(--text-secondary)', maxWidth: '560px', margin: '0 auto', lineHeight: 1.6 }}>
-            Now see it for yourself. Choose a persona below to explore inPlace from their perspective. Each role sees a different dashboard and set of features. No sign-up required.
+            Pick a person below and you're straight into the real app, seeing exactly what they see. Nothing to sign up for, nothing to fill in.
           </p>
         </div>
 
@@ -172,6 +181,11 @@ const DemoPickerPage = window.DemoPickerPage = ({ onLogin, onNavigate }) => {
         <div style={{ textAlign: 'center', marginTop: '32px', color: 'var(--text-muted)', fontSize: '13px' }}>
           Click any card above to explore InPlace as that user.
         </div>
+      </div>
+
+      {/* ── See It In Action walkthrough — below the demo, not in front of it ── */}
+      <div style={{ borderTop: '1px solid var(--border-color)' }}>
+        <CareStoryWalkthrough onNavigate={onNavigate} compact={true} />
       </div>
     </div>
   );

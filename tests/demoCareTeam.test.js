@@ -29,10 +29,12 @@ describe("the demo shows the care team it actually has", () => {
   });
 });
 
-describe("care team member thumbnails resolve for everyone, not just demo users", () => {
-  test("member avatars go through userPhotoUrl, which checks both photo columns", () => {
-    // The list returned u.avatar_url raw. A photo somebody UPLOADS lands in profile_photo, so
-    // the member who had actually set a picture was the one rendering as coloured initials.
+describe("care team member thumbnails are served as URLs, not inlined base64", () => {
+  // v1.105.97 — the v1.105.96 version of this described a correctness bug that did not exist.
+  // Pete: "the thumbnails have always worked well on my live account." He was right: every
+  // write path sets avatar_url as well as profile_photo. The reason to route through
+  // userPhotoUrl() is payload size (the C2 rule), not broken images.
+  test("member avatars go through userPhotoUrl rather than a possibly-base64 column", () => {
     expect(careTeams).toMatch(/const \{ userPhotoUrl \} = require\("\.\/media"\);/);
     expect(careTeams).toMatch(/avatarUrl: userPhotoUrl\(m\)/);
     expect(careTeams).not.toMatch(/avatarUrl: m\.avatar_url/);

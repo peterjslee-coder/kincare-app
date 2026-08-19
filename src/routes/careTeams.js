@@ -129,11 +129,18 @@ router.get("/", requireRole("family"), async (req, res) => {
       team.members = members.map(m => ({
         firstName: m.first_name,
         lastName: m.last_name,
-        // v1.105.96 — this returned u.avatar_url raw, and a photo somebody UPLOADS lands in
-        // profile_photo, not avatar_url. So the member who had actually set a picture was the
-        // one who rendered as coloured initials, on every care team, for everyone. media.js has
-        // had userPhotoUrl() for exactly this since v1.66.0: it checks both columns and returns
-        // a cacheable endpoint instead of inlining base64 into a list payload (the C2 rule).
+        // v1.105.97 — CORRECTION to the v1.105.96 note that was here. It claimed member
+        // thumbnails were broken for real users because uploads land in profile_photo and this
+        // returned avatar_url. That is not true and Pete said so: "the thumbnails have always
+        // worked well on my live account." Every write path sets BOTH columns (auth.js:1036,
+        // userFlags.js:267) and OAuth signup sets avatar_url, so avatar_url was always populated.
+        // Nothing was broken.
+        //
+        // userPhotoUrl() is still the right call here, for the reason it was written in v1.66.0:
+        // avatar_url may hold a base64 data URL, and inlining those into a LIST payload puts a
+        // photo per member into every care-team response (the C2 rule). This returns a cacheable
+        // same-origin endpoint instead. A size fix, not a correctness fix — worth having, worth
+        // not overselling.
         avatarUrl: userPhotoUrl(m),
         role: m.role,
       }));
