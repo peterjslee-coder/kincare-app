@@ -327,7 +327,7 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
               );
             })}
             {careRequests.length > 5 && (
-              <div style={{ fontSize: 12, color: '#bf360c', textAlign: 'center' }}>+{careRequests.length - 5} more — tap a day to see all</div>
+              <div style={{ fontSize: 12, color: 'var(--color-warning)', textAlign: 'center' }}>+{careRequests.length - 5} more — tap a day to see all</div>
             )}
           </div>
         </div>

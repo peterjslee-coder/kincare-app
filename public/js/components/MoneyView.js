@@ -117,7 +117,7 @@ const MoneyView = window.MoneyView = ({ careTeamId, onClose }) => {
         </div>
 
         {loading && <div style={{ padding: 30, textAlign: 'center', color: 'var(--text-muted)' }}>Loading…</div>}
-        {error && <div style={{ padding: 20, color: '#c62828', fontSize: 14 }}>{error}</div>}
+        {error && <div style={{ padding: 20, color: 'var(--color-error)', fontSize: 14 }}>{error}</div>}
 
         {!loading && !error && (
           <>

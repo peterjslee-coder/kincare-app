@@ -17,7 +17,7 @@ const DemoPickerPage = window.DemoPickerPage = ({ onLogin, onNavigate }) => {
       email: 'maria@inplace.care',
       label: 'Maria Santos',
       role: 'Caregiver / Companion',
-      color: '#2e7d6d',
+      color: 'var(--role-color)',
       icon: '🤝',
       description: 'You\'re a professional caregiver assigned to the Lowe family. See your schedule, earnings, assigned families, area map, and client reviews.',
     },

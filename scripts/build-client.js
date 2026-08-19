@@ -76,6 +76,7 @@ const scripts = [
   "js/components/Analytics.js",
   "js/components/EmailVerificationBanner.js",
   "js/components/DisclaimerModal.js",
+  "js/components/DemoOrientation.js",
   "js/components/FeedbackButton.js",
   "js/components/NotificationPrompt.js",
   "js/components/DemoPickerPage.js",

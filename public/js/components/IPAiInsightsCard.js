@@ -182,7 +182,7 @@ const IPAiInsightsCard = window.IPAiInsightsCard = ({ recipientId, recipientName
 
             {/* Family Additions — editable notes that iPAi incorporates on next regeneration */}
             <div style={{ marginTop: 12, padding: '10px 12px', background: '#f0f4ff', borderRadius: 8, border: '1px solid #c5cae9' }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#3949ab', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-indigo)', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
                 {'\u{1F4D6}'} Your Family's Notes
                 <span style={{ fontWeight: 400, color: '#7986cb' }}> — everything you share helps iPAi give better care guidance</span>
               </div>
@@ -190,7 +190,7 @@ const IPAiInsightsCard = window.IPAiInsightsCard = ({ recipientId, recipientName
                 <div>
                   <textarea value={familyNoteText} onChange={e => setFamilyNoteText(e.target.value)}
                     placeholder={`Share anything that helps ${recipientName}'s caregivers...\n\nThings like:\n• "She takes her pills better with applesauce"\n• "She gets upset if you mention her late husband"\n• "Frank Sinatra during meal prep always makes her smile"\n• "She's a morning person — best before noon"\n\nThe more you share, the better iPAi can guide ${recipientName}'s care team.`}
-                    style={{ width: '100%', minHeight: 80, padding: 10, border: '1px solid #c5cae9', borderRadius: 8, fontSize: 13, fontFamily: 'inherit', color: '#1a237e', resize: 'vertical', boxSizing: 'border-box' }}
+                    style={{ width: '100%', minHeight: 80, padding: 10, border: '1px solid #c5cae9', borderRadius: 8, fontSize: 13, fontFamily: 'inherit', color: 'var(--color-info)', resize: 'vertical', boxSizing: 'border-box' }}
                     autoFocus />
                   <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
                     <button onClick={async () => {
@@ -213,12 +213,12 @@ const IPAiInsightsCard = window.IPAiInsightsCard = ({ recipientId, recipientName
               ) : (
                 <div>
                   {familyNoteText ? (
-                    <div style={{ fontSize: 13, color: '#1a237e', lineHeight: 1.5, whiteSpace: 'pre-wrap', marginBottom: 6 }}>
+                    <div style={{ fontSize: 13, color: 'var(--color-info)', lineHeight: 1.5, whiteSpace: 'pre-wrap', marginBottom: 6 }}>
                       {familyNoteText}
                     </div>
                   ) : null}
                   <button onClick={() => setEditingFamilyNote(true)} style={{
-                    padding: '4px 10px', background: 'var(--bg-surface)', color: '#3949ab', border: '1px solid #c5cae9', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                    padding: '4px 10px', background: 'var(--bg-surface)', color: 'var(--color-indigo)', border: '1px solid #c5cae9', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer',
                   }}>{familyNoteText ? 'Edit Notes' : `+ Add notes about ${recipientName}`}</button>
                 </div>
               )}

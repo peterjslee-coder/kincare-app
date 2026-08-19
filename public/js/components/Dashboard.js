@@ -787,8 +787,8 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
               <span style={{ fontSize: 22 }}>{'\u{1F6D1}'}</span>
               <div>
-                <div style={{ fontWeight: 700, fontSize: 15, color: '#c62828' }}>Account on hold — payment overdue</div>
-                <div style={{ fontSize: 13, color: '#c62828', marginTop: 2 }}>
+                <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--color-error)' }}>Account on hold — payment overdue</div>
+                <div style={{ fontSize: 13, color: 'var(--color-error)', marginTop: 2 }}>
                   You have {overdue.length} unpaid session{overdue.length > 1 ? 's' : ''} totaling ${totalOwed.toFixed(2)}.
                   New bookings and upcoming sessions are paused until payment is complete.
                 </div>
@@ -796,7 +796,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
             </div>
             {overdue.map(pr => (
               <div key={pr.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', marginBottom: 4, background: 'rgba(255,255,255,0.6)', borderRadius: 8 }}>
-                <span style={{ fontSize: 13, color: '#c62828' }}>{pr.caregiver_name} · {pr.scheduled_date}</span>
+                <span style={{ fontSize: 13, color: 'var(--color-error)' }}>{pr.caregiver_name} · {pr.scheduled_date}</span>
                 <button onClick={async () => {
                   try {
                     const r = await apiFetch('/api/payments/checkout', { method: 'POST', body: JSON.stringify({ sessionId: pr.id, tipCents: parseInt(pr.pending_tip_cents) || 0 }) });

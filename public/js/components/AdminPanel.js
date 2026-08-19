@@ -2320,14 +2320,14 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
         const attentionItems = [];
         // Pending user approvals
         pendingApprovals.forEach(u => attentionItems.push({
-          icon: '👤', color: '#1565c0', pill: 'Review', pillBg: '#e3f2fd', pillColor: '#1565c0',
+          icon: '👤', color: 'var(--color-info)', pill: 'Review', pillBg: '#e3f2fd', pillColor: '#1565c0',
           title: `New signup — ${u.first_name} ${u.last_name}`,
           sub: `${u.role} · ${u.email} · ${new Date(u.created_at).toLocaleDateString()}`,
           action: () => { setActiveTab('people'); },
         }));
         // Paused caregivers
         pausedCaregivers.forEach(cg => attentionItems.push({
-          icon: '🛑', color: '#c62828', pill: 'Paused', pillBg: '#ffebee', pillColor: '#c62828',
+          icon: '🛑', color: 'var(--color-error)', pill: 'Paused', pillBg: '#ffebee', pillColor: '#c62828',
           title: `Paused caregiver — ${cg.first_name} ${cg.last_name}`,
           sub: `No-show · needs review`,
           action: () => { setActiveTab('sessions'); },
@@ -2341,7 +2341,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
         }));
         // Safety flags
         if (safetyFlagCount > 0) attentionItems.push({
-          icon: '🚨', color: '#c62828', pill: `${safetyFlagCount} flag${safetyFlagCount > 1 ? 's' : ''}`, pillBg: '#ffebee', pillColor: '#c62828',
+          icon: '🚨', color: 'var(--color-error)', pill: `${safetyFlagCount} flag${safetyFlagCount > 1 ? 's' : ''}`, pillBg: '#ffebee', pillColor: '#c62828',
           title: `Safety flags need review`,
           sub: `${safetyFlagCount} pending or escalated`,
           action: () => { setActiveTab('safety'); },
@@ -2369,7 +2369,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
         });
         // New feedback
         if (newFeedbackCount > 0) attentionItems.push({
-          icon: '💬', color: '#1565c0', pill: `${newFeedbackCount} new`, pillBg: '#e3f2fd', pillColor: '#1565c0',
+          icon: '💬', color: 'var(--color-info)', pill: `${newFeedbackCount} new`, pillBg: '#e3f2fd', pillColor: '#1565c0',
           title: `New user feedback`,
           sub: `${newFeedbackCount} unread submission${newFeedbackCount > 1 ? 's' : ''}`,
           action: () => { setActiveTab('feedback'); },
@@ -2384,17 +2384,17 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <span style={{ fontSize: 22 }}>🤖</span>
                   <div>
-                    <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0, color: '#1a237e' }}>iPAi Admin Brief</h3>
-                    <div style={{ fontSize: 11, color: '#5c6bc0' }}>{adminBriefing ? 'Updated just now' : 'Loading...'}</div>
+                    <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0, color: 'var(--color-info)' }}>iPAi Admin Brief</h3>
+                    <div style={{ fontSize: 11, color: 'var(--color-indigo)' }}>{adminBriefing ? 'Updated just now' : 'Loading...'}</div>
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <button onClick={() => { setAdminBriefing(null); loadBriefing(); }} style={{ padding: '4px 10px', borderRadius: 8, border: '1px solid #c5cae9', background: 'white', fontSize: 11, cursor: 'pointer', color: '#5c6bc0' }}>↻ Refresh</button>
+                  <button onClick={() => { setAdminBriefing(null); loadBriefing(); }} style={{ padding: '4px 10px', borderRadius: 8, border: '1px solid #c5cae9', background: 'white', fontSize: 11, cursor: 'pointer', color: 'var(--color-indigo)' }}>↻ Refresh</button>
                   <button onClick={() => setBriefingDismissed(true)} style={{ padding: '4px 10px', borderRadius: 8, border: '1px solid #c5cae9', background: 'white', fontSize: 11, cursor: 'pointer', color: '#999' }}>✕</button>
                 </div>
               </div>
               {briefingLoading && !adminBriefing ? (
-                <div style={{ padding: '16px 18px', textAlign: 'center', color: '#5c6bc0', fontSize: 13 }}>Analyzing your platform...</div>
+                <div style={{ padding: '16px 18px', textAlign: 'center', color: 'var(--color-indigo)', fontSize: 13 }}>Analyzing your platform...</div>
               ) : adminBriefing?.items?.length > 0 ? (
                 <div style={{ padding: '0 18px 14px' }}>
                   {adminBriefing.items.map((item, i) => {
@@ -2404,8 +2404,8 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                       <div key={i} style={{ display: 'flex', gap: 10, padding: '8px 0', borderTop: i > 0 ? '1px solid rgba(0,0,0,0.06)' : 'none' }}>
                         <span style={{ fontSize: 16, flexShrink: 0, marginTop: 1 }}>{item.icon}</span>
                         <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: 13, fontWeight: 600, color: '#1a237e', marginBottom: 2 }}>{item.title}</div>
-                          <div style={{ fontSize: 12, color: '#37474f', lineHeight: 1.5 }}>{item.detail}</div>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-info)', marginBottom: 2 }}>{item.title}</div>
+                          <div style={{ fontSize: 12, color: 'var(--text-slate)', lineHeight: 1.5 }}>{item.detail}</div>
                         </div>
                         <span style={{
                           padding: '2px 8px', borderRadius: 8, fontSize: 10, fontWeight: 700, height: 'fit-content', marginTop: 2,
@@ -2427,7 +2427,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
             <div style={{ background: 'var(--bg-card)', borderRadius: 12, border: '1px solid var(--border-color)', marginBottom: 16, overflow: 'hidden' }}>
               <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <h3 style={{ fontSize: 14, fontWeight: 600, margin: 0, color: 'var(--text-primary)' }}>Needs Attention</h3>
-                <span style={{ padding: '2px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: '#ffebee', color: '#c62828' }}>{attentionItems.length}</span>
+                <span style={{ padding: '2px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: '#ffebee', color: 'var(--color-error)' }}>{attentionItems.length}</span>
               </div>
               <div>
                 {attentionItems.map((item, i) => (
@@ -2581,7 +2581,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                     </div>
                   )}
                   {adminBriefing?.reviews?.flagged_pending > 0 && (
-                    <div style={{ padding: '4px 10px', borderRadius: 8, background: '#ffebee', fontSize: 11, color: '#c62828', fontWeight: 600 }}>
+                    <div style={{ padding: '4px 10px', borderRadius: 8, background: '#ffebee', fontSize: 11, color: 'var(--color-error)', fontWeight: 600 }}>
                       {adminBriefing.reviews.flagged_pending} flagged
                     </div>
                   )}
@@ -3505,7 +3505,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                               {(parseTimestamp(e.created_at) || new Date(0)).toLocaleString()}
                             </span>
                           </div>
-                          <div style={{ color: '#b91c1c' }}>{e.error_message}</div>
+                          <div style={{ color: 'var(--color-error)' }}>{e.error_message}</div>
                           <div style={{ display: 'flex', gap: '12px', marginTop: '4px', fontSize: '11px', color: 'var(--text-tertiary)', flexWrap: 'wrap' }}>
                             <span>User: {e.email || e.user_id || 'anon'}</span>
                             <span>Source: {e.error_source || '?'}</span>
@@ -3938,7 +3938,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
             <div style={{ background: 'linear-gradient(135deg, #e8f0fe 0%, #f3e8ff 100%)', borderRadius: 14, border: '1px solid #c5cae9', padding: '16px 18px', marginBottom: 16 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                 <span style={{ fontSize: 18 }}>🤖</span>
-                <span style={{ fontSize: 14, fontWeight: 700, color: '#1a237e' }}>iPAi Review Insights</span>
+                <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-info)' }}>iPAi Review Insights</span>
                 <span style={{ fontSize: 11, color: '#7986cb' }}>Last 90 days</span>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -3950,7 +3950,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                       <span style={{ fontSize: 16, flexShrink: 0 }}>{ins.icon}</span>
                       <div>
                         <div style={{ fontSize: 13, fontWeight: 600, color: typeColors[ins.type] || '#333' }}>{ins.title}</div>
-                        <div style={{ fontSize: 12, color: '#37474f', lineHeight: 1.5, marginTop: 2 }}>{ins.detail}</div>
+                        <div style={{ fontSize: 12, color: 'var(--text-slate)', lineHeight: 1.5, marginTop: 2 }}>{ins.detail}</div>
                       </div>
                     </div>
                   );
@@ -4175,7 +4175,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                         style={{ padding: '12px 16px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
                         <div style={{ flex: 1 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
-                            <span style={{ color: '#e53935', fontSize: 15, letterSpacing: 1 }}>{stars}</span>
+                            <span style={{ color: 'var(--color-error)', fontSize: 15, letterSpacing: 1 }}>{stars}</span>
                             <span style={{ fontSize: 13, fontWeight: 600 }}>{r.caregiver_name}</span>
                             <span style={{ padding: '1px 7px', borderRadius: 10, fontSize: 9, fontWeight: 700, background: statusColors[st] + '20', color: statusColors[st], textTransform: 'uppercase' }}>{st}</span>
                           </div>
@@ -4885,7 +4885,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                             {/* Concerns */}
                             {ai.concerns && ai.concerns.length > 0 && (
                               <div style={{ marginTop: 12, padding: 10, borderRadius: 8, background: 'rgba(231,76,60,0.08)', border: '1px solid rgba(231,76,60,0.2)' }}>
-                                <div style={{ fontWeight: 600, fontSize: 12, marginBottom: 4, color: '#e74c3c' }}>Concerns</div>
+                                <div style={{ fontWeight: 600, fontSize: 12, marginBottom: 4, color: 'var(--color-error)' }}>Concerns</div>
                                 {ai.concerns.map((c, i) => <div key={i} style={{ fontSize: 12, color: 'var(--text-primary)', marginTop: 2 }}>• {c}</div>)}
                               </div>
                             )}
@@ -5247,13 +5247,13 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                 {/* GPS data from visit log */}
                 {sessionDetail.visitLog?.some(vl => vl.check_in_lat && vl.check_in_lng) && (
                   <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10, padding: 12, marginBottom: 14 }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: '#166534', marginBottom: 6 }}>Check-In Location</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-success)', marginBottom: 6 }}>Check-In Location</div>
                     {sessionDetail.visitLog.filter(vl => vl.check_in_lat).map((vl, i) => (
-                      <div key={i} style={{ fontSize: 12, color: '#15803d' }}>
+                      <div key={i} style={{ fontSize: 12, color: 'var(--color-success)' }}>
                         {vl.check_in_lat.toFixed(5)}, {vl.check_in_lng.toFixed(5)}
                         {vl.check_in_distance_ft != null && ` \u00B7 ${Math.round(vl.check_in_distance_ft)} ft from home`}
                         {vl.check_out_lat && vl.check_out_lng && (
-                          <div style={{ marginTop: 4, color: '#166534' }}>
+                          <div style={{ marginTop: 4, color: 'var(--color-success)' }}>
                             Check-out: {vl.check_out_lat.toFixed(5)}, {vl.check_out_lng.toFixed(5)}
                           </div>
                         )}
@@ -5308,7 +5308,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                           )}
                           {/* GPS on check-in events */}
                           {ev.gps && (
-                            <div style={{ fontSize: 11, color: '#15803d', marginTop: 3 }}>
+                            <div style={{ fontSize: 11, color: 'var(--color-success)', marginTop: 3 }}>
                               GPS: {ev.gps.lat?.toFixed(5)}, {ev.gps.lng?.toFixed(5)}
                               {ev.gps.distance_ft != null && ` (${Math.round(ev.gps.distance_ft)} ft)`}
                             </div>
@@ -5343,16 +5343,16 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                     <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>Payment Records</div>
                     {sessionDetail.payments.map((p, i) => (
                       <div key={i} style={{ fontSize: 12, padding: '8px 10px', background: '#eff6ff', borderRadius: 8, border: '1px solid #bfdbfe', marginBottom: 6 }}>
-                        <div style={{ fontWeight: 600, color: '#1e40af' }}>
+                        <div style={{ fontWeight: 600, color: 'var(--color-info)' }}>
                           ${((p.amount || 0) / 100).toFixed(2)} — {p.status}
                           {p.auto_charged ? ' (auto)' : ''}
                           {p.tip_cents > 0 ? ` + $${(p.tip_cents / 100).toFixed(2)} tip` : ''}
                         </div>
-                        <div style={{ color: '#3b82f6', marginTop: 2 }}>
+                        <div style={{ color: 'var(--color-info)', marginTop: 2 }}>
                           Caregiver: ${((p.caregiver_payout || 0) / 100).toFixed(2)} | Platform: ${((p.platform_fee || 0) / 100).toFixed(2)}
                         </div>
                         {p.stripe_payment_intent && (
-                          <div style={{ color: '#64748b', marginTop: 2, fontFamily: 'monospace', fontSize: 10 }}>
+                          <div style={{ color: 'var(--text-slate)', marginTop: 2, fontFamily: 'monospace', fontSize: 10 }}>
                             PI: {p.stripe_payment_intent}
                           </div>
                         )}
@@ -6866,7 +6866,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                     </button>
                     {setPasswordOpen && (
                       <div style={{ marginTop: 10, padding: 12, background: '#e3f2fd', borderRadius: 8, border: '1px solid #90caf9' }}>
-                        <div style={{ fontSize: 12, fontWeight: 600, color: '#1565c0', marginBottom: 6 }}>Set a new password for {userDrawer.user.first_name}</div>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-info)', marginBottom: 6 }}>Set a new password for {userDrawer.user.first_name}</div>
                         <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 8 }}>They'll be prompted to change it on next login.</div>
                         <div style={{ display: 'flex', gap: 8 }}>
                           <input type="text" value={setPasswordValue} onChange={e => setSetPasswordValue(e.target.value)}
@@ -6992,7 +6992,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                 {/* Safety flags */}
                 {userDrawer.safetyFlags?.length > 0 && (
                   <div style={{ marginBottom: 22 }}>
-                    <h4 style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, color: '#c62828', marginBottom: 8, paddingBottom: 6, borderBottom: '1px solid var(--border-color)' }}>Safety Flags ({userDrawer.safetyFlags.length})</h4>
+                    <h4 style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--color-error)', marginBottom: 8, paddingBottom: 6, borderBottom: '1px solid var(--border-color)' }}>Safety Flags ({userDrawer.safetyFlags.length})</h4>
                     {userDrawer.safetyFlags.map(f => (
                       <div key={f.id} style={{ padding: '8px 0', borderBottom: '1px solid var(--border-color)' }}>
                         <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{f.category || 'Flag'}</div>
@@ -7119,7 +7119,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                       </button>
                     ) : (
                       <button onClick={() => { setDeleteConfirm(userDrawer.user?.id); setNukeConfirm(null); }}
-                        style={{ padding: '6px 14px', background: 'var(--bg-surface)', color: '#c62828', border: '1px solid #ef9a9a', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                        style={{ padding: '6px 14px', background: 'var(--bg-surface)', color: 'var(--color-error)', border: '1px solid #ef9a9a', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                         Soft Delete
                       </button>
                     )}
@@ -7145,7 +7145,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                       )
                     ) : (
                       <button onClick={() => { setNukeConfirm(userDrawer.user?.id); setDeleteConfirm(null); }}
-                        style={{ padding: '6px 14px', background: 'var(--bg-surface)', color: '#b71c1c', border: '1px solid #ef9a9a', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                        style={{ padding: '6px 14px', background: 'var(--bg-surface)', color: 'var(--color-error)', border: '1px solid #ef9a9a', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
                         Nuke
                       </button>
                     )}

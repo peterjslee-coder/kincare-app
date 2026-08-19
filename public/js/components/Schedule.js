@@ -155,7 +155,7 @@ const Schedule = window.Schedule = () => {
           <span style={{ fontSize: 22 }}>🔒</span>
           <div>
             <div style={{ fontWeight: 600, color: 'var(--color-warning)', fontSize: 15, marginBottom: 4 }}>Authorization Required</div>
-            <div style={{ fontSize: 13, color: '#6d4c00', lineHeight: 1.5 }}>
+            <div style={{ fontSize: 13, color: 'var(--color-warning)', lineHeight: 1.5 }}>
               Before scheduling care, you'll need to add a loved one and complete the care authorization process.
               This ensures everyone involved is aware and has consented to care arrangements.
             </div>
@@ -344,7 +344,7 @@ const Schedule = window.Schedule = () => {
                     <div style={{ marginTop: 12, padding: '12px', background: 'var(--bg-neutral)', borderRadius: 8, fontSize: 13 }}>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 24px' }}>
                         <div><span style={{ color: 'var(--text-tertiary)' }}>Duration:</span> <strong>{s.duration_hours || 2} hours</strong></div>
-                        <div><span style={{ color: 'var(--text-tertiary)' }}>Cost:</span> <strong>{s.estimated_cost ? `$${s.estimated_cost}` : s.actual_cost ? `$${s.actual_cost}` : '—'}</strong>{s.overtime_minutes > 0 && <span style={{ fontSize: 11, color: '#b45309', marginLeft: 4 }}>(+{s.overtime_minutes}min OT)</span>}</div>
+                        <div><span style={{ color: 'var(--text-tertiary)' }}>Cost:</span> <strong>{s.estimated_cost ? `$${s.estimated_cost}` : s.actual_cost ? `$${s.actual_cost}` : '—'}</strong>{s.overtime_minutes > 0 && <span style={{ fontSize: 11, color: 'var(--color-warning)', marginLeft: 4 }}>(+{s.overtime_minutes}min OT)</span>}</div>
                         <div><span style={{ color: 'var(--text-tertiary)' }}>Service:</span> <strong>{formatServiceType(s.service_type)}</strong></div>
                         <div><span style={{ color: 'var(--text-tertiary)' }}>Caregiver:</span> <strong>{s.caregiver_name || 'Pending match'}</strong></div>
                       </div>

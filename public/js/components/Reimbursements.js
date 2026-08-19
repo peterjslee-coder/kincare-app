@@ -584,7 +584,7 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
             {payoutsLoading ? (
               <div style={{ color: 'var(--text-muted)', fontSize: 14, padding: 12, textAlign: 'center' }}>Loading your deposits…</div>
             ) : !d || d.error ? (
-              <div style={{ color: '#c62828', fontSize: 14, padding: 12 }}>Couldn't load your deposits right now. Please try again.</div>
+              <div style={{ color: 'var(--color-error)', fontSize: 14, padding: 12 }}>Couldn't load your deposits right now. Please try again.</div>
             ) : !d.onboarded ? (
               <div style={{ color: 'var(--text-secondary)', fontSize: 14, padding: 12 }}>
                 Set up direct deposit first (in the reimbursement form) and your bank deposits will show up here, each tied to the requests that make it up.
@@ -602,7 +602,7 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
                 {d.upcoming.length > 0 && (
                   <div style={{ border: '1px dashed var(--border-light)', borderRadius: 10, padding: 12, marginBottom: 14, background: 'var(--bg-card)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: '#e65100' }}>On the way — not yet deposited</span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-warning)' }}>On the way — not yet deposited</span>
                       <span style={{ fontSize: 15, fontWeight: 700 }}>{money(d.upcomingTotal)}</span>
                     </div>
                     {d.upcoming.map((it) => (
@@ -1037,7 +1037,7 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
               </span>
             ))}
           </div>
-          {error && <div style={{ color: '#c62828', fontSize: 13, marginBottom: 8 }}>{error}</div>}
+          {error && <div style={{ color: 'var(--color-error)', fontSize: 13, marginBottom: 8 }}>{error}</div>}
           <div style={{ display: 'flex', gap: 8 }}>
             <button type="submit" disabled={busy}
               style={{ padding: '10px 18px', background: busy ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: busy ? 'wait' : 'pointer' }}>
@@ -1077,14 +1077,14 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
                   {meta.isApprover && sc.status === 'pending_approval' && (
                     <>
                       <button onClick={() => schedAct('approve')} style={{ padding: '4px 10px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Approve</button>
-                      <button onClick={() => schedAct('decline')} style={{ padding: '4px 10px', background: 'none', border: '1px solid #c62828', color: '#c62828', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>Decline</button>
+                      <button onClick={() => schedAct('decline')} style={{ padding: '4px 10px', background: 'none', border: '1px solid #c62828', color: 'var(--color-error)', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>Decline</button>
                     </>
                   )}
                   {(meta.isApprover || mine) && sc.status === 'active' && (
                     <button onClick={() => schedAct('pause')} style={{ padding: '4px 10px', background: 'none', border: '1px solid var(--border-light)', color: 'var(--text-secondary)', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>Pause</button>
                   )}
                   {(meta.isApprover || mine) && sc.status === 'paused' && (
-                    <button onClick={() => schedAct('resume')} style={{ padding: '4px 10px', background: 'none', border: '1px solid #2e7d32', color: '#2e7d32', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>Resume</button>
+                    <button onClick={() => schedAct('resume')} style={{ padding: '4px 10px', background: 'none', border: '1px solid #2e7d32', color: 'var(--color-success)', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>Resume</button>
                   )}
                   {(meta.isApprover || mine) && ['pending_approval', 'active', 'paused'].includes(sc.status) && (
                     <button onClick={() => { if (confirm('Cancel this recurring reimbursement?')) schedAct('cancel'); }} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: 12, cursor: 'pointer', textDecoration: 'underline' }}>Cancel</button>
@@ -1138,7 +1138,7 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
                 <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>
                   {it.payee_first_name} {it.payee_last_name}
                   {it.expense_date ? ` · ${it.expense_date}` : ''} · requested {fmtDate(it.created_at)}
-                  {!!it.self_recorded && <span style={{ color: '#7b5ea7', fontWeight: 600 }}> · recorded by approver</span>}
+                  {!!it.self_recorded && <span style={{ color: 'var(--role-color)', fontWeight: 600 }}> · recorded by approver</span>}
                 </div>
                 {/* v1.105.29 — say when there is NO receipt, not just when there is one.
                     Rendering nothing for an empty list looks identical to a permissions
@@ -1221,7 +1221,7 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
             {meta.isApprover && ['pending', 'approved'].includes(it.status) && (
               <div style={{ fontSize: 12, marginTop: 6, color: payToLabel(it) ? 'var(--text-secondary)' : '#e65100' }}>
                 {payToLabel(it)
-                  ? <>Pay to: {payToLabel(it)}{!!it.payout_verified && <span style={{ color: '#2e7d32', fontWeight: 600 }}> ✓ verified linked account</span>}{it.paid_from_label ? <> · From: {it.paid_from_label}</> : null}</>
+                  ? <>Pay to: {payToLabel(it)}{!!it.payout_verified && <span style={{ color: 'var(--color-success)', fontWeight: 600 }}> ✓ verified linked account</span>}{it.paid_from_label ? <> · From: {it.paid_from_label}</> : null}</>
                   : <>⚠️ No payment details on file — coordinate with {it.payee_first_name} on how to pay</>}
               </div>
             )}
@@ -1229,7 +1229,7 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
             {!meta.isApprover && it.payee_user_id === myUserId && ['pending', 'approved'].includes(it.status) && (
               <div style={{ fontSize: 12, marginTop: 6, color: payToLabel(it) ? 'var(--text-secondary)' : '#e65100' }}>
                 {payToLabel(it)
-                  ? <>You'll be paid to: {payToLabel(it)}{!!it.payout_verified && <span style={{ color: '#2e7d32', fontWeight: 600 }}> ✓ verified linked account</span>} — the approver sends it from their bank; InPlace tracks it</>
+                  ? <>You'll be paid to: {payToLabel(it)}{!!it.payout_verified && <span style={{ color: 'var(--color-success)', fontWeight: 600 }}> ✓ verified linked account</span>} — the approver sends it from their bank; InPlace tracks it</>
                   : <>⚠️ No payment details on this request — edit it to say how you want to be paid</>}
               </div>
             )}
@@ -1244,11 +1244,11 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
                   {it.payee_payout_ready ? 'Approve only' : 'Approve…'}
                 </button>
                 <button disabled={busyId === it.id} onClick={() => { const reason = prompt('Reason (optional):') || ''; act(it.id, 'decline', { reason }); }}
-                  style={{ padding: '6px 14px', background: 'none', border: '1px solid #c62828', color: '#c62828', borderRadius: 8, fontSize: 13, cursor: 'pointer' }}>
+                  style={{ padding: '6px 14px', background: 'none', border: '1px solid #c62828', color: 'var(--color-error)', borderRadius: 8, fontSize: 13, cursor: 'pointer' }}>
                   Decline
                 </button>
                 {it.payout_method === 'inplace' && !it.payee_payout_ready && (
-                  <span style={{ fontSize: 12, color: '#e65100', alignSelf: 'center' }}>Waiting on {it.payee_first_name} to finish direct-deposit setup</span>
+                  <span style={{ fontSize: 12, color: 'var(--color-warning)', alignSelf: 'center' }}>Waiting on {it.payee_first_name} to finish direct-deposit setup</span>
                 )}
               </div>
             )}
@@ -1278,7 +1278,7 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
                   </>
                 ) : (
                   <button onClick={() => setPayingId(it.id)}
-                    style={{ padding: '6px 14px', background: 'none', border: '1px solid #2e7d32', color: '#2e7d32', borderRadius: 8, fontSize: 13, cursor: 'pointer' }}>
+                    style={{ padding: '6px 14px', background: 'none', border: '1px solid #2e7d32', color: 'var(--color-success)', borderRadius: 8, fontSize: 13, cursor: 'pointer' }}>
                     Mark as paid
                   </button>
                 )}
@@ -1351,7 +1351,7 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
             <div style={{ background: 'var(--bg-primary)', borderRadius: 10, padding: '10px 12px', marginBottom: 12, fontSize: 13 }}>
               <div style={{ marginBottom: 4 }}>
                 <span style={{ fontWeight: 600 }}>To:</span> {payToLabel(approveTarget) || `coordinate with ${approveTarget.payee_first_name}`}
-                {!!approveTarget.payout_verified && <span style={{ color: '#2e7d32', fontWeight: 600 }}> ✓ verified — this account is linked to {approveTarget.payee_first_name}'s InPlace profile</span>}
+                {!!approveTarget.payout_verified && <span style={{ color: 'var(--color-success)', fontWeight: 600 }}> ✓ verified — this account is linked to {approveTarget.payee_first_name}'s InPlace profile</span>}
               </div>
               <div>
                 <span style={{ fontWeight: 600 }}>From:</span>{' '}
@@ -1386,7 +1386,7 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
                 This is a note for the family's records — which account the money comes from. No money moves through InPlace and account numbers are never stored; you make the actual payment from your bank, then mark it paid here. Everyone on the request is notified when you approve and when you pay.
               </div>
             </div>
-            {approveError && <div style={{ color: '#c62828', fontSize: 13, marginBottom: 10 }}>{approveError}</div>}
+            {approveError && <div style={{ color: 'var(--color-error)', fontSize: 13, marginBottom: 10 }}>{approveError}</div>}
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={confirmApprove} disabled={busyId === approveTarget.id}
                 style={{ flex: 1, padding: '10px 16px', background: busyId === approveTarget.id ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>

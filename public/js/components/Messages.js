@@ -2595,7 +2595,7 @@ const Messages = window.Messages = () => {
         {messagingLimited && !activeConvId && (
           <div style={{ padding: '10px 16px', background: 'var(--color-warning-bg)', borderBottom: '1px solid #ffe082', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
             <span style={{ fontSize: 16 }}>🔒</span>
-            <span style={{ fontSize: 13, color: '#6d4c00' }}>Messaging limited to InPlace Support until your background check is approved.</span>
+            <span style={{ fontSize: 13, color: 'var(--color-warning)' }}>Messaging limited to InPlace Support until your background check is approved.</span>
           </div>
         )}
         {showFindPeople ? renderFindPeople() : showNewChat ? renderNewChatPicker() : activeConvId ? renderChatView() : renderConversationList()}
@@ -2612,7 +2612,7 @@ const Messages = window.Messages = () => {
       {messagingLimited && (
         <div style={{ padding: '10px 16px', background: 'var(--color-warning-bg)', borderBottom: '1px solid #ffe082', display: 'flex', alignItems: 'center', gap: 8, borderRadius: '12px 12px 0 0' }}>
           <span style={{ fontSize: 16 }}>🔒</span>
-          <span style={{ fontSize: 13, color: '#6d4c00' }}>Messaging is limited to InPlace Support until your background check is approved.</span>
+          <span style={{ fontSize: 13, color: 'var(--color-warning)' }}>Messaging is limited to InPlace Support until your background check is approved.</span>
         </div>
       )}
       <div style={{ display: 'flex', height: messagingLimited ? 'calc(100% - 40px)' : '100%', background: 'var(--bg-surface)', borderRadius: messagingLimited ? '0 0 12px 12px' : '12px', overflow: 'hidden', boxShadow: '0 1px 8px rgba(0,0,0,0.08)' }}>

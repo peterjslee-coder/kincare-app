@@ -52,6 +52,12 @@
       --color-success-bg: #e8f5e9;
       --color-error: #c62828;
       --color-error-bg: #ffebee;
+      /* v1.105.98 — FILL colours, for a solid chip or button with white text on top.
+         --color-success / --color-error are lightened in the dark theme so they stay legible
+         as TEXT on a dark card; reusing them as a fill put white on #4caf50 (2.78:1). These
+         stay dark enough for white in either theme. */
+      --color-success-fill: #2e7d32;
+      --color-error-fill: #c62828;
       --color-warning: #f9a825;
       --color-warning-bg: #fff8e1;
       --color-info: #1565c0;
@@ -129,6 +135,9 @@
       --color-success-bg: #1b3a1b;
       --color-error: #ef5350;
       --color-error-bg: #3a1b1b;
+      /* Deliberately NOT lightened — see the note in the light block. */
+      --color-success-fill: #2e7d32;
+      --color-error-fill: #c62828;
       --color-warning: #ffb74d;
       --color-warning-bg: #3a2e1b;
       --color-info: #42a5f5;

@@ -925,7 +925,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
                 showCareHistory && careHistory && React.createElement('div', { style: { marginTop: 8, borderTop: '1px solid #ce93d8', paddingTop: 8 } },
                   careHistory.visits.map((v, i) => React.createElement('div', { key: i, style: { fontSize: 11, padding: '4px 0', borderBottom: i < careHistory.visits.length - 1 ? '1px solid #e1bee7' : 'none' } },
                     React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
-                      React.createElement('span', { style: { fontWeight: 600, color: '#4a148c' } }, v.scheduled_date),
+                      React.createElement('span', { style: { fontWeight: 600, color: 'var(--color-purple)' } }, v.scheduled_date),
                       React.createElement('span', { style: { display: 'flex', alignItems: 'center', gap: 2 } },
                         moodDot(v.arrival_mood), '\u2192 ', moodDot(v.departure_mood),
                         v.actual_cost && React.createElement('span', { style: { marginLeft: 6, color: 'var(--text-secondary)' } }, `$${Math.round(v.actual_cost || v.estimated_cost)}`)

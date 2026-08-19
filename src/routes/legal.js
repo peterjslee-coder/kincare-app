@@ -48,7 +48,14 @@ router.get("/pending", async (req, res) => {
     for (const a of acceptances) acceptMap[a.doc_type] = a.version;
 
     // Filter to docs where user hasn't accepted the current version
-    const pending = activeDocs.filter(d => acceptMap[d.doc_type] !== d.version);
+    let pending = activeDocs.filter(d => acceptMap[d.doc_type] !== d.version);
+
+    // v1.105.98 — a demo account is nobody, and cannot agree to anything. See auth.js for the
+    // full reasoning; the short version is that user_legal_acceptances exists to record that a
+    // named human accepted a named version, and seeding it from a shared fictional login makes
+    // that record less trustworthy, not more complete.
+    const me = await db.prepare("SELECT is_demo FROM users WHERE id = ?").get(req.user.id);
+    if (me && me.is_demo) pending = [];
 
     res.json({ pending });
   } catch (err) {

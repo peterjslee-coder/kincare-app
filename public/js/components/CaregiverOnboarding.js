@@ -837,7 +837,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
   };
   const inputErrorStyle = { ...inputStyle, borderColor: '#e74c3c' };
   const labelStyle = { display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px' };
-  const errorStyle = { color: '#e74c3c', fontSize: '12px', marginTop: '4px' };
+  const errorStyle = { color: 'var(--color-error)', fontSize: '12px', marginTop: '4px' };
   const fieldGroup = { marginBottom: '16px' };
   const rowStyle = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' };
 
@@ -864,7 +864,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
         <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--color-error)', marginBottom: '4px' }}>
           Please fix {errorKeys.length} {errorKeys.length === 1 ? 'issue' : 'issues'} below
         </div>
-        <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '13px', color: '#b91c1c', lineHeight: '1.6' }}>
+        <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '13px', color: 'var(--color-error)', lineHeight: '1.6' }}>
           {errorKeys.map(k => <li key={k}>{errors[k]}</li>)}
         </ul>
       </div>
@@ -941,7 +941,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
             <span style={{ fontSize: '20px' }}>&#9888;&#65039;</span>
             <div>
               <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--color-error)' }}>You're offline</div>
-              <div style={{ fontSize: '13px', color: '#b91c1c' }}>
+              <div style={{ fontSize: '13px', color: 'var(--color-error)' }}>
                 Please check your internet connection. Your progress has been saved and you can continue when you're back online.
               </div>
             </div>
@@ -1169,7 +1169,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
 
             {/* Pets, Allergies & Medical */}
             <div style={{ padding: '16px', background: 'var(--bg-warm)', borderRadius: '8px', marginBottom: '16px', border: '1px solid var(--border-color)' }}>
-              <h3 style={{ fontSize: '15px', color: '#8B6914', margin: '0 0 4px' }}>🐾 Pets, Allergies & Medical</h3>
+              <h3 style={{ fontSize: '15px', color: 'var(--color-warning)', margin: '0 0 4px' }}>🐾 Pets, Allergies & Medical</h3>
               <p style={{ fontSize: '12px', color: 'var(--text-tertiary)', margin: '0 0 12px' }}>
                 This helps families match with the right caregiver. All fields are optional.
               </p>
@@ -1663,7 +1663,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
               Take a selfie and a photo of your government-issued ID. This helps us verify your identity and keep everyone safe.
             </p>
             <div style={{ padding: '10px 14px', background: '#fff8e1', borderRadius: '8px', marginBottom: '20px', border: '1px solid #ffe0b2' }}>
-              <p style={{ fontSize: '12px', color: '#795548', margin: 0, lineHeight: '1.5' }}>
+              <p style={{ fontSize: '12px', color: 'var(--text-brown)', margin: 0, lineHeight: '1.5' }}>
                 &#128274; Your photos are stored securely and only visible to InPlace administrators for verification purposes.
               </p>
             </div>
@@ -1806,10 +1806,10 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
             </div>
 
             <div style={{ padding: '14px', background: 'var(--bg-warm)', borderRadius: '8px', marginBottom: '16px', border: '1px solid #ffe0c0' }}>
-              <p style={{ fontSize: '13px', color: '#b45309', margin: 0, lineHeight: '1.5' }}>
+              <p style={{ fontSize: '13px', color: 'var(--color-warning)', margin: 0, lineHeight: '1.5' }}>
                 <strong>What happens next:</strong>
               </p>
-              <ul style={{ fontSize: '13px', color: '#b45309', margin: '8px 0 0', paddingLeft: '20px', lineHeight: '1.8' }}>
+              <ul style={{ fontSize: '13px', color: 'var(--color-warning)', margin: '8px 0 0', paddingLeft: '20px', lineHeight: '1.8' }}>
                 <li>Complete your <strong>First Steps</strong> checklist on your dashboard</li>
                 <li>Set your rates, care preferences, and availability</li>
                 <li>Payment setup and background checks will be available soon from your dashboard</li>

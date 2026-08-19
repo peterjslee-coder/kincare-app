@@ -1040,7 +1040,7 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
                       })}
                     </div>
                     {reminderIntervals.length === 0 && ['sms', 'both'].includes(notifChannel) && (
-                      <div style={{ fontSize: 12, color: '#d35400', marginTop: 6 }}>
+                      <div style={{ fontSize: 12, color: 'var(--color-warning)', marginTop: 6 }}>
                         No arrival reminders selected — {team.recipient_first_name} will still get the standard 15-minute heads up.
                       </div>
                     )}

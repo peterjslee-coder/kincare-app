@@ -719,7 +719,7 @@ const FindWork = window.FindWork = () => {
           borderRadius: 10, display: 'flex', alignItems: 'center', gap: 10,
         }}>
           <span style={{ fontSize: 18 }}>🔒</span>
-          <div style={{ flex: 1, fontSize: 13, color: '#6d4c00', lineHeight: 1.4 }}>
+          <div style={{ flex: 1, fontSize: 13, color: 'var(--color-warning)', lineHeight: 1.4 }}>
             Complete your background check and payment setup to accept jobs.
           </div>
           <button onClick={() => {
@@ -967,7 +967,7 @@ const FindWork = window.FindWork = () => {
                       {visitCounts[s.careRecipientId || s.care_recipient_id] > 0 && (() => {
                         const vc = visitCounts[s.careRecipientId || s.care_recipient_id];
                         const rName = (s.recipientName || '').split(' ')[0] || 'this person';
-                        return <span title={`You have cared for ${rName} ${vc} time${vc > 1 ? 's' : ''}`} style={{ background: 'var(--color-purple-bg)', color: '#3f51b5', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, cursor: 'default' }}>{'\uD83D\uDD01'} {vc}x</span>;
+                        return <span title={`You have cared for ${rName} ${vc} time${vc > 1 ? 's' : ''}`} style={{ background: 'var(--color-purple-bg)', color: 'var(--color-indigo)', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, cursor: 'default' }}>{'\uD83D\uDD01'} {vc}x</span>;
                       })()}
                     </div>
 

@@ -177,7 +177,7 @@ const ConsentVerification = window.ConsentVerification = ({ recipientId, recipie
           <span style={{ fontSize: '24px' }}>{'\u2705'}</span>
           <div>
             <div style={{ fontWeight: 600, color: 'var(--color-success)', fontSize: '15px' }}>Verified</div>
-            <div style={{ color: '#558b2f', fontSize: '13px' }}>{recipientName}'s care authorization is complete. You can now book care sessions.</div>
+            <div style={{ color: 'var(--color-success)', fontSize: '13px' }}>{recipientName}'s care authorization is complete. You can now book care sessions.</div>
           </div>
         </div>
       </div>
@@ -298,7 +298,7 @@ const ConsentVerification = window.ConsentVerification = ({ recipientId, recipie
         {success && <div style={{ background: 'var(--color-success-bg)', color: 'var(--color-success)', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', marginBottom: '16px' }}>{success}</div>}
 
         {/* Attestation statement */}
-        <div style={{ background: 'var(--color-warning-bg)', border: '1px solid #FFE082', borderRadius: '8px', padding: '16px', marginBottom: '20px', fontSize: '13px', lineHeight: '1.6', color: '#5D4037' }}>
+        <div style={{ background: 'var(--color-warning-bg)', border: '1px solid #FFE082', borderRadius: '8px', padding: '16px', marginBottom: '20px', fontSize: '13px', lineHeight: '1.6', color: 'var(--color-warning)' }}>
           <div style={{ fontWeight: 600, marginBottom: '8px', color: 'var(--color-warning)' }}>Attestation Statement</div>
           {attestationText}
         </div>

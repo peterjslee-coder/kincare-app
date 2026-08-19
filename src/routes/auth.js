@@ -702,6 +702,22 @@ router.get("/me", authenticate, async (req, res) => {
         const required = DOC_ROLES[d.doc_type];
         return !required || required.some(r => userRoles.includes(r));
       });
+
+    // ─── v1.105.98: a demo account cannot enter into an agreement ───
+    //
+    // Paul Lowe is not a person. Nobody browsing the demo is a client of Cedar Rock Holdings,
+    // no services are being provided, and no money moves — so gating them behind three
+    // scroll-to-the-bottom contracts asked for consent that would be void if given, and wrote
+    // it into user_legal_acceptances, which is an audit trail meant to answer "did this human
+    // agree to version X". Filling it with rows from a shared fictional login makes it worse at
+    // the one job it has.
+    //
+    // Demo users instead get a one-screen plain-language summary of what InPlace is and isn't
+    // (DemoOrientation), with a single acknowledgement and links to the full documents. That
+    // screen is honest that it is a summary and that nothing is being signed.
+    //
+    // Real users are untouched: this filter is keyed on users.is_demo.
+    if (user.is_demo) pendingLegalDocs = [];
   } catch (e) { /* legal docs table may not exist yet */ }
 
   // Include token for in-memory use (WebSocket auth) — cookie handles persistence

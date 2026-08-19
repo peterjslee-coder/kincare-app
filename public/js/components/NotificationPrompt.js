@@ -393,10 +393,10 @@ const NotificationSettings = window.NotificationSettings = ({ embedded = false }
     iosNeedInstall && React.createElement('div', {
       style: { marginTop: '12px', padding: '14px 16px', borderRadius: '10px', background: 'var(--color-warning-bg)', border: '1px solid #fbbf24' },
     },
-      React.createElement('div', { style: { fontWeight: 600, fontSize: '14px', color: '#92400e', marginBottom: '8px' } },
+      React.createElement('div', { style: { fontWeight: 600, fontSize: '14px', color: 'var(--color-warning)', marginBottom: '8px' } },
         'Add to Home Screen to enable notifications'
       ),
-      React.createElement('div', { style: { fontSize: '13px', color: '#78350f', lineHeight: 1.6 } },
+      React.createElement('div', { style: { fontSize: '13px', color: 'var(--color-warning)', lineHeight: 1.6 } },
         'Push notifications on iPad & iPhone only work when inPlace is installed to your home screen. ',
         'Tap the Share button \uD83D\uDCE4 in Safari, then "Add to Home Screen," and open inPlace from there.'
       ),
@@ -422,7 +422,7 @@ const NotificationSettings = window.NotificationSettings = ({ embedded = false }
     vapidReady === false && React.createElement('div', {
       style: {
         marginTop: '12px', padding: '10px 14px', borderRadius: '8px',
-        background: 'var(--color-warning-bg)', color: '#92400e', fontSize: '13px',
+        background: 'var(--color-warning-bg)', color: 'var(--color-warning)', fontSize: '13px',
       },
     }, '⚠️ Push notification server is not fully configured. Contact the admin.'),
   );

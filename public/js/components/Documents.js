@@ -689,7 +689,7 @@ const Documents = window.Documents = ({ onNavigate }) => {
                   <p style={{ margin: '0 0 4px 0', fontSize: '12px', fontWeight: '600', color: 'var(--accent-color)' }}>
                     ⚠️ AI Concerns:
                   </p>
-                  <ul style={{ margin: 0, paddingLeft: '16px', fontSize: '12px', color: '#c05621' }}>
+                  <ul style={{ margin: 0, paddingLeft: '16px', fontSize: '12px', color: 'var(--color-warning)' }}>
                     {doc.ai_classification.concerns.map((concern, idx) => (
                       <li key={idx} style={{ marginBottom: '2px' }}>{concern}</li>
                     ))}
@@ -1290,11 +1290,11 @@ const Documents = window.Documents = ({ onNavigate }) => {
                 borderRadius: '6px',
                 marginBottom: '16px',
               }}>
-                <p style={{ margin: '0 0 8px 0', fontSize: '14px', fontWeight: '600', color: '#22863a' }}>
+                <p style={{ margin: '0 0 8px 0', fontSize: '14px', fontWeight: '600', color: 'var(--color-success)' }}>
                   ✓ Document uploaded successfully!
                 </p>
                 {uploadResult.ai_classification && (
-                  <div style={{ fontSize: '13px', color: '#165b33', marginTop: '8px' }}>
+                  <div style={{ fontSize: '13px', color: 'var(--color-success)', marginTop: '8px' }}>
                     <p style={{ margin: '0 0 4px 0' }}>
                       <strong>Classification:</strong> {uploadResult.ai_classification.predicted_category}
                     </p>
@@ -1623,8 +1623,8 @@ const Documents = window.Documents = ({ onNavigate }) => {
                 fontSize: '13px',
                 borderLeft: '3px solid #e8724a',
               }}>
-                <strong style={{ color: '#c05621' }}>Admin Notes:</strong>
-                <p style={{ margin: '6px 0 0 0', color: '#9c2c1d' }}>{previewDocument.admin_notes}</p>
+                <strong style={{ color: 'var(--color-warning)' }}>Admin Notes:</strong>
+                <p style={{ margin: '6px 0 0 0', color: 'var(--color-error)' }}>{previewDocument.admin_notes}</p>
               </div>
             )}
 

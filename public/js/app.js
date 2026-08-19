@@ -556,6 +556,10 @@ const App = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showDisclaimer, setShowDisclaimer] = useState(false);
   const [pendingLegalDocs, setPendingLegalDocs] = useState([]);
+  // v1.105.98 — shown once per browser session to demo visitors, in place of the legal gate.
+  // sessionStorage, not localStorage: switching demo persona should not re-show it, but a
+  // genuinely new visit should.
+  const [showDemoOrientation, setShowDemoOrientation] = useState(false);
   // Dual-role: active role for users with multiple roles
   const [activeRole, setActiveRoleState] = useState(getActiveRole());
   // Unread message count for nav badge
@@ -565,6 +569,17 @@ const App = () => {
   const [adminAlertDetails, setAdminAlertDetails] = useState(null);
   // In-app notification badge (v1.56.0)
   const [unreadNotifCount, setUnreadNotifCount] = useState(0);
+  // v1.105.98 — one effect rather than eight. setShowDisclaimer(true) is called from eight
+  // places (login, demo login, refresh, OAuth return...) and adding a ninth branch to each was
+  // how the old flow got hard to reason about. Demo orientation keys off the user instead, so
+  // it also survives switching persona inside the demo without re-prompting.
+  useEffect(() => {
+    if (!currentUser || !currentUser.isDemo) { setShowDemoOrientation(false); return; }
+    let seen = false;
+    try { seen = sessionStorage.getItem('inplace_demo_oriented') === '1'; } catch { /* private mode */ }
+    if (!seen) setShowDemoOrientation(true);
+  }, [currentUser && currentUser.isDemo]);
+
   // ─── Admin Impersonation (View As) state ───
   const [impersonating, setImpersonating] = useState(() => {
     try { return JSON.parse(sessionStorage.getItem('inplace_impersonation_user')); } catch { return null; }
@@ -1787,6 +1802,13 @@ const App = () => {
 
   const appContent = (
     <React.Fragment>
+      {/* v1.105.98 — a demo visitor gets one screen, not three contracts. The server no longer
+          returns pendingLegalDocs for a demo account (auth.js), so showDisclaimer never fires
+          for them; this is what they see instead, once per session. Real users are unchanged. */}
+      {showDemoOrientation && <DemoOrientation onAcknowledge={() => {
+        try { sessionStorage.setItem('inplace_demo_oriented', '1'); } catch {}
+        setShowDemoOrientation(false);
+      }} />}
       {showDisclaimer && <DisclaimerModal
         pendingDocs={pendingLegalDocs}
         onAccept={() => {

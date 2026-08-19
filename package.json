@@ -11,6 +11,7 @@
     "setup": "node src/seed.js && node src/server.js",
     "test": "jest --forceExit --detectOpenHandles --testPathIgnorePatterns tests/integration",
     "lint:client": "node scripts/lint-client.js",
+    "lint:contrast": "node scripts/lint-contrast.js",
     "lint:requires": "node scripts/lint-requires.js",
     "lint:sql-columns": "node scripts/lint-sql-columns.js",
     "collect-feedback": "node scripts/collect-feedback.js",

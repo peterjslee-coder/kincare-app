@@ -220,11 +220,11 @@ const CaredForView = window.CaredForView = () => {
 
   const renderSessionCard = (s, compact) => {
     const statusColors = {
-      requested: { bg: '#fff3e0', border: '#ffb74d', label: 'Looking for Caregiver', color: '#e65100' },
-      open: { bg: '#fff3e0', border: '#ffb74d', label: 'Open', color: '#e65100' },
-      confirmed: { bg: '#e8f5e9', border: '#66bb6a', label: 'Confirmed', color: '#2e7d32' },
-      in_progress: { bg: '#e3f2fd', border: '#42a5f5', label: 'In Progress', color: '#1565c0' },
-      pending: { bg: '#f3e5f5', border: '#ab47bc', label: 'Pending', color: '#7b1fa2' },
+      requested: { bg: '#fff3e0', border: '#ffb74d', label: 'Looking for Caregiver', color: 'var(--color-warning)' },
+      open: { bg: '#fff3e0', border: '#ffb74d', label: 'Open', color: 'var(--color-warning)' },
+      confirmed: { bg: '#e8f5e9', border: '#66bb6a', label: 'Confirmed', color: 'var(--color-success)' },
+      in_progress: { bg: '#e3f2fd', border: '#42a5f5', label: 'In Progress', color: 'var(--color-info)' },
+      pending: { bg: '#f3e5f5', border: '#ab47bc', label: 'Pending', color: 'var(--color-purple)' },
     };
     const sc = statusColors[s.status] || statusColors.pending;
 
@@ -250,7 +250,7 @@ const CaredForView = window.CaredForView = () => {
               </div>
             )}
             {!s.caregiverName && s.status === 'requested' && (
-              <div style={{ fontSize: 12, color: '#e65100', fontStyle: 'italic' }}>Matching you with a caregiver...</div>
+              <div style={{ fontSize: 12, color: 'var(--color-warning)', fontStyle: 'italic' }}>Matching you with a caregiver...</div>
             )}
           </div>
           <span style={{
@@ -318,7 +318,7 @@ const CaredForView = window.CaredForView = () => {
           <span style={{ fontSize: '20px' }}>\uD83E\uDD1D</span>
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 600, fontSize: '13px', color: 'var(--color-info)' }}>Collaborative Care</div>
-            <div style={{ fontSize: '12px', color: '#37474f', marginTop: '2px' }}>
+            <div style={{ fontSize: '12px', color: 'var(--text-slate)', marginTop: '2px' }}>
               Your care is co-managed with {managedByName || 'your care team'}. You can request sessions — they'll review and approve.
             </div>
           </div>
@@ -549,7 +549,7 @@ const CaredForView = window.CaredForView = () => {
                     <div style={{ fontSize: 13, fontWeight: isTodayCell ? 800 : 600, color: isTodayCell ? '#e8724a' : 'var(--text-primary)', marginBottom: 2 }}>{day}</div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                       {hasRequested && <div style={{ fontSize: 9, fontWeight: 600, color: '#e65100', background: 'var(--bg-surface)', borderRadius: 8, padding: '1px 5px', width: 'fit-content' }}>{counts.requested} req</div>}
-                      {hasConfirmed && <div style={{ fontSize: 9, fontWeight: 600, color: '#2e7d32', background: 'var(--bg-surface)', borderRadius: 8, padding: '1px 5px', width: 'fit-content' }}>{counts.confirmed} booked</div>}
+                      {hasConfirmed && <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--color-success)', background: 'var(--bg-surface)', borderRadius: 8, padding: '1px 5px', width: 'fit-content' }}>{counts.confirmed} booked</div>}
                     </div>
                   </div>
                 );
@@ -650,7 +650,7 @@ const CaredForView = window.CaredForView = () => {
                           <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>Certifications</div>
                           <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                             {cg.certifications.map((c, i) => (
-                              <span key={i} style={{ padding: '3px 10px', borderRadius: 10, fontSize: 11, background: '#e8f5e9', color: '#2e7d32', fontWeight: 500 }}>{c}</span>
+                              <span key={i} style={{ padding: '3px 10px', borderRadius: 10, fontSize: 11, background: '#e8f5e9', color: 'var(--color-success)', fontWeight: 500 }}>{c}</span>
                             ))}
                           </div>
                         </div>

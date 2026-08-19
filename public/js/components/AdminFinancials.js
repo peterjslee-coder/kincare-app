@@ -422,9 +422,9 @@ const AdminFinancials = window.AdminFinancials = () => {
             const linePath = (key) => days.map((d, i) => `${i === 0 ? 'M' : 'L'}${scaleX(i).toFixed(1)},${scaleY(d[key]).toFixed(1)}`).join(' ');
 
             const lines = [
-              { key: 'gross', color: '#1565c0', label: 'Gross' },
-              { key: 'net', color: '#2e7d32', label: 'Net to Caregiver' },
-              { key: 'fees', color: '#e65100', label: 'Platform Fees' },
+              { key: 'gross', color: 'var(--color-info)', label: 'Gross' },
+              { key: 'net', color: 'var(--color-success)', label: 'Net to Caregiver' },
+              { key: 'fees', color: 'var(--color-warning)', label: 'Platform Fees' },
             ];
 
             // Y-axis grid values
@@ -946,7 +946,7 @@ const AdminFinancials = window.AdminFinancials = () => {
                                   <div><strong>Duration:</strong> {t.durationHours ? `${t.durationHours}h` : '—'}</div>
                                   <div><strong>Session Status:</strong> {t.sessionStatus || '—'}</div>
                                   {t.careRecipient && <div><strong>Care Recipient:</strong> {t.careRecipient}</div>}
-                                  {t.lateCheckIn && <div style={{ color: '#c62828' }}>Late check-in</div>}
+                                  {t.lateCheckIn && <div style={{ color: 'var(--color-error)' }}>Late check-in</div>}
                                 </div>
                                 <div>
                                   <div style={{ fontWeight: 700, fontSize: 11, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 4, letterSpacing: 0.4 }}>Time Records</div>
@@ -1019,10 +1019,10 @@ const AdminFinancials = window.AdminFinancials = () => {
           <>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, marginBottom: 16 }}>
               {[
-                { key: 'unconfirmed', icon: '⏳', label: 'Unconfirmed', count: timeAudit.counts.unconfirmed, color: '#e65100', bg: '#fff3e0', desc: 'No family review' },
-                { key: 'discrepancies', icon: '⚠️', label: 'Time Gaps', count: timeAudit.counts.discrepancies, color: '#c62828', bg: '#ffebee', desc: 'Actual ≠ scheduled' },
-                { key: 'missing', icon: '❌', label: 'No Records', count: timeAudit.counts.missingRecords, color: '#4a148c', bg: '#f3e5f5', desc: 'Missing clock data' },
-                { key: 'late', icon: '🕐', label: 'Late Check-in', count: timeAudit.counts.lateCheckins, color: '#1565c0', bg: '#e3f2fd', desc: 'Arrived late' },
+                { key: 'unconfirmed', icon: '⏳', label: 'Unconfirmed', count: timeAudit.counts.unconfirmed, color: 'var(--color-warning)', bg: '#fff3e0', desc: 'No family review' },
+                { key: 'discrepancies', icon: '⚠️', label: 'Time Gaps', count: timeAudit.counts.discrepancies, color: 'var(--color-error)', bg: '#ffebee', desc: 'Actual ≠ scheduled' },
+                { key: 'missing', icon: '❌', label: 'No Records', count: timeAudit.counts.missingRecords, color: 'var(--color-purple)', bg: '#f3e5f5', desc: 'Missing clock data' },
+                { key: 'late', icon: '🕐', label: 'Late Check-in', count: timeAudit.counts.lateCheckins, color: 'var(--color-info)', bg: '#e3f2fd', desc: 'Arrived late' },
               ].map(m => (
                 <div key={m.key} onClick={() => setAuditView(m.key)} style={{
                   padding: '14px 12px', borderRadius: 10, cursor: 'pointer', textAlign: 'center',
@@ -1128,7 +1128,7 @@ const AdminFinancials = window.AdminFinancials = () => {
                           React.createElement('td', { style: { padding: '8px 6px', textAlign: 'center' } },
                             r.geo ? geoIcon(r.geo) : '—'),
                           auditView === 'missing'
-                            ? React.createElement('td', { style: { padding: '8px 6px', fontSize: 11, color: '#c62828' } },
+                            ? React.createElement('td', { style: { padding: '8px 6px', fontSize: 11, color: 'var(--color-error)' } },
                                 !r.hasVisitLog ? 'No visit log' : !r.hasCheckIn ? 'No check-in' : 'No check-out')
                             : null,
                         ),
@@ -1159,7 +1159,7 @@ const AdminFinancials = window.AdminFinancials = () => {
                                       React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 } },
                                         React.createElement('span', { style: { fontSize: 16 } }, '📍'),
                                         React.createElement('div', null,
-                                          React.createElement('strong', { style: { color: '#2e7d32' } }, 'Same location '),
+                                          React.createElement('strong', { style: { color: 'var(--color-success)' } }, 'Same location '),
                                           React.createElement('span', { style: { fontSize: 11, color: 'var(--text-muted)' } }, `(${ioDistFt} ft apart)`),
                                         ),
                                       ),

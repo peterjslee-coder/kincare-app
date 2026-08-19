@@ -346,7 +346,7 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
         <div className="register-card" style={{ maxWidth: '480px' }}>
           <div style={{ background: 'var(--color-warning-bg)', border: '2px solid #ff9800', borderRadius: '12px', padding: '16px', marginBottom: '20px', textAlign: 'center' }}>
             <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-warning)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '4px' }}>Sandbox Mode</div>
-            <div style={{ fontSize: '13px', color: '#bf360c' }}>No account was created. This is a preview.</div>
+            <div style={{ fontSize: '13px', color: 'var(--color-warning)' }}>No account was created. This is a preview.</div>
           </div>
           <div style={{ textAlign: 'center', marginBottom: '24px' }}>
             <div style={{ fontSize: '48px', marginBottom: '12px' }}>{'✅'}</div>

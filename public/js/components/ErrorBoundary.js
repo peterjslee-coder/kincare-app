@@ -72,8 +72,8 @@ const ErrorBoundary = window.ErrorBoundary = class ErrorBoundary extends React.C
     return React.createElement('div', { style: wrap },
       React.createElement('div', { style: card },
         React.createElement('div', { style: { fontSize: 44, marginBottom: 12 } }, '⚠️'),
-        React.createElement('h2', { style: { margin: '0 0 8px', fontSize: 20, color: '#222' } }, 'Something went wrong'),
-        React.createElement('p', { style: { fontSize: 15, color: '#666', lineHeight: 1.6, margin: 0 } },
+        React.createElement('h2', { style: { margin: '0 0 8px', fontSize: 20, color: 'var(--text-primary)' } }, 'Something went wrong'),
+        React.createElement('p', { style: { fontSize: 15, color: 'var(--text-secondary)', lineHeight: 1.6, margin: 0 } },
           "This screen hit a snag and couldn't load. Reloading usually fixes it. Our team has been notified automatically."),
         React.createElement('button', { style: btn, onClick: reload }, 'Reload')
       )

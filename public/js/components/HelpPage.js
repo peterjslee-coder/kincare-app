@@ -662,7 +662,7 @@ const HelpPage = window.HelpPage = ({ currentUser, onNavigate }) => {
     currentUser && React.createElement('div', {
       style: { marginTop: 32, padding: 24, background: '#fff5f5', borderRadius: 14, boxShadow: '0 1px 4px rgba(0,0,0,0.06)', border: '1px solid #ffcdd2' }
     },
-      React.createElement('h3', { style: { margin: '0 0 8px', fontSize: 18, fontWeight: 700, color: '#c62828' } }, '\uD83D\uDEA8 Report an Incident'),
+      React.createElement('h3', { style: { margin: '0 0 8px', fontSize: 18, fontWeight: 700, color: 'var(--color-error)' } }, '\uD83D\uDEA8 Report an Incident'),
       React.createElement('p', { style: { fontSize: 14, color: 'var(--text-secondary)', margin: '0 0 16px', lineHeight: 1.5 } },
         'Report a safety concern, theft, abuse, neglect, or any serious incident. This will be immediately flagged for admin review.'
       ),
@@ -737,7 +737,7 @@ const HelpPage = window.HelpPage = ({ currentUser, onNavigate }) => {
                       style: { width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #ddd', fontSize: 14, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }
                     }),
                     incidentDesc.length > 0 && incidentDesc.trim().length < 10 && React.createElement('div', {
-                      style: { fontSize: 11, color: '#c62828', marginTop: 4 }
+                      style: { fontSize: 11, color: 'var(--color-error)', marginTop: 4 }
                     }, 'Please provide at least 10 characters')
                   ),
                   // Error

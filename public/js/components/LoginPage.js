@@ -423,7 +423,7 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBa
               </div>
             )}
             {failCount >= 3 && !errorCode && (
-              <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid rgba(114,28,36,0.15)', fontSize: 12, color: '#944' }}>
+              <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid rgba(114,28,36,0.15)', fontSize: 12, color: 'var(--color-error)' }}>
                 Having trouble? Try <a onClick={() => onNavigate('forgot-password')} style={{ color: 'var(--color-error)', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}>resetting your password</a> or contact support.
               </div>
             )}

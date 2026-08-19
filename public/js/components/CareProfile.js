@@ -1127,8 +1127,8 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
             <div style={{ background: 'var(--color-warning-bg)', border: '2px solid #e8724a', borderRadius: 10, padding: '12px 16px', marginBottom: 16, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
               <span style={{ fontSize: 20, flexShrink: 0 }}>{'\u2695\uFE0F'}</span>
               <div>
-                <div style={{ fontWeight: 700, fontSize: 14, color: '#bf360c', marginBottom: 2 }}>InPlace is not a medical service</div>
-                <div style={{ fontSize: 12, color: '#5d4037', lineHeight: 1.5 }}>Our caregivers provide companion care and daily living assistance. They do not diagnose, treat, administer medication, or perform medical procedures.</div>
+                <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--color-warning)', marginBottom: 2 }}>InPlace is not a medical service</div>
+                <div style={{ fontSize: 12, color: 'var(--text-brown)', lineHeight: 1.5 }}>Our caregivers provide companion care and daily living assistance. They do not diagnose, treat, administer medication, or perform medical procedures.</div>
               </div>
             </div>
 
@@ -1538,7 +1538,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                             ),
                             React.createElement('button', {
                               onClick: (e) => { e.stopPropagation(); handleDeleteReminder(r.id); },
-                              style: { padding: '4px 8px', borderRadius: 6, border: 'none', background: 'transparent', color: '#E74C3C', fontSize: 16, cursor: 'pointer', marginLeft: 8 },
+                              style: { padding: '4px 8px', borderRadius: 6, border: 'none', background: 'transparent', color: 'var(--color-error)', fontSize: 16, cursor: 'pointer', marginLeft: 8 },
                               title: 'Delete reminder',
                             }, '\u00D7'),
                           ),
@@ -1548,7 +1548,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                   )}
 
                   {/* Info note */}
-                  <div style={{ marginTop: 16, padding: '10px 14px', background: 'var(--color-warning-bg)', borderRadius: 8, fontSize: 12, color: '#8D6E08', lineHeight: 1.5 }}>
+                  <div style={{ marginTop: 16, padding: '10px 14px', background: 'var(--color-warning-bg)', borderRadius: 8, fontSize: 12, color: 'var(--color-warning)', lineHeight: 1.5 }}>
                     {'\uD83D\uDCA1'} Reminders are delivered as voice calls via Kindred. {profile?.first_name || 'Your loved one'} will hear the message in a familiar voice at the scheduled time.
                   </div>
                 </div>
@@ -1560,11 +1560,11 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                   {/* ── Abuse Alert Banner (top priority) ── */}
                   {kindredSummary?.abuse_flags?.length > 0 && (
                     <div style={{ padding: '12px 16px', background: '#FDEDEC', border: '2px solid #E74C3C', borderRadius: 10, marginBottom: 16 }}>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: '#C0392B', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-error)', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
                         {'\u26A0\uFE0F'} Safety Alert
                       </div>
                       {kindredSummary.abuse_flags.map((flag, i) => (
-                        <div key={i} style={{ fontSize: 13, color: '#922B21', lineHeight: 1.5, padding: '4px 0' }}>
+                        <div key={i} style={{ fontSize: 13, color: 'var(--color-error)', lineHeight: 1.5, padding: '4px 0' }}>
                           {'\u2022'} {flag}
                         </div>
                       ))}
@@ -1584,7 +1584,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                         </span>
                       )}
                     </div>
-                    <p style={{ fontSize: 12, color: '#8D6E08', marginBottom: 8, lineHeight: 1.4 }}>
+                    <p style={{ fontSize: 12, color: 'var(--color-warning)', marginBottom: 8, lineHeight: 1.4 }}>
                       Tell Kindred what's happening today. It will adapt how it talks to {profile?.first_name || 'your loved one'}.
                     </p>
                     <textarea
@@ -1664,9 +1664,9 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                         {/* Medical alerts */}
                         {kindredSummary.medical_alerts?.length > 0 && (
                           <div style={{ padding: '12px 16px', background: '#FEF9E7', border: '1px solid #F9E79F', borderRadius: 10 }}>
-                            <div style={{ fontSize: 13, fontWeight: 700, color: '#7D6608', marginBottom: 6 }}>{'\uD83C\uDFE5'} Medical Alerts</div>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-warning)', marginBottom: 6 }}>{'\uD83C\uDFE5'} Medical Alerts</div>
                             {kindredSummary.medical_alerts.map((alert, i) => (
-                              <div key={i} style={{ fontSize: 13, color: '#7D6608', lineHeight: 1.5, padding: '3px 0' }}>
+                              <div key={i} style={{ fontSize: 13, color: 'var(--color-warning)', lineHeight: 1.5, padding: '3px 0' }}>
                                 {'\u2022'} {alert}
                               </div>
                             ))}
@@ -1906,7 +1906,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                     <div style={{ marginTop: 14, padding: '12px 14px', background: '#FEF9E7', border: '1px solid #F9E79F', borderRadius: 10, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
                       <span style={{ fontSize: 16 }}>{'\uD83D\uDCA1'}</span>
                       <div>
-                        <div style={{ fontSize: 12, fontWeight: 600, color: '#7D6608' }}>Credit-saving tip</div>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-warning)' }}>Credit-saving tip</div>
                         <div style={{ fontSize: 12, color: 'var(--color-navy)', marginTop: 2, lineHeight: 1.5 }}>
                           Daily check-ins and alerts happen frequently but don't need Pete's voice to feel personal. Using Sarah or Brian for these saves roughly 40% of monthly credits without affecting {profile?.first_name}'s experience.
                         </div>
@@ -2037,7 +2037,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                           { label: 'Messages', value: companionUsage.summary?.total_messages || 0, icon: '\uD83D\uDCAC', color: 'var(--color-info)' },
                           { label: 'Conversations', value: companionUsage.summary?.conversation_count || 0, icon: '\uD83D\uDDE3\uFE0F', color: '#27AE60' },
                           { label: 'Credits Used', value: companionUsage.summary?.total_credits_used || 0, icon: '\uD83D\uDCB0', color: '#E67E22' },
-                          { label: 'Proj. Monthly', value: companionUsage.summary?.projected_monthly_credits || 0, icon: '\uD83D\uDCC8', color: '#8E44AD' },
+                          { label: 'Proj. Monthly', value: companionUsage.summary?.projected_monthly_credits || 0, icon: '\uD83D\uDCC8', color: 'var(--color-purple)' },
                         ].map((stat, i) => (
                           <div key={i} style={{ textAlign: 'center', padding: 10, background: '#F4F6F7', borderRadius: 10 }}>
                             <div style={{ fontSize: 16, marginBottom: 2 }}>{stat.icon}</div>

@@ -1234,7 +1234,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
 
       {/* Welcome subtitle — shown during onboarding */}
       {showFirstSteps && (
-        <div style={{ color: '#2e5984', fontWeight: 500, background: '#e8f0fe', padding: '10px 14px', borderRadius: '10px', fontSize: '13px', lineHeight: 1.5, marginBottom: '20px' }}>
+        <div style={{ color: 'var(--color-info)', fontWeight: 500, background: 'var(--color-info-bg)', padding: '10px 14px', borderRadius: '10px', fontSize: '13px', lineHeight: 1.5, marginBottom: '20px' }}>
           This is your home hub. When you finish onboarding you'll see available jobs and your calendar!
         </div>
       )}
@@ -1264,7 +1264,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
             <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--color-warning)', marginBottom: 4 }}>
               {label}
             </div>
-            <div style={{ fontSize: 13, color: '#bf360c', marginBottom: 12 }}>
+            <div style={{ fontSize: 13, color: 'var(--color-warning)', marginBottom: 12 }}>
               Congratulations! You've completed {ms.milestone_value} care sessions on inPlace. Thank you for the incredible work you do.
             </div>
             <button onClick={handleAck} style={{
@@ -1326,7 +1326,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
           <div className="card" style={{ marginBottom: 16, borderLeft: '4px solid #f59e0b', display: 'flex', alignItems: 'center', gap: 12 }}>
             <span style={{ fontSize: 24 }}>{'\u26A0\uFE0F'}</span>
             <div>
-              <div style={{ fontWeight: 600, fontSize: 14, color: '#92400e' }}>Background Check — Action Needed</div>
+              <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--color-warning)' }}>Background Check — Action Needed</div>
               <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>
                 Your background check requires additional information. Please check your email for instructions from Checkr on how to complete the review process.
               </div>
@@ -1383,12 +1383,12 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
 
       {/* First Steps — THE top tile on dashboard when steps remain */}
       {showFirstSteps && (
-        <div style={{ background: 'var(--bg-surface)', borderRadius: '14px', border: '2px solid #e8724a', padding: '20px 22px', marginBottom: '20px', boxShadow: '0 2px 8px rgba(232, 114, 74, 0.08)' }}>
+        <div style={{ background: 'var(--bg-surface)', borderRadius: '14px', border: '2px solid var(--accent-color)', padding: '20px 22px', marginBottom: '20px', boxShadow: '0 2px 8px rgba(232, 114, 74, 0.08)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
-            <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 700, color: '#b45309' }}>First Steps</h3>
+            <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 700, color: 'var(--accent-color)' }}>First Steps</h3>
             <div style={{ display: 'flex', alignItems: 'center' }}>
-              <div style={{ height: '6px', background: '#f3e8d0', borderRadius: '3px', overflow: 'hidden', width: '120px', marginRight: '10px' }}>
-                <div style={{ height: '100%', background: '#2e5984', borderRadius: '3px', transition: 'width 0.3s', width: (firstStepsDone / firstSteps.length * 100) + '%' }}></div>
+              <div style={{ height: '6px', background: 'var(--border-color)', borderRadius: '3px', overflow: 'hidden', width: '120px', marginRight: '10px' }}>
+                <div style={{ height: '100%', background: 'var(--role-color)', borderRadius: '3px', transition: 'width 0.3s', width: (firstStepsDone / firstSteps.length * 100) + '%' }}></div>
               </div>
               <span style={{ fontSize: '12px', color: 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>{firstStepsDone} of {firstSteps.length} complete</span>
             </div>
@@ -1419,8 +1419,8 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                 if (s.id === 'identity') { window.__accountTab = 'profile'; window.__navigateTo && window.__navigateTo('account'); }
               }} style={{
                 display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '12px 14px',
-                borderRadius: '10px', border: s.done ? '1px solid #c8e6c9' : '1px solid #eee',
-                background: s.done ? '#f1f8f1' : 'var(--bg-card)',
+                borderRadius: '10px', border: s.done ? '1px solid var(--color-success)' : '1px solid var(--border-color)',
+                background: s.done ? 'var(--color-success-bg)' : 'var(--bg-card)',
                 cursor: 'pointer', // v1.104.8 — done steps are editable too
                 transition: 'all 0.15s',
               }}>
@@ -1430,23 +1430,23 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                   fontSize: '13px', fontWeight: 700, flexShrink: 0, marginTop: '1px',
                   background: s.done ? 'var(--color-success)' : 'transparent',
                   color: s.done ? 'var(--text-on-primary)' : 'var(--accent-color)',
-                  border: s.done ? '2px solid #4caf50' : '2px solid #e8724a',
+                  border: s.done ? '2px solid var(--color-success)' : '2px solid var(--accent-color)',
                 }}>{s.done ? '\u2713' : (idx + 1)}</div>
                 <div style={{ flex: 1 }}>
                   <div style={{
                     fontSize: '14px', fontWeight: 600,
                     color: s.done ? 'var(--color-success)' : 'var(--text-primary)',
                     textDecoration: s.done ? 'line-through' : 'none',
-                    textDecorationColor: s.done ? 'var(--color-success-bg)' : undefined,
+                    textDecorationColor: s.done ? 'var(--color-success)' : undefined,
                   }}>{s.label}</div>
                   {!s.done && s.desc && <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginTop: '2px' }}>{s.desc}</div>}
                   {!s.done && s.missing && (
-                    <div style={{ marginTop: '6px', padding: '6px 10px', background: 'var(--bg-warm)', border: '1px solid #fde68a', borderRadius: '6px', fontSize: '11px', color: '#b45309', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <div style={{ marginTop: '6px', padding: '6px 10px', background: 'var(--bg-warm)', border: '1px solid var(--color-warning)', borderRadius: '6px', fontSize: '11px', color: 'var(--color-warning)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <span style={{ fontSize: '13px' }}>{'\u26A0\uFE0F'}</span> {s.missing}
                     </div>
                   )}
                   {s.done && s.warning && (
-                    <div style={{ marginTop: '6px', padding: '8px 10px', background: 'var(--color-warning-bg)', border: '1px solid #f59e0b', borderRadius: '6px', fontSize: '12px', color: '#92400e', display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
+                    <div style={{ marginTop: '6px', padding: '8px 10px', background: 'var(--color-warning-bg)', border: '1px solid var(--color-warning)', borderRadius: '6px', fontSize: '12px', color: 'var(--color-warning)', display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
                       <span style={{ fontSize: '13px', flexShrink: 0 }}>{'\u26A0\uFE0F'}</span> <span>{s.warning}</span>
                     </div>
                   )}
@@ -1462,7 +1462,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
 
       {/* Calendar Placeholder — shown when no availability set yet */}
       {showFirstSteps && !hasAvailability && (
-        <div style={{ background: 'var(--bg-surface)', borderRadius: '14px', border: '1px solid #e5e7eb', padding: '28px 22px', textAlign: 'center', marginBottom: '20px' }}>
+        <div style={{ background: 'var(--bg-surface)', borderRadius: '14px', border: '1px solid var(--border-color)', padding: '28px 22px', textAlign: 'center', marginBottom: '20px' }}>
           <div style={{ fontSize: '40px', marginBottom: '8px', opacity: 0.5 }}>📅</div>
           <div style={{ fontSize: '14px', color: 'var(--text-muted)' }}>Your availability and booked sessions will show here later</div>
           <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>Complete step 2 to set your availability and see your calendar</div>
@@ -1695,11 +1695,11 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                       <div style={{ fontSize: 13, color: 'var(--text-tertiary)', textDecoration: 'line-through' }}>{origDay} at {formatT(p.originalTime)}</div>
                     </div>
                     <div>
-                      <div style={{ fontSize: 11, color: '#b07800', fontWeight: 600, textTransform: 'uppercase' }}>You Proposed</div>
-                      <div style={{ fontSize: 14, color: '#b07800', fontWeight: 600 }}>{propDay} at {formatT(p.proposedTime)}</div>
+                      <div style={{ fontSize: 11, color: 'var(--color-warning)', fontWeight: 600, textTransform: 'uppercase' }}>You Proposed</div>
+                      <div style={{ fontSize: 14, color: 'var(--color-warning)', fontWeight: 600 }}>{propDay} at {formatT(p.proposedTime)}</div>
                     </div>
                   </div>
-                  <div style={{ fontSize: 12, color: '#b07800', fontWeight: 600, marginTop: 6 }}>
+                  <div style={{ fontSize: 12, color: 'var(--color-warning)', fontWeight: 600, marginTop: 6 }}>
                     {'\u{26A0}\u{FE0F}'} Family didn't respond in time. This session is on hold — contact the family or wait for them to rebook.
                   </div>
                 </div>
@@ -3245,7 +3245,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                           ? React.createElement('div', { style: {
                               padding: 12, background: '#f8f4ff', borderRadius: 8, border: '1px solid #e8daff', marginBottom: 14,
                             }},
-                              React.createElement('div', { style: { fontSize: 12, fontWeight: 600, color: '#6b21a8', marginBottom: 8 } }, 'Recent Care Notes'),
+                              React.createElement('div', { style: { fontSize: 12, fontWeight: 600, color: 'var(--color-purple)', marginBottom: 8 } }, 'Recent Care Notes'),
                               bd.recentNotes.map((n, i) =>
                                 React.createElement('div', { key: i, style: {
                                   fontSize: 12, color: 'var(--text-primary)', lineHeight: 1.5,
@@ -3591,7 +3591,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                   style: {
                     flex: 1, padding: 14, borderRadius: 12, fontSize: 14, fontWeight: 700,
                     cursor: 'pointer', border: 'none',
-                    background: 'var(--color-success)', color: '#fff',
+                    background: 'var(--color-success-fill)', color: 'var(--text-on-primary)',
                   }
                 }, 'Finish Check-In')
               )

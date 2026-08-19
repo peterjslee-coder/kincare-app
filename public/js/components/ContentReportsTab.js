@@ -137,7 +137,7 @@ const ContentReportsTab = window.ContentReportsTab = ({ apiFetch, showToast }) =
                   placeholder="What did you do about it?"
                   style={{ flex: 1, minWidth: 180, padding: '7px 10px', borderRadius: 8, border: '1px solid var(--border-color)', fontSize: 12 }} />
                 <button disabled={busyId === r.id} onClick={() => decide(r.id, 'actioned')}
-                  style={{ padding: '7px 14px', borderRadius: 8, border: 'none', background: 'var(--color-error)', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                  style={{ padding: '7px 14px', borderRadius: 8, border: 'none', background: 'var(--color-error-fill)', color: 'var(--text-on-primary)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
                   Actioned
                 </button>
                 <button disabled={busyId === r.id} onClick={() => decide(r.id, 'reviewed')}

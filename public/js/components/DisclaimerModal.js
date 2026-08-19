@@ -176,10 +176,10 @@ const DisclaimerModal = window.DisclaimerModal = ({ onAccept, pendingDocs }) => 
               background: '#e3f2fd', border: '2px solid #1565c0', borderRadius: 12,
               padding: '14px 18px', marginBottom: 18,
             }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: '#1565c0', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-info)', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span>🤖</span> What Changed (v{currentDoc.previous_version} → v{currentDoc.version})
               </div>
-              <div style={{ fontSize: 13, color: '#0d47a1', lineHeight: 1.6 }}>
+              <div style={{ fontSize: 13, color: 'var(--color-info)', lineHeight: 1.6 }}>
                 {currentDoc.change_summary}
               </div>
             </div>
@@ -210,7 +210,7 @@ const DisclaimerModal = window.DisclaimerModal = ({ onAccept, pendingDocs }) => 
                 background: 'var(--color-warning-bg)', border: '2px solid #E65100', borderRadius: 10,
                 padding: '16px 18px', marginBottom: 16,
               }}>
-                <p style={{ margin: 0, fontWeight: 700, fontSize: 15, color: '#BF360C' }}>
+                <p style={{ margin: 0, fontWeight: 700, fontSize: 15, color: 'var(--color-warning)' }}>
                   InPlace does not provide at-home medical care in accordance with Virginia state law.
                 </p>
               </div>
@@ -218,7 +218,7 @@ const DisclaimerModal = window.DisclaimerModal = ({ onAccept, pendingDocs }) => 
                 background: '#FFEBEE', border: '2px solid #C62828', borderRadius: 10,
                 padding: '16px 18px', marginBottom: 16,
               }}>
-                <p style={{ margin: 0, fontWeight: 700, fontSize: 15, color: '#B71C1C' }}>
+                <p style={{ margin: 0, fontWeight: 700, fontSize: 15, color: 'var(--color-error)' }}>
                   You are personally liable for any medical care you provide beyond calling professional medical attention when warranted.
                 </p>
               </div>

@@ -237,8 +237,8 @@ const FamilyPayments = window.FamilyPayments = () => {
         }}>
           <div style={{ fontSize: '20px' }}>⏸️</div>
           <div>
-            <div style={{ fontWeight: 600, color: '#856404', marginBottom: '2px' }}>Payments are currently paused</div>
-            <div style={{ fontSize: '13px', color: '#856404' }}>Payment methods and transactions are view-only. Payment methods are temporarily unavailable.</div>
+            <div style={{ fontWeight: 600, color: 'var(--color-warning)', marginBottom: '2px' }}>Payments are currently paused</div>
+            <div style={{ fontSize: '13px', color: 'var(--color-warning)' }}>Payment methods and transactions are view-only. Payment methods are temporarily unavailable.</div>
           </div>
         </div>
       )}
