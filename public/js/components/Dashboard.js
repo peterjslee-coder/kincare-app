@@ -16,12 +16,9 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
   const [showPwaGuide, setShowPwaGuide] = useState(false);
   // Cancel + review state
   const [cancellingId, setCancellingId] = useState(null);
-  const [cancelReason, setCancelReason] = useState('');
   // v1.105.15 — what this cancellation actually costs, computed server-side by the SAME
   // rule the cancel endpoint applies. Never derived client-side: a second implementation
   // is a second answer, and the failure mode is showing $0 and charging $120.
-  const [cancelPreview, setCancelPreview] = useState(null);
-  const [cancelLoading, setCancelLoading] = useState(false);
   const [reviewSession, setReviewSession] = useState(null); // session that can be reviewed after late cancel
   const [reviewRating, setReviewRating] = useState(0);
   const [reviewComment, setReviewComment] = useState('');
@@ -308,43 +305,6 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
     setAcceptingInviteId(null);
   };
 
-  useEffect(() => {
-    if (!cancellingId) { setCancelPreview(null); return; }
-    let stale = false;
-    (async () => {
-      try {
-        const res = await apiFetch(`/api/sessions/${cancellingId}/cancel-preview`);
-        if (!stale && res?.ok) setCancelPreview(await res.json());
-        else if (!stale) setCancelPreview({ unavailable: true });
-      } catch { if (!stale) setCancelPreview({ unavailable: true }); }
-    })();
-    return () => { stale = true; };
-  }, [cancellingId]);
-
-  const handleCancel = async (sessionId) => {
-    setCancelLoading(true);
-    try {
-      const res = await apiFetch(`/api/sessions/${sessionId}/cancel`, {
-        method: 'PUT',
-        body: JSON.stringify({ reason: cancelReason || 'Cancelled by family' }),
-      });
-      if (res?.ok) {
-        const d = await res.json();
-        setCancellingId(null);
-        setCancelReason('');
-        setCancelPreview(null);
-        fetchDashboard();
-        // If caregiver late-cancelled, prompt for review (won't happen for family cancel, but check anyway)
-        if (d.canReview) {
-          setReviewSession(d.session);
-        }
-      } else {
-        const err = await res?.json().catch(() => ({}));
-        alert(err?.error || 'Failed to cancel session');
-      }
-    } catch { alert('Failed to cancel session'); }
-    setCancelLoading(false);
-  };
 
   const handleReview = async () => {
     if (!reviewRating) return;
@@ -2281,63 +2241,27 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
           </div>
         );
       })()}
-      {/* Cancel Confirmation Modal */}
-      {cancellingId && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-          <div style={{ background: 'var(--bg-surface)', borderRadius: 12, padding: 24, width: 400, maxWidth: '90vw' }}>
-            <h3 style={{ margin: '0 0 12px', fontSize: 18 }}>Cancel Session</h3>
-            {(() => {
-              const s = upcoming.find(x => x.id === cancellingId);
-              if (!s) return null;
-              const sessionDT = TimezoneHelper.buildDateTime((s.date || '').split('T')[0], s.time || '00:00', s.timezone || data?.timezone);
-              const hoursAway = (sessionDT.getTime() - TimezoneHelper.realNowMs()) / (1000 * 60 * 60);
-              const hasCaregiver = !!s.caregiverName;
-              const isLate = hasCaregiver && hoursAway < 24;
-              return (
-                <div>
-                  <div style={{ fontSize: 14, color: 'var(--text-primary)', marginBottom: 12 }}>
-                    {s.recipientName} — {s.date ? TimezoneHelper.parseDate(s.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : ''} at {s.time}
-                  </div>
-                  {!hasCaregiver && (
-                    <div style={{ padding: '10px 14px', background: 'var(--color-success-bg)', borderRadius: 8, border: '1px solid #c8e6c9', marginBottom: 12, fontSize: 13, color: 'var(--color-success)' }}>
-                      No caregiver assigned yet — free to cancel with no fee.
-                    </div>
-                  )}
-                  {/* v1.105.15 — this used to hardcode "You will still be charged for this
-                      session", which was wrong twice over: the contract charges a posted
-                      cancellation FEE rather than the session price, and no fee was ever
-                      actually taken. Now it states whatever the server will really do. */}
-                  {isLate && (
-                    <div style={{ padding: '10px 14px', background: 'var(--color-warning-bg)', borderRadius: 8, border: '1px solid #ffe082', marginBottom: 12, fontSize: 13, color: 'var(--color-warning)' }}>
-                      {cancelPreview && !cancelPreview.unavailable
-                        ? cancelPreview.message
-                        : cancelPreview?.unavailable
-                          ? <span>This is a <strong>late cancellation</strong> (less than 24 hours before the session). We could not check whether a cancellation fee applies.</span>
-                          : <span>Checking whether a cancellation fee applies\u2026</span>}
-                    </div>
-                  )}
-                  <div style={{ marginBottom: 12 }}>
-                    <label style={{ display: 'block', fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 4 }}>Reason (optional)</label>
-                    <textarea value={cancelReason} onChange={e => setCancelReason(e.target.value)}
-                      placeholder="Why are you cancelling?"
-                      style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border-color)', fontSize: 13, minHeight: 60, resize: 'vertical' }} />
-                  </div>
-                  <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-                    <button onClick={() => { setCancellingId(null); setCancelReason(''); }}
-                      style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid var(--border-color)', background: 'var(--bg-surface)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-                      Keep Session
-                    </button>
-                    <button onClick={() => handleCancel(cancellingId)} disabled={cancelLoading}
-                      style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: cancelLoading ? 'var(--text-muted)' : 'var(--color-error)', color: 'var(--text-on-primary)', fontSize: 13, fontWeight: 600, cursor: cancelLoading ? 'wait' : 'pointer' }}>
-                      {cancelLoading ? 'Cancelling...' : 'Cancel Session'}
-                    </button>
-                  </div>
-                </div>
-              );
-            })()}
-          </div>
-        </div>
-      )}
+      {/* Cancel Confirmation Modal — shared with Schedule via CancelSessionModal (v1.105.117) */}
+      {cancellingId && (() => {
+        const s = upcoming.find(x => x.id === cancellingId);
+        if (!s) return null;
+        return (
+          <CancelSessionModal
+            sessionId={cancellingId}
+            dateISO={(s.date || '').split('T')[0]}
+            time={s.time}
+            timezone={s.timezone || (data && data.timezone)}
+            caregiverName={s.caregiverName}
+            recipientName={s.recipientName}
+            onClose={() => setCancellingId(null)}
+            onCancelled={(d) => {
+              setCancellingId(null);
+              fetchDashboard();
+              if (d && d.canReview) setReviewSession(d.session);
+            }}
+          />
+        );
+      })()}
 
       {/* ─── Propose Time Change Modal (family proposing) ─── */}
       {timeChangeModal && (() => {

@@ -44,6 +44,7 @@ const scripts = [
   "js/components/AttentionCard.js",
   "js/components/CareTasks.js",
   "js/components/CareEvents.js",
+  "js/components/CancelSessionModal.js",
   "js/components/Dashboard.js",
   "js/components/CareProfile.js",
   "js/components/Schedule.js",

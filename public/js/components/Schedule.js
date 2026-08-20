@@ -13,6 +13,7 @@ const Schedule = window.Schedule = () => {
   });
   const [expandedSession, setExpandedSession] = useState(null);
   const [visitDetailSessionId, setVisitDetailSessionId] = useState(null);
+  const [cancellingSession, setCancellingSession] = useState(null);
 
   // Pick up pending schedule date from activity feed deep-link
   useEffect(() => {
@@ -359,10 +360,22 @@ const Schedule = window.Schedule = () => {
                           Caregiver rating: ⭐ {s.caregiver_rating}
                         </div>
                       )}
-                      <button onClick={(e) => { e.stopPropagation(); setVisitDetailSessionId(s.id); }}
-                        style={{ marginTop: 10, padding: '6px 14px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-                        View Full Details
-                      </button>
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 10 }}>
+                        <button onClick={(e) => { e.stopPropagation(); setVisitDetailSessionId(s.id); }}
+                        style={{ padding: '6px 14px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                          View Full Details
+                        </button>
+                        {/* v1.105.117 — cancelling used to be possible only from the Dashboard,
+                            so anyone who found the session on the calendar had to go somewhere
+                            else to call it off. Same statuses the server accepts, and never on a
+                            session that has already started or already happened. */}
+                        {!isPast(selectedDate) && ['confirmed', 'pending', 'open', 'requested'].includes(s.status) && (
+                          <button onClick={(e) => { e.stopPropagation(); setCancellingSession(s); }}
+                            style={{ padding: '6px 14px', background: 'var(--bg-surface)', color: 'var(--color-error)', border: '1px solid var(--color-error)', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                            Cancel
+                          </button>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -412,6 +425,18 @@ const Schedule = window.Schedule = () => {
           );
         })()}
       </div>
+      {cancellingSession && (
+        <CancelSessionModal
+          sessionId={cancellingSession.id}
+          dateISO={(cancellingSession.scheduled_date || '').split('T')[0]}
+          time={cancellingSession.scheduled_time}
+          timezone={cancellingSession.timezone}
+          caregiverName={cancellingSession.caregiver_name}
+          recipientName={cancellingSession.recipient_name || 'Care recipient'}
+          onClose={() => setCancellingSession(null)}
+          onCancelled={() => { setCancellingSession(null); setExpandedSession(null); fetchSessions(); }}
+        />
+      )}
       {visitDetailSessionId && (
         <VisitDetailModal sessionId={visitDetailSessionId} role="family" onClose={() => setVisitDetailSessionId(null)} />
       )}

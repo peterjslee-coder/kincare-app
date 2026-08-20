@@ -231,15 +231,56 @@ describe("cancel preview", () => {
 });
 
 describe("the client tells the user before charging them", () => {
-  test("Dashboard no longer hardcodes the charge claim", () => {
+  // v1.105.117 — the confirm-and-charge UI moved out of Dashboard into the shared
+  // CancelSessionModal so the Schedule page could offer cancelling too. These tests
+  // used to assert on Dashboard.js directly and caught the move, which is the point:
+  // they now assert that every screen with a cancel button routes through the ONE
+  // component that asks the server what the cancellation costs.
+  const CANCEL_SCREENS = [
+    "public/js/components/Dashboard.js",
+    "public/js/components/Schedule.js",
+  ];
+
+  test("no client file makes the old hardcoded charge claim", () => {
     // It used to say "You will still be charged for this session" — wrong twice: the
     // contract charges a posted FEE, not the session price, and nothing was ever taken.
-    const dash = rd("public/js/components/Dashboard.js");
-    expect(dash).not.toMatch(/You will still be charged for this session/);
-    expect(dash).toMatch(/cancel-preview/);
+    for (const f of [...CANCEL_SCREENS, "public/js/components/CancelSessionModal.js", "public/js/components/VisitDetailModal.js"]) {
+      expect(rd(f)).not.toMatch(/You will still be charged for this session/);
+    }
+  });
+
+  test("the shared cancel modal asks the server before confirming", () => {
+    const modal = rd("public/js/components/CancelSessionModal.js");
+    expect(modal).toMatch(/cancel-preview/);
+    // An unreachable preview is a THIRD state. It must not render as "no fee".
+    expect(modal).toMatch(/unavailable/);
+    expect(modal).toMatch(/could not check whether a cancellation fee applies/i);
+  });
+
+  test("every screen that offers a cancel routes through the shared modal", () => {
+    for (const f of CANCEL_SCREENS) {
+      const src = rd(f);
+      expect(src).toMatch(/<CancelSessionModal/);
+      // and does not re-implement the confirm-and-charge copy locally
+      expect(src).not.toMatch(/free to cancel with no fee/);
+    }
+  });
+
+  test("the shared modal ships in the bundle, ahead of its callers", () => {
+    // A component the build never emits renders as nothing at runtime while every
+    // test above still passes on the source text.
+    const build = rd("scripts/build-client.js");
+    const idx = (n) => build.indexOf(`js/components/${n}.js`);
+    expect(idx("CancelSessionModal")).toBeGreaterThan(-1);
+    expect(idx("CancelSessionModal")).toBeLessThan(idx("Dashboard"));
+    expect(idx("CancelSessionModal")).toBeLessThan(idx("Schedule"));
   });
 
   test("the session detail modal previews before confirming", () => {
+    // NOTE: VisitDetailModal is still a separate, role-aware cancel path built on
+    // window.confirm rather than this modal. It is not a duplicate by accident —
+    // unifying it would change the CAREGIVER cancel experience, which nobody has
+    // asked for. It must keep previewing on its own until it is folded in.
     expect(rd("public/js/components/VisitDetailModal.js")).toMatch(/cancel-preview/);
   });
 });
