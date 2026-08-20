@@ -1033,10 +1033,20 @@ onboarding screen.** No backend changes — that is a constraint, not an observa
       list claiming payment setup and background checks were "available soon" when both are
       available immediately. ✅ **v1.105.115.** 16 render + source tests.
       ⚠️ Header is inline-styled only (no new CSS rules), but eyeball it on a narrow phone.
-- [ ] **Commit 3 — the dashboard + resume.** First Steps renders legs 1–2 collapsed and ticked
-      with leg 3 expanded, header "N of 13 left"; `app.js` `resume-onboarding` gets a "you got
-      to Leg 2, here's what's done" screen first. Keep `firstStepsResolved` (v1.105.82) and the
-      `!isDemo` gate (v1.105.95).
+- [x] **Commit 3 — quiet.** Pete on the v1.105.115 header: *"the finished stuff...small, greyed
+      out, lined through... We don't want this to be a catalogue in your face of how hard it is
+      to sign up."* Both surfaces rewritten to one grammar: finished work struck through at 11px
+      on one line, ONE open step with any weight, everything left as a single grey line of names
+      (never prefixed — no "then"). Seven bordered rows on the dashboard became about four lines;
+      the wizard header went from ~260px to ~70px. `waiting` renders in its own note OUTSIDE the
+      queue, because a document sitting with us is not work she has left. Two CSS animations
+      under 400ms, class-scoped, both off under `prefers-reduced-motion`.
+      ✅ **v1.105.118.** Mockups: `Mockups/Onboarding_Path_Mockup_2026-08-20.html`.
+- [ ] **Resume still restarts at step 2.** The struck-through line gives her memory WITHIN a
+      session, but `CaregiverOnboarding` does `useState(resumeMode ? 2 : 1)` and no form data is
+      persisted, so coming back tomorrow genuinely starts over. Jumping her to step 7 with an
+      empty form would be worse than restarting — this needs the form draft saved (localStorage,
+      no backend) before the step number is worth restoring. **Structural fact 2 is NOT closed.**
 - [ ] **Copy pass.** Five First Steps items still speak system voice (Stripe, security,
       preferences, availability/rates, photo) and wizard step 4's heading is
       "🔒 Background Check Information". ⚠️ `personal_care` copy stays exactly as counsel left

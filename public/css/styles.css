@@ -3356,3 +3356,24 @@ body.text-size-xlarge h2, body.text-size-xlarge h3 { font-size: 28px !important;
   -ms-overflow-style: none;   /* old Edge */
 }
 .scroll-x-quiet::-webkit-scrollbar { display: none; }
+
+/* ─── The onboarding path (v1.105.118) ───
+   Pete: "I want a little lite animation. the finished stuff...small, greyed out, lined
+   through... We don't want this to be a catalogue in your face of how hard it is to sign up."
+
+   Two animations, both under 400ms, and they only ever play on ONE thing: the step that just
+   opened, and the line of finished work it just joined. Nothing else on the path moves — no
+   shimmer, no pulse, no bar filling. Replayed by changing the element's React key, so there is
+   no animation state to get stuck.
+
+   Class-scoped on purpose. A bare `div`/`li` rule here would reach every component in the app
+   (see the dark-mode CSS incident). */
+@keyframes ipPathStepIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes ipPathDoneIn { from { opacity: 0.25; } to { opacity: 1; } }
+.ip-path-step { animation: ipPathStepIn 0.22s ease-out both; }
+.ip-path-done { animation: ipPathDoneIn 0.35s ease-out both; }
+
+/* A caregiver on a five-year-old Android should not pay for delight. */
+@media (prefers-reduced-motion: reduce) {
+  .ip-path-step, .ip-path-done { animation: none; }
+}

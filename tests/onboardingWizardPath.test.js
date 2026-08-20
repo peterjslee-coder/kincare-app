@@ -36,30 +36,46 @@ const compiled = babel.transformSync(routeSrc + "\n;\n" + headerSrc, {
 }).code;
 const win = {};
 new Function("window", "React", compiled)(win, React);
-const { OnboardingRouteHeader } = win;
+const { OnboardingPath } = win;
 
-const html = (step, idSubmitted = false) =>
-  renderToStaticMarkup(React.createElement(OnboardingRouteHeader, { step, idSubmitted }));
+const html = (step, slot, idSubmitted = false) =>
+  renderToStaticMarkup(React.createElement(OnboardingPath, { step, slot, idSubmitted })) || "";
 
-const text = (step, idSubmitted = false) =>
-  html(step, idSubmitted).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+const text = (step, slot, idSubmitted = false) =>
+  html(step, slot, idSubmitted).replace(/<[^>]+>/g, " ").replace(/&#x27;/g, "'").replace(/\s+/g, " ").trim();
 
-describe("the header draws the whole route, not this wizard's share of it", () => {
-  test("all three legs are visible from the very first screen", () => {
-    // Property 1: you can see the end from the beginning. On screen one she could previously
-    // see nine dashes and no hint that a second list existed.
-    const t = text(1);
-    expect(t).toContain("Who you are");
-    expect(t).toContain("What you bring");
-    expect(t).toContain("How you work");
+const done = (step, sub) => text(step, "done", sub);
+const ahead = (step, sub) => text(step, "ahead", sub);
+
+describe("the path is all there, and quiet about it", () => {
+  // v1.105.115 drew the whole route as legs and rows. Pete: "we don't want this to be a
+  // catalogue in your face of how hard it is to sign up." v1.105.118 keeps every property and
+  // strips the weight — finished work struck through at 11px, one open step, the rest a single
+  // grey line of names.
+
+  test("every one of the thirteen is readable on screen one", () => {
+    // Property 1, and the reason the ahead line is NOT truncated: "…and 6 more" would be
+    // quieter and would also reintroduce "there keeps being more steps".
+    const t = ahead(1);
+    expect(t).toContain("The paperwork");
+    expect(t).toContain("A photo of your licence");
+    expect(t).toContain("Where your pay lands");
+    expect(t).toContain("Lock down your account");
+    expect(t).not.toMatch(/more$/);
+  });
+
+  test("dashboard work is named in the wizard, not sprung afterwards", () => {
+    // Property 4. She reads "The safety check" on screen one instead of meeting it after a
+    // congratulations screen.
+    expect(ahead(1)).toContain("The safety check");
   });
 
   test("it counts jobs, and there are thirteen of them", () => {
-    expect(text(1)).toMatch(/13 things in all/);
+    expect(ahead(1)).toMatch(/13 things left/);
   });
 
   test("the count only ever goes down as she walks", () => {
-    const left = (step) => Number(text(step).match(/(\d+) left/)[1]);
+    const left = (step) => Number(ahead(step).match(/(\d+) things? left/)[1]);
     let previous = Infinity;
     for (let step = 1; step <= 8; step++) {
       expect(left(step)).toBeLessThanOrEqual(previous);
@@ -68,47 +84,46 @@ describe("the header draws the whole route, not this wizard's share of it", () =
     expect(left(8)).toBeLessThan(left(1));
   });
 
-  test("dashboard work is named in the wizard, not sprung afterwards", () => {
-    // Property 4. "Where your pay lands" and "The safety check" live on the dashboard, and she
-    // now reads them on screen one instead of meeting them after a congratulations screen.
-    const t = text(1);
-    expect(t).toContain("Where your pay lands");
-    expect(t).toContain("The safety check");
+  test("nothing is finished on screen one, so nothing is struck through", () => {
+    expect(html(1, "done")).toBe("");
   });
 
-  test("the leg she is in opens; the others stay named but collapsed", () => {
-    // Property 3 at the leg level: one leg open at a time. A collapsed leg still NAMES its
-    // items — on one dim line, joined — because a leg showing only a count tells her how many
-    // surprises are coming rather than what they are.
-    const joined = "Certifications · Your training programme";
-    expect(text(1)).toContain(joined);
-    expect(text(6)).not.toContain(joined);
-    expect(text(6)).toContain("Certifications");
-  });
-
-  test("finished items stay on screen, ticked", () => {
+  test("finished work stays visible, struck through, on one line", () => {
     // Property 2: finished steps shrink, they do not vanish. This is what stops "I log in and
-    // have to remember what I already did".
-    const t = text(3);
+    // have to remember what I already did" — and it costs one line, not eight rows.
+    const markup = html(4, "done");
+    expect(markup).toContain("line-through");
+    expect(markup).toContain("11px");
+    const t = done(4);
     expect(t).toContain("Create your account");
     expect(t).toContain("The paperwork");
-    expect(html(3)).toMatch(/✓/);
-  });
-
-  test("screen 4 stays in leg 1 even though it feeds a leg 3 job", () => {
-    // It collects legal name, DOB and SSN-4 for the safety check. Jumping the header to "How
-    // you work" and then walking back to "What you bring" is exactly the quest feeling.
-    const t = text(4);
     expect(t).toContain("About you");
-    // Still leg 1: leg 2 is collapsed to its one joined line, not opened.
-    expect(t).toContain("Certifications · Your training programme");
-    expect(text(5)).not.toContain("Certifications · Your training programme");
   });
 
-  test("a submitted ID reads as with us, not as unfinished", () => {
-    // Since v1.105.112 this is every caregiver's normal case, and the wizard is where she
-    // first meets it.
-    expect(text(8, true)).toMatch(/A photo of your licence — with us now/);
+  test("what she is doing right now is not listed among what is left", () => {
+    // Sited by wizardStep, not by route.current: screen 4 collects safety-check details, and
+    // the first thing she has LEFT is not what she is currently looking at.
+    expect(ahead(6)).not.toContain("Your training programme");
+    expect(ahead(6)).toContain("Documents");
+  });
+
+  test("a submitted ID is counted with us, and never among the things left", () => {
+    // Since v1.105.112 this is every caregiver's normal case. Listing her own finished ID as
+    // outstanding work is the sentence this whole track exists to delete.
+    const t = ahead(8, true);
+    expect(t).toMatch(/1 with us/);
+    expect(t).not.toContain("A photo of your licence");
+  });
+
+  test("the animation is opt-out, and only the two path classes carry it", () => {
+    const css = fs.readFileSync(path.join(__dirname, "..", "public", "css", "styles.css"), "utf8");
+    expect(css).toMatch(/@keyframes ipPathStepIn/);
+    expect(css).toMatch(/@keyframes ipPathDoneIn/);
+    // A caregiver on a five-year-old Android should not pay for delight.
+    const reduced = css.slice(css.indexOf("prefers-reduced-motion", css.indexOf("ipPathStepIn")));
+    expect(reduced.slice(0, 200)).toMatch(/\.ip-path-step, \.ip-path-done \{ animation: none; \}/);
+    // Class-scoped: a bare element rule here would reach every component in the app.
+    expect(css).not.toMatch(/\n\s*div \{[^}]*ipPath/);
   });
 });
 
@@ -118,7 +133,7 @@ describe("the wizard stops counting screens at her", () => {
   });
 
   test('no "Step 7 of 9"', () => {
-    expect(wizardSrc).not.toMatch(/Step \{step\} of \{TOTAL_STEPS\}/);
+    expect(wizardCode).not.toMatch(/Step \{step\} of \{TOTAL_STEPS\}/);
   });
 
   test("stepLabels still covers all nine screens", () => {

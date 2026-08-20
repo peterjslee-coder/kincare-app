@@ -1,14 +1,23 @@
-// ─── The route header (v1.105.115) ───
+// ─── The path, quietly (v1.105.115, rewritten v1.105.118) ───
 //
-// Replaces a nine-segment progress bar that measured SCREENS. A caregiver told us onboarding
-// felt like "some mythic quest", and a bar that fills as you walk cannot answer the question
-// she is actually asking, which is "how much is left?" — because the wizard was never the
-// whole route. Seven more things waited on the dashboard and nothing here mentioned them.
+// v1.105.115 replaced a nine-segment progress bar with the whole route: three legs, every item
+// of the open one on its own row, every item of the closed ones named beside them. Accurate,
+// and Pete's verdict on seeing it: "we don't want this to be a catalogue in your face of how
+// hard it is to sign up."
 //
-// So this draws the whole path from `onboardingRoute.js`: three legs, all visible from screen
-// one, the current leg open and the others collapsed to a line. The number it shows is JOBS,
-// never screens — see the WIZARD_SCREEN_LEG note in the route module for why those differ.
-const OnboardingRouteHeader = window.OnboardingRouteHeader = ({ step, idSubmitted }) => {
+// He is right, and the fix is not less information — she still needs to see the end from the
+// beginning, and nothing may appear later — it is less WEIGHT. So:
+//
+//   finished  11px, grey, struck through, all of it joined onto one wrapping line
+//   open      the screen she is on, at full size, the only thing with any weight
+//   ahead     11px, lighter grey, names on one line, truncated after six
+//
+// Height on a phone goes from roughly 260px to about 70px, and property 1 survives intact:
+// every one of the thirteen is still readable before she starts.
+//
+// `slot` splits it around the form: what is done sits above the screen she is on, what is left
+// sits below it. That ordering is the point — she reads her own progress first.
+const OnboardingPath = window.OnboardingPath = ({ step, idSubmitted, slot }) => {
   // A caregiver in the wizard has done none of the dashboard work yet. Stated as a fact rather
   // than left undefined, because an undefined Stripe status legitimately means "not asked" and
   // would draw as `unknown` — and there is nothing to ask about yet.
@@ -19,77 +28,44 @@ const OnboardingRouteHeader = window.OnboardingRouteHeader = ({ step, idSubmitte
     stripe: { status: 'none' },
     backgroundCheck: {},
   });
-  const currentLeg = wizardLegForStep(step);
 
-  const marker = (state, isCurrent) => {
-    const base = {
-      width: '16px', height: '16px', borderRadius: '50%', flexShrink: 0,
-      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-      fontSize: '10px', fontWeight: 700, marginTop: '1px', transition: 'background 0.3s',
-    };
-    if (state === 'done') return { ...base, background: 'var(--color-success)', color: 'var(--text-on-primary)' };
-    if (state === 'waiting') return { ...base, background: 'transparent', border: '2px solid var(--color-success)', color: 'var(--color-success)' };
-    if (isCurrent) return { ...base, background: 'var(--role-color)', color: 'var(--text-on-primary)' };
-    return { ...base, background: 'transparent', border: '2px solid var(--border-color)', color: 'var(--text-tertiary)' };
-  };
+  if (slot === 'done') {
+    const done = route.items.filter((i) => i.state === 'done').map((i) => i.label);
+    if (done.length === 0) return null;
+    return (
+      // Keyed on the count so finishing a step replays the fade — no animation state to leak.
+      <div className="ip-path-done" key={done.length} style={{
+        fontSize: '11px', lineHeight: '1.55', color: 'var(--text-tertiary)',
+        textDecoration: 'line-through', marginBottom: '14px', opacity: 0.75,
+      }}>{done.join('  \u00B7  ')}</div>
+    );
+  }
+
+  // Everything still to come. Two exclusions, both deliberate:
+  //   - the item this screen collects, because she is looking at it
+  //   - anything `waiting`, because it is with US. Listing her own finished ID among the things
+  //     she has left to do is the exact sentence this whole track exists to delete.
+  // Sited by `wizardStep`, not by route.current: screen 4 collects safety-check details, and
+  // the first thing she has left is not what she is currently doing.
+  const ahead = route.items
+    .filter((i) => i.state !== 'done' && i.state !== 'waiting' && i.wizardStep !== step)
+    .map((i) => i.label);
+  const waiting = route.items.filter((i) => i.state === 'waiting').length;
+  // Not truncated. "…and 6 more" would be quieter and would also reintroduce the exact thing
+  // she complained about — "you think you're almost there and there keeps being more steps".
+  // Every name is readable on screen one; it is 11px grey, which is the part that was wrong
+  // before, not the completeness.
 
   return (
-    <div style={{ marginBottom: '20px' }}>
-      {route.legs.map((leg) => {
-        const isCurrent = !!currentLeg && leg.id === currentLeg.id;
-        const legDone = leg.complete;
-        return (
-          <div key={leg.id} style={{ marginBottom: '8px' }}>
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: '8px',
-              fontSize: '12px', fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase',
-              color: isCurrent ? 'var(--role-color)' : legDone ? 'var(--color-success)' : 'var(--text-tertiary)',
-            }}>
-              <span style={marker(legDone ? 'done' : 'todo', isCurrent)}>{legDone ? '\u2713' : leg.n}</span>
-              <span>{leg.name}</span>
-              <span style={{ fontWeight: 500, letterSpacing: 0, textTransform: 'none', color: 'var(--text-tertiary)' }}>
-                {legDone ? 'done' : `${leg.done} of ${leg.total}`}
-              </span>
-            </div>
-            {!isCurrent && !legDone && (
-              // Collapsed, but NAMED. Property 1 is "you can see the end from the beginning",
-              // and a leg that shows only a count tells her how many surprises are coming
-              // rather than what they are. One dim line costs nothing and removes the ambush.
-              <div style={{
-                paddingLeft: '24px', marginTop: '2px', fontSize: '12px', lineHeight: '1.4',
-                color: 'var(--text-tertiary)',
-              }}>
-                {leg.items.map((i) => i.label).join('  \u00B7  ')}
-              </div>
-            )}
-            {isCurrent && (
-              <div style={{ paddingLeft: '24px', marginTop: '6px' }}>
-                {leg.items.map((item) => (
-                  <div key={item.id} style={{
-                    display: 'flex', alignItems: 'flex-start', gap: '8px', marginBottom: '4px',
-                    fontSize: '13px', lineHeight: '1.4',
-                    color: item.state === 'done' ? 'var(--text-tertiary)'
-                      : route.current && route.current.id === item.id ? 'var(--text-primary)' : 'var(--text-tertiary)',
-                    fontWeight: route.current && route.current.id === item.id ? 600 : 400,
-                  }}>
-                    <span style={marker(item.state, route.current && route.current.id === item.id)}>
-                      {item.state === 'done' ? '\u2713' : ''}
-                    </span>
-                    <span>
-                      {item.label}
-                      {item.state === 'waiting' && (
-                        <span style={{ color: 'var(--text-tertiary)', fontWeight: 400 }}> {'\u2014'} with us now</span>
-                      )}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        );
-      })}
-      <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginTop: '10px' }}>
-        {route.total} things in all {'\u2014'} {route.remaining} left
+    <div style={{ marginTop: '16px' }}>
+      {ahead.length > 0 && (
+        <div style={{ fontSize: '11px', lineHeight: '1.55', color: 'var(--text-muted)' }}>
+          {ahead.join('  \u00B7  ')}
+        </div>
+      )}
+      <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '8px', opacity: 0.8 }}>
+        {route.remaining} {route.remaining === 1 ? 'thing' : 'things'} left
+        {waiting > 0 ? '  \u00B7  ' + waiting + ' with us' : ''}
       </div>
     </div>
   );
@@ -1028,8 +1004,8 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
           )}
         </div>
 
-        {/* The route \u2014 the whole path, not this wizard's share of it (v1.105.115) */}
-        {step < TOTAL_STEPS && <OnboardingRouteHeader step={step} idSubmitted={!!idVerifyResult} />}
+        {/* What she has already done \u2014 above the screen she is on, deliberately (v1.105.118) */}
+        {step < TOTAL_STEPS && <OnboardingPath slot="done" step={step} idSubmitted={!!idVerifyResult} />}
 
         {/* Offline banner */}
         {isOffline && (
@@ -1050,8 +1026,8 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
         {/* This screen. Not "Step 7 of 9" \u2014 the number of screens is our business, not hers,
             and it was never the number she wanted. */}
         {step < TOTAL_STEPS && (
-          <div style={{ marginBottom: '16px' }}>
-            <span style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)' }}>
+          <div className="ip-path-step" key={step} style={{ marginBottom: '14px' }}>
+            <span style={{ fontSize: '17px', fontWeight: 600, color: 'var(--text-primary)' }}>
               {stepLabels[step]}
             </span>
           </div>
@@ -1985,6 +1961,9 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
           </div>
           );
         })()}
+        {/* What is left \u2014 below the form, quiet, and never prefixed. Pete: no "then" leading
+            each line. */}
+        {step < TOTAL_STEPS && <OnboardingPath slot="ahead" step={step} idSubmitted={!!idVerifyResult} />}
       </div>
     </div>
   );

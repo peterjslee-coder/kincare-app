@@ -1218,6 +1218,48 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   // looking, and 'identity' wants a real document these characters do not have — so the honest
   // fix is not to fake the inputs but to stop asking a demo the question. Real caregivers are
   // unaffected: isDemo comes from users.is_demo (dashboard.js).
+  // ─── The path, as the dashboard draws it (v1.105.118) ───
+  //
+  // Same route object the wizard renders, so the list she read on her way out of signup and the
+  // list she meets here cannot drift apart. `firstSteps` above still owns the copy, the click
+  // targets and the per-step warnings; this owns which of them is OPEN and how loud each is.
+  const hubRoute = resolveRoute({
+    surface: 'hub',
+    profileCreated: true,
+    identity: {
+      loaded: idVerification.loaded, loadFailed: idVerification.loadFailed,
+      submitted: idSubmitted, approved: idApproved, status: idVerification.status,
+    },
+    stripe: { status: stripeStatus ? stripeStatus.status : null, connected: stripeConnected, override: stripeOverride },
+    backgroundCheck: {
+      override: bgOverride, passed: !!profile.isBackgroundChecked,
+      submitted: bgCheckSubmitted, checkrStatus: profile.checkrStatus,
+    },
+    hasPreferences, hasAvailability, hasRates, hasPhoto, securityReviewed,
+  });
+  // The route calls it `stripe`; First Steps has called it `stripe-bg` since before the safety
+  // check was split out of it. One line of translation beats renaming a live click target.
+  const firstStepFor = (routeId) => firstSteps.find((f) => f.id === (routeId === 'stripe' ? 'stripe-bg' : routeId)) || null;
+
+  // v1.105.118 — lifted out of the row that used to be its only caller, because the open step
+  // is now a button rather than a list item.
+  const openFirstStep = (id) => {
+    if (id === 'photo') { window.__accountTab = 'profile'; window.__navigateTo && window.__navigateTo('account'); }
+    if (id === 'avail-rates') { window.__findWorkTab = 'availability'; window.__navigateTo && window.__navigateTo('find-work'); }
+    if (id === 'security') {
+      window.__accountTab = 'settings';
+      window.__navigateTo && window.__navigateTo('account');
+      setTimeout(() => window.dispatchEvent(new CustomEvent('accountTabSwitch', { detail: { tab: 'settings' } })), 100);
+    }
+    if (id === 'stripe-bg' || id === 'stripe') { window.__accountTab = 'payments'; window.__navigateTo && window.__navigateTo('account'); }
+    if (id === 'background-check') { window.__accountTab = 'payments'; window.__navigateTo && window.__navigateTo('account'); }
+    if (id === 'preferences') { window.__accountTab = 'preferences'; window.__navigateTo && window.__navigateTo('account'); }
+    // v1.105.64 — the selfie + ID capture lives in My Account's profile tab. It is the one
+    // place a caregiver can reach it after the signup wizard, which is why the step has to
+    // point there rather than at the wizard they have already left.
+    if (id === 'identity') { window.__accountTab = 'profile'; window.__navigateTo && window.__navigateTo('account'); }
+  };
+
   const showFirstSteps = firstStepsResolved && firstStepsDone < firstSteps.length && !profile.isDemo;
   // Expose to parent (app.js) so bottom nav can grey out Find Work
   window.__caregiverFirstStepsRemain = showFirstSteps;
@@ -1462,97 +1504,96 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         </div>
       )}
 
-      {/* First Steps — THE top tile on dashboard when steps remain */}
-      {showFirstSteps && (
-        <div style={{ background: 'var(--bg-surface)', borderRadius: '14px', border: '2px solid var(--accent-color)', padding: '20px 22px', marginBottom: '20px', boxShadow: '0 2px 8px rgba(232, 114, 74, 0.08)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
-            <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 700, color: 'var(--accent-color)' }}>First Steps</h3>
-            <div style={{ display: 'flex', alignItems: 'center' }}>
-              <div style={{ height: '6px', background: 'var(--border-color)', borderRadius: '3px', overflow: 'hidden', width: '120px', marginRight: '10px' }}>
-                <div style={{ height: '100%', background: 'var(--role-color)', borderRadius: '3px', transition: 'width 0.3s', width: (firstStepsDone / firstSteps.length * 100) + '%' }}></div>
-              </div>
-              <span style={{ fontSize: '12px', color: 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>{firstStepsDone} of {firstSteps.length} complete</span>
-            </div>
-          </div>
+      {/* ─── First steps, quietly (v1.105.118) ───
+          Pete, on the version that listed all seven as rows: "the finished stuff...small, greyed
+          out, lined through... We don't want this to be a catalogue in your face of how hard it
+          is to sign up."
+
+          So the information is unchanged and the weight is not: everything done collapses onto
+          one small struck-through line, ONE step is open and has any size to it, and what is
+          left is a single quiet line of names. Seven rows of orange-bordered work became about
+          four lines. */}
+      {showFirstSteps && (() => {
+        const doneNames = hubRoute.items.filter((i) => i.state === 'done').map((i) => i.label);
+        const waitingItems = hubRoute.items.filter((i) => i.state === 'waiting');
+        const open = hubRoute.current;
+        const openStep = open ? firstStepFor(open.id) : null;
+        // Never prefixed, per Pete — just the names.
+        const ahead = hubRoute.items
+          .filter((i) => i.state === 'todo' && (!open || i.id !== open.id))
+          .map((i) => i.label);
+
+        return (
+        <div style={{ background: 'var(--bg-surface)', borderRadius: '14px', border: '1px solid var(--border-color)', padding: '18px 20px', marginBottom: '20px' }}>
           <input type="file" ref={avatarInputRef} accept="image/*" style={{ display: 'none' }} onChange={handleAvatarUpload} />
-          <div style={{ display: 'grid', gap: '8px' }}>
-            {firstSteps.map((s, idx) => (
-              <div key={s.id} onClick={() => {
-                // v1.104.8 — completed steps stay tappable so caregivers can EDIT
-                // what they've already entered (care preferences, availability &
-                // rates, photo, etc.). Every target below just opens a settings tab,
-                // so re-opening a done step is safe. (Previously `if (s.done) return`
-                // locked them, leaving no edit path once a step was complete.)
-                if (s.id === 'photo') { window.__accountTab = 'profile'; window.__navigateTo && window.__navigateTo('account'); }
-                if (s.id === 'avail-rates') { window.__findWorkTab = 'availability'; window.__navigateTo && window.__navigateTo('find-work'); }
-                if (s.id === 'security') {
-                  window.__accountTab = 'settings';
-                  window.__navigateTo && window.__navigateTo('account');
-                  // Also fire event for already-mounted MyAccount to switch tabs
-                  setTimeout(() => window.dispatchEvent(new CustomEvent('accountTabSwitch', { detail: { tab: 'settings' } })), 100);
-                }
-                if (s.id === 'stripe-bg') { window.__accountTab = 'payments'; window.__navigateTo && window.__navigateTo('account'); }
-                if (s.id === 'background-check') { window.__accountTab = 'payments'; window.__navigateTo && window.__navigateTo('account'); }
-                if (s.id === 'preferences') { window.__accountTab = 'preferences'; window.__navigateTo && window.__navigateTo('account'); }
-                // v1.105.64 — the selfie + ID capture lives in My Account's profile tab. It is
-                // the one place a caregiver can reach it after the signup wizard, which is why
-                // the step has to point there rather than at the wizard they have already left.
-                if (s.id === 'identity') { window.__accountTab = 'profile'; window.__navigateTo && window.__navigateTo('account'); }
-              }} style={{
-                display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '12px 14px',
-                borderRadius: '10px', border: s.done ? '1px solid var(--color-success)' : '1px solid var(--border-color)',
-                background: s.done ? 'var(--color-success-bg)' : 'var(--bg-card)',
-                cursor: 'pointer', // v1.104.8 — done steps are editable too
-                transition: 'all 0.15s',
-              }}>
-                <div style={{
-                  width: '28px', height: '28px', borderRadius: '50%',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: '13px', fontWeight: 700, flexShrink: 0, marginTop: '1px',
-                  background: s.done ? 'var(--color-success)' : 'transparent',
-                  color: s.done ? 'var(--text-on-primary)' : s.unknown ? 'var(--text-muted)' : 'var(--accent-color)',
-                  border: s.done ? '2px solid var(--color-success)' : s.unknown ? '2px solid var(--border-color)' : '2px solid var(--accent-color)',
-                }}>{s.done ? '\u2713' : s.unknown ? '\u00B7\u00B7\u00B7' : (idx + 1)}</div>
-                <div style={{ flex: 1 }}>
-                  <div style={{
-                    fontSize: '14px', fontWeight: 600,
-                    color: s.done ? 'var(--color-success)' : 'var(--text-primary)',
-                    textDecoration: s.done ? 'line-through' : 'none',
-                    textDecorationColor: s.done ? 'var(--color-success)' : undefined,
-                  }}>{s.label}</div>
-                  {/* v1.105.112 — "not known yet" is its own state. While the app is still
-                      finding out, say so plainly instead of drawing the step as undone. Pete:
-                      "you finish...and it says you still haven't verified your ID (but you
-                      did) and it's like, when does this ever end?" */}
-                  {s.unknown && (
-                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>Checking{'\u2026'}</div>
-                  )}
-                  {!s.done && !s.unknown && s.desc && <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginTop: '2px' }}>{s.desc}</div>}
-                  {!s.done && !s.unknown && s.missing && (
-                    <div style={{ marginTop: '6px', padding: '6px 10px', background: 'var(--bg-warm)', border: '1px solid var(--color-warning)', borderRadius: '6px', fontSize: '11px', color: 'var(--color-warning)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span style={{ fontSize: '13px' }}>{'\u26A0\uFE0F'}</span> {s.missing}
-                    </div>
-                  )}
-                  {/* v1.105.112 — was `s.done && s.warning`, and the identity warning is only
-                      ever set when the document is submitted and NOT yet approved — i.e. when
-                      `done` is false. So "Submitted — waiting on review. You don't need to do
-                      anything else" has never once been visible to anyone. It is the sentence
-                      that answers "when does this ever end?", and from this release on it is
-                      the normal case for every caregiver. */}
-                  {!s.unknown && s.warning && (
-                    <div style={{ marginTop: '6px', padding: '8px 10px', background: 'var(--color-warning-bg)', border: '1px solid var(--color-warning)', borderRadius: '6px', fontSize: '12px', color: 'var(--color-warning)', display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
-                      <span style={{ fontSize: '13px', flexShrink: 0 }}>{'\u26A0\uFE0F'}</span> <span>{s.warning}</span>
-                    </div>
-                  )}
-                </div>
-                {s.done
-                  ? <span style={{ color: 'var(--role-color)', fontSize: '12px', fontWeight: 700, marginTop: '5px', whiteSpace: 'nowrap' }}>{'Edit \u203A'}</span>
-                  : <span style={{ color: 'var(--text-muted)', fontSize: '18px', marginTop: '3px' }}>{'\u203A'}</span>}
+
+          {/* Done. Keyed on the count so finishing one replays the fade. */}
+          {doneNames.length > 0 && (
+            <div className="ip-path-done" key={doneNames.length} style={{
+              fontSize: '11px', lineHeight: '1.55', color: 'var(--text-tertiary)',
+              textDecoration: 'line-through', marginBottom: '14px', opacity: 0.75,
+            }}>{doneNames.join('  \u00B7  ')}</div>
+          )}
+
+          {/* Open — the only thing here with any weight. */}
+          {open && openStep && (
+            <div className="ip-path-step" key={open.id}>
+              <div style={{ fontSize: '17px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px' }}>
+                {open.label}
               </div>
-            ))}
+              {openStep.desc && (
+                <div style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.45', marginBottom: '12px' }}>
+                  {openStep.desc}
+                </div>
+              )}
+              {/* v1.105.63 — the waived/not-waived branch lives in `desc` above and must keep
+                  its own sentence. This is the separate "and here is what is missing" line. */}
+              {openStep.missing && (
+                <div style={{ fontSize: '12px', color: 'var(--color-warning)', marginBottom: '10px' }}>
+                  {openStep.missing}
+                </div>
+              )}
+              <button onClick={() => openFirstStep(openStep.id)} style={{
+                width: '100%', padding: '11px', background: 'var(--role-color)', color: 'var(--text-on-primary)',
+                border: 'none', borderRadius: '8px', fontSize: '15px', fontWeight: 600, cursor: 'pointer',
+              }}>Start</button>
+            </div>
+          )}
+
+          {ahead.length > 0 && (
+            <div style={{ fontSize: '11px', lineHeight: '1.55', color: 'var(--text-muted)', marginTop: '14px' }}>
+              {ahead.join('  \u00B7  ')}
+            </div>
+          )}
+
+          <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '8px', opacity: 0.8 }}>
+            {hubRoute.remaining} {hubRoute.remaining === 1 ? 'thing' : 'things'} left
+            {waitingItems.length > 0 ? '  \u00B7  ' + waitingItems.length + ' with us' : ''}
           </div>
+
+          {/* Waiting on US. Its own note, outside the queue of things to do, because it is not
+              her work — and since v1.105.112 it is what every caregiver's dashboard looks like
+              on day one. */}
+          {waitingItems.map((item) => {
+            const step = firstStepFor(item.id);
+            return (
+              <div key={item.id} onClick={() => step && openFirstStep(step.id)} style={{
+                marginTop: '12px', padding: '11px 12px', background: 'var(--bg-highlight)',
+                border: '1px solid #d4ede8', borderRadius: '8px', cursor: 'pointer',
+              }}>
+                <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--role-color)', marginBottom: '2px' }}>
+                  {item.label}
+                </div>
+                <div style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.45' }}>
+                  {(step && step.warning)
+                    || 'Sent \u2014 we\u2019ll review it and reach out if we have any questions. Nothing else for you to do.'}
+                </div>
+              </div>
+            );
+          })}
         </div>
-      )}
+        );
+      })()}
 
       {/* Calendar Placeholder — shown when no availability set yet */}
       {showFirstSteps && !hasAvailability && (

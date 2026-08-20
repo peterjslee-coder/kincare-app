@@ -20,34 +20,52 @@ describe("the third state exists", () => {
     expect(code).toMatch(/unknown: !idVerification\.loaded,/);
   });
 
-  test("the marker is neither a tick nor a step number", () => {
-    expect(code).toMatch(/\{s\.done \? '\\u2713' : s\.unknown \? '\\u00B7\\u00B7\\u00B7' : \(idx \+ 1\)\}/);
+  // v1.105.118 rewrote this checklist into a path: one open step with any weight, finished work
+  // on a small struck-through line, the rest one quiet line of names. The three-state rule did
+  // not soften — it got a stronger mechanism. It used to be "draw the unknown row differently";
+  // it is now "an unknown row cannot be drawn as work at all".
+
+  test("nothing is painted until every async answer is in", () => {
+    // v1.105.82's gate, load-bearing again: identity and Stripe both resolve after first paint,
+    // and a count that corrects itself is the flashing checklist Julia saw on every page change.
+    expect(code).toMatch(/const firstStepsResolved = idVerification\.loaded && stripeStatus !== null;/);
+    expect(code).toMatch(/const showFirstSteps = firstStepsResolved &&/);
   });
 
-  test("it says 'Checking…' rather than nothing", () => {
-    expect(code).toMatch(/s\.unknown && \(/);
-    expect(hub).toMatch(/Checking\{'/);
+  test("the open step is chosen from the route, which never opens an unknown one", () => {
+    // `resolveRoute().current` is the first item whose state is 'todo' and which is not blocked.
+    // 'unknown' is not 'todo', so it can never be the thing she is asked to do next.
+    // tests/onboardingRoute.test.js asserts that directly.
+    expect(code).toMatch(/const open = hubRoute\.current;/);
   });
 
-  test("an unknown step is never told to do anything", () => {
+  test("an unknown step is never listed among the things left", () => {
     // Prompting for a photo she already sent is the complaint itself.
-    expect(code).toMatch(/!s\.done && !s\.unknown && s\.missing &&/);
-    expect(code).toMatch(/!s\.done && !s\.unknown && s\.desc &&/);
+    expect(code).toMatch(/\.filter\(\(i\) => i\.state === 'todo' && \(!open \|\| i\.id !== open\.id\)\)/);
   });
 
   test("it does not draw as done either", () => {
-    // The failure direction matters: claiming done while unsure would be worse.
-    expect(code).toMatch(/background: s\.done \? 'var\(--color-success\)' : 'transparent'/);
+    // The failure direction matters: claiming done while unsure would be worse. The struck line
+    // is built from 'done' and nothing else.
+    expect(code).toMatch(/hubRoute\.items\.filter\(\(i\) => i\.state === 'done'\)/);
   });
 });
 
 describe("the sentence that answers 'when does this ever end?'", () => {
-  test("a warning no longer requires the step to be done", () => {
-    // It was `s.done && s.warning`, but the identity warning is ONLY ever set when the
+  test("waiting on us is its own state, not a warning on an undone row", () => {
+    // It used to render under `s.done && s.warning`, and that warning is ONLY ever set when the
     // document is submitted and not yet approved — i.e. when done is false. So "waiting on
     // review, you don't need to do anything else" had never once been visible to anyone.
-    expect(code).toMatch(/\{!s\.unknown && s\.warning && \(/);
+    // v1.105.118 makes it a state: it renders in its own note, outside the list of things left.
     expect(code).not.toMatch(/\{s\.done && s\.warning && \(/);
+    expect(code).toMatch(/i\.state === 'waiting'/);
+  });
+
+  test("and what is left never counts it", () => {
+    // "How much is left?" has to mean "left for you", or the answer is wrong in the direction
+    // that makes it feel endless.
+    expect(code).toMatch(/\{hubRoute\.remaining\}/);
+    expect(code).toMatch(/' with us'/);
   });
 
   test("and it reads like a person wrote it", () => {

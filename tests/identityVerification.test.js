@@ -146,7 +146,9 @@ describe("the caregiver can finally see the gate they are stuck behind", () => {
 
   test("tapping it goes somewhere a caregiver can actually submit from", () => {
     // The wizard is behind them; My Account's profile tab is the one reachable capture UI.
-    const nav = hub.slice(hub.indexOf("if (s.id === 'identity')"));
+    // v1.105.118 — the click targets moved into openFirstStep(), because the open step is a
+    // button now rather than one row in a list of seven.
+    const nav = hub.slice(hub.indexOf("if (id === 'identity')"));
     expect(nav.slice(0, 200)).toMatch(/__accountTab = 'profile'/);
     expect(nav.slice(0, 200)).toMatch(/__navigateTo\('account'\)/);
   });
@@ -168,6 +170,11 @@ describe("the caregiver can finally see the gate they are stuck behind", () => {
   });
 
   test("and it is not gated behind the step being done", () => {
-    expect(hub).toMatch(/\{!s\.unknown && s\.warning && \(/);
+    // v1.105.118 — it is no longer a warning hung off a checklist row at all. `waiting` is a
+    // state of its own, and it renders in its own note OUTSIDE the queue of things to do,
+    // because a document sitting with us is not work she has left.
+    expect(hub).toMatch(/waitingItems = hubRoute\.items\.filter\(\(i\) => i\.state === 'waiting'\)/);
+    expect(hub).toMatch(/waitingItems\.map\(\(item\) => \{/);
+    expect(hub).toMatch(/\(step && step\.warning\)/);
   });
 });
