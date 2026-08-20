@@ -71,7 +71,13 @@ describe("there is a count of what is waiting", () => {
 
   test("it is part of the badge total, not just the payload", () => {
     // A count nobody adds up is a count nobody sees.
-    expect(overview).toMatch(/pendingIdentity: Math\.max\(0, counts\.pendingIdentity - \(seen\.pendingIdentity \|\| 0\)\)/);
+    //
+    // v1.105.113 — identity is a WORK alert now, so it reaches the badge RAW rather than as a
+    // delta against the last-seen snapshot. That snapshot is exactly what silenced Julia's ID
+    // for days: it was dismissed by being LOOKED AT rather than by being FINISHED. Same
+    // invariant, stronger mechanism.
+    expect(overview).toMatch(/const WORK_ALERTS = \[[^\]]*"pendingIdentity"/);
+    expect(overview).toMatch(/delta\[key\] = WORK_ALERTS\.includes\(key\)/);
     // v1.105.70 added aiApprovedIdentity to the same sum.
     expect(overview).toMatch(/delta\.newFeedback \+ delta\.safetyFlags \+ delta\.pendingIdentity \+ delta\.aiApprovedIdentity \+ delta\.checkrAlerts/);
   });

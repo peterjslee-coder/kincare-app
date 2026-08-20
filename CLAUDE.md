@@ -333,10 +333,15 @@ Bump `APP_VERSION` in `src/server.js` · `node scripts/build-client.js` · commi
 
 ### Open — needs hands, not code
 
-- **GPS check-in has never been verified on a real iPhone.** P0 since March.
-  `@capacitor/geolocation` is not in `package.json`; nothing calls
-  `requestWhenInUseAuthorization()`. The safety proposition rests on it, and you find out at
-  App Store submission.
+- **GPS check-in is unverified on a real iPhone — but NOT for the reason older notes give.**
+  ✅ `@capacitor/geolocation` **is** installed (`^8.2.1`, added v1.105.67), wired through
+  `_capPlugin('Geolocation')` in `public/js/utils.js`, declared in `ios/App/CapApp-SPM`, and
+  the Info.plist strings went in at v1.105.58 after Apple's ITMS-90683 on Build 8. Any note
+  saying the dependency is missing is stale — including the paragraph in `utils.js` that
+  describes the original diagnosis in the present tense.
+  What is genuinely open: **nobody has stood at a real address with the native build and
+  confirmed a check-in captured a location.** Pete's `web:denied(1)` at his mother's house was
+  the PWA path, which is not the path that ships. The safety proposition rests on it.
 - **Julia is still "Full access"** on Betty's team and should be Viewer.
 
 ### Do NOT redo

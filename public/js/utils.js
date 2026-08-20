@@ -354,7 +354,13 @@ const closeLocalNotification = window.closeLocalNotification = async (tag) => {
 // would have come back as denied(1); a real failure as timeout(3). Nothing came back at
 // all. That is the signature of a stub: Capacitor's WKWebView does not connect the browser
 // Geolocation API to Core Location, and @capacitor/geolocation — the plugin that does —
-// is not installed. Not permission, not signal, not GPS, not indoors. The API is scenery.
+// WAS NOT INSTALLED AT THE TIME. Not permission, not signal, not GPS, not indoors.
+//
+// ⚠️ Tense matters. **The plugin has been installed since v1.105.67** (`^8.2.1`, wired through
+// `_capPlugin('Geolocation')` below, Info.plist strings added v1.105.58 after Apple's
+// ITMS-90683 on Build 8). Read in the present tense, the paragraph above says a dependency is
+// missing that is not — an Aug 19 handoff did exactly that. What is still open is the NATIVE
+// path on a real device, which is a different sentence.
 //
 // This matters well beyond the visit nudge. Caregiver CHECK-IN and CHECK-OUT called
 // navigator.geolocation directly too, so the location evidence that proves a caregiver
