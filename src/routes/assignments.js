@@ -2,6 +2,7 @@ const express = require("express");
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { authenticate, requireRole } = require("../middleware/auth");
+const { coarsenCoordinate } = require("../utils/geocode");
 
 const router = express.Router();
 router.use(authenticate);
@@ -253,6 +254,12 @@ router.get("/suggestions", async (req, res) => {
           if (dist <= 25) {
             nearbyCaregivers.push({
               ...c,
+              // v1.105.121 — the distance is measured from the exact point, then the point is
+              // rounded to ~1 mile before it leaves. A caregiver's precise coordinates are her
+              // home address, and this list handed them to any family who opened the booking
+              // picker.
+              latitude: coarsenCoordinate(c.latitude),
+              longitude: coarsenCoordinate(c.longitude),
               distance: Math.round(dist * 10) / 10,
               visit_count: 0, last_visit: null, is_assigned: 0, is_favorite: 0,
               specialties: c.specialties ? JSON.parse(c.specialties) : [],

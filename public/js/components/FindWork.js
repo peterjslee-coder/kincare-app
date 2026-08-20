@@ -20,6 +20,12 @@ const FindWork = window.FindWork = () => {
   const [bgCheckPaid, setBgCheckPaid] = useState(null);
   const [caregiverCleared, setCaregiverCleared] = useState(false);
   const [accountPaused, setAccountPaused] = useState(false);
+  // v1.105.121 — defaults to TRUE so the gate never flashes before the dashboard answers. An
+  // unknown answer is not a negative one (v1.105.112), and this particular negative tells her
+  // she is invisible to every family on the platform.
+  const [locationKnown, setLocationKnown] = useState(true);
+  const [locatingNow, setLocatingNow] = useState(false);
+  const [locationError, setLocationError] = useState(null);
   const [viewMode, setViewMode] = useState('list'); // 'list' or 'map'
   const [zipFilter, setZipFilter] = useState('');
   const [profileCenter, setProfileCenter] = useState(null);
@@ -226,6 +232,45 @@ const FindWork = window.FindWork = () => {
     init();
   }, []);
 
+  // ─── v1.105.121: the other way to be locatable ───
+  //
+  // Pete: "if they don't provide an address, they have to provide their location to search
+  // around somehow... If they get to know where jobs are, we get to know where they are."
+  const shareMyLocation = async () => {
+    setLocationError(null);
+    setLocatingNow(true);
+    try {
+      const result = await getDeviceLocation({ timeoutMs: 20000 });
+      if (!result || !result.pos) {
+        // Say which of the two things went wrong, because they need different answers from her.
+        setLocationError(result && result.reason === 'denied'
+          ? 'Your phone is set to refuse location for InPlace. You can turn it back on in Settings, or add your address instead.'
+          : 'Your phone didn\u2019t answer. Try again, or add your address instead.');
+        setLocatingNow(false);
+        return;
+      }
+      const res = await apiFetch('/api/caregivers/me/location', {
+        method: 'POST',
+        body: JSON.stringify({
+          latitude: result.pos.coords.latitude,
+          longitude: result.pos.coords.longitude,
+        }),
+      });
+      if (!res?.ok) {
+        const data = await res.json().catch(() => ({}));
+        setLocationError(data.error || 'That didn\u2019t save. Try again, or add your address instead.');
+        setLocatingNow(false);
+        return;
+      }
+      setLocationKnown(true);
+      setLocatingNow(false);
+      fetchData();
+    } catch (e) {
+      setLocationError('That didn\u2019t save. Try again, or add your address instead.');
+      setLocatingNow(false);
+    }
+  };
+
   const fetchData = async () => {
     setLoading(true);
     try {
@@ -237,6 +282,7 @@ const FindWork = window.FindWork = () => {
         const d = await res.json();
         setAccountPaused(!!d?.profile?.accountPaused);
         setCaregiverCleared(!!d?.profile?.caregiverCleared);
+        setLocationKnown(d.locationKnown !== false);
         // openJobs from dashboard already has matchQuality, distanceMiles, healthTags, careSummary, etc.
         // Client-side safety: filter out jobs whose start time has already passed.
         // "Now" is computed in each job's care-location timezone — never device time.
@@ -710,7 +756,49 @@ const FindWork = window.FindWork = () => {
       )}
 
       {/* ═══ OPEN JOBS SUB-TAB ═══ */}
-      {subTab === 'jobs' && <>
+      {/* ─── v1.105.121: no location, no jobs ───
+          Not a nag above a list she can still read. The booking picker only offers families
+          caregivers with a point inside 25 miles, so a caregiver with no coordinates cannot
+          receive a first booking from anyone — and until now she saw every job on the platform
+          while being invisible to all of them. Pete: "no jobs as a policy (and a reality)". */}
+      {subTab === 'jobs' && !locationKnown && (
+        <div className="card" style={{ padding: '22px 20px' }}>
+          <div style={{ fontSize: '17px', fontWeight: 600, color: 'var(--role-color)', marginBottom: '8px' }}>
+            We don{'\u2019'}t know where you are
+          </div>
+          <p style={{ fontSize: '14px', color: 'var(--text-secondary)', lineHeight: '1.55', margin: '0 0 12px' }}>
+            Families are only offered caregivers within 25 miles of them, so right now no family
+            can find you {'\u2014'} and this list stays empty. It goes both ways: to see where the
+            work is, we need to know roughly where you are.
+          </p>
+          {canAskLocation() && (
+            <button onClick={shareMyLocation} disabled={locatingNow} style={{
+              width: '100%', padding: '12px', background: 'var(--role-color)', color: 'var(--text-on-primary)',
+              border: 'none', borderRadius: '8px', fontSize: '15px', fontWeight: 600,
+              cursor: locatingNow ? 'default' : 'pointer', opacity: locatingNow ? 0.7 : 1,
+            }}>{locatingNow ? 'Asking your phone\u2026' : 'Use my phone\u2019s location'}</button>
+          )}
+          {locationError && (
+            <div style={{ marginTop: '10px', fontSize: '13px', color: 'var(--color-error)', lineHeight: '1.45' }}>
+              {locationError}
+            </div>
+          )}
+          <p style={{ fontSize: '12px', color: 'var(--text-tertiary)', lineHeight: '1.5', margin: '12px 0 0' }}>
+            We round it to about a mile and keep that {'\u2014'} never your exact spot. Families see
+            how far away you are, not where you live.
+          </p>
+          <button onClick={() => {
+            window.__accountTab = 'profile';
+            window.__navigateTo && window.__navigateTo('account');
+          }} style={{
+            marginTop: '10px', width: '100%', padding: '11px', background: 'transparent',
+            color: 'var(--role-color)', border: '1px solid var(--border-color)', borderRadius: '8px',
+            fontSize: '14px', fontWeight: 600, cursor: 'pointer',
+          }}>Add my address instead</button>
+        </div>
+      )}
+
+      {subTab === 'jobs' && locationKnown && <>
 
       {/* Clearance banner — shown when BG check or Stripe not done */}
       {!caregiverCleared && (

@@ -4,7 +4,7 @@ const { userPhotoUrl } = require("./media");
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { authenticate, requireRole } = require("../middleware/auth");
-const { geocodeAddress, buildAddressString, haversineDistance } = require("../utils/geocode");
+const { geocodeAddress, buildAddressString, haversineDistance, coarsenCoordinate } = require("../utils/geocode");
 
 const router = express.Router();
 router.use(authenticate);
@@ -119,8 +119,12 @@ router.get("/", async (req, res) => {
       vouchedForYou: vouchedCaregiverIds.has(c.user_id),
       city: c.location_city,
       state: c.location_state,
-      latitude: c.latitude,
-      longitude: c.longitude,
+      // v1.105.121 — COARSENED on the way out. Distances are still computed from the
+      // exact point server-side; what leaves the building is rounded to ~1 mile. A
+      // caregiver's precise coordinates are her home address, and every family browsing
+      // the platform was being handed it to about 11 metres.
+      latitude: coarsenCoordinate(c.latitude),
+      longitude: coarsenCoordinate(c.longitude),
       maxTravelMiles: c.max_travel_miles,
       profilePhoto: (c.avatar_url || c.profile_photo) ? `/api/media/user/${c.user_id}/photo` : null,
     };
@@ -207,8 +211,10 @@ router.get("/nearby/:careRecipientId", async (req, res) => {
       vouchedForYou: nearbyVouchedIds.has(c.user_id),
       city: c.location_city,
       state: c.location_state,
-      latitude: c.latitude,
-      longitude: c.longitude,
+      // v1.105.121 — coarsened out, exact in. `distance` below is still measured from the real
+      // point; the point itself leaves rounded to ~1 mile.
+      latitude: coarsenCoordinate(c.latitude),
+      longitude: coarsenCoordinate(c.longitude),
       maxTravelMiles: c.max_travel_miles,
       profilePhoto: (c.avatar_url || c.profile_photo) ? `/api/media/user/${c.user_id}/photo` : null,
       distance: Math.round(
@@ -332,6 +338,56 @@ router.put("/me", requireRole("caregiver"), async (req, res) => {
   res.json({ ok: true, profile: updated });
 });
 
+// ─── POST /api/caregivers/me/location ───
+//
+// v1.105.121 — the other way to be locatable.
+//
+// The booking picker offers a family two lists: caregivers they already know, and caregivers
+// with coordinates within 25 miles (assignments.js). A caregiver with no coordinates is in
+// neither, so she cannot receive a FIRST booking from anyone — a cold start with no exit.
+// Onboarding does require an address today, but Nominatim is a best-effort free service with a
+// 4-second timeout, and when it returns null the profile saves anyway with NULL coordinates and
+// nobody is told. She finishes every step and is findable by nobody.
+//
+// Pete: "if they don't provide an address, they have to provide their location to search around
+// somehow... otherwise no jobs as a policy (and a reality). If they get to know where jobs are,
+// we get to know where they are."
+//
+// That reciprocity is the rule this endpoint exists to make keepable. Her phone can answer the
+// question her address didn't.
+//
+// Stored COARSENED — two decimals, roughly a mile (utils/geocode.js). It is precise enough for
+// a 25-mile match and deliberately not precise enough to be a home address. Note that a
+// geocoded address is NOT coarsened on the way in; it is coarsened on the way OUT to families,
+// below and in assignments.js.
+router.post("/me/location", requireRole("caregiver"), async (req, res) => {
+  const db = await getDb();
+  const lat = Number(req.body.latitude);
+  const lng = Number(req.body.longitude);
+
+  // 0,0 is Null Island — the Atlantic off Ghana, and the single most common value a broken
+  // geolocation call produces. Accepting it would put her 4,000 miles from every job and look
+  // exactly like a real answer.
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)
+      || Math.abs(lat) > 90 || Math.abs(lng) > 180
+      || (lat === 0 && lng === 0)) {
+    return res.status(400).json({ error: "That doesn't look like a real location. Try again, or add your address instead." });
+  }
+
+  const profile = await db.prepare("SELECT id FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
+  if (!profile) return res.status(404).json({ error: "Caregiver profile not found" });
+
+  const coarseLat = coarsenCoordinate(lat);
+  const coarseLng = coarsenCoordinate(lng);
+  await db.prepare(`
+    UPDATE caregiver_profiles
+    SET latitude = ?, longitude = ?, location_source = 'device'
+    WHERE id = ?
+  `).run(coarseLat, coarseLng, profile.id);
+
+  res.json({ ok: true, latitude: coarseLat, longitude: coarseLng, source: "device" });
+});
+
 // ─── GET /api/caregivers/:id ───
 router.get("/:id", async (req, res) => {
   const db = await getDb();
@@ -380,8 +436,12 @@ router.get("/:id", async (req, res) => {
       vouchedForYou: await hasActiveVouch(db, cg.user_id, req.user.id),
       city: cg.location_city,
       state: cg.location_state,
-      latitude: cg.latitude,
-      longitude: cg.longitude,
+      // v1.105.121 — COARSENED on the way out. Distances are still computed from the
+      // exact point server-side; what leaves the building is rounded to ~1 mile. A
+      // caregiver's precise coordinates are her home address, and every family browsing
+      // the platform was being handed it to about 11 metres.
+      latitude: coarsenCoordinate(cg.latitude),
+      longitude: coarsenCoordinate(cg.longitude),
       maxTravelMiles: cg.max_travel_miles,
       totalSessions: stats.total_sessions,
       avgSessionDuration: stats.avg_duration,
@@ -426,6 +486,9 @@ router.post("/profile", requireRole("caregiver"), async (req, res) => {
         lng = geo.lng;
         console.log(`  [caregiver-profile] Geocoded to: ${lat}, ${lng}`);
       } else {
+        // v1.105.121 — this is the silent path that produces a caregiver nobody can book. She
+        // typed a real address, the free geocoder timed out, the profile saved anyway, and the
+        // only trace was this line in a log nobody reads. FindWork now tells her outright.
         console.log(`  [caregiver-profile] Geocoding failed for: "${addrStr}"`);
       }
     }

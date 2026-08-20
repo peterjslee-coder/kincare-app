@@ -433,6 +433,10 @@ async function initializeDatabase() {
     `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS work_location_address TEXT`,
     `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS work_latitude REAL`,
     `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS work_longitude REAL`,
+    // v1.105.121 — how we came to know where she is: 'address' (geocoded from what she typed)
+    // or 'device' (her phone, coarsened to ~1 mile). NULL means we do not know, which is now a
+    // state with consequences rather than a quiet gap.
+    `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS location_source TEXT`,
     `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS care_stoplight TEXT`,
     `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS terms_accepted_at TIMESTAMPTZ`,
     `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS terms_version TEXT`,

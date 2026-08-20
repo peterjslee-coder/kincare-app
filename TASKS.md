@@ -607,21 +607,33 @@
       with the four sharpened questions now that a helper can be write-only. **P1.**
 
 
-- [ ] **Caregivers can finish onboarding with no address, and then be findable by nobody.**
-      (Aug 18, from Pete trying to book Julia.) The booking picker offers people with a prior
-      session for this recipient, and people with coordinates in range. A caregiver who never
-      gave an address has neither, so she cannot receive a FIRST booking from anyone — a cold
-      start with no exit. v1.105.83 unblocks the case that matters most (an active
-      `bg_admin_vouches` row for this family now makes her bookable), but the general problem
-      stands for any caregiver a family has not vouched for.
-      Pete's steer: *"we might need to ask to register their phone's location if they want to
-      accept work around where they are otherwise...we may not get people's addresses in
-      onboarding."* So the options are roughly: ask for an address in onboarding; or ask for
-      device location with a clear purpose string and store a coarsened point (note
-      `coarsenCoordinate` already exists in utils/geocode.js and the family-visit nudge sets
-      the privacy precedent); or let a caregiver name a service area by town rather than a
-      precise point. Also relevant: this is the same population as the GPS P0 — location
-      permission on iOS is already unproven. **P1**
+- [x] **Caregivers can finish onboarding with no address, and then be findable by nobody.**
+      ✅ **Fixed v1.105.121.** ⚠️ **The ticket's premise was already stale:** step 3 DOES require
+      address/city/state/ZIP (`CaregiverOnboarding.js:445`), and the stale comment claiming
+      otherwise is in `assignments.js`. The real hole is that Nominatim is a free best-effort
+      service with a 4s timeout — when it returns null the profile saves anyway with NULL
+      coordinates, `COALESCE` keeps the old NULL, and the only trace is a log line. She finishes
+      all thirteen steps and is findable by nobody.
+      **The asymmetry was the headline:** `assignments.js:235` excludes NULL-coordinate
+      caregivers from the nearby list outright, while `dashboard.js` openJobs had **no location
+      predicate at all** — so she saw every job on the platform while being invisible to every
+      family on it. Pete: *"if they get to know where jobs are, we get to know where they are."*
+      Now: `POST /api/caregivers/me/location` stores a **coarsened** device point (2dp, ~1 mile)
+      with `location_source`; openJobs returns `[]` without coordinates and the dashboard sends
+      `locationKnown`; FindWork replaces the jobs tab with a gate that explains the deal in both
+      directions, offers the phone, and always offers the address as a way through. Null Island
+      (0,0) rejected. `tests/caregiverLocation.test.js` (15).
+- [ ] **⚠️ Two things found next door, both worth their own pass.**
+      (a) **`work_latitude` / `work_longitude` are read by three places
+      (`dashboard.js:817`, `utils/aiMatching.js:82`, `AreaMap.js:27`) and written by NONE** —
+      the discarded-value pattern again, on the fallback that was supposed to catch exactly the
+      caregivers this ticket is about. `work_location_address` is stored as free text and never
+      geocoded. (b) **`assignments.js:230` does `ORDER BY rating_avg DESC LIMIT 20` BEFORE the
+      distance filter**, so the 20 highest-rated geocoded caregivers platform-wide are fetched
+      first and a nearby caregiver with a low rating is cut before distance is ever computed. A
+      new caregiver with no ratings, in the right town, can be invisible for that reason alone.
+      Also: `POST /api/sessions/:id/match` has no location filter whatsoever despite a comment
+      at `:1114` saying it should. **P1**
 
 
 > **Aug 18 2026 — feedback loop.** 5 new items, all from Pete on iOS native 1.105.71, all within

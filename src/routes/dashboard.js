@@ -801,7 +801,21 @@ async function caregiverDashboard(db, userId, res) {
       reviewerName: r.reviewer_name,
       createdAt: r.created_at,
     })),
+    // v1.105.121 — do we know where she is? NULL coordinates are the state that makes a
+    // caregiver unbookable (assignments.js only offers people with a point within 25 miles), and
+    // until now it was also completely invisible to her: she saw every job on the platform while
+    // no family could see her.
+    //
+    // Pete: "if they get to know where jobs are, we get to know where they are." So the job list
+    // is the thing that depends on it. This flag is what FindWork renders instead.
+    locationKnown: !!(profile && profile.latitude && profile.longitude),
+    locationSource: (profile && profile.location_source) || null,
     openJobs: await (async () => {
+      // v1.105.121 — the reciprocity, enforced. Not a nag above a list she can still read: no
+      // location, no jobs. It is a policy AND a reality — every distance, sort and proximity
+      // score below is measured from a point we do not have.
+      if (!profile || !profile.latitude || !profile.longitude) return [];
+
       // v1.105.107 — TRUST decides what she may see; STRIPE decides whether she can be paid.
       // This used to require `stripe_onboard_complete` as well, so a caregiver personally
       // vouched for by a family still saw "Care Recipient", no city, no family name, no
