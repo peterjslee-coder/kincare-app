@@ -761,11 +761,39 @@
       Guarded against the obvious trap: `Number(null)` is `0` and 0 is a valid hour, so a
       missing time would have dragged the window back to midnight — the exact complaint.
       `tests/calendarHours.test.js` (13, validated against the pre-fix source).
-- [ ] **First Steps is overwhelming.** (aed1e440, Tyler) Suggests a 1-of-7 view showing the
-      current task with a slide to the next.
-      **Pete's call, Aug 19: not the 1-of-7 redesign.** *"Leave it, just tighten it"* — keep all
-      seven visible, collapse completed ones to a single line so the list shrinks as he works
-      through it. The existing rule stands: it disappears entirely once complete. **P2**
+- [ ] **⛳ ONBOARDING: "the path" — design track, not a ticket.** (aed1e440 Tyler, plus Pete
+      Aug 19.) Superseded the narrower "tighten First Steps" call: Pete looked at three
+      directions and picked **B, the path**.
+      **Brief: `Onboarding_Path_Plan_2026-08-19.md` in the Working Folder. Read it before
+      touching any onboarding screen.** It exists because this flow has been rebuilt at least
+      twice, each rebuild fixed the screen in front of it, and the feeling came back — so the
+      deliverable is a decision that survives the next redesign, and the code is the smaller
+      half.
+      Pete on what is actually wrong: *"you think you're almost there and there keeps being
+      more steps…and you log in to find that you have to remember what you've already done. And
+      then you finish…and it says you still haven't verified your ID (but you did) and it's
+      like, 'when does this ever end?'"*
+      Three structural facts behind that, none of which softer copy fixes:
+      1. **It is told twice.** The wizard is 9 steps and First Steps is 7 more, and background
+         check + identity verification appear in **both** — sixteen apparent things for about
+         ten real ones, with no warning that a second list is waiting. Needs no backend change,
+         only a decision about which list owns each item.
+      2. **Coming back has no memory.** `resume-onboarding` and First Steps both show what
+         REMAINS, never what she already finished.
+      3. **"You still haven't verified your ID"** is a real bug, not a feeling. In
+         `CaretakerHub.js` the identity step is `done: idApproved`; while `idVerification` is
+         still loading `idApproved` is false, and v1.105.75 (rightly) suppresses the prompt —
+         so it renders **unticked with no explanation**. Same shape as v1.105.70's dropped
+         `identityStatus`. **The rule to establish: a checklist item has THREE states — done,
+         not done, and not known yet — and the third must never draw as the second.**
+      Also found while reading: `TOTAL_STEPS = 9` but `stepLabels` has 8 keys and is off by one
+      from step 8, so the wizard's last two screens read *"Step 8 of 9 — Review & Complete"*
+      over an ID form and then **"Step 9 of 9 — undefined"**. And the identity step's
+      description claims *"A person reviews it"* — `src/utils/identity.js` auto-approves in the
+      common case, so the copy is wrong in the direction that makes onboarding feel LONGER.
+      Constraint Pete set: **no backend changes.** Tone goes softer — *"'A photo of your
+      license' is way better than 'VERIFY YOUR IDENTITY!'"* — but the `personal_care` and
+      medication wording stays exactly as counsel left it. **P2 (track)**
 - [x] **Say "Betty", not "Care Recipient".** (7d94657c, Julia) On the Find Work card. She is
       about to spend an afternoon with a person, not a role.
       ⚠️ **I GOT THE CAUSE WRONG, and the record should say so.** I read the gate, saw
