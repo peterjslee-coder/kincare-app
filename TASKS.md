@@ -745,8 +745,22 @@
       scoped `.scroll-x-quiet` utility that hides the bar chrome — scoped deliberately, because
       a bare `::-webkit-scrollbar` rule would strip the bar off every scrollable panel in the
       app. `tests/carePrefsOverflow.test.js` (8).
-- [ ] **Calendar starts at 0am and looks odd on the dashboard.** (16328059, Tyler) Suggest moving
-      it, shrinking it, or trimming the hours shown. **P2**
+- [x] **Calendar starts at 0am and looks odd on the dashboard.** (16328059, Tyler)
+      ✅ **Fixed v1.105.110 — and "0am" was literal.** The hour label was
+      `hour <= 12 ? hour : hour - 12`, which maps midnight to **0**. There is no 0 o'clock on a
+      12-hour clock; the row said `0a`. Now `12a`.
+      The grid itself was a fixed `hourStart = 0, hourEnd = 24`, so ten almost-always-empty
+      overnight rows pushed the part he came to look at a screen and a half down.
+      **Not replaced with a hardcoded 7–21.** Overnight supervision is a service InPlace sells;
+      a caregiver working 10pm–6am would find her own shift clipped off the top with nothing to
+      say it had been, and a calendar that silently omits a booked visit is worse than a tall
+      one. `calendarHourRange()` takes a comfortable 7–21 default and **widens** it with
+      whatever is really on the grid — sessions, care requests, and the caregiver's own
+      availability and blocked rules. A normal week is 14 rows instead of 24; an overnight week
+      still shows midnight.
+      Guarded against the obvious trap: `Number(null)` is `0` and 0 is a valid hour, so a
+      missing time would have dragged the window back to midnight — the exact complaint.
+      `tests/calendarHours.test.js` (13, validated against the pre-fix source).
 - [ ] **First Steps is overwhelming.** (aed1e440, Tyler) Suggests a 1-of-7 view showing the
       current task with a slide to the next.
       **Pete's call, Aug 19: not the 1-of-7 redesign.** *"Leave it, just tighten it"* — keep all

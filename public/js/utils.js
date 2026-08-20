@@ -83,6 +83,52 @@ const jobPay = window.jobPay = (job) => {
   };
 };
 
+// ─── Which hours a calendar needs to show (v1.105.110) ───
+//
+// Tyler, 16328059: "Calendar starts at 0am and looks odd on the dashboard."
+//
+// CaregiverCalendar drew a fixed `hourStart = 0, hourEnd = 24` grid. Twenty-four rows, of
+// which the overnight ten are almost always empty, so the thing you actually came to look at
+// starts a screen and a half down.
+//
+// The tempting fix is to hardcode 7–21 instead. That is wrong here: overnight supervision is
+// a service type InPlace sells, and a caregiver working 10pm–6am would find her own shift
+// clipped off the top of the calendar with nothing to say it had been.
+//
+// So: a comfortable default window, WIDENED by whatever is really on the grid. A normal week
+// shows a third fewer rows; an overnight week shows midnight. Nothing is ever hidden, which is
+// the property that matters — a calendar that silently omits a booked visit is worse than a
+// tall one.
+const DEFAULT_CALENDAR_HOURS = { start: 7, end: 21 };
+
+/**
+ * @param {Array<{hour:number, span?:number}>} spans  things occupying the grid
+ * @param {{start:number, end:number}} [fallback]
+ * @returns {{start:number, end:number}} half-open [start, end), clamped to 0..24
+ */
+const calendarHourRange = window.calendarHourRange = (spans, fallback = DEFAULT_CALENDAR_HOURS) => {
+  let start = fallback.start;
+  let end = fallback.end;
+  for (const s of spans || []) {
+    // `Number(null)` is 0, and 0 is a perfectly good hour — so a missing time would silently
+    // drag the window back to midnight, which is the exact complaint being fixed.
+    if (s == null || s.hour == null || s.hour === '') continue;
+    const h = Number(s.hour);
+    if (!Number.isFinite(h)) continue;
+    const span = Number(s.span);
+    const finish = h + (Number.isFinite(span) && span > 0 ? Math.ceil(span) : 1);
+    if (h < start) start = h;
+    if (finish > end) end = finish;
+    // A shift that runs past midnight has a tail in the early hours of the next day. Show
+    // them: an overnight caregiver looking at a calendar that stops at midnight cannot see
+    // half her own week.
+    if (finish > 24) start = 0;
+  }
+  start = Math.max(0, Math.min(23, Math.floor(start)));
+  end = Math.max(start + 1, Math.min(24, Math.ceil(end)));
+  return { start, end };
+};
+
 // How long an exclusive ("Just for You") offer has left, and whether it has lapsed —
 // both from a `now` the CALLER controls (v1.105.106).
 //

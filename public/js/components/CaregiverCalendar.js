@@ -28,8 +28,6 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
   }, []);
 
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  const hourStart = 0;
-  const hourEnd = 24; // Full 24-hour display
 
   // Compute current week's dates
   const getWeekDates = () => {
@@ -193,6 +191,39 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
     const today = new Date();
     return d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth() && d.getDate() === today.getDate();
   };
+
+  // ─── How tall the grid needs to be (v1.105.110) ───
+  //
+  // Tyler, 16328059: "Calendar starts at 0am and looks odd on the dashboard." It drew a fixed
+  // 0–24 grid, so the ten overnight rows — almost always empty — pushed the part he came to
+  // look at a screen and a half down.
+  //
+  // Not replaced with a hardcoded 7–21: overnight supervision is a service InPlace sells, and
+  // clipping a caregiver's own 10pm shift off the top with nothing to say so would be the
+  // worse bug. The window is a comfortable default WIDENED by whatever is actually there.
+  const visibleHours = (() => {
+    const spans = [];
+    const push = (t, dur) => spans.push({
+      hour: t ? parseInt(String(t).split(':')[0], 10) : null,
+      span: parseFloat(dur) || 1,
+    });
+    const weekStrs = weekDates.map(toLocalDateStr);
+    for (const dateStr of weekStrs) {
+      for (const s of getSessionsForDate(dateStr)) push(s.scheduled_time || s.time, s.duration_hours || s.durationHours);
+      for (const s of getRequestsForDate(dateStr)) push(s.scheduled_time || s.time, s.duration_hours || s.durationHours);
+    }
+    // Availability and blocked rules count too — an early-morning availability block a
+    // caregiver deliberately set should not be invisible on her own calendar.
+    weekDates.forEach((d, i) => {
+      const { available, blocked } = getAvailForDay(d.getDay(), weekStrs[i]);
+      for (const r of available.concat(blocked)) {
+        spans.push({ hour: r.startH, span: Math.max(1, (r.endH || 0) - (r.startH || 0)) });
+      }
+    });
+    return calendarHourRange(spans);
+  })();
+  const hourStart = visibleHours.start;
+  const hourEnd = visibleHours.end;
 
   // Build hour-by-hour cell data for a given date
   const getCellType = (dateStr, dayOfWeek, hour) => {
@@ -450,7 +481,10 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
               return (
                 <tr key={hour}>
                   <td style={{ padding: '0 4px', fontSize: 10, color: 'var(--text-muted)', textAlign: 'right', borderRight: '1px solid #e8e8e8', background: 'var(--bg-primary)', position: 'sticky', left: 0, zIndex: 1, height: 28 }}>
-                    {hour <= 12 ? hour : hour - 12}{hour < 12 ? 'a' : 'p'}
+                    {/* v1.105.110 — midnight rendered as "0a". That is literally Tyler's
+                        "starts at 0am" (16328059): `hour <= 12 ? hour : hour - 12` maps 0 to
+                        0, and there is no 0 o'clock on a 12-hour clock. */}
+                    {hour % 12 === 0 ? 12 : hour % 12}{hour < 12 ? 'a' : 'p'}
                   </td>
                   {weekDates.map((d, di) => {
                     const dateStr = toLocalDateStr(d);
