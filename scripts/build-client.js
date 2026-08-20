@@ -25,6 +25,9 @@ const OUT_DIR = path.join(PUBLIC, "js-compiled");
 const scripts = [
   "js/offlineQueue.js",
   "js/utils.js",
+  // v1.105.114 — the onboarding route. Pure data + resolvers, no React, no fetches;
+  // both CaregiverOnboarding and CaretakerHub read it, so it loads before either.
+  "js/onboardingRoute.js",
   "js/components/ErrorBoundary.js",
   "js/components/TimezoneHelper.js",
   "js/components/InPlaceIcon.js",

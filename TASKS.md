@@ -1001,7 +1001,32 @@
 
 ## In Progress — Stashed
 
-*(empty)*
+### Onboarding "the path" — caregiver track (Aug 19–20, 2026)
+
+Brief: `Onboarding_Path_Plan_2026-08-19.md` (what it should feel like) · Spec:
+`Onboarding_Path_Spec_2026-08-20.md` (what gets built). **Read both before touching any
+onboarding screen.** No backend changes — that is a constraint, not an observation.
+
+- [x] **Commit 1 — the route.** `public/js/onboardingRoute.js` + `tests/onboardingRoute.test.js`
+      (25). One list of 13 real jobs replacing the 16 things on screen, four item states
+      (done / todo / unknown / **waiting on us**), leg grouping and the Stripe → safety-check
+      dependency. Pure module, nothing renders it yet. ✅ **v1.105.114.**
+- [ ] **Commit 2 — the wizard.** Route header replaces the 9-segment progress bar
+      (`Leg 1 of 3 · Who you are — 2 of 4`, never "Step 7 of 9"); step 9's 🎉 "Welcome to
+      InPlace!" becomes a handoff that names the five things waiting on the dashboard. That
+      celebration is a finish line placed mid-route and is most of the quest feeling.
+- [ ] **Commit 3 — the dashboard + resume.** First Steps renders legs 1–2 collapsed and ticked
+      with leg 3 expanded, header "N of 13 left"; `app.js` `resume-onboarding` gets a "you got
+      to Leg 2, here's what's done" screen first. Keep `firstStepsResolved` (v1.105.82) and the
+      `!isDemo` gate (v1.105.95).
+- [ ] **Copy pass.** Five First Steps items still speak system voice (Stripe, security,
+      preferences, availability/rates, photo) and wizard step 4's heading is
+      "🔒 Background Check Information". ⚠️ `personal_care` copy stays exactly as counsel left
+      it; the waived/not-waived $30 branch (v1.105.63) does not get flattened.
+- [ ] **The path visual + one 150ms tick** (`prefers-reduced-motion` respected). Explicitly NOT
+      confetti — celebrating step 3 of 13 makes a route feel longer. Motion vocabulary
+      (feedback `69e796fa`) stays P3.
+
 
 ## Recently Completed
 
