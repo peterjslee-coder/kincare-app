@@ -424,6 +424,8 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
   // Document Review tab
   const [pendingDocs, setPendingDocs] = useState([]);
   const [pendingDocsCount, setPendingDocsCount] = useState(0);
+  // v1.105.113 — identity documents waiting on a person, split by how they got there.
+  const [identityAlerts, setIdentityAlerts] = useState({ pending: 0, aiApproved: 0 });
   const [pendingDocsLoading, setPendingDocsLoading] = useState(false);
   const [reviewingDocId, setReviewingDocId] = useState(null);
   const [reviewNotes, setReviewNotes] = useState('');
@@ -825,6 +827,11 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
         setNewFeedbackCount(d.newFeedback || 0);
         setCheckrAlertCount(d.checkrAlerts || 0);
         setBgCheckActionItems(d.bgCheckActionItems || []);
+        // v1.105.113 — /api/admin/alerts has returned these since v1.105.68/.70 and this
+        // loader threw them away, so the Overview "Needs attention" list — the one screen an
+        // admin actually opens — never mentioned an identity document waiting on a decision.
+        // Pete: "I log into the Admin page and there's no demand for my attention."
+        setIdentityAlerts({ pending: d.pendingIdentity || 0, aiApproved: d.aiApprovedIdentity || 0 });
       }
     } catch {}
   };
@@ -2375,6 +2382,23 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
           action: () => { setActiveTab('authorizations'); },
         }));
         // Safety flags
+        // v1.105.113 — identity documents. FIRST in the list, above everything else, because
+        // this one blocks a person from working at all: onboarding cannot complete without an
+        // approved identity document, and since v1.105.112 only an admin can approve one.
+        if (identityAlerts.pending > 0) attentionItems.push({
+          icon: '\uD83E\uDEAA', color: 'var(--color-error)', pill: `${identityAlerts.pending} waiting`, pillBg: '#ffebee', pillColor: '#c62828',
+          title: `${identityAlerts.pending} ID${identityAlerts.pending === 1 ? '' : 's'} waiting on you`,
+          sub: identityAlerts.pending === 1
+            ? 'Someone cannot finish onboarding until you look at it'
+            : 'They cannot finish onboarding until you look at them',
+          action: () => { setActiveTab('docreview'); },
+        });
+        if (identityAlerts.aiApproved > 0) attentionItems.push({
+          icon: '\uD83E\uDD16', color: 'var(--color-error)', pill: `${identityAlerts.aiApproved} unchecked`, pillBg: '#ffebee', pillColor: '#c62828',
+          title: `${identityAlerts.aiApproved} ID${identityAlerts.aiApproved === 1 ? '' : 's'} approved with nobody asked`,
+          sub: 'Approved automatically before v1.105.112 — no person has reviewed them',
+          action: () => { setActiveTab('docreview'); },
+        });
         if (safetyFlagCount > 0) attentionItems.push({
           icon: '🚨', color: 'var(--color-error)', pill: `${safetyFlagCount} flag${safetyFlagCount > 1 ? 's' : ''}`, pillBg: '#ffebee', pillColor: '#c62828',
           title: `Safety flags need review`,

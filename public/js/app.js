@@ -807,6 +807,10 @@ const App = () => {
         }
       } catch {}
     };
+    // v1.105.113 — dismissing needs to re-ask, not assume. Work items are no longer
+    // suppressible by the snapshot, so the honest count after a dismiss is whatever the server
+    // still says is outstanding.
+    window.__refetchAdminAlerts = fetchAlerts;
     fetchAlerts();
     const interval = setInterval(fetchAlerts, 60000); // refresh every 60s
     return () => clearInterval(interval);
@@ -1458,11 +1462,20 @@ const App = () => {
     if (page === 'messages') setUnreadMsgCount(0);
     // Clear admin badge when opening admin — save current counts as "seen"
     if (page === 'admin' && adminAlertCount > 0 && adminAlertDetails?._raw) {
-      setAdminAlertCount(0);
+      // v1.105.113 — do NOT zero it locally.
+      //
+      // Pete: "I log into the Admin page and there's no demand for my attention." Opening this
+      // page used to set the badge to 0 on the spot AND record a server-side snapshot, so an
+      // identity document waiting on his decision was silenced by being LOOKED AT rather than
+      // by being FINISHED. The server now refuses to snapshot work items; this stops lying
+      // about them in the meantime, and re-asks so anything still outstanding comes straight
+      // back.
       apiFetch('/api/admin/alerts/dismiss-all', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ snapshot: adminAlertDetails._raw }),
+      }).then(() => {
+        if (typeof window.__refetchAdminAlerts === 'function') window.__refetchAdminAlerts();
       }).catch(() => {});
     }
   };

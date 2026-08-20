@@ -19,6 +19,17 @@ const {
   NOT_DEMO_SESSION, safeJson, logAdminAction, checkAdmin,
 } = require("./shared");
 
+// ─── Alert classes: news vs work (v1.105.113) ───
+//
+// WORK is anything where a PERSON IS BLOCKED until an admin acts. Those counts are reported
+// raw and can never be reduced by the last-seen snapshot — they fall to zero on their own when
+// the work is done, so a snapshot has nothing to add and everything to hide. Everything else
+// is news, and news stops repeating once you have seen it.
+//
+// Keep this list short. A badge that never goes quiet gets ignored, and then it protects
+// nothing — the same failure arrived at from the other side.
+const WORK_ALERTS = ["pendingUsers", "pendingConsent", "safetyFlags", "pendingIdentity", "aiApprovedIdentity"];
+
 module.exports = function register(router) {
 
 // ─── GET /api/admin/alerts — Lightweight count of items needing admin attention ───
@@ -75,19 +86,39 @@ router.get("/alerts", async (req, res) => {
       recentMilestones: parseInt(recentMilestones.count) || 0,
     };
 
-    // Calculate delta from last-seen snapshot — only badge genuinely new items
+    // ─── News vs work (v1.105.113) ───
+    //
+    // Pete, Aug 19: "I log into the Admin page and there's no demand for my attention, I even
+    // went into Doc view and BG checks and there's nothing there for me to review."
+    //
+    // Julia's ID had been sitting unreviewed for days. `aiApprovedIdentity` was added in
+    // v1.105.70 precisely to catch that — and it did count her. But every count here was then
+    // reduced by a LAST-SEEN SNAPSHOT, and app.js writes that snapshot the moment the admin
+    // page is opened. So the first time he opened Admin the number was recorded as "seen", the
+    // delta went to zero, and it stayed zero forever while the work stayed undone.
+    //
+    // **An item was silenced by being LOOKED AT rather than by being FINISHED.**
+    //
+    // A seen-snapshot is right for news and wrong for work:
+    //
+    //   NEWS  "5 new pieces of feedback", "3 referrals this week" — once you have seen the
+    //         number, repeating it is nagging. Delta is correct.
+    //   WORK  "an identity document is waiting on your decision" — this must keep asking until
+    //         it is DONE. Its count already falls to zero on its own the moment the work is
+    //         done, so there is nothing for a snapshot to add and everything for it to hide.
+    //
+    // Work items are things where a PERSON IS BLOCKED until an admin acts. Everything else
+    // stays news, deliberately: a badge that never goes quiet gets ignored, and then it
+    // protects nothing.
     let seen = {};
     try { seen = JSON.parse(userRow?.admin_alerts_snapshot || '{}'); } catch {} // expected: tolerated parse fallback
-    const delta = {
-      pendingUsers: Math.max(0, counts.pendingUsers - (seen.pendingUsers || 0)),
-      pausedCaregivers: Math.max(0, counts.pausedCaregivers - (seen.pausedCaregivers || 0)),
-      pendingConsent: Math.max(0, counts.pendingConsent - (seen.pendingConsent || 0)),
-      newFeedback: Math.max(0, counts.newFeedback - (seen.newFeedback || 0)),
-      safetyFlags: Math.max(0, counts.safetyFlags - (seen.safetyFlags || 0)),
-      pendingIdentity: Math.max(0, counts.pendingIdentity - (seen.pendingIdentity || 0)),
-      aiApprovedIdentity: Math.max(0, counts.aiApprovedIdentity - (seen.aiApprovedIdentity || 0)),
-      checkrAlerts: Math.max(0, counts.checkrAlerts - (seen.checkrAlerts || 0)),
-    };
+
+    const delta = {};
+    for (const key of Object.keys(counts)) {
+      delta[key] = WORK_ALERTS.includes(key)
+        ? counts[key]                                        // never suppressed by looking
+        : Math.max(0, counts[key] - (seen[key] || 0));
+    }
 
     const total = delta.pendingUsers + delta.pausedCaregivers + delta.pendingConsent +
       delta.newFeedback + delta.safetyFlags + delta.pendingIdentity + delta.aiApprovedIdentity + delta.checkrAlerts;
@@ -144,8 +175,14 @@ router.post("/alerts/dismiss-checkr", async (req, res) => {
 router.post("/alerts/dismiss-all", async (req, res) => {
   try {
     const db = await getDb();
-    // Store snapshot of current counts on the user row
-    const snapshot = JSON.stringify(req.body.snapshot || {});
+    // v1.105.113 — a work item cannot be dismissed by opening a page. app.js fires this the
+    // moment the admin page is opened, so anything recorded here is silenced from then on.
+    // Stripping the work keys means a snapshot can only ever quiet news; an identity document
+    // waiting on a decision keeps asking until somebody decides.
+    const incoming = req.body.snapshot || {};
+    const snapshot = JSON.stringify(
+      Object.fromEntries(Object.entries(incoming).filter(([k]) => !WORK_ALERTS.includes(k)))
+    );
     await db.prepare(
       "UPDATE users SET admin_alerts_snapshot = ?, admin_alerts_seen_at = NOW() WHERE id = ?"
     ).run(snapshot, req.user.id);

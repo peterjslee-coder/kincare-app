@@ -345,6 +345,39 @@
 
 ### P1
 
+- [x] **⛔ "There's no demand for my attention." Three things were hiding it at once.**
+      (Pete, Aug 19.) *"I couldn't see where to review Julie's ID. I didn't get a push
+      notification. I log into the Admin page and there's no demand for my attention, I even
+      went into Doc view and BG checks and there's nothing there for me to review."*
+      ✅ **Fixed v1.105.112 + v1.105.113.** Each of these alone would have hidden it:
+      1. **The document was `approved`.** The AI decided, so it was never in the Doc Review
+         queue — `status IN ('ai_review','pending','ai_flagged')` correctly excluded it. Fixed
+         by v1.105.112, and the backfill is what put Pete's and Julia's IDs back in front of
+         him.
+      2. **The bell counted it, then silenced itself.** `aiApprovedIdentity` (v1.105.70) DID
+         count Julia. But every count was reduced by a **last-seen snapshot**, and `app.js`
+         writes that snapshot the moment the admin page is opened. **The item was silenced by
+         being LOOKED AT rather than by being FINISHED**, and stayed silent while the work
+         stayed undone.
+         A seen-snapshot is right for **news** ("5 new pieces of feedback" — repeating it is
+         nagging) and wrong for **work** ("an ID is waiting on your decision" — it must keep
+         asking until it's done, and its count already falls to zero on its own when it is).
+         `WORK_ALERTS` in `admin/overview.js` is now reported raw and stripped from any
+         snapshot the dismiss endpoint stores. Kept deliberately short: a badge that never goes
+         quiet gets ignored, which is the same failure from the other side.
+      3. **The Overview "Needs attention" list never mentioned identity.** `loadAlerts` fetched
+         `pendingIdentity` and `aiApprovedIdentity` and **threw them away** — the v1.105.72
+         discarded-value class, on the one number that mattered most. They are now the FIRST
+         two rows, because this is the only item that stops a person working at all, and each
+         says the consequence rather than a bare count.
+      Opening the admin page no longer zeroes the badge locally either — it re-asks, so
+      anything still outstanding comes straight back.
+      `tests/adminAlertsWork.test.js` (14, validated against the pre-fix source).
+      ⚠️ **Still unexplained: the push never arrived.** Email was the fixable half (opt-in,
+      default off → now opt-out for identity). Whether Pete's admin account has a live push
+      subscription at all is unverified — worth checking `push_subscriptions` for his user
+      before trusting push as a channel for anything that matters.
+
 - [x] **⛔ The AI approved government IDs. It doesn't any more.** (Pete, Aug 19)
       *"I want to review everything an AI clears. Below a confidence of, say, 90%, it doesn't
       even decide...I do. But I haven't gotten a doc review notice on anything yet."*
