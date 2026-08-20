@@ -90,6 +90,34 @@ const ONBOARDING_ROUTE = window.ONBOARDING_ROUTE = [
   { id: 'security', leg: 'work', wizardStep: null, label: 'Lock down your account' },
 ];
 
+// ─── Which leg a wizard SCREEN belongs to ───
+//
+// Not the same question as which item a screen feeds, and this is the clearest place the
+// screens-are-not-route-items rule earns its keep. Screen 4 collects legal name, date of birth
+// and the last four of her SSN, which the safety check needs — a leg-3 item. But she is not
+// doing leg 3 work at screen 4; she is telling us who she is, and the header must not jump to
+// "Leg 3" and then walk backwards. So the SCREEN sits in leg 1 while the ITEM it feeds sits in
+// leg 3, and both statements are true.
+const WIZARD_SCREEN_LEG = window.WIZARD_SCREEN_LEG = {
+  1: 'who', 2: 'who', 3: 'who', 4: 'who',
+  5: 'bring', 6: 'bring', 7: 'bring', 8: 'bring',
+  9: null, // the handoff — not a job, and not part of a leg
+};
+
+const wizardLegForStep = window.wizardLegForStep = (step) => {
+  const legId = WIZARD_SCREEN_LEG[step] || null;
+  return legId ? ONBOARDING_LEGS.find((l) => l.id === legId) || null : null;
+};
+
+// Screens in the same leg, so a leg can show its own progress without borrowing the route's
+// count. The number of SCREENS moves faster than the number of JOBS; only the second is ever
+// presented as "how much is left".
+const wizardScreensInLeg = window.wizardScreensInLeg = (legId) =>
+  Object.keys(WIZARD_SCREEN_LEG)
+    .filter((k) => WIZARD_SCREEN_LEG[k] === legId)
+    .map(Number)
+    .sort((a, b) => a - b);
+
 // The length is a constant, and a test asserts it. If this number changes, the route changed
 // under someone mid-signup — which is the quest, by definition.
 const ONBOARDING_ROUTE_LENGTH = window.ONBOARDING_ROUTE_LENGTH = 13;
@@ -122,9 +150,10 @@ const routeItemState = window.routeItemState = (id, facts = {}) => {
     // asking "is it approved?", because `approved` is false while we are still finding out.
     case 'identity': {
       const idf = f.identity || {};
-      if (f.surface === 'wizard' && !idf.submitted) {
-        return (f.step || 1) > 8 ? 'waiting' : 'todo';
-      }
+      // In the wizard there is no status fetch to wait on — she either sent it on screen 8 or
+      // she has not reached it yet. Sent is `waiting` immediately, because a person has to look
+      // and that is now the normal ending, not an exception.
+      if (f.surface === 'wizard') return idf.submitted ? 'waiting' : 'todo';
       if (!idf.loaded || idf.loadFailed) return 'unknown';
       if (idf.approved) return 'done';
       if (idf.status === 'rejected') return 'todo';

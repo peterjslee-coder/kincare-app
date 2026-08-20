@@ -97,6 +97,9 @@ describe("the wizard can count its own steps", () => {
 
   test("finishing the wizard no longer claims the ID is verified", () => {
     expect(wiz).not.toMatch(/documents uploaded, and identity verified/);
-    expect(wiz).toMatch(/ll check your ID and reach out/);
+    // v1.105.115 — the sentence moved into the handoff that replaced the celebration screen,
+    // and gained the part that matters most: nothing else is hers to do while it sits with us.
+    expect(wiz).toMatch(/Your ID is with us/);
+    expect(wiz).toMatch(/ll review it and reach out if we have any questions/);
   });
 });

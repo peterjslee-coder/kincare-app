@@ -19,7 +19,8 @@ const src = fs.readFileSync(
   path.join(__dirname, "..", "public", "js", "onboardingRoute.js"), "utf8");
 const w = {};
 new Function("window", src)(w);
-const { ONBOARDING_ROUTE, ONBOARDING_LEGS, ONBOARDING_ROUTE_LENGTH, routeItemState, resolveRoute } = w;
+const { ONBOARDING_ROUTE, ONBOARDING_LEGS, ONBOARDING_ROUTE_LENGTH, routeItemState, resolveRoute,
+        WIZARD_SCREEN_LEG, wizardLegForStep, wizardScreensInLeg } = w;
 
 // A caregiver who has just finished the wizard and is standing on her dashboard. Her ID is
 // submitted and sitting with us, which since v1.105.112 is what EVERY caregiver's dashboard
@@ -228,5 +229,42 @@ describe("copy", () => {
     expect(labels).toMatch(/A photo of your licence/);
     expect(labels).not.toMatch(/[Vv]erify your identity/);
     expect(labels).not.toMatch(/Stripe/);
+  });
+});
+
+describe("a screen and the item it feeds are different questions", () => {
+  test("screen 4 sits in leg 1, but feeds a leg 3 item", () => {
+    // The clearest case of screens-are-not-route-items. Screen 4 takes legal name, DOB and
+    // SSN-4 for the safety check — a leg 3 job — but she is telling us who she is, and the
+    // header must not jump to "Leg 3" at screen 4 and then walk backwards.
+    expect(wizardLegForStep(4).id).toBe("who");
+    expect(ONBOARDING_ROUTE.find((i) => i.id === "background-check").leg).toBe("work");
+  });
+
+  test("every wizard screen has a leg, except the handoff", () => {
+    for (let step = 1; step <= 8; step++) expect(wizardLegForStep(step)).not.toBeNull();
+    expect(wizardLegForStep(9)).toBeNull();
+  });
+
+  test("the legs a screen can belong to are legs that exist", () => {
+    const legIds = new Set(ONBOARDING_LEGS.map((l) => l.id));
+    for (const legId of Object.values(WIZARD_SCREEN_LEG)) {
+      if (legId !== null) expect(legIds.has(legId)).toBe(true);
+    }
+  });
+
+  test("a leg knows its own screens, and they do not overlap", () => {
+    const who = wizardScreensInLeg("who");
+    const bring = wizardScreensInLeg("bring");
+    expect(who).toEqual([1, 2, 3, 4]);
+    expect(bring).toEqual([5, 6, 7, 8]);
+    expect(who.filter((s) => bring.includes(s))).toEqual([]);
+  });
+
+  test("screens outnumber the jobs they feed, which is the whole point", () => {
+    // Leg 1 is four screens and three jobs. If these were forced to match, every new screen
+    // would become a new thing on her list — which is how 13 jobs became 16 things.
+    const wizardItemsInWho = ONBOARDING_ROUTE.filter((i) => i.leg === "who").length;
+    expect(wizardScreensInLeg("who").length).toBeGreaterThan(wizardItemsInWho);
   });
 });

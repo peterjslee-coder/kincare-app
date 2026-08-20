@@ -1011,10 +1011,15 @@ onboarding screen.** No backend changes — that is a constraint, not an observa
       (25). One list of 13 real jobs replacing the 16 things on screen, four item states
       (done / todo / unknown / **waiting on us**), leg grouping and the Stripe → safety-check
       dependency. Pure module, nothing renders it yet. ✅ **v1.105.114.**
-- [ ] **Commit 2 — the wizard.** Route header replaces the 9-segment progress bar
-      (`Leg 1 of 3 · Who you are — 2 of 4`, never "Step 7 of 9"); step 9's 🎉 "Welcome to
-      InPlace!" becomes a handoff that names the five things waiting on the dashboard. That
-      celebration is a finish line placed mid-route and is most of the quest feeling.
+- [x] **Commit 2 — the wizard.** `OnboardingRouteHeader` replaces the 9-segment progress bar:
+      three legs visible from screen one, current leg open, collapsed legs still NAMED on one
+      dim line, and a jobs count ("13 things in all — 13 left") that only goes down. Step 9's
+      🎉 "Welcome to InPlace!" is now a handoff naming the six dashboard items in order.
+      Also killed: the wizard still said **"✅ Identity verified!"** whenever the automated
+      checks agreed — the last surface contradicting v1.105.112 — and a "what happens next"
+      list claiming payment setup and background checks were "available soon" when both are
+      available immediately. ✅ **v1.105.115.** 16 render + source tests.
+      ⚠️ Header is inline-styled only (no new CSS rules), but eyeball it on a narrow phone.
 - [ ] **Commit 3 — the dashboard + resume.** First Steps renders legs 1–2 collapsed and ticked
       with leg 3 expanded, header "N of 13 left"; `app.js` `resume-onboarding` gets a "you got
       to Leg 2, here's what's done" screen first. Keep `firstStepsResolved` (v1.105.82) and the

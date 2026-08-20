@@ -1,3 +1,100 @@
+// ─── The route header (v1.105.115) ───
+//
+// Replaces a nine-segment progress bar that measured SCREENS. A caregiver told us onboarding
+// felt like "some mythic quest", and a bar that fills as you walk cannot answer the question
+// she is actually asking, which is "how much is left?" — because the wizard was never the
+// whole route. Seven more things waited on the dashboard and nothing here mentioned them.
+//
+// So this draws the whole path from `onboardingRoute.js`: three legs, all visible from screen
+// one, the current leg open and the others collapsed to a line. The number it shows is JOBS,
+// never screens — see the WIZARD_SCREEN_LEG note in the route module for why those differ.
+const OnboardingRouteHeader = window.OnboardingRouteHeader = ({ step, idSubmitted }) => {
+  // A caregiver in the wizard has done none of the dashboard work yet. Stated as a fact rather
+  // than left undefined, because an undefined Stripe status legitimately means "not asked" and
+  // would draw as `unknown` — and there is nothing to ask about yet.
+  const route = resolveRoute({
+    surface: 'wizard',
+    step,
+    identity: { submitted: !!idSubmitted },
+    stripe: { status: 'none' },
+    backgroundCheck: {},
+  });
+  const currentLeg = wizardLegForStep(step);
+
+  const marker = (state, isCurrent) => {
+    const base = {
+      width: '16px', height: '16px', borderRadius: '50%', flexShrink: 0,
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      fontSize: '10px', fontWeight: 700, marginTop: '1px', transition: 'background 0.3s',
+    };
+    if (state === 'done') return { ...base, background: 'var(--color-success)', color: 'var(--text-on-primary)' };
+    if (state === 'waiting') return { ...base, background: 'transparent', border: '2px solid var(--color-success)', color: 'var(--color-success)' };
+    if (isCurrent) return { ...base, background: 'var(--role-color)', color: 'var(--text-on-primary)' };
+    return { ...base, background: 'transparent', border: '2px solid var(--border-color)', color: 'var(--text-tertiary)' };
+  };
+
+  return (
+    <div style={{ marginBottom: '20px' }}>
+      {route.legs.map((leg) => {
+        const isCurrent = !!currentLeg && leg.id === currentLeg.id;
+        const legDone = leg.complete;
+        return (
+          <div key={leg.id} style={{ marginBottom: '8px' }}>
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: '8px',
+              fontSize: '12px', fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase',
+              color: isCurrent ? 'var(--role-color)' : legDone ? 'var(--color-success)' : 'var(--text-tertiary)',
+            }}>
+              <span style={marker(legDone ? 'done' : 'todo', isCurrent)}>{legDone ? '\u2713' : leg.n}</span>
+              <span>{leg.name}</span>
+              <span style={{ fontWeight: 500, letterSpacing: 0, textTransform: 'none', color: 'var(--text-tertiary)' }}>
+                {legDone ? 'done' : `${leg.done} of ${leg.total}`}
+              </span>
+            </div>
+            {!isCurrent && !legDone && (
+              // Collapsed, but NAMED. Property 1 is "you can see the end from the beginning",
+              // and a leg that shows only a count tells her how many surprises are coming
+              // rather than what they are. One dim line costs nothing and removes the ambush.
+              <div style={{
+                paddingLeft: '24px', marginTop: '2px', fontSize: '12px', lineHeight: '1.4',
+                color: 'var(--text-tertiary)',
+              }}>
+                {leg.items.map((i) => i.label).join('  \u00B7  ')}
+              </div>
+            )}
+            {isCurrent && (
+              <div style={{ paddingLeft: '24px', marginTop: '6px' }}>
+                {leg.items.map((item) => (
+                  <div key={item.id} style={{
+                    display: 'flex', alignItems: 'flex-start', gap: '8px', marginBottom: '4px',
+                    fontSize: '13px', lineHeight: '1.4',
+                    color: item.state === 'done' ? 'var(--text-tertiary)'
+                      : route.current && route.current.id === item.id ? 'var(--text-primary)' : 'var(--text-tertiary)',
+                    fontWeight: route.current && route.current.id === item.id ? 600 : 400,
+                  }}>
+                    <span style={marker(item.state, route.current && route.current.id === item.id)}>
+                      {item.state === 'done' ? '\u2713' : ''}
+                    </span>
+                    <span>
+                      {item.label}
+                      {item.state === 'waiting' && (
+                        <span style={{ color: 'var(--text-tertiary)', fontWeight: 400 }}> {'\u2014'} with us now</span>
+                      )}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+      <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginTop: '10px' }}>
+        {route.total} things in all {'\u2014'} {route.remaining} left
+      </div>
+    </div>
+  );
+};
+
 // ─── Caregiver Onboarding Flow ───
 // Multi-step wizard shown when a user visits ?invite=TOKEN
 // Creates user account + caregiver profile + uploads documents in one flow.
@@ -931,16 +1028,8 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
           )}
         </div>
 
-        {/* Progress bar */}
-        <div style={{ display: 'flex', gap: '4px', marginBottom: '28px' }}>
-          {Array.from({ length: TOTAL_STEPS }, (_, i) => (
-            <div key={i} style={{
-              flex: 1, height: '4px', borderRadius: '2px',
-              background: i + 1 <= step ? 'var(--role-color)' : 'var(--border-light)',
-              transition: 'background 0.3s',
-            }} />
-          ))}
-        </div>
+        {/* The route \u2014 the whole path, not this wizard's share of it (v1.105.115) */}
+        {step < TOTAL_STEPS && <OnboardingRouteHeader step={step} idSubmitted={!!idVerifyResult} />}
 
         {/* Offline banner */}
         {isOffline && (
@@ -958,12 +1047,15 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
           </div>
         )}
 
-        {/* Step label */}
-        <div style={{ textAlign: 'center', marginBottom: '20px' }}>
-          <span style={{ fontSize: '12px', color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1px' }}>
-            Step {step} of {TOTAL_STEPS} — {stepLabels[step]}
-          </span>
-        </div>
+        {/* This screen. Not "Step 7 of 9" \u2014 the number of screens is our business, not hers,
+            and it was never the number she wanted. */}
+        {step < TOTAL_STEPS && (
+          <div style={{ marginBottom: '16px' }}>
+            <span style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)' }}>
+              {stepLabels[step]}
+            </span>
+          </div>
+        )}
 
         {/* ─── Step 1: Create Account ─── */}
         {step === 1 && (
@@ -1749,14 +1841,22 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
 
             {/* Verify Result */}
             {idVerifyResult && (
-              <div style={{ padding: 14, borderRadius: 8, marginBottom: 16, background: idVerifyResult.matched ? 'var(--color-success-bg)' : '#fff8e1', border: idVerifyResult.matched ? '1px solid #c8e6c9' : '1px solid #ffe0b2' }}>
-                <div style={{ fontWeight: 600, fontSize: 14, color: idVerifyResult.matched ? 'var(--color-success)' : '#e65100', marginBottom: 4 }}>
-                  {idVerifyResult.matched ? '&#9989; Identity verified!' : '&#9203; Submitted for admin review'}
+              <div style={{ padding: 14, borderRadius: 8, marginBottom: 16, background: '#fff8e1', border: '1px solid #ffe0b2' }}>
+                {/* v1.105.115 \u2014 this screen still said "Identity verified!" whenever the
+                    automated checks agreed. They no longer verify anything: since v1.105.112 the
+                    status is ALWAYS pending and only a person writes 'approved'. The server has
+                    been sending `pendingReview: true` and a comment saying "never tell her she is
+                    verified" since that release; this was the one surface still saying it. Worse
+                    than merely wrong \u2014 she read "verified" here and then found the same step
+                    sitting unfinished on her dashboard, which is the contradiction the whole
+                    onboarding track exists to remove. */}
+                <div style={{ fontWeight: 600, fontSize: 14, color: '#e65100', marginBottom: 4 }}>
+                  &#9203; Sent
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
                   {idVerifyResult.matched
-                    ? 'Your selfie matches your ID. Moving to the final step...'
-                    : 'Your documents have been submitted. An admin will review and approve your identity.'}
+                    ? 'Your selfie matches your ID. We\u2019ll review it and reach out if we have any questions \u2014 nothing else for you to do.'
+                    : 'We\u2019ll review it and reach out if we have any questions \u2014 nothing else for you to do.'}
                 </div>
               </div>
             )}
@@ -1780,14 +1880,62 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
         )}
 
         {/* ─── Step 9: Review & Complete ─── */}
-        {step === 9 && (
+        {step === 9 && (() => {
+          // The same route the header has been drawing all along, so the list she reads here
+          // and the list she meets on the dashboard cannot drift apart.
+          const handoff = resolveRoute({
+            surface: 'wizard', step,
+            identity: { submitted: !!idVerifyResult },
+            stripe: { status: 'none' }, backgroundCheck: {},
+          });
+          return (
           <div className="card" style={{ padding: '24px' }}>
-            <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-              <div style={{ fontSize: '48px', marginBottom: '12px' }}>&#127881;</div>
-              <h2 style={{ fontSize: '22px', color: 'var(--role-color)', margin: '0 0 8px' }}>Welcome to InPlace!</h2>
-              <p style={{ color: 'var(--text-secondary)', fontSize: '15px', margin: 0 }}>
-                Your profile is set up and your documents are in. We{'\u2019'}ll check your ID and reach out if we have any questions.
+            {/* v1.105.115 \u2014 this was a finish line placed in the middle of the route.
+                Confetti, "Welcome to InPlace!", and then a second list of seven things she had
+                never been told about, waiting on the other side of the button. That single
+                screen is most of the "when does this ever end?" feeling: it is the moment the
+                quest reveals a second act. It is a handoff now \u2014 it names what is left,
+                by name, before she gets there. */}
+            <div style={{ marginBottom: '20px' }}>
+              <h2 style={{ fontSize: '20px', color: 'var(--role-color)', margin: '0 0 8px' }}>
+                That{'\u2019'}s the long part done{form.firstName ? ', ' + form.firstName : ''}.
+              </h2>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '15px', margin: 0, lineHeight: '1.5' }}>
+                Your profile is set up and your documents are in.
+                {handoff.waiting > 0 && ' Your ID is with us \u2014 we\u2019ll review it and reach out if we have any questions.'}
               </p>
+            </div>
+
+            {/* What is left, named. Property 4: nothing appears after she starts, so the list
+                she meets on the dashboard is the list she reads here. */}
+            <div style={{ background: 'var(--bg-primary)', borderRadius: '8px', padding: '16px', marginBottom: '20px' }}>
+              <h3 style={{ fontSize: '14px', color: 'var(--text-primary)', margin: '0 0 4px' }}>
+                {handoff.remaining === 1
+                  ? 'One thing left, on your dashboard'
+                  : handoff.remaining + ' things left, all on your dashboard'}
+              </h3>
+              <p style={{ fontSize: '12px', color: 'var(--text-tertiary)', margin: '0 0 12px' }}>
+                In this order {'\u2014'} each one takes a few minutes.
+              </p>
+              {handoff.legs.filter((leg) => leg.surface === 'hub').map((leg) => (
+                leg.items.map((item) => (
+                  <div key={item.id} style={{
+                    display: 'flex', alignItems: 'flex-start', gap: '8px', marginBottom: '8px',
+                    fontSize: '14px', lineHeight: '1.4',
+                    color: item.state === 'done' ? 'var(--text-tertiary)' : 'var(--text-primary)',
+                  }}>
+                    <span style={{
+                      width: '18px', height: '18px', borderRadius: '50%', flexShrink: 0, marginTop: '1px',
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: '10px', fontWeight: 700,
+                      background: item.state === 'done' ? 'var(--color-success)' : 'transparent',
+                      color: item.state === 'done' ? 'var(--text-on-primary)' : 'var(--text-tertiary)',
+                      border: item.state === 'done' ? 'none' : '2px solid var(--border-color)',
+                    }}>{item.state === 'done' ? '\u2713' : ''}</span>
+                    <span>{item.label}</span>
+                  </div>
+                ))
+              ))}
             </div>
 
             {/* Summary */}
@@ -1817,18 +1965,6 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
               </div>
             </div>
 
-            <div style={{ padding: '14px', background: 'var(--bg-warm)', borderRadius: '8px', marginBottom: '16px', border: '1px solid #ffe0c0' }}>
-              <p style={{ fontSize: '13px', color: 'var(--color-warning)', margin: 0, lineHeight: '1.5' }}>
-                <strong>What happens next:</strong>
-              </p>
-              <ul style={{ fontSize: '13px', color: 'var(--color-warning)', margin: '8px 0 0', paddingLeft: '20px', lineHeight: '1.8' }}>
-                <li>Complete your <strong>First Steps</strong> checklist on your dashboard</li>
-                <li>Set your rates, care preferences, and availability</li>
-                <li>Payment setup and background checks will be available soon from your dashboard</li>
-                <li>Once your profile is complete, you can start connecting with families!</li>
-              </ul>
-            </div>
-
             <div style={{ padding: '14px', background: 'var(--color-success-bg)', borderRadius: '8px', marginBottom: '16px', border: '1px solid #c8e6c9' }}>
               <p style={{ fontSize: '13px', color: 'var(--color-success)', margin: 0, lineHeight: '1.5' }}>
                 As an independent contractor (1099), you set your own schedule, rates, and choose which care requests to accept.
@@ -1841,7 +1977,8 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
               borderRadius: '8px', fontSize: '16px', fontWeight: 600, cursor: 'pointer',
             }}>Go to My Dashboard</button>
           </div>
-        )}
+          );
+        })()}
       </div>
     </div>
   );
