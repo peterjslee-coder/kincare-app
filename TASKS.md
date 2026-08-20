@@ -375,9 +375,22 @@
       impersonate the platform. `tests/integration/supportThreadIsNotADm.itest.js` (4).
       Not only a label problem: `safety.js:175` refuses to let anyone block "InPlace Support",
       so the merged thread was **unblockable** too.
-      ⚠️ **Left for Pete:** the existing merged Pete↔Julia thread is not migrated. His old
-      personal messages stay in the support thread; a new DM starts clean. Splitting them
-      would mean guessing which past message was which, so it is a decision, not a script.
+      ✅ **The existing merged thread is repaired by v1.105.104** —
+      `scripts/repair-support-dm-split.js`. I first told Pete the split would be guesswork.
+      **It is not:** `messages.sender_label` already records it. `admin/safety.js` stamps
+      `InPlace Support` on everything sent AS the platform; every ordinary send path leaves it
+      NULL. The only unlabelled case is the other party's replies, which follow whatever they
+      were replying to.
+      Two outcomes: **CLEAR** (named `InPlace Support` but the platform never actually spoke —
+      it was a DM wearing the wrong name, so clear the name, no message moves) and **SPLIT**
+      (holds both — the personal half moves to a real DM). Report-only by default.
+      ⚠️ The trap it avoids: a thread's visible history starts at
+      `COALESCE(cm.joined_at, c.created_at)` (v1.105.92), so moving an old message into a newer
+      DM delivers it into the **invisible** half — the repair would report success and Pete's
+      messages would vanish. The destination is back-dated. Validated in both directions:
+      without the back-dating, two integration tests fail.
+      🔴 **[NEEDS YOUR HANDS]** Railway service console, after a snapshot:
+      `node scripts/repair-support-dm-split.js` to read it, then `--apply`.
       Noticed in passing, not fixed: `kindred.js` names its relay `Kindred (<name>)`, which is
       not in the reserved list, so `messages.js:113` retitles it to the Kindred system user's
       first/last name in the conversation list.
@@ -410,8 +423,7 @@
       after a refetch; and the live append had no dedupe, so a socket reconnect could show the
       same message twice. `tests/openThreadPush.test.js` (20, seven of them running the
       registry rather than reading it).
-      ⚠️ **Still true for Pete until the duplicate threads are reconciled** — see the note under
-      7972ed90. His two Pete↔Julia rows are not merged.
+      The duplicate Pete↔Julia rows are reconciled by the repair script under 7972ed90.
 
 - [ ] **A job shows two different rates.** (dc5e86b5, Julia) *"$24 and then $29 listed on same
       job (doesn't match up)."* Money that disagrees with itself on the same card. In the same

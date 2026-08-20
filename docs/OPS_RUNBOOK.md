@@ -94,3 +94,30 @@ feature work → push to staging → verify on staging URL
 Emergency bypass (CI is broken but a prod fix can't wait): Railway →
 service → Deployments → "Deploy latest commit" manually, or temporarily
 toggle "Wait for CI" off. Turn it back on after.
+
+---
+
+## One-off repair: personal DMs stuck in the "InPlace Support" thread
+
+`scripts/repair-support-dm-split.js` (v1.105.104)
+
+Until v1.105.102, seven lookups asked "is there already a direct conversation containing these
+two users?" with no `ORDER BY` and no `LIMIT`. An admin who is also a person already had an
+`InPlace Support` row with that user, so personal messages could land in the platform's thread
+— which is why Julia saw Pete as "InPlace support". v1.105.102 stops it recurring; this undoes
+what already happened.
+
+The split is read from `messages.sender_label`, not guessed: `admin/safety.js` stamps
+`InPlace Support` on anything sent as the platform, ordinary sends leave it NULL, and the other
+party's unlabelled replies follow whatever they were replying to.
+
+```bash
+# Railway → service → Console. Take a snapshot first (manual pg_dump above).
+node scripts/repair-support-dm-split.js            # report only — changes nothing
+node scripts/repair-support-dm-split.js --apply
+node scripts/repair-support-dm-split.js --apply --only <conversationId>
+```
+
+Read the report before applying. `CLEAR` means the thread was only ever a DM wearing the wrong
+name and just gets untitled — no message moves. `SPLIT` lists the messages that will move.
+It never deletes anything, and re-running it is a no-op.
