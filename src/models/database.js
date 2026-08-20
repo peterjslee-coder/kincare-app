@@ -2023,6 +2023,34 @@ async function initializeDatabase() {
         `ALTER TABLE family_visits ADD COLUMN IF NOT EXISTS photos TEXT`,
       ],
     },
+    {
+      // v1.105.112 — the AI stops deciding identity; it recommends, and a person decides.
+      //
+      // `ai_recommendation` holds what the model would have said ('recommend_approve',
+      // 'recommend_reject', or 'abstain' below the confidence threshold). It is stored NEXT TO
+      // the document rather than in `status`, because a recommendation is not a decision:
+      // `status` stays 'pending' until an admin grants or rejects, and nothing in the app may
+      // gate on this column.
+      //
+      // Also backfills the identity documents the AI approved on its own before today. They
+      // are moved back to 'pending' — with the old automated verdict preserved here — so they
+      // appear in Doc Review and get the human look they never had. Pete: "I want to review
+      // everything an AI clears."
+      id: "024_identity_ai_recommendation",
+      statements: [
+        `ALTER TABLE verified_documents ADD COLUMN IF NOT EXISTS ai_recommendation TEXT`,
+        `ALTER TABLE verified_documents ADD COLUMN IF NOT EXISTS ai_recommendation_reason TEXT`,
+        `UPDATE verified_documents
+            SET ai_recommendation = 'recommend_approve',
+                ai_recommendation_reason = 'Approved automatically before v1.105.112, with no person asked.',
+                status = 'pending',
+                is_verified = 0
+          WHERE category = 'identity'
+            AND document_type != 'selfie'
+            AND status = 'approved'
+            AND admin_reviewed_by IS NULL`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

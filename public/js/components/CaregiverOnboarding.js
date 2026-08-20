@@ -108,10 +108,14 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
 
   // ─── Onboarding event tracking ───
   // Sends events to server for admin visibility (fire-and-forget, never blocks UI)
+  // v1.105.112 — this analytics map was off too, and in a different way from stepLabels: it
+  // carried a "Background Check Payment" step at 7 that the wizard does not have, shifting
+  // every name after it. So every onboarding event since has been filed under the wrong step
+  // name, and the admin funnel has been measuring the wrong thing. Keys 1–9, matching the JSX.
   const stepNames = {
     1: 'Create Account', 2: 'Disclosures & Terms', 3: 'Personal Info',
     4: 'Background Check Info', 5: 'Certifications', 6: 'Academic Program',
-    7: 'Background Check Payment', 8: 'Document Upload', 9: 'Identity Verification', 10: 'Review & Complete',
+    7: 'Document Upload', 8: 'Identity Verification', 9: 'Review & Complete',
   };
   const trackEvent = (eventType, stepNum, extra = {}) => {
     try {
@@ -841,15 +845,21 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
   const fieldGroup = { marginBottom: '16px' };
   const rowStyle = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' };
 
+  // v1.105.112 — EIGHT keys for NINE steps, and off by one from step 8: the wizard read
+  // "Step 8 of 9 — Review & Complete" over an ID form, then "Step 9 of 9 — undefined".
+  // A wizard that cannot count its own steps is a poor argument that you are nearly there,
+  // which is exactly the feeling this flow is being rebuilt to fix.
+  // Softer wording too: say what the person does, not what the system records.
   const stepLabels = {
-    1: 'Create Account',
-    2: 'Disclosures & Terms',
-    3: 'Personal Info',
-    4: 'Background Check Info',
+    1: 'Create your account',
+    2: 'The paperwork',
+    3: 'About you',
+    4: 'For the safety check',
     5: 'Certifications',
-    6: 'Academic Program',
-    7: 'Document Upload',
-    8: 'Review & Complete',
+    6: 'Your training programme',
+    7: 'Documents',
+    8: 'A photo of your licence',
+    9: 'One last look',
   };
 
   // Error summary banner — shows at top of step when validation fails
@@ -1658,9 +1668,9 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
         {/* ─── Step 8: Identity Verification (Selfie + ID) ─── */}
         {step === 8 && (
           <div className="card" style={{ padding: '24px' }}>
-            <h2 style={{ fontSize: '18px', color: 'var(--text-primary)', marginTop: 0, marginBottom: '4px' }}>&#128247; Identity Verification</h2>
+            <h2 style={{ fontSize: '18px', color: 'var(--text-primary)', marginTop: 0, marginBottom: '4px' }}>&#128247; A photo of your licence</h2>
             <p style={{ color: 'var(--text-tertiary)', fontSize: '13px', marginTop: 0, marginBottom: '12px' }}>
-              Take a selfie and a photo of your government-issued ID. This helps us verify your identity and keep everyone safe.
+              A selfie and a photo of your government-issued ID. We{'\u2019'}ll review it and reach out if we have any questions.
             </p>
             <div style={{ padding: '10px 14px', background: '#fff8e1', borderRadius: '8px', marginBottom: '20px', border: '1px solid #ffe0b2' }}>
               <p style={{ fontSize: '12px', color: 'var(--text-brown)', margin: 0, lineHeight: '1.5' }}>
@@ -1776,7 +1786,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
               <div style={{ fontSize: '48px', marginBottom: '12px' }}>&#127881;</div>
               <h2 style={{ fontSize: '22px', color: 'var(--role-color)', margin: '0 0 8px' }}>Welcome to InPlace!</h2>
               <p style={{ color: 'var(--text-secondary)', fontSize: '15px', margin: 0 }}>
-                Your profile has been created, documents uploaded, and identity verified.
+                Your profile is set up and your documents are in. We{'\u2019'}ll check your ID and reach out if we have any questions.
               </p>
             </div>
 
@@ -1791,7 +1801,9 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
                 <div><span style={{ color: 'var(--text-tertiary)' }}>Caretaking experience:</span> {form.yearsExperience || 0} years</div>
                 <div><span style={{ color: 'var(--text-tertiary)' }}>Certifications:</span> {form.certifications.filter(c => c.certType).map(c => c.certType).join(', ') || 'None'}</div>
                 <div><span style={{ color: 'var(--text-tertiary)' }}>Documents:</span> {form.documents.length} uploaded</div>
-                <div><span style={{ color: 'var(--text-tertiary)' }}>Identity:</span> {idVerifyResult?.matched ? 'Verified' : 'Pending admin review'}</div>
+                {/* v1.105.112 — the AI no longer approves anything, so this can no longer say
+                    "Verified" the moment the checks agree. It says what is true: it is with us. */}
+                <div><span style={{ color: 'var(--text-tertiary)' }}>ID:</span> {idVerifyResult ? 'Sent \u2014 we\u2019ll review it' : 'Not sent yet'}</div>
                 <div><span style={{ color: 'var(--text-tertiary)' }}>Travel radius:</span> {form.travelRadius} miles</div>
                 {form.comfortableWithPets !== null && (
                   <div><span style={{ color: 'var(--text-tertiary)' }}>Pets:</span> {form.comfortableWithPets ? 'Comfortable' : 'Prefer pet-free'}</div>

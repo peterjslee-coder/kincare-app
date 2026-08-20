@@ -9,6 +9,7 @@ const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { authenticate } = require("../middleware/auth");
 const { classifyDocument } = require("../utils/documentAI");
+const { identityDecision, verdictLabel, VERDICT } = require("../utils/identityDecision");
 const { MODEL_SONNET } = require("../utils/aiModels");
 const storage = require("../utils/storage"); // v1.91.0 — env-gated R2 offload for document blobs
 const router = express.Router();
@@ -156,14 +157,22 @@ router.post("/verify-id", authenticate, async (req, res) => {
       allConcerns.push("Selfie was skipped — face comparison not performed");
     }
 
-    // ─── Decision logic ───
-    // Auto-approve: name matches + valid doc + DOB matches + faces similar enough
+    // ─── Decision — v1.105.112: the AI no longer makes one ───
+    //
+    // The second of the two doors into identity verification (src/utils/identity.js explains
+    // why there are two). Both wrote status='approved' outright when the checks agreed, with
+    // nobody asked. Pete's call: "I want to review everything an AI clears. Below a confidence
+    // of, say, 90%, it doesn't even decide...I do."
     const facePassed = faceComparison.skipped || faceComparison.similar || faceComparison.confidence >= 0.5;
-    const isVerified = nameMatched && classifyResult.isValid && dobMatched && facePassed;
-    // Human review: anything questionable at all
-    const needsHumanReview = !isVerified ||
-      (classifyResult.confidence || 0) < 0.8 ||
-      (!faceComparison.skipped && faceComparison.confidence < 0.7);
+    const looksRight = nameMatched && classifyResult.isValid && dobMatched && facePassed;
+    const decision = identityDecision({
+      looksRight,
+      docConfidence: classifyResult.confidence,
+      faceConfidence: faceComparison.confidence,
+      faceSkipped: !!faceComparison.skipped,
+    });
+    const isVerified = looksRight;   // "the checks agreed", never "you are verified"
+    const needsHumanReview = true;
 
     // Build ai_classification JSON for admin panel compatibility (matches format from classifyDocument)
     const aiClassificationForAdmin = {
@@ -190,8 +199,8 @@ router.post("/verify-id", authenticate, async (req, res) => {
     // Original v1.36.0 schema NOT NULL columns: id, owner_type, owner_id, uploaded_by, category, document_type, file_data
     const docId = uuid();
     await db.prepare(
-      `INSERT INTO verified_documents (id, owner_id, owner_type, uploaded_by, category, document_type, file_data, mime_type, status, ai_classification, extracted_data, ai_confidence, ai_concerns, is_verified, verified_at, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO verified_documents (id, owner_id, owner_type, uploaded_by, category, document_type, file_data, mime_type, status, ai_classification, extracted_data, ai_confidence, ai_concerns, ai_recommendation, ai_recommendation_reason, is_verified, verified_at, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       docId,
       ownerId,
@@ -201,7 +210,7 @@ router.post("/verify-id", authenticate, async (req, res) => {
       classifyResult.classification || 'drivers_license',
       await storage.storeFileData("identity", idPhotoBase64), // v1.91.0
       mimetype,
-      needsHumanReview ? 'pending' : 'approved',
+      decision.status,                                         // always 'pending'
       JSON.stringify(aiClassificationForAdmin),                // ai_classification — for admin panel
       JSON.stringify({
         extractedName, registeredName, extractedDOB,
@@ -211,7 +220,10 @@ router.post("/verify-id", authenticate, async (req, res) => {
       }),
       classifyResult.confidence || 0,
       JSON.stringify(allConcerns),
-      isVerified ? 1 : 0,
+      decision.verdict,
+      decision.reason,
+      0,                                                       // a human's word, not the model's
+      null,
       new Date().toISOString(),
       new Date().toISOString()
     );
@@ -250,17 +262,12 @@ router.post("/verify-id", authenticate, async (req, res) => {
     try {
       const { notifyAdmins } = require("./push");
       notifyAdmins("identity_submitted", {
-        // v1.105.70 — say WHICH outcome happened. The AI does not merely queue these: when the
-        // name, document validity, DOB and face all match it writes status='approved' outright
-        // and no human is ever asked. Julia's government ID was approved that way, and the admin
-        // learned of it only because he went looking days later. An automated approval of
-        // someone's identity is MORE worth telling a person about than one that stops for review,
-        // not less — it is the case where nobody chose.
-        title: needsHumanReview ? "ID verification needs review" : "ID auto-approved — worth a look",
-        body: needsHumanReview
-          ? `${req.user.firstName || "Someone"} submitted a selfie and photo ID.`
-          : `${req.user.firstName || "Someone"} submitted a selfie and photo ID, and it was approved automatically. No person has reviewed it.`,
-        data: { type: "identity_submitted", userId: req.user.id, documentId: docId, autoApproved: !needsHumanReview },
+        // v1.105.112 — there is no longer an "auto-approved" case. Every submission waits on a
+        // person, and the notification says which way the AI leans so the reviewer knows
+        // whether this is a formality or a real question.
+        title: "ID waiting on your review",
+        body: `${req.user.firstName || "Someone"} submitted a selfie and photo ID. ${verdictLabel(decision.verdict)}${decision.verdict === VERDICT.ABSTAIN ? ` (${Math.round(decision.confidence * 100)}% — below the threshold).` : "."}`,
+        data: { type: "identity_submitted", userId: req.user.id, documentId: docId, aiRecommendation: decision.verdict },
       });
     } catch (e) { console.error("[identity] admin notify failed:", e.message); }
 

@@ -1163,8 +1163,22 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
     // incomplete with nothing telling them why or where to go. `idVerified` was already being
     // computed a few lines above and thrown away.
     { id: 'identity',
-      label: 'Verify your identity',
-      desc: 'A selfie and a photo of your government-issued ID. Families are inviting you into their home — this is the step that lets them know who you are. A person reviews it.',
+      // v1.105.112 — softer, and true. It used to read "Verify your identity" / "A person
+      // reviews it." The first shouted; the second was wrong in the common case, because the
+      // AI approved most of these outright and nobody was asked (that is fixed in the same
+      // release — a person really does review it now).
+      label: 'A photo of your licence',
+      desc: 'A selfie and a photo of your government-issued ID. Families are inviting you into their home — this is the step that lets them know who you are. We\u2019ll review it and reach out if we have any questions.',
+      // v1.105.112 — THREE states, not two.
+      //
+      // Pete: "you finish...and it says you still haven't verified your ID (but you did) and
+      // it's like, when does this ever end?"
+      //
+      // `done: idApproved` was false while `idVerification` was still loading, so the step
+      // drew UNTICKED with no explanation — v1.105.75 rightly suppresses the prompt in flight,
+      // which left nothing at all. Done, not done, and NOT KNOWN YET are three different
+      // things, and the third must never render as the second.
+      unknown: !idVerification.loaded,
       done: idApproved,
       // v1.105.75 — while the answer is still in flight, prompt for nothing. Telling an
       // approved caregiver to photograph her ID because a fetch hasn't returned is how this
@@ -1179,7 +1193,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         : (idSubmitted && !idApproved
             ? (idVerification.status === 'rejected'
                 ? 'Your ID could not be verified. Tap to submit a clearer photo.'
-                : 'Submitted — waiting on a person to review it. You don’t need to do anything else.')
+                : 'Sent \u2014 we\u2019ll review it and reach out if we have any questions. Nothing else for you to do.')
             : null) },
     { id: 'security', label: 'Make your account more secure', desc: 'Set up two-factor authentication or biometrics to protect your account', done: securityReviewed, missing: !securityReviewed ? 'Enable 2FA or biometrics in Settings' : null },
     { id: 'preferences', label: 'Select your care preferences', desc: 'Your selections help us match you to compatible clients and allow you to voice your availability for different types of clients', done: hasPreferences, missing: !hasPreferences ? 'Select all preferences and save' : null },
@@ -1496,9 +1510,9 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontSize: '13px', fontWeight: 700, flexShrink: 0, marginTop: '1px',
                   background: s.done ? 'var(--color-success)' : 'transparent',
-                  color: s.done ? 'var(--text-on-primary)' : 'var(--accent-color)',
-                  border: s.done ? '2px solid var(--color-success)' : '2px solid var(--accent-color)',
-                }}>{s.done ? '\u2713' : (idx + 1)}</div>
+                  color: s.done ? 'var(--text-on-primary)' : s.unknown ? 'var(--text-muted)' : 'var(--accent-color)',
+                  border: s.done ? '2px solid var(--color-success)' : s.unknown ? '2px solid var(--border-color)' : '2px solid var(--accent-color)',
+                }}>{s.done ? '\u2713' : s.unknown ? '\u00B7\u00B7\u00B7' : (idx + 1)}</div>
                 <div style={{ flex: 1 }}>
                   <div style={{
                     fontSize: '14px', fontWeight: 600,
@@ -1506,13 +1520,26 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                     textDecoration: s.done ? 'line-through' : 'none',
                     textDecorationColor: s.done ? 'var(--color-success)' : undefined,
                   }}>{s.label}</div>
-                  {!s.done && s.desc && <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginTop: '2px' }}>{s.desc}</div>}
-                  {!s.done && s.missing && (
+                  {/* v1.105.112 — "not known yet" is its own state. While the app is still
+                      finding out, say so plainly instead of drawing the step as undone. Pete:
+                      "you finish...and it says you still haven't verified your ID (but you
+                      did) and it's like, when does this ever end?" */}
+                  {s.unknown && (
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>Checking{'\u2026'}</div>
+                  )}
+                  {!s.done && !s.unknown && s.desc && <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginTop: '2px' }}>{s.desc}</div>}
+                  {!s.done && !s.unknown && s.missing && (
                     <div style={{ marginTop: '6px', padding: '6px 10px', background: 'var(--bg-warm)', border: '1px solid var(--color-warning)', borderRadius: '6px', fontSize: '11px', color: 'var(--color-warning)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <span style={{ fontSize: '13px' }}>{'\u26A0\uFE0F'}</span> {s.missing}
                     </div>
                   )}
-                  {s.done && s.warning && (
+                  {/* v1.105.112 — was `s.done && s.warning`, and the identity warning is only
+                      ever set when the document is submitted and NOT yet approved — i.e. when
+                      `done` is false. So "Submitted — waiting on review. You don't need to do
+                      anything else" has never once been visible to anyone. It is the sentence
+                      that answers "when does this ever end?", and from this release on it is
+                      the normal case for every caregiver. */}
+                  {!s.unknown && s.warning && (
                     <div style={{ marginTop: '6px', padding: '8px 10px', background: 'var(--color-warning-bg)', border: '1px solid var(--color-warning)', borderRadius: '6px', fontSize: '12px', color: 'var(--color-warning)', display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
                       <span style={{ fontSize: '13px', flexShrink: 0 }}>{'\u26A0\uFE0F'}</span> <span>{s.warning}</span>
                     </div>

@@ -151,16 +151,21 @@ describe("an AI decision about someone's identity is not silent", () => {
   const appSrc = code("public/js/app.js");
   const identity = code("src/utils/identity.js");
 
-  test("the notice says whether a human is needed or the AI already decided", () => {
-    // The AI does not merely queue these: matching name + valid document + matching DOB +
-    // matching face writes status='approved' outright, with nobody in the loop.
-    for (const [name, src] of [["wizard", cg], ["My Account", self]]) {
-      expect(`${name}: distinguishes`).toBe(
-        /needsHumanReview \? "ID verification needs review" : "ID auto-approved/.test(src)
-          ? `${name}: distinguishes` : `${name}: DOES NOT`
-      );
-      expect(src).toMatch(/No person has reviewed it/);
-      expect(src).toMatch(/autoApproved: !needsHumanReview/);
+  // v1.105.112 — CHANGED DELIBERATELY, and the invariant got STRONGER, not weaker.
+  //
+  // This used to require the notice to distinguish "needs review" from "auto-approved", which
+  // was the best available fix while the AI still approved IDs on its own. Pete's call on
+  // Aug 19 removed the second case entirely: "I want to review everything an AI clears."
+  // There is no automated approval left to warn him about. What the notice must carry now is
+  // which way the model leans, so he knows whether he is confirming a formality or answering
+  // a real question.
+  test("every submission notifies, and says which way the AI leans", () => {
+    for (const [, src] of [["wizard", cg], ["My Account", self]]) {
+      expect(src).toMatch(/title: "ID waiting on your review"/);
+      expect(src).toMatch(/verdictLabel\(decision\.verdict\)/);
+      expect(src).toMatch(/aiRecommendation: decision\.verdict/);
+      expect(src).not.toMatch(/autoApproved/);
+      expect(src).not.toMatch(/No person has reviewed it/);
     }
   });
 

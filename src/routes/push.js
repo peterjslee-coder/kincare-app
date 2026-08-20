@@ -265,6 +265,22 @@ async function sendPushToAdmins(eventType, payload) {
 
 // ─── Utility: Send email to admin users ───
 // Fire-and-forget email to all admin accounts for a given event type
+// v1.105.112 — admin events that default to email ON rather than OFF.
+//
+// Pete: "I haven't gotten a doc review notice on anything yet."
+//
+// He hadn't, and this is why. Admin email was opt-IN with a default of OFF
+// (`prefs[...] !== true`), so unless he had explicitly set `email_identity_submitted` in his
+// notification prefs — a screen he had no reason to visit — the only signal was a push, which
+// is fire-and-forget and gone the moment it is missed.
+//
+// That is an acceptable default for "someone posted a job". It is not acceptable for the one
+// class of event where a person is BLOCKED until he acts. Since v1.105.112 no caregiver can
+// finish onboarding until Pete reviews their ID, so a missed notification is not noise — it
+// is somebody sitting still. These few events are opt-OUT instead: he can still turn them
+// off, but he has to mean it.
+const EMAIL_ON_BY_DEFAULT = new Set(["identity_submitted"]);
+
 async function sendEmailToAdmins(eventType, { subject, body }) {
   try {
     const { sendEmail, brandedHtml } = require("../utils/email");
@@ -272,7 +288,9 @@ async function sendEmailToAdmins(eventType, { subject, body }) {
     const admins = await db.prepare("SELECT id, email, notification_prefs FROM users WHERE is_admin = 1").all();
     for (const admin of admins) {
       const prefs = admin.notification_prefs ? JSON.parse(admin.notification_prefs) : {};
-      if (prefs[`email_${eventType}`] !== true) continue; // email is opt-IN (default off)
+      const pref = prefs[`email_${eventType}`];
+      const wanted = EMAIL_ON_BY_DEFAULT.has(eventType) ? pref !== false : pref === true;
+      if (!wanted) continue;
       const html = brandedHtml({
         title: "InPlace Admin",
         greeting: subject,

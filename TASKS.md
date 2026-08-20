@@ -345,6 +345,59 @@
 
 ### P1
 
+- [x] **⛔ The AI approved government IDs. It doesn't any more.** (Pete, Aug 19)
+      *"I want to review everything an AI clears. Below a confidence of, say, 90%, it doesn't
+      even decide...I do. But I haven't gotten a doc review notice on anything yet."*
+      ✅ **Shipped v1.105.112.** Both verify-id endpoints wrote
+      `status = needsHumanReview ? 'pending' : 'approved'` — matching name + valid document +
+      matching DOB + matching face meant **the AI approved someone's government ID outright and
+      no person was ever asked.** Review was the exception, not the rule. Julia's was approved
+      that way.
+      Now: `src/utils/identityDecision.js`. **Status is always `pending`** — there is no code
+      path returning anything else, and only an admin action writes `approved`. Above **90%**
+      the model records a *recommendation* beside the document (`ai_recommendation`); below it
+      the model records **no opinion at all**, because a low-confidence guess anchors the
+      reviewer on a number the model itself won't stand behind. Nothing in the app gates on the
+      recommendation — `status` is still the only thing that means anything.
+      Confidence is **the weakest link it measured, not the strongest**: a 97% document read
+      next to a 40% face match is a 40% answer. (That exact pair of numbers is v1.105.73.) A
+      *skipped* face comparison is not a zero — "couldn't measure" is not "measured badly".
+      **Migration 024 re-queues the ones already approved this way**, preserving the old verdict
+      as the recommendation, and leaves anything a person actually reviewed alone.
+      **Why he never got a notice:** admin email was opt-**IN** with a default of **off**
+      (`prefs[...] !== true`), so unless he had visited a prefs screen he had no reason to
+      visit, the only signal was a push — fire-and-forget, gone the moment it's missed.
+      `identity_submitted` is now opt-**OUT**. He can still turn it off, but he has to mean it.
+      ⚠️ **This raises the cost of every signup** — no caregiver finishes onboarding until Pete
+      looks. That is the trade he chose, and it is why the notification had to be fixed in the
+      same release: a queue nobody is told about is not review, it's a delay.
+      Lawyer agenda item **L1b closed** — in the safer direction, before counsel saw it.
+      `tests/identityDecision.test.js` (28),
+      `tests/integration/identityNeverAutoApproves.itest.js` (7, real schema).
+
+- [x] **⛔ "It says you still haven't verified your ID (but you did)."** (Pete, Aug 19)
+      ✅ **Fixed v1.105.112, and it was never a feeling.** The First Steps identity item is
+      `done: idApproved`; while `idVerification` was still loading, `idApproved` was false, so
+      the step drew **unticked** — and v1.105.75 rightly suppresses the "take a photo of your
+      ID" prompt while the answer is in flight, which left the row with **no explanation at
+      all**. An unknown answer rendered identically to a negative one.
+      **The rule, now enforced: a checklist item has THREE states — done, not done, and NOT
+      KNOWN YET — and the third must never draw as the second.** Same family as "a broken
+      feature and a switched-off feature look identical".
+      Found in the same pass: **the "waiting on review" message had never once been visible.**
+      It rendered under `s.done && s.warning`, but that warning is only ever set when the
+      document is submitted and NOT approved — i.e. when `done` is false. It is the sentence
+      that answers *"when does this ever end?"*, and from v1.105.112 it is the normal case for
+      every caregiver.
+      Also: `TOTAL_STEPS = 9` with 8 `stepLabels` off by one from step 8 → *"Step 9 of 9 —
+      undefined"*; and `stepNames` (the analytics map) carried a "Background Check Payment"
+      step the wizard doesn't have, so **every onboarding event has been filed under the wrong
+      step name** and the admin funnel measured the wrong thing. Both fixed.
+      Copy softened per Pete — *"'A photo of your license' is way better than 'VERIFY YOUR
+      IDENTITY!'"* — and made true: *"We'll review it and reach out if we have any questions"*
+      replaces *"A person reviews it"*, which was false in the common case until this release.
+      `tests/threeStateChecklist.test.js` (13).
+
 - [x] **The signup age gate gave a different answer depending on where the server was.**
       ✅ **Fixed v1.105.102.** `ageInYears` (`src/utils/age.js`) parsed the date of birth as
       bare calendar integers but read the reference date with `getFullYear/getMonth/getDate` —

@@ -4,6 +4,7 @@ const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { authenticate } = require("../middleware/auth");
 const { classifyDocument } = require("../utils/documentAI");
+const { identityDecision, verdictLabel, VERDICT } = require("../utils/identityDecision");
 const { MODEL_SONNET } = require("../utils/aiModels");
 const storage = require("../utils/storage"); // v1.91.0 — env-gated R2 offload for document blobs
 
@@ -252,10 +253,25 @@ router.post("/verify-id", async (req, res) => {
       allConcerns.unshift(`Face comparison: ${faceComparison.explanation} (confidence: ${Math.round(faceComparison.confidence * 100)}%)`);
     }
 
-    // Decision
+    // ─── Decision — v1.105.112: the AI no longer makes one ───
+    //
+    // Pete: "I want to review everything an AI clears. Below a confidence of, say, 90%, it
+    // doesn't even decide...I do." This used to write status='approved' outright whenever the
+    // checks agreed, and no person was ever asked. Now every document lands as 'pending'; the
+    // model's opinion is stored beside it as a recommendation, and it withholds even that
+    // below the threshold. See src/utils/identityDecision.js.
     const facePassed = faceComparison.skipped || faceComparison.similar || faceComparison.confidence >= 0.5;
-    const isVerified = nameMatched && classifyResult.isValid && dobMatched && facePassed;
-    const needsHumanReview = !isVerified || (classifyResult.confidence || 0) < 0.8 || (!faceComparison.skipped && faceComparison.confidence < 0.7);
+    const looksRight = nameMatched && classifyResult.isValid && dobMatched && facePassed;
+    const decision = identityDecision({
+      looksRight,
+      docConfidence: classifyResult.confidence,
+      faceConfidence: faceComparison.confidence,
+      faceSkipped: !!faceComparison.skipped,
+    });
+    // Kept for the response shape the client already reads. `matched` means "the checks
+    // agreed", never "you are verified" — the caregiver-facing copy says a person will look.
+    const isVerified = looksRight;
+    const needsHumanReview = true;
 
     const aiClassification = {
       classification: classifyResult.classification, confidence: classifyResult.confidence,
@@ -268,20 +284,22 @@ router.post("/verify-id", async (req, res) => {
     // Store ID document
     const docId = uuid();
     await db.prepare(
-      `INSERT INTO verified_documents (id, owner_id, owner_type, uploaded_by, category, document_type, file_data, mime_type, status, ai_classification, extracted_data, ai_confidence, ai_concerns, is_verified, verified_at, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO verified_documents (id, owner_id, owner_type, uploaded_by, category, document_type, file_data, mime_type, status, ai_classification, extracted_data, ai_confidence, ai_concerns, ai_recommendation, ai_recommendation_reason, is_verified, verified_at, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       docId, profile.id, 'caregiver', req.user.id, 'identity',
       classifyResult.classification || 'drivers_license',
       await storage.storeFileData("identity", idPhotoBase64), mimetype, // v1.91.0
 
-      needsHumanReview ? 'pending' : 'approved',
+      decision.status,                  // always 'pending' — only an admin writes 'approved'
       JSON.stringify(aiClassification),
       JSON.stringify({ extractedName, registeredName, extractedDOB, issuingAuthority, expiryDate, confidence: classifyResult.confidence, nameMatched, dobMatched }),
       classifyResult.confidence || 0,
       JSON.stringify(allConcerns),
-      isVerified ? 1 : 0,
-      new Date().toISOString(),
+      decision.verdict,
+      decision.reason,
+      0,                                // is_verified is a human's word, not the model's
+      null,                             // and so is verified_at
       new Date().toISOString()
     );
 
@@ -299,7 +317,9 @@ router.post("/verify-id", async (req, res) => {
     ).run(
       selfieDocId, profile.id, 'caregiver', req.user.id,
       'identity', 'selfie', await storage.storeFileData("identity", selfieBase64), selfieMime, // v1.91.0
-      'approved', JSON.stringify({ linkedIdDocId: docId, faceComparison }),
+      // v1.105.112 — 'pending', like the ID it belongs to. A selfie the AI filed as approved
+      // was a second automated verdict nobody asked for.
+      'pending', JSON.stringify({ linkedIdDocId: docId, faceComparison }),
       faceComparison.skipped ? null : (typeof faceComparison.confidence === 'number' ? faceComparison.confidence : null),
       JSON.stringify(faceComparison.skipped ? [] : (faceComparison.similar ? [] : [`Face comparison: ${faceComparison.explanation || 'faces did not match'}`])),
       new Date().toISOString()
@@ -322,16 +342,20 @@ router.post("/verify-id", async (req, res) => {
         // learned of it only because he went looking days later. An automated approval of
         // someone's identity is MORE worth telling a person about than one that stops for review,
         // not less — it is the case where nobody chose.
-        title: needsHumanReview ? "ID verification needs review" : "ID auto-approved — worth a look",
-        body: needsHumanReview
-          ? `${req.user.firstName || "A caregiver"} submitted a selfie and photo ID.`
-          : `${req.user.firstName || "A caregiver"} submitted a selfie and photo ID, and it was approved automatically. No person has reviewed it.`,
-        data: { type: "identity_submitted", userId: req.user.id, documentId: docId, autoApproved: !needsHumanReview },
+        // v1.105.112 — there is no longer an "auto-approved" case to distinguish. Every
+        // submission is waiting on Pete, and the notification says which way the AI leans so
+        // he knows whether this is a formality or a real question.
+        title: "ID waiting on your review",
+        body: `${req.user.firstName || "A caregiver"} submitted a selfie and photo ID. ${verdictLabel(decision.verdict)}${decision.verdict === VERDICT.ABSTAIN ? ` (${Math.round(decision.confidence * 100)}% — below the threshold).` : "."}`,
+        data: { type: "identity_submitted", userId: req.user.id, documentId: docId, aiRecommendation: decision.verdict },
       });
     } catch (e) { console.error("[identity] admin notify failed:", e.message); }
 
     res.json({
       matched: isVerified, needsHumanReview,
+      // v1.105.112 — what the client should TELL the person. Never "you're verified".
+      pendingReview: true,
+      aiRecommendation: decision.verdict,
       extractedName, registeredName, extractedDOB, expiryDate,
       confidence: classifyResult.confidence, concerns: allConcerns,
       documentId: docId, issuingAuthority, nameMatched, dobMatched,
