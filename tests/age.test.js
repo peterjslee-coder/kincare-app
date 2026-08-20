@@ -3,7 +3,10 @@
 
 const { ageInYears, checkSignupAge, MIN_SIGNUP_AGE } = require("../src/utils/age");
 
-const on = (s) => new Date(`${s}T12:00:00`); // local noon — no DST/midnight edge
+// v1.105.102 — UTC noon, not local noon. ageInYears reads its reference date in UTC so the
+// gate cannot move with the server's timezone; a local-noon fixture would drift a day for any
+// offset past +12 and silently re-test a different date than the name says.
+const on = (s) => new Date(`${s}T12:00:00Z`);
 
 describe("ageInYears", () => {
   test("counts whole years", () => {
@@ -121,5 +124,37 @@ describe("signup age gate covers every door", () => {
   test("there is a migration adding the column", () => {
     expect(rd("src/models/database.js")).toMatch(/013_users_date_of_birth/);
     expect(rd("src/models/database.js")).toMatch(/ALTER TABLE users ADD COLUMN IF NOT EXISTS date_of_birth DATE/);
+  });
+});
+
+// v1.105.102 — the gate must not move with the server's timezone.
+//
+// ageInYears used to read its reference date with getFullYear/getMonth/getDate — the SERVER'S
+// LOCAL date — while the date of birth is parsed as bare calendar integers. Two frames in one
+// comparison. Railway and GitHub Actions both run UTC, so production and CI agreed and nothing
+// showed; on a machine in Eastern time, every evening after 8pm the gate rejected someone on
+// their own 13th birthday.
+describe("the answer does not depend on where the server is", () => {
+  const TZS = ["UTC", "America/New_York", "America/Los_Angeles", "Asia/Tokyo", "Pacific/Kiritimati"];
+  const withTz = (tz, fn) => {
+    const prev = process.env.TZ;
+    process.env.TZ = tz;
+    try { return fn(); } finally { process.env.TZ = prev; }
+  };
+
+  test("a 13th birthday reads the same in every timezone", () => {
+    const dob = "2013-07-30";
+    const instant = new Date("2026-07-30T02:00:00Z"); // late evening of the 29th in the Americas
+    const answers = TZS.map(tz => withTz(tz, () => ageInYears(dob, instant)));
+    expect(new Set(answers).size).toBe(1);
+    expect(answers[0]).toBe(13);
+  });
+
+  test("and so does the day before it", () => {
+    const dob = "2013-07-31";
+    const instant = new Date("2026-07-30T23:30:00Z"); // already the 31st in Tokyo
+    const answers = TZS.map(tz => withTz(tz, () => checkSignupAge(dob, instant).ok));
+    expect(new Set(answers).size).toBe(1);
+    expect(answers[0]).toBe(false);
   });
 });

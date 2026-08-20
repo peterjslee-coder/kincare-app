@@ -48,7 +48,7 @@ describe("register + login", () => {
 
   test("refuses a signup under 13", async () => {
     const d = new Date();
-    d.setFullYear(d.getFullYear() - 12);
+    d.setUTCFullYear(d.getUTCFullYear() - 12);
     const res = await h.request.post("/api/auth/register")
       .send({ ...CREDS, email: "under13@itest.local", dateOfBirth: d.toISOString().slice(0, 10) });
     expect(res.status).toBe(400);
@@ -56,8 +56,11 @@ describe("register + login", () => {
   });
 
   test("accepts a signup at exactly 13", async () => {
+    // v1.105.102 — UTC on both sides. This used setFullYear (local) and then serialised with
+    // toISOString (UTC), so in Eastern time after 8pm it sent a dob one day AFTER the
+    // birthday and the "exactly 13" case failed on a developer machine while passing in CI.
     const d = new Date();
-    d.setFullYear(d.getFullYear() - 13);
+    d.setUTCFullYear(d.getUTCFullYear() - 13);
     const res = await h.request.post("/api/auth/register")
       .send({ ...CREDS, email: "exactly13@itest.local", dateOfBirth: d.toISOString().slice(0, 10) });
     expect(res.status).toBe(201);

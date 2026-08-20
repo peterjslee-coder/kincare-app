@@ -1,4 +1,5 @@
 const express = require("express");
+const { PERSONAL_DIRECT_WHERE } = require("../utils/conversations");
 const { hasAnyActiveVouch } = require("../utils/vouches");
 const { userPhotoUrl } = require("./media");
 const multer = require("multer");
@@ -327,16 +328,21 @@ router.post("/conversations", async (req, res) => {
       SELECT c.id FROM conversations c
       JOIN conversation_members cm1 ON cm1.conversation_id = c.id AND cm1.user_id = ?
       JOIN conversation_members cm2 ON cm2.conversation_id = c.id AND cm2.user_id = ?
-      WHERE c.type = 'direct'
+      WHERE ${PERSONAL_DIRECT_WHERE}
     `).get(req.user.id, partnerId);
 
     if (existing) return res.json({ conversationId: existing.id, existing: true });
   }
 
   const convId = uuid();
+  // v1.105.102 — a direct conversation is NEVER named here. Its title is the other person,
+  // resolved at read time. A name on a direct row means a system thread ("InPlace Support",
+  // "iPAi", "Kindred (…)"), and letting a caller set one from the request body would let a
+  // user's DM impersonate the platform — and would break the "name IS NULL means personal"
+  // invariant that PERSONAL_DIRECT_WHERE depends on.
   await db.prepare(
     "INSERT INTO conversations (id, type, name, created_by) VALUES (?, ?, ?, ?)"
-  ).run(convId, type, name || null, req.user.id);
+  ).run(convId, type, type === "direct" ? null : (name || null), req.user.id);
 
   // Add the creator as a member (admin for groups)
   await db.prepare(
@@ -861,7 +867,7 @@ router.post("/", sendLimiter, async (req, res) => {
     SELECT c.id FROM conversations c
     JOIN conversation_members cm1 ON cm1.conversation_id = c.id AND cm1.user_id = ?
     JOIN conversation_members cm2 ON cm2.conversation_id = c.id AND cm2.user_id = ?
-    WHERE c.type = 'direct'
+    WHERE ${PERSONAL_DIRECT_WHERE}
   `).get(req.user.id, recipientId);
 
   if (existing) {
@@ -926,7 +932,7 @@ router.get("/:partnerId", async (req, res) => {
     SELECT c.id FROM conversations c
     JOIN conversation_members cm1 ON cm1.conversation_id = c.id AND cm1.user_id = ?
     JOIN conversation_members cm2 ON cm2.conversation_id = c.id AND cm2.user_id = ?
-    WHERE c.type = 'direct'
+    WHERE ${PERSONAL_DIRECT_WHERE}
   `).get(userId, partnerId);
 
   let messages;

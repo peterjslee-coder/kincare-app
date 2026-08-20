@@ -36,7 +36,7 @@ const MIN_SIGNUP_AGE = 13;
  * of this comparison naturally.
  *
  * @param {string} dob  "YYYY-MM-DD"
- * @param {Date}   [now] reference date; defaults to today
+ * @param {Date}   [now] reference date; defaults to now. Read in UTC — see below.
  * @returns {number|null} whole years, or null if the input isn't a valid calendar date
  */
 function ageInYears(dob, now = new Date()) {
@@ -53,7 +53,16 @@ function ageInYears(dob, now = new Date()) {
     return null;
   }
 
-  const ny = now.getFullYear(), nmo = now.getMonth() + 1, nd = now.getDate();
+  // v1.105.102 — UTC on BOTH sides. This read `now.getFullYear()/getMonth()/getDate()`,
+  // i.e. the SERVER'S LOCAL DATE, while the dob above is parsed as bare calendar integers.
+  // Two frames in one comparison: the same date of birth got a different answer depending on
+  // which machine asked. Railway runs UTC and GitHub Actions runs UTC, so production and CI
+  // agreed and nothing showed — but on a developer machine in Eastern time, every evening
+  // after 8pm the gate rejected people on their own 13th birthday, and
+  // tests/integration/auth.itest.js failed for that reason alone.
+  // The same class as the timezone-frame rule in CLAUDE.md: never compare a value in one
+  // frame against a value in another.
+  const ny = now.getUTCFullYear(), nmo = now.getUTCMonth() + 1, nd = now.getUTCDate();
   let age = ny - y;
   if (nmo < mo || (nmo === mo && nd < d)) age -= 1;
   return age;

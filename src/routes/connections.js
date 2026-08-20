@@ -1,4 +1,5 @@
 const express = require("express");
+const { PERSONAL_DIRECT_WHERE } = require("../utils/conversations");
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { authenticate } = require("../middleware/auth");
@@ -173,7 +174,7 @@ router.put("/:id", async (req, res) => {
         SELECT c.id FROM conversations c
         JOIN conversation_members cm1 ON cm1.conversation_id = c.id AND cm1.user_id = ?
         JOIN conversation_members cm2 ON cm2.conversation_id = c.id AND cm2.user_id = ?
-        WHERE c.type = 'direct'
+        WHERE ${PERSONAL_DIRECT_WHERE}
       `).get(conn.requester_id, conn.recipient_id);
 
       if (existingConv) {

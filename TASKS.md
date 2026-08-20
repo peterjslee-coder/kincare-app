@@ -345,10 +345,42 @@
 
 ### P1
 
-- [ ] **Messages show Pete as "InPlace support".** (7972ed90) *"I started messages between
+- [x] **The signup age gate gave a different answer depending on where the server was.**
+      ✅ **Fixed v1.105.102.** `ageInYears` (`src/utils/age.js`) parsed the date of birth as
+      bare calendar integers but read the reference date with `getFullYear/getMonth/getDate` —
+      the **server's local date**. Two frames in one comparison, the exact class CLAUDE.md's
+      timezone rule exists to prevent. Railway runs UTC and GitHub Actions runs UTC, so
+      production and CI agreed and nothing ever showed; on a machine in Eastern time, every
+      evening after 8pm the gate rejected people on their own 13th birthday — and that is how
+      it was found, as `tests/integration/auth.itest.js` failing at 9pm ET and only at 9pm ET.
+      Both sides now read UTC. `tests/age.test.js` gained a five-timezone invariance check
+      (validated in both directions), and its `on()` fixture moved from local noon to UTC noon.
+      This is a legal boundary that is part of the app-store age declaration, so it mattering
+      only 1/6 of the day on one machine is not a reason to leave it.
+
+- [x] **Messages show Pete as "InPlace support".** (7972ed90) *"I started messages between
       Julia and I and it is showing me as InPlace support. Not my name as a family member."*
-      A family member appearing to a caregiver as the platform is a trust problem, not a label
-      problem — she cannot tell who she is talking to. **P1**
+      ✅ **Fixed v1.105.102.** **Seven** places asked "is there already a direct conversation
+      containing these two users?" with a query that matched ANY direct conversation. Pete is
+      an admin, so an `InPlace Support` thread between him and Julia already existed
+      (`admin/safety.js` creates it) — and every one of those lookups found it. His personal
+      messages went into the platform's thread: `messages.js` (create-conversation,
+      send-to-recipient, read-thread-by-partner), `sessions.js` (interview request),
+      `interviews.js`, `connections.js` (accept).
+      The distinction the code was missing: **a personal DM has no name.** Its title is
+      whoever the other person is. A NAMED direct row is a system thread — `InPlace Support`,
+      `iPAi`, `Kindred (…)` — and that is a different conversation even though it holds the
+      same two user rows. `src/utils/conversations.js` now owns `PERSONAL_DIRECT_WHERE`, and
+      `POST /conversations` forces `name` to NULL for direct rows so a user's DM cannot
+      impersonate the platform. `tests/integration/supportThreadIsNotADm.itest.js` (4).
+      Not only a label problem: `safety.js:175` refuses to let anyone block "InPlace Support",
+      so the merged thread was **unblockable** too.
+      ⚠️ **Left for Pete:** the existing merged Pete↔Julia thread is not migrated. His old
+      personal messages stay in the support thread; a new DM starts clean. Splitting them
+      would mean guessing which past message was which, so it is a decision, not a script.
+      Noticed in passing, not fixed: `kindred.js` names its relay `Kindred (<name>)`, which is
+      not in the reserved list, so `messages.js:113` retitles it to the Kindred system user's
+      first/last name in the conversation list.
 
 - [ ] **The "Needs you" tile counts the wrong things and dead-ends on the right one.**
       (917f3787) Pete: five unread messages show there and should not — *"I wanted to show up as
