@@ -82,6 +82,19 @@ describe("before anyone vouches for her", () => {
     expect(job.familyName).toBeNull();
     expect(job.specialInstructions).toBeNull();
   });
+
+  // v1.105.108 — and it says WHICH input was false. I told Pete her card said "Care
+  // Recipient" because of Stripe; he replied "julia very much has stripe enabled." The gate
+  // had three inputs and the payload reported none of them, so the only way to tell was to
+  // guess. It reports them now.
+  test("and the payload says why, with the raw inputs behind it", async () => {
+    const sessionId = await postJob({ familyUserId: pete.user.id, recipientId: peteRecipientId });
+    const job = jobFor(await dashboardFor(julia), peteRecipientId, sessionId);
+    expect(job.detailsWithheld).toBe(true);
+    expect(job.detailsWithheldReason).toBe("no_trust_for_this_family");
+    expect(job.isBackgroundChecked).toBe(false);
+    expect(job.vouchedByThisFamily).toBe(false);
+  });
 });
 
 describe("after Pete vouches for her", () => {
@@ -103,6 +116,9 @@ describe("after Pete vouches for her", () => {
     expect(job.recipientName).toBe("Betty Lee");
     expect(job.familyName).toBe("Pete Lee");
     expect(job.specialInstructions).toBe("Back door sticks — pull it toward you.");
+    expect(job.detailsWithheld).toBe(false);
+    expect(job.detailsWithheldReason).toBeNull();
+    expect(job.vouchedByThisFamily).toBe(true);
   });
 
   test("and still NOT the family nobody vouched from", async () => {

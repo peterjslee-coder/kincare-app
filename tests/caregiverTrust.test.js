@@ -13,7 +13,7 @@
 // the action: Julia could take a job for Pete's mother while the card still called her
 // "Care Recipient".
 
-const { maySeeRecipientDetails, isTrustedCaregiver } = require("../src/utils/caregiverTrust");
+const { maySeeRecipientDetails, isTrustedCaregiver, detailsWithheldReason } = require("../src/utils/caregiverTrust");
 const fs = require("fs");
 const path = require("path");
 const read = (p) => fs.readFileSync(path.join(__dirname, "..", p), "utf8");
@@ -76,7 +76,7 @@ describe("the callers", () => {
   const dash = read("src/routes/dashboard.js");
 
   test("dashboard.js has one definition of each, not its own copy", () => {
-    expect(dash).toMatch(/const \{ maySeeRecipientDetails, isTrustedCaregiver \} = require\("\.\.\/utils\/caregiverTrust"\)/);
+    expect(dash).toMatch(/const \{ maySeeRecipientDetails, isTrustedCaregiver, detailsWithheldReason \} = require\("\.\.\/utils\/caregiverTrust"\)/);
     expect(dash).toMatch(/const bgCleared = maySeeRecipientDetails\(profile, vouchedFamilyIds, s\.family_user_id\)/);
     expect(dash).toMatch(/caregiverCleared: isTrustedCaregiver\(profile, vouchedFamilyIds\)/);
   });
@@ -95,6 +95,56 @@ describe("the callers", () => {
     // "Care Recipient" read like the app had forgotten who she was.
     const fw = read("public/js/components/FindWork.js");
     const code = fw.split("\n").filter((l) => !l.trim().startsWith("//")).join("\n");
-    expect((code.match(/Name shared once you\\u2019re cleared/g) || []).length).toBe(2);
+    expect((code.match(/Name shared once this family clears you/g) || []).length).toBe(2);
+  });
+});
+
+
+// ─── v1.105.108 — say which input was false ───
+//
+// I got Julia's diagnosis wrong. I read the gate, saw `stripe_onboard_complete` in it, and
+// told Pete that was why her card said "Care Recipient". He answered: "julia very much has
+// stripe enabled."
+//
+// The gate had three inputs and the payload reported NONE of them, so the only way to tell
+// which one was false was to guess. A boolean that hides its own reasoning costs a release
+// every time it is wrong.
+describe("the payload says why, so nobody has to guess again", () => {
+  test("nothing withheld, no reason", () => {
+    expect(detailsWithheldReason({ is_background_checked: 1 }, new Set(), LOWES)).toBeNull();
+    expect(detailsWithheldReason({}, new Set([LOWES]), LOWES)).toBeNull();
+  });
+
+  test("withheld, and it says so", () => {
+    expect(detailsWithheldReason({}, new Set(), LOWES)).toBe("no_trust_for_this_family");
+    expect(detailsWithheldReason({}, new Set([LOWES]), HUBERS)).toBe("no_trust_for_this_family");
+  });
+
+  test("it always agrees with the gate it explains", () => {
+    const cases = [
+      [{ is_background_checked: 1 }, new Set(), LOWES],
+      [{}, new Set([LOWES]), LOWES],
+      [{}, new Set([LOWES]), HUBERS],
+      [{}, new Set(), LOWES],
+      [null, new Set([LOWES]), LOWES],
+    ];
+    for (const [p, v, f] of cases) {
+      expect(detailsWithheldReason(p, v, f) === null).toBe(maySeeRecipientDetails(p, v, f));
+    }
+  });
+
+  test("the dashboard sends the raw inputs too", () => {
+    // So the answer does not depend on the reason string staying in sync with the gate.
+    const dash = read("src/routes/dashboard.js");
+    expect(dash).toMatch(/detailsWithheld: !bgCleared/);
+    expect(dash).toMatch(/detailsWithheldReason: detailsWithheldReason\(profile, vouchedFamilyIds, s\.family_user_id\)/);
+    expect(dash).toMatch(/isBackgroundChecked: !!profile\.is_background_checked/);
+    expect(dash).toMatch(/vouchedByThisFamily: vouchedFamilyIds\.has\(s\.family_user_id\)/);
+  });
+
+  test("and the card explains itself rather than looking broken", () => {
+    const fw = read("public/js/components/FindWork.js");
+    const code = fw.split("\n").filter((l) => !l.trim().startsWith("//")).join("\n");
+    expect((code.match(/s\.detailsWithheld \? 'Name shared once this family clears you'/g) || []).length).toBe(2);
   });
 });

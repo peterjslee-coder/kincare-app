@@ -733,10 +733,22 @@
       through it. The existing rule stands: it disappears entirely once complete. **P2**
 - [x] **Say "Betty", not "Care Recipient".** (7d94657c, Julia) On the Find Work card. She is
       about to spend an afternoon with a person, not a role.
+      ⚠️ **I GOT THE CAUSE WRONG, and the record should say so.** I read the gate, saw
+      `stripe_onboard_complete` in it, and told Pete that was why her card said "Care
+      Recipient". Pete, Aug 19: *"julia very much has stripe enabled."* So Stripe was never her
+      blocker, and v1.105.107 — correct on its own terms, and his call — will not by itself
+      have fixed her card. **What actually withheld it is one of the other two inputs:** either
+      `is_background_checked = 0` with **no active `bg_admin_vouches` row** for the family that
+      posted that job, or a vouch recorded against a *different* `family_user_id` than the
+      session's. v1.105.108 makes the payload say which.
+      The lesson is the one already written down here twice: **trace the producer AND the
+      consumer before believing a finding.** I traced the gate and stopped, without ever
+      checking the value of the input I was blaming.
+
       ✅ **Fixed v1.105.107 — the name was not missing, it was WITHHELD.** `dashboard.js` gated
       every personal detail on `stripe_onboard_complete && (is_background_checked ||
-      vouched-by-this-family)`. Julia's check was waived by vouch and she has no bank account
-      yet, so she got no name, no city, no family name, no instructions, **no care summary**.
+      vouched-by-this-family)`, so a caregiver with no bank account got no name, no city, no
+      family name, no instructions, **no care summary**.
       And it was backwards: the Stripe gate on *accepting* a job is **commented out** in
       `sessions.js` ("skipped for now — not live yet"), so Stripe blocked the information and
       not the action — she could take a job for Betty while the card still called her
@@ -748,7 +760,14 @@
       the outlier, not the rule.
       A vouch stays scoped to ONE family (v1.64.0): trusted by Pete says nothing about anyone
       else, and the integration test asserts exactly that so the gate can't be loosened too far
-      unnoticed. Where a name genuinely is withheld the card now says so instead of printing a
+      unnoticed.
+      ✅ **v1.105.108 — the payload now says WHICH input was false**: `detailsWithheld`,
+      `detailsWithheldReason`, plus the raw `isBackgroundChecked` and `vouchedByThisFamily`.
+      A boolean that hides its own reasoning costs a release every time someone guesses wrong
+      about it, which is exactly what happened above. Her own standing, never the family's.
+      🔴 **[NEEDS YOUR HANDS]** Admin → Vouches: is there an ACTIVE row for Julia against the
+      user who posted that job? If not, that is the answer; if there is, the `family_user_id`
+      on it does not match `care_sessions.family_user_id`. Where a name genuinely is withheld the card now says so instead of printing a
       label that reads like a bug. `tests/caregiverTrust.test.js` (11),
       `tests/integration/recipientNameVisibility.itest.js` (4, both directions).
 - [ ] **Photo picker should take more than one picture.** (40ad8896, Pete) **P2**

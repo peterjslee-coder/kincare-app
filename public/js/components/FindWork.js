@@ -884,12 +884,13 @@ const FindWork = window.FindWork = () => {
                 const time = s.time || s.scheduled_time;
                 const duration = s.durationHours || s.duration_hours;
                 const service = s.serviceType || s.service_type;
-                // v1.105.107 — a withheld name should read as withheld, not as a label.
+                // v1.105.107/.108 — a withheld name should read as withheld, and say why.
                 // "Care Recipient" looked like the app had forgotten who she was; it actually
-                // meant "you are not cleared for this family yet". Since v1.105.107 a vouch or
-                // a background check is enough, so this fallback is now rare — and when it does
-                // appear it says why. (Julia, 7d94657c.)
-                const recipient = s.recipientName || s.recipient_name || 'Name shared once you\u2019re cleared';
+                // meant "you are not cleared for this family yet". The server now sends the
+                // reason, so the card stops being a puzzle for the caregiver AND for whoever
+                // is trying to work out why she cannot see it. (Julia, 7d94657c.)
+                const recipient = s.recipientName || s.recipient_name
+                  || (s.detailsWithheld ? 'Name shared once this family clears you' : 'Care recipient');
                 const cost = s.estimatedCost || s.estimated_cost;
                 const instructions = s.specialInstructions || s.special_instructions;
                 const dateStr = s.date || s.scheduled_date;
@@ -1132,12 +1133,13 @@ const FindWork = window.FindWork = () => {
                 const time = s.time || s.scheduled_time;
                 const duration = s.durationHours || s.duration_hours;
                 const service = s.serviceType || s.service_type;
-                // v1.105.107 — a withheld name should read as withheld, not as a label.
+                // v1.105.107/.108 — a withheld name should read as withheld, and say why.
                 // "Care Recipient" looked like the app had forgotten who she was; it actually
-                // meant "you are not cleared for this family yet". Since v1.105.107 a vouch or
-                // a background check is enough, so this fallback is now rare — and when it does
-                // appear it says why. (Julia, 7d94657c.)
-                const recipient = s.recipientName || s.recipient_name || 'Name shared once you\u2019re cleared';
+                // meant "you are not cleared for this family yet". The server now sends the
+                // reason, so the card stops being a puzzle for the caregiver AND for whoever
+                // is trying to work out why she cannot see it. (Julia, 7d94657c.)
+                const recipient = s.recipientName || s.recipient_name
+                  || (s.detailsWithheld ? 'Name shared once this family clears you' : 'Care recipient');
                 const cost = s.caregiverPayout || s.caregiver_payout || s.estimatedCost || s.estimated_cost;
                 const location = s.location || s.recipientCity || '';
                 const familyName = s.familyName || '';

@@ -47,4 +47,23 @@ function isTrustedCaregiver(profile, vouchedFamilyIds) {
   return !!profile.is_background_checked || !!(vouchedFamilyIds && vouchedFamilyIds.size > 0);
 }
 
-module.exports = { maySeeRecipientDetails, isTrustedCaregiver };
+/**
+ * WHY a caregiver cannot see this family's details — v1.105.108.
+ *
+ * Added because I got Julia's diagnosis wrong. I read the gate, saw Stripe in it, and told
+ * Pete that was why her card said "Care Recipient". He answered: "julia very much has stripe
+ * enabled." The gate has three inputs and the payload reported none of them, so the only way
+ * to tell which one was false was to guess — and I guessed.
+ *
+ * The reason is about HER OWN standing, never about the family, so it is safe to send to her.
+ * It is also what the card should have been saying all along: a withheld name that explains
+ * itself is a different thing from a name that appears to be missing.
+ *
+ * @returns {null|'no_trust_for_this_family'} null when nothing is withheld
+ */
+function detailsWithheldReason(profile, vouchedFamilyIds, familyUserId) {
+  if (maySeeRecipientDetails(profile, vouchedFamilyIds, familyUserId)) return null;
+  return "no_trust_for_this_family";
+}
+
+module.exports = { maySeeRecipientDetails, isTrustedCaregiver, detailsWithheldReason };

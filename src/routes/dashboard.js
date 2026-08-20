@@ -1,6 +1,6 @@
 const express = require("express");
 const { activeVouchesFor } = require("../utils/vouches");
-const { maySeeRecipientDetails, isTrustedCaregiver } = require("../utils/caregiverTrust");
+const { maySeeRecipientDetails, isTrustedCaregiver, detailsWithheldReason } = require("../utils/caregiverTrust");
 const { recipientPhotoUrl } = require("./media");
 const { getDb } = require("../models/database");
 const { authenticate } = require("../middleware/auth");
@@ -857,6 +857,14 @@ async function caregiverDashboard(db, userId, res) {
           // hers becomes an open job when the window lapses, and the button that worked
           // yesterday silently stops working with nothing on screen changing.
           isDirectedAtMe: s.offered_to_caregiver_id === profile.id || s.caregiver_id === profile.id,
+          // v1.105.108 — say WHY the person's details are missing, instead of leaving a card
+          // that looks like the app forgot who she was. The gate had three inputs and the
+          // payload reported none of them, so a wrong guess about which one was false cost a
+          // whole release to find out. Her own standing, never the family's.
+          detailsWithheld: !bgCleared,
+          detailsWithheldReason: detailsWithheldReason(profile, vouchedFamilyIds, s.family_user_id),
+          isBackgroundChecked: !!profile.is_background_checked,
+          vouchedByThisFamily: vouchedFamilyIds.has(s.family_user_id),
           date: s.scheduled_date,
           time: s.scheduled_time,
           serviceType: s.service_type,
