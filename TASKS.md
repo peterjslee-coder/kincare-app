@@ -8,6 +8,38 @@
 
 ### P0
 
+> **Aug 19 2026 — feedback loop.** 16 new items from THREE real users now: Pete, Julia and
+> Tyler Huth. Sentry clean, zero unresolved. Two of these are regressions in work I shipped
+> yesterday; one is a dead end I created.
+
+- [ ] **⛔ Phone and video calls never ring.** (8d27e33c, mood "terrible") Pete: *"Phone and
+      video calls do not ring or notify the user until I push notification after the call."*
+      A call feature that cannot summon the person is not a feature. Related and probably the
+      same area: the call buttons have VANISHED from chat — Pete (e452db48) *"I don't see the
+      video call or phone options in the chat anymore. Where are they?"* and Julia (d378b267)
+      *"The call button is hidden."* Two users, independently, same day. **P0**
+
+- [ ] **⛔ "Welcome to InPlace!" popup cannot be dismissed.** (8a05e737, Tyler) *"does not go
+      away at all or when navigating to new screens."* A modal that survives navigation blocks
+      the whole app for a brand-new user — which is the worst possible moment. **P0**
+
+- [ ] **⛔ Decline STILL fails for Julia — and it is my design error, not a stale bundle.**
+      (17b2434c) *"Still not working when I press 'Decline Request.'"* v1.105.91 fixed the
+      SERVER to accept `offered_to_caregiver_id`. What it did not fix is that the "Can't make
+      it" button renders on EVERY job that is not your own request, including open-pool jobs
+      where nobody was named — and the server correctly 404s those, because you decline an open
+      job by not claiming it.
+      Worse, `dashboard.js:51-68` expires an exclusive offer by clearing
+      `offered_to_caregiver_id` and setting the session back to `open`. So a request that WAS
+      directed at her becomes an open job after its window, and the button that worked yesterday
+      stops working today with no visible change.
+      **Two things to decide:** (a) hide the button unless the job is genuinely directed at her
+      — the dashboard needs to send that flag, it does not today; and (b) decide what an open
+      job should offer instead — probably "not for me", which hides it from her list without
+      telling a family that nobody named has declined. Do not just widen the server check:
+      declining a job you were never offered has no meaning to send to the family. **P0**
+
+
 > **Aug 4 2026 — code + task review.** Two agents swept the client and the server for every
 > failure pattern this codebase has already been bitten by; every finding below was verified
 > against the code before being written down. 13 stale items were closed, 5 stated causes were
@@ -294,6 +326,31 @@
 
 ### P1
 
+- [ ] **Messages show Pete as "InPlace support".** (7972ed90) *"I started messages between
+      Julia and I and it is showing me as InPlace support. Not my name as a family member."*
+      A family member appearing to a caregiver as the platform is a trust problem, not a label
+      problem — she cannot tell who she is talking to. **P1**
+
+- [ ] **The "Needs you" tile counts the wrong things and dead-ends on the right one.**
+      (917f3787) Pete: five unread messages show there and should not — *"I wanted to show up as
+      the notifications over the message pill"* — while the thing that DOES need him, Julia's
+      time-change request, *"doesn't do anything. It is a dead end."* Same tile, both failure
+      directions at once: noise where it should be quiet, silence where it should act. **P1**
+
+- [ ] **Push notifications fire while you are looking at the very chat they describe** —
+      and the message does not appear in the open thread. (97783012) *"I am on the messaging
+      interface messaging Julia and I get push notifications that Julia has sent a message, but
+      I don't see it in the chat. I have to back out."* Two bugs braided: suppress push for the
+      conversation currently on screen, and the live socket update is not landing in the open
+      thread. **P1**
+
+- [ ] **A job shows two different rates.** (dc5e86b5, Julia) *"$24 and then $29 listed on same
+      job (doesn't match up)."* Money that disagrees with itself on the same card. In the same
+      item: the description expand still misbehaves — *"the 'Accept Job' button disappears and
+      reappears but the description length stays the same"* — so v1.105.91's full-text fix is
+      either not reaching her or the expand toggle is fighting the layout. **P1**
+
+
 - [ ] **Special rules for helpers under 18, before this goes beyond one family.** (Aug 18 2026.)
       v1.105.93 lets a minor of 13+ be added as a `helper` with exactly the capabilities the
       family owner ticks. Pete's deliberate call was no extra age handling for now: *"there may
@@ -517,6 +574,21 @@
 
 ### P2
 
+- [ ] **Care preferences box runs off the screen.** (5eba31dd, Tyler, iPhone 17 Pro) *"the items
+      go in a box that extends beyond my phone screen and i can't see the full text."* Same
+      family as the v1.105.2 `minmax()` overflow — check for a hard floor. **P2**
+- [ ] **"Caregiver preferences" heading and a stray scroll bar.** (93a017e2, Tyler) Rename to fit
+      like the other text; the scroll bar at the top *"feels out of place"*. **P2**
+- [ ] **Calendar starts at 0am and looks odd on the dashboard.** (16328059, Tyler) Suggest moving
+      it, shrinking it, or trimming the hours shown. **P2**
+- [ ] **First Steps is overwhelming.** (aed1e440, Tyler) Suggests a 1-of-7 view showing the
+      current task with a slide to the next. Worth weighing against Pete's existing rule that the
+      checklist should disappear entirely once complete. **P2**
+- [ ] **Say "Betty", not "Care Recipient".** (7d94657c, Julia) On the Find Work card. She is
+      about to spend an afternoon with a person, not a role. **P2**
+- [ ] **Photo picker should take more than one picture.** (40ad8896, Pete) **P2**
+
+
 - [ ] **Stripe Link UX deceptive for bank accounts.** Flow pushes Link, which has higher fees at no benefit. ~~Check Stripe Checkout `payment_method_types` config.~~ **Wrong location — the code is already correct:** all three Checkout call sites set `["card", "us_bank_account"]` and none include `"link"`. Link methods still arrive, so they come from the **Stripe Dashboard's** payment-method settings. This is a Pete-in-a-browser task, not an engineering one. *(Feedback `d63ed33e` — Pete, Apr 4)* **P2**
 - [ ] **Notification bell too much space on mobile.** Only shows when notifications exist but takes way too much room. Quick CSS fix — reduce size or use icon-only on mobile. *(Feedback `81cb9e47` — Pete, Mar 29)* **P2**
 - [x] **Cancel open request without reason.** Cancelling an unfilled request shouldn't require a reason — just confirm and do it. Only require reason when caregiver is already assigned. *(Feedback `ab7fea88` — Pete, Mar 29)* **P2** ✅ **Closed Aug 4 2026 in the code+task review — verified against the code, not assumed.** Optional on this path all along — the label reads "Reason (optional)" and the handler falls back to "Cancelled by family"; it also already says "free to cancel with no fee" when no caregiver is assigned. v1.33.5 (`492c107`).
@@ -552,6 +624,14 @@
 - [ ] **"Vouch for family" is hard to find, and can't reach caregivers who haven't onboarded.** Pete hunted for the vouch flow 3× (Admin → Background Checks → caregiver card → "Vouch for family…"). Two fixes: (a) a prominent "Vouch for a caregiver" entry with name/email **search that works independently of onboarding progress** — v1.104.9 made vouch-only caregivers appear, but the list is still sourced from onboarding data, so a signed-up-but-not-onboarded caregiver (Julia today) can't be found at all; (b) a persistent "Edit preferences" link on the caregiver dashboard after First Steps completes. *(Feedback `e54bc363` — Pete, Jul 29; residual after v1.104.9)* **P2**
 
 ### P3
+
+- [ ] **Use the send animation more widely.** (69e796fa, Pete) *"That's a really nice touch that
+      would make everything else look nicer. Where are some places we could use that elsewhere?
+      Like the shimmer for an upcoming appointment, or the purple outline on just-for-you
+      stuff."* A design-language question rather than a ticket: pick two or three places where
+      motion carries meaning (something arrived, something is for you, something is happening
+      now) and apply it consistently, rather than sprinkling it. **P3**
+
 
 - [x] **Dark mode.** Add a dark theme toggle (Account settings or system-level preference detection via `prefers-color-scheme`). Applies to the full app — dashboard, messages, care profile, admin, Kindred. Store preference in user settings. CSS custom properties (`--bg`, `--text`, `--card-bg`, etc.) make this straightforward once defined. *(Pete — Mar 27, 2026)* **P3** ✅ **Closed Aug 4 2026 in the code+task review — verified against the code, not assumed.** Light/Dark/Auto in My Account → Settings, `prefers-color-scheme` honoured, 28 `[data-theme="dark"]` blocks in styles.css. v1.51.59 (`98233b0`) — shipped the same day this was filed.
 - [ ] **Swipe to reply and long-press for emojis in messages.** Mobile UX enhancement — swipe right on a message to reply, long-press to react with emoji. Standard messaging app pattern. *(Feedback — Pete, Feb 25)* **P3**
