@@ -389,17 +389,39 @@
       DM delivers it into the **invisible** half — the repair would report success and Pete's
       messages would vanish. The destination is back-dated. Validated in both directions:
       without the back-dating, two integration tests fail.
-      🔴 **[NEEDS YOUR HANDS]** Railway service console, after a snapshot:
-      `node scripts/repair-support-dm-split.js` to read it, then `--apply`.
+      **Pete's call, Aug 19: do not bother running it.** *"honestly, i don't care about the
+      chat with julia. you can nuke it if you want. i just want it fixed going forward, even if
+      there are two."* Going forward is handled by v1.105.102. The script stays in the repo,
+      documented in `docs/OPS_RUNBOOK.md`, if the duplicate threads ever become annoying —
+      it is optional, not pending work.
       Noticed in passing, not fixed: `kindred.js` names its relay `Kindred (<name>)`, which is
       not in the reserved list, so `messages.js:113` retitles it to the Kindred system user's
       first/last name in the conversation list.
 
-- [ ] **The "Needs you" tile counts the wrong things and dead-ends on the right one.**
+- [x] **The "Needs you" tile counts the wrong things and dead-ends on the right one.**
       (917f3787) Pete: five unread messages show there and should not — *"I wanted to show up as
       the notifications over the message pill"* — while the thing that DOES need him, Julia's
-      time-change request, *"doesn't do anything. It is a dead end."* Same tile, both failure
-      directions at once: noise where it should be quiet, silence where it should act. **P1**
+      time-change request, *"doesn't do anything. It is a dead end."*
+      ✅ **Fixed v1.105.105.**
+      **The noise:** unread messages left the tile AND the total. They already ride the message
+      pill (`app.js` `unreadMsgCount`); counting them twice made the badge a number about
+      correspondence rather than about decisions, against `attention.js`'s own stated
+      definition — *a number here means YOU are the blocker.* The count is still returned, just
+      not summed, so the card and the app icon still agree.
+      **The dead end was literal.** The row's target page was `'sessions'`. **app.js has no
+      such page** — `renderPage` falls through to `return <Dashboard/>`, so tapping it
+      re-rendered the screen he was already on. Now it targets `dashboard` and carries the
+      session id, and `tests/attentionCardTargets.test.js` checks every `page:` in the card
+      against the pages app.js actually renders.
+      **And a second, wider dead end found on the way:** `window.__pendingFocus` is SET in four
+      places in `app.js` (a `?focus=` param, a push tap, two `session:<id>` paths) and was READ
+      in exactly one component, `Reimbursements.js`. **Every `session:` focus was written and
+      discarded** — the v1.105.72 discarded-value class again — so tapping a schedule-change
+      *push* has never opened anything either. `Dashboard` and `CaretakerHub` now claim it and
+      open the visit detail.
+      `tests/attentionCardTargets.test.js` (14, validated against the pre-fix source),
+      `tests/integration/attention.itest.js` (+4), `tests/attentionBadge.test.js` updated where
+      it pinned the old total.
 
 - [x] **Push notifications fire while you are looking at the very chat they describe** —
       and the message does not appear in the open thread. (97783012) *"I am on the messaging

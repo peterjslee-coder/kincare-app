@@ -344,7 +344,101 @@ describe("a task you can no longer see must not badge you", () => {
 describe("the shape the badge relies on", () => {
   test("a user with nothing waiting gets a real zero, not a null", async () => {
     const r = await attentionCountFor(db, outsider.user.id);
-    expect(r).toEqual({ total: 0, reimbursements: 0, timeChanges: 0, careTasks: 0, messages: 0 });
+    expect(r).toEqual({ total: 0, reimbursements: 0, timeChanges: 0, timeChangeSessionId: null, careTasks: 0, messages: 0 });
     expect(Number.isFinite(r.total)).toBe(true);
+  });
+});
+
+
+// ─── v1.105.105 ───
+//
+// Pete, 917f3787: five unread messages showed in the "Needs you" tile and should not — "I
+// wanted to show up as the notifications over the message pill" — while Julia's time-change
+// request, the thing that actually needed him, "doesn't do anything. It is a dead end."
+describe("unread messages are counted but do not badge", () => {
+  let reader, writer, convId;
+
+  beforeAll(async () => {
+    reader = await h.createUser({ firstName: "Pete", lastName: "Reader" });
+    writer = await h.createUser({ firstName: "Jules", lastName: "Writer" });
+    convId = uuid();
+    await db.prepare("INSERT INTO conversations (id, type, created_by) VALUES (?, 'direct', ?)")
+      .run(convId, writer.user.id);
+    for (const u of [reader, writer]) {
+      await db.prepare(
+        "INSERT INTO conversation_members (id, conversation_id, user_id, role, joined_at) VALUES (?, ?, ?, 'member', NOW() - INTERVAL '1 day')"
+      ).run(uuid(), convId, u.user.id);
+    }
+    for (let i = 0; i < 5; i++) {
+      await db.prepare(
+        "INSERT INTO messages (id, conversation_id, sender_id, recipient_id, content, is_read, created_at) VALUES (?, ?, ?, ?, ?, 0, NOW())"
+      ).run(uuid(), convId, writer.user.id, reader.user.id, `hello ${i}`);
+    }
+  });
+
+  test("the five unread are reported", async () => {
+    expect((await attentionCountFor(db, reader.user.id)).messages).toBe(5);
+  });
+
+  test("but the badge stays at zero — nothing is waiting on a decision from him", async () => {
+    // The card and the app icon both read `total`. If messages left the card but stayed in
+    // the total, the icon would sit permanently five higher than the list that itemises it.
+    expect((await attentionCountFor(db, reader.user.id)).total).toBe(0);
+  });
+});
+
+describe("the time-change row knows which visit to open", () => {
+  let fam, cg, sessionId, propId;
+
+  beforeAll(async () => {
+    fam = await h.createUser({ firstName: "Fam", lastName: "Ily" });
+    cg = await h.createUser({ firstName: "Care", lastName: "Giver", roles: ["caregiver"] });
+    const t = await h.createCareTeam({ familyUserId: fam.user.id });
+    const profileId = uuid();
+    await db.prepare("INSERT INTO caregiver_profiles (id, user_id, hourly_rate, created_at) VALUES (?, ?, 25, NOW())")
+      .run(profileId, cg.user.id);
+    sessionId = uuid();
+    await db.prepare(`
+      INSERT INTO care_sessions (id, care_recipient_id, family_user_id, caregiver_id, service_type, scheduled_date, scheduled_time, duration_hours, status, created_at)
+      VALUES (?, ?, ?, ?, 'companionship', CURRENT_DATE + 3, '09:00', 3, 'confirmed', NOW())
+    `).run(sessionId, t.recipientId, fam.user.id, profileId);
+    propId = uuid();
+    await db.prepare(`
+      INSERT INTO time_change_proposals (id, session_id, proposed_by, proposed_by_user_id,
+        original_time, original_duration, proposed_time, proposed_duration, status, created_at)
+      VALUES (?, ?, 'caregiver', ?, '09:00', 3, '11:00', 3, 'pending', NOW())
+    `).run(propId, sessionId, cg.user.id);
+    await db.prepare("UPDATE care_sessions SET pending_time_change_id = ? WHERE id = ?").run(propId, sessionId);
+  });
+
+  test("the counterparty gets the count AND the session id", async () => {
+    const r = await attentionCountFor(db, fam.user.id);
+    expect(r.timeChanges).toBe(1);
+    expect(r.timeChangeSessionId).toBe(sessionId);   // a real id, not the number 0
+  });
+
+  test("the proposer gets neither — you are not the blocker on your own proposal", async () => {
+    // The caregiver IS booked on this session, so the only reason she gets nothing is that
+    // she is the one who proposed. Without the caregiver_id link above this would pass
+    // vacuously.
+    const r = await attentionCountFor(db, cg.user.id);
+    expect(r.timeChanges).toBe(0);
+    expect(r.timeChangeSessionId).toBeNull();
+  });
+
+  test("flip who proposed and the destination flips with it", async () => {
+    await db.prepare("UPDATE time_change_proposals SET proposed_by = 'family', proposed_by_user_id = ? WHERE id = ?")
+      .run(fam.user.id, propId);
+    expect((await attentionCountFor(db, cg.user.id)).timeChangeSessionId).toBe(sessionId);
+    expect((await attentionCountFor(db, fam.user.id)).timeChangeSessionId).toBeNull();
+    await db.prepare("UPDATE time_change_proposals SET proposed_by = 'caregiver', proposed_by_user_id = ? WHERE id = ?")
+      .run(cg.user.id, propId);
+  });
+
+  test("answering it takes the destination away too", async () => {
+    await db.prepare("UPDATE care_sessions SET pending_time_change_id = NULL WHERE id = ?").run(sessionId);
+    const r = await attentionCountFor(db, fam.user.id);
+    expect(r.timeChanges).toBe(0);
+    expect(r.timeChangeSessionId).toBeNull();
   });
 });

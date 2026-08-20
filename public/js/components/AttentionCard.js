@@ -14,18 +14,26 @@
 // waiting, it renders nothing at all — the dashboard is crowded (his words) and a card
 // saying "you're all caught up" is decoration.
 
+// v1.105.105 — `page` must be a page app.js actually renders. `timeChanges` pointed at
+// 'sessions', which is not one: renderPage falls through to <Dashboard/>, so tapping the row
+// re-rendered the screen Pete was already on. "It doesn't do anything. It is a dead end."
+// (917f3787.) tests/attentionCardTargets.test.js now checks every value here against app.js.
+//
+// `focus` names the field on the payload holding the id of the exact thing to open. A count
+// with no destination is what made this a dead end in the first place.
 const ATTENTION_ROWS = [
   { key: 'reimbursements', icon: '💵', page: 'care-team',
     one: 'reimbursement waiting for your approval',
     many: 'reimbursements waiting for your approval' },
-  { key: 'timeChanges', icon: '🕑', page: 'sessions',
+  { key: 'timeChanges', icon: '🕑', page: 'dashboard', focus: 'timeChangeSessionId', focusPrefix: 'session',
     one: 'schedule change waiting on your answer',
     many: 'schedule changes waiting on your answer' },
   { key: 'careTasks', icon: '✅', page: 'care-team',
     one: 'care task assigned to you is due',
     many: 'care tasks assigned to you are due' },
-  { key: 'messages', icon: '💬', page: 'messages',
-    one: 'unread message', many: 'unread messages' },
+  // Unread messages deliberately absent — v1.105.105. Pete: they "should not" be here, they
+  // belong "over the message pill", which already carries them (app.js `unreadMsgCount`).
+  // `total` no longer counts them either, so this list and the app icon still agree.
 ];
 
 const AttentionCard = window.AttentionCard = ({ onNavigate }) => {
@@ -92,7 +100,17 @@ const AttentionCard = window.AttentionCard = ({ onNavigate }) => {
       {rows.map((r) => (
         <button
           key={r.key}
-          onClick={() => onNavigate && onNavigate(r.page)}
+          onClick={() => {
+            // Open the exact item, not just the page it lives on. Consumed by Dashboard /
+            // CaretakerHub, which open the visit detail for `session:<id>`.
+            const id = r.focus && counts[r.focus];
+            if (id) window.__pendingFocus = `${r.focusPrefix}:${id}`;
+            if (onNavigate) onNavigate(r.page);
+            // This card lives inside Dashboard, and onNavigate is setCurrentPage, which does
+            // not remount it — so a mount-time read of __pendingFocus would never fire when
+            // the target page is the one we are already on. Announce it instead.
+            if (id) setTimeout(() => window.dispatchEvent(new Event('inplace:focus')), 0);
+          }}
           style={{
             display: 'flex', alignItems: 'center', gap: 10, width: '100%',
             background: 'none', border: 'none', borderTop: '1px solid var(--border-color, #eee)',

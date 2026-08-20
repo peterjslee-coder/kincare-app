@@ -32,6 +32,36 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
   const [tipSent, setTipSent] = useState(false);
   const [visitDetailSessionId, setVisitDetailSessionId] = useState(null);
   const [awaitingExpanded, setAwaitingExpanded] = useState(false);
+
+  // ─── Deep-link focus: open the exact visit (v1.105.105) ───
+  //
+  // `window.__pendingFocus` has been SET in four places in app.js since v1.97 — a `?focus=`
+  // URL param, a push tap, and two `session:<id>` paths — and until now it was READ in exactly
+  // one: Reimbursements.js. Every `session:` focus was written and discarded. So tapping a
+  // schedule-change push, or "1 schedule change waiting on your answer" in the Needs-you card,
+  // landed you on the dashboard with nothing open. Pete: "it doesn't do anything. It is a dead
+  // end." (917f3787.)
+  //
+  // Cleared as soon as it is claimed, so a later remount does not reopen a modal the person
+  // has closed. Left in place when the id is not ours to handle, so another consumer can.
+  useEffect(() => {
+    const claim = () => {
+      const f = window.__pendingFocus;
+      if (!f || typeof f !== 'string' || !f.startsWith('session:')) return;
+      const id = f.slice('session:'.length);
+      if (!id) return;
+      window.__pendingFocus = null;
+      setVisitDetailSessionId(id);
+    };
+    claim();
+    // A push tap or a ?focus= param arrives before this mounts, so claim() on mount covers
+    // those. The Needs-you card is rendered INSIDE this component and navigates with
+    // setCurrentPage, which does not bump pageNavCount and therefore does not remount us —
+    // so it also announces itself, and we claim again.
+    window.addEventListener('inplace:focus', claim);
+    return () => window.removeEventListener('inplace:focus', claim);
+  }, []);
+
   const [proposalActionLoading, setProposalActionLoading] = useState(null);
   const [nextUpExpanded, setNextUpExpanded] = useState(false);
   // ─── Care Tasks (v1.99.0): today's occurrences, inline in Next Up ───

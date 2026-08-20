@@ -39,11 +39,28 @@ describe("the count means: you are the blocker", () => {
     });
   });
 
-  test("it sums the four things, and reports the breakdown", async () => {
+  // v1.105.105 — CHANGED DELIBERATELY. The total used to include unread messages. Pete,
+  // 917f3787: five of them showed in the "Needs you" tile and "should not" — he wanted them
+  // "over the message pill", where app.js already puts them. Counting correspondence made the
+  // badge a number about mail rather than about decisions, against this file's own definition:
+  // a number here means YOU are the blocker. Reading a message blocks nobody.
+  //
+  // `messages` is still REPORTED. Only the total changed, because the card and the app icon
+  // both read `total` and must agree.
+  test("it sums the things waiting on a decision, and reports the rest", async () => {
     const r = await attentionCountFor(
       fakeDb({ reimbursements: 2, timeChanges: 1, careTasks: 3, messages: 4 }), "pete"
     );
-    expect(r).toEqual({ total: 10, reimbursements: 2, timeChanges: 1, careTasks: 3, messages: 4 });
+    expect(r.total).toBe(6);                    // 2 + 1 + 3 — NOT the 4 unread
+    expect(r).toEqual({
+      total: 6, reimbursements: 2, timeChanges: 1, timeChangeSessionId: null, careTasks: 3, messages: 4,
+    });
+  });
+
+  test("unread messages alone leave the badge dark", async () => {
+    const r = await attentionCountFor(fakeDb({ messages: 12 }), "pete");
+    expect(r.messages).toBe(12);
+    expect(r.total).toBe(0);
   });
 
   test("nothing waiting is zero, not null or undefined", async () => {
@@ -60,7 +77,7 @@ describe("the count means: you are the blocker", () => {
     const brokenDb = { prepare: () => ({ get: async () => { throw new Error("db down"); } }) };
     const r = await attentionCountFor(brokenDb, "pete");
     expect(r.total).toBe(0);
-    expect(r).toEqual({ total: 0, reimbursements: 0, timeChanges: 0, careTasks: 0, messages: 0 });
+    expect(r).toEqual({ total: 0, reimbursements: 0, timeChanges: 0, timeChangeSessionId: null, careTasks: 0, messages: 0 });
   });
 });
 
@@ -303,11 +320,12 @@ describe("the number says what it is made of", () => {
     expect(card).toMatch(/apiFetch\('\/api\/push\/attention'\)/);
   });
 
-  test("every category is a row, and every row goes where you clear it", () => {
-    for (const key of ["reimbursements", "timeChanges", "careTasks", "messages"]) {
+  test("every category in the total is a row, and every row goes where you clear it", () => {
+    // v1.105.105 — 'messages' left this list with the total; see above.
+    for (const key of ["reimbursements", "timeChanges", "careTasks"]) {
       expect(card).toMatch(new RegExp(`key: '${key}'`));
     }
-    expect(card).toMatch(/onNavigate && onNavigate\(r\.page\)/);
+    expect(card).toMatch(/if \(onNavigate\) onNavigate\(r\.page\)/);
   });
 
   test("nothing waiting draws nothing at all", () => {

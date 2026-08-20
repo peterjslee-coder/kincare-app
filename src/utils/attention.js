@@ -33,12 +33,24 @@ async function safe(label, fn) {
   }
 }
 
+// Same contract as safe(), for a value that is an id rather than a count. safe() coerces
+// anything non-finite to 0, which would turn a session id into the number zero.
+async function safeId(label, fn) {
+  try {
+    const v = await fn();
+    return typeof v === "string" && v ? v : null;
+  } catch (e) {
+    console.log(`[attention] ${label} failed (non-blocking):`, e.message);
+    return null;
+  }
+}
+
 /**
  * Breakdown + total for one user.
  * @returns {{ total:number, reimbursements:number, timeChanges:number, careTasks:number, messages:number }}
  */
 async function attentionCountFor(db, userId) {
-  if (!userId) return { total: 0, reimbursements: 0, timeChanges: 0, careTasks: 0, messages: 0 };
+  if (!userId) return { total: 0, reimbursements: 0, timeChanges: 0, timeChangeSessionId: null, careTasks: 0, messages: 0 };
 
   // ── Reimbursements awaiting MY approval ──
   // Approver = the team's billing contact, or the leader when no billing contact is set.
@@ -164,10 +176,43 @@ async function attentionCountFor(db, userId) {
     return parseInt(row?.count || 0, 10);
   });
 
+  // ── Which visit the time change belongs to ──
+  // v1.105.105 — a count with no destination is why "1 schedule change waiting on your
+  // answer" was a dead end: the card sent you to a page and the page said nothing. The row
+  // has to know WHICH visit, so it can open that visit.
+  const timeChangeSessionId = timeChanges === 0 ? null : await safeId("timeChangeSession", async () => {
+    const row = await db.prepare(`
+      SELECT cs.id, cs.scheduled_date, cs.scheduled_time
+      FROM time_change_proposals tcp
+      JOIN care_sessions cs
+        ON cs.id = tcp.session_id AND cs.pending_time_change_id = tcp.id
+      LEFT JOIN caregiver_profiles cp ON cp.id = cs.caregiver_id
+      WHERE tcp.status = 'pending'
+        AND cs.status NOT IN ('cancelled', 'completed', 'disputed')
+        AND (
+          (tcp.proposed_by = 'caregiver' AND cs.family_user_id = ?)
+          OR (tcp.proposed_by = 'family' AND cp.user_id = ?)
+        )
+      ORDER BY cs.scheduled_date, cs.scheduled_time
+      LIMIT 1
+    `).get(userId, userId);
+    return row?.id || null;
+  });
+
   return {
-    total: reimbursements + timeChanges + careTasks + messages,
+    // v1.105.105 — unread messages are NOT in the total any more. Pete: five of them showed
+    // in "Needs you" and "I wanted to show up as the notifications over the message pill" —
+    // which it already does, in the nav (app.js `unreadMsgCount`). Counting them twice made
+    // the badge a number about correspondence rather than about decisions, and the definition
+    // at the top of this file is the product: a number here means YOU are the blocker.
+    // Reading a message is not a decision anyone is waiting on.
+    // The count is still returned — it is honest, and the caller may want it — but the card
+    // and the app icon both read `total`, so they stay in agreement, which is the one thing
+    // AttentionCard cannot afford to lose.
+    total: reimbursements + timeChanges + careTasks,
     reimbursements,
     timeChanges,
+    timeChangeSessionId,
     careTasks,
     messages,
   };
