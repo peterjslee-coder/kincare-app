@@ -93,8 +93,24 @@ io.on("connection", (socket) => {
   // ─── Call signaling ───
   socket.on("call_invite", (data) => {
     // data: { targetUserId, roomName, callType, callerName }
+    //
+    // ─── v1.105.99: a call that only rings an app already on screen ───
+    //
+    // This was `if (targetSockets) { emit }` with no else. A socket exists only while the app
+    // is open and foregrounded, so an incoming call reached exactly the person who did not need
+    // telling — and if their phone was locked, backgrounded, or simply on the home screen, the
+    // invite went nowhere at all. Silently. Pete: "Phone and video calls do not ring or notify
+    // the user until I push notification after the call."
+    //
+    // Ringing someone who is not looking at their phone is the entire job of a call. So: emit
+    // to any live socket, and if there is none, push.
+    //
+    // Push only when there is NO socket, deliberately — Pete's other report (97783012) is that
+    // push while you are already in the app is noise. The socket IS the signal that they are
+    // here; its absence is the signal that they are not.
     const targetSockets = connectedUsers.get(data.targetUserId);
-    if (targetSockets) {
+    const liveSockets = targetSockets && targetSockets.size > 0;
+    if (liveSockets) {
       for (const sid of targetSockets) {
         io.to(sid).emit("call_incoming", {
           roomName: data.roomName,
@@ -103,6 +119,31 @@ io.on("connection", (socket) => {
           callerName: data.callerName,
         });
       }
+    } else {
+      const kind = data.callType === "video" ? "Video call" : "Call";
+      const who = data.callerName || "Someone";
+      // Fire and forget, but never silently: a push that fails is the difference between a
+      // ringing phone and nothing at all, so it is logged and reported.
+      (async () => {
+        try {
+          const { sendPushToUser } = require("./routes/push");
+          await sendPushToUser(data.targetUserId, {
+            title: `${kind} from ${who}`,
+            body: "Tap to answer",
+            data: {
+              type: "call_incoming",
+              page: "messages",
+              roomName: data.roomName,
+              callType: data.callType,
+              callerId: userId,
+              callerName: who,
+            },
+          }, "call_incoming");
+        } catch (err) {
+          console.error("call_invite push failed:", err.message);
+          captureException(err, { where: "socket: call_invite push", targetUserId: data.targetUserId });
+        }
+      })();
     }
   });
 
@@ -444,7 +485,7 @@ app.use("/api/media", require("./routes/media"));
 app.use("/api/safety", require("./routes/safety"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.105.98";
+const APP_VERSION = "1.105.99";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });

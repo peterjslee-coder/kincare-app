@@ -621,7 +621,19 @@ const App = () => {
       // EVERY tap (web push, native push, in-app list) gets the same clobber
       // protection the web-URL cold path already has.
       let target = null;
-      if ((t === 'message' || t === 'video_call') && d.conversationId) {
+      // v1.105.99 — an incoming call arriving as a push (the phone was locked, so there was no
+      // socket to ring). Tapping it must land on Messages with enough to answer: the room, the
+      // type and who is calling. Without this branch the push would fall through to the default
+      // and open the dashboard, which is a call you cannot pick up.
+      if (t === 'call_incoming') {
+        window.__pendingCall = {
+          roomName: d.roomName,
+          callType: d.callType,
+          callerId: d.callerId,
+          callerName: d.callerName,
+        };
+        target = 'messages';
+      } else if ((t === 'message' || t === 'video_call') && d.conversationId) {
         window.__pendingConversation = d.conversationId;
         target = 'messages';
       } else if (t.startsWith('reimbursement')) {

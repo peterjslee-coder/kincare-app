@@ -826,6 +826,16 @@ const Messages = window.Messages = () => {
 
   // Listen for incoming calls via Socket.io
   useEffect(() => {
+    // v1.105.99 — a call that arrived as a push while the app was closed. app.js parks it on
+    // window.__pendingCall; pick it up on mount so the incoming-call UI appears rather than
+    // dumping her into Messages with no idea why she is there.
+    try {
+      if (window.__pendingCall) {
+        setIncomingCall(window.__pendingCall);
+        window.__pendingCall = null;
+      }
+    } catch {}
+
     const cleanup = onSocketEvent('call_incoming', (data) => {
       if (!callState.active) {
         setIncomingCall(data);
