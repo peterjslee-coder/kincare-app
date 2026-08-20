@@ -312,6 +312,9 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
   const [nukeError, setNukeError] = useState(null);
   // Onboarding override state
   const [onboardingModal, setOnboardingModal] = useState(null); // { userId, data }
+  // v1.105.109 — the vouch picker. Pete: "i don't like the vouch picker, the 'type a number
+  // that corresponds with a name'". { caregiverUserId, caregiverName, mode, onDone }
+  const [vouchPicker, setVouchPicker] = useState(null);
   const [onboardingLoading, setOnboardingLoading] = useState(false);
   // Help/FAQ management state
   const [helpArticles, setHelpArticles] = useState([]);
@@ -1595,29 +1598,51 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
   //
   // Deliberately the same prompt/confirm flow as the BG Checks card, including the wording
   // that a vouch is NOT a background check and covers one family only.
-  const vouchFromPeople = async () => {
+  // v1.105.109 — was a prompt() holding a numbered list you had to transcribe, then a second
+  // prompt() for the note, then a confirm(). Transcribing an index fails silently: pick the
+  // wrong number and you have vouched a caregiver into a stranger's family. It also fetched
+  // `limit=100` and filtered in the browser, so the 101st family could not be vouched for at
+  // all. <VouchPicker/> searches on the server.
+  const vouchFromPeople = () => {
     if (!onboardingModal) return;
-    const who = onboardingModal.user?.name || onboardingModal.user?.email || 'this caregiver';
+    const userId = onboardingModal.userId;
+    setVouchPicker({
+      caregiverUserId: userId,
+      caregiverName: onboardingModal.user?.name || onboardingModal.user?.email || 'this caregiver',
+      mode: 'vouch',
+      onDone: () => openOnboardingModal(userId),
+    });
+  };
+
+  // v1.105.109 — one place that actually writes a vouch, for all three entry points.
+  // Returns true on success; the picker stays open on failure with the family still selected,
+  // so finding the right one is not thrown away by a network blip.
+  const submitVouch = async (family, note) => {
+    if (!vouchPicker) return false;
+    const { caregiverUserId, mode, onDone } = vouchPicker;
     try {
-      const r = await apiFetch('/api/admin/users?role=family&limit=100');
-      if (!r?.ok) { alert('Failed to load families'); return; }
-      const d = await r.json();
-      const fams = (d.users || d || []).filter(u => !u.is_demo);
-      if (!fams.length) { alert('No family accounts found'); return; }
-      const listing = fams.map((f, i) => `${i + 1}. ${f.first_name} ${f.last_name} (${f.email})`).join('\n');
-      const pick = prompt(`Vouch for ${who} with which family?\n\n${listing}\n\nEnter number:`);
-      if (!pick) return;
-      const fam = fams[parseInt(pick, 10) - 1];
-      if (!fam) { alert('Invalid selection'); return; }
-      const note = prompt(`Optional note — why can you vouch for ${who} with ${fam.first_name} ${fam.last_name}'s family?`) || '';
-      if (!confirm(`Vouch for ${who} to work with ${fam.first_name} ${fam.last_name}'s family ONLY?\n\nThis is NOT a background check and will never display as one. That family sees: "Approved by admin — no background check."`)) return;
-      const res = await apiFetch('/api/admin/vouches', {
-        method: 'POST',
-        body: JSON.stringify({ caregiverUserId: onboardingModal.userId, familyUserId: fam.id, note }),
-      });
-      if (res?.ok) { openOnboardingModal(onboardingModal.userId); }
-      else { const e = res ? await res.json().catch(() => ({})) : {}; alert(e.error || 'Failed to vouch'); }
-    } catch (err) { console.error('Vouch from People error:', err); alert('Failed to vouch'); }
+      const res = mode === 'convert'
+        ? await apiFetch(`/api/admin/caregivers/${caregiverUserId}/convert-to-vouch`, {
+            method: 'POST', body: JSON.stringify({ familyUserId: family.id, note }),
+          })
+        : await apiFetch('/api/admin/vouches', {
+            method: 'POST',
+            body: JSON.stringify({ caregiverUserId, familyUserId: family.id, note }),
+          });
+      if (!res?.ok) {
+        const d = res ? await res.json().catch(() => ({})) : {};
+        showToast(d.error || (mode === 'convert' ? 'Failed to convert' : 'Failed to vouch'), 'error');
+        return false;
+      }
+      showToast(mode === 'convert' ? 'Converted to an honest vouch' : 'Vouch created', 'success');
+      setVouchPicker(null);
+      if (typeof onDone === 'function') onDone();
+      return true;
+    } catch (err) {
+      console.error('Vouch error:', err);
+      showToast('Failed to save — check your connection', 'error');
+      return false;
+    }
   };
 
   const revokeVouchFromPeople = async (vouch) => {
@@ -1835,6 +1860,16 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
 
   return (
     <div style={{ display: 'flex', height: 'calc(100vh - 60px)', overflow: 'hidden', margin: '-16px -16px 0', position: 'relative' }}>
+
+      {/* ═══ Vouch picker (v1.105.109) — replaces three chained browser dialogs ═══ */}
+      {vouchPicker && typeof VouchPicker !== 'undefined' && (
+        <VouchPicker
+          caregiverName={vouchPicker.caregiverName}
+          mode={vouchPicker.mode}
+          onCancel={() => setVouchPicker(null)}
+          onSubmit={submitVouch}
+        />
+      )}
 
       {/* ═══ IP Verification Modal ═══ */}
       {ipVerifyModal && (
@@ -6112,34 +6147,20 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
         const isHighlight = (s) => s === 'consider' || s === 'adverse_action' || s === 'suspended' || s === 'disputed' || s === 'did_not_pass';
 
         // ── v1.64.0 honest-override: vouch actions ──
-        const pickFamily = async () => {
-          const r = await apiFetch('/api/admin/users?role=family&limit=100');
-          if (!r || !r.ok) { showToast('Failed to load families', 'error'); return null; }
-          const d = await r.json();
-          const fams = (d.users || d || []).filter(u => !u.is_demo);
-          if (!fams.length) { showToast('No family accounts found', 'error'); return null; }
-          const listing = fams.map((f, i) => `${i + 1}. ${f.first_name} ${f.last_name} (${f.email})`).join('\n');
-          const pick = prompt('Vouch for which family?\n\n' + listing + '\n\nEnter number:');
-          if (!pick) return null;
-          const idx = parseInt(pick, 10) - 1;
-          if (isNaN(idx) || !fams[idx]) { showToast('Invalid selection', 'error'); return null; }
-          return fams[idx];
-        };
-        const vouchForFamily = async (c) => {
-          const fam = await pickFamily(); if (!fam) return;
-          const note = prompt(`Optional note \u2014 why can you vouch for ${c.first_name} with ${fam.first_name} ${fam.last_name}'s family?`) || '';
-          if (!confirm(`Vouch for ${c.first_name} ${c.last_name} to work with ${fam.first_name} ${fam.last_name}'s family ONLY?\n\nThis is NOT a background check and will never display as one. That family sees: \u201cApproved by admin \u2014 no background check.\u201d`)) return;
-          const r = await apiFetch('/api/admin/vouches', { method: 'POST', body: JSON.stringify({ caregiverUserId: c.user_id, familyUserId: fam.id, note }) });
-          if (r && r.ok) { showToast('Vouch created', 'success'); loadBgChecks(); }
-          else { const d = r ? await r.json().catch(() => ({})) : {}; showToast(d.error || 'Failed to vouch', 'error'); }
-        };
-        const convertToVouch = async (c) => {
-          const fam = await pickFamily(); if (!fam) return;
-          if (!confirm(`Convert ${c.first_name} ${c.last_name}'s manually-set \u201cbackground cleared\u201d flag into an honest per-family vouch for ${fam.first_name} ${fam.last_name}'s family?\n\nAfter this:\n\u2022 They can still work for that family\n\u2022 They will NO LONGER display as background-checked\n\u2022 A real check is required for any other family`)) return;
-          const r = await apiFetch(`/api/admin/caregivers/${c.user_id}/convert-to-vouch`, { method: 'POST', body: JSON.stringify({ familyUserId: fam.id }) });
-          if (r && r.ok) { showToast('Converted to honest vouch', 'success'); loadBgChecks(); }
-          else { const d = r ? await r.json().catch(() => ({})) : {}; showToast(d.error || 'Failed to convert', 'error'); }
-        };
+        // v1.105.109 — see vouchFromPeople above: the numbered-prompt picker is gone, and
+        // with it the silent limit=100 cap.
+        const vouchForFamily = (c) => setVouchPicker({
+          caregiverUserId: c.user_id,
+          caregiverName: `${c.first_name} ${c.last_name}`.trim(),
+          mode: 'vouch',
+          onDone: loadBgChecks,
+        });
+        const convertToVouch = (c) => setVouchPicker({
+          caregiverUserId: c.user_id,
+          caregiverName: `${c.first_name} ${c.last_name}`.trim(),
+          mode: 'convert',
+          onDone: loadBgChecks,
+        });
         const revokeVouch = async (v, c) => {
           if (!confirm(`Revoke the vouch for ${c.first_name} with ${v.family_name}'s family? They will no longer be able to claim that family's jobs.`)) return;
           const r = await apiFetch(`/api/admin/vouches/${v.id}`, { method: 'DELETE' });

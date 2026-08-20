@@ -290,8 +290,13 @@ router.get("/users", async (req, res) => {
       sql += ` AND (email ILIKE ? OR (first_name || ' ' || last_name) ILIKE ?)`;
     }
     if (role) {
-      params.push(role);
-      sql += ` AND role = ?`;
+      // v1.105.109 — match the `roles` array too, not just the singular `role` column.
+      // Someone who signed up as a caregiver and later added a family profile has
+      // role='caregiver' and roles=["caregiver","family"]. Filtering on `role` alone made
+      // them invisible to `?role=family` — which meant the vouch picker could not offer
+      // their family, and nothing said why. Pete himself is both.
+      params.push(role, `%"${role}"%`);
+      sql += ` AND (role = ? OR roles LIKE ?)`;
     }
     if (req.query.demo === 'demo') {
       sql += ` AND COALESCE(is_demo, 0) = 1`;

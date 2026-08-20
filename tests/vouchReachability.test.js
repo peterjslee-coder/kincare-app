@@ -28,6 +28,7 @@ const checkr = code("src/routes/checkr.js");
 const userFlags = code("src/routes/admin/userFlags.js");
 const dashboard = code("src/routes/dashboard.js");
 const adminPanel = code("public/js/components/AdminPanel.js");
+const vouchPicker = code("public/js/components/VouchPicker.js");
 const hub = code("public/js/components/CaretakerHub.js");
 
 function region(src, startMarker, endMarker, label) {
@@ -113,19 +114,27 @@ describe("vouching is reachable without entering the Checkr pipeline", () => {
     expect(userFlags).toMatch(/\n\s+vouches,/);
   });
 
+  // v1.105.109 — the three entry points now open one <VouchPicker/> instead of each running
+  // their own prompt() chain. Same invariants, new shape: still three doors, still one write,
+  // still the honest wording, and revoke unchanged.
   test("the modal can create and revoke one", () => {
-    expect(adminPanel).toMatch(/const vouchFromPeople = async/);
+    expect(adminPanel).toMatch(/const vouchFromPeople = \(\) => \{/);
     expect(adminPanel).toMatch(/const revokeVouchFromPeople = async/);
-    const fn = region(adminPanel, "const vouchFromPeople = async", "const revokeVouchFromPeople = async", "vouchFromPeople");
-    expect(fn).toMatch(/apiFetch\('\/api\/admin\/vouches', \{/);
-    expect(fn).toMatch(/caregiverUserId: onboardingModal\.userId/);
+    const fn = region(adminPanel, "const vouchFromPeople = () => {", "const submitVouch = async", "vouchFromPeople");
+    expect(fn).toMatch(/caregiverUserId: userId/);
+    // and one shared writer behind all three
+    const writer = region(adminPanel, "const submitVouch = async", "const revokeVouchFromPeople = async", "submitVouch");
+    expect(writer).toMatch(/apiFetch\('\/api\/admin\/vouches', \{/);
+    expect(writer).toMatch(/convert-to-vouch/);
   });
 
   test("it reuses the honest wording — a vouch is never shown as a background check", () => {
     // v1.64.0's rule. A second entry point must not become a second, laxer story.
-    const fn = region(adminPanel, "const vouchFromPeople = async", "const revokeVouchFromPeople = async", "vouchFromPeople");
-    expect(fn).toMatch(/NOT a background check/);
-    expect(fn).toMatch(/family ONLY/);
+    // The wording moved out of a confirm() and onto the picker, where it is on screen WHILE
+    // the admin chooses rather than after.
+    expect(vouchPicker).toMatch(/not<\/strong> a background check/);
+    expect(vouchPicker).toMatch(/applies to that family <strong>only<\/strong>/);
+    expect(vouchPicker).toMatch(/Approved by admin/);
   });
 
   test("the panel explains what the fee flag above it does not do", () => {
@@ -135,7 +144,7 @@ describe("vouching is reachable without entering the Checkr pipeline", () => {
   });
 
   test("BG Checks keeps its own vouch flow — this is a second door, not a move", () => {
-    expect(adminPanel).toMatch(/const vouchForFamily = async/);
-    expect(adminPanel).toMatch(/const convertToVouch = async/);
+    expect(adminPanel).toMatch(/const vouchForFamily = \(c\) => setVouchPicker\(\{/);
+    expect(adminPanel).toMatch(/const convertToVouch = \(c\) => setVouchPicker\(\{/);
   });
 });

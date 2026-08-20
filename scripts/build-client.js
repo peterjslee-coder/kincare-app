@@ -92,6 +92,7 @@ const scripts = [
 
 // Admin-only components — dependency order (AdminPanel renders the other two)
 const ADMIN_SCRIPTS = [
+  "js/components/VouchPicker.js",
   "js/components/AdminFinancials.js",
   "js/components/SafetyFlagsTab.js",
   "js/components/ContentReportsTab.js",

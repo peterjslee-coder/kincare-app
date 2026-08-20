@@ -704,6 +704,27 @@
 
 ### P2
 
+- [x] **The vouch picker made you transcribe a number.** (Pete, Aug 19) *"i don't like the vouch
+      picker, the 'type a number that corresponds with a name'…there needs to be a cleaner
+      picker, like when you search for contacts in messages."*
+      ✅ **Fixed v1.105.109.** It was three browser dialogs in a row: a `prompt()` holding a
+      numbered list you had to read and retype as an index, a second `prompt()` for the note,
+      and a `confirm()` carrying the honesty warning. **Transcribing an index fails silently** —
+      pick the wrong number and you have vouched a caregiver into a stranger's family, which is
+      the most consequential thing an admin can do on that screen.
+      `<VouchPicker/>` — search box, results with name and email, one tap to select, the note
+      inline, and the confirm button names the family you chose so a mis-tap is visible before
+      you commit. All three entry points (People modal, BG Checks vouch, BG Checks convert) open
+      it, and one `submitVouch` writes.
+      **Two silent bugs went with it:** the old picker fetched `limit=100` and filtered in the
+      browser, so **the 101st family could not be vouched for at all**; and `?role=family`
+      matched only the singular `role` column, so anyone who signed up as a caregiver and later
+      added a family profile — **Pete himself** — was invisible to it. The filter now matches
+      the `roles` array too. `tests/vouchPicker.test.js` (16); `vouchReachability.test.js`
+      updated to the new shape without weakening what it pins.
+      ⚠️ Also: the nav path is **Admin → BG Checks**, not "Admin → Vouches". I sent Pete to a
+      page that does not exist by inferring it from an API route name.
+
 - [x] **Care preferences box runs off the screen.** (5eba31dd, Tyler, iPhone 17 Pro) *"the items
       go in a box that extends beyond my phone screen and i can't see the full text."*
       ✅ **Fixed v1.105.107, and it was the hard floor.** The row is
