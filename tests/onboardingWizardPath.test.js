@@ -164,8 +164,24 @@ describe("the wizard never says she is verified", () => {
     expect(wizardCode).not.toContain("An admin will review and approve your identity");
   });
 
-  test("it says what is true: it is sent, and nothing else is hers to do", () => {
-    expect(wizardSrc).toMatch(/we\\u2019ll review it and reach out if we have any questions/);
-    expect(wizardSrc).toMatch(/nothing else for you to do/);
+  test("what it says instead is warm, and the same for everyone", () => {
+    // Pete: "Looking good (Julia)! Verification doesn't take long. Let's continue." She has
+    // just photographed her own face; the answer to that should not be a status label.
+    expect(wizardCode).toMatch(/Looking good\{form\.firstName/);
+    expect(wizardCode).toMatch(/Verification doesn/);
+    expect(wizardCode).toMatch(/s continue/);
+  });
+
+  test("the automated verdict does not change what she reads", () => {
+    // v1.105.112 established that nothing gates on the AI recommendation. Branching the copy
+    // on `matched` would put that verdict back in front of her by the back door, in the one
+    // place she is least able to argue with it.
+    const box = wizardCode.slice(wizardCode.indexOf("{idVerifyResult && ("));
+    expect(box.slice(0, box.indexOf("{/* Buttons */}"))).not.toContain("idVerifyResult.matched");
+  });
+
+  test("the handoff still tells her where the ID went", () => {
+    expect(wizardCode).toMatch(/Your ID is with us/);
+    expect(wizardCode).toMatch(/we\\u2019ll review it and reach out if we have any questions/);
   });
 });

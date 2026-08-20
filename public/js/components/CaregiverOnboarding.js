@@ -1841,22 +1841,28 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
 
             {/* Verify Result */}
             {idVerifyResult && (
-              <div style={{ padding: 14, borderRadius: 8, marginBottom: 16, background: '#fff8e1', border: '1px solid #ffe0b2' }}>
-                {/* v1.105.115 \u2014 this screen still said "Identity verified!" whenever the
-                    automated checks agreed. They no longer verify anything: since v1.105.112 the
-                    status is ALWAYS pending and only a person writes 'approved'. The server has
-                    been sending `pendingReview: true` and a comment saying "never tell her she is
-                    verified" since that release; this was the one surface still saying it. Worse
-                    than merely wrong \u2014 she read "verified" here and then found the same step
-                    sitting unfinished on her dashboard, which is the contradiction the whole
-                    onboarding track exists to remove. */}
-                <div style={{ fontWeight: 600, fontSize: 14, color: '#e65100', marginBottom: 4 }}>
-                  &#9203; Sent
+              // v1.105.116 \u2014 Pete's words. She has just photographed her own face and her
+              // own licence, which is the most exposed moment in the whole signup, and the
+              // screen used to answer it with either a green "Identity verified!" (untrue since
+              // v1.105.112 \u2014 only a person writes 'approved') or an amber "Submitted for
+              // admin review", which reads like a hold-up. Neither is what you say to someone
+              // who just did the hard part.
+              //
+              // ONE message, deliberately, whatever the automated checks thought. `matched` is
+              // the recommendation that v1.105.112 established nothing gates on; letting it
+              // change what she reads would put an AI verdict back in front of her by the
+              // back door, in the one place she is least able to argue with it.
+              //
+              // It advances to the handoff after 1.5s, so "Let's continue" is literal.
+              <div style={{
+                padding: 14, borderRadius: 8, marginBottom: 16,
+                background: 'var(--bg-highlight)', border: '1px solid #d4ede8',
+              }}>
+                <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--role-color)', marginBottom: 4 }}>
+                  Looking good{form.firstName ? ', ' + form.firstName : ''}!
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                  {idVerifyResult.matched
-                    ? 'Your selfie matches your ID. We\u2019ll review it and reach out if we have any questions \u2014 nothing else for you to do.'
-                    : 'We\u2019ll review it and reach out if we have any questions \u2014 nothing else for you to do.'}
+                  Verification doesn{'\u2019'}t take long. Let{'\u2019'}s continue.
                 </div>
               </div>
             )}
