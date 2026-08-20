@@ -966,6 +966,29 @@ const App = () => {
   });
   const [verifyMessage, setVerifyMessage] = useState(null);
 
+  // v1.105.101 — this banner had no way out.
+  //
+  // Tyler, a brand-new user, reported "Welcome to InPlace!" would not go away "at all or when
+  // navigating to new screens." It is not a modal — it is THIS banner, rendered above
+  // renderPage(), so it is app-level state that no page change touches. It is set the instant
+  // he accepts the legal docs, which happens BEHIND the full-screen DisclaimerModal, so he
+  // never saw it appear; it simply materialised over the app and stayed.
+  //
+  // The only dismissal was a bare "×" with no padding: roughly a 10x18px tap target on a
+  // phone, against Apple's 44x44 minimum. So "does not go away at all" was literally true —
+  // he was tapping it and missing.
+  //
+  // Celebrations expire; problems don't. A success message has been read the moment it is
+  // seen, so it clears itself. An error is the only thing the user has telling them what went
+  // wrong, and it stays until they dismiss it. Not on the login page, where "Email verified!
+  // Sign in to continue." is an instruction they may still be reading.
+  useEffect(() => {
+    if (!verifyMessage || verifyMessage.type !== 'success' || appState !== 'app') return;
+    const t = setTimeout(() => setVerifyMessage(null), 6000);
+    return () => clearTimeout(t);
+  }, [verifyMessage, appState]);
+
+
   // ─── Dedicated email verification useEffect (isolated from auto-login) ───
   useEffect(() => {
     if (!pendingVerifyToken) return;
@@ -2002,7 +2025,14 @@ const App = () => {
             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
           }}>
             <span>{verifyMessage.type === 'success' ? '✅ ' : '⚠️ '}{verifyMessage.text}</span>
-            <button onClick={() => setVerifyMessage(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px', color: 'inherit' }}>&times;</button>
+            {/* v1.105.101 — was a bare 16px "×" with no padding: about a 10x18px tap target,
+                against Apple's 44x44 minimum. Tyler could not dismiss this banner because he
+                kept missing it. Negative margin keeps the banner the same height. */}
+            <button onClick={() => setVerifyMessage(null)} aria-label="Dismiss" style={{
+              background: 'none', border: 'none', cursor: 'pointer', fontSize: '20px', lineHeight: 1,
+              color: 'inherit', minWidth: '44px', minHeight: '44px', margin: '-12px -16px -12px 0',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            }}>&times;</button>
           </div>
         )}
         {updateAvailable && (

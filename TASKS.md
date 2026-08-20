@@ -19,11 +19,22 @@
       video call or phone options in the chat anymore. Where are they?"* and Julia (d378b267)
       *"The call button is hidden."* Two users, independently, same day. **P0**
 
-- [ ] **⛔ "Welcome to InPlace!" popup cannot be dismissed.** (8a05e737, Tyler) *"does not go
-      away at all or when navigating to new screens."* A modal that survives navigation blocks
-      the whole app for a brand-new user — which is the worst possible moment. **P0**
+- [x] **⛔ "Welcome to InPlace!" popup cannot be dismissed.** (8a05e737, Tyler) *"does not go
+      away at all or when navigating to new screens."* ✅ **Fixed v1.105.101.** Not a modal —
+      the `verifyMessage` banner in `app.js`, rendered above `renderPage()`, so it is app-level
+      state that no page change touches. It is set the instant he accepts the legal docs, which
+      happens BEHIND the full-screen `DisclaimerModal`, so he never saw it appear; it simply
+      materialised over the app and stayed. And the only dismissal was a bare 16px `×` with no
+      padding — about a **10x18px tap target** against Apple's 44x44 minimum, so *"does not go
+      away at all"* was literally true: he was tapping it and missing.
+      Success banners now clear themselves after 6s (errors never do — an error is the only
+      thing telling the user what went wrong; and not on the login page, where *"Email verified!
+      Sign in to continue."* is an instruction they may still be reading). Both dismiss buttons
+      meet 44x44 and carry `aria-label`. `tests/verifyBannerDismissal.test.js` (9).
+      Side effect worth noting: `app.js:2021` suppresses the *verify your email* nudge while a
+      `verifyMessage` is up, so a stuck success banner was also permanently hiding it.
 
-- [ ] **⛔ Decline STILL fails for Julia — and it is my design error, not a stale bundle.**
+- [x] **⛔ Decline STILL fails for Julia — and it is my design error, not a stale bundle.**
       (17b2434c) *"Still not working when I press 'Decline Request.'"* v1.105.91 fixed the
       SERVER to accept `offered_to_caregiver_id`. What it did not fix is that the "Can't make
       it" button renders on EVERY job that is not your own request, including open-pool jobs
@@ -38,6 +49,14 @@
       job should offer instead — probably "not for me", which hides it from her list without
       telling a family that nobody named has declined. Do not just widen the server check:
       declining a job you were never offered has no meaning to send to the family. **P0**
+
+      ✅ **Fixed v1.105.100.** `dashboard.js` now sends `isDirectedAtMe`
+      (`offered_to_caregiver_id` OR `caregiver_id` === me); `CaretakerHub` shows "Can't make it"
+      only for those, at both job-card sites. Open jobs get **"Not for me"**, which hides them
+      on the device and tells nobody — a family should not hear that a caregiver they never
+      approached passed on their job. A job directed at her is never hidden that way: that one
+      needs an answer, and quietly removing it would turn a request into silence.
+      `tests/declineButtonVisibility.test.js` (8).
 
 
 > **Aug 4 2026 — code + task review.** Two agents swept the client and the server for every

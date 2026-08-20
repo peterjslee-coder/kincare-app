@@ -405,7 +405,12 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBa
             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
           }}>
             <span>{banner.type === 'info' ? 'ℹ️ ' : banner.type === 'success' ? '✅ ' : '⚠️ '}{banner.text}</span>
-            {onDismissBanner && <button onClick={onDismissBanner} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px', color: 'inherit', padding: '0 0 0 8px' }}>&times;</button>}
+            {onDismissBanner && <button onClick={onDismissBanner} aria-label="Dismiss" style={{
+              /* v1.105.101 — same 44x44 minimum as the in-app banner's dismiss. */
+              background: 'none', border: 'none', cursor: 'pointer', fontSize: '20px', lineHeight: 1,
+              color: 'inherit', minWidth: '44px', minHeight: '44px', margin: '-12px -12px -12px 0',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            }}>&times;</button>}
           </div>
         )}
 
