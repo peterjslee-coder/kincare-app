@@ -39,6 +39,77 @@ const SERVICE_TYPE_LABELS = {
   overnight: 'Overnight', respite: 'Respite Care',
   housekeeping: 'Housekeeping',
 };
+// ─── What a job pays, computed once (v1.105.106) ───
+//
+// Julia, dc5e86b5: "$24 and then $29 listed on same job (doesn't match up)."
+//
+// She was right, and it was not a display preference — it was arithmetic that could not be
+// reconciled. The two job cards each computed the money inline, twice over, like this:
+//
+//   basePerHour   = Math.round(baseCost / hours)     ← whole dollars
+//   effectiveTotal = baseCost                        ← then rendered with .toFixed(0)
+//
+// Two independent roundings of the same money. A 1.2-hour job at $29 showed a "$24/hr" pill
+// and a bare "$29", and 24 x 1.2 is 28.8, not 29 — so multiplying what she could see never
+// gave what she could see. Worse, the $29 carried NO LABEL at all: a rate and a total sitting
+// side by side, one of them unexplained. Of course it didn't match up.
+//
+// So: derive everything from ONE total, round only at the very end, and never round a rate
+// independently of the total it came from.
+//
+// `estimated_cost` IS the caregiver's take — sessions.js sets
+// `caregiver_payout: estimatedCost` with the comment "caregiver gets the full amount"; the
+// platform fee is added ON TOP for the family. So it is honest to label this as what she earns.
+const jobPay = window.jobPay = (job) => {
+  const hours = parseFloat(job && job.durationHours) || 0;
+  const surcharge = parseFloat(job && job.shortNoticeSurcharge) || 0;
+  const proposedRate = parseFloat(job && job.proposedRate) || 0;
+  const baseCost = parseFloat(job && job.estimatedCost) || 0;
+
+  // One total. Everything below is derived from it.
+  const total = proposedRate > 0 ? (proposedRate * hours) + surcharge : baseCost;
+  const perHour = hours > 0 ? total / hours : 0;
+  // What it would pay without the short-notice bonus — from the SAME total, not a
+  // separately-rounded figure.
+  const basePerHour = hours > 0 ? (total - surcharge) / hours : 0;
+
+  return {
+    hours,
+    surcharge,
+    hasBonus: surcharge > 0,
+    total,
+    perHour,
+    basePerHour,
+  };
+};
+
+// How long an exclusive ("Just for You") offer has left, and whether it has lapsed —
+// both from a `now` the CALLER controls (v1.105.106).
+//
+// These used to be inlined four times in CaretakerHub, each calling `new Date()` during
+// render: twice in the two filters that decide which section a job belongs to, and once per
+// card for the countdown. List membership therefore depended on the wall clock at the instant
+// React happened to render, so any unrelated re-render could move a card from "Just for You"
+// into Find Work mid-tap. Passing `now` in makes one render see one moment.
+const exclusiveMinutesLeft = window.exclusiveMinutesLeft = (job, nowMs) => {
+  const until = job && job.exclusiveUntil ? new Date(job.exclusiveUntil).getTime() : null;
+  if (!until || Number.isNaN(until)) return null;
+  return Math.max(0, Math.floor((until - nowMs) / 60000));
+};
+
+const isExclusiveExpired = window.isExclusiveExpired = (job, nowMs) => {
+  const left = exclusiveMinutesLeft(job, nowMs);
+  return left !== null && left <= 0;
+};
+
+// Money the reader can check with a calculator. Whole dollars stay whole ($29, not $29.00);
+// anything else keeps its cents ($24.17), because rounding a rate to the dollar is exactly
+// what stopped the numbers reconciling.
+const formatMoney = window.formatMoney = (n) => {
+  const v = Math.round((Number(n) || 0) * 100) / 100;
+  return Number.isInteger(v) ? `$${v}` : `$${v.toFixed(2)}`;
+};
+
 const formatServiceType = window.formatServiceType = (type) => {
   if (!type) return '';
   // Handle "other:Custom text" format

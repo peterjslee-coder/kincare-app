@@ -99,7 +99,23 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const [tcRespondLoading, setTcRespondLoading] = useState(false);
   const [highlightTab, setHighlightTab] = useState(false);
   const [jobSort, setJobSort] = useState('best_match');
-  const [exclusiveTick, setExclusiveTick] = useState(0);
+  // v1.105.106 — a TIMESTAMP, not a tick counter.
+  //
+  // `exclusiveTick` was incremented every 30s purely to force a re-render, and never read.
+  // Every place that needed "is this offer still exclusive?" then called `new Date()` DURING
+  // RENDER — twice, in two filters that must agree, plus once more per card for the countdown.
+  //
+  // That makes list membership depend on the wall clock at the instant React happens to
+  // render. Tap "Read more" on a job whose window has just lapsed and the split is recomputed:
+  // the "Just for You" section returns null, the card reappears further down in Find Work, and
+  // from the outside "the Accept Job button disappears and reappears" — Julia, dc5e86b5 —
+  // while the description she was trying to read is unchanged, because that was never what
+  // moved.
+  //
+  // One `now`, changed only by the ticker. The boundary can now only move on a tick, never on
+  // an unrelated re-render, and the two filters cannot disagree with each other or with the
+  // "N min left" printed on the card.
+  const [exclusiveNow, setExclusiveNow] = useState(() => Date.now());
   const calendarRef = useRef(null);
   const [claimingJobId, setClaimingJobId] = useState(null);
   const [cancellingJobId, setCancellingJobId] = useState(null);
@@ -408,7 +424,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   useEffect(() => {
     const hasExclusive = data?.openJobs?.some(j => j.exclusiveUntil || j.exclusive_until);
     if (!hasExclusive) return;
-    const iv = setInterval(() => setExclusiveTick(t => t + 1), 30000);
+    const iv = setInterval(() => setExclusiveNow(Date.now()), 30000);
     return () => clearInterval(iv);
   }, [data?.openJobs]);
 
@@ -1569,9 +1585,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         const exclusiveOffers = openJobs.filter(job => {
           if (pendingProposalSessionIds.has(job.id)) return false; // already proposed
           if (!job.offeredToCaregiverId) return false;
-          const exUntil = job.exclusiveUntil ? new Date(job.exclusiveUntil) : null;
-          const expired = exUntil && Math.max(0, Math.floor((exUntil - new Date()) / 60000)) <= 0;
-          return !expired; // only show non-expired exclusive offers
+          return !isExclusiveExpired(job, exclusiveNow); // only non-expired exclusive offers
         });
         if (exclusiveOffers.length === 0) return null;
 
@@ -1588,17 +1602,13 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               const tParts = (job.time || '').split(':').map(Number);
               const timeLabel = tParts.length >= 2 ? `${tParts[0] > 12 ? tParts[0] - 12 : tParts[0] || 12}:${String(tParts[1]).padStart(2, '0')} ${tParts[0] >= 12 ? 'PM' : 'AM'}` : '';
 
-              const surcharge = parseFloat(job.shortNoticeSurcharge) || 0;
-              const proposedRate = parseFloat(job.proposedRate) || 0;
-              const hours = parseFloat(job.durationHours) || 1;
-              const baseCost = parseFloat(job.estimatedCost) || 0;
-              const basePerHour = proposedRate > 0 ? proposedRate : (hours > 0 ? Math.round(baseCost / hours) : 0);
-              const effectiveTotal = proposedRate > 0 ? (proposedRate * hours) + surcharge : baseCost;
-              const effectivePerHour = hours > 0 ? Math.round(effectiveTotal / hours * 100) / 100 : 0;
-              const hasBonus = surcharge > 0;
+              // v1.105.106 — one computation, in utils.js, shared with the open-jobs card
+              // below. These two cards each did the arithmetic inline and rounded the rate
+              // and the total independently, which is why Julia saw "$24 and then $29 listed
+              // on same job (doesn't match up)" — dc5e86b5.
+              const { total: effectiveTotal, perHour: effectivePerHour, basePerHour, hasBonus } = jobPay(job);
 
-              const exclusiveUntil = job.exclusiveUntil ? new Date(job.exclusiveUntil) : null;
-              const exclusiveRemaining = exclusiveUntil ? Math.max(0, Math.floor((exclusiveUntil - new Date()) / 60000)) : null;
+              const exclusiveRemaining = exclusiveMinutesLeft(job, exclusiveNow);
               const exclusiveUrgent = exclusiveRemaining !== null && exclusiveRemaining <= 10;
 
               return (
@@ -1624,14 +1634,14 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                       <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>{formatServiceType(job.serviceType)}</div>
                       <div style={{ fontSize: 14, color: 'var(--text-secondary)', marginTop: 3 }}>
                         {dayLabel}{timeLabel ? ` at ${timeLabel}` : ''}{job.durationHours ? ` \u2022 ${job.durationHours}hr` : ''}
-                        {effectiveTotal > 0 && <React.Fragment><span> {'\u2022'} </span><span style={{ fontWeight: 800, color: 'var(--role-color)', fontSize: 22 }}>${effectiveTotal.toFixed(0)}</span></React.Fragment>}
+                        {effectiveTotal > 0 && <React.Fragment><span> {'\u2022'} </span><span style={{ fontWeight: 800, color: 'var(--role-color)', fontSize: 22 }}>{formatMoney(effectiveTotal)}</span><span style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 600 }}> total</span></React.Fragment>}
                       </div>
                       {job.recipientCity && <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>{'\uD83D\uDCCD'} {job.recipientCity}</div>}
                       {job.familyName && <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 1 }}>Requested by {job.familyName}</div>}
                       {hasBonus && basePerHour > 0 && (
                         <div style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
-                          <span style={{ textDecoration: 'line-through', color: 'var(--text-muted)', fontSize: 12 }}>${basePerHour}/hr</span>
-                          <span style={{ color: 'var(--role-color)', fontWeight: 700, fontSize: 14 }}>${effectivePerHour}/hr</span>
+                          <span style={{ textDecoration: 'line-through', color: 'var(--text-muted)', fontSize: 12 }}>{formatMoney(basePerHour)}/hr</span>
+                          <span style={{ color: 'var(--role-color)', fontWeight: 700, fontSize: 14 }}>{formatMoney(effectivePerHour)}/hr</span>
                         </div>
                       )}
                       {job.healthTags && job.healthTags.length > 0 && (
@@ -2247,9 +2257,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         const nonExclusiveJobs = openJobs.filter(job => {
           if (pendingProposalSessionIds.has(job.id)) return false; // already proposed on this job
           if (!job.offeredToCaregiverId) return true; // regular jobs stay
-          const exUntil = job.exclusiveUntil ? new Date(job.exclusiveUntil) : null;
-          const expired = exUntil && Math.max(0, Math.floor((exUntil - new Date()) / 60000)) <= 0;
-          return expired; // expired exclusive offers fall back to Find Work
+          return isExclusiveExpired(job, exclusiveNow); // expired ones fall back to Find Work
         });
         const sortedJobs = [...nonExclusiveJobs].sort((a, b) => {
           // Direct offers (expired exclusive) on top
@@ -2302,20 +2310,13 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                   const tParts = (job.time || '').split(':').map(Number);
                   const timeLabel = tParts.length >= 2 ? `${tParts[0] > 12 ? tParts[0] - 12 : tParts[0] || 12}:${String(tParts[1]).padStart(2, '0')} ${tParts[0] >= 12 ? 'PM' : 'AM'}` : '';
 
-                  const surcharge = parseFloat(job.shortNoticeSurcharge) || 0;
-                  const hasBonus = surcharge > 0;
-                  const proposedRate = parseFloat(job.proposedRate) || 0;
-                  const hours = parseFloat(job.durationHours) || 1;
-                  const baseCost = parseFloat(job.estimatedCost) || 0;
-                  const basePerHour = proposedRate > 0 ? proposedRate : (hours > 0 ? Math.round(baseCost / hours) : 0);
-                  const effectiveTotal = proposedRate > 0 ? (proposedRate * hours) + surcharge : baseCost;
-                  const effectivePerHour = hours > 0 ? Math.round(effectiveTotal / hours * 100) / 100 : 0;
+                  // v1.105.106 — see the exclusive card above: one shared computation.
+                  const { total: effectiveTotal, perHour: effectivePerHour, basePerHour, hasBonus } = jobPay(job);
 
                   const isDirectOffer = !!job.offeredToCaregiverId;
                   // Exclusive timer countdown
-                  const exclusiveUntil = job.exclusiveUntil ? new Date(job.exclusiveUntil) : null;
-                  const exclusiveRemaining = exclusiveUntil ? Math.max(0, Math.floor((exclusiveUntil - new Date()) / 60000)) : null;
-                  const exclusiveExpired = exclusiveUntil && exclusiveRemaining <= 0;
+                  const exclusiveRemaining = exclusiveMinutesLeft(job, exclusiveNow);
+                  const exclusiveExpired = isExclusiveExpired(job, exclusiveNow);
                   const exclusiveUrgent = exclusiveRemaining !== null && exclusiveRemaining <= 10 && !exclusiveExpired;
 
                   return (
@@ -2351,17 +2352,17 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                           )}
                           {hasBonus && basePerHour > 0 ? (
                             <span style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 4 }}>
-                              <span style={{ textDecoration: 'line-through', color: 'var(--text-muted)', fontSize: 12 }}>${basePerHour}/hr</span>
-                              <span style={{ color: 'var(--role-color)', fontWeight: 700, fontSize: 14 }}>${effectivePerHour}/hr</span>
+                              <span style={{ textDecoration: 'line-through', color: 'var(--text-muted)', fontSize: 12 }}>{formatMoney(basePerHour)}/hr</span>
+                              <span style={{ color: 'var(--role-color)', fontWeight: 700, fontSize: 14 }}>{formatMoney(effectivePerHour)}/hr</span>
                             </span>
                           ) : basePerHour > 0 ? (
-                            <span style={{ background: 'var(--color-success-bg)', color: 'var(--role-color)', padding: '2px 8px', borderRadius: 12, fontSize: 12, fontWeight: 700 }}>${basePerHour}/hr</span>
+                            <span style={{ background: 'var(--color-success-bg)', color: 'var(--role-color)', padding: '2px 8px', borderRadius: 12, fontSize: 12, fontWeight: 700 }}>{formatMoney(basePerHour)}/hr</span>
                           ) : null}
                         </div>
                         <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)' }}>{formatServiceType(job.serviceType)}</div>
                         <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>
                           {dayLabel}{timeLabel ? ` at ${timeLabel}` : ''}{job.durationHours ? ` \u2022 ${job.durationHours}hr` : ''}
-                          {effectiveTotal > 0 && <React.Fragment><span> {'\u2022'} </span><span style={{ fontWeight: 800, color: 'var(--role-color)', fontSize: 20 }}>${effectiveTotal.toFixed(0)}</span></React.Fragment>}
+                          {effectiveTotal > 0 && <React.Fragment><span> {'\u2022'} </span><span style={{ fontWeight: 800, color: 'var(--role-color)', fontSize: 20 }}>{formatMoney(effectiveTotal)}</span><span style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 600 }}> total</span></React.Fragment>}
                         </div>
                         {job.recipientCity && <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>{'\uD83D\uDCCD'} {job.recipientCity}</div>}
                         {job.familyName && <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 1 }}>Requested by {job.familyName}</div>}

@@ -447,11 +447,38 @@
       registry rather than reading it).
       The duplicate Pete↔Julia rows are reconciled by the repair script under 7972ed90.
 
-- [ ] **A job shows two different rates.** (dc5e86b5, Julia) *"$24 and then $29 listed on same
-      job (doesn't match up)."* Money that disagrees with itself on the same card. In the same
-      item: the description expand still misbehaves — *"the 'Accept Job' button disappears and
-      reappears but the description length stays the same"* — so v1.105.91's full-text fix is
-      either not reaching her or the expand toggle is fighting the layout. **P1**
+- [x] **A job shows two different rates.** (dc5e86b5, Julia) *"$24 and then $29 listed on same
+      job (doesn't match up)."*
+      ✅ **Fixed v1.105.106. She was right, and it was arithmetic, not taste.** Both job cards
+      computed the money inline: `basePerHour = Math.round(baseCost / hours)` (whole dollars)
+      and `effectiveTotal` rendered with `.toFixed(0)` — **two independent roundings of the
+      same money** — and the total carried **no label at all**. A 1.2-hour job at $29 showed a
+      `$24/hr` pill in the badge row and a bare `$29` in the detail line. 24 × 1.2 = 28.8, so
+      multiplying what she could see never produced what she could see.
+      `jobPay()` and `formatMoney()` in `utils.js` now derive everything from ONE total,
+      round only at the end, and never round a rate independently of its total. She sees
+      **$24.17/hr** and **$29 total** — and 24.17 × 1.2 = 29.00.
+      (`estimated_cost` really is her take: `sessions.js` sets `caregiver_payout: estimatedCost`
+      — "caregiver gets the full amount" — with the platform fee added on top for the family.
+      So labelling it as what she earns is honest.)
+
+      **And the second half — *"the 'Accept Job' button disappears and reappears but the
+      description length stays the same"* — was not the expand toggle at all.**
+      `exclusiveTick` was incremented every 30s purely to force a re-render and **never read**.
+      Every place that asked "is this offer still exclusive?" called `new Date()` **during
+      render** — twice, in the two filters that decide whether a job sits in "Just for You" or
+      in Find Work, plus once per card for the countdown. So list membership depended on the
+      wall clock at the instant React happened to render. Tap "Read more" on a job whose window
+      had just lapsed and the split is recomputed: the purple section returns `null`, the card
+      reappears further down, the Accept button goes and comes back — and the description is
+      unchanged, because the description was never what moved.
+      One `now` in state, changed only by the ticker; `exclusiveMinutesLeft` / `isExclusiveExpired`
+      take it as an argument. The boundary can now only move on a tick.
+      `tests/jobPay.test.js` (12), `tests/jobCardMoney.test.js` (7) — both validated against the
+      pre-fix source.
+      ⚠️ If Julia still reports the description not expanding, that is a THIRD thing and the
+      next step is her client version (`GET /api/admin/client-versions`) — the 200-char server
+      cut was removed in v1.105.91 and she has been on a stale bundle before.
 
 
 - [ ] **Special rules for helpers under 18, before this goes beyond one family.** (Aug 18 2026.)
