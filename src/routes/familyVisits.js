@@ -53,24 +53,71 @@ function validatePhoto(photo) {
   return null;
 }
 
+// ─── The set of photos (v1.105.111) ───
+//
+// Pete, 40ad8896: the picker should take more than one picture.
+//
+// A cap on COUNT and a cap on TOTAL, not just per photo. `express.json` for this route is
+// capped in server.js, and a body that exceeds it is rejected by middleware BEFORE this
+// handler runs — which means a 413 with none of the wording below. So the count is kept low
+// enough that the client's downscaled images cannot reach that ceiling in normal use, and
+// the total is checked here so an oversized set gets an explanation rather than a bare 413.
+const MAX_PHOTOS = 4;
+const MAX_PHOTOS_BYTES = 8 * 1024 * 1024;
+
+function validatePhotoSet(list) {
+  if (!Array.isArray(list)) return { error: "Photos must be a list" };
+  const clean = list.filter((p) => typeof p === "string" && p);
+  if (clean.length > MAX_PHOTOS) {
+    return { error: `Up to ${MAX_PHOTOS} photos per visit — you picked ${clean.length}` };
+  }
+  let bytes = 0;
+  for (const p of clean) {
+    const bad = validatePhoto(p);
+    if (bad) return { error: bad };
+    // base64 is 4 characters per 3 bytes; close enough to police a ceiling with.
+    bytes += Math.floor((p.length - p.indexOf(",") - 1) * 0.75);
+  }
+  if (bytes > MAX_PHOTOS_BYTES) {
+    return { error: "Those photos are too large together — try fewer, or retake them" };
+  }
+  return { photos: clean };
+}
+
 // ─── POST /api/family-visits ───
 router.post("/", async (req, res) => {
   try {
     const db = await getDb();
     const {
       careRecipientId, summary, moodRating, activities,
-      visitedAt, durationMinutes, latitude, longitude, loggedVia, photo,
+      visitedAt, durationMinutes, latitude, longitude, loggedVia, photo, photos,
     } = req.body || {};
 
     if (!careRecipientId) return res.status(400).json({ error: "careRecipientId is required" });
 
     // Validate before the access lookup: a malformed photo should not cost a DB round trip.
-    let photoData = null;
-    if (photo) {
+    //
+    // v1.105.111 — `photos` is the list; `photo` is the single-photo shape every client
+    // before today sent. Accept both, normalise to one list, and keep writing the first one
+    // into `photo` so existing rows, `/:id/photo` and the feed's has_photo flag all keep
+    // meaning exactly what they meant.
+    let photoList = [];
+    // A `photos` we cannot read is not the same as no photos. Falling through would save the
+    // visit with the pictures silently dropped — the quiet-failure class this codebase keeps
+    // paying for. Say so instead.
+    if (photos != null && !Array.isArray(photos)) {
+      return res.status(400).json({ error: "Photos must be a list" });
+    }
+    if (Array.isArray(photos) && photos.length) {
+      const checked = validatePhotoSet(photos);
+      if (checked.error) return res.status(400).json({ error: checked.error });
+      photoList = checked.photos;
+    } else if (photo) {
       const bad = validatePhoto(photo);
       if (bad) return res.status(400).json({ error: bad });
-      photoData = photo;
+      photoList = [photo];
     }
+    const photoData = photoList[0] || null;
 
     // 404 rather than 403: "not yours" and "not there" look identical to someone probing ids.
     const access = await recipientAccess(db, careRecipientId, req.user.id);
@@ -124,8 +171,8 @@ router.post("/", async (req, res) => {
     await db.prepare(`
       INSERT INTO family_visits
         (id, care_recipient_id, user_id, visited_at, duration_minutes, summary, mood_rating,
-         activities, latitude, longitude, distance_ft, geo_flag, logged_via, photo, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+         activities, latitude, longitude, distance_ft, geo_flag, logged_via, photo, photos, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
     `).run(
       id, careRecipientId, req.user.id, visited.toISOString(),
       durationMinutes ? parseInt(durationMinutes, 10) : null,
@@ -135,6 +182,7 @@ router.post("/", async (req, res) => {
       geo.distanceFt, geo.flag,
       loggedVia === "geo_prompt" ? "geo_prompt" : "manual",
       photoData,
+      photoList.length > 1 ? JSON.stringify(photoList) : null,
     );
 
     notifyTeam(db, req, { id, careRecipientId }).catch(() => {});
@@ -160,6 +208,7 @@ router.get("/:careRecipientId", async (req, res) => {
       SELECT fv.id, fv.care_recipient_id, fv.user_id, fv.visited_at, fv.duration_minutes,
              fv.summary, fv.mood_rating, fv.activities, fv.created_at,
              (fv.photo IS NOT NULL) AS has_photo,
+             fv.photos,
              u.first_name AS author_first_name, u.last_name AS author_last_name
       FROM family_visits fv
       JOIN users u ON u.id = fv.user_id
@@ -187,14 +236,32 @@ router.get("/:careRecipientId", async (req, res) => {
 // Route order is safe either way: GET /:careRecipientId is one path segment and this is two,
 // so "/<id>/photo" can never fall through to the list route. Worth stating because the two
 // params look alike and are NOT the same id — that one is a recipient, this one is a visit.
-router.get("/:id/photo", async (req, res) => {
+//
+// v1.105.111 — `/:id/photo` is index 0 and keeps working untouched for every client and every
+// row written before today; `/:id/photo/:idx` reaches the rest.
+async function sendVisitPhoto(req, res, index) {
   try {
     const db = await getDb();
-    const row = await db.prepare("SELECT care_recipient_id, photo FROM family_visits WHERE id = ?").get(req.params.id);
-    if (!row || !row.photo) return res.status(404).json({ error: "Photo not found" });
+    const row = await db.prepare(
+      "SELECT care_recipient_id, photo, photos FROM family_visits WHERE id = ?"
+    ).get(req.params.id);
+    if (!row) return res.status(404).json({ error: "Photo not found" });
+
+    // A row written before the `photos` column existed has only `photo`, and reads as a
+    // one-photo visit rather than as a broken one.
+    let list = [];
+    if (row.photos) { try { const a = JSON.parse(row.photos); if (Array.isArray(a)) list = a; } catch {} }
+    if (!list.length && row.photo) list = [row.photo];
+
+    const data = list[index];
+    if (!data) return res.status(404).json({ error: "Photo not found" });
+
+    // Access checked AFTER we know the photo exists but BEFORE we send it, and both failures
+    // answer 404 — so probing ids cannot distinguish "not yours" from "not there".
     const access = await recipientAccess(db, row.care_recipient_id, req.user.id);
     if (!access) return res.status(404).json({ error: "Photo not found" });
-    const m = row.photo.match(/^data:([^;]+);base64,(.+)$/s);
+
+    const m = data.match(/^data:([^;]+);base64,(.+)$/s);
     if (!m) return res.status(500).json({ error: "Stored photo is corrupt" });
     res.set("Content-Type", m[1]);
     res.set("Cache-Control", "private, max-age=86400");
@@ -204,6 +271,16 @@ router.get("/:id/photo", async (req, res) => {
     captureException(err, { where: "familyVisits: photo" });
     res.status(500).json({ error: "Could not load that photo" });
   }
+}
+
+router.get("/:id/photo", (req, res) => sendVisitPhoto(req, res, 0));
+
+router.get("/:id/photo/:idx", (req, res) => {
+  const idx = parseInt(req.params.idx, 10);
+  if (!Number.isInteger(idx) || idx < 0 || idx >= MAX_PHOTOS) {
+    return res.status(404).json({ error: "Photo not found" });
+  }
+  return sendVisitPhoto(req, res, idx);
 });
 
 // ─── DELETE /api/family-visits/:id — author only ───
@@ -251,6 +328,13 @@ function shape(r) {
     // v1.105.74 — the flag, never the blob. `photo` is a data URI up to 5MB and a list of 50
     // of them would be a quarter-gigabyte response; the client fetches /:id/photo on demand.
     hasPhoto: r.has_photo === true || r.has_photo === 1 || (r.photo != null && r.has_photo === undefined),
+    // v1.105.111 — how MANY, so the feed can show every thumbnail rather than only the first.
+    // Still the count and never the blobs, for the reason above: a list of 50 rows each
+    // carrying four 5MB data URIs would be a response measured in gigabytes.
+    photoCount: (() => {
+      if (r.photos) { try { const a = JSON.parse(r.photos); if (Array.isArray(a)) return a.length; } catch {} }
+      return (r.has_photo === true || r.has_photo === 1 || r.photo != null) ? 1 : 0;
+    })(),
   };
 }
 

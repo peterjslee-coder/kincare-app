@@ -2010,6 +2010,19 @@ async function initializeDatabase() {
         `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS decline_reason TEXT`,
       ],
     },
+    {
+      // v1.105.111 — more than one photo per visit (Pete, 40ad8896).
+      //
+      // A JSON array of data URIs, alongside the existing single `photo` column rather than
+      // instead of it. `photo` keeps holding the FIRST image, so every row written before
+      // today still renders, `/:id/photo` still answers, and the `has_photo` flag on the feed
+      // keeps meaning what it meant. Additive and nullable: nothing has to be backfilled, and
+      // a row with only `photo` set reads as a one-photo visit.
+      id: "023_family_visit_photos",
+      statements: [
+        `ALTER TABLE family_visits ADD COLUMN IF NOT EXISTS photos TEXT`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

@@ -1297,15 +1297,26 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                     AttachmentThumb rather than a bare <img src>, for the reason the note photo
                     below documents — a plain src is an UNAUTHENTICATED request, and in the
                     native app it renders "Authentication required". */}
-                {v.hasPhoto && (
-                  <div style={{ marginTop: 6 }}>
-                    <AttachmentThumb size={64}
-                      attachment={{ path: `/api/family-visits/${v.id}/photo`, name: 'Visit photo', mime: '' }}
-                      onOpen={() => setViewingAttachments({
-                        list: [{ path: `/api/family-visits/${v.id}/photo`, name: 'Visit photo', mime: '' }], index: 0,
-                      })} />
-                  </div>
-                )}
+                {/* v1.105.111 — a visit can carry up to four now (40ad8896). photoCount is a
+                    COUNT, never the blobs: a 50-row feed each holding four data URIs would be
+                    a response measured in gigabytes. `/photo` is index 0 for every row ever
+                    written; `/photo/N` reaches the rest. */}
+                {(v.photoCount > 0 || v.hasPhoto) && (() => {
+                  const n = v.photoCount || 1;
+                  const list = Array.from({ length: n }, (_, i) => ({
+                    path: i === 0 ? `/api/family-visits/${v.id}/photo` : `/api/family-visits/${v.id}/photo/${i}`,
+                    name: n > 1 ? `Visit photo ${i + 1} of ${n}` : 'Visit photo',
+                    mime: '',
+                  }));
+                  return (
+                    <div style={{ marginTop: 6, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      {list.map((att, i) => (
+                        <AttachmentThumb key={att.path} size={64} attachment={att}
+                          onOpen={() => setViewingAttachments({ list, index: i })} />
+                      ))}
+                    </div>
+                  );
+                })()}
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
                   {TimezoneHelper.formatTimestamp(v.visitedAt, profile?.timezone, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) || ''}
                 </div>

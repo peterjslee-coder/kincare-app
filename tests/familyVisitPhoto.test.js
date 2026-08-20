@@ -69,7 +69,8 @@ describe("a photo is a record on its own", () => {
 
   test("the client agrees, rather than blocking the submit first", () => {
     // Two guards that disagree is how a feature looks broken on one path only.
-    expect(form).toMatch(/!summary\.trim\(\) && acts\.length === 0 && !photo/);
+    // v1.105.111 — `photo` became `photos`; the rule is unchanged.
+    expect(form).toMatch(/!summary\.trim\(\) && acts\.length === 0 && photos\.length === 0/);
   });
 });
 
@@ -90,20 +91,26 @@ describe("the list never carries the blob", () => {
 
 describe("fetching a photo is access-controlled the same as the visit", () => {
   test("the endpoint exists and goes through recipientAccess", () => {
-    const fn = route.slice(route.indexOf('router.get("/:id/photo"'), route.indexOf('router.delete("/:id"'));
+    // v1.105.111 — the body moved into sendVisitPhoto(), shared by /:id/photo and
+    // /:id/photo/:idx. Same rules, one implementation.
+    const fn = route.slice(route.indexOf('async function sendVisitPhoto'), route.indexOf('router.delete("/:id"'));
     expect(fn).toMatch(/recipientAccess\(db, row\.care_recipient_id, req\.user\.id\)/);
   });
 
   test("'not yours' and 'not there' both answer 404", () => {
     // A 403 would confirm the id exists to someone probing.
-    const fn = route.slice(route.indexOf('router.get("/:id/photo"'), route.indexOf('router.delete("/:id"'));
+    // v1.105.111 — the body moved into sendVisitPhoto(), shared by /:id/photo and
+    // /:id/photo/:idx. Same rules, one implementation.
+    const fn = route.slice(route.indexOf('async function sendVisitPhoto'), route.indexOf('router.delete("/:id"'));
     const notFounds = fn.match(/404/g) || [];
     expect(notFounds.length).toBeGreaterThanOrEqual(2);
     expect(fn).not.toMatch(/403/);
   });
 
   test("it is wrapped in try/catch — Express 4 does not catch async route errors", () => {
-    const fn = route.slice(route.indexOf('router.get("/:id/photo"'), route.indexOf('router.delete("/:id"'));
+    // v1.105.111 — the body moved into sendVisitPhoto(), shared by /:id/photo and
+    // /:id/photo/:idx. Same rules, one implementation.
+    const fn = route.slice(route.indexOf('async function sendVisitPhoto'), route.indexOf('router.delete("/:id"'));
     expect(fn).toMatch(/try \{/);
     expect(fn).toMatch(/catch \(err\)/);
   });
@@ -111,8 +118,9 @@ describe("fetching a photo is access-controlled the same as the visit", () => {
 
 describe("the client", () => {
   test("downscales on the device before sending", () => {
-    // An untouched iPhone photo is 3–5MB and the route caps at 5MB.
-    expect(form).toMatch(/downscaleImage\(file, \{ maxDim: 1600, quality: 0\.85 \}\)/);
+    // An untouched iPhone photo is 3–5MB and the route caps at 5MB. v1.105.111 downscales
+    // harder because there can now be four of them in one body.
+    expect(form).toMatch(/downscaleImage\(f, \{ maxDim: 1400, quality: 0\.82 \}\)/);
   });
 
   test("the failed-read path says something", () => {
@@ -130,7 +138,10 @@ describe("the client", () => {
   test("the feed renders it through AttachmentThumb, not a bare img src", () => {
     // v1.105.34: a plain src is an unauthenticated request and renders
     // "Authentication required" in the native app.
-    const block = profile.slice(profile.indexOf("v.hasPhoto &&"), profile.indexOf("v.hasPhoto &&") + 700);
+    // v1.105.111 — the condition became (v.photoCount > 0 || v.hasPhoto) so a row written
+    // before the photos column still renders.
+    const start = profile.indexOf("(v.photoCount > 0 || v.hasPhoto)");
+    const block = profile.slice(start, start + 900);
     expect(block).toMatch(/AttachmentThumb/);
     expect(block).not.toMatch(/<img/);
   });

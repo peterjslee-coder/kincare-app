@@ -805,7 +805,26 @@
       on it does not match `care_sessions.family_user_id`. Where a name genuinely is withheld the card now says so instead of printing a
       label that reads like a bug. `tests/caregiverTrust.test.js` (11),
       `tests/integration/recipientNameVisibility.itest.js` (4, both directions).
-- [ ] **Photo picker should take more than one picture.** (40ad8896, Pete) **P2**
+- [x] **Photo picker should take more than one picture.** (40ad8896, Pete)
+      ✅ **Fixed v1.105.111.** The quick visit-log sheet (`FamilyVisitLog`) took exactly one.
+      The caregiver's visit log and `VisitDetailModal` were already `multiple`; this was the
+      one Pete uses from his phone, and a visit is often several things worth recording — the
+      fridge, the pill organiser, her in the garden — so one slot forced a choice between them.
+      Up to **4**, each removable, count on screen, thumbnails in the feed, tap any one to open
+      the lightbox at that photo.
+      **The compatibility shape mattered more than the feature.** `photos` is a JSON column
+      **alongside** `photo`, not instead of it: the first image still goes in `photo`, so every
+      row written before today still renders, `/:id/photo` still answers unchanged, and the
+      feed's `has_photo` flag still means what it meant. `/:id/photo/:idx` reaches the rest.
+      A client that has not reloaded and still sends a single `photo` is still accepted.
+      Caps on **count and total**, not just per-photo: `express.json` for this route rejects an
+      oversized body in middleware, *before* the handler could explain why, so the client
+      downscales harder (1400px / 0.82) and the server checks the combined size and answers in
+      words. And a `photos` value the server cannot read is now **refused** rather than
+      ignored — falling through would have saved the visit with the pictures silently dropped.
+      `tests/visitPhotoPicker.test.js` (22, validated against the pre-fix source),
+      `tests/integration/visitPhotos.itest.js` (12, real Postgres, including legacy rows);
+      `familyVisitPhoto.test.js` retargeted to the new shape without weakening it.
 
 
 - [ ] **Stripe Link UX deceptive for bank accounts.** Flow pushes Link, which has higher fees at no benefit. ~~Check Stripe Checkout `payment_method_types` config.~~ **Wrong location — the code is already correct:** all three Checkout call sites set `["card", "us_bank_account"]` and none include `"link"`. Link methods still arrive, so they come from the **Stripe Dashboard's** payment-method settings. This is a Pete-in-a-browser task, not an engineering one. *(Feedback `d63ed33e` — Pete, Apr 4)* **P2**

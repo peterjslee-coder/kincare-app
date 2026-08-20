@@ -57,32 +57,54 @@ const LogVisitSheet = window.LogVisitSheet = ({ recipients, presetRecipientId, p
   // There doesn't seem to be a way for me to add a picture when I am just quickly logging a
   // visit." Downscaled on this device before it ever hits the wire — an untouched iPhone photo
   // is 3–5MB and the route caps at 5MB.
-  const [photo, setPhoto] = useState(null);       // data URI, already downscaled
+  // v1.105.111 — Pete, 40ad8896: the picker should take more than one picture. A visit is
+  // often several things worth recording — the fridge, the pill organiser, her in the garden —
+  // and one slot forced a choice between them.
+  const [photos, setPhotos] = useState([]);      // data URIs, already downscaled
   const [photoBusy, setPhotoBusy] = useState(false);
   const photoInputRef = React.useRef(null);
+  const MAX_PHOTOS = 4;                          // mirrors the server's cap
 
-  const pickPhoto = async (file) => {
-    if (!file) return;
+  const pickPhotos = async (fileList) => {
+    const files = Array.from(fileList || []);
+    if (!files.length) return;
     setPhotoBusy(true);
     setError('');
-    try {
-      const dataUrl = await downscaleImage(file, { maxDim: 1600, quality: 0.85 });
-      if (!dataUrl) { setError('That image could not be read — try another'); }
-      else setPhoto(dataUrl);
-    } catch (e) {
-      console.error('Visit photo error:', e);
-      setError('That image could not be read — try another');
+    const room = MAX_PHOTOS - photos.length;
+    const taking = files.slice(0, Math.max(0, room));
+    const added = [];
+    let failed = 0;
+    for (const f of taking) {
+      try {
+        // Downscaled on THIS device before it ever hits the wire — an untouched iPhone photo
+        // is 3–5MB, and four of them would exceed the route's body limit and be rejected by
+        // middleware before the handler could explain why. Slightly harder than the
+        // single-photo path was, because now there can be four.
+        const dataUrl = await downscaleImage(f, { maxDim: 1400, quality: 0.82 });
+        if (dataUrl) added.push(dataUrl); else failed++;
+      } catch (e) {
+        console.error('Visit photo error:', e);
+        failed++;
+      }
     }
+    if (added.length) setPhotos((prev) => [...prev, ...added]);
+    // Say what happened to the ones that did NOT make it. Silently dropping a photo someone
+    // chose is the same class of quiet failure as a swallowed save.
+    if (failed && !added.length) setError('That image could not be read — try another');
+    else if (failed) setError(`${failed} of those could not be read — the rest were added`);
+    else if (files.length > taking.length) setError(`Up to ${MAX_PHOTOS} photos — the first ${taking.length} were added`);
     setPhotoBusy(false);
     if (photoInputRef.current) photoInputRef.current.value = '';
   };
+
+  const removePhoto = (i) => setPhotos((prev) => prev.filter((_, n) => n !== i));
 
   const toggle = (id) => setActs((a) => (a.includes(id) ? a.filter((x) => x !== id) : [...a, id]));
 
   const save = async () => {
     if (!chosen) { setError('Pick who you visited'); return; }
     // A photo is a record on its own — that was the whole point of the request.
-    if (!summary.trim() && acts.length === 0 && !photo) {
+    if (!summary.trim() && acts.length === 0 && photos.length === 0) {
       setError('Add a note, a photo, or what you did — otherwise there’s nothing to record');
       return;
     }
@@ -100,7 +122,9 @@ const LogVisitSheet = window.LogVisitSheet = ({ recipients, presetRecipientId, p
       // Only sent when the nudge supplied it. The server coarsens before storing, and the
       // geofence decision was already made on this device at full precision.
       if (position) { body.latitude = position.latitude; body.longitude = position.longitude; }
-      if (photo) body.photo = photo;
+      // `photos` is the list; `photo` stays populated with the first so a server that has
+      // not been redeployed yet still records something rather than nothing.
+      if (photos.length) { body.photos = photos; body.photo = photos[0]; }
 
       const res = await apiFetch('/api/family-visits', { method: 'POST', body: JSON.stringify(body) });
       if (res?.ok) {
@@ -190,27 +214,41 @@ const LogVisitSheet = window.LogVisitSheet = ({ recipients, presetRecipientId, p
           placeholder="How they seemed, what you talked about, anything the team should know…"
           style={{ width: '100%', minHeight: 84, padding: 10, border: '1px solid var(--border-light)', borderRadius: 9, fontSize: 13, resize: 'vertical', background: 'var(--bg-card)', color: 'var(--text-primary)' }} />
 
-        {/* v1.105.74 — the photo. `capture` is deliberately NOT set: it would force the camera
-            and Pete's case is often a picture already in the roll. Both sources stay available. */}
-        <label style={label}>A photo (optional)</label>
-        {photo ? (
-          <div style={{ position: 'relative', marginBottom: 4 }}>
-            <img src={photo} alt="Attached to this visit" style={{ width: '100%', maxHeight: 220, objectFit: 'cover', borderRadius: 9, border: '1px solid var(--border-light)', display: 'block' }} />
-            <button onClick={() => setPhoto(null)} aria-label="Remove photo" style={{
-              position: 'absolute', top: 8, right: 8, width: 30, height: 30, borderRadius: '50%',
-              border: 'none', background: 'rgba(0,0,0,0.6)', color: '#fff', fontSize: 15, cursor: 'pointer', lineHeight: 1,
-            }}>{'\u2715'}</button>
+        {/* v1.105.74 — `capture` is deliberately NOT set: it would force the camera and Pete's
+            case is often a picture already in the roll. Both sources stay available.
+            v1.105.111 — and now more than one of them (40ad8896). */}
+        <label style={label}>
+          Photos (optional){photos.length > 0 ? ` — ${photos.length} of ${MAX_PHOTOS}` : ''}
+        </label>
+
+        {photos.length > 0 && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(88px, 100%), 1fr))', gap: 6, marginBottom: 6 }}>
+            {photos.map((p, i) => (
+              <div key={i} style={{ position: 'relative' }}>
+                <img src={p} alt={`Attached to this visit (${i + 1} of ${photos.length})`}
+                  style={{ width: '100%', aspectRatio: '1 / 1', objectFit: 'cover', borderRadius: 9, border: '1px solid var(--border-light)', display: 'block' }} />
+                <button onClick={() => removePhoto(i)} aria-label={`Remove photo ${i + 1}`} style={{
+                  position: 'absolute', top: 4, right: 4, width: 26, height: 26, borderRadius: '50%',
+                  border: 'none', background: 'rgba(0,0,0,0.6)', color: '#fff', fontSize: 13, cursor: 'pointer', lineHeight: 1,
+                }}>{'\u2715'}</button>
+              </div>
+            ))}
           </div>
-        ) : (
+        )}
+
+        {photos.length < MAX_PHOTOS && (
           <button onClick={() => photoInputRef.current && photoInputRef.current.click()} disabled={photoBusy} style={{
             width: '100%', padding: '11px', borderRadius: 9, fontSize: 13, fontWeight: 600,
             border: '1px dashed var(--border-light)', background: 'var(--bg-card)',
             color: photoBusy ? 'var(--text-tertiary)' : 'var(--text-secondary)',
             cursor: photoBusy ? 'default' : 'pointer',
-          }}>{photoBusy ? 'Preparing photo\u2026' : '\uD83D\uDCF7  Add a photo'}</button>
+          }}>{photoBusy
+            ? 'Preparing photos\u2026'
+            : photos.length ? '\uD83D\uDCF7  Add another' : '\uD83D\uDCF7  Add photos'}</button>
         )}
-        <input ref={photoInputRef} type="file" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }}
-          onChange={(e) => pickPhoto(e.target.files && e.target.files[0])} />
+        <input ref={photoInputRef} type="file" accept="image/jpeg,image/png,image/webp" multiple
+          style={{ display: 'none' }}
+          onChange={(e) => pickPhotos(e.target.files)} />
 
         {error && (
           <div role="alert" style={{ marginTop: 10, fontSize: 13, color: 'var(--color-error)', background: 'var(--bg-error-light)', border: '1px solid var(--color-error)', borderRadius: 8, padding: '8px 12px' }}>{error}</div>
