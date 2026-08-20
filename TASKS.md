@@ -351,11 +351,23 @@
       *"Peggy doesn't check email, but she has a cell phone. If we send a link to their number and word it
       like 'create an account at this link to join (Betty's) care team'. So email has to be optional… they
       can do both and verify/setup from both, but cell phone isn't optional."*
-      This is the real Peggy — the neighbour who brings Betty dinner nightly — so the bar is somebody who
-      will not create an account to help a friend. **Not started, and deliberately not started here:** it
-      inverts the identity model (phone becomes the required identifier, email the optional one), which
-      touches registration, verification, invites and login, and it overlaps the onboarding "path" track
-      that owns those screens. **Decide it against `Onboarding_Path_Spec_2026-08-20.md` before building.**
+      This is the real Peggy — the neighbour who brings Betty dinner nightly.
+      ✅ **Scoped Aug 20 — plan is `Helper_SMS_Signup_Decision_2026-08-20.md` in the Working Folder. Read it
+      before touching helper signup.** Pete's answer to the fork: **Peggy effectively has NO email address**,
+      not "doesn't check it" — so making email optional is REQUIRED, and texting the invite is phase 1 of
+      that rather than an alternative to it. For her the phone is the entire account: identity, login, only
+      recovery channel, only notification channel.
+      **Already done and easy to miss:** phone is ALREADY required for helpers (`auth.js` ~181, v1.105.93);
+      the `helper` role, its view-only capability and the real-helper-creating invite all shipped
+      (v1.105.93/.94); invites already mint `/invite/<token>` with a dedicated landing page; and **Twilio is
+      live on prod** with `sendSms`/`formatPhoneE164` in `src/utils/sms.js`.
+      **What it costs:** `users.email` is `TEXT UNIQUE NOT NULL` and the login identifier, `users.phone` has
+      NO unique constraint, and there are **33 `WHERE LOWER(email)` lookups across 16 files**, plus password
+      reset and Google/Apple OAuth assuming an email exists. ⚠️ The synthetic-email shortcut
+      (`helper+1540…@yourinplace.com`) is banned — it leaves accounts whose email is a lie.
+      🔴 **BLOCKED on two things, build nothing until both clear:** lawyer agenda **L3** (TCPA — texting a
+      non-user whose number a third party typed in) and **A2P 10DLC registration**, which US carriers enforce
+      by dropping traffic *silently*. Arrival reminders share that number, so it may already be biting.
       **P1**
 
 - [x] **⛔ "There's no demand for my attention." Three things were hiding it at once.**
