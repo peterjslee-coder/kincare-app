@@ -231,8 +231,8 @@ describe("colour says where you are", () => {
 
   test("exactly one warm dot exists, and it is on the open step", () => {
     // One per screen is what lets it be the only warm colour on the page.
-    const label = wizardCode.slice(wizardCode.indexOf('className="ip-path-step"'));
-    expect(label.slice(0, 700)).toContain("var(--accent-color)");
+    const label = wizardCode.slice(0, wizardCode.indexOf("{stepLabels[step]}"));
+    expect(label.slice(-700)).toContain("var(--accent-color)");
     const dots = (wizardCode.match(/background: 'var\(--accent-color\)', flexShrink: 0/g) || []);
     expect(dots).toHaveLength(1);
   });
@@ -264,5 +264,45 @@ describe("the dashboard descriptions stop reading like system text", () => {
     // choice. Someone whose fee was waived once read "one-time $30 fee" above a warning to act.
     expect(hub).toMatch(/The \$30 fee has been waived for you/);
     expect(hub).toMatch(/one-time \$30 fee that is refunded after 10 completed sessions/);
+  });
+});
+
+describe("coming back", () => {
+  // The brief said "coming back has no memory". Half right — and the half it got wrong is the
+  // useful half. A draft HAS been saved here for a long time, and every step POSTs to the
+  // server before advancing (the SSN at step 4, the documents at step 7), so her answers were
+  // never lost. What was lost was the ability to save the draft AT ALL for anyone on a
+  // cookie-only session.
+
+  test("the draft is no longer gated on a bearer token", () => {
+    // The old gate was `if (step > 1 && token)`, and v1.103.4 established that sessions
+    // restored from the httpOnly auth cookie have window.AUTH_TOKEN unset. Those caregivers
+    // saved nothing and restored nothing — silently, because a draft that is never written
+    // looks exactly like someone who never got that far.
+    expect(wizardCode).not.toMatch(/if \(step > 1 && token\)/);
+    expect(wizardCode).toMatch(/if \(step > 1\) \{/);
+  });
+
+  test("but the step is only restored when the session is plausibly real", () => {
+    // Dropping her into step 6 of a wizard she cannot submit from would be worse than
+    // starting over, which is the one thing worse than this bug.
+    expect(wizardCode).toMatch(/parsed\.step > 1 && \(parsed\.authToken \|\| resumeMode\)/);
+  });
+
+  test("a draft expires, so a shared laptop does not hand it to the next person", () => {
+    expect(wizardCode).toMatch(/DRAFT_MAX_AGE_MS = 30 \* 24 \* 60 \* 60 \* 1000/);
+    expect(wizardCode).toMatch(/Date\.now\(\) - parsed\.savedAt\) > DRAFT_MAX_AGE_MS/);
+    expect(wizardCode).toMatch(/savedAt: Date\.now\(\)/);
+  });
+
+  test("the SSN is still never written to the browser", () => {
+    expect(wizardCode).toMatch(/documents: \[\], password: '', confirmPassword: '', ssnLast4: ''/);
+  });
+
+  test("and she is told she was remembered", () => {
+    // Pete's caregiver: "you log in to find that you have to remember what you've already
+    // done." The struck line shows WHAT is done; this says we kept it.
+    expect(wizardCode).toMatch(/resumedFromDraft && step < TOTAL_STEPS/);
+    expect(wizardCode).toMatch(/Picking up where you left off/);
   });
 });

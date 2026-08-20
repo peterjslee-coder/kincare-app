@@ -1042,11 +1042,19 @@ onboarding screen.** No backend changes — that is a constraint, not an observa
       queue, because a document sitting with us is not work she has left. Two CSS animations
       under 400ms, class-scoped, both off under `prefers-reduced-motion`.
       ✅ **v1.105.118.** Mockups: `Mockups/Onboarding_Path_Mockup_2026-08-20.html`.
-- [ ] **Resume still restarts at step 2.** The struck-through line gives her memory WITHIN a
-      session, but `CaregiverOnboarding` does `useState(resumeMode ? 2 : 1)` and no form data is
-      persisted, so coming back tomorrow genuinely starts over. Jumping her to step 7 with an
-      empty form would be worse than restarting — this needs the form draft saved (localStorage,
-      no backend) before the step number is worth restoring. **Structural fact 2 is NOT closed.**
+- [x] **Coming back — and a correction.** ✅ **v1.105.120.** I claimed in v1.105.118 that resume
+      "restarts at step 2 and no form draft is persisted". **That was wrong, and I asserted it
+      from `useState(resumeMode ? 2 : 1)` without reading the restore effect twelve lines below
+      it.** A draft has been saved for a long time, and every step POSTs to the server before
+      advancing (SSN at step 4, documents at step 7), so her answers were never lost.
+      The REAL bug, found by checking: the save ran `if (step > 1 && token)` where
+      `token = authToken || window.AUTH_TOKEN` — and v1.103.4 already established that sessions
+      restored from the httpOnly cookie have `window.AUTH_TOKEN` unset. **Every caregiver on a
+      cookie session saved nothing and restored nothing, silently**, because a draft that is
+      never written is indistinguishable from a user who never got that far. Save is no longer
+      gated on the token; the STEP is restored only with a saved token or `resumeMode`, drafts
+      expire after 30 days, the SSN is still never written, and the wizard now says "Picking up
+      where you left off." **Structural fact 2 closed.**
 - [ ] **Copy pass.** Five First Steps items still speak system voice (Stripe, security,
       preferences, availability/rates, photo) and wizard step 4's heading is
       "🔒 Background Check Information". ⚠️ `personal_care` copy stays exactly as counsel left

@@ -266,15 +266,44 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
 
   const [bgCheckPaid, setBgCheckPaid] = useState(false);
 
-  // ─── Persist form progress to localStorage ───
+  // ─── Coming back (v1.105.120) ───
+  //
+  // The brief said "coming back has no memory". That was half right, and the half it got wrong
+  // matters: a draft HAS been saved here for a long time, and every step POSTs to the server
+  // before advancing anyway — the SSN at step 4, the documents at step 7 — so her answers were
+  // never actually lost. What was lost was the ability to save it AT ALL for a whole class of
+  // caregiver:
+  //
+  //   the old save ran `if (step > 1 && token)`, where token = authToken || window.AUTH_TOKEN
+  //
+  // and v1.103.4 already established that sessions restored from the httpOnly auth cookie have
+  // window.AUTH_TOKEN unset. So anyone who closed the tab and came back on a cookie session
+  // saved nothing, restored nothing, and started over — silently, with no error anywhere,
+  // because a draft that is never written looks exactly like a user who never got that far.
+  //
+  // The token was never what made the draft valid. The cookie authenticates her; the draft is
+  // only re-display. So: always save. Restore the STEP only when we have some reason to believe
+  // the session is real (a saved bearer token, or resumeMode, which means she is already logged
+  // in) — dropping her into step 6 of a wizard she cannot submit from would be worse than
+  // starting over, which is the one thing worse than this bug.
   const STORAGE_KEY = 'inplace_onboarding_progress';
-  // Restore saved progress on mount
+  // A month. Long enough for a real return, short enough that a shared laptop does not hand
+  // someone else's half-finished signup to the next person who opens it.
+  const DRAFT_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+  const [resumedFromDraft, setResumedFromDraft] = useState(false);
+
   useEffect(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        // Restore form fields (except password and documents which can't be serialized)
+        if (parsed.savedAt && (Date.now() - parsed.savedAt) > DRAFT_MAX_AGE_MS) {
+          localStorage.removeItem(STORAGE_KEY);
+          return;
+        }
+        // Restore form fields. Never the password, never the documents (File objects do not
+        // serialize), and never the SSN — it is not written in the first place, and the server
+        // already holds it from step 4.
         if (parsed.form) {
           setForm(f => ({
             ...f,
@@ -283,12 +312,14 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
             documents: [], // can't persist File objects
           }));
         }
-        // Restore step if past account creation (don't go back to step 1 if account exists)
-        if (parsed.step && parsed.step > 1 && parsed.authToken) {
+        if (parsed.step && parsed.step > 1 && (parsed.authToken || resumeMode)) {
           setStep(parsed.step);
-          setAuthTokenState(parsed.authToken);
-          if (typeof setAuthToken === 'function') setAuthToken(parsed.authToken);
-          window.AUTH_TOKEN = parsed.authToken;
+          setResumedFromDraft(true);
+          if (parsed.authToken) {
+            setAuthTokenState(parsed.authToken);
+            if (typeof setAuthToken === 'function') setAuthToken(parsed.authToken);
+            window.AUTH_TOKEN = parsed.authToken;
+          }
           // Mark invite as resolved so we skip the validation
           if (!inviteInfo && parsed.inviteInfo) setInviteInfo(parsed.inviteInfo);
           setLoading(false);
@@ -298,15 +329,17 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
       }
     } catch (e) { /* ignore corrupt storage */ }
   }, []);
-  // Save progress whenever form or step changes
+  // Save progress whenever form or step changes. NOT gated on a token — see above; that gate
+  // is the bug, and it failed silently for exactly the people it mattered most to.
   useEffect(() => {
     try {
       const token = authToken || window.AUTH_TOKEN;
-      if (step > 1 && token) {
-        // Only save serializable form data (strip documents/files)
+      if (step > 1) {
+        // Only save serializable form data (strip documents/files), and never the SSN.
         const saveable = { ...form, documents: [], password: '', confirmPassword: '', ssnLast4: '' };
         localStorage.setItem(STORAGE_KEY, JSON.stringify({
-          form: saveable, step, authToken: token, inviteInfo, profileId, bgCheckPaid,
+          form: saveable, step, authToken: token || null, inviteInfo, profileId, bgCheckPaid,
+          savedAt: Date.now(),
         }));
       }
     } catch (e) { /* ignore */ }
@@ -1012,6 +1045,17 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
             </p>
           )}
         </div>
+
+        {/* v1.105.120 \u2014 say it out loud, once. The struck-through line below shows WHAT is
+            done; this says we remembered, which is the actual complaint: "you log in to find
+            that you have to remember what you've already done." */}
+        {resumedFromDraft && step < TOTAL_STEPS && (
+          <div className="ip-path-step" style={{
+            fontSize: '13px', color: 'var(--role-color)', marginBottom: '10px', fontWeight: 600,
+          }}>
+            Picking up where you left off.
+          </div>
+        )}
 
         {/* What she has already done \u2014 above the screen she is on, deliberately (v1.105.118) */}
         {step < TOTAL_STEPS && <OnboardingPath slot="done" step={step} idSubmitted={!!idVerifyResult} />}
