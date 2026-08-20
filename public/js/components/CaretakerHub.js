@@ -1130,7 +1130,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const firstSteps = [
     { id: 'stripe-bg',
       label: 'Set up Stripe and connect your bank account',
-      desc: 'Connect your bank account to receive payments for care sessions. Stripe handles everything securely.',
+      desc: 'Connect your bank so families can pay you. Stripe holds the account details \u2014 InPlace never sees them. About two minutes.',
       done: stripeConnected || stripeOverride,
       // v1.105.75 — stripeStatus starts null and only becomes real once /connect/status
       // answers; null means "not asked yet", not "not connected".
@@ -1195,9 +1195,9 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                 ? 'Your ID could not be verified. Tap to submit a clearer photo.'
                 : 'Sent \u2014 we\u2019ll review it and reach out if we have any questions. Nothing else for you to do.')
             : null) },
-    { id: 'security', label: 'Make your account more secure', desc: 'Set up two-factor authentication or biometrics to protect your account', done: securityReviewed, missing: !securityReviewed ? 'Enable 2FA or biometrics in Settings' : null },
-    { id: 'preferences', label: 'Select your care preferences', desc: 'Your selections help us match you to compatible clients and allow you to voice your availability for different types of clients', done: hasPreferences, missing: !hasPreferences ? 'Select all preferences and save' : null },
-    { id: 'avail-rates', label: 'Set your availability and rates', desc: 'Tell families when you\'re free and what you charge', done: hasAvailability && hasRates, missing: (() => { const m = []; if (!hasAvailability) m.push('set at least one availability rule'); if (!hasRates) m.push('save your rates'); return m.length > 0 ? 'Still needed: ' + m.join(' and ') : null; })() },
+    { id: 'security', label: 'Make your account more secure', desc: 'Face unlock, or a code from your phone. About a minute.', done: securityReviewed, missing: !securityReviewed ? 'Enable 2FA or biometrics in Settings' : null },
+    { id: 'preferences', label: 'Select your care preferences', desc: 'The kinds of care you want to take on, and the kinds you\u2019d rather not. It helps families find the right fit \u2014 and you can change your mind later.', done: hasPreferences, missing: !hasPreferences ? 'Select all preferences and save' : null },
+    { id: 'avail-rates', label: 'Set your availability and rates', desc: 'When you\u2019re free, and what you charge. You can change both whenever you like.', done: hasAvailability && hasRates, missing: (() => { const m = []; if (!hasAvailability) m.push('set at least one availability rule'); if (!hasRates) m.push('save your rates'); return m.length > 0 ? 'Still needed: ' + m.join(' and ') : null; })() },
     { id: 'photo', label: 'Review your account page and add a profile picture', desc: 'Families want to see who they\'re inviting into their home', done: hasPhoto, missing: !hasPhoto ? 'Upload a profile photo' : null },
   ];
   const firstStepsDone = firstSteps.filter(s => s.done).length;
@@ -1529,16 +1529,28 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
 
           {/* Done. Keyed on the count so finishing one replays the fade. */}
           {doneNames.length > 0 && (
+            // v1.105.119 — green behind you, teal now, grey ahead. Opacity rather than a
+            // lighter green, so it survives dark mode where --color-success is a different hue.
             <div className="ip-path-done" key={doneNames.length} style={{
-              fontSize: '11px', lineHeight: '1.55', color: 'var(--text-tertiary)',
-              textDecoration: 'line-through', marginBottom: '14px', opacity: 0.75,
+              fontSize: '11px', lineHeight: '1.6', color: 'var(--color-success)',
+              textDecoration: 'line-through', textDecorationColor: 'var(--color-success)',
+              marginBottom: '14px', opacity: 0.62,
             }}>{doneNames.join('  \u00B7  ')}</div>
           )}
 
           {/* Open — the only thing here with any weight. */}
           {open && openStep && (
             <div className="ip-path-step" key={open.id}>
-              <div style={{ fontSize: '17px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px' }}>
+              <div style={{
+                fontSize: '17px', fontWeight: 600, color: 'var(--role-color)', marginBottom: '5px',
+                display: 'flex', alignItems: 'center', gap: '8px',
+              }}>
+                {/* The one live dot. Exactly one exists on the screen, which is why it can
+                    afford to be the only warm colour on it. */}
+                <span style={{
+                  width: '7px', height: '7px', borderRadius: '50%',
+                  background: 'var(--accent-color)', flexShrink: 0,
+                }} />
                 {open.label}
               </div>
               {openStep.desc && (
@@ -1568,7 +1580,11 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
 
           <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '8px', opacity: 0.8 }}>
             {hubRoute.remaining} {hubRoute.remaining === 1 ? 'thing' : 'things'} left
-            {waitingItems.length > 0 ? '  \u00B7  ' + waitingItems.length + ' with us' : ''}
+            {waitingItems.length > 0 && (
+              <span style={{ color: 'var(--role-color)', fontWeight: 600 }}>
+                {'  \u00B7  ' + waitingItems.length + ' with us'}
+              </span>
+            )}
           </div>
 
           {/* Waiting on US. Its own note, outside the queue of things to do, because it is not

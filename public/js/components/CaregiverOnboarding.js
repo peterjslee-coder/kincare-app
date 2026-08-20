@@ -34,9 +34,14 @@ const OnboardingPath = window.OnboardingPath = ({ step, idSubmitted, slot }) => 
     if (done.length === 0) return null;
     return (
       // Keyed on the count so finishing a step replays the fade — no animation state to leak.
+      // v1.105.119 — green, not grey. Pete: "let's get a little color in there. too much grey.
+      // little green strike through or something." Colour carries the shape of the path before
+      // a word of it is read: green behind you, teal now, grey ahead. Opacity rather than a
+      // lighter green so it holds up in dark mode, where --color-success is a different hue.
       <div className="ip-path-done" key={done.length} style={{
-        fontSize: '11px', lineHeight: '1.55', color: 'var(--text-tertiary)',
-        textDecoration: 'line-through', marginBottom: '14px', opacity: 0.75,
+        fontSize: '11px', lineHeight: '1.6', color: 'var(--color-success)',
+        textDecoration: 'line-through', textDecorationColor: 'var(--color-success)',
+        marginBottom: '14px', opacity: 0.62,
       }}>{done.join('  \u00B7  ')}</div>
     );
   }
@@ -65,7 +70,11 @@ const OnboardingPath = window.OnboardingPath = ({ step, idSubmitted, slot }) => 
       )}
       <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '8px', opacity: 0.8 }}>
         {route.remaining} {route.remaining === 1 ? 'thing' : 'things'} left
-        {waiting > 0 ? '  \u00B7  ' + waiting + ' with us' : ''}
+        {waiting > 0 && (
+          <span style={{ color: 'var(--role-color)', fontWeight: 600 }}>
+            {'  \u00B7  ' + waiting + ' with us'}
+          </span>
+        )}
       </div>
     </div>
   );
@@ -1026,8 +1035,16 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
         {/* This screen. Not "Step 7 of 9" \u2014 the number of screens is our business, not hers,
             and it was never the number she wanted. */}
         {step < TOTAL_STEPS && (
-          <div className="ip-path-step" key={step} style={{ marginBottom: '14px' }}>
-            <span style={{ fontSize: '17px', fontWeight: 600, color: 'var(--text-primary)' }}>
+          <div className="ip-path-step" key={step} style={{
+            marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '8px',
+          }}>
+            {/* Exactly one of these exists on the screen at a time. That is the whole point of
+                it being the only warm colour on the page. */}
+            <span style={{
+              width: '7px', height: '7px', borderRadius: '50%',
+              background: 'var(--accent-color)', flexShrink: 0,
+            }} />
+            <span style={{ fontSize: '17px', fontWeight: 600, color: 'var(--role-color)' }}>
               {stepLabels[step]}
             </span>
           </div>

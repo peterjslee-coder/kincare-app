@@ -200,3 +200,69 @@ describe("the wizard never says she is verified", () => {
     expect(wizardCode).toMatch(/we\\u2019ll review it and reach out if we have any questions/);
   });
 });
+
+describe("colour says where you are", () => {
+  // Pete: "let's get a little color in there. too much grey. little green strike through or
+  // something." Green behind you, teal now, one orange dot, grey ahead — so the shape of the
+  // path is legible before a word of it is.
+
+  test("finished work is struck through IN GREEN, not grey", () => {
+    const markup = html(4, "done");
+    expect(markup).toContain("var(--color-success)");
+    expect(markup).toContain("line-through");
+    expect(markup).not.toContain("var(--text-tertiary)");
+  });
+
+  test("it dims with opacity rather than a paler green", () => {
+    // --color-success is a different hue in dark mode (#4caf50 vs #2e7d32), so a hardcoded
+    // soft green would only be right in one of them.
+    expect(html(4, "done")).toMatch(/opacity:0?\.62/);
+  });
+
+  test("what is ahead stays grey", () => {
+    // The temptation is to colour this line too, and that is exactly what would turn it back
+    // into a catalogue. Grey is doing real work here.
+    expect(html(1, "ahead")).toContain("var(--text-muted)");
+  });
+
+  test("work sitting with us is teal, because it is live", () => {
+    expect(html(8, "ahead", true)).toContain("var(--role-color)");
+  });
+
+  test("exactly one warm dot exists, and it is on the open step", () => {
+    // One per screen is what lets it be the only warm colour on the page.
+    const label = wizardCode.slice(wizardCode.indexOf('className="ip-path-step"'));
+    expect(label.slice(0, 700)).toContain("var(--accent-color)");
+    const dots = (wizardCode.match(/background: 'var\(--accent-color\)', flexShrink: 0/g) || []);
+    expect(dots).toHaveLength(1);
+  });
+});
+
+describe("the dashboard descriptions stop reading like system text", () => {
+  const hub = read("public", "js", "components", "CaretakerHub.js");
+
+  test("they say what she does, not what we record", () => {
+    expect(hub).not.toContain("Connect your bank account to receive payments for care sessions");
+    expect(hub).not.toContain("Set up two-factor authentication or biometrics");
+    expect(hub).not.toContain("Your selections help us match you to compatible clients");
+    expect(hub).toContain("Connect your bank so families can pay you");
+    expect(hub).toContain("Face unlock, or a code from your phone");
+  });
+
+  test("they say how long it takes, when it is short", () => {
+    // "About a minute" removes more dread than any reassurance does.
+    expect(hub).toMatch(/About a minute/);
+    expect(hub).toMatch(/About two minutes/);
+  });
+
+  test("the money sentence still says where the money goes", () => {
+    expect(hub).toMatch(/InPlace never sees them/);
+  });
+
+  test("the safety check copy is untouched", () => {
+    // v1.105.63 — the waived / not-waived branch is a legal-adjacent distinction, not a tone
+    // choice. Someone whose fee was waived once read "one-time $30 fee" above a warning to act.
+    expect(hub).toMatch(/The \$30 fee has been waived for you/);
+    expect(hub).toMatch(/one-time \$30 fee that is refunded after 10 completed sessions/);
+  });
+});
