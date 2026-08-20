@@ -277,18 +277,28 @@ consequence:
    recipients `WHERE is_admin = 1` → opt-out is `prefs['push_' + eventType] === false`, and
    Pete's `notification_prefs` holds only `{email_new_registration: false}`.
 
-   **What is actually left**, and it needs live SQL rather than a browser fetch: the comment at
-   `push.js:268` says admin *email* was opt-IN defaulting OFF until v1.105.112 shipped Aug 19,
-   and Julia submitted Aug 18 — so the silence may already be fixed. Confirm whether
-   `notifyAdmins` existed on Aug 18, and check subscription health; four subscriptions for one
-   person suggests dead endpoints from old devices.
-   ```sql
-   SELECT platform, created_at, fail_count, last_success_at FROM push_subscriptions
-   WHERE user_id = (SELECT id FROM users WHERE email = 'peterjslee@gmail.com');
-   ```
-   **Method note:** three claims in this handoff have now been disproved by one same-origin
-   fetch each — the push red, the `role` lead, and geolocation (twice). A handoff is a lead
-   sheet, not evidence.
+   **AND THE LAST TWO PIECES ARE NOW CLOSED TOO (Aug 20).**
+
+   *Why Julia's submission was silent:* **there was no code to notify anyone.** `notifyAdmins`
+   itself is old — v1.13.1, Feb 22 — but the `notifyAdmins("identity_submitted", …)` call was
+   added to `caregiveronboarding.js` and `selfOnboarding.js` on **Aug 18 in v1.105.68**, in the
+   commit literally titled *"she sent in her ID, was told it worked, and nobody was told."*
+   Julia submitted before that shipped. Nothing is broken; the gap was real and is already
+   fixed. Do not re-open this.
+
+   *Subscription health:* all four are live. `POST /api/push/test` as Pete on Aug 20 returned
+   `{success: true, sent: 4, total: 4, removed: 0}`. Since `sendPushToUser` deletes on 403/404/
+   410/401 and prunes after `MAX_FAIL_COUNT`, a clean 4-of-4 with zero removals means no dead
+   endpoints. `POST /api/push/test` is the cheapest subscription-health probe there is — it
+   answers the question AND garbage-collects, no SQL needed.
+
+   **Method note:** every single 🔴 this handoff carried has now been disproved — the push red,
+   the `role` lead, and geolocation (twice). Each fell to one same-origin fetch. **A handoff is
+   a lead sheet, not evidence.** Re-check before you build on it.
+
+   *Ops note:* live SQL was NOT available this session. Railway's Database → Data tab hung on
+   "Attempting to connect", and typing into the Railway web Console is blocked by a classifier.
+   When you need prod data, look for an API route that already answers the question.
 2. **Does Julia's Find Work card show "Betty" now?** v1.105.107 split trust from Stripe;
    v1.105.108 makes the card say which input is false if it still doesn't. Nobody has looked
    at her screen since.
