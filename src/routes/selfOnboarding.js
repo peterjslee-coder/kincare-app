@@ -12,6 +12,7 @@ const { classifyDocument } = require("../utils/documentAI");
 const { identityDecision, verdictLabel, VERDICT } = require("../utils/identityDecision");
 const { MODEL_SONNET } = require("../utils/aiModels");
 const storage = require("../utils/storage"); // v1.91.0 — env-gated R2 offload for document blobs
+const { geocodeAddress, buildAddressString } = require("../utils/geocode");
 const router = express.Router();
 
 /**
@@ -343,6 +344,34 @@ router.post("/complete", authenticate, async (req, res) => {
     // Format date_of_birth
     const dobFormatted = dateOfBirth ? new Date(dateOfBirth).toISOString().split('T')[0] : null;
 
+    // ─── v1.105.122: this address was never turned into a point ───
+    //
+    // Step 4 of the wizard REQUIRES a care address, and this endpoint has been storing it as
+    // four strings and nothing else since it was written. So every care recipient who signed
+    // themselves up ended with latitude and longitude NULL — not sometimes, always.
+    //
+    // The family path geocodes (careRecipients.js), and everything downstream assumes somebody
+    // did: the caregiver browse map centres on `recipients[0].latitude`, /caregivers/nearby
+    // measures from it, and openJobs computes the distance a caregiver sees from it. A recipient
+    // with no point is the same cold start v1.105.121 just closed for caregivers, arriving from
+    // the other side of the marketplace.
+    let lat = null;
+    let lng = null;
+    try {
+      const addrStr = buildAddressString({
+        address: careAddress.line1, city: careAddress.city,
+        state: careAddress.state, zip: careAddress.zip,
+      });
+      if (addrStr) {
+        const geo = await geocodeAddress(addrStr);
+        if (geo) { lat = geo.lat; lng = geo.lng; }
+        else console.log(`  [self-onboarding] Geocoding failed for: "${addrStr}"`);
+      }
+    } catch (e) {
+      // Never block finishing onboarding on a free geocoder. The startup backfill retries.
+      console.log("  [self-onboarding] Geocoding errored:", e.message);
+    }
+
     // Update care_recipients table with health & safety info
     await db.prepare(
       `UPDATE care_recipients
@@ -354,6 +383,8 @@ router.post("/complete", authenticate, async (req, res) => {
          location_city = ?,
          location_state = ?,
          location_zip = ?,
+         latitude = COALESCE(?, latitude),
+         longitude = COALESCE(?, longitude),
          medical_conditions = ?,
          medications = ?,
          food_allergies = ?,
@@ -375,6 +406,8 @@ router.post("/complete", authenticate, async (req, res) => {
       careAddress.city,
       careAddress.state,
       careAddress.zip,
+      lat,
+      lng,
       medicalConditions || null,
       medications || null,
       foodAllergies || null,

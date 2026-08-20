@@ -623,6 +623,38 @@
       `locationKnown`; FindWork replaces the jobs tab with a gate that explains the deal in both
       directions, offers the phone, and always offers the address as a way through. Null Island
       (0,0) rejected. `tests/caregiverLocation.test.js` (15).
+- [x] **The same cold start, from the family's side.** ✅ **Fixed v1.105.122.** Asked after
+      v1.105.121: does any of the onboarding work apply to care-team members or care recipients?
+      **It does not — nothing outside `CaregiverOnboarding.js`/`CaretakerHub.js` references the
+      route module — and two of those flows had the coordinate bug worse.**
+      (a) **`/api/self-onboarding/complete` never geocoded at all**, so EVERY care recipient who
+      signed themselves up has NULL lat/lng — always, not sometimes. (b) The family wizard
+      **never required an address**, client or server: first name, last name and email were the
+      whole list and the field was not even marked, so a family could reach "You're All Set!"
+      with no address. (c) `AddressAutocomplete` hands back lat/lng and the form **dropped them**,
+      forcing a server geocode round-trip that can fail. Now: self-onboarding geocodes (inside a
+      try/catch — a free geocoder must never block someone finishing); the address is required
+      with the reason attached; the picker's point is sent and used as a FALLBACK after the
+      server's own geocode, validated, Null Island rejected; hand-editing an address clears the
+      stale point (**a wrong point is worse than none — it is indistinguishable from a right one
+      downstream**); and the startup backfill now repairs care recipients too, which is what
+      fixes everyone already broken. `tests/careRecipientLocation.test.js` (10).
+- [ ] **The other three signup flows have the bugs the caregiver path just had.** Found in the
+      same sweep, NOT yet fixed:
+      (a) **Both non-caregiver progress bars change length mid-flow** — `RegisterPage.js:544`
+      goes 2→3 steps when a family user answers the authorization question, and
+      `CareRecipients.js:526` goes 4→5 on tier3. That is property 4 ("nothing new appears after
+      you start") violated by construction, in the two flows we did not touch.
+      (b) **`Dashboard.js:914` "Get Started" tiles mark done by CLICK**, via
+      `localStorage.inplace_discovered` — tap "Complete your profile", abandon it, and it is
+      ticked forever. A false positive is worse than the three-state bug, and it is client-only
+      so it does not survive a device change.
+      (c) **`Dashboard.js:556` "things to explore" does `.filter(s => !s.done)`** — finished work
+      vanishes instead of shrinking, the direct inverse of the property that stops "I have to
+      remember what I already did".
+      (d) **The VA-only rule is enforced in `SelfOnboardingWizard.js:216` and NOWHERE in the
+      family's recipient form** — an enforcement gap, not a UI one, while L1 licensure is open
+      with the lawyer. **P1**
 - [ ] **⚠️ Two things found next door, both worth their own pass.**
       (a) **`work_latitude` / `work_longitude` are read by three places
       (`dashboard.js:817`, `utils/aiMatching.js:82`, `AreaMap.js:27`) and written by NONE** —

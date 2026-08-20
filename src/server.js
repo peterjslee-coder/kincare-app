@@ -524,7 +524,7 @@ app.use("/api/media", require("./routes/media"));
 app.use("/api/safety", require("./routes/safety"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.105.121";
+const APP_VERSION = "1.105.122";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });
@@ -1252,6 +1252,48 @@ async function start() {
       }
     } catch (err) {
       console.log("  Geocode backfill skipped:", err.message);
+    }
+  })();
+
+  // ─── v1.105.122: the same backfill, for care recipients ───
+  //
+  // This half never existed, and the population it repairs is not an edge case: until
+  // v1.105.122 the self-onboarding endpoint never geocoded at all, so EVERY care recipient who
+  // signed themselves up has NULL coordinates, and so does every family recipient whose
+  // geocode happened to time out. A recipient with no point is missing from
+  // /caregivers/nearby, centres no map, and gives every caregiver a blank distance on the job.
+  (async () => {
+    try {
+      const { geocodeAddress, buildAddressString } = require("./utils/geocode");
+      const missing = await db.prepare(`
+        SELECT id, location_address, location_city, location_state, location_zip
+        FROM care_recipients
+        WHERE latitude IS NULL AND longitude IS NULL
+          AND (location_zip IS NOT NULL OR location_city IS NOT NULL)
+      `).all();
+      if (missing.length > 0) {
+        console.log(`  Geocode backfill: ${missing.length} care recipient(s) missing coordinates`);
+        for (const cr of missing) {
+          const addrStr = buildAddressString({
+            address: cr.location_address,
+            city: cr.location_city,
+            state: cr.location_state,
+            zip: cr.location_zip,
+          });
+          if (!addrStr) continue;
+          const geo = await geocodeAddress(addrStr);
+          if (geo) {
+            await db.prepare(
+              "UPDATE care_recipients SET latitude = ?, longitude = ? WHERE id = ?"
+            ).run(geo.lat, geo.lng, cr.id);
+            console.log(`    Geocoded recipient ${cr.location_city || cr.location_zip} → ${geo.lat}, ${geo.lng}`);
+          }
+          // Nominatim rate limit: 1 req/sec
+          await new Promise(r => setTimeout(r, 1100));
+        }
+      }
+    } catch (err) {
+      console.log("  Care recipient geocode backfill skipped:", err.message);
     }
   })();
 

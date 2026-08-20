@@ -6,6 +6,26 @@ const { geocodeAddress, buildAddressString } = require("../utils/geocode");
 
 const { MODEL_SONNET, MODEL_HAIKU } = require("../utils/aiModels");
 const { captureException } = require("../utils/sentry");
+// ─── v1.105.122: a point the client already had beats no point at all ───
+//
+// Both handlers below geocode the typed address, which is the right primary source: it is
+// server-side, it is not spoofable by the caller, and it matches what the address string
+// actually says. But Nominatim is free and best-effort on a 4s timeout, and when it returns
+// null the recipient is saved with NULL coordinates — which silently removes them from
+// /caregivers/nearby, from the browse map, and from every job-distance a caregiver sees.
+//
+// AddressAutocomplete already resolved that same address in the browser and handed the form
+// lat/lng. Used only as a FALLBACK, and only if it looks like a real point: 0,0 is Null Island
+// and the commonest value a broken lookup produces.
+function usableClientPoint(latitude, longitude) {
+  const lat = Number(latitude);
+  const lng = Number(longitude);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+  if (lat === 0 && lng === 0) return null;
+  return { lat, lng };
+}
+
 const router = express.Router();
 
 // All routes require authentication
@@ -98,11 +118,15 @@ router.post("/", requireRole("family"), async (req, res) => {
   const db = await getDb();
   const id = uuid();
 
-  // Auto-geocode address
+  // Auto-geocode address, falling back to the point the address picker already resolved.
   let lat = null, lng = null;
   if (address || city) {
     const geo = await geocodeAddress(buildAddressString({ address, city, state, zip }));
     if (geo) { lat = geo.lat; lng = geo.lng; }
+  }
+  if (lat === null || lng === null) {
+    const fallback = usableClientPoint(req.body.latitude, req.body.longitude);
+    if (fallback) { lat = fallback.lat; lng = fallback.lng; }
   }
 
   // Determine consent status based on authorization tier
@@ -251,6 +275,10 @@ router.put("/:id", requireRole("family", "admin"), async (req, res) => {
     });
     const geo = await geocodeAddress(addrStr);
     if (geo) { lat = geo.lat; lng = geo.lng; }
+  }
+  if (lat === null || lng === null) {
+    const fallback = usableClientPoint(req.body.latitude, req.body.longitude);
+    if (fallback) { lat = fallback.lat; lng = fallback.lng; }
   }
 
   await db.prepare(`

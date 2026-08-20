@@ -5,7 +5,7 @@ const CareRecipients = window.CareRecipients = () => {
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState({
-    firstName: '', lastName: '', age: '', relationship: '', nickname: '', emoji: '', address: '', city: '', state: '', zip: '',
+    firstName: '', lastName: '', age: '', relationship: '', nickname: '', emoji: '', address: '', city: '', state: '', zip: '', latitude: null, longitude: null,
     phone: '', email: '',
     sameAddress: false, healthConditions: '', observedConcerns: '', medications: '', pets: '', petAllergies: '', foodAllergies: '', medicalConditions: '', personality: '', preferences: '',
     emergencyContactName: '', emergencyContactPhone: '',
@@ -209,7 +209,7 @@ const CareRecipients = window.CareRecipients = () => {
 
   const resetForm = () => {
     setFormData({
-      firstName: '', lastName: '', age: '', relationship: '', nickname: '', emoji: '', address: '', city: '', state: '', zip: '',
+      firstName: '', lastName: '', age: '', relationship: '', nickname: '', emoji: '', address: '', city: '', state: '', zip: '', latitude: null, longitude: null,
       phone: '', email: '',
       sameAddress: false, healthConditions: '', observedConcerns: '', medications: '', pets: '', petAllergies: '', foodAllergies: '', medicalConditions: '', personality: '', preferences: '',
       emergencyContactName: '', emergencyContactPhone: '',
@@ -274,6 +274,20 @@ const CareRecipients = window.CareRecipients = () => {
       showToast('First and last name are required.', 'error');
       return;
     }
+    // ─── v1.105.122: the address is required now ───
+    //
+    // It never was. First name, last name and email were the whole list, client and server, and
+    // the field was not even marked. So a family could walk the wizard to "You're All Set!" with
+    // no address at all — and then `latitude`/`longitude` are NULL, which is not a cosmetic gap:
+    // /caregivers/nearby measures from that point, the browse map centres on it, and the
+    // distance a caregiver sees on a job is computed from it. It is the same cold start
+    // v1.105.121 closed for caregivers, arriving from the other side of the marketplace.
+    if (!formData.address.trim() || !formData.city.trim() || !formData.state.trim() || !formData.zip.trim()) {
+      const msg = 'We need the address where care happens — it\u2019s how we find caregivers nearby, and how they know where to go.';
+      setSaveMsg(msg);
+      showToast(msg, 'error');
+      return;
+    }
     // Email is required for new recipients (needed for consent verification)
     if (!editingId && !formData.email.trim()) {
       setSaveMsg('Email is required — it\'s used to verify your loved one\'s awareness of care arrangements.');
@@ -285,6 +299,12 @@ const CareRecipients = window.CareRecipients = () => {
       lastName: formData.lastName,
       age: parseInt(formData.age) || 0,
       address: formData.address || null,
+      // v1.105.122 — AddressAutocomplete hands back lat/lng with the address it just resolved,
+      // and this form dropped them on the floor, leaving the server to ask a free geocoder the
+      // same question again. When that round trip fails — Nominatim is best-effort on a 4s
+      // timeout — the recipient is left with no point at all. Send what we already know.
+      latitude: formData.latitude != null ? formData.latitude : null,
+      longitude: formData.longitude != null ? formData.longitude : null,
       emoji: formData.emoji || null,
       city: formData.city,
       state: formData.state,
@@ -513,7 +533,16 @@ const CareRecipients = window.CareRecipients = () => {
 
   const getName = (r) => r.first_name ? `${r.first_name} ${r.last_name}` : `${r.firstName || ''} ${r.lastName || ''}`.trim();
   const selected = recipients.find(r => r.id === selectedId);
-  const fd = (field, val) => setFormData({ ...formData, [field]: val });
+  // v1.105.122 — typing over an address invalidates the coordinates that came with the one
+  // before it. Picking "12 Oak Lane" from the suggestions and then hand-editing it to "14 Oak
+  // Lane" would otherwise keep number 12's point, which is worse than having none: a wrong
+  // point is indistinguishable from a right one everywhere downstream.
+  const ADDRESS_FIELDS = ['address', 'city', 'state', 'zip'];
+  const fd = (field, val) => setFormData({
+    ...formData,
+    [field]: val,
+    ...(ADDRESS_FIELDS.includes(field) ? { latitude: null, longitude: null } : {}),
+  });
 
   const parseDisplay = (val) => {
     try {
@@ -1302,7 +1331,7 @@ const CareRecipients = window.CareRecipients = () => {
             <label>Street Address</label>
             <AddressAutocomplete value={formData.address}
               onChange={(v) => fd('address', v)}
-              onSelect={(s) => setFormData(prev => ({ ...prev, address: s.line1, city: s.city || prev.city, state: s.state || prev.state, zip: s.zip || prev.zip }))}
+              onSelect={(s) => setFormData(prev => ({ ...prev, address: s.line1, city: s.city || prev.city, state: s.state || prev.state, zip: s.zip || prev.zip, latitude: s.lat != null ? s.lat : null, longitude: s.lng != null ? s.lng : null }))}
               placeholder="Start typing — e.g. 123 Oak Lane" />
           </div>
           <div className="form-row">
