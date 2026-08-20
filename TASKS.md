@@ -704,18 +704,53 @@
 
 ### P2
 
-- [ ] **Care preferences box runs off the screen.** (5eba31dd, Tyler, iPhone 17 Pro) *"the items
-      go in a box that extends beyond my phone screen and i can't see the full text."* Same
-      family as the v1.105.2 `minmax()` overflow — check for a hard floor. **P2**
-- [ ] **"Caregiver preferences" heading and a stray scroll bar.** (93a017e2, Tyler) Rename to fit
-      like the other text; the scroll bar at the top *"feels out of place"*. **P2**
+- [x] **Care preferences box runs off the screen.** (5eba31dd, Tyler, iPhone 17 Pro) *"the items
+      go in a box that extends beyond my phone screen and i can't see the full text."*
+      ✅ **Fixed v1.105.107, and it was the hard floor.** The row is
+      `[icon] [label flex:1] [three rating buttons flexShrink:0]`. A flex child defaults to
+      `min-width: auto`, so the label could not shrink below its longest word, and the buttons
+      refused to shrink at all. **Nothing in the row could give, so the row grew past the
+      viewport instead** — the same family as v1.105.2's `minmax(220px, 1fr)`.
+      `minWidth: 0` + `overflowWrap: anywhere` on the label, `flexWrap` on the row and on the
+      button group. **Structural, not tuned:** no breakpoint, so it cannot overflow at any
+      width, font size or text-size accessibility setting.
+      ⚠️ **Not measured in Chromium**, against the usual rule — this sandbox has no browser and
+      can't download one. Worth one look on a real iPhone.
+- [x] **"Caregiver preferences" heading and a stray scroll bar.** (93a017e2, Tyler)
+      ✅ **Fixed v1.105.107 — and the two halves were the same bug.** Every other account tab
+      is one word (Profile, Settings, Payments, Documents); `Care Preferences` was twice as
+      long, and that is what pushed the strip past the edge of his phone and produced the
+      scroll bar. Renamed to **Preferences**. The strip still scrolls where it must, but via a
+      scoped `.scroll-x-quiet` utility that hides the bar chrome — scoped deliberately, because
+      a bare `::-webkit-scrollbar` rule would strip the bar off every scrollable panel in the
+      app. `tests/carePrefsOverflow.test.js` (8).
 - [ ] **Calendar starts at 0am and looks odd on the dashboard.** (16328059, Tyler) Suggest moving
       it, shrinking it, or trimming the hours shown. **P2**
 - [ ] **First Steps is overwhelming.** (aed1e440, Tyler) Suggests a 1-of-7 view showing the
-      current task with a slide to the next. Worth weighing against Pete's existing rule that the
-      checklist should disappear entirely once complete. **P2**
-- [ ] **Say "Betty", not "Care Recipient".** (7d94657c, Julia) On the Find Work card. She is
-      about to spend an afternoon with a person, not a role. **P2**
+      current task with a slide to the next.
+      **Pete's call, Aug 19: not the 1-of-7 redesign.** *"Leave it, just tighten it"* — keep all
+      seven visible, collapse completed ones to a single line so the list shrinks as he works
+      through it. The existing rule stands: it disappears entirely once complete. **P2**
+- [x] **Say "Betty", not "Care Recipient".** (7d94657c, Julia) On the Find Work card. She is
+      about to spend an afternoon with a person, not a role.
+      ✅ **Fixed v1.105.107 — the name was not missing, it was WITHHELD.** `dashboard.js` gated
+      every personal detail on `stripe_onboard_complete && (is_background_checked ||
+      vouched-by-this-family)`. Julia's check was waived by vouch and she has no bank account
+      yet, so she got no name, no city, no family name, no instructions, **no care summary**.
+      And it was backwards: the Stripe gate on *accepting* a job is **commented out** in
+      `sessions.js` ("skipped for now — not live yet"), so Stripe blocked the information and
+      not the action — she could take a job for Betty while the card still called her
+      "Care Recipient".
+      **Pete's call, Aug 19: split them.** Trust (a background check, or a vouch from that
+      job's family) decides what she may SEE; Stripe decides whether she can be PAID. One
+      definition now, `src/utils/caregiverTrust.js`. Two siblings already omitted Stripe
+      (`isCaregiverCleared` in messages.js, `caregiverCleared` in dashboard.js) — line 807 was
+      the outlier, not the rule.
+      A vouch stays scoped to ONE family (v1.64.0): trusted by Pete says nothing about anyone
+      else, and the integration test asserts exactly that so the gate can't be loosened too far
+      unnoticed. Where a name genuinely is withheld the card now says so instead of printing a
+      label that reads like a bug. `tests/caregiverTrust.test.js` (11),
+      `tests/integration/recipientNameVisibility.itest.js` (4, both directions).
 - [ ] **Photo picker should take more than one picture.** (40ad8896, Pete) **P2**
 
 

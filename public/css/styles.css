@@ -3340,3 +3340,19 @@ body.text-size-xlarge h2, body.text-size-xlarge h3 { font-size: 28px !important;
 .form-group input, .form-group select, .form-group textarea, .modal-input {
   min-height: 44px;
 }
+
+/* ─── A scroll bar that only appears when it is doing something (v1.105.107) ───
+   Tyler, 93a017e2: the scroll bar above the account tabs "feels out of place."
+   It came from `overflow-x: auto` on the tab strip, which every browser draws chrome for
+   whether or not there is anything to scroll to. The strip still scrolls — a narrow phone
+   with five tabs needs it — but it no longer advertises itself.
+   Scoped to this one utility rather than a broad `::-webkit-scrollbar` rule: a broad rule
+   here would silently take the scroll bar off every scrollable panel in the app, which is
+   exactly the clobbering v1.105.2 was about. */
+.scroll-x-quiet {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;      /* Firefox */
+  -ms-overflow-style: none;   /* old Edge */
+}
+.scroll-x-quiet::-webkit-scrollbar { display: none; }

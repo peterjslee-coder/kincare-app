@@ -1,5 +1,6 @@
 const express = require("express");
 const { activeVouchesFor } = require("../utils/vouches");
+const { maySeeRecipientDetails, isTrustedCaregiver } = require("../utils/caregiverTrust");
 const { recipientPhotoUrl } = require("./media");
 const { getDb } = require("../models/database");
 const { authenticate } = require("../middleware/auth");
@@ -702,7 +703,9 @@ async function caregiverDashboard(db, userId, res) {
       stripeConnected: !!profile.stripe_onboard_complete,
       stripeOnboardComplete: !!profile.stripe_onboard_complete,
       // Stripe not yet live — cleared if BG check passed OR admin set is_available override
-      caregiverCleared: !!profile.is_background_checked || vouchedFamilyIds.size > 0, // v1.64.0: is_available bypass removed; vouches count
+      // v1.64.0: is_available bypass removed; vouches count. v1.105.107: one definition, in
+      // src/utils/caregiverTrust.js, so this and the per-job gate below cannot drift apart.
+      caregiverCleared: isTrustedCaregiver(profile, vouchedFamilyIds),
       bgCheckRejectionReason: profile.bg_check_rejection_reason || null,
       legalFirstName: profile.legal_first_name,
       legalMiddleName: profile.legal_middle_name || '',
@@ -799,13 +802,15 @@ async function caregiverDashboard(db, userId, res) {
       createdAt: r.created_at,
     })),
     openJobs: await (async () => {
-      // Sensitive job details require Stripe onboarding plus either a real
-      // background check or an admin vouch FOR THAT JOB'S FAMILY (v1.64.0).
+      // v1.105.107 — TRUST decides what she may see; STRIPE decides whether she can be paid.
+      // This used to require `stripe_onboard_complete` as well, so a caregiver personally
+      // vouched for by a family still saw "Care Recipient", no city, no family name, no
+      // instructions and no care summary until she had finished setting up a bank account
+      // (Julia, 7d94657c). See src/utils/caregiverTrust.js for why that was backwards.
       const results = [];
 
       for (const s of openJobs) {
-        const bgCleared = !!profile.stripe_onboard_complete &&
-          (!!profile.is_background_checked || vouchedFamilyIds.has(s.family_user_id));
+        const bgCleared = maySeeRecipientDetails(profile, vouchedFamilyIds, s.family_user_id);
         // Conflict detection: check against caregiver's upcoming sessions
         const conflict = computeJobConflicts(s, upcoming);
         // Distance from caregiver's location

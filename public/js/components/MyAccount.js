@@ -897,7 +897,11 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
         ...(isCaregiver ? [
           { id: 'payments', label: 'Payments' },
           { id: 'documents', label: 'Documents' },
-          { id: 'preferences', label: 'Care Preferences' },
+          // v1.105.107 — "Preferences", not "Care Preferences". Tyler, 93a017e2: rename it
+          // "to fit like the other text". Every other tab here is a single word, and this one
+          // being twice as long is what pushed the strip past the edge of his phone and
+          // produced the scroll bar he reported in the same breath.
+          { id: 'preferences', label: 'Preferences' },
         ] : [
           { id: 'documents', label: '📄 Documents' },
           { id: 'payments', label: '💳 Payments' },
@@ -942,7 +946,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
       </div>
 
       {/* Tab Bar */}
-      <div style={{ display: 'flex', borderBottom: '1px solid #e0e0e0', marginBottom: 20, overflowX: 'auto' }}>
+      <div className="scroll-x-quiet" style={{ display: 'flex', borderBottom: '1px solid #e0e0e0', marginBottom: 20 }}>
         {tabs.map(t => (
           <button key={t.id} onClick={() => { setActiveTab(t.id); setPwError(null); }} style={tabStyle(t.id)}>{t.label}</button>
         ))}
@@ -2273,10 +2277,20 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                     border: '1px solid ' + (val !== 'none' ? ratingObj.color : 'var(--border-light)'),
                     transition: 'all 0.2s',
                   }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px' }}>
+                    {/* v1.105.107 — Tyler, 5eba31dd, iPhone 17 Pro: "the items go in a box
+                        that extends beyond my phone screen and i can't see the full text."
+                        A flex child defaults to `min-width: auto`, so the label could not
+                        shrink below its longest word, while the three rating buttons were
+                        `flexShrink: 0`. Nothing in the row could give, so the row grew past
+                        the screen instead — the same hard-floor family as v1.105.2's
+                        `minmax(220px, 1fr)`.
+                        `minWidth: 0` lets the label wrap, and `flexWrap` lets the buttons drop
+                        to their own line when even that is not enough. Structural, not tuned:
+                        the row cannot overflow at any width or font size. */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', flexWrap: 'wrap' }}>
                       <span style={{ fontSize: 18, width: 24, textAlign: 'center', flexShrink: 0 }}>{pref.icon}</span>
-                      <div style={{ flex: 1, fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', lineHeight: 1.3 }}>{pref.label}</div>
-                      <div style={{ display: 'flex', gap: 3, flexShrink: 0 }}>
+                      <div style={{ flex: '1 1 140px', minWidth: 0, overflowWrap: 'anywhere', fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', lineHeight: 1.3 }}>{pref.label}</div>
+                      <div style={{ display: 'flex', gap: 3, flexShrink: 0, marginLeft: 'auto', flexWrap: 'wrap' }}>
                         {CG_RATING_OPTIONS.slice(1).map(r => (
                           <button key={r.value} onClick={() => setPreferences({ ...prefs, [pref.id]: val === r.value ? 'none' : r.value })} style={{
                             padding: '3px 8px', borderRadius: 5, fontSize: 10, fontWeight: 600,
