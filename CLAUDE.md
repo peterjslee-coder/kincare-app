@@ -264,15 +264,31 @@ Nothing is mid-flight, so pick a lane:
 **A. Verify last night's work reached the people it was for.** Three unconfirmed, in order of
 consequence:
 
-1. **Does Pete's admin account have a push subscription at all?** He got no push when Julia's
-   ID landed. Email was the fixable half (opt-in → opt-out for `identity_submitted`,
-   v1.105.112). Push is unexplained.
+1. ~~**Does Pete's admin account have a push subscription at all?**~~ ✅ **ANSWERED Aug 20 — it
+   does, and the follow-on theory was wrong too.** `GET /api/push/status` as Pete returns
+   `{vapidConfigured: true, userSubscriptions: 4, ready: true}`. A second theory — that his
+   `role` is `family` rather than `admin`, so an admin fan-out would skip him — is **also
+   dead**: the fan-out never reads `role`. `sendPushToAdmins` selects
+   `FROM users WHERE is_admin = 1`, and `/api/auth/me` returns Pete with `is_admin: true`.
+   **`role: family` and `is_admin: true` live on the same row — never infer admin-ness from
+   `role`.** The chain is intact end to end: `caregiveronboarding.js:337` and
+   `selfOnboarding.js:263` both lazy-`require("./push")` and call
+   `notifyAdmins("identity_submitted", …)` → `push.js:310` fans out to push + email →
+   recipients `WHERE is_admin = 1` → opt-out is `prefs['push_' + eventType] === false`, and
+   Pete's `notification_prefs` holds only `{email_new_registration: false}`.
+
+   **What is actually left**, and it needs live SQL rather than a browser fetch: the comment at
+   `push.js:268` says admin *email* was opt-IN defaulting OFF until v1.105.112 shipped Aug 19,
+   and Julia submitted Aug 18 — so the silence may already be fixed. Confirm whether
+   `notifyAdmins` existed on Aug 18, and check subscription health; four subscriptions for one
+   person suggests dead endpoints from old devices.
    ```sql
-   SELECT platform, created_at FROM push_subscriptions
+   SELECT platform, created_at, fail_count, last_success_at FROM push_subscriptions
    WHERE user_id = (SELECT id FROM users WHERE email = 'peterjslee@gmail.com');
    ```
-   **If that returns nothing, every admin push since the feature shipped has gone nowhere** —
-   and several older "I never got told" reports have the same answer.
+   **Method note:** three claims in this handoff have now been disproved by one same-origin
+   fetch each — the push red, the `role` lead, and geolocation (twice). A handoff is a lead
+   sheet, not evidence.
 2. **Does Julia's Find Work card show "Betty" now?** v1.105.107 split trust from Stripe;
    v1.105.108 makes the card say which input is false if it still doesn't. Nobody has looked
    at her screen since.
