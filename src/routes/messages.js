@@ -255,6 +255,33 @@ router.get("/conversations", async (req, res) => {
   res.json({ conversations });
 });
 
+// v1.105.103 — do not push someone about a message they are reading. `isViewingConversation`
+// is set from the socket layer (server.js) and is socket-scoped, so it only suppresses when a
+// still-connected socket has that exact thread on screen. If the answer is unknown — no socket
+// server wired in, as in the integration harness — it is false, and the push goes out. The
+// failure direction is an extra push, never a swallowed one.
+// v1.105.103 — the live payload must match what GET /conversations/:id returns, or the same
+// message reads differently depending on whether it arrived over the socket or over a refetch.
+// Two fields were missing: `reactions` (harmless, the client defaults it) and `senderLabel` —
+// which is how a message from the platform is labelled "InPlace Support" instead of the
+// admin's own name. Without it, a support message that arrived LIVE showed a person's real
+// name, and the same message showed "InPlace Support" after backing out and re-entering.
+function liveMessagePayload(message, realName, convId) {
+  return {
+    ...message,
+    senderName: message.sender_label || realName,
+    senderLabel: message.sender_label || null,
+    reactions: [],
+    type: "received",
+    conversationId: convId,
+  };
+}
+
+function makeShouldPush(req) {
+  const isViewing = req.app.get("isViewingConversation");
+  return (memberId, convId) => !(typeof isViewing === "function" && isViewing(memberId, convId));
+}
+
 // ─── POST /api/messages/conversations ─── Create a new conversation
 router.post("/conversations", async (req, res) => {
   const db = await getDb();
@@ -679,8 +706,9 @@ router.post("/conversations/:id/photo", sendLimiter, upload.single("photo"), asy
 
     // Notify all other members
     const emitToUser = req.app.get("emitToUser");
+    const shouldPush = makeShouldPush(req);
     for (const member of members) {
-      sendPushToUser(member.user_id, {
+      if (shouldPush(member.user_id, convId)) sendPushToUser(member.user_id, {
         title: "InPlace",
         // v1.105.39 — the caption is free text about the person being cared for.
         body: `${senderName} sent a photo`,
@@ -688,9 +716,7 @@ router.post("/conversations/:id/photo", sendLimiter, upload.single("photo"), asy
       }).catch(() => {});
 
       if (emitToUser) {
-        emitToUser(member.user_id, "new_message", {
-          ...message, senderName, type: "received", conversationId: convId,
-        });
+        emitToUser(member.user_id, "new_message", liveMessagePayload(message, senderName, convId));
       }
     }
 
@@ -774,7 +800,7 @@ router.post("/conversations/:id", sendLimiter, async (req, res) => {
     // v1.105.39 — no preview. messages.content is marked /* PHI-risk */ in the schema
     // because families and caregivers discuss health in here, and a preview renders on a
     // locked screen. Knowing WHO wrote is enough to decide whether to pick the phone up.
-    sendPushToUser(partnerId, {
+    if (makeShouldPush(req)(partnerId, newConvId)) sendPushToUser(partnerId, {
       title: "InPlace",
       body: `${senderName} sent you a message`,
       data: { type: "message", senderId: userId, conversationId: newConvId },
@@ -782,9 +808,7 @@ router.post("/conversations/:id", sendLimiter, async (req, res) => {
 
     const emitToUser = req.app.get("emitToUser");
     if (emitToUser) {
-      emitToUser(partnerId, "new_message", {
-        ...message, senderName, type: "received", conversationId: newConvId,
-      });
+      emitToUser(partnerId, "new_message", liveMessagePayload(message, senderName, newConvId));
     }
 
     // Fire-and-forget AI safety screening
@@ -829,18 +853,17 @@ router.post("/conversations/:id", sendLimiter, async (req, res) => {
 
   // Notify all other members
   const emitToUser = req.app.get("emitToUser");
+  const shouldPush = makeShouldPush(req);
   for (const member of members) {
     // v1.105.39 — no preview (group threads carry the same PHI risk as one-to-one).
-    sendPushToUser(member.user_id, {
+    if (shouldPush(member.user_id, convId)) sendPushToUser(member.user_id, {
       title: "InPlace",
       body: `${senderName} sent a message`,
       data: { type: "message", senderId: userId, conversationId: convId },
     }).catch(() => {});
 
     if (emitToUser) {
-      emitToUser(member.user_id, "new_message", {
-        ...message, senderName, type: "received", conversationId: convId,
-      });
+      emitToUser(member.user_id, "new_message", liveMessagePayload(message, senderName, convId));
     }
   }
 
@@ -900,7 +923,7 @@ router.post("/", sendLimiter, async (req, res) => {
   const sender = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(req.user.id);
   const senderName = sender ? `${sender.first_name} ${sender.last_name}` : "Someone";
   // v1.105.39 — no preview (legacy direct-message path).
-  sendPushToUser(recipientId, {
+  if (makeShouldPush(req)(recipientId, convId)) sendPushToUser(recipientId, {
     title: "InPlace",
     body: `${senderName} sent you a message`,
     data: { type: "message", senderId: req.user.id, conversationId: convId },
@@ -908,9 +931,7 @@ router.post("/", sendLimiter, async (req, res) => {
 
   const emitToUser = req.app.get("emitToUser");
   if (emitToUser) {
-    emitToUser(recipientId, "new_message", {
-      ...message, senderName, type: "received", conversationId: convId,
-    });
+    emitToUser(recipientId, "new_message", liveMessagePayload(message, senderName, convId));
   }
 
   // Fire-and-forget AI safety screening

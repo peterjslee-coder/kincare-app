@@ -443,13 +443,38 @@ const Messages = window.Messages = () => {
         }
         return prev;
       });
-      // If viewing this conversation, add message directly
+      // If viewing this conversation, add message directly.
+      // v1.105.103 — dedupe by id. The socket re-registers its listeners on every reconnect
+      // (utils.js connectSocket), so one delivery can arrive twice, and a duplicate in a
+      // message thread reads as the other person having said the same thing twice.
       if (msg.conversationId === activeConvId) {
-        setMessages(prev => [...prev, msg]);
+        setMessages(prev => (prev.some(m => m.id === msg.id) ? prev : [...prev, msg]));
       }
       fetchConversations();
     });
     return cleanup;
+  }, [activeConvId]);
+
+  // ─── Tell the server which thread is on screen (v1.105.103) ───
+  //
+  // Pete: "I am on the messaging interface messaging Julia and I get push notifications that
+  // Julia has sent a message" (97783012). The server had no way to know he was reading it.
+  //
+  // `visibilitychange` is half the point, not a nicety: a backgrounded tab or a locked phone
+  // still holds an open socket, and someone whose screen is off is not reading the thread.
+  // Closing on hide means the worst case is an extra push, never a missing one.
+  useEffect(() => {
+    const sock = window._socket;
+    if (!sock || !activeConvId) return;
+    const open = () => sock.emit('conversation_open', { conversationId: activeConvId });
+    const close = () => sock.emit('conversation_close', {});
+    const onVisibility = () => (document.hidden ? close() : open());
+    open();
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      close();
+    };
   }, [activeConvId]);
 
   // Listen for real-time reactions

@@ -22,6 +22,7 @@ const rateLimit = require("express-rate-limit");
 const { Server } = require("socket.io");
 const jwt = require("jsonwebtoken");
 const { initializeDatabase, getDb } = require("./models/database");
+const { createViewRegistry } = require("./utils/presence");
 const { limitBodySize } = require("./middleware/validate");
 const { withPollerLock } = require("./models/database");
 // v1.82.0 (H5): every poller tick runs under a pg advisory lock so a second app
@@ -62,6 +63,25 @@ io.use((socket, next) => {
 
 // Track connected users: userId -> Set of socket ids
 const connectedUsers = new Map();
+
+// v1.105.103 — which conversation each socket currently has OPEN.
+//
+// Pete: "I am on the messaging interface messaging Julia and I get push notifications that
+// Julia has sent a message, but I don't see it in the chat" (97783012). A push that tells you
+// about a message you are reading is worse than no push: it trains the person to ignore the
+// one that matters. The server had no way to know — it fanned out to every member.
+//
+// Deliberately socket-scoped, not user-scoped: the same person on a laptop and a phone is
+// looking at one of them. A member is only skipped if the socket that has the thread open is
+// still connected, and the client closes the thread on `visibilitychange` — a hidden page is
+// not being read. Anything else (a lock, a crash, a network drop) disconnects the socket,
+// which clears the entry below. The failure direction is therefore an EXTRA push, never a
+// swallowed one.
+const viewingConversation = createViewRegistry();
+
+function isViewingConversation(userId, conversationId) {
+  return viewingConversation.isViewing(connectedUsers.get(userId), conversationId);
+}
 
 // v1.66.0 (C1): resolve conversation membership for socket fan-out, with a
 // short TTL cache so rapid typing events don't hammer the DB. Returns [] on error.
@@ -217,7 +237,25 @@ io.on("connection", (socket) => {
     } catch (err) { captureException(err); }
   });
 
+  // ─── Which thread is on screen (v1.105.103) ───
+  // Membership is checked here rather than trusted: without it, claiming to be "viewing" any
+  // conversation id would suppress that person's pushes for it.
+  socket.on("conversation_open", async (data) => {
+    try {
+      const convId = data?.conversationId;
+      if (!convId) return;
+      const memberIds = await conversationMemberIds(convId);
+      if (!memberIds.includes(userId)) return;
+      viewingConversation.open(socket.id, convId);
+    } catch (err) { captureException(err); }
+  });
+
+  socket.on("conversation_close", () => {
+    viewingConversation.close(socket.id);
+  });
+
   socket.on("disconnect", () => {
+    viewingConversation.close(socket.id);
     const sockets = connectedUsers.get(userId);
     if (sockets) {
       sockets.delete(socket.id);
@@ -239,6 +277,7 @@ function emitToUser(userId, event, data) {
 // Make io and emitToUser available to routes
 app.set("io", io);
 app.set("emitToUser", emitToUser);
+app.set("isViewingConversation", isViewingConversation);
 
 // ─── Middleware ───
 app.set("trust proxy", 1); // Trust first proxy (Cloudflare/Railway) for X-Forwarded-For
@@ -485,7 +524,7 @@ app.use("/api/media", require("./routes/media"));
 app.use("/api/safety", require("./routes/safety"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.105.102";
+const APP_VERSION = "1.105.103";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });

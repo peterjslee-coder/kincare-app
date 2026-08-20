@@ -388,12 +388,30 @@
       time-change request, *"doesn't do anything. It is a dead end."* Same tile, both failure
       directions at once: noise where it should be quiet, silence where it should act. **P1**
 
-- [ ] **Push notifications fire while you are looking at the very chat they describe** —
+- [x] **Push notifications fire while you are looking at the very chat they describe** —
       and the message does not appear in the open thread. (97783012) *"I am on the messaging
       interface messaging Julia and I get push notifications that Julia has sent a message, but
-      I don't see it in the chat. I have to back out."* Two bugs braided: suppress push for the
-      conversation currently on screen, and the live socket update is not landing in the open
-      thread. **P1**
+      I don't see it in the chat. I have to back out."*
+      ✅ **Fixed v1.105.102 + v1.105.103.** Two bugs braided, and they had different causes.
+      **The message not landing** was the same defect as 7972ed90: TWO direct conversation rows
+      existed between Pete and Julia (a personal one and `InPlace Support`), and the lookup had
+      no `ORDER BY` and no `LIMIT`, so different calls could return different rows. Her message
+      went into one; his open thread was the other; `msg.conversationId !== activeConvId` so it
+      was never appended; backing out refetched and showed it. Fixed by v1.105.102.
+      **The push** is v1.105.103: `src/utils/presence.js` tracks which conversation each SOCKET
+      has open (socket-scoped — the same person on a laptop and a phone is looking at one of
+      them), the client announces it and closes it on `visibilitychange` (a hidden page is not
+      being read), and all four send paths in `messages.js` skip the push for a member who is
+      reading that thread. Membership is verified server-side, an unknown answer means the push
+      goes out, and a disconnect clears the entry — the failure direction is an extra push,
+      never a swallowed one.
+      Two more found in the same pass: the socket payload omitted `sender_label`, so a message
+      from the platform showed the admin's real name when it arrived live and "InPlace Support"
+      after a refetch; and the live append had no dedupe, so a socket reconnect could show the
+      same message twice. `tests/openThreadPush.test.js` (20, seven of them running the
+      registry rather than reading it).
+      ⚠️ **Still true for Pete until the duplicate threads are reconciled** — see the note under
+      7972ed90. His two Pete↔Julia rows are not merged.
 
 - [ ] **A job shows two different rates.** (dc5e86b5, Julia) *"$24 and then $29 listed on same
       job (doesn't match up)."* Money that disagrees with itself on the same card. In the same
