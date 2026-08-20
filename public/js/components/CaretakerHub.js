@@ -160,6 +160,24 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   // way to see the rest — which is the part that tells her whether she wants the job.
   const [expandedSummaryJobId, setExpandedSummaryJobId] = useState(null);
 
+  // v1.105.100 — "Not for me" on an OPEN job. It is not a decline: nobody offered it to her,
+  // so there is no family waiting on an answer and nothing to send. It just stops cluttering
+  // her list. Kept on the device deliberately — a local preference about a public listing does
+  // not belong in anyone's care record, and a family should not be told that a caregiver they
+  // never approached passed on their job.
+  const [hiddenJobIds, setHiddenJobIds] = useState(() => {
+    try { return new Set(JSON.parse(localStorage.getItem('inplace.hiddenOpenJobs') || '[]')); }
+    catch { return new Set(); }   // storage throws in private mode / locked-down webviews (v1.105.35)
+  });
+  const hideOpenJob = (jobId) => {
+    setHiddenJobIds((prev) => {
+      const next = new Set(prev); next.add(jobId);
+      try { localStorage.setItem('inplace.hiddenOpenJobs', JSON.stringify([...next])); } catch {}
+      return next;
+    });
+    showToast('Hidden from your list', 'info');
+  };
+
   const [decliningJob, setDecliningJob] = useState(null);
   const [declineReason, setDeclineReason] = useState('');
   const [decliningBusy, setDecliningBusy] = useState(false);
@@ -871,7 +889,10 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const profile = data.profile || {};
   const assignments = data.assignments || [];
   const sessions = data.upcomingSessions || [];
-  const openJobs = data.openJobs || [];
+  // v1.105.100 — jobs she has said "not for me" to drop out of the list. A job DIRECTED at her
+  // is never hidden this way: that one needs an answer, and quietly removing it would turn a
+  // request from a family into silence.
+  const openJobs = (data.openJobs || []).filter((j) => j.isDirectedAtMe || !hiddenJobIds.has(j.id));
   const dataReviews = data.reviews || [];
   const stats = data.stats || {};
 
@@ -1629,11 +1650,19 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                           padding: '7px 14px', background: 'var(--bg-surface)', color: 'var(--color-purple-light)', border: '2px solid #7c3aed',
                           borderRadius: '10px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
                         }}>Propose Different Time</button>}
-                      {!job.isOwnRequest && <button onClick={(e) => { e.stopPropagation(); setDecliningJob(job); setDeclineReason(''); }}
+                      {/* v1.105.100 — only a job actually offered to her can be DECLINED; an
+                          open job is refused by simply not taking it, and the server rightly
+                          404s that. Julia hit "Care request not found" twice on this button. */}
+                      {!job.isOwnRequest && job.isDirectedAtMe && <button onClick={(e) => { e.stopPropagation(); setDecliningJob(job); setDeclineReason(''); }}
                         style={{
                           padding: '7px 14px', background: 'none', color: 'var(--text-tertiary)', border: 'none',
                           fontSize: '12px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', textDecoration: 'underline',
                         }}>Can't make it</button>}
+                      {!job.isOwnRequest && !job.isDirectedAtMe && <button onClick={(e) => { e.stopPropagation(); hideOpenJob(job.id); }}
+                        style={{
+                          padding: '7px 14px', background: 'none', color: 'var(--text-tertiary)', border: 'none',
+                          fontSize: '12px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', textDecoration: 'underline',
+                        }}>Not for me</button>}
                     </div>
                   </div>
                 </div>
@@ -2351,11 +2380,19 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                             padding: '7px 14px', background: 'var(--bg-surface)', color: 'var(--role-color)', border: '2px solid #1b6b5a',
                             borderRadius: '10px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
                           }}>Propose Different Time</button>}
-                      {!job.isOwnRequest && <button onClick={(e) => { e.stopPropagation(); setDecliningJob(job); setDeclineReason(''); }}
+                      {/* v1.105.100 — only a job actually offered to her can be DECLINED; an
+                          open job is refused by simply not taking it, and the server rightly
+                          404s that. Julia hit "Care request not found" twice on this button. */}
+                      {!job.isOwnRequest && job.isDirectedAtMe && <button onClick={(e) => { e.stopPropagation(); setDecliningJob(job); setDeclineReason(''); }}
                         style={{
                           padding: '7px 14px', background: 'none', color: 'var(--text-tertiary)', border: 'none',
                           fontSize: '12px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', textDecoration: 'underline',
                         }}>Can't make it</button>}
+                      {!job.isOwnRequest && !job.isDirectedAtMe && <button onClick={(e) => { e.stopPropagation(); hideOpenJob(job.id); }}
+                        style={{
+                          padding: '7px 14px', background: 'none', color: 'var(--text-tertiary)', border: 'none',
+                          fontSize: '12px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', textDecoration: 'underline',
+                        }}>Not for me</button>}
                       </div>
                     </div>
                   );

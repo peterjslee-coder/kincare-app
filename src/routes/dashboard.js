@@ -839,6 +839,19 @@ async function caregiverDashboard(db, userId, res) {
           // v1.105.89 — shown, not hidden, and never acceptable. The client greys the card and
           // drops the Accept/Propose buttons rather than leaving a gap where a job should be.
           isOwnRequest: s.is_own_request === true || s.is_own_request === 1,
+          // v1.105.100 — is this job actually MINE to decline?
+          //
+          // Julia pressed "Can't make it" and got "Care request not found", twice. v1.105.91
+          // fixed the server to recognise offered_to_caregiver_id, but the BUTTON rendered on
+          // every job that was not your own — including open-pool jobs, where nobody was named
+          // and the server correctly refuses, because you decline an open job by not claiming
+          // it. A button that cannot succeed is worse than no button.
+          //
+          // Worse still: this same file expires an exclusive offer by clearing
+          // offered_to_caregiver_id and reverting the session to 'open'. So a request that WAS
+          // hers becomes an open job when the window lapses, and the button that worked
+          // yesterday silently stops working with nothing on screen changing.
+          isDirectedAtMe: s.offered_to_caregiver_id === profile.id || s.caregiver_id === profile.id,
           date: s.scheduled_date,
           time: s.scheduled_time,
           serviceType: s.service_type,
