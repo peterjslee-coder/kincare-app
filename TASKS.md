@@ -639,22 +639,31 @@
       stale point (**a wrong point is worse than none — it is indistinguishable from a right one
       downstream**); and the startup backfill now repairs care recipients too, which is what
       fixes everyone already broken. `tests/careRecipientLocation.test.js` (10).
-- [ ] **The other three signup flows have the bugs the caregiver path just had.** Found in the
-      same sweep, NOT yet fixed:
-      (a) **Both non-caregiver progress bars change length mid-flow** — `RegisterPage.js:544`
-      goes 2→3 steps when a family user answers the authorization question, and
-      `CareRecipients.js:526` goes 4→5 on tier3. That is property 4 ("nothing new appears after
-      you start") violated by construction, in the two flows we did not touch.
-      (b) **`Dashboard.js:914` "Get Started" tiles mark done by CLICK**, via
-      `localStorage.inplace_discovered` — tap "Complete your profile", abandon it, and it is
-      ticked forever. A false positive is worse than the three-state bug, and it is client-only
-      so it does not survive a device change.
-      (c) **`Dashboard.js:556` "things to explore" does `.filter(s => !s.done)`** — finished work
-      vanishes instead of shrinking, the direct inverse of the property that stops "I have to
-      remember what I already did".
-      (d) **The VA-only rule is enforced in `SelfOnboardingWizard.js:216` and NOWHERE in the
-      family's recipient form** — an enforcement gap, not a UI one, while L1 licensure is open
-      with the lawyer. **P1**
+- [x] **The other signup flows — checked properly, and two of my four claims were wrong.**
+      ✅ **v1.105.123.** Filed in v1.105.122 off a read of the computations rather than the
+      render paths. Corrected here:
+      ~~(a) both non-caregiver progress bars change length mid-flow~~ — **WRONG, neither does.**
+      `RegisterPage.js` computes `totalSteps` 2-or-3, but `step === 1` returns early at `:379`
+      and `:465`, so the dots only ever render on step 2, by which time track and authHint are
+      settled. `CareRecipients.js` computes `displaySteps` 4-or-5, but the first screen renders
+      no bar at all — `WizardProgressBar` appears from `WizardStep2` onward, and the tier is
+      fixed before then. **Both look shape-shifting in the source and are stable on screen.**
+      ~~(c) "things to explore" deletes finished items~~ — **overstated.** It is labelled
+      "casual, not a checklist" in the code and hiding a suggestion once it is genuinely done is
+      reasonable. Left alone.
+      (b) **REAL, and fixed:** `Dashboard.js` "Get Started" tiles were removed permanently by
+      the tap that opened them (`localStorage.inplace_discovered`), with no relation to whether
+      anything got done. Open "Complete your profile", change your mind, and the only reminder on
+      the dashboard is gone for good. Same family as the identity step reading "not done" while
+      still loading. A tap now just navigates; a tile hides when it is DONE (`hasProfile` — the
+      one observable item) or when the user presses "Dismiss all", which already existed. The old
+      per-item key is deliberately not read, so tiles someone opened and abandoned come back.
+      `tests/discoveryTiles.test.js` (5).
+- [ ] **(d) The Virginia-only rule is enforced in `SelfOnboardingWizard.js:216` and NOWHERE in
+      the family's recipient form.** A family can add a care recipient in any state; a recipient
+      signing themselves up cannot. That is an enforcement gap rather than a UI one, and with L1
+      licensure still open with counsel it is **not mine to close unilaterally** — added to the
+      lawyer agenda. **P1**
 - [ ] **⚠️ Two things found next door, both worth their own pass.**
       (a) **`work_latitude` / `work_longitude` are read by three places
       (`dashboard.js:817`, `utils/aiMatching.js:82`, `AreaMap.js:27`) and written by NONE** —

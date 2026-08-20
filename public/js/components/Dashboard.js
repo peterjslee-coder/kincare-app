@@ -917,33 +917,44 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
           { id: 'discover-preferences', icon: '⚙️', label: 'Review care preferences', desc: 'Adjust schedules, medications, and daily routines', target: 'recipients' },
           { id: 'discover-family', icon: '👨‍👩‍👧', label: 'Invite family to the care team', desc: 'Add siblings, relatives, or trusted friends', target: 'care-team' },
           { id: 'discover-caregivers', icon: '🔍', label: 'Browse caregivers in your area', desc: 'See who\'s available nearby', target: 'caregivers' },
-          { id: 'discover-profile', icon: '👤', label: 'Complete your profile', desc: 'Add your phone number and address', target: 'account' },
+          // The one item here whose completion we can actually see. The other three are
+          // suggestions, not tasks — there is no state that says "you have browsed enough
+          // caregivers" — so they stay until the whole block goes, which it does the moment
+          // profile and recipient both exist (the condition above).
+          { id: 'discover-profile', icon: '👤', label: 'Complete your profile', desc: 'Add your phone number and address', target: 'account', done: hasProfile },
         ];
-        const clicked = (() => { try { return JSON.parse(localStorage.getItem('inplace_discovered') || '[]'); } catch { return []; } })();
-        const remaining = discoverItems.filter(d => !clicked.includes(d.id));
+        // ─── v1.105.123: tapping a thing is not doing it ───
+        //
+        // These tiles used to be removed permanently by the TAP that opened them, recorded in
+        // localStorage. Open "Complete your profile", look at it, change your mind, and the only
+        // thing on the dashboard that would have reminded you is gone for good — while the
+        // profile is still incomplete. It is the same family as the identity step that read
+        // "not done" while it was still loading (v1.105.112): a state we had not established
+        // being rendered as one we had.
+        //
+        // "Dismiss all" already exists and is the honest way to say "stop showing me these", so
+        // nothing is lost by letting a tap be a tap. It gets its own key; the old per-item one
+        // is deliberately not read, which means a tile someone opened and abandoned comes back.
+        const dismissed = (() => { try { return localStorage.getItem('inplace_discover_dismissed') === '1'; } catch { return false; } })();
+        if (dismissed) return null;
+        const remaining = discoverItems.filter(d => !d.done);
         if (remaining.length === 0) return null;
 
-        const markClicked = (item) => {
-          try {
-            const cur = JSON.parse(localStorage.getItem('inplace_discovered') || '[]');
-            if (!cur.includes(item.id)) { cur.push(item.id); localStorage.setItem('inplace_discovered', JSON.stringify(cur)); }
-          } catch {}
-          onNavigate && onNavigate(item.target);
-        };
+        const openItem = (item) => { onNavigate && onNavigate(item.target); };
 
         return (
           <div style={{ marginBottom: 20 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Get Started</div>
               <button onClick={() => {
-                try { localStorage.setItem('inplace_discovered', JSON.stringify(discoverItems.map(d => d.id))); } catch {}
+                try { localStorage.setItem('inplace_discover_dismissed', '1'); } catch {}
                 setDismissedTiles(prev => ({ ...prev, _discoverForceHide: Date.now() }));
               }} style={{ background: 'none', border: 'none', fontSize: 12, color: 'var(--text-muted)', cursor: 'pointer', padding: '2px 6px' }}>Dismiss all</button>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
               {remaining.map(item => (
                 <div key={item.id}
-                  onClick={() => markClicked(item)}
+                  onClick={() => openItem(item)}
                   style={{
                     background: 'var(--bg-surface)', border: '1px solid var(--border-light)', borderRadius: 12,
                     padding: '16px 14px', cursor: 'pointer', transition: 'box-shadow 0.15s, border-color 0.15s',
