@@ -248,94 +248,110 @@ The consent_outreach table tracks emails sent + recipient responses. Attestation
 
 ## Last Session Handoff (updated each session)
 
-**Date:** August 19, 2026 (evening) | **Version:** v1.105.113 | **Session arc:** fourteen
-releases driven by two real users, ending with the AI being taken out of the identity decision
+**Aug 19, 2026, 10pm ET · baseline v1.105.113 on `main`, staging and prod both current.**
+Nothing uncommitted, nothing half-finished. Fourteen releases tonight, all user-driven.
 
-> If the date above is stale, trust `git log` over this section.
+> If `git log` disagrees with this section, trust `git log`.
+> **⚠️ Pete's mounted checkout runs stale.** Run `Sync InPlace.command` before reading
+> anything in `~/Documents/Claude Working Folder/kincare-repo` as current.
 
-### First five minutes
+---
 
-Push works from the Cowork sandbox. Not from inside Pete's checkout — from a **fresh clone**:
+### Do this first
+
+Nothing is mid-flight, so pick a lane:
+
+**A. Verify last night's work reached the people it was for.** Three unconfirmed, in order of
+consequence:
+
+1. **Does Pete's admin account have a push subscription at all?** He got no push when Julia's
+   ID landed. Email was the fixable half (opt-in → opt-out for `identity_submitted`,
+   v1.105.112). Push is unexplained.
+   ```sql
+   SELECT platform, created_at FROM push_subscriptions
+   WHERE user_id = (SELECT id FROM users WHERE email = 'peterjslee@gmail.com');
+   ```
+   **If that returns nothing, every admin push since the feature shipped has gone nowhere** —
+   and several older "I never got told" reports have the same answer.
+2. **Does Julia's Find Work card show "Betty" now?** v1.105.107 split trust from Stripe;
+   v1.105.108 makes the card say which input is false if it still doesn't. Nobody has looked
+   at her screen since.
+3. **Is the Doc Review queue empty?** Pete approved his and Julia's on Aug 19. Since
+   v1.105.112 every new signup lands there, so a non-empty queue is now normal, not a bug.
+
+**B. Run the feedback loop.** Full cycle in this file below. Sweep Sentry as PART of it, not
+after — on 7/29 the queue had one item while Sentry had a P0 blocking every caregiver signup.
+
+**C. Take something from TASKS.md.** The P0/P1 list is empty as of tonight. What is left is
+the P2 tail and two long-standing items in "Open" below.
+
+---
+
+### Ground rules for pushing
+
+Fresh clone — **never write-mode git in the mounted repo** (FUSE cannot unlink; the orphaned
+`.git/index.lock` is Pete's to clear by hand):
 
 ```bash
-PAT=$(grep -o 'github_pat_[A-Za-z0-9_]*' "<his repo>/.git/config" | head -1)
+PAT=$(grep -o 'github_pat_[A-Za-z0-9_]*' "$HOME/Documents/Claude Working Folder/kincare-repo/.git/config" | head -1)
 git clone "https://x-access-token:${PAT}@github.com/peterjslee-coder/kincare-app.git" /tmp/kc
 ```
 
-**Never run write-mode git in his mounted repo** — FUSE cannot unlink, so `.git/index.lock`
-is orphaned and he has to clear it by hand.
-
-Gates before any push:
-
 ```bash
 npm run lint:client && npm run lint:requires && npm run lint:sql-columns
-npx jest                                                            # ~1,130 unit
+npx jest                                                                            # ~1,130
 npx jest --forceExit --runInBand --testMatch "**/tests/integration/**/*.itest.js"   # 197
 ```
 
-`npm test -- <name>` does **not** filter — the script already ends in
-`--testPathIgnorePatterns`, so your argument is appended to *that* and the named test is
-EXCLUDED. Use `npx jest tests/<file>`.
+`npm test -- <name>` does **not** filter — the script ends in `--testPathIgnorePatterns`, so
+your argument is appended to *that* and the named test is EXCLUDED. Use `npx jest tests/<file>`.
 
-Bump `APP_VERSION` in `src/server.js`, run `node scripts/build-client.js`, commit with a
-heredoc (backticks in `-m` get eaten by the shell), push `HEAD:staging` then `HEAD:main`.
+Bump `APP_VERSION` in `src/server.js` · `node scripts/build-client.js` · commit **from a file**
+(backticks in `-m` are eaten by the shell) · push `HEAD:staging` then `HEAD:main`.
 
-### What shipped, .100 → .113
+---
 
-| Ver | What |
-| --- | --- |
-| .100 | Decline shown only on jobs that can be declined; open jobs get "Not for me" |
-| .101 | The welcome banner had no way out — a ~10x18px dismiss target, and it outlived every page change |
-| .102 | **A personal DM has no name.** Seven lookups matched ANY direct conversation, so Pete's DM and the "InPlace Support" thread were interchangeable |
-| .103 | No push for the thread you are reading; socket presence is socket-scoped and closes on `visibilitychange` |
-| .104 | `scripts/repair-support-dm-split.js` — optional, Pete declined to run it |
-| .105 | "Needs you" tile: unread messages out of the badge; the time-change row pointed at a page that does not exist |
-| .106 | Money that reconciles — one total, rounded once; and list membership stopped depending on `new Date()` during render |
-| .107 | **Trust decides what a caregiver sees; Stripe decides whether she is paid.** They were conflated |
-| .108 | The payload says WHICH input withheld a name — added because I guessed wrong and it cost a release |
-| .109 | Vouch picker: search instead of transcribing a number; and `?role=family` now matches the `roles` array |
-| .110 | Calendar shows the hours that are used, never hides one; midnight is "12a" not "0a" |
-| .111 | Up to four photos on a visit; `photos` alongside `photo`, so nothing written before today breaks |
-| .112 | **The AI stopped approving government IDs.** Status is always `pending`; below 90% it records no opinion |
-| .113 | **A work item is silenced by being finished, not by being looked at** |
-
-### The three rules worth carrying forward
+### Three rules earned tonight
 
 1. **A checklist item has THREE states — done, not done, and NOT KNOWN YET — and the third
-   must never draw as the second.** (v1.105.112. Pete: *"it says you still haven't verified
-   your ID (but you did)"*.) Same family as "a broken feature and a switched-off feature look
-   identical."
+   must never draw as the second.** (v1.105.112.) Same family as "a broken feature and a
+   switched-off feature look identical."
 2. **News is dismissed by being seen; work is dismissed by being done.** Never let a
    seen-snapshot suppress a queue. (v1.105.113.)
 3. **Confidence is the weakest link you measured, not the strongest.** A 97% document read
    beside a 40% face match is a 40% answer.
 
-### Open, and would be lost if nobody writes it down
+---
 
-- 🔴 **Does Pete's admin account have a push subscription at all?** He got no push for Julia's
-  ID. Email was the fixable half (opt-in→opt-out, v1.105.112); push is unverified. If
-  `push_subscriptions` is empty for his user, **every admin push since the feature shipped has
-  gone nowhere.** One query answers it.
-- 🔴 **Every signup now waits on Pete.** v1.105.112 was deliberate, but it is an operational
-  change, not just a code one. If IDs start piling up, that is the design working, not failing.
-- **Did Julia's Find Work card actually get her Betty's name?** v1.105.107/.108 should have,
-  but nobody has confirmed it on her device. `.108` makes the card say which input is false.
-- **ONBOARDING is a design track now** — `Onboarding_Path_Plan_2026-08-19.md` in the Working
-  Folder. Pete picked direction B, "the path". **Read the brief before touching any onboarding
-  screen.** No backend changes.
-- **GPS check-in has never been verified on a real iPhone** (P0, unchanged since March).
-  `@capacitor/geolocation` is not in `package.json`. The safety proposition rests on it.
+### Two things that are now true and were not yesterday
+
+- **⚠️ IDENTITY IS A HUMAN GATE.** The AI never writes `approved`; status is always `pending`;
+  below 90% confidence it records no opinion at all. Only an admin approves.
+  `src/utils/identityDecision.js`. Anything reasoning about this gate should know that the old
+  comments claiming otherwise are gone. Lawyer agenda **L1b closed**.
+- **Every signup waits on Pete.** Deliberate. If IDs pile up, that is the design working.
+
+### Open — needs hands, not code
+
+- **GPS check-in has never been verified on a real iPhone.** P0 since March.
+  `@capacitor/geolocation` is not in `package.json`; nothing calls
+  `requestWhenInUseAuthorization()`. The safety proposition rests on it, and you find out at
+  App Store submission.
 - **Julia is still "Full access"** on Betty's team and should be Viewer.
-- The P2 tail in TASKS.md: notification bell size on mobile, cancel-from-Schedule, passkey
-  buttons off-screen, admin search on mobile, Stripe Link (a Pete-in-a-browser task).
 
-### What NOT to redo
+### Do NOT redo
 
-- The `.104` repair script. Pete's call: *"i don't care about the chat with julia... i just want
-  it fixed going forward, even if there are two."* It is documented in `docs/OPS_RUNBOOK.md` if
-  it is ever wanted.
-- Tyler's 1-of-7 First Steps redesign. Pete chose "tighten, don't redesign" — then chose the
-  broader path track instead. The brief supersedes both.
+- `scripts/repair-support-dm-split.js` (v1.105.104). Pete: *"i don't care about the chat with
+  julia… i just want it fixed going forward, even if there are two."* Documented in
+  `docs/OPS_RUNBOOK.md` if ever wanted.
+- Tyler's 1-of-7 First Steps redesign. Superseded by the onboarding track.
+- Anything in the "Already done" table of `Onboarding_Path_Plan_2026-08-19.md`.
+
+### Onboarding is a separate track
+
+`Onboarding_Path_Plan_2026-08-19.md` (Working Folder). Pete picked direction B, "the path".
+**Read it before touching any onboarding screen.** It carries its own ordered next steps and
+its own list of what NOT to redo. No backend changes.
 
 ## Local Development
 
