@@ -248,8 +248,8 @@ The consent_outreach table tracks emails sent + recipient responses. Attestation
 
 ## Last Session Handoff (updated each session)
 
-**Date:** August 18, 2026 (second session) | **Version:** v1.105.72 | **Session arc:** the sweep
-that was offered and never started — and the discovery that it was the wrong sweep
+**Date:** August 19, 2026 (evening) | **Version:** v1.105.113 | **Session arc:** fourteen
+releases driven by two real users, ending with the AI being taken out of the identity decision
 
 > If the date above is stale, trust `git log` over this section.
 
@@ -262,92 +262,80 @@ PAT=$(grep -o 'github_pat_[A-Za-z0-9_]*' "<his repo>/.git/config" | head -1)
 git clone "https://x-access-token:${PAT}@github.com/peterjslee-coder/kincare-app.git" /tmp/kc
 ```
 
-**Never run write-mode git against his checkout.** Not through the device bridge, not through the
-sandbox mount — both are FUSE and cannot unlink. The trap is that the command *succeeds*: git
-writes `.git/index.lock`, does the work, fails to remove the lock, and only warns. The orphan then
-blocks every later git command in that repo until Pete deletes it by hand. This session did it
-once, on the very first commit, after reading the previous handoff warning against it.
-Read-only git in the mount is fine: `git log`, `git diff`, `git status`, `git push --dry-run`.
+**Never run write-mode git in his mounted repo** — FUSE cannot unlink, so `.git/index.lock`
+is orphaned and he has to clear it by hand.
 
-**Pete's preference is that you commit and push directly.** He said so plainly. Do not hand him
-shell commands unless something genuinely needs his hands.
-
-### What shipped — v1.105.72
-
-Twenty-two client functions that were written, maintained, and wired to nothing.
-
-The handoff asked for a gate on "fields the server computes and sends that no client ever reads."
-Tracing the five known instances first showed they are **three different mechanisms**:
-
-  (a) a key the client never mentions anywhere — 110 exist; **no gate**, too many false
-      positives, and the identity cases proved this is not what bit users. Listed in TASKS.md.
-  (b) a relay object that rebuilds a payload field by field and drops fields — how BOTH
-      `identityStatus` and `idVerified` went missing.
-  (c) a value computed on the client and never rendered — and this generalises into something
-      worse than a stray field: **functions nothing calls.**
-
-Six were on the caregiver's own home screen. `CaretakerHub` is live (`app.js`,
-`role === 'caregiver'`), and inside it `handleIdentityVerify`, `handleStripeOnboard`,
-`handleStripeDashboard`, `handleCancelJob`, `saveStoplight`, `handleDocUpload` and three
-availability-rule handlers could not be reached. All superseded by MyAccount and FindWork.
-`handleIdentityVerify` was worse than dead — it called **Stripe Identity**, the third system
-v1.105.64 established that nothing gates on.
-
-**v1.105.51 did careful maintenance on a dead function.** It added an else branch to
-`MyAccount.handleSaveRates`, noting "FindWork's twin of this handler already had the else branch."
-FindWork's twin is the one that runs. `tests/noSilentFailures.test.js` asserted on the dead copy
-and passed for months. **A test can pin unreachable code and prove nothing** — worth checking
-whether other source-matching tests do the same.
-
-Two complete features had no way in and were deleted as unreachable, then logged in TASKS.md as
-capability gaps: `CareProfile.saveSummaryEdit` (edit the AI care summary) and
-`MyAccount.handleRenamePasskey`. The care-summary one is a **decision, not a re-add** — given the
-iPAi rule about human review of AI-derived text, an edit affordance there is arguably the point.
-
-### The gate
-
-`lint:client` gained `no-unused-vars`, narrowed to function-valued bindings via espree, with two
-deliberate escapes: JSX-used names and `window.*` exports. Baseline empty and test-enforced.
-`tests/unreachableFunctionLint.test.js` pins the gate, its escapes and the deletions.
-
-Narrowed to functions **on purpose**: the rule reports 224 raw, 139 after the escapes; the rest
-are mostly unused `useState` values. A gate that cries wolf gets switched off.
+Gates before any push:
 
 ```bash
 npm run lint:client && npm run lint:requires && npm run lint:sql-columns
-npx jest                       # 53 suites, 770 pass / 6 skipped, ~2s
+npx jest                                                            # ~1,130 unit
+npx jest --forceExit --runInBand --testMatch "**/tests/integration/**/*.itest.js"   # 197
 ```
 
-### Two method lessons, both learned the hard way here
+`npm test -- <name>` does **not** filter — the script already ends in
+`--testPathIgnorePatterns`, so your argument is appended to *that* and the named test is
+EXCLUDED. Use `npx jest tests/<file>`.
 
-**Validate a detector in both directions, against a genuinely pre-fix commit.** The first two
-detectors this session built were WRONG, and only testing caught it. The first "validation" used
-v1.105.69 to check an `idVerified` fix that landed in **.64** — after it, not before. The gate is
-trustworthy because it flags `idVerified` at .63 and not at .71, flags a planted dead handler, and
-stays quiet on a JSX-only component. This is the same discipline as the minified-bundle false
-negative in the previous handoff.
+Bump `APP_VERSION` in `src/server.js`, run `node scripts/build-client.js`, commit with a
+heredoc (backticks in `-m` get eaten by the shell), push `HEAD:staging` then `HEAD:main`.
 
-**Do not brace-count to delete code.** An early deletion script counted braces and removed single
-lines out of arrow functions, because `async (a, b) =>` opens and closes a paren before the body
-starts. It corrupted 22 files and had to be reverted. Use AST ranges.
+### What shipped, .100 → .113
 
-### Where to pick up
+| Ver | What |
+| --- | --- |
+| .100 | Decline shown only on jobs that can be declined; open jobs get "Not for me" |
+| .101 | The welcome banner had no way out — a ~10x18px dismiss target, and it outlived every page change |
+| .102 | **A personal DM has no name.** Seven lookups matched ANY direct conversation, so Pete's DM and the "InPlace Support" thread were interchangeable |
+| .103 | No push for the thread you are reading; socket presence is socket-scoped and closes on `visibilitychange` |
+| .104 | `scripts/repair-support-dm-split.js` — optional, Pete declined to run it |
+| .105 | "Needs you" tile: unread messages out of the badge; the time-change row pointed at a page that does not exist |
+| .106 | Money that reconciles — one total, rounded once; and list membership stopped depending on `new Date()` during render |
+| .107 | **Trust decides what a caregiver sees; Stripe decides whether she is paid.** They were conflated |
+| .108 | The payload says WHICH input withheld a name — added because I guessed wrong and it cost a release |
+| .109 | Vouch picker: search instead of transcribing a number; and `?role=family` now matches the `roles` array |
+| .110 | Calendar shows the hours that are used, never hides one; midnight is "12a" not "0a" |
+| .111 | Up to four photos on a visit; `photos` alongside `photo`, so nothing written before today breaks |
+| .112 | **The AI stopped approving government IDs.** Status is always `pending`; below 90% it records no opinion |
+| .113 | **A work item is silenced by being finished, not by being looked at** |
 
-**1. Julia is still the open thread.** Nothing this session touched her. Re-run
-`GET /api/admin/client-versions` — if she is still on 1.105.64 the force-quit instruction did not
-work, and that is a real finding about the PWA update mechanism. Two accounts were on the 1.58.x
-line as of Aug 18 and have never been chased down.
+### The three rules worth carrying forward
 
-**2. TASKS.md P1, new this session:** `AvailabilityTab.js` is an entire component nothing renders
-and it still ships in every bundle; ~117 unused client values (incl. `Dashboard`'s tipping state);
-110 unread server response keys.
+1. **A checklist item has THREE states — done, not done, and NOT KNOWN YET — and the third
+   must never draw as the second.** (v1.105.112. Pete: *"it says you still haven't verified
+   your ID (but you did)"*.) Same family as "a broken feature and a switched-off feature look
+   identical."
+2. **News is dismissed by being seen; work is dismissed by being done.** Never let a
+   seen-snapshot suppress a queue. (v1.105.113.)
+3. **Confidence is the weakest link you measured, not the strongest.** A 97% document read
+   beside a 40% face match is a 40% answer.
 
-**3. Still unverified since March: GPS check-in on a real iPhone.** Note the previous handoff said
-`@capacitor/geolocation` is not in `package.json` — **it is**, at `^8.2.1`. The rest of that P0
-still stands: nothing calls `requestWhenInUseAuthorization()`, and the native path is untested.
+### Open, and would be lost if nobody writes it down
 
-**4. Lawyer agenda, still open:** AI auto-approval of government identity documents, no human in
-the loop, no admin notification.
+- 🔴 **Does Pete's admin account have a push subscription at all?** He got no push for Julia's
+  ID. Email was the fixable half (opt-in→opt-out, v1.105.112); push is unverified. If
+  `push_subscriptions` is empty for his user, **every admin push since the feature shipped has
+  gone nowhere.** One query answers it.
+- 🔴 **Every signup now waits on Pete.** v1.105.112 was deliberate, but it is an operational
+  change, not just a code one. If IDs start piling up, that is the design working, not failing.
+- **Did Julia's Find Work card actually get her Betty's name?** v1.105.107/.108 should have,
+  but nobody has confirmed it on her device. `.108` makes the card say which input is false.
+- **ONBOARDING is a design track now** — `Onboarding_Path_Plan_2026-08-19.md` in the Working
+  Folder. Pete picked direction B, "the path". **Read the brief before touching any onboarding
+  screen.** No backend changes.
+- **GPS check-in has never been verified on a real iPhone** (P0, unchanged since March).
+  `@capacitor/geolocation` is not in `package.json`. The safety proposition rests on it.
+- **Julia is still "Full access"** on Betty's team and should be Viewer.
+- The P2 tail in TASKS.md: notification bell size on mobile, cancel-from-Schedule, passkey
+  buttons off-screen, admin search on mobile, Stripe Link (a Pete-in-a-browser task).
+
+### What NOT to redo
+
+- The `.104` repair script. Pete's call: *"i don't care about the chat with julia... i just want
+  it fixed going forward, even if there are two."* It is documented in `docs/OPS_RUNBOOK.md` if
+  it is ever wanted.
+- Tyler's 1-of-7 First Steps redesign. Pete chose "tighten, don't redesign" — then chose the
+  broader path track instead. The brief supersedes both.
 
 ## Local Development
 
