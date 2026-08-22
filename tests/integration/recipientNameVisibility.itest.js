@@ -54,10 +54,20 @@ beforeAll(async () => {
 
   juliaProfileId = uuid();
   // No bank account. is_background_checked stays 0 — hers was waived by vouch.
+  //
+  // v1.105.124 — she now needs COORDINATES too, and that is not what this file is about.
+  // v1.105.121 made the deal explicit ("if they get to know where jobs are, we get to know
+  // where they are"): a caregiver with NULL latitude/longitude gets `openJobs: []`, because
+  // no family can see her either. Every assertion below reads a job out of openJobs, so
+  // without a point this file stopped testing the vouch gate and silently started testing
+  // the location gate — five red tests, all for the wrong reason.
+  //
+  // Blacksburg VA, coarsened to two decimals the way the app stores it.
   await db.prepare(`
     INSERT INTO caregiver_profiles (id, user_id, hourly_rate, is_background_checked,
-                                    stripe_onboard_complete, is_available, created_at)
-    VALUES (?, ?, 25, 0, 0, 1, NOW())
+                                    stripe_onboard_complete, is_available, latitude, longitude,
+                                    location_source, created_at)
+    VALUES (?, ?, 25, 0, 0, 1, 37.23, -80.41, 'address', NOW())
   `).run(juliaProfileId, julia.user.id);
 
   const petesTeam = await h.createCareTeam({ familyUserId: pete.user.id });
