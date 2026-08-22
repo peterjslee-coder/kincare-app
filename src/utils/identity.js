@@ -13,8 +13,15 @@
 //      selfie and photo ID to earn a blue check", it works, and it stores real documents.
 //
 //   3. Stripe Identity        → /api/payments/identity/*
-//      writes caregiver_profiles.identity_verified. Nothing gates on it. CaretakerHub
-//      asked it for a status and discarded the answer.
+//      writes caregiver_profiles.identity_verified.
+//
+//      ⚠️ v1.105.124 — this used to say "Nothing gates on it." That was FALSE, and the
+//      sentence is what hid the bug. `authorizeSessionPayment` gated the money on that
+//      exact column, so a caregiver who verified through doors 1 or 2 — the doors people
+//      actually use — could never have a payment authorized. Julia hit it on the first
+//      real paid visit in the product's life: no PaymentIntent was created, and at
+//      check-out there was nothing to capture. That gate now calls the resolver below.
+//      If you add a reader of `identity_verified`, it belongs here instead.
 //
 // The onboarding gate and the admin panel only ever recognised shape 1. The blue check in
 // My Account is decided by a fourth rule entirely (`uploaded_by = <you>`, auth.js), which

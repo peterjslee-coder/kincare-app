@@ -7,10 +7,11 @@ const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { authenticate, requireRole } = require("../middleware/auth");
 const { calculateSessionCost, SURCHARGE_PLATFORM_SHARE } = require("../utils/rateCalculator");
-const { getNowInZone, buildDateTimeInZone } = require("../utils/timezone");
+const { getNowInZone, buildDateTimeInZone, zonedDateTimeToInstant } = require("../utils/timezone");
 const { sendPushToUser } = require("./push");
 const ticketRouter = require("./tickets");
 const { captureException } = require("../utils/sentry");
+const { caregiverIdentityVerified } = require("../utils/identity");
 
 // emitToUser injected from server.js at startup
 let _emitToUser = null;
@@ -61,20 +62,46 @@ async function authorizeSessionPayment(sessionId) {
         cp.user_id AS caregiver_user_id, cp.identity_verified,
         u2.first_name || ' ' || u2.last_name AS caregiver_name,
         cr.first_name || ' ' || cr.last_name AS recipient_name,
-        fam.stripe_customer_id
+        fam.stripe_customer_id,
+        ct.billing_user_id,
+        bill.stripe_customer_id AS billing_stripe_customer_id
       FROM care_sessions cs
       LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
       LEFT JOIN users u2 ON cp.user_id = u2.id
       LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
       LEFT JOIN users fam ON cs.family_user_id = fam.id
+      LEFT JOIN care_teams ct ON ct.care_recipient_id = cs.care_recipient_id
+      LEFT JOIN users bill ON ct.billing_user_id = bill.id
       WHERE cs.id = ?
     `).get(sessionId);
 
     if (!session) return { error: "Session not found" };
     if (session.stripe_payment_intent_id) return { error: "Already authorized" };
-    if (!session.stripe_customer_id) return { error: "Family has no payment method on file" };
+
+    // v1.105.124 — charge whoever actually pays. `processOverduePayments` has always
+    // preferred the care team's billing contact over the session's family_user_id;
+    // this gate read family_user_id alone, so a team whose billing contact holds the
+    // card could fail pre-authorization and then be charged successfully hours later
+    // by auto-pay. Two money paths disagreeing about who the payer is.
+    const payerCustomerId = session.billing_stripe_customer_id || session.stripe_customer_id;
+    if (!payerCustomerId) return { error: "Family has no payment method on file" };
+
     if (!session.stripe_account_id || !session.stripe_onboard_complete) return { error: "Caregiver Stripe not set up" };
-    if (!session.identity_verified) return { error: "Caregiver identity not verified" };
+
+    // v1.105.124 — ask the resolver, not the column.
+    //
+    // `cp.identity_verified` is written by exactly one flow: Stripe Identity. Julia
+    // verified through the selfie + document path, which writes `verified_documents`
+    // and never touches that column, so this gate saw an unverified caregiver, no
+    // PaymentIntent was ever created, and at check-out there was nothing to capture —
+    // "Session payment capture failed: No payment authorization found".
+    //
+    // v1.105.64 built this resolver to end exactly that class of disagreement, but only
+    // the onboarding gate and the admin panel were moved onto it. The money gate was
+    // missed, and the comment at the top of identity.js said of the Stripe column
+    // "Nothing gates on it" — which is how it stayed missed.
+    const identityOk = await caregiverIdentityVerified(db, session.caregiver_user_id, session.caregiver_id);
+    if (!identityOk) return { error: "Caregiver identity not verified" };
 
     // Calculate cost
     const durationHours = session.duration_hours || 2;
@@ -110,7 +137,7 @@ async function authorizeSessionPayment(sessionId) {
     const paymentIntent = await stripe.paymentIntents.create({
       amount: totalCents,
       currency: "usd",
-      customer: session.stripe_customer_id,
+      customer: payerCustomerId,
       capture_method: "manual",
       application_fee_amount: platformFeeCents,
       transfer_data: {
@@ -716,6 +743,31 @@ async function pollPaymentAuthorizations() {
           const result = await authorizeSessionPayment(s.id);
           if (result.error) {
             console.warn(`[accountability] Auth skipped for ${s.id.slice(0, 8)}: ${result.error}`);
+            // v1.105.124 — a skipped authorization used to end here, at a console.warn
+            // nobody reads. On Aug 22 this ran ~24h ahead of Julia's visit, skipped
+            // silently, and the first signal anyone got was the capture failing AFTER
+            // she had already worked the shift. The bug cost one session; the silence
+            // cost the chance to fix it before she left the house.
+            //
+            // `demo_session_blocked` is the one expected outcome and stays quiet.
+            if (result.error !== "demo_session_blocked") {
+              captureException(new Error(`Payment authorization skipped: ${result.error}`), {
+                where: "accountability: pollPaymentAuthorizations",
+                sessionId: s.id,
+                reason: result.error,
+                hoursUntilSession: Number(hoursUntil.toFixed(1)),
+              });
+              try {
+                const { notifyAdmins } = require("./push");
+                notifyAdmins("payment_authorization_failed", {
+                  title: "A shift is not funded",
+                  body: `${s.caregiver_name || "A caregiver"} works in ${hoursUntil.toFixed(0)}h and payment could not be authorized: ${result.error}`,
+                  data: { type: "payment_authorization_failed", sessionId: s.id, reason: result.error },
+                });
+              } catch (e) {
+                captureException(e, { where: "accountability: unfunded-shift notify failed" });
+              }
+            }
           }
         }
       } catch (err) {
@@ -764,7 +816,13 @@ async function pollLateCheckIns() {
       try {
         const tz = s.care_timezone || 'America/New_York';
         const dateStr = s.scheduled_date.split('T')[0];
-        const scheduledStart = buildDateTimeInZone(dateStr, s.scheduled_time, tz);
+        // v1.105.124 — same mixed-frame bug as the check-in route, second site.
+        // `s.check_in_time` comes out of Postgres as a REAL instant, so it must be
+        // compared against a real instant. This poller sweeps every in-progress
+        // session with late_check_in = 0, so the shifted version did not just
+        // mis-record one visit — it stood ready to re-flag on-time caregivers as
+        // four hours late, continuously.
+        const scheduledStart = zonedDateTimeToInstant(dateStr, s.scheduled_time, tz);
         const checkInTime = new Date(s.check_in_time);
         const lateMinutes = Math.floor((checkInTime - scheduledStart) / 60000);
 

@@ -9,7 +9,7 @@ const { captureException } = require("../utils/sentry");
 const availabilityRouter = require("./availability");
 const { sendPushToUser, notifyAdmins, sendSessionReminders } = require("./push");
 const { calculateSessionCost, isShortNotice } = require("../utils/rateCalculator");
-const { getNowInZone, getTodayStringInZone, buildDateTimeInZone } = require("../utils/timezone");
+const { getNowInZone, getTodayStringInZone, buildDateTimeInZone, zonedDateTimeToInstant } = require("../utils/timezone");
 const { geofenceEvidence, coarsenCoordinate } = require("../utils/geocode");
 const { hasActiveVouch } = require("../utils/vouches");
 const { decideCancellationCharge, CANCEL_FEE_WINDOW_HOURS } = require("../utils/cancellationFee");
@@ -1582,8 +1582,22 @@ router.post("/:id/check-in", async (req, res) => {
     let lateMinutes = 0;
     if (session.scheduled_date && session.scheduled_time) {
       try {
-        const checkInMoment = isOfflineSync ? effectiveCheckInTime : getNowInZone(careTz);
-        const scheduledStart = buildDateTimeInZone(session.scheduled_date.split('T')[0], session.scheduled_time, careTz);
+        // v1.105.124 — BOTH SIDES MUST BE TRUE INSTANTS.
+        //
+        // This subtraction used to mix two frames. `buildDateTimeInZone` returns a
+        // SHIFTED Date (its getHours() read as the care timezone, stamped onto the
+        // server's clock); `getNowInZone` returns one too, so the live branch was
+        // self-consistent and right. But `effectiveCheckInTime` is a real instant
+        // sent by the device, so the OFFLINE branch subtracted a real instant from a
+        // shifted one and picked up the whole UTC offset.
+        //
+        // Julia checked in 4 minutes EARLY on Aug 22 and was recorded 236 minutes
+        // late — 240 minus 4, the exact EDT offset. It reads correctly on a machine
+        // whose own clock is America/New_York, which is why it survived: it is only
+        // wrong on Railway, which runs UTC. See tests/lateCheckInFrames.test.js,
+        // which pins TZ=UTC for that reason.
+        const checkInMoment = isOfflineSync ? effectiveCheckInTime : new Date();
+        const scheduledStart = zonedDateTimeToInstant(session.scheduled_date.split('T')[0], session.scheduled_time, careTz);
         lateMinutes = Math.floor((checkInMoment - scheduledStart) / 60000);
         if (lateMinutes >= 10) {
           lateCheckIn = true;
@@ -1606,6 +1620,30 @@ router.post("/:id/check-in", async (req, res) => {
     // Proof-of-presence: distance from the caregiver's check-in point to the recipient's home + geofence flag
     const ciGeo = geofenceEvidence(checkInLatitude, checkInLongitude, session.recipient_lat, session.recipient_lng);
     if (ciGeo.flag === 'far') console.warn(`[check-in] Geofence FAR: ${ciGeo.distanceFt} ft from home — session ${req.params.id.slice(0, 8)}`);
+    // v1.105.124 — a check-in with NO location must not read as a normal check-in.
+    //
+    // Proof-of-presence is the app's whole safety proposition, and until now its absence
+    // was the quietest state in the system: `no_geo` was written to the row and nothing
+    // else happened. Julia's first real paid visit on Aug 22 recorded no coordinates at
+    // all — she checked in through the offline queue, where the body was captured before
+    // any position was, so there was nothing to send. It looked exactly like every
+    // successful check-in.
+    //
+    // `no_home_geo` is a DIFFERENT failure — the caregiver's phone worked and we simply
+    // never geocoded the recipient's address — so it is reported separately rather than
+    // blamed on her device.
+    if (ciGeo.flag === 'no_geo' || ciGeo.flag === 'no_home_geo') {
+      const why = ciGeo.flag === 'no_geo'
+        ? "caregiver device sent no coordinates"
+        : "care recipient has no geocoded home";
+      console.warn(`[check-in] NO PROOF OF PRESENCE (${ciGeo.flag}, offlineSync=${isOfflineSync}) — session ${req.params.id.slice(0, 8)}`);
+      captureException(new Error(`Check-in recorded without location: ${why}`), {
+        where: "sessions: check-in proof-of-presence missing",
+        sessionId: req.params.id,
+        geoFlag: ciGeo.flag,
+        offlineSync: isOfflineSync,
+      });
+    }
     await db.prepare(`
       INSERT INTO visit_logs (id, session_id, caregiver_id, check_in_time, arrival_mood, check_in_latitude, check_in_longitude, check_in_distance_ft, check_in_geo_flag, briefing_acknowledged_at, offline_sync, is_test, created_at)
       VALUES (?, ?, ?, ${checkInTimeSQL}, ?, ?, ?, ?, ?, ${briefingAcknowledged ? 'NOW()' : 'NULL'}, ?, ?, NOW())
