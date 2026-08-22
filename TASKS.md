@@ -345,6 +345,54 @@
 
 ### P1
 
+<!-- ── Triaged Aug 22, 2026 (feedback loop, Julia's first paid visit) ── -->
+
+- [x] **28 notifications for one 90-minute visit.** ✅ **Fixed v1.105.126.** *(Feedback `9860f5fe`,
+      `9d67cb84`, `b39f6a77` — Pete, Aug 22.)* Measured from his notification history, not inferred:
+      `check_out_imminent` ×5 (13:55–13:59) and `overdue_check_out_family` ×23 (14:15–14:37), one
+      per minute. Root cause: `care_sessions.notifications_sent` had THREE writers and TWO formats
+      — `sendSessionReminders` wrote a JSON array and read it back with `JSON.parse`,
+      `sendArrivalSms` joined with spaces, `accountability.js` joined with commas. The parse threw
+      on any row another writer had touched, the throw was swallowed by the function's own outer
+      catch **after** the pushes went out and **before** they were recorded, so the next poll sent
+      them all again. Fixed with `src/utils/notificationsSent.js` (format-tolerant read, canonical
+      comma write) and by moving the dedupe write OUTSIDE the send's try block. Pinned by
+      `tests/notificationsSent.test.js` (14). **P1**
+
+- [x] **"I never got a notification that Julia had checked out."** ✅ **Explained, and it was the
+      same bug.** *(Feedback `b39f6a77` — Pete, Aug 22.)* He did get it — `session_complete` at
+      14:38. It arrived at the tail of the 23-message flood carrying the same `famTag`, so on the
+      lock screen it replaced the last "Session Running Over" and looked like more of the same.
+      With the flood gone it is now the only notification in that slot. **P1**
+
+- [x] **A tapped notification landed nowhere.** ✅ **Fixed v1.105.126.** *(Feedback `9d67cb84`.)*
+      `overdue_check_out_family` carries a `sessionId` but was not in the named list in
+      `__handlePushNavigate`, so it fell through to the generic `d.page` branch and opened the
+      dashboard with nothing highlighted. Any session-bearing push now sets `__pendingFocus`,
+      rather than adding one more type to a list someone will forget again. **P1**
+
+- [ ] **Does the run-up still need an acknowledgement mute?** *(Feedback `9860f5fe` — Pete, Aug 22:
+      "once I have acknowledged that Julia is getting ready to check in the notifications need to
+      stop.")* **Deliberately not built yet.** 28 of his 30 notifications were one bug repeating;
+      with it fixed a visit produces roughly four (`caregiver_arriving`, optional `on_my_way` and
+      `five_min_away` if the caregiver taps them, `session_in_progress`). Ask him whether four
+      still feels like too many before building per-session acknowledgement state — measuring
+      first is what closed three P2s on Aug 20. **P1 — decide it.**
+
+- [ ] **Julia only sees the care briefing inside the check-in wizard.** *(Feedback `8a3c2276` —
+      caregiver, Aug 22: "I only got her care briefing right before checking in! Definitely need
+      access to that beforehand.")* ⚠️ **Not an access bug — a discoverability one.**
+      `GET /api/sessions/:id/care-briefing` has NO time restriction and the assigned caregiver can
+      fetch it whenever; `CaretakerHub` already has an expandable profile view that calls it. She
+      never found it, because the only path that puts it in front of her is step 1 of the check-in
+      flow. Needs the briefing surfaced on the upcoming-session card, which is a caregiver-hub
+      design change rather than a fix. **P1**
+
+- [ ] **"Still says she's just a care recipient in My Families."** *(Same report `8a3c2276`.)*
+      Julia is vouched, so v1.105.107/.108 should be showing Betty's name. This is the same
+      unconfirmed item the v1.105.113 handoff carried — nobody has looked at her screen. Needs her
+      device or her session; cannot be verified from an admin account. **P1**
+
 <!-- ── Triaged Aug 20, 2026 (feedback loop) ── -->
 
 - [ ] **Helpers need to sign up from a text message, not an email.** *(Feedback `a63d0eb1` — Pete, Aug 20.)*

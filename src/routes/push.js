@@ -469,6 +469,8 @@ router.get("/attention", authenticate, async (req, res) => {
 // Hanging the correction off ONE endpoint is what left Pete's icon stuck at 2 — tap a push,
 // land in Messages, read it, and nothing ever asked the server for the new number.
 const { syncBadgeToDevices } = require("../utils/badgeSync");
+const { hasSent, appendSent } = require("../utils/notificationsSent");
+const { captureException } = require("../utils/sentry");
 
 // Optional eventType param — if provided, checks user's notification_prefs before sending
 async function sendPushToUser(userId, payload, eventType) {
@@ -646,12 +648,13 @@ async function sendArrivalSms(session, minutesBefore) {
     const result = await sendSms(session.sms_phone, message);
 
     // Track that we sent this tier so it doesn't re-fire
+    // v1.105.126 — was `|| ' ' || ?`, which joined with spaces while sendSessionReminders
+    // wrote a JSON array and read it back with JSON.parse. This line is what poisoned the
+    // column for every reminder that followed it on the same session.
     const tag = `arrival_sms_${minutesBefore}`;
-    await db.prepare(`
-      UPDATE care_sessions
-      SET notifications_sent = COALESCE(notifications_sent, '') || ' ' || ?
-      WHERE id = ?
-    `).run(tag, session.id);
+    const sentRow = await db.prepare("SELECT notifications_sent FROM care_sessions WHERE id = ?").get(session.id);
+    await db.prepare("UPDATE care_sessions SET notifications_sent = ? WHERE id = ?")
+      .run(appendSent(sentRow && sentRow.notifications_sent, tag), session.id);
 
     console.log(`  [arrival-sms] ${result.success ? '✅' : '❌'} ${recipName}: "${caregiverFirstName} arriving in ${timeLabel}" (session ${session.id.slice(0,8)})`);
     return result;
@@ -892,15 +895,36 @@ async function sendSessionReminders(sessionId, reminderType) {
       console.log(`  Session reminders (overdue_check_out) sent for session ${sessionId} → caregiver + ${teamUserIds.length} team members`);
     }
 
-    // Mark this reminder as sent on the session (prevents duplicates)
-    const existing = session.notifications_sent ? JSON.parse(session.notifications_sent) : [];
-    if (!existing.includes(reminderType)) {
-      existing.push(reminderType);
-      await db.prepare("UPDATE care_sessions SET notifications_sent = ? WHERE id = ?")
-        .run(JSON.stringify(existing), sessionId);
-    }
   } catch (err) {
     console.error(`Session reminder error (${reminderType}, session ${sessionId}):`, err.message);
+    captureException(err, { where: "push: sendSessionReminders", sessionId, reminderType });
+  }
+
+  // ─── Mark this reminder as sent — OUTSIDE the try above, deliberately ───
+  //
+  // v1.105.126. This line used to live at the end of that try block, and it used
+  // JSON.parse. Both were wrong, and together they cost Pete 28 notifications for one
+  // 90-minute visit.
+  //
+  // The parse threw on any row a non-JSON writer had touched (sendArrivalSms joins with
+  // spaces, accountability.js joins with commas). The throw landed in the catch above —
+  // after the pushes had gone out, before they were recorded — so the next poll, one
+  // minute later, sent them all again. Twenty-three times, until Julia checked out.
+  //
+  // So: parse defensively, and record OUTSIDE the send. A failure to notify must never
+  // become a failure to remember that we tried. The worst case here is one missed
+  // reminder; the worst case the other way round is a phone that buzzes every minute.
+  try {
+    const db = await getDb();
+    const row = await db.prepare("SELECT notifications_sent FROM care_sessions WHERE id = ?").get(sessionId);
+    if (row && !hasSent(row.notifications_sent, reminderType)) {
+      await db.prepare("UPDATE care_sessions SET notifications_sent = ? WHERE id = ?")
+        .run(appendSent(row.notifications_sent, reminderType), sessionId);
+    }
+  } catch (markErr) {
+    // If we cannot record it, say so loudly — this is the state that repeats forever.
+    console.error(`[push] COULD NOT RECORD ${reminderType} for ${sessionId} — it may repeat:`, markErr.message);
+    captureException(markErr, { where: "push: reminder dedupe write failed", sessionId, reminderType });
   }
 }
 

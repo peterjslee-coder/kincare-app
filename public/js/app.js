@@ -617,6 +617,16 @@ const App = () => {
       if (d.focus) window.__pendingFocus = d.focus;
       if (d.careTeamId) setSelectedCareTeamId(d.careTeamId);
       const t = String(d.type || '');
+      // v1.105.126 — if a push is ABOUT a session, the screen it opens must say which one.
+      // Pete, Aug 22: "I hit the notification and it takes me to the app with no indication
+      // of what I'm supposed to be seeing." He was tapping overdue_check_out_family, which
+      // carries a sessionId and falls through to the generic `d.page` branch below — so it
+      // landed on the dashboard with nothing highlighted, twenty-three times.
+      //
+      // Set the focus for EVERY session-bearing push rather than adding another type to the
+      // list underneath. The named branches keep their own assignment; this only reaches the
+      // ones nobody thought to name.
+      if (d.sessionId && !d.focus && !window.__pendingFocus) window.__pendingFocus = `session:${d.sessionId}`;
       // Compute the destination page, then route through applyTarget() below so
       // EVERY tap (web push, native push, in-app list) gets the same clobber
       // protection the web-URL cold path already has.
