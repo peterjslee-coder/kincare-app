@@ -983,6 +983,32 @@
       flex-shrink: 0;
     }
 
+    /* ─── Call buttons in the chat header (v1.105.131) ───
+       Pete: "i don't like the buttons...they're ugly, but their there." They were 36px
+       outlined squares with a hardcoded #1b6b5a border and their hover written in JS —
+       onMouseEnter fires on a TAP on a touch screen and onMouseLeave never does, so the
+       button you just called from stayed inverted. Hover belongs here, where a touch device
+       simply never applies it. 44x44 is Apple's minimum; these are decisions, not decoration. */
+    .msg-call-btn {
+      width: 44px;
+      height: 44px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: none;
+      border-radius: 50%;
+      background: var(--bg-teal-light);
+      color: var(--role-color);
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+    }
+    .msg-call-btn + .msg-call-btn { margin-left: 6px; }
+    .msg-call-btn:active { transform: scale(0.94); }
+    @media (hover: hover) {
+      .msg-call-btn:hover { background: var(--role-color); color: var(--text-on-primary); }
+    }
+
     .msg-conv-item {
       display: flex;
       align-items: center;
@@ -2313,6 +2339,16 @@
         max-height: none;
         min-height: 0;
         overflow: hidden;
+      }
+
+      /* v1.105.131 — while the keyboard is up, the only height that means anything is the
+         one visualViewport reports. 100dvh does not shrink for a keyboard on iOS, so the
+         panel stayed 646px tall with its header above the visible area, and the bottom nav
+         we subtract 55px for is behind the keyboard anyway. Messages.js sets --msg-vvh and
+         toggles this class; with no visualViewport API neither ever appears and this rule
+         never applies. */
+      body.msg-keyboard-open .msg-panel {
+        height: var(--msg-vvh, calc(100dvh - var(--sab) - 55px));
       }
 
       .card {

@@ -80,6 +80,51 @@ const Messages = window.Messages = () => {
     return () => { if (style.parentNode) style.parentNode.removeChild(style); };
   }, [isMobile]);
 
+  // ─── The keyboard takes the header with it (v1.105.131) ───
+  //
+  // Pete, 8/24: "they show, but only at the very top of the chat...gotta scroll all the way
+  // up to find them. open the keyboard?...they gone to the top."
+  //
+  // Measured on production at 500x701 first, because the obvious suspect was wrong: the panel
+  // IS bounded (646px), the header IS sticky at top 0, and .msg-messages-area is the only
+  // scroller on the page (508 visible / 779 of content). Nothing is broken until a keyboard
+  // exists — which a desktop browser does not have.
+  //
+  // On iOS the keyboard does not change innerHeight and does not change 100dvh. It shrinks the
+  // VISUAL viewport and then scrolls the LAYOUT viewport up to reveal the focused input. The
+  // panel is still 646px tall and the header is still at its top; that top is simply above the
+  // part of the screen you can see. Which is exactly what he described — including having to
+  // scroll back up afterwards, because nothing puts the layout viewport back.
+  //
+  // So: track visualViewport, give the panel the height that is actually visible while the
+  // keyboard is up, and put the layout viewport back to 0 when iOS moves it. Guarded on the
+  // API existing — no visualViewport, no change in behaviour.
+  useEffect(() => {
+    if (!isMobile) return;
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const root = document.documentElement;
+    const apply = () => {
+      // How much of the layout viewport the keyboard (and any offset iOS applied) is eating.
+      const hidden = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+      const open = hidden > 120; // a keyboard, not a URL bar collapsing
+      root.style.setProperty('--msg-vvh', Math.round(vv.height) + 'px');
+      document.body.classList.toggle('msg-keyboard-open', open);
+      // iOS scrolled the layout viewport to reveal the input. The panel now fits the visible
+      // area on its own, so that scroll is pure loss: it is what puts the header off screen.
+      if (open && window.scrollY !== 0) window.scrollTo(0, 0);
+    };
+    apply();
+    vv.addEventListener('resize', apply);
+    vv.addEventListener('scroll', apply);
+    return () => {
+      vv.removeEventListener('resize', apply);
+      vv.removeEventListener('scroll', apply);
+      document.body.classList.remove('msg-keyboard-open');
+      root.style.removeProperty('--msg-vvh');
+    };
+  }, [isMobile]);
+
   // Fetch current user
   useEffect(() => {
     (async () => {
@@ -1823,8 +1868,12 @@ const Messages = window.Messages = () => {
               ‹
             </button>
           )}
+          {/* minWidth:0 below — a flex child defaults to min-width:auto, so a long
+              conversation name could not shrink and pushed the call buttons past the edge of
+              a panel that is overflow:hidden. That is one way "where are they?" happens with
+              nothing conditional anywhere. */}
           {activeConv && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
               {!isGroup && (activeConv.name === 'InPlace Support' || activeConv.name === 'iPAi') ? (
                 <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'var(--role-color)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-on-primary)', fontSize: 15, fontWeight: 700, flexShrink: 0 }}>iP</div>
               ) : !isGroup && activeConv.profilePhoto ? (
@@ -1840,7 +1889,7 @@ const Messages = window.Messages = () => {
               </div>
               )}
               <div>
-                <div style={{ fontWeight: 600, fontSize: '15px', color: 'var(--text-primary)', lineHeight: 1.2 }}>{activeConv.name}</div>
+                <div style={{ fontWeight: 600, fontSize: '15px', color: 'var(--text-primary)', lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{activeConv.name}</div>
                 <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
                   {isGroup
                     ? `${activeConv.members?.length || 0} members`
@@ -1850,63 +1899,26 @@ const Messages = window.Messages = () => {
               </div>
             </div>
           )}
+          {/* v1.105.131 — Pete, triage on e452db48: "no the buttons are there. i don't like
+              the buttons...they're ugly, but their there."
+              They were two 36px outlined squares — under Apple's 44x44 minimum, hardcoded
+              #1b6b5a so the border never followed the theme, and styled by onMouseEnter /
+              onMouseLeave, which on a touch screen fires on TAP and then never fires again:
+              the button you called from stayed inverted until the next re-render. Filled
+              circles now, 44x44, coloured from the theme, hover in CSS where it belongs. */}
           <button
-            className="msg-voice-call-btn"
+            className="msg-call-btn"
             onClick={() => handleStartCall('voice')}
             title="Start voice call"
-            style={{
-              background: 'none',
-              border: '2px solid #1b6b5a',
-              color: 'var(--role-color)',
-              borderRadius: '8px',
-              width: '36px',
-              height: '36px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              fontSize: '18px',
-              transition: 'all 0.2s',
-              flexShrink: 0,
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'var(--role-color)';
-              e.currentTarget.style.color = 'var(--bg-surface)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'none';
-              e.currentTarget.style.color = 'var(--role-color)';
-            }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+            aria-label="Start voice call">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
           </button>
           <button
-            className="msg-video-call-btn"
+            className="msg-call-btn"
             onClick={() => handleStartCall('video')}
             title="Start video call"
-            style={{
-              background: 'none',
-              border: '2px solid #1b6b5a',
-              color: 'var(--role-color)',
-              borderRadius: '8px',
-              width: '36px',
-              height: '36px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              fontSize: '18px',
-              transition: 'all 0.2s',
-              flexShrink: 0,
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'var(--role-color)';
-              e.currentTarget.style.color = 'var(--bg-surface)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'none';
-              e.currentTarget.style.color = 'var(--role-color)';
-            }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+            aria-label="Start video call">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
           </button>
 
           {/* ─── v1.105.22 — report/block, reachable on a phone ───

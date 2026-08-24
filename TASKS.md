@@ -12,12 +12,47 @@
 > Tyler Huth. Sentry clean, zero unresolved. Two of these are regressions in work I shipped
 > yesterday; one is a dead end I created.
 
-- [ ] **⛔ Phone and video calls never ring.** (8d27e33c, mood "terrible") Pete: *"Phone and
+- [x] **⛔ Phone and video calls never ring.** (8d27e33c, mood "terrible") Pete: *"Phone and
       video calls do not ring or notify the user until I push notification after the call."*
       A call feature that cannot summon the person is not a feature. Related and probably the
       same area: the call buttons have VANISHED from chat — Pete (e452db48) *"I don't see the
       video call or phone options in the chat anymore. Where are they?"* and Julia (d378b267)
       *"The call button is hidden."* Two users, independently, same day. **P0**
+
+      ✅ **CLOSED — both halves, and this line has been stale since Aug 19.** Checked on 8/24
+      before starting work on it, because five days of "open P0" and a shipped fix should not
+      coexist.
+      **The ringing:** fixed in **v1.105.99** (`server.js` `call_invite`). It was
+      `if (targetSockets) { emit }` with no else — a socket exists only while the app is open
+      and foregrounded, so the invite reached exactly the person who did not need telling. No
+      live socket now sends a push carrying the room, the call type and the caller; the tap
+      parks it on `window.__pendingCall` and Messages raises the incoming-call UI on mount.
+      `tests/callRinging.test.js`. Live on prod since .99 — **still wants one real
+      two-device test: call Julia's phone while it is locked.**
+      **The buttons:** retracted by Pete in the same triage — *"no the buttons are there. i
+      don't like the buttons...they're ugly, but their there."* Nothing was ever hiding them.
+      What was left was the ugliness, and it was real: two 36px outlined squares (under the
+      44x44 minimum), a hardcoded `#1b6b5a` border that ignored the theme, and hover written
+      as `onMouseEnter`/`onMouseLeave` — which on a touch screen fires on TAP and never
+      un-fires, so the button you called from stayed inverted. **Fixed v1.105.131:** one
+      `.msg-call-btn` class, 44x44 filled circles, themed, hover in CSS behind
+      `@media (hover: hover)`. Also `minWidth: 0` on the header's name block — a flex child
+      cannot shrink below its content by default, and the panel is `overflow: hidden`, which
+      is one way "where are they?" happens with nothing conditional anywhere.
+      **And the third report, 8/24, which turned out to be the real one:** *"they show, but
+      only at the very top of the chat...gotta scroll all the way up to find them. open the
+      keyboard?...they gone to the top."* Measured on production at 500x701 before touching
+      anything, and the obvious suspect was wrong: the panel IS bounded (646px = viewport −
+      55px nav), the header IS sticky at top 0, and `.msg-messages-area` is the only scroller
+      on the page (508 visible of 779 content). Nothing about the layout is broken — what a
+      desktop browser does not have is a keyboard. On iOS the keyboard changes neither
+      `innerHeight` nor `100dvh`; it shrinks the VISUAL viewport and scrolls the LAYOUT
+      viewport up to reveal the focused input, so a correctly-sized panel keeps its header at
+      a top you can no longer see, and nothing puts the layout viewport back afterwards.
+      **Fixed v1.105.131:** `visualViewport` drives `--msg-vvh` and a `msg-keyboard-open`
+      body class while the keyboard is up, and the layout viewport is scrolled back to 0.
+      ⚠️ **NOT MEASURED — this half needs Pete on a real iPhone**, because the sandbox has no
+      keyboard and the desktop measurement above is exactly what looked fine.
 
 - [x] **⛔ "Welcome to InPlace!" popup cannot be dismissed.** (8a05e737, Tyler) *"does not go
       away at all or when navigating to new screens."* ✅ **Fixed v1.105.101.** Not a modal —
@@ -344,6 +379,39 @@
 
 
 ### P1
+
+> **Aug 24 2026 — session.** Prod verified at v1.105.128 via `/api/health` (NOT `git log`) and
+> the whole CI run green locally before touching anything: 4 lints, 1269 unit, 197 integration.
+> Nothing was stuck this time — the deploy freeze of Aug 22 has not recurred.
+
+- [x] **"Needs you" was a count, not a thing you could answer. Shipped v1.105.129.** Pete:
+      *"I'm not happy with how the 'needs you' is displayed. It doesn't match the app appearance
+      and is clumsy looking. You know what looks good? the pop-ups that appear when you're
+      offered a job… if something needs me let's get it clear on WHAT they're needed for and
+      make it a one-click event to clear it out or open it up for more."*
+      It is now the exclusive-offer card from `CaretakerHub` applied to the same data: one
+      bordered card per item in the accent orange (never the offers' violet — a job you may
+      take and a decision blocking somebody are different kinds of urgent), the sentence that
+      names it (*"Approve $24.60 to Edwina Hall — Groceries · food · for Betty"*), and the
+      button that ends it on the card. The counting queries became ROW queries and every count
+      is `rows.length`, so the app icon and the card cannot drift apart. Each item carries the
+      one endpoint that clears it, named on the server beside the query that found the row.
+      One tap holds for 5s with an Undo and flushes on `pagehide` with `keepalive`.
+      `tests/attentionOneClick.test.js` (28), card RENDERED not grepped.
+      **Wants Pete's eye on a real phone**, and the mockup is in the working folder:
+      `NeedsYou_Redesign_2026-08-24.html`.
+
+- [x] **Nothing was writing a log line when the process died. Shipped v1.105.130.** Filed by
+      .127 as "no uncaughtException/unhandledRejection reporter at all" — **half wrong, and
+      checked before building on it**: `@sentry/node` registers both by default (confirmed
+      against the installed package), which is how INPLACE-C reached us. What was missing is
+      the half that matters at 2am — a line in the Railway log saying the process is going
+      down and how long it had been up — and the case where `SENTRY_DSN` is not set at all.
+      The trap: registering an `uncaughtException` listener SUPPRESSES Node's default exit and
+      Sentry's handler stands down when another listener exists, so a well-meant logger would
+      have left the API serving after an unknown throw. It exits deliberately now.
+      `src/utils/crashHandlers.js`, `tests/crashHandlers.test.js` (7, real child processes).
+
 
 <!-- ── Aug 24, 2026 ── -->
 
