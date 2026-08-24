@@ -154,13 +154,13 @@ describe("the keyboard cannot push the header off screen", () => {
     expect(msgs).toMatch(/height: \(kbOpen \? vvBox\.height : Math\.max\(0, vvBox\.height - safeBot - 55\)\) \+ 'px', bottom: 'auto'/);
   });
 
-  test("the .131 attempt is gone, both halves", () => {
-    // A scrollTo on a position:fixed body, and a height on the wrong element. Comment lines
-    // are stripped first — the post-mortem above deliberately quotes the code it removed.
-    const code = msgs.split("\n").filter((l) => !l.trim().startsWith("//")).join("\n");
-    expect(code).not.toMatch(/window\.scrollTo\(0, 0\)/);
+  test("the .131 attempt is gone — the part that was actually wrong", () => {
+    // .131 sized `.msg-panel`, which is not what is anchored. That stays gone.
     expect(css).not.toMatch(/body\.msg-keyboard-open/);
     expect(msgs).not.toMatch(/msg-keyboard-open/);
+    // Its scrollTo(0,0) is BACK, on purpose, in .136 — see below. It was dead code in .131
+    // only because the body was position:fixed and could not scroll; .135 removed that.
+    expect(msgs).toMatch(/window\.scrollTo\(0, 0\)/);
   });
 
   test("the nav's 55px is only reserved while the keyboard is DOWN", () => {
@@ -173,7 +173,7 @@ describe("the keyboard cannot push the header off screen", () => {
   test("a WebView that shrinks the LAYOUT viewport is still detected", () => {
     // In that mode innerHeight, vv.height and vv.offsetTop all agree with each other and all
     // are wrong, so no measurement sees a keyboard. A focused composer is one in every mode.
-    expect(msgs).toMatch(/onFocus=\{\(\) => setInputFocused\(true\)\}/);
+    expect(msgs).toMatch(/onFocus=\{\(\) => \{ setInputFocused\(true\)/);
     expect(msgs).toMatch(/onBlur=\{\(\) => setInputFocused\(false\)\}/);
     // ...and only where focusing an input summons one. A 500px-wide desktop window is
     // `isMobile` by width and has no keyboard at all.
@@ -240,10 +240,37 @@ describe("the keyboard cannot push the header off screen", () => {
     expect(msgs).toMatch(/if \(q === '0'\) localStorage\.removeItem\('kbdebug'\);/);
   });
 
-  test("but the numbers are still there when asked for", () => {
+  test("but the numbers are still there when asked for — and say which build", () => {
     for (const k of ["iH", "vvH", "vvT", "hidden", "sY", "top"]) {
       expect(msgs).toMatch(new RegExp(`kbDebug\\.${k}`));
     }
+    // I could not tell from the server which build his PHONE was running — the
+    // client-versions row is per user, and his Mac had already overwritten it. The readout
+    // says so itself now.
+    expect(msgs).toMatch(/v\{window\.APP_VERSION \|\| '\?'\}/);
+  });
+
+  test("the switch is reachable without typing a URL", () => {
+    // Pete, told to load "yourinplace.com/?kbdebug=1": "i don't know what you mean by that."
+    // Right twice: it is jargon, and he opens the app from his home screen, where there is no
+    // address bar to type it into.
+    const acct = read("public", "js", "components", "MyAccount.js");
+    expect(acct).toMatch(/user\?\.is_admin && \(/);
+    expect(acct).toMatch(/Keyboard diagnostics/);
+    expect(acct).toMatch(/localStorage\.setItem\('kbdebug', '1'\)/);
+    expect(acct).toMatch(/localStorage\.removeItem\('kbdebug'\)/);
+  });
+
+  test("the page is pulled back for as long as the keyboard takes to animate", () => {
+    // v1.105.136. .131 called scrollTo(0,0) once on a position:fixed body and I later called
+    // it dead code — right THEN. .135 unpinned the body, so the page can be scrolled by iOS
+    // and put back by us. One call is still not enough: iOS scrolls to the focused input
+    // while the keyboard is still animating, so a single reset fired first is undone a frame
+    // later.
+    expect(msgs).toMatch(/const pullPageBack = \(\) => \{/);
+    expect(msgs).toMatch(/if \(\+\+n < 20\) requestAnimationFrame\(pullPageBack\);/);
+    expect(msgs).toMatch(/if \(scrolled > 0\) settle\(\);/);
+    expect(msgs).toMatch(/onFocus=\{\(\) => \{ setInputFocused\(true\); if \(settleRef\.current\) settleRef\.current\(\); \}\}/);
   });
 
 });

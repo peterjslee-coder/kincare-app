@@ -153,6 +153,11 @@ const DeleteAccountSection = ({ onDeleted }) => {
 
 const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
   const [user, setUser] = useState(null);
+  // v1.105.136 — the keyboard-diagnostics switch below. Read once from localStorage so the
+  // toggle reflects what Messages will actually do.
+  const [kbDebugOn, setKbDebugOn] = useState(() => {
+    try { return localStorage.getItem('kbdebug') === '1'; } catch { return false; }
+  });
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -1723,6 +1728,35 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
               </label>
             ))}
           </div>
+          {/* ─── Keyboard diagnostics (v1.105.136, admin only) ───
+              Pete, on being told to load "yourinplace.com/?kbdebug=1": "i don't know what you
+              mean by that" — and he was right twice over. It is jargon, and the app he uses is
+              on his home screen, where there is no address bar to type it into. A switch he can
+              reach is the only version of this that works. Off by default; when it is on, the
+              chat shows one line of viewport numbers above the composer, which is what turns a
+              screenshot of a keyboard bug into a measurement. */}
+          {user?.is_admin && (
+            <div className="card" style={{ marginTop: 16 }}>
+              <div className="card-header"><span>🔧 Keyboard diagnostics</span></div>
+              <p style={{ fontSize: 13, color: 'var(--text-tertiary)', margin: '0 0 10px' }}>
+                Shows a line of viewport measurements above the message box, for chasing keyboard
+                layout bugs. Screenshot it with the keyboard open. Off for everyone else, always.
+              </p>
+              <label className="toggle-label">
+                <input type="checkbox" className="toggle-input"
+                  checked={kbDebugOn}
+                  onChange={(e) => {
+                    try {
+                      if (e.target.checked) localStorage.setItem('kbdebug', '1');
+                      else localStorage.removeItem('kbdebug');
+                    } catch { /* private mode — the switch simply won't stick */ }
+                    setKbDebugOn(e.target.checked);
+                  }} />
+                <span>Show viewport numbers in Messages</span>
+              </label>
+            </div>
+          )}
+
           <div className="card" style={{ marginTop: 16 }}>
             <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span>✉️ Email Notifications</span>

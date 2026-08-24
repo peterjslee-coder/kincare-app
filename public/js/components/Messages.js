@@ -142,6 +142,7 @@ const Messages = window.Messages = () => {
   // keyboard-up path is verified in a simulator I can measure directly, not until it looks
   // right once.
   const [kbDebug, setKbDebug] = useState(null);
+  const settleRef = useRef(null);
   // Opt-in, remembered: ?kbdebug=1 turns the readout on for this device, ?kbdebug=0 off.
   const kbDebugOn = React.useMemo(() => {
     try {
@@ -162,6 +163,28 @@ const Messages = window.Messages = () => {
     if (!isMobile) return;
     const vv = window.visualViewport;
     if (!vv) return; // no API, no change in behaviour
+    // ─── v1.105.136 — put the page back, repeatedly, while the keyboard settles ───
+    //
+    // .131 called window.scrollTo(0, 0) once, on a body that was position:fixed, and I later
+    // called that dead code. Half right: it was dead THEN. .135 took position:fixed off the
+    // body, so the page can now actually be scrolled — and put back.
+    //
+    // It has to be a loop, not one call. iOS scrolls to the focused input while the keyboard
+    // is still animating in, so a single reset fired before that scroll happens is undone a
+    // frame later. ~20 frames covers the animation, and each tick is a no-op once the number
+    // is already 0.
+    const settle = () => {
+      let n = 0;
+      const pullPageBack = () => {
+        if (window.scrollY) window.scrollTo(0, 0);
+        if (document.documentElement.scrollTop) document.documentElement.scrollTop = 0;
+        if (document.body.scrollTop) document.body.scrollTop = 0;
+        if (++n < 20) requestAnimationFrame(pullPageBack);
+      };
+      pullPageBack(); // now, then again while the keyboard animates in
+    };
+    settleRef.current = settle;
+
     const apply = () => {
       // ─── v1.105.134 — subtract the document scroll ───
       //
@@ -201,6 +224,7 @@ const Messages = window.Messages = () => {
       setVvBox({ top, height });
       setKbDebug({ iH: window.innerHeight, vvH: height, vvT: Math.round(vv.offsetTop || 0), hidden, sY: scrolled, top });
       setVvShrunk(hidden > 120 || top > 0 || scrolled > 120);
+      if (scrolled > 0) settle();
     };
     apply();
     vv.addEventListener('resize', apply);
@@ -2412,7 +2436,7 @@ const Messages = window.Messages = () => {
             fontSize: 10, fontFamily: 'ui-monospace, monospace', color: 'var(--text-tertiary)',
             background: 'var(--bg-primary)', padding: '2px 8px', textAlign: 'center', flexShrink: 0,
           }}>
-            iH {kbDebug.iH} · vv {kbDebug.vvH}@{kbDebug.vvT} · hid {kbDebug.hidden} · sy {kbDebug.sY} · top {kbDebug.top} · kb {kbOpen ? 'up' : 'down'}{inputFocused ? '·focus' : ''}
+            v{window.APP_VERSION || '?'} · iH {kbDebug.iH} · vv {kbDebug.vvH}@{kbDebug.vvT} · hid {kbDebug.hidden} · sy {kbDebug.sY} · top {kbDebug.top} · kb {kbOpen ? 'up' : 'down'}{inputFocused ? '·focus' : ''}
           </div>
         )}
         <div className="msg-input-area">
@@ -2450,7 +2474,7 @@ const Messages = window.Messages = () => {
           <textarea
             ref={inputRef}
             className="msg-input"
-            onFocus={() => setInputFocused(true)}
+            onFocus={() => { setInputFocused(true); if (settleRef.current) settleRef.current(); }}
             onBlur={() => setInputFocused(false)}
             placeholder={replyTo ? "Type your reply..." : "Type a message..."}
             value={inputText}
