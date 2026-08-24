@@ -49,10 +49,29 @@
       `innerHeight` nor `100dvh`; it shrinks the VISUAL viewport and scrolls the LAYOUT
       viewport up to reveal the focused input, so a correctly-sized panel keeps its header at
       a top you can no longer see, and nothing puts the layout viewport back afterwards.
-      **Fixed v1.105.131:** `visualViewport` drives `--msg-vvh` and a `msg-keyboard-open`
-      body class while the keyboard is up, and the layout viewport is scrolled back to 0.
-      ⚠️ **NOT MEASURED — this half needs Pete on a real iPhone**, because the sandbox has no
-      keyboard and the desktop measurement above is exactly what looked fine.
+      **v1.105.131 tried and missed**, and Pete said so the same hour: *"still do not work…
+      if I minimize the keyboard, the button is returned to the top of the screen where I
+      would expect them to be all the time."* Two mistakes, both worth remembering:
+      (a) it called `window.scrollTo(0, 0)`, but this component injects
+      `html,body{position:fixed}` on mobile — the window can never scroll and `scrollY` is
+      always 0; (b) it resized `.msg-panel`, and **the panel is not what is anchored**. On
+      mobile ALL of Messages renders inside a `position: fixed` container pinned
+      `top: 0 → bottom: safeBottom + 55`, laid out against the LAYOUT viewport. Sizing a child
+      inside a container whose top is already above the screen changes nothing you can see.
+      **I measured the panel, the header and the scrollers — and then fixed the thing I had
+      measured instead of the thing I had not.**
+      **Fixed v1.105.132:** the fixed CONTAINER takes the visible box —
+      `top = visualViewport.offsetTop`, `height = visualViewport.height` — which is the same
+      correct answer whichever of iOS's three keyboard mechanisms is in play. The nav's 55px
+      is reserved only while the keyboard is down. Detection is measurement OR a focused
+      composer (gated on `pointer: coarse`), because in the layout-shrinking mode no
+      measurement sees a keyboard at all.
+      Keyboard-DOWN path re-measured on prod after deploy: container top 0 / height 702 of a
+      757 viewport, header at 0–69, both 44px buttons present, composer bottom 702 = nav top.
+      ⚠️ **The keyboard-UP path still needs Pete's iPhone.** Shipped with an **admin-only,
+      temporary** one-line readout above the composer (`iH · vv h@offset · hidden · scrollY ·
+      kb`) so that if it is still wrong, one screenshot says which mechanism did it instead of
+      another round of inference. **Remove that line once confirmed.**
 
 - [x] **⛔ "Welcome to InPlace!" popup cannot be dismissed.** (8a05e737, Tyler) *"does not go
       away at all or when navigating to new screens."* ✅ **Fixed v1.105.101.** Not a modal —
