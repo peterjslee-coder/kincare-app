@@ -115,6 +115,11 @@ const Messages = window.Messages = () => {
   // — innerHeight, vv.height and vv.offsetTop all agree with each other and all are wrong.
   // A focused composer is a keyboard, in every one of them.
   const [inputFocused, setInputFocused] = useState(false);
+  // v1.105.134 — BACK. .133 removed this the moment the fix was confirmed, and the very next
+  // report was a new keyboard bug whose cause was unreadable without it. It stays until the
+  // keyboard-up path is verified in a simulator I can measure directly, not until it looks
+  // right once.
+  const [kbDebug, setKbDebug] = useState(null);
   // ...but only where focusing an input actually SUMMONS a keyboard. A narrow desktop window
   // is `isMobile` by width and has no keyboard, and treating a click in the composer as one
   // there would hand the panel the nav's 55px and put the composer underneath it.
@@ -127,7 +132,28 @@ const Messages = window.Messages = () => {
     const vv = window.visualViewport;
     if (!vv) return; // no API, no change in behaviour
     const apply = () => {
-      const top = Math.round(vv.offsetTop || 0);
+      // ─── v1.105.134 — subtract the document scroll ───
+      //
+      // .132 used vv.offsetTop directly as the `top` of a position:fixed container. Pete's
+      // readout on a real iPhone said why that is wrong:
+      //
+      //     iH 568 · vv 499@344 · hid -275 · sy 344 · kb up·focus
+      //
+      // window.scrollY is 344 — the document DID scroll, so `html,body{position:fixed}` is
+      // not holding here, and .131's "the window can never scroll" was simply false on the
+      // device. And vv.offsetTop is 344, exactly equal to it: this engine reports the offset
+      // against the DOCUMENT, not against the layout viewport. Note also iH 568 — the layout
+      // viewport shrank too, so `hidden` came out NEGATIVE (-275) and the measurement half of
+      // the detection never fired; only the focused composer did.
+      //
+      // A position:fixed element is laid out against the LAYOUT viewport, which the document
+      // scroll has already moved. So .132 pushed the container 344px down inside a viewport
+      // 568 tall and left 224px of it on screen — Pete: "a little tiny window", and a second
+      // scrollbar, because the message list had to scroll inside that band.
+      //
+      // The offset that matters is the part the document scroll did NOT already account for.
+      const scrolled = Math.round(window.scrollY || 0);
+      const top = Math.max(0, Math.round(vv.offsetTop || 0) - scrolled);
       const height = Math.round(vv.height);
       // How much of the layout viewport something is covering. A keyboard is >120px; a URL
       // bar collapsing is not.
@@ -136,9 +162,14 @@ const Messages = window.Messages = () => {
       // composer, admin-only, so that if the header was STILL wrong the next report would
       // carry the numbers instead of another inference from a screenshot. Pete confirmed the
       // fix, so it is out again. It did its job by not being needed.
-      const hidden = Math.round(window.innerHeight - height - top);
+      // Can be NEGATIVE when the engine shrinks the layout viewport AND reports a
+      // document-relative offset — which is what iH 568 / vv 499@344 is. So a keyboard is
+      // "the visible region is materially shorter than the layout viewport", measured
+      // against height alone; the offset is a position, not evidence.
+      const hidden = Math.round(window.innerHeight - height);
       setVvBox({ top, height });
-      setVvShrunk(hidden > 120 || top > 0);
+      setKbDebug({ iH: window.innerHeight, vvH: height, vvT: Math.round(vv.offsetTop || 0), hidden, sY: scrolled, top });
+      setVvShrunk(hidden > 120 || top > 0 || scrolled > 120);
     };
     apply();
     vv.addEventListener('resize', apply);
@@ -2334,6 +2365,20 @@ const Messages = window.Messages = () => {
             on screen at the moment someone reads an answer, not just before they ask. */}
         {isIPAiThread && typeof IPAiDisclaimer !== 'undefined' && (
           <div style={{ padding: '0 12px 6px' }}><IPAiDisclaimer /></div>
+        )}
+        {/* ─── v1.105.134, admin only, temporary — BACK, and staying until measured ───
+            .132 shipped this, .133 removed it the moment the fix "worked really well", and the
+            very next report was a new keyboard bug I could not have diagnosed without it. One
+            screenshot of this line carried iH 568 · vv 499@344 · sy 344 and named the cause
+            outright. It comes out when the keyboard-up path has been measured in a simulator,
+            not when it looks right once. */}
+        {currentUser?.is_admin && kbDebug && (
+          <div style={{
+            fontSize: 10, fontFamily: 'ui-monospace, monospace', color: 'var(--text-tertiary)',
+            background: 'var(--bg-primary)', padding: '2px 8px', textAlign: 'center', flexShrink: 0,
+          }}>
+            iH {kbDebug.iH} · vv {kbDebug.vvH}@{kbDebug.vvT} · hid {kbDebug.hidden} · sy {kbDebug.sY} · top {kbDebug.top} · kb {kbOpen ? 'up' : 'down'}{inputFocused ? '·focus' : ''}
+          </div>
         )}
         <div className="msg-input-area">
           {/* Hidden file input for photo uploads */}

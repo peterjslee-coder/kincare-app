@@ -181,7 +181,8 @@ describe("the keyboard cannot push the header off screen", () => {
   });
 
   test("a URL bar collapsing is not a keyboard", () => {
-    expect(msgs).toMatch(/setVvShrunk\(hidden > 120 \|\| top > 0\);/);
+    // 120px, on whichever of the three signals the engine actually gives us.
+    expect(msgs).toMatch(/hidden > 120 \|\| top > 0 \|\| scrolled > 120/);
   });
 
   test("no visualViewport, no change in behaviour", () => {
@@ -189,18 +190,33 @@ describe("the keyboard cannot push the header off screen", () => {
     expect(msgs).toMatch(/: \{ bottom: \(safeBot \+ 55\) \+ 'px' \}\)/);
   });
 
-  test("the temporary admin readout is gone once it was confirmed", () => {
-    // v1.105.132 shipped a one-line metrics readout above the composer so that if the header
-    // was still wrong, the next report would carry numbers rather than another inference from
-    // a screenshot. Pete confirmed the fix ("works really well"), so it came out in .133.
-    // Pinned here because a debug surface that nobody removes becomes part of the product.
-    expect(msgs).not.toMatch(/kbDebug/);
-    expect(msgs).not.toMatch(/currentUser\?\.is_admin && /);
+  test("the document scroll is subtracted from the visual-viewport offset", () => {
+    // v1.105.134. Pete's own readout, on a real iPhone, with the keyboard up:
+    //     iH 568 · vv 499@344 · hid -275 · sy 344 · kb up·focus
+    // window.scrollY is 344, so the document DID scroll (v1.105.131's "the window can never
+    // scroll under position:fixed" was false on the device), and vv.offsetTop is exactly equal
+    // to it — this engine reports the offset against the DOCUMENT. A position:fixed container
+    // is laid out against the layout viewport, which that scroll has already moved, so .132
+    // pushed it 344px down inside a 568px viewport and left 224px on screen: "a little tiny
+    // window", plus a second scrollbar because the list had to scroll inside the band.
+    expect(msgs).toMatch(/const scrolled = Math\.round\(window\.scrollY \|\| 0\);/);
+    expect(msgs).toMatch(/const top = Math\.max\(0, Math\.round\(vv\.offsetTop \|\| 0\) - scrolled\);/);
   });
 
-  test("the measurement it printed is still the one that decides", () => {
-    // Removing the readout must not remove the reading.
-    expect(msgs).toMatch(/const hidden = Math\.round\(window\.innerHeight - height - top\);/);
+  test("a shrinking layout viewport cannot make `hidden` negative", () => {
+    // iH 568 with vv 499@344 gave hidden = -275 under the old arithmetic, so the measurement
+    // half of the detection never fired at all — only the focused composer did.
+    expect(msgs).toMatch(/const hidden = Math\.round\(window\.innerHeight - height\);/);
+    expect(msgs).toMatch(/setVvShrunk\(hidden > 120 \|\| top > 0 \|\| scrolled > 120\);/);
+  });
+
+  test("the admin readout is back, and reports the derived top too", () => {
+    // .133 removed it as soon as the fix was confirmed and the next report was unreadable.
+    // It stays until the keyboard-up path is MEASURED, not until it looks right once.
+    expect(msgs).toMatch(/currentUser\?\.is_admin && kbDebug/);
+    for (const k of ["iH", "vvH", "vvT", "hidden", "sY", "top"]) {
+      expect(msgs).toMatch(new RegExp(`kbDebug\\.${k}`));
+    }
   });
 
 });
