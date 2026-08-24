@@ -472,6 +472,30 @@ const { syncBadgeToDevices } = require("../utils/badgeSync");
 const { hasSent, appendSent } = require("../utils/notificationsSent");
 const { captureException } = require("../utils/sentry");
 
+// ─── GET /api/push/attention/items — the same number, itemised ───
+// v1.105.129. Pete, 8/24: "if something needs me let's get it clear on what they're needed
+// for and make it a one-click event to clear it out or open it up for more."
+//
+// Same function as the count endpoint above, one field wider: the rows the count is made of,
+// each carrying the sentence to show and the ONE request that answers it. The card cannot
+// disagree with the icon because there is only one query set behind both (utils/attention.js).
+//
+// Errors 500 rather than answering an empty list, for the reason written against the count
+// endpoint: an empty list on this card does not decline to report, it reports "you're all
+// caught up".
+router.get("/attention/items", authenticate, async (req, res) => {
+  try {
+    const db = await getDb();
+    const { attentionItemsFor } = require("../utils/attention");
+    const payload = await attentionItemsFor(db, req.user.id);
+    res.json(payload);
+    syncBadgeToDevices(db, req.user.id, payload.total).catch(() => {});
+  } catch (err) {
+    console.error("Attention items error:", err);
+    res.status(500).json({ error: "Could not load what needs you." });
+  }
+});
+
 // Optional eventType param — if provided, checks user's notification_prefs before sending
 async function sendPushToUser(userId, payload, eventType) {
   // NEVER send push notifications to demo users — prevents demo data from

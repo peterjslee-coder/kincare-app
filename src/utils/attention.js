@@ -22,6 +22,18 @@
 //
 // Everything is per-user and computed server-side. Each query fails soft to 0 — a badge is
 // a convenience and must never take down a push send or a dashboard load.
+//
+// ─── v1.105.129 — the count is now DERIVED from the list ───
+//
+// Pete, 8/24: "I'm not happy with how the 'needs you' is displayed… if something needs me
+// let's get it clear on WHAT they're needed for and make it a one-click event."
+//
+// A card that says what each item is needs the items, not a number. The obvious way to get
+// them is a second set of queries beside the counting ones — and that is exactly how the
+// badge and the card come to disagree, which is the one thing this file cannot afford
+// (v1.105.105 note below). So there is one set of queries, they SELECT rows, and every count
+// in the payload is `rows.length`. The two cannot drift because there is nothing to drift
+// from.
 
 async function safe(label, fn) {
   try {
@@ -33,42 +45,59 @@ async function safe(label, fn) {
   }
 }
 
-// Same contract as safe(), for a value that is an id rather than a count. safe() coerces
-// anything non-finite to 0, which would turn a session id into the number zero.
-async function safeId(label, fn) {
+// Same contract as safe(), for the row lists. safe() coerces anything non-finite to 0,
+// which would turn a list of things you have to do into the number zero.
+async function safeRows(label, fn) {
   try {
-    const v = await fn();
-    return typeof v === "string" && v ? v : null;
+    const rows = await fn();
+    return Array.isArray(rows) ? rows : [];
   } catch (e) {
     console.log(`[attention] ${label} failed (non-blocking):`, e.message);
-    return null;
+    return [];
   }
 }
 
+const money = (n) => {
+  const v = Number(n);
+  return Number.isFinite(v) ? `$${v.toFixed(2)}` : "$0.00";
+};
+
+const name = (first, last) => [first, last].filter(Boolean).join(" ").trim() || null;
+
+const EMPTY = {
+  total: 0, reimbursements: 0, timeChanges: 0, timeChangeSessionId: null,
+  careTasks: 0, messages: 0, items: [],
+};
+
 /**
- * Breakdown + total for one user.
- * @returns {{ total:number, reimbursements:number, timeChanges:number, careTasks:number, messages:number }}
+ * Everything waiting on one user, itemised, plus the counts derived from it.
+ * `items` is what the dashboard card draws; the counts are what the app icon reads.
+ * @returns {{ total:number, reimbursements:number, timeChanges:number,
+ *             timeChangeSessionId:string|null, careTasks:number, messages:number,
+ *             items:Array<object> }}
  */
-async function attentionCountFor(db, userId) {
-  if (!userId) return { total: 0, reimbursements: 0, timeChanges: 0, timeChangeSessionId: null, careTasks: 0, messages: 0 };
+async function attentionItemsFor(db, userId) {
+  if (!userId) return { ...EMPTY };
 
   // ── Reimbursements awaiting MY approval ──
   // Approver = the team's billing contact, or the leader when no billing contact is set.
   // Mirrors teamAccess() in routes/reimbursements.js; kept as one query so the badge does
   // not need to walk every team.
-  const reimbursements = await safe("reimbursements", async () => {
-    const row = await db.prepare(`
-      SELECT COUNT(*) AS count
-      FROM reimbursements r
-      JOIN care_teams ct ON ct.id = r.care_team_id
-      LEFT JOIN care_team_members ctm
-        ON ctm.care_team_id = ct.id AND ctm.user_id = ? AND ctm.role = 'leader'
-      WHERE r.status = 'pending'
-        AND r.payee_user_id IS DISTINCT FROM ?
-        AND (ct.billing_user_id = ? OR (ct.billing_user_id IS NULL AND ctm.user_id IS NOT NULL))
-    `).get(userId, userId, userId);
-    return parseInt(row?.count || 0, 10);
-  });
+  const reimbursementRows = await safeRows("reimbursements", () => db.prepare(`
+    SELECT r.id, r.amount, r.description, r.category, r.expense_date, r.care_team_id,
+           pu.first_name AS payee_first, pu.last_name AS payee_last,
+           cr.first_name AS recipient_first
+    FROM reimbursements r
+    JOIN care_teams ct ON ct.id = r.care_team_id
+    LEFT JOIN care_team_members ctm
+      ON ctm.care_team_id = ct.id AND ctm.user_id = ? AND ctm.role = 'leader'
+    LEFT JOIN users pu ON pu.id = r.payee_user_id
+    LEFT JOIN care_recipients cr ON cr.id = r.care_recipient_id
+    WHERE r.status = 'pending'
+      AND r.payee_user_id IS DISTINCT FROM ?
+      AND (ct.billing_user_id = ? OR (ct.billing_user_id IS NULL AND ctm.user_id IS NOT NULL))
+    ORDER BY r.created_at
+  `).all(userId, userId, userId));
 
   // ── A session time change waiting on my answer ──
   //
@@ -93,32 +122,43 @@ async function attentionCountFor(db, userId) {
   // (dashboard.js), so a pending row the pointer no longer references cannot be acted on from
   // anywhere in the app. Badging it would be unclearable by construction. Terminal sessions are
   // excluded for the same reason — there is no answering a change to a cancelled visit.
-  const timeChanges = await safe("timeChanges", async () => {
-    const offers = await db.prepare(`
-      SELECT COUNT(*) AS count
-      FROM time_proposals tp
-      JOIN care_sessions cs ON cs.id = tp.session_id
-      WHERE tp.status = 'pending'
-        AND cs.family_user_id = ?
-        AND (tp.expires_at IS NULL OR tp.expires_at > NOW())
-    `).get(userId);
+  const offerRows = await safeRows("timeOffers", () => db.prepare(`
+    SELECT tp.id, tp.session_id, tp.proposed_date, tp.proposed_time, tp.message,
+           cu.first_name AS caregiver_first, cu.last_name AS caregiver_last,
+           cs.service_type, cs.scheduled_date, cs.scheduled_time, cs.duration_hours,
+           cr.timezone AS tz, cr.first_name AS recipient_first
+    FROM time_proposals tp
+    JOIN care_sessions cs ON cs.id = tp.session_id
+    LEFT JOIN users cu ON cu.id = tp.caregiver_user_id
+    LEFT JOIN care_recipients cr ON cr.id = cs.care_recipient_id
+    WHERE tp.status = 'pending'
+      AND cs.family_user_id = ?
+      AND (tp.expires_at IS NULL OR tp.expires_at > NOW())
+    ORDER BY tp.created_at
+  `).all(userId));
 
-    const changes = await db.prepare(`
-      SELECT COUNT(*) AS count
-      FROM time_change_proposals tcp
-      JOIN care_sessions cs
-        ON cs.id = tcp.session_id AND cs.pending_time_change_id = tcp.id
-      LEFT JOIN caregiver_profiles cp ON cp.id = cs.caregiver_id
-      WHERE tcp.status = 'pending'
-        AND cs.status NOT IN ('cancelled', 'completed', 'disputed')
-        AND (
-          (tcp.proposed_by = 'caregiver' AND cs.family_user_id = ?)
-          OR (tcp.proposed_by = 'family' AND cp.user_id = ?)
-        )
-    `).get(userId, userId);
-
-    return parseInt(offers?.count || 0, 10) + parseInt(changes?.count || 0, 10);
-  });
+  const changeRows = await safeRows("timeChanges", () => db.prepare(`
+    SELECT tcp.id, tcp.session_id, tcp.proposed_by, tcp.original_time, tcp.proposed_time,
+           tcp.original_duration, tcp.proposed_duration, tcp.reason, tcp.is_within_24h,
+           cs.scheduled_date, cs.scheduled_time, cs.service_type,
+           cr.timezone AS tz, cr.first_name AS recipient_first,
+           cu.first_name AS caregiver_first, cu.last_name AS caregiver_last,
+           fu.first_name AS family_first, fu.last_name AS family_last
+    FROM time_change_proposals tcp
+    JOIN care_sessions cs
+      ON cs.id = tcp.session_id AND cs.pending_time_change_id = tcp.id
+    LEFT JOIN caregiver_profiles cp ON cp.id = cs.caregiver_id
+    LEFT JOIN users cu ON cu.id = cp.user_id
+    LEFT JOIN users fu ON fu.id = cs.family_user_id
+    LEFT JOIN care_recipients cr ON cr.id = cs.care_recipient_id
+    WHERE tcp.status = 'pending'
+      AND cs.status NOT IN ('cancelled', 'completed', 'disputed')
+      AND (
+        (tcp.proposed_by = 'caregiver' AND cs.family_user_id = ?)
+        OR (tcp.proposed_by = 'family' AND cp.user_id = ?)
+      )
+    ORDER BY cs.scheduled_date, cs.scheduled_time
+  `).all(userId, userId));
 
   // ── A care task assigned to me that is already due ──
   // Assigned to me specifically: an unassigned task is the team's, not mine, and badging
@@ -129,18 +169,18 @@ async function attentionCountFor(db, userId) {
   // sweeps occurrences of ACTIVE tasks (routes/careTasks.js). Delete or pause a task and
   // its pending occurrences are orphaned: still 'pending', still counted here, and no
   // longer reachable anywhere in the UI. Unclearable by construction.
-  const careTasks = await safe("careTasks", async () => {
-    const row = await db.prepare(`
-      SELECT COUNT(*) AS count
-      FROM care_task_occurrences occ
-      JOIN care_tasks t ON t.id = occ.task_id
-      WHERE occ.status = 'pending'
-        AND t.is_active = 1
-        AND t.assigned_user_id = ?
-        AND occ.due_at <= NOW()
-    `).get(userId);
-    return parseInt(row?.count || 0, 10);
-  });
+  const taskRows = await safeRows("careTasks", () => db.prepare(`
+    SELECT occ.id, occ.due_at, occ.due_date, t.title, t.task_type, t.tz,
+           t.care_recipient_id, cr.first_name AS recipient_first
+    FROM care_task_occurrences occ
+    JOIN care_tasks t ON t.id = occ.task_id
+    LEFT JOIN care_recipients cr ON cr.id = t.care_recipient_id
+    WHERE occ.status = 'pending'
+      AND t.is_active = 1
+      AND t.assigned_user_id = ?
+      AND occ.due_at <= NOW()
+    ORDER BY occ.due_at
+  `).all(userId));
 
   // ── Unread messages ──
   //
@@ -160,6 +200,9 @@ async function attentionCountFor(db, userId) {
   // cannot disagree: newer than my last read, not mine, not the Kindred relay (which the
   // user reads in Kindred chat instead), and not in a conversation I archived or deleted.
   // An unread you cannot see is an unread you cannot clear.
+  //
+  // Still a COUNT: this one is not itemised, because it is not in `total` and the card does
+  // not draw it (see the note on the return value).
   const messages = await safe("messages", async () => {
     const row = await db.prepare(`
       SELECT COUNT(*) AS count
@@ -176,28 +219,90 @@ async function attentionCountFor(db, userId) {
     return parseInt(row?.count || 0, 10);
   });
 
-  // ── Which visit the time change belongs to ──
-  // v1.105.105 — a count with no destination is why "1 schedule change waiting on your
-  // answer" was a dead end: the card sent you to a page and the page said nothing. The row
-  // has to know WHICH visit, so it can open that visit.
-  const timeChangeSessionId = timeChanges === 0 ? null : await safeId("timeChangeSession", async () => {
-    const row = await db.prepare(`
-      SELECT cs.id, cs.scheduled_date, cs.scheduled_time
-      FROM time_change_proposals tcp
-      JOIN care_sessions cs
-        ON cs.id = tcp.session_id AND cs.pending_time_change_id = tcp.id
-      LEFT JOIN caregiver_profiles cp ON cp.id = cs.caregiver_id
-      WHERE tcp.status = 'pending'
-        AND cs.status NOT IN ('cancelled', 'completed', 'disputed')
-        AND (
-          (tcp.proposed_by = 'caregiver' AND cs.family_user_id = ?)
-          OR (tcp.proposed_by = 'family' AND cp.user_id = ?)
-        )
-      ORDER BY cs.scheduled_date, cs.scheduled_time
-      LIMIT 1
-    `).get(userId, userId);
-    return row?.id || null;
-  });
+  // ── The list the card draws ──
+  //
+  // Each item carries the sentence to show and the ONE request that clears it. The endpoint
+  // is named here, on the server, next to the query that found the row — so the thing that
+  // knows an item is waiting is the thing that says how to answer it. A client guessing the
+  // URL from a `kind` string is how the wrong id ends up in the right-looking path.
+  //
+  // `verb` is what the button says. `undoable` marks the ones with a real server-side undo;
+  // the card gives every action a hold-then-send window, but only these can be taken back
+  // after it closes.
+  const items = [
+    ...reimbursementRows.map((r) => ({
+      kind: "reimbursement",
+      id: r.id,
+      title: `Approve ${money(r.amount)} to ${name(r.payee_first, r.payee_last) || "a team member"}`,
+      detail: [r.description, r.category].filter(Boolean).join(" · "),
+      forWhom: r.recipient_first || null,
+      when: r.expense_date || null,
+      verb: "Approve",
+      action: { method: "POST", path: `/api/reimbursements/${r.id}/approve` },
+      page: "care-team",
+      // Approval is not payment. Pete's money rule: say plainly where money moves — and
+      // here it does not move yet, so the card says so rather than implying a transfer.
+      note: "Approving doesn't send money — you choose how to pay after.",
+    })),
+    ...offerRows.map((p) => ({
+      kind: "timeOffer",
+      id: p.id,
+      sessionId: p.session_id,
+      title: `${name(p.caregiver_first, p.caregiver_last) || "A caregiver"} offered a time`,
+      detail: p.message || null,
+      forWhom: p.recipient_first || null,
+      serviceType: p.service_type || null,
+      tz: p.tz || null,
+      proposedDate: p.proposed_date || null,
+      proposedTime: p.proposed_time || null,
+      verb: "Accept",
+      action: { method: "PUT", path: `/api/sessions/${p.session_id}/proposals/${p.id}/accept` },
+      page: "dashboard",
+      focus: `session:${p.session_id}`,
+    })),
+    ...changeRows.map((c) => ({
+      kind: "timeChange",
+      id: c.id,
+      sessionId: c.session_id,
+      title: `${c.proposed_by === "caregiver"
+        ? (name(c.caregiver_first, c.caregiver_last) || "Your caregiver")
+        : (name(c.family_first, c.family_last) || "The family")} asked to move a visit`,
+      detail: c.reason || null,
+      forWhom: c.recipient_first || null,
+      serviceType: c.service_type || null,
+      tz: c.tz || null,
+      date: c.scheduled_date || null,
+      fromTime: c.original_time || null,
+      toTime: c.proposed_time || null,
+      fromDuration: c.original_duration || null,
+      toDuration: c.proposed_duration || null,
+      isWithin24h: !!c.is_within_24h,
+      verb: "Accept",
+      action: {
+        method: "PUT",
+        path: `/api/sessions/${c.session_id}/time-change/${c.id}/respond`,
+        body: { action: "accept" },
+      },
+      page: "dashboard",
+      focus: `session:${c.session_id}`,
+    })),
+    ...taskRows.map((t) => ({
+      kind: "careTask",
+      id: t.id,
+      title: t.title,
+      detail: null,
+      forWhom: t.recipient_first || null,
+      tz: t.tz || null,
+      dueAt: t.due_at || null,
+      verb: "Mark done",
+      action: { method: "POST", path: `/api/care-tasks/occurrences/${t.id}/check` },
+      undo: { method: "POST", path: `/api/care-tasks/occurrences/${t.id}/undo` },
+      undoable: true,
+      page: "care-team",
+    })),
+  ];
+
+  const timeChanges = offerRows.length + changeRows.length;
 
   return {
     // v1.105.105 — unread messages are NOT in the total any more. Pete: five of them showed
@@ -209,13 +314,28 @@ async function attentionCountFor(db, userId) {
     // The count is still returned — it is honest, and the caller may want it — but the card
     // and the app icon both read `total`, so they stay in agreement, which is the one thing
     // AttentionCard cannot afford to lose.
-    total: reimbursements + timeChanges + careTasks,
-    reimbursements,
+    total: reimbursementRows.length + timeChanges + taskRows.length,
+    reimbursements: reimbursementRows.length,
     timeChanges,
-    timeChangeSessionId,
-    careTasks,
+    // v1.105.105 — a count with no destination is why "1 schedule change waiting on your
+    // answer" was a dead end: the card sent you to a page and the page said nothing. Kept
+    // for any caller still reading it; the items each carry their own `focus` now, so
+    // nothing in the card depends on this single id any more.
+    timeChangeSessionId: changeRows[0]?.session_id || null,
+    careTasks: taskRows.length,
     messages,
+    items,
   };
 }
 
-module.exports = { attentionCountFor };
+/**
+ * Breakdown + total for one user, without the item list — the badge's view.
+ * Same rows, same numbers, by construction: this is attentionItemsFor with `items` dropped.
+ * @returns {{ total:number, reimbursements:number, timeChanges:number, careTasks:number, messages:number }}
+ */
+async function attentionCountFor(db, userId) {
+  const { items, ...counts } = await attentionItemsFor(db, userId);
+  return counts;
+}
+
+module.exports = { attentionCountFor, attentionItemsFor };

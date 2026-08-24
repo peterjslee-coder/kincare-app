@@ -11,19 +11,39 @@
 const { code } = require("./helpers/source");
 const { attentionCountFor } = require("../src/utils/attention");
 
-// Stub shaped like DatabaseWrapper: db.prepare(sql).get(...). Routes by matching the SQL,
-// so each test reads as "this is what's in the database".
+// Stub shaped like DatabaseWrapper: db.prepare(sql).get(...) / .all(...). Routes by matching
+// the SQL, so each test reads as "this is what's in the database".
+//
+// v1.105.129 — the counting queries became row queries: the card needs the items, and a
+// second set of queries beside these is exactly how the icon and the card come to disagree.
+// So the counts here are `rows.length`, and this stub hands back that many rows.
+function rows(n, row) {
+  return Array.from({ length: n }, (_, i) => ({ id: `${row.id || "row"}-${i}`, ...row }));
+}
+
 function fakeDb(counts) {
   return {
     prepare(sql) {
       const norm = sql.replace(/\s+/g, " ");
       return {
         async get() {
-          if (norm.includes("FROM reimbursements")) return { count: counts.reimbursements ?? 0 };
-          if (norm.includes("FROM time_proposals")) return { count: counts.timeChanges ?? 0 };
-          if (norm.includes("FROM care_task_occurrences")) return { count: counts.careTasks ?? 0 };
           if (norm.includes("FROM messages")) return { count: counts.messages ?? 0 };
           return { count: 0 };
+        },
+        async all() {
+          if (norm.includes("FROM reimbursements")) {
+            return rows(counts.reimbursements ?? 0, { id: "r", amount: 12.5, description: "Groceries" });
+          }
+          if (norm.includes("FROM time_proposals")) {
+            return rows(counts.timeOffers ?? 0, { id: "tp", session_id: "s1" });
+          }
+          if (norm.includes("FROM time_change_proposals")) {
+            return rows(counts.timeChanges ?? 0, { id: "tcp", session_id: "s1", proposed_by: "caregiver" });
+          }
+          if (norm.includes("FROM care_task_occurrences")) {
+            return rows(counts.careTasks ?? 0, { id: "occ", title: "Evening meds" });
+          }
+          return [];
         },
       };
     },
@@ -53,7 +73,7 @@ describe("the count means: you are the blocker", () => {
     );
     expect(r.total).toBe(6);                    // 2 + 1 + 3 — NOT the 4 unread
     expect(r).toEqual({
-      total: 6, reimbursements: 2, timeChanges: 1, timeChangeSessionId: null, careTasks: 3, messages: 4,
+      total: 6, reimbursements: 2, timeChanges: 1, timeChangeSessionId: "s1", careTasks: 3, messages: 4,
     });
   });
 
@@ -74,7 +94,10 @@ describe("the count means: you are the blocker", () => {
   });
 
   test("every query fails soft — a badge must never break a push send", async () => {
-    const brokenDb = { prepare: () => ({ get: async () => { throw new Error("db down"); } }) };
+    const brokenDb = { prepare: () => ({
+      get: async () => { throw new Error("db down"); },
+      all: async () => { throw new Error("db down"); },
+    }) };
     const r = await attentionCountFor(brokenDb, "pete");
     expect(r.total).toBe(0);
     expect(r).toEqual({ total: 0, reimbursements: 0, timeChanges: 0, timeChangeSessionId: null, careTasks: 0, messages: 0 });
@@ -314,23 +337,32 @@ describe("the number says what it is made of", () => {
   const card = code("public/js/components/AttentionCard.js");
   const dash = code("public/js/components/Dashboard.js");
 
-  test("the card reads the same endpoint the icon does", () => {
+  test("the card reads the same source the icon does", () => {
     // "I don't know what they are" survives fixing the count. A badge with no list behind
     // it is a number you can only ignore.
-    expect(card).toMatch(/apiFetch\('\/api\/push\/attention'\)/);
+    //
+    // v1.105.129 — the card reads /attention/items and the icon reads /attention. Different
+    // endpoints, ONE function behind both (attentionItemsFor), so they cannot disagree —
+    // which is the property this test is really about.
+    expect(card).toMatch(/apiFetch\('\/api\/push\/attention\/items'\)/);
+    const push = code("src/routes/push.js");
+    expect(push).toMatch(/attentionItemsFor\(db, req\.user\.id\)/);
+    expect(code("src/utils/attention.js"))
+      .toMatch(/const \{ items, \.\.\.counts \} = await attentionItemsFor\(db, userId\);/);
   });
 
-  test("every category in the total is a row, and every row goes where you clear it", () => {
+  test("every category in the total is an item, and every item goes where you clear it", () => {
     // v1.105.105 — 'messages' left this list with the total; see above.
-    for (const key of ["reimbursements", "timeChanges", "careTasks"]) {
-      expect(card).toMatch(new RegExp(`key: '${key}'`));
+    const util = code("src/utils/attention.js");
+    for (const kind of ["reimbursement", "timeChange", "careTask"]) {
+      expect(util).toMatch(new RegExp(`kind: "${kind}"`));
     }
-    expect(card).toMatch(/if \(onNavigate\) onNavigate\(r\.page\)/);
+    expect(card).toMatch(/if \(onNavigate\) onNavigate\(item\.page\)/);
   });
 
   test("nothing waiting draws nothing at all", () => {
     // The dashboard is crowded — his word — and "you're all caught up" is decoration.
-    expect(card).toMatch(/if \(!counts \|\| !counts\.total\) return null;/);
+    expect(card).toMatch(/if \(!visible\.length && !heldIds\.length\) return null;/);
   });
 
   test("it refreshes on return, like the badge does", () => {

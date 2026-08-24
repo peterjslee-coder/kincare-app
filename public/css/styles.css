@@ -77,6 +77,9 @@
       --bg-error-subtle: #fef2f2;
       --bg-accent-light: #fdf0ed;
       --bg-exclusive-card: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
+      /* v1.105.129 — the 'Needs you' cards. Accent orange on purpose: the violet above is
+         a job you MAY take, this is a decision somebody is waiting on. */
+      --bg-attention-card: linear-gradient(135deg, #fff6f2 0%, #ffece4 100%);
       --bg-neutral: #f9f9f9;
       --color-navy: #2C3E50;
       --color-red-strong: #cc0000;
@@ -155,6 +158,7 @@
       --bg-error-subtle: #2e1515;
       --bg-accent-light: #2e1f18;
       --bg-exclusive-card: linear-gradient(135deg, #1e1535 0%, #251a3a 100%);
+      --bg-attention-card: linear-gradient(135deg, #2e1f18 0%, #3a2620 100%);
       --bg-neutral: #1e1e2a;
       --color-navy: #7da8cc;
       --color-red-strong: #ef5350;

@@ -13,43 +13,122 @@
 // disagree, and every row goes to the place where you clear it. When there is nothing
 // waiting, it renders nothing at all — the dashboard is crowded (his words) and a card
 // saying "you're all caught up" is decoration.
-
-// v1.105.105 — `page` must be a page app.js actually renders. `timeChanges` pointed at
-// 'sessions', which is not one: renderPage falls through to <Dashboard/>, so tapping the row
-// re-rendered the screen Pete was already on. "It doesn't do anything. It is a dead end."
-// (917f3787.) tests/attentionCardTargets.test.js now checks every value here against app.js.
 //
-// `focus` names the field on the payload holding the id of the exact thing to open. A count
-// with no destination is what made this a dead end in the first place.
-const ATTENTION_ROWS = [
-  { key: 'reimbursements', icon: '💵', page: 'care-team',
-    one: 'reimbursement waiting for your approval',
-    many: 'reimbursements waiting for your approval' },
-  { key: 'timeChanges', icon: '🕑', page: 'dashboard', focus: 'timeChangeSessionId', focusPrefix: 'session',
-    one: 'schedule change waiting on your answer',
-    many: 'schedule changes waiting on your answer' },
-  { key: 'careTasks', icon: '✅', page: 'care-team',
-    one: 'care task assigned to you is due',
-    many: 'care tasks assigned to you are due' },
-  // Unread messages deliberately absent — v1.105.105. Pete: they "should not" be here, they
-  // belong "over the message pill", which already carries them (app.js `unreadMsgCount`).
-  // `total` no longer counts them either, so this list and the app icon still agree.
-];
+// ─── v1.105.129 — say what it is, and let one tap end it ───
+//
+// Pete, 8/24: "I'm not happy with how the 'needs you' is displayed. It doesn't match the app
+// appearance and is clumsy looking. You know what looks good? the pop-ups that appear when
+// you're offered a job. They're up top, they have a different colour, they're noticeable, and
+// I can click to approve/expand right there. If something needs me let's get it clear on WHAT
+// they're needed for and make it a one-click event to clear it out or open it up for more."
+//
+// The old card was a count per CATEGORY — "1 reimbursement waiting for your approval" — which
+// is the badge broken into three smaller badges. It still never said whose, for how much, or
+// for when, and every row's only move was to navigate somewhere else and start looking.
+//
+// This is the exclusive-offer card from CaretakerHub, applied to the same data: an eyebrow in
+// the accent colour, one bordered card per THING, the sentence that names it, and the button
+// that ends it sitting on the card. Orange rather than the offers' violet — the two must not
+// be mistaken for one another; a job you may take and a decision that is blocking somebody
+// are different kinds of urgent.
+//
+// The items, and the single request that clears each one, come from the server
+// (utils/attention.js) next to the query that found them — see the note there.
+
+// Hold-then-send. Nothing is irreversible for five seconds: the card clears the moment you
+// tap, and the request goes out when the window closes. Only care tasks have a real
+// server-side undo, and a design that offers Undo on one row in three is worse than one that
+// offers it nowhere — so the window is the undo, uniformly.
+//
+// pagehide flushes anything still held, with keepalive so the browser sends it while the page
+// is going away. Without that, tapping Approve and immediately closing the app would silently
+// do nothing, which is the one outcome worse than a slow approval.
+const ATTENTION_HOLD_MS = 5000;
+
+// What the confirmation row says after you tap. Spelled out rather than derived: "Accept"
+// + "d" is "Acceptd", and a card whose job is to be legible cannot afford that.
+const ATTENTION_PAST = {
+  Approve: 'Approved.',
+  Accept: 'Accepted.',
+  'Mark done': 'Marked done.',
+};
+
+const ATTENTION_KINDS = {
+  reimbursement: { icon: '💵', chip: 'MONEY' },
+  timeOffer:     { icon: '🕑', chip: 'SCHEDULE' },
+  timeChange:    { icon: '🕑', chip: 'SCHEDULE' },
+  careTask:      { icon: '✅', chip: 'CARE TASK' },
+};
+
+// "14:30" → "2:30 PM". The server sends wall-clock times in the care recipient's zone; they
+// are already the right numbers, so this formats rather than converts. Converting them here
+// is the timezone-frame mistake this codebase has now made three times.
+const attentionClock = (t) => {
+  if (!t) return '';
+  const [h, m] = String(t).split(':').map(Number);
+  if (!Number.isFinite(h)) return '';
+  const hour = h % 12 === 0 ? 12 : h % 12;
+  return `${hour}:${String(m || 0).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
+};
+
+const attentionDay = (dateStr, tz) => {
+  if (!dateStr) return '';
+  const d = String(dateStr).split('T')[0];
+  try {
+    if (typeof TimezoneHelper !== 'undefined' && TimezoneHelper.getDateLabel) {
+      return TimezoneHelper.getDateLabel(d, tz || TimezoneHelper.DEFAULT_TZ);
+    }
+  } catch { /* fall through to the raw date rather than losing the row */ }
+  return d;
+};
+
+// One sentence under the title: the specifics that make the item recognisable without
+// opening it. Never the same words as the title.
+const attentionDetail = (item) => {
+  if (item.kind === 'reimbursement') {
+    const bits = [item.detail, item.when ? attentionDay(item.when, null) : null].filter(Boolean);
+    return bits.join(' · ');
+  }
+  if (item.kind === 'timeChange') {
+    const day = attentionDay(item.date, item.tz);
+    const from = attentionClock(item.fromTime);
+    const to = attentionClock(item.toTime);
+    if (from && to) return `${day}${day ? ' · ' : ''}${from} → ${to}`;
+    return day;
+  }
+  if (item.kind === 'timeOffer') {
+    const day = attentionDay(item.proposedDate, item.tz);
+    const at = attentionClock(item.proposedTime);
+    return `${day}${at ? ` at ${at}` : ''}`;
+  }
+  if (item.kind === 'careTask') {
+    return item.dueAt ? `Due ${attentionDay(item.dueAt, item.tz)}` : 'Due now';
+  }
+  return item.detail || '';
+};
 
 const AttentionCard = window.AttentionCard = ({ onNavigate }) => {
-  const [counts, setCounts] = React.useState(null);
+  const [payload, setPayload] = React.useState(null);
   // v1.105.51 — a failed load used to render exactly nothing, which on this card means
   // "you're all caught up". That is the one lie this component cannot afford: the app icon
   // may be showing a number while the card that is supposed to itemise it isn't there.
   // (Also `res.ok` not `res?.ok` — apiFetch returns null on its 401 path, which threw
   // straight into the same silent catch.)
   const [loadFailed, setLoadFailed] = React.useState(false);
+  // id → { item, verbPast, timer } while the hold window is open.
+  const [held, setHeld] = React.useState({});
+  // id → message, when the request came back non-OK. The row comes BACK on failure; a
+  // request that failed has not cleared anything, and pretending otherwise is how a
+  // reimbursement stays pending while everyone believes it was approved.
+  const [failed, setFailed] = React.useState({});
+  const heldRef = React.useRef({});
+  heldRef.current = held;
 
   const load = React.useCallback(async () => {
     try {
-      const res = await apiFetch('/api/push/attention');
+      const res = await apiFetch('/api/push/attention/items');
       if (!res?.ok) { setLoadFailed(true); return; }
-      setCounts(await res.json());
+      setPayload(await res.json());
       setLoadFailed(false);
     } catch { setLoadFailed(true); }
   }, []);
@@ -63,10 +142,77 @@ const AttentionCard = window.AttentionCard = ({ onNavigate }) => {
     return () => document.removeEventListener('visibilitychange', onVis);
   }, [load]);
 
-  if (loadFailed && !counts) {
+  // Send anything still being held before the page goes away. keepalive lets the request
+  // outlive the document; a plain fetch here is cancelled on unload.
+  React.useEffect(() => {
+    const flush = () => {
+      Object.values(heldRef.current).forEach(({ item }) => {
+        if (!item?.action) return;
+        try {
+          apiFetch(item.action.path, {
+            method: item.action.method || 'POST',
+            body: JSON.stringify(item.action.body || {}),
+            keepalive: true,
+          }).catch(() => {});
+        } catch { /* the page is leaving; there is nothing left to report to */ }
+      });
+    };
+    window.addEventListener('pagehide', flush);
+    return () => { window.removeEventListener('pagehide', flush); flush(); };
+  }, []);
+
+  const send = React.useCallback(async (item) => {
+    let ok = false;
+    let message = null;
+    try {
+      const res = await apiFetch(item.action.path, {
+        method: item.action.method || 'POST',
+        body: JSON.stringify(item.action.body || {}),
+      });
+      ok = !!res?.ok;
+      if (!ok) {
+        try { message = (await res.json())?.error; } catch { /* keep the generic line */ }
+      }
+    } catch (e) {
+      message = null;
+    }
+    setHeld((prev) => { const next = { ...prev }; delete next[item.id]; return next; });
+    if (ok) {
+      load(); // the server is the count; re-read rather than decrementing a local number
+    } else {
+      setFailed((prev) => ({ ...prev, [item.id]: message || "That didn't go through. Try again." }));
+    }
+  }, [load]);
+
+  const act = React.useCallback((item, verbPast) => {
+    setFailed((prev) => { const next = { ...prev }; delete next[item.id]; return next; });
+    const timer = setTimeout(() => send(item), ATTENTION_HOLD_MS);
+    setHeld((prev) => ({ ...prev, [item.id]: { item, verbPast, timer } }));
+  }, [send]);
+
+  const undo = React.useCallback((id) => {
+    setHeld((prev) => {
+      const entry = prev[id];
+      if (entry) clearTimeout(entry.timer);
+      const next = { ...prev }; delete next[id]; return next;
+    });
+  }, []);
+
+  const open = React.useCallback((item) => {
+    // Open the exact item, not just the page it lives on. Consumed by Dashboard /
+    // CaretakerHub, which open the visit detail for `session:<id>`.
+    if (item.focus) window.__pendingFocus = item.focus;
+    if (onNavigate) onNavigate(item.page);
+    // This card lives inside Dashboard, and onNavigate is setCurrentPage, which does
+    // not remount it — so a mount-time read of __pendingFocus would never fire when
+    // the target page is the one we are already on. Announce it instead.
+    if (item.focus) setTimeout(() => window.dispatchEvent(new Event('inplace:focus')), 0);
+  }, [onNavigate]);
+
+  if (loadFailed && !payload) {
     return (
       <div style={{
-        background: 'var(--card-bg, #fff)', border: '1px solid var(--border-color, #e0e0e0)',
+        background: 'var(--bg-card)', border: '1px solid var(--border-color)',
         borderRadius: 12, padding: '12px 16px', marginBottom: 16,
         display: 'flex', alignItems: 'center', gap: 10,
       }}>
@@ -74,58 +220,117 @@ const AttentionCard = window.AttentionCard = ({ onNavigate }) => {
           Couldn't load what needs you.
         </span>
         <button onClick={load} style={{
-          background: 'none', border: 'none', color: 'var(--accent-color)',
-          font: 'inherit', fontSize: 13, fontWeight: 650, cursor: 'pointer', padding: 0,
+          minHeight: 44, padding: '0 12px', background: 'none', border: 'none',
+          color: 'var(--accent-color)', font: 'inherit', fontSize: 14, fontWeight: 700,
+          cursor: 'pointer',
         }}>Retry</button>
       </div>
     );
   }
 
-  if (!counts || !counts.total) return null; // nothing waiting → nothing drawn
-
-  const rows = ATTENTION_ROWS
-    .map((r) => ({ ...r, n: Number(counts[r.key]) || 0 }))
-    .filter((r) => r.n > 0);
-  if (!rows.length) return null;
+  const items = (payload && Array.isArray(payload.items)) ? payload.items : [];
+  const heldIds = Object.keys(held);
+  const visible = items.filter((i) => !held[i.id]);
+  // Held rows still occupy the section — that is where the Undo lives. Only when there is
+  // nothing at all does the card disappear.
+  if (!visible.length && !heldIds.length) return null;
 
   return (
-    <div style={{
-      background: 'var(--card-bg, #fff)', border: '1px solid var(--border-color, #e0e0e0)',
-      borderLeft: '4px solid var(--accent-color, #2e7d6f)', borderRadius: 12,
-      padding: '14px 16px', marginBottom: 16,
-    }}>
-      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 10 }}>
-        {counts.total === 1 ? 'Needs you (1)' : `Needs you (${counts.total})`}
+    <div style={{ marginBottom: 16 }}>
+      <div style={{
+        fontSize: 12, fontWeight: 700, color: 'var(--accent-color)',
+        textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10,
+        display: 'flex', alignItems: 'center', gap: 6,
+      }}>
+        <span aria-hidden="true">{'❗'}</span> Needs you ({visible.length})
       </div>
-      {rows.map((r) => (
-        <button
-          key={r.key}
-          onClick={() => {
-            // Open the exact item, not just the page it lives on. Consumed by Dashboard /
-            // CaretakerHub, which open the visit detail for `session:<id>`.
-            const id = r.focus && counts[r.focus];
-            if (id) window.__pendingFocus = `${r.focusPrefix}:${id}`;
-            if (onNavigate) onNavigate(r.page);
-            // This card lives inside Dashboard, and onNavigate is setCurrentPage, which does
-            // not remount it — so a mount-time read of __pendingFocus would never fire when
-            // the target page is the one we are already on. Announce it instead.
-            if (id) setTimeout(() => window.dispatchEvent(new Event('inplace:focus')), 0);
-          }}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 10, width: '100%',
-            background: 'none', border: 'none', borderTop: '1px solid var(--border-color, #eee)',
-            padding: '10px 0', cursor: 'pointer', textAlign: 'left', font: 'inherit',
-            color: 'var(--text-primary)',
-          }}
-        >
-          <span aria-hidden="true" style={{ fontSize: 16 }}>{r.icon}</span>
-          <span style={{ flex: 1, fontSize: 14 }}>
-            <strong>{r.n}</strong> {r.n === 1 ? r.one : r.many}
-          </span>
-          <span aria-hidden="true" style={{ color: 'var(--text-tertiary)', fontSize: 18 }}>›</span>
-        </button>
-      ))}
-      <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 8 }}>
+
+      {heldIds.map((id) => {
+        const { item, verbPast } = held[id];
+        return (
+          <div key={`held-${id}`} style={{
+            marginBottom: 10, padding: '12px 16px', borderRadius: 12,
+            border: '1px dashed var(--border-color)', background: 'var(--bg-card)',
+            display: 'flex', alignItems: 'center', gap: 10,
+          }}>
+            <span aria-hidden="true" style={{ fontSize: 16 }}>{'✓'}</span>
+            <span style={{ flex: 1, fontSize: 13.5, color: 'var(--text-secondary)' }}>
+              {verbPast}
+            </span>
+            <button onClick={() => undo(id)} style={{
+              minHeight: 44, padding: '0 14px', background: 'none', border: 'none',
+              color: 'var(--accent-color)', font: 'inherit', fontSize: 14, fontWeight: 700,
+              cursor: 'pointer',
+            }}>Undo</button>
+          </div>
+        );
+      })}
+
+      {visible.map((item) => {
+        const kind = ATTENTION_KINDS[item.kind] || { icon: '❗', chip: 'NEEDS YOU' };
+        const detail = attentionDetail(item);
+        return (
+          <div key={item.id} className="card" style={{
+            marginBottom: 10, padding: '16px 18px',
+            border: '2px solid var(--accent-color)', borderRadius: 12,
+            background: 'var(--bg-attention-card)',
+            boxShadow: '0 2px 8px rgba(232,114,74,0.15)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, flexWrap: 'wrap' }}>
+              <span style={{
+                background: 'var(--accent-color-dark)', color: 'var(--text-on-primary)',
+                padding: '3px 10px', borderRadius: 12, fontSize: 11, fontWeight: 700,
+              }}>{kind.icon} {kind.chip}</span>
+              {item.forWhom && (
+                <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>for {item.forWhom}</span>
+              )}
+              {item.isWithin24h && (
+                <span style={{
+                  background: 'var(--color-warning-bg)', color: 'var(--color-warning)',
+                  padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700,
+                }}>Within 24 hours</span>
+              )}
+            </div>
+
+            <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>{item.title}</div>
+            {detail && (
+              <div style={{ fontSize: 14, color: 'var(--text-secondary)', marginTop: 3 }}>{detail}</div>
+            )}
+            {item.kind !== 'reimbursement' && item.detail && (
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4, fontStyle: 'italic' }}>
+                {'“'}{item.detail}{'”'}
+              </div>
+            )}
+            {item.note && (
+              <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 6 }}>{item.note}</div>
+            )}
+            {failed[item.id] && (
+              <div style={{
+                marginTop: 8, padding: '6px 10px', borderRadius: 8,
+                background: 'var(--color-error-bg)', color: 'var(--color-error)',
+                fontSize: 12.5, fontWeight: 600,
+              }}>{failed[item.id]}</div>
+            )}
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+              <button onClick={() => act(item, ATTENTION_PAST[item.verb] || 'Done.')}
+                style={{
+                  flex: '1 1 auto', minHeight: 44, padding: '12px 24px',
+                  background: 'var(--accent-color-dark)', color: 'var(--text-on-primary)',
+                  border: 'none', borderRadius: 12, fontSize: 15, fontWeight: 700,
+                  cursor: 'pointer', boxShadow: '0 2px 8px rgba(216,90,43,0.3)',
+                }}>{item.verb}</button>
+              <button onClick={() => open(item)} style={{
+                minHeight: 44, padding: '10px 18px', background: 'var(--bg-surface)',
+                color: 'var(--accent-color)', border: '2px solid var(--accent-color)',
+                borderRadius: 12, fontSize: 13.5, fontWeight: 700, cursor: 'pointer',
+              }}>Open{' '}{'›'}</button>
+            </div>
+          </div>
+        );
+      })}
+
+      <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>
         This is the number on the app icon. It clears as you deal with each one.
       </div>
     </div>

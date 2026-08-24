@@ -27,8 +27,11 @@ const realPages = new Set(
   [...app.matchAll(/currentPage === '([a-z-]+)'/g)].map((m) => m[1])
 );
 
+// v1.105.129 — the page names moved to the SERVER, next to the query that finds each item
+// (utils/attention.js). Same rule, one file over: a page name that does not exist fails as
+// a page name that does.
 describe("every row points at a page that exists", () => {
-  const targets = [...card.matchAll(/page: '([a-z-]+)'/g)].map((m) => m[1]);
+  const targets = [...attention.matchAll(/page: "([a-z-]+)"/g)].map((m) => m[1]);
 
   test("there are rows to check", () => {
     expect(targets.length).toBeGreaterThan(0);
@@ -46,14 +49,14 @@ describe("every row points at a page that exists", () => {
 
 describe("unread messages are not in this tile", () => {
   test("no messages row", () => {
-    expect(card).not.toMatch(/key: 'messages'/);
+    expect(attention).not.toMatch(/kind: "message/);
   });
 
   test("and they are not in the total either", () => {
     // The card and the app icon both read `total`. Dropping the row but not the total would
     // leave the icon permanently higher than the list that is supposed to itemise it — the
     // one disagreement this card exists to prevent.
-    expect(attention).toMatch(/total: reimbursements \+ timeChanges \+ careTasks,/);
+    expect(attention).toMatch(/total: reimbursementRows\.length \+ timeChanges \+ taskRows\.length,/);
   });
 
   test("the count is still reported, just not counted", () => {
@@ -67,18 +70,19 @@ describe("unread messages are not in this tile", () => {
 
 describe("the time-change row opens the actual visit", () => {
   test("the server says which visit", () => {
-    expect(attention).toMatch(/timeChangeSessionId/);
-    expect(attention).toMatch(/ORDER BY cs\.scheduled_date, cs\.scheduled_time\n\s+LIMIT 1/);
+    // v1.105.129 — no longer a separate id lookup. The row IS the answer: each item carries
+    // its own `focus`, so there is no second query to fall out of step with the first.
+    expect(attention).toMatch(/focus: `session:\$\{c\.session_id\}`/);
+    expect(attention).toMatch(/ORDER BY cs\.scheduled_date, cs\.scheduled_time/);
   });
 
-  test("an id is never coerced to a count", () => {
-    // safe() turns anything non-finite into 0, which would make a session id the number zero.
-    expect(attention).toMatch(/async function safeId\(/);
-    expect(attention).toMatch(/await safeId\("timeChangeSession"/);
+  test("the legacy single id still comes from the same rows", () => {
+    // Kept for any caller still reading it — but derived, not queried a second time.
+    expect(attention).toMatch(/timeChangeSessionId: changeRows\[0\]\?\.session_id \|\| null,/);
   });
 
   test("the row writes the focus and announces it", () => {
-    expect(card).toMatch(/window\.__pendingFocus = `\$\{r\.focusPrefix\}:\$\{id\}`/);
+    expect(card).toMatch(/window\.__pendingFocus = item\.focus/);
     expect(card).toMatch(/dispatchEvent\(new Event\('inplace:focus'\)\)/);
   });
 
