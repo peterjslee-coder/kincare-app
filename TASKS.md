@@ -68,10 +68,11 @@
       measurement sees a keyboard at all.
       Keyboard-DOWN path re-measured on prod after deploy: container top 0 / height 702 of a
       757 viewport, header at 0–69, both 44px buttons present, composer bottom 702 = nav top.
-      ⚠️ **The keyboard-UP path still needs Pete's iPhone.** Shipped with an **admin-only,
-      temporary** one-line readout above the composer (`iH · vv h@offset · hidden · scrollY ·
-      kb`) so that if it is still wrong, one screenshot says which mechanism did it instead of
-      another round of inference. **Remove that line once confirmed.**
+      ✅ **Confirmed by Pete on his iPhone, 8/24: "works really well."** The temporary
+      admin-only readout (`iH · vv h@offset · hidden · scrollY · kb`) that shipped with .132 to
+      make the next report carry numbers instead of a screenshot was **removed in v1.105.133**;
+      the measurement it printed still drives the detection, and `tests/callRinging.test.js`
+      now pins its absence — a debug surface nobody removes becomes part of the product.
 
 - [x] **⛔ "Welcome to InPlace!" popup cannot be dismissed.** (8a05e737, Tyler) *"does not go
       away at all or when navigating to new screens."* ✅ **Fixed v1.105.101.** Not a modal —

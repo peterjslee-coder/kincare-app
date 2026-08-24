@@ -115,7 +115,6 @@ const Messages = window.Messages = () => {
   // — innerHeight, vv.height and vv.offsetTop all agree with each other and all are wrong.
   // A focused composer is a keyboard, in every one of them.
   const [inputFocused, setInputFocused] = useState(false);
-  const [kbDebug, setKbDebug] = useState(null); // admin-only readout, see below
   // ...but only where focusing an input actually SUMMONS a keyboard. A narrow desktop window
   // is `isMobile` by width and has no keyboard, and treating a click in the composer as one
   // there would hand the panel the nav's 55px and put the composer underneath it.
@@ -132,10 +131,14 @@ const Messages = window.Messages = () => {
       const height = Math.round(vv.height);
       // How much of the layout viewport something is covering. A keyboard is >120px; a URL
       // bar collapsing is not.
+      //
+      // v1.105.133 — .132 also rendered these numbers in a one-line readout above the
+      // composer, admin-only, so that if the header was STILL wrong the next report would
+      // carry the numbers instead of another inference from a screenshot. Pete confirmed the
+      // fix, so it is out again. It did its job by not being needed.
       const hidden = Math.round(window.innerHeight - height - top);
       setVvBox({ top, height });
       setVvShrunk(hidden > 120 || top > 0);
-      setKbDebug({ iH: window.innerHeight, vvH: height, vvT: top, hidden, sY: Math.round(window.scrollY || 0) });
     };
     apply();
     vv.addEventListener('resize', apply);
@@ -2331,19 +2334,6 @@ const Messages = window.Messages = () => {
             on screen at the moment someone reads an answer, not just before they ask. */}
         {isIPAiThread && typeof IPAiDisclaimer !== 'undefined' && (
           <div style={{ padding: '0 12px 6px' }}><IPAiDisclaimer /></div>
-        )}
-        {/* ─── v1.105.132, admin only, temporary ───
-            iOS has three ways of making room for a keyboard and they report completely
-            different numbers. Rather than guess again from a screenshot, the numbers ARE the
-            screenshot: if the header is still wrong, this line says which mechanism did it.
-            Remove once confirmed. */}
-        {currentUser?.is_admin && kbDebug && (
-          <div style={{
-            fontSize: 10, fontFamily: 'ui-monospace, monospace', color: 'var(--text-tertiary)',
-            background: 'var(--bg-primary)', padding: '2px 8px', textAlign: 'center', flexShrink: 0,
-          }}>
-            iH {kbDebug.iH} · vv {kbDebug.vvH}@{kbDebug.vvT} · hid {kbDebug.hidden} · sy {kbDebug.sY} · kb {kbOpen ? 'up' : 'down'}{inputFocused ? '·focus' : ''}
-          </div>
         )}
         <div className="msg-input-area">
           {/* Hidden file input for photo uploads */}

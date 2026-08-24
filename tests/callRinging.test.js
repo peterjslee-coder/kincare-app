@@ -189,12 +189,18 @@ describe("the keyboard cannot push the header off screen", () => {
     expect(msgs).toMatch(/: \{ bottom: \(safeBot \+ 55\) \+ 'px' \}\)/);
   });
 
-  test("the admin-only readout reports the numbers, not a guess", () => {
-    // Three mechanisms, three different sets of numbers. If it is still wrong, this says why
-    // in one screenshot instead of another round of inference.
-    expect(msgs).toMatch(/currentUser\?\.is_admin && kbDebug/);
-    for (const k of ["iH", "vvH", "vvT", "hidden", "sY"]) {
-      expect(msgs).toMatch(new RegExp(`kbDebug\\.${k}`));
-    }
+  test("the temporary admin readout is gone once it was confirmed", () => {
+    // v1.105.132 shipped a one-line metrics readout above the composer so that if the header
+    // was still wrong, the next report would carry numbers rather than another inference from
+    // a screenshot. Pete confirmed the fix ("works really well"), so it came out in .133.
+    // Pinned here because a debug surface that nobody removes becomes part of the product.
+    expect(msgs).not.toMatch(/kbDebug/);
+    expect(msgs).not.toMatch(/currentUser\?\.is_admin && /);
   });
+
+  test("the measurement it printed is still the one that decides", () => {
+    // Removing the readout must not remove the reading.
+    expect(msgs).toMatch(/const hidden = Math\.round\(window\.innerHeight - height - top\);/);
+  });
+
 });
