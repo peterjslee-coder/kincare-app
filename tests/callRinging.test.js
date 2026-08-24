@@ -210,10 +210,37 @@ describe("the keyboard cannot push the header off screen", () => {
     expect(msgs).toMatch(/setVvShrunk\(hidden > 120 \|\| top > 0 \|\| scrolled > 120\);/);
   });
 
-  test("the admin readout is back, and reports the derived top too", () => {
-    // .133 removed it as soon as the fix was confirmed and the next report was unreadable.
-    // It stays until the keyboard-up path is MEASURED, not until it looks right once.
-    expect(msgs).toMatch(/currentUser\?\.is_admin && kbDebug/);
+  test("the body is no longer pinned — the cause, not the symptom", () => {
+    // v1.105.135. Pete's readout, keyboard up, on a body that is position:fixed AND
+    // overflow:hidden — i.e. unscrollable:
+    //     iH 499 · vv 499@413 · hid 0 · sy 413 · top 0 · kb up·focus
+    // window.scrollY is 413. That is iOS scrolling the page to the focused input anyway, and
+    // on a FIXED body it drags the page up while leaving fixed elements anchored where the
+    // page used to be — so the container rendered 413px above the screen and only its bottom
+    // edge was visible: the composer at the top, conversation below it.
+    //
+    // Three versions tried to compute that displacement back out. It cannot be done: the same
+    // phone reported it two incompatible ways within a minute (iH 568 · vv 499@344, then
+    // iH 499 · vv 499@413), because whether the LAYOUT viewport also shrinks is up to the
+    // WebView. Removing position:fixed removes the thing being displaced.
+    const lock = msgs.slice(msgs.indexOf("data-messages-lock"), msgs.indexOf("data-messages-lock") + 600);
+    expect(lock).not.toMatch(/position:fixed/);
+    expect(lock).toMatch(/overflow:hidden!important/);
+    expect(lock).toMatch(/height:100%!important/);
+    // ...and the rubber-banding that position:fixed was brought in for is handled properly.
+    expect(lock).toMatch(/overscroll-behavior:none!important/);
+  });
+
+  test("the readout is OFF unless it is asked for", () => {
+    // Pete: "note the coordinate display, which obviously can't be there in production."
+    // Admin-only is not off — it was on for him, on every device, all the time.
+    expect(msgs).not.toMatch(/currentUser\?\.is_admin && kbDebug/);
+    expect(msgs).toMatch(/\{kbDebugOn && kbDebug && \(/);
+    expect(msgs).toMatch(/localStorage\.getItem\('kbdebug'\) === '1'/);
+    expect(msgs).toMatch(/if \(q === '0'\) localStorage\.removeItem\('kbdebug'\);/);
+  });
+
+  test("but the numbers are still there when asked for", () => {
     for (const k of ["iH", "vvH", "vvT", "hidden", "sY", "top"]) {
       expect(msgs).toMatch(new RegExp(`kbDebug\\.${k}`));
     }

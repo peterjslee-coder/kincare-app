@@ -70,12 +70,34 @@ const Messages = window.Messages = () => {
 
   const isMobile = window.innerWidth <= 768;
 
-  // Lock body/html scroll on mobile to prevent iOS elastic overscroll
+  // ─── Stop iOS rubber-banding, without pinning the body (v1.105.135) ───
+  //
+  // This used to add `position: fixed` to html and body. That one declaration is the root of
+  // three versions of keyboard bugs, and it took Pete's readout on a real phone to see it:
+  //
+  //     iH 499 · vv 499@413 · hid 0 · sy 413 · top 0 · kb up·focus
+  //
+  // `window.scrollY` is 413 on a body that is `position: fixed` and `overflow: hidden` —
+  // which should be unscrollable. That is iOS's own scroll-the-page-to-the-focused-input,
+  // and on a fixed body it drags the whole page up while leaving fixed elements anchored to
+  // where the page used to be. So the container rendered 413px above the screen and all you
+  // could see was its bottom edge: the composer, at the top, with the conversation below it.
+  //
+  // Every attempt so far tried to compute that displacement back out. It cannot be done
+  // consistently — the same phone reported it two incompatible ways within a minute
+  // (iH 568 · vv 499@344 vs iH 499 · vv 499@413), because whether the LAYOUT viewport also
+  // shrinks depends on the WebView. Remove the cause instead.
+  //
+  // Without `position: fixed` there is nothing for iOS to displace: the body cannot scroll
+  // (overflow hidden, height 100%), so the keyboard shrinks the viewport instead — which is
+  // exactly the state Pete's second screenshot shows, and the one he said he would be happy
+  // with. `overscroll-behavior: none` does the rubber-band job that `position: fixed` was
+  // brought in for; it has been supported since iOS 16.
   useEffect(() => {
     if (!isMobile) return;
     const style = document.createElement('style');
     style.setAttribute('data-messages-lock', '1');
-    style.textContent = 'html,body{overflow:hidden!important;height:100%!important;position:fixed!important;width:100%!important;} .msg-messages-area{overscroll-behavior:contain;-webkit-overflow-scrolling:touch;}';
+    style.textContent = 'html,body{overflow:hidden!important;height:100%!important;overscroll-behavior:none!important;} .msg-messages-area{overscroll-behavior:contain;-webkit-overflow-scrolling:touch;}';
     document.head.appendChild(style);
     return () => { if (style.parentNode) style.parentNode.removeChild(style); };
   }, [isMobile]);
@@ -120,6 +142,15 @@ const Messages = window.Messages = () => {
   // keyboard-up path is verified in a simulator I can measure directly, not until it looks
   // right once.
   const [kbDebug, setKbDebug] = useState(null);
+  // Opt-in, remembered: ?kbdebug=1 turns the readout on for this device, ?kbdebug=0 off.
+  const kbDebugOn = React.useMemo(() => {
+    try {
+      const q = new URLSearchParams(window.location.search).get('kbdebug');
+      if (q === '1') localStorage.setItem('kbdebug', '1');
+      if (q === '0') localStorage.removeItem('kbdebug');
+      return localStorage.getItem('kbdebug') === '1';
+    } catch { return false; }
+  }, []);
   // ...but only where focusing an input actually SUMMONS a keyboard. A narrow desktop window
   // is `isMobile` by width and has no keyboard, and treating a click in the composer as one
   // there would hand the panel the nav's 55px and put the composer underneath it.
@@ -2366,13 +2397,17 @@ const Messages = window.Messages = () => {
         {isIPAiThread && typeof IPAiDisclaimer !== 'undefined' && (
           <div style={{ padding: '0 12px 6px' }}><IPAiDisclaimer /></div>
         )}
-        {/* ─── v1.105.134, admin only, temporary — BACK, and staying until measured ───
+        {/* ─── v1.105.135 — off unless you ask for it ───
+            Pete: "note the coordinate display, which obviously can't be there in production."
+            Correct: admin-only is not off, it is on for him on every device. It now needs
+            ?kbdebug=1 once (it remembers, and ?kbdebug=0 forgets), so it exists when we are
+            hunting a keyboard and never otherwise.
             .132 shipped this, .133 removed it the moment the fix "worked really well", and the
             very next report was a new keyboard bug I could not have diagnosed without it. One
             screenshot of this line carried iH 568 · vv 499@344 · sy 344 and named the cause
             outright. It comes out when the keyboard-up path has been measured in a simulator,
             not when it looks right once. */}
-        {currentUser?.is_admin && kbDebug && (
+        {kbDebugOn && kbDebug && (
           <div style={{
             fontSize: 10, fontFamily: 'ui-monospace, monospace', color: 'var(--text-tertiary)',
             background: 'var(--bg-primary)', padding: '2px 8px', textAlign: 'center', flexShrink: 0,
