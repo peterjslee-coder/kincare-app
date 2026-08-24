@@ -68,11 +68,34 @@
       measurement sees a keyboard at all.
       Keyboard-DOWN path re-measured on prod after deploy: container top 0 / height 702 of a
       757 viewport, header at 0–69, both 44px buttons present, composer bottom 702 = nav top.
-      ✅ **Confirmed by Pete on his iPhone, 8/24: "works really well."** The temporary
-      admin-only readout (`iH · vv h@offset · hidden · scrollY · kb`) that shipped with .132 to
-      make the next report carry numbers instead of a screenshot was **removed in v1.105.133**;
-      the measurement it printed still drives the detection, and `tests/callRinging.test.js`
-      now pins its absence — a debug surface nobody removes becomes part of the product.
+      **.132 was confirmed and then immediately wasn't.** Pete on .132: "works really well" —
+      so .133 removed the temporary readout. The very next report was a NEW keyboard bug
+      ("two scroll areas… you can't see what you type until you scroll this little tiny
+      window") that was unreadable without it, so .134 put it back. **Do not remove a
+      diagnostic the first time a fix looks right.**
+      **The whole chase, and its one lesson.** .131/.132/.134 each tried to COMPUTE the
+      keyboard displacement back out of `visualViewport`, and each was curve-fitting to the
+      last screenshot — because the same iPhone reported it two incompatible ways within a
+      minute: `iH 568 · vv 499@344 · sy 344` (layout viewport not shrunk) and
+      `iH 499 · vv 499@413 · sy 413` (shrunk). The correct fixed-position `top` is 0 in one and
+      413 in the other, with no signal that generalises.
+      **v1.105.135 found the cause instead:** `Messages.js` was injecting
+      `html,body{position:fixed}` on mobile to stop elastic overscroll. **iOS scrolls the page
+      to the focused input even on an unscrollable body, and on a FIXED body that drags the
+      page up while leaving `position:fixed` children anchored where the page used to be** —
+      so the container rendered 413px above the screen and only its bottom edge (the composer)
+      was visible, at the top, with the conversation under it. The lock is now
+      `overflow:hidden; height:100%; overscroll-behavior:none`, which does the rubber-band job
+      properly (iOS 16+) and leaves nothing to displace.
+      **v1.105.136 finished it:** with the body no longer pinned the page CAN be put back, so
+      `window.scrollTo(0,0)` — dead code in .131 for exactly that reason — is live again, in a
+      ~20-frame loop, because iOS does its scroll while the keyboard is still animating and a
+      single reset fired first is undone a frame later.
+      ✅ **CONFIRMED BY PETE ON HIS IPHONE, v1.105.136: "that seems to have worked."**
+      The readout survives as an **opt-in switch in Account → Keyboard diagnostics**
+      (admin-only, off by default, prints the app version too). Pete on being told to load
+      `?kbdebug=1`: *"i don't know what you mean by that"* — jargon, and he opens the app from
+      his home screen where there is no address bar to type it into.
 
 - [x] **⛔ "Welcome to InPlace!" popup cannot be dismissed.** (8a05e737, Tyler) *"does not go
       away at all or when navigating to new screens."* ✅ **Fixed v1.105.101.** Not a modal —
