@@ -36,6 +36,38 @@ function getPool() {
       // on a transaction that is open and IDLE, which no healthy path here ever is.
       idle_in_transaction_session_timeout: 30000,
     });
+
+    // ─── v1.105.127 — the whole API used to die here ───
+    //
+    // node-postgres emits 'error' on a client sitting IDLE in the pool when the
+    // connection drops underneath it — a Postgres restart, a Railway network blip, an
+    // idle reaper on the server side. EventEmitter's contract is that an 'error' event
+    // with NO listener is re-thrown, and there is no process-level uncaughtException
+    // handler in this codebase to catch it. So the process exits.
+    //
+    // This is not theoretical. Sentry INPLACE-C, 2026-08-22T17:43:51Z, on release
+    // 17e3b016 (v1.105.126): "Connection terminated unexpectedly", from
+    // pg/lib/client.js, tagged mechanism=auto.node.onuncaughtexception, handled=no,
+    // level=fatal. The app had booted at 16:47:57Z. It ran fifty-six minutes and then
+    // the API was gone. Railway restarted it, which is the only reason nobody noticed —
+    // but every request in flight died with it.
+    //
+    // A dropped idle client is NORMAL and pg recovers from it by itself: the client is
+    // discarded and the next caller gets a fresh one. The only thing that made it fatal
+    // was that nobody was listening. So listen, report, and carry on. Do not rethrow,
+    // do not exit, and do not try to "reconnect" — the pool already does that.
+    pool.on("error", (err, client) => {
+      console.error("[db] idle client error (pool recovers, process must not die):", err && err.message);
+      try {
+        require("../utils/sentry").captureException(err, {
+          where: "db: idle pool client error",
+          // Distinguishes this from the same message arriving as a rejected query,
+          // which routes already catch. This one had no owner.
+          fatal_without_handler: true,
+          hadClient: !!client,
+        });
+      } catch { /* reporting must never be the thing that throws */ }
+    });
   }
   return pool;
 }

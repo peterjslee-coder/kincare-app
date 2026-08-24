@@ -5847,11 +5847,19 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
 
       {/* Document Preview Modal */}
       {docPreview && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+        /* v1.105.127 — Pete, Aug 18: "on the screen, I can't scroll the page down, but I can
+           scroll the picture down." Literally true. The ONLY element with overflow:auto in this
+           modal wrapped the image; the AI Analysis block above it — status, extracted fields,
+           concerns, face comparison, admin notes — sat outside any scroll container inside a
+           panel capped at 85vh. Tall analysis pushed itself out of reach.
+           Now the PANEL scrolls and the header is sticky, so the ✕ is always on screen. The
+           overlay carries the safe-area insets so a full-height panel never runs under the
+           notch or the home indicator. */
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', paddingTop: 'var(--sat, 0px)', paddingBottom: 'var(--sab, 0px)', boxSizing: 'border-box' }}
           onClick={() => closeDocPreview()}>
-          <div style={{ background: 'var(--bg-surface)', borderRadius: '12px', padding: '24px', maxWidth: '800px', width: '90%', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}
+          <div style={{ background: 'var(--bg-surface)', borderRadius: '12px', padding: '24px', maxWidth: '800px', width: '90%', maxHeight: '85vh', display: 'flex', flexDirection: 'column', overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}
             onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', position: 'sticky', top: '-24px', background: 'var(--bg-surface)', paddingTop: '4px', zIndex: 1, flexShrink: 0 }}>
               <h3 style={{ margin: 0, fontSize: '16px' }}>{'\u{1F4C4}'} {docPreview.fileName}</h3>
               <button onClick={() => closeDocPreview()} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: 'var(--text-muted)' }}>{'\u2715'}</button>
             </div>
@@ -5975,7 +5983,10 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                 )}
               </div>
             )}
-            <div style={{ flex: 1, overflow: 'auto', minHeight: '300px' }}>
+            {/* v1.105.127 — was `flex: 1, overflow: 'auto', minHeight: '300px'`. That made this
+                the modal's only scrollable region AND reserved 300px for it, squeezing the
+                analysis above out of the panel. The panel scrolls now; this is just content. */}
+            <div style={{ flexShrink: 0 }}>
               {docPreview.mimeType === 'application/pdf' ? (
                 /* v1.105.67 — was a bare iframe; WebKit will not render a PDF in a subframe,
                    so on an iPhone this was a white rectangle. Shared with the Documents
@@ -6855,14 +6866,24 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
           <div onClick={() => { setUserDrawer(null); setUserDrawerLoading(false); }} style={{
             position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 300,
           }} />
+          {/* v1.105.127 — Pete, Aug 18: "I can't scroll down to see the danger zone. Also the X
+              at the top is often obscured and unreachable behind the battery."
+              Two causes, one element. `100vh` on iOS is the LARGE viewport — it ignores the
+              browser chrome — so the bottom of this drawer sat below the visible area and the
+              danger zone, which is the last thing in it, could not be scrolled to. And starting
+              at top:0 with no safe-area inset put the sticky header under the status bar.
+              100dvh is the height actually on screen; --sat/--sab are the app's existing
+              safe-area variables (styles.css:9-10, polyfilled in index.html). */}
           <div style={{
-            position: 'fixed', top: 0, right: 0, width: window.innerWidth <= 768 ? '100%' : 480, maxWidth: '100%', height: '100vh',
+            position: 'fixed', top: 0, right: 0, width: window.innerWidth <= 768 ? '100%' : 480, maxWidth: '100%', height: '100dvh',
             background: 'var(--bg-card)', boxShadow: '-4px 0 24px rgba(0,0,0,0.15)', zIndex: 301,
             overflowY: 'auto', WebkitOverflowScrolling: 'touch',
+            paddingBottom: 'var(--sab, 0px)', boxSizing: 'border-box',
           }}>
             {/* Drawer header */}
             <div style={{
-              padding: '18px 20px', borderBottom: '1px solid var(--border-color)',
+              padding: '18px 20px', paddingTop: 'calc(18px + var(--sat, 0px))',
+              borderBottom: '1px solid var(--border-color)',
               display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
               position: 'sticky', top: 0, background: 'var(--bg-card)', zIndex: 1,
             }}>

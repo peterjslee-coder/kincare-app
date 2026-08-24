@@ -345,6 +345,47 @@
 
 ### P1
 
+<!-- ── Aug 24, 2026 ── -->
+
+- [x] **🔴 An idle Postgres client could kill the whole API — and did.** ✅ **Fixed v1.105.127.**
+      `new Pool(...)` in `src/models/database.js` had no `.on('error')` listener and there is no
+      process-level `uncaughtException` handler anywhere in the codebase. node-postgres emits
+      `'error'` on a client sitting IDLE when the connection drops beneath it, and EventEmitter
+      re-throws an `'error'` with no listener — so the process exits.
+      **Not theoretical: Sentry INPLACE-C, 2026-08-22T17:43:51Z, release `17e3b016` (v1.105.126),
+      `mechanism: auto.node.onuncaughtexception`, `handled: no`, `level: fatal`.** The app had
+      booted at 16:47:57Z. It ran 56 minutes and the API was gone; Railway restarted it, which is
+      the only reason nobody noticed, but every in-flight request died with it. A dropped idle
+      client is normal and pg recovers on its own — the only thing that made it fatal was that
+      nobody was listening. Pinned by `tests/poolErrorHandler.test.js` (8).
+      **Still open:** there is no `uncaughtException` / `unhandledRejection` reporter at all, so
+      the next unhandled throw from anywhere else is equally silent. **P1 — decide it.**
+
+- [x] **Doc preview: "I can't scroll the page down, but I can scroll the picture down."**
+      ✅ **Fixed v1.105.127.** *(Feedback `26c70f5a` — Pete, Aug 18.)* Literally true. The only
+      element with `overflow: auto` in that modal wrapped the image, and it also carried
+      `minHeight: 300px`, so the AI Analysis block above it — status, extracted fields, concerns,
+      face comparison, admin notes — sat outside any scroll container inside a panel capped at
+      `85vh`. Tall analysis pushed itself out of reach. The panel scrolls now, the header is
+      sticky so the ✕ stays on screen, and the overlay carries the safe-area insets.
+
+- [x] **Admin drawer: danger zone unreachable, ✕ behind the battery.** ✅ **Fixed v1.105.127.**
+      *(Feedback `0cddfaab` — Pete, Aug 18.)* Two symptoms, one element. The User Detail Drawer
+      used `height: 100vh`, and on iOS `100vh` is the LARGE viewport — it ignores browser chrome —
+      so the bottom of the drawer sat below the visible area and the danger zone, which is the
+      last thing in it, could not be scrolled to. And `top: 0` with no safe-area inset put the
+      sticky header under the status bar. Now `100dvh` plus the app's existing `--sat`/`--sab`
+      variables (styles.css:9-10, polyfilled in index.html).
+      ⚠️ **`AdminPanel.js` has 14 fixed overlays and had ZERO uses of `safe-area-inset` before
+      this.** Two are fixed; the other twelve are unaudited. **P1 — sweep them.**
+
+- [x] **The 0%/97% confidence contradiction.** ✅ **Already fixed in v1.105.73** — verified in the
+      code on Aug 24, not taken on trust. The selfie was never scored on the axis being displayed;
+      `ai_confidence DEFAULT 0` was rendering as a verdict. `AdminPanel.js:4923` now shows the
+      face comparison and links it to the ID. *(Feedback `26c70f5a`, first half.)*
+      ⚠️ A cloud session on Aug 24 re-raised this as the serious open item. It was six days closed.
+
+
 <!-- ── Triaged Aug 22, 2026 (feedback loop, Julia's first paid visit) ── -->
 
 - [x] **28 notifications for one 90-minute visit.** ✅ **Fixed v1.105.126.** *(Feedback `9860f5fe`,
