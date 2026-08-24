@@ -123,20 +123,25 @@ describe("the call buttons are reachable, themed, and hard to lose", () => {
   });
 });
 
-// ─── v1.105.131 — the keyboard was taking the header with it ───
+// ─── v1.105.131 → .132 — the keyboard was taking the header with it ───
 //
 // Pete, 8/24: "they show, but only at the very top of the chat...gotta scroll all the way up
-// to find them. open the keyboard?...they gone to the top."
+// to find them. open the keyboard?...they gone to the top." Then, after .131: "still do not
+// work… if I minimize the keyboard, the button is returned to the top of the screen where I
+// would expect them to be all the time." So the buttons and the header are both fine; the
+// keyboard moves them, and .131 did not stop it.
 //
-// MEASURED ON PRODUCTION FIRST, at 500x701, because the obvious suspect was wrong: the panel
-// is bounded (646px = viewport - 55px nav), the header is sticky at top 0, and
-// .msg-messages-area is the only scroller on the page (508 visible of 779). Nothing about the
-// layout is broken. What a desktop browser does not have is a keyboard.
+// MEASURED ON PRODUCTION at 500x701 before either attempt: the panel is bounded (646px), the
+// header is sticky at top 0, and .msg-messages-area is the only scroller (508 of 779). The
+// layout is right. What a desktop browser does not have is a keyboard.
 //
-// On iOS the keyboard changes neither innerHeight nor 100dvh. It shrinks the VISUAL viewport
-// and scrolls the LAYOUT viewport up to reveal the focused input, so a correctly-sized panel
-// keeps its header at a top you can no longer see — and nothing puts the layout viewport back,
-// which is the "scroll all the way up" half.
+// .131 got two things wrong, and both are worth keeping as tests:
+//   1. It called window.scrollTo(0, 0) — but this component injects html,body{position:fixed}
+//      on mobile, so the window cannot scroll and scrollY is always 0. Dead code that looked
+//      like a fix.
+//   2. It resized .msg-panel. The panel is not what is anchored: on mobile ALL of Messages
+//      renders inside a position:fixed container pinned top:0 → bottom:safeBottom+55, laid
+//      out against the LAYOUT viewport, while the keyboard changes the VISUAL one.
 describe("the keyboard cannot push the header off screen", () => {
   const fs = require("fs");
   const path = require("path");
@@ -144,30 +149,52 @@ describe("the keyboard cannot push the header off screen", () => {
   const msgs = read("public", "js", "components", "Messages.js");
   const css = read("public", "css", "styles.css");
 
-  test("the panel is sized from visualViewport while the keyboard is up", () => {
-    expect(msgs).toMatch(/window\.visualViewport/);
-    expect(msgs).toMatch(/root\.style\.setProperty\('--msg-vvh'/);
-    expect(css).toMatch(/body\.msg-keyboard-open \.msg-panel \{\s*height: var\(--msg-vvh/);
+  test("the FIXED CONTAINER follows the visible region — not the panel", () => {
+    expect(msgs).toMatch(/top: vvBox \? vvBox\.top : 0,/);
+    expect(msgs).toMatch(/height: \(kbOpen \? vvBox\.height : Math\.max\(0, vvBox\.height - safeBot - 55\)\) \+ 'px', bottom: 'auto'/);
   });
 
-  test("the layout viewport is put back when iOS moves it", () => {
-    expect(msgs).toMatch(/if \(open && window\.scrollY !== 0\) window\.scrollTo\(0, 0\);/);
+  test("the .131 attempt is gone, both halves", () => {
+    // A scrollTo on a position:fixed body, and a height on the wrong element. Comment lines
+    // are stripped first — the post-mortem above deliberately quotes the code it removed.
+    const code = msgs.split("\n").filter((l) => !l.trim().startsWith("//")).join("\n");
+    expect(code).not.toMatch(/window\.scrollTo\(0, 0\)/);
+    expect(css).not.toMatch(/body\.msg-keyboard-open/);
+    expect(msgs).not.toMatch(/msg-keyboard-open/);
+  });
+
+  test("the nav's 55px is only reserved while the keyboard is DOWN", () => {
+    // While typing the nav is behind the keyboard; holding its space is what pushed the
+    // composer up into the conversation in his screenshot.
+    const box = msgs.slice(msgs.indexOf("const kbOpen ="), msgs.indexOf("const kbOpen =") + 200);
+    expect(box).toMatch(/vvShrunk \|\| \(inputFocused && hasSoftKeyboard\)/);
+  });
+
+  test("a WebView that shrinks the LAYOUT viewport is still detected", () => {
+    // In that mode innerHeight, vv.height and vv.offsetTop all agree with each other and all
+    // are wrong, so no measurement sees a keyboard. A focused composer is one in every mode.
+    expect(msgs).toMatch(/onFocus=\{\(\) => setInputFocused\(true\)\}/);
+    expect(msgs).toMatch(/onBlur=\{\(\) => setInputFocused\(false\)\}/);
+    // ...and only where focusing an input summons one. A 500px-wide desktop window is
+    // `isMobile` by width and has no keyboard at all.
+    expect(msgs).toMatch(/window\.matchMedia\('\(pointer: coarse\)'\)\.matches/);
   });
 
   test("a URL bar collapsing is not a keyboard", () => {
-    // Without a threshold this would fire on every Safari chrome animation and fight the user.
-    expect(msgs).toMatch(/const open = hidden > 120;/);
+    expect(msgs).toMatch(/setVvShrunk\(hidden > 120 \|\| top > 0\);/);
   });
 
   test("no visualViewport, no change in behaviour", () => {
-    // Every other browser and the older WebViews keep exactly what they have today.
-    expect(msgs).toMatch(/if \(!vv\) return;/);
-    expect(css).toMatch(/height: var\(--msg-vvh, calc\(100dvh - var\(--sab\) - 55px\)\)/);
+    expect(msgs).toMatch(/if \(!vv\) return; \/\/ no API, no change in behaviour/);
+    expect(msgs).toMatch(/: \{ bottom: \(safeBot \+ 55\) \+ 'px' \}\)/);
   });
 
-  test("it cleans up after itself", () => {
-    // A body class left behind would size the panel to a keyboard that is no longer there.
-    expect(msgs).toMatch(/document\.body\.classList\.remove\('msg-keyboard-open'\)/);
-    expect(msgs).toMatch(/root\.style\.removeProperty\('--msg-vvh'\)/);
+  test("the admin-only readout reports the numbers, not a guess", () => {
+    // Three mechanisms, three different sets of numbers. If it is still wrong, this says why
+    // in one screenshot instead of another round of inference.
+    expect(msgs).toMatch(/currentUser\?\.is_admin && kbDebug/);
+    for (const k of ["iH", "vvH", "vvT", "hidden", "sY"]) {
+      expect(msgs).toMatch(new RegExp(`kbDebug\\.${k}`));
+    }
   });
 });

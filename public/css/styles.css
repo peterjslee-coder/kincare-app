@@ -2341,15 +2341,11 @@
         overflow: hidden;
       }
 
-      /* v1.105.131 — while the keyboard is up, the only height that means anything is the
-         one visualViewport reports. 100dvh does not shrink for a keyboard on iOS, so the
-         panel stayed 646px tall with its header above the visible area, and the bottom nav
-         we subtract 55px for is behind the keyboard anyway. Messages.js sets --msg-vvh and
-         toggles this class; with no visualViewport API neither ever appears and this rule
-         never applies. */
-      body.msg-keyboard-open .msg-panel {
-        height: var(--msg-vvh, calc(100dvh - var(--sab) - 55px));
-      }
+      /* v1.105.131 tried to fix the keyboard here and had the wrong element: .msg-panel is not
+         what is anchored. On mobile the whole of Messages lives in a position:fixed container
+         (Messages.js, `if (isMobile)`) pinned to the LAYOUT viewport, and the keyboard changes
+         the VISUAL one. The container follows visualViewport itself now — v1.105.132 — so the
+         panel simply fills whatever box it is given, as it always did. */
 
       .card {
         padding: 16px;

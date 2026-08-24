@@ -80,39 +80,62 @@ const Messages = window.Messages = () => {
     return () => { if (style.parentNode) style.parentNode.removeChild(style); };
   }, [isMobile]);
 
-  // ─── The keyboard takes the header with it (v1.105.131) ───
+  // ─── The keyboard takes the header off the top of the screen (v1.105.131 → .132) ───
   //
-  // Pete, 8/24: "they show, but only at the very top of the chat...gotta scroll all the way
-  // up to find them. open the keyboard?...they gone to the top."
+  // Pete, 8/24: "they show, but only at the very top of the chat...gotta scroll all the way up
+  // to find them. open the keyboard?...they gone to the top." Then, after .131 shipped: "still
+  // do not work… if I minimize the keyboard, the button is returned to the top of the screen
+  // where I would expect them to be all the time."
   //
-  // Measured on production at 500x701 first, because the obvious suspect was wrong: the panel
-  // IS bounded (646px), the header IS sticky at top 0, and .msg-messages-area is the only
-  // scroller on the page (508 visible / 779 of content). Nothing is broken until a keyboard
-  // exists — which a desktop browser does not have.
+  // So the buttons are fine and the header is fine. The KEYBOARD moves them, and .131 did not
+  // stop it. Two things were wrong with that attempt:
   //
-  // On iOS the keyboard does not change innerHeight and does not change 100dvh. It shrinks the
-  // VISUAL viewport and then scrolls the LAYOUT viewport up to reveal the focused input. The
-  // panel is still 646px tall and the header is still at its top; that top is simply above the
-  // part of the screen you can see. Which is exactly what he described — including having to
-  // scroll back up afterwards, because nothing puts the layout viewport back.
+  //   1. It called window.scrollTo(0, 0). This component injects
+  //      `html,body{position:fixed}` on mobile, so the window can never scroll and scrollY is
+  //      always 0. That line could not have done anything.
+  //   2. It resized `.msg-panel`. The panel is not what is anchored — on mobile the whole of
+  //      Messages renders inside a `position: fixed` container pinned `top: 0` to
+  //      `bottom: safeBottom + 55`. That container is laid out against the LAYOUT viewport,
+  //      and the keyboard changes the VISUAL one.
   //
-  // So: track visualViewport, give the panel the height that is actually visible while the
-  // keyboard is up, and put the layout viewport back to 0 when iOS moves it. Guarded on the
-  // API existing — no visualViewport, no change in behaviour.
+  // So track the visual viewport and give that container exactly the box the user can see.
+  // Deliberately mechanism-agnostic: iOS variously shrinks the layout viewport, offsets the
+  // visual viewport, or does both depending on the WebView and the Capacitor keyboard mode,
+  // and this reads the same correct answer out of all of them —
+  //   keyboard down → offsetTop 0, vv.height = innerHeight → exactly today's box.
+  //   keyboard up   → whatever region is genuinely visible.
+  //
+  // The nav's 55px is only subtracted when the keyboard is DOWN; while typing, the nav is
+  // behind the keyboard and reserving space for it is what pushes the composer up into the
+  // page (the second thing in his screenshot).
+  const [vvBox, setVvBox] = useState(null);     // { top, height } of the visible region
+  const [vvShrunk, setVvShrunk] = useState(false);
+  // The composer's own focus. Some WebViews shrink the LAYOUT viewport for the keyboard
+  // instead of offsetting the visual one, and then no measurement above sees anything at all
+  // — innerHeight, vv.height and vv.offsetTop all agree with each other and all are wrong.
+  // A focused composer is a keyboard, in every one of them.
+  const [inputFocused, setInputFocused] = useState(false);
+  const [kbDebug, setKbDebug] = useState(null); // admin-only readout, see below
+  // ...but only where focusing an input actually SUMMONS a keyboard. A narrow desktop window
+  // is `isMobile` by width and has no keyboard, and treating a click in the composer as one
+  // there would hand the panel the nav's 55px and put the composer underneath it.
+  const hasSoftKeyboard = typeof window.matchMedia === 'function'
+    && window.matchMedia('(pointer: coarse)').matches;
+  const kbOpen = vvShrunk || (inputFocused && hasSoftKeyboard);
+
   useEffect(() => {
     if (!isMobile) return;
     const vv = window.visualViewport;
-    if (!vv) return;
-    const root = document.documentElement;
+    if (!vv) return; // no API, no change in behaviour
     const apply = () => {
-      // How much of the layout viewport the keyboard (and any offset iOS applied) is eating.
-      const hidden = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
-      const open = hidden > 120; // a keyboard, not a URL bar collapsing
-      root.style.setProperty('--msg-vvh', Math.round(vv.height) + 'px');
-      document.body.classList.toggle('msg-keyboard-open', open);
-      // iOS scrolled the layout viewport to reveal the input. The panel now fits the visible
-      // area on its own, so that scroll is pure loss: it is what puts the header off screen.
-      if (open && window.scrollY !== 0) window.scrollTo(0, 0);
+      const top = Math.round(vv.offsetTop || 0);
+      const height = Math.round(vv.height);
+      // How much of the layout viewport something is covering. A keyboard is >120px; a URL
+      // bar collapsing is not.
+      const hidden = Math.round(window.innerHeight - height - top);
+      setVvBox({ top, height });
+      setVvShrunk(hidden > 120 || top > 0);
+      setKbDebug({ iH: window.innerHeight, vvH: height, vvT: top, hidden, sY: Math.round(window.scrollY || 0) });
     };
     apply();
     vv.addEventListener('resize', apply);
@@ -120,8 +143,6 @@ const Messages = window.Messages = () => {
     return () => {
       vv.removeEventListener('resize', apply);
       vv.removeEventListener('scroll', apply);
-      document.body.classList.remove('msg-keyboard-open');
-      root.style.removeProperty('--msg-vvh');
     };
   }, [isMobile]);
 
@@ -2311,6 +2332,19 @@ const Messages = window.Messages = () => {
         {isIPAiThread && typeof IPAiDisclaimer !== 'undefined' && (
           <div style={{ padding: '0 12px 6px' }}><IPAiDisclaimer /></div>
         )}
+        {/* ─── v1.105.132, admin only, temporary ───
+            iOS has three ways of making room for a keyboard and they report completely
+            different numbers. Rather than guess again from a screenshot, the numbers ARE the
+            screenshot: if the header is still wrong, this line says which mechanism did it.
+            Remove once confirmed. */}
+        {currentUser?.is_admin && kbDebug && (
+          <div style={{
+            fontSize: 10, fontFamily: 'ui-monospace, monospace', color: 'var(--text-tertiary)',
+            background: 'var(--bg-primary)', padding: '2px 8px', textAlign: 'center', flexShrink: 0,
+          }}>
+            iH {kbDebug.iH} · vv {kbDebug.vvH}@{kbDebug.vvT} · hid {kbDebug.hidden} · sy {kbDebug.sY} · kb {kbOpen ? 'up' : 'down'}{inputFocused ? '·focus' : ''}
+          </div>
+        )}
         <div className="msg-input-area">
           {/* Hidden file input for photo uploads */}
           {/* v1.103.3 — no capture attr (forced camera-only); iOS now offers
@@ -2346,6 +2380,8 @@ const Messages = window.Messages = () => {
           <textarea
             ref={inputRef}
             className="msg-input"
+            onFocus={() => setInputFocused(true)}
+            onBlur={() => setInputFocused(false)}
             placeholder={replyTo ? "Type your reply..." : "Type a message..."}
             value={inputText}
             rows={1}
@@ -2576,10 +2612,16 @@ const Messages = window.Messages = () => {
     return (
       <div style={{
         position: 'fixed',
-        top: 0,
+        // v1.105.132 — the box the user can actually see, not the one the document thinks
+        // it has. See the visualViewport effect above.
+        top: vvBox ? vvBox.top : 0,
         left: 0,
         right: 0,
-        bottom: (safeBot + 55) + 'px',
+        ...(vvBox
+          // While the keyboard is up the bottom nav is behind it; reserving its 55px is what
+          // pushed the composer up into the conversation.
+          ? { height: (kbOpen ? vvBox.height : Math.max(0, vvBox.height - safeBot - 55)) + 'px', bottom: 'auto' }
+          : { bottom: (safeBot + 55) + 'px' }),
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
