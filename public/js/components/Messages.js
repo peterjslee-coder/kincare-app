@@ -33,7 +33,7 @@ const Messages = window.Messages = () => {
   const [archivedIds, setArchivedIds] = useState([]);
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState([]);
-  const messagesEndRef = useRef(null);
+  const messagesAreaRef = useRef(null);
   const inputRef = useRef(null);
   const swipeRef = useRef({ startX: 0, startY: 0, id: null });
   const [swipingId, setSwipingId] = useState(null);
@@ -658,11 +658,28 @@ const Messages = window.Messages = () => {
     return cleanup;
   }, [activeConvId]);
 
-  useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [messages]);
+  // ─── v1.105.137 — pin the list, never the page ───
+  //
+  // This was a sentinel div at the end of the list plus `scrollIntoView()`, which scrolls every scrollable
+  // ANCESTOR as well — including the document. That was harmless while the body was
+  // position:fixed and could not scroll; v1.105.135 removed that pin, so an innocent
+  // scroll-into-view can now move the whole page, which is the exact displacement .135 and
+  // .136 exist to prevent. Scrolling the list's own scrollTop cannot touch anything else.
+  const pinToBottom = React.useCallback((smooth) => {
+    const area = messagesAreaRef.current;
+    if (!area) return;
+    const top = area.scrollHeight;
+    if (smooth && typeof area.scrollTo === 'function') area.scrollTo({ top, behavior: 'smooth' });
+    else area.scrollTop = top;
+  }, []);
+
+  useEffect(() => { pinToBottom(true); }, [messages, pinToBottom]);
+
+  // ...and again whenever the visible box changes shape. Pete, 8/24: "when i try to enter
+  // another text, it hides the text I just sent." The keyboard opening shrinks the container,
+  // the list keeps the scroll offset it had when it was taller, and the newest message ends
+  // up behind the composer. Nothing in `messages` changed, so the effect above never ran.
+  useEffect(() => { pinToBottom(false); }, [vvBox, kbOpen, pinToBottom]);
 
   useEffect(() => {
     if (activeConvId && inputRef.current) {
@@ -2069,7 +2086,7 @@ const Messages = window.Messages = () => {
           </div>
         )}
 
-        <div className="msg-messages-area">
+        <div className="msg-messages-area" ref={messagesAreaRef}>
           {messages.length === 0 ? (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', padding: 24 }}>
               {(activeConvId === '__ipai__' || activeConv?.name === 'iPAi' || activeConv?.otherName === 'iPAi Assistant') ? (
@@ -2343,7 +2360,6 @@ const Messages = window.Messages = () => {
               </div>
             );
           })()}
-          <div ref={messagesEndRef} />
         </div>
 
         {/* iPAi instruction suggestion card */}
@@ -2496,7 +2512,15 @@ const Messages = window.Messages = () => {
             disabled={sending}
             style={{ resize: 'none', overflow: 'hidden' }}
           />
-          <button className="msg-send-btn" onClick={handleSendMessage} disabled={sending || !inputText.trim()}>
+          {/* v1.105.137 — Pete: "when I send a text it requires me to hit send again after
+              it's dropped to the bottom."
+              Touching this button blurs the textarea, the keyboard starts to dismiss, and the
+              container resizes — so by the time the CLICK resolves the button has moved out
+              from under his finger and the tap lands on nothing. The second tap works because
+              the keyboard is already down and nothing moves. Preventing the default on
+              mousedown keeps focus in the composer: no blur, no resize, no moving target —
+              and the keyboard stays up for the next message, which is what you want anyway. */}
+          <button className="msg-send-btn" onMouseDown={(e) => e.preventDefault()} onClick={handleSendMessage} disabled={sending || !inputText.trim()}>
             {sending ? (
               <span style={{ display: 'inline-block', width: '16px', height: '16px', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: 'var(--bg-surface)', borderRadius: '50%', animation: 'spin 0.6s linear infinite' }}></span>
             ) : (

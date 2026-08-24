@@ -274,3 +274,49 @@ describe("the keyboard cannot push the header off screen", () => {
   });
 
 });
+
+// ─── v1.105.137 — what the keyboard fix broke on the way past ───
+//
+// Pete, on .136: "display looks good, but when I send a text it requires me to hit send again
+// after it's dropped to the bottom. then when i try to enter another text, it hides the text I
+// just sent."
+//
+// Both are consequences of the container now RESIZING when the keyboard moves — which is the
+// fix working, and two things that were never right becoming visible.
+describe("sending a message, with the keyboard doing what it does", () => {
+  const fs = require("fs");
+  const path = require("path");
+  const read = (...p) => fs.readFileSync(path.join(__dirname, "..", ...p), "utf8");
+  const msgs = read("public", "js", "components", "Messages.js");
+
+  test("Send does not blur the composer", () => {
+    // Touching the button blurs the textarea, the keyboard starts to dismiss, the container
+    // resizes — and by the time the CLICK resolves the button has moved out from under his
+    // finger. The second tap works because the keyboard is already down and nothing moves.
+    expect(msgs).toMatch(/className="msg-send-btn" onMouseDown=\{\(e\) => e\.preventDefault\(\)\} onClick=\{handleSendMessage\}/);
+  });
+
+  test("the list is pinned to the bottom when the BOX changes, not only when messages do", () => {
+    // "it hides the text I just sent": the keyboard shrinks the container, the list keeps the
+    // scroll offset it had while it was taller, and the newest message sits behind the
+    // composer. `messages` did not change, so the existing effect never ran.
+    expect(msgs).toMatch(/useEffect\(\(\) => \{ pinToBottom\(false\); \}, \[vvBox, kbOpen, pinToBottom\]\);/);
+    expect(msgs).toMatch(/useEffect\(\(\) => \{ pinToBottom\(true\); \}, \[messages, pinToBottom\]\);/);
+  });
+
+  test("pinning scrolls the LIST and can never scroll the page", () => {
+    // scrollIntoView() scrolls every scrollable ANCESTOR too, including the document. That was
+    // harmless while the body was position:fixed; .135 removed that pin, so it became a way to
+    // reintroduce the exact displacement .135 and .136 exist to prevent.
+    const code = msgs.split("\n").filter((l) => !l.trim().startsWith("//")).join("\n");
+    expect(code).not.toMatch(/scrollIntoView/);
+    expect(msgs).toMatch(/area\.scrollTop = top;/);
+    expect(msgs).toMatch(/area\.scrollTo\(\{ top, behavior: 'smooth' \}\)/);
+  });
+
+  test("the sentinel it replaced is gone with it", () => {
+    // An unused ref and an empty div at the end of every conversation is exactly the dead
+    // code this repo's lint gate hunts.
+    expect(msgs).not.toMatch(/messagesEndRef/);
+  });
+});
