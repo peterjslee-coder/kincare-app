@@ -6878,7 +6878,12 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
             position: 'fixed', top: 0, right: 0, width: window.innerWidth <= 768 ? '100%' : 480, maxWidth: '100%', height: '100dvh',
             background: 'var(--bg-card)', boxShadow: '-4px 0 24px rgba(0,0,0,0.15)', zIndex: 301,
             overflowY: 'auto', WebkitOverflowScrolling: 'touch',
-            paddingBottom: 'var(--sab, 0px)', boxSizing: 'border-box',
+            // The bottom nav is position:fixed at z-index 900 and this drawer is 301, so the
+            // nav sits ON TOP of the drawer's last ~51px. Safe-area padding alone was not
+            // enough — measured on prod, the DANGER ZONE heading cleared but its buttons did
+            // not. 84px is the clearance the rest of the app already uses for this nav
+            // (styles.css:1580, index.html:165).
+            paddingBottom: 'calc(var(--sab, 0px) + 84px)', boxSizing: 'border-box',
           }}>
             {/* Drawer header */}
             <div style={{
