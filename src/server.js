@@ -3,6 +3,9 @@ require("dotenv").config();
 const { initSentry, setupSentryErrorHandler, captureException, tagRequestUser } = require("./utils/sentry");
 initSentry();
 
+require("./utils/crashHandlers").installCrashHandlers();
+
+
 const express = require("express");
 
 // v1.105.37 — install BEFORE any route module is required. Route files register their
@@ -524,7 +527,7 @@ app.use("/api/media", require("./routes/media"));
 app.use("/api/safety", require("./routes/safety"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.105.129";
+const APP_VERSION = "1.105.130";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });
