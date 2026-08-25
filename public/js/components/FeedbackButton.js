@@ -1,3 +1,40 @@
+// ─── Keeping the button reachable (v1.105.138) ───
+//
+// Pete, 8/24: "the floating feedback lightbulb flew up to the top and I can no longer
+// reach/open it."
+//
+// The FAB is draggable and its position is remembered in localStorage as absolute
+// coordinates. Two things conspired:
+//
+//   • the drag clamped to `Math.max(0, …)`, so the top of the range was y = 0 — underneath
+//     the status bar and the notch, where nothing can be tapped in a home-screen app;
+//   • nothing ever re-checked the saved value. A position saved while the viewport was a
+//     different shape — during the keyboard work the page was displaced by up to 413px, and
+//     innerHeight was reported as anything from 499 to 912 — is simply where the button lives
+//     from then on, on every screen, forever.
+//
+// So the band is the safe area, not the raw viewport, and it is re-applied on load and on
+// rotation. A stranded button rescues itself the next time the app opens.
+const FAB_SIZE = 48;
+const fabSafeBand = () => {
+  // Same fallback Messages uses: on Capacitor native the insets are 59/34 on every modern
+  // iPhone, and __safeArea* is not always populated by the time this first runs.
+  const isCapNative = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+  const safeTop = window.__safeAreaTop || (isCapNative ? 59 : 0);
+  const safeBottom = window.__safeAreaBottom || (isCapNative ? 34 : 0);
+  const top = safeTop + 8;
+  const bottom = Math.max(top, window.innerHeight - safeBottom - FAB_SIZE - 8);
+  return { top, bottom, left: 8, right: Math.max(8, window.innerWidth - FAB_SIZE - 8) };
+};
+const clampFabPos = (p) => {
+  if (!p || typeof p.x !== 'number' || typeof p.y !== 'number') return null;
+  const b = fabSafeBand();
+  return {
+    x: Math.min(Math.max(b.left, p.x), b.right),
+    y: Math.min(Math.max(b.top, p.y), b.bottom),
+  };
+};
+
 // ─── Floating Feedback Button ───
 // Persistent FAB on every screen, opens feedback submission modal.
 // Draggable so it never blocks UI. Always on top of modals/popups.
@@ -22,7 +59,7 @@ const FeedbackButton = window.FeedbackButton = ({ currentPage, userRole, current
   const [pos, setPos] = useState(() => {
     try {
       const saved = localStorage.getItem('inplace_fab_pos');
-      if (saved) return JSON.parse(saved);
+      if (saved) return clampFabPos(JSON.parse(saved));
     } catch (e) {}
     return null; // null = use default CSS position
   });
@@ -311,9 +348,8 @@ const FeedbackButton = window.FeedbackButton = ({ currentPage, userRole, current
     if (Math.abs(dx) > 4 || Math.abs(dy) > 4) dragRef.current.moved = true;
     if (!dragRef.current.moved) return;
     e.preventDefault(); // prevent scroll while dragging
-    const newX = Math.max(0, Math.min(window.innerWidth - 48, dragRef.current.startPosX + dx));
-    const newY = Math.max(0, Math.min(window.innerHeight - 48, dragRef.current.startPosY + dy));
-    setPos({ x: newX, y: newY });
+    // Clamped to the SAFE band, not to the raw viewport: y = 0 is under the status bar.
+    setPos(clampFabPos({ x: dragRef.current.startPosX + dx, y: dragRef.current.startPosY + dy }));
   }, []);
 
   const handleDragEnd = React.useCallback(() => {
@@ -324,6 +360,24 @@ const FeedbackButton = window.FeedbackButton = ({ currentPage, userRole, current
       try { localStorage.setItem('inplace_fab_pos', JSON.stringify(pos)); } catch (e) {}
     }
   }, [pos]);
+
+  // Rescue a stranded button: re-clamp on mount and on rotation. Deliberately NOT on every
+  // resize — a keyboard opening is a resize, and re-clamping to a viewport that is temporarily
+  // 400px shorter would walk the button up the screen every time someone types.
+  React.useEffect(() => {
+    const rescueFab = () => {
+      setPos((prev) => {
+        if (!prev) return prev;
+        const next = clampFabPos(prev);
+        if (!next || (next.x === prev.x && next.y === prev.y)) return prev;
+        try { localStorage.setItem('inplace_fab_pos', JSON.stringify(next)); } catch (e) {}
+        return next;
+      });
+    };
+    rescueFab();
+    window.addEventListener('orientationchange', rescueFab);
+    return () => window.removeEventListener('orientationchange', rescueFab);
+  }, []);
 
   // Attach global move/end listeners while dragging
   React.useEffect(() => {
