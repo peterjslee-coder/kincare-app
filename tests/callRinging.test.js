@@ -378,3 +378,76 @@ describe("a call fits on the phone it is ringing on", () => {
     expect(fn.slice(0, 400)).toMatch(/if \(onEndCall\) onEndCall/);
   });
 });
+
+// ─── v1.105.140 — two causes, one of them provable from the DOM ───
+//
+// Pete: "it tried to connect but still can't" and "the hang-up and mic button is better, but
+// still hiding a little behind the bottom banner."
+describe("a call is on top of the app, and says why when it fails", () => {
+  const fs = require("fs");
+  const path = require("path");
+  const read = (...p) => fs.readFileSync(path.join(__dirname, "..", ...p), "utf8");
+  const msgs = read("public", "js", "components", "Messages.js");
+  const overlay = read("public", "js", "components", "VideoCallOverlay.js");
+  const css = read("public", "css", "styles.css");
+
+  test("z-index 10000 inside a z-index 1 box loses to a nav at 900", () => {
+    // The proof, not the theory: the mobile Messages container really does set zIndex 1, and
+    // the nav really is 900 at the app level. Everything inside that container — the call
+    // overlay's 10000, the incoming banner's 9999 — is resolved WITHIN a context worth 1.
+    // The safe-area insets in .139 were real, and were treating a symptom.
+    expect(msgs).toMatch(/zIndex: 1,/);
+    expect(css).toMatch(/z-index: 900;/);
+  });
+
+  test("so both call surfaces are portalled out of it", () => {
+    expect(msgs).toMatch(/ReactDOM\.createPortal\(node, document\.body\)/);
+    expect(msgs).toMatch(/const callOverlay = toBody\(/);
+    expect(msgs).toMatch(/return toBody\(\s*\n\s*<div style=\{\{\s*\n\s*position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,/);
+  });
+
+  test("and it degrades to the old behaviour if ReactDOM has no portal", () => {
+    expect(msgs).toMatch(/typeof ReactDOM !== 'undefined' && ReactDOM\.createPortal/);
+  });
+
+  test("the microphone is asked for FIRST, so a refusal is legible", () => {
+    // Probed production before writing this: /api/video/token returns a valid JWT, the
+    // self-hosted SDK loads (2.28.1), and Video.connect with audio:false/video:false reached a
+    // real Twilio room. Signalling, CSP and credentials are all fine. Local media is what the
+    // probe skipped, and Twilio acquires it INSIDE connect(), where a refusal comes back as an
+    // opaque connect failure — "tried to connect but still can't".
+    expect(overlay).toMatch(/navigator\.mediaDevices\.getUserMedia\(\{/);
+    const acquire = overlay.indexOf("navigator.mediaDevices.getUserMedia({");
+    const connect = overlay.indexOf("const connectOptions = {");
+    expect(acquire).toBeGreaterThan(-1);
+    expect(acquire).toBeLessThan(connect); // first, not inside connect()
+  });
+
+  test("each refusal gets a sentence a person can act on", () => {
+    expect(overlay).toMatch(/name === 'NotAllowedError' \|\| name === 'SecurityError'/);
+    expect(overlay).toMatch(/Allow it in Settings/);
+    expect(overlay).toMatch(/name === 'NotFoundError'/);
+    expect(overlay).toMatch(/name === 'NotReadableError'/);
+    // ...and a WebView with no capture API at all names itself rather than "failed".
+    expect(overlay).toMatch(/won\\u2019t let InPlace use the microphone from here/);
+  });
+
+  test("the failure is reported, with the one field that is the diagnosis", () => {
+    expect(overlay).toMatch(/mediaErrorName: name \|\| 'unknown'/);
+    expect(overlay).toMatch(/standalone: !!\(window\.navigator\.standalone/);
+    expect(overlay).toMatch(/capacitor: !!\(window\.Capacitor/);
+  });
+
+  test("we hand Twilio the tracks we already took, and nobody is asked twice", () => {
+    expect(overlay).toMatch(/tracks: mediaTracks,/);
+    expect(overlay).not.toMatch(/audio: true,\n\s+video: callState\.callType === 'video' \? \{\n\s+facingMode/);
+  });
+
+  test("and we give the microphone back on every exit", () => {
+    // Twilio stops the tracks it creates; tracks handed to it are ours. A microphone still
+    // lit after a call has ended is the worst bug a care app could ship.
+    expect(overlay).toMatch(/function stopAcquiredTracks\(\)/);
+    const ends = overlay.match(/acquiredTracksRef\.current = \[\];/g) || [];
+    expect(ends.length).toBe(3); // end call, unmount, and a connect that failed
+  });
+});

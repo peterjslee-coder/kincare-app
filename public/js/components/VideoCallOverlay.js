@@ -27,6 +27,10 @@ const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, curr
   const timerRef = useRef(null);
   const durationRef = useRef(0);
   const localTrackRef = useRef(null);
+  // v1.105.140 — tracks WE acquired with getUserMedia. Twilio stops the tracks it creates
+  // itself; tracks handed to it are ours to stop. Miss this and the microphone indicator
+  // stays lit after the call ends, which is the single worst bug a care app could ship.
+  const acquiredTracksRef = useRef([]);
 
   // Connect to Twilio room on mount
   useEffect(() => {
@@ -83,14 +87,68 @@ const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, curr
         const Video = window.Twilio.Video;
 
         // Connect to room with wide-angle video constraints
+        // ─── v1.105.140 — get the microphone FIRST, and say so when you can't ───
+        //
+        // Pete: "it tried to connect but still can't." Everything upstream is fine — I probed
+        // production from a browser: /api/video/token returns a valid 475-char JWT, the
+        // self-hosted SDK loads (2.28.1), and Video.connect with audio:false/video:false
+        // reached a real Twilio room. Signalling, CSP and credentials are not the problem.
+        //
+        // What that probe skipped is the only thing left: local media. Twilio calls
+        // getUserMedia inside connect(), so a blocked microphone surfaces as a connect
+        // failure with an opaque message — which is exactly "tried to connect but still
+        // can't". Asking for the media ourselves, first, turns one unreadable failure into a
+        // sentence that names the cause and, where possible, the fix.
+        //
+        // The tracks are then handed to Twilio rather than released, so the person is not
+        // asked for the microphone twice in one call.
+        let mediaTracks = null;
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          // No API at all: an insecure context, or a WebView that does not expose capture.
+          throw new Error('This device won\u2019t let InPlace use the microphone from here. Try the InPlace app, or open yourinplace.com in Safari.');
+        }
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            audio: true,
+            video: callState.callType === 'video'
+              ? { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } }
+              : false,
+          });
+          mediaTracks = stream.getTracks();
+          acquiredTracksRef.current = mediaTracks;
+        } catch (mediaErr) {
+          const name = mediaErr && mediaErr.name;
+          const needs = callState.callType === 'video' ? 'camera and microphone' : 'microphone';
+          let human;
+          if (name === 'NotAllowedError' || name === 'SecurityError') {
+            human = `InPlace needs your ${needs} for calls. Allow it in Settings \u2192 InPlace, then try again.`;
+          } else if (name === 'NotFoundError' || name === 'OverconstrainedError') {
+            human = `No ${needs} was found on this device.`;
+          } else if (name === 'NotReadableError' || name === 'AbortError') {
+            human = `Something else is using your ${needs}. Close it and try again.`;
+          } else {
+            human = `Couldn\u2019t reach your ${needs} (${name || 'unknown error'}).`;
+          }
+          // Report it: a call that fails is exactly the thing nobody sends feedback about
+          // twice, and the error NAME is the whole diagnosis.
+          try {
+            if (typeof reportClientError === 'function') {
+              reportClientError(mediaErr, {
+                page: 'call',
+                callType: callState.callType,
+                mediaErrorName: name || 'unknown',
+                standalone: !!(window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches),
+                capacitor: !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()),
+              });
+            }
+          } catch { /* reporting must never be what breaks the call */ }
+          throw new Error(human);
+        }
+
         const connectOptions = {
           name: callState.roomName,
-          audio: true,
-          video: callState.callType === 'video' ? {
-            facingMode: 'user',
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-          } : false,
+          // The tracks acquired above, not another request for them.
+          tracks: mediaTracks,
           dominantSpeaker: true,
         };
 
@@ -179,6 +237,11 @@ const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, curr
       } catch (err) {
         if (!cancelled) {
           console.error('[VideoCall] Connection error:', err);
+          // The call is not happening; nothing should still be holding the microphone.
+          (acquiredTracksRef.current || []).forEach((t) => {
+            try { if (t && t.readyState !== 'ended') t.stop(); } catch { /* already gone */ }
+          });
+          acquiredTracksRef.current = [];
           setError(err.message);
           setStatus('ended');
         }
@@ -193,6 +256,12 @@ const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, curr
         roomRef.current.disconnect();
         roomRef.current = null;
       }
+      // Unmounting is also a way to end a call — the microphone must go off here too, not
+      // only down the handleEndCall path.
+      (acquiredTracksRef.current || []).forEach((t) => {
+        try { if (t && t.readyState !== 'ended') t.stop(); } catch { /* already gone */ }
+      });
+      acquiredTracksRef.current = [];
       stopTimer();
     };
   }, [callState?.active, callState?.roomName]);
@@ -254,11 +323,19 @@ const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, curr
     }
   }
 
+  function stopAcquiredTracks() {
+    (acquiredTracksRef.current || []).forEach((t) => {
+      try { if (t && t.readyState !== 'ended') t.stop(); } catch { /* already gone */ }
+    });
+    acquiredTracksRef.current = [];
+  }
+
   function handleEndCall() {
     if (roomRef.current) {
       roomRef.current.disconnect();
       roomRef.current = null;
     }
+    stopAcquiredTracks();
     stopTimer();
     clearRemoteVideo();
     document.querySelectorAll('[data-twilio-remote-audio]').forEach(el => el.remove());

@@ -70,6 +70,26 @@ const Messages = window.Messages = () => {
 
   const isMobile = window.innerWidth <= 768;
 
+  // ─── v1.105.140 — z-index 10000 inside a z-index 1 box is still 1 ───
+  //
+  // Pete: "the hang-up and mic button is better, but still hiding a little behind the bottom
+  // banner", and earlier "Couldn't answer it because the button was behind the top banner."
+  // The safe-area insets in .139 were real but they were treating a symptom.
+  //
+  // On mobile, ALL of Messages renders inside a position:fixed container with `zIndex: 1`.
+  // That creates a stacking context, and every z-index inside it — the call overlay's 10000,
+  // the incoming banner's 9999 — is resolved WITHIN it. Against the app's bottom nav, which
+  // is a sibling at z-index 900, the whole container loses: 1 < 900. So the nav paints over
+  // the bottom of a full-screen call, End Call included, and moving the buttons up by the
+  // safe-area inset only bought back the few pixels the nav did not already cover.
+  //
+  // A portal to document.body takes them out of that box entirely, which is the only fix that
+  // does not involve arguing with the nav about numbers.
+  const toBody = (node) => (node && typeof ReactDOM !== 'undefined' && ReactDOM.createPortal
+    ? ReactDOM.createPortal(node, document.body)
+    : node);
+
+
   // ─── Stop iOS rubber-banding, without pinning the body (v1.105.135) ───
   //
   // This used to add `position: fixed` to html and body. That one declaration is the root of
@@ -2538,11 +2558,14 @@ const Messages = window.Messages = () => {
   // ─── Incoming call banner ───
   const renderIncomingCallBanner = () => {
     if (!incomingCall) return null;
+    // Portalled for the same reason as the call overlay above — see `toBody`. This one is
+    // worse: the banner is how you ANSWER, so losing its bottom edge to the nav (or its top
+    // edge to the notch) means a ringing phone with no way to pick it up.
     const typeLabel = incomingCall.callType === 'video' ? 'Video' : 'Voice';
     const callSvg = incomingCall.callType === 'video'
       ? '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--bg-surface)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>'
       : '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--bg-surface)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>';
-    return (
+    return toBody(
       <div style={{
         position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,
         background: 'linear-gradient(135deg, #1b6b5a, #2a9d8f)',
@@ -2722,11 +2745,11 @@ const Messages = window.Messages = () => {
   };
 
   // ─── Layout ───
-  const callOverlay = React.createElement(VideoCallOverlay, {
+  const callOverlay = toBody(React.createElement(VideoCallOverlay, {
     callState: callState,
     onEndCall: handleEndCall,
     currentUserId: currentUser?.id,
-  });
+  }));
 
   if (isMobile) {
     // Capacitor native iOS fallback: 59px top, 34px bottom — covers all modern iPhones
