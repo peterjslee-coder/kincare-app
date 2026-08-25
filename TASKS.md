@@ -423,6 +423,39 @@
 
 ### P1
 
+> **Aug 25 2026 — feedback triage.** 4 new, all Pete, all marked reviewed on the server. Three
+> were one bug and shipped as **v1.105.139**; the fourth was my own regression from .129.
+
+- [x] **⛔ Every call surface was laid out against the RAW viewport. Shipped v1.105.139.**
+      Three reports, one cause. `4edb6642` (terrible): *"Saw a call come through from Julia.
+      Couldn't answer it because the button was behind the top banner."* — the incoming-call
+      banner is `position: fixed; top: 0` with no safe-area inset, so on an iPhone its whole
+      contents, Accept included, sit under the status bar and the notch where nothing is
+      tappable. **A ringing phone you cannot answer is the same as a phone that never rang.**
+      It clears `--sat` now and both buttons are 44px.
+      `538d4d05` (bad): *"Phone call in app looks terrible and hidden behind bottom row."* —
+      the overlay's controls bar sat at `bottom: 40`, in the home-indicator strip.
+      `d149b793` (terrible): *"Video call froze the app had to close out and relaunch."* —
+      **the same bug one step further on.** The button in that strip is END CALL, and a call
+      you cannot hang up IS a frozen app; relaunching was the only exit available. Controls,
+      zoom UI and the PiP all clear `--sab`/`--sat` now. The other half of "froze":
+      `Video.connect` has no deadline of its own, so a connect that never answers leaves a
+      full-screen black overlay reading "Connecting…" forever — 30s and a real error now.
+      ⚠️ **Wants Pete on a device: place a call, answer one, and hang one up.**
+
+- [x] **"Needs you" opened a page instead of the thing. Shipped v1.105.139.** `51d4226c`:
+      *"Need you alerts shouldn't open a generic page…they should open the task or event. I
+      went to log Betty's meds and like the look of the alert at the top, but then I hit to
+      open the task it just took me to the care team page… ie I gotta scroll down and find the
+      task."* **My own regression:** v1.105.129 gave the schedule rows a `focus` and left
+      reimbursements and care tasks with a page name only — a page name is a dead end wearing
+      a destination's clothes, which is exactly what v1.105.105 was about, one card later.
+      Care tasks now carry `careTask:<occurrenceId>` and point at the **dashboard**, where
+      today's tasks live, and the existing focus claim opens the **check sheet** for that
+      occurrence. Reimbursements carry `reimbursement:<id>`, which `Reimbursements.js` has
+      consumed since v1.97.0 — scroll, flash, open approve. It was simply never sent.
+      The new test asks this of **every** kind rather than the kinds I happened to wire.
+
 > **Aug 24 2026 — session.** Prod verified at v1.105.128 via `/api/health` (NOT `git log`) and
 > the whole CI run green locally before touching anything: 4 lints, 1269 unit, 197 integration.
 > Nothing was stuck this time — the deploy freeze of Aug 22 has not recurred.
