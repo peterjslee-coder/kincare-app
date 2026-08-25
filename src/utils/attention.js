@@ -240,6 +240,11 @@ async function attentionItemsFor(db, userId) {
       verb: "Approve",
       action: { method: "POST", path: `/api/reimbursements/${r.id}/approve` },
       page: "care-team",
+      // v1.105.139 — Pete (51d4226c): "Need you alerts shouldn't open a generic page…they
+      // should open the task or event." Reimbursements.js has consumed this exact focus since
+      // v1.97.0 — it scrolls to the row, flashes it, and opens the approve modal for the
+      // approver. .129 simply never sent it.
+      focus: `reimbursement:${r.id}`,
       // Approval is not payment. Pete's money rule: say plainly where money moves — and
       // here it does not move yet, so the card says so rather than implying a transfer.
       note: "Approving doesn't send money — you choose how to pay after.",
@@ -298,7 +303,12 @@ async function attentionItemsFor(db, userId) {
       action: { method: "POST", path: `/api/care-tasks/occurrences/${t.id}/check` },
       undo: { method: "POST", path: `/api/care-tasks/occurrences/${t.id}/undo` },
       undoable: true,
-      page: "care-team",
+      // v1.105.139 — "I went to log Betty's meds… it just took me to the care team page… I
+      // gotta scroll down and find the task." The dashboard is where today's tasks live and
+      // where the check sheet opens, so Open now opens the SHEET for this occurrence: who did
+      // it, and a note. Care-team was the page you had to go hunting on.
+      page: "dashboard",
+      focus: `careTask:${t.id}`,
     })),
   ];
 

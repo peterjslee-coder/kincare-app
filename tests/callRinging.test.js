@@ -320,3 +320,61 @@ describe("sending a message, with the keyboard doing what it does", () => {
     expect(msgs).not.toMatch(/messagesEndRef/);
   });
 });
+
+// ─── v1.105.139 — the call UI met the phone's own furniture ───
+//
+// Three feedback items in one evening, all "terrible" or "bad", all the same root cause: the
+// call surfaces are laid out against the RAW viewport, so on an iPhone they end up underneath
+// the status bar at the top and the home indicator at the bottom.
+//
+//   4edb6642  "Saw a call come through from Julia. Couldn't answer it because the button was
+//             behind the top banner."
+//   538d4d05  "Phone call in app looks terrible and hidden behind bottom row."
+//   d149b793  "Video call froze the app had to close out and relaunch."
+//
+// The third is the same bug as the second, one step further on: the End Call button sat in the
+// home-indicator strip, and a call you cannot hang up IS a frozen app — relaunching was the
+// only exit available.
+describe("a call fits on the phone it is ringing on", () => {
+  const fs = require("fs");
+  const path = require("path");
+  const read = (...p) => fs.readFileSync(path.join(__dirname, "..", ...p), "utf8");
+  const msgs = read("public", "js", "components", "Messages.js");
+  const overlay = read("public", "js", "components", "VideoCallOverlay.js");
+
+  test("the incoming-call banner clears the notch", () => {
+    // It was position:fixed top:0 with no inset, so Accept was under the status bar.
+    expect(msgs).toMatch(/padding: '16px 24px', paddingTop: 'calc\(16px \+ var\(--sat, 0px\)\)'/);
+  });
+
+  test("Accept and Decline are 44px — you are answering a ringing phone", () => {
+    const banner = msgs.slice(msgs.indexOf("const renderIncomingCallBanner"));
+    const head = banner.slice(0, banner.indexOf("};"));
+    expect((head.match(/minHeight: 44/g) || []).length).toBe(2);
+  });
+
+  test("the End Call button clears the home indicator", () => {
+    // The one that made "hidden behind bottom row" into "had to close out and relaunch".
+    expect(overlay).toMatch(/bottom: 'calc\(40px \+ var\(--sab, 0px\)\)'/);
+  });
+
+  test("so does everything else anchored to an edge", () => {
+    expect(overlay).not.toMatch(/bottom: 115,/);
+    expect(overlay).not.toMatch(/\n\s+top: 16,\n\s+right: 16,/);
+    expect(overlay).toMatch(/top: 'calc\(20px \+ var\(--sat, 0px\)\)'/);
+  });
+
+  test("a connect that never answers gives up and says so", () => {
+    // Twilio's connect has no deadline of its own. Without one, a hung call is a full-screen
+    // black overlay reading "Connecting..." forever — which is the other half of "froze".
+    expect(overlay).toMatch(/Promise\.race\(\[\s*\n\s*Video\.connect\(token, connectOptions\)/);
+    expect(overlay).toMatch(/Couldn't connect the call\. Check your signal and try again\./);
+  });
+
+  test("ending a call works even when there is no room to leave", () => {
+    // The escape hatch must not depend on the thing that failed.
+    const fn = overlay.slice(overlay.indexOf("function handleEndCall"));
+    expect(fn.slice(0, 400)).toMatch(/if \(roomRef\.current\)/);
+    expect(fn.slice(0, 400)).toMatch(/if \(onEndCall\) onEndCall/);
+  });
+});

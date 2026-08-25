@@ -44,7 +44,30 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
   useEffect(() => {
     const claim = () => {
       const f = window.__pendingFocus;
-      if (!f || typeof f !== 'string' || !f.startsWith('session:')) return;
+      if (!f || typeof f !== 'string') return;
+      // ─── v1.105.139 — "Needs you" opens the THING, not the page it lives on ───
+      //
+      // Pete (51d4226c): "Need you alerts shouldn't open a generic page…they should open the
+      // task or event. I went to log Betty's meds and like the look of the alert at the top,
+      // but then I hit to open the task it just took me to the care team page… ie I gotta
+      // scroll down and find the task."
+      //
+      // Fair, and it is my own regression: v1.105.129 gave the schedule rows a `focus` and
+      // left the other two kinds with only a page name. A page name is a dead end wearing a
+      // destination's clothes — the same finding as v1.105.105, one card later.
+      if (f.startsWith('careTask:')) {
+        const occId = f.slice('careTask:'.length);
+        for (const g of (careTasksRef.current?.groups || [])) {
+          const occ = (g.occurrences || []).find((o) => o.id === occId);
+          if (occ) {
+            window.__pendingFocus = null;
+            setTaskSheet({ occ, group: g });
+            return;
+          }
+        }
+        return; // today's tasks may not have loaded yet — keep the focus and try again
+      }
+      if (!f.startsWith('session:')) return;
       const id = f.slice('session:'.length);
       if (!id) return;
       window.__pendingFocus = null;
@@ -63,6 +86,14 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
   const [nextUpExpanded, setNextUpExpanded] = useState(false);
   // ─── Care Tasks (v1.99.0): today's occurrences, inline in Next Up ───
   const [careTasksToday, setCareTasksToday] = useState(_dashCache.careTasks);
+  // The focus listener below is registered once, so it cannot close over this state. A focus
+  // can also arrive BEFORE the tasks do (a push tap, or the Needs-you card on a cold load),
+  // which is why arrival re-runs the claim.
+  const careTasksRef = useRef(careTasksToday);
+  useEffect(() => {
+    careTasksRef.current = careTasksToday;
+    if (window.__pendingFocus) window.dispatchEvent(new Event('inplace:focus'));
+  }, [careTasksToday]);
   const [taskSheet, setTaskSheet] = useState(null); // { occ, group } → CareTaskCheckSheet
   const [showTaskCreate, setShowTaskCreate] = useState(false); // kept: CareTeamManage opens this via window.__openTaskCreate
   const [showLogVisit, setShowLogVisit] = useState(null); // v1.105.38 — { recipientId, position }

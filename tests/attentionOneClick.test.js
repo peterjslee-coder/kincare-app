@@ -166,6 +166,47 @@ describe("the action is the real endpoint, with the real id", () => {
     }
   });
 
+  test("EVERY item opens the thing, not the page it lives on", async () => {
+    // v1.105.139. Pete (51d4226c): "Need you alerts shouldn't open a generic page…they should
+    // open the task or event. I went to log Betty's meds… it just took me to the care team
+    // page… ie I gotta scroll down and find the task."
+    //
+    // My own regression: .129 gave the schedule rows a `focus` and left reimbursements and
+    // care tasks with only a page name — which is a dead end wearing a destination's clothes,
+    // the same finding as v1.105.105 one card later. This test is the one that would have
+    // caught it: it asks of EVERY kind, not of the kinds I happened to wire.
+    const { items } = await attentionItemsFor(
+      fakeDb({ reimbursements: [REIMBURSEMENT], offers: [OFFER], changes: [CHANGE], tasks: [TASK] }),
+      "pete"
+    );
+    expect(items).toHaveLength(4);
+    for (const item of items) {
+      expect(typeof item.focus).toBe("string");
+      expect(item.focus).toMatch(/^(session|reimbursement|careTask):.+/);
+    }
+  });
+
+  test("a care task opens its check sheet on the dashboard", async () => {
+    const item = await only("careTask", { tasks: [TASK] });
+    expect(item.focus).toBe("careTask:occ-1");
+    expect(item.page).toBe("dashboard"); // where today's tasks and the sheet actually are
+  });
+
+  test("a reimbursement opens the row that was already waiting for it", async () => {
+    // Reimbursements.js has consumed this focus since v1.97.0 — scroll, flash, open approve.
+    const item = await only("reimbursement", { reimbursements: [REIMBURSEMENT] });
+    expect(item.focus).toBe("reimbursement:reim-1");
+    expect(read("public/js/components/Reimbursements.js")).toMatch(/startsWith\('reimbursement:'\)/);
+  });
+
+  test("and the dashboard knows how to open a care task", () => {
+    const dash = read("public/js/components/Dashboard.js");
+    expect(dash).toMatch(/f\.startsWith\('careTask:'\)/);
+    expect(dash).toMatch(/setTaskSheet\(\{ occ, group: g \}\);/);
+    // A focus can arrive before today's tasks do — a push tap, or a cold dashboard load.
+    expect(dash).toMatch(/if \(window\.__pendingFocus\) window\.dispatchEvent\(new Event\('inplace:focus'\)\);/);
+  });
+
   test("the visit-opening rows still know which visit", async () => {
     const { items } = await attentionItemsFor(fakeDb({ offers: [OFFER], changes: [CHANGE] }), "pete");
     expect(items.map((i) => i.focus).sort()).toEqual(["session:sess-4", "session:sess-9"]);

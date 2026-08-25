@@ -94,7 +94,17 @@ const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, curr
           dominantSpeaker: true,
         };
 
-        const twilioRoom = await Video.connect(token, connectOptions);
+        // v1.105.139 — a connect that never resolves used to leave a full-screen black
+        // overlay saying "Connecting..." with no end to it. Twilio's own default has no
+        // deadline, and neither did we. 30s, then say so, so the person is looking at an
+        // error with a way out instead of at a call they think is still trying.
+        const twilioRoom = await Promise.race([
+          Video.connect(token, connectOptions),
+          new Promise((_, reject) => setTimeout(
+            () => reject(new Error("Couldn't connect the call. Check your signal and try again.")),
+            30000
+          )),
+        ]);
 
         // Detect camera zoom capability for local video track
         if (callState.callType === 'video') {
@@ -332,7 +342,7 @@ const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, curr
       ref: localVideoRef,
       style: {
         position: 'absolute',
-        top: 16,
+        top: 'calc(16px + var(--sat, 0px))',
         right: 16,
         width: 120,
         height: 160,
@@ -393,7 +403,7 @@ const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, curr
     isVideo && React.createElement('div', {
       style: {
         position: 'absolute',
-        top: 20,
+        top: 'calc(20px + var(--sat, 0px))',
         left: '50%',
         transform: 'translateX(-50%)',
         color: 'var(--text-on-primary)',
@@ -425,7 +435,7 @@ const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, curr
     isVideo && zoomSupported && status === 'connected' && React.createElement('div', {
       style: {
         position: 'absolute',
-        bottom: 115,
+        bottom: 'calc(115px + var(--sab, 0px))',
         left: '50%',
         transform: 'translateX(-50%)',
         display: 'flex',
@@ -462,7 +472,7 @@ const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, curr
     isVideo && !zoomSupported && status === 'connected' && React.createElement('div', {
       style: {
         position: 'absolute',
-        bottom: 115,
+        bottom: 'calc(115px + var(--sab, 0px))',
         left: '50%',
         transform: 'translateX(-50%)',
         display: 'flex',
@@ -506,10 +516,15 @@ const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, curr
     ),
 
     // Controls bar (bottom)
+    // v1.105.139 — Pete: "Phone call in app looks terrible and hidden behind bottom row" and
+    // "Video call froze the app had to close out and relaunch." Those are one bug. The whole
+    // overlay was laid out against the raw viewport, so on an iPhone the End Call button sat
+    // in the home-indicator strip — and a call you cannot hang up IS a frozen app; relaunching
+    // was the only exit he had.
     React.createElement('div', {
       style: {
         position: 'absolute',
-        bottom: 40,
+        bottom: 'calc(40px + var(--sab, 0px))',
         display: 'flex',
         gap: 20,
         zIndex: 10001,

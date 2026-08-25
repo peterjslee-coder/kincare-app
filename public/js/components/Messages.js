@@ -2546,7 +2546,13 @@ const Messages = window.Messages = () => {
       <div style={{
         position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,
         background: 'linear-gradient(135deg, #1b6b5a, #2a9d8f)',
-        padding: '16px 24px', display: 'flex', alignItems: 'center',
+        // v1.105.139 — Pete: "Saw a call come through from Julia. Couldn't answer it because
+        // the button was behind the top banner." The banner was pinned to top: 0 with no
+        // safe-area inset, so on an iPhone its whole contents — including Accept — sat under
+        // the status bar and the notch, where nothing is tappable. A ringing phone you cannot
+        // answer is the same as a phone that never rang.
+        padding: '16px 24px', paddingTop: 'calc(16px + var(--sat, 0px))',
+        display: 'flex', alignItems: 'center',
         justifyContent: 'space-between', color: 'var(--text-on-primary)', boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
         animation: 'slideDown 0.3s ease',
       }}>
@@ -2559,11 +2565,11 @@ const Messages = window.Messages = () => {
         </div>
         <div style={{ display: 'flex', gap: 12 }}>
           <button onClick={handleDeclineIncoming}
-            style={{ padding: '8px 20px', borderRadius: 20, border: 'none', background: '#e74c3c', color: 'var(--text-on-primary)', fontWeight: 600, cursor: 'pointer', fontSize: 14 }}>
+            style={{ minHeight: 44, padding: '8px 20px', borderRadius: 22, border: 'none', background: '#e74c3c', color: 'var(--text-on-primary)', fontWeight: 600, cursor: 'pointer', fontSize: 15 }}>
             Decline
           </button>
           <button onClick={handleAcceptIncoming}
-            style={{ padding: '8px 20px', borderRadius: 20, border: 'none', background: 'var(--bg-surface)', color: 'var(--role-color)', fontWeight: 600, cursor: 'pointer', fontSize: 14 }}>
+            style={{ minHeight: 44, padding: '8px 20px', borderRadius: 22, border: 'none', background: 'var(--bg-surface)', color: 'var(--role-color)', fontWeight: 700, cursor: 'pointer', fontSize: 15 }}>
             Accept
           </button>
         </div>

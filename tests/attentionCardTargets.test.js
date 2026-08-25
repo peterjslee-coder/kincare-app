@@ -97,9 +97,18 @@ describe("the time-change row opens the actual visit", () => {
 
   test("the focus is cleared once claimed", () => {
     // Otherwise a later remount reopens a modal the person already closed.
+    //
+    // v1.105.139 — the slice was 500 chars and a comment pushed the code past it, which is a
+    // test that fails for a reason unrelated to the property. Bound it by the end of the
+    // function instead, and check every kind the claim handles rather than the first one.
     for (const src of [dashboard, hub]) {
-      const eff = src.slice(src.indexOf("const claim = () =>"));
-      expect(eff.slice(0, 500)).toMatch(/window\.__pendingFocus = null;\n\s+setVisitDetailSessionId\(id\)/);
+      const start = src.indexOf("const claim = () =>");
+      const eff = src.slice(start, src.indexOf("claim();", start));
+      expect(eff).toMatch(/window\.__pendingFocus = null;\n\s+setVisitDetailSessionId\(id\)/);
+      // Every branch that opens something clears the focus FIRST.
+      const opens = eff.match(/set(VisitDetailSessionId|TaskSheet)\(/g) || [];
+      const clears = eff.match(/window\.__pendingFocus = null;/g) || [];
+      expect(clears.length).toBe(opens.length);
     }
   });
 });
