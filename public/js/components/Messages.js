@@ -50,6 +50,10 @@ const Messages = window.Messages = () => {
   // ─── In-app call state (Twilio Video) ───
   const [callState, setCallState] = useState({ active: false, roomName: null, callType: null, remoteParticipantName: null, remoteParticipantPhoto: null, callDirection: null });
   const [incomingCall, setIncomingCall] = useState(null); // { roomName, callType, callerId, callerName }
+  // v1.105.141 — what the server did with our invite: reached their open app, went out as a
+  // push, or reached nothing at all. Pete: "not sure if it rang on her side or she's just not
+  // available." Now the screen says which.
+  const [ringStatus, setRingStatus] = useState(null); // 'app' | 'push' | 'nowhere'
 
   // ─── Typing indicators ───
   const [typingUsers, setTypingUsers] = useState({}); // { conversationId: { userId: { name, timeout } } }
@@ -969,6 +973,7 @@ const Messages = window.Messages = () => {
     }
 
     // Start the call locally
+    setRingStatus(null); // this call's answer, not the last one's
     setCallState({
       active: true,
       roomName: roomName,
@@ -1053,6 +1058,9 @@ const Messages = window.Messages = () => {
       }
     } catch {}
 
+    const cleanupRing = onSocketEvent('call_ring_status', (data) => {
+      setRingStatus(data?.via || null);
+    });
     const cleanup = onSocketEvent('call_incoming', (data) => {
       if (!callState.active) {
         setIncomingCall(data);
@@ -1068,7 +1076,7 @@ const Messages = window.Messages = () => {
     const cleanup3 = onSocketEvent('call_declined', () => {
       setCallState({ active: false, roomName: null, callType: null, remoteParticipantName: null, remoteParticipantPhoto: null, callDirection: null });
     });
-    return () => { cleanup(); cleanup2(); cleanup3(); };
+    return () => { cleanupRing(); cleanup(); cleanup2(); cleanup3(); };
   }, [callState.active]);
 
   // ─── Typing indicator socket listener ───
@@ -2749,6 +2757,7 @@ const Messages = window.Messages = () => {
     callState: callState,
     onEndCall: handleEndCall,
     currentUserId: currentUser?.id,
+    ringStatus: ringStatus,
   }));
 
   if (isMobile) {

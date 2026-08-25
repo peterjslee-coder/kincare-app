@@ -504,13 +504,13 @@ async function sendPushToUser(userId, payload, eventType) {
     const db = await getDb();
     const targetUser = await db.prepare("SELECT is_demo, notification_prefs FROM users WHERE id = ?").get(userId);
     if (targetUser?.is_demo) {
-      return; // silently skip demo users
+      return { sent: 0, failed: 0, removed: 0, reason: "demo_user" }; // silently skip demo users
     }
 
     // Check user notification preferences if eventType is provided
     if (eventType && targetUser?.notification_prefs) {
       const prefs = JSON.parse(targetUser.notification_prefs);
-      if (prefs[`push_${eventType}`] === false) return; // user opted out
+      if (prefs[`push_${eventType}`] === false) return { sent: 0, failed: 0, removed: 0, reason: "opted_out" };
     }
 
     // ─── v1.56.0 — Also create an in-app notification record ───
@@ -537,7 +537,10 @@ async function sendPushToUser(userId, payload, eventType) {
       "SELECT id, subscription_json, fail_count FROM push_subscriptions WHERE user_id = ?"
     ).all(userId);
 
-    if (subs.length === 0) return; // no subscriptions for this user
+    // v1.105.141 — this used to `return` into the void. For most notifications that is fine.
+    // For a CALL it is the difference between "her phone is ringing" and "nothing happened
+    // anywhere", and the caller was shown "Ringing…" either way. Say which it was.
+    if (subs.length === 0) return { sent: 0, failed: 0, removed: 0, reason: "no_devices" }; // no subscriptions for this user
 
     // v1.105.40 — every push carries the recipient's CURRENT attention count, because a
     // push always means something changed. `badge` here is the monochrome ICON for the web

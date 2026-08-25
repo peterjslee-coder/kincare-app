@@ -451,3 +451,66 @@ describe("a call is on top of the app, and says why when it fails", () => {
     expect(ends.length).toBe(3); // end call, unmount, and a connect that failed
   });
 });
+
+// ─── v1.105.141 — "not sure if it rang on her side" ───
+//
+// Pete, after the first call that got as far as showing his own video: "Julia didn't pick up,
+// not sure if it rang on her side or she's just not available."
+//
+// He could not have known. The caller's screen said "Ringing…" whether the invite reached her
+// open app, went out as a push, or reached nothing at all — three very different facts wearing
+// one word. And two of those branches were silent by construction.
+describe("the caller is told what happened to the invite", () => {
+  const fs = require("fs");
+  const path = require("path");
+  const read = (...p) => fs.readFileSync(path.join(__dirname, "..", ...p), "utf8");
+  const server = read("src", "server.js");
+  const push = read("src", "routes", "push.js");
+  const msgs = read("public", "js", "components", "Messages.js");
+  const overlay = read("public", "js", "components", "VideoCallOverlay.js");
+
+  test("every branch of call_invite answers the caller", () => {
+    expect(server).toMatch(/socket\.emit\("call_ring_status", \{ roomName: data\.roomName, via, devices/);
+    expect(server).toMatch(/ack\("app", targetSockets\.size\)/);
+    expect(server).toMatch(/ack\(sent > 0 \? "push" : "nowhere", sent\)/);
+    expect(server).toMatch(/ack\("nowhere", 0\)/); // the push threw
+  });
+
+  test("sendPushToUser stops returning into the void", () => {
+    // For a digest, `return` is fine. For a call it is the difference between "her phone is
+    // ringing" and "nothing happened anywhere" — and the caller saw "Ringing…" either way.
+    expect(push).toMatch(/return \{ sent: 0, failed: 0, removed: 0, reason: "no_devices" \}/);
+    expect(push).toMatch(/return \{ sent: 0, failed: 0, removed: 0, reason: "opted_out" \}/);
+    expect(push).toMatch(/return \{ sent: 0, failed: 0, removed: 0, reason: "demo_user" \}/);
+  });
+
+  test("a CALL is not subject to the notification opt-out", () => {
+    // sendPushToUser drops anything whose push_<eventType> preference is false, silently.
+    // Right for a digest, wrong for a ringing phone: not wanting calls from someone is a
+    // block, not a preference toggle. The call push passes no eventType.
+    const invite = server.slice(server.indexOf('socket.on("call_invite"'), server.indexOf('socket.on("call_accept"'));
+    expect(invite).toMatch(/const result = await sendPushToUser\(data\.targetUserId, \{/);
+    expect(invite).not.toMatch(/\}, "call_incoming"\);/);
+    // ...and the in-app record still lands, so a missed call is visible either way.
+    expect(invite).toMatch(/type: "call_incoming"/);
+  });
+
+  test("the client listens, and resets per call", () => {
+    expect(msgs).toMatch(/onSocketEvent\('call_ring_status'/);
+    expect(msgs).toMatch(/setRingStatus\(null\); \/\/ this call's answer, not the last one's/);
+    expect(msgs).toMatch(/ringStatus: ringStatus,/);
+    expect(msgs).toMatch(/return \(\) => \{ cleanupRing\(\); cleanup\(\); cleanup2\(\); cleanup3\(\); \};/);
+  });
+
+  test("each outcome gets a sentence, not a status word", () => {
+    expect(overlay).toMatch(/has InPlace open — it's ringing on their screen/);
+    expect(overlay).toMatch(/isn't in the app\. We've sent a notification to their phone/);
+    expect(overlay).toMatch(/has no device set up for notifications\. They'll see a missed call/);
+  });
+
+  test("it is for the caller only, and stops once someone answers", () => {
+    // The person receiving a call does not need to be told how it reached them, and once it
+    // is connected, how it rang stops mattering.
+    expect(overlay).toMatch(/status === 'connected' \|\| callState\.callDirection !== 'outgoing'\) \? null/);
+  });
+});

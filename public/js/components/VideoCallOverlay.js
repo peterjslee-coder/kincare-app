@@ -10,7 +10,7 @@
  *
  * Uses Twilio Video SDK loaded from self-hosted /vendor/ (window.Twilio.Video).
  */
-const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, currentUserId }) => {
+const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, currentUserId, ringStatus }) => {
   const [status, setStatus] = useState('connecting'); // connecting | ringing | connected | ended
   const [room, setRoom] = useState(null);
   const [isMuted, setIsMuted] = useState(false);
@@ -388,6 +388,21 @@ const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, curr
 
   const isVideo = callState.callType === 'video';
 
+  // ─── v1.105.141 — say whether it actually rang ───
+  //
+  // Pete: "Julia didn't pick up, not sure if it rang on her side or she's just not
+  // available." Until now the caller saw "Ringing…" whether the invite reached her open app,
+  // went out as a push, or reached nothing at all — three very different facts wearing one
+  // word. The server answers the invite now (server.js `call_ring_status`) and this is that
+  // answer, in plain language. Only while the call is still unanswered: once someone picks
+  // up, how it rang stops mattering.
+  const who = callState.remoteParticipantName || 'They';
+  const ringLine = (status === 'connected' || callState.callDirection !== 'outgoing') ? null
+    : ringStatus === 'app' ? `${who} has InPlace open — it's ringing on their screen.`
+    : ringStatus === 'push' ? `${who} isn't in the app. We've sent a notification to their phone.`
+    : ringStatus === 'nowhere' ? `${who} has no device set up for notifications. They'll see a missed call in InPlace.`
+    : null;
+
   return React.createElement('div', {
     style: {
       position: 'fixed',
@@ -473,7 +488,11 @@ const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, curr
       }, status === 'connecting' ? 'Connecting...'
         : status === 'ringing' ? 'Ringing...'
         : status === 'connected' ? formatDuration(callDuration)
-        : 'Call ended')
+        : 'Call ended'),
+      // v1.105.141 — what actually happened to the invite. See ringLine().
+      ringLine && React.createElement('div', {
+        style: { color: 'rgba(255,255,255,0.55)', fontSize: 12.5, maxWidth: 260, textAlign: 'center', lineHeight: 1.4 }
+      }, ringLine)
     ),
 
     // Video call status overlay (top center)
@@ -494,6 +513,24 @@ const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, curr
       : status === 'ringing' ? `Calling ${callState.remoteParticipantName || ''}...`
       : status === 'connected' ? formatDuration(callDuration)
       : 'Call ended'),
+
+    // v1.105.141 — the same honest line, for a video call
+    isVideo && ringLine && React.createElement('div', {
+      style: {
+        position: 'absolute',
+        top: 'calc(56px + var(--sat, 0px))',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        color: 'rgba(255,255,255,0.75)',
+        fontSize: 12.5,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        padding: '5px 14px',
+        borderRadius: 16,
+        maxWidth: '80%',
+        textAlign: 'center',
+        zIndex: 10001,
+      }
+    }, ringLine),
 
     // Error message
     error && React.createElement('div', {

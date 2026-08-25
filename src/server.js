@@ -131,6 +131,16 @@ io.on("connection", (socket) => {
     // Push only when there is NO socket, deliberately — Pete's other report (97783012) is that
     // push while you are already in the app is noise. The socket IS the signal that they are
     // here; its absence is the signal that they are not.
+    //
+    // ─── v1.105.141 — tell the CALLER what happened ───
+    //
+    // Pete: "Julia didn't pick up, not sure if it rang on her side or she's just not
+    // available." He could not have known: the caller's screen says "Ringing…" whether the
+    // invite reached a live app, went out as a push, or fell into a hole. Every branch below
+    // now answers back, so the person holding the phone is told which one it was.
+    const ack = (via, devices) => {
+      socket.emit("call_ring_status", { roomName: data.roomName, via, devices: devices || 0 });
+    };
     const targetSockets = connectedUsers.get(data.targetUserId);
     const liveSockets = targetSockets && targetSockets.size > 0;
     if (liveSockets) {
@@ -142,6 +152,7 @@ io.on("connection", (socket) => {
           callerName: data.callerName,
         });
       }
+      ack("app", targetSockets.size);
     } else {
       const kind = data.callType === "video" ? "Video call" : "Call";
       const who = data.callerName || "Someone";
@@ -150,7 +161,13 @@ io.on("connection", (socket) => {
       (async () => {
         try {
           const { sendPushToUser } = require("./routes/push");
-          await sendPushToUser(data.targetUserId, {
+          // NO eventType, deliberately. sendPushToUser reads notification preferences from
+          // the eventType and silently drops anything the recipient has switched off — which
+          // is right for a digest and wrong for a ringing phone. A call is not a notification
+          // you quietly opt out of; if someone does not want calls, that is a block, not a
+          // preference toggle. The in-app record still lands with type "call_incoming",
+          // taken from data.type, so a missed call is visible in the app either way.
+          const result = await sendPushToUser(data.targetUserId, {
             title: `${kind} from ${who}`,
             body: "Tap to answer",
             data: {
@@ -161,10 +178,13 @@ io.on("connection", (socket) => {
               callerId: userId,
               callerName: who,
             },
-          }, "call_incoming");
+          });
+          const sent = (result && result.sent) || 0;
+          ack(sent > 0 ? "push" : "nowhere", sent);
         } catch (err) {
           console.error("call_invite push failed:", err.message);
           captureException(err, { where: "socket: call_invite push", targetUserId: data.targetUserId });
+          ack("nowhere", 0);
         }
       })();
     }
@@ -527,7 +547,7 @@ app.use("/api/media", require("./routes/media"));
 app.use("/api/safety", require("./routes/safety"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.105.140";
+const APP_VERSION = "1.105.141";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });
