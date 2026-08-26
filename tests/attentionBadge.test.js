@@ -362,7 +362,7 @@ describe("the number says what it is made of", () => {
 
   test("nothing waiting draws nothing at all", () => {
     // The dashboard is crowded — his word — and "you're all caught up" is decoration.
-    expect(card).toMatch(/if \(!visible\.length && !heldIds\.length\) return null;/);
+    expect(card).toMatch(/if \(!visible\.length && !doneIds\.length\) return null;/);
   });
 
   test("it refreshes on return, like the badge does", () => {

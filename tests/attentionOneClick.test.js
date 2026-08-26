@@ -280,9 +280,9 @@ function build(seeds) {
   return fn(win, doc, shim, async () => ({ ok: true, json: async () => ({}) }), TimezoneHelper);
 }
 
-// seeds are useState calls in declaration order: payload, loadFailed, held, failed
-const draw = (payload, { held = {}, failed = {} } = {}) => {
-  const C = build([payload, false, held, failed]);
+// seeds are useState calls in declaration order: payload, loadFailed, busy, done, failed
+const draw = (payload, { busy = {}, done = {}, failed = {} } = {}) => {
+  const C = build([payload, false, busy, done, failed]);
   const out = renderToStaticMarkup(React.createElement(C, { onNavigate: () => {} }));
   return { html: out, text: out.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim() };
 };
@@ -331,14 +331,23 @@ describe("the card draws the thing, not the count of the thing", () => {
     expect(out).toContain("Retry");
   });
 
-  test("a held action shows what was done and how to take it back", async () => {
+  test("a completed undoable action shows what was done and how to take it back", async () => {
+    // v1.105.142 — this row appears AFTER the server confirmed, not instead of the request.
+    const payload = await payloadOf({ tasks: [TASK] });
+    const item = payload.items[0];
+    const { text } = draw(payload, { done: { [item.id]: { item, verbPast: "Marked done." } } });
+    expect(text).toContain("Marked done.");
+    expect(text).toContain("Undo");
+  });
+
+  test("a busy row stays on screen and says it is working", async () => {
+    // The row used to vanish before anything had happened, which is how a reload could put it
+    // straight back and make one tap look like a failure.
     const payload = await payloadOf({ reimbursements: [REIMBURSEMENT] });
     const item = payload.items[0];
-    const { text } = draw(payload, { held: { [item.id]: { item, verbPast: "Approved." } } });
-    expect(text).toContain("Approved.");
-    expect(text).toContain("Undo");
-    // ...and the row it replaced is not also on screen
-    expect(text).not.toContain("Approve $24.60");
+    const { text } = draw(payload, { busy: { [item.id]: true } });
+    expect(text).toContain("Approve $24.60 to Edwina Hall");
+    expect(text).toMatch(/Working/);
   });
 
   test("a failed action puts the row back, with the reason", async () => {
@@ -359,30 +368,60 @@ describe("the card draws the thing, not the count of the thing", () => {
   });
 });
 
-describe("one tap is safe because nothing goes out for five seconds", () => {
-  test("the action is held, not sent", () => {
-    expect(cardSrc).toMatch(/const timer = setTimeout\(\(\) => send\(item\), ATTENTION_HOLD_MS\);/);
-    expect(cardSrc).toMatch(/const ATTENTION_HOLD_MS = 5000;/);
+describe("one tap is one request, and the row leaves when the server says so", () => {
+  // v1.105.142. Pete (ab4fb08c, dictated): "I click off that her medication was delivered and
+  // it goes away, but then it reasserts. I click on it again. It goes away and then I can go
+  // click completed below in the care team panel, but then it says it's already been checked
+  // off."
+  //
+  // .129 held every action for 5s so one tap could be taken back — undo for actions with no
+  // server-side undo, bought by hiding the row before anything had happened. That lie does not
+  // survive the rest of the app: the card unmounts when he navigates, the unmount flushes the
+  // request and remounts with fresh state, the reload beats the write, and the row he cleared
+  // comes back. His second tap then 409s and the error path returns the row a third time.
+
+  test("the hold window is gone", () => {
+    expect(cardSrc).not.toMatch(/ATTENTION_HOLD_MS/);
+    expect(cardSrc).not.toMatch(/setTimeout\(\(\) => send\(item\)/);
+    // ...and with it the pagehide/keepalive machinery that only existed to serve it.
+    expect(cardSrc).not.toMatch(/keepalive: true/);
+    expect(cardSrc).not.toMatch(/pagehide/);
   });
 
-  test("undo cancels the send rather than reversing it", () => {
-    expect(cardSrc).toMatch(/if \(entry\) clearTimeout\(entry\.timer\);/);
+  test("the row stays put, busy, until the server answers", () => {
+    expect(cardSrc).toMatch(/const visible = items;/);
+    expect(cardSrc).toMatch(/setBusy\(\(prev\) => \(\{ \.\.\.prev, \[item\.id\]: true \}\)\)/);
+    expect(cardSrc).toMatch(/busy\[item\.id\] \? 'Working/);
   });
 
-  test("closing the app flushes what is still held, with keepalive", () => {
-    // Without this, "tap Approve then close the app" quietly does nothing — the worst
-    // outcome available, because the person watched it clear.
-    expect(cardSrc).toMatch(/window\.addEventListener\('pagehide', flush\)/);
-    expect(cardSrc).toMatch(/keepalive: true/);
+  test("a second tap cannot start a second request", () => {
+    expect(cardSrc).toMatch(/if \(busy\[item\.id\]\) return; \/\/ one tap is one request/);
   });
 
-  test("a failed send is never reported as done", () => {
+  test("409 means it is already how you wanted it — that is success", () => {
+    // "Already checked off" is the endpoint agreeing with the user. Handing it back as an
+    // error is what turned one tap into three.
+    expect(cardSrc).toMatch(/if \(!ok && res\?\.status === 409\) ok = true;/);
+  });
+
+  test("Undo only where the server really has one, and it calls it", () => {
+    expect(cardSrc).toMatch(/if \(item\.undoable && item\.undo\)/);
+    expect(cardSrc).toMatch(/apiFetch\(entry\.item\.undo\.path/);
+  });
+
+  test("the other surfaces are told, because they draw the same task", () => {
+    // Next Up and the care-team panel both render care tasks and neither was listening.
+    expect(cardSrc).toMatch(/new Event\('inplace:attention-changed'\)/);
+    const dash = read("public", "js", "components", "Dashboard.js");
+    expect(dash).toMatch(/window\.addEventListener\('inplace:attention-changed', refresh\)/);
+    expect(dash).toMatch(/window\.removeEventListener\('inplace:attention-changed', refresh\)/);
+  });
+
+  test("a failed send still puts the row back, with the reason", () => {
     expect(cardSrc).toMatch(/setFailed\(\(prev\) => \(\{ \.\.\.prev, \[item\.id\]: message \|\| "That didn't go through\. Try again\." \}\)\)/);
   });
 
   test("after a send the count is re-read from the server, not decremented locally", () => {
-    // The server is the definition of the number (utils/attention.js). A local decrement is
-    // a second opinion, and the icon would keep the first.
-    expect(cardSrc).toMatch(/load\(\); \/\/ the server is the count/);
+    expect(cardSrc).toMatch(/load\(\);/);
   });
 });

@@ -94,6 +94,16 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
     careTasksRef.current = careTasksToday;
     if (window.__pendingFocus) window.dispatchEvent(new Event('inplace:focus'));
   }, [careTasksToday]);
+
+  // v1.105.142 — the same care task is drawn in three places: the Needs-you card, the Next Up
+  // feed, and the care-team panel. Checking it off in one of them left the other two showing
+  // it as outstanding, which is how Pete ended up tapping "completed" on a task that was
+  // already done and being told so. Whoever changes it says so; everyone else re-reads.
+  useEffect(() => {
+    const refresh = () => { fetchCareTasks(); };
+    window.addEventListener('inplace:attention-changed', refresh);
+    return () => window.removeEventListener('inplace:attention-changed', refresh);
+  }, []);
   const [taskSheet, setTaskSheet] = useState(null); // { occ, group } → CareTaskCheckSheet
   const [showTaskCreate, setShowTaskCreate] = useState(false); // kept: CareTeamManage opens this via window.__openTaskCreate
   const [showLogVisit, setShowLogVisit] = useState(null); // v1.105.38 — { recipientId, position }

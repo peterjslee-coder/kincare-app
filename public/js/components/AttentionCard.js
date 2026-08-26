@@ -35,15 +35,29 @@
 // The items, and the single request that clears each one, come from the server
 // (utils/attention.js) next to the query that found them — see the note there.
 
-// Hold-then-send. Nothing is irreversible for five seconds: the card clears the moment you
-// tap, and the request goes out when the window closes. Only care tasks have a real
-// server-side undo, and a design that offers Undo on one row in three is worse than one that
-// offers it nowhere — so the window is the undo, uniformly.
+// ─── v1.105.142 — send on tap. The hold window was a mistake. ───
 //
-// pagehide flushes anything still held, with keepalive so the browser sends it while the page
-// is going away. Without that, tapping Approve and immediately closing the app would silently
-// do nothing, which is the one outcome worse than a slow approval.
-const ATTENTION_HOLD_MS = 5000;
+// Pete (ab4fb08c, dictated): "There's something wrong with the Needs you buttons on top. I
+// click off that her medication was delivered and it goes away, but then it reasserts. I click
+// on it again. It goes away and then I can go click completed below in the care team panel,
+// but then it says it's already been checked off."
+//
+// v1.105.129 held every action for five seconds before sending it, so that one tap could be
+// taken back. Undo for actions with no server-side undo, bought with a lie: the row vanished
+// before anything had happened.
+//
+// The lie does not survive contact with the rest of the app. The card lives inside Dashboard
+// and unmounts whenever he navigates; unmounting flushes the pending request and remounts with
+// fresh state, which immediately re-reads the server — and the server has not finished the
+// write yet, so the row he cleared comes straight back. He taps it again, that second request
+// arrives after the first one landed, the endpoint correctly answers 409 "Already checked
+// off", and my error path puts the row back a THIRD time wearing the server's error. Every
+// other surface (Next Up, the care-team panel) never heard about any of it.
+//
+// So: send on tap. The row is gone when the server says it is gone, undo is offered only where
+// the server actually has an undo, and a 409 means the task is done — which is what the person
+// asked for, so it is a success, not an error to hand back to them.
+const ATTENTION_DONE_LINGER_MS = 6000;
 
 // What the confirmation row says after you tap. Spelled out rather than derived: "Accept"
 // + "d" is "Acceptd", and a card whose job is to be legible cannot afford that.
@@ -115,14 +129,16 @@ const AttentionCard = window.AttentionCard = ({ onNavigate }) => {
   // (Also `res.ok` not `res?.ok` — apiFetch returns null on its 401 path, which threw
   // straight into the same silent catch.)
   const [loadFailed, setLoadFailed] = React.useState(false);
-  // id → { item, verbPast, timer } while the hold window is open.
-  const [held, setHeld] = React.useState({});
+  // id → true while its request is in flight. The row stays on screen, busy, rather than
+  // disappearing before anything has happened.
+  const [busy, setBusy] = React.useState({});
+  // id → { item, verbPast } for a few seconds after it really is done, so an undoable action
+  // has somewhere to put its Undo.
+  const [done, setDone] = React.useState({});
   // id → message, when the request came back non-OK. The row comes BACK on failure; a
   // request that failed has not cleared anything, and pretending otherwise is how a
   // reimbursement stays pending while everyone believes it was approved.
   const [failed, setFailed] = React.useState({});
-  const heldRef = React.useRef({});
-  heldRef.current = held;
 
   const load = React.useCallback(async () => {
     try {
@@ -142,26 +158,9 @@ const AttentionCard = window.AttentionCard = ({ onNavigate }) => {
     return () => document.removeEventListener('visibilitychange', onVis);
   }, [load]);
 
-  // Send anything still being held before the page goes away. keepalive lets the request
-  // outlive the document; a plain fetch here is cancelled on unload.
-  React.useEffect(() => {
-    const flush = () => {
-      Object.values(heldRef.current).forEach(({ item }) => {
-        if (!item?.action) return;
-        try {
-          apiFetch(item.action.path, {
-            method: item.action.method || 'POST',
-            body: JSON.stringify(item.action.body || {}),
-            keepalive: true,
-          }).catch(() => {});
-        } catch { /* the page is leaving; there is nothing left to report to */ }
-      });
-    };
-    window.addEventListener('pagehide', flush);
-    return () => { window.removeEventListener('pagehide', flush); flush(); };
-  }, []);
-
   const send = React.useCallback(async (item) => {
+    setFailed((prev) => { const next = { ...prev }; delete next[item.id]; return next; });
+    setBusy((prev) => ({ ...prev, [item.id]: true }));
     let ok = false;
     let message = null;
     try {
@@ -170,33 +169,50 @@ const AttentionCard = window.AttentionCard = ({ onNavigate }) => {
         body: JSON.stringify(item.action.body || {}),
       });
       ok = !!res?.ok;
+      // 409 is this endpoint saying the thing is ALREADY in the state you asked for — a care
+      // task already checked off, a proposal already answered. The person wanted it done; it
+      // is done. Handing them "Already checked off" as a failure is how one tap turned into
+      // three in Pete's report.
+      if (!ok && res?.status === 409) ok = true;
       if (!ok) {
         try { message = (await res.json())?.error; } catch { /* keep the generic line */ }
       }
     } catch (e) {
       message = null;
     }
-    setHeld((prev) => { const next = { ...prev }; delete next[item.id]; return next; });
+    setBusy((prev) => { const next = { ...prev }; delete next[item.id]; return next; });
     if (ok) {
-      load(); // the server is the count; re-read rather than decrementing a local number
+      // Only NOW is it true. Reload from the server rather than decrementing a local number,
+      // and tell the rest of the app, because the same task is drawn in Next Up and in the
+      // care-team panel and neither of them was listening.
+      load();
+      try { window.dispatchEvent(new Event('inplace:attention-changed')); } catch { /* no-op */ }
+      if (item.undoable && item.undo) {
+        setDone((prev) => ({ ...prev, [item.id]: { item, verbPast: ATTENTION_PAST[item.verb] || 'Done.' } }));
+        setTimeout(() => {
+          setDone((prev) => { const next = { ...prev }; delete next[item.id]; return next; });
+        }, ATTENTION_DONE_LINGER_MS);
+      }
     } else {
       setFailed((prev) => ({ ...prev, [item.id]: message || "That didn't go through. Try again." }));
     }
   }, [load]);
 
-  const act = React.useCallback((item, verbPast) => {
-    setFailed((prev) => { const next = { ...prev }; delete next[item.id]; return next; });
-    const timer = setTimeout(() => send(item), ATTENTION_HOLD_MS);
-    setHeld((prev) => ({ ...prev, [item.id]: { item, verbPast, timer } }));
-  }, [send]);
+  const act = React.useCallback((item) => {
+    if (busy[item.id]) return; // one tap is one request
+    send(item);
+  }, [send, busy]);
 
-  const undo = React.useCallback((id) => {
-    setHeld((prev) => {
-      const entry = prev[id];
-      if (entry) clearTimeout(entry.timer);
-      const next = { ...prev }; delete next[id]; return next;
-    });
-  }, []);
+  const undo = React.useCallback(async (id) => {
+    const entry = done[id];
+    setDone((prev) => { const next = { ...prev }; delete next[id]; return next; });
+    if (!entry?.item?.undo) return;
+    try {
+      await apiFetch(entry.item.undo.path, { method: entry.item.undo.method || 'POST' });
+    } catch { /* the reload below will show the truth either way */ }
+    load();
+    try { window.dispatchEvent(new Event('inplace:attention-changed')); } catch { /* no-op */ }
+  }, [done, load]);
 
   const open = React.useCallback((item) => {
     // Open the exact item, not just the page it lives on. Consumed by Dashboard /
@@ -229,11 +245,12 @@ const AttentionCard = window.AttentionCard = ({ onNavigate }) => {
   }
 
   const items = (payload && Array.isArray(payload.items)) ? payload.items : [];
-  const heldIds = Object.keys(held);
-  const visible = items.filter((i) => !held[i.id]);
-  // Held rows still occupy the section — that is where the Undo lives. Only when there is
-  // nothing at all does the card disappear.
-  if (!visible.length && !heldIds.length) return null;
+  const doneIds = Object.keys(done);
+  // Nothing is hidden optimistically any more: a row leaves this list when the SERVER stops
+  // returning it. The done rows below are things that really are done, lingering only long
+  // enough to offer the undo the server actually supports.
+  const visible = items;
+  if (!visible.length && !doneIds.length) return null;
 
   return (
     <div style={{ marginBottom: 16 }}>
@@ -245,10 +262,10 @@ const AttentionCard = window.AttentionCard = ({ onNavigate }) => {
         <span aria-hidden="true">{'❗'}</span> Needs you ({visible.length})
       </div>
 
-      {heldIds.map((id) => {
-        const { item, verbPast } = held[id];
+      {doneIds.map((id) => {
+        const { verbPast } = done[id];
         return (
-          <div key={`held-${id}`} style={{
+          <div key={`done-${id}`} style={{
             marginBottom: 10, padding: '12px 16px', borderRadius: 12,
             border: '1px dashed var(--border-color)', background: 'var(--bg-card)',
             display: 'flex', alignItems: 'center', gap: 10,
@@ -313,13 +330,15 @@ const AttentionCard = window.AttentionCard = ({ onNavigate }) => {
             )}
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
-              <button onClick={() => act(item, ATTENTION_PAST[item.verb] || 'Done.')}
+              <button onClick={() => act(item)} disabled={!!busy[item.id]}
                 style={{
                   flex: '1 1 auto', minHeight: 44, padding: '12px 24px',
-                  background: 'var(--accent-color-dark)', color: 'var(--text-on-primary)',
+                  background: busy[item.id] ? 'var(--border-light)' : 'var(--accent-color-dark)',
+                  color: busy[item.id] ? 'var(--text-secondary)' : 'var(--text-on-primary)',
                   border: 'none', borderRadius: 12, fontSize: 15, fontWeight: 700,
-                  cursor: 'pointer', boxShadow: '0 2px 8px rgba(216,90,43,0.3)',
-                }}>{item.verb}</button>
+                  cursor: busy[item.id] ? 'wait' : 'pointer',
+                  boxShadow: busy[item.id] ? 'none' : '0 2px 8px rgba(216,90,43,0.3)',
+                }}>{busy[item.id] ? 'Working\u2026' : item.verb}</button>
               <button onClick={() => open(item)} style={{
                 minHeight: 44, padding: '10px 18px', background: 'var(--bg-surface)',
                 color: 'var(--accent-color)', border: '2px solid var(--accent-color)',
