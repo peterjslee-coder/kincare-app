@@ -117,6 +117,72 @@ router.post("/backfill-assignments", async (req, res) => {
   }
 });
 
+// ─── GET /api/admin/users/:id/reachability ───
+//
+// v1.105.144. "Did it actually ring?" has been unanswerable all week, and every attempt to
+// answer it has been inference from one field. Pete: "julia's definitely not on the PWA, but
+// on the ios version" — while `user_client_info.platform` says "web" for her, which is either
+// a bug in how the native app reports itself or a stale row from a browser session. Either
+// way, guessing is how the last three wrong answers happened.
+//
+// This is the question stated properly: what would a call to this person actually reach?
+// Devices, kinds, and whether each one has EVER worked — a subscription that has never had a
+// success is a subscription that does not exist, no matter how good the row looks.
+//
+// No tokens or endpoints are returned. A push token is a credential for someone's phone; the
+// kind and the dates are what a diagnosis needs.
+router.get("/users/:id/reachability", authenticate, checkAdmin, requireAdmin, async (req, res) => {
+  try {
+    const db = await getDb();
+    const user = await db.prepare(
+      "SELECT id, first_name, last_name, email FROM users WHERE id = ?"
+    ).get(req.params.id);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    const client = await db.prepare(
+      "SELECT app_version, user_agent, platform, last_seen_at FROM user_client_info WHERE user_id = ?"
+    ).get(req.params.id);
+
+    const subs = await db.prepare(`
+      SELECT endpoint, fail_count, last_success_at, last_failure_at, created_at, updated_at
+      FROM push_subscriptions WHERE user_id = ? ORDER BY created_at
+    `).all(req.params.id);
+
+    const devices = subs.map((s) => {
+      const ep = String(s.endpoint || "");
+      // native://ios/<token> and native://android/<token> — anything else is Web Push.
+      const m = ep.match(/^native:\/\/([a-z]+)\//i);
+      return {
+        kind: m ? m[1].toLowerCase() : "web",
+        // Enough to tell two rows apart in a support conversation, and useless to anyone else.
+        ref: ep.slice(-6),
+        failCount: s.fail_count || 0,
+        everWorked: !!s.last_success_at,
+        lastSuccessAt: s.last_success_at,
+        lastFailureAt: s.last_failure_at,
+        createdAt: s.created_at,
+      };
+    });
+
+    const usable = devices.filter((d) => d.failCount < 5);
+    const summary = !devices.length
+      ? "no devices registered — a call can only be answered if they happen to be in the app"
+      : usable.some((d) => d.kind === "ios" || d.kind === "android")
+        ? `native push should reach them (${usable.filter((d) => d.kind !== "web").length} device(s))`
+        : "only Web Push is registered — inside the native iOS app that arrives nowhere";
+
+    res.json({
+      user: { id: user.id, name: `${user.first_name || ""} ${user.last_name || ""}`.trim(), email: user.email },
+      client: client || null,
+      devices,
+      summary,
+    });
+  } catch (err) {
+    console.error("Reachability error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── GET /api/admin/client-versions ───
 // Returns all active users with their client version info (web/iOS/Android, app_version, platform)
 router.get("/client-versions", authenticate, checkAdmin, requireAdmin, async (req, res) => {
