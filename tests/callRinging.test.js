@@ -514,3 +514,66 @@ describe("the caller is told what happened to the invite", () => {
     expect(overlay).toMatch(/status === 'connected' \|\| callState\.callDirection !== 'outgoing'\) \? null/);
   });
 });
+
+// ─── v1.105.143 — "not sure it's actually ringing" ───
+//
+// Pete, with .141's honest line on screen: "says they aren't in the app but notifying their
+// phone...but no one ever picks up. not sure it's actually ringing."
+//
+// It wasn't, in the sense he means. Two separate silences:
+//   • App OPEN: the invite arrives over the socket and drew a silent green banner. Look away
+//     for ten seconds and the call came and went with no sound at all.
+//   • App CLOSED: the push arrived as the same banner every other notification uses —
+//     Open / Dismiss, auto-dismissing, and held back entirely by any Focus mode.
+describe("a call announces itself like a call", () => {
+  const fs = require("fs");
+  const path = require("path");
+  const read = (...p) => fs.readFileSync(path.join(__dirname, "..", ...p), "utf8");
+  const msgs = read("public", "js", "components", "Messages.js");
+  const sw = read("public", "sw.js");
+  const apns = read("src", "utils", "apns.js");
+  const app = read("public", "js", "app.js");
+
+  test("the open app rings, on a cadence, for as long as it is ringing", () => {
+    expect(msgs).toMatch(/const Ctx = window\.AudioContext \|\| window\.webkitAudioContext;/);
+    expect(msgs).toMatch(/timer = setInterval\(burst, 3000\);/);
+    // Synthesised: no asset to ship or cache, nothing for the CSP to block, works offline.
+    expect(msgs).toMatch(/ctx\.createOscillator\(\)/);
+  });
+
+  test("and it stops — no ring outliving the banner", () => {
+    const eff = msgs.slice(msgs.indexOf("make it actually ring"), msgs.indexOf("Typing indicator socket listener"));
+    expect(eff).toMatch(/if \(timer\) clearInterval\(timer\);/);
+    expect(eff).toMatch(/if \(ctx && ctx\.close\) ctx\.close\(\);/);
+    expect(eff).toMatch(/\}, \[incomingCall\]\);/);
+  });
+
+  test("the notification stays on screen instead of scrolling away", () => {
+    expect(sw).toMatch(/const isCall = pushData\.type === 'call_incoming';/);
+    expect(sw).toMatch(/requireInteraction: isCall,/);
+  });
+
+  test("its buttons are the two answers a ringing phone has", () => {
+    expect(sw).toMatch(/\{ action: 'answer', title: 'Answer' \}, \{ action: 'decline', title: 'Decline' \}/);
+  });
+
+  test("Decline from the lock screen actually declines", () => {
+    // Otherwise the notification's own button silently does nothing and the caller stands
+    // there listening to a call that will never be answered.
+    expect(sw).toMatch(/client\.postMessage\(\{ type: 'CALL_DECLINE', data: d \}\)/);
+    expect(app).toMatch(/window\._socket\.emit\('call_decline', \{ callerId: d\.callerId, roomName: d\.roomName \}\)/);
+  });
+
+  test("a second call never silently replaces the first", () => {
+    // v1.105.126 was this exact collapse bug wearing a different hat: 23 notifications
+    // stacked under one tag, so the last one looked like more of the same.
+    expect(sw).toMatch(/tag: isCall \? `call-\$\{pushData\.roomName \|\| Date\.now\(\)\}`/);
+  });
+
+  test("iOS is told a call is time-sensitive, and ONLY a call", () => {
+    // An ordinary alert is held back by Do Not Disturb and by every Focus the person has on.
+    // time-sensitive is the level Apple defines for something that matters now and is
+    // worthless later — and it stops being honoured if you use it for everything.
+    expect(apns).toMatch(/payload\?\.data\?\.type === "call_incoming" \? \{ "interruption-level": "time-sensitive" \}/);
+  });
+});

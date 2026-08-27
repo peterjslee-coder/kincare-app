@@ -128,6 +128,13 @@ function sendApnsNotification(deviceToken, payload) {
     aps: {
       alert: { title: payload.title || "InPlace", body: payload.body || "" },
       sound: "default",
+      // v1.105.143 — a call has to get through a Focus mode. Pete: "says they aren't in the
+      // app but notifying their phone...but no one ever picks up. not sure it's actually
+      // ringing." An ordinary alert is silently held back by Do Not Disturb and by every
+      // Focus the person has on; time-sensitive is the level iOS defines for exactly this —
+      // something that matters NOW and is worthless later. Reserved for calls: use it for
+      // everything and iOS stops honouring it.
+      ...(payload?.data?.type === "call_incoming" ? { "interruption-level": "time-sensitive" } : {}),
       // v1.105.40 — the app-icon badge. iOS SETS the icon to this number, it does not add
       // to it, so the server sending the current total is exactly right: the badge is
       // corrected on every push, including downward. 0 clears it.

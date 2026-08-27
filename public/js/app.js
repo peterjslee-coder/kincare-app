@@ -1292,6 +1292,18 @@ const App = () => {
         if (event.data?.type === 'PUSH_NAVIGATE') {
           window.__handlePushNavigate(event.data.data || {});
         }
+        // v1.105.143 — "Decline" tapped on the call notification itself. The service worker
+        // cannot reach the socket; the page can. Declining has to actually tell the caller,
+        // otherwise the notification's own button silently does nothing and they stand there
+        // listening to a call that is never going to be answered.
+        if (event.data?.type === 'CALL_DECLINE') {
+          const d = event.data.data || {};
+          try {
+            if (window._socket && d.callerId) {
+              window._socket.emit('call_decline', { callerId: d.callerId, roomName: d.roomName });
+            }
+          } catch { /* nothing left to do from here */ }
+        }
       });
     }
   }, []);

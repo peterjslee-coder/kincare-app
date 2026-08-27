@@ -1,6 +1,6 @@
 // InPlace Service Worker — v1.57.14
-const CACHE_NAME = 'inplace-build-273c7c7a-mt9zs7wz';
-const SW_VERSION = 'build-273c7c7a-mt9zs7wz';
+const CACHE_NAME = 'inplace-build-9311e1ef-mtbo0wv1';
+const SW_VERSION = 'build-9311e1ef-mtbo0wv1';
 const STATIC_ASSETS = [
   '/',
   '/css/styles.css',
@@ -215,22 +215,39 @@ self.addEventListener('push', (event) => {
         }
       } catch { /* badging is a bonus — never block the notification */ }
 
-      const actions = [
-        { action: 'open', title: 'Open' },
-      ];
-      if (pushData.mapsUrl) {
+      // ─── v1.105.143 — a call is not a notification about a thing that happened ───
+      //
+      // Pete: "says they aren't in the app but notifying their phone...but no one ever picks
+      // up. not sure it's actually ringing."
+      //
+      // It wasn't, in the sense he means. Every push this app sends arrives as the same
+      // banner: Open / Dismiss, gone the moment it scrolls off. For a message that is right.
+      // For someone standing there waiting for an answer it is not — the whole point of a
+      // call is that it demands attention NOW and stays until it is dealt with.
+      //
+      // requireInteraction keeps it on screen instead of auto-dismissing, the actions become
+      // the two answers a ringing phone has, and the tag is per-CALL so a second call never
+      // silently replaces the first (v1.105.126 was that same collapse bug wearing a
+      // different hat).
+      const isCall = pushData.type === 'call_incoming';
+
+      const actions = isCall
+        ? [{ action: 'answer', title: 'Answer' }, { action: 'decline', title: 'Decline' }]
+        : [{ action: 'open', title: 'Open' }];
+      if (!isCall && pushData.mapsUrl) {
         actions.push({ action: 'directions', title: 'Directions' });
       }
-      actions.push({ action: 'dismiss', title: 'Dismiss' });
+      if (!isCall) actions.push({ action: 'dismiss', title: 'Dismiss' });
 
       const options = {
         body: data.body,
         icon: '/icons/icon-192.png',
         badge: '/icons/icon-maskable-96.png',
-        vibrate: [100, 50, 100],
+        vibrate: isCall ? [400, 200, 400, 200, 400] : [100, 50, 100],
         data: pushData,
-        tag: data.tag || undefined,
-        renotify: !!data.tag,
+        tag: isCall ? `call-${pushData.roomName || Date.now()}` : (data.tag || undefined),
+        renotify: isCall ? true : !!data.tag,
+        requireInteraction: isCall,
         actions,
       };
 
@@ -244,6 +261,25 @@ self.addEventListener('notificationclick', (event) => {
   event.notification.close();
 
   if (event.action === 'dismiss') return;
+
+  // v1.105.143 — "Decline" from the lock screen must actually decline, not open the app and
+  // leave the caller listening to nothing. The page does the socket work; the click just has
+  // to carry the intent through.
+  if (event.action === 'decline') {
+    const d = event.notification.data || {};
+    event.waitUntil(
+      clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+        for (const client of list) {
+          if (client.url.includes(self.location.origin)) {
+            client.postMessage({ type: 'CALL_DECLINE', data: d });
+            return;
+          }
+        }
+        // No open window to relay through — nothing to do but let it ring out.
+      })
+    );
+    return;
+  }
 
   // "Directions" action — open maps directly
   if (event.action === 'directions' && event.notification.data?.mapsUrl) {

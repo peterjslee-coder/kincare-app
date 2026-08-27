@@ -1079,6 +1079,58 @@ const Messages = window.Messages = () => {
     return () => { cleanupRing(); cleanup(); cleanup2(); cleanup3(); };
   }, [callState.active]);
 
+  // ─── v1.105.143 — make it actually ring ───
+  //
+  // Pete: "no one ever picks up. not sure it's actually ringing."
+  //
+  // It wasn't. When the app is OPEN the invite arrives over the socket and drew a silent
+  // green banner — if she was not looking at the screen at that second, nothing happened at
+  // all. A call is the one notification that is allowed to make a noise.
+  //
+  // Synthesised rather than an audio file: no asset to ship or cache, nothing for the CSP to
+  // block, and it works offline. Two tones at the usual cadence — 2s of ring, 4s of silence —
+  // for as long as the banner is up.
+  //
+  // Autoplay policy can refuse this in a tab that has never been touched. That is a browser
+  // rule, not a bug to route around, and the banner is still there either way.
+  useEffect(() => {
+    if (!incomingCall) return;
+    let ctx = null;
+    let stopped = false;
+    let timer = null;
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      ctx = new Ctx();
+      if (ctx.state === 'suspended' && ctx.resume) ctx.resume().catch(() => {});
+      const burst = () => {
+        if (stopped || !ctx) return;
+        [0, 0.5].forEach((offset) => {
+          const t0 = ctx.currentTime + offset;
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(880, t0);
+          gain.gain.setValueAtTime(0, t0);
+          gain.gain.linearRampToValueAtTime(0.18, t0 + 0.04);
+          gain.gain.setValueAtTime(0.18, t0 + 0.34);
+          gain.gain.linearRampToValueAtTime(0, t0 + 0.4);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(t0);
+          osc.stop(t0 + 0.45);
+        });
+      };
+      burst();
+      timer = setInterval(burst, 3000);
+    } catch { /* no audio available — the banner still is */ }
+    return () => {
+      stopped = true;
+      if (timer) clearInterval(timer);
+      try { if (ctx && ctx.close) ctx.close(); } catch { /* already gone */ }
+    };
+  }, [incomingCall]);
+
   // ─── Typing indicator socket listener ───
   useEffect(() => {
     const cleanup = onSocketEvent('typing_indicator', (data) => {
