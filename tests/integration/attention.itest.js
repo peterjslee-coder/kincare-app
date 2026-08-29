@@ -344,7 +344,9 @@ describe("a task you can no longer see must not badge you", () => {
 describe("the shape the badge relies on", () => {
   test("a user with nothing waiting gets a real zero, not a null", async () => {
     const r = await attentionCountFor(db, outsider.user.id);
-    expect(r).toEqual({ total: 0, reimbursements: 0, timeChanges: 0, timeChangeSessionId: null, careTasks: 0, messages: 0 });
+    // v1.105.145 — `approvals` joined the payload. Zero for this user: they are not an admin,
+    // and an approval is not their decision to make.
+    expect(r).toEqual({ total: 0, reimbursements: 0, timeChanges: 0, timeChangeSessionId: null, careTasks: 0, approvals: 0, messages: 0 });
     expect(Number.isFinite(r.total)).toBe(true);
   });
 });
