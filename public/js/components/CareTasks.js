@@ -36,6 +36,16 @@ const careTaskDoneBy = (occ, short) => {
 // ─── Next Up row (rendered inside Dashboard's Next Up list) ───
 // v1.101.0: swipe left (or mouse-drag) reveals ✓ Done / Dismiss. Dismiss maps
 // to the existing 'skipped' status — on the record, attributed, undoable.
+// v1.105.147 — the client half of utils/careTaskSchedule.taskTimes. Same rule, same fallback:
+// the list if there is one, otherwise the single due_time every older task has.
+const careTaskTimesOf = (t) => {
+  let raw = t && t.due_times;
+  if (typeof raw === 'string') { try { raw = JSON.parse(raw); } catch { raw = null; } }
+  const list = Array.isArray(raw) ? raw.filter((x) => /^([01]\d|2[0-3]):[0-5]\d$/.test(String(x))) : [];
+  if (list.length) return [...new Set(list)].sort();
+  return t?.due_time ? [t.due_time] : [];
+};
+
 const CareTaskNextUpRow = window.CareTaskNextUpRow = ({ occ, group, onQuickCheck, onOpenSheet, onUndo, onDismiss, onClear }) => {
   const done = occ.status === 'done';
   const skipped = occ.status === 'skipped';
@@ -44,7 +54,10 @@ const CareTaskNextUpRow = window.CareTaskNextUpRow = ({ occ, group, onQuickCheck
   const graceMs = (occ.grace_minutes ?? 45) * 60000;
   const isDue = !done && !skipped && nowMs >= dueMs;
   const isLate = !done && !skipped && nowMs >= dueMs + graceMs;
-  const timeLabel = TimezoneHelper.formatTime(occ.due_time);
+  // v1.105.147 — the time of THIS dose, not the task's first one. `occ_time` comes from the
+  // server, which knows which slot this row is; falling back to due_time keeps every task
+  // written before multi-time existed rendering exactly as it did.
+  const timeLabel = TimezoneHelper.formatTime(occ.occ_time || occ.due_time);
   const detail = careTaskDetail(occ);
 
   const borderColor = isLate ? 'var(--color-error)' : isDue ? 'var(--color-warning)' : done ? 'var(--color-success)' : 'var(--border-color)';
@@ -161,7 +174,7 @@ const CareTaskCheckSheet = window.CareTaskCheckSheet = ({ occ, group, onClose, o
           {careTaskIcon(occ.task_type)} {occ.title}
         </div>
         <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2, marginBottom: 16 }}>
-          Today at {TimezoneHelper.formatTime(occ.due_time)} · for {group.recipientFirstName}{detail ? ` · ${detail}` : ''}
+          Today at {TimezoneHelper.formatTime(occ.occ_time || occ.due_time)} · for {group.recipientFirstName}{detail ? ` · ${detail}` : ''}
         </div>
 
         <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 }}>Who did it?</div>
@@ -225,7 +238,12 @@ const CareTaskFormModal = ({ recipientId, recipientFirstName, teamMembers, exist
   const [type, setType] = useState(ex.task_type || 'medication');
   const [medName, setMedName] = useState(exDetails.med_name || '');
   const [dose, setDose] = useState(exDetails.dose || '');
-  const [dueTime, setDueTime] = useState(ex.due_time || '19:00');
+  // v1.105.147 — Pete: "Would like more availability to check this task off three times where
+  // I can mark morning lunch and dinner medication." One time became a list of them.
+  const [times, setTimes] = useState(() => {
+    const t = careTaskTimesOf(ex);
+    return t.length ? t : ['19:00'];
+  });
   const [recurrence, setRecurrence] = useState(ex.recurrence || 'daily');
   const [days, setDays] = useState((ex.recurrence_days || 'mon,tue,wed,thu,fri,sat,sun').split(','));
   const [startDate, setStartDate] = useState(ex.start_date || todayStr);
@@ -243,7 +261,7 @@ const CareTaskFormModal = ({ recipientId, recipientFirstName, teamMembers, exist
     const body = {
       care_recipient_id: recipientId, title: title.trim(), task_type: type, details,
       recurrence, recurrence_days: recurrence === 'days' ? days.join(',') : undefined,
-      due_time: dueTime, start_date: startDate, end_date: hasEnd ? (endDate || undefined) : null,
+      due_times: times, start_date: startDate, end_date: hasEnd ? (endDate || undefined) : null,
       assigned_user_id: assignee || null, grace_minutes: Number(grace),
     };
     setSaving(true);
@@ -294,8 +312,40 @@ const CareTaskFormModal = ({ recipientId, recipientFirstName, teamMembers, exist
         )}
 
         <div style={label}>When</div>
+        {/* v1.105.147 — one row per time of day. Three doses of one medication is ONE task
+            with three times, not three tasks: three tasks means three names to read, three
+            histories, and three rows that never add up to "did she get her meds today". */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
+          {times.map((t, i) => (
+            <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input type="time" style={{ ...input, width: 130 }} value={t}
+                onChange={(e) => setTimes(times.map((x, j) => (j === i ? e.target.value : x)))} />
+              {times.length > 1 && (
+                <button onClick={() => setTimes(times.filter((_, j) => j !== i))}
+                  aria-label={`Remove the ${TimezoneHelper.formatTime(t)} time`}
+                  style={{ minHeight: 44, minWidth: 44, background: 'none', border: 'none', color: 'var(--text-tertiary)', fontSize: 20, cursor: 'pointer' }}>
+                  {'\u00D7'}
+                </button>
+              )}
+            </div>
+          ))}
+          {times.length < 6 && (
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <button onClick={() => setTimes([...times, '12:00'])}
+                style={{ minHeight: 44, padding: '0 14px', background: 'var(--bg-teal-light)', color: 'var(--role-color)', border: 'none', borderRadius: 10, fontSize: 13.5, fontWeight: 700, cursor: 'pointer' }}>
+                + Add a time
+              </button>
+              {/* The case he actually described, in one tap. */}
+              {times.length === 1 && (
+                <button onClick={() => setTimes(['08:00', '12:30', '18:00'])}
+                  style={{ minHeight: 44, padding: '0 14px', background: 'none', color: 'var(--accent-color)', border: 'none', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                  Morning, lunch & dinner
+                </button>
+              )}
+            </div>
+          )}
+        </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <input type="time" style={{ ...input, width: 130 }} value={dueTime} onChange={(e) => setDueTime(e.target.value)} />
           <button style={chip(recurrence === 'daily')} onClick={() => setRecurrence('daily')}>Every day</button>
           <button style={chip(recurrence === 'days')} onClick={() => setRecurrence('days')}>Some days</button>
           <button style={chip(recurrence === 'weekly')} onClick={() => setRecurrence('weekly')}>Weekly</button>
@@ -411,7 +461,7 @@ const CareTasksSection = window.CareTasksSection = ({ recipientId, recipientFirs
   const { tasks, canManage, teamMembers } = data;
 
   const scheduleLine = (t) => {
-    const time = TimezoneHelper.formatTime(t.due_time);
+    const time = careTaskTimesOf(t).map((x) => TimezoneHelper.formatTime(x)).join(', ');
     const rep = t.recurrence === 'daily' ? 'every day'
       : t.recurrence === 'weekly' ? 'weekly'
       : (t.recurrence_days || '').split(',').map(d => d && d[0].toUpperCase() + d.slice(1, 3)).join(' ');

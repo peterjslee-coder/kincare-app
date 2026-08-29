@@ -23,7 +23,7 @@ const { getDb } = require("../models/database");
 const { authenticate } = require("../middleware/auth");
 const { captureException } = require("../utils/sentry");
 const { getTodayStringInZone, zonedDateTimeToInstant } = require("../utils/timezone");
-const { isDueOn, validateTaskInput } = require("../utils/careTaskSchedule");
+const { isDueOn, validateTaskInput, taskTimes } = require("../utils/careTaskSchedule");
 
 const router = express.Router();
 router.use(authenticate);
@@ -90,17 +90,28 @@ function taskTz(task, recipientTz) {
 async function materializeOccurrence(db, task, recipientTz, dateStr) {
   if (!isDueOn(task, dateStr)) return;
   const tz = taskTz(task, recipientTz);
-  const dueAt = zonedDateTimeToInstant(dateStr, task.due_time, tz);
-  await db.prepare(`
-    INSERT INTO care_task_occurrences (id, task_id, due_date, due_at)
-    VALUES (?, ?, ?, ?)
-    ON CONFLICT (task_id, due_date) DO NOTHING
-  `).run(uuid(), task.id, dateStr, dueAt.toISOString());
-  // Self-heal: pending rows created before the frame fix (or after a
-  // due_time edit that raced) get their due_at corrected in place.
+  // v1.105.147 — one row per TIME, not per day. `taskTimes` returns [due_time] for every task
+  // written before this existed, so a single-dose task materializes exactly as it always did.
+  const times = taskTimes(task);
+  for (let slot = 0; slot < times.length; slot += 1) {
+    const dueAt = zonedDateTimeToInstant(dateStr, times[slot], tz);
+    await db.prepare(`
+      INSERT INTO care_task_occurrences (id, task_id, due_date, due_at, slot_index)
+      VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT (task_id, due_date, slot_index) DO NOTHING
+    `).run(uuid(), task.id, dateStr, dueAt.toISOString(), slot);
+    // Self-heal: pending rows created before the frame fix (or after a
+    // due_time edit that raced) get their due_at corrected in place. Scoped to the SLOT —
+    // without that, a task with three times would rewrite all three to whichever time ran last.
+    await db.prepare(
+      "UPDATE care_task_occurrences SET due_at = ? WHERE task_id = ? AND due_date = ? AND slot_index = ? AND status = 'pending' AND due_at <> ?"
+    ).run(dueAt.toISOString(), task.id, dateStr, slot, dueAt.toISOString());
+  }
+  // Times removed from the task: drop the pending rows they left behind. Done and skipped
+  // rows stay — they are the record that care happened, and history is never rewritten.
   await db.prepare(
-    "UPDATE care_task_occurrences SET due_at = ? WHERE task_id = ? AND due_date = ? AND status = 'pending' AND due_at <> ?"
-  ).run(dueAt.toISOString(), task.id, dateStr, dueAt.toISOString());
+    "DELETE FROM care_task_occurrences WHERE task_id = ? AND due_date = ? AND status = 'pending' AND slot_index >= ?"
+  ).run(task.id, dateStr, times.length);
 }
 
 // Care recipients this user can see tasks for (owner + shares + team member).
@@ -175,8 +186,8 @@ router.get("/today", async (req, res) => {
       if (tasks.length === 0) continue;
       const today = getTodayStringInZone(cr.timezone || DEFAULT_TZ);
       for (const t of tasks) await materializeOccurrence(db, t, cr.timezone, today);
-      const occurrences = await db.prepare(`
-        SELECT o.*, t.title, t.task_type, t.details, t.due_time, t.assigned_user_id,
+      const rows = await db.prepare(`
+        SELECT o.*, t.title, t.task_type, t.details, t.due_time, t.due_times, t.assigned_user_id,
                t.grace_minutes, au.first_name AS assignee_first_name,
                cu.first_name AS completed_by_first_name, cu.last_name AS completed_by_last_name
         FROM care_task_occurrences o
@@ -186,6 +197,14 @@ router.get("/today", async (req, res) => {
         WHERE t.care_recipient_id = ? AND o.due_date = ?
         ORDER BY o.due_at ASC
       `).all(cr.id, today);
+      // v1.105.147 — `due_time` on the join is the task's FIRST time. For a task due three
+      // times a day that would label every dose "8:00 AM", which is worse than no label: it
+      // is a screen telling you the evening dose is the morning one. Each row carries its own.
+      const occurrences = rows.map((o) => {
+        const times = taskTimes({ due_times: o.due_times, due_time: o.due_time });
+        const slot = Number(o.slot_index) || 0;
+        return { ...o, occ_time: times[slot] || o.due_time, slot_count: times.length };
+      });
       if (occurrences.length === 0) continue;
       groups.push({
         careRecipientId: cr.id,
@@ -268,14 +287,17 @@ router.post("/", async (req, res) => {
 
     const cr = await db.prepare("SELECT timezone FROM care_recipients WHERE id = ?").get(care_recipient_id);
     const id = uuid();
+    // v1.105.147 — the list is the truth; due_time is its first entry, kept because the
+    // reminder poller, the admin views and the history strip all still read it.
+    const times = taskTimes(req.body);
     await db.prepare(`
       INSERT INTO care_tasks (id, care_recipient_id, created_by, title, task_type, details,
-        recurrence, recurrence_days, due_time, tz, start_date, end_date, assigned_user_id, grace_minutes)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        recurrence, recurrence_days, due_time, due_times, tz, start_date, end_date, assigned_user_id, grace_minutes)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id, care_recipient_id, req.user.id, String(req.body.title).trim(), type, details,
       rec, rec === "days" ? String(req.body.recurrence_days).toLowerCase() : null,
-      req.body.due_time, cr?.timezone || null, req.body.start_date, req.body.end_date || null,
+      times[0], JSON.stringify(times), cr?.timezone || null, req.body.start_date, req.body.end_date || null,
       req.body.assigned_user_id || null, grace
     );
     const task = await db.prepare("SELECT * FROM care_tasks WHERE id = ?").get(id);
@@ -314,15 +336,16 @@ router.put("/:id", async (req, res) => {
         ? JSON.stringify(req.body.details).slice(0, 2000) : null;
     }
     const isActive = req.body.is_active === undefined ? task.is_active : (req.body.is_active ? 1 : 0);
+    const times = taskTimes(req.body.due_times !== undefined ? req.body : merged);
     await db.prepare(`
       UPDATE care_tasks SET title = ?, task_type = ?, details = ?, recurrence = ?,
-        recurrence_days = ?, due_time = ?, start_date = ?, end_date = ?,
+        recurrence_days = ?, due_time = ?, due_times = ?, start_date = ?, end_date = ?,
         assigned_user_id = ?, grace_minutes = ?, is_active = ?, updated_at = NOW()
       WHERE id = ?
     `).run(
       String(merged.title).trim(), type, details, rec,
       rec === "days" ? String(merged.recurrence_days).toLowerCase() : null,
-      merged.due_time, merged.start_date, merged.end_date || null,
+      times[0], JSON.stringify(times), merged.start_date, merged.end_date || null,
       req.body.assigned_user_id === undefined ? task.assigned_user_id : (req.body.assigned_user_id || null),
       grace, isActive, task.id
     );
@@ -332,11 +355,11 @@ router.put("/:id", async (req, res) => {
     const tz = taskTz(updated, cr?.timezone);
     const today = getTodayStringInZone(tz);
     if (updated.is_active && isDueOn(updated, today)) {
+      // v1.105.147 — materializeOccurrence now does the whole reconciliation per slot: create
+      // what is missing, correct the times that moved, drop the pending rows for times that
+      // were removed. The blanket UPDATE that used to follow it set EVERY pending row of the
+      // day to one due_at, which with three doses would have collapsed them onto each other.
       await materializeOccurrence(db, updated, cr?.timezone, today);
-      const dueAt = zonedDateTimeToInstant(today, updated.due_time, tz);
-      await db.prepare(
-        "UPDATE care_task_occurrences SET due_at = ? WHERE task_id = ? AND due_date = ? AND status = 'pending'"
-      ).run(dueAt.toISOString(), updated.id, today);
     } else {
       // No longer due today (paused, rescheduled, or ended) — drop the
       // pending row so it doesn't linger in Next Up. Done/skipped rows stay.

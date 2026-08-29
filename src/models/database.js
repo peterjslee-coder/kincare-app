@@ -1110,6 +1110,7 @@ async function initializeDatabase() {
 
     // v1.51.82 — Push reliability: track consecutive failures to auto-remove dead tokens
     `ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS fail_count INTEGER DEFAULT 0`,
+
     `ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS last_success_at TIMESTAMPTZ`,
     `ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS last_failure_at TIMESTAMPTZ`,
 
@@ -1715,7 +1716,11 @@ async function initializeDatabase() {
           note TEXT /* PHI */,
           reminders_sent TEXT NOT NULL DEFAULT '',
           created_at TIMESTAMPTZ DEFAULT NOW(),
-          UNIQUE (task_id, due_date)
+          /* v1.105.147 — which of the day's times this row is. A medication task due at
+             08:00, 12:30 and 18:00 makes three rows for one date, and they are told apart by
+             slot, not by due_at: an edit to one time must not collide with another. */
+          slot_index INTEGER NOT NULL DEFAULT 0,
+          UNIQUE (task_id, due_date, slot_index)
         )`,
         `CREATE INDEX IF NOT EXISTS idx_cto_status_due ON care_task_occurrences(status, due_at)`,
         `CREATE INDEX IF NOT EXISTS idx_cto_task_date ON care_task_occurrences(task_id, due_date DESC)`,
@@ -2085,6 +2090,29 @@ async function initializeDatabase() {
             AND document_type != 'selfie'
             AND status = 'approved'
             AND admin_reviewed_by IS NULL`,
+      ],
+    },
+    {
+      // ─── v1.105.147 — a care task can be due more than once a day ───
+      //
+      // Pete: "Would like more availability to check this task off three times where I can
+      // mark morning lunch and dinner medication." care_tasks held ONE due_time, and
+      // care_task_occurrences was UNIQUE on (task_id, due_date) — one dose per day, enforced
+      // by the database.
+      //
+      // It belongs here rather than in the early ALTER list at the top of this file: those run
+      // BEFORE migration 009 creates care_tasks, so an ALTER there is an ALTER on a table that
+      // does not exist yet. (Which is exactly how the integration suite caught it.)
+      //
+      // Order matters. The column first — every existing row defaults to slot 0, which is
+      // precisely what it is — then the old constraint comes off, then the new one goes on.
+      // Dropping first would leave a window in which two identical rows could be written.
+      id: "025_care_task_multi_time",
+      statements: [
+        `ALTER TABLE care_tasks ADD COLUMN IF NOT EXISTS due_times TEXT`,
+        `ALTER TABLE care_task_occurrences ADD COLUMN IF NOT EXISTS slot_index INTEGER NOT NULL DEFAULT 0`,
+        `ALTER TABLE care_task_occurrences DROP CONSTRAINT IF EXISTS care_task_occurrences_task_id_due_date_key`,
+        `CREATE UNIQUE INDEX IF NOT EXISTS uniq_cto_task_date_slot ON care_task_occurrences(task_id, due_date, slot_index)`,
       ],
     },
   ];
