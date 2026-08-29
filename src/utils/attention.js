@@ -66,7 +66,7 @@ const name = (first, last) => [first, last].filter(Boolean).join(" ").trim() || 
 
 const EMPTY = {
   total: 0, reimbursements: 0, timeChanges: 0, timeChangeSessionId: null,
-  careTasks: 0, messages: 0, items: [],
+  careTasks: 0, approvals: 0, messages: 0, items: [],
 };
 
 /**
@@ -159,6 +159,34 @@ async function attentionItemsFor(db, userId) {
       )
     ORDER BY cs.scheduled_date, cs.scheduled_time
   `).all(userId, userId));
+
+  // ── Someone waiting on ME to let them into InPlace ──
+  //
+  // v1.105.145. Pete, after Rebecca signed up: "I never got a push notification that something
+  // was waiting on me as an admin, and there was no indication inside the app that I needed
+  // attention to approve her account… I got an email that made me go to the app… It needs to
+  // be faster than that."
+  //
+  // The push fan-out to admins does exist and is keyed on is_admin, correctly. But a push is
+  // gone the moment it is missed, and nothing PERSISTENT ever said so — the one surface whose
+  // entire job is "you are the blocker" did not know that approvals exist. A person who signed
+  // up and cannot get in is the purest example of this file's definition at the top.
+  //
+  // Admins only, and by is_admin rather than role: Pete is role 'family' AND is_admin, and a
+  // check on role would skip the only admin there is.
+  const approvalRows = await safeRows("approvals", async () => {
+    const me = await db.prepare("SELECT is_admin FROM users WHERE id = ?").get(userId);
+    if (!me || !me.is_admin) return [];
+    return db.prepare(`
+      SELECT id, first_name, last_name, email, role, created_at
+      FROM users
+      WHERE COALESCE(account_approved, 0) = 0
+        AND COALESCE(is_demo, 0) = 0
+        AND COALESCE(is_active, 1) = 1
+        AND created_at > '2026-02-20'
+      ORDER BY created_at
+    `).all();
+  });
 
   // ── A care task assigned to me that is already due ──
   // Assigned to me specifically: an unassigned task is the team's, not mine, and badging
@@ -291,6 +319,19 @@ async function attentionItemsFor(db, userId) {
       page: "dashboard",
       focus: `session:${c.session_id}`,
     })),
+    ...approvalRows.map((u) => ({
+      kind: "approval",
+      id: u.id,
+      title: `Approve ${name(u.first_name, u.last_name) || u.email} — waiting to get in`,
+      detail: [u.email, u.role].filter(Boolean).join(" · "),
+      forWhom: null,
+      when: u.created_at || null,
+      verb: "Approve",
+      action: { method: "PUT", path: `/api/admin/users/${u.id}/approve` },
+      page: "admin",
+      focus: `approval:${u.id}`,
+      note: "They can't use InPlace until you do.",
+    })),
     ...taskRows.map((t) => ({
       kind: "careTask",
       id: t.id,
@@ -324,8 +365,9 @@ async function attentionItemsFor(db, userId) {
     // The count is still returned — it is honest, and the caller may want it — but the card
     // and the app icon both read `total`, so they stay in agreement, which is the one thing
     // AttentionCard cannot afford to lose.
-    total: reimbursementRows.length + timeChanges + taskRows.length,
+    total: reimbursementRows.length + timeChanges + taskRows.length + approvalRows.length,
     reimbursements: reimbursementRows.length,
+    approvals: approvalRows.length,
     timeChanges,
     // v1.105.105 — a count with no destination is why "1 schedule change waiting on your
     // answer" was a dead end: the card sent you to a page and the page said nothing. Kept

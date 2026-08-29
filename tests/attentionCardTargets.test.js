@@ -56,7 +56,7 @@ describe("unread messages are not in this tile", () => {
     // The card and the app icon both read `total`. Dropping the row but not the total would
     // leave the icon permanently higher than the list that is supposed to itemise it — the
     // one disagreement this card exists to prevent.
-    expect(attention).toMatch(/total: reimbursementRows\.length \+ timeChanges \+ taskRows\.length,/);
+    expect(attention).toMatch(/total: reimbursementRows\.length \+ timeChanges \+ taskRows\.length \+ approvalRows\.length,/);
   });
 
   test("the count is still reported, just not counted", () => {

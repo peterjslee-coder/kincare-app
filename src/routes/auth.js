@@ -286,7 +286,13 @@ router.post("/register", validateRegister, async (req, res) => {
     notifyAdmins("new_registration", {
       title: "New Signup — Approval Needed",
       body: `${firstName} ${lastName} (${roleName}) signed up and needs your approval to continue.`,
-      data: { type: "new_registration", userId: id, email, needsApproval: true },
+      // v1.105.145 — Pete: "a push notification that takes me straight to the approval."
+      // Without page/focus this fell through to the default and opened the dashboard, which
+      // is a notification about a blocked person that does not show you the blocked person.
+      data: {
+        type: "new_registration", userId: id, email, needsApproval: true,
+        page: "admin", focus: `approval:${id}`,
+      },
     });
 
     // v1.88.0: limited-early-signups flow — email Pete so he can arrange a

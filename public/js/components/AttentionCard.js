@@ -72,6 +72,7 @@ const ATTENTION_KINDS = {
   timeOffer:     { icon: '🕑', chip: 'SCHEDULE' },
   timeChange:    { icon: '🕑', chip: 'SCHEDULE' },
   careTask:      { icon: '✅', chip: 'CARE TASK' },
+  approval:      { icon: '🔑', chip: 'ACCESS' },
 };
 
 // "14:30" → "2:30 PM". The server sends wall-clock times in the care recipient's zone; they
@@ -117,6 +118,10 @@ const attentionDetail = (item) => {
   }
   if (item.kind === 'careTask') {
     return item.dueAt ? `Due ${attentionDay(item.dueAt, item.tz)}` : 'Due now';
+  }
+  if (item.kind === 'approval') {
+    const since = item.when ? attentionDay(item.when, null) : null;
+    return [item.detail, since ? `signed up ${since}` : null].filter(Boolean).join(' · ');
   }
   return item.detail || '';
 };

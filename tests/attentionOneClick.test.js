@@ -52,17 +52,26 @@ const TASK = {
   care_recipient_id: "cr-1", recipient_first: "Betty",
 };
 
-function fakeDb({ reimbursements = [], offers = [], changes = [], tasks = [], messages = 0 } = {}) {
+const PENDING_USER = {
+  id: "u-9", first_name: "Rebecca", last_name: "Nolan", email: "rebecca@example.com",
+  role: "caregiver", created_at: "2026-08-29",
+};
+
+function fakeDb({ reimbursements = [], offers = [], changes = [], tasks = [], approvals = [], isAdmin = false, messages = 0 } = {}) {
   return {
     prepare(sql) {
       const norm = sql.replace(/\s+/g, " ");
       return {
-        async get() { return { count: norm.includes("FROM messages") ? messages : 0 }; },
+        async get() {
+          if (norm.includes("SELECT is_admin FROM users")) return { is_admin: isAdmin ? 1 : 0 };
+          return { count: norm.includes("FROM messages") ? messages : 0 };
+        },
         async all() {
           if (norm.includes("FROM reimbursements")) return reimbursements;
           if (norm.includes("FROM time_proposals")) return offers;
           if (norm.includes("FROM time_change_proposals")) return changes;
           if (norm.includes("FROM care_task_occurrences")) return tasks;
+          if (norm.includes("FROM users") && norm.includes("account_approved")) return approvals;
           return [];
         },
       };
@@ -210,6 +219,56 @@ describe("the action is the real endpoint, with the real id", () => {
   test("the visit-opening rows still know which visit", async () => {
     const { items } = await attentionItemsFor(fakeDb({ offers: [OFFER], changes: [CHANGE] }), "pete");
     expect(items.map((i) => i.focus).sort()).toEqual(["session:sess-4", "session:sess-9"]);
+  });
+});
+
+describe("somebody waiting to get in", () => {
+  // v1.105.145. Pete, after Rebecca signed up: "I never got a push notification that something
+  // was waiting on me as an admin, and there was no indication inside the app that I needed
+  // attention to approve her account… I got an email that made me go to the app… It needs to
+  // be faster than that."
+  //
+  // The admin push fan-out does exist and is keyed on is_admin, correctly. But a push is gone
+  // the moment it is missed, and nothing persistent ever said so — the one surface whose whole
+  // job is "you are the blocker" did not know approvals existed. A person who signed up and
+  // cannot get in is the purest case this file's definition describes.
+
+  test("an admin sees the person who is stuck", async () => {
+    const item = await only("approval", { approvals: [PENDING_USER], isAdmin: true });
+    expect(item.title).toBe("Approve Rebecca Nolan — waiting to get in");
+    expect(item.note).toBe("They can't use InPlace until you do.");
+    expect(item.action).toEqual({ method: "PUT", path: "/api/admin/users/u-9/approve" });
+    expect(item.page).toBe("admin");
+    expect(item.focus).toBe("approval:u-9");
+  });
+
+  test("everyone else sees nothing — this is not their decision", async () => {
+    const payload = await attentionItemsFor(fakeDb({ approvals: [PENDING_USER], isAdmin: false }), "julia");
+    expect(payload.items).toEqual([]);
+    expect(payload.total).toBe(0);
+  });
+
+  test("admin-ness is is_admin, never role", async () => {
+    // Pete is role 'family' AND is_admin. A check on role would skip the only admin there is.
+    const util = read("src/utils/attention.js");
+    expect(util).toMatch(/SELECT is_admin FROM users WHERE id = \?/);
+    expect(util).not.toMatch(/role = 'admin'/);
+  });
+
+  test("it counts toward the same total the app icon reads", async () => {
+    const payload = await attentionItemsFor(
+      fakeDb({ tasks: [TASK], approvals: [PENDING_USER], isAdmin: true }), "pete"
+    );
+    expect(payload.approvals).toBe(1);
+    expect(payload.total).toBe(2);
+    expect(payload.total).toBe(payload.items.length);
+  });
+
+  test("the push that announces it can now land on it", () => {
+    // Without page/focus the tap fell through to the default and opened the dashboard —
+    // a notification about a blocked person that does not show you the blocked person.
+    const auth = read("src/routes/auth.js");
+    expect(auth).toMatch(/page: "admin", focus: `approval:\$\{id\}`/);
   });
 });
 

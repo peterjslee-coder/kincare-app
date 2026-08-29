@@ -697,7 +697,44 @@ const Messages = window.Messages = () => {
     else area.scrollTop = top;
   }, []);
 
-  useEffect(() => { pinToBottom(true); }, [messages, pinToBottom]);
+  // ─── v1.105.145 — a chat opens at the newest message ───
+  //
+  // Pete: "Every time I open the chat, it anchors near the top for some reason and I have to
+  // scroll to the bottom of the chat. The chat should load from the most recent message."
+  //
+  // Two different moments were being treated as one. A message ARRIVING should glide to the
+  // bottom — that motion is what tells you something came in. OPENING a conversation should
+  // simply BE at the bottom, with no animation to watch and nothing to interrupt.
+  //
+  // And on open the list is still growing underneath the scroll: avatars, photos and the
+  // "messages before you joined" boundary all land after the first paint, so one scroll to
+  // scrollHeight aims at a height that is already out of date and stops short — near the top
+  // of a long thread. So re-pin until the height stops changing, the same settle loop
+  // Reimbursements has used since v1.98.10 for the same reason.
+  const openedConvRef = useRef(null);
+  useEffect(() => {
+    if (!messages.length) return;
+    const firstPaintOfThisThread = openedConvRef.current !== activeConvId;
+    if (!firstPaintOfThisThread) { pinToBottom(true); return; }
+    openedConvRef.current = activeConvId;
+    pinToBottom(false);
+    let lastHeight = -1;
+    let tries = 0;
+    const settle = setInterval(() => {
+      const area = messagesAreaRef.current;
+      tries += 1;
+      if (area) {
+        if (area.scrollHeight !== lastHeight) {
+          lastHeight = area.scrollHeight;
+          pinToBottom(false);
+        } else {
+          clearInterval(settle); // height held still — we are at the bottom and staying there
+        }
+      }
+      if (tries >= 20) clearInterval(settle); // ~2s, then stop trying
+    }, 100);
+    return () => clearInterval(settle);
+  }, [messages, activeConvId, pinToBottom]);
 
   // ...and again whenever the visible box changes shape. Pete, 8/24: "when i try to enter
   // another text, it hides the text I just sent." The keyboard opening shrinks the container,
@@ -2583,8 +2620,16 @@ const Messages = window.Messages = () => {
               e.target.style.height = Math.min(e.target.scrollHeight, 72) + 'px';
             }}
             onKeyDown={(e) => {
-              // Enter sends message, Shift+Enter inserts newline
-              if (e.key === 'Enter' && !e.shiftKey) {
+              // v1.105.145 — Pete: "I don't like how I hit return (for a break in messages)
+              // and it posts the message."
+              //
+              // On a physical keyboard, Enter-to-send with Shift+Enter for a newline is the
+              // convention and stays. On a phone there IS no shift on the Return key, so that
+              // rule reduced to "you may not write a second line" — and he was typing from a
+              // hospital, where a message worth breaking into lines is exactly the kind you
+              // are sending. On a touch keyboard Return is a newline and the button sends,
+              // which is what every messaging app on that keyboard already does.
+              if (e.key === 'Enter' && !e.shiftKey && !hasSoftKeyboard) {
                 e.preventDefault();
                 handleSendMessage();
               }

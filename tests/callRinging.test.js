@@ -301,7 +301,10 @@ describe("sending a message, with the keyboard doing what it does", () => {
     // scroll offset it had while it was taller, and the newest message sits behind the
     // composer. `messages` did not change, so the existing effect never ran.
     expect(msgs).toMatch(/useEffect\(\(\) => \{ pinToBottom\(false\); \}, \[vvBox, kbOpen, pinToBottom\]\);/);
-    expect(msgs).toMatch(/useEffect\(\(\) => \{ pinToBottom\(true\); \}, \[messages, pinToBottom\]\);/);
+    // v1.105.145 — the messages effect now distinguishes opening a thread from receiving in
+    // one (see messagesReadingAndTyping.test.js); the BOX effect is unchanged and is what
+    // this test is about.
+    expect(msgs).toMatch(/\}, \[messages, activeConvId, pinToBottom\]\);/);
   });
 
   test("pinning scrolls the LIST and can never scroll the page", () => {
