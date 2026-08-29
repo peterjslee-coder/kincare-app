@@ -200,7 +200,12 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
         await new Promise(r => setTimeout(r, 1500));
         return fetchDashboard(retryCount + 1);
       }
-      console.error('Dashboard fetch error:', err);
+      // v1.105.146 — say what it was. This line ran four times in one of Pete's reports and
+      // told us nothing, because an Error stringifies to {} (see FeedbackButton). The name and
+      // message are the entire diagnosis: a timeout on hospital wifi and a 500 from the server
+      // are the same three retries and the same red screen from here.
+      console.error('Dashboard fetch error:', err?.name || 'Error', err?.message || String(err));
+      try { if (typeof reportClientError === 'function') reportClientError(err, { page: 'dashboard' }); } catch { /* never throw from a reporter */ }
       setError(true);
     }
     setLoading(false);

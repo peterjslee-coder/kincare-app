@@ -128,9 +128,29 @@ const FeedbackButton = window.FeedbackButton = ({ currentPage, userRole, current
   React.useEffect(() => {
     // Capture console errors
     const originalError = console.error;
+    // v1.105.146 — an Error does not survive JSON.stringify.
+    //
+    // Pete's report 3ad54eea arrived carrying "Dashboard fetch error: {}" four times over. The
+    // dashboard was not logging an empty object: `message` and `stack` are NON-ENUMERABLE on
+    // Error, so JSON.stringify(err) is "{}" for every error ever thrown. Every console.error
+    // this app has attached to a feedback report has been throwing the cause away and keeping
+    // the punctuation — and this is the channel through which real users tell us what broke.
+    const describe = (a) => {
+      if (typeof a === 'string') return a;
+      if (a instanceof Error) return `${a.name}: ${a.message}`;
+      if (a && typeof a === 'object') {
+        // DOMException, ErrorEvent and anything else with a message but no enumerable keys.
+        if (typeof a.message === 'string' && a.message) return `${a.name || 'Error'}: ${a.message}`;
+        try {
+          const json = JSON.stringify(a);
+          return json === '{}' ? Object.prototype.toString.call(a) : json;
+        } catch { return Object.prototype.toString.call(a); }
+      }
+      return String(a);
+    };
     console.error = function (...args) {
       recentErrorsRef.current.push({
-        message: args.map(a => typeof a === 'string' ? a : JSON.stringify(a)).join(' '),
+        message: args.map(describe).join(' '),
         timestamp: new Date().toISOString(),
       });
       // Keep only last 5 errors
