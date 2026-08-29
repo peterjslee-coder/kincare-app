@@ -460,11 +460,22 @@
       reconnect or on a poll, several messages land together — which is what a lump looks like.
       **P1** — he is coordinating Betty's care through this thread.
 
-- [ ] **A medication task he can check off three times a day.** (`3ad54eea`) *"Would like more
-      availability to check this task off three times where I can mark morning lunch and dinner
-      medication."* `care_tasks` has a single `due_time`, so this is a real schema change
-      (multiple times per task per day) rather than a UI tweak. **The most valuable open
-      feature on this list** — it is Betty's actual daily care. **P1**
+- [x] **A medication task he can check off three times a day. Shipped v1.105.147.**
+      (`3ad54eea`) *"Would like more availability to check this task off three times where I can
+      mark morning lunch and dinner medication."*
+      Schema: `care_tasks.due_times` (JSON list) + `care_task_occurrences.slot_index`, and the
+      UNIQUE on `(task_id, due_date)` — one dose per day, **enforced by the database** — became
+      `(task_id, due_date, slot_index)`. Migration `025_care_task_multi_time`.
+      **`taskTimes()` returns `[due_time]` for every task written before this**, so nothing
+      old changes behaviour, and `due_time` survives as the first of the list because the
+      reminder poller, the admin views and the history strip all still read it.
+      Each occurrence carries `occ_time`, its own time — the join's `due_time` is the task's
+      FIRST, which would have labelled all three doses "8:00 AM".
+      **Two traps worth remembering:** an `ALTER` in the early list at the top of `database.js`
+      runs BEFORE migration 009 creates the table; and `PUT` validates `{...taskRow, ...body}`,
+      where the row carries `due_times` as the JSON **string** it is stored as — insisting on an
+      array there broke pausing and renaming. Both caught by the integration suite.
+      ⚠️ **Wants Pete to set up Betty's real three-dose task and check one off.**
 
 - [x] **"Julia should not be in care team."** (`0939378b`) ❌ **CLOSED, no action — Pete,
       8/29: "disregard the care team message about julia. she stays there."** Recorded rather
