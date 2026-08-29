@@ -466,16 +466,21 @@
       (multiple times per task per day) rather than a UI tweak. **The most valuable open
       feature on this list** — it is Betty's actual daily care. **P1**
 
-- [ ] **"Julia should not be in care team."** (`0939378b`) **Needs Pete's answer before any
-      code:** is she wrongly a MEMBER of Betty's care team (a data/membership bug), or is the
-      complaint that a paid caregiver should not appear in that list at all (a model decision)?
-      Those are different fixes and one of them is irreversible for real teams.
+- [x] **"Julia should not be in care team."** (`0939378b`) ❌ **CLOSED, no action — Pete,
+      8/29: "disregard the care team message about julia. she stays there."** Recorded rather
+      than deleted because the same thought will occur again: a paid caregiver appearing in the
+      family's care team is INTENDED. Do not "fix" it.
 
-- [ ] **Should iPAi read the care team's messages?** (`9ba3eebb`) *"I'm at hospital with her
-      and the most critical info on her care is here right now."* The pull is obvious and so is
-      the hazard: iPAi reading person-to-person conversation is a different privacy posture
-      from iPAi reading care records, and the care team includes paid caregivers who did not
-      sign up to be summarised. **Needs a decision, and probably belongs on the lawyer list.**
+- [ ] **⏸️ SUSPENDED — should iPAi read the care team's messages?** (`9ba3eebb`) *"I'm at
+      hospital with her and the most critical info on her care is here right now."*
+      **Pete, 8/29: "suspend the care team reading for now."** Not rejected, not scheduled — do
+      not start building it, and do not slip it in as part of something else.
+      The reason to be careful when it comes back: iPAi reading person-to-person conversation
+      is a different privacy posture from iPAi reading care records, and the care team includes
+      paid caregivers who never agreed to be summarised by an AI. It needs consent design and
+      almost certainly a lawyer question before a line of code. The pull is real — the most
+      current information about a person's care genuinely does live in the thread — so this
+      will be asked again.
 
 - [ ] **GPS check-in still not sticking.** (`4c87911b`) *"It says last check I was 2.3 miles
       away, but I don't know when that was… I'm definitely inside of 1000 feet… it still
