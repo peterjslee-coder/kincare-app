@@ -423,6 +423,67 @@
 
 ### P1
 
+> **Aug 29 2026 — feedback pull, 8 items.** Pete filed most of these from his phone **at the
+> hospital with Betty**, which is the context that ranks them: two were the app arguing with
+> the only device he had. Three shipped as **v1.105.145**, one as **.146**; the rest are below.
+
+- [x] **A chat opened near the top of the thread. Shipped v1.105.145.** (`72c3a626`)
+      Opening a conversation and receiving a message were the same code path. An arriving
+      message SHOULD glide to the bottom; opening should simply BE there. And on open the list
+      is still growing underneath the scroll — avatars, photos, the "before you joined"
+      boundary — so one scroll to `scrollHeight` aims at a stale height and stops short, which
+      in a long thread reads as "near the top". Re-pins until the height settles (~2s cap).
+
+- [x] **Return posted the message instead of breaking the line. Shipped v1.105.145.**
+      (`befaf875`, part) Enter-to-send with Shift+Enter stays on a physical keyboard. **A touch
+      keyboard has no shift on Return**, so the rule reduced to "you may not write a second
+      line" — from a hospital, where the messages worth breaking into lines are exactly the
+      ones you send. Gated on the same `(pointer: coarse)` test as the keyboard work.
+
+- [x] **Nothing in the app said someone was waiting to be approved. Shipped v1.105.145.**
+      (`34430910`) *"Rebecca signed up and needed approval. I never got a push notification…
+      and there was no indication inside the app… I got an email that made me go to the app."*
+      The admin push fan-out exists and is keyed on `is_admin` correctly — but **a push is gone
+      the moment it is missed**, and the one surface whose whole job is "you are the blocker"
+      did not know approvals existed. "Needs you" carries them now (admins only, by `is_admin`
+      never by role), one tap approves, and the signup push carries `page`+`focus` so tapping
+      it lands on the approval instead of the dashboard.
+
+- [x] **"Dashboard fetch error: {}" — the feedback loop was discarding every cause. .146.**
+      `message` and `stack` are non-enumerable on `Error`, so `JSON.stringify(err)` is `"{}"`
+      for every error ever thrown, and that is what the console capture used. **Every**
+      console error ever attached to a feedback report arrived stripped of the diagnosis.
+
+- [ ] **Messages arrive in a lump.** (`befaf875`, part) *"There's some sort of lag in the
+      messages. Sometimes replies don't show up until all at once."* Not investigated yet.
+      Prime suspect is socket delivery: if the socket drops and the app only catches up on
+      reconnect or on a poll, several messages land together — which is what a lump looks like.
+      **P1** — he is coordinating Betty's care through this thread.
+
+- [ ] **A medication task he can check off three times a day.** (`3ad54eea`) *"Would like more
+      availability to check this task off three times where I can mark morning lunch and dinner
+      medication."* `care_tasks` has a single `due_time`, so this is a real schema change
+      (multiple times per task per day) rather than a UI tweak. **The most valuable open
+      feature on this list** — it is Betty's actual daily care. **P1**
+
+- [ ] **"Julia should not be in care team."** (`0939378b`) **Needs Pete's answer before any
+      code:** is she wrongly a MEMBER of Betty's care team (a data/membership bug), or is the
+      complaint that a paid caregiver should not appear in that list at all (a model decision)?
+      Those are different fixes and one of them is irreversible for real teams.
+
+- [ ] **Should iPAi read the care team's messages?** (`9ba3eebb`) *"I'm at hospital with her
+      and the most critical info on her care is here right now."* The pull is obvious and so is
+      the hazard: iPAi reading person-to-person conversation is a different privacy posture
+      from iPAi reading care records, and the care team includes paid caregivers who did not
+      sign up to be summarised. **Needs a decision, and probably belongs on the lawyer list.**
+
+- [ ] **GPS check-in still not sticking.** (`4c87911b`) *"It says last check I was 2.3 miles
+      away, but I don't know when that was… I'm definitely inside of 1000 feet… it still
+      doesn't say that I'm at her location."* Two separate things: the geo status line gives a
+      distance with **no timestamp**, so a stale reading is indistinguishable from a current
+      one; and the check-in is not updating the stored point. Tied to the standing GPS P0.
+
+
 > **Aug 25 2026 — feedback triage.** 4 new, all Pete, all marked reviewed on the server. Three
 > were one bug and shipped as **v1.105.139**; the fourth was my own regression from .129.
 
