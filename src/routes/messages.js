@@ -1181,4 +1181,43 @@ router.delete("/conversations/:id", async (req, res) => {
   }
 });
 
+// ─── Upload errors, handled (v1.105.150) ───
+//
+// Sentry INPLACE-G, 16 hours old, unhandled, on a NEW user's first photo message:
+//
+//   Error: Unexpected end of form
+//   busboy/lib/types/multipart.js:588  Multipart._final
+//   POST /api/messages/conversations/:id/photo   mechanism auto.middleware.express
+//
+// busboy raises that when the multipart body stops arriving before the form is complete —
+// a phone that lost signal mid-upload, an app backgrounded halfway through, a tab closed.
+// It is a normal thing for a network to do and it was reaching Express's default handler,
+// which means an unhandled 500 and a page in Sentry.
+//
+// photos.js has had this handler since it shipped; this router never got one, and the
+// difference only shows up when someone's upload is interrupted.
+//
+// The response may well go nowhere — if they truly disconnected, nobody is listening. That is
+// not the point: the point is that a dropped connection is not a crash, and it must not spend
+// the alerting budget that a real failure needs.
+router.use((err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    if (err.code === "LIMIT_FILE_SIZE") {
+      return res.status(400).json({ error: "That photo is too large (5MB max)." });
+    }
+    return res.status(400).json({ error: err.message });
+  }
+  if (err && err.message === "Only image files are allowed") {
+    return res.status(400).json({ error: err.message });
+  }
+  // The upload was cut off. 408 rather than 400: nothing was wrong with the request, it just
+  // did not all arrive.
+  if (err && /Unexpected end of form|Unexpected end of multipart data|aborted/i.test(String(err.message))) {
+    console.log("  [messages] upload interrupted (client disconnected mid-body)");
+    if (res.headersSent || req.destroyed) return; // nobody is listening; do not thrash
+    return res.status(408).json({ error: "The photo didn't finish uploading. Try again." });
+  }
+  return next(err);
+});
+
 module.exports = router;

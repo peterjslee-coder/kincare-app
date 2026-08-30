@@ -579,8 +579,34 @@ const saveBlob = window.saveBlob = async (blob, filename) => {
 // Report a client-side problem to the server's Sentry sink. Raw fetch on purpose — routing
 // this through apiFetch would let a timeout report time out. keepalive so it survives the
 // view being torn down.
+// ─── v1.105.150 — a dropped network is not a bug ───
+//
+// Sentry INPLACE-H: "[client] Load failed", 12 events in four hours, escalating, all from one
+// iPhone on 1.105.149, all `page: dashboard`. "Load failed" is WebKit's message for a fetch
+// that did not complete — and the commonest cause on a phone is not a broken server, it is
+// iOS cancelling in-flight requests when the app goes to the background, or a signal that came
+// and went.
+//
+// I built this pile myself, from both ends: .146 started reporting the dashboard's final
+// failure (correctly — three retries failing used to go nowhere), and .148 added a catch-up
+// that re-fetches on every reconnect and every return to the foreground. More fetches at
+// exactly the moments iOS is most likely to kill one.
+//
+// So: an error raised while the tab is hidden or the device is offline is not reported. It
+// says nothing about the app, and an alert channel that fills with weather is one nobody reads
+// when something real happens — which is the same argument that put the port-scan filter in
+// utils/sentry.js.
+//
+// Everything else still reports, and now carries whether the page was visible and online, so
+// the next one of these can be read rather than guessed at.
 const reportClientError = window.reportClientError = (err, extra = {}) => {
   try {
+    const online = typeof navigator.onLine === 'boolean' ? navigator.onLine : true;
+    const visible = typeof document !== 'undefined' ? document.visibilityState !== 'hidden' : true;
+    const name = err?.name || '';
+    // An abort is something WE or the browser did on purpose.
+    const aborted = name === 'AbortError' || /aborted|cancell?ed/i.test(String(err?.message || ''));
+    if (!online || !visible || aborted) return;
     fetch(API_BASE + '/api/client-error', {
       method: 'POST',
       credentials: 'same-origin',
@@ -592,6 +618,7 @@ const reportClientError = window.reportClientError = (err, extra = {}) => {
         version: window.APP_VERSION || null,
         userAgent: navigator?.userAgent || null,
         url: (window.location.hash || window.location.pathname) || null,
+        online, visible,
         ...extra,
       }),
     }).catch(() => {});
