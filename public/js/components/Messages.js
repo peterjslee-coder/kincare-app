@@ -298,7 +298,16 @@ const Messages = window.Messages = () => {
       const res = await apiFetch(`/api/messages/conversations/${convId}`);
       if (res?.ok) {
         const data = await res.json();
-        setMessages(data.messages || []);
+        // v1.105.148 — replace only if something actually changed. The catch-up below re-reads
+        // the thread on every reconnect and every return to the foreground; handing React a
+        // new array each time would re-run the scroll effect and pull a reader who is halfway
+        // up the history back down to the bottom for no reason.
+        const next = data.messages || [];
+        setMessages((prev) => {
+          if (prev.length === next.length && prev.length > 0
+            && prev[prev.length - 1]?.id === next[next.length - 1]?.id) return prev;
+          return next;
+        });
         setActiveConvType(data.conversationType || 'direct');
         // v1.105.92 — how many messages predate this person joining. Shown as a line at the
         // top of the thread so it reads as a boundary rather than a broken load.
@@ -632,6 +641,35 @@ const Messages = window.Messages = () => {
       fetchConversations();
     });
     return cleanup;
+  }, [activeConvId]);
+
+  // ─── v1.105.148 — catch up on what arrived while we were not listening ───
+  //
+  // Pete: "There's some sort of lag in the messages. Sometimes replies don't show up until all
+  // at once."
+  //
+  // That is not lag, it is a gap. New messages arrive on ONE path: a `new_message` socket
+  // event. Socket.io reconnects by itself, but it does not replay what it missed — so every
+  // message sent while the socket was down (phone asleep, app backgrounded, wifi handing over
+  // to cellular in a hospital corridor) is simply never delivered to this client. The thread
+  // then sits silently stale until something else happens to re-read it, at which point they
+  // all appear together. Which is exactly what "all at once" looks like.
+  //
+  // So: re-read on reconnect and on coming back to the foreground. Cheap, and the guard in
+  // fetchMessages means an unchanged thread costs a request and nothing else.
+  useEffect(() => {
+    if (!activeConvId) return;
+    const catchUp = () => {
+      fetchMessages(activeConvId);
+      fetchConversations();
+    };
+    const onVisible = () => { if (document.visibilityState === 'visible') catchUp(); };
+    const offConnect = onSocketEvent('connect', catchUp);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      if (typeof offConnect === 'function') offConnect();
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, [activeConvId]);
 
   // ─── Tell the server which thread is on screen (v1.105.103) ───

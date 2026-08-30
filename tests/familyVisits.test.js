@@ -164,10 +164,40 @@ describe("the nudge nudges, it does not nag", () => {
 
   test("it reports the distance, so 'is this even working' has an answer", () => {
     // Otherwise the only way to test a geofence is to drive to the house and hope.
-    const invite = client.slice(client.indexOf("const VisitGeoInvite"), client.indexOf("const VisitNudgeCard"));
+    //
+    // v1.105.148 — the slice used to run to VisitNudgeCard, which now sweeps in VisitGeoStatus
+    // as well. Bounded to the invite itself, because the property below is about THIS
+    // component and a test that fails for an unrelated neighbour is a test nobody trusts.
+    const start = client.indexOf("const VisitGeoInvite");
+    const invite = client.slice(start, client.indexOf("const agoLabel", start));
     expect(invite).toMatch(/haversineFeet\(latitude, longitude, r\.latitude, r\.longitude\)/);
     expect(invite).toMatch(/it appears within 1,000 ft/);
     expect(invite).not.toMatch(/apiFetch|fetch\(/); // decided on the device, sent nowhere
+  });
+
+  test("the passive path still sends the person's location nowhere", () => {
+    // The invariant, restated at the level it actually holds: opening the app, the nudge, and
+    // the status line all read a position, compare it on the device, and send nothing.
+    const status = client.slice(client.indexOf("const VisitGeoStatus"), client.indexOf("const VisitNudgeCard"));
+    const passive = status.slice(0, status.indexOf("const pinHere"));
+    expect(passive).not.toMatch(/apiFetch|fetch\(/);
+  });
+
+  test("the ONE thing that does send a location is deliberate, confirmed, and about the house", () => {
+    // v1.105.148. Pete: "I'm definitely inside of 1000 feet from her house… but it still
+    // doesn't say that I'm at her location." Every fix so far assumed the phone was wrong; the
+    // other half of the subtraction is the HOME point, which came from geocoding an address and
+    // can sit on a street or ZIP centroid.
+    //
+    // Repairing it means sending a coordinate — so it is the only call here, it is behind an
+    // explicit confirmation, and what it writes is the care recipient's home on a record this
+    // family owns, not a track of where the family member has been.
+    const status = client.slice(client.indexOf("const VisitGeoStatus"), client.indexOf("const VisitNudgeCard"));
+    const calls = status.match(/apiFetch\(/g) || [];
+    expect(calls).toHaveLength(1);
+    expect(status).toMatch(/apiFetch\(`\/api\/care-recipients\/\$\{target\.id\}`/);
+    expect(status).toMatch(/pinState === 'confirming'/);
+    expect(status).not.toMatch(/onClick=\{pinHere\}[\s\S]{0,80}Pin it here/); // never the first tap
   });
 
   test("no pinned address, no invite — there'd be nothing to compare against", () => {

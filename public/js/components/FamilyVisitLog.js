@@ -459,14 +459,45 @@ const VisitGeoInvite = ({ recipients, onEnabled }) => {
 // it never pushes anything. It shows what the last check found and offers to redo it on
 // demand. It also says out loud that the check happens on open, which is the honest
 // description of what this feature is.
+// v1.105.148 — "It says last check I was 2.3 miles away, but I don't know when that was."
+// The timestamp was being STORED all along (recordLastCheck writes `at`) and never shown, so a
+// reading from three days ago and one from ten seconds ago looked identical.
+const agoLabel = (ts) => {
+  // No timestamp is not "a long time ago" — it is "we do not know". Number(null) is 0, which
+  // would have dated a reading to 1970 and printed "20695 days ago" with total confidence.
+  // Caught by its own test; the line falls back to "at last check" when this returns null.
+  const n = Number(ts);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  const ms = Date.now() - n;
+  if (ms < 0) return null;
+  const mins = Math.round(ms / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins} min ago`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs} hour${hrs === 1 ? '' : 's'} ago`;
+  const days = Math.round(hrs / 24);
+  return `${days} day${days === 1 ? '' : 's'} ago`;
+};
+
 const VisitGeoStatus = ({ recipients }) => {
   const [last, setLast] = useState(readLastCheck);
   const [busy, setBusy] = useState(false);
+  const [pinState, setPinState] = useState('idle'); // idle → confirming → saving → done/failed
+  const [pinNote, setPinNote] = useState(null);
 
   const withCoords = (recipients || []).filter((r) => r.latitude != null && r.longitude != null);
   if (!withCoords.length) return null;
 
   const nameOf = (r) => r.first_name || r.firstName || 'them';
+
+  const nearestTo = (latitude, longitude) => {
+    let best = null;
+    for (const r of withCoords) {
+      const ft = haversineFeet(latitude, longitude, r.latitude, r.longitude);
+      if (!best || ft < best.ft) best = { ft, r };
+    }
+    return best;
+  };
 
   const recheck = async () => {
     setBusy(true);
@@ -474,19 +505,60 @@ const VisitGeoStatus = ({ recipients }) => {
     setBusy(false);
     if (!pos) return;
     const { latitude, longitude } = pos.coords;
-    let best = null;
-    for (const r of withCoords) {
-      const ft = haversineFeet(latitude, longitude, r.latitude, r.longitude);
-      if (!best || ft < best.ft) best = { ft, r };
-    }
+    const best = nearestTo(latitude, longitude);
     recordLastCheck(best.ft, nameOf(best.r));
     setLast(readLastCheck());
   };
 
+  // ─── v1.105.148 — when the house is pinned in the wrong place ───
+  //
+  // Pete: "I'm definitely inside of 1000 feet from her house, I've hit check now and it's
+  // tagged my location… but it still doesn't say that I'm at her location."
+  //
+  // Every fix so far has assumed the phone was wrong. The other half of the subtraction is the
+  // HOME point, and it comes from geocoding an address — which can land on a street centroid,
+  // a ZIP centroid, or the wrong side of a rural road, and then no amount of GPS accuracy will
+  // ever close the gap. A stable, confident 2.3 miles while standing in the kitchen is that
+  // shape of wrong.
+  //
+  // So: if you are AT the house, say so and the house moves to where you are. Full precision,
+  // deliberately — this is care_recipients.latitude, the same field the address geocoder
+  // writes, on a record this family owns.
+  const pinHere = async () => {
+    setPinState('saving');
+    setPinNote(null);
+    const { pos } = await getPosition();
+    if (!pos) { setPinState('idle'); setPinNote("Couldn't read your location."); return; }
+    const { latitude, longitude } = pos.coords;
+    const target = nearestTo(latitude, longitude)?.r;
+    if (!target) { setPinState('idle'); return; }
+    try {
+      const res = await apiFetch(`/api/care-recipients/${target.id}`, {
+        method: 'PUT', body: JSON.stringify({ latitude, longitude }),
+      });
+      if (res?.ok) {
+        recordLastCheck(0, nameOf(target));
+        setLast(readLastCheck());
+        setPinState('done');
+        setPinNote(`Saved. ${nameOf(target)}'s home is where you are now.`);
+      } else {
+        const d = await res.json().catch(() => ({}));
+        setPinState('idle');
+        setPinNote(d.error || "Couldn't save that.");
+      }
+    } catch {
+      setPinState('idle');
+      setPinNote("Couldn't save that.");
+    }
+  };
+
+  const when = last ? agoLabel(last.at) : null;
+  const looksWrong = last && last.ft > 1000 && pinState !== 'done';
+
   return (
     <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)', marginBottom: 10, lineHeight: 1.5 }}>
       {last
-        ? `${prettyFeet(last.ft)} from ${last.name}'s at last check. InPlace looks when you open it — the nudge appears within 1,000 ft.`
+        ? `${prettyFeet(last.ft)} from ${last.name}'s${when ? `, checked ${when}` : ' at last check'}. InPlace looks when you open it — the nudge appears within 1,000 ft.`
         : 'InPlace will check how close you are to the house when you open it.'}
       {' '}
       <button onClick={recheck} disabled={busy} style={{
@@ -494,6 +566,33 @@ const VisitGeoStatus = ({ recipients }) => {
         color: 'var(--text-secondary)', textDecoration: 'underline',
         cursor: busy ? 'default' : 'pointer',
       }}>{busy ? 'checking…' : 'check now'}</button>
+
+      {looksWrong && (
+        <div style={{ marginTop: 6 }}>
+          {pinState === 'confirming' ? (
+            <React.Fragment>
+              <span>Only if you{'\u2019'}re standing at the house right now. </span>
+              <button onClick={pinHere} style={{
+                background: 'none', border: 'none', padding: 0, font: 'inherit',
+                color: 'var(--accent-color)', fontWeight: 700, textDecoration: 'underline', cursor: 'pointer',
+              }}>Yes, I{'\u2019'}m here</button>
+              <span> · </span>
+              <button onClick={() => setPinState('idle')} style={{
+                background: 'none', border: 'none', padding: 0, font: 'inherit',
+                color: 'var(--text-tertiary)', textDecoration: 'underline', cursor: 'pointer',
+              }}>cancel</button>
+            </React.Fragment>
+          ) : (
+            <button onClick={() => setPinState('confirming')} disabled={pinState === 'saving'} style={{
+              background: 'none', border: 'none', padding: 0, font: 'inherit',
+              color: 'var(--text-secondary)', textDecoration: 'underline', cursor: 'pointer',
+            }}>
+              {pinState === 'saving' ? 'saving\u2026' : 'Standing at the house and this looks wrong? Pin it here'}
+            </button>
+          )}
+        </div>
+      )}
+      {pinNote && <div style={{ marginTop: 4, color: 'var(--text-secondary)' }}>{pinNote}</div>}
     </div>
   );
 };
