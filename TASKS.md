@@ -454,11 +454,17 @@
       for every error ever thrown, and that is what the console capture used. **Every**
       console error ever attached to a feedback report arrived stripped of the diagnosis.
 
-- [ ] **Messages arrive in a lump.** (`befaf875`, part) *"There's some sort of lag in the
-      messages. Sometimes replies don't show up until all at once."* Not investigated yet.
-      Prime suspect is socket delivery: if the socket drops and the app only catches up on
-      reconnect or on a poll, several messages land together — which is what a lump looks like.
-      **P1** — he is coordinating Betty's care through this thread.
+- [x] **Messages arrived in a lump. Shipped v1.105.148.** (`befaf875`, part) *"There's some
+      sort of lag in the messages. Sometimes replies don't show up until all at once."*
+      **It was never lag — nothing was slow, the messages were never coming.** New messages
+      arrive on exactly ONE path, a `new_message` socket event, and **socket.io reconnects by
+      itself but does not replay what it missed.** Anything sent while the socket was down
+      (phone asleep, app backgrounded, wifi handing to cellular in a corridor) was never
+      delivered, and nothing re-read the thread — so it sat stale until something happened to
+      fetch it, and then they all landed together.
+      Re-reads the thread + the conversation list on reconnect and on foreground. `fetchMessages`
+      replaces state only when the thread actually changed, or the catch-up would yank a reader
+      who is halfway up the history back to the bottom on every reconnect.
 
 - [x] **A medication task he can check off three times a day. Shipped v1.105.147.**
       (`3ad54eea`) *"Would like more availability to check this task off three times where I can
@@ -493,11 +499,20 @@
       current information about a person's care genuinely does live in the thread — so this
       will be asked again.
 
-- [ ] **GPS check-in still not sticking.** (`4c87911b`) *"It says last check I was 2.3 miles
-      away, but I don't know when that was… I'm definitely inside of 1000 feet… it still
-      doesn't say that I'm at her location."* Two separate things: the geo status line gives a
-      distance with **no timestamp**, so a stale reading is indistinguishable from a current
-      one; and the check-in is not updating the stored point. Tied to the standing GPS P0.
+- [~] **GPS: the line says WHEN now, and the house can be repaired. v1.105.148.**
+      (`4c87911b`) The timestamp has been **stored since the feature shipped** (`recordLastCheck`
+      writes `at`) and was never displayed — a reading from three days ago and one from ten
+      seconds ago looked identical. It says "checked 4 min ago" now.
+      **And the assumption everyone made, me included, was that the phone was wrong.** The other
+      half of the subtraction is the HOME point, geocoded from an address, which can land on a
+      street centroid, a ZIP centroid or the wrong side of a rural road. **A stable, confident
+      2.3 miles while standing in the kitchen is that shape of wrong** and no GPS accuracy will
+      ever close it. When the reading says you are far, the line now offers to move the house to
+      where you are standing, behind an explicit confirm.
+      ⚠️ **STILL OPEN and needs Pete at Betty's house:** whether that is actually the cause. If
+      pinning it fixes the distance, the geocode was wrong and the remaining GPS P0 shrinks to
+      "check-in on a real iPhone". If it does not, the device point is the problem after all.
+      One trip answers it.
 
 
 > **Aug 25 2026 — feedback triage.** 4 new, all Pete, all marked reviewed on the server. Three
