@@ -533,7 +533,14 @@
       zoom UI and the PiP all clear `--sab`/`--sat` now. The other half of "froze":
       `Video.connect` has no deadline of its own, so a connect that never answers leaves a
       full-screen black overlay reading "Connecting…" forever — 30s and a real error now.
-      ⚠️ **Wants Pete on a device: place a call, answer one, and hang one up.**
+      ✅ **CONFIRMED by Pete, 8/29: "i tried the video chat the other day and it worked
+      great. like, really, really good quality."** Placing a video call, the media, and the
+      controls all work on his iPhone. The 1280x720 constraint stays — that quality is the
+      constraint doing its job, so nobody should "optimise" it down later without a reason.
+      ⏳ **Still unconfirmed: the RECEIVING side when the person is not in the app** — the ring,
+      the notification's Answer/Decline, and whether the push reaches a device at all
+      (see the reachability endpoint, v1.105.144). That needs a second person, not a second
+      test on the same phone.
 
 - [x] **"Needs you" opened a page instead of the thing. Shipped v1.105.139.** `51d4226c`:
       *"Need you alerts shouldn't open a generic page…they should open the task or event. I
