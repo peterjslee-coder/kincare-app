@@ -91,14 +91,32 @@ router.get("/vapid-key", (req, res) => {
 // Debug endpoint: check push notification readiness (auth required)
 router.get("/status", authenticate, async (req, res) => {
   const db = await getDb();
-  const subCount = await db.prepare(
-    "SELECT COUNT(*) as count FROM push_subscriptions WHERE user_id = ?"
-  ).get(req.user.id);
+  const rows = await db.prepare(
+    "SELECT endpoint FROM push_subscriptions WHERE user_id = ?"
+  ).all(req.user.id);
+
+  // ─── v1.105.151 — WHICH devices, not how many ───
+  //
+  // Pete: "why don't i get push notifications when i don't get messages in app… i know the
+  // other people get notifications, but I don't."
+  //
+  // He has three registered devices — two web and an android — and no iOS token at all, while
+  // he tests on an iPhone. So every message push he was owed went out successfully, to a
+  // laptop and to an Android build he isn't holding.
+  //
+  // The self-repair in checkPushHealth existed to catch exactly this and could never fire: it
+  // asked whether `userSubscriptions === 0`, and his was 3. "Does the server know about ANY
+  // device for me" is the wrong question; the one that decides whether a phone buzzes is
+  // "does it know about THIS one". The count alone cannot answer that, so the platforms come
+  // back too.
+  const { deviceKind } = require("../utils/pushDevices");
+  const platforms = [...new Set(rows.map((r) => deviceKind(r.endpoint)))];
 
   res.json({
     vapidConfigured: _vapidInitialized && !!_vapidPublicKey && !!_vapidPrivateKey,
-    userSubscriptions: parseInt(subCount.count),
-    ready: _vapidInitialized && !!_vapidPrivateKey && parseInt(subCount.count) > 0,
+    userSubscriptions: rows.length,
+    platforms,
+    ready: _vapidInitialized && !!_vapidPrivateKey && rows.length > 0,
   });
 });
 

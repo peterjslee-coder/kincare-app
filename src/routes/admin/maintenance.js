@@ -151,9 +151,9 @@ router.get("/users/:id/reachability", authenticate, checkAdmin, requireAdmin, as
     const devices = subs.map((s) => {
       const ep = String(s.endpoint || "");
       // native://ios/<token> and native://android/<token> — anything else is Web Push.
-      const m = ep.match(/^native:\/\/([a-z]+)\//i);
+      // v1.105.151 — one definition, shared with /api/push/status and the client's self-repair.
       return {
-        kind: m ? m[1].toLowerCase() : "web",
+        kind: require("../../utils/pushDevices").deviceKind(ep),
         // Enough to tell two rows apart in a support conversation, and useless to anyone else.
         ref: ep.slice(-6),
         failCount: s.fail_count || 0,

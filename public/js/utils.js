@@ -1336,8 +1336,27 @@ const checkPushHealth = window.checkPushHealth = async () => {
       const res = await apiFetch('/api/push/status');
       if (!res?.ok) return;
       const status = await res.json();
-      if (status.userSubscriptions === 0 && typeof subscribeNativePush === 'function') {
-        console.log('Push health: server has no devices for this user — re-registering native token');
+      // ─── v1.105.151 — ask about THIS device, not about any device ───
+      //
+      // Pete: "why don't i get push notifications… i know the other people get notifications,
+      // but I don't." He had three registered devices — two web and an android — and no iOS
+      // token at all, while testing on an iPhone. Every message push he was owed went out
+      // successfully, to a laptop and an Android build he was not holding.
+      //
+      // This repair existed to catch exactly that, and could never fire: it asked whether
+      // `userSubscriptions === 0`, and his was 3. The other devices were what kept his phone
+      // unregistered — the more devices you have, the more certain this check was that
+      // everything was fine. "Does the server know about ANY device for me" is the wrong
+      // question; the one that decides whether a phone buzzes is "does it know about THIS one".
+      //
+      // Registration is an upsert on the endpoint, so re-registering when we are already
+      // known costs one request and changes nothing.
+      const mine = window.Capacitor?.getPlatform?.();
+      const platforms = Array.isArray(status.platforms) ? status.platforms : null;
+      const missing = platforms ? (mine ? !platforms.includes(mine) : platforms.length === 0)
+        : status.userSubscriptions === 0; // older server: fall back to the old question
+      if (missing && typeof subscribeNativePush === 'function') {
+        console.log(`Push health: no ${mine || 'native'} device registered for this user — registering`);
         await subscribeNativePush();
       }
       return;

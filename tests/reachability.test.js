@@ -17,7 +17,15 @@ describe("what it reports", () => {
 
   test("a native token and a Web Push subscription are told apart by endpoint shape", () => {
     // subscribe-native writes native://ios/<token>; Web Push writes the browser's URL.
-    expect(src).toMatch(/native:\\\/\\\/\(\[a-z\]\+\)\\\//i);
+    //
+    // v1.105.151 — the parsing moved into utils/pushDevices so that /api/push/status and the
+    // client's self-repair read it the same way. Three copies of a regex is three chances to
+    // disagree about whether someone's phone is registered, which is the exact bug that
+    // version fixed. The behaviour is asserted directly in pushDeviceRegistration.test.js.
+    expect(src).toMatch(/utils\/pushDevices"\)\.deviceKind/);
+    const { deviceKind } = require("../src/utils/pushDevices");
+    expect(deviceKind("native://ios/tok")).toBe("ios");
+    expect(deviceKind("https://web.push.apple.com/x")).toBe("web");
   });
 
   test("'registered' is not the same as 'has ever worked'", () => {
