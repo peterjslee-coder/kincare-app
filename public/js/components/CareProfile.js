@@ -1,3 +1,7 @@
+// v1.105.149 — how many observations the card shows before it asks. Five is about a screen
+// on a phone, and the newest five are what anyone opening a care record came to read.
+const NOTES_PREVIEW = 5;
+
 const CareProfile = window.CareProfile = ({ onNavigate }) => {
   const [profile, setProfile] = useState(null);
   const [allRecipients, setAllRecipients] = useState([]);
@@ -11,6 +15,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
   const [newNote, setNewNote] = useState('');
   const [addingNote, setAddingNote] = useState(false);
   const [notesOpen, setNotesOpen] = useState(true); // v1.76.0 — observations are a first-class feature, not buried
+  const [showAllNotes, setShowAllNotes] = useState(false); // v1.105.149 — newest few, then ask
   const [noteUrgent, setNoteUrgent] = useState(false);
   const [notePhoto, setNotePhoto] = useState(null); // { data, name }
   const [viewingAttachments, setViewingAttachments] = useState(null); // v1.105.34 — { list, index }
@@ -1322,7 +1327,16 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                 </div>
               </div>
             ))}
-            {notes.length > 0 ? notes.map((n) => (
+            {/* ─── v1.105.149 — the newest few, then ask ───
+                Pete: "Care notes...same thing" (after "the reimbursement page...way too many.
+                pages of scroll"). The section already collapsed as a whole, which is the wrong
+                unit: the choice was "all of it or none of it", and every note carries its
+                content, its category chips and its AI highlights. On a care record months old
+                that is a wall.
+                The newest ones are the ones anyone came here to read — a note from March is
+                history, not news. The count on the header still says how many there are, so
+                nothing is hidden, only folded. */}
+            {notes.length > 0 ? (showAllNotes ? notes : notes.slice(0, NOTES_PREVIEW)).map((n) => (
               <div key={n.id} style={{ padding: '10px 0', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
                 <div style={{ flex: 1 }}>
                   {!!n.needs_attention && (
@@ -1369,7 +1383,19 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                   }} style={{ padding: '3px 8px', background: 'none', border: '1px solid #fdd', borderRadius: 4, cursor: 'pointer', fontSize: 11, color: 'var(--color-red-strong)', whiteSpace: 'nowrap', flexShrink: 0 }}>Delete</button>
                 )}
               </div>
-            )) : (
+            )).concat(notes.length > NOTES_PREVIEW ? [(
+              <button key="__more" onClick={() => setShowAllNotes(!showAllNotes)}
+                style={{
+                  width: '100%', minHeight: 44, marginTop: 10, background: 'none',
+                  border: '1px dashed var(--border-color)', borderRadius: 10,
+                  color: 'var(--role-color)', font: 'inherit', fontSize: 13.5, fontWeight: 700,
+                  cursor: 'pointer',
+                }}>
+                {showAllNotes
+                  ? 'Show fewer'
+                  : `Show all ${notes.length} observations`}
+              </button>
+            )] : []) : (
               <p style={{ color: 'var(--text-muted)', fontSize: 13, margin: '8px 0 0' }}>No notes yet. Add one to share care observations with your team.</p>
             )}
           </div>

@@ -77,6 +77,9 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
   const [markMethod, setMarkMethod] = useState('venmo');
   const [error, setError] = useState('');
   const [showMoney, setShowMoney] = useState(false); // v1.96.0 — Money view (leader + billing contact)
+  // v1.105.149 — which row is open. One at a time: the point is a page you can see the shape
+  // of, and "expand all" is the page we started with.
+  const [expandedId, setExpandedId] = useState(null);
   const [viewingAttachments, setViewingAttachments] = useState(null); // v1.105.34 — { list, index }
   // v1.98.17 — Bank deposits view: groups received reimbursements into the actual
   // Stripe payout batches so the number on the bank statement ties to requests.
@@ -1128,18 +1131,47 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
                   ⚠️ {needsAction.length === 1 ? '1 request needs' : `${needsAction.length} requests need`} your attention
                 </div>
               )}
-              {ordered.map((it) => (
+              {ordered.map((it) => {
+          // ─── v1.105.149 — one line per request until you ask for more ───
+          //
+          // Pete: "The reimbursement page...way too many. pages of scroll. collapse that
+          // thing pls."
+          //
+          // v1.105.31 already collapsed the settled TAIL, and it was the right idea aimed at
+          // the wrong axis: the length is not how many rows there are, it is how tall each one
+          // is. Every row renders receipt thumbnails, attach/ask buttons, decline reasons and
+          // payment detail whether or not anyone is looking at them — about 130 lines of JSX
+          // apiece. Ten requests is pages of scrolling before you reach anything.
+          //
+          // So the row is its summary, and the detail opens on tap. What is NOT hidden: a row
+          // that needs this person to do something keeps its buttons on the collapsed line.
+          // Tidying a screen by hiding the work is how you get a shorter page that is worse.
+          const needsMe = meta.isApprover && ['pending', 'approved'].includes(it.status);
+          const open = expandedId === it.id || needsMe;
+          return (
           <div key={it.id} data-reimb-id={it.id} style={{ borderTop: '1px solid var(--border-light)', padding: '12px 4px', borderRadius: 8, transition: 'background 1.2s ease', background: highlightId === it.id ? 'rgba(74, 144, 217, 0.16)' : 'transparent' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, flexWrap: 'wrap' }}>
-              <div style={{ flex: '1 1 240px' }}>
+              <div style={{ flex: '1 1 240px', cursor: needsMe ? 'default' : 'pointer' }}
+                onClick={needsMe ? undefined : () => setExpandedId(open ? null : it.id)}>
                 <div style={{ fontWeight: 600, fontSize: 15 }}>
+                  {!needsMe && (
+                    <span aria-hidden="true" style={{ display: 'inline-block', width: 14, color: 'var(--text-tertiary)', fontSize: 11, transform: open ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }}>{'\u25B6'}</span>
+                  )}
                   ${Number(it.amount).toFixed(2)} <span style={{ fontWeight: 400, color: 'var(--text-secondary)' }}>— {it.description}</span>
                 </div>
-                <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>
+                <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2, paddingLeft: needsMe ? 0 : 14 }}>
                   {it.payee_first_name} {it.payee_last_name}
                   {it.expense_date ? ` · ${it.expense_date}` : ''} · requested {fmtDate(it.created_at)}
                   {!!it.self_recorded && <span style={{ color: 'var(--role-color)', fontWeight: 600 }}> · recorded by approver</span>}
+                  {/* Collapsed, the receipt count is the one fact you would otherwise open the
+                      row to learn — and "no receipt" is the fact that decides an approval. */}
+                  {!open && (
+                    <span> · {it.receipts.length
+                      ? `${it.receipts.length} receipt${it.receipts.length === 1 ? '' : 's'}`
+                      : 'no receipt'}</span>
+                  )}
                 </div>
+                {open && (<React.Fragment>
                 {/* v1.105.29 — say when there is NO receipt, not just when there is one.
                     Rendering nothing for an empty list looks identical to a permissions
                     problem: you cannot tell "they did not attach one" from "the app is not
@@ -1197,12 +1229,15 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
                     </select>
                   </div>
                 )}
+                </React.Fragment>)}
               </div>
               <div style={{ textAlign: 'right' }}>{statusChip(it)}</div>
             </div>
 
             {/* v1.98.12 — DURABLE outcome banner: stays put so the approver can always
-                tell what actually happened (a vanishing toast was the whole problem). */}
+                tell what actually happened (a vanishing toast was the whole problem).
+                v1.105.149 — and it stays visible while the row is collapsed, for the same
+                reason: an outcome you have to go looking for is the vanishing toast again. */}
             {actionResult[it.id] && (
               <div style={{
                 marginTop: 8, padding: '8px 12px', borderRadius: 8, fontSize: 13, fontWeight: 600,
@@ -1217,6 +1252,9 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
               </div>
             )}
 
+            {/* v1.105.149 — the rest of the row only when it is open. A needs-you row is
+                always open, so nothing anyone has to act on is ever behind a tap. */}
+            {open && (<React.Fragment>
             {/* Approver: how to pay the payee */}
             {meta.isApprover && ['pending', 'approved'].includes(it.status) && (
               <div style={{ fontSize: 12, marginTop: 6, color: payToLabel(it) ? 'var(--text-secondary)' : '#e65100' }}>
@@ -1297,8 +1335,9 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
                 </button>
               </div>
             )}
+            </React.Fragment>)}
           </div>
-              ))}
+                );})}
               {/* v1.105.31 — this toggle sits at the BOTTOM, where the tail begins: here it
                   reads as "…and 9 finished ones", which is the question you actually have at
                   that point in the list. Totals stay visible either way, so collapsing never
