@@ -27,7 +27,7 @@ const ReactionBar = window.ReactionBar = ({ reactions, onReact, currentUserId, a
 
   const positioned = overlap ? {
     position: 'absolute',
-    bottom: -13,
+    bottom: -11,
     [align === 'right' ? 'right' : 'left']: 8,
     zIndex: 2,
   } : {
@@ -47,18 +47,18 @@ const ReactionBar = window.ReactionBar = ({ reactions, onReact, currentUserId, a
             aria-label={`${emoji} from ${who.map((r) => r.userName).filter(Boolean).join(', ') || 'someone'}`}
             style={{
               display: 'flex', alignItems: 'center', gap: 2,
-              padding: '2px 7px',
+              padding: '1px 6px',
               // The ring is what makes it read as sitting ON the bubble rather than beside it.
               background: mine ? 'var(--bubble-sent-bg)' : 'var(--bg-elevated, #3b3b3d)',
               border: '2px solid var(--bg-primary)',
-              borderRadius: 14,
-              fontSize: 13, lineHeight: 1.2, cursor: 'pointer',
+              borderRadius: 12,
+              fontSize: 11.5, lineHeight: 1.25, cursor: 'pointer',
               color: mine ? 'var(--text-on-primary)' : 'var(--text-primary)',
               boxShadow: '0 1px 3px rgba(0,0,0,0.28)',
             }}>
             <span aria-hidden="true">{emoji}</span>
             {who.length > 1 && (
-              <span style={{ fontSize: 11, fontWeight: 600, opacity: 0.85 }}>{who.length}</span>
+              <span style={{ fontSize: 10, fontWeight: 600, opacity: 0.85 }}>{who.length}</span>
             )}
           </button>
         );

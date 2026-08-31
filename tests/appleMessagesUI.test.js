@@ -72,7 +72,7 @@ describe("reactions overlap the bubble, and belong to no one screen", () => {
   });
 
   test("it hangs off the corner — that is what 'overlap' means", () => {
-    expect(bar).toMatch(/position: 'absolute',\s*\n\s*bottom: -13,/);
+    expect(bar).toMatch(/position: 'absolute',\s*\n\s*bottom: -11,/);
     expect(bar).toMatch(/border: '2px solid var\(--bg-primary\)'/); // the ring that lifts it off
   });
 
@@ -94,5 +94,73 @@ describe("reactions overlap the bubble, and belong to no one screen", () => {
 
   test("and Messages degrades if it is missing", () => {
     expect(msgs).toMatch(/typeof ReactionBar !== 'undefined' &&/);
+  });
+});
+
+// ─── v1.105.159 — the gestures, and two things his screen recording caught ───
+//
+// Pete: "can we get swipe to reply treatment? I still dont like the press and hit reply…
+// but i like when i hit and hold on messages and a few emojis pop up. right now it's a janky
+// reply and one emoji." Then, watching it: "reaction looks too big and dominates the message,
+// and the reply/emoji is stuck up high and won't cancel out."
+describe("holding and swiping", () => {
+  test("a hold opens the emoji row directly", () => {
+    // It used to mean: long-press, aim at a small 😀 in a strip, then pick. Three steps for a
+    // thumbs-up. The six emoji ARE the menu now.
+    expect(msgs).toMatch(/msgSwipeRef\.current\.pressTimer = setTimeout\(/);
+    expect(msgs).toMatch(/setShowEmojiFor\(msg\.id\);/);
+    expect(msgs).toMatch(/\}, 420\);/);
+  });
+
+  test("moving cancels the hold, and swiping cancels the menu", () => {
+    expect(msgs).toMatch(/if \(Math\.abs\(dx\) > 8 \|\| dy > 8\) clearLongPress\(\);/);
+    expect(msgs).toMatch(/msgSwipeRef\.current\.locked = true;\s*\n\s*setShowEmojiFor\(null\);/);
+  });
+
+  test("the swipe claims the gesture so the list stops fighting it", () => {
+    // Most of why swipe-to-reply never felt like it worked: the browser kept the touch and the
+    // drag stuttered or died halfway.
+    expect(msgs).toMatch(/if \(e\.cancelable\) e\.preventDefault\(\);/);
+  });
+
+  test("the commit reads the ref, not the state", () => {
+    // touchmove fires faster than React re-renders, so the last pixels of a fast swipe were
+    // not in msgSwipeOffset yet when touchend ran.
+    expect(msgs).toMatch(/const travelled = msgSwipeRef\.current\.offset \|\| 0;/);
+    expect(msgs).toMatch(/if \(travelled >= REPLY_TRIGGER_PX\)/);
+  });
+
+  test("it rubber-bands rather than stopping dead", () => {
+    expect(msgs).toMatch(/REPLY_TRIGGER_PX \+ \(dx - REPLY_TRIGGER_PX\) \* 0\.35/);
+  });
+
+  test("haptics are optional and can never break the gesture", () => {
+    expect(msgs).toMatch(/const tapHaptic = \(style\) =>/);
+    expect(msgs).toMatch(/catch \{ \/\* never let feedback break the gesture \*\/ \}/);
+  });
+});
+
+describe("the two faults in the recording", () => {
+  test("the hover strip does not exist on a touch screen", () => {
+    // onMouseEnter fires on TAP and onMouseLeave never fires, so one tap pinned it to the edge
+    // of the screen, detached from any bubble, with no way to dismiss it.
+    expect(msgs).toMatch(/\{!hasSoftKeyboard && \(\s*\n\s*<div className="msg-hover-actions"/);
+  });
+
+  test("the emoji row can be dismissed by tapping anywhere", () => {
+    // Before this the only way out was to pick an emoji you did not want.
+    expect(msgs).toMatch(/onClick=\{\(\) => setShowEmojiFor\(null\)\}\s*\n\s*onTouchStart=\{\(\) => setShowEmojiFor\(null\)\}/);
+    expect(msgs).toMatch(/position: 'fixed', inset: 0, zIndex: 9/);
+  });
+
+  test("it is a pill, not a banner", () => {
+    expect(msgs).toMatch(/borderRadius: 999,/);
+    expect(msgs).toMatch(/fontSize: 17, lineHeight: 1, padding: '5px 6px'/);
+    expect(msgs).not.toMatch(/cursor: 'pointer', fontSize: 20, padding: '4px'/);
+  });
+
+  test("and the reaction pill sits quietly on the corner", () => {
+    expect(bar).toMatch(/fontSize: 11\.5/);
+    expect(bar).not.toMatch(/fontSize: 13, lineHeight: 1\.2/);
   });
 });

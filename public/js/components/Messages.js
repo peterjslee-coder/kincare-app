@@ -61,6 +61,9 @@ const Messages = window.Messages = () => {
   const [msgSwipeOffset, setMsgSwipeOffset] = useState(0);
   const { showToast } = useToast();
   const REACTION_EMOJIS = ['\u2764\uFE0F', '\uD83D\uDC4D', '\uD83D\uDC4E', '\uD83D\uDE02', '\uD83D\uDE2E', '\uD83D\uDE4F'];
+  // v1.105.159 — how far to drag before it counts as a reply. 48px is about a thumb's easy
+  // travel; the old 50 was measured against a value that had already been clamped at 80.
+  const REPLY_TRIGGER_PX = 48;
   const [currentUser, setCurrentUser] = useState(null); const [ipaiRecipientName, setIpaiRecipientName] = useState(null); useEffect(() => { (async () => { try { const res = await apiFetch('/api/care-recipients'); if (res?.ok) { const data = await res.json(); const name = data.careRecipients?.[0]?.name; if (name) setIpaiRecipientName(String(name).trim().split(/\s+/)[0]); } } catch (e) {} })(); }, []); // v1.96.1: personalize iPAi chips (was hardcoded demo names)
 
   // ─── In-app call state (Twilio Video) ───
@@ -510,11 +513,50 @@ const Messages = window.Messages = () => {
   };
 
   // ─── Message swipe-to-reply handlers (mobile) ───
+  // ─── v1.105.159 — the two gestures, made to feel like the ones he is comparing us to ───
+  //
+  // Pete: "can we get swipe to reply treatment? I still dont like the press and hit reply…
+  // but i like when i hit and hold on messages and a few emojis pop up. right now it's a
+  // janky reply and one emoji."
+  //
+  // Both already existed and both were doing it the long way round. Swipe-to-reply was here
+  // since v1.51 and never felt reliable, and the six Tapback emoji were behind a 😀 button in
+  // a hover strip — so on a phone, reacting meant long-press, aim at a small icon, then pick.
+  // That is the "janky reply and one emoji".
+  //
+  // Now: hold the bubble and the emoji row IS the menu. Swipe it right and you are replying.
+  const tapHaptic = (style) => {
+    // The thing that makes Apple's gestures feel decided rather than accidental. Absent on the
+    // web, and absent is fine — everything below works without it.
+    try {
+      const H = window.Capacitor?.Plugins?.Haptics;
+      if (H?.impact) H.impact({ style: style || 'LIGHT' });
+      else if (navigator.vibrate) navigator.vibrate(8);
+    } catch { /* never let feedback break the gesture */ }
+  };
+
+  const clearLongPress = () => {
+    if (msgSwipeRef.current.pressTimer) {
+      clearTimeout(msgSwipeRef.current.pressTimer);
+      msgSwipeRef.current.pressTimer = null;
+    }
+  };
+
   const onMsgTouchStart = (e, msg) => {
     const touch = e.touches[0];
-    msgSwipeRef.current = { startX: touch.clientX, startY: touch.clientY, id: msg.id, locked: false };
+    msgSwipeRef.current = {
+      startX: touch.clientX, startY: touch.clientY, id: msg.id, locked: false,
+      offset: 0, pressTimer: null,
+    };
     setMsgSwipingId(null);
     setMsgSwipeOffset(0);
+    // Hold ~420ms — long enough not to fire while scrolling, short enough not to feel stuck.
+    msgSwipeRef.current.pressTimer = setTimeout(() => {
+      if (msgSwipeRef.current.id !== msg.id || msgSwipeRef.current.locked) return;
+      tapHaptic('MEDIUM');
+      setShowEmojiFor(msg.id);
+      msgSwipeRef.current.pressTimer = null;
+    }, 420);
   };
 
   const onMsgTouchMove = (e, msg) => {
@@ -522,23 +564,42 @@ const Messages = window.Messages = () => {
     const touch = e.touches[0];
     const dx = touch.clientX - msgSwipeRef.current.startX;
     const dy = Math.abs(touch.clientY - msgSwipeRef.current.startY);
+    // Any real movement means this is not a hold.
+    if (Math.abs(dx) > 8 || dy > 8) clearLongPress();
     // Only horizontal swipe right
     if (dx > 10 && dy < dx * 0.5) {
-      if (!msgSwipeRef.current.locked) msgSwipeRef.current.locked = true;
+      if (!msgSwipeRef.current.locked) {
+        msgSwipeRef.current.locked = true;
+        setShowEmojiFor(null);
+      }
+      // Once we have claimed the gesture, stop the message list scrolling underneath it —
+      // without this the browser keeps the touch and the drag stutters or dies halfway, which
+      // is most of why swipe-to-reply never felt like it worked.
+      if (e.cancelable) e.preventDefault();
+      // Rubber-band past the trigger point, the way iOS does, so it feels like it has a limit
+      // rather than a bug.
+      const eased = dx <= REPLY_TRIGGER_PX ? dx : REPLY_TRIGGER_PX + (dx - REPLY_TRIGGER_PX) * 0.35;
+      const offset = Math.min(eased, 92);
+      if (dx >= REPLY_TRIGGER_PX && msgSwipeRef.current.offset < REPLY_TRIGGER_PX) tapHaptic('LIGHT');
+      msgSwipeRef.current.offset = dx;
       setMsgSwipingId(msg.id);
-      setMsgSwipeOffset(Math.min(dx, 80));
+      setMsgSwipeOffset(offset);
     }
   };
 
   const onMsgTouchEnd = (msg) => {
+    clearLongPress();
     if (msgSwipeRef.current.id !== msg.id) return;
-    if (msgSwipeOffset > 50) {
+    // Read the REF, not the state: touchmove fires faster than React re-renders, so the last
+    // few pixels of a fast swipe were not in `msgSwipeOffset` yet when this ran.
+    const travelled = msgSwipeRef.current.offset || 0;
+    if (travelled >= REPLY_TRIGGER_PX) {
       setReplyTo(msg);
       if (inputRef.current) inputRef.current.focus();
     }
     setMsgSwipingId(null);
     setMsgSwipeOffset(0);
-    msgSwipeRef.current = { startX: 0, startY: 0, id: null, locked: false };
+    msgSwipeRef.current = { startX: 0, startY: 0, id: null, locked: false, offset: 0, pressTimer: null };
   };
 
   // ─── Emoji reaction handler ───
@@ -2459,7 +2520,16 @@ const Messages = window.Messages = () => {
                             align={isSent ? 'right' : 'left'}
                             onReact={(emoji) => handleReaction(m.id, emoji)} />
                         )}
-                        {/* Desktop hover actions: reply + emoji */}
+                        {/* ─── v1.105.159 — desktop only, and it means it now ───
+                            Pete, with a screen recording: "the reply/emoji is stuck up high and
+                            won't cancel out." Exactly that. This strip is shown by onMouseEnter
+                            and hidden by onMouseLeave — and on a touch screen mouseenter fires
+                            on TAP while mouseleave never fires at all. So one tap pinned it to
+                            the edge of the screen, detached from any bubble, with no way to
+                            dismiss it. Hold-for-emoji and swipe-to-reply are the touch
+                            gestures; this is for a mouse, and now only exists where there is
+                            one. */}
+                        {!hasSoftKeyboard && (
                         <div className="msg-hover-actions" style={{
                           position: 'absolute', top: m.replyTo ? 0 : -8,
                           [isSent ? 'left' : 'right']: -8,
@@ -2498,23 +2568,38 @@ const Messages = window.Messages = () => {
                             </button>
                           )}
                         </div>
+                        )}
                         {/* Emoji picker popover */}
+                        {/* ─── v1.105.159 — a Tapback pill, not a banner ───
+                            Pete, on the recording: "reaction looks too big and dominates the
+                            message." It was: 20px emoji with 8px of padding each, in a row as
+                            wide as the bubble, sitting over the message above it. Apple's is a
+                            small floating pill you could cover with a thumb. Compact now, and
+                            it hangs off the bubble's own side rather than stretching. */}
                         {showEmojiFor === m.id && (
-                          <div style={{
-                            position: 'absolute', bottom: '100%', marginBottom: 4,
-                            [isSent ? 'right' : 'left']: 0,
-                            background: 'var(--bg-surface)', borderRadius: 20, boxShadow: '0 2px 12px rgba(0,0,0,0.15)',
-                            padding: '6px 8px', display: 'flex', gap: 2, zIndex: 10,
-                          }}>
-                            {REACTION_EMOJIS.map(emoji => (
-                              <button key={emoji} onClick={() => handleReaction(m.id, emoji)}
-                                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, padding: '4px', borderRadius: 8, transition: 'background 0.15s' }}
-                                onMouseEnter={(e) => e.currentTarget.style.background = 'var(--badge-muted-bg)'}
-                                onMouseLeave={(e) => e.currentTarget.style.background = 'none'}>
-                                {emoji}
-                              </button>
-                            ))}
-                          </div>
+                          <React.Fragment>
+                            {/* Tap anywhere to put it away. Without this the only way out was
+                                to pick an emoji you did not want. */}
+                            <div onClick={() => setShowEmojiFor(null)}
+                              onTouchStart={() => setShowEmojiFor(null)}
+                              style={{ position: 'fixed', inset: 0, zIndex: 9 }} />
+                            <div style={{
+                              position: 'absolute', bottom: '100%', marginBottom: 6,
+                              [isSent ? 'right' : 'left']: 0,
+                              background: 'var(--bg-surface)', borderRadius: 999,
+                              boxShadow: '0 3px 14px rgba(0,0,0,0.22)',
+                              padding: '4px 6px', display: 'flex', gap: 0, zIndex: 10,
+                              border: '1px solid var(--border-light)',
+                            }}>
+                              {REACTION_EMOJIS.map(emoji => (
+                                <button key={emoji} onClick={() => handleReaction(m.id, emoji)}
+                                  aria-label={`React ${emoji}`}
+                                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 17, lineHeight: 1, padding: '5px 6px', borderRadius: 999 }}>
+                                  {emoji}
+                                </button>
+                              ))}
+                            </div>
+                          </React.Fragment>
                         )}
                       </div>
                     </div>
