@@ -31,6 +31,8 @@ const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, curr
   // itself; tracks handed to it are ours to stop. Miss this and the microphone indicator
   // stays lit after the call ends, which is the single worst bug a care app could ship.
   const acquiredTracksRef = useRef([]);
+  // v1.105.160 — see the incoming-call branch below.
+  const emptyRoomTimer = useRef(null);
 
   // Connect to Twilio room on mount
   useEffect(() => {
@@ -207,6 +209,7 @@ const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, curr
 
         // Handle new remote participants
         twilioRoom.on('participantConnected', participant => {
+          clearEmptyRoomTimer(); // they are here after all
           handleParticipantConnected(participant);
           setRemoteConnected(true);
           setStatus('connected');
@@ -232,6 +235,25 @@ const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, curr
           setRemoteConnected(true);
           setStatus('connected');
           startTimer();
+        } else if (callState.callDirection === 'incoming') {
+          // ─── v1.105.160 — answering a call the caller has already left ───
+          //
+          // Pete: "it showed her where to tap to accept the call but nothing happened when she
+          // hit it." Two things made that. Her ringing banner did not clear when he hung up
+          // (fixed in Messages.js), and if she tapped Accept anyway she joined an empty room
+          // and sat on "Connecting…" — technically connected, to nobody, forever.
+          //
+          // Answering means the caller should ALREADY be in the room. Empty is not "not yet",
+          // it is "gone". A short grace for the hand-off, then say so plainly instead of
+          // spinning.
+          emptyRoomTimer.current = setTimeout(() => {
+            if (cancelled) return;
+            const room = roomRef.current;
+            if (room && room.participants.size === 0) {
+              setError(`${callState.remoteParticipantName || 'They'} already hung up.`);
+              handleEndCall();
+            }
+          }, 8000);
         }
 
       } catch (err) {
@@ -252,6 +274,7 @@ const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, curr
 
     return () => {
       cancelled = true;
+      if (emptyRoomTimer.current) { clearTimeout(emptyRoomTimer.current); emptyRoomTimer.current = null; }
       if (roomRef.current) {
         roomRef.current.disconnect();
         roomRef.current = null;
@@ -323,6 +346,10 @@ const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, curr
     }
   }
 
+  function clearEmptyRoomTimer() {
+    if (emptyRoomTimer.current) { clearTimeout(emptyRoomTimer.current); emptyRoomTimer.current = null; }
+  }
+
   function stopAcquiredTracks() {
     (acquiredTracksRef.current || []).forEach((t) => {
       try { if (t && t.readyState !== 'ended') t.stop(); } catch { /* already gone */ }
@@ -331,6 +358,7 @@ const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, curr
   }
 
   function handleEndCall() {
+    clearEmptyRoomTimer();
     if (roomRef.current) {
       roomRef.current.disconnect();
       roomRef.current = null;

@@ -1222,12 +1222,31 @@ const Messages = window.Messages = () => {
         }, 30000);
       }
     });
-    const cleanup2 = onSocketEvent('call_ended', () => {
+    // ─── v1.105.160 — a call that has been hung up must stop offering to be answered ───
+    //
+    // Pete: "tried calling sara in the app. it showed her where to tap to accept the call but
+    // nothing happened when she hit it."
+    //
+    // These two cleared callState and left `incomingCall` alone. For someone who has ALREADY
+    // answered that is right — the overlay closes. For someone still looking at the ringing
+    // banner it does nothing at all: her callState was never active. So when he gave up, her
+    // banner stayed on screen, still saying Accept, for up to the 30 seconds until the
+    // auto-dismiss. Tapping it joined a room he had left — which from her side is a tap that
+    // does nothing, and from his side is exactly what he reported.
+    //
+    // A cancelled call now takes its banner with it, and says why: "Peter ended the call"
+    // beats a banner that vanishes while a thumb is on the way to it.
+    const clearRinging = (reason) => {
       setCallState({ active: false, roomName: null, callType: null, remoteParticipantName: null, remoteParticipantPhoto: null, callDirection: null });
-    });
-    const cleanup3 = onSocketEvent('call_declined', () => {
-      setCallState({ active: false, roomName: null, callType: null, remoteParticipantName: null, remoteParticipantPhoto: null, callDirection: null });
-    });
+      setIncomingCall((prev) => {
+        if (prev && showToast) {
+          showToast(`${prev.callerName || 'They'} ${reason}`, 'info');
+        }
+        return null;
+      });
+    };
+    const cleanup2 = onSocketEvent('call_ended', () => clearRinging('ended the call'));
+    const cleanup3 = onSocketEvent('call_declined', () => clearRinging('is not available'));
     return () => { cleanupRing(); cleanup(); cleanup2(); cleanup3(); };
   }, [callState.active]);
 

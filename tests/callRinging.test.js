@@ -580,3 +580,50 @@ describe("a call announces itself like a call", () => {
     expect(apns).toMatch(/payload\?\.data\?\.type === "call_incoming" \? \{ "interruption-level": "time-sensitive" \}/);
   });
 });
+
+// ─── v1.105.160 — "nothing happened when she hit it" ───
+//
+// Pete: "tried calling sara in the app. it showed her where to tap to accept the call but
+// nothing happened when she hit it."
+//
+// Two faults, one experience. Her ringing banner did not clear when he gave up — call_ended
+// cleared callState, which for someone who has not answered yet is already inactive, and left
+// `incomingCall` untouched. So the banner sat there still offering Accept until the 30-second
+// auto-dismiss. And if she tapped it, she joined a room he had already left and sat on
+// "Connecting…" — genuinely connected, to nobody, with no end.
+describe("a call that has been hung up stops offering to be answered", () => {
+  const fs = require("fs");
+  const path = require("path");
+  const read = (...p) => fs.readFileSync(path.join(__dirname, "..", ...p), "utf8");
+  const msgs = read("public", "js", "components", "Messages.js");
+  const overlay = read("public", "js", "components", "VideoCallOverlay.js");
+
+  test("call_ended clears the ringing banner, not just the call", () => {
+    expect(msgs).toMatch(/const clearRinging = \(reason\) => \{/);
+    expect(msgs).toMatch(/setIncomingCall\(\(prev\) => \{/);
+    expect(msgs).toMatch(/onSocketEvent\('call_ended', \(\) => clearRinging\('ended the call'\)\)/);
+    expect(msgs).toMatch(/onSocketEvent\('call_declined', \(\) => clearRinging\('is not available'\)\)/);
+  });
+
+  test("and says why, rather than vanishing under a thumb", () => {
+    expect(msgs).toMatch(/showToast\(`\$\{prev\.callerName \|\| 'They'\} \$\{reason\}`, 'info'\)/);
+  });
+
+  test("answering an empty room is 'gone', not 'not yet'", () => {
+    // For an OUTGOING call an empty room is normal — you are waiting. For an INCOMING one the
+    // caller should already be there.
+    expect(overlay).toMatch(/\} else if \(callState\.callDirection === 'incoming'\) \{/);
+    expect(overlay).toMatch(/already hung up\./);
+    expect(overlay).toMatch(/\}, 8000\);/);
+  });
+
+  test("someone arriving cancels the verdict", () => {
+    expect(overlay).toMatch(/clearEmptyRoomTimer\(\); \/\/ they are here after all/);
+  });
+
+  test("the timer cannot outlive the call", () => {
+    // A stray timeout that fires after the overlay is gone would end a LATER call.
+    expect(overlay).toMatch(/function handleEndCall\(\) \{\s*\n\s*clearEmptyRoomTimer\(\);/);
+    expect(overlay).toMatch(/if \(emptyRoomTimer\.current\) \{ clearTimeout\(emptyRoomTimer\.current\); emptyRoomTimer\.current = null; \}\s*\n\s*if \(roomRef\.current\) \{/);
+  });
+});
