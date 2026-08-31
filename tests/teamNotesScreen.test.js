@@ -64,6 +64,35 @@ describe("the notification lands on it", () => {
   });
 });
 
+describe("visits share the screen", () => {
+  // v1.105.156. Pete: "Julia is on the care team...she should be able to see the notes, or I
+  // should be able to select it at least." She may read visits too — the missing piece was
+  // never permission, it was a place to look.
+  test("they are fetched only where the capability allows", () => {
+    expect(view).toMatch(/if \(!rec\?\.canReadVisits\) return;/);
+    expect(notes).toMatch(/recipientsWithCapabilityFor\(db, req\.user\.id, CAP\.READ_VISITS\)/);
+  });
+
+  test("notes and visits are one timeline, newest first", () => {
+    // A caregiver arriving at the house wants "what has happened with her recently", not two
+    // lists to reconcile by date.
+    expect(view).toMatch(/const timeline = notes === null \? null : \[/);
+    expect(view).toMatch(/\.sort\(\(a, b\) => String\(b\.at \|\| ''\)\.localeCompare\(String\(a\.at \|\| ''\)\)\)/);
+  });
+
+  test("a visit says it is a visit", () => {
+    expect(view).toMatch(/👣 Visit/);
+  });
+
+  test("a missing visit history does not blank the notes", () => {
+    expect(view).toMatch(/catch \{ \/\* a missing visit history must not blank the notes \*\/ \}/);
+  });
+
+  test("and the visit push lands here too", () => {
+    expect(app).toMatch(/t === 'team_note' \|\| t === 'observation_attention' \|\| t === 'family_visit'/);
+  });
+});
+
 describe("what the page will and will not do", () => {
   test("it reads; it never writes", () => {
     // Writing a note goes in someone's care record and pushes the whole team. The places to
@@ -83,6 +112,7 @@ describe("what the page will and will not do", () => {
   });
 
   test("long histories fold, like every other list we fixed today", () => {
-    expect(view).toMatch(/Show all \$\{notes\.length\} notes/);
+    // v1.105.156 — the count is the merged timeline now, notes plus visits.
+    expect(view).toMatch(/Show all \$\{timeline\.length\}/);
   });
 });

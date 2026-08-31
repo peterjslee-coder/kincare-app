@@ -65,9 +65,15 @@ router.get("/mine/recipients", async (req, res) => {
     const { recipientsWithCapabilityFor } = require("../utils/access");
     const { CAP } = require("../utils/capabilities");
     const recipients = await recipientsWithCapabilityFor(db, req.user.id, CAP.READ_NOTES);
+    // v1.105.156 — visits ride on the same screen, under their own capability. Asked here so
+    // the client never requests a history it is not allowed to see and then handles a 403.
+    const withVisits = new Set(
+      (await recipientsWithCapabilityFor(db, req.user.id, CAP.READ_VISITS)).map((r) => r.id)
+    );
     res.json({
       recipients: recipients.map((r) => ({
         id: r.id, firstName: r.first_name, lastName: r.last_name, timezone: r.timezone,
+        canReadVisits: withVisits.has(r.id),
       })),
     });
   } catch (err) {

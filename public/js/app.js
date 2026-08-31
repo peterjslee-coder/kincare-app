@@ -677,7 +677,7 @@ const App = () => {
       } else if (t === 'check_in_reminder' || t === 'check_out_reminder' || t === 'caregiver_arriving' || t === 'caregiver_arriving_recipient' || t === 'session_in_progress' || t === 'session_complete') {
         if (d.sessionId && !d.focus) window.__pendingFocus = `session:${d.sessionId}`;
         target = 'dashboard';
-      } else if (t === 'team_note' || t === 'observation_attention') {
+      } else if (t === 'team_note' || t === 'observation_attention' || t === 'family_visit') {
         // ─── v1.105.153 — send them where they can actually read it ───
         //
         // The push carries page:"care-profile", which is the FAMILY's record and loads an
@@ -688,6 +688,8 @@ const App = () => {
         // Routed on the viewer, not on the note: the family owner keeps the full profile,
         // everyone else gets the notes list. A caregiver who is not on the team never receives
         // this push at all, so this branch is not what decides who may read.
+        // v1.105.156 — visits land on the same screen as notes now, so they route the same
+        // way. A visit has no note id to focus; opening on the right person is the whole job.
         if (d.careRecipientId) window.__pendingNoteRecipientId = d.careRecipientId;
         if (d.noteId && !d.focus) window.__pendingFocus = `note:${d.noteId}`;
         target = (window.__currentRole || 'family') === 'family' ? 'care-profile' : 'care-notes';

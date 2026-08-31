@@ -359,28 +359,23 @@ async function notifyTeam(db, req, { id, careRecipientId }) {
 
     // v1.105.81 — see notes.js: told only if you could go and read it. Someone who can log
     // a visit but not read the history does not need a push about somebody else's.
-    const { usersWithCapability, usersWithProfileAccess } = require("../utils/access");
+    // ─── v1.105.156 — the audience is back to everyone who may read it ───
+    //
+    // v1.105.154 narrowed this to people who could reach the family's care profile, because
+    // Julia was being notified about visits she had nowhere to open. That was solving the
+    // wrong half. Pete: "Julia is on the care team...she should be able to see the notes, or
+    // I should be able to select it at least."
+    //
+    // He is right, and the capability already said so — READ_VISITS is granted to her by
+    // membership, and GET /api/family-visits/:id has always authorized her. The missing piece
+    // was a screen, and the answer to a missing screen is a screen, not a quieter app. Care
+    // Notes shows visits now, so the push has somewhere to land again.
+    //
+    // If a family wants a particular person NOT to see visits, that is what withholding
+    // READ_VISITS on the invitation is for — a decision they make, not one hard-coded here.
+    const { usersWithCapability } = require("../utils/access");
     const { CAP } = require("../utils/capabilities");
     const ids = new Set(await usersWithCapability(db, careRecipientId, CAP.READ_VISITS));
-
-    // ─── v1.105.154 — and can they actually GET to it? ───
-    //
-    // Pete: "i left a visit report and it again notified julia, and again told her 'this
-    // belongs to the family'. If that's the case, fine, but stop sending her notifications."
-    //
-    // v1.105.81 narrowed this to people who may READ a visit. Julia may — she is on Betty's
-    // care team. But a family visit log is only rendered on the family's own care profile,
-    // and that page loads an endpoint restricted to family/admin/care_for. So she was told
-    // about something she is permitted to read and has nowhere to open, twice, and the
-    // second time the page at least said so honestly.
-    //
-    // Notes got the other fix in v1.105.153 — a screen of their own. Visits have no such
-    // reader, so until they do, the push goes only to people the profile will open for.
-    // A notification that cannot lead anywhere is worse than no notification: it is a
-    // promise the app then breaks in front of you.
-    const canOpen = new Set(await usersWithProfileAccess(db, careRecipientId));
-    for (const id of [...ids]) if (!canOpen.has(id)) ids.delete(id);
-
     ids.delete(req.user.id); // never push your own visit back at you
     if (ids.size === 0) return;
 

@@ -17,7 +17,10 @@ const { startHarness, stopHarness } = require("./harness");
 
 jest.setTimeout(180000);
 
-const ROUTERS = { "/api/notes": "../../src/routes/notes" };
+const ROUTERS = {
+  "/api/notes": "../../src/routes/notes",
+  "/api/family-visits": "../../src/routes/familyVisits",
+};
 
 let h, family, teamCaregiver, otherCaregiver, recipientId, teamId;
 
@@ -61,7 +64,10 @@ describe("which recipients' notes are shared with me", () => {
 
   test("it returns a name to show and no more than that", async () => {
     const [r] = await mine(teamCaregiver);
-    expect(Object.keys(r).sort()).toEqual(["firstName", "id", "lastName", "timezone"]);
+    // v1.105.156 — plus whether visits are readable, so the client never asks for a history
+    // it would be refused and then has to handle a 403.
+    expect(Object.keys(r).sort()).toEqual(["canReadVisits", "firstName", "id", "lastName", "timezone"]);
+    expect(typeof r.canReadVisits).toBe("boolean");
   });
 });
 
@@ -97,44 +103,44 @@ describe("and reading them", () => {
   });
 });
 
-// ─── v1.105.154 — a visit report must not notify someone who cannot open it ───
+// ─── v1.105.156 — a visit report is announced to everyone who may read it ───
 //
-// Pete: "i left a visit report and it again notified julia, and again told her 'this belongs
-// to the family'. If that's the case, fine, but stop sending her notifications."
+// v1.105.154 narrowed this fan-out to people who could reach the family's care profile,
+// because Julia was being notified about visits with nowhere to open them. Pete corrected it:
+// "Julia is on the care team...she should be able to see the notes, or I should be able to
+// select it at least."
 //
-// v1.105.81 narrowed this fan-out to people who may READ a visit, and Julia may — she is on
-// the care team. But a family visit log renders only on the family's own care profile, which
-// loads an endpoint restricted to family/admin/care_for. Notes got a screen of their own in
-// v1.105.153; visits have no such reader, so the push is narrowed to people the profile will
-// actually open for.
-describe("who a family visit log may be announced to", () => {
-  test("the family owner can open the profile", async () => {
-    const { usersWithProfileAccess } = require("../../src/utils/access");
-    const ids = await usersWithProfileAccess(h.db, recipientId);
-    expect(ids).toContain(family.user.id);
-  });
-
-  test("a care team member cannot — membership is not the family's profile", async () => {
-    // This is the whole fix in one assertion: Julia is on the team, and this list is not
-    // about the team.
-    const { usersWithProfileAccess } = require("../../src/utils/access");
-    const ids = await usersWithProfileAccess(h.db, recipientId);
-    expect(ids).not.toContain(teamCaregiver.user.id);
-  });
-
-  test("she still has the capability — this narrows the AUDIENCE, not her rights", async () => {
-    // If a caregiver-facing visit history is ever built, the narrowing comes out and she is
-    // notified again. Nothing was taken away from her.
+// He is right, and the capability already said so. The missing piece was a screen, and the
+// answer to a missing screen is a screen, not a quieter app. Care Notes shows visits now, so
+// the audience goes back to whoever holds READ_VISITS — and a family who wants someone
+// excluded withholds that capability on the invitation, which is their decision to make
+// rather than one hard-coded in the notifier.
+describe("who a family visit log is announced to", () => {
+  test("a caregiver on the care team may read visits", async () => {
     const { usersWithCapability } = require("../../src/utils/access");
     const { CAP } = require("../../src/utils/capabilities");
     const readers = await usersWithCapability(h.db, recipientId, CAP.READ_VISITS);
     expect(readers).toContain(teamCaregiver.user.id);
   });
 
-  test("and an outsider is in neither list", async () => {
-    const { usersWithProfileAccess, usersWithCapability } = require("../../src/utils/access");
+  test("and can fetch them — the API always allowed this", async () => {
+    const res = await h.request.get(`/api/family-visits/${recipientId}`).set(h.auth(teamCaregiver.token));
+    expect(res.status).toBe(200);
+  });
+
+  test("someone not on the team can do neither", async () => {
+    const { usersWithCapability } = require("../../src/utils/access");
     const { CAP } = require("../../src/utils/capabilities");
-    expect(await usersWithProfileAccess(h.db, recipientId)).not.toContain(otherCaregiver.user.id);
-    expect(await usersWithCapability(h.db, recipientId, CAP.READ_VISITS)).not.toContain(otherCaregiver.user.id);
+    expect(await usersWithCapability(h.db, recipientId, CAP.READ_VISITS))
+      .not.toContain(otherCaregiver.user.id);
+    const res = await h.request.get(`/api/family-visits/${recipientId}`).set(h.auth(otherCaregiver.token));
+    expect(res.status).toBe(404); // same answer as "no such recipient" — tells her nothing
+  });
+
+  test("the notifier no longer second-guesses the capability", async () => {
+    const fs = require("fs");
+    const path = require("path");
+    const src = fs.readFileSync(path.join(__dirname, "..", "..", "src", "routes", "familyVisits.js"), "utf8");
+    expect(src).not.toMatch(/usersWithProfileAccess/);
   });
 });

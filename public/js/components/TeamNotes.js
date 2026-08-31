@@ -19,6 +19,11 @@ const TeamNotes = window.TeamNotes = ({ onNavigate }) => {
   const [recipients, setRecipients] = React.useState(null);
   const [selectedId, setSelectedId] = React.useState(null);
   const [notes, setNotes] = React.useState(null);
+  // v1.105.156 — visits share this screen. Pete: "Julia is on the care team...she should be
+  // able to see the notes, or I should be able to select it at least." She may read both; the
+  // only thing she was missing was somewhere to do it, and a visit belongs in the same
+  // timeline as a note — they are both "what happened with her recently".
+  const [visits, setVisits] = React.useState([]);
   const [loadFailed, setLoadFailed] = React.useState(false);
   const [showAll, setShowAll] = React.useState(false);
   const [highlightId, setHighlightId] = React.useState(null);
@@ -45,6 +50,7 @@ const TeamNotes = window.TeamNotes = ({ onNavigate }) => {
     let cancelled = false;
     (async () => {
       setNotes(null);
+      setVisits([]);
       try {
         const res = await apiFetch(`/api/notes/${selectedId}`);
         if (cancelled) return;
@@ -53,9 +59,19 @@ const TeamNotes = window.TeamNotes = ({ onNavigate }) => {
         setNotes(data.notes || []);
         setLoadFailed(false);
       } catch { if (!cancelled) setLoadFailed(true); }
+
+      // Only where the capability says so — never ask for a history we would be refused.
+      const rec = (recipients || []).find((r) => r.id === selectedId);
+      if (!rec?.canReadVisits) return;
+      try {
+        const vr = await apiFetch(`/api/family-visits/${selectedId}?limit=50`);
+        if (cancelled || !vr?.ok) return;
+        const vd = await vr.json();
+        setVisits(vd.visits || []);
+      } catch { /* a missing visit history must not blank the notes */ }
     })();
     return () => { cancelled = true; };
-  }, [selectedId]);
+  }, [selectedId, recipients]);
 
   // The note the notification was about: show it even if it is far down, and mark it so the
   // person can see WHICH one they were told about.
@@ -94,7 +110,24 @@ const TeamNotes = window.TeamNotes = ({ onNavigate }) => {
   }
 
   const selected = (recipients || []).find((r) => r.id === selectedId);
-  const visible = notes && (showAll ? notes : notes.slice(0, PREVIEW));
+
+  // v1.105.156 — one timeline. A caregiver arriving at the house wants "what has happened
+  // with her recently", not two lists to reconcile by date.
+  const timeline = notes === null ? null : [
+    ...notes.map((n) => ({
+      kind: 'note', id: n.id, at: n.created_at, body: n.content,
+      who: `${n.author_first_name || ''} ${n.author_last_name || ''}`.trim(),
+      urgent: !!n.needs_attention,
+    })),
+    ...visits.map((v) => ({
+      kind: 'visit', id: `v-${v.id}`, at: v.visited_at || v.created_at,
+      body: v.summary || 'Visited.',
+      who: `${v.author_first_name || ''} ${v.author_last_name || ''}`.trim(),
+      minutes: v.duration_minutes || null,
+    })),
+  ].sort((a, b) => String(b.at || '').localeCompare(String(a.at || '')));
+
+  const visible = timeline && (showAll ? timeline : timeline.slice(0, PREVIEW));
 
   return (
     <div style={{ padding: '0 0 24px' }}>
@@ -120,46 +153,54 @@ const TeamNotes = window.TeamNotes = ({ onNavigate }) => {
         )}
 
         <p style={{ fontSize: 12, color: 'var(--text-tertiary)', margin: '4px 0 0' }}>
-          What the care team has written. You can read these; the family writes them.
+          Notes and visits from the care team. You can read these; the family writes them.
         </p>
       </div>
 
-      {notes === null ? (
+      {timeline === null ? (
         <LoadingSpinner text="Loading notes…" />
-      ) : notes.length === 0 ? (
+      ) : timeline.length === 0 ? (
         <div className="card" style={{ color: 'var(--text-secondary)', fontSize: 14 }}>
-          No notes yet for {selected ? selected.firstName : 'this person'}.
+          Nothing recorded yet for {selected ? selected.firstName : 'this person'}.
         </div>
       ) : (
         <div className="card">
-          {visible.map((n) => (
-            <div key={n.id} data-note-id={n.id} style={{
+          {visible.map((item) => (
+            <div key={item.id} data-note-id={item.kind === 'note' ? item.id : undefined} style={{
               padding: '12px 4px', borderBottom: '1px solid var(--border-light)',
               transition: 'background 1.2s ease',
-              background: highlightId === n.id ? 'rgba(74, 144, 217, 0.16)' : 'transparent',
+              background: highlightId === item.id ? 'rgba(74, 144, 217, 0.16)' : 'transparent',
             }}>
-              {!!n.needs_attention && (
-                <span style={{
-                  display: 'inline-block', fontSize: 11, fontWeight: 700, color: 'var(--color-warning)',
-                  background: 'var(--color-warning-bg)', padding: '2px 8px', borderRadius: 10, marginBottom: 4,
-                }}>⚠ Needs attention</span>
-              )}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, flexWrap: 'wrap' }}>
+                {item.kind === 'visit' && (
+                  <span style={{
+                    fontSize: 11, fontWeight: 700, color: 'var(--role-color)',
+                    background: 'var(--bg-teal-light)', padding: '2px 8px', borderRadius: 10,
+                  }}>👣 Visit{item.minutes ? ` · ${item.minutes} min` : ''}</span>
+                )}
+                {item.urgent && (
+                  <span style={{
+                    fontSize: 11, fontWeight: 700, color: 'var(--color-warning)',
+                    background: 'var(--color-warning-bg)', padding: '2px 8px', borderRadius: 10,
+                  }}>⚠ Needs attention</span>
+                )}
+              </div>
               <div style={{ fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                {n.content}
+                {item.body}
               </div>
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 5 }}>
-                {n.author_first_name} {n.author_last_name}
-                {n.created_at ? ` · ${TimezoneHelper.formatTimestamp(n.created_at, selected?.timezone, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) || ''}` : ''}
+                {item.who}
+                {item.at ? ` · ${TimezoneHelper.formatTimestamp(item.at, selected?.timezone, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) || ''}` : ''}
               </div>
             </div>
           ))}
-          {notes.length > PREVIEW && (
+          {timeline.length > PREVIEW && (
             <button onClick={() => setShowAll(!showAll)} style={{
               width: '100%', minHeight: 44, marginTop: 10, background: 'none',
               border: '1px dashed var(--border-color)', borderRadius: 10,
               color: 'var(--role-color)', font: 'inherit', fontSize: 13.5, fontWeight: 700, cursor: 'pointer',
             }}>
-              {showAll ? 'Show fewer' : `Show all ${notes.length} notes`}
+              {showAll ? 'Show fewer' : `Show all ${timeline.length}`}
             </button>
           )}
         </div>
