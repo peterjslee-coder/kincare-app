@@ -88,7 +88,11 @@ const attentionClock = (t) => {
 
 const attentionDay = (dateStr, tz) => {
   if (!dateStr) return '';
-  const d = String(dateStr).split('T')[0];
+  // v1.105.152 — split on T *or* a space. `due_at` is a Postgres timestamptz and arrives
+  // "2026-08-30 22:00:00+00", so splitting on "T" alone left the whole string and the row
+  // read "Due Invalid Date" (feedback 54249195). TimezoneHelper.getDateLabel is fixed too;
+  // this one keeps the bad value from reaching it in the first place.
+  const d = String(dateStr).split(/[T ]/)[0];
   try {
     if (typeof TimezoneHelper !== 'undefined' && TimezoneHelper.getDateLabel) {
       return TimezoneHelper.getDateLabel(d, tz || TimezoneHelper.DEFAULT_TZ);

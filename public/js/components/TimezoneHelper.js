@@ -100,12 +100,28 @@ const TimezoneHelper = window.TimezoneHelper = (() => {
       "-" +
       String(tomorrow.getDate()).padStart(2, "0");
 
-    const clean = (dateStr || "").split("T")[0];
+    // ─── v1.105.152 — a timestamp is not always ISO ───
+    //
+    // Pete, feedback 54249195: "Due invalid date".
+    //
+    // This split on "T" alone. Postgres timestamptz comes back from our db wrapper
+    // SPACE-separated — "2026-08-30 22:00:00+00" — so `clean` kept the whole string, the
+    // day parsed as Number("30 22:00:00+00") = NaN, and new Date(2026, 7, NaN) is an Invalid
+    // Date whose toLocaleDateString is literally the words "Invalid Date". Shown to a person,
+    // on a medication reminder.
+    //
+    // Splitting on either separator fixes the caller that prompted it; the guard below fixes
+    // every caller that has not been found yet. This helper is used all over the app, and any
+    // one of them handing it a timestamp instead of a date has been rendering those two words.
+    const clean = String(dateStr || "").split(/[T ]/)[0];
     if (clean === today) return "Today";
     if (clean === tomorrowStr) return "Tomorrow";
 
     const [y, mo, d] = clean.split("-").map(Number);
     const dt = new Date(y, mo - 1, d);
+    // Never render the words "Invalid Date" at a person. The raw date is not pretty, but it
+    // is true, and it says which value is wrong instead of hiding it.
+    if (Number.isNaN(dt.getTime())) return clean;
     return dt.toLocaleDateString("en-US", {
       weekday: "short",
       month: "short",

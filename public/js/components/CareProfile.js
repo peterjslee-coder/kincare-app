@@ -776,7 +776,30 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
   };
 
   if (loading) return <LoadingSpinner text="Loading care profile..." />;
-  if (!profile) return <EmptyState icon="👵" title="No care recipient found" text="Add a care recipient to get started." actionLabel="+ Add Your Loved One" onAction={() => onNavigate && onNavigate('recipients')} />;
+  // ─── v1.105.152 — the same empty state was telling two different people two different lies ───
+  //
+  // Pete: "Julia sees my notes but when she clicks on the notification it says 'no care
+  // recipient found'."
+  //
+  // She is a CAREGIVER. This page loads GET /api/care-recipients, which is family/admin/
+  // care_for only, so for her it returns nothing and this line ran — telling someone who is
+  // on Betty's care team that there is no care recipient, and inviting her to add one. Both
+  // halves are wrong, and the second is worse than an error message.
+  //
+  // Note what it is NOT: she is allowed to read the note. The push fan-out has been gated on
+  // CAP.READ_NOTES since v1.105.81, and GET /api/notes/:id authorizes her as a team member.
+  // The notification is correct; its DESTINATION is a family-only screen.
+  //
+  // Until caregivers have a place to read notes (TASKS.md P1), this at least stops the app
+  // lying to them about who they are.
+  if (!profile) {
+    const isFamilyOwner = (window.__currentRole || 'family') === 'family';
+    return isFamilyOwner
+      ? <EmptyState icon="👵" title="No care recipient found" text="Add a care recipient to get started." actionLabel="+ Add Your Loved One" onAction={() => onNavigate && onNavigate('recipients')} />
+      : <EmptyState icon="🌷" title="This page belongs to the family"
+          text="You're on the care team, but the full care profile is the family's own record. Notes and instructions for your visits show up in your check-in."
+          actionLabel="Back to my hub" onAction={() => onNavigate && onNavigate('dashboard')} />;
+  }
 
   const canEdit = profile.access_level !== 'view';
   const healthConditions = parseJsonField(profile.health_conditions);
