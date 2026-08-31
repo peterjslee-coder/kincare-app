@@ -87,3 +87,55 @@ describe("and the thing he suspected was not it", () => {
     expect(send.slice(0, 700)).toMatch(/data: \{ type: "message", senderId: userId, conversationId: convId \},\s*\n\s*\}\)\.catch/);
   });
 });
+
+// ─── v1.105.154 — the prompt was silenced by a flag, not by the truth ───
+//
+// Pete, still, weeks on: "I have yet to get a single push notification from messages… other
+// people get them, but I dont."
+//
+// The reachability view: his account has two web subscriptions and an android one, and NO ios
+// token, while he uses an iPhone. Julia, who does get them, has `ios`. So the notifications
+// are real and going to devices he is not holding.
+//
+// NotificationPrompt exists to notice exactly this and offer the fix, and it was returning
+// early on `localStorage.native_push_registered` — a memory that registration happened once,
+// on this device, at some point. A token pruned after repeated failures, rotated by iOS, or
+// never saved at all leaves that flag set and the prompt hidden forever.
+describe("the notification prompt trusts the server, not this browser's memory", () => {
+  const prompt = code("public/js/components/NotificationPrompt.js");
+
+  test("it asks whether a device is registered for THIS platform", () => {
+    expect(prompt).toMatch(/const res = await apiFetch\('\/api\/push\/status'\)/);
+    expect(prompt).toMatch(/registeredHere = mine \? status\.platforms\.includes\(mine\) : status\.platforms\.length > 0;/);
+  });
+
+  test("no device registered → it shows, whatever the flag says", () => {
+    expect(prompt).toMatch(/localStorage\.removeItem\('native_push_registered'\)/);
+    expect(prompt).toMatch(/if \(registeredHere === false\) \{/);
+  });
+
+  test("registered → it stays quiet and the flag is brought back in step", () => {
+    expect(prompt).toMatch(/if \(registeredHere === true\) \{/);
+    expect(prompt).toMatch(/localStorage\.setItem\('native_push_registered', '1'\); \/\/ keep the two in step/);
+  });
+
+  test("a dismissal does not outrank a phone that cannot receive anything", () => {
+    // A dismissal was about a prompt, not a promise to stay silent while notifications are
+    // broken. The dismissal check only applies on the path where we could not ask the server.
+    // helpers/source strips own-line comments, so the slice is bounded by code.
+    const start = prompt.indexOf("if (registeredHere === false)");
+    const branch = prompt.slice(start, prompt.indexOf("const nativeRegistered", start));
+    expect(branch).not.toMatch(/push_prompt_dismissed/);
+  });
+
+  test("if the server cannot be asked, the old behaviour stands", () => {
+    // Offline, or an older server: fall back to what the device remembers rather than
+    // nagging someone whose push works fine.
+    expect(prompt).toMatch(/let registeredHere = null; \/\/ null = could not ask/);
+    expect(prompt).toMatch(/const dismissedOffline = localStorage\.getItem\('push_prompt_dismissed'\);/);
+  });
+
+  test("the disabled branch it replaced is gone, not left switched off", () => {
+    expect(prompt).not.toMatch(/if \(false\)/);
+  });
+});

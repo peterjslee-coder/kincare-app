@@ -96,3 +96,45 @@ describe("and reading them", () => {
     expect([403, 404]).toContain(res.status);
   });
 });
+
+// ─── v1.105.154 — a visit report must not notify someone who cannot open it ───
+//
+// Pete: "i left a visit report and it again notified julia, and again told her 'this belongs
+// to the family'. If that's the case, fine, but stop sending her notifications."
+//
+// v1.105.81 narrowed this fan-out to people who may READ a visit, and Julia may — she is on
+// the care team. But a family visit log renders only on the family's own care profile, which
+// loads an endpoint restricted to family/admin/care_for. Notes got a screen of their own in
+// v1.105.153; visits have no such reader, so the push is narrowed to people the profile will
+// actually open for.
+describe("who a family visit log may be announced to", () => {
+  test("the family owner can open the profile", async () => {
+    const { usersWithProfileAccess } = require("../../src/utils/access");
+    const ids = await usersWithProfileAccess(h.db, recipientId);
+    expect(ids).toContain(family.user.id);
+  });
+
+  test("a care team member cannot — membership is not the family's profile", async () => {
+    // This is the whole fix in one assertion: Julia is on the team, and this list is not
+    // about the team.
+    const { usersWithProfileAccess } = require("../../src/utils/access");
+    const ids = await usersWithProfileAccess(h.db, recipientId);
+    expect(ids).not.toContain(teamCaregiver.user.id);
+  });
+
+  test("she still has the capability — this narrows the AUDIENCE, not her rights", async () => {
+    // If a caregiver-facing visit history is ever built, the narrowing comes out and she is
+    // notified again. Nothing was taken away from her.
+    const { usersWithCapability } = require("../../src/utils/access");
+    const { CAP } = require("../../src/utils/capabilities");
+    const readers = await usersWithCapability(h.db, recipientId, CAP.READ_VISITS);
+    expect(readers).toContain(teamCaregiver.user.id);
+  });
+
+  test("and an outsider is in neither list", async () => {
+    const { usersWithProfileAccess, usersWithCapability } = require("../../src/utils/access");
+    const { CAP } = require("../../src/utils/capabilities");
+    expect(await usersWithProfileAccess(h.db, recipientId)).not.toContain(otherCaregiver.user.id);
+    expect(await usersWithCapability(h.db, recipientId, CAP.READ_VISITS)).not.toContain(otherCaregiver.user.id);
+  });
+});

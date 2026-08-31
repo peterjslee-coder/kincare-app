@@ -18,22 +18,67 @@ const NotificationPrompt = window.NotificationPrompt = ({ onSubscribed }) => {
   useEffect(() => {
     // In native Capacitor app, push is handled by native plugin
     if (_isNativeApp()) {
-      const nativeRegistered = localStorage.getItem('native_push_registered');
-      if (nativeRegistered) {
-        setPermState('granted');
-        return; // Already registered
-      }
-      // Check if user previously dismissed
-      const dismissed = localStorage.getItem('push_prompt_dismissed');
-      if (dismissed) {
-        const dismissedAt = parseInt(dismissed, 10);
-        if (Date.now() - dismissedAt < 7 * 24 * 60 * 60 * 1000) return;
-      }
-      setPermState('default');
-      setVisible(true);
+      // ─── v1.105.154 — ask the server, not a flag in this browser ───
+      //
+      // Pete, for weeks: "I have yet to get a single push notification from messages… other
+      // people get them, but I dont." The reachability view says why: his account has two web
+      // subscriptions and an android one, and NO ios token, while he uses an iPhone. Julia,
+      // who does get them, has one.
+      //
+      // This is the prompt whose whole job is to notice that and offer to fix it, and it was
+      // silenced by `native_push_registered` — a localStorage flag meaning "we registered
+      // once, on this device, at some point". That is a memory of an event, not evidence of a
+      // current registration. A token that was pruned after repeated failures, or rotated by
+      // iOS, or never reached the server at all, leaves the flag set and the prompt hidden
+      // forever, with nothing anywhere saying the phone is deaf.
+      //
+      // So the flag no longer decides. The server does — the same question v1.105.151 taught
+      // checkPushHealth to ask: is there a device registered for THIS platform. If yes, we are
+      // done. If no, prompt, whatever this browser remembers.
+      (async () => {
+        let registeredHere = null; // null = could not ask
+        try {
+          const res = await apiFetch('/api/push/status');
+          if (res?.ok) {
+            const status = await res.json();
+            const mine = window.Capacitor?.getPlatform?.();
+            if (Array.isArray(status.platforms)) {
+              registeredHere = mine ? status.platforms.includes(mine) : status.platforms.length > 0;
+            }
+          }
+        } catch { /* fall through to the remembered flag */ }
+
+        if (registeredHere === true) {
+          localStorage.setItem('native_push_registered', '1'); // keep the two in step
+          setPermState('granted');
+          return;
+        }
+        if (registeredHere === false) {
+          // The server has nothing for this phone. This is exactly the case the prompt exists
+          // for, so it is shown even if the flag says we did this once, and even if it was
+          // dismissed — a dismissal was about a prompt, not a promise to stay silent while
+          // notifications are broken.
+          localStorage.removeItem('native_push_registered');
+          setPermState('default');
+          setVisible(true);
+          return;
+        }
+        // Could not ask (offline, older server): fall back to what this device remembers.
+        const nativeRegistered = localStorage.getItem('native_push_registered');
+        if (nativeRegistered) {
+          setPermState('granted');
+          return;
+        }
+        const dismissedOffline = localStorage.getItem('push_prompt_dismissed');
+        if (dismissedOffline) {
+          const at = parseInt(dismissedOffline, 10);
+          if (Date.now() - at < 7 * 24 * 60 * 60 * 1000) return;
+        }
+        setPermState('default');
+        setVisible(true);
+      })();
       return;
     }
-
     // On iOS/iPadOS, push only works when installed as home screen app
     if (_isIOS() && !_isStandalone()) {
       setIosNotInstalled(true);

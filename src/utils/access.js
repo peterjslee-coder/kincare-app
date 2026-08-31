@@ -188,6 +188,35 @@ async function recipientsWithCapabilityFor(db, userId, cap) {
 }
 
 /**
+ * The people for whom this care recipient appears in GET /api/care-recipients — the family
+ * owner and anyone the record has been SHARED with. Care team members are deliberately not
+ * here: membership grants capabilities over the record, not the family's own profile screen.
+ *
+ * v1.105.154. Pete: "i left a visit report and it again notified julia, and again told her
+ * 'this belongs to the family'. If that's the case, fine, but stop sending her notifications."
+ *
+ * A family visit log has no reader outside that screen — there is no caregiver-side view of
+ * one, the way there is now for notes. So notifying someone who cannot open it is a promise
+ * the app cannot keep, and the rule from v1.105.81 has to go one step further than "can they
+ * read it": can they GET to it. If a caregiver-facing visit history is ever built, this
+ * narrowing is what should be removed.
+ */
+async function usersWithProfileAccess(db, recipientId) {
+  if (!recipientId) return [];
+  const rows = await db.prepare(`
+    SELECT DISTINCT u.id
+    FROM users u
+    WHERE COALESCE(u.is_active, 1) = 1
+      AND u.id IN (
+        SELECT family_user_id FROM care_recipients WHERE id = ?
+        UNION
+        SELECT shared_with_user_id FROM care_recipient_shares WHERE care_recipient_id = ?
+      )
+  `).all(recipientId, recipientId);
+  return rows.map((r) => r.id);
+}
+
+/**
  * Access to one session. Returns null when the session does not exist OR the user has no
  * business with it — the caller cannot tell the two apart, and neither can an attacker.
  *
@@ -236,4 +265,4 @@ async function sessionAccess(db, sessionId, userId) {
 
 module.exports = {
   recipientCapabilities, usersWithCapability, recipientsWithCapabilityFor,
-  recipientAccess, sessionAccess };
+  usersWithProfileAccess, recipientAccess, sessionAccess };
