@@ -139,3 +139,58 @@ describe("the notification prompt trusts the server, not this browser's memory",
     expect(prompt).not.toMatch(/if \(false\)/);
   });
 });
+
+// ─── v1.105.157 — the repair only ran for people who logged in ───
+//
+// Pete: "I got notifications until about two days ago… I am running the TestFlight app."
+//
+// A new TestFlight build gives the app a NEW APNs device token. The old one is dead, APNs
+// answers 410, and routes/push.js correctly deletes it on the first send — so every build
+// shipped costs a registration. The two things that would put it back, subscribeNativePush()
+// and the checkPushHealth timer, both lived inside handleLogin.
+//
+// Nobody logs in. The app restores the session. So for every already signed-in user the
+// health check had never run once — including the version fixed in v1.105.151, which was
+// written for exactly this and was unreachable from where it sat.
+describe("push registration survives an app update", () => {
+  const app = code("public/js/app.js");
+  const push = code("src/routes/push.js");
+
+  test("a dead token really is deleted — the other half of the story", () => {
+    expect(push).toMatch(/if \(code === 403 \|\| code === 404 \|\| code === 410 \|\| code === 401\) \{/);
+    expect(push).toMatch(/DELETE FROM push_subscriptions WHERE id = \?/);
+  });
+
+  test("there is one definition of 'make sure push is registered'", () => {
+    expect(app).toMatch(/const ensurePushRegistered = React\.useCallback\(\(\) => \{/);
+    // ...and login uses it rather than keeping its own copy: exactly one bare call site
+    // besides the resume listener and the restore path.
+    expect((app.match(/^\s*ensurePushRegistered\(\);$/gm) || []).length).toBeGreaterThanOrEqual(2);
+    expect(app).not.toMatch(/Native app: register FCM token with server on every login/);
+  });
+
+  test("it runs on session restore — the path everyone actually takes", () => {
+    expect(app).toMatch(/window\.__setSessionActive\(window\.__sessionIsPersistent\(\)\);\n\s+setAppState\('app'\);\n\s+ensurePushRegistered\(\);/);
+  });
+
+  test("and on resume, when a new build's token is brand new", () => {
+    expect(app).toMatch(/document\.addEventListener\('resume', onResume\)/);
+    expect(app).toMatch(/if \(document\.visibilityState === 'visible'\) ensurePushRegistered\(\)/);
+  });
+
+  test("the health check runs NOW, not in half an hour", () => {
+    // A phone that cannot be reached should not stay that way waiting for a timer to tick.
+    const fn = app.slice(app.indexOf("const ensurePushRegistered"), app.indexOf("const handleLogin"));
+    expect(fn).toMatch(/checkPushHealth\(\)\.catch\(\(\) => \{\}\);\n\s+if \(window\._pushHealthTimer\) clearInterval/);
+  });
+
+  test("it never breaks the app starting", () => {
+    const fn = app.slice(app.indexOf("const ensurePushRegistered"), app.indexOf("const handleLogin"));
+    expect(fn).toMatch(/catch \{ \/\* push is a convenience/);
+  });
+
+  test("the listeners are removed", () => {
+    expect(app).toMatch(/document\.removeEventListener\('resume', onResume\)/);
+    expect(app).toMatch(/document\.removeEventListener\('visibilitychange', onVisible\)/);
+  });
+});

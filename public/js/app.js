@@ -1145,6 +1145,8 @@ const App = () => {
             // storage it already lived in (preserve persistent vs session-only).
             window.__setSessionActive(window.__sessionIsPersistent());
             setAppState('app');
+            // v1.105.157 — the path everyone actually takes. See ensurePushRegistered.
+            ensurePushRegistered();
             // If returning user has a pending invite token, accept it now
             // Check URL, __originalSearch, and localStorage (survives approval gate)
             const inviteParam = new URLSearchParams(window.location.search).get('invite')
@@ -1345,6 +1347,58 @@ const App = () => {
     }
   }, []);
 
+  // ─── v1.105.157 — keeping push alive for someone who never logs in again ───
+  //
+  // Pete: "I got notifications until about two days ago… I am running the TestFlight app."
+  //
+  // Installing a new TestFlight build gives the app a NEW APNs device token; the old one is
+  // dead, APNs answers 410, and routes/push.js correctly deletes it on the first send. So
+  // every build I ship costs him his registration — and the only two things that would put it
+  // back, subscribeNativePush() and the checkPushHealth timer, both live inside handleLogin.
+  //
+  // He does not log in. Nobody does: the app restores the session. So for every already
+  // signed-in user the health check has never once run — not the version fixed in v1.105.151,
+  // not any version. It was written to repair exactly this and was unreachable.
+  //
+  // Registering is an upsert on the endpoint, so calling this more often than strictly needed
+  // costs one request and changes nothing.
+  const ensurePushRegistered = React.useCallback(() => {
+    try {
+      if (window.Capacitor?.isNativePlatform?.()) {
+        if (typeof subscribeNativePush === 'function') {
+          subscribeNativePush().then((r) => {
+            if (r) localStorage.setItem('native_push_registered', '1');
+          }).catch(() => {});
+        }
+        if (typeof initNativeTokenRefresh === 'function') initNativeTokenRefresh();
+      } else if (typeof subscribeToPush === 'function' && 'Notification' in window
+                 && Notification.permission === 'granted') {
+        subscribeToPush().catch(() => {});
+      }
+      if (typeof checkPushHealth === 'function') {
+        // Once NOW, not in half an hour. A phone that cannot be reached should not stay that
+        // way for thirty minutes because a timer has not ticked yet.
+        checkPushHealth().catch(() => {});
+        if (window._pushHealthTimer) clearInterval(window._pushHealthTimer);
+        window._pushHealthTimer = setInterval(() => checkPushHealth().catch(() => {}), 30 * 60 * 1000);
+      }
+    } catch { /* push is a convenience; it must never break the app starting */ }
+  }, []);
+
+  // Coming back to the app is the other moment a token can be new — a fresh TestFlight
+  // install's first foreground, or iOS having rotated it while we were away.
+  React.useEffect(() => {
+    if (appState !== 'app') return;
+    const onResume = () => ensurePushRegistered();
+    document.addEventListener('resume', onResume);          // Capacitor native
+    const onVisible = () => { if (document.visibilityState === 'visible') ensurePushRegistered(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      document.removeEventListener('resume', onResume);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [appState, ensurePushRegistered]);
+
   const handleLogin = (user, remember = true) => {
     // Mark this session active. remember=true → persistent (survives close);
     // remember=false → session-only (ends when browser/app closes). Defaults to
@@ -1391,32 +1445,13 @@ const App = () => {
     setAppState('app');
     // Start proactive auth token refresh (keeps user logged in across app restarts)
     if (typeof startProactiveRefresh === 'function') startProactiveRefresh();
-    // Re-sync push subscription on login
-    if (window.Capacitor?.isNativePlatform?.()) {
-      // Native app: register FCM token with server on every login
-      // (ensures token is always fresh — previous registration may have failed or token rotated)
-      if (typeof subscribeNativePush === 'function') {
-        subscribeNativePush().then(r => {
-          if (r) localStorage.setItem('native_push_registered', '1');
-        }).catch(() => {});
-      }
-      // Also set up token refresh listener
-      if (typeof initNativeTokenRefresh === 'function') {
-        initNativeTokenRefresh();
-      }
-    } else if (typeof subscribeToPush === 'function' && 'Notification' in window && Notification.permission === 'granted') {
-      // Web: re-sync VAPID subscription if already granted
-      subscribeToPush().catch(() => {});
-    }
+    // Re-sync push subscription on login — one definition, shared with session restore and
+    // with coming back to the foreground (v1.105.157).
+    ensurePushRegistered();
     // v1.105.40 — set the app-icon badge from the server's count as soon as we know who
     // this is. Without this the badge only ever moved when a push arrived.
     if (typeof refreshAppBadge === 'function') refreshAppBadge();
     // Start periodic push health check (every 30 min) to keep subscriptions fresh
-    if (typeof checkPushHealth === 'function') {
-      // Clear any existing timer (handles re-login without refresh)
-      if (window._pushHealthTimer) clearInterval(window._pushHealthTimer);
-      window._pushHealthTimer = setInterval(() => checkPushHealth().catch(() => {}), 30 * 60 * 1000);
-    }
     // Connect WebSocket for real-time updates
     if (AUTH_TOKEN && typeof connectSocket === 'function') {
       connectSocket(AUTH_TOKEN);
