@@ -423,6 +423,20 @@
 
 ### P1
 
+- [ ] **🔴 A caregiver has nowhere to READ a care note.** (Pete, 8/30: *"Julia sees my notes
+      but when she clicks on the notification it says 'no care recipient found'."*)
+      **She is allowed to** — the push fan-out is gated on `CAP.READ_NOTES` (v1.105.81) and
+      `GET /api/notes/:careRecipientId` authorizes any team member, with visibility rules
+      already written. So the notification is correct and the API is correct.
+      What is missing is a SCREEN. `CareProfile` is the family's record (and loads
+      `/api/care-recipients`, which is family/admin/care_for only); `CaredForView` is the
+      recipient's own; the only caregiver-side notes in the app are inside a check-in briefing,
+      which is no use to someone tapping a notification between visits.
+      v1.105.152 stopped the page telling her she has no care recipient, but that is a
+      truthful dead end, not a fix. **Needs a read-only notes view on the caregiver side, and
+      the note push deep-linked to it by role.**
+
+
 > **Aug 29 2026 — feedback pull, 8 items.** Pete filed most of these from his phone **at the
 > hospital with Betty**, which is the context that ranks them: two were the app arguing with
 > the only device he had. Three shipped as **v1.105.145**, one as **.146**; the rest are below.
