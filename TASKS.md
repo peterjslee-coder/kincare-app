@@ -423,26 +423,22 @@
 
 ### P1
 
-- [ ] **⏳ [NEEDS YOUR HANDS] Android developer verification — deadline Sep 30 2026.**
-      Google Play, "[Final reminder]" 8/30: **every Play app must be registered by Sep 30 2026
-      or it is "removed from Google Play globally."** ~31 days.
-      **Almost certainly already done for us** — Google says it auto-registered >99% of Play
-      apps using their Play signing keys, and `com.yourinplace.app` is an ordinary Play upload.
-      But "almost certainly" is not a thing to find out on Oct 1.
-      **The only check that matters (2 minutes, Pete's hands, Play Console):** Home → the
-      package-name status shown beside *InPlace Care* → filter to unregistered. If it is
-      registered, this item is closed. If not, register it on the Android developer
-      verification page, and finish any DRAFT registration already started — a half-finished
-      one counts as unregistered.
-      **The other two bullets in that mail do NOT apply to us, checked:** we distribute nothing
-      outside Play (the only artifact ever produced is
-      `android-builds/InPlace-v1.51.60-versionCode5.aab`, and an AAB is a Play upload format —
-      it cannot be sideloaded), and we sign with one upload key via Gradle
-      (`~/inplace-release.keystore`), used for Play and nowhere else, so there are no
-      "additional keys used outside Play" to add.
-      Blast radius today is the internal-testing track only — but removal would also take out
-      `Store_Launch_Plan_2026-07-28.md` before it starts. Account: Cedar Rock Holdings
-      (Organization), ID 5800715944793820555.
+- [x] **✅ Android developer verification — CHECKED IN PLAY CONSOLE 8/31, nothing to do.**
+      Google's "[Final reminder]" said every Play app must be registered by **Sep 30 2026** or
+      be *"removed from Google Play globally."* Checked it rather than assuming, in Pete's own
+      Play Console (he signed in, I read):
+      > **"All of your apps have been successfully registered to meet Android developer
+      > verification requirements."**
+      One app listed — *InPlace Care* / `com.yourinplace.app`, Draft / Internal testing — and
+      it is covered by the automatic registration Google did with the Play signing key.
+      **The mail's other two asks do not apply, also checked:** nothing is distributed outside
+      Play (the only artifact ever built is
+      `android-builds/InPlace-v1.51.60-versionCode5.aab`, and an AAB cannot be sideloaded), and
+      there is one upload key (`~/inplace-release.keystore`) used for Play and nowhere else, so
+      there are no "additional keys" to add.
+      ⚠️ **Re-check only if that changes**: if an APK is ever handed to a tester directly, or a
+      build is signed with a second key, those package+key pairs must be registered before the
+      deadline. Account: Cedar Rock Holdings (Organization), ID 5800715944793820555.
 
 
 - [x] **A caregiver on the care team had nowhere to READ a note. Shipped v1.105.153.**
