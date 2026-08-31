@@ -539,6 +539,27 @@ const App = () => {
   // initializer, because it runs on first render BEFORE the effect at ~line 585
   // strips the URL query with replaceState (that strip was eating page/focus/
   // careTeamId, so the tap always fell back to Home — the "top of the hero" bug).
+  // v1.105.153 — how many people's notes are shared with me. Decides whether the Care Notes
+  // tab exists at all; 0 means it never appears. Asked once, after auth.
+  const [sharedNotesRecipients, setSharedNotesRecipients] = useState(0);
+  // v1.105.153 — only the people who are NOT the family owner need this; the family has the
+  // full care profile. One request, on role change, and a failure leaves the tab hidden rather
+  // than showing one that cannot load.
+  useEffect(() => {
+    if (!currentUser || (currentUser.role || 'family') === 'family') { setSharedNotesRecipients(0); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await apiFetch('/api/notes/mine/recipients');
+        if (cancelled || !res?.ok) return;
+        const data = await res.json();
+        setSharedNotesRecipients((data.recipients || []).length);
+      } catch { /* no tab, rather than a broken one */ }
+    })();
+    return () => { cancelled = true; };
+  }, [currentUser]);
+
+
   const [currentPage, setCurrentPage] = useState(() => {
     try {
       const p = new URLSearchParams(window.location.search);
@@ -656,6 +677,20 @@ const App = () => {
       } else if (t === 'check_in_reminder' || t === 'check_out_reminder' || t === 'caregiver_arriving' || t === 'caregiver_arriving_recipient' || t === 'session_in_progress' || t === 'session_complete') {
         if (d.sessionId && !d.focus) window.__pendingFocus = `session:${d.sessionId}`;
         target = 'dashboard';
+      } else if (t === 'team_note' || t === 'observation_attention') {
+        // ─── v1.105.153 — send them where they can actually read it ───
+        //
+        // The push carries page:"care-profile", which is the FAMILY's record and loads an
+        // endpoint restricted to family/admin/care_for. Julia is on Betty's care team and is
+        // allowed to read the note (the fan-out is gated on READ_NOTES since v1.105.81) — she
+        // just landed on a page that then told her she had no care recipient.
+        //
+        // Routed on the viewer, not on the note: the family owner keeps the full profile,
+        // everyone else gets the notes list. A caregiver who is not on the team never receives
+        // this push at all, so this branch is not what decides who may read.
+        if (d.careRecipientId) window.__pendingNoteRecipientId = d.careRecipientId;
+        if (d.noteId && !d.focus) window.__pendingFocus = `note:${d.noteId}`;
+        target = (window.__currentRole || 'family') === 'family' ? 'care-profile' : 'care-notes';
       } else if (t.startsWith('care_task') || t.startsWith('care_event')) {
         target = 'dashboard';
       } else if (t === 'kindred_relay') {
@@ -1617,6 +1652,7 @@ const App = () => {
 
   const role = activeRole || currentUser?.role || 'family';
   window.__currentRole = role; // v1.97.0 — read by __handlePushNavigate (defined pre-auth, so no closure over role)
+
   window.__currentUserId = currentUser?.id; // v1.99.0 — read by CareTaskCheckSheet's who-did-it picker
 
   // ─── Role-specific color theming ───
@@ -1740,11 +1776,20 @@ const App = () => {
   const getNavItems = () => {
     if (role === 'caregiver') {
       const cgOnboarded = currentUser?.onboardingComplete !== false;
-      return [
+      const cgNav = [
         { id: 'dashboard', icon: '🏠', label: 'Home' },
         { id: 'find-work', icon: '🔍', label: 'Find Work', isAction: true, disabled: !cgOnboarded },
         { id: 'messages', icon: '💬', label: 'Messages' },
       ];
+      // v1.105.153 — only for someone a family has actually put on a care team and shared the
+      // record with. Pete: "not all caregivers should get it… not all caregivers will be on
+      // the care team." So this is driven by what the server says this person can read, never
+      // by the role — a caregiver with no shared record never sees the tab, rather than seeing
+      // one that explains why it is empty.
+      if (sharedNotesRecipients > 0) {
+        cgNav.push({ id: 'care-notes', icon: '📝', label: 'Care Notes' });
+      }
+      return cgNav;
     }
     if (role === 'care_for') {
       return [
@@ -1819,6 +1864,13 @@ const App = () => {
       return <Dashboard key={pageKey} onNavigate={setCurrentPage} acceptingInvite={acceptingInvite} />;
     }
     if (currentPage === 'care-profile') return <CareProfile key={pageKey} onNavigate={setCurrentPage} />;
+    // v1.105.153 — the care team's notes for people who are not the family. Guarded like every
+    // other optional component: a missing bundle entry must not white-screen the app.
+    if (currentPage === 'care-notes') {
+      return typeof TeamNotes !== 'undefined'
+        ? <TeamNotes key={pageKey} onNavigate={setCurrentPage} />
+        : <Dashboard onNavigate={setCurrentPage} />;
+    }
     if (currentPage === 'care-team') return <CareTeamPage key={pageKey} selectedTeamId={selectedCareTeamId} onNavigate={setCurrentPage} />;
     if (currentPage === 'find-work') return <FindWork key={pageKey} />;
     if (currentPage === 'schedule') return <Schedule key={pageKey} />;

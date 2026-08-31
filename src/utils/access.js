@@ -154,6 +154,40 @@ async function usersWithCapability(db, recipientId, cap) {
 }
 
 /**
+ * The inverse of usersWithCapability: which care recipients grant THIS user a capability.
+ *
+ * v1.105.153. Pete: "not all caregivers should get it...it's just that Julia IS on Betty's
+ * care team AND she's a caregiver" and "not all caregivers will be on the care team."
+ *
+ * So the question a notes screen must ask is never "is this person a caregiver". It is "which
+ * care recipients has this person been given the care record for" — the same three sources
+ * usersWithCapability walks (owner, care_team_members, care_recipient_shares), read from the
+ * other end, and then the same capability check. A caregiver who is merely assigned to a
+ * session is in none of those sets and gets an empty list, which is the intended answer.
+ */
+async function recipientsWithCapabilityFor(db, userId, cap) {
+  const { can } = require("./capabilities");
+  if (!userId || !cap) return [];
+
+  const rows = await db.prepare(`
+    SELECT DISTINCT cr.id, cr.first_name, cr.last_name, cr.timezone
+    FROM care_recipients cr
+    LEFT JOIN care_teams ct ON ct.care_recipient_id = cr.id
+    LEFT JOIN care_team_members ctm ON ctm.care_team_id = ct.id AND ctm.user_id = ?
+    LEFT JOIN care_recipient_shares s ON s.care_recipient_id = cr.id AND s.shared_with_user_id = ?
+    WHERE cr.family_user_id = ? OR ctm.user_id IS NOT NULL OR s.id IS NOT NULL
+    ORDER BY cr.first_name
+  `).all(userId, userId, userId);
+
+  const allowed = [];
+  for (const r of rows) {
+    const caps = await recipientCapabilities(db, r.id, userId);
+    if (can(caps, cap)) allowed.push(r);
+  }
+  return allowed;
+}
+
+/**
  * Access to one session. Returns null when the session does not exist OR the user has no
  * business with it — the caller cannot tell the two apart, and neither can an attacker.
  *
@@ -201,4 +235,5 @@ async function sessionAccess(db, sessionId, userId) {
 }
 
 module.exports = {
-  recipientCapabilities, usersWithCapability, recipientAccess, sessionAccess };
+  recipientCapabilities, usersWithCapability, recipientsWithCapabilityFor,
+  recipientAccess, sessionAccess };

@@ -50,6 +50,33 @@ async function hasAccess(db, recipientId, userId) {
 
 // GET /api/notes/:careRecipientId — get notes for a care recipient
 // Accessible by: family (owner), shared users, care team members, assigned caregivers, admins
+// ─── GET /api/notes/mine/recipients ───
+//
+// v1.105.153. Which people's notes may I read? Registered BEFORE /:careRecipientId — "mine"
+// is two segments so it could not be swallowed anyway, but the next specific route added here
+// might be one, and this is the order that stays correct.
+//
+// Membership, never role. Pete: "not all caregivers will be on the care team" — a caregiver
+// assigned to a session and nothing more is in none of the three sources this reads, so she
+// gets an empty list and no screen, which is the intended answer rather than a special case.
+router.get("/mine/recipients", async (req, res) => {
+  try {
+    const db = await getDb();
+    const { recipientsWithCapabilityFor } = require("../utils/access");
+    const { CAP } = require("../utils/capabilities");
+    const recipients = await recipientsWithCapabilityFor(db, req.user.id, CAP.READ_NOTES);
+    res.json({
+      recipients: recipients.map((r) => ({
+        id: r.id, firstName: r.first_name, lastName: r.last_name, timezone: r.timezone,
+      })),
+    });
+  } catch (err) {
+    captureException(err, { where: "notes: mine/recipients" });
+    console.error("Notes recipients error:", err.message);
+    res.status(500).json({ error: "Could not load your care recipients" });
+  }
+});
+
 router.get("/:careRecipientId", async (req, res) => {
   const db = await getDb();
   const recipientId = req.params.careRecipientId;
