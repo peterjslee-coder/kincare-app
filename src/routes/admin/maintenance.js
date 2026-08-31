@@ -152,8 +152,15 @@ router.get("/users/:id/reachability", authenticate, checkAdmin, requireAdmin, as
       const ep = String(s.endpoint || "");
       // native://ios/<token> and native://android/<token> — anything else is Web Push.
       // v1.105.151 — one definition, shared with /api/push/status and the client's self-repair.
+      // v1.105.155 — WHICH push service, so a browser subscription can be placed. Apple's is
+      // Safari or an iOS home-screen app; Google's is Chrome, and usually a laptop. "web" on
+      // its own could not tell Pete's iPhone from his Mac, which is the exact question he was
+      // asking. Host only — never the token.
+      let service = null;
+      try { service = ep.startsWith("http") ? new URL(ep).host : null; } catch { service = null; }
       return {
         kind: require("../../utils/pushDevices").deviceKind(ep),
+        service,
         // Enough to tell two rows apart in a support conversation, and useless to anyone else.
         ref: ep.slice(-6),
         failCount: s.fail_count || 0,
