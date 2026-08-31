@@ -423,18 +423,21 @@
 
 ### P1
 
-- [ ] **🔴 A caregiver has nowhere to READ a care note.** (Pete, 8/30: *"Julia sees my notes
-      but when she clicks on the notification it says 'no care recipient found'."*)
-      **She is allowed to** — the push fan-out is gated on `CAP.READ_NOTES` (v1.105.81) and
-      `GET /api/notes/:careRecipientId` authorizes any team member, with visibility rules
-      already written. So the notification is correct and the API is correct.
-      What is missing is a SCREEN. `CareProfile` is the family's record (and loads
-      `/api/care-recipients`, which is family/admin/care_for only); `CaredForView` is the
-      recipient's own; the only caregiver-side notes in the app are inside a check-in briefing,
-      which is no use to someone tapping a notification between visits.
-      v1.105.152 stopped the page telling her she has no care recipient, but that is a
-      truthful dead end, not a fix. **Needs a read-only notes view on the caregiver side, and
-      the note push deep-linked to it by role.**
+- [x] **A caregiver on the care team had nowhere to READ a note. Shipped v1.105.153.**
+      (Pete, 8/30: *"Julia sees my notes but when she clicks on the notification it says 'no
+      care recipient found'."*)
+      **The rule, in his words — and it is the whole design:** *"not all caregivers should get
+      it...it's just that Julia IS on Betty's care team AND she's a caregiver"* and *"not all
+      caregivers will be on the care team."* So the word "caregiver" appears in none of the
+      decisions. `GET /api/notes/mine/recipients` asks which recipients grant THIS person
+      `READ_NOTES` across owner + care-team member + share — `usersWithCapability` read from
+      the other end. A caregiver merely assigned to a session is in none of those sets, gets an
+      empty list, and **never sees the tab**, rather than seeing one that explains itself.
+      `TeamNotes.js` is read-only: writing a note enters a care record and pushes the whole
+      team, and the places to do that already exist. The note push routes on the viewer —
+      family to the full profile, everyone else to the notes list — carrying the recipient and
+      note id, and expanding past the preview so the note it announced is actually on screen.
+      ⚠️ **Wants Julia to tap one.**
 
 
 > **Aug 29 2026 — feedback pull, 8 items.** Pete filed most of these from his phone **at the
