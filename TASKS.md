@@ -423,6 +423,23 @@
 
 ### P1
 
+- [ ] **Reactions on care notes and visits — "socialize anywhere we're leaving feedback".**
+      (Pete, 8/31.) The hard part is done: `ReactionBar.js` (v1.105.158) knows nothing about
+      messages — a list, a callback, an alignment, and whether to overlap — so a note or a
+      visit renders the identical control.
+      **What is left is the data.** `message_reactions` is message-shaped (FK to `messages`,
+      `UNIQUE(message_id, user_id)`). Notes and visits need a generic store — one
+      `reactions(target_type, target_id, user_id, emoji)` table with
+      `UNIQUE(target_type, target_id, user_id)`, plus POST/DELETE keyed the same way, and the
+      capability check per target type (READ_NOTES / READ_VISITS — if you cannot see it you
+      cannot react to it).
+      **Decide once, deliberately:** migrate `message_reactions` onto that table, or leave it
+      and run two. One store is right — it is the same feature — but it touches a working path,
+      so it wants doing on its own rather than folded into something else.
+      Also worth settling: does a reaction notify the author? A 👍 on a care note is
+      encouragement; a push for every 👍 is noise. Suggest: in-app only, no push.
+
+
 - [x] **✅ Android developer verification — CHECKED IN PLAY CONSOLE 8/31, nothing to do.**
       Google's "[Final reminder]" said every Play app must be registered by **Sep 30 2026** or
       be *"removed from Google Play globally."* Checked it rather than assuming, in Pete's own
