@@ -1,3 +1,19 @@
+// ─── v1.105.158 — Apple's corner rules, in one place ───
+//
+// A bubble's shape is decided by its neighbours, not by itself: 20px everywhere, except the
+// side facing the sender, which stays round only on the LAST message of a run. Everything in
+// between tucks in at 6px. That is what makes three messages from one person read as one
+// person talking instead of three separate objects.
+const MSG_R = 20;
+const MSG_TUCK = 6;
+function bubbleRadius(isSent, runStart, runEnd) {
+  const near = isSent ? 'Right' : 'Left';
+  const r = { topLeft: MSG_R, topRight: MSG_R, bottomLeft: MSG_R, bottomRight: MSG_R };
+  if (!runStart) r[`top${near}`] = MSG_TUCK;
+  if (!runEnd) r[`bottom${near}`] = MSG_TUCK;
+  return `${r.topLeft}px ${r.topRight}px ${r.bottomRight}px ${r.bottomLeft}px`;
+}
+
 const Messages = window.Messages = () => {
   const [conversations, setConversations] = useState([]);
   const [activeConvId, setActiveConvId] = useState(null);
@@ -2284,6 +2300,16 @@ const Messages = window.Messages = () => {
               const showSenderName = isGroup && !isSent;
               const prevMsg = i > 0 ? messages[i - 1] : null;
               const showName = showSenderName && (!prevMsg || prevMsg.sender_id !== m.sender_id || prevMsg.type !== m.type);
+              // ─── v1.105.158 — runs, the way Apple does them ───
+              //
+              // Pete: "it's janky… if i could make it like anything, it would be like Apple
+              // messages' ui." Every bubble here had its own tail, so three messages from one
+              // person read as three separate objects with equal gaps between them. In
+              // Messages a run tucks together and only the LAST one keeps the tail.
+              const nextMsg = i < messages.length - 1 ? messages[i + 1] : null;
+              const sameRun = (a, b) => !!a && !!b && a.sender_id === b.sender_id && a.type === b.type;
+              const runStart = !sameRun(prevMsg, m);
+              const runEnd = !sameRun(nextMsg, m);
               const parseTs = (t) => parseTimestamp(t) || new Date(0);
               const isMsgSwiping = msgSwipingId === m.id;
               const reactions = m.reactions || [];
@@ -2339,32 +2365,50 @@ const Messages = window.Messages = () => {
                           if (actions) actions.style.opacity = '0';
                           if (showEmojiFor === m.id) setShowEmojiFor(null);
                         }}>
+                        {/* v1.105.158 — grey, small. It was using getAvatarColor as a TEXT
+                            colour, which is why "Rebecca Lee" came out orange. */}
                         {showName && (
-                          <div style={{ fontSize: 11, color: m.senderLabel ? 'var(--role-color)' : getAvatarColor(m.senderName || ''), fontWeight: 600, marginBottom: 2, marginLeft: 4 }}>
+                          <div style={{ fontSize: 12, color: m.senderLabel ? 'var(--role-color)' : 'var(--text-muted)', fontWeight: 500, marginBottom: 3, marginLeft: 12, letterSpacing: '0.01em' }}>
                             {m.senderLabel ? `\u{1F6E1}\uFE0F ${m.senderLabel}` : m.senderName}
                           </div>
                         )}
                         {/* Reply quote */}
+                        {/* ─── v1.105.158 — a reply is two bubbles, not one two-storey object ───
+                            It was a grey panel with a coloured left border, fused to the top of
+                            the bubble by a negative margin. Apple stacks the quoted message
+                            above and inset, dimmed, in its own rounded shape — so a reply reads
+                            as "this, about that" instead of one strange tall thing. It is the
+                            worst-looking element in the screenshot he sent. */}
                         {m.replyTo && (
                           <div style={{
-                            padding: '6px 10px', marginBottom: -6, borderRadius: isSent ? '12px 12px 0 0' : '12px 12px 0 0',
-                            background: isSent ? 'var(--bubble-reply-sent-bg)' : 'var(--bubble-reply-received-bg)', fontSize: 12, lineHeight: 1.3,
-                            borderLeft: isSent ? '3px solid rgba(255,255,255,0.4)' : '3px solid var(--bubble-sent-bg)',
+                            opacity: 0.62,
+                            margin: isSent ? '0 14px 3px auto' : '0 auto 3px 14px',
+                            maxWidth: '86%',
+                            padding: '7px 12px',
+                            borderRadius: 18,
+                            background: 'var(--bubble-received-bg)',
+                            color: 'var(--bubble-received-text)',
+                            fontSize: 14, lineHeight: 1.3,
                           }}>
-                            <div style={{ fontWeight: 600, fontSize: 11, color: isSent ? 'rgba(255,255,255,0.7)' : 'var(--bubble-sent-bg)', marginBottom: 1 }}>
+                            <div style={{ fontWeight: 600, fontSize: 12.5, marginBottom: 1, opacity: 0.85 }}>
                               {m.replyTo.senderName || 'Unknown'}
                             </div>
-                            <div style={{ color: isSent ? 'rgba(255,255,255,0.6)' : 'var(--bubble-received-meta)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 220 }}>
-                              {m.replyTo.content}
-                            </div>
+                            <div style={{
+                              display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+                              overflow: 'hidden',
+                            }}>{m.replyTo.content}</div>
                           </div>
                         )}
                         <div style={{
-                          padding: '10px 14px',
-                          borderRadius: m.replyTo ? (isSent ? '0 0 4px 18px' : '0 0 18px 4px') : (isSent ? '18px 18px 4px 18px' : '18px 18px 18px 4px'),
+                          // v1.105.158 — 17px, not 14. Apple's body size, and the single
+                          // biggest reason this screen read as cramped: everything else was
+                          // in proportion to text two sizes too small.
+                          padding: '8px 13px',
+                          borderRadius: bubbleRadius(isSent, runStart, runEnd),
                           background: m.is_deleted ? 'var(--badge-muted-bg)' : (isSent ? 'var(--bubble-sent-bg)' : 'var(--bubble-received-bg)'),
                           color: m.is_deleted ? 'var(--text-muted)' : (isSent ? 'var(--bubble-sent-text)' : 'var(--bubble-received-text)'),
-                          fontSize: '14px', lineHeight: 1.45, wordWrap: 'break-word',
+                          fontSize: '17px', lineHeight: 1.32, letterSpacing: '-0.01em',
+                          wordWrap: 'break-word',
                           fontStyle: m.is_deleted ? 'italic' : 'normal',
                         }}>
                           {m.message_type === 'photo' && m.metadata ? (() => {
@@ -2410,26 +2454,10 @@ const Messages = window.Messages = () => {
                           </div>
                         </div>
                         {/* Reaction pills below bubble */}
-                        {reactions.length > 0 && (
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4, justifyContent: isSent ? 'flex-end' : 'flex-start' }}>
-                            {Object.entries(reactions.reduce((acc, r) => {
-                              acc[r.emoji] = acc[r.emoji] || [];
-                              acc[r.emoji].push(r);
-                              return acc;
-                            }, {})).map(([emoji, rList]) => (
-                              <button key={emoji} onClick={() => handleReaction(m.id, emoji)}
-                                title={rList.map(r => r.userName).join(', ')}
-                                style={{
-                                  display: 'flex', alignItems: 'center', gap: 3, padding: '2px 6px',
-                                  background: rList.some(r => r.userId === currentUser?.id) ? 'var(--color-success-bg)' : 'var(--bg-primary)',
-                                  border: rList.some(r => r.userId === currentUser?.id) ? '1px solid #1b6b5a' : '1px solid #e0e0e0',
-                                  borderRadius: 12, fontSize: 13, cursor: 'pointer', lineHeight: 1,
-                                }}>
-                                <span>{emoji}</span>
-                                {rList.length > 1 && <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>{rList.length}</span>}
-                              </button>
-                            ))}
-                          </div>
+                        {typeof ReactionBar !== 'undefined' && (
+                          <ReactionBar reactions={reactions} currentUserId={currentUser?.id}
+                            align={isSent ? 'right' : 'left'}
+                            onReact={(emoji) => handleReaction(m.id, emoji)} />
                         )}
                         {/* Desktop hover actions: reply + emoji */}
                         <div className="msg-hover-actions" style={{

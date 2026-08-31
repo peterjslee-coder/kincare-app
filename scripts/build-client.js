@@ -48,6 +48,7 @@ const scripts = [
   "js/components/Dashboard.js",
   "js/components/CareProfile.js",
   "js/components/TeamNotes.js",
+  "js/components/ReactionBar.js",
   "js/components/Schedule.js",
   "js/components/ActivityFeed.js",
   "js/components/CaregiverScheduleModal.js",
