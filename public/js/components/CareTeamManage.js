@@ -15,10 +15,21 @@ const CAP_LABELS = [
   ['write_visits', 'Log a visit',                   'Record that they were there.'],
   ['read_tasks',   'See care tasks',                'Including medication reminders.'],
   ['check_tasks',  'Tick off a care task',          'Including recording that medication was given.'],
+  // v1.105.165 — Pete: "new categoy of access for care team members: the ability to schedule
+  // appointments." It used to require 'manage', which is also "edit the profile and delete any
+  // task" — so a sibling who should be able to put cardiology on Tuesday had to be trusted
+  // with the whole record.
+  ['schedule_events', 'Schedule appointments',      'Add and change doctor visits, outings, and other events on the calendar.'],
+  // v1.105.165 — the wall, in Pete's words: "there needs to be a wall where the team leader
+  // controls who can bring caregivers (and spend betty's money in doing so) into the home."
+  // Last in the list and out of every preset, deliberately: this is the one that costs money
+  // and puts a stranger in the house, so it should be a decision, never a default.
+  ['book_care',    'Book paid care',                'Request a caregiver — this brings someone into the home and charges the billing contact.'],
   ['manage',       'Manage the care profile',       'Create and edit tasks, edit the profile.'],
 ];
 const CAP_PRESETS = {
-  member: CAP_LABELS.map((c) => c[0]),
+  // "Everything" here still means everything EXCEPT booking paid care — see book_care above.
+  member: CAP_LABELS.map((c) => c[0]).filter((c) => c !== 'book_care'),
   viewer: ['read_profile', 'read_notes', 'write_notes', 'read_visits', 'write_visits'],
   helper: ['write_notes', 'write_visits'],
 };

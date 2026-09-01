@@ -63,6 +63,17 @@ async function hasAccess(db, recipientId, userId) {
 
 // Manage (create/edit/pause) = owner, admin, edit/leader, or full share.
 const canManage = (access) => Array.isArray(access) ? can(access, CAP.MANAGE) : ["owner", "admin", "edit", "full"].includes(access);
+// ─── v1.105.165 — appointments, without the keys to everything ───
+//
+// Pete: "new categoy of access for care team members: the ability to schedule appointments."
+//
+// Care events were gated on canManage, which is also "edit the care profile and delete any
+// task". So putting cardiology on Tuesday required being trusted with the entire record.
+// SCHEDULE_EVENTS is that permission on its own; MANAGE still implies it, so nobody who could
+// add an appointment yesterday loses it today.
+const canScheduleEvents = (access) => Array.isArray(access)
+  ? (can(access, CAP.SCHEDULE_EVENTS) || can(access, CAP.MANAGE))
+  : ["owner", "admin", "edit", "full"].includes(access);
 // Check off = anyone with access at all — any team member, shared user, or
 // assigned caregiver can record that care happened (Pete's rule: "Peggy
 // watched her take it, I'm logging it").
@@ -650,4 +661,4 @@ module.exports = router;
 module.exports.pollCareTasks = pollCareTasks;
 // Shared access/team helpers — reused by careEvents.js (v1.100.0) so the
 // access model stays defined in exactly one place.
-module.exports._shared = { hasAccess, canManage, accessibleRecipients, teamUserIds, isFamilyNotifiable };
+module.exports._shared = { hasAccess, canManage, canScheduleEvents, accessibleRecipients, teamUserIds, isFamilyNotifiable };

@@ -773,6 +773,34 @@ router.post("/", requireRole("family", "care_for"), validateSession, async (req,
     return res.status(404).json({ error: "Care recipient not found" });
   }
 
+  // ─── v1.105.165 — the wall: who may bring a caregiver into the house ───
+  //
+  // Pete: "there needs to be a wall where the team leader controls who can bring caregivers
+  // (and spend betty's money in doing so) into the home."
+  //
+  // There wasn't one. The lookup above accepts the owner, ANY care_recipient_shares row at any
+  // level, and ANY care_team_members row — and then booked. So every member of Betty's team,
+  // including a helper invited to bring dinner, could raise a request that puts a stranger in
+  // her house and charges the billing contact's card. Nothing asked whether they were allowed.
+  //
+  // The owner always may. The care recipient booking her own care always may — it is her home
+  // and her arrangement. Everyone else needs BOOK_CARE, granted per person by the person whose
+  // card it is.
+  {
+    const isOwner = recipient.family_user_id === req.user.id;
+    const isSelf = activeRole === "care_for" && recipient.linked_user_id === req.user.id;
+    if (!isOwner && !isSelf) {
+      const { recipientCapabilities } = require("../utils/access");
+      const { can, CAP } = require("../utils/capabilities");
+      const caps = await recipientCapabilities(db, careRecipientId, req.user.id);
+      if (!can(caps, CAP.BOOK_CARE)) {
+        return res.status(403).json({
+          error: "You can view this care plan, but booking paid care is up to the care team leader. Ask them to request this visit, or to give you booking access.",
+        });
+      }
+    }
+  }
+
   // ─── Consent gate: block booking if consent not verified ───
   // NOTE: This is a pre-check for immediate UI feedback. The actual enforcement
   // happens inside the transaction below (SELECT ... FOR UPDATE) to prevent

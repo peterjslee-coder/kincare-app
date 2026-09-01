@@ -22,7 +22,7 @@ const { getDb } = require("../models/database");
 const { authenticate } = require("../middleware/auth");
 const { captureException } = require("../utils/sentry");
 const { getTodayStringInZone } = require("../utils/timezone");
-const { hasAccess, canManage, accessibleRecipients, teamUserIds, isFamilyNotifiable } =
+const { hasAccess, canManage, canScheduleEvents, accessibleRecipients, teamUserIds, isFamilyNotifiable } =
   require("./careTasks")._shared;
 const {
   CATEGORIES, addDaysToDateString, eventStartInstant,
@@ -99,7 +99,7 @@ router.get("/upcoming", async (req, res) => {
           recipientFirstName: cr.first_name,
           recipientName: `${cr.first_name} ${cr.last_name}`.trim(),
           timezone: tz,
-          canManage: canManage(access),
+          canManage: canScheduleEvents(access),
         }));
       }
     }
@@ -200,7 +200,8 @@ router.post("/", async (req, res) => {
     const { care_recipient_id } = req.body || {};
     if (!care_recipient_id) return res.status(400).json({ error: "care_recipient_id required" });
     const access = await hasAccess(db, care_recipient_id, req.user.id);
-    if (!canManage(access)) return res.status(403).json({ error: "Only the family owner or care team leaders can add events" });
+    // v1.105.165 — SCHEDULE_EVENTS, not MANAGE. See canScheduleEvents in careTasks.js.
+    if (!canScheduleEvents(access)) return res.status(403).json({ error: "You don't have permission to add appointments for this person" });
 
     const { errors, category } = validateEventInput(req.body);
     if (errors.length) return res.status(400).json({ error: errors[0], errors });
@@ -252,7 +253,7 @@ router.put("/:id", async (req, res) => {
     const ev = await db.prepare("SELECT * FROM care_events WHERE id = ?").get(req.params.id);
     if (!ev) return res.status(404).json({ error: "Event not found" });
     const access = await hasAccess(db, ev.care_recipient_id, req.user.id);
-    if (!canManage(access)) return res.status(403).json({ error: "Only the family owner or care team leaders can edit events" });
+    if (!canScheduleEvents(access)) return res.status(403).json({ error: "You don't have permission to change appointments for this person" });
 
     const merged = { ...ev, ...req.body };
     // Client may clear the time (switch to all-day) with event_time: null
@@ -294,7 +295,7 @@ router.delete("/:id", async (req, res) => {
     const ev = await db.prepare("SELECT * FROM care_events WHERE id = ?").get(req.params.id);
     if (!ev) return res.status(404).json({ error: "Event not found" });
     const access = await hasAccess(db, ev.care_recipient_id, req.user.id);
-    if (!canManage(access)) return res.status(403).json({ error: "Only the family owner or care team leaders can remove events" });
+    if (!canScheduleEvents(access)) return res.status(403).json({ error: "You don't have permission to remove appointments for this person" });
     await db.prepare("UPDATE care_events SET is_active = 0, updated_at = NOW() WHERE id = ?").run(ev.id);
     return res.json({ success: true });
   } catch (err) {

@@ -25,6 +25,26 @@ const CAP = Object.freeze({
   WRITE_VISITS: "write_visits",   // log a family visit — "someone was there"
   READ_TASKS: "read_tasks",       // see care tasks, including medication
   CHECK_TASKS: "check_tasks",     // tick one off / undo
+  // ─── v1.105.165 — Pete: "new categoy of access for care team members: the ability to
+  // schedule appointments." ───
+  //
+  // Adding a doctor's appointment needed MANAGE, which is also "edit the care profile and
+  // delete any task". So a sibling who should be able to put cardiology on Tuesday had to be
+  // handed the keys to the whole record. Its own capability now.
+  SCHEDULE_EVENTS: "schedule_events", // add/edit appointments, outings — Betty's calendar
+  // ─── The wall Pete asked for, and it did not exist ───
+  //
+  // "there needs to be a wall where the team leader controls who can bring caregivers (and
+  // spend betty's money in doing so) into the home."
+  //
+  // POST /api/sessions accepted the owner, ANY care_recipient_shares row at any level, and ANY
+  // care_team_members row. So every member of Betty's team — including a helper invited to
+  // bring dinner — could raise a care request that books a stranger into the house and commits
+  // the billing contact's card. Nothing anywhere asked whether they were allowed to.
+  //
+  // Deliberately NOT part of MANAGE: managing the care record and spending money are different
+  // kinds of trust, and conflating them is how the gap above happened.
+  BOOK_CARE: "book_care",         // raise a care request — brings a caregiver in, and bills
   MANAGE: "manage",               // create, edit, delete tasks and the care profile itself
 });
 
@@ -36,6 +56,19 @@ const ALL = Object.freeze(Object.values(CAP));
 // looks wrong and it IS wrong as a default, but silently revoking access from every existing
 // share on deploy would be worse than the bug. Pete tightens it per person from the invite UI.
 const VIEW_SET = [CAP.READ_PROFILE, CAP.READ_NOTES, CAP.WRITE_NOTES, CAP.READ_VISITS, CAP.WRITE_VISITS, CAP.READ_TASKS, CAP.CHECK_TASKS];
+
+// ─── v1.105.165 — the one place this file deliberately does NOT preserve today's behaviour ───
+//
+// Everything else here maps legacy access onto exactly what it already granted, because
+// silently revoking on deploy is worse than the bug. BOOK_CARE is the exception, and Pete
+// asked for it in those words: booking a caregiver spends the billing contact's money and puts
+// a stranger in Betty's house. It is not something a share should acquire by default because
+// nobody thought to withhold it.
+//
+// So: owner, admin, and the levels that were given EVERYTHING (edit/full) keep it. A plain
+// team member or viewer does not, and the team leader grants it per person. Anyone who could
+// book yesterday and cannot today is exactly the set he wants to decide about.
+const BOOKERS = [CAP.BOOK_CARE];
 
 const LEGACY = Object.freeze({
   view: VIEW_SET,
@@ -55,7 +88,9 @@ const LEGACY = Object.freeze({
 const PRESETS = Object.freeze({
   viewer: [CAP.READ_PROFILE, CAP.READ_NOTES, CAP.WRITE_NOTES, CAP.READ_VISITS, CAP.WRITE_VISITS],
   helper: [CAP.WRITE_NOTES, CAP.WRITE_VISITS],
-  member: ALL,
+  // v1.105.165 — "member" is the preset for a sibling who helps run things: the whole record,
+  // appointments included. Booking paid care is still granted deliberately, not by preset.
+  member: ALL.filter((c) => c !== CAP.BOOK_CARE),
 });
 
 /**
