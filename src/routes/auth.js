@@ -601,7 +601,7 @@ router.post("/change-password", authenticate, async (req, res) => {
 router.get("/me", authenticate, async (req, res) => {
   const db = await getDb();
   const user = await db.prepare(
-    "SELECT id, email, role, roles, first_name, last_name, phone, avatar_url, profile_photo, notification_prefs, accessibility_prefs, email_verified, is_demo, is_admin, is_tester, account_approved, companion_access, password_changed_at, disclaimer_accepted_at, disclaimer_version, pets, pet_allergies, food_allergies, medical_conditions, address_line1, address_line2, city, state, zip, created_at FROM users WHERE id = ?"
+    "SELECT id, email, role, roles, first_name, last_name, phone, avatar_url, profile_photo, notification_prefs, accessibility_prefs, ui_prefs, email_verified, is_demo, is_admin, is_tester, account_approved, companion_access, password_changed_at, disclaimer_accepted_at, disclaimer_version, pets, pet_allergies, food_allergies, medical_conditions, address_line1, address_line2, city, state, zip, created_at FROM users WHERE id = ?"
   ).get(req.user.id);
 
   if (!user) return res.status(404).json({ error: "User not found" });
@@ -782,6 +782,59 @@ router.get("/me", authenticate, async (req, res) => {
   });
 });
 
+// ─── PATCH /api/auth/me/ui-prefs (v1.105.171) ───
+//
+// Which sections you keep folded up. Deliberately NOT part of PUT /api/auth/me: this is
+// written on every chevron tap, and that route validates a profile and returns the whole
+// user object. A tap should cost the smallest request the app makes.
+//
+// It takes a PATCH of individual keys and MERGES them server-side. Sending the whole blob
+// would mean the phone overwriting what the Mac just changed — last writer wins on keys
+// nobody touched. Merging one key at a time makes two devices additive instead.
+//
+// `null` deletes a key, so the blob does not grow forever as sections are renamed.
+router.patch("/me/ui-prefs", authenticate, async (req, res) => {
+  try {
+    const patch = req.body && req.body.patch;
+    if (!patch || typeof patch !== "object" || Array.isArray(patch)) {
+      return res.status(400).json({ error: "patch must be an object" });
+    }
+    const keys = Object.keys(patch);
+    // A bound, so this cannot become a general-purpose key-value store on the users table.
+    if (keys.length > 50) return res.status(400).json({ error: "Too many keys" });
+    for (const k of keys) {
+      if (typeof k !== "string" || k.length > 80) {
+        return res.status(400).json({ error: "Invalid key" });
+      }
+      const v = patch[k];
+      if (v !== null && typeof v !== "boolean" && typeof v !== "number" && typeof v !== "string") {
+        return res.status(400).json({ error: "Values must be primitives" });
+      }
+      if (typeof v === "string" && v.length > 200) {
+        return res.status(400).json({ error: "Value too long" });
+      }
+    }
+
+    const db = await getDb();
+    const row = await db.prepare("SELECT ui_prefs FROM users WHERE id = ?").get(req.user.id);
+    let current = {};
+    // One malformed row must not lock a user out of ever collapsing anything again.
+    try { current = row?.ui_prefs ? (JSON.parse(row.ui_prefs) || {}) : {}; } catch { current = {}; }
+    if (typeof current !== "object" || Array.isArray(current)) current = {};
+
+    for (const k of keys) {
+      if (patch[k] === null) delete current[k];
+      else current[k] = patch[k];
+    }
+
+    await db.prepare("UPDATE users SET ui_prefs = ? WHERE id = ?").run(JSON.stringify(current), req.user.id);
+    res.json({ uiPrefs: current });
+  } catch (err) {
+    captureException(err, { where: "PATCH /api/auth/me/ui-prefs" });
+    res.status(500).json({ error: "Could not save that preference" });
+  }
+});
+
 // ─── PUT /api/auth/me ───
 router.put("/me", authenticate, validateProfileUpdate, async (req, res) => {
   try {
@@ -822,7 +875,7 @@ router.put("/me", authenticate, validateProfileUpdate, async (req, res) => {
 
     // Return updated user
     const user = await db.prepare(
-      "SELECT id, email, role, roles, first_name, last_name, phone, avatar_url, profile_photo, notification_prefs, accessibility_prefs, pets, pet_allergies, food_allergies, medical_conditions, address_line1, address_line2, city, state, zip, created_at FROM users WHERE id = ?" /* v1.74.5: profile_photo was missing — saving an address blanked the avatar in the UI */
+      "SELECT id, email, role, roles, first_name, last_name, phone, avatar_url, profile_photo, notification_prefs, accessibility_prefs, ui_prefs, pets, pet_allergies, food_allergies, medical_conditions, address_line1, address_line2, city, state, zip, created_at FROM users WHERE id = ?" /* v1.74.5: profile_photo was missing — saving an address blanked the avatar in the UI */
     ).get(req.user.id);
 
     // Parse roles

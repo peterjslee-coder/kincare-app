@@ -2148,6 +2148,22 @@ async function initializeDatabase() {
            ON reactions(target_type, target_id)`,
       ],
     },
+    {
+      // ─── v1.105.171 — which sections you keep folded up ───
+      //
+      // Pete: "it should stick, too...if I minimize the reimbursements because i don't really
+      // look at that...the next time i log in i want it minimized too. if I leave the care
+      // notes open because I return to that a lot, I want it to remain up."
+      //
+      // "The next time I log in" is the requirement, and it rules out localStorage: he uses
+      // the phone and the Mac, and a preference that only exists on the device he set it on
+      // is one he has to set twice. One TEXT column holding JSON, the same shape as
+      // notification_prefs and accessibility_prefs beside it.
+      id: "027_ui_prefs",
+      statements: [
+        `ALTER TABLE users ADD COLUMN IF NOT EXISTS ui_prefs TEXT`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

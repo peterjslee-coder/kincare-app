@@ -25,6 +25,9 @@ const OUT_DIR = path.join(PUBLIC, "js-compiled");
 const scripts = [
   "js/offlineQueue.js",
   "js/utils.js",
+  // v1.105.171 — reads window.__uiPrefs and useStickySection; every collapsible section
+  // depends on it, so it loads before any component.
+  "js/uiPrefs.js",
   // v1.105.114 — the onboarding route. Pure data + resolvers, no React, no fetches;
   // both CaregiverOnboarding and CaretakerHub read it, so it loads before either.
   "js/onboardingRoute.js",
@@ -49,6 +52,7 @@ const scripts = [
   "js/components/Dashboard.js",
   "js/components/CareProfile.js",
   "js/components/TeamNotes.js",
+  "js/components/CollapsibleCard.js", // v1.105.171 — used by CareProfile and CareTeamManage
   "js/components/ReactionBar.js",
   "js/components/Schedule.js",
   "js/components/ActivityFeed.js",

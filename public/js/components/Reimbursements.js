@@ -17,6 +17,9 @@ const PURPOSE_LABEL = (v) => (PURPOSE_OPTIONS.find((o) => o.value === v) || {}).
 
 const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId }) => {
   const { showToast } = useToast();
+  // v1.105.171 — remembered on the account, not the device: "the next time i log in i want
+  // it minimized too", and he uses the phone and the Mac.
+  const [sectionOpen, setSectionOpen] = useStickySection('careTeam.reimbursements', true);
   const [items, setItems] = useState([]);
   const [meta, setMeta] = useState({ isApprover: false, canSubmit: false });
   const [loading, setLoading] = useState(true);
@@ -828,8 +831,19 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
           Now the row WRAPS, and + Request comes first — the primary action is
           never the one that overflows. */}
       <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', rowGap: 8 }}>
-        <span>💵 Reimbursements</span>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+        {/* ─── v1.105.171 — Pete: "if I minimize the reimbursements because i don't really
+            look at that...the next time i log in i want it minimized too." ───
+            The TITLE is the control, not the whole header: this row carries up to six
+            buttons, and a header that folds the section when you meant to press "+ Request"
+            is worse than a header that does not fold at all. */}
+        <span role="button" tabIndex={0} aria-expanded={sectionOpen}
+          onClick={() => setSectionOpen(!sectionOpen)}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSectionOpen(!sectionOpen); } }}
+          style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+          💵 Reimbursements
+          <span aria-hidden="true" style={{ fontSize: 15, color: 'var(--text-muted)', transition: 'transform 0.2s', transform: sectionOpen ? 'rotate(180deg)' : 'rotate(0)' }}>{'▼'}</span>
+        </span>
+        <div style={{ display: sectionOpen ? 'flex' : 'none', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           {meta.canSubmit && !showForm && (
             <button onClick={openRequestForm}
               style={{ padding: '6px 14px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
@@ -882,6 +896,7 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
         </div>
       </div>
 
+      <div style={{ display: sectionOpen ? 'block' : 'none' }}>
       <div style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '4px 0 12px' }}>
         Fronted money for {`the care recipient`}? Snap the receipt and request reimbursement.
         The whole care team can see requests; the billing contact approves and pays outside InPlace (Venmo, Zelle, bank transfer, check) — no fees. You pick how you get paid back; they pick which account it comes from.
@@ -1439,6 +1454,7 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 };

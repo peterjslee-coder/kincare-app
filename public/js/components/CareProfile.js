@@ -14,7 +14,10 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
   const [familyVisits, setFamilyVisits] = useState([]); // v1.105.38
   const [newNote, setNewNote] = useState('');
   const [addingNote, setAddingNote] = useState(false);
-  const [notesOpen, setNotesOpen] = useState(true); // v1.76.0 — observations are a first-class feature, not buried
+  // v1.105.171 — these three remember. Pete: "if I leave the care notes open because I
+  // return to that a lot, I want it to remain up." The second argument is each section's
+  // previous default, so anyone who has never touched it sees exactly what they saw before.
+  const [notesOpen, setNotesOpen] = useStickySection('lovedOne.notes', true); // v1.76.0 — observations are a first-class feature, not buried
   const [showAllNotes, setShowAllNotes] = useState(false); // v1.105.149 — newest few, then ask
   const [highlightNoteId, setHighlightNoteId] = useState(null); // v1.105.163
   const notesCardRef = React.useRef(null);
@@ -31,7 +34,9 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
   const [aiSummaryDate, setAiSummaryDate] = useState(null);
   const [generatingAI, setGeneratingAI] = useState(false);
   const [savingPrefs, setSavingPrefs] = useState(false);
-  const [prefsExpanded, setPrefsExpanded] = useState(false);
+  const [prefsExpanded, setPrefsExpanded] = useStickySection('lovedOne.preferences', false);
+  const [healthOpen, setHealthOpen] = useStickySection('lovedOne.health', true);
+  const [permsOpen, setPermsOpen] = useStickySection('lovedOne.permissions', true);
   const [showAllPrefs, setShowAllPrefs] = useState(false);
   const [editingSummary, setEditingSummary] = useState(false);
   const [editedSummary, setEditedSummary] = useState('');
@@ -48,7 +53,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
   const [doctorQuestions, setDoctorQuestions] = useState([]); // v1.94.0 — iPAi's pre-draft gap questions
   const [doctorAnswers, setDoctorAnswers] = useState({});
   // Kindred panel state
-  const [companionOpen, setCompanionOpen] = useState(false);
+  const [companionOpen, setCompanionOpen] = useStickySection('lovedOne.kindred', false);
   const [companionTab, setCompanionTab] = useState('conversations');
   const [companionConvos, setCompanionConvos] = useState([]);
   const [companionConvosLoading, setCompanionConvosLoading] = useState(false);
@@ -828,7 +833,9 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
     const idx = list.findIndex((n) => n.id === id);
     if (idx === -1) return; // not this recipient's, or not loaded yet — leave it for them
     window.__pendingFocus = null;
-    setNotesOpen(true);
+    // v1.105.171 — open it, but do NOT remember it. He followed a push to a note; that is
+    // the app deciding to unfold this, not him choosing to keep it unfolded.
+    setNotesOpen(true, { remember: false });
     if (!isVisit && idx >= NOTES_PREVIEW) setShowAllNotes(true);
     setHighlightNoteId(id);
     // After the expand has painted, or we scroll to where the row is about to be.
@@ -1021,7 +1028,16 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
 
       {/* ─── 3. Health Conditions & Medications (combined, compact) ─── */}
       <div className="card">
-        <div className="card-header"><span className="card-icon">{'\u2695\uFE0F'}</span>Health & Medications</div>
+        <div className="card-header" role="button" tabIndex={0} aria-expanded={healthOpen}
+          onClick={() => setHealthOpen(!healthOpen)}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setHealthOpen(!healthOpen); } }}
+          style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center' }}><span className="card-icon">{'\u2695\uFE0F'}</span>Health & Medications</span>
+          <span aria-hidden="true" style={{ fontSize: 16, color: 'var(--text-muted)', transition: 'transform 0.2s', transform: healthOpen ? 'rotate(180deg)' : 'rotate(0)' }}>{'\u25BC'}</span>
+        </div>
+        {/* Never folded away mid-edit: hiding the fields somebody is typing into, because a
+            saved preference says this section is closed, would lose their work. */}
+        <div style={{ display: (healthOpen || editing) ? 'block' : 'none' }}>
         {editing ? (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             <div>
@@ -1198,6 +1214,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
             )}
           </div>
         )}
+        </div>
       </div>
 
       {/* ─── 4. Care Preferences (collapsible) ─── */}
@@ -2270,9 +2287,14 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
       {canEdit && (
         profile?.linked_user_id ? (
         <div className="card" style={{ marginBottom: 16, border: '1px solid #e0e0e0' }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span>{'\uD83D\uDD10'}</span> {profile.first_name}'s App Permissions
+          <div role="button" tabIndex={0} aria-expanded={permsOpen}
+            onClick={() => setPermsOpen(!permsOpen)}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setPermsOpen(!permsOpen); } }}
+            style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: permsOpen ? 12 : 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, cursor: 'pointer' }}>
+            <span><span>{'\uD83D\uDD10'}</span> {profile.first_name}'s App Permissions</span>
+            <span aria-hidden="true" style={{ fontSize: 16, color: 'var(--text-muted)', transition: 'transform 0.2s', transform: permsOpen ? 'rotate(180deg)' : 'rotate(0)' }}>{'\u25BC'}</span>
           </div>
+          <div style={{ display: permsOpen ? 'block' : 'none' }}>
           <p style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 14, lineHeight: 1.5 }}>
             Control what {profile.first_name} sees and can do when they log into their own account.
           </p>
@@ -2353,6 +2375,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
           }}>
             {savingPerms ? 'Saving...' : 'Save Permissions'}
           </button>
+          </div>
         </div>
         ) : (
         <div className="card" style={{ marginBottom: 16, border: '1px solid #e0e0e0', opacity: 0.55 }}>

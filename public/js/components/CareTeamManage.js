@@ -98,7 +98,15 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
   const [notifChannel, setNotifChannel] = useState('push');
   const [savingNotif, setSavingNotif] = useState(false);
   const [reminderIntervals, setReminderIntervals] = useState([120, 60, 30]);
-  const [a11yExpanded, setA11yExpanded] = useState(false);
+  // v1.105.171 — remembered on the account, like every other section on this page.
+  const [a11yExpanded, setA11yExpanded] = useStickySection('careTeam.accessibility', false);
+  // v1.105.171 — Pete: "make all the menus collapsible on the care team and betty pages. it
+  // should stick, too." Each default is what the section did before, so converting one is
+  // invisible until he folds it.
+  const [membersOpen, setMembersOpen] = useStickySection('careTeam.members', true);
+  const [billingOpen, setBillingOpen] = useStickySection('careTeam.billing', true);
+  const [caregiversOpen, setCaregiversOpen] = useStickySection('careTeam.caregivers', true);
+  const [visitsOpen, setVisitsOpen] = useStickySection('careTeam.recentVisits', true);
   const [billingUserId, setBillingUserId] = useState('');
   const [savingBilling, setSavingBilling] = useState(false);
   const [recipientCaregivers, setRecipientCaregivers] = useState([]);
@@ -598,9 +606,16 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
 
       {/* Members */}
       <div className="card">
-        <div className="card-header">
-          Team Members ({team.members?.length || 0}{isLeader && team.invites?.length > 0 ? ` + ${team.invites.length} pending` : ''})
+        <div className="card-header" role="button" tabIndex={0} aria-expanded={membersOpen}
+          onClick={() => setMembersOpen(!membersOpen)}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setMembersOpen(!membersOpen); } }}
+          style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+          <span>Team Members ({team.members?.length || 0}{isLeader && team.invites?.length > 0 ? ` + ${team.invites.length} pending` : ''})</span>
+          <span aria-hidden="true" style={{ fontSize: 16, color: 'var(--text-muted)', transition: 'transform 0.2s', transform: membersOpen ? 'rotate(180deg)' : 'rotate(0)' }}>{'▼'}</span>
         </div>
+        {/* Folded with display rather than unmounted: reopening a section must not refetch
+            the team or lose a half-finished edit. v1.105.171 */}
+        <div style={{ display: membersOpen ? 'block' : 'none' }}>
 
         {/* v1.105.81 — Pete: "if I send an invite, I want to see 'pending - Viewer' under team
             members". They used to live in a separate card below Recent Visits, which is not
@@ -740,11 +755,19 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
           );
         })}
       </div>
+      </div>
 
       {/* Billing Contact — leader only */}
       {isLeader && (
         <div className="card" style={{ marginTop: 16 }}>
-          <div className="card-header">Billing Contact</div>
+          <div className="card-header" role="button" tabIndex={0} aria-expanded={billingOpen}
+            onClick={() => setBillingOpen(!billingOpen)}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setBillingOpen(!billingOpen); } }}
+            style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+            <span>Billing Contact</span>
+            <span aria-hidden="true" style={{ fontSize: 16, color: 'var(--text-muted)', transition: 'transform 0.2s', transform: billingOpen ? 'rotate(180deg)' : 'rotate(0)' }}>{'▼'}</span>
+          </div>
+          <div style={{ display: billingOpen ? 'block' : 'none' }}>
           <div style={{ padding: '14px 0' }}>
             <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '0 0 12px', lineHeight: 1.5 }}>
               Choose who pays for {team.recipient_first_name}'s care sessions. If set, this person's payment method will be charged when any team member books a session.
@@ -784,13 +807,20 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
               </div>
             )}
           </div>
+          </div>
         </div>
       )}
 
       {/* Caregivers for this recipient */}
       <div className="card" style={{ marginTop: 16 }}>
         <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span>{team.recipient_first_name}'s Caregivers ({recipientCaregivers.length})</span>
+          <span role="button" tabIndex={0} aria-expanded={caregiversOpen}
+            onClick={() => setCaregiversOpen(!caregiversOpen)}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCaregiversOpen(!caregiversOpen); } }}
+            style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+            {team.recipient_first_name}'s Caregivers ({recipientCaregivers.length})
+            <span aria-hidden="true" style={{ fontSize: 15, color: 'var(--text-muted)', transition: 'transform 0.2s', transform: caregiversOpen ? 'rotate(180deg)' : 'rotate(0)' }}>{'▼'}</span>
+          </span>
           {isLeader && (
             <button onClick={openAssignPicker}
               style={{ padding: '5px 14px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
@@ -798,6 +828,7 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
             </button>
           )}
         </div>
+        <div style={{ display: caregiversOpen ? 'block' : 'none' }}>
         {recipientCaregivers.length === 0 && (
           <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
             No caregivers assigned yet. Tap "+ Assign" to add one.
@@ -835,6 +866,7 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
             )}
           </div>
         ))}
+        </div>
       </div>
 
       {/* Assign Caregiver Picker Modal */}
@@ -889,7 +921,14 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
       {/* Recent Visits */}
       {recentVisits.length > 0 && (
         <div style={{ marginTop: 24, background: 'var(--bg-surface)', borderRadius: 12, border: '1px solid #e0e0e0', padding: '16px 20px' }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--role-color)', marginBottom: 12 }}>Recent Visits</div>
+          <div role="button" tabIndex={0} aria-expanded={visitsOpen}
+            onClick={() => setVisitsOpen(!visitsOpen)}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setVisitsOpen(!visitsOpen); } }}
+            style={{ fontSize: 15, fontWeight: 700, color: 'var(--role-color)', marginBottom: visitsOpen ? 12 : 0, cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+            <span>Recent Visits</span>
+            <span aria-hidden="true" style={{ fontSize: 16, color: 'var(--text-muted)', transition: 'transform 0.2s', transform: visitsOpen ? 'rotate(180deg)' : 'rotate(0)' }}>{'▼'}</span>
+          </div>
+          <div style={{ display: visitsOpen ? 'block' : 'none' }}>
           {recentVisits.map((s) => {
             const svcLabel = formatServiceType(s.service_type);
             return (
@@ -916,6 +955,7 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
               </div>
             );
           })}
+          </div>
         </div>
       )}
 

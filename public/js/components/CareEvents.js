@@ -277,6 +277,8 @@ const CareEventFormModal = window.CareEventFormModal = ({ recipientId, recipient
 
 // ─── Recipient-profile card: upcoming events ───
 const CareEventsSection = window.CareEventsSection = ({ recipientId, recipientFirstName }) => {
+  // v1.105.171 — see CareTasks; same fold, same store.
+  const [sectionOpen, setSectionOpen] = useStickySection('lovedOne.careEvents', true);
   const [data, setData] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -298,14 +300,25 @@ const CareEventsSection = window.CareEventsSection = ({ recipientId, recipientFi
   return (
     <div className="card">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-        <div className="card-header" style={{ margin: 0 }}><span className="card-icon">{'📅'}</span>Events</div>
-        {canManage && (
+        {/* v1.105.171 — the TITLE folds the section, not the whole row: "+ Add" lives here
+            too, and a header that collapses when you meant to add something is worse than a
+            header that does not collapse. */}
+        <div className="card-header" style={{ margin: 0, cursor: 'pointer' }}
+          role="button" tabIndex={0} aria-expanded={sectionOpen}
+          onClick={() => setSectionOpen(!sectionOpen)}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSectionOpen(!sectionOpen); } }}>
+          <span className="card-icon">{'📅'}</span>Events
+          <span aria-hidden="true" style={{ marginLeft: 8, fontSize: 15, color: 'var(--text-muted)', transition: 'transform 0.2s', transform: sectionOpen ? 'rotate(180deg)' : 'rotate(0)' }}>{'▼'}</span>
+        </div>
+        {sectionOpen && canManage && (
           <button onClick={() => { setEditing(null); setShowForm(true); }}
             style={{ padding: '6px 12px', borderRadius: 8, border: 'none', background: 'var(--accent-color)', color: 'var(--text-on-primary)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
             + Add event
           </button>
         )}
       </div>
+      {/* display, not unmount: reopening must not refetch the list or lose a half-typed form */}
+      <div style={{ display: sectionOpen ? 'block' : 'none' }}>
       {upcoming.length === 0 && past.length === 0 ? (
         <div style={{ fontSize: 13, color: 'var(--text-tertiary)', padding: '8px 0' }}>
           Appointments and outings the care team should know about — a doctor
@@ -331,6 +344,7 @@ const CareEventsSection = window.CareEventsSection = ({ recipientId, recipientFi
           )}
         </>
       )}
+      </div>
       {showForm && (
         <CareEventFormModal recipientId={recipientId} recipientFirstName={recipientFirstName}
           timezone={data.events[0]?.timezone} existing={editing}

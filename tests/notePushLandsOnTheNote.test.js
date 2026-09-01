@@ -38,7 +38,10 @@ describe("and the family's own screen now uses it", () => {
   test("three things, because any one alone still leaves you hunting", () => {
     // The section can be collapsed; the note can be past the five-note preview; and either
     // way it is somewhere below a screenful of care intelligence and tasks.
-    expect(profile).toMatch(/setNotesOpen\(true\);/);
+    // v1.105.171 — the section remembers whether he folded it, so opening it for a push has
+    // to say "do not remember this". He followed a link to a note; that is the app unfolding
+    // the section, not him choosing to keep it unfolded.
+    expect(profile).toMatch(/setNotesOpen\(true, \{ remember: false \}\);/);
     expect(profile).toMatch(/if \(!isVisit && idx >= NOTES_PREVIEW\) setShowAllNotes\(true\);/);
     expect(profile).toMatch(/el\.scrollIntoView\(\{ behavior: 'smooth', block: 'center' \}\)/);
   });

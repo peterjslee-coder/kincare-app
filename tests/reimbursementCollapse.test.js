@@ -80,7 +80,9 @@ describe("the control itself", () => {
 // row has rendered, so finding it requires scrolling past the exact clutter it removes.
 describe("the same control, in the card header where it can be found", () => {
   test("the header carries a toggle", () => {
-    const header = ui.slice(ui.indexOf('<span>💵 Reimbursements</span>'), ui.indexOf('Fronted money for'));
+    // v1.105.171 — the title is now a collapse control, so it is no longer a bare
+    // `<span>💵 Reimbursements</span>`. The slice still means "the header row".
+    const header = ui.slice(ui.indexOf('💵 Reimbursements'), ui.indexOf('Fronted money for'));
     expect(header).toMatch(/onClick=\{toggleSettled\}/);
   });
 

@@ -443,6 +443,9 @@ const CareTaskQuickCreate = window.CareTaskQuickCreate = ({ recipients, onClose,
 
 // ─── Recipient-profile card: manage task definitions ───
 const CareTasksSection = window.CareTasksSection = ({ recipientId, recipientFirstName }) => {
+  // v1.105.171 — remembered on the account. Pete: "make all the menus collapsible on the
+  // care team and betty pages. it should stick, too."
+  const [sectionOpen, setSectionOpen] = useStickySection('lovedOne.careTasks', true);
   const { showToast } = useToast();
   const [data, setData] = useState(null);
   const [showForm, setShowForm] = useState(false);
@@ -483,14 +486,25 @@ const CareTasksSection = window.CareTasksSection = ({ recipientId, recipientFirs
   return (
     <div className="card">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-        <div className="card-header" style={{ margin: 0 }}><span className="card-icon">{'✅'}</span>Care Tasks</div>
-        {canManage && (
+        {/* v1.105.171 — the TITLE folds the section, not the whole row: "+ Add" lives here
+            too, and a header that collapses when you meant to add something is worse than a
+            header that does not collapse. */}
+        <div className="card-header" style={{ margin: 0, cursor: 'pointer' }}
+          role="button" tabIndex={0} aria-expanded={sectionOpen}
+          onClick={() => setSectionOpen(!sectionOpen)}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSectionOpen(!sectionOpen); } }}>
+          <span className="card-icon">{'✅'}</span>Care Tasks
+          <span aria-hidden="true" style={{ marginLeft: 8, fontSize: 15, color: 'var(--text-muted)', transition: 'transform 0.2s', transform: sectionOpen ? 'rotate(180deg)' : 'rotate(0)' }}>{'▼'}</span>
+        </div>
+        {sectionOpen && canManage && (
           <button onClick={() => { setEditing(null); setShowForm(true); }}
             style={{ padding: '6px 12px', borderRadius: 8, border: 'none', background: 'var(--accent-color)', color: 'var(--text-on-primary)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
             + Add task
           </button>
         )}
       </div>
+      {/* display, not unmount: reopening must not refetch the list or lose a half-typed form */}
+      <div style={{ display: sectionOpen ? 'block' : 'none' }}>
       {tasks.length === 0 ? (
         <div style={{ fontSize: 13, color: 'var(--text-tertiary)', padding: '8px 0' }}>
           Recurring things the care team keeps on track — medications, baths, check-ins.
@@ -519,6 +533,7 @@ const CareTasksSection = window.CareTasksSection = ({ recipientId, recipientFirs
           </div>
         </div>
       ))}
+      </div>
       {showForm && (
         <CareTaskFormModal recipientId={recipientId} recipientFirstName={recipientFirstName}
           teamMembers={teamMembers} existing={editing}

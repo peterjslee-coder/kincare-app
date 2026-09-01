@@ -1157,6 +1157,7 @@ const App = () => {
             }
             // Apply accessibility text size from user prefs
             try {
+              if (typeof window.__setUiPrefs === 'function') window.__setUiPrefs(data.user.ui_prefs); // v1.105.171 — which sections he keeps folded
               const a11y = data.user.accessibility_prefs ? JSON.parse(data.user.accessibility_prefs) : {};
               if (a11y.textSize && typeof applyTextSize === 'function') applyTextSize(a11y.textSize);
             } catch {}
@@ -1454,7 +1455,8 @@ const App = () => {
           }
           // Apply accessibility text size
           try {
-            const a11y = data.user.accessibility_prefs ? JSON.parse(data.user.accessibility_prefs) : {};
+            if (typeof window.__setUiPrefs === 'function') window.__setUiPrefs(data.user.ui_prefs); // v1.105.171 — which sections he keeps folded
+              const a11y = data.user.accessibility_prefs ? JSON.parse(data.user.accessibility_prefs) : {};
             if (a11y.textSize && typeof applyTextSize === 'function') applyTextSize(a11y.textSize);
           } catch {}
         }
@@ -1616,7 +1618,8 @@ const App = () => {
               } else if (!data.user.disclaimer_accepted_at || data.user.disclaimer_version !== '1.0') {
                 setShowDisclaimer(true);
               }
-              try { const a11y = data.user.accessibility_prefs ? JSON.parse(data.user.accessibility_prefs) : {}; if (a11y.textSize && typeof applyTextSize === 'function') applyTextSize(a11y.textSize); } catch {}
+              try { if (typeof window.__setUiPrefs === 'function') window.__setUiPrefs(data.user.ui_prefs); // v1.105.171 — which sections he keeps folded
+              const a11y = data.user.accessibility_prefs ? JSON.parse(data.user.accessibility_prefs) : {}; if (a11y.textSize && typeof applyTextSize === 'function') applyTextSize(a11y.textSize); } catch {}
               // Post-onboarding: send caregiver to dashboard where First Steps guides them
               window.__postOnboarding = true;
               setCurrentPage('dashboard');
@@ -1668,7 +1671,8 @@ const App = () => {
               } else if (!data.user.disclaimer_accepted_at || data.user.disclaimer_version !== '1.0') {
                 setShowDisclaimer(true);
               }
-              try { const a11y = data.user.accessibility_prefs ? JSON.parse(data.user.accessibility_prefs) : {}; if (a11y.textSize && typeof applyTextSize === 'function') applyTextSize(a11y.textSize); } catch {}
+              try { if (typeof window.__setUiPrefs === 'function') window.__setUiPrefs(data.user.ui_prefs); // v1.105.171 — which sections he keeps folded
+              const a11y = data.user.accessibility_prefs ? JSON.parse(data.user.accessibility_prefs) : {}; if (a11y.textSize && typeof applyTextSize === 'function') applyTextSize(a11y.textSize); } catch {}
               // Post-onboarding: send caregiver to dashboard where First Steps guides them
               window.__postOnboarding = true;
               setCurrentPage('dashboard');
