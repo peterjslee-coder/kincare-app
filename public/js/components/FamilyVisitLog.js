@@ -503,7 +503,13 @@ const VisitGeoStatus = ({ recipients }) => {
   const [pinState, setPinState] = useState('idle'); // idle → confirming → saving → done/failed
   const [pinNote, setPinNote] = useState(null);
 
+  // Admin-only (v1.105.169). Not a diagnostic readout this time — Pete asked to keep seeing
+  // it while the distance is wrong and for nobody else to. Hooks are all above this line;
+  // an early return that sits between them is the "late hooks" lint failure.
+  const adminOnly = !!(window.__isAdmin);
+
   const withCoords = (recipients || []).filter((r) => r.latitude != null && r.longitude != null);
+  if (!adminOnly) return null;
   if (!withCoords.length) return null;
 
   const nameOf = (r) => r.first_name || r.firstName || 'them';
@@ -573,44 +579,69 @@ const VisitGeoStatus = ({ recipients }) => {
   const when = last ? agoLabel(last.at) : null;
   const looksWrong = last && last.ft > 1000 && pinState !== 'done';
 
-  return (
-    <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)', marginBottom: 10, lineHeight: 1.5 }}>
-      {last
-        ? `${prettyFeet(last.ft)} from ${last.name}'s${when ? `, checked ${when}` : ' at last check'}. InPlace looks when you open it — the nudge appears within 1,000 ft.`
-        : 'InPlace will check how close you are to the house when you open it.'}
-      {' '}
-      <button onClick={recheck} disabled={busy} style={{
-        background: 'none', border: 'none', padding: 0, font: 'inherit',
-        color: 'var(--text-secondary)', textDecoration: 'underline',
-        cursor: busy ? 'default' : 'pointer',
-      }}>{busy ? 'checking…' : 'check now'}</button>
+  // ─── v1.105.169 — one line, and only mine ───
+  //
+  // Pete: "the header about checking in at Betty's. It's not working, takes up critical
+  // space. make it one line. and make it just for me. no one else should see it. it's
+  // distracting."
+  //
+  // Two separate asks, and the second one is the important one. This line explains a
+  // feature that does not yet do what it says — the 2.3-miles-in-the-kitchen bug is still
+  // open — and a broken explanation on every family member's dashboard is worse than no
+  // explanation. It stays for the person debugging it and disappears for everyone else.
+  // When the distance is right, this comes back out from behind the gate.
+  //
+  // It cost three lines: the distance, then the sentence explaining when the nudge fires,
+  // then "Standing at the house and this looks wrong? Pin it here". The explanation goes
+  // (it was answering a question nobody had asked twice), and the pin becomes a word.
+  const row = {
+    display: 'flex', alignItems: 'baseline', gap: 6,
+    fontSize: 11.5, color: 'var(--text-tertiary)', marginBottom: 10, lineHeight: 1.5,
+  };
+  // The guarantee, rather than the hope: the text is what gives way on a narrow screen, and
+  // the actions never do — an ellipsised "check now" is a line that is one line and useless.
+  const text = { flex: '1 1 auto', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' };
+  const link = (colour) => ({
+    flexShrink: 0, background: 'none', border: 'none', padding: 0, font: 'inherit',
+    color: colour, textDecoration: 'underline', cursor: 'pointer', whiteSpace: 'nowrap',
+  });
 
+  // A note replaces the line instead of being added under it, or "one line" lasts until the
+  // first time anything happens.
+  if (pinNote) {
+    return (
+      <div style={row}>
+        <span style={text}>{pinNote}</span>
+        <button onClick={() => { setPinNote(null); setPinState('idle'); }} style={link('var(--text-secondary)')}>ok</button>
+      </div>
+    );
+  }
+
+  if (pinState === 'confirming') {
+    return (
+      <div style={row}>
+        <span style={text}>Standing at {last ? `${last.name}'s` : 'the house'} right now?</span>
+        <button onClick={pinHere} style={{ ...link('var(--accent-color)'), fontWeight: 700 }}>yes, pin it</button>
+        <button onClick={() => setPinState('idle')} style={link('var(--text-tertiary)')}>cancel</button>
+      </div>
+    );
+  }
+
+  return (
+    <div style={row}>
+      <span style={text}>
+        {last
+          ? `${prettyFeet(last.ft)} from ${last.name}'s${when ? ` · ${when}` : ''}`
+          : 'Distance not checked yet'}
+      </span>
+      <button onClick={recheck} disabled={busy} style={{ ...link('var(--text-secondary)'), cursor: busy ? 'default' : 'pointer' }}>
+        {busy ? 'checking…' : 'check now'}
+      </button>
       {looksWrong && (
-        <div style={{ marginTop: 6 }}>
-          {pinState === 'confirming' ? (
-            <React.Fragment>
-              <span>Only if you{'\u2019'}re standing at the house right now. </span>
-              <button onClick={pinHere} style={{
-                background: 'none', border: 'none', padding: 0, font: 'inherit',
-                color: 'var(--accent-color)', fontWeight: 700, textDecoration: 'underline', cursor: 'pointer',
-              }}>Yes, I{'\u2019'}m here</button>
-              <span> · </span>
-              <button onClick={() => setPinState('idle')} style={{
-                background: 'none', border: 'none', padding: 0, font: 'inherit',
-                color: 'var(--text-tertiary)', textDecoration: 'underline', cursor: 'pointer',
-              }}>cancel</button>
-            </React.Fragment>
-          ) : (
-            <button onClick={() => setPinState('confirming')} disabled={pinState === 'saving'} style={{
-              background: 'none', border: 'none', padding: 0, font: 'inherit',
-              color: 'var(--text-secondary)', textDecoration: 'underline', cursor: 'pointer',
-            }}>
-              {pinState === 'saving' ? 'saving\u2026' : 'Standing at the house and this looks wrong? Pin it here'}
-            </button>
-          )}
-        </div>
+        <button onClick={() => setPinState('confirming')} disabled={pinState === 'saving'} style={link('var(--text-secondary)')}>
+          {pinState === 'saving' ? 'saving…' : 'pin here'}
+        </button>
       )}
-      {pinNote && <div style={{ marginTop: 4, color: 'var(--text-secondary)' }}>{pinNote}</div>}
     </div>
   );
 };

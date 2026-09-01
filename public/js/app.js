@@ -1711,6 +1711,11 @@ const App = () => {
 
   window.__currentUserId = currentUser?.id; // v1.99.0 — read by CareTaskCheckSheet's who-did-it picker
 
+  // v1.105.169 — read by VisitGeoStatus, which is admin-only while the distance it reports
+  // is still wrong. Same shape as the two globals above: components deep in the tree that
+  // need one fact about the signed-in user, without threading a prop through every parent.
+  window.__isAdmin = !!(currentUser?.is_admin || currentUser?.isAdmin);
+
   // ─── Role-specific color theming ───
   // Changes sidebar active color, role switcher accent, and other themed elements per role
   const roleColors = {

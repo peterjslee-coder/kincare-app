@@ -52,7 +52,10 @@ describe("geo: the distance now says when, and the house can be wrong", () => {
     // ago and one from ten seconds ago looked identical on screen.
     expect(visit).toMatch(/lsSet\(VISIT_GEO_LAST_KEY, JSON\.stringify\(\{ ft, name, at: Date\.now\(\) \}\)\)/);
     expect(visit).toMatch(/const agoLabel = \(ts\) =>/);
-    expect(visit).toMatch(/checked \$\{when\}/);
+    // v1.105.169 — the line is one line now, so "checked 3 hours ago" lost the word
+    // "checked" and became a middot-separated clause. The timestamp is still shown, which
+    // is what this test is about.
+    expect(visit).toMatch(/when \? ` · \$\{when\}` : ''/);
   });
 
   test("ago reads in the units a person would use", () => {
@@ -83,7 +86,40 @@ describe("geo: the distance now says when, and the house can be wrong", () => {
 
   test("and never on one tap — it moves where someone's mother lives", () => {
     expect(visit).toMatch(/pinState === 'confirming'/);
-    expect(visit).toMatch(/Only if you.{0,12}re standing at the house right now/);
+    // The confirm survived the one-line rewrite; it just fits on the line now, and names the
+    // person so you know which house you are about to move.
+    expect(visit).toMatch(/Standing at \{last \? `\$\{last\.name\}'s` : 'the house'\} right now\?/);
+    expect(visit).toMatch(/>yes, pin it</);
+  });
+
+  test("it is one line, and the actions are what survives a narrow screen", () => {
+    // Pete: "takes up critical space. make it one line." It was three: the distance, a
+    // sentence explaining when the nudge fires, and "Standing at the house and this looks
+    // wrong? Pin it here". The explanation is gone and the pin is a word.
+    expect(visit).not.toMatch(/the nudge appears within 1,000 ft\.`/);
+    expect(visit).not.toMatch(/Standing at the house and this looks wrong\? Pin it here/);
+    // whiteSpace: nowrap on its own would just clip; the text must be the part that gives
+    // way, or an ellipsised "check now" is one line and useless.
+    expect(visit).toMatch(/flex: '1 1 auto', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'/);
+    expect(visit).toMatch(/flexShrink: 0,[\s\S]{0,220}whiteSpace: 'nowrap'/);
+    // A note replaces the line rather than being added under it, or "one line" lasts until
+    // the first time anything happens.
+    expect(visit).toMatch(/if \(pinNote\) \{\s*\n\s*return \(/);
+  });
+
+  test("and only the admin sees it while the distance is still wrong", () => {
+    // Pete: "make it just for me. no one else should see it. it's distracting." A line that
+    // explains a feature which does not yet do what it says is worse than no line at all on
+    // a family member's dashboard.
+    expect(visit).toMatch(/const adminOnly = !!\(window\.__isAdmin\);/);
+    expect(visit).toMatch(/if \(!adminOnly\) return null;/);
+    // The gate sits AFTER every hook — an early return between hooks is the late-hooks lint.
+    const body = visit.slice(visit.indexOf("const VisitGeoStatus"), visit.indexOf("const VisitNudgeCard"));
+    expect(body.indexOf("useState(readLastCheck)")).toBeLessThan(body.indexOf("if (!adminOnly) return null;"));
+    expect(body.indexOf("useState(null); // idle")).toBeLessThan(body.indexOf("if (!adminOnly) return null;"));
+    // ...and the flag is actually published by the app.
+    const app = require("./helpers/source").code("public/js/app.js");
+    expect(app).toMatch(/window\.__isAdmin = !!\(currentUser\?\.is_admin \|\| currentUser\?\.isAdmin\);/);
   });
 
   test("a failure says so instead of looking saved", () => {
