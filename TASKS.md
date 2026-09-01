@@ -423,7 +423,50 @@
 
 ### P1
 
-- [ ] **Reactions on care notes and visits — "socialize anywhere we're leaving feedback".**
+- [ ] **CallKit + VoIP push — make the phone actually ring.** (Pete, 9/1: "let's get the work
+      on callkit and voip.") **Plan: `CallKit_VoIP_Plan_2026-09-01.md` in the Working Folder —
+      read it before touching any of this.**
+      The missed video call to Sara was not a bug: the push was delivered (APNs accepted it
+      20:39:40 UTC, zero failures) and she never opened the app after it — her client last
+      checked in 84 seconds BEFORE it landed. We are not ringing her phone; we are sending a
+      notification that says a call is happening, and it is gone from the screen in seconds.
+      Needs PushKit (a separate VoIP token) + CallKit (the system's own full-screen ringing UI)
+      in the iOS shell. **Hard rule: every VoIP push MUST report an incoming call to CallKit
+      immediately, or iOS stops delivering them to the app entirely.**
+      ⚠️ Found while writing the plan: `Info.plist` has **no `UIBackgroundModes` at all** — no
+      `voip`, no `audio` — so even the NATIVE app cannot hold a call while backgrounded today.
+      Steps 1, 2, 5 and 7 need Pete's hands (Xcode + TestFlight). Steps 3, 4 and 6 are server
+      work deliberately NOT started: nothing can call them until a real VoIP token exists, and
+      v1.105.72 already found twenty-two functions written, maintained and wired to nothing.
+      **Decide first:** VoIP token per-device or per-user — ringing every Apple device needs a
+      `call_cancel` fan-out we do not have.
+
+- [ ] **[NEEDS YOUR HANDS] Get Sara onto the native iOS app.** (Pete, 9/1: "file sara on native
+      app...she's not super great with tech.")
+      Her only registered push device is a `native://ios` token from **13 July** — the
+      TestFlight app — while her client reports `platform: web`, Safari on iOS 18.7, and she has
+      **no Web Push subscription at all**. So her call and message notifications ring the native
+      app while she lives in the web one. Two InPlace icons on her phone and the wrong one
+      buzzes.
+      She is not confident with tech, so this should not be a set of instructions sent to her —
+      do it on her phone, or in one call: open the TestFlight InPlace, sign in, allow
+      notifications, and delete the Safari home-screen icon so there is only one InPlace left.
+      **This also blocks CallKit being any use to her**, since CallKit only exists in the native
+      app.
+
+- [ ] **Notice when someone's push devices do not match the app they use.** (Found 9/1 while
+      diagnosing Sara.) Nothing in the product spots a user whose registered devices belong to a
+      different client than the one they open — they are silently unreachable and the only way
+      we found out was a missed call. `GET /api/admin/users/:id/reachability` already computes a
+      `summary`; it has both facts (`client.platform` and the device kinds) and could say so.
+      Better still, tell the person themselves in the app they are actually using. Small work,
+      and it would have caught this weeks ago.
+
+- [x] **SHIPPED v1.105.170 — Reactions on care notes and visits — "socialize anywhere we're leaving feedback".**
+      Generic `reactions(target_type, target_id, user_id, emoji)` store; `src/utils/reactions.js`
+      TARGETS is both the whitelist and the authorisation rule. `message_reactions` deliberately
+      NOT migrated (it works; moving live data to tidy the schema is how features break).
+      App-only, no push, per Pete. 12 integration tests.
       (Pete, 8/31.) The hard part is done: `ReactionBar.js` (v1.105.158) knows nothing about
       messages — a list, a callback, an alignment, and whether to overlap — so a note or a
       visit renders the identical control.
