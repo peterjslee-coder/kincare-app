@@ -106,9 +106,15 @@ describe("the time-change row opens the actual visit", () => {
       const eff = src.slice(start, src.indexOf("claim();", start));
       expect(eff).toMatch(/window\.__pendingFocus = null;\n\s+setVisitDetailSessionId\(id\)/);
       // Every branch that opens something clears the focus FIRST.
+      //
+      // v1.105.161 — clears may now OUTNUMBER opens: the care-task branch also clears when it
+      // gives up after a retry, so a focus that can never be claimed does not sit there
+      // forever waiting to reopen something that no longer exists. What must never happen is
+      // an open WITHOUT a clear, which is what this counts.
       const opens = eff.match(/set(VisitDetailSessionId|TaskSheet)\(/g) || [];
       const clears = eff.match(/window\.__pendingFocus = null;/g) || [];
-      expect(clears.length).toBe(opens.length);
+      expect(clears.length).toBeGreaterThanOrEqual(opens.length);
+      expect(opens.length).toBeGreaterThan(0);
     }
   });
 });

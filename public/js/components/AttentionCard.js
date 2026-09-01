@@ -65,6 +65,7 @@ const ATTENTION_PAST = {
   Approve: 'Approved.',
   Accept: 'Accepted.',
   'Mark done': 'Marked done.',
+  Skip: 'Skipped for today.',
 };
 
 const ATTENTION_KINDS = {
@@ -206,6 +207,14 @@ const AttentionCard = window.AttentionCard = ({ onNavigate }) => {
       setFailed((prev) => ({ ...prev, [item.id]: message || "That didn't go through. Try again." }));
     }
   }, [load]);
+
+  // v1.105.161 — the same send path as `act`, pointed at the dismiss endpoint. One request,
+  // one reload, no confirmation step: skipping is undoable from the dashboard row, so a second
+  // tap to confirm would be ceremony over an action that can be taken back.
+  const dismiss = React.useCallback((item) => {
+    if (!item.dismiss || busy[item.id]) return;
+    send({ ...item, action: item.dismiss, verb: 'Skip' });
+  }, [send, busy]);
 
   const act = React.useCallback((item) => {
     if (busy[item.id]) return; // one tap is one request
@@ -353,6 +362,16 @@ const AttentionCard = window.AttentionCard = ({ onNavigate }) => {
                 color: 'var(--accent-color)', border: '2px solid var(--accent-color)',
                 borderRadius: 12, fontSize: 13.5, fontWeight: 700, cursor: 'pointer',
               }}>Open{' '}{'›'}</button>
+              {/* v1.105.161 — the third answer. See `dismiss` in utils/attention.js: a row that
+                  interrupts you has to be clearable without finishing the task. */}
+              {item.dismiss && (
+                <button onClick={() => dismiss(item)} disabled={!!busy[item.id]} style={{
+                  minHeight: 44, padding: '10px 14px', background: 'none',
+                  color: 'var(--text-tertiary)', border: 'none',
+                  font: 'inherit', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                  textDecoration: 'underline',
+                }}>{item.dismiss.label || 'Not now'}</button>
+              )}
             </div>
           </div>
         );

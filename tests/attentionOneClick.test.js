@@ -372,7 +372,10 @@ describe("the card draws the thing, not the count of the thing", () => {
   test("every item offers exactly one primary action and one way in", async () => {
     const { html } = draw(await payloadOf({ reimbursements: [REIMBURSEMENT], tasks: [TASK] }));
     const buttons = html.match(/<button/g) || [];
-    expect(buttons).toHaveLength(4); // two items × (act + open)
+    // v1.105.161 — five now: two items × (act + open), plus "Not today" on the care task.
+    // A care task is the one kind you can answer by NOT doing it; an approval or a schedule
+    // change has somebody waiting on a reply.
+    expect(buttons).toHaveLength(5);
     expect(html).toContain("Approve<");
     expect(html).toContain("Mark done<");
   });
@@ -482,5 +485,70 @@ describe("one tap is one request, and the row leaves when the server says so", (
 
   test("after a send the count is re-read from the server, not decremented locally", () => {
     expect(cardSrc).toMatch(/load\(\);/);
+  });
+});
+
+// ─── v1.105.161 — "those buttons have to be workable" ───
+//
+// Pete, with a screenshot of the check sheet showing a red "Already checked off" across both
+// of its buttons: "it says it needs me, but I can't open the task from the needs you button.
+// I can only mark done, which actually opens the task, which then doesn't allow me to complete
+// the task or skip it because it will say it's already done… I either mark it done by hitting
+// the task and completing it, or I dismiss that needs me now. But it can't have me go multiple
+// places trying to get rid of the warning unsuccessfully."
+//
+// Three separate faults conspired to make one dead end.
+describe("every exit from a Needs-you task actually leaves", () => {
+  const sheet = read("public/js/components/CareTasks.js");
+  const dash = read("public/js/components/Dashboard.js");
+  const util = read("src/utils/attention.js");
+
+  test("the check sheet stops calling 409 a failure", () => {
+    // The endpoint answers 409 when the occurrence is already done or skipped — the server
+    // AGREEING with the person. v1.105.142 taught the card that; the sheet still painted it
+    // red across the only two buttons, so the task looked stuck from both directions.
+    expect(sheet).toMatch(/if \(res\?\.ok \|\| res\?\.status === 409\) \{ onDone\(\); onClose\(\); \}/);
+  });
+
+  test("Open never silently does nothing", () => {
+    // If today's tasks had not loaded — or loaded before this occurrence existed — the claim
+    // returned, kept the focus, and waited for a re-dispatch that only fires when the task
+    // list CHANGES. With a warm cache it never changed, so the tap did nothing, forever, with
+    // no error and no clue.
+    expect(dash).toMatch(/if \(!careTaskFocusRetry\.current\) \{/);
+    expect(dash).toMatch(/fetchCareTasks\(\);/);
+    expect(dash).toMatch(/That task isn't on today's list any more\./);
+  });
+
+  test("the retry cannot loop, and re-arms once it succeeds", () => {
+    expect(dash).toMatch(/careTaskFocusRetry\.current = true;/);
+    expect(dash).toMatch(/careTaskFocusRetry\.current = false;\s*\n\s*setTaskSheet/);
+  });
+
+  test("a care task can be skipped from the row that interrupted him", () => {
+    // Until now the only exits were finishing the task or opening it. Skipping is a real
+    // answer — it was not given, or someone handled it off-app — and the dashboard row has
+    // offered it all along. The row that INTERRUPTS should offer at least as much.
+    expect(util).toMatch(/dismiss: \{/);
+    expect(util).toMatch(/body: \{ status: "skipped" \}/);
+    expect(util).toMatch(/label: "Not today"/);
+  });
+
+  test("and the card renders that exit", () => {
+    expect(cardSrc).toMatch(/\{item\.dismiss && \(/);
+    expect(cardSrc).toMatch(/const dismiss = React\.useCallback\(\(item\) => \{/);
+    expect(cardSrc).toMatch(/send\(\{ \.\.\.item, action: item\.dismiss, verb: 'Skip' \}\)/);
+  });
+
+  test("skipping goes through the same send path — busy guard, 409, reload and all", () => {
+    // A second way to send would be a second place for this bug to come back.
+    expect(cardSrc).toMatch(/if \(!item\.dismiss \|\| busy\[item\.id\]\) return;/);
+    expect(cardSrc).toMatch(/Skip: 'Skipped for today\.'/);
+  });
+
+  test("only kinds that HAVE a dismiss show one", () => {
+    // An approval or a schedule change has no "not today" — someone is waiting on an answer.
+    const reimb = util.slice(util.indexOf('kind: "reimbursement"'), util.indexOf('kind: "timeOffer"'));
+    expect(reimb).not.toMatch(/dismiss:/);
   });
 });

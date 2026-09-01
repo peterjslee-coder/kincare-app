@@ -154,7 +154,19 @@ const CareTaskCheckSheet = window.CareTaskCheckSheet = ({ occ, group, onClose, o
       const res = await apiFetch(`/api/care-tasks/occurrences/${occ.id}/check`, {
         method: 'POST', body: JSON.stringify(body),
       });
-      if (res?.ok) { onDone(); onClose(); }
+      // ─── v1.105.161 — "already checked off" is not a failure ───
+      //
+      // Pete: "I can only mark done, which actually opens the task, which then doesn't allow
+      // me to complete the task or skip it because it will say it's already done."
+      //
+      // The endpoint answers 409 when the occurrence is already done or skipped. That is the
+      // server AGREEING with the person: the thing they wanted is true. v1.105.142 taught the
+      // Needs-you card that; this sheet was still calling it an error and leaving a red
+      // banner across the only two buttons, so the task looked stuck from both directions.
+      //
+      // It closes now, exactly as it would have on 200 — the world is in the state he asked
+      // for, and nothing is served by arguing about who put it there.
+      if (res?.ok || res?.status === 409) { onDone(); onClose(); }
       else { const d = await res.json().catch(() => ({})); showToast(d.error || 'Could not save', 'error'); }
     } catch { showToast('Could not save', 'error'); }
     setSaving(false);

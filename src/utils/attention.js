@@ -344,6 +344,23 @@ async function attentionItemsFor(db, userId) {
       action: { method: "POST", path: `/api/care-tasks/occurrences/${t.id}/check` },
       undo: { method: "POST", path: `/api/care-tasks/occurrences/${t.id}/undo` },
       undoable: true,
+      // ─── v1.105.161 — a way out that is not "do it" ───
+      //
+      // Pete: "I either mark it done by hitting the task and completing it, or I dismiss that
+      // needs me now. But it can't have me go multiple places trying to get rid of the warning
+      // unsuccessfully."
+      //
+      // Until now the only exits from this row were finishing the task or opening it. Skipping
+      // is a real answer — the medication was not given, or someone else handled it off-app —
+      // and the dashboard row has offered it all along. The row that INTERRUPTS him should
+      // offer at least as much as the one he has to scroll to.
+      dismiss: {
+        method: "POST",
+        path: `/api/care-tasks/occurrences/${t.id}/check`,
+        body: { status: "skipped" },
+        label: "Not today",
+        confirm: "Mark as skipped for today?",
+      },
       // v1.105.139 — "I went to log Betty's meds… it just took me to the care team page… I
       // gotta scroll down and find the task." The dashboard is where today's tasks live and
       // where the check sheet opens, so Open now opens the SHEET for this occurrence: who did

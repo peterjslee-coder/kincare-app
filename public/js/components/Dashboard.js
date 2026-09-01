@@ -61,11 +61,34 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
           const occ = (g.occurrences || []).find((o) => o.id === occId);
           if (occ) {
             window.__pendingFocus = null;
+            careTaskFocusRetry.current = false;
             setTaskSheet({ occ, group: g });
             return;
           }
         }
-        return; // today's tasks may not have loaded yet — keep the focus and try again
+        // ─── v1.105.161 — never silently do nothing ───
+        //
+        // Pete: "I can't open the task from the needs you button." This line was the reason it
+        // could look like that: if today's tasks had not loaded — or had loaded before this
+        // occurrence existed — the claim returned, kept the focus, and waited for a re-dispatch
+        // that only happens when `careTasksToday` changes. If the cache was already warm it
+        // never changed, so the tap did nothing at all, forever, with no error and no clue.
+        //
+        // Now it asks the server once, which triggers exactly that change. If the second pass
+        // still cannot find it, the focus is dropped and the person is told — a tap that
+        // achieves nothing must at least say so.
+        if (!careTaskFocusRetry.current) {
+          careTaskFocusRetry.current = true;
+          fetchCareTasks();
+          setTimeout(() => {
+            if (window.__pendingFocus === f) {
+              window.__pendingFocus = null;
+              careTaskFocusRetry.current = false;
+              showToast("That task isn't on today's list any more.", 'info');
+            }
+          }, 2500);
+        }
+        return;
       }
       if (!f.startsWith('session:')) return;
       const id = f.slice('session:'.length);
@@ -90,6 +113,8 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
   // can also arrive BEFORE the tasks do (a push tap, or the Needs-you card on a cold load),
   // which is why arrival re-runs the claim.
   const careTasksRef = useRef(careTasksToday);
+  // v1.105.161 — one retry per focus, so a missing occurrence cannot loop.
+  const careTaskFocusRetry = useRef(false);
   useEffect(() => {
     careTasksRef.current = careTasksToday;
     if (window.__pendingFocus) window.dispatchEvent(new Event('inplace:focus'));
