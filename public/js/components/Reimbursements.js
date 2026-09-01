@@ -839,9 +839,8 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
         <span role="button" tabIndex={0} aria-expanded={sectionOpen}
           onClick={() => setSectionOpen(!sectionOpen)}
           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSectionOpen(!sectionOpen); } }}
-          style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+          style={{ cursor: 'pointer' }}>
           💵 Reimbursements
-          <span aria-hidden="true" style={{ fontSize: 15, color: 'var(--text-muted)', transition: 'transform 0.2s', transform: sectionOpen ? 'rotate(180deg)' : 'rotate(0)' }}>{'▼'}</span>
         </span>
         <div style={{ display: sectionOpen ? 'flex' : 'none', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           {meta.canSubmit && !showForm && (
@@ -894,6 +893,10 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
             </button>
           )}
         </div>
+        {/* v1.105.172 — Pete: "I prefer end-justified." Last in the row, always. */}
+        <span role="button" tabIndex={0} aria-hidden="true"
+          onClick={() => setSectionOpen(!sectionOpen)}
+          style={{ marginLeft: 'auto', fontSize: 16, color: 'var(--text-muted)', cursor: 'pointer', transition: 'transform 0.2s', transform: sectionOpen ? 'rotate(180deg)' : 'rotate(0)' }}>{'▼'}</span>
       </div>
 
       <div style={{ display: sectionOpen ? 'block' : 'none' }}>

@@ -173,6 +173,58 @@ describe("every section Pete named, plus the rest of both pages", () => {
   });
 });
 
+describe("every chevron sits at the end of its row", () => {
+  // Pete: "i want to standardize where the collapse button is. in some places its at the end
+  // of the text, in others it end-justified. I prefer end-justified."
+  //
+  // Four headers had it tucked in after the title, because those rows also carry buttons
+  // ("+ Add task", "+ Assign", and Reimbursements' six) and the safe thing was to make the
+  // title the control. That was the wrong trade: the chevron can be last in the row AND be
+  // its own click target, which is what these assert.
+  const files = [
+    "public/js/components/CareTasks.js",
+    "public/js/components/CareEvents.js",
+    "public/js/components/Reimbursements.js",
+    "public/js/components/CareTeamManage.js",
+    "public/js/components/CareProfile.js",
+  ];
+
+  test("no chevron is glued to the end of the title text", () => {
+    // `marginLeft: 8` on the chevron is the shape of "right after the words".
+    for (const f of files) {
+      const src = code(f);
+      expect(src).not.toMatch(/marginLeft: 8, fontSize: 15[^}]*transform: \w+ \? 'rotate\(180deg\)'/);
+    }
+  });
+
+  test("every fold header is a flex row that pushes the chevron right", () => {
+    for (const f of files) {
+      const src = code(f);
+      const chevrons = (src.match(/transform: [\w.]+ \? 'rotate\(180deg\)' : 'rotate\(0\)'/g) || []).length;
+      expect(chevrons).toBeGreaterThan(0);
+      // Either the header is space-between, or the chevron carries marginLeft: auto.
+      const pushers = (src.match(/justifyContent: 'space-between'/g) || []).length
+        + (src.match(/marginLeft: 'auto'/g) || []).length;
+      expect(pushers).toBeGreaterThanOrEqual(1);
+    }
+  });
+
+  test("the buttons beside it still do their own job", () => {
+    // A chevron at the far right is only an improvement if pressing "+ Add" does not fold the
+    // section on the way past.
+    expect(code("public/js/components/CareTasks.js")).toMatch(/onClick=\{\(e\) => \{ e\.stopPropagation\(\); setEditing\(null\); setShowForm\(true\); \}\}/);
+    expect(code("public/js/components/CareEvents.js")).toMatch(/onClick=\{\(e\) => \{ e\.stopPropagation\(\); setEditing\(null\); setShowForm\(true\); \}\}/);
+  });
+
+  test("a collapsed section hides its own actions", () => {
+    // They act on things you cannot see.
+    for (const f of ["CareTasks", "CareEvents"]) {
+      expect(code(`public/js/components/${f}.js`)).toMatch(/\{sectionOpen && canManage && \(/);
+    }
+    expect(code("public/js/components/CareTeamManage.js")).toMatch(/\{caregiversOpen && isLeader && \(/);
+  });
+});
+
 describe("folding never destroys work", () => {
   test("bodies are hidden with display, not unmounted", () => {
     // Reopening must not refetch the ledger or lose a half-typed request.
@@ -186,13 +238,14 @@ describe("folding never destroys work", () => {
     expect(profile).toMatch(/display: \(healthOpen \|\| editing\) \? 'block' : 'none'/);
   });
 
-  test("a header full of buttons folds from its title, not from anywhere in the row", () => {
-    // Reimbursements carries up to six buttons; Care Tasks and Events carry "+ Add". A header
-    // that collapses the section when you meant to press one of those is worse than a header
-    // that does not collapse.
-    expect(code("public/js/components/Reimbursements.js")).toMatch(/💵 Reimbursements\s*\n\s*<span aria-hidden/);
-    for (const f of ["CareTasks", "CareEvents"]) {
-      expect(code(`public/js/components/${f}.js`)).toMatch(/\{sectionOpen && canManage && \(/);
+  test("a header full of buttons folds from its title and its chevron — not from the row", () => {
+    // Reimbursements carries up to six buttons; Care Tasks and Events carry "+ Add". Making
+    // the whole row the control would fold the section when you meant to press one of those.
+    // v1.105.172 moved the chevron to the end of the row without giving the row the click.
+    for (const f of ["CareTasks.js", "CareEvents.js", "Reimbursements.js"]) {
+      const src = code(`public/js/components/${f}`);
+      expect(src).toMatch(/aria-expanded=\{sectionOpen\}/);
+      expect(src).toMatch(/onClick=\{\(\) => setSectionOpen\(!sectionOpen\)\}/);
     }
   });
 });

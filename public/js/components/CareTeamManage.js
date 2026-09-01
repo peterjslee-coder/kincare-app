@@ -817,16 +817,20 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
           <span role="button" tabIndex={0} aria-expanded={caregiversOpen}
             onClick={() => setCaregiversOpen(!caregiversOpen)}
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCaregiversOpen(!caregiversOpen); } }}
-            style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+            style={{ cursor: 'pointer' }}>
             {team.recipient_first_name}'s Caregivers ({recipientCaregivers.length})
-            <span aria-hidden="true" style={{ fontSize: 15, color: 'var(--text-muted)', transition: 'transform 0.2s', transform: caregiversOpen ? 'rotate(180deg)' : 'rotate(0)' }}>{'▼'}</span>
           </span>
-          {isLeader && (
-            <button onClick={openAssignPicker}
-              style={{ padding: '5px 14px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
-              + Assign
-            </button>
-          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+            {caregiversOpen && isLeader && (
+              <button onClick={openAssignPicker}
+                style={{ padding: '5px 14px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
+                + Assign
+              </button>
+            )}
+            <span role="button" tabIndex={0} aria-hidden="true"
+              onClick={() => setCaregiversOpen(!caregiversOpen)}
+              style={{ fontSize: 16, color: 'var(--text-muted)', cursor: 'pointer', transition: 'transform 0.2s', transform: caregiversOpen ? 'rotate(180deg)' : 'rotate(0)' }}>{'▼'}</span>
+          </div>
         </div>
         <div style={{ display: caregiversOpen ? 'block' : 'none' }}>
         {recipientCaregivers.length === 0 && (
