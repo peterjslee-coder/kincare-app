@@ -10,6 +10,7 @@ const fs = require("fs");
 const path = require("path");
 const msgs = code("public/js/components/Messages.js");
 const bar = code("public/js/components/ReactionBar.js");
+const css = fs.readFileSync(require("path").join(__dirname, "..", "public", "css", "styles.css"), "utf8");
 
 // bubbleRadius is pure and self-contained — run it rather than grep it.
 const src = fs.readFileSync(path.join(__dirname, "..", "public", "js", "components", "Messages.js"), "utf8");
@@ -75,7 +76,7 @@ describe("reactions overlap the bubble, and belong to no one screen", () => {
     // v1.105.167. This asserted `bottom: -11` until Pete's screenshot showed "10:5..."
     // disappearing behind the badge: on a sent bubble the bottom corner already holds the
     // time and the read receipt. Apple hangs a Tapback off the top for that reason.
-    expect(bar).toMatch(/position: 'absolute',\s*\n\s*top: -12,/);
+    expect(bar).toMatch(/position: 'absolute',\s*\n\s*top: -20,/);
     expect(bar).not.toMatch(/bottom: -11/);
   });
 
@@ -183,7 +184,12 @@ describe("the two faults in the recording", () => {
     // Was `fontSize: 11.5` — an 11.5px emoji inside 2px of border and 6px of padding, which
     // is a bigger object on the screen than a bare 15px emoji. v1.105.167 took the chrome
     // away, so the glyph can be the size a glyph should be.
-    expect(bar).toMatch(/fontSize: 15, lineHeight: 1,/);
+    expect(bar).toMatch(/fontSize: 17, lineHeight: 1,/);
+    // The size was never the font. `@media (max-width:768px) { .btn, button { min-height:44px;
+    // min-width:44px } }` made a one-emoji badge a 44x44 block on every phone — the "box" in
+    // the screenshot. A component that must not be 44px has to say so explicitly.
+    expect(bar).toMatch(/width: 32, height: 32, minWidth: 32, minHeight: 32,/);
+    expect(css).toMatch(/\.btn, button \{\s*\n\s*min-height: 44px;/); // the rule it is opting out of
     expect(bar).not.toMatch(/fontSize: 13, lineHeight: 1\.2/);
     expect(bar).not.toMatch(/padding: '1px 6px'/);
   });

@@ -38,10 +38,13 @@ const ReactionBar = window.ReactionBar = ({ reactions, onReact, currentUserId, a
   // The box goes too. A white pill with a ring and a drop shadow is a chip — a piece of UI
   // sitting next to the message. A Tapback is a mark ON the message. The emoji alone, at the
   // size it wants to be, is smaller on the screen than a smaller emoji inside chrome.
+  // Offsets are for the 32px HIT BOX, not the glyph: the emoji is centred in it, so the mark
+  // you see lands about 13px above and 4px outside the bubble's corner — overlapping the
+  // bubble's padding, never its first line of text. Measured on production at 375x812.
   const positioned = overlap ? {
     position: 'absolute',
-    top: -12,
-    [align === 'right' ? 'right' : 'left']: 10,
+    top: -20,
+    [align === 'right' ? 'right' : 'left']: -14,
     zIndex: 2,
   } : {
     marginTop: 4,
@@ -59,11 +62,24 @@ const ReactionBar = window.ReactionBar = ({ reactions, onReact, currentUserId, a
             title={who.map((r) => r.userName).filter(Boolean).join(', ')}
             aria-label={`${emoji} from ${who.map((r) => r.userName).filter(Boolean).join(', ') || 'someone'}`}
             style={{
-              display: 'flex', alignItems: 'center', gap: 1,
+              // ─── The "box" was a global rule, not this component's styling ───
+              //
+              // `@media (max-width: 768px) { .btn, button { min-height: 44px; min-width: 44px } }`
+              // in styles.css. It applies to EVERY button on a phone, so a badge holding one
+              // 11.5px emoji was rendered as a 44x44 block — which is what Pete photographed
+              // as a box, and why it "dominates the message". Shrinking the font could never
+              // have fixed it; the size was never coming from the font.
+              //
+              // 44px is right for a thumb and wrong for a mark on a bubble, and this is a
+              // secondary affordance (tap your own reaction to remove it) — the primary way
+              // to react is the hold-for-emoji row. 32px is the compromise, and it must be
+              // stated explicitly because the broad rule wins otherwise.
+              width: 32, height: 32, minWidth: 32, minHeight: 32,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1,
               padding: 0,
               background: 'none',
               border: 'none',
-              fontSize: 15, lineHeight: 1, cursor: 'pointer',
+              fontSize: 17, lineHeight: 1, cursor: 'pointer',
               // One's own reaction is not marked by a different colour any more — there is no
               // fill left to colour. A slight lift is enough, and it survives both themes.
               transform: mine ? 'scale(1.12)' : 'none',
