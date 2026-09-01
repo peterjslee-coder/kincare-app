@@ -18,6 +18,7 @@ const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { authenticate } = require("../middleware/auth");
 const { recipientAccess } = require("../utils/access");
+const { attachReactions } = require("../utils/reactions"); // v1.105.170
 const { coarsenCoordinate, geofenceEvidence } = require("../utils/geocode");
 const { validateMagicBytes } = require("../utils/fileValidation");
 const { captureException } = require("../utils/sentry");
@@ -220,7 +221,10 @@ router.get("/:careRecipientId", async (req, res) => {
     // logged_via, coordinates, distance and geo_flag are deliberately NOT returned. The
     // team sees "Pete logged a visit", never "Pete was detected at Betty's house" — that
     // line is the whole difference between a nudge and surveillance.
-    res.json({ visits: rows.map(shape) });
+    //
+    // v1.105.170 — reactions come with the list, in ONE query for the whole page. Fetching
+    // them per row would be a request per visit on a screen that shows fifty.
+    res.json({ visits: await attachReactions(db, "family_visit", rows.map(shape)) });
   } catch (err) {
     console.error("Family visit list error:", err);
     captureException(err, { where: "familyVisits: list" });

@@ -113,11 +113,16 @@ const TeamNotes = window.TeamNotes = ({ onNavigate }) => {
 
   // v1.105.156 — one timeline. A caregiver arriving at the house wants "what has happened
   // with her recently", not two lists to reconcile by date.
+  // v1.105.170 — `id` here is a REACT KEY, and a visit's is prefixed "v-" so it cannot
+  // collide with a note's. The reaction endpoint needs the real row id, so both are carried:
+  // `id` for the list, `targetId` + `targetType` for the write. Posting the prefixed one
+  // would 404 every time, on a screen where nothing else would look wrong.
   const timeline = notes === null ? null : [
     ...notes.map((n) => ({
       kind: 'note', id: n.id, at: n.created_at, body: n.content,
       who: `${n.author_first_name || ''} ${n.author_last_name || ''}`.trim(),
       urgent: !!n.needs_attention,
+      targetType: 'note', targetId: n.id, reactions: n.reactions || [],
     })),
     ...visits.map((v) => ({
       kind: 'visit', id: `v-${v.id}`, at: v.visitedAt || v.createdAt,
@@ -125,8 +130,24 @@ const TeamNotes = window.TeamNotes = ({ onNavigate }) => {
       who: v.authorName || v.authorFirstName || '',
       minutes: v.durationMinutes || null,
       mood: v.moodRating || null,
+      targetType: 'family_visit', targetId: v.id, reactions: v.reactions || [],
     })),
   ].sort((a, b) => String(b.at || '').localeCompare(String(a.at || '')));
+
+  // The same whole-list write as CareProfile: the server returns every reaction on the row,
+  // not a delta, because a delta is only right if this copy was already right.
+  const handleReact = async (targetType, targetId, emoji) => {
+    try {
+      const res = await apiFetch(`/api/reactions/${targetType}/${targetId}`, {
+        method: 'POST', body: JSON.stringify({ emoji }),
+      });
+      if (!res?.ok) return;
+      const d = await res.json();
+      const apply = (rows) => (rows || []).map((r) => (r.id === targetId ? { ...r, reactions: d.reactions } : r));
+      if (targetType === 'note') setNotes(apply);
+      else setVisits(apply);
+    } catch { /* a reaction that does not save is a reaction that does not appear */ }
+  };
 
   const visible = timeline && (showAll ? timeline : timeline.slice(0, PREVIEW));
 
@@ -199,6 +220,10 @@ const TeamNotes = window.TeamNotes = ({ onNavigate }) => {
                 {item.who}
                 {item.at ? ` · ${TimezoneHelper.formatTimestamp(item.at, selected?.timezone, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) || ''}` : ''}
               </div>
+              {typeof ReactionRow !== 'undefined' && (
+                <ReactionRow reactions={item.reactions} currentUserId={window.__currentUserId}
+                  onReact={(emoji) => handleReact(item.targetType, item.targetId, emoji)} />
+              )}
             </div>
           ))}
           {timeline.length > PREVIEW && (

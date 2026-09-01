@@ -94,12 +94,22 @@ describe("visits share the screen", () => {
 });
 
 describe("what the page will and will not do", () => {
-  test("it reads; it never writes", () => {
-    // Writing a note goes in someone's care record and pushes the whole team. The places to
-    // do that exist already, with their own framing.
-    expect(view).not.toMatch(/method: 'POST'/);
+  test("it never changes anyone's care record", () => {
+    // Writing, editing or deleting a note goes in someone's care record and pushes the whole
+    // team. The places to do that exist already, with their own framing. This screen is for
+    // reading.
     expect(view).not.toMatch(/method: 'DELETE'/);
     expect(view).not.toMatch(/method: 'PUT'/);
+    expect(view).not.toMatch(/apiFetch\('\/api\/notes'/);
+  });
+
+  test("the ONE thing it may write is a reaction", () => {
+    // v1.105.170. Pete: "socialize anywhere that we're leaving feedback." A reaction does not
+    // alter the note, does not appear in the record as content, and does not push anybody —
+    // so it is the one write that belongs on a read-only screen. This test exists to keep
+    // that list at one: the assertion above became narrower, and this is what took its place.
+    const posts = [...view.matchAll(/apiFetch\(`([^`]+)`,\s*\{\s*\n?\s*method: 'POST'/g)].map((m) => m[1]);
+    expect(posts).toEqual(["/api/reactions/${targetType}/${targetId}"]);
   });
 
   test("nothing shared is an honest empty state, not an error", () => {

@@ -14,6 +14,11 @@
 // `align` says which corner it hangs off: 'right' for something you sent, 'left' for
 // something you're reading. `overlap` false puts it inline instead, for surfaces where a
 // floating cluster would collide with the layout — the caller decides, not this file.
+// The six the server accepts (src/utils/reactions.js ALLOWED_EMOJIS) and the six the messages
+// screen offers. Kept in one place on the client too, so a picker cannot offer an emoji the
+// API will reject with "Invalid emoji" after the tap.
+const REACTION_EMOJIS = window.REACTION_EMOJIS = ['❤️', '👍', '👎', '😂', '😮', '🙏'];
+
 const ReactionBar = window.ReactionBar = ({ reactions, onReact, currentUserId, align = 'left', overlap = true }) => {
   const list = Array.isArray(reactions) ? reactions : [];
   if (!list.length) return null;
@@ -101,6 +106,82 @@ const ReactionBar = window.ReactionBar = ({ reactions, onReact, currentUserId, a
           </button>
         );
       })}
+    </div>
+  );
+};
+
+// ─── ReactionRow — the whole affordance, for surfaces with no gesture (v1.105.170) ───
+//
+// Pete: "add the reactions into the notes section."
+//
+// On a message you react by holding it; a note is not a bubble and has no gesture, so the way
+// in has to be visible. ReactionBar above only DISPLAYS — this adds the way to leave one, and
+// keeps both halves in the same file so notes, visits and whatever comes next get the same
+// thing rather than each growing their own.
+//
+// Inline rather than overlapped: `overlap` hangs the cluster off a bubble's corner, which on a
+// note row lands on the author line or the photo thumbnail. A note is a block of text in a
+// list, so the reactions sit under it, on their own line, where nothing else is.
+const ReactionRow = window.ReactionRow = ({ reactions, onReact, currentUserId, disabled = false }) => {
+  const [picking, setPicking] = React.useState(false);
+  const list = Array.isArray(reactions) ? reactions : [];
+  const mine = list.find((r) => r.userId === currentUserId);
+
+  const pick = (emoji) => { setPicking(false); if (onReact) onReact(emoji); };
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6, flexWrap: 'wrap', position: 'relative' }}
+      onClick={(e) => e.stopPropagation()}>
+      <ReactionBar reactions={list} currentUserId={currentUserId} onReact={onReact} overlap={false} />
+
+      {!disabled && (
+        <button
+          onClick={(e) => { e.stopPropagation(); setPicking((p) => !p); }}
+          aria-label={mine ? 'Change your reaction' : 'Add a reaction'}
+          title={mine ? 'Change your reaction' : 'Add a reaction'}
+          style={{
+            // Same opt-out as the badge: `@media (max-width:768px) { button { min-height:44px } }`
+            // would make this a 44px block in the middle of a note. See ReactionBar above.
+            width: 28, height: 28, minWidth: 28, minHeight: 28,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: 0, borderRadius: 999,
+            border: '1px solid var(--border-light, #e0e0e0)',
+            background: 'var(--bg-surface)',
+            color: 'var(--text-muted)', fontSize: 13, lineHeight: 1, cursor: 'pointer',
+          }}>
+          {'☺'}
+        </button>
+      )}
+
+      {picking && (
+        <React.Fragment>
+          {/* The dismiss layer. v1.105.159 shipped an emoji strip on messages that a tap
+              opened and nothing closed — on a touch screen mouseenter fires on tap and
+              mouseleave never does. Any surface that opens a picker owes the user a way out
+              that is not "choose an emoji you did not want". */}
+          <div onClick={(e) => { e.stopPropagation(); setPicking(false); }}
+            onTouchStart={(e) => { e.stopPropagation(); setPicking(false); }}
+            style={{ position: 'fixed', inset: 0, zIndex: 9 }} />
+          <div style={{
+            position: 'absolute', bottom: '100%', left: 0, marginBottom: 6, zIndex: 10,
+            display: 'flex', gap: 2, padding: '4px 6px', borderRadius: 999,
+            background: 'var(--bg-surface)', border: '1px solid var(--border-light, #e0e0e0)',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.16)',
+          }}>
+            {REACTION_EMOJIS.map((emoji) => (
+              <button key={emoji} onClick={(e) => { e.stopPropagation(); pick(emoji); }}
+                aria-label={emoji}
+                style={{
+                  width: 34, height: 34, minWidth: 34, minHeight: 34,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: emoji === (mine && mine.emoji) ? 'var(--bg-primary)' : 'none',
+                  border: 'none', borderRadius: 999,
+                  fontSize: 19, lineHeight: 1, padding: 0, cursor: 'pointer',
+                }}>{emoji}</button>
+            ))}
+          </div>
+        </React.Fragment>
+      )}
     </div>
   );
 };

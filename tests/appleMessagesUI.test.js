@@ -84,10 +84,13 @@ describe("reactions overlap the bubble, and belong to no one screen", () => {
     // Pete: "Also, no box around it." The white fill, the ring and the drop shadow together
     // read as a piece of UI parked next to the bubble. What keeps the emoji legible where it
     // straddles the bubble's edge is a shadow on the glyph, not a background behind it.
-    expect(bar).toMatch(/background: 'none'/);
-    expect(bar).toMatch(/border: 'none'/);
-    expect(bar).not.toMatch(/boxShadow/);
-    expect(bar).toMatch(/filter: 'drop-shadow\(/);
+    // Scoped to ReactionBar itself: v1.105.170 added ReactionRow to the same file, and its
+    // emoji PICKER is a popover, which legitimately has a shadow. The badge is what must not.
+    const badge = bar.slice(bar.indexOf("const ReactionBar ="), bar.indexOf("const ReactionRow ="));
+    expect(badge).toMatch(/background: 'none'/);
+    expect(badge).toMatch(/border: 'none'/);
+    expect(badge).not.toMatch(/boxShadow/);
+    expect(badge).toMatch(/filter: 'drop-shadow\(/);
   });
 
   test("the space reserved for it moved with it", () => {

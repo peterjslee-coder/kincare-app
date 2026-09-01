@@ -2115,6 +2115,39 @@ async function initializeDatabase() {
         `CREATE UNIQUE INDEX IF NOT EXISTS uniq_cto_task_date_slot ON care_task_occurrences(task_id, due_date, slot_index)`,
       ],
     },
+    {
+      // ─── v1.105.170 — reactions, for anything, not just messages ───
+      //
+      // Pete: "I'd like the option to carry this same thing over to people reacting to visits
+      // and care notes as well...socialize anywhere that we're leaving feedback." Then:
+      // "add the reactions into the notes section."
+      //
+      // So the table is keyed on (target_type, target_id) rather than a message_id. A note
+      // and a family visit are the first two types; the next one is a schema change of zero
+      // rows. `message_reactions` is deliberately NOT migrated onto this — it works, Pete
+      // confirmed the messages UI three versions ago, and moving live data to prove a point
+      // about tidiness is how a working feature breaks. The two converge when there is a
+      // reason to touch messages anyway.
+      //
+      // The UNIQUE index is the rule "one reaction per person per thing" put where it cannot
+      // be forgotten: picking a second emoji replaces the first, and the toggle is an upsert
+      // rather than a read-then-write that two taps can race.
+      id: "026_reactions",
+      statements: [
+        `CREATE TABLE IF NOT EXISTS reactions (
+           id TEXT PRIMARY KEY,
+           target_type TEXT NOT NULL,
+           target_id TEXT NOT NULL,
+           user_id TEXT NOT NULL REFERENCES users(id),
+           emoji TEXT NOT NULL,
+           created_at TIMESTAMPTZ DEFAULT NOW()
+         )`,
+        `CREATE UNIQUE INDEX IF NOT EXISTS uniq_reaction_per_person
+           ON reactions(target_type, target_id, user_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_reactions_target
+           ON reactions(target_type, target_id)`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

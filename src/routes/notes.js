@@ -4,6 +4,7 @@ const { getDb } = require("../models/database");
 const { authenticate } = require("../middleware/auth");
 const { captureException } = require("../utils/sentry");
 const { validateMagicBytes } = require("../utils/fileValidation");
+const { attachReactions } = require("../utils/reactions"); // v1.105.170
 
 // v1.76.0 — parse stored JSON defensively (one malformed row must not 500 the list)
 function safeJson(raw, fallback) {
@@ -129,12 +130,16 @@ router.get("/:careRecipientId", async (req, res) => {
     ORDER BY rn.created_at DESC
   `).all(recipientId, ...filterParams);
 
+  // v1.105.170 — reactions ride along with the notes, in ONE query for the whole list.
+  // They are loaded AFTER the visibility filter above, so a reaction can never appear on a
+  // note this reader is not allowed to see — the filter is the only place that decision is
+  // made, and adding a second one here is how the two drift apart.
   res.json({
-    notes: notes.map((n) => ({
+    notes: await attachReactions(db, "note", notes.map((n) => ({
       ...n,
       categories: safeJson(n.categories, []),
       ai_highlights: safeJson(n.ai_highlights, null),
-    })),
+    }))),
   });
 });
 

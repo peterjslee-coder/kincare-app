@@ -549,6 +549,28 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
     } catch { setFamilyVisits([]); }
   };
 
+  // ─── v1.105.170 — reactions on notes and visits ───
+  //
+  // Pete: "add the reactions into the notes section", after "socialize anywhere that we're
+  // leaving feedback."
+  //
+  // The server returns the FULL list rather than a delta, and this writes that list in whole.
+  // Applying a delta would only be right if this copy were already right, and someone else may
+  // have reacted since the page loaded — the same reason the messages reaction handler does it
+  // this way. A failed write changes nothing on screen, so the row keeps telling the truth.
+  const handleReact = async (targetType, targetId, emoji) => {
+    try {
+      const res = await apiFetch(`/api/reactions/${targetType}/${targetId}`, {
+        method: 'POST', body: JSON.stringify({ emoji }),
+      });
+      if (!res?.ok) return;
+      const d = await res.json();
+      const apply = (rows) => rows.map((r) => (r.id === targetId ? { ...r, reactions: d.reactions } : r));
+      if (targetType === 'note') setNotes(apply);
+      else setFamilyVisits(apply);
+    } catch { /* a reaction that does not save is a reaction that does not appear */ }
+  };
+
   const fetchNotes = async (recipientId) => {
     try {
       const res = await apiFetch(`/api/notes/${recipientId}`);
@@ -1400,6 +1422,10 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
                   {TimezoneHelper.formatTimestamp(v.visitedAt, profile?.timezone, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) || ''}
                 </div>
+                {typeof ReactionRow !== 'undefined' && (
+                  <ReactionRow reactions={v.reactions} currentUserId={window.__currentUserId}
+                    onReact={(emoji) => handleReact('family_visit', v.id, emoji)} />
+                )}
               </div>
             ))}
             {/* ─── v1.105.149 — the newest few, then ask ───
@@ -1453,6 +1479,10 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                     {n.author_first_name} {n.author_last_name}
                     {' \u00B7 '}{TimezoneHelper.formatTimestamp(n.created_at, profile?.timezone, { month: 'short', day: 'numeric', year: 'numeric' }) || (new Date()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                   </div>
+                  {typeof ReactionRow !== 'undefined' && (
+                    <ReactionRow reactions={n.reactions} currentUserId={window.__currentUserId}
+                      onReact={(emoji) => handleReact('note', n.id, emoji)} />
+                  )}
                 </div>
                 {canEdit && (
                   <button onClick={async (e) => {
