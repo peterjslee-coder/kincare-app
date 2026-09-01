@@ -472,11 +472,13 @@ describe("one tap is one request, and the row leaves when the server says so", (
   });
 
   test("the other surfaces are told, because they draw the same task", () => {
-    // Next Up and the care-team panel both render care tasks and neither was listening.
-    expect(cardSrc).toMatch(/new Event\('inplace:attention-changed'\)/);
+    // v1.105.162 — this moved onto the shared channel in js/careTaskSync.js, and became
+    // two-way: the card announces its own writes AND re-reads when Next Up or the care-team
+    // panel writes. The full rule is pinned in careTaskOneSource.test.js.
+    expect(cardSrc).toMatch(/CareTaskSync\.announce\(item\.id\)/);
+    expect(cardSrc).toMatch(/CareTaskSync\.onChange\(\(\) => load\(\)\)/);
     const dash = read("public", "js", "components", "Dashboard.js");
-    expect(dash).toMatch(/window\.addEventListener\('inplace:attention-changed', refresh\)/);
-    expect(dash).toMatch(/window\.removeEventListener\('inplace:attention-changed', refresh\)/);
+    expect(dash).toMatch(/CareTaskSync\.onChange\(\(\) => fetchCareTasks\(\)\)/);
   });
 
   test("a failed send still puts the row back, with the reason", () => {
@@ -507,7 +509,10 @@ describe("every exit from a Needs-you task actually leaves", () => {
     // The endpoint answers 409 when the occurrence is already done or skipped — the server
     // AGREEING with the person. v1.105.142 taught the card that; the sheet still painted it
     // red across the only two buttons, so the task looked stuck from both directions.
-    expect(sheet).toMatch(/if \(res\?\.ok \|\| res\?\.status === 409\) \{ onDone\(\); onClose\(\); \}/);
+    // v1.105.162 — the decision moved into CareTaskSync.write, where every caller gets it.
+    expect(sheet).toMatch(/const r = await CareTaskSync\.write\(occ\.id, body\);/);
+    expect(sheet).toMatch(/if \(r\.ok\) \{ onDone\(\); onClose\(\); \}/);
+    expect(read("public", "js", "careTaskSync.js")).toMatch(/res\?\.ok \|\| res\?\.status === 409/);
   });
 
   test("Open never silently does nothing", () => {

@@ -124,11 +124,10 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
   // feed, and the care-team panel. Checking it off in one of them left the other two showing
   // it as outstanding, which is how Pete ended up tapping "completed" on a task that was
   // already done and being told so. Whoever changes it says so; everyone else re-reads.
-  useEffect(() => {
-    const refresh = () => { fetchCareTasks(); };
-    window.addEventListener('inplace:attention-changed', refresh);
-    return () => window.removeEventListener('inplace:attention-changed', refresh);
-  }, []);
+  // v1.105.162 — one subscription, replacing the one-way hookup added in .142. Whoever writes
+  // a care task announces it once; every screen showing one re-reads. No screen is
+  // authoritative over another — they are all views of the same occurrence row.
+  useEffect(() => CareTaskSync.onChange(() => fetchCareTasks()), []);
   const [taskSheet, setTaskSheet] = useState(null); // { occ, group } → CareTaskCheckSheet
   const [showTaskCreate, setShowTaskCreate] = useState(false); // kept: CareTeamManage opens this via window.__openTaskCreate
   const [showLogVisit, setShowLogVisit] = useState(null); // v1.105.38 — { recipientId, position }
@@ -261,31 +260,25 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
   // One-tap on the circle = done, recorded as the tapper. The sheet handles
   // "who did it" attribution and notes; both land back here.
   const quickCheckTask = async (occ) => {
-    try {
-      const res = await apiFetch(`/api/care-tasks/occurrences/${occ.id}/check`, {
-        method: 'POST', body: JSON.stringify({ status: 'done' }),
-      });
-      if (res?.ok) { showToast('Checked off ✓', 'success'); fetchCareTasks(); }
-      else { const d = await res.json().catch(() => ({})); showToast(d.error || 'Could not check off', 'error'); fetchCareTasks(); }
-    } catch { showToast('Could not check off', 'error'); }
+    // v1.105.162 — one writer. See js/careTaskSync.js.
+    const r = await CareTaskSync.write(occ.id, { status: 'done' });
+    if (!r.ok) showToast(r.error, 'error');
+    fetchCareTasks();
   };
   const undoTask = async (occ) => {
-    try {
-      const res = await apiFetch(`/api/care-tasks/occurrences/${occ.id}/undo`, { method: 'POST' });
-      if (res?.ok) fetchCareTasks();
-    } catch {}
+    const r = await CareTaskSync.undo(occ.id);
+    if (!r.ok) showToast(r.error, 'error');
+    fetchCareTasks();
   };
-  // v1.101.0 — swipe-to-dismiss. Semantics (Pete's call): dismiss = the
-  // existing 'skipped' status, on the record and attributed — a reminder can
-  // leave the feed fast, but care state never vanishes silently.
+
+  // v1.101.0 — swipe-to-dismiss. Semantics (Pete's call): dismiss = the existing 'skipped'
+  // status, on the record and attributed — a reminder can leave the feed fast, but care state
+  // never vanishes silently.
   const dismissTask = async (occ) => {
-    try {
-      const res = await apiFetch(`/api/care-tasks/occurrences/${occ.id}/check`, {
-        method: 'POST', body: JSON.stringify({ status: 'skipped' }),
-      });
-      if (res?.ok) { showToast('Dismissed — marked skipped (undo on the row)', 'success'); fetchCareTasks(); }
-      else { const d = await res.json().catch(() => ({})); showToast(d.error || 'Could not dismiss', 'error'); fetchCareTasks(); }
-    } catch { showToast('Could not dismiss', 'error'); }
+    const r = await CareTaskSync.write(occ.id, { status: 'skipped' });
+    if (r.ok) showToast('Dismissed — marked skipped (undo on the row)', 'success');
+    else showToast(r.error, 'error');
+    fetchCareTasks();
   };
   const removeEvent = async (ev) => {
     try {

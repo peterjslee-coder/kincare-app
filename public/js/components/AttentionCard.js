@@ -159,6 +159,14 @@ const AttentionCard = window.AttentionCard = ({ onNavigate }) => {
     } catch { setLoadFailed(true); }
   }, []);
 
+  // v1.105.162 — and the other direction: check a task off in Next Up or the care-team panel
+  // and this card clears itself. Before, it only ever announced; the "needs you" row could
+  // outlive the task it was about until something else happened to reload it.
+  React.useEffect(() => {
+    if (typeof CareTaskSync === 'undefined') return;
+    return CareTaskSync.onChange(() => load());
+  }, [load]);
+
   React.useEffect(() => {
     load();
     // Same trigger as the icon badge: whatever you just cleared, the card agrees when you
@@ -196,7 +204,14 @@ const AttentionCard = window.AttentionCard = ({ onNavigate }) => {
       // and tell the rest of the app, because the same task is drawn in Next Up and in the
       // care-team panel and neither of them was listening.
       load();
-      try { window.dispatchEvent(new Event('inplace:attention-changed')); } catch { /* no-op */ }
+      // v1.105.162 — one announcement, on the shared channel. Whoever writes a care task says
+      // so once; Next Up and the care-team panel re-read. This card listens for theirs too,
+      // below — the three are peers, not a hierarchy.
+      try {
+        if (item.kind === 'careTask' && typeof CareTaskSync !== 'undefined') {
+          CareTaskSync.announce(item.id);
+        }
+      } catch { /* a missed announcement costs a stale card until the next visit */ }
       if (item.undoable && item.undo) {
         setDone((prev) => ({ ...prev, [item.id]: { item, verbPast: ATTENTION_PAST[item.verb] || 'Done.' } }));
         setTimeout(() => {
@@ -225,11 +240,14 @@ const AttentionCard = window.AttentionCard = ({ onNavigate }) => {
     const entry = done[id];
     setDone((prev) => { const next = { ...prev }; delete next[id]; return next; });
     if (!entry?.item?.undo) return;
-    try {
-      await apiFetch(entry.item.undo.path, { method: entry.item.undo.method || 'POST' });
-    } catch { /* the reload below will show the truth either way */ }
+    if (entry.item.kind === 'careTask' && typeof CareTaskSync !== 'undefined') {
+      await CareTaskSync.undo(entry.item.id);
+    } else {
+      try {
+        await apiFetch(entry.item.undo.path, { method: entry.item.undo.method || 'POST' });
+      } catch { /* the reload below will show the truth either way */ }
+    }
     load();
-    try { window.dispatchEvent(new Event('inplace:attention-changed')); } catch { /* no-op */ }
   }, [done, load]);
 
   const open = React.useCallback((item) => {

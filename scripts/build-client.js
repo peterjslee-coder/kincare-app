@@ -41,6 +41,7 @@ const scripts = [
   "js/components/SwipeableRow.js",
   "js/components/AttachmentViewer.js",
   "js/components/FamilyVisitLog.js",
+  "js/careTaskSync.js",
   "js/components/AttentionCard.js",
   "js/components/CareTasks.js",
   "js/components/CareEvents.js",
