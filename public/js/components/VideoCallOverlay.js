@@ -33,6 +33,39 @@ const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, curr
   const acquiredTracksRef = useRef([]);
   // v1.105.160 — see the incoming-call branch below.
   const emptyRoomTimer = useRef(null);
+  // ─── v1.105.173 — a web call has to survive a minute on an iPhone ───
+  //
+  // Sara called Pete on voice: "it worked for a minute but then went quiet." She is on the
+  // WEB app, and an iPhone's Auto-Lock is 30 seconds or a minute. When an iOS web page is
+  // backgrounded or the screen locks, Safari suspends it and WebRTC media stops dead. The
+  // native app can hold a call in the background; a page cannot — unless it asks the screen
+  // to stay on, which we never did.
+  const wakeLockRef = useRef(null);
+  // Media dropped and the SDK is retrying. Distinct from 'connecting' (never been up) and
+  // from 'ended' (over) — the person needs to know it is coming back rather than gone.
+  const [reconnecting, setReconnecting] = useState(false);
+  // iOS refuses to autoplay a media element created outside a user gesture. The FIRST attach
+  // rides in on the tap that answered the call; a re-attach after any interruption does not,
+  // and fails silently — a call that looks connected and is inaudible, permanently.
+  const [audioBlocked, setAudioBlocked] = useState(false);
+  // A remote who vanishes might be gone, or might be switching from wifi to cellular.
+  const remoteGraceTimer = useRef(null);
+
+  // ─── v1.105.173 — the lock is dropped every time the page is hidden ───
+  //
+  // Take it again on the way back, and use the same moment to ask the audio to resume: iOS
+  // suspends media with the page, and coming back is a user-initiated event, which is exactly
+  // the gesture autoplay wanted.
+  useEffect(() => {
+    if (!callState?.active) return;
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return;
+      requestWakeLock();
+      resumeAudio();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [callState?.active]);
 
   // Connect to Twilio room on mount
   useEffect(() => {
@@ -194,6 +227,9 @@ const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, curr
         roomRef.current = twilioRoom;
         setRoom(twilioRoom);
         setStatus(callState.callDirection === 'outgoing' ? 'ringing' : 'connected');
+        // v1.105.173 — from the moment we are in the room, not from the moment someone
+        // answers: a phone that locks while it is still ringing has the same problem.
+        requestWakeLock();
 
         // Attach local tracks
         twilioRoom.localParticipant.tracks.forEach(publication => {
@@ -210,24 +246,59 @@ const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, curr
         // Handle new remote participants
         twilioRoom.on('participantConnected', participant => {
           clearEmptyRoomTimer(); // they are here after all
+          clearRemoteGrace();    // ...or back after all
+          setReconnecting(false);
           handleParticipantConnected(participant);
           setRemoteConnected(true);
           setStatus('connected');
           startTimer();
+          requestWakeLock();
         });
 
+        // ─── v1.105.173 — 1.5 seconds was not a grace period, it was a hang-up ───
+        //
+        // A remote who vanishes might have hung up, or might be a phone changing from wifi to
+        // cellular in a hallway. Ending the call in a second and a half makes those two the
+        // same thing. Now it waits, says "Reconnecting…", and only gives up if they really
+        // have not come back — and any participantConnected cancels it.
         twilioRoom.on('participantDisconnected', () => {
+          if (cancelled) return;
           setRemoteConnected(false);
           clearRemoteVideo();
-          // End call when remote disconnects
-          setTimeout(() => {
-            handleEndCall();
-          }, 1500);
+          setReconnecting(true);
+          clearRemoteGrace();
+          remoteGraceTimer.current = setTimeout(() => {
+            if (cancelled) return;
+            const room = roomRef.current;
+            if (room && room.participants.size === 0) handleEndCall();
+            else setReconnecting(false);
+          }, 12000);
+        });
+
+        // ─── v1.105.173 — a dropped connection is not a finished call ───
+        //
+        // Twilio retries signalling and media on its own; until now nothing listened, so the
+        // screen kept showing a running timer over a call that had gone silent. These say so,
+        // and the re-attach on 'reconnected' is what gets the audio back — see attachTrack.
+        twilioRoom.on('reconnecting', () => {
+          if (cancelled) return;
+          setReconnecting(true);
+        });
+        twilioRoom.on('reconnected', () => {
+          if (cancelled) return;
+          setReconnecting(false);
+          clearRemoteGrace();
+          // The tracks survive a reconnect but their audio elements may have been suspended
+          // by iOS while the page was hidden. Ask them to play again; if the browser refuses,
+          // audioBlocked puts a button on screen.
+          resumeAudio();
+          requestWakeLock();
         });
 
         twilioRoom.on('disconnected', () => {
           setStatus('ended');
           stopTimer();
+          releaseWakeLock();
         });
 
         // If there are already participants, we're connected
@@ -274,6 +345,8 @@ const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, curr
 
     return () => {
       cancelled = true;
+      releaseWakeLock();
+      if (remoteGraceTimer.current) { clearTimeout(remoteGraceTimer.current); remoteGraceTimer.current = null; }
       if (emptyRoomTimer.current) { clearTimeout(emptyRoomTimer.current); emptyRoomTimer.current = null; }
       if (roomRef.current) {
         roomRef.current.disconnect();
@@ -301,6 +374,12 @@ const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, curr
     participant.on('trackUnsubscribed', track => {
       detachTrack(track, 'remote');
     });
+    // v1.105.173 — the remote side's own reconnect, which is the common case on a phone that
+    // changes network. Their tracks come back; their audio element has to be asked to play.
+    if (typeof participant.on === 'function') {
+      participant.on('reconnecting', () => setReconnecting(true));
+      participant.on('reconnected', () => { setReconnecting(false); resumeAudio(); });
+    }
   }
 
   function attachTrack(track, type) {
@@ -316,8 +395,13 @@ const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, curr
     }
     if (type === 'remote' && track.kind === 'audio') {
       const audioEl = track.attach();
+      // v1.105.173 — playsInline stops iOS taking the element fullscreen; autoplay is the
+      // hint, playRemoteAudio is what actually finds out whether it worked.
+      audioEl.setAttribute('playsinline', 'true');
+      audioEl.autoplay = true;
       document.body.appendChild(audioEl);
       audioEl.setAttribute('data-twilio-remote-audio', 'true');
+      playRemoteAudio(audioEl);
     }
   }
 
@@ -346,8 +430,48 @@ const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, curr
     }
   }
 
+  function clearRemoteGrace() {
+    if (remoteGraceTimer.current) { clearTimeout(remoteGraceTimer.current); remoteGraceTimer.current = null; }
+  }
+
   function clearEmptyRoomTimer() {
     if (emptyRoomTimer.current) { clearTimeout(emptyRoomTimer.current); emptyRoomTimer.current = null; }
+  }
+
+  // ─── Keep the screen awake for the duration of the call (v1.105.173) ───
+  //
+  // iOS 16.4+ and Chrome support the Screen Wake Lock API. Where it does not exist there is
+  // nothing to be done from a web page, so this degrades to exactly today's behaviour rather
+  // than throwing. The lock is released by the browser whenever the page is hidden, so it has
+  // to be re-taken on visibilitychange — asking once is asking for the first minute only.
+  async function requestWakeLock() {
+    try {
+      if (!navigator.wakeLock || wakeLockRef.current) return;
+      wakeLockRef.current = await navigator.wakeLock.request('screen');
+      wakeLockRef.current.addEventListener('release', () => { wakeLockRef.current = null; });
+    } catch { /* denied or unsupported — the call still works, the screen may sleep */ }
+  }
+
+  function releaseWakeLock() {
+    try { if (wakeLockRef.current) wakeLockRef.current.release(); } catch {}
+    wakeLockRef.current = null;
+  }
+
+  // Play a remote audio element and notice when the browser refuses. `play()` returns a
+  // promise that REJECTS on an autoplay block; ignoring it is how a call goes silent with no
+  // error anywhere.
+  function playRemoteAudio(el) {
+    try {
+      const r = el.play();
+      if (r && typeof r.catch === 'function') {
+        r.then(() => setAudioBlocked(false)).catch(() => setAudioBlocked(true));
+      }
+    } catch { setAudioBlocked(true); }
+  }
+
+  // The way out of an autoplay block: one tap, which is a gesture, which is all iOS wanted.
+  function resumeAudio() {
+    document.querySelectorAll('[data-twilio-remote-audio]').forEach((el) => playRemoteAudio(el));
   }
 
   function stopAcquiredTracks() {
@@ -359,6 +483,8 @@ const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, curr
 
   function handleEndCall() {
     clearEmptyRoomTimer();
+    clearRemoteGrace();
+    releaseWakeLock();
     if (roomRef.current) {
       roomRef.current.disconnect();
       roomRef.current = null;
@@ -513,10 +639,22 @@ const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, curr
       }, callState.remoteParticipantName || 'Unknown'),
       React.createElement('div', {
         style: { color: 'rgba(255,255,255,0.6)', fontSize: 14 }
-      }, status === 'connecting' ? 'Connecting...'
+      }, reconnecting ? 'Reconnecting\u2026'
+        : status === 'connecting' ? 'Connecting...'
         : status === 'ringing' ? 'Ringing...'
         : status === 'connected' ? formatDuration(callDuration)
         : 'Call ended'),
+      // v1.105.173 — a call the browser has muted on us. It looks connected and it is
+      // inaudible, so it has to say so, and the tap that dismisses it is the gesture iOS
+      // was holding out for.
+      audioBlocked && React.createElement('button', {
+        onClick: resumeAudio,
+        style: {
+          marginTop: 10, padding: '10px 18px', borderRadius: 999, border: 'none',
+          background: 'var(--color-warning, #e65100)', color: '#fff',
+          fontSize: 14, fontWeight: 700, cursor: 'pointer',
+        },
+      }, '\uD83D\uDD08 Tap to hear them'),
       // v1.105.141 — what actually happened to the invite. See ringLine().
       ringLine && React.createElement('div', {
         style: { color: 'rgba(255,255,255,0.55)', fontSize: 12.5, maxWidth: 260, textAlign: 'center', lineHeight: 1.4 }
@@ -537,10 +675,25 @@ const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, curr
         borderRadius: 20,
         zIndex: 10001,
       }
-    }, status === 'connecting' ? 'Connecting...'
+    }, reconnecting ? 'Reconnecting\u2026'
+      : status === 'connecting' ? 'Connecting...'
       : status === 'ringing' ? `Calling ${callState.remoteParticipantName || ''}...`
       : status === 'connected' ? formatDuration(callDuration)
       : 'Call ended'),
+
+    // v1.105.173 — the same "we have gone quiet on you" button, on a video call.
+    isVideo && audioBlocked && React.createElement('button', {
+      onClick: resumeAudio,
+      style: {
+        position: 'absolute',
+        top: 'calc(96px + var(--sat, 0px))',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        padding: '10px 18px', borderRadius: 999, border: 'none',
+        background: 'var(--color-warning, #e65100)', color: '#fff',
+        fontSize: 14, fontWeight: 700, cursor: 'pointer', zIndex: 10002,
+      },
+    }, '\uD83D\uDD08 Tap to hear them'),
 
     // v1.105.141 — the same honest line, for a video call
     isVideo && ringLine && React.createElement('div', {

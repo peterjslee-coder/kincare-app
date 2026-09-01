@@ -391,9 +391,15 @@ describe("a call fits on the phone it is ringing on", () => {
 
   test("ending a call works even when there is no room to leave", () => {
     // The escape hatch must not depend on the thing that failed.
-    const fn = overlay.slice(overlay.indexOf("function handleEndCall"));
-    expect(fn.slice(0, 400)).toMatch(/if \(roomRef\.current\)/);
-    expect(fn.slice(0, 400)).toMatch(/if \(onEndCall\) onEndCall/);
+    // Slice to the end of the function rather than a fixed number of characters: v1.105.173
+    // added two lines to the top of it and pushed onEndCall past a 400-char window, failing a
+    // test whose subject had not changed at all.
+    const from = overlay.indexOf("function handleEndCall");
+    const fn = overlay.slice(from, overlay.indexOf("\n  }", from));
+    expect(fn).toMatch(/if \(roomRef\.current\)/);
+    expect(fn).toMatch(/if \(onEndCall\) onEndCall/);
+    // ...and the room's absence must not stop any of it.
+    expect(fn.indexOf("if (onEndCall) onEndCall")).toBeGreaterThan(fn.indexOf("if (roomRef.current)"));
   });
 });
 
