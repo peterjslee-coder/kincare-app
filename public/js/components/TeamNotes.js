@@ -120,10 +120,11 @@ const TeamNotes = window.TeamNotes = ({ onNavigate }) => {
       urgent: !!n.needs_attention,
     })),
     ...visits.map((v) => ({
-      kind: 'visit', id: `v-${v.id}`, at: v.visited_at || v.created_at,
+      kind: 'visit', id: `v-${v.id}`, at: v.visitedAt || v.createdAt,
       body: v.summary || 'Visited.',
-      who: `${v.author_first_name || ''} ${v.author_last_name || ''}`.trim(),
-      minutes: v.duration_minutes || null,
+      who: v.authorName || v.authorFirstName || '',
+      minutes: v.durationMinutes || null,
+      mood: v.moodRating || null,
     })),
   ].sort((a, b) => String(b.at || '').localeCompare(String(a.at || '')));
 
@@ -177,6 +178,12 @@ const TeamNotes = window.TeamNotes = ({ onNavigate }) => {
                     fontSize: 11, fontWeight: 700, color: 'var(--role-color)',
                     background: 'var(--bg-teal-light)', padding: '2px 8px', borderRadius: 10,
                   }}>👣 Visit{item.minutes ? ` · ${item.minutes} min` : ''}</span>
+                )}
+                {/* v1.105.164 — how she seemed. Recorded on every visit, drawn on none of them
+                    until now. */}
+                {item.mood && typeof visitMoodEmoji === 'function' && visitMoodEmoji(item.mood) && (
+                  <span title={visitMoodLabel(item.mood)} aria-label={visitMoodLabel(item.mood)}
+                    style={{ fontSize: 15, lineHeight: 1 }}>{visitMoodEmoji(item.mood)}</span>
                 )}
                 {item.urgent && (
                   <span style={{

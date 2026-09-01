@@ -25,9 +25,27 @@ const VISIT_ACTIVITIES = window.VISIT_ACTIVITIES = [
 ];
 
 const VISIT_MOODS = [
-  { id: 'great', emoji: '😀' }, { id: 'good', emoji: '🙂' },
-  { id: 'okay', emoji: '😐' }, { id: 'low', emoji: '😕' }, { id: 'poor', emoji: '😟' },
+  { id: 'great', emoji: '😀', label: 'seemed great' }, { id: 'good', emoji: '🙂', label: 'seemed good' },
+  { id: 'okay', emoji: '😐', label: 'seemed okay' }, { id: 'low', emoji: '😕', label: 'seemed low' },
+  { id: 'poor', emoji: '😟', label: 'seemed poor' },
 ];
+
+// ─── v1.105.164 — the mood, where it can be read at a glance ───
+//
+// Pete: "there's no way to see the emoji (sad to happy) on notes and visits. a little emoji
+// next to 'family visit' to show would be helpful and not require it to all be expandable."
+//
+// Every visit has been asked "how did she seem?" since the feature shipped, the answer is
+// stored on the row and returned by the API as `moodRating` — and it has never once been
+// drawn. The one number in a visit that you can scan a month of at a time was the one thing
+// you had to open each visit to see.
+//
+// Exported rather than duplicated: the family profile and the care team's Care Notes both
+// show visits, and a second copy of this map is a second chance for 😐 to mean two things.
+const visitMoodEmoji = window.visitMoodEmoji = (id) =>
+  (VISIT_MOODS.find((m) => m.id === id) || {}).emoji || null;
+const visitMoodLabel = window.visitMoodLabel = (id) =>
+  (VISIT_MOODS.find((m) => m.id === id) || {}).label || null;
 
 // `datetime-local` wants the LOCAL wall clock, not an ISO instant.
 const toLocalInput = (d) => {

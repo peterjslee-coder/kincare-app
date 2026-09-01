@@ -116,3 +116,60 @@ describe("what the page will and will not do", () => {
     expect(view).toMatch(/Show all \$\{timeline\.length\}/);
   });
 });
+
+// ─── v1.105.164 — the mood, and a bug it exposed in my own code ───
+//
+// Pete: "there's no way to see the emoji (sad to happy) on notes and visits. a little emoji
+// next to 'family visit' to show would be helpful and not require it to all be expandable."
+describe("how she seemed, at a glance", () => {
+  const visitLog = code("public/js/components/FamilyVisitLog.js");
+  const profile = code("public/js/components/CareProfile.js");
+
+  test("the mood map is exported, not copied", () => {
+    // The family profile and the care team's Care Notes both show visits. A second copy of
+    // this map is a second chance for 😐 to mean two different things.
+    expect(visitLog).toMatch(/const visitMoodEmoji = window\.visitMoodEmoji =/);
+    expect(visitLog).toMatch(/const visitMoodLabel = window\.visitMoodLabel =/);
+  });
+
+  test("every mood has words as well as a face", () => {
+    // A bare glyph in a care record is a guess. Title and aria-label both get the words.
+    expect(visitLog).toMatch(/\{ id: 'great', emoji: '😀', label: 'seemed great' \}/);
+    expect(visitLog).toMatch(/\{ id: 'poor', emoji: '😟', label: 'seemed poor' \}/);
+  });
+
+  test("it shows on the family's own visit list", () => {
+    expect(profile).toMatch(/visitMoodEmoji\(v\.moodRating\)/);
+    expect(profile).toMatch(/aria-label=\{visitMoodLabel\(v\.moodRating\)\}/);
+  });
+
+  test("and on the care team's", () => {
+    expect(view).toMatch(/mood: v\.moodRating \|\| null,/);
+    expect(view).toMatch(/visitMoodEmoji\(item\.mood\)/);
+  });
+
+  test("it degrades if the helper is not in the bundle", () => {
+    expect(profile).toMatch(/typeof visitMoodEmoji === 'function' &&/);
+    expect(view).toMatch(/typeof visitMoodEmoji === 'function' &&/);
+  });
+});
+
+describe("the visit fields TeamNotes reads are the ones the API sends", () => {
+  test("camelCase, because shape() in familyVisits.js emits camelCase", () => {
+    // v1.105.164 — found while adding the mood. My own v1.105.156 read v.visited_at,
+    // v.author_first_name and v.duration_minutes off an endpoint that returns visitedAt,
+    // authorName and durationMinutes. Every one was undefined, so a visit in Julia's Care
+    // Notes had no date, no author and no duration — and none of it threw, because reading a
+    // missing property is silent. The mood row is what made it visible.
+    expect(view).toMatch(/at: v\.visitedAt \|\| v\.createdAt/);
+    expect(view).toMatch(/who: v\.authorName \|\| v\.authorFirstName/);
+    expect(view).toMatch(/minutes: v\.durationMinutes \|\| null/);
+    expect(view).not.toMatch(/v\.visited_at|v\.author_first_name|v\.duration_minutes/);
+  });
+
+  test("notes stay snake_case, because THAT endpoint returns raw rows", () => {
+    // Not an inconsistency to tidy: two endpoints, two shapes, and the client must match each.
+    expect(view).toMatch(/n\.created_at/);
+    expect(view).toMatch(/n\.author_first_name/);
+  });
+});

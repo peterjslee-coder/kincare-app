@@ -1353,6 +1353,11 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                 background: highlightNoteId === v.id ? 'rgba(74, 144, 217, 0.16)' : 'transparent',
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                  {/* v1.105.164 — how she seemed, at a glance. See visitMoodEmoji. */}
+                  {typeof visitMoodEmoji === 'function' && visitMoodEmoji(v.moodRating) && (
+                    <span title={visitMoodLabel(v.moodRating)} aria-label={visitMoodLabel(v.moodRating)}
+                      style={{ fontSize: 16, lineHeight: 1 }}>{visitMoodEmoji(v.moodRating)}</span>
+                  )}
                   <span style={{ fontSize: 13, fontWeight: 650 }}>{v.authorFirstName || v.authorName}</span>
                   <span style={{ fontSize: 10, fontWeight: 750, color: 'var(--role-color)', background: '#E8F8F0', padding: '1.5px 7px', borderRadius: 9 }}>FAMILY VISIT</span>
                 </div>
