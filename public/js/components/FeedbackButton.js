@@ -17,11 +17,11 @@
 // rotation. A stranded button rescues itself the next time the app opens.
 const FAB_SIZE = 48;
 const fabSafeBand = () => {
-  // Same fallback Messages uses: on Capacitor native the insets are 59/34 on every modern
-  // iPhone, and __safeArea* is not always populated by the time this first runs.
-  const isCapNative = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
-  const safeTop = window.__safeAreaTop || (isCapNative ? 59 : 0);
-  const safeBottom = window.__safeAreaBottom || (isCapNative ? 34 : 0);
+  // v1.105.166 — see Messages.js: the insets are resolved once in app.js, synchronously,
+  // before any component renders. A per-component `isNativePlatform() ? 59 : 0` fallback
+  // re-guesses them for platforms that never needed one.
+  const safeTop = window.__safeAreaTop || 0;
+  const safeBottom = window.__safeAreaBottom || 0;
   const top = safeTop + 8;
   const bottom = Math.max(top, window.innerHeight - safeBottom - FAB_SIZE - 8);
   return { top, bottom, left: 8, right: Math.max(8, window.innerWidth - FAB_SIZE - 8) };

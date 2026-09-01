@@ -6,13 +6,21 @@
   <script>
     // Safe-area polyfill: WKWebView with contentInsetAdjustmentBehavior=never
     // can return 0 for env(safe-area-inset-*). Detect and inject real values.
+    // v1.105.166 — this only guesses inside the Capacitor iOS WebView. In a browser or a
+    // home-screen PWA, env() reporting 0 means the page does not extend under the status
+    // bar, and inventing an inset draws an empty band at the top of every screen. app.js
+    // runs the same check again and always has the last word.
     (function(){try{
       var d=document.createElement('div');
       d.style.cssText='position:absolute;visibility:hidden;padding-top:env(safe-area-inset-top,0px)';
       document.documentElement.appendChild(d);
       var v=parseFloat(getComputedStyle(d).paddingTop)||0;
       document.documentElement.removeChild(d);
-      if(v<1){
+      var capIOS=!!(window.Capacitor
+        && (typeof window.Capacitor.isNativePlatform!=='function' || window.Capacitor.isNativePlatform())
+        && typeof window.Capacitor.getPlatform==='function'
+        && window.Capacitor.getPlatform()==='ios');
+      if(v<1 && capIOS){
         var h=Math.max(screen.height,screen.width),w=Math.min(screen.height,screen.width);
         if(h/w>2.0){
           document.documentElement.style.setProperty('--sat',(h>=852?59:47)+'px');
@@ -41,7 +49,7 @@
   <!-- PWA Manifest -->
   <link rel="manifest" href="/manifest.json">
 
-  <link rel="stylesheet" href="/css/styles.css?v=build-a40d4b3a-mtirqqjw">
+  <link rel="stylesheet" href="/css/styles.css?v=build-562c0f4a-mtixptfl">
 
   <!-- Leaflet CSS for maps (self-hosted — no CDN dependency) -->
   <link rel="stylesheet" href="/vendor/leaflet.css">
@@ -71,9 +79,9 @@
 
   <!-- Pre-compiled app bundle (built by scripts/build-client.js) -->
   <script>
-    window.APP_VERSION = '1.105.165';
+    window.APP_VERSION = '1.105.166';
     // v1.85: admin components live in a separate lazy bundle (infra #5)
-    window.__ADMIN_BUNDLE_URL = '/js-compiled/bundle-admin.js?v=build-a40d4b3a-mtirqqjw';
+    window.__ADMIN_BUNDLE_URL = '/js-compiled/bundle-admin.js?v=build-562c0f4a-mtixptfl';
   </script>
   <script>
     // ─── Theme initialization ───
@@ -125,7 +133,7 @@
       });
     })();
   </script>
-  <script src="/js-compiled/bundle.js?v=build-a40d4b3a-mtirqqjw"></script>
+  <script src="/js-compiled/bundle.js?v=build-562c0f4a-mtixptfl"></script>
 
   <script>
     // Service worker: register/update and auto-reload on new version

@@ -202,6 +202,28 @@ const Messages = window.Messages = () => {
     && window.matchMedia('(pointer: coarse)').matches;
   const kbOpen = vvShrunk || (inputFocused && hasSoftKeyboard);
 
+  // ─── v1.105.166 — make a wrong guess harmless ───
+  //
+  // When kbOpen is true this container stops reserving the bottom nav's 55px, because the
+  // nav is behind the keyboard. If that judgement is ever wrong, the nav is NOT behind a
+  // keyboard — it is a z-index-900 bar painting over the bottom of a z-index-1 container,
+  // and the thing it covers is the composer. The user sees a conversation with no way to
+  // type in it and no indication why.
+  //
+  // Detecting a keyboard from the outside will always be a judgement call, so make the
+  // wrong call cheap instead of trying to make it impossible: if we have decided the
+  // keyboard is up, take the nav away. Right, and the nav was invisible behind the keyboard
+  // anyway. Wrong, and the user is briefly missing a nav bar that comes back on blur —
+  // instead of silently losing the composer.
+  // The class is named for what it DOES. v1.105.131 had a body class here that resized
+  // `.msg-panel` — the wrong element — and callRinging.test.js pins that name as gone, so
+  // this one must not borrow it.
+  useEffect(() => {
+    if (!isMobile) return;
+    document.body.classList.toggle('msg-nav-hidden', !!kbOpen);
+    return () => document.body.classList.remove('msg-nav-hidden');
+  }, [isMobile, kbOpen]);
+
   useEffect(() => {
     if (!isMobile) return;
     const vv = window.visualViewport;
@@ -266,7 +288,25 @@ const Messages = window.Messages = () => {
       const hidden = Math.round(window.innerHeight - height);
       setVvBox({ top, height });
       setKbDebug({ iH: window.innerHeight, vvH: height, vvT: Math.round(vv.offsetTop || 0), hidden, sY: scrolled, top });
-      setVvShrunk(hidden > 120 || top > 0 || scrolled > 120);
+      // ─── v1.105.166 — `hidden` is not evidence of a keyboard ───
+      //
+      // `hidden` is innerHeight - visualViewport.height: how much shorter the visible
+      // region is than the layout viewport. A keyboard does that. So does mobile Safari's
+      // URL bar and bottom toolbar, which together are ~120-140px — over the threshold,
+      // with no keyboard anywhere. And a false "keyboard is up" is not a cosmetic error:
+      // it takes away the 55px this container reserves for the bottom nav, and the composer
+      // moves down behind a nav that sits at z-index 900 over a container at z-index 1.
+      //
+      // Pete, on Debbie's screen: "when she opens the app there's no clear way to enter
+      // text… you have to just click around on the bottom and it eventually brings up the
+      // new message space." Clicking around collapses the browser chrome, `hidden` drops
+      // under the threshold, and the composer reappears. That is this line.
+      //
+      // The other two terms are positions, not sizes: the visual viewport being pushed down
+      // or the document being scrolled is something a keyboard does and browser chrome does
+      // not. And per .134 the focused composer is the signal that actually fires on the
+      // device — the measurement half never did.
+      setVvShrunk(top > 0 || scrolled > 120);
       if (scrolled > 0) settle();
     };
     apply();
@@ -3029,9 +3069,12 @@ const Messages = window.Messages = () => {
 
   if (isMobile) {
     // Capacitor native iOS fallback: 59px top, 34px bottom — covers all modern iPhones
-    const isCapNative = window.Capacitor?.isNativePlatform?.();
-    const safeTop = window.__safeAreaTop || (isCapNative ? 59 : 0);
-    const safeBot = window.__safeAreaBottom || (isCapNative ? 34 : 0);
+    // v1.105.166 — no second guess here. app.js resolves the insets once, for every
+    // surface, before anything renders; a component-level `isNativePlatform() ? 59 : 0`
+    // fallback fires on Android native too, where nothing is covering the top of the page,
+    // and drew a 59px band of nothing above the header.
+    const safeTop = window.__safeAreaTop || 0;
+    const safeBot = window.__safeAreaBottom || 0;
     return (
       <div style={{
         position: 'fixed',

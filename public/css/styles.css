@@ -3007,6 +3007,13 @@
       padding-top: 16px;
     }
 
+    /* v1.105.166 — while Messages believes the keyboard is up, the bottom nav is behind it
+       and reserves no space. Hiding it means that if that belief is ever wrong, the cost is
+       a missing nav rather than a composer painted over by a z-index-900 bar. */
+    body.msg-nav-hidden .bottom-nav {
+      display: none !important;
+    }
+
     /* safe-area bottom nav handled in base mobile styles */
 
     /* ─── Print Styles (Hour Reports) ─── */

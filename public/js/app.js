@@ -3,6 +3,17 @@
 // Detect actual safe area and expose as globals + CSS custom properties.
 window.__safeAreaTop = 0;
 window.__safeAreaBottom = 0;
+// True only inside the Capacitor iOS WKWebView — the one surface where
+// env(safe-area-inset-*) can report 0 while a notch/Dynamic Island really is covering the
+// top of the page. Everywhere else a 0 inset means there is nothing to inset.
+function isCapacitorIOS(){
+  try{
+    if(!window.Capacitor) return false;
+    if(typeof window.Capacitor.isNativePlatform==='function' && !window.Capacitor.isNativePlatform()) return false;
+    if(typeof window.Capacitor.getPlatform==='function') return window.Capacitor.getPlatform()==='ios';
+    return false;
+  }catch(e){ return false; }
+}
 (function(){try{
   // Probe env() to see if it returns real values
   var d=document.createElement('div');
@@ -17,22 +28,26 @@ window.__safeAreaBottom = 0;
     document.body.appendChild(d2);
     window.__safeAreaBottom=parseFloat(getComputedStyle(d2).paddingBottom)||0;
     document.body.removeChild(d2);
-  }else{
-    // env() returned 0 — use device heuristic
+  }else if(isCapacitorIOS()){
+    // ─── v1.105.166 — env() returned 0. Only ONE surface lies about that. ───
+    //
+    // Pete, on Debbie's screen: "way too much void at the top of the screen."
+    // Measured on production at 375x812: `env(safe-area-inset-top)` resolved to 0px, this
+    // heuristic saw a tall screen and set --sat to 47px anyway, and the Messages container
+    // duly drew a 47px spacer above the header — on top of the space the browser had
+    // ALREADY left for the status bar. The status bar got reserved twice.
+    //
+    // env() returning 0 is only ever wrong in one place: the Capacitor iOS WKWebView with
+    // contentInsetAdjustmentBehavior=never, which is what this polyfill was written for.
+    // Everywhere else — a Safari tab, a home-screen PWA, Android, a desktop window — 0 is
+    // the truth: the surface does not extend under the status bar, so nothing is needed.
+    //
+    // The old test was the screen's aspect ratio, which is not evidence about insets at all.
+    // It fires on any tall phone in any browser, and (h/w > 1.7) fires on an ordinary
+    // 2560x1440 desktop monitor too, for a 20px band of nothing.
     var h=Math.max(screen.height,screen.width),w=Math.min(screen.height,screen.width);
-    if(h/w>2.0){
-      window.__safeAreaTop=h>=852?59:47;
-      window.__safeAreaBottom=34;
-    }else if(h/w>1.7){
-      window.__safeAreaTop=20;
-      window.__safeAreaBottom=0;
-    }
-  }
-  // Capacitor native iOS fallback: if detection still returned 0, hardcode it.
-  // Every modern iPhone has a notch or Dynamic Island — 59px covers both safely.
-  if(window.__safeAreaTop===0 && window.Capacitor && typeof window.Capacitor.isNativePlatform==='function' && window.Capacitor.isNativePlatform()){
-    window.__safeAreaTop=59;
-    window.__safeAreaBottom=34;
+    window.__safeAreaTop=(h/w>2.0)?(h>=852?59:47):20;
+    window.__safeAreaBottom=(h/w>2.0)?34:0;
   }
   // Also set CSS vars (for any CSS that references them)
   document.documentElement.style.setProperty('--sat',window.__safeAreaTop+'px');

@@ -180,9 +180,21 @@ describe("the keyboard cannot push the header off screen", () => {
     expect(msgs).toMatch(/window\.matchMedia\('\(pointer: coarse\)'\)\.matches/);
   });
 
-  test("a URL bar collapsing is not a keyboard", () => {
-    // 120px, on whichever of the three signals the engine actually gives us.
-    expect(msgs).toMatch(/hidden > 120 \|\| top > 0 \|\| scrolled > 120/);
+  test("neither a URL bar nor a bottom toolbar is a keyboard", () => {
+    // This asserted `hidden > 120 || top > 0 || scrolled > 120` until v1.105.166. The 120px
+    // threshold was meant to ignore a URL bar COLLAPSING — a change of ~50px. What it missed
+    // is the URL bar and the bottom toolbar simply BEING THERE: in mobile Safari innerHeight
+    // is the full layout viewport while visualViewport.height is the visible band, and the
+    // difference is ~120-140px, over the threshold, with no keyboard anywhere. A false
+    // "keyboard up" makes this container stop reserving the nav's 55px, and the composer
+    // goes under a z-index-900 nav. Pete, on Debbie's screen: "there's no clear way to enter
+    // text... you have to just click around on the bottom and it eventually brings up the new
+    // message space" — clicking around collapses the chrome and the composer reappears.
+    //
+    // What is left are the two signals that are POSITIONS rather than sizes. Browser chrome
+    // does not push the visual viewport down or scroll the document; a keyboard does.
+    expect(msgs).toMatch(/setVvShrunk\(top > 0 \|\| scrolled > 120\);/);
+    expect(msgs).not.toMatch(/setVvShrunk\([^)]*hidden/);
   });
 
   test("no visualViewport, no change in behaviour", () => {
@@ -203,11 +215,14 @@ describe("the keyboard cannot push the header off screen", () => {
     expect(msgs).toMatch(/const top = Math\.max\(0, Math\.round\(vv\.offsetTop \|\| 0\) - scrolled\);/);
   });
 
-  test("a shrinking layout viewport cannot make `hidden` negative", () => {
-    // iH 568 with vv 499@344 gave hidden = -275 under the old arithmetic, so the measurement
-    // half of the detection never fired at all — only the focused composer did.
+  test("`hidden` survives as a readout, not as a decision", () => {
+    // iH 568 with vv 499@344 gave hidden = -275, so this half of the detection never fired
+    // on the device at all — only the focused composer did. It went on firing on OTHER
+    // devices, wrongly (see above), which is why v1.105.166 took it out of the decision. It
+    // stays in the diagnostic line, where a number that is sometimes -275 is informative
+    // rather than harmful.
     expect(msgs).toMatch(/const hidden = Math\.round\(window\.innerHeight - height\);/);
-    expect(msgs).toMatch(/setVvShrunk\(hidden > 120 \|\| top > 0 \|\| scrolled > 120\);/);
+    expect(msgs).toMatch(/hidden,/); // still reported in kbDebug
   });
 
   test("the body is no longer pinned — the cause, not the symptom", () => {
