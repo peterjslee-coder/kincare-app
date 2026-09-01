@@ -71,9 +71,29 @@ describe("reactions overlap the bubble, and belong to no one screen", () => {
     expect(msgs).not.toMatch(/borderRadius: 12, fontSize: 13, cursor: 'pointer', lineHeight: 1,/);
   });
 
-  test("it hangs off the corner — that is what 'overlap' means", () => {
-    expect(bar).toMatch(/position: 'absolute',\s*\n\s*bottom: -11,/);
-    expect(bar).toMatch(/border: '2px solid var\(--bg-primary\)'/); // the ring that lifts it off
+  test("it hangs off the TOP corner — the bottom one is the timestamp's", () => {
+    // v1.105.167. This asserted `bottom: -11` until Pete's screenshot showed "10:5..."
+    // disappearing behind the badge: on a sent bubble the bottom corner already holds the
+    // time and the read receipt. Apple hangs a Tapback off the top for that reason.
+    expect(bar).toMatch(/position: 'absolute',\s*\n\s*top: -12,/);
+    expect(bar).not.toMatch(/bottom: -11/);
+  });
+
+  test("no box — a Tapback is a mark on the message, not a chip beside it", () => {
+    // Pete: "Also, no box around it." The white fill, the ring and the drop shadow together
+    // read as a piece of UI parked next to the bubble. What keeps the emoji legible where it
+    // straddles the bubble's edge is a shadow on the glyph, not a background behind it.
+    expect(bar).toMatch(/background: 'none'/);
+    expect(bar).toMatch(/border: 'none'/);
+    expect(bar).not.toMatch(/boxShadow/);
+    expect(bar).toMatch(/filter: 'drop-shadow\(/);
+  });
+
+  test("the space reserved for it moved with it", () => {
+    // Reserving room BELOW a bubble for a badge that now sits above it is how one fix
+    // becomes two bugs.
+    expect(msgs).toMatch(/marginTop: reactions\.length > 0 \? '14px' : 0,/);
+    expect(msgs).not.toMatch(/marginBottom: reactions\.length > 0/);
   });
 
   test("one pill per emoji with a count, not one per person", () => {
@@ -159,8 +179,12 @@ describe("the two faults in the recording", () => {
     expect(msgs).not.toMatch(/cursor: 'pointer', fontSize: 20, padding: '4px'/);
   });
 
-  test("and the reaction pill sits quietly on the corner", () => {
-    expect(bar).toMatch(/fontSize: 11\.5/);
+  test("and the reaction sits quietly on the corner", () => {
+    // Was `fontSize: 11.5` — an 11.5px emoji inside 2px of border and 6px of padding, which
+    // is a bigger object on the screen than a bare 15px emoji. v1.105.167 took the chrome
+    // away, so the glyph can be the size a glyph should be.
+    expect(bar).toMatch(/fontSize: 15, lineHeight: 1,/);
     expect(bar).not.toMatch(/fontSize: 13, lineHeight: 1\.2/);
+    expect(bar).not.toMatch(/padding: '1px 6px'/);
   });
 });

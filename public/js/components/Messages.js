@@ -2456,7 +2456,13 @@ const Messages = window.Messages = () => {
                       </div>
                     )}
                     <div style={{
-                      display: 'flex', justifyContent: isSent ? 'flex-end' : 'flex-start', marginBottom: reactions.length > 0 ? '16px' : '4px',
+                      // v1.105.167 — the reaction moved from the bottom corner to the top one
+                      // (it was covering the timestamp), so the room it needs moved with it.
+                      // Reserving the space below a bubble for a badge that now sits above it
+                      // is how a fix turns into two bugs.
+                      display: 'flex', justifyContent: isSent ? 'flex-end' : 'flex-start',
+                      marginBottom: '4px',
+                      marginTop: reactions.length > 0 ? '14px' : 0,
                       transform: isMsgSwiping ? 'translateX(' + msgSwipeOffset + 'px)' : 'none',
                       transition: isMsgSwiping ? 'none' : 'transform 0.2s',
                     }}>

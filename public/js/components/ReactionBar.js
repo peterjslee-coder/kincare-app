@@ -25,10 +25,23 @@ const ReactionBar = window.ReactionBar = ({ reactions, onReact, currentUserId, a
     return acc;
   }, {});
 
+  // ─── v1.105.167 — off the timestamp, and out of its box ───
+  //
+  // Pete: "The emoji…looks dumb and janky. Needs to not block the time of the message. Also,
+  // no box around it."
+  //
+  // It hung off the BOTTOM corner, which on a sent bubble is exactly where the time and the
+  // read receipt live — his screenshot has "10:5..." disappearing behind it. Apple hangs a
+  // Tapback off the TOP corner, and the reason is not taste: the bottom of a bubble is
+  // already spoken for.
+  //
+  // The box goes too. A white pill with a ring and a drop shadow is a chip — a piece of UI
+  // sitting next to the message. A Tapback is a mark ON the message. The emoji alone, at the
+  // size it wants to be, is smaller on the screen than a smaller emoji inside chrome.
   const positioned = overlap ? {
     position: 'absolute',
-    bottom: -11,
-    [align === 'right' ? 'right' : 'left']: 8,
+    top: -12,
+    [align === 'right' ? 'right' : 'left']: 10,
     zIndex: 2,
   } : {
     marginTop: 4,
@@ -46,19 +59,28 @@ const ReactionBar = window.ReactionBar = ({ reactions, onReact, currentUserId, a
             title={who.map((r) => r.userName).filter(Boolean).join(', ')}
             aria-label={`${emoji} from ${who.map((r) => r.userName).filter(Boolean).join(', ') || 'someone'}`}
             style={{
-              display: 'flex', alignItems: 'center', gap: 2,
-              padding: '1px 6px',
-              // The ring is what makes it read as sitting ON the bubble rather than beside it.
-              background: mine ? 'var(--bubble-sent-bg)' : 'var(--bg-elevated, #3b3b3d)',
-              border: '2px solid var(--bg-primary)',
-              borderRadius: 12,
-              fontSize: 11.5, lineHeight: 1.25, cursor: 'pointer',
-              color: mine ? 'var(--text-on-primary)' : 'var(--text-primary)',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.28)',
+              display: 'flex', alignItems: 'center', gap: 1,
+              padding: 0,
+              background: 'none',
+              border: 'none',
+              fontSize: 15, lineHeight: 1, cursor: 'pointer',
+              // One's own reaction is not marked by a different colour any more — there is no
+              // fill left to colour. A slight lift is enough, and it survives both themes.
+              transform: mine ? 'scale(1.12)' : 'none',
+              transformOrigin: align === 'right' ? 'right center' : 'left center',
+              // The badge straddles the bubble's edge, so it is over two different colours at
+              // once. A shadow rather than a background keeps it legible on both without
+              // putting a box back.
+              filter: 'drop-shadow(0 1px 1.5px rgba(0,0,0,0.35))',
             }}>
             <span aria-hidden="true">{emoji}</span>
             {who.length > 1 && (
-              <span style={{ fontSize: 10, fontWeight: 600, opacity: 0.85 }}>{who.length}</span>
+              <span style={{
+                fontSize: 10, fontWeight: 700, color: 'var(--text-secondary)',
+                // The count is text, not an emoji, so it needs its own legibility against
+                // whichever half of the edge it lands on.
+                textShadow: '0 0 3px var(--bg-primary), 0 0 3px var(--bg-primary)',
+              }}>{who.length}</span>
             )}
           </button>
         );
