@@ -692,6 +692,10 @@ const App = () => {
         // way. A visit has no note id to focus; opening on the right person is the whole job.
         if (d.careRecipientId) window.__pendingNoteRecipientId = d.careRecipientId;
         if (d.noteId && !d.focus) window.__pendingFocus = `note:${d.noteId}`;
+        // v1.105.163 — a visit push carries visitId, not noteId. Without this it arrived with
+        // no focus at all and dropped the person at the top of a long page to go hunting,
+        // which is the exact complaint.
+        if (d.visitId && !d.noteId && !d.focus) window.__pendingFocus = `visit:${d.visitId}`;
         target = (window.__currentRole || 'family') === 'family' ? 'care-profile' : 'care-notes';
       } else if (t.startsWith('care_task') || t.startsWith('care_event')) {
         target = 'dashboard';

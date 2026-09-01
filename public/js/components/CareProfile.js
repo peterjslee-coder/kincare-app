@@ -16,6 +16,8 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
   const [addingNote, setAddingNote] = useState(false);
   const [notesOpen, setNotesOpen] = useState(true); // v1.76.0 — observations are a first-class feature, not buried
   const [showAllNotes, setShowAllNotes] = useState(false); // v1.105.149 — newest few, then ask
+  const [highlightNoteId, setHighlightNoteId] = useState(null); // v1.105.163
+  const notesCardRef = React.useRef(null);
   const [noteUrgent, setNoteUrgent] = useState(false);
   const [notePhoto, setNotePhoto] = useState(null); // { data, name }
   const [viewingAttachments, setViewingAttachments] = useState(null); // v1.105.34 — { list, index }
@@ -775,6 +777,47 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
     setGeneratingAI(false);
   };
 
+  // ─── v1.105.163 — a note push lands ON the note ───
+  //
+  // Pete: "i get a notification that debbie left a note about betty. I click it. it opens the
+  // app, takes me to care team, drops me at top. I have to scroll past the care intel and
+  // tasks and figure out where notes are… I don't want a push and then anxiety of 'I wonder
+  // if I'll find it'."
+  //
+  // The push has carried `noteId` since v1.96.0 and this screen never read it. The caregiver
+  // side got this in v1.105.153 — TeamNotes opens on the right person and marks the right
+  // note — and the family's own screen, the one he actually uses, was left arriving at the top
+  // of a long page.
+  //
+  // Three things, because any one alone still leaves you hunting: open the section (it can be
+  // collapsed), show ALL notes if the one being announced is past the five-note preview, and
+  // scroll to it. Then mark it, so among a dozen notes it is obvious which one the phone buzzed
+  // about.
+  React.useEffect(() => {
+    const f = window.__pendingFocus;
+    if (!f || typeof f !== 'string') return;
+    // A visit log renders in this same card, just above the notes, so it has the same problem
+    // and takes the same answer.
+    const isVisit = f.startsWith('visit:');
+    if (!f.startsWith('note:') && !isVisit) return;
+    const id = f.slice(f.indexOf(':') + 1);
+    const list = isVisit ? familyVisits : notes;
+    if (!list.length) return;
+    const idx = list.findIndex((n) => n.id === id);
+    if (idx === -1) return; // not this recipient's, or not loaded yet — leave it for them
+    window.__pendingFocus = null;
+    setNotesOpen(true);
+    if (!isVisit && idx >= NOTES_PREVIEW) setShowAllNotes(true);
+    setHighlightNoteId(id);
+    // After the expand has painted, or we scroll to where the row is about to be.
+    setTimeout(() => {
+      const sel = isVisit ? `[data-visit-id="${id}"]` : `[data-note-id="${id}"]`;
+      const el = document.querySelector(sel) || notesCardRef.current;
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 80);
+    setTimeout(() => setHighlightNoteId(null), 5000);
+  }, [notes, familyVisits]);
+
   if (loading) return <LoadingSpinner text="Loading care profile..." />;
   // ─── v1.105.152 — the same empty state was telling two different people two different lies ───
   //
@@ -1239,7 +1282,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
       {profile?.id && <CareEventsSection recipientId={profile.id} recipientFirstName={profile.first_name} />}
 
       {/* ─── 5. Care Notes (collapsible) ─── */}
-      <div className="card">
+      <div className="card" ref={notesCardRef}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
           onClick={() => setNotesOpen(!notesOpen)}>
           <div className="card-header" style={{ margin: 0 }}>
@@ -1304,7 +1347,11 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                 the derivation-chain failure from the v1.93 post-mortem. Source is always
                 visible, here and everywhere downstream. */}
             {familyVisits.map((v) => (
-              <div key={v.id} style={{ padding: '10px 0', borderBottom: '1px solid #f0f0f0' }}>
+              <div key={v.id} data-visit-id={v.id} style={{
+                padding: '10px 0', borderBottom: '1px solid #f0f0f0',
+                transition: 'background 1.2s ease',
+                background: highlightNoteId === v.id ? 'rgba(74, 144, 217, 0.16)' : 'transparent',
+              }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
                   <span style={{ fontSize: 13, fontWeight: 650 }}>{v.authorFirstName || v.authorName}</span>
                   <span style={{ fontSize: 10, fontWeight: 750, color: 'var(--role-color)', background: '#E8F8F0', padding: '1.5px 7px', borderRadius: 9 }}>FAMILY VISIT</span>
@@ -1360,7 +1407,12 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                 history, not news. The count on the header still says how many there are, so
                 nothing is hidden, only folded. */}
             {notes.length > 0 ? (showAllNotes ? notes : notes.slice(0, NOTES_PREVIEW)).map((n) => (
-              <div key={n.id} style={{ padding: '10px 0', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+              <div key={n.id} data-note-id={n.id} style={{
+                padding: '10px 0', borderBottom: '1px solid #f0f0f0', display: 'flex',
+                justifyContent: 'space-between', alignItems: 'flex-start', gap: 8,
+                transition: 'background 1.2s ease',
+                background: highlightNoteId === n.id ? 'rgba(74, 144, 217, 0.16)' : 'transparent',
+              }}>
                 <div style={{ flex: 1 }}>
                   {!!n.needs_attention && (
                     <span style={{ display: 'inline-block', fontSize: 11, fontWeight: 700, color: '#e65100', background: '#fff3e0', padding: '2px 8px', borderRadius: 10, marginBottom: 4 }}>{'\u26A0'} Needs attention</span>
