@@ -352,9 +352,26 @@ const Messages = window.Messages = () => {
   };
 
   // Fetch messages for a conversation
+  // ─── v1.105.177 — "no messages" must mean no messages ───
+  //
+  // Pete, after a safety-flag resolve went wrong: "there's no longer any messages in the
+  // thread that were there before the resolution prompt." All 94 were there the whole time —
+  // checked on production, the newest is the flagged message itself. What he saw was a FAILED
+  // LOAD drawn as an empty room.
+  //
+  // The thread renders its empty state whenever `messages` is [], and [] is also the value it
+  // has before the first load and after one that errored. Three different situations, one
+  // screen, and for a care record the one it picks is the most alarming reading available:
+  // your mother's care conversation is gone.
+  //
+  // So the empty state now requires a load that actually came back and actually said zero.
+  const [threadState, setThreadState] = useState('idle'); // idle | loading | loaded | failed
+
   const fetchMessages = async (convId) => {
+    setThreadState((prev) => (prev === 'loaded' ? prev : 'loading'));
     try {
       const res = await apiFetch(`/api/messages/conversations/${convId}`);
+      if (!res?.ok) { setThreadState('failed'); return; }
       if (res?.ok) {
         const data = await res.json();
         // v1.105.148 — replace only if something actually changed. The catch-up below re-reads
@@ -371,8 +388,11 @@ const Messages = window.Messages = () => {
         // v1.105.92 — how many messages predate this person joining. Shown as a line at the
         // top of the thread so it reads as a boundary rather than a broken load.
         setHiddenBefore(data.hiddenBefore || 0);
+        setThreadState('loaded');
       }
     } catch (err) {
+      // A network error is not an empty conversation. Say so, and keep whatever is on screen.
+      setThreadState('failed');
       console.error('Fetch messages error:', err);
     }
   };
@@ -945,6 +965,7 @@ const Messages = window.Messages = () => {
     setShowEmojiFor(null);
     // Restore draft for the new conversation
     setInputText(draftsRef.current[conv.id] || '');
+    setThreadState('loading'); // this thread has not loaded yet, whatever the last one did
     fetchMessages(conv.id);
   };
 
@@ -2425,9 +2446,26 @@ const Messages = window.Messages = () => {
                   </div>
                 </div>
               ) : (
+                threadState === 'failed' ? (
+                  // The honest version of the screen that frightened him.
+                  <div style={{ color: 'var(--text-secondary)', fontSize: 14, textAlign: 'center' }}>
+                    <div style={{ fontWeight: 600, marginBottom: 6 }}>Couldn{'\u2019'}t load this conversation</div>
+                    <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>
+                      Nothing has been deleted. Check your connection and try again.
+                    </div>
+                    <button onClick={() => fetchMessages(activeConvId)} style={{
+                      minHeight: 44, padding: '0 18px', borderRadius: 10, border: 'none',
+                      background: 'var(--role-color)', color: 'var(--text-on-primary)',
+                      font: 'inherit', fontSize: 14, fontWeight: 700, cursor: 'pointer',
+                    }}>Try again</button>
+                  </div>
+                ) : threadState !== 'loaded' ? (
+                  <div style={{ color: 'var(--text-muted)', fontSize: 14 }}>Loading{'\u2026'}</div>
+                ) : (
                 <div style={{ color: 'var(--text-muted)', fontSize: 14 }}>
                   {isGroup ? 'No messages yet in this group' : 'Send a message to start the conversation'}
                 </div>
+                )
               )}
             </div>
           ) : (

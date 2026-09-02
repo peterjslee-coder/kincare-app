@@ -346,7 +346,7 @@ describe("the shape the badge relies on", () => {
     const r = await attentionCountFor(db, outsider.user.id);
     // v1.105.145 — `approvals` joined the payload. Zero for this user: they are not an admin,
     // and an approval is not their decision to make.
-    expect(r).toEqual({ total: 0, reimbursements: 0, timeChanges: 0, timeChangeSessionId: null, careTasks: 0, approvals: 0, messages: 0 });
+    expect(r).toEqual({ total: 0, reimbursements: 0, timeChanges: 0, timeChangeSessionId: null, careTasks: 0, approvals: 0, safetyFlags: 0, messages: 0 });
     expect(Number.isFinite(r.total)).toBe(true);
   });
 });

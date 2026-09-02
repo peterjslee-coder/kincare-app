@@ -155,11 +155,13 @@ async function screenMessage(messageContent, senderId, conversationId, senderInf
     const flagType = analysis.flag_type || "abuse_signal";
     const severity = analysis.severity || "medium";
 
-    // Insert safety flag
+    // Insert safety flag. v1.105.177 — the id is kept: the push has to carry it, or a tap
+    // cannot open the flag it is about.
+    const flagId = uuid();
     await db.prepare(`
       INSERT INTO safety_flags (id, user_id, flag_type, user_message, conversation_id, status, created_at)
       VALUES (?, ?, ?, ?, ?, 'pending', NOW())
-    `).run(uuid(), senderId, flagType, messageContent.substring(0, 1000), conversationId);
+    `).run(flagId, senderId, flagType, messageContent.substring(0, 1000), conversationId);
 
     // Build alert
     const severityEmoji = severity === "critical" ? "🚨🚨" : severity === "high" ? "🚨" : "⚠️";
@@ -187,7 +189,13 @@ async function screenMessage(messageContent, senderId, conversationId, senderInf
             title: alertTitle,
             // v1.105.39 — the excerpt was the flagged message itself, on a lock screen.
             body: "Tap to review in InPlace.",
-            data: { type: "safety_flag", conversationId },
+            // v1.105.177 — Pete: "i got a flagged message to resolve. i clicked to resolve
+            // it. it opened the app, but no 'needs you' or prompt to open admin or anything.
+            // just dead ends." The payload was type + conversationId, and __handlePushNavigate
+            // has no branch for `safety_flag` and no `page` to fall back on — so `target`
+            // stayed null and the handler returned. The tap opened the app and did nothing at
+            // all. A push about suspected abuse is the last one that should go nowhere.
+            data: { type: "safety_flag", conversationId, flagId, page: "admin" },
           }).catch(() => {});
         }
       }

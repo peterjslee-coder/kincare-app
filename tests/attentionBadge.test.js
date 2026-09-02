@@ -75,8 +75,11 @@ describe("the count means: you are the blocker", () => {
     expect(r).toEqual({
       // v1.105.145 — `approvals` joined the payload: somebody who signed up and cannot get in
       // is the purest case of "you are the blocker". Zero here: this stub's user is not admin.
+      // v1.105.177 — `safetyFlags` joined it for the same reason: a suspected-abuse report
+      // nobody has reviewed is the definition at the top of that file. Zero here for the same
+      // reason approvals is: this stub's user is not an admin.
       total: 6, reimbursements: 2, timeChanges: 1, timeChangeSessionId: "s1", careTasks: 3,
-      approvals: 0, messages: 4,
+      approvals: 0, safetyFlags: 0, messages: 4,
     });
   });
 
@@ -103,7 +106,7 @@ describe("the count means: you are the blocker", () => {
     }) };
     const r = await attentionCountFor(brokenDb, "pete");
     expect(r.total).toBe(0);
-    expect(r).toEqual({ total: 0, reimbursements: 0, timeChanges: 0, timeChangeSessionId: null, careTasks: 0, approvals: 0, messages: 0 });
+    expect(r).toEqual({ total: 0, reimbursements: 0, timeChanges: 0, timeChangeSessionId: null, careTasks: 0, approvals: 0, safetyFlags: 0, messages: 0 });
   });
 });
 

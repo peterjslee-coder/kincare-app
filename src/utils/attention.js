@@ -66,7 +66,7 @@ const name = (first, last) => [first, last].filter(Boolean).join(" ").trim() || 
 
 const EMPTY = {
   total: 0, reimbursements: 0, timeChanges: 0, timeChangeSessionId: null,
-  careTasks: 0, approvals: 0, messages: 0, items: [],
+  careTasks: 0, approvals: 0, safetyFlags: 0, messages: 0, items: [],
 };
 
 /**
@@ -185,6 +185,31 @@ async function attentionItemsFor(db, userId) {
         AND COALESCE(is_active, 1) = 1
         AND created_at > '2026-02-20'
       ORDER BY created_at
+    `).all();
+  });
+
+  // ── A pending safety flag, for an admin ──
+  //
+  // v1.105.177. Pete tapped a safety-flag push: "it opened the app, but no 'needs you' or
+  // prompt to open admin or anything. just dead ends. found it when i went looking in admin."
+  //
+  // The deep link is fixed separately, but a link is not the answer on its own — a push is
+  // gone the moment it is missed, and this is the one surface whose entire job is "you are the
+  // blocker". A suspected-abuse report sitting unread because nobody happened to open the
+  // Admin page is the worst version of the thing this file exists to prevent.
+  //
+  // Admins only, by is_admin rather than role, for the same reason as approvals above.
+  // Escalated counts too: escalating is not resolving, and something escalated is still open.
+  const safetyRows = await safeRows("safetyFlags", async () => {
+    const me = await db.prepare("SELECT is_admin FROM users WHERE id = ?").get(userId);
+    if (!me || !me.is_admin) return [];
+    return db.prepare(`
+      SELECT sf.id, sf.flag_type, sf.created_at, sf.status,
+             u.first_name, u.last_name
+      FROM safety_flags sf
+      LEFT JOIN users u ON u.id = sf.user_id
+      WHERE sf.status IN ('pending', 'escalated')
+      ORDER BY sf.created_at
     `).all();
   });
 
@@ -332,6 +357,23 @@ async function attentionItemsFor(db, userId) {
       focus: `approval:${u.id}`,
       note: "They can't use InPlace until you do.",
     })),
+    ...safetyRows.map((f) => ({
+      kind: "safetyFlag",
+      id: f.id,
+      // No excerpt, deliberately: the flagged message is the thing being reported and this
+      // card is read on a lock screen's worth of dashboard. Same rule as the push (v1.105.39).
+      title: `Review safety flag — ${name(f.first_name, f.last_name) || "a member"}`,
+      detail: String(f.flag_type || "").replace(/_/g, " ") || null,
+      forWhom: null,
+      when: f.created_at || null,
+      // No one-tap action. Every other item here can be settled from the card; this one cannot,
+      // because resolving an abuse report without reading it is not a thing to make easy.
+      verb: "Open",
+      action: null,
+      page: "admin",
+      focus: `safetyFlag:${f.id}`,
+      note: f.status === "escalated" ? "Escalated and still open." : "Nobody else is reviewing this.",
+    })),
     ...taskRows.map((t) => ({
       kind: "careTask",
       id: t.id,
@@ -382,9 +424,11 @@ async function attentionItemsFor(db, userId) {
     // The count is still returned — it is honest, and the caller may want it — but the card
     // and the app icon both read `total`, so they stay in agreement, which is the one thing
     // AttentionCard cannot afford to lose.
-    total: reimbursementRows.length + timeChanges + taskRows.length + approvalRows.length,
+    total: reimbursementRows.length + timeChanges + taskRows.length + approvalRows.length
+      + safetyRows.length,
     reimbursements: reimbursementRows.length,
     approvals: approvalRows.length,
+    safetyFlags: safetyRows.length,
     timeChanges,
     // v1.105.105 — a count with no destination is why "1 schedule change waiting on your
     // answer" was a dead end: the card sent you to a page and the page said nothing. Kept

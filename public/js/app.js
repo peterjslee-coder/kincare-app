@@ -714,6 +714,12 @@ const App = () => {
         target = (window.__currentRole || 'family') === 'family' ? 'care-profile' : 'care-notes';
       } else if (t.startsWith('care_task') || t.startsWith('care_event')) {
         target = 'dashboard';
+      } else if (t === 'safety_flag') {
+        // v1.105.177 — there was no branch here at all, and the payload carried no `page`, so
+        // `target` stayed null and the whole handler returned: the tap opened the app and did
+        // nothing. Pete: "just dead ends. found it when i went looking in admin."
+        if (d.flagId && !d.focus) window.__pendingFocus = `safetyFlag:${d.flagId}`;
+        target = 'admin';
       } else if (t === 'kindred_relay') {
         target = 'messages';
       } else if (t === 'admin_setting_change') {

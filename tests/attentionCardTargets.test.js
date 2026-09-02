@@ -56,7 +56,10 @@ describe("unread messages are not in this tile", () => {
     // The card and the app icon both read `total`. Dropping the row but not the total would
     // leave the icon permanently higher than the list that is supposed to itemise it — the
     // one disagreement this card exists to prevent.
-    expect(attention).toMatch(/total: reimbursementRows\.length \+ timeChanges \+ taskRows\.length \+ approvalRows\.length,/);
+    // v1.105.177 — safety flags joined the sum. What this assertion is really about is that
+    // MESSAGES are not in it, so it names the terms rather than pinning the line verbatim.
+    expect(attention).toMatch(/total: reimbursementRows\.length \+ timeChanges \+ taskRows\.length \+ approvalRows\.length/);
+    expect(attention).toMatch(/\+ safetyRows\.length,/);
   });
 
   test("the count is still reported, just not counted", () => {

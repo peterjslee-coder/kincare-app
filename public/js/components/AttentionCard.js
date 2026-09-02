@@ -366,6 +366,10 @@ const AttentionCard = window.AttentionCard = ({ onNavigate }) => {
             )}
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+              {/* v1.105.177 — an item with no `action` cannot be settled from a card. A
+                  safety flag is the first: resolving an abuse report without reading it is
+                  not a thing to make one tap easy. Open is the only way in. */}
+              {item.action && (
               <button onClick={() => act(item)} disabled={!!busy[item.id]}
                 style={{
                   flex: '1 1 auto', minHeight: 44, padding: '12px 24px',
@@ -375,11 +379,16 @@ const AttentionCard = window.AttentionCard = ({ onNavigate }) => {
                   cursor: busy[item.id] ? 'wait' : 'pointer',
                   boxShadow: busy[item.id] ? 'none' : '0 2px 8px rgba(216,90,43,0.3)',
                 }}>{busy[item.id] ? 'Working\u2026' : item.verb}</button>
+              )}
               <button onClick={() => open(item)} style={{
-                minHeight: 44, padding: '10px 18px', background: 'var(--bg-surface)',
-                color: 'var(--accent-color)', border: '2px solid var(--accent-color)',
+                // When it is the only button it takes the room the action button would have.
+                flex: item.action ? undefined : '1 1 auto',
+                minHeight: 44, padding: '10px 18px',
+                background: item.action ? 'var(--bg-surface)' : 'var(--accent-color-dark)',
+                color: item.action ? 'var(--accent-color)' : 'var(--text-on-primary)',
+                border: item.action ? '2px solid var(--accent-color)' : 'none',
                 borderRadius: 12, fontSize: 13.5, fontWeight: 700, cursor: 'pointer',
-              }}>Open{' '}{'›'}</button>
+              }}>{item.action ? 'Open' : (item.verb || 'Open')}{' '}{'\u203A'}</button>
               {/* v1.105.161 — the third answer. See `dismiss` in utils/attention.js: a row that
                   interrupts you has to be clearable without finishing the task. */}
               {item.dismiss && (

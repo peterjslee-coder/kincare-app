@@ -300,10 +300,31 @@ router.put("/safety-flags/:id", authenticate, checkAdmin, requireAdmin, async (r
     const { status, admin_notes } = req.body;
     if (!status) return res.status(400).json({ error: "Status is required" });
 
+    // ─── v1.105.177 — the same answer twice is one answer ───
+    //
+    // Pete resolved a flag, the request timed out at 25s, he pressed it again and it worked.
+    // Both had worked: the flag's audit trail carries TWO `status_resolved` events, 95 seconds
+    // apart, from one decision. On an ordinary record that is untidy. On the accountability
+    // record for who reviewed a suspected-abuse report and when, it is a false history — and
+    // this route's whole purpose is that history.
+    //
+    // A retry of a request that already landed is not a second decision, so it does not get a
+    // second entry. Genuinely CHANGING the status still does: pending → escalated → resolved
+    // is a real sequence and each step is real.
+    const before = await db.prepare(
+      "SELECT status, reviewed_by FROM safety_flags WHERE id = ?"
+    ).get(req.params.id);
+    if (!before) return res.status(404).json({ error: "Safety flag not found" });
+    const isRepeat = before.status === status && before.reviewed_by === req.user.id;
+
     await db.prepare(`
       UPDATE safety_flags SET status = ?, admin_notes = ?, reviewed_by = ?, reviewed_at = NOW()
       WHERE id = ?
     `).run(status, admin_notes || null, req.user.id, req.params.id);
+
+    // Answer the retry honestly rather than pretending nothing happened: the client shows the
+    // same success either way, and the flag is in the state the admin asked for.
+    if (isRepeat) return res.json({ success: true, repeated: true });
 
     // Log status change as audit event
     await db.prepare(
@@ -318,6 +339,10 @@ router.put("/safety-flags/:id", authenticate, checkAdmin, requireAdmin, async (r
 
     res.json({ success: true });
   } catch (err) {
+    // v1.105.177 — this catch used to swallow the reason entirely. A 500 on the route that
+    // records who reviewed an abuse report is exactly the failure that has to be reportable.
+    captureException(err, { where: "admin: safety flag review", flagId: req.params.id });
+    console.error("Safety flag review error:", err);
     res.status(500).json({ error: "Failed to update safety flag" });
   }
 });
