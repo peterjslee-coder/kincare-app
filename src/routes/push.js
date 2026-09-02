@@ -976,17 +976,26 @@ async function sendSessionReminders(sessionId, reminderType) {
 // ─── v1.56.0 — In-app notifications API ───
 
 // GET /api/push/notifications — recent notifications for current user
+// See utils/notificationGroups.js for why messages group and nothing else does.
+const { groupNotifications } = require("../utils/notificationGroups");
+
 router.get("/notifications", authenticate, async (req, res) => {
   try {
     const db = await getDb();
     const limit = parseInt(req.query.limit) || 30;
-    const notifications = await db.prepare(
+    // Read wider than we return, because grouping only shrinks the list. Bounded so a busy
+    // account cannot turn one dashboard load into an unbounded scan.
+    const scan = Math.min(limit * 8, 200);
+    const rows = await db.prepare(
       "SELECT id, title, body, type, data, read, created_at FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT ?"
-    ).all(req.user.id, limit);
+    ).all(req.user.id, scan);
     const unreadCount = await db.prepare(
       "SELECT COUNT(*) as count FROM notifications WHERE user_id = ? AND read = 0"
     ).get(req.user.id);
-    res.json({ notifications, unreadCount: parseInt(unreadCount?.count || 0) });
+    res.json({
+      notifications: groupNotifications(rows, limit),
+      unreadCount: parseInt(unreadCount?.count || 0),
+    });
   } catch (err) {
     console.error("Notifications fetch error:", err.message);
     res.json({ notifications: [], unreadCount: 0 });

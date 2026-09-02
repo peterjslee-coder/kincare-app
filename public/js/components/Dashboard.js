@@ -2015,7 +2015,10 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
 
         const openNotif = (n) => {
           const nData = n.data ? (typeof n.data === 'string' ? JSON.parse(n.data) : n.data) : {};
-          markNotificationsRead([n.id]);
+          // v1.105.176 — a row can now stand for several notifications (five messages from one
+          // conversation are one row), so opening it clears all of them. Marking only the row's
+          // own id would leave the badge counting messages the person has just been shown.
+          markNotificationsRead(n.ids || [n.id]);
           if (nData.sessionId && typeof setVisitDetailSessionId === 'function') setVisitDetailSessionId(nData.sessionId);
           else if (['payment', 'manual_payment'].includes(nData.type) && onNavigate) onNavigate('payments');
           else if (window.__handlePushNavigate) window.__handlePushNavigate(nData);
@@ -2034,7 +2037,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
               </span>
               <span style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                 {unread.length > 0 && (
-                  <button onClick={() => markNotificationsRead(unread.map(n => n.id))} style={{
+                  <button onClick={() => markNotificationsRead(unread.flatMap(n => n.ids || [n.id]))} style={{
                     padding: '4px 10px', background: 'var(--role-color-light)', color: 'var(--role-color)',
                     border: 'none', borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: 'pointer',
                   }}>✓ Mark all read</button>
