@@ -49,7 +49,24 @@ if (!JWT_SECRET) {
 // Socket.io. Nothing broke only because every caller is same-origin today; see
 // utils/env.js for the derivation and for the App Store / Capacitor caveat.
 const { allowedOrigins: ALLOWED_ORIGINS } = require("./utils/env");
-const io = new Server(server, { cors: { origin: ALLOWED_ORIGINS, credentials: true } });
+// ─── v1.105.175 — find out sooner that a client has gone away ───
+//
+// Socket.io's defaults are pingInterval 25s and pingTimeout 20s, so a phone that locks
+// mid-conversation stays registered here for up to 45 seconds. That is not a cosmetic delay:
+// for those 45 seconds the server believes the person is reading the thread, so it suppresses
+// their push — and delivers the message to a socket that is not there. The message is lost in
+// both directions at once, which is exactly what "I didn't see any of the messages until all
+// 5 were there" looks like from the outside.
+//
+// 10 and 10 cuts the window to about 20 seconds. It costs one small frame each way every ten
+// seconds per socket, which is nothing next to a message nobody receives. The view registry
+// (utils/presence.js) expires its claims independently, so this is the belt and that is the
+// braces — neither alone is a guarantee.
+const io = new Server(server, {
+  cors: { origin: ALLOWED_ORIGINS, credentials: true },
+  pingInterval: 10000,
+  pingTimeout: 10000,
+});
 
 // JWT auth middleware for socket connections
 io.use((socket, next) => {
@@ -275,6 +292,23 @@ io.on("connection", (socket) => {
 
   socket.on("conversation_close", () => {
     viewingConversation.close(socket.id);
+  });
+
+  // ─── v1.105.175 — "are you actually there?", asked by the client ───
+  //
+  // A socket that has been frozen and thawed can report itself connected while the connection
+  // underneath it is long gone; the client cannot tell by asking itself. This answers, and the
+  // silence when it does not answer is what the client acts on. See connectSocket() in
+  // public/js/utils.js.
+  //
+  // It doubles as the heartbeat for the view registry: a page that is awake enough to ask is
+  // awake enough to still be reading, so a live answer refreshes the claim rather than needing
+  // a second round trip to do it.
+  socket.on("ping_check", (payload, ack) => {
+    const cb = typeof payload === "function" ? payload : ack;
+    const convId = typeof payload === "object" && payload ? payload.conversationId : null;
+    if (convId) viewingConversation.open(socket.id, convId);
+    if (typeof cb === "function") cb({ ok: true });
   });
 
   socket.on("disconnect", () => {
@@ -548,7 +582,7 @@ app.use("/api/media", require("./routes/media"));
 app.use("/api/safety", require("./routes/safety"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.105.174";
+const APP_VERSION = "1.105.175";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });

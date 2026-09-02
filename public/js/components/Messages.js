@@ -774,6 +774,21 @@ const Messages = window.Messages = () => {
   //
   // So: re-read on reconnect and on coming back to the foreground. Cheap, and the guard in
   // fetchMessages means an unchanged thread costs a request and nothing else.
+  // v1.105.175 — the catch-up below is gated on having a thread OPEN. Someone sitting on the
+  // conversation list whose socket quietly died saw a list that simply stopped updating, with
+  // no thread to trigger the re-read. This is the same catch-up, for that case.
+  useEffect(() => {
+    if (activeConvId) return; // the effect below covers an open thread, and does more
+    const catchUpList = () => fetchConversations();
+    const onVisible = () => { if (document.visibilityState === 'visible') catchUpList(); };
+    const offConnect = onSocketEvent('connect', catchUpList);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      if (typeof offConnect === 'function') offConnect();
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [activeConvId]);
+
   useEffect(() => {
     if (!activeConvId) return;
     const catchUp = () => {
@@ -804,9 +819,20 @@ const Messages = window.Messages = () => {
     const close = () => sock.emit('conversation_close', {});
     const onVisibility = () => (document.hidden ? close() : open());
     open();
+    // v1.105.175 — the liveness probe re-asserts this claim on the same round trip, and it is
+    // the only thing that can: a probe fired from utils.js has no idea which thread is open.
+    window.__openConversationId = activeConvId;
+    // ...and the claim now EXPIRES server-side (utils/presence.js), so a page that is genuinely
+    // on screen has to keep saying so. A frozen page cannot, which is the entire point: its
+    // claim dies on its own instead of suppressing pushes for a reader who is not there.
+    const beat = setInterval(() => {
+      if (document.visibilityState === 'visible') open();
+    }, 20000);
     document.addEventListener('visibilitychange', onVisibility);
     return () => {
+      clearInterval(beat);
       document.removeEventListener('visibilitychange', onVisibility);
+      window.__openConversationId = null;
       close();
     };
   }, [activeConvId]);

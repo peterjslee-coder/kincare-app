@@ -992,10 +992,57 @@ const ToastProvider = window.ToastProvider = ({ children }) => {
 let _socket = null;
 const _socketListeners = new Map(); // event -> Set of callbacks
 
+// ─── v1.105.175 — a socket that says it is connected is not evidence that it is ───
+//
+// Pete: "I didn't see any of the messages until all 5 were there."
+//
+// A phone that locks, or a tab that is frozen and later thawed, comes back holding an object
+// that still reports `connected: true` over a connection that died minutes ago. Nothing in the
+// client ever questioned that, so there was no reconnect, no 'connect' event, and therefore no
+// catch-up — the screen simply stopped receiving, indefinitely, with no error anywhere.
+//
+// So: on the way back to the foreground, ask the server and require an answer. Silence is the
+// signal. This is the only reliable test from inside the page.
+const SOCKET_PROBE_TIMEOUT_MS = 3000;
+
+// The thread currently on screen, so a probe can re-assert it as the same round trip (see
+// `ping_check` in server.js). Set by Messages; null everywhere else.
+window.__openConversationId = window.__openConversationId || null;
+
+function probeSocket() {
+  const sock = _socket;
+  if (!sock) return;
+  // Never connected, or knows it is gone: just reconnect. socket.io will not do this by itself
+  // if it believes the disconnect was deliberate.
+  if (!sock.connected) { try { sock.connect(); } catch {} return; }
+  if (typeof sock.timeout !== 'function') return; // older client build; nothing to ask with
+  try {
+    sock.timeout(SOCKET_PROBE_TIMEOUT_MS).emit(
+      'ping_check',
+      { conversationId: window.__openConversationId || null },
+      (err) => {
+        if (!err) return; // answered — genuinely alive
+        // No answer inside the window. Tear it down and rebuild: the 'connect' that follows is
+        // what every screen's catch-up already listens for.
+        try { sock.disconnect(); } catch {}
+        try { sock.connect(); } catch {}
+      }
+    );
+  } catch { /* a probe must never be the thing that breaks messaging */ }
+}
+window.__probeSocket = probeSocket;
+
 const connectSocket = window.connectSocket = (token) => {
   if (_socket) _socket.disconnect();
   if (!token || typeof io === 'undefined') return;
-  _socket = io(API_BASE, { auth: { token }, transports: ['websocket', 'polling'] });
+  _socket = io(API_BASE, {
+    // v1.105.175 — a FUNCTION, not a captured value. `auth: { token }` freezes whatever token
+    // was current at connect time, so once it expires every reconnection attempt fails the
+    // handshake forever and the app goes quiet with no way back short of a reload. Tokens last
+    // seven days, which is exactly long enough for nobody to connect this to the symptom.
+    auth: (cb) => cb({ token: (typeof getAuthToken === 'function' && getAuthToken()) || token }),
+    transports: ['websocket', 'polling'],
+  });
   window._socket = _socket;
   _socket.on('connect', () => console.log('WS connected'));
   _socket.on('disconnect', () => console.log('WS disconnected'));
@@ -1005,7 +1052,23 @@ const connectSocket = window.connectSocket = (token) => {
       _socket.on(event, cb);
     }
   }
+  bindLivenessChecks();
 };
+
+// Bound once for the life of the page, not per connection: these listeners have to survive the
+// socket being replaced, which is the situation they exist to cause.
+let _livenessBound = false;
+function bindLivenessChecks() {
+  if (_livenessBound) return;
+  _livenessBound = true;
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') probeSocket();
+  });
+  // Coming back onto a network is the other way this happens, and it does not always produce a
+  // visibilitychange — a phone that never locked but lost signal in a lift.
+  window.addEventListener('online', probeSocket);
+  window.addEventListener('focus', probeSocket);
+}
 
 const disconnectSocket = window.disconnectSocket = () => {
   if (_socket) { _socket.disconnect(); _socket = null; window._socket = null; }
