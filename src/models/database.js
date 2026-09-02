@@ -225,6 +225,19 @@ const SNAPSHOT_TABLES = {
   reviews: {},
 };
 const SNAPSHOT_MAX_ROWS_PER_TABLE = 20000; // safety valve against runaway snapshot size
+// ─── v1.105.178 — the valve that was missing ───
+//
+// Railway warned Postgres was at 81% of its volume. `boot_snapshots` was 130.7 MB of a 259.8 MB
+// database — HALF of it — in five rows.
+//
+// The row valve above never fired: `messages` has 433 rows, nowhere near 20,000. But a photo
+// message stores its image as a base64 data URI in `content`, and the biggest is 6 MB, so those
+// 433 rows are 24 MB — and every boot copied all of it, five times over.
+//
+// Rows were never the thing worth capping; bytes are. `users.profile_photo` and
+// `care_recipients.photo` are already excluded above, which shows the author knew blobs were the
+// risk — the miss is that a blob can hide inside an ordinary-looking TEXT column too.
+const SNAPSHOT_MAX_BYTES_PER_TABLE = 4 * 1024 * 1024;
 const SNAPSHOT_KEEP = 5;
 
 async function preMigrationSnapshot(db) {
@@ -246,6 +259,20 @@ async function preMigrationSnapshot(db) {
       const cnt = await db.prepare(`SELECT COUNT(*)::int AS n FROM ${table}`).get();
       if (cnt.n > SNAPSHOT_MAX_ROWS_PER_TABLE) {
         snap._meta["skipped_" + table] = `row count ${cnt.n} exceeds cap`;
+        continue;
+      }
+      // v1.105.178 — and how big those rows actually are. pg_total_relation_size includes
+      // TOAST, which is exactly where a base64 photo in a TEXT column lives; measuring the
+      // main fork alone would report `messages` as small and copy 24 MB anyway.
+      const size = await db.prepare(
+        "SELECT pg_total_relation_size(to_regclass(?))::bigint AS bytes"
+      ).get("public." + table);
+      const bytes = Number(size?.bytes || 0);
+      if (bytes > SNAPSHOT_MAX_BYTES_PER_TABLE) {
+        // Loud in _meta rather than silent: a snapshot that quietly stopped covering the
+        // messages table would be a safety net with a hole in it that nobody could see. The
+        // real backup is still the nightly pg_dump — this is only the pre-migration undo.
+        snap._meta["skipped_" + table] = `size ${(bytes / 1048576).toFixed(1)} MB exceeds ${(SNAPSHOT_MAX_BYTES_PER_TABLE / 1048576).toFixed(0)} MB cap`;
         continue;
       }
       const colList = keep.map((c) => `"${c}"`).join(", ");

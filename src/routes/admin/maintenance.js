@@ -212,6 +212,55 @@ router.get("/db-storage", authenticate, checkAdmin, requireAdmin, async (req, re
   }
 });
 
+// ─── POST /api/admin/db-storage/prune-snapshots (v1.105.178) ───
+//
+// Deleting the rows is only half of it. Postgres frees the space for REUSE but does not hand it
+// back to the filesystem, and Railway's warning is about the volume — so without the VACUUM
+// FULL the number Pete is looking at would not move. The table is a handful of rows, so the
+// exclusive lock it takes lasts a moment, and nothing reads boot_snapshots at runtime.
+//
+// `keep` defaults to 1: the point of a pre-migration snapshot is undoing the migration that is
+// about to run, so the newest one is the one with a job. The nightly pg_dump is the real backup
+// and is untouched by this.
+router.post("/db-storage/prune-snapshots", authenticate, checkAdmin, requireAdmin, async (req, res) => {
+  try {
+    const db = await getDb();
+    const keep = Math.max(0, Math.min(parseInt(req.body?.keep, 10) || 1, 5));
+
+    const before = await db.prepare(
+      "SELECT COUNT(*)::int AS rows, COALESCE(pg_total_relation_size('public.boot_snapshots'), 0)::bigint AS bytes FROM boot_snapshots"
+    ).get();
+
+    await db.prepare(
+      "DELETE FROM boot_snapshots WHERE id NOT IN (SELECT id FROM boot_snapshots ORDER BY created_at DESC, id DESC LIMIT ?)"
+    ).run(keep);
+
+    // Cannot run inside a transaction, and must not be parameterised — a fixed table name.
+    await db.exec("VACUUM FULL boot_snapshots");
+
+    const after = await db.prepare(
+      "SELECT COUNT(*)::int AS rows, COALESCE(pg_total_relation_size('public.boot_snapshots'), 0)::bigint AS bytes FROM boot_snapshots"
+    ).get();
+    const dbSize = await db.prepare("SELECT pg_database_size(current_database())::bigint AS bytes").get();
+
+    await logAdminAction(req, "db_prune_snapshots", "database", "boot_snapshots", {
+      keep,
+      freedBytes: Number(before?.bytes || 0) - Number(after?.bytes || 0),
+    });
+
+    res.json({
+      keep,
+      before: { rows: Number(before?.rows || 0), bytes: Number(before?.bytes || 0) },
+      after: { rows: Number(after?.rows || 0), bytes: Number(after?.bytes || 0) },
+      freedBytes: Number(before?.bytes || 0) - Number(after?.bytes || 0),
+      databaseBytes: Number(dbSize?.bytes || 0),
+    });
+  } catch (err) {
+    captureException(err, { where: "admin: prune boot snapshots" });
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.get("/users/:id/reachability", authenticate, checkAdmin, requireAdmin, async (req, res) => {
   try {
     const db = await getDb();

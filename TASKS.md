@@ -440,6 +440,26 @@
       wants the record of what was posted, not only what was posted to him.
       Depends on nothing; the `reactions` table (v1.105.170) has the timestamps.
 
+- [ ] **Photo messages are stored as base64 in `messages.content`, and sent in every thread
+      fetch.** (Found 9/2 chasing Railway's 81% storage warning.) Measured on prod: the four
+      biggest messages in Betty Core are **5–6 MB each**, `message_type: 'photo'`, and the whole
+      table is 24 MB of TOAST across 433 rows. `GET /api/messages/conversations/:id` returns
+      them inline, so opening that thread downloads ~24 MB — which is almost certainly what Pete
+      reported on 8/29 as "some sort of lag in the messages" (`befaf875`).
+      `src/utils/storage.js` (R2) already exists and is used by documents, consent,
+      reimbursements and caregiver onboarding. Message photos never got the same treatment, and
+      neither did `visit_photos` (27 MB in 9 rows), `family_visits.photo/photos`,
+      `recipient_notes.photo` or `feedback.screenshot`.
+      Two jobs, and the second is the bigger one: (a) stop returning image data in list
+      payloads — serve it by id like `/api/notes/:id/photo` already does; (b) move the blobs to
+      R2 behind the existing `storeFileData`/`resolveFileData` markers, with a backfill.
+
+- [ ] **`audit_log` has 82,061 rows / 35 MB and no retention policy.** (Found 9/2.) Second
+      largest thing in the database after the boot snapshots. Nothing prunes it, and it is
+      excluded from boot snapshots only because it trips the 20,000-row cap. Decide a retention
+      window — this is an accountability record, so the answer is a deliberate one, not "delete
+      the old ones". Ask the lawyer list what the minimum is.
+
 - [ ] **CallKit + VoIP push — make the phone actually ring.** (Pete, 9/1: "let's get the work
       on callkit and voip.") **Plan: `CallKit_VoIP_Plan_2026-09-01.md` in the Working Folder —
       read it before touching any of this.**
