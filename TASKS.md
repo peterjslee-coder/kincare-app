@@ -423,6 +423,14 @@
 
 ### P1
 
+- [ ] **Opting out of a push silently opts you out of the Activity row too.** (Found 9/2.)
+      In `sendPushToUser` the notification-preferences check returns BEFORE the in-app
+      `notifications` INSERT, so `push_team_note: false` means no push AND no record anywhere
+      in the app. "I don't want my phone to buzz" and "I never want to know this happened" are
+      not the same request, and today they are the same switch. The in-app record should be
+      written first, then the push decision made. Nobody has hit this yet — Pete's prefs are
+      `{email_new_registration: false}` — but the first person who turns a push off will.
+
 - [ ] **Activity should show notes and reactions.** (Pete, 9/2, feedback `99834ce2`: "In
       activity…I should see if someone posted a note. Including my own…or if someone liked it.")
       The Activity feed carries sessions and care tasks; a note being posted, and a reaction
