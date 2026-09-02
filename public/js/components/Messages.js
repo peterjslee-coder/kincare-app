@@ -1154,8 +1154,12 @@ const Messages = window.Messages = () => {
       showToast('Only image files are allowed', 'error');
       return;
     }
-    // v1.104.0 — auto-downscale so big camera photos never hit the 5MB wall
-    file = await window.downscaleImageFile(file);
+    // v1.104.0 — auto-downscale so big camera photos never hit the 5MB wall.
+    // v1.105.181 — and smaller than that. Pete: "we don't need big photos." The default 1600px
+    // at 0.85 is right for a document you might zoom into; a chat photo renders at most 300px
+    // tall in a bubble and 1280 at 0.72 is indistinguishable there at roughly a third of the
+    // bytes. Every one of these is stored base64 in Postgres, which is how the volume filled.
+    file = await window.downscaleImageFile(file, { maxDim: 1280, quality: 0.72 });
     if (file.size > 5 * 1024 * 1024) {
       showToast('Photo must be under 5MB', 'error');
       return;
@@ -2604,12 +2608,24 @@ const Messages = window.Messages = () => {
                           {m.message_type === 'photo' && m.metadata ? (() => {
                             try {
                               const meta = typeof m.metadata === 'string' ? JSON.parse(m.metadata) : m.metadata;
+                              // ─── v1.105.181 — by id, not inline ───
+                              //
+                              // The list used to carry `photoUrl`, a base64 data URI, for every
+                              // photo in the thread — 5-6 MB each on prod. It carries `hasPhoto`
+                              // now and the bytes come from an endpoint, one request per photo,
+                              // cached for a day, and `loading="lazy"` so scrolling past one
+                              // costs nothing. `meta.photoUrl` is still honoured because a
+                              // message JUST sent has the real URL in the local echo.
+                              const src = meta.photoUrl || `/api/messages/${m.id}/photo`;
                               return React.createElement('div', { style: { margin: '-6px -10px 4px -10px' } },
                                 React.createElement('img', {
-                                  src: meta.photoUrl,
+                                  src,
                                   alt: meta.caption || 'Photo',
-                                  style: { maxWidth: '100%', maxHeight: 300, borderRadius: 12, display: 'block', cursor: 'pointer' },
-                                  onClick: (e) => { e.stopPropagation(); setLightboxPhoto({ src: meta.photoUrl, caption: meta.caption }); },
+                                  loading: 'lazy',
+                                  // Reserves the space before it loads, so arriving photos do
+                                  // not shove the thread around under the reader.
+                                  style: { maxWidth: '100%', maxHeight: 300, minHeight: 120, borderRadius: 12, display: 'block', cursor: 'pointer', background: 'var(--bg-primary)' },
+                                  onClick: (e) => { e.stopPropagation(); setLightboxPhoto({ src, caption: meta.caption }); },
                                 }),
                                 meta.caption ? React.createElement('div', { style: { padding: '4px 10px 0', fontSize: 14 } }, meta.caption) : null
                               );

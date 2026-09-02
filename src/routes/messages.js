@@ -277,6 +277,29 @@ function liveMessagePayload(message, realName, convId) {
   };
 }
 
+// ─── v1.105.181 — the photo does not ride along with the thread ───
+//
+// Pete: "we should probably resize photos in messages or something...loading is bad now."
+//
+// A photo message stores its image as a base64 data URI in `metadata.photoUrl`, and every list
+// endpoint returned the metadata verbatim. Measured on production: the four biggest messages in
+// one thread are 5-6 MB EACH and the table is 24 MB across 433 rows — so opening that
+// conversation downloaded ~24 MB before a single bubble appeared. It is also half the reason
+// the Postgres volume filled (boot snapshots copied all of it, five times).
+//
+// Same rule the note photos have had since v1.105.74: the list carries a FLAG, the image is
+// fetched by id. `/photo` below streams it, one request per photo actually on screen.
+function stripPhotoBlob(m) {
+  if (!m || !m.metadata) return m;
+  let meta;
+  try { meta = typeof m.metadata === "string" ? JSON.parse(m.metadata) : m.metadata; } catch { return m; }
+  if (!meta || typeof meta !== "object" || !meta.photoUrl) return m;
+  // Keep everything about the photo EXCEPT the bytes: the caption still renders, and hasPhoto
+  // is what tells the client to point an <img> at the endpoint.
+  const { photoUrl, ...rest } = meta;
+  return { ...m, metadata: JSON.stringify({ ...rest, hasPhoto: true }) };
+}
+
 function makeShouldPush(req) {
   const isViewing = req.app.get("isViewingConversation");
   return (memberId, convId) => !(typeof isViewing === "function" && isViewing(memberId, convId));
@@ -537,7 +560,7 @@ router.get("/conversations/:id", async (req, res) => {
       senderLabel: m.sender_label || null,
     }));
 
-    return res.json({ messages: enriched, conversationType: "direct" });
+    return res.json({ messages: enriched.map(stripPhotoBlob), conversationType: "direct" });
   }
 
   // Verify membership
@@ -638,6 +661,50 @@ router.get("/conversations/:id", async (req, res) => {
     historyFrom,
     hiddenBefore,
   });
+});
+
+// ─── GET /api/messages/:id/photo (v1.105.181) — stream one photo ───
+//
+// The counterpart to stripPhotoBlob. Membership is checked on the message's conversation, and
+// a failed check answers 404 rather than 403 so probing ids tells you nothing — the same
+// convention as notes and family visits.
+//
+// Cached privately for a day: the bytes for a given message id never change, and re-downloading
+// a photo every time someone scrolls past it is the problem this endpoint exists to solve.
+router.get("/:id/photo", async (req, res) => {
+  try {
+    const db = await getDb();
+    const msg = await db.prepare(
+      "SELECT id, conversation_id, sender_id, recipient_id, metadata FROM messages WHERE id = ?"
+    ).get(req.params.id);
+    if (!msg) return res.status(404).json({ error: "Photo not found" });
+
+    let allowed = false;
+    if (msg.conversation_id) {
+      const membership = await db.prepare(
+        "SELECT id FROM conversation_members WHERE conversation_id = ? AND user_id = ?"
+      ).get(msg.conversation_id, req.user.id);
+      allowed = !!membership;
+    } else {
+      // Legacy direct messages predate conversations and have no membership row.
+      allowed = msg.sender_id === req.user.id || msg.recipient_id === req.user.id;
+    }
+    if (!allowed) return res.status(404).json({ error: "Photo not found" });
+
+    let meta = null;
+    try { meta = msg.metadata ? JSON.parse(msg.metadata) : null; } catch { meta = null; }
+    const dataUrl = meta && meta.photoUrl;
+    if (!dataUrl) return res.status(404).json({ error: "Photo not found" });
+
+    const m = String(dataUrl).match(/^data:([^;]+);base64,(.+)$/s);
+    if (!m) return res.status(500).json({ error: "Stored photo is corrupt" });
+    res.set("Content-Type", m[1]);
+    res.set("Cache-Control", "private, max-age=86400");
+    res.send(Buffer.from(m[2], "base64"));
+  } catch (err) {
+    captureException(err, { where: "messages: photo" });
+    res.status(500).json({ error: "Could not load that photo" });
+  }
 });
 
 // ─── POST /api/messages/conversations/:id/photo ─── Upload a photo in a conversation
@@ -989,7 +1056,7 @@ router.get("/:partnerId", async (req, res) => {
     senderName: `${m.sender_first_name} ${m.sender_last_name}`,
   }));
 
-  res.json({ messages: enriched });
+  res.json({ messages: enriched.map(stripPhotoBlob) });
 });
 
 // ─── DELETE /api/messages/:messageId ─── Soft-delete a message (sender only)
