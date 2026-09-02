@@ -235,8 +235,30 @@ router.post("/db-storage/prune-snapshots", authenticate, checkAdmin, requireAdmi
       "DELETE FROM boot_snapshots WHERE id NOT IN (SELECT id FROM boot_snapshots ORDER BY created_at DESC, id DESC LIMIT ?)"
     ).run(keep);
 
-    // Cannot run inside a transaction, and must not be parameterised — a fixed table name.
-    await db.exec("VACUUM FULL boot_snapshots");
+    // ─── v1.105.180 — VACUUM FULL is the wrong first move on a FULL disk ───
+    //
+    // It rewrites the table into a new file, so it needs free space equal to the table's size.
+    // On prod that meant asking for 130 MB of headroom on a volume with none, and it failed
+    // with `could not write to file "pg_wal/xlogtemp": No space left on device` — the attempt
+    // to reclaim space needed space.
+    //
+    // Plain VACUUM does not rewrite anything: it marks the deleted pages reusable in place, in
+    // constant extra space. That is what stops writes failing. It does not hand the space back
+    // to the filesystem, so Railway's gauge will not move — but it is the step that can always
+    // run, and it has to come first.
+    await db.exec("VACUUM boot_snapshots");
+
+    // Now that the rows are gone and the pages are reusable, the rewrite is small enough to
+    // have a chance. Best effort, deliberately: failing to shrink the file is a worse outcome
+    // than the DELETE not having happened, so it must not turn the whole call into a 500.
+    let compacted = true;
+    let compactError = null;
+    try {
+      await db.exec("VACUUM FULL boot_snapshots");
+    } catch (e) {
+      compacted = false;
+      compactError = e.message;
+    }
 
     const after = await db.prepare(
       "SELECT COUNT(*)::int AS rows, COALESCE(pg_total_relation_size('public.boot_snapshots'), 0)::bigint AS bytes FROM boot_snapshots"
@@ -254,6 +276,10 @@ router.post("/db-storage/prune-snapshots", authenticate, checkAdmin, requireAdmi
       after: { rows: Number(after?.rows || 0), bytes: Number(after?.bytes || 0) },
       freedBytes: Number(before?.bytes || 0) - Number(after?.bytes || 0),
       databaseBytes: Number(dbSize?.bytes || 0),
+      // false means the rows are gone and the space is reusable by Postgres, but the file has
+      // not shrunk — so the volume gauge will not move until there is room to rewrite.
+      compacted,
+      compactError,
     });
   } catch (err) {
     captureException(err, { where: "admin: prune boot snapshots" });
