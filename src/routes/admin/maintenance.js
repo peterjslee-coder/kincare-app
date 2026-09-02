@@ -131,6 +131,87 @@ router.post("/backfill-assignments", async (req, res) => {
 //
 // No tokens or endpoints are returned. A push token is a credential for someone's phone; the
 // kind and the dates are what a diagnosis needs.
+// ─── GET /api/admin/db-storage (v1.105.178) ───
+//
+// Railway warned that Postgres is at 81% of its volume, and nothing in the app could say why.
+// Answering "what is using the disk" by reading the schema and guessing is exactly the habit
+// this codebase keeps paying for, so: ask the database.
+//
+// Read-only and admin-gated. `pg_total_relation_size` includes indexes and TOAST — TOAST is the
+// whole point here, because a base64 photo in a TEXT column lives there rather than in the
+// table's main fork, and a naive size query would report the table as tiny.
+router.get("/db-storage", authenticate, checkAdmin, requireAdmin, async (req, res) => {
+  try {
+    const db = await getDb();
+    const total = await db.prepare("SELECT pg_database_size(current_database()) AS bytes").get();
+
+    const tables = await db.prepare(`
+      SELECT c.relname AS table,
+             pg_total_relation_size(c.oid) AS total_bytes,
+             pg_relation_size(c.oid) AS heap_bytes,
+             pg_indexes_size(c.oid) AS index_bytes,
+             COALESCE(pg_total_relation_size(c.reltoastrelid), 0) AS toast_bytes,
+             c.reltuples::bigint AS approx_rows
+      FROM pg_class c
+      JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE c.relkind = 'r' AND n.nspname = 'public'
+      ORDER BY pg_total_relation_size(c.oid) DESC
+      LIMIT 25
+    `).all();
+
+    // The columns actually suspected of holding base64: measured, not assumed. Each entry is
+    // [table, column]; a table that does not exist is skipped rather than failing the report.
+    const BLOB_COLUMNS = [
+      ["users", "profile_photo"], ["users", "avatar_url"],
+      ["care_recipients", "photo"],
+      ["recipient_notes", "photo"],
+      ["family_visits", "photo"], ["family_visits", "photos"],
+      ["feedback", "screenshot"],
+      ["caregiver_documents", "file_data"],
+      ["verified_documents", "file_data"],
+    ];
+    const columns = [];
+    for (const [table, column] of BLOB_COLUMNS) {
+      try {
+        const row = await db.prepare(`
+          SELECT COUNT(*) FILTER (WHERE ${column} IS NOT NULL) AS rows_with_data,
+                 COALESCE(SUM(pg_column_size(${column})), 0) AS bytes,
+                 COALESCE(MAX(pg_column_size(${column})), 0) AS largest_bytes,
+                 COUNT(*) FILTER (WHERE ${column} LIKE 'r2:%') AS already_offloaded
+          FROM ${table}
+        `).get();
+        if (row && Number(row.rows_with_data) > 0) {
+          columns.push({
+            column: `${table}.${column}`,
+            rowsWithData: Number(row.rows_with_data),
+            bytes: Number(row.bytes),
+            largestBytes: Number(row.largest_bytes),
+            alreadyOffloaded: Number(row.already_offloaded),
+          });
+        }
+      } catch { /* column or table absent on this deployment — not a failure of the report */ }
+    }
+    columns.sort((a, b) => b.bytes - a.bytes);
+
+    res.json({
+      databaseBytes: Number(total?.bytes || 0),
+      tables: tables.map((t) => ({
+        table: t.table,
+        totalBytes: Number(t.total_bytes),
+        heapBytes: Number(t.heap_bytes),
+        indexBytes: Number(t.index_bytes),
+        // Where a base64 blob actually lives.
+        toastBytes: Number(t.toast_bytes),
+        approxRows: Number(t.approx_rows),
+      })),
+      blobColumns: columns,
+    });
+  } catch (err) {
+    captureException(err, { where: "admin: db storage" });
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.get("/users/:id/reachability", authenticate, checkAdmin, requireAdmin, async (req, res) => {
   try {
     const db = await getDb();
