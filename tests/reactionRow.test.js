@@ -54,6 +54,31 @@ describe("the affordance exists where there is no gesture", () => {
   });
 });
 
+describe("the way in is a control, not content", () => {
+  test("it is not an emoji", () => {
+    // Pete, the morning after v1.105.170 shipped: "Why does every entry now have the same
+    // emoji on it". It was a ☺. An emoji on a row reads as content — and on a visit row it
+    // lands beside the MOOD emoji from v1.105.164, which is content and means something.
+    // Two smileys side by side, one of which is a button, is worse than no button.
+    const row = bar.slice(bar.indexOf("const ReactionRow ="));
+    const addButton = row.slice(row.indexOf("aria-label={mine ?"), row.indexOf("{picking && ("));
+    expect(addButton).not.toMatch(/☺|🙂|😊/);
+    expect(addButton).toMatch(/\\u002B/); // a plain +
+  });
+
+  test("and it looks like an affordance", () => {
+    const row = bar.slice(bar.indexOf("const ReactionRow ="));
+    const addButton = row.slice(row.indexOf("aria-label={mine ?"), row.indexOf("{picking && ("));
+    expect(addButton).toMatch(/border: '1px dashed/);
+    expect(addButton).toMatch(/background: 'none'/);
+  });
+
+  test("the PICKER still offers real emoji", () => {
+    // Only the entry point changed. What you pick is unchanged.
+    expect(bar).toMatch(/REACTION_EMOJIS\.map\(\(emoji\) =>/);
+  });
+});
+
 describe("notes and visits both render it", () => {
   test("CareProfile puts one on every note and every visit", () => {
     expect(profile).toMatch(/onReact=\{\(emoji\) => handleReact\('note', n\.id, emoji\)\}/);

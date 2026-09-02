@@ -145,11 +145,20 @@ const ReactionRow = window.ReactionRow = ({ reactions, onReact, currentUserId, d
             width: 28, height: 28, minWidth: 28, minHeight: 28,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             padding: 0, borderRadius: 999,
-            border: '1px solid var(--border-light, #e0e0e0)',
-            background: 'var(--bg-surface)',
-            color: 'var(--text-muted)', fontSize: 13, lineHeight: 1, cursor: 'pointer',
+            border: '1px dashed var(--border-light, #e0e0e0)',
+            background: 'none',
+            color: 'var(--text-muted)', fontSize: 15, lineHeight: 1, cursor: 'pointer',
+            opacity: 0.65,
           }}>
-          {'☺'}
+          {/* ─── v1.105.174 — a control, not a face ───
+              Pete, the morning after .170 shipped: "Why does every entry now have the same
+              emoji on it". It was a ☺, and he is right twice over. An emoji on a row reads as
+              CONTENT — and on a visit row it lands next to the mood emoji from v1.105.164,
+              which is content, and means something. Two smileys side by side, one of which is
+              a button, is worse than no button.
+              A dashed outline with a "+" is unmistakably an affordance. Nothing about it
+              claims to be part of the note. */}
+          {'\u002B'}
         </button>
       )}
 

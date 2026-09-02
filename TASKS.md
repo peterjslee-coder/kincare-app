@@ -423,6 +423,15 @@
 
 ### P1
 
+- [ ] **Activity should show notes and reactions.** (Pete, 9/2, feedback `99834ce2`: "In
+      activity…I should see if someone posted a note. Including my own…or if someone liked it.")
+      The Activity feed carries sessions and care tasks; a note being posted, and a reaction
+      landing on one, are both invisible there. Reactions already write a row nowhere — they
+      are app-only by design (no push), which is right, but "app-only" should still mean it
+      appears somewhere in the app you can find later. Include his OWN notes, explicitly: he
+      wants the record of what was posted, not only what was posted to him.
+      Depends on nothing; the `reactions` table (v1.105.170) has the timestamps.
+
 - [ ] **CallKit + VoIP push — make the phone actually ring.** (Pete, 9/1: "let's get the work
       on callkit and voip.") **Plan: `CallKit_VoIP_Plan_2026-09-01.md` in the Working Folder —
       read it before touching any of this.**
