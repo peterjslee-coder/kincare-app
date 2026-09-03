@@ -224,6 +224,39 @@ router.post("/", async (req, res) => {
       const notifyIds = new Set(await usersWithCapability(db, careRecipientId, CAP.READ_NOTES));
       notifyIds.delete(req.user.id); // never notify the author
 
+      // ─── v1.105.182 — Activity is the PAST, and a note left no trace in it ───
+      //
+      // Pete, twice: "i don't see debbie's added note anywhere on activity. why does this keep
+      // dropping?"
+      //
+      // Because the Activity card renders `notifications.filter(n => !n.read)` plus a tail from
+      // `activity_feed` — and a note wrote a notification but never an activity_feed row. So a
+      // note appeared in Activity only while its notification was UNREAD, and vanished the
+      // moment he opened it. Reading the thing was what deleted the record of it.
+      //
+      // v1.105.176 grouped message notifications so notes were not crowded out of the fetch.
+      // That was real, and it was the wrong layer: the card filters messages out anyway, and
+      // no amount of room in the list keeps a row that is deleted on read.
+      //
+      // One row keyed on the RECIPIENT, so everyone with access sees it — including the author,
+      // which the notification path can never do (you are never pushed your own note) and which
+      // Pete asked for by name: "Including my own."
+      //
+      // No excerpt. recipient_notes.content is PHI and this renders on a dashboard; the title
+      // says a note exists and tapping it goes to the note. Same rule as the push.
+      try {
+        await db.prepare(
+          "INSERT INTO activity_feed (id, family_user_id, care_recipient_id, event_type, title, message, metadata) VALUES (?, ?, ?, ?, ?, ?, ?)"
+        ).run(uuid(), cr.family_user_id, careRecipientId,
+          needsAttention ? "observation_attention" : "team_note",
+          needsAttention
+            ? `⚠️ ${authorName} flagged something about ${cr.first_name}`
+            : `${authorName} added a note about ${cr.first_name}`,
+          null,
+          JSON.stringify({ type: needsAttention ? "observation_attention" : "team_note", careRecipientId, noteId: id, page: "care-profile" })
+        );
+      } catch (e) { captureException(e, { where: "notes: activity row" }); }
+
       const title = needsAttention
         ? `⚠️ Needs attention — ${cr.first_name}`
         : photoData

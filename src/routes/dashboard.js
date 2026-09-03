@@ -338,6 +338,14 @@ async function familyDashboard(db, userId, res) {
           isRead: a.is_read,
           timestamp: a.created_at,
           sessionId: meta.sessionId || null,
+          // v1.105.182 — enough to open the row, and no more. The whole metadata blob is not
+          // forwarded: other writers put their own fields in there and this renders on a
+          // dashboard. Only the deep-link keys travel.
+          link: meta.type ? {
+            type: meta.type, page: meta.page || null,
+            careRecipientId: meta.careRecipientId || null,
+            noteId: meta.noteId || null, visitId: meta.visitId || null,
+          } : null,
         };
       }),
       pendingProposals: pendingProposals.map(p => ({

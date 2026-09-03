@@ -2002,7 +2002,35 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
         // Read tail = recent activity that isn't already shown as an unread
         // notification (same event often lands in both streams).
         const unreadKeys = new Set(unread.map(n => (n.title || '').trim().toLowerCase()));
-        const readTail = activity.filter(a => !unreadKeys.has((a.title || '').trim().toLowerCase())).slice(0, 6);
+        // ─── v1.105.182 — dedupe on the THING, not on the wording ───
+        //
+        // The rule at the top of this block is "nothing appears in both". It was enforced by
+        // comparing titles, which works only while the two writers happen to phrase it the same
+        // way. Notes and visits now write an activity_feed row AND a notification, and they are
+        // deliberately worded differently — the push is terse for a lock screen ("New note —
+        // Betty"), the Activity row is descriptive ("Deborah added a note about Betty"). Under a
+        // title comparison those are two different events and a fresh note showed up twice.
+        //
+        // They are the same event when they point at the same note or visit, so compare that.
+        const unreadIds = new Set();
+        for (const n of unread) {
+          try {
+            const d = n.data ? (typeof n.data === 'string' ? JSON.parse(n.data) : n.data) : null;
+            if (d?.noteId) unreadIds.add('note:' + d.noteId);
+            if (d?.visitId) unreadIds.add('visit:' + d.visitId);
+          } catch { /* a malformed row must not collapse the feed */ }
+        }
+        const activityKey = (a) => {
+          const d = a.link || null;
+          if (d?.noteId) return 'note:' + d.noteId;
+          if (d?.visitId) return 'visit:' + d.visitId;
+          return null;
+        };
+        const readTail = activity.filter((a) => {
+          const k = activityKey(a);
+          if (k && unreadIds.has(k)) return false;          // same event, already shown above
+          return !unreadKeys.has((a.title || '').trim().toLowerCase());
+        }).slice(0, 6);
         if (unread.length === 0 && readTail.length === 0) return null;
 
         const combined = [
@@ -2058,8 +2086,20 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                 </div>
               </div>
             ) : (
-              <div key={key} onClick={() => it.sessionId && setVisitDetailSessionId(it.sessionId)}
-                style={{ padding: '9px 0', borderBottom: '1px solid var(--border-light)', opacity: 0.6, cursor: it.sessionId ? 'pointer' : 'default' }}>
+              <div key={key} onClick={() => {
+                  // v1.105.182 — an Activity row that cannot be opened is a row that tells you
+                  // something happened and then refuses to show you. Notes and visits carry
+                  // their own deep link in metadata now; sessions keep the modal they had.
+                  if (it.sessionId) return setVisitDetailSessionId(it.sessionId);
+                  // The server sends this as `link` (routes/dashboard.js) — a trimmed set of
+                  // deep-link keys, not the raw metadata blob. Reading `metadata` here found
+                  // nothing, so the row became clickable and did nothing, which is the exact
+                  // dead end this change exists to remove. The fallbacks are for older payloads.
+                  const md = it.link || it.metadata || it.meta;
+                  const d = typeof md === 'string' ? (() => { try { return JSON.parse(md); } catch { return null; } })() : md;
+                  if (d && d.type && window.__handlePushNavigate) window.__handlePushNavigate(d);
+                }}
+                style={{ padding: '9px 0', borderBottom: '1px solid var(--border-light)', opacity: 0.6, cursor: 'pointer' }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 9 }}>
                   <span style={{ width: 7, flexShrink: 0 }} />
                   <div style={{ flex: 1, minWidth: 0 }}>

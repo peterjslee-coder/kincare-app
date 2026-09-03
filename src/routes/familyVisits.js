@@ -377,17 +377,38 @@ async function notifyTeam(db, req, { id, careRecipientId }) {
     //
     // If a family wants a particular person NOT to see visits, that is what withholding
     // READ_VISITS on the invitation is for — a decision they make, not one hard-coded here.
+    // v1.105.182 — and a durable row, for the same reason notes now get one: the Activity card
+    // shows unread notifications plus activity_feed, so anything that writes only a
+    // notification disappears from Activity the moment it is read.
+    const author = await db.prepare("SELECT first_name FROM users WHERE id = ?").get(req.user.id);
+    try {
+      await db.prepare(
+        "INSERT INTO activity_feed (id, family_user_id, care_recipient_id, event_type, title, message, metadata) VALUES (?, ?, ?, ?, ?, ?, ?)"
+      ).run(uuid(), cr.family_user_id, careRecipientId, "family_visit",
+        `${author?.first_name || "Someone"} logged a visit with ${cr.first_name}`,
+        null,
+        JSON.stringify({ type: "family_visit", careRecipientId, visitId: id, page: "care-profile" })
+      );
+    } catch (e) { captureException(e, { where: "familyVisits: activity row" }); }
+
     const { usersWithCapability } = require("../utils/access");
     const { CAP } = require("../utils/capabilities");
     const ids = new Set(await usersWithCapability(db, careRecipientId, CAP.READ_VISITS));
     ids.delete(req.user.id); // never push your own visit back at you
     if (ids.size === 0) return;
 
-    const author = await db.prepare("SELECT first_name FROM users WHERE id = ?").get(req.user.id);
     const { sendPushToUser } = require("./push");
     for (const userId of ids) {
+      // ─── v1.105.182 — a visit is not a note ───
+      //
+      // This said "added a note about Betty" for a VISIT, and it has cost three rounds of the
+      // same conversation. Julia has READ_VISITS and not READ_NOTES, so she correctly receives
+      // visit pushes and correctly receives no note pushes — but the visit push called itself
+      // a note, so every time she reported "I'm told about notes I can't read", she was
+      // reporting exactly what the app said. Both fan-outs were right the whole time; the
+      // WORD was wrong.
       sendPushToUser(userId, {
-        title: `${author?.first_name || "Someone"} added a note about ${cr.first_name}`,
+        title: `${author?.first_name || "Someone"} logged a visit with ${cr.first_name}`,
         body: "Tap to read",
         tag: `family-visit-${id.slice(0, 8)}`,
         data: { type: "family_visit", careRecipientId, visitId: id, page: "care-profile" },
