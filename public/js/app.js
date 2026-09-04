@@ -563,15 +563,36 @@ const App = () => {
   useEffect(() => {
     if (!currentUser || (currentUser.role || 'family') === 'family') { setSharedNotesRecipients(0); return; }
     let cancelled = false;
-    (async () => {
+    const check = async () => {
       try {
         const res = await apiFetch('/api/notes/mine/recipients');
         if (cancelled || !res?.ok) return;
         const data = await res.json();
         setSharedNotesRecipients((data.recipients || []).length);
       } catch { /* no tab, rather than a broken one */ }
-    })();
-    return () => { cancelled = true; };
+    };
+    check();
+    // ─── v1.105.184 — ask again, because access is granted while the app is open ───
+    //
+    // Julia: "when I click on notifications I can see the notes, but they don't 'live' anywhere
+    // in the platform for me."
+    //
+    // The Care Notes tab exists only when this count is above zero, and it was asked EXACTLY
+    // ONCE, on login. Julia had no read access at that moment, so she had no tab — and when
+    // Pete ticked "read care notes" for her, nothing in her running app ever found out. A push
+    // could still deep-link her INTO the notes, which is why she could see them and then had no
+    // way back to them: the destination existed, the door did not.
+    //
+    // Re-asking when the app comes back to the foreground is the cheapest thing that makes a
+    // permission change land without a re-login. Same trigger as the socket liveness probe.
+    const onVisible = () => { if (document.visibilityState === 'visible') check(); };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
+    };
   }, [currentUser]);
 
 

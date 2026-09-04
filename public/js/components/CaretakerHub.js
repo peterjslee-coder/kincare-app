@@ -2725,7 +2725,12 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               <h3 style={{ margin: 0, fontSize: 15, display: 'flex', alignItems: 'center', gap: 8 }}>
                 {'\u{1F514}'} Recent Activity ({unread.length})
               </h3>
-              {unread.length > 1 && <button onClick={() => markRead(unread.map(n => n.id))} style={{ padding: '4px 10px', background: 'transparent', color: 'var(--text-muted)', border: '1px solid var(--border-color)', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>Mark all read</button>}
+              {/* ─── v1.105.184 — one is exactly when you need it ───
+                  Julia: "my 'clear notifications' button has disappeared. Annoying, because I
+                  can't clear notifications that I click on but can't access."
+                  It was `> 1`. With a single stuck notification — the commonest case, and the
+                  one where you most want it gone — the only way to clear it vanished. */}
+              {unread.length > 0 && <button onClick={() => markRead(unread.map(n => n.id))} style={{ padding: '4px 10px', background: 'transparent', color: 'var(--text-muted)', border: '1px solid var(--border-color)', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>Mark all read</button>}
             </div>
             {unread.slice(0, 5).map(n => (
               <div key={n.id} className="activity-new-shimmer" onClick={() => {
