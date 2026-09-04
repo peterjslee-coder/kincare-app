@@ -538,7 +538,21 @@ router.get("/conversations/:id", async (req, res) => {
     const partnerId = convId.replace("legacy-", "");
 
     const messages = await db.prepare(`
-      SELECT m.*,
+      SELECT
+      m.id, m.sender_id, m.recipient_id, m.content, m.is_read, m.created_at,
+      m.conversation_id, m.message_type, m.reply_to_id, m.sender_label, m.is_deleted, m.updated_at,
+      -- ─── v1.105.183 — the blob must not leave POSTGRES, never mind the response ───
+      --
+      -- v1.105.181 stripped metadata.photoUrl on the way out, which fixed the payload and
+      -- not the wait: SELECT m.* still dragged all 24 MB of base64 out of the database into
+      -- Node on every thread load, just to throw it away. Pete: "it spins, loading, for about
+      -- 20 seconds before any messages show up." That was me fixing the wire and not the read.
+      --
+      -- Every column is now named so the fat one can be left behind, and the data URI is
+      -- replaced IN THE DATABASE. The caption and originalName survive, which is why this is a
+      -- surgical replace rather than dropping metadata for photo rows: the caption renders
+      -- under the photo and is not recoverable from anywhere else the client reads.
+      regexp_replace(m.metadata, '"photoUrl"\s*:\s*"data:[^"]*"', '"hasPhoto":true') AS metadata,
         su.first_name AS sender_first_name, su.last_name AS sender_last_name
       FROM messages m
       JOIN users su ON m.sender_id = su.id
@@ -593,7 +607,21 @@ router.get("/conversations/:id", async (req, res) => {
 
   // Get messages with reply-to info
   const messages = await db.prepare(`
-    SELECT m.*,
+    SELECT
+      m.id, m.sender_id, m.recipient_id, m.content, m.is_read, m.created_at,
+      m.conversation_id, m.message_type, m.reply_to_id, m.sender_label, m.is_deleted, m.updated_at,
+      -- ─── v1.105.183 — the blob must not leave POSTGRES, never mind the response ───
+      --
+      -- v1.105.181 stripped metadata.photoUrl on the way out, which fixed the payload and
+      -- not the wait: SELECT m.* still dragged all 24 MB of base64 out of the database into
+      -- Node on every thread load, just to throw it away. Pete: "it spins, loading, for about
+      -- 20 seconds before any messages show up." That was me fixing the wire and not the read.
+      --
+      -- Every column is now named so the fat one can be left behind, and the data URI is
+      -- replaced IN THE DATABASE. The caption and originalName survive, which is why this is a
+      -- surgical replace rather than dropping metadata for photo rows: the caption renders
+      -- under the photo and is not recoverable from anywhere else the client reads.
+      regexp_replace(m.metadata, '"photoUrl"\s*:\s*"data:[^"]*"', '"hasPhoto":true') AS metadata,
       su.first_name AS sender_first_name, su.last_name AS sender_last_name,
       rm.content AS reply_content, rm.sender_id AS reply_sender_id,
       ru.first_name AS reply_sender_first, ru.last_name AS reply_sender_last
@@ -1026,7 +1054,11 @@ router.get("/:partnerId", async (req, res) => {
   let messages;
   if (conv) {
     messages = await db.prepare(`
-      SELECT m.*, su.first_name AS sender_first_name, su.last_name AS sender_last_name
+      SELECT
+        m.id, m.sender_id, m.recipient_id, m.content, m.is_read, m.created_at,
+        m.conversation_id, m.message_type, m.reply_to_id, m.sender_label, m.is_deleted, m.updated_at,
+        regexp_replace(m.metadata, '"photoUrl"\s*:\s*"data:[^"]*"', '"hasPhoto":true') AS metadata,
+        su.first_name AS sender_first_name, su.last_name AS sender_last_name
       FROM messages m JOIN users su ON m.sender_id = su.id
       WHERE m.conversation_id = ?
       ORDER BY m.created_at ASC
@@ -1037,7 +1069,11 @@ router.get("/:partnerId", async (req, res) => {
     ).run(conv.id, userId);
   } else {
     messages = await db.prepare(`
-      SELECT m.*, su.first_name AS sender_first_name, su.last_name AS sender_last_name
+      SELECT
+        m.id, m.sender_id, m.recipient_id, m.content, m.is_read, m.created_at,
+        m.conversation_id, m.message_type, m.reply_to_id, m.sender_label, m.is_deleted, m.updated_at,
+        regexp_replace(m.metadata, '"photoUrl"\s*:\s*"data:[^"]*"', '"hasPhoto":true') AS metadata,
+        su.first_name AS sender_first_name, su.last_name AS sender_last_name
       FROM messages m JOIN users su ON m.sender_id = su.id
       WHERE ((m.sender_id = ? AND m.recipient_id = ?) OR (m.sender_id = ? AND m.recipient_id = ?))
         AND m.conversation_id IS NULL
