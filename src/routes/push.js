@@ -531,6 +531,22 @@ async function sendPushToUser(userId, payload, eventType) {
       if (prefs[`push_${eventType}`] === false) return { sent: 0, failed: 0, removed: 0, reason: "opted_out" };
     }
 
+    // ─── v1.105.185 — and never about something they may not open ───
+    //
+    // Deliberately BEFORE the in-app record, and deliberately unlike the notification-prefs
+    // check above, which returns early for a different reason and which I have filed as a bug
+    // for exactly that: "do not buzz my phone" and "never tell me this happened" are different
+    // requests. A PERMISSION failure is not. If someone may not read the note, an in-app row
+    // pointing at it is the same dead end as the push, just quieter — Julia: "I can't clear
+    // notifications that I click on but can't access."
+    try {
+      const { mayBeNotified } = require("../utils/pushPermission");
+      const verdict = await mayBeNotified(db, userId, payload && payload.data);
+      if (!verdict.allowed) {
+        return { sent: 0, failed: 0, removed: 0, reason: verdict.reason };
+      }
+    } catch { /* see mayBeNotified: this path fails open on purpose */ }
+
     // ─── v1.56.0 — Also create an in-app notification record ───
     try {
       await db.prepare(
