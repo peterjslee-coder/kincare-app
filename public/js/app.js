@@ -1118,6 +1118,27 @@ const App = () => {
   }, []);
 
   const [pendingInviteToken, setPendingInviteToken] = useState(null);
+  // v1.105.186 — a platform invite (today: a family adding a caregiver it knows) opened by
+  // someone who already has an account. Accepting it is one POST; the server does the rest.
+  const acceptPendingPlatformInvite = () => {
+    let tok = null;
+    try { tok = localStorage.getItem('pendingPlatformInvite'); } catch (e) { tok = null; }
+    if (!tok) return;
+    apiFetch('/api/platform-invites/accept-invite', {
+      method: 'POST',
+      body: JSON.stringify({ token: tok }),
+    }).then(async r => {
+      const d = r ? await r.json().catch(() => ({})) : {};
+      if (r?.ok) {
+        setVerifyMessage({ type: 'success', text: d.kind === 'known-caregiver'
+          ? 'You\u2019re set up with that family. Once your pay has somewhere to land, they can book you.'
+          : (d.message || 'Invite accepted') });
+      } else {
+        setVerifyMessage({ type: 'error', text: d.error || 'Could not accept this invite. It may have expired.' });
+      }
+      try { localStorage.removeItem('pendingPlatformInvite'); } catch (e) { /* ignore */ }
+    }).catch(() => { /* keep it for the next load */ });
+  };
   const pendingInviteRef = useRef(null); // Ref mirror — survives closures
   const [inviteInfo, setInviteInfo] = useState(null); // { email, role, teamName, recipientName, inviterName }
   const [acceptingInvite, setAcceptingInvite] = useState(false); // True while invite acceptance is in-flight
@@ -1194,6 +1215,7 @@ const App = () => {
             setAppState('app');
             // v1.105.157 — the path everyone actually takes. See ensurePushRegistered.
             ensurePushRegistered();
+            acceptPendingPlatformInvite(); // v1.105.186
             // If returning user has a pending invite token, accept it now
             // Check URL, __originalSearch, and localStorage (survives approval gate)
             const inviteParam = new URLSearchParams(window.location.search).get('invite')
@@ -1274,9 +1296,16 @@ const App = () => {
     // Check for platform (onboarding) invite token
     const pInvite = params.get('platformInvite');
     if (pInvite) {
-      setPlatformInviteToken(pInvite);
-      setAppState('platform-onboarding');
       window.history.replaceState({}, '', window.location.pathname);
+      // v1.105.186 — someone who already has an account (a caregiver a family added by email)
+      // must not be walked into "Create your account". Park the token; the session restore
+      // and the login handler both accept it.
+      if (window.__hasActiveSession && window.__hasActiveSession()) {
+        try { localStorage.setItem('pendingPlatformInvite', pInvite); } catch (e) { /* private mode */ }
+      } else {
+        setPlatformInviteToken(pInvite);
+        setAppState('platform-onboarding');
+      }
     }
 
     // Check for email-first signup confirmation token (legacy flow — route to unified register)
@@ -1504,6 +1533,7 @@ const App = () => {
     if (AUTH_TOKEN && typeof connectSocket === 'function') {
       connectSocket(AUTH_TOKEN);
     }
+    acceptPendingPlatformInvite(); // v1.105.186
     // Accept pending care team invite if one exists (use ref to avoid stale closure)
     const inviteTokenNow = pendingInviteRef.current || localStorage.getItem('pendingInviteToken');
     if (inviteTokenNow) {

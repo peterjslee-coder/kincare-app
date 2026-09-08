@@ -17,13 +17,14 @@
 //
 // `slot` splits it around the form: what is done sits above the screen she is on, what is left
 // sits below it. That ordering is the point — she reads her own progress first.
-const OnboardingPath = window.OnboardingPath = ({ step, idSubmitted, slot }) => {
+const OnboardingPath = window.OnboardingPath = ({ step, idSubmitted, slot, familyOnly }) => {
   // A caregiver in the wizard has done none of the dashboard work yet. Stated as a fact rather
   // than left undefined, because an undefined Stripe status legitimately means "not asked" and
   // would draw as `unknown` — and there is nothing to ask about yet.
   const route = resolveRoute({
     surface: 'wizard',
     step,
+    familyOnly: !!familyOnly,
     identity: { submitted: !!idSubmitted },
     stripe: { status: 'none' },
     backgroundCheck: {},
@@ -350,6 +351,13 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
   };
 
   const TOTAL_STEPS = 9; // Step 8 = Identity Verification (selfie+ID), Step 9 = Review
+  // v1.105.186 — a family that already knows her added her by name and email. She is THEIR
+  // caregiver; InPlace did not vet her and never says it did. Screens 1–3, then 8 and 9; the
+  // safety-check details (4), certifications, training and documents (5–7) are hers to add
+  // whenever she wants other families' work. See src/utils/knownCaregivers.js for the posture.
+  const familyOnly = !!(inviteInfo && inviteInfo.kind === 'known-caregiver');
+  const familyFirst = familyOnly ? String(inviteInfo.inviterName || '').split(' ')[0] : '';
+  const recipientFirst = familyOnly ? (inviteInfo.recipientFirstName || 'your family') : '';
   const US_STATES = [
     'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS',
     'KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY',
@@ -404,8 +412,23 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
       const res = await resilientFetch(`/api/platform-invites/info?token=${inviteToken}`);
       if (res.ok) {
         const data = await res.json();
+        // v1.105.186 — she already has an account. Park the token and send her to sign in;
+        // app.js accepts it the moment she is back.
+        if (data.invite && data.invite.kind === 'known-caregiver' && data.invite.existingAccount) {
+          try { localStorage.setItem('pendingPlatformInvite', inviteToken); } catch (e) { /* private mode */ }
+          setInviteInfo(data.invite);
+          setInviteError('existing-account');
+          setLoading(false);
+          return;
+        }
         setInviteInfo(data.invite);
-        setForm(f => ({ ...f, email: data.invite.email }));
+        setForm(f => ({
+          ...f, email: data.invite.email,
+          // v1.105.186 — what the family typed, so she does not retype it.
+          firstName: f.firstName || data.invite.firstName || '',
+          lastName: f.lastName || data.invite.lastName || '',
+          phone: f.phone || (data.invite.phone ? formatPhone(data.invite.phone) : ''),
+        }));
       } else {
         const data = await res.json();
         setInviteError(data.error || 'Invalid invite');
@@ -584,7 +607,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
       }).catch(() => {});
 
       trackEvent('step_complete', 3);
-      setStep(4);
+      setStep(familyOnly ? 8 : 4); // v1.105.186 — the short path skips the safety-check details
     } catch (err) {
       trackEvent('error', 3, { error: networkErrorMsg(err), source: 'network' });
       setErrors({ submit: networkErrorMsg(err) });
@@ -933,6 +956,27 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
     );
   }
 
+  // v1.105.186 — not an error: she has an account already. One button, and it says what happens.
+  if (inviteError === 'existing-account') {
+    const who = inviteInfo && inviteInfo.recipientFirstName ? inviteInfo.recipientFirstName : 'the family';
+    const by = inviteInfo && inviteInfo.inviterName ? inviteInfo.inviterName : 'Someone';
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', background: 'var(--bg-primary)' }}>
+        <div style={{ textAlign: 'center', maxWidth: '400px', padding: '40px' }}>
+          <div style={{ fontSize: '48px', marginBottom: '16px' }}>&#129309;</div>
+          <h2 style={{ color: 'var(--text-primary)', marginBottom: '8px' }}>{by} added you as {who}{'\u2019'}s caregiver</h2>
+          <p style={{ color: 'var(--text-secondary)', marginBottom: '24px' }}>
+            You already have an InPlace account with this email. Sign in and you{'\u2019'}re set {'\u2014'} nothing else to fill in.
+          </p>
+          <a href="/" style={{
+            display: 'inline-block', padding: '12px 28px', background: 'var(--role-color)', color: 'var(--text-on-primary)',
+            borderRadius: '8px', textDecoration: 'none', fontWeight: 600,
+          }}>Sign in</a>
+        </div>
+      </div>
+    );
+  }
+
   if (inviteError) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', background: 'var(--bg-primary)' }}>
@@ -967,7 +1011,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
   // Softer wording too: say what the person does, not what the system records.
   const stepLabels = {
     1: 'Create your account',
-    2: 'The paperwork',
+    2: 'A few quick details',
     3: 'About you',
     4: 'For the safety check',
     5: 'Certifications',
@@ -1038,11 +1082,31 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
             color: 'var(--text-on-primary)', fontWeight: 800, fontSize: '18px', fontFamily: "'DM Sans', sans-serif",
             marginBottom: '12px',
           }}>iP</div>
-          <h1 style={{ fontSize: '22px', color: 'var(--role-color)', margin: '0 0 4px' }}>Join InPlace</h1>
-          {inviteInfo && inviteInfo.inviterName && (
-            <p style={{ color: 'var(--text-tertiary)', fontSize: '14px', margin: 0 }}>
-              Invited by {inviteInfo.inviterName}
-            </p>
+          {familyOnly ? (
+            <>
+              {/* v1.105.186 — she was brought in by someone she knows. Say so, by name, and say
+                  how short the road is. Four things; the number on screen one is four. */}
+              <p style={{ color: 'var(--text-tertiary)', fontSize: '13px', margin: '0 0 4px' }}>
+                {inviteInfo.inviterName} added you as {recipientFirst}{'\u2019'}s caregiver
+              </p>
+              <h1 style={{ fontSize: '22px', color: 'var(--role-color)', margin: '0 0 6px', lineHeight: 1.2 }}>
+                Care for {recipientFirst}, get paid through InPlace
+              </h1>
+              {step < TOTAL_STEPS && (
+                <p style={{ color: 'var(--text-secondary)', fontSize: '13px', margin: 0 }}>
+                  Four things, about ten minutes.
+                </p>
+              )}
+            </>
+          ) : (
+            <>
+              <h1 style={{ fontSize: '22px', color: 'var(--role-color)', margin: '0 0 4px' }}>Join InPlace</h1>
+              {inviteInfo && inviteInfo.inviterName && (
+                <p style={{ color: 'var(--text-tertiary)', fontSize: '14px', margin: 0 }}>
+                  Invited by {inviteInfo.inviterName}
+                </p>
+              )}
+            </>
           )}
         </div>
 
@@ -1058,7 +1122,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
         )}
 
         {/* What she has already done \u2014 above the screen she is on, deliberately (v1.105.118) */}
-        {step < TOTAL_STEPS && <OnboardingPath slot="done" step={step} idSubmitted={!!idVerifyResult} />}
+        {step < TOTAL_STEPS && <OnboardingPath slot="done" step={step} idSubmitted={!!idVerifyResult} familyOnly={familyOnly} />}
 
         {/* Offline banner */}
         {isOffline && (
@@ -1162,7 +1226,13 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
               'Although some caregivers on InPlace may hold medical licenses or certifications (such as CNA, LPN, or RN), this platform is not for seeking or administering medical care. All services provided through InPlace are limited to non-medical companionship, personal care, and household assistance. Licensed medical professionals using InPlace must understand they are operating in a non-medical capacity only. Future development may introduce medically supervised care options, but at this time, medical care is not available through InPlace.'
             )}
 
-            {disclosureCheck('acceptBackgroundCheck',
+            {/* v1.105.186 — on the short path the sentence "for all caregivers" would be untrue
+                of her, so it says when the check applies. The requirement itself is unchanged
+                and the box is still required. ⚠️ Counsel-adjacent: flag any further rewording. */}
+            {familyOnly ? disclosureCheck('acceptBackgroundCheck',
+              'Background Check \u2014 for other families',
+              'You were added by a family you already know, and that family can book you without a background check. Before you take work from any other family on InPlace, a background check through Checkr is required. You are responsible for the one-time cost ($30). This includes criminal history, driving record, and identity verification.'
+            ) : disclosureCheck('acceptBackgroundCheck',
               'Background Check Required',
               'InPlace requires a background check through Checkr for all caregivers. You are responsible for the one-time cost ($30). This includes criminal history, driving record, and identity verification.'
             )}
@@ -1907,7 +1977,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
             {/* Buttons */}
             {!cameraStream && !idVerifyResult && (
               <div style={{ display: 'flex', gap: 10 }}>
-                {backBtn(7)}
+                {backBtn(familyOnly ? 3 : 7)}
                 <button onClick={handleVerifyIdentity}
                   disabled={!idSelfie || !idPhoto || idVerifying}
                   style={{
@@ -1927,7 +1997,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
           // The same route the header has been drawing all along, so the list she reads here
           // and the list she meets on the dashboard cannot drift apart.
           const handoff = resolveRoute({
-            surface: 'wizard', step,
+            surface: 'wizard', step, familyOnly,
             identity: { submitted: !!idVerifyResult },
             stripe: { status: 'none' }, backgroundCheck: {},
           });
@@ -1944,7 +2014,9 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
                 That{'\u2019'}s the long part done{form.firstName ? ', ' + form.firstName : ''}.
               </h2>
               <p style={{ color: 'var(--text-secondary)', fontSize: '15px', margin: 0, lineHeight: '1.5' }}>
-                Your profile is set up and your documents are in.
+                {familyOnly
+                  ? `Your account is set up. Once your pay has somewhere to land, ${familyFirst || 'the family'} can book you for ${recipientFirst}.`
+                  : 'Your profile is set up and your documents are in.'}
                 {handoff.waiting > 0 && ' Your ID is with us \u2014 we\u2019ll review it and reach out if we have any questions.'}
               </p>
             </div>
@@ -1979,6 +2051,15 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
                   </div>
                 ))
               ))}
+              {/* v1.105.186 — the rest of the route, named once, quietly, as hers to take
+                  whenever she likes. Not a to-do; not counted. The safety check is what opens
+                  other families' jobs, and it is said in those words. */}
+              {familyOnly && handoff.optional.length > 0 && (
+                <p style={{ fontSize: '12px', color: 'var(--text-tertiary)', margin: '12px 0 0', lineHeight: '1.5' }}>
+                  The safety check isn{'\u2019'}t needed for {recipientFirst} {'\u2014'} {familyFirst || 'the family'} brought you in. Add it from your dashboard whenever you want to work with other families, along with{' '}
+                  {handoff.optional.filter((i) => i.id !== 'background-check').map((i) => i.label.toLowerCase()).join(', ')}.
+                </p>
+              )}
             </div>
 
             {/* Summary */}
@@ -2024,7 +2105,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
         })()}
         {/* What is left \u2014 below the form, quiet, and never prefixed. Pete: no "then" leading
             each line. */}
-        {step < TOTAL_STEPS && <OnboardingPath slot="ahead" step={step} idSubmitted={!!idVerifyResult} />}
+        {step < TOTAL_STEPS && <OnboardingPath slot="ahead" step={step} idSubmitted={!!idVerifyResult} familyOnly={familyOnly} />}
       </div>
     </div>
   );

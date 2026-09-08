@@ -70,7 +70,8 @@ const ONBOARDING_LEGS = window.ONBOARDING_LEGS = [
 // that stops being a contradiction and starts being the shape.
 const ONBOARDING_ROUTE = window.ONBOARDING_ROUTE = [
   { id: 'account', leg: 'who', wizardStep: 1, label: 'Create your account' },
-  { id: 'paperwork', leg: 'who', wizardStep: 2, label: 'The paperwork' },
+  // v1.105.186 — was 'The paperwork'. Pete: "we promise paperwork three times."
+  { id: 'paperwork', leg: 'who', wizardStep: 2, label: 'A few quick details' },
   { id: 'about-you', leg: 'who', wizardStep: 3, label: 'About you' },
 
   { id: 'certifications', leg: 'bring', wizardStep: 5, label: 'Certifications' },
@@ -122,6 +123,20 @@ const wizardScreensInLeg = window.wizardScreensInLeg = (legId) =>
 // under someone mid-signup — which is the quest, by definition.
 const ONBOARDING_ROUTE_LENGTH = window.ONBOARDING_ROUTE_LENGTH = 13;
 
+// ─── The short path (v1.105.186) ───
+//
+// A family that already knows someone adds them by name and email ("known caregiver"). They
+// are that family's caregiver — InPlace did not vet them and does not pretend to. Before the
+// family can book them they need four things: an account, a few quick details, somewhere for
+// pay to land, and a photo of their licence. Everything else on the route is still THERE (the
+// safety check is what opens other families' jobs) but it is optional, and an optional item is
+// never counted in `remaining`, never `current`, and never drawn as a to-do.
+//
+// The rule that makes this a path and not a second quest: optional items are excluded, not
+// hidden-then-revealed. She sees four on screen one and four is the number that goes down.
+const SHORT_PATH_ITEMS = window.SHORT_PATH_ITEMS = ['account', 'paperwork', 'identity', 'stripe'];
+const isOptionalOnShortPath = window.isOptionalOnShortPath = (id) => SHORT_PATH_ITEMS.indexOf(id) === -1;
+
 // ─── State resolvers ───
 //
 // One per item, all pure, all reading the same `facts` bag the surfaces already compute. Any
@@ -142,7 +157,11 @@ const routeItemState = window.routeItemState = (id, facts = {}) => {
     case 'documents': {
       if (f.surface !== 'wizard') return f.profileCreated ? 'done' : 'todo';
       const item = ONBOARDING_ROUTE.find((i) => i.id === id);
-      return (f.step || 1) > item.wizardStep ? 'done' : 'todo';
+      // On the short path "a few quick details" is screens 2 and 3 together — one job with two
+      // screens, which is what screens-are-not-route-items was for. Screen 4 (the safety-check
+      // details) is skipped: she is not getting a safety check, so we do not take an SSN for one.
+      const finishesAfter = (f.familyOnly && id === 'paperwork') ? 3 : item.wizardStep;
+      return (f.step || 1) > finishesAfter ? 'done' : 'todo';
     }
 
     // ── Identity ──
@@ -200,7 +219,8 @@ const routeItemState = window.routeItemState = (id, facts = {}) => {
 // as such is how "when does this ever end?" gets its answer wrong.
 const resolveRoute = window.resolveRoute = (facts = {}) => {
   const f = facts || {};
-  const items = ONBOARDING_ROUTE.map((item) => {
+  const familyOnly = !!f.familyOnly;
+  const all = ONBOARDING_ROUTE.map((item) => {
     const state = routeItemState(item.id, f);
     // A dependency that is not yet met makes an item blocked, not undone. She is not being
     // lazy about the safety check; she cannot start it yet.
@@ -209,8 +229,13 @@ const resolveRoute = window.resolveRoute = (facts = {}) => {
       state,
       blocked: state === 'todo' && blockedBy.length > 0,
       blockedBy,
+      optional: familyOnly && isOptionalOnShortPath(item.id),
     });
   });
+  // `items` is her path. `optional` is what she may do whenever she likes — drawn, if at all,
+  // as one quiet line, and never as work she has left.
+  const items = all.filter((i) => !i.optional);
+  const optional = all.filter((i) => i.optional);
 
   const byLeg = ONBOARDING_LEGS.map((leg) => {
     const legItems = items.filter((i) => i.leg === leg.id);
@@ -229,6 +254,8 @@ const resolveRoute = window.resolveRoute = (facts = {}) => {
 
   return {
     items,
+    optional,
+    familyOnly,
     legs: byLeg,
     current,
     total: items.length,

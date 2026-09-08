@@ -707,7 +707,7 @@ async function caregiverDashboard(db, userId, res) {
       ).get(userId).catch(() => null)),
       isBackgroundChecked: !!profile.is_background_checked,
       checkrStatus: profile.is_background_checked ? 'clear' : (profile.checkr_status || 'pending'),
-      adminVouches: (await activeVouchesFor(db, userId)).map((v) => ({ familyName: v.family_name })),
+      adminVouches: (await activeVouchesFor(db, userId)).map((v) => ({ familyName: v.family_name, familyBrought: v.note === 'family-brought' /* v1.105.186 */ })),
       stripeConnected: !!profile.stripe_onboard_complete,
       stripeOnboardComplete: !!profile.stripe_onboard_complete,
       // Stripe not yet live — cleared if BG check passed OR admin set is_available override

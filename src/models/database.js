@@ -2191,6 +2191,19 @@ async function initializeDatabase() {
         `ALTER TABLE users ADD COLUMN IF NOT EXISTS ui_prefs TEXT`,
       ],
     },
+    {
+      // v1.105.186 — a family leader adds a caregiver it already knows. Rides platform_invites:
+      // `kind` tells the wizard to draw the short path, `care_recipient_id` is who they are for,
+      // `invited_name`/`phone` are what the leader typed so the caregiver does not retype them.
+      id: "028_known_caregiver_invites",
+      statements: [
+        `ALTER TABLE platform_invites ADD COLUMN IF NOT EXISTS kind TEXT`,
+        `ALTER TABLE platform_invites ADD COLUMN IF NOT EXISTS care_recipient_id TEXT REFERENCES care_recipients(id)`,
+        `ALTER TABLE platform_invites ADD COLUMN IF NOT EXISTS invited_name TEXT`,
+        `ALTER TABLE platform_invites ADD COLUMN IF NOT EXISTS phone TEXT`,
+        `CREATE INDEX IF NOT EXISTS idx_platform_invites_kind_recipient ON platform_invites (kind, care_recipient_id) WHERE kind IS NOT NULL`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

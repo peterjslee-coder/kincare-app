@@ -553,6 +553,7 @@ app.use("/api/admin/treasury", require("./routes/treasury"));
 app.use("/api/admin/tickets", require("./routes/tickets"));
 app.use("/api/costs", require("./routes/costs"));
 app.use("/api/platform-invites", require("./routes/platformInvites"));
+app.use("/api/known-caregivers", require("./routes/knownCaregivers")); // v1.105.186 — a family adds a caregiver it already knows
 app.use("/api/caregiver-onboarding", require("./routes/caregiveronboarding"));
 app.use("/api/family-visits", require("./routes/familyVisits")); // v1.105.38
 app.use("/api/reactions", require("./routes/reactions")); // v1.105.170 — notes, visits, and whatever is next
@@ -582,7 +583,7 @@ app.use("/api/media", require("./routes/media"));
 app.use("/api/safety", require("./routes/safety"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.105.185";
+const APP_VERSION = "1.105.186";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });

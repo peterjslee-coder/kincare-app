@@ -18,6 +18,81 @@ const Caregivers = window.Caregivers = () => {
   const [activeTab, setActiveTab] = useState('nearby');
   const { showToast } = useToast();
 
+  // ─── v1.105.186 — add someone you already know ───
+  // Pete, Sep 7: "I find someone interested in the wild. I get their name and number and
+  // email, and the next thing they get is an email to finish setting up their account." They
+  // are the family's own caregiver — InPlace did not vet them and never says it did. The word
+  // "vouch" does not appear on this screen. See src/utils/knownCaregivers.js.
+  const [knownInvites, setKnownInvites] = useState([]);
+  const [knownOpen, setKnownOpen] = useState(false);
+  const [knownForm, setKnownForm] = useState({ recipientId: '', name: '', email: '', phone: '' });
+  const [knownSaving, setKnownSaving] = useState(false);
+  const [knownError, setKnownError] = useState('');
+
+  const fetchKnownInvites = async (recips) => {
+    const list = recips || recipients;
+    if (!list.length) { setKnownInvites([]); return; }
+    try {
+      const all = [];
+      for (const r of list) {
+        const res = await apiFetch(`/api/known-caregivers?careRecipientId=${encodeURIComponent(r.id)}`);
+        if (res?.ok) {
+          const d = await res.json();
+          (d.invites || []).forEach((inv) => all.push({ ...inv, recipientFirstName: r.first_name || r.firstName }));
+        }
+        // 403 = not this recipient's leader; nothing to list, not an error
+      }
+      setKnownInvites(all);
+    } catch (e) { /* a failed list is an empty list here, and the door still works */ }
+  };
+
+  const sendKnownInvite = async () => {
+    setKnownError('');
+    const rid = knownForm.recipientId || (recipients[0] && recipients[0].id);
+    if (!rid) { setKnownError('Add your loved one first, then add their caregiver.'); return; }
+    if (!knownForm.name.trim()) { setKnownError('Their name is required.'); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(knownForm.email.trim())) { setKnownError('That email doesn\u2019t look right.'); return; }
+    setKnownSaving(true);
+    try {
+      const res = await apiFetch('/api/known-caregivers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ careRecipientId: rid, name: knownForm.name.trim(), email: knownForm.email.trim(), phone: knownForm.phone.trim() || null }),
+      });
+      const d = res ? await res.json().catch(() => ({})) : {};
+      if (res?.ok) {
+        showToast(d.message || 'Email sent', 'success');
+        setKnownForm({ recipientId: '', name: '', email: '', phone: '' });
+        setKnownOpen(false);
+        await fetchKnownInvites();
+      } else {
+        setKnownError(d.error || 'Couldn\u2019t send that. Try again.');
+      }
+    } catch (e) {
+      setKnownError('Couldn\u2019t reach InPlace. Check your connection and try again.');
+    }
+    setKnownSaving(false);
+  };
+
+  const resendKnownInvite = async (inv) => {
+    try {
+      const res = await apiFetch(`/api/known-caregivers/${inv.id}/resend`, { method: 'POST' });
+      const d = res ? await res.json().catch(() => ({})) : {};
+      if (res?.ok) { showToast(d.message || 'Sent another email', 'success'); await fetchKnownInvites(); }
+      else showToast(d.error || 'Couldn\u2019t resend', 'error');
+    } catch (e) { showToast('Couldn\u2019t reach InPlace', 'error'); }
+  };
+
+  const withdrawKnownInvite = async (inv) => {
+    if (!window.confirm(`Withdraw the invite to ${inv.name}? The link in their email will stop working.`)) return;
+    try {
+      const res = await apiFetch(`/api/known-caregivers/${inv.id}`, { method: 'DELETE' });
+      const d = res ? await res.json().catch(() => ({})) : {};
+      if (res?.ok) { showToast('Invite withdrawn', 'success'); await fetchKnownInvites(); }
+      else showToast(d.error || 'Couldn\u2019t withdraw', 'error');
+    } catch (e) { showToast('Couldn\u2019t reach InPlace', 'error'); }
+  };
+
   // Privacy: hide caregiver full names in browse — show first name + last initial only
   // Full names are revealed only after in-app connection/assignment
   const privacyName = (cg, isAssigned) => {
@@ -62,6 +137,7 @@ const Caregivers = window.Caregivers = () => {
       if (dashRes?.ok) {
         const d = await dashRes.json();
         setRecipients(d.careRecipients || []);
+        fetchKnownInvites(d.careRecipients || []); // v1.105.186
 
         // Auto-populate search with first recipient's zip or city, then auto-search
         const first = (d.careRecipients || [])[0];
@@ -429,6 +505,9 @@ const Caregivers = window.Caregivers = () => {
               ))}
               {cg.isBackgroundChecked ? (
                 <span style={{ padding: '2px 8px', background: 'var(--color-info-bg)', color: 'var(--color-info)', borderRadius: '10px', fontSize: '10px', fontWeight: 500 }}>✓ Background checked</span>
+              ) : cg.familyBrought ? (
+                // v1.105.186 — the family added this person themselves. Say that, not "approved".
+                <span style={{ padding: '2px 8px', background: 'var(--color-warning-bg, #fff8e1)', color: 'var(--color-warning, #f57f17)', borderRadius: '10px', fontSize: '10px', fontWeight: 500 }} title="You added this caregiver yourself. InPlace has not checked their background.">🤝 Your caregiver · no background check</span>
               ) : cg.vouchedForYou ? (
                 <span style={{ padding: '2px 8px', background: 'var(--color-warning-bg, #fff8e1)', color: 'var(--color-warning, #f57f17)', borderRadius: '10px', fontSize: '10px', fontWeight: 500 }} title="An InPlace admin personally vouched for this caregiver working with your family. No background check has been completed.">🤝 Admin-approved for your family · no background check</span>
               ) : null}
@@ -466,6 +545,65 @@ const Caregivers = window.Caregivers = () => {
         <p className="page-subtitle">Manage your care team and find nearby caregivers</p>
       </div>
 
+      {/* v1.105.186 — the second door. "Find a caregiver" is the other two tabs; this is
+          for a neighbour, a friend from church, someone who has helped before. */}
+      <div className="card" style={{ marginBottom: '14px', border: '1.5px solid var(--role-color)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '16px', fontWeight: 700, color: 'var(--role-color)', marginBottom: '4px' }}>
+          <span>&#129309;</span> Add someone you already know
+        </div>
+        <p style={{ margin: '0 0 12px', fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.45 }}>
+          A neighbour, a friend from church, someone who{'\u2019'}s helped before. We{'\u2019'}ll set them up as {recipients[0] ? (recipients[0].first_name || recipients[0].firstName) + '\u2019s' : 'your loved one\u2019s'} caregiver so you can book and pay them here.
+        </p>
+        {!knownOpen ? (
+          <button onClick={() => setKnownOpen(true)} style={{
+            width: '100%', padding: '11px', background: 'var(--role-color)', color: 'var(--text-on-primary)',
+            border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 700, cursor: 'pointer',
+          }}>Add a caregiver</button>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {recipients.length > 1 && (
+              <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)' }}>
+                For
+                <select value={knownForm.recipientId || recipients[0].id} onChange={(e) => setKnownForm({ ...knownForm, recipientId: e.target.value })}
+                  style={{ display: 'block', width: '100%', marginTop: '4px', padding: '9px 10px', borderRadius: '6px', border: '1px solid var(--input-border)', background: 'var(--input-bg)', color: 'var(--text-primary)', fontSize: '14px' }}>
+                  {recipients.map((r) => <option key={r.id} value={r.id}>{r.first_name || r.firstName} {r.last_name || r.lastName || ''}</option>)}
+                </select>
+              </label>
+            )}
+            <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)' }}>
+              Their name
+              <input type="text" value={knownForm.name} onChange={(e) => setKnownForm({ ...knownForm, name: e.target.value })} autoComplete="off"
+                style={{ display: 'block', width: '100%', marginTop: '4px', padding: '9px 10px', borderRadius: '6px', border: '1px solid var(--input-border)', background: 'var(--input-bg)', color: 'var(--text-primary)', fontSize: '14px', boxSizing: 'border-box' }} />
+            </label>
+            <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)' }}>
+              Email
+              <input type="email" inputMode="email" value={knownForm.email} onChange={(e) => setKnownForm({ ...knownForm, email: e.target.value })} autoComplete="off"
+                style={{ display: 'block', width: '100%', marginTop: '4px', padding: '9px 10px', borderRadius: '6px', border: '1px solid var(--input-border)', background: 'var(--input-bg)', color: 'var(--text-primary)', fontSize: '14px', boxSizing: 'border-box' }} />
+            </label>
+            <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)' }}>
+              Phone <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>optional {'\u00B7'} saved to their profile, we won{'\u2019'}t text them</span>
+              <input type="tel" inputMode="tel" value={knownForm.phone} onChange={(e) => setKnownForm({ ...knownForm, phone: e.target.value })} autoComplete="off"
+                style={{ display: 'block', width: '100%', marginTop: '4px', padding: '9px 10px', borderRadius: '6px', border: '1px solid var(--input-border)', background: 'var(--input-bg)', color: 'var(--text-primary)', fontSize: '14px', boxSizing: 'border-box' }} />
+            </label>
+            {/* Plain words about what InPlace did and did not check. This paragraph is the
+                posture; keep it honest before keeping it short. */}
+            <div style={{ fontSize: '12px', lineHeight: 1.45, color: 'var(--text-secondary)', background: 'var(--bg-highlight)', borderRadius: '8px', padding: '10px 12px' }}>
+              <strong style={{ color: 'var(--role-color)' }}>{knownForm.name.trim() ? knownForm.name.trim().split(/\s+/)[0] : 'They'} will be your caregiver{recipients[0] ? ' for ' + (recipients[0].first_name || recipients[0].firstName) : ''}.</strong>{' '}
+              You know them; InPlace hasn{'\u2019'}t checked their background. You can book them as soon as they{'\u2019'}re set up to be paid. To take work from other families on InPlace they{'\u2019'}ll need the full safety check, same as everyone.
+            </div>
+            {knownError && <div style={{ fontSize: '13px', color: 'var(--color-error)' }}>{knownError}</div>}
+            <button onClick={sendKnownInvite} disabled={knownSaving} style={{
+              width: '100%', padding: '11px', background: 'var(--role-color)', color: 'var(--text-on-primary)',
+              border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 700, cursor: 'pointer', opacity: knownSaving ? 0.7 : 1,
+            }}>{knownSaving ? 'Sending\u2026' : `Send ${knownForm.name.trim() ? knownForm.name.trim().split(/\s+/)[0] : 'them'} an email`}</button>
+            <button onClick={() => { setKnownOpen(false); setKnownError(''); }} style={{
+              width: '100%', padding: '10px', background: 'transparent', color: 'var(--text-primary)',
+              border: '1px solid var(--border-light)', borderRadius: '8px', fontSize: '14px', cursor: 'pointer',
+            }}>Cancel</button>
+          </div>
+        )}
+      </div>
+
       {/* Tabs */}
       <div style={{ display: 'flex', gap: '4px', marginBottom: '20px', borderBottom: '2px solid #e0e0e0' }}>
         {[
@@ -488,6 +626,43 @@ const Caregivers = window.Caregivers = () => {
       {/* ─── Assigned Tab ─── */}
       {activeTab === 'assigned' && (
         <div>
+          {/* Invited, not yet bookable. Honest state per row: waiting on them, or expired. */}
+          {knownInvites.filter((i) => i.status !== 'accepted' || (!(i.progress && i.progress.ready) && !assignments.some((a) => a.caregiver_user_id === i.progress?.userId))).length > 0 && (
+            <div className="card" style={{ marginBottom: '14px', padding: '6px 16px' }}>
+              <div style={{ fontSize: '11px', fontWeight: 500, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', padding: '10px 0 2px' }}>Invited</div>
+              {knownInvites.filter((i) => i.status !== 'accepted' || (!(i.progress && i.progress.ready) && !assignments.some((a) => a.caregiver_user_id === i.progress?.userId))).map((inv) => {
+                const first = (inv.name || inv.email).split(/\s+/)[0];
+                const p = inv.progress;
+                const line = inv.status === 'expired' ? 'Link expired'
+                  : inv.status === 'accepted' ? `${p ? p.done : 1} of ${p ? p.of : 4} done`
+                  : 'Sent \u00B7 not opened yet';
+                const pill = inv.status === 'expired'
+                  ? { text: 'Expired', bg: 'var(--color-error-bg)', fg: 'var(--color-error)' }
+                  : { text: `Waiting on ${first}`, bg: 'var(--color-warning-bg, #fff8e1)', fg: 'var(--color-warning, #b7791f)' };
+                return (
+                  <div key={inv.id} style={{ borderTop: '1px solid var(--border-color)', padding: '10px 0' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'var(--bg-accent-light)', color: 'var(--accent-color)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 13, flexShrink: 0 }}>
+                        {(inv.name || inv.email).split(/\s+/).map((n) => n[0]).join('').slice(0, 2).toUpperCase()}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>{inv.name || inv.email}</div>
+                        <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>For {inv.recipientFirstName} {'\u00B7'} {line}</div>
+                      </div>
+                      <span style={{ fontSize: '10.5px', fontWeight: 500, borderRadius: '999px', padding: '3px 8px', whiteSpace: 'nowrap', background: pill.bg, color: pill.fg }}>{pill.text}</span>
+                    </div>
+                    {inv.status !== 'accepted' && (
+                      <div style={{ display: 'flex', gap: '8px', paddingTop: '8px' }}>
+                        <button onClick={() => resendKnownInvite(inv)} style={{ fontSize: '11px', fontWeight: 500, background: 'var(--role-color-light)', color: 'var(--role-color)', border: 'none', borderRadius: '999px', padding: '4px 10px', cursor: 'pointer' }}>Resend email</button>
+                        <button onClick={() => withdrawKnownInvite(inv)} style={{ fontSize: '11px', fontWeight: 500, background: 'var(--badge-muted-bg)', color: 'var(--badge-muted-text)', border: 'none', borderRadius: '999px', padding: '4px 10px', cursor: 'pointer' }}>Withdraw</button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
           {assignments.length > 0 ? assignments.map((a, idx) => {
             const cg = caregivers.find(c => c.id === a.caregiver_profile_id);
             return (
@@ -515,6 +690,20 @@ const Caregivers = window.Caregivers = () => {
                     <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
                       Assigned to: <strong>{a.recipient_first_name || ''} {a.recipient_last_name || ''}</strong>
                     </div>
+                    {/* v1.105.186 — what actually happened, in the family's own words. Never
+                        "approved": nobody at InPlace checked anything. */}
+                    {Number(a.family_brought) > 0 && !a.is_background_checked && (() => {
+                      const inv = knownInvites.find((i) => i.progress && i.progress.userId === a.caregiver_user_id);
+                      const p = inv && inv.progress;
+                      return (
+                        <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginTop: '2px' }}>
+                          Your caregiver {'\u00B7'} {a.recipient_first_name || 'this family'} only {'\u00B7'} no background check
+                          {p && !p.ready && (
+                            <span style={{ color: 'var(--color-warning, #b7791f)', fontWeight: 500 }}> {'\u00B7'} still setting up, {p.done} of {p.of} done</span>
+                          )}
+                        </div>
+                      );
+                    })()}
                     {cg && (
                       <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginTop: '4px' }}>
                         <span title="Family rating of this caregiver">⭐ {cg.rating || '—'}</span> &bull;
@@ -542,7 +731,7 @@ const Caregivers = window.Caregivers = () => {
             );
           }) : (
             <div className="card" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
-              No caregivers assigned yet. Browse available caregivers to get started.
+              No caregivers yet. Add someone you already know above, or find one nearby.
             </div>
           )}
         </div>

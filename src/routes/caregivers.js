@@ -1,5 +1,6 @@
 const express = require("express");
 const { hasActiveVouch, activeVouchesFor } = require("../utils/vouches");
+const { FAMILY_BROUGHT_NOTE } = require("../utils/knownCaregivers"); // v1.105.186
 const { userPhotoUrl } = require("./media");
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
@@ -94,9 +95,12 @@ router.get("/", async (req, res) => {
 
   // Vouches held by the requesting user's family (v1.64.0)
   const vouchRows = await db.prepare(
-    "SELECT caregiver_user_id FROM bg_admin_vouches WHERE family_user_id = ? AND revoked_at IS NULL"
+    "SELECT caregiver_user_id, note FROM bg_admin_vouches WHERE family_user_id = ? AND revoked_at IS NULL"
   ).all(req.user.id);
   const vouchedCaregiverIds = new Set(vouchRows.map((v) => v.caregiver_user_id));
+  // v1.105.186 — a caregiver the family brought in itself is not "admin-approved"; the badge
+  // must say what actually happened.
+  const familyBroughtIds = new Set(vouchRows.filter((v) => v.note === FAMILY_BROUGHT_NOTE).map((v) => v.caregiver_user_id));
 
   const result = caregivers.map((c) => {
     const entry = {
@@ -117,6 +121,7 @@ router.get("/", async (req, res) => {
       // v1.64.0: admin vouch scoped to the REQUESTING family — "approved by
       // admin for your family, no background check". Never shown to others.
       vouchedForYou: vouchedCaregiverIds.has(c.user_id),
+      familyBrought: familyBroughtIds.has(c.user_id),
       city: c.location_city,
       state: c.location_state,
       // v1.105.121 — COARSENED on the way out. Distances are still computed from the
@@ -189,9 +194,10 @@ router.get("/nearby/:careRecipientId", async (req, res) => {
   const maxRadius = parseFloat(radius);
 
   const nearbyVouchRows = await db.prepare(
-    "SELECT caregiver_user_id FROM bg_admin_vouches WHERE family_user_id = ? AND revoked_at IS NULL"
+    "SELECT caregiver_user_id, note FROM bg_admin_vouches WHERE family_user_id = ? AND revoked_at IS NULL"
   ).all(req.user.id);
   const nearbyVouchedIds = new Set(nearbyVouchRows.map((v) => v.caregiver_user_id));
+  const nearbyFamilyBroughtIds = new Set(nearbyVouchRows.filter((v) => v.note === FAMILY_BROUGHT_NOTE).map((v) => v.caregiver_user_id));
 
   const nearby = allCaregivers
     .map((c) => ({
@@ -209,6 +215,7 @@ router.get("/nearby/:careRecipientId", async (req, res) => {
       reviewCount: c.rating_count,
       isBackgroundChecked: !!c.is_background_checked,
       vouchedForYou: nearbyVouchedIds.has(c.user_id),
+      familyBrought: nearbyFamilyBroughtIds.has(c.user_id),
       city: c.location_city,
       state: c.location_state,
       // v1.105.121 — coarsened out, exact in. `distance` below is still measured from the real
@@ -434,6 +441,9 @@ router.get("/:id", async (req, res) => {
       isAvailable: !!cg.is_available,
       isBackgroundChecked: !!cg.is_background_checked,
       vouchedForYou: await hasActiveVouch(db, cg.user_id, req.user.id),
+      familyBrought: !!(await db.prepare(
+        "SELECT id FROM bg_admin_vouches WHERE caregiver_user_id = ? AND family_user_id = ? AND note = ? AND revoked_at IS NULL LIMIT 1"
+      ).get(cg.user_id, req.user.id, FAMILY_BROUGHT_NOTE)),
       city: cg.location_city,
       state: cg.location_state,
       // v1.105.121 — COARSENED on the way out. Distances are still computed from the
@@ -613,6 +623,14 @@ router.post("/profile", requireRole("caregiver"), async (req, res) => {
 
     const profile = await db.prepare("SELECT * FROM caregiver_profiles WHERE id = ?").get(id);
     console.log(`  [caregiver-profile] Created new profile id=${id} for user=${req.user.id} (${req.user.email})`);
+    // v1.105.186 — a family that brought this caregiver in accepted the invite before a profile
+    // existed. Now there is one, put them under that family's care recipient.
+    try {
+      const { fulfillPendingForUser } = require("../utils/knownCaregivers");
+      await fulfillPendingForUser(db, req.user.id);
+    } catch (e) {
+      console.error("  [caregiver-profile] known-caregiver fulfil (non-blocking):", e.message);
+    }
     res.status(201).json({ profile });
   } catch (err) {
     console.error(`  [caregiver-profile] ❌ Error for user=${req.user?.id} (${req.user?.email}):`, err.message);

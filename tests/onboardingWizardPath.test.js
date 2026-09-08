@@ -57,7 +57,7 @@ describe("the path is all there, and quiet about it", () => {
     // Property 1, and the reason the ahead line is NOT truncated: "…and 6 more" would be
     // quieter and would also reintroduce "there keeps being more steps".
     const t = ahead(1);
-    expect(t).toContain("The paperwork");
+    expect(t).toContain("A few quick details");
     expect(t).toContain("A photo of your licence");
     expect(t).toContain("Where your pay lands");
     expect(t).toContain("Lock down your account");
@@ -96,7 +96,7 @@ describe("the path is all there, and quiet about it", () => {
     expect(markup).toContain("11px");
     const t = done(4);
     expect(t).toContain("Create your account");
-    expect(t).toContain("The paperwork");
+    expect(t).toContain("A few quick details");
     expect(t).toContain("About you");
   });
 

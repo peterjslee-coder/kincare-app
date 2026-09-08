@@ -20,7 +20,12 @@ router.get("/", async (req, res) => {
         u.first_name, u.last_name, cp.rating_avg, cp.hourly_rate,
         cp.rate_daytime, cp.rate_nighttime, cp.rate_overnight,
         cp.specialties, cp.certifications, cp.open_to_interview,
-        cr.first_name AS recipient_first_name, cr.last_name AS recipient_last_name
+        cp.is_background_checked, cp.stripe_onboard_complete,
+        cr.first_name AS recipient_first_name, cr.last_name AS recipient_last_name,
+        /* v1.105.186 — the family brought this caregiver in; the row says so honestly */
+        (SELECT COUNT(*) FROM bg_admin_vouches v
+          WHERE v.caregiver_user_id = cp.user_id AND v.family_user_id = ca.family_user_id
+            AND v.note = 'family-brought' AND v.revoked_at IS NULL) AS family_brought
       FROM caregiver_assignments ca
       JOIN caregiver_profiles cp ON ca.caregiver_profile_id = cp.id
       JOIN users u ON cp.user_id = u.id

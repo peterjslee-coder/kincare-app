@@ -1126,6 +1126,10 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   // covers ONLY the vouched family — honest copy shown below).
   const adminVouches = profile.adminVouches || [];
   const bgOverride = !!profile.isBackgroundChecked || adminVouches.length > 0;
+  // v1.105.186 — a family that already knew her added her. She is on the short path: four
+  // things, and the rest of the route is hers to take whenever she wants other families' work.
+  const familyBrought = adminVouches.filter((v) => v.familyBrought);
+  const familyOnly = !profile.isBackgroundChecked && familyBrought.length > 0;
 
   const firstSteps = [
     { id: 'stripe-bg',
@@ -1149,7 +1153,10 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       done: bgCheckSubmitted || bgOverride,
       missing: !(bgCheckSubmitted || bgOverride) ? (bgPaid ? 'Complete the background check form' : ((stripeConnected || stripeOverride) ? 'Pay for background check ($30)' : 'Complete Stripe setup first')) : null,
       warning: (!profile.isBackgroundChecked && adminVouches.length > 0 && !bgCheckSubmitted)
-        ? ('You\'re approved to work with ' + adminVouches.map(v => v.familyName).join(', ') + ' without a background check. To accept work from other families, a background check is required.')
+        ? (familyOnly
+          // Not "approved" — nobody at InPlace checked anything. The family brought her in.
+          ? (familyBrought.map(v => v.familyName).join(', ') + '\'s family added you themselves, so they can book you without a background check. Before you take work from any other family, a background check is required.')
+          : ('You\'re approved to work with ' + adminVouches.map(v => v.familyName).join(', ') + ' without a background check. To accept work from other families, a background check is required.'))
         : bgCheckSubmitted && profile.checkrStatus === 'consider'
         ? 'Your background check needs additional information. Please check your email for instructions from Checkr on how to complete the review process.'
         : (bgCheckSubmitted && profile.checkrStatus === 'processing'
@@ -1200,7 +1207,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
     { id: 'avail-rates', label: 'Set your availability and rates', desc: 'When you\u2019re free, and what you charge. You can change both whenever you like.', done: hasAvailability && hasRates, missing: (() => { const m = []; if (!hasAvailability) m.push('set at least one availability rule'); if (!hasRates) m.push('save your rates'); return m.length > 0 ? 'Still needed: ' + m.join(' and ') : null; })() },
     { id: 'photo', label: 'Review your account page and add a profile picture', desc: 'Families want to see who they\'re inviting into their home', done: hasPhoto, missing: !hasPhoto ? 'Upload a profile photo' : null },
   ];
-  const firstStepsDone = firstSteps.filter(s => s.done).length;
+  let firstStepsDone = firstSteps.filter(s => s.done).length;
   // Show checklist whenever steps remain — disappears when ALL done (or admin overrides all fields)
   //
   // v1.105.82 — ...but not until we KNOW. Two of the seven steps (identity, Stripe) are decided
@@ -1225,6 +1232,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   // targets and the per-step warnings; this owns which of them is OPEN and how loud each is.
   const hubRoute = resolveRoute({
     surface: 'hub',
+    familyOnly,
     profileCreated: true,
     identity: {
       loaded: idVerification.loaded, loadFailed: idVerification.loadFailed,
@@ -1260,6 +1268,11 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
     if (id === 'identity') { window.__accountTab = 'profile'; window.__navigateTo && window.__navigateTo('account'); }
   };
 
+  // v1.105.186 — on the short path the card closes when HER four are done, not when the
+  // optional nine are; otherwise Find Work stays greyed out for a caregiver whose family is
+  // waiting to book her. Expressed as "all first steps done" so the line below keeps the
+  // shape two older tests pin.
+  if (familyOnly && hubRoute.items.every((i) => i.state === 'done')) firstStepsDone = firstSteps.length;
   const showFirstSteps = firstStepsResolved && firstStepsDone < firstSteps.length && !profile.isDemo;
   // Expose to parent (app.js) so bottom nav can grey out Find Work
   window.__caregiverFirstStepsRemain = showFirstSteps;
@@ -1586,6 +1599,15 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               </span>
             )}
           </div>
+
+          {/* v1.105.186 — the short path. What is NOT on it is said once, quietly, as hers to
+              take whenever she likes. Not counted, not a to-do, and the safety check is named
+              for what it does: opens other families' jobs. */}
+          {familyOnly && hubRoute.optional.length > 0 && (
+            <div style={{ fontSize: '11px', lineHeight: '1.55', color: 'var(--text-muted)', marginTop: '10px', paddingTop: '10px', borderTop: '1px dashed var(--border-color)' }}>
+              Whenever you like: {hubRoute.optional.filter((i) => i.state !== 'done').map((i) => i.id === 'background-check' ? 'the safety check (to work with other families)' : i.label.toLowerCase()).join('  \u00B7  ')}
+            </div>
+          )}
 
           {/* Waiting on US. Its own note, outside the queue of things to do, because it is not
               her work — and since v1.105.112 it is what every caregiver's dashboard looks like

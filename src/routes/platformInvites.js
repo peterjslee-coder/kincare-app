@@ -4,6 +4,7 @@ const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { authenticate, requireAdmin } = require("../middleware/auth");
 const { sendEmail, brandedHtml } = require("../utils/email");
+const KNOWN = require("../utils/knownCaregivers"); // v1.105.186
 
 const router = express.Router();
 
@@ -40,14 +41,29 @@ router.get("/info", async (req, res) => {
     if (invite.status !== "pending") return res.status(400).json({ error: `Invite is ${invite.status}` });
     if (new Date(invite.expires_at) < new Date()) return res.status(400).json({ error: "Invite has expired" });
 
-    res.json({
-      invite: {
-        email: invite.invited_email,
-        role: invite.role,
-        inviterName: `${invite.inviter_first_name} ${invite.inviter_last_name}`,
-        expiresAt: invite.expires_at,
-      },
-    });
+    const out = {
+      email: invite.invited_email,
+      role: invite.role,
+      inviterName: `${invite.inviter_first_name} ${invite.inviter_last_name}`,
+      expiresAt: invite.expires_at,
+    };
+    // v1.105.186 — a known-caregiver invite draws the short path and speaks the family's name.
+    if (invite.kind === KNOWN.KIND && invite.care_recipient_id) {
+      const recipient = await db.prepare("SELECT first_name FROM care_recipients WHERE id = ?").get(invite.care_recipient_id);
+      const nameParts = String(invite.invited_name || "").trim().split(/\s+/);
+      out.kind = invite.kind;
+      out.recipientFirstName = recipient ? recipient.first_name : null;
+      out.relationship = await KNOWN.relationshipFor(db, invite.care_recipient_id, invite.invited_by);
+      out.invitedName = invite.invited_name || null;
+      out.firstName = nameParts[0] || null;
+      out.lastName = nameParts.slice(1).join(" ") || null;
+      out.phone = invite.phone || null;
+      // The invitee already knows their own email; the token is the secret. This lets the
+      // wizard send an existing caregiver to sign in instead of failing at "create account".
+      const existing = await db.prepare("SELECT id FROM users WHERE LOWER(email) = LOWER(?)").get(invite.invited_email);
+      out.existingAccount = !!existing;
+    }
+    res.json({ invite: out });
   } catch (err) {
     console.error("Invite info error:", err);
     res.status(500).json({ error: "Failed to get invite info" });
@@ -72,9 +88,39 @@ router.post("/accept-invite", authenticate, async (req, res) => {
 
     await db.prepare("UPDATE platform_invites SET status = 'accepted' WHERE id = ?").run(invite.id);
 
+    const userName = `${req.user.firstName || ''} ${req.user.lastName || ''}`.trim() || req.user.email;
+
+    // ─── v1.105.186 — a family brought this person ───
+    // Open that family's jobs to them now (the assignment follows once a profile exists), keep
+    // the phone the leader typed, and tell the LEADER — not the admins; this was their door.
+    if (invite.kind === KNOWN.KIND) {
+      await KNOWN.fulfillKnownCaregiverInvite(db, invite, req.user.id);
+      if (invite.phone) {
+        await db.prepare("UPDATE users SET phone = COALESCE(NULLIF(phone, ''), ?) WHERE id = ?").run(invite.phone, req.user.id);
+      }
+      try {
+        const recipient = await db.prepare("SELECT id, first_name FROM care_recipients WHERE id = ?").get(invite.care_recipient_id);
+        const rf = recipient ? recipient.first_name : "your loved one";
+        await db.prepare(
+          "INSERT INTO activity_feed (id, family_user_id, care_recipient_id, event_type, title, message) VALUES (?, ?, ?, 'known_caregiver_joined', ?, ?)"
+        ).run(uuid(), invite.invited_by, invite.care_recipient_id, `${userName} is setting up`,
+          `${userName} accepted your invite and is finishing setup. You can book them for ${rf} once they're set up to be paid and have sent a photo of their licence.`);
+        const { sendPushToUser } = require("./push");
+        sendPushToUser(invite.invited_by, {
+          title: `${userName} is setting up`,
+          body: `They accepted your invite for ${rf}.`,
+          data: { type: "known_caregiver_joined", careRecipientId: invite.care_recipient_id, page: "caregivers" },
+        }).catch(() => {});
+        const emitToUser = req.app.get("emitToUser");
+        if (emitToUser) emitToUser(invite.invited_by, "activity_update", { type: "known_caregiver_joined", message: `${userName} accepted your invite` });
+      } catch (e) {
+        console.error("Known caregiver accept notify (non-blocking):", e.message);
+      }
+      return res.json({ message: "Invite accepted", kind: invite.kind });
+    }
+
     // Notify the admin who sent the invite via push
     const { notifyAdmins } = require("./push");
-    const userName = `${req.user.firstName || ''} ${req.user.lastName || ''}`.trim() || req.user.email;
     notifyAdmins("invite_accepted", {
       title: "Invite Accepted!",
       body: `${userName} just accepted your invite and joined InPlace`,
