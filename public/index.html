@@ -49,7 +49,7 @@
   <!-- PWA Manifest -->
   <link rel="manifest" href="/manifest.json">
 
-  <link rel="stylesheet" href="/css/styles.css?v=build-afe5d0d9-mtsja5ov">
+  <link rel="stylesheet" href="/css/styles.css?v=build-409ae622-mttzllwo">
 
   <!-- Leaflet CSS for maps (self-hosted — no CDN dependency) -->
   <link rel="stylesheet" href="/vendor/leaflet.css">
@@ -79,9 +79,9 @@
 
   <!-- Pre-compiled app bundle (built by scripts/build-client.js) -->
   <script>
-    window.APP_VERSION = '1.105.186';
+    window.APP_VERSION = '1.105.187';
     // v1.85: admin components live in a separate lazy bundle (infra #5)
-    window.__ADMIN_BUNDLE_URL = '/js-compiled/bundle-admin.js?v=build-afe5d0d9-mtsja5ov';
+    window.__ADMIN_BUNDLE_URL = '/js-compiled/bundle-admin.js?v=build-409ae622-mttzllwo';
   </script>
   <script>
     // ─── Theme initialization ───
@@ -133,7 +133,7 @@
       });
     })();
   </script>
-  <script src="/js-compiled/bundle.js?v=build-afe5d0d9-mtsja5ov"></script>
+  <script src="/js-compiled/bundle.js?v=build-409ae622-mttzllwo"></script>
 
   <script>
     // Service worker: register/update and auto-reload on new version
@@ -163,8 +163,85 @@
         window.location.reload();
       });
 
+      // ─── v1.105.187 — apply updates at a safe moment, and say so ───
+      //
+      // Pete, Sep 9: a deploy landed while the app was closed; the next open ran the OLD bundle
+      // against the NEW server and every screen switch spun for a minute. The pill below was on
+      // screen the whole time. "Is there a way to force the app to restart when there's an
+      // update... or a screen that says 'App updated, reloading your data... back in a sec!'"
+      //
+      // Both, with one rule: NEVER mid-work. Auto-reload on arrival is what broke dashboards
+      // pre-v1.57.14, so:
+      //   1. Update already waiting when the app OPENS (deploy happened while closed): nothing is
+      //      in flight yet — apply now, behind a full-screen "App updated" card.
+      //   2. Update lands while the app is OPEN: show the pill, and ALSO apply at the next screen
+      //      change — if no form has text in it and no modal is open (`swIsSafeMoment`).
+      //   3. Typing or booking: wait. The pill stays; the next screen change tries again.
+      // Lives here, not in the React bundle, because the bundle is the thing that is stale.
+      var swApplying = false;
+      var swPendingReg = null;
+
+      function swIsSafeMoment() {
+        try {
+          if (document.querySelector('.modal-overlay, .modal-backdrop, [role="dialog"]')) return false;
+          var fields = document.querySelectorAll('input, textarea, [contenteditable="true"]');
+          for (var i = 0; i < fields.length; i++) {
+            var f = fields[i];
+            if (f.disabled || f.readOnly) continue;
+            var t = (f.getAttribute('type') || 'text').toLowerCase();
+            if (t === 'hidden' || t === 'checkbox' || t === 'radio' || t === 'submit' || t === 'button' || t === 'range') continue;
+            var v = f.isContentEditable ? (f.textContent || '') : (f.value || '');
+            if (v.trim()) return false;
+          }
+          return true;
+        } catch (e) { return false; }
+      }
+
+      function swShowUpdateScreen() {
+        if (document.getElementById('sw-update-screen')) return;
+        var pill = document.getElementById('sw-update-pill');
+        if (pill) pill.remove();
+        var el = document.createElement('div');
+        el.id = 'sw-update-screen';
+        el.setAttribute('role', 'status');
+        el.setAttribute('aria-live', 'polite');
+        el.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;' +
+          'align-items:center;justify-content:center;gap:14px;background:#1b6b5a;color:#fff;' +
+          'font:400 15px -apple-system,BlinkMacSystemFont,"DM Sans",sans-serif;text-align:center;padding:32px;';
+        el.innerHTML =
+          '<div style="width:56px;height:56px;border-radius:14px;background:rgba(255,255,255,.14);' +
+          'display:flex;align-items:center;justify-content:center;font-weight:800;font-size:22px;">iP</div>' +
+          '<div style="font-size:20px;font-weight:700;">App updated</div>' +
+          '<div style="opacity:.85;max-width:26ch;line-height:1.45;">Reloading your data… back in a sec.</div>' +
+          '<div style="margin-top:8px;width:28px;height:28px;border:3px solid rgba(255,255,255,.35);' +
+          'border-top-color:#fff;border-radius:50%;animation:swspin .8s linear infinite;"></div>' +
+          '<style>@keyframes swspin{to{transform:rotate(360deg)}}@media (prefers-reduced-motion:reduce){#sw-update-screen div[style*="swspin"]{animation:none}}</style>';
+        document.body.appendChild(el);
+      }
+
+      function swApplyUpdate(reg) {
+        if (swApplying || !reg || !reg.waiting) return false;
+        swApplying = true;
+        swShowUpdateScreen();
+        reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+        // controllerchange normally reloads within a second. If it never fires (a browser
+        // that will not swap controllers, or a worker that errors), reload anyway rather
+        // than leaving a "back in a sec" card up forever.
+        setTimeout(function() { if (!swReloaded) { swReloaded = true; window.location.reload(); } }, 8000);
+        return true;
+      }
+
+      // The bundle calls this on every screen change (window.__swApplyPendingUpdate).
+      window.__swApplyPendingUpdate = function() {
+        if (!swPendingReg || !swPendingReg.waiting) return false;
+        if (!swIsSafeMoment()) return false;
+        return swApplyUpdate(swPendingReg);
+      };
+
       function swShowUpdatePill(reg) {
-        if (!reg.waiting || document.getElementById('sw-update-pill')) return;
+        if (!reg.waiting) return;
+        swPendingReg = reg;
+        if (document.getElementById('sw-update-pill') || document.getElementById('sw-update-screen')) return;
         var pill = document.createElement('button');
         pill.id = 'sw-update-pill';
         pill.textContent = 'Update ready — tap to refresh';
@@ -174,13 +251,7 @@
           'background:#1b6b5a;color:#fff;border:none;border-radius:22px;' +
           'padding:12px 20px;font:600 14px -apple-system,BlinkMacSystemFont,sans-serif;' +
           'box-shadow:0 4px 14px rgba(0,0,0,0.25);cursor:pointer;';
-        pill.onclick = function() {
-          if (reg.waiting) {
-            pill.textContent = 'Updating\u2026';
-            pill.disabled = true;
-            reg.waiting.postMessage({ type: 'SKIP_WAITING' });
-          }
-        };
+        pill.onclick = function() { swApplyUpdate(reg); };
         document.body.appendChild(pill);
       }
 
@@ -191,8 +262,9 @@
           reg.update().catch(function() {});
           console.log('SW registered:', reg.scope);
 
-          // Already-waiting worker (deploy happened while app was closed)
-          swShowUpdatePill(reg);
+          // Already-waiting worker (deploy happened while app was closed). The app has JUST
+          // opened, so nothing is in flight: apply it now, behind the "App updated" card.
+          if (reg.waiting) { swApplyUpdate(reg); } else { swShowUpdatePill(reg); }
           // Worker that finishes installing while the app is open
           reg.addEventListener('updatefound', function() {
             var nw = reg.installing;
@@ -206,7 +278,11 @@
           // Long-lived PWA/native sessions: re-check when the app comes back to
           // the foreground, and every 30 minutes while open
           document.addEventListener('visibilitychange', function() {
-            if (document.visibilityState === 'visible') reg.update().catch(function() {});
+            if (document.visibilityState !== 'visible') return;
+            // Coming back to the foreground is a natural pause: apply a waiting update if
+            // nothing is half-typed, otherwise just check and leave the pill.
+            if (reg.waiting && swIsSafeMoment()) { swApplyUpdate(reg); return; }
+            reg.update().catch(function() {});
           });
           setInterval(function() { reg.update().catch(function() {}); }, 30 * 60 * 1000);
         } catch (err) {

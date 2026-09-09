@@ -609,6 +609,9 @@ const App = () => {
   const [pageNavCount, setPageNavCount] = useState(0);
   // v1.104.4 — expose the current page to the ErrorBoundary crash reporter
   useEffect(() => { try { window.__currentPage = currentPage; } catch {} }, [currentPage]);
+  // v1.105.187 — a screen change is a safe moment to apply a waiting app update (index.html
+  // owns the check and the "App updated" card; it declines if a form has text or a modal is open).
+  useEffect(() => { try { if (window.__swApplyPendingUpdate) window.__swApplyPendingUpdate(); } catch {} }, [currentPage]);
   const [showRequestCareModal, setShowRequestCareModal] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showDisclaimer, setShowDisclaimer] = useState(false);
