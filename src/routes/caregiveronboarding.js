@@ -326,6 +326,9 @@ router.post("/verify-id", async (req, res) => {
     );
 
 
+    // v1.105.188 — the licence photo may be the last of a family-brought caregiver's four.
+    try { require("../utils/knownCaregivers").notifyIfReadyToBook(db, req.user.id).catch(() => {}); } catch (e) { /* non-blocking */ }
+
     // v1.105.68 — tell someone. Submitting a selfie + government ID used to notify NOBODY:
     // no push, no email, no entry in the admin alert counts, nothing in the activity feed. A
     // caregiver sent in their ID, was told it worked, and waited — while the admin had no

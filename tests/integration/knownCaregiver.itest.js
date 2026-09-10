@@ -141,6 +141,31 @@ describe("adding a caregiver you already know", () => {
     expect(inv.progress.ready).toBe(false);
   });
 
+  test("when the fourth thing lands, the leader is told she is ready to book — once", async () => {
+    const { notifyIfReadyToBook } = require("../../src/utils/knownCaregivers");
+    // Not yet: no Stripe, no licence photo.
+    expect(await notifyIfReadyToBook(h.db, carol.user.id)).toEqual([]);
+    await h.db.prepare("UPDATE caregiver_profiles SET stripe_onboard_complete = 1 WHERE user_id = ?").run(carol.user.id);
+    expect(await notifyIfReadyToBook(h.db, carol.user.id)).toEqual([]);
+    const profile = await h.db.prepare("SELECT id FROM caregiver_profiles WHERE user_id = ?").get(carol.user.id);
+    await h.db.prepare(`INSERT INTO verified_documents (id, owner_type, owner_id, uploaded_by, category, document_type, file_data, mime_type, status, is_verified, created_at)
+      VALUES (?, 'caregiver', ?, ?, 'identity', 'drivers_license', 'x', 'image/jpeg', 'pending', 0, NOW())`).run(uuid(), profile.id, carol.user.id);
+    const fired = await notifyIfReadyToBook(h.db, carol.user.id);
+    expect(fired).toEqual([inviteId]);
+    const row = await h.db.prepare("SELECT status FROM platform_invites WHERE id = ?").get(inviteId);
+    expect(row.status).toBe("ready");
+    const feed = await h.db.prepare("SELECT * FROM activity_feed WHERE family_user_id = ? AND event_type = 'known_caregiver_ready'").all(pete.user.id);
+    expect(feed).toHaveLength(1);
+    expect(feed[0].title).toBe("Carol Whitaker is ready to book");
+    // Once. A second Stripe webhook or re-upload must not tell him again.
+    expect(await notifyIfReadyToBook(h.db, carol.user.id)).toEqual([]);
+    // And the leader's list still shows her, now with progress 4 of 4.
+    const res = await h.request.get(`/api/known-caregivers?careRecipientId=${recipientId}`).set(h.auth(pete.token));
+    const inv = res.body.invites.find((i) => i.id === inviteId);
+    expect(inv.status).toBe("accepted");
+    expect(inv.progress.ready).toBe(true);
+  });
+
   test("resend and withdraw are the leader's, and only while it is open", async () => {
     // Carol's is accepted now — cannot be withdrawn.
     const w = await h.request.delete(`/api/known-caregivers/${inviteId}`).set(h.auth(pete.token));

@@ -406,6 +406,11 @@ router.post("/webhook", express.raw({ type: "application/json" }), async (req, r
           await db.prepare(
             "UPDATE caregiver_profiles SET stripe_onboard_complete = 1, updated_at = NOW() WHERE stripe_account_id = ?"
           ).run(account.id);
+          // v1.105.188 — pay landing may be the last of a family-brought caregiver's four.
+          try {
+            const cg = await db.prepare("SELECT user_id FROM caregiver_profiles WHERE stripe_account_id = ?").get(account.id);
+            if (cg) require("../utils/knownCaregivers").notifyIfReadyToBook(db, cg.user_id).catch(() => {});
+          } catch (e) { /* non-blocking */ }
           // v1.98.0 — family/payee reimbursement payout accounts live on users
           await db.prepare(
             "UPDATE users SET stripe_onboard_complete = 1, updated_at = NOW() WHERE stripe_account_id = ?"
@@ -917,6 +922,8 @@ router.get("/connect/status", requireRole("caregiver"), async (req, res) => {
       await db.prepare(
         "UPDATE caregiver_profiles SET stripe_onboard_complete = 1, updated_at = NOW() WHERE user_id = ?"
       ).run(req.user.id);
+      // v1.105.188 — see the webhook above; this is the same moment seen from the app.
+      try { require("../utils/knownCaregivers").notifyIfReadyToBook(db, req.user.id).catch(() => {}); } catch (e) { /* non-blocking */ }
     }
 
     res.json({

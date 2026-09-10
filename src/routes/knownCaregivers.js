@@ -15,9 +15,8 @@ const { authenticate, requireRole } = require("../middleware/auth");
 const { sendEmail, brandedHtml } = require("../utils/email");
 const {
   KIND, INVITE_DAYS, OPEN_CAP_PER_LEADER,
-  recipientIfLeader, relationshipFor, fulfillKnownCaregiverInvite,
+  recipientIfLeader, relationshipFor, fulfillKnownCaregiverInvite, progressFor,
 } = require("../utils/knownCaregivers");
-const { caregiverIdentityDoc } = require("../utils/identity");
 
 const router = express.Router();
 const APP_URL = process.env.APP_URL || "https://yourinplace.com";
@@ -64,29 +63,6 @@ function inviteEmail({ inviterName, recipient, relationship, firstName, token, r
   };
 }
 
-// Progress for the leader's "Waiting on Carol · 2 of 4" line. Four jobs on the short path:
-// account, quick details (profile exists), pay (Stripe), licence photo (submitted counts —
-// approval is our wait, not hers).
-async function progressFor(db, email) {
-  const user = await db.prepare("SELECT id FROM users WHERE LOWER(email) = LOWER(?)").get(email);
-  if (!user) return { account: false, details: false, pay: false, licence: false, done: 0, of: 4, ready: false };
-  const profile = await db.prepare(
-    "SELECT id, stripe_onboard_complete FROM caregiver_profiles WHERE user_id = ?"
-  ).get(user.id);
-  const doc = await caregiverIdentityDoc(db, user.id, profile ? profile.id : null);
-  const p = {
-    userId: user.id,
-    account: true,
-    details: !!profile,
-    pay: !!(profile && profile.stripe_onboard_complete),
-    licence: !!doc,
-  };
-  p.done = ["account", "details", "pay", "licence"].filter((k) => p[k]).length;
-  p.of = 4;
-  p.ready = p.done === 4;
-  return p;
-}
-
 // ─── GET /api/known-caregivers?careRecipientId= ───
 router.get("/", async (req, res) => {
   try {
@@ -100,7 +76,7 @@ router.get("/", async (req, res) => {
       SELECT pi.*, u.first_name AS inviter_first_name, u.last_name AS inviter_last_name
       FROM platform_invites pi
       JOIN users u ON u.id = pi.invited_by
-      WHERE pi.kind = ? AND pi.care_recipient_id = ? AND pi.status IN ('pending', 'accepted')
+      WHERE pi.kind = ? AND pi.care_recipient_id = ? AND pi.status IN ('pending', 'accepted', 'ready')
       ORDER BY pi.created_at DESC
     `).all(KIND, recipient.id);
 
@@ -112,11 +88,12 @@ router.get("/", async (req, res) => {
         name: r.invited_name,
         email: r.invited_email,
         phone: r.phone,
-        status: expired ? "expired" : r.status,
+        // `ready` is an accepted invite whose caregiver finished the four; the leader was told.
+        status: expired ? "expired" : (r.status === "ready" ? "accepted" : r.status),
         sentAt: r.created_at,
         expiresAt: r.expires_at,
         inviterName: `${r.inviter_first_name} ${r.inviter_last_name}`,
-        progress: r.status === "accepted" ? await progressFor(db, r.invited_email) : null,
+        progress: (r.status === "accepted" || r.status === "ready") ? await progressFor(db, r.invited_email) : null,
       });
     }
     res.json({ invites });

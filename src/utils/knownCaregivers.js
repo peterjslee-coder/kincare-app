@@ -111,6 +111,71 @@ async function fulfillPendingForUser(db, caregiverUserId) {
   return results;
 }
 
+/**
+ * Progress on the short path for the leader's "2 of 4 done" line. Four jobs: account, quick
+ * details (a profile exists), pay (Stripe), licence photo (SUBMITTED counts — approval is our
+ * wait, not hers).
+ */
+async function progressFor(db, email) {
+  const { caregiverIdentityDoc } = require("./identity");
+  const user = await db.prepare("SELECT id FROM users WHERE LOWER(email) = LOWER(?)").get(email);
+  if (!user) return { userId: null, account: false, details: false, pay: false, licence: false, done: 0, of: 4, ready: false };
+  const profile = await db.prepare(
+    "SELECT id, stripe_onboard_complete FROM caregiver_profiles WHERE user_id = ?"
+  ).get(user.id);
+  const doc = await caregiverIdentityDoc(db, user.id, profile ? profile.id : null);
+  const p = { userId: user.id, account: true, details: !!profile, pay: !!(profile && profile.stripe_onboard_complete), licence: !!doc };
+  p.done = ["account", "details", "pay", "licence"].filter((k) => p[k]).length;
+  p.of = 4;
+  p.ready = p.done === 4;
+  return p;
+}
+
+/**
+ * v1.105.188 — "I want a notification when she's joined." The accept push says she is SETTING
+ * UP; this one says she is READY TO BOOK, which is the moment the family actually wants. Called
+ * after each thing that can be the last thing (Stripe completing, the licence photo landing).
+ * Marks the invite `ready` so it fires once. Fire-and-forget at every call site.
+ */
+async function notifyIfReadyToBook(db, caregiverUserId) {
+  const user = await db.prepare("SELECT id, email, first_name, last_name FROM users WHERE id = ?").get(caregiverUserId);
+  if (!user || !user.email) return [];
+  const invites = await db.prepare(`
+    SELECT * FROM platform_invites
+    WHERE kind = ? AND status = 'accepted' AND LOWER(invited_email) = LOWER(?)
+  `).all(KIND, user.email);
+  if (invites.length === 0) return [];
+  const progress = await progressFor(db, user.email);
+  if (!progress.ready) return [];
+  const name = `${user.first_name || ""} ${user.last_name || ""}`.trim() || user.email;
+  const fired = [];
+  for (const inv of invites) {
+    // Claim it first so two racing call sites cannot both notify.
+    const claimed = await db.prepare(
+      "UPDATE platform_invites SET status = 'ready' WHERE id = ? AND status = 'accepted'"
+    ).run(inv.id);
+    if (!claimed || (claimed.changes !== undefined && claimed.changes === 0)) continue;
+    const recipient = await db.prepare("SELECT id, first_name FROM care_recipients WHERE id = ?").get(inv.care_recipient_id);
+    const rf = recipient ? recipient.first_name : "your loved one";
+    try {
+      await db.prepare(
+        "INSERT INTO activity_feed (id, family_user_id, care_recipient_id, event_type, title, message) VALUES (?, ?, ?, 'known_caregiver_ready', ?, ?)"
+      ).run(uuid(), inv.invited_by, inv.care_recipient_id, `${name} is ready to book`,
+        `${name} is set up to be paid and has sent a photo of their licence. Book them for ${rf} from the Caregivers tab.`);
+      const { sendPushToUser } = require("../routes/push");
+      await sendPushToUser(inv.invited_by, {
+        title: `${name} is ready to book`,
+        body: `Set up to be paid, licence photo in. Book them for ${rf} whenever you like.`,
+        data: { type: "known_caregiver_ready", careRecipientId: inv.care_recipient_id, page: "caregivers" },
+      });
+    } catch (e) {
+      console.error("known-caregiver ready notify (non-blocking):", e.message);
+    }
+    fired.push(inv.id);
+  }
+  return fired;
+}
+
 /** Does this caregiver work for families ONLY because a family brought them in? */
 async function isFamilyBroughtOnly(db, caregiverUserId) {
   const profile = await db.prepare(
@@ -127,4 +192,5 @@ module.exports = {
   KIND, FAMILY_BROUGHT_NOTE, INVITE_DAYS, OPEN_CAP_PER_LEADER,
   recipientIfLeader, relationshipFor,
   fulfillKnownCaregiverInvite, fulfillPendingForUser, isFamilyBroughtOnly,
+  progressFor, notifyIfReadyToBook,
 };

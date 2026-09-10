@@ -180,6 +180,17 @@ describe("mechanism: the gate row is keyed on the OWNER, and the assignment wait
     expect(block).toContain('page: "caregivers"');
   });
 
+  test("the leader is told twice, at the two moments that matter: setting up, and ready to book", () => {
+    // The accept push says "is setting up". The one the family actually waits for is "ready to
+    // book", fired from whichever of Stripe or the licence photo lands last, and only once.
+    const payments = code("src/routes/payments.js");
+    const onboarding = code("src/routes/caregiveronboarding.js");
+    expect((payments.match(/notifyIfReadyToBook\(db, /g) || []).length).toBe(2);
+    expect(onboarding).toContain("notifyIfReadyToBook(db, req.user.id)");
+    expect(known).toContain("UPDATE platform_invites SET status = 'ready' WHERE id = ? AND status = 'accepted'");
+    expect(known).toContain('page: "caregivers"');
+  });
+
   test("phone is stored, never texted", () => {
     expect(platform).toContain("UPDATE users SET phone = COALESCE(NULLIF(phone, ''), ?)");
     expect(route).not.toMatch(/twilio|sendSms|sendArrivalSms/i);
