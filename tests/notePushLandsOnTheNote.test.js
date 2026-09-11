@@ -42,7 +42,8 @@ describe("and the family's own screen now uses it", () => {
     // to say "do not remember this". He followed a link to a note; that is the app unfolding
     // the section, not him choosing to keep it unfolded.
     expect(profile).toMatch(/setNotesOpen\(true, \{ remember: false \}\);/);
-    expect(profile).toMatch(/if \(!isVisit && idx >= NOTES_PREVIEW\) setShowAllNotes\(true\);/);
+    // v1.105.189 — visits and notes are one list now, so a visit past the fold expands it too.
+    expect(profile).toMatch(/if \(idx >= NOTES_PREVIEW\) setShowAllNotes\(true\);/);
     expect(profile).toMatch(/el\.scrollIntoView\(\{ behavior: 'smooth', block: 'center' \}\)/);
   });
 

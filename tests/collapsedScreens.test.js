@@ -62,16 +62,17 @@ describe("a reimbursement is one line until you ask", () => {
 describe("care notes show the newest few", () => {
   test("a preview, not the whole history", () => {
     expect(profile).toMatch(/const NOTES_PREVIEW = 5;/);
-    expect(profile).toMatch(/\(showAllNotes \? notes : notes\.slice\(0, NOTES_PREVIEW\)\)\.map/);
+    // v1.105.189 — the preview is over the merged visits+notes timeline, not the notes alone.
+    expect(profile).toMatch(/const shown = showAllNotes \? noteTimeline : noteTimeline\.slice\(0, NOTES_PREVIEW\);/);
   });
 
   test("with a way to see all of them", () => {
-    expect(profile).toMatch(/Show all \$\{notes\.length\} observations/);
+    expect(profile).toMatch(/Show all \$\{noteTimeline\.length\}/);
     expect(profile).toMatch(/Show fewer/);
   });
 
   test("the button only exists when there is more to show", () => {
-    expect(profile).toMatch(/notes\.length > NOTES_PREVIEW \? \[\(/);
+    expect(profile).toMatch(/noteTimeline\.length > NOTES_PREVIEW \? \[\(/);
   });
 
   test("the count in the header still tells the truth", () => {

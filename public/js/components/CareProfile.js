@@ -583,7 +583,28 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
     } catch {}
   };
 
+  // ─── v1.105.189 — one timeline, in time order ───
+  // Pete, Sep 11: "Daniel's notes are waaaay out of date order?" They were not — each list was
+  // ordered — but this card was TWO lists stacked: every family visit first, then every note.
+  // Daniel's note from this morning rendered under a week of older visits. The caregiver view
+  // fixed the same thing in v1.105.156 ("a caregiver arriving at the house wants 'what has
+  // happened with her recently', not two lists to reconcile by date"); the family view never
+  // got it. Visits keep their label — interleaved, never blended (v1.105.38).
+  const noteTimeline = [
+    ...familyVisits.map((v) => ({ kind: 'visit', id: v.id, at: v.visitedAt || v.createdAt, row: v })),
+    ...notes.map((n) => ({ kind: 'note', id: n.id, at: n.created_at, row: n })),
+  ].sort((a, b) => String(b.at || '').localeCompare(String(a.at || '')));
+
+  // A tap and an Enter arriving together used to save the same note twice (Daniel, Sep 11,
+  // 14:27:14 and 14:27:15). React state is too slow to be the lock; a ref is not.
+  const addingNoteRef = React.useRef(false);
+
   const handleAddNote = async () => {
+    if (addingNoteRef.current) return;
+    addingNoteRef.current = true;
+    try { await handleAddNoteInner(); } finally { addingNoteRef.current = false; }
+  };
+  const handleAddNoteInner = async () => {
     if (!newNote.trim() || !profile?.id) return;
     setAddingNote(true);
     try {
@@ -828,15 +849,14 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
     const isVisit = f.startsWith('visit:');
     if (!f.startsWith('note:') && !isVisit) return;
     const id = f.slice(f.indexOf(':') + 1);
-    const list = isVisit ? familyVisits : notes;
-    if (!list.length) return;
-    const idx = list.findIndex((n) => n.id === id);
+    if (!noteTimeline.length) return;
+    const idx = noteTimeline.findIndex((t) => t.id === id && t.kind === (isVisit ? 'visit' : 'note'));
     if (idx === -1) return; // not this recipient's, or not loaded yet — leave it for them
     window.__pendingFocus = null;
     // v1.105.171 — open it, but do NOT remember it. He followed a push to a note; that is
     // the app deciding to unfold this, not him choosing to keep it unfolded.
     setNotesOpen(true, { remember: false });
-    if (!isVisit && idx >= NOTES_PREVIEW) setShowAllNotes(true);
+    if (idx >= NOTES_PREVIEW) setShowAllNotes(true);
     setHighlightNoteId(id);
     // After the expand has painted, or we scroll to where the row is about to be.
     setTimeout(() => {
@@ -1385,8 +1405,9 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                 point: a doctor report that implies a nurse observed something a son did is
                 the derivation-chain failure from the v1.93 post-mortem. Source is always
                 visible, here and everywhere downstream. */}
-            {familyVisits.map((v) => (
-              <div key={v.id} data-visit-id={v.id} style={{
+            {(() => {
+            const renderVisit = (v) => (
+              <div key={`v-${v.id}`} data-visit-id={v.id} style={{
                 padding: '10px 0', borderBottom: '1px solid #f0f0f0',
                 transition: 'background 1.2s ease',
                 background: highlightNoteId === v.id ? 'rgba(74, 144, 217, 0.16)' : 'transparent',
@@ -1444,7 +1465,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                     onReact={(emoji) => handleReact('family_visit', v.id, emoji)} />
                 )}
               </div>
-            ))}
+            );
             {/* ─── v1.105.149 — the newest few, then ask ───
                 Pete: "Care notes...same thing" (after "the reimbursement page...way too many.
                 pages of scroll"). The section already collapsed as a whole, which is the wrong
@@ -1454,8 +1475,8 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                 The newest ones are the ones anyone came here to read — a note from March is
                 history, not news. The count on the header still says how many there are, so
                 nothing is hidden, only folded. */}
-            {notes.length > 0 ? (showAllNotes ? notes : notes.slice(0, NOTES_PREVIEW)).map((n) => (
-              <div key={n.id} data-note-id={n.id} style={{
+            const renderNote = (n) => (
+              <div key={`n-${n.id}`} data-note-id={n.id} style={{
                 padding: '10px 0', borderBottom: '1px solid #f0f0f0', display: 'flex',
                 justifyContent: 'space-between', alignItems: 'flex-start', gap: 8,
                 transition: 'background 1.2s ease',
@@ -1510,7 +1531,10 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                   }} style={{ padding: '3px 8px', background: 'none', border: '1px solid #fdd', borderRadius: 4, cursor: 'pointer', fontSize: 11, color: 'var(--color-red-strong)', whiteSpace: 'nowrap', flexShrink: 0 }}>Delete</button>
                 )}
               </div>
-            )).concat(notes.length > NOTES_PREVIEW ? [(
+            );
+            // Newest few of EVERYTHING, then ask (v1.105.149's rule, now over the merged list).
+            const shown = showAllNotes ? noteTimeline : noteTimeline.slice(0, NOTES_PREVIEW);
+            return noteTimeline.length > 0 ? shown.map((t) => (t.kind === 'visit' ? renderVisit(t.row) : renderNote(t.row))).concat(noteTimeline.length > NOTES_PREVIEW ? [(
               <button key="__more" onClick={() => setShowAllNotes(!showAllNotes)}
                 style={{
                   width: '100%', minHeight: 44, marginTop: 10, background: 'none',
@@ -1520,11 +1544,12 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                 }}>
                 {showAllNotes
                   ? 'Show fewer'
-                  : `Show all ${notes.length} observations`}
+                  : `Show all ${noteTimeline.length}`}
               </button>
             )] : []) : (
               <p style={{ color: 'var(--text-muted)', fontSize: 13, margin: '8px 0 0' }}>No notes yet. Add one to share care observations with your team.</p>
-            )}
+            );
+            })()}
           </div>
         )}
       </div>
