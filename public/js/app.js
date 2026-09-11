@@ -2018,12 +2018,22 @@ const App = () => {
     if (role === 'caregiver') {
       const cgOnboarded = currentUser?.onboardingComplete !== false;
       const firstStepsRemain = !!window.__caregiverFirstStepsRemain;
-      return [
+      const cgBottom = [
         { id: 'dashboard', icon: '🏠', label: 'Home' },
         { id: 'find-work', icon: '🔍', label: 'Find Work', isAccent: true, disabled: !cgOnboarded || firstStepsRemain },
         { id: 'messages', icon: '💬', label: 'Messages' },
-        { id: 'account', icon: '👤', label: 'Account' },
       ];
+      // ─── v1.105.190 — the door, on the phone ───
+      //
+      // Pete, Sep 11: "julia still can't see care notes." Her share carries read_notes, the
+      // server lists Betty for her, and v1.105.153 / .184 put the Care Notes tab in getNavItems
+      // — the DESKTOP sidebar. This is the bottom bar. She is on an iPhone. The tab has never
+      // once existed on the screen she uses; two fixes shipped against a door on the other
+      // building. Same rule as above: driven by what the server says she may read, never by
+      // role. Five items is the family bar's count, so it fits.
+      if (sharedNotesRecipients > 0) cgBottom.push({ id: 'care-notes', icon: '📝', label: 'Care Notes' });
+      cgBottom.push({ id: 'account', icon: '👤', label: 'Account' });
+      return cgBottom;
     }
     if (role === 'care_for') {
       return [
