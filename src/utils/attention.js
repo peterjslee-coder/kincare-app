@@ -230,7 +230,7 @@ async function attentionItemsFor(db, userId) {
     LEFT JOIN care_recipients cr ON cr.id = t.care_recipient_id
     WHERE occ.status = 'pending'
       AND t.is_active = 1
-      AND t.assigned_user_id = ?
+      AND COALESCE(occ.assigned_user_id, t.assigned_user_id) = ? /* v1.105.191 — tonight's person */
       AND occ.due_at <= NOW()
     ORDER BY occ.due_at
   `).all(userId));

@@ -159,6 +159,31 @@ const CareTaskCheckSheet = window.CareTaskCheckSheet = ({ occ, group, onClose, o
     setSaving(false);
   };
 
+  // ─── v1.105.191 — "who WILL do it", not only "who DID it" ───
+  // Pete: "it defaults to me and if I open it and select dan, my only option in the 'needs
+  // you' pane is to complete the task or skip". Picking a team member now also offers to hand
+  // TONIGHT to them. The task's default person is unchanged; tomorrow it is his again.
+  const [handing, setHanding] = useState(false);
+  const pickedMember = who.kind === 'user' ? (group.teamMembers || []).find((m) => m.id === who.id) : null;
+  const handOff = async () => {
+    if (!pickedMember || handing) return;
+    setHanding(true);
+    try {
+      const res = await apiFetch(`/api/care-tasks/occurrences/${occ.id}/assign`, {
+        method: 'POST', body: JSON.stringify({ userId: pickedMember.id }),
+      });
+      const d = res ? await res.json().catch(() => ({})) : {};
+      if (res?.ok) {
+        showToast(`Handed to ${pickedMember.first_name} for today \u2014 they\u2019ve been told`, 'success');
+        if (typeof CareTaskSync !== 'undefined') CareTaskSync.announce(occ.id);
+        onDone(); onClose();
+      } else {
+        showToast(d.error || 'Couldn\u2019t hand that off', 'error');
+      }
+    } catch { showToast('Couldn\u2019t reach InPlace', 'error'); }
+    setHanding(false);
+  };
+
   const chip = (selected) => ({
     padding: '8px 14px', borderRadius: 20, fontSize: 13, fontWeight: selected ? 700 : 500, cursor: 'pointer',
     border: selected ? '2px solid var(--role-color)' : '1px solid var(--border-color)',
@@ -199,7 +224,15 @@ const CareTaskCheckSheet = window.CareTaskCheckSheet = ({ occ, group, onClose, o
           placeholder="e.g. Took it with dinner. Seemed calm tonight."
           style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border-color)', fontSize: 14, resize: 'vertical', background: 'var(--bg-surface)', color: 'var(--text-primary)', boxSizing: 'border-box' }} />
 
-        <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+        {pickedMember && (
+          <button disabled={handing || saving} onClick={handOff} style={{
+            width: '100%', marginTop: 14, padding: '12px 0', borderRadius: 12,
+            border: '1.5px solid var(--role-color)', background: 'var(--role-color-light)',
+            color: 'var(--role-color)', fontSize: 14, fontWeight: 700, cursor: 'pointer', opacity: handing ? 0.6 : 1,
+          }}>{handing ? 'Handing off\u2026' : `Hand tonight to ${pickedMember.first_name} \u2014 not done yet`}</button>
+        )}
+
+        <div style={{ display: 'flex', gap: 10, marginTop: pickedMember ? 10 : 16 }}>
           <button disabled={saving} onClick={() => submit('done')} style={{
             flex: 1, padding: '13px 0', borderRadius: 12, border: 'none', background: 'var(--color-success)',
             color: 'var(--text-on-primary)', fontSize: 15, fontWeight: 700, cursor: 'pointer', opacity: saving ? 0.6 : 1,
@@ -476,6 +509,15 @@ const CareTasksSection = window.CareTasksSection = ({ recipientId, recipientFirs
     return `${time} · ${rep}${until}${who}`;
   };
 
+  const removeTask = async (t) => {
+    if (!window.confirm(`Remove "${t.title}"? It won\u2019t come up again. What\u2019s already been recorded stays in the history.`)) return;
+    try {
+      const res = await apiFetch(`/api/care-tasks/${t.id}`, { method: 'DELETE' });
+      const d = res ? await res.json().catch(() => ({})) : {};
+      if (res?.ok) { showToast('Task removed', 'success'); load(); if (typeof CareTaskSync !== 'undefined') CareTaskSync.announce(null); }
+      else showToast(d.error || 'Couldn\u2019t remove that', 'error');
+    } catch { showToast('Couldn\u2019t reach InPlace', 'error'); }
+  };
   const toggleActive = async (t) => {
     try {
       const res = await apiFetch(`/api/care-tasks/${t.id}`, { method: 'PUT', body: JSON.stringify({ is_active: t.is_active ? 0 : 1 }) });
@@ -534,6 +576,13 @@ const CareTasksSection = window.CareTasksSection = ({ recipientId, recipientFirs
                 <button onClick={() => toggleActive(t)}
                   style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--bg-surface)', color: 'var(--text-tertiary)', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
                   {t.is_active ? 'Pause' : 'Resume'}
+                </button>
+                {/* v1.105.191 — Pete: "i still can't cancel tasks." DELETE existed on the
+                    server since Phase 1; nothing on screen called it. Pause keeps a finished
+                    course of antibiotics on the list forever. History is kept either way. */}
+                <button onClick={() => removeTask(t)}
+                  style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #fdd', background: 'var(--bg-surface)', color: 'var(--color-red-strong)', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+                  Remove
                 </button>
               </div>
             )}

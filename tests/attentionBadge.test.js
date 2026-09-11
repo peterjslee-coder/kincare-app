@@ -133,7 +133,8 @@ describe("what the count deliberately EXCLUDES", () => {
 
   test("an unassigned care task badges nobody", () => {
     // It belongs to the team, not to one person. Badging everyone for it is noise.
-    expect(util).toMatch(/t\.assigned_user_id = \?/);
+    // v1.105.191 — tonight's person (occurrence) wins over the task's default; still never everyone.
+    expect(util).toMatch(/COALESCE\(occ\.assigned_user_id, t\.assigned_user_id\) = \?/);
   });
 
   test("an expired time proposal doesn't count — there's nothing left to do", () => {

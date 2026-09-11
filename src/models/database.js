@@ -2204,6 +2204,15 @@ async function initializeDatabase() {
         `CREATE INDEX IF NOT EXISTS idx_platform_invites_kind_recipient ON platform_invites (kind, care_recipient_id) WHERE kind IS NOT NULL`,
       ],
     },
+    {
+      // v1.105.191 — "hand tonight's task to Daniel". A task has a default person
+      // (care_tasks.assigned_user_id); one night's occurrence can be handed to someone else
+      // without changing the default. Effective assignee = COALESCE(occurrence, task).
+      id: "029_occurrence_assignee",
+      statements: [
+        `ALTER TABLE care_task_occurrences ADD COLUMN IF NOT EXISTS assigned_user_id TEXT REFERENCES users(id)`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

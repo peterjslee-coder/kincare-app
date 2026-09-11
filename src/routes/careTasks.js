@@ -198,12 +198,15 @@ router.get("/today", async (req, res) => {
       const today = getTodayStringInZone(cr.timezone || DEFAULT_TZ);
       for (const t of tasks) await materializeOccurrence(db, t, cr.timezone, today);
       const rows = await db.prepare(`
-        SELECT o.*, t.title, t.task_type, t.details, t.due_time, t.due_times, t.assigned_user_id,
+        SELECT o.*, t.title, t.task_type, t.details, t.due_time, t.due_times,
+               /* v1.105.191 — tonight's person wins over the task's default person */
+               COALESCE(o.assigned_user_id, t.assigned_user_id) AS assigned_user_id,
+               t.assigned_user_id AS task_assigned_user_id,
                t.grace_minutes, au.first_name AS assignee_first_name,
                cu.first_name AS completed_by_first_name, cu.last_name AS completed_by_last_name
         FROM care_task_occurrences o
         JOIN care_tasks t ON o.task_id = t.id
-        LEFT JOIN users au ON t.assigned_user_id = au.id
+        LEFT JOIN users au ON au.id = COALESCE(o.assigned_user_id, t.assigned_user_id)
         LEFT JOIN users cu ON o.completed_by_user_id = cu.id
         WHERE t.care_recipient_id = ? AND o.due_date = ?
         ORDER BY o.due_at ASC
@@ -519,6 +522,65 @@ router.post("/occurrences/:id/check", async (req, res) => {
 });
 
 // ─── POST /api/care-tasks/occurrences/:id/undo ─── mistakes happen
+// ─── POST /api/care-tasks/occurrences/:id/assign ─── { userId | null }
+//
+// v1.105.191. Pete: "I want a way to assign the task we're waiting on (mom's meds tonight) to
+// Daniel. or sara. it defaults to me and if I open it and select dan, my only option in the
+// 'needs you' pane is to complete the task or skip." The sheet's picker was "who DID it"; this
+// is "who WILL do it" — for tonight only. The task's default person is untouched, so tomorrow
+// it is Pete's again. null hands it back to the default. The new person is told.
+router.post("/occurrences/:id/assign", async (req, res) => {
+  try {
+    const db = await getDb();
+    const occ = await db.prepare(`
+      SELECT o.*, t.care_recipient_id, t.title, t.assigned_user_id AS task_assigned_user_id, t.tz,
+             cr.first_name AS recipient_first_name, cr.timezone AS recipient_tz
+      FROM care_task_occurrences o
+      JOIN care_tasks t ON o.task_id = t.id
+      JOIN care_recipients cr ON cr.id = t.care_recipient_id
+      WHERE o.id = ?
+    `).get(req.params.id);
+    if (!occ) return res.status(404).json({ error: "Occurrence not found" });
+    const access = await hasAccess(db, occ.care_recipient_id, req.user.id);
+    if (!canCheckOff(access)) return res.status(403).json({ error: "Access denied" });
+    if (occ.status === "done" || occ.status === "skipped") {
+      return res.status(409).json({ error: "Already checked off", occurrence: occ });
+    }
+    const userId = req.body?.userId ? String(req.body.userId) : null;
+    if (userId) {
+      const theirs = await hasAccess(db, occ.care_recipient_id, userId);
+      if (!theirs || !canCheckOff(theirs)) return res.status(400).json({ error: "That person can't check off tasks for this care recipient" });
+    }
+    await db.prepare("UPDATE care_task_occurrences SET assigned_user_id = ? WHERE id = ?").run(userId, occ.id);
+
+    const effective = userId || occ.task_assigned_user_id || null;
+    let assigneeName = null;
+    if (effective) {
+      const u = await db.prepare("SELECT id, first_name FROM users WHERE id = ?").get(effective);
+      assigneeName = u ? u.first_name : null;
+      if (u && u.id !== req.user.id) {
+        try {
+          const handedBy = await db.prepare("SELECT first_name FROM users WHERE id = ?").get(req.user.id);
+          const tz = taskTz({ tz: occ.tz }, occ.recipient_tz);
+          const when = new Date(occ.due_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: tz });
+          const { sendPushToUser } = require("./push");
+          // No title, no medication name — the lock screen rule from v1.105.39.
+          sendPushToUser(u.id, {
+            title: "It's your turn tonight",
+            body: `${handedBy ? handedBy.first_name : "Someone"} handed you something due at ${when} for ${occ.recipient_first_name}. Tap to see it.`,
+            data: { type: "care_task_due", page: "dashboard", occurrenceId: occ.id, taskId: occ.task_id, careRecipientId: occ.care_recipient_id },
+          }, "care_task").catch(() => {});
+        } catch (e) { /* the handoff stands whether or not the push does */ }
+      }
+    }
+    return res.json({ success: true, assignedUserId: effective, assigneeFirstName: assigneeName, occurrenceId: occ.id });
+  } catch (err) {
+    captureException(err);
+    console.error("Care task assign error:", err.message);
+    return res.status(500).json({ error: "Failed to hand off" });
+  }
+});
+
 router.post("/occurrences/:id/undo", async (req, res) => {
   try {
     const db = await getDb();
@@ -618,7 +680,9 @@ async function pollCareTasks(sendPushToUser) {
       // still shows as pending in the app either way.
       const staleMs = 6 * 60 * 60000;
       if (!sent.includes("due") && now - dueAt < staleMs) {
-        const assignee = t.assigned_user_id ? notifiable.find((m) => m.id === t.assigned_user_id) : null;
+        // v1.105.191 — tonight's person, if the task was handed to someone, else the default.
+        const assigneeId = occ.assigned_user_id || t.assigned_user_id;
+        const assignee = assigneeId ? notifiable.find((m) => m.id === assigneeId) : null;
         const targets = assignee ? [assignee.id] : notifiable.map((m) => m.id);
         for (const uid of targets) {
           // v1.105.39 — `t.title` is user-authored and routinely names a condition or a
