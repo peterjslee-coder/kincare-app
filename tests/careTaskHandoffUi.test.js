@@ -3,10 +3,10 @@ const { code } = require("./helpers/source");
 const ui = code("public/js/components/CareTasks.js");
 const routes = code("src/routes/careTasks.js");
 
-test("picking a team member offers to hand tonight to them, without checking it off", () => {
+test("picking a team member offers to hand the task to them, without checking it off", () => {
   expect(ui).toContain("const pickedMember = who.kind === 'user' ? (group.teamMembers || []).find((m) => m.id === who.id) : null;");
   expect(ui).toContain("`/api/care-tasks/occurrences/${occ.id}/assign`");
-  expect(ui).toMatch(/Hand tonight to \$\{pickedMember\.first_name\}/);
+  expect(ui).toMatch(/Hand this task to \$\{pickedMember\.first_name\}/); // v1.105.192 — was "tonight"; an 8 AM task is not tonight
   // Done and Skip are untouched — the handoff is a third thing, not a replacement.
   expect(ui).toContain("submit('done')");
   expect(ui).toContain("submit('skipped')");

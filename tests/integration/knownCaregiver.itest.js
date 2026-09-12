@@ -190,3 +190,28 @@ describe("adding a caregiver you already know", () => {
     expect(res.body.error).toMatch(/isn't a caregiver account/);
   });
 });
+
+describe("she signed up on her own with the invited email (Tina, Sep 12)", () => {
+  test("the pending invite is claimed by the account: accepted, gate row, assignment, phone", async () => {
+    const email = "tina.itest@example.com";
+    const sent = await send(pete, { name: "Tina Houston", email, phone: "(540) 392-7077" });
+    expect(sent.status).toBe(201);
+    // No link clicked. An account appears with that email, with a profile already.
+    const tina = await h.createUser({ roles: ["caregiver"], firstName: "Tina", lastName: "Houston", email });
+    await h.db.prepare("INSERT INTO caregiver_profiles (id, user_id, hourly_rate, is_available) VALUES (?, ?, 25, 1)").run(uuid(), tina.user.id);
+    const { claimPendingByEmail } = require("../../src/utils/knownCaregivers");
+    const claimed = await claimPendingByEmail(h.db, tina.user.id, email);
+    expect(claimed).toHaveLength(1);
+    const inv = await h.db.prepare("SELECT status FROM platform_invites WHERE id = ?").get(sent.body.invite.id);
+    expect(inv.status).toBe("accepted");
+    const gate = await h.db.prepare("SELECT note FROM bg_admin_vouches WHERE caregiver_user_id = ? AND family_user_id = ? AND revoked_at IS NULL").all(tina.user.id, pete.user.id);
+    expect(gate).toHaveLength(1);
+    expect(gate[0].note).toBe("family-brought");
+    const asg = await h.db.prepare("SELECT id FROM caregiver_assignments WHERE care_recipient_id = ? AND family_user_id = ? AND is_active = 1 AND caregiver_profile_id IN (SELECT id FROM caregiver_profiles WHERE user_id = ?)").all(recipientId, pete.user.id, tina.user.id);
+    expect(asg).toHaveLength(1);
+    const u = await h.db.prepare("SELECT phone FROM users WHERE id = ?").get(tina.user.id);
+    expect(u.phone).toBe("5403927077");
+    // Once. The dashboard calls this on every load.
+    expect(await claimPendingByEmail(h.db, tina.user.id, email)).toEqual([]);
+  });
+});

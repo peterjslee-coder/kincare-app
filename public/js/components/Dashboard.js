@@ -259,10 +259,32 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
 
   // One-tap on the circle = done, recorded as the tapper. The sheet handles
   // "who did it" attribution and notes; both land back here.
+  // ─── v1.105.192 — say something the instant they tap ───
+  // Pete: "Daniel has tried to mark done on a task and it just freezes. It eventually does mark
+  // the task completed but there's no indication to the user that it will happen. So he keeps
+  // hitting done." The circle did nothing until the round trip AND the re-fetch came back — on
+  // a slow connection that is seconds of a button that looks broken. Now the row turns done
+  // immediately (marked as saving), the write goes out once, and a failure puts it back with a
+  // toast. A second tap while saving is ignored, not sent again.
+  const savingOccIds = React.useRef(new Set());
+  const patchOcc = (occId, patch) => setCareTasksToday((prev) => {
+    if (!prev || !prev.groups) return prev;
+    const next = { ...prev, groups: prev.groups.map((g) => ({
+      ...g, occurrences: (g.occurrences || []).map((o) => (o.id === occId ? { ...o, ...patch } : o)),
+    })) };
+    _dashCache.careTasks = next;
+    return next;
+  });
   const quickCheckTask = async (occ) => {
+    if (savingOccIds.current.has(occ.id)) return;
+    savingOccIds.current.add(occ.id);
+    const before = { status: occ.status, completed_by_name: occ.completed_by_name, completed_by_user_id: occ.completed_by_user_id, __saving: false };
+    patchOcc(occ.id, { status: 'done', completed_by_user_id: window.__currentUserId || null, completed_by_name: null, __saving: true });
     // v1.105.162 — one writer. See js/careTaskSync.js.
     const r = await CareTaskSync.write(occ.id, { status: 'done' });
-    if (!r.ok) showToast(r.error, 'error');
+    savingOccIds.current.delete(occ.id);
+    if (!r.ok) { patchOcc(occ.id, before); showToast(r.error, 'error'); }
+    else patchOcc(occ.id, { __saving: false });
     fetchCareTasks();
   };
   const undoTask = async (occ) => {
@@ -1499,7 +1521,24 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
       {/* Open Requests — unclaimed jobs the family posted */}
       {(() => {
         const tz = upcoming[0]?.timezone || TimezoneHelper.DEFAULT_TZ;
-        const openReqs = upcoming.filter(s => ['open', 'requested'].includes(s.status) && !s.caregiverName);
+        // ─── v1.105.192 — a series is one thing waiting, not six ───
+        // Pete: "If there is one job that is recurring, the caregiver will accept the series
+        // not just the job every time it occurs. Therefore there should not be multiple
+        // reminders... There should be one for the series... for the closest event." A
+        // caregiver accepts the whole series, so six dashed cards for one unfilled weekly
+        // request were six reminders of one fact. Fold them: the soonest occurrence carries
+        // the card, with how many more ride behind it.
+        const openAll = upcoming.filter(s => ['open', 'requested'].includes(s.status) && !s.caregiverName);
+        const seenSeries = new Map();
+        const openReqs = [];
+        for (const s of openAll) {
+          if (!s.recurrenceGroupId) { openReqs.push(s); continue; }
+          const head = seenSeries.get(s.recurrenceGroupId);
+          if (head) { head.__seriesMore += 1; continue; }
+          const copy = { ...s, __seriesMore: 0 };
+          seenSeries.set(s.recurrenceGroupId, copy);
+          openReqs.push(copy);
+        }
         if (openReqs.length === 0) return null;
         const showAll = awaitingExpanded || openReqs.length <= 2;
         const visibleReqs = showAll ? openReqs : openReqs.slice(0, 2);
@@ -1529,16 +1568,31 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                           {s.durationHours ? ` \u2022 ${s.durationHours}hr` : ''}
                           {s.serviceType ? ` \u2022 ${formatServiceType(s.serviceType)}` : ''}
                         </div>
-                        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginTop: 4 }}>No caregiver yet — waiting for someone to accept</div>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginTop: 4 }}>
+                          {s.recurrenceGroupId
+                            ? `${s.recurrenceRule ? s.recurrenceRule.charAt(0).toUpperCase() + s.recurrenceRule.slice(1) : 'Recurring'} series \u2014 no caregiver yet. Whoever accepts takes the whole series${s.__seriesMore ? ` (${s.__seriesMore} more upcoming)` : ''}.`
+                            : 'No caregiver yet \u2014 waiting for someone to accept'}
+                        </div>
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
                         <span style={{
                           padding: '4px 10px', borderRadius: 10, fontSize: 11, fontWeight: 600,
                           background: 'var(--color-warning-bg)', color: 'var(--color-warning)', textTransform: 'capitalize', whiteSpace: 'nowrap',
                         }}>Open</span>
-                        <button onClick={(e) => { e.stopPropagation(); setCancellingId(s.id); }}
+                        <button onClick={async (e) => {
+                          e.stopPropagation();
+                          // One card stands for the series, so its Cancel must too — cancelling
+                          // only the head would surface the next one as a fresh reminder.
+                          if (!s.recurrenceGroupId) { setCancellingId(s.id); return; }
+                          if (!window.confirm(`Cancel this whole series? ${s.__seriesMore ? s.__seriesMore + ' more upcoming visit' + (s.__seriesMore === 1 ? '' : 's') + ' will be cancelled too.' : ''}`.trim())) return;
+                          try {
+                            const res = await apiFetch(`/api/sessions/recurring/${s.recurrenceGroupId}`, { method: 'DELETE' });
+                            if (res?.ok) { showToast('Series cancelled', 'success'); fetchDashboard && fetchDashboard(); }
+                            else showToast('Couldn\u2019t cancel the series', 'error');
+                          } catch { showToast('Couldn\u2019t reach InPlace', 'error'); }
+                        }}
                           style={{ padding: '3px 8px', borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--bg-surface)', color: 'var(--color-error)', fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>
-                          Cancel
+                          {s.recurrenceGroupId ? 'Cancel series' : 'Cancel'}
                         </button>
                       </div>
                     </div>

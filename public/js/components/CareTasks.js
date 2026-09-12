@@ -103,7 +103,8 @@ const CareTaskNextUpRow = window.CareTaskNextUpRow = ({ occ, group, onQuickCheck
             {careTaskIcon(occ.task_type)} {occ.title}
           </div>
           <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>
-            {done ? `Done · ${careTaskDoneBy(occ, true)}${occ.note ? ' · 📝' : ''}`
+            {occ.__saving ? 'Saving\u2026'
+              : done ? `Done · ${careTaskDoneBy(occ, true)}${occ.note ? ' · 📝' : ''}`
               : skipped ? `Skipped · ${careTaskDoneBy(occ, true)}`
               : <>Today at {timeLabel} · for {group.recipientFirstName}{detail ? ` · ${detail}` : ''}</>}
           </div>
@@ -174,7 +175,7 @@ const CareTaskCheckSheet = window.CareTaskCheckSheet = ({ occ, group, onClose, o
       });
       const d = res ? await res.json().catch(() => ({})) : {};
       if (res?.ok) {
-        showToast(`Handed to ${pickedMember.first_name} for today \u2014 they\u2019ve been told`, 'success');
+        showToast(`Handed to ${pickedMember.first_name} \u2014 they\u2019ve been told`, 'success');
         if (typeof CareTaskSync !== 'undefined') CareTaskSync.announce(occ.id);
         onDone(); onClose();
       } else {
@@ -229,7 +230,7 @@ const CareTaskCheckSheet = window.CareTaskCheckSheet = ({ occ, group, onClose, o
             width: '100%', marginTop: 14, padding: '12px 0', borderRadius: 12,
             border: '1.5px solid var(--role-color)', background: 'var(--role-color-light)',
             color: 'var(--role-color)', fontSize: 14, fontWeight: 700, cursor: 'pointer', opacity: handing ? 0.6 : 1,
-          }}>{handing ? 'Handing off\u2026' : `Hand tonight to ${pickedMember.first_name} \u2014 not done yet`}</button>
+          }}>{handing ? 'Handing off\u2026' : `Hand this task to ${pickedMember.first_name} \u2014 not completed`}</button>
         )}
 
         <div style={{ display: 'flex', gap: 10, marginTop: pickedMember ? 10 : 16 }}>

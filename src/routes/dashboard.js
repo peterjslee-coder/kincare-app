@@ -325,6 +325,9 @@ async function familyDashboard(db, userId, res) {
           tcProposedTime: s.tc_proposed_time || null,
           tcProposedDuration: s.tc_proposed_duration || null,
           tcProposedBy: s.tc_proposed_by || null,
+          // v1.105.192 — so the dashboard can fold a series into one card
+          recurrenceGroupId: s.recurrence_group_id || null,
+          recurrenceRule: s.recurrence_rule || null,
         };
       }),
       recentActivity: recentActivity.map((a) => {
@@ -427,6 +430,13 @@ async function familyDashboard(db, userId, res) {
 
 // ─── Caregiver Dashboard (Maria's view) ───
 async function caregiverDashboard(db, userId, res) {
+  // v1.105.192 — an invite this caregiver never clicked, but whose email is theirs (Tina).
+  // Idempotent and cheap: one indexed lookup on pending invites by email.
+  try {
+    const { claimPendingByEmail } = require("../utils/knownCaregivers");
+    const me = await db.prepare("SELECT email FROM users WHERE id = ?").get(userId);
+    if (me && me.email) await claimPendingByEmail(db, userId, me.email);
+  } catch (e) { console.error("dashboard: claim known-caregiver invite (non-blocking):", e.message); }
   // Expire time proposals that have passed their 2-hour response window
   await expireStaleProposals(db, null, null).catch(() => {});
 

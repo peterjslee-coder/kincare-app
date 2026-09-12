@@ -312,6 +312,15 @@ router.post("/register", validateRegister, async (req, res) => {
       }).catch((e) => captureException(e, { where: "auth: signup welcome-call email" }));
     } catch (e) { captureException(e, { where: "auth: signup welcome-call email" }); }
 
+    // v1.105.192 — a caregiver signing up with an email a family already invited (see
+    // src/utils/knownCaregivers.js, claimPendingByEmail). Non-fatal: the account exists either way.
+    if (role === "caregiver") {
+      try {
+        const { claimPendingByEmail } = require("../utils/knownCaregivers");
+        await claimPendingByEmail(db, id, email);
+      } catch (e) { captureException(e, { where: "auth: claim known-caregiver invite" }); }
+    }
+
     setAuthCookie(res, token);
     setCsrfCookie(res);
     const refreshToken = await generateRefreshToken(id);

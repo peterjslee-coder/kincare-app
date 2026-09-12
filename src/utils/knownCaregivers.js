@@ -94,12 +94,61 @@ async function fulfillKnownCaregiverInvite(db, invite, caregiverUserId) {
 }
 
 /**
+ * v1.105.192 — she signed up on her own, with the same email the family invited.
+ *
+ * Tina, Sep 12: Pete added her by email on the 10th; she found the app herself and made an
+ * account the normal way. Her invite sat "pending" while Pete vouched and assigned her by
+ * hand, then asked why she had not "automatically show[n] up as an assigned caregiver". The
+ * link was never the point — the EMAIL was. So a pending, unexpired known-caregiver invite
+ * whose email matches a caregiver account is claimed by that account: gate row, assignment
+ * when a profile exists, phone kept, leader told. Same writes as accept-invite, minus the token.
+ */
+async function claimPendingByEmail(db, caregiverUserId, email) {
+  if (!caregiverUserId || !email) return [];
+  const invites = await db.prepare(`
+    SELECT * FROM platform_invites
+    WHERE kind = ? AND status = 'pending' AND expires_at > NOW() AND LOWER(invited_email) = LOWER(?)
+  `).all(KIND, email);
+  const claimed = [];
+  for (const inv of invites) {
+    const r = await db.prepare(
+      "UPDATE platform_invites SET status = 'accepted' WHERE id = ? AND status = 'pending'"
+    ).run(inv.id);
+    if (r && r.changes === 0) continue;
+    await fulfillKnownCaregiverInvite(db, inv, caregiverUserId);
+    if (inv.phone) {
+      await db.prepare("UPDATE users SET phone = COALESCE(NULLIF(phone, ''), ?) WHERE id = ?").run(inv.phone, caregiverUserId);
+    }
+    try {
+      const u = await db.prepare("SELECT first_name, last_name, email FROM users WHERE id = ?").get(caregiverUserId);
+      const name = `${u.first_name || ""} ${u.last_name || ""}`.trim() || u.email;
+      const recipient = await db.prepare("SELECT first_name FROM care_recipients WHERE id = ?").get(inv.care_recipient_id);
+      const rf = recipient ? recipient.first_name : "your loved one";
+      await db.prepare(
+        "INSERT INTO activity_feed (id, family_user_id, care_recipient_id, event_type, title, message) VALUES (?, ?, ?, 'known_caregiver_joined', ?, ?)"
+      ).run(uuid(), inv.invited_by, inv.care_recipient_id, `${name} is setting up`,
+        `${name} made an account with the email you invited, so they're set up as ${rf}'s caregiver. You can book them once they're set up to be paid and have sent a photo of their licence.`);
+      const { sendPushToUser } = require("../routes/push");
+      await sendPushToUser(inv.invited_by, {
+        title: `${name} is setting up`,
+        body: `They signed up with the email you invited for ${rf}.`,
+        data: { type: "known_caregiver_joined", careRecipientId: inv.care_recipient_id, page: "caregivers" },
+      });
+    } catch (e) { console.error("known-caregiver claim notify (non-blocking):", e.message); }
+    claimed.push(inv.id);
+  }
+  return claimed;
+}
+
+/**
  * Called when a caregiver profile is first created. The invite was accepted at step 1, before
  * a profile existed, so the assignment could not be written then. Finish it now.
  */
 async function fulfillPendingForUser(db, caregiverUserId) {
   const user = await db.prepare("SELECT email FROM users WHERE id = ?").get(caregiverUserId);
   if (!user || !user.email) return [];
+  // v1.105.192 — an invite she never clicked but whose email is hers.
+  await claimPendingByEmail(db, caregiverUserId, user.email);
   const invites = await db.prepare(`
     SELECT * FROM platform_invites
     WHERE kind = ? AND status = 'accepted' AND LOWER(invited_email) = LOWER(?)
@@ -192,5 +241,5 @@ module.exports = {
   KIND, FAMILY_BROUGHT_NOTE, INVITE_DAYS, OPEN_CAP_PER_LEADER,
   recipientIfLeader, relationshipFor,
   fulfillKnownCaregiverInvite, fulfillPendingForUser, isFamilyBroughtOnly,
-  progressFor, notifyIfReadyToBook,
+  progressFor, notifyIfReadyToBook, claimPendingByEmail,
 };

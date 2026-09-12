@@ -6026,7 +6026,13 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                       ? 'Caregiver paid the $30 fee'
                       : onboardingModal.flags?.backgroundCheckFee === 'waived'
                         ? 'Waived by an admin — no payment was taken. This covers the fee only; they are still asked to complete the check. Use a vouch to waive the check itself.'
-                        : 'Unpaid. Granting this waives the $30 fee — it does not waive the background check.' },
+                        : ((onboardingModal.vouches || []).length > 0
+                          // v1.105.192 — Pete: "it was a family voucher so there is no background
+                          // check requirement. Am I supposed to waive the background check fee?"
+                          // No. The vouch already covers that family; the fee only matters if
+                          // they want other families' work. Say so where he was asking.
+                          ? `Not needed \u2014 vouched for ${onboardingModal.vouches.map(v => v.family_name).join(', ')}, so no check and no fee for that family. Leave this alone unless they want work from other families.`
+                          : 'Unpaid. Granting this waives the $30 fee — it does not waive the background check.') },
                   { key: 'onboardingComplete', label: 'Onboarding Complete', desc: 'All registration steps finished' },
                   { key: 'isAvailable', label: 'Accepting Work (their own toggle)', desc: 'The caregiver’s availability switch — actually claiming a job still requires a background check or your family vouch' },
                 ].map(flag => (
@@ -6095,8 +6101,13 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                     <span>{onboardingModal.flags.backgroundCheckConsent ? 'Yes' : 'No'}</span>
                     <span style={{ color: 'var(--text-tertiary)' }}>Has Photo:</span>
                     <span>{onboardingModal.flags.hasPhoto ? 'Yes' : 'No'}</span>
-                    <span style={{ color: 'var(--text-tertiary)' }}>Drivers License:</span>
-                    <span>{onboardingModal.flags.hasDriversLicense ? 'Yes' : 'No'}</span>
+                    {/* v1.105.192 — Pete: "I have approved her ID and the AI flagged it as a
+                        drivers license as well. Why does it show drivers license: no?" This flag
+                        was `dl_number && dl_state` — the NUMBER typed on wizard screen 4 — and
+                        the short path (v1.105.186) never visits screen 4. Say which thing it is. */}
+                    <span style={{ color: 'var(--text-tertiary)' }}>Licence number typed:</span>
+                    <span>{onboardingModal.flags.hasDriversLicense ? 'Yes'
+                      : (onboardingModal.flags.identityStatus === 'approved' ? 'No \u2014 photo approved, number not entered (fine for a family-brought caregiver)' : 'No')}</span>
                     <span style={{ color: 'var(--text-tertiary)' }}>Program Reports:</span>
                     <span>{onboardingModal.flags.needsHourReports ? 'Yes' : 'No'}</span>
                     {onboardingModal.flags.academicProgram && <>
