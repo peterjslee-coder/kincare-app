@@ -972,6 +972,14 @@ const ToastProvider = window.ToastProvider = ({ children }) => {
     setToasts(prev => prev.filter(t => t.id !== id));
   }, []);
 
+  // v1.105.193 — `window.__showToast` had two callers (the push handlers above) and no
+  // definition, so the "new notification" toast never once showed. Now it exists, and the
+  // locked Find Work button uses it too.
+  useEffect(() => {
+    window.__showToast = showToast;
+    return () => { if (window.__showToast === showToast) window.__showToast = null; };
+  }, [showToast]);
+
   const icons = { success: '✓', error: '✕', info: 'ℹ' };
 
   return React.createElement(ToastContext.Provider, { value: { showToast } },

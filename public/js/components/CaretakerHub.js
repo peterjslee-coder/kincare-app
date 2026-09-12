@@ -1276,6 +1276,12 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const showFirstSteps = firstStepsResolved && firstStepsDone < firstSteps.length && !profile.isDemo;
   // Expose to parent (app.js) so bottom nav can grey out Find Work
   window.__caregiverFirstStepsRemain = showFirstSteps;
+  // v1.105.193 — and WHAT is left, so a greyed-out Find Work can say why instead of doing
+  // nothing. Tina (Sep 12): everything on her path done but preferences and availability;
+  // the button was dead with no sentence next to it.
+  window.__caregiverFirstStepsLeft = showFirstSteps
+    ? hubRoute.items.filter((i) => i.state === 'todo').map((i) => i.label)
+    : [];
   // NEVER gate/blur the dashboard — checklist is motivational, not a lock
   const onboardingGated = false;
   const shouldBlur = false;

@@ -2013,6 +2013,18 @@ const App = () => {
     return <Dashboard key={pageKey} onNavigate={setCurrentPage} />;
   };
 
+  // ─── v1.105.193 — a locked button says why ───
+  // Find Work is greyed until First Steps are done. It used to be a dead tap. Now it names
+  // what is left and takes you to the card that lists it.
+  const explainLockedFindWork = () => {
+    const left = window.__caregiverFirstStepsLeft || [];
+    const msg = left.length
+      ? `Find Work unlocks when you finish: ${left.join(', ')}.`
+      : 'Find Work unlocks when your First Steps are done \u2014 they\u2019re on your Home screen.';
+    try { window.__showToast?.(msg, 'info'); } catch { /* the navigation below still explains */ }
+    handlePageChange('dashboard');
+  };
+
   // Bottom nav items (max 5 for mobile)
   const getBottomNavItems = () => {
     if (role === 'caregiver') {
@@ -2135,7 +2147,7 @@ const App = () => {
             {getNavItems().map(item => {
               // Action button (orange highlight) — Request Care for family, Find Work for caregiver
               if (item.isAction) {
-                const actionClick = item.disabled ? () => {} : item.id === '_request_care'
+                const actionClick = item.disabled ? (item.id === 'find-work' ? explainLockedFindWork : () => {}) : item.id === '_request_care'
                   ? () => { handlePageChange('schedule'); setSidebarOpen(false); }
                   : item.id === '_launch_kindred'
                   ? () => { window.open(`/kindred?token=${encodeURIComponent(AUTH_TOKEN)}`, '_blank'); setSidebarOpen(false); }
@@ -2152,7 +2164,7 @@ const App = () => {
               const isParentActive = currentPage === item.id || (item.children && item.children.some(c => currentPage === c.id));
               return (
                 <li key={item.id} className="nav-item">
-                  <button className={`nav-link ${currentPage === item.id ? 'active' : ''}`} onClick={item.disabled ? undefined : () => handlePageChange(item.id)} style={item.disabled ? { position: 'relative', opacity: 0.4, cursor: 'not-allowed' } : { position: 'relative' }} title={item.disabled ? 'Complete your profile first' : ''}>
+                  <button className={`nav-link ${currentPage === item.id ? 'active' : ''}`} onClick={item.disabled ? (item.id === 'find-work' ? explainLockedFindWork : undefined) : () => handlePageChange(item.id)} style={item.disabled ? { position: 'relative', opacity: 0.4, cursor: 'not-allowed' } : { position: 'relative' }} title={item.disabled ? 'Complete your profile first' : ''}>
                     <span className="nav-icon">{item.icon}</span>
                     {item.label} {item.disabled && '🔒'}
                     {item.id === 'messages' && unreadMsgCount > 0 && (
@@ -2313,7 +2325,7 @@ const App = () => {
       {/* Bottom navigation bar — visible on mobile only (CSS hides on desktop) */}
       <nav className="bottom-nav" style={window.__safeAreaBottom ? { paddingBottom: window.__safeAreaBottom } : undefined}>
         {getBottomNavItems().map(item => (
-          <button key={item.id} className={`bottom-nav-item ${currentPage === item.id ? 'active' : ''}`} onClick={item.disabled ? undefined : item.isKindred ? () => window.open(`/kindred?token=${encodeURIComponent(AUTH_TOKEN)}`, '_blank') : () => handlePageChange(item.id)} style={{ position: 'relative', ...(item.disabled ? { opacity: 0.35, cursor: 'not-allowed' } : {}), ...(item.isAccent && currentPage !== item.id && !item.disabled ? { color: 'var(--accent-color)' } : {}), ...(item.isKindred ? { color: 'var(--color-info)' } : {}) }}>
+          <button key={item.id} className={`bottom-nav-item ${currentPage === item.id ? 'active' : ''}`} onClick={item.disabled ? (item.id === 'find-work' ? explainLockedFindWork : undefined) : item.isKindred ? () => window.open(`/kindred?token=${encodeURIComponent(AUTH_TOKEN)}`, '_blank') : () => handlePageChange(item.id)} style={{ position: 'relative', ...(item.disabled ? { opacity: 0.35, cursor: 'not-allowed' } : {}), ...(item.isAccent && currentPage !== item.id && !item.disabled ? { color: 'var(--accent-color)' } : {}), ...(item.isKindred ? { color: 'var(--color-info)' } : {}) }}>
             <span className="bottom-nav-icon" style={item.isAccent && currentPage !== item.id ? { background: 'var(--bg-accent-light)', borderRadius: '50%', padding: '2px' } : undefined}>{item.icon}</span>
             {item.id === 'messages' && unreadMsgCount > 0 && (
               <span style={{
