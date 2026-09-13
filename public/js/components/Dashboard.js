@@ -480,7 +480,9 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
     const c6 = onSocketEvent('time_change_proposed', () => fetchDashboard());
     const c7 = onSocketEvent('time_change_accepted', () => fetchDashboard());
     const c8 = onSocketEvent('time_change_rejected', () => fetchDashboard());
-    return () => { c1(); c2(); c3(); c4(); c5(); c6(); c7(); c8(); };
+    // v1.106.13 — poller 112 expires unanswered time changes; clear the card when it does.
+    const c9 = onSocketEvent('time_change_expired', () => fetchDashboard());
+    return () => { c1(); c2(); c3(); c4(); c5(); c6(); c7(); c8(); c9(); };
   }, []);
 
   // Refresh dashboard when tab regains focus (catches missed socket events)

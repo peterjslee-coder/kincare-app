@@ -820,7 +820,7 @@ app.use("/api/media", require("./routes/media"));
 app.use("/api/safety", require("./routes/safety"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.106.12";
+const APP_VERSION = "1.106.13";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION, minAppVersion: MIN_APP_VERSION });
@@ -1690,6 +1690,35 @@ async function start() {
     setTimeout(runRetention, 30 * 1000);
     setInterval(runRetention, 24 * 60 * 60 * 1000);
     console.log("  Retention poller started (audit 180d, admin audit 365d, notifications 60d, activity 60d, onboarding events 30d)");
+  }
+
+  // ─── v1.106.13 — poller 112: proposals that nobody answered ───
+  //
+  // expireStaleProposals was only ever called from two places in dashboard.js, both passing
+  // (db, null, null). So it ran only when a family happened to load their dashboard, and its
+  // notification arguments were dead on both paths — an expiring proposal could never tell
+  // the person who made it.
+  //
+  // That was tolerable when the only thing it swept was time_proposals, where an expiry means
+  // "the job is back in the open pool" and the caregiver finds out by looking. It is not
+  // tolerable for time_change_proposals: the person waiting is waiting on a visit that is
+  // still on the calendar, and the pointer that unblocks the session is cleared here.
+  //
+  // Every ten minutes, with the real emit and push functions, so the sweep does not depend on
+  // whose browser happens to be open. The dashboard calls stay as an opportunistic sweep.
+  {
+    const runProposalSweep = guardedPoller(112, async () => {
+      const { expireStaleProposals } = require("./routes/sessions");
+      // sendPushToUser is not a module-level binding in this file — every other poller
+      // requires it locally, and so does this one.
+      const { sendPushToUser: pushFn } = require("./routes/push");
+      const db = await getDb();
+      const n = await expireStaleProposals(db, emitToUser, pushFn);
+      if (n > 0) console.log(`  [proposals] expired ${n} unanswered proposal(s)`);
+    });
+    setTimeout(runProposalSweep, 90 * 1000);
+    setInterval(runProposalSweep, 10 * 60 * 1000);
+    console.log("  Proposal expiry poller started (time offers + time changes, every 10m)");
   }
 
   // v1.105.50 — bound the inbound side too. Node's defaults leave `server.timeout` at 0,

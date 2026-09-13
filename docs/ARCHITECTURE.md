@@ -8,7 +8,7 @@ build red.
 Hand-written sections (§3 "Where is…") are preserved across regeneration; edit those freely.
 
 Structure at last generation: 524 HTTP routes across 55 mounts ·
-91 `CREATE TABLE` statements · 11 background jobs · 36 socket events
+91 `CREATE TABLE` statements · 12 background jobs · 37 socket events
 (15 with no client listener) · 59 push event types · 55 `window.__*` globals.
 
 ---
@@ -137,6 +137,7 @@ Every job runs through `guardedPoller` → `withPollerLock` (`src/models/databas
 | 109 | Kindred Reminder Delivery Poller | 1 min | `src/server.js:1444` |
 | 110 | Retention (v1.106.9, poller 110) | 24 h | `src/server.js:1691` |
 | 111 | (see src/server.js:1604) | 1 h | `src/server.js:1604` |
+| 112 | v1.106.13 — poller 112: proposals that nobody answered | 10 min | `src/server.js:1720` |
 
 ---
 
@@ -178,6 +179,7 @@ why this app runs on exactly one Railway replica.
 | `reminder_delivered` | `server.js` | 🔶 **none** |
 | `session_update` | `routes/accountability.js`, `routes/activity.js` | yes |
 | `time_change_accepted` | `routes/sessions.js` | yes |
+| `time_change_expired` | `routes/sessions.js` | yes |
 | `time_change_proposed` | `routes/sessions.js` | yes |
 | `time_change_rejected` | `routes/sessions.js` | yes |
 | `time_proposal` | `routes/sessions.js` | 🔶 **none** |

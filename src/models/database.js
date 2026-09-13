@@ -2376,6 +2376,45 @@ async function initializeDatabase() {
         `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS onboarding_complete INTEGER DEFAULT 0`,
       ],
     },
+    {
+      // v1.106.13 — a pending time change never ended.
+      //
+      // time_proposals (a caregiver bidding on an OPEN request) has expires_at and a sweeper.
+      // time_change_proposals (moving an ALREADY-BOOKED visit) had neither. Proposing one sets
+      // care_sessions.pending_time_change_id, and the ONLY thing that ever cleared it was the
+      // other party explicitly answering. If they never did:
+      //
+      //   - the session could never take another time change again, forever, because the
+      //     propose handler refuses when pending_time_change_id is set;
+      //   - the "asked to move a visit" card sat in the other party's Needs You feed with
+      //     nothing able to clear it;
+      //   - and both survived the visit itself, so a completed session still carried a live
+      //     request to move it.
+      //
+      // The visit was never at risk — an unanswered change is simply not applied, so the
+      // original time stands. This is a stuck-state bug, not a scheduling one.
+      //
+      // Backfill: give existing pending rows a deadline rather than leaving them immortal.
+      // 24h from creation, or the session's own start if that comes first — a request to move
+      // a visit is meaningless once the visit has begun.
+      id: "036_time_change_proposal_expiry",
+      statements: [
+        `ALTER TABLE time_change_proposals ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ`,
+        `UPDATE time_change_proposals tcp
+            SET expires_at = LEAST(
+                  tcp.created_at + INTERVAL '24 hours',
+                  COALESCE(
+                    (SELECT cs.scheduled_date::timestamptz
+                            + COALESCE(cs.scheduled_time, '00:00')::interval
+                       FROM care_sessions cs WHERE cs.id = tcp.session_id),
+                    tcp.created_at + INTERVAL '24 hours'
+                  )
+                )
+          WHERE tcp.status = 'pending' AND tcp.expires_at IS NULL`,
+        `CREATE INDEX IF NOT EXISTS idx_tcp_pending_expiry
+           ON time_change_proposals(expires_at) WHERE status = 'pending'`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

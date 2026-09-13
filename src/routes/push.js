@@ -3,6 +3,7 @@ const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { authenticate } = require("../middleware/auth");
 const { clampLimit, clampOffset } = require("../utils/queryLimits");
+const { formatTimeForDisplay } = require("../utils/timezone");
 
 const router = express.Router();
 
@@ -875,7 +876,12 @@ async function sendSessionReminders(sessionId, reminderType) {
               const endM = m + Math.round((session.duration_hours % 1) * 60);
               const finalH = endH + Math.floor(endM / 60);
               const finalM = endM % 60;
-              return `${finalH > 12 ? finalH - 12 : finalH}:${String(finalM).padStart(2, "0")} ${finalH >= 12 ? "PM" : "AM"}`;
+              // v1.106.13 — this used to format finalH itself, and finalH can exceed 24:
+              // a 4-hour visit starting at 21:00 ends at hour 25. `25 > 12 ? 25 - 12 : 25`
+              // gave 13, and `25 >= 12` gave "PM", so the care recipient was texted
+              // "1:00 PM" for a visit ending at 1am. Wrap the day, then hand it to the one
+              // formatter.
+              return formatTimeForDisplay(`${finalH % 24}:${finalM}`);
             })()
           : "soon";
         await sendSms(session.sms_phone, `Hi ${coRecipName}, ${caregiverName} will be heading out around ${endTime}.`);

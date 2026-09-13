@@ -9,7 +9,7 @@ const { captureException } = require("../utils/sentry");
 const availabilityRouter = require("./availability");
 const { sendPushToUser, notifyAdmins, sendSessionReminders } = require("./push");
 const { calculateSessionCost, isShortNotice } = require("../utils/rateCalculator");
-const { getNowInZone, getTodayStringInZone, buildDateTimeInZone, zonedDateTimeToInstant } = require("../utils/timezone");
+const { getNowInZone, getTodayStringInZone, buildDateTimeInZone, zonedDateTimeToInstant, formatTimeForDisplay } = require("../utils/timezone");
 const { geofenceEvidence, coarsenCoordinate } = require("../utils/geocode");
 const { hasActiveVouch } = require("../utils/vouches");
 const { decideCancellationCharge, CANCEL_FEE_WINDOW_HOURS } = require("../utils/cancellationFee");
@@ -124,7 +124,59 @@ async function expireStaleProposals(db, emitToUser, sendPushToUserFn) {
       await db.prepare("UPDATE time_proposals SET status = 'accepted', responded_at = NOW() WHERE id = ?").run(p.id);
     }
 
-    return expired.length + orphaned.length;
+    // ─── v1.106.13 — the OTHER proposal table, which nothing swept ───
+    //
+    // time_change_proposals is a request to move an already-booked visit. It had no deadline
+    // and no sweeper, and care_sessions.pending_time_change_id was cleared only by an explicit
+    // answer. An ignored request therefore blocked every future time change on that session
+    // permanently and left an unclearable card in the other party's Needs You feed.
+    //
+    // Both halves are one transaction for the same reason the propose handler is: expiring the
+    // proposal without clearing the pointer leaves the session just as stuck, and clearing the
+    // pointer without expiring the proposal orphans a 'pending' row the UI can no longer reach.
+    //
+    // Terminal sessions are swept too, without waiting for the deadline — there is nothing to
+    // answer about a cancelled visit.
+    const staleChanges = await db.prepare(`
+      SELECT tcp.id, tcp.session_id, tcp.proposed_by, tcp.proposed_by_user_id,
+             cs.family_user_id, cp.user_id AS caregiver_user_id,
+             cr.first_name AS recipient_first_name
+        FROM time_change_proposals tcp
+        JOIN care_sessions cs ON cs.id = tcp.session_id
+        LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+        LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+       WHERE tcp.status = 'pending'
+         AND ((tcp.expires_at IS NOT NULL AND tcp.expires_at < NOW())
+              OR cs.status IN ('cancelled', 'completed'))
+       LIMIT 20
+    `).all();
+
+    for (const c of staleChanges) {
+      await db.transaction(async (tx) => {
+        await tx.prepare(
+          "UPDATE time_change_proposals SET status = 'expired', acknowledged_at = NOW() WHERE id = ? AND status = 'pending'"
+        ).run(c.id);
+        await tx.prepare(
+          "UPDATE care_sessions SET pending_time_change_id = NULL, updated_at = NOW() WHERE id = ? AND pending_time_change_id = ?"
+        ).run(c.session_id, c.id);
+      });
+
+      // Tell the proposer, so "nothing happened" is not the only signal they get. The visit
+      // is unchanged and still on the calendar — say that, because the alternative reading
+      // (the visit is off) is the dangerous one.
+      if (emitToUser) {
+        emitToUser(c.proposed_by_user_id, "time_change_expired", { sessionId: c.session_id, proposalId: c.id });
+      }
+      if (sendPushToUserFn) {
+        sendPushToUserFn(c.proposed_by_user_id, {
+          title: "Time change expired",
+          body: `Your request to move ${c.recipient_first_name || "the"}'s visit wasn't answered. The visit is unchanged, at its original time.`,
+          data: { type: "time_change_expired", sessionId: c.session_id },
+        }, "time_change").catch(() => {});
+      }
+    }
+
+    return expired.length + orphaned.length + staleChanges.length;
   } catch (e) {
     console.log("expireStaleProposals skipped:", e.message);
     return 0;
@@ -1080,7 +1132,7 @@ router.post("/", requireRole("family", "care_for"), validateSession, async (req,
       }
 
       // Push notification to assigned caregivers
-      const timeLabel = scheduledTime ? (() => { const [h, m] = scheduledTime.split(':').map(Number); return `${h > 12 ? h - 12 : h || 12}:${String(m).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`; })() : '';
+      const timeLabel = formatTimeForDisplay(scheduledTime);
       for (const cg of assignedCgs) {
         sendPushToUser(cg.user_id, {
           title: `New care request${rateLabel ? ' — ' + rateLabel + surchargeLabel : ''}`,
@@ -2310,22 +2362,35 @@ router.post("/:id/propose-time-change", async (req, res) => {
     const feeHours = session.duration_hours - (overlapMinutes / 60);
 
     const proposalId = uuid();
-    await db.prepare(`
-      INSERT INTO time_change_proposals (id, session_id, proposed_by, proposed_by_user_id,
-        original_time, original_duration, proposed_time, proposed_duration,
-        status, is_within_24h, cancel_fee_hours, reason, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, NOW())
-    `).run(
-      proposalId, req.params.id, proposedBy, userId,
-      session.scheduled_time, session.duration_hours,
-      proposedTime, proposedDuration,
-      isWithin24h ? 1 : 0, feeHours > 0 ? feeHours : 0, reason || null
-    );
 
-    // Mark session as having a pending time change
-    await db.prepare(
-      "UPDATE care_sessions SET pending_time_change_id = ?, updated_at = NOW() WHERE id = ?"
-    ).run(proposalId, req.params.id);
+    // v1.106.13 — a deadline, because before this there was none and the request outlived
+    // the visit. 24 hours to answer, or the moment the visit starts, whichever comes first:
+    // there is no answering "can we move it to 3pm" at 3:30pm. expireStaleProposals sweeps
+    // it and clears pending_time_change_id, which is what unblocks the session.
+    const expiresAtMs = Math.min(Date.now() + 24 * 60 * 60 * 1000, sessionDateTime.getTime());
+    const expiresAt = new Date(expiresAtMs).toISOString();
+
+    // v1.106.13 — one transaction. The INSERT and the pointer that makes it findable are one
+    // fact: a proposal with no pointer is invisible to the dashboard and the Needs You feed
+    // (both join through pending_time_change_id), and a pointer with no proposal blocks every
+    // future time change on a row that does not exist. Neither half is safe alone.
+    await db.transaction(async (tx) => {
+      await tx.prepare(`
+        INSERT INTO time_change_proposals (id, session_id, proposed_by, proposed_by_user_id,
+          original_time, original_duration, proposed_time, proposed_duration,
+          status, is_within_24h, cancel_fee_hours, reason, created_at, expires_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, NOW(), ?)
+      `).run(
+        proposalId, req.params.id, proposedBy, userId,
+        session.scheduled_time, session.duration_hours,
+        proposedTime, proposedDuration,
+        isWithin24h ? 1 : 0, feeHours > 0 ? feeHours : 0, reason || null, expiresAt
+      );
+
+      await tx.prepare(
+        "UPDATE care_sessions SET pending_time_change_id = ?, updated_at = NOW() WHERE id = ?"
+      ).run(proposalId, req.params.id);
+    });
 
     // Notify the other party
     const emitToUser = req.app.get("emitToUser");
@@ -2423,15 +2488,22 @@ router.put("/:id/time-change/:proposalId/respond", async (req, res) => {
     const responderName = isResponderCaregiver ? session.caregiver_name : session.family_name;
 
     if (action === "accept") {
-      // Update proposal status
-      await db.prepare(
-        "UPDATE time_change_proposals SET status = 'accepted', acknowledged_by_user_id = ?, acknowledged_at = NOW() WHERE id = ?"
-      ).run(userId, proposal.id);
+      // v1.106.13 — one transaction, and this is the branch where splitting it hurt most.
+      //
+      // The proposal was marked 'accepted' first and the session moved second. If the second
+      // write did not land, the record said the change was accepted, the push below told the
+      // proposer their new time was agreed, and care_sessions still held the OLD time. A
+      // caregiver arrives at 2pm for a visit the schedule, the check-in geofence and the
+      // payment hold all still think starts at 10am.
+      await db.transaction(async (tx) => {
+        await tx.prepare(
+          "UPDATE time_change_proposals SET status = 'accepted', acknowledged_by_user_id = ?, acknowledged_at = NOW() WHERE id = ?"
+        ).run(userId, proposal.id);
 
-      // Apply the time change to the session
-      await db.prepare(
-        "UPDATE care_sessions SET scheduled_time = ?, duration_hours = ?, pending_time_change_id = NULL, updated_at = NOW() WHERE id = ?"
-      ).run(proposal.proposed_time, proposal.proposed_duration, req.params.id);
+        await tx.prepare(
+          "UPDATE care_sessions SET scheduled_time = ?, duration_hours = ?, pending_time_change_id = NULL, updated_at = NOW() WHERE id = ?"
+        ).run(proposal.proposed_time, proposal.proposed_duration, req.params.id);
+      });
 
       // Notify proposer
       if (emitToUser) {
@@ -2452,13 +2524,16 @@ router.put("/:id/time-change/:proposalId/respond", async (req, res) => {
       res.json({ ok: true, action: "accepted", newTime: proposal.proposed_time, newDuration: proposal.proposed_duration });
 
     } else if (action === "reject") {
-      // Simply reject — keep original time
-      await db.prepare(
-        "UPDATE time_change_proposals SET status = 'rejected', acknowledged_by_user_id = ?, acknowledged_at = NOW() WHERE id = ?"
-      ).run(userId, proposal.id);
-      await db.prepare(
-        "UPDATE care_sessions SET pending_time_change_id = NULL, updated_at = NOW() WHERE id = ?"
-      ).run(req.params.id);
+      // Reject — keep the original time. Both writes together: a rejected proposal whose
+      // pointer survives leaves the session unable to take another time change.
+      await db.transaction(async (tx) => {
+        await tx.prepare(
+          "UPDATE time_change_proposals SET status = 'rejected', acknowledged_by_user_id = ?, acknowledged_at = NOW() WHERE id = ?"
+        ).run(userId, proposal.id);
+        await tx.prepare(
+          "UPDATE care_sessions SET pending_time_change_id = NULL, updated_at = NOW() WHERE id = ?"
+        ).run(req.params.id);
+      });
 
       if (emitToUser) {
         emitToUser(proposal.proposed_by_user_id === session.caregiver_user_id ? session.caregiver_user_id : session.family_user_id, "time_change_rejected", {
@@ -2474,16 +2549,19 @@ router.put("/:id/time-change/:proposalId/respond", async (req, res) => {
 
       if (proposal.proposed_by === "caregiver" && isResponderFamily) {
         // Caregiver proposed, family cancels → no charge + can review caregiver
-        await db.prepare(
-          "UPDATE time_change_proposals SET status = 'cancelled_no_fee', acknowledged_by_user_id = ?, acknowledged_at = NOW() WHERE id = ?"
-        ).run(userId, proposal.id);
-        await db.prepare(`
-          UPDATE care_sessions SET status = 'cancelled', pending_time_change_id = NULL,
-            cancellation_reason = ?, cancelled_by = 'family', cancelled_at = NOW(),
-            late_cancel = ?, cancelled_caregiver_id = caregiver_id,
-            updated_at = NOW()
-          WHERE id = ?
-        `).run(cancelReason || "Cancelled due to caregiver time change", isWithin24h ? 1 : 0, req.params.id);
+        // v1.106.13 — cancelling a visit and closing the proposal that caused it are one act.
+        await db.transaction(async (tx) => {
+          await tx.prepare(
+            "UPDATE time_change_proposals SET status = 'cancelled_no_fee', acknowledged_by_user_id = ?, acknowledged_at = NOW() WHERE id = ?"
+          ).run(userId, proposal.id);
+          await tx.prepare(`
+            UPDATE care_sessions SET status = 'cancelled', pending_time_change_id = NULL,
+              cancellation_reason = ?, cancelled_by = 'family', cancelled_at = NOW(),
+              late_cancel = ?, cancelled_caregiver_id = caregiver_id,
+              updated_at = NOW()
+            WHERE id = ?
+          `).run(cancelReason || "Cancelled due to caregiver time change", isWithin24h ? 1 : 0, req.params.id);
+        });
 
         if (emitToUser) {
           emitToUser(session.caregiver_user_id, "session_update", {
@@ -2512,16 +2590,21 @@ router.put("/:id/time-change/:proposalId/respond", async (req, res) => {
         // window as every other one, and the money actually moves.
         const feeHours = proposal.cancel_fee_hours || 0;
 
-        await db.prepare(
-          "UPDATE time_change_proposals SET status = 'cancelled_with_fee', acknowledged_by_user_id = ?, acknowledged_at = NOW() WHERE id = ?"
-        ).run(userId, proposal.id);
-        await db.prepare(`
-          UPDATE care_sessions SET status = 'open', pending_time_change_id = NULL,
-            cancellation_reason = ?, cancelled_by = 'caregiver', cancelled_at = NOW(),
-            cancelled_caregiver_id = caregiver_id, caregiver_id = NULL,
-            late_cancel = ?, updated_at = NOW()
-          WHERE id = ?
-        `).run(cancelReason || "Cancelled due to family time change", isWithin24h ? 1 : 0, req.params.id);
+        // v1.106.13 — as above. Note this one also releases the caregiver (caregiver_id = NULL)
+        // and puts the job back in the open pool, so a half-applied version could leave a
+        // session open with a caregiver still attached to it.
+        await db.transaction(async (tx) => {
+          await tx.prepare(
+            "UPDATE time_change_proposals SET status = 'cancelled_with_fee', acknowledged_by_user_id = ?, acknowledged_at = NOW() WHERE id = ?"
+          ).run(userId, proposal.id);
+          await tx.prepare(`
+            UPDATE care_sessions SET status = 'open', pending_time_change_id = NULL,
+              cancellation_reason = ?, cancelled_by = 'caregiver', cancelled_at = NOW(),
+              cancelled_caregiver_id = caregiver_id, caregiver_id = NULL,
+              late_cancel = ?, updated_at = NOW()
+            WHERE id = ?
+          `).run(cancelReason || "Cancelled due to family time change", isWithin24h ? 1 : 0, req.params.id);
+        });
 
         // Record the standard fee under the standard rules. isLateCancel is the family's
         // late time-change, and cancelledBy is 'family' because the family is the party
@@ -2603,14 +2686,9 @@ function parseTimeToMinutes(timeStr) {
   return h * 60 + (m || 0);
 }
 
-// Helper: format "14:00" → "2:00 PM"
-function formatTime12h(timeStr) {
-  if (!timeStr) return "";
-  const [h, m] = timeStr.split(":").map(Number);
-  const ampm = h >= 12 ? "PM" : "AM";
-  const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
-  return `${h12}:${String(m || 0).padStart(2, "0")} ${ampm}`;
-}
+// v1.106.13 — was a sixth copy of the same formatter. The name stays because call sites
+// read better with it; the implementation is now utils/timezone's single owner.
+const formatTime12h = formatTimeForDisplay;
 
 // ─── PUT /api/sessions/:id/instructions ───
 // Update special_instructions on a session (family/care_for only, before completion)
@@ -3769,12 +3847,7 @@ router.post("/:id/propose-time", async (req, res) => {
     const caregiverUser = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(userId);
     const caregiverName = caregiverUser ? `${caregiverUser.first_name} ${caregiverUser.last_name}` : "A caregiver";
 
-    // Format the proposed time for display
-    const [h, m] = proposedTime.split(":");
-    const hour = parseInt(h);
-    const ampm = hour >= 12 ? "PM" : "AM";
-    const hour12 = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
-    const timeStr = `${hour12}:${m} ${ampm}`;
+    const timeStr = formatTimeForDisplay(proposedTime);
 
     const title = `${caregiverName} proposed a different time`;
     const body = `${caregiverName} would like to care for ${session.recipient_first_name} on ${proposedDate} at ${timeStr} instead. You have 2 hours to respond.`;
@@ -3797,7 +3870,7 @@ router.post("/:id/propose-time", async (req, res) => {
       const { sendEmail, brandedHtml } = require("../utils/email");
       const familyUser = await db.prepare("SELECT email, first_name FROM users WHERE id = ?").get(session.family_user_id);
       if (familyUser?.email) {
-        const origTime = (() => { const [h2, m2] = (session.scheduled_time || '').split(':'); const hr = parseInt(h2); return `${hr === 0 ? 12 : hr > 12 ? hr - 12 : hr}:${m2} ${hr >= 12 ? 'PM' : 'AM'}`; })();
+        const origTime = formatTimeForDisplay(session.scheduled_time);
         const appUrl = process.env.APP_URL || 'https://inplace.care';
         await sendEmail({
           to: familyUser.email,
@@ -3868,17 +3941,36 @@ router.put("/:id/proposals/:proposalId/accept", async (req, res) => {
       return res.status(400).json({ error: "This session is no longer available" });
     }
 
-    // Update the session with the new time and assign the caregiver
-    await db.prepare(`
-      UPDATE care_sessions SET
-        scheduled_date = ?, scheduled_time = ?,
-        caregiver_id = ?, status = 'confirmed', updated_at = NOW()
-      WHERE id = ?
-    `).run(proposal.proposed_date, proposal.proposed_time, proposal.caregiver_profile_id, req.params.id);
+    // v1.106.13 — three writes that have to be one.
+    //
+    // Confirming the session, accepting this proposal and declining the rival proposals are
+    // a single decision. Split, the failure modes are all live-user-visible: a confirmed
+    // session whose proposal is still 'pending' shows the family an Accept button for work
+    // already booked, and rival proposals left 'pending' let a second caregiver be accepted
+    // onto the same visit — overwriting caregiver_id on a session the first one is planning
+    // to work.
+    //
+    // The status re-check inside the UPDATE is the other half. Everything above was read
+    // before these writes, so two accepts arriving together both passed the "still open"
+    // check. Making the write itself conditional means the second one changes no rows.
+    const confirmed = await db.transaction(async (tx) => {
+      const applied = await tx.prepare(`
+        UPDATE care_sessions SET
+          scheduled_date = ?, scheduled_time = ?,
+          caregiver_id = ?, status = 'confirmed', updated_at = NOW()
+        WHERE id = ? AND status IN ('open', 'requested', 'pending')
+      `).run(proposal.proposed_date, proposal.proposed_time, proposal.caregiver_profile_id, req.params.id);
 
-    // Mark this proposal as accepted, decline any other pending proposals for same session
-    await db.prepare("UPDATE time_proposals SET status = 'accepted', responded_at = NOW() WHERE id = ?").run(req.params.proposalId);
-    await db.prepare("UPDATE time_proposals SET status = 'declined', responded_at = NOW() WHERE session_id = ? AND id != ? AND status = 'pending'").run(req.params.id, req.params.proposalId);
+      if (!applied || applied.changes === 0) return false;
+
+      await tx.prepare("UPDATE time_proposals SET status = 'accepted', responded_at = NOW() WHERE id = ?").run(req.params.proposalId);
+      await tx.prepare("UPDATE time_proposals SET status = 'declined', responded_at = NOW() WHERE session_id = ? AND id != ? AND status = 'pending'").run(req.params.id, req.params.proposalId);
+      return true;
+    });
+
+    if (!confirmed) {
+      return res.status(409).json({ error: "This session was just booked by someone else." });
+    }
 
     // Auto-create assignment so caregiver appears in future "Request Care" lists
     try {

@@ -129,15 +129,7 @@ function parseTimeToMinutes(timeStr) {
   return (h || 0) * 60 + (m || 0);
 }
 
-/**
- * Format "HH:MM" 24h time to "H:MM AM/PM".
- */
-function formatTime12(timeStr) {
-  if (!timeStr) return '';
-  const [h, m] = timeStr.split(':').map(Number);
-  const ampm = h >= 12 ? 'PM' : 'AM';
-  const dh = h > 12 ? h - 12 : h === 0 ? 12 : h;
-  return `${dh}:${String(m).padStart(2, '0')} ${ampm}`;
-}
+// v1.106.13 — one owner for 12-hour time. See utils/timezone.
+const formatTime12 = require('./timezone').formatTimeForDisplay;
 
 module.exports = { computeJobConflicts, computeMatchScore };

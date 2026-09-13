@@ -86,13 +86,24 @@ function zonedDateTimeToInstant(dateStr, timeStr, tz = DEFAULT_TIMEZONE) {
 
 /**
  * Format a session time for display: "8:00 AM"
+ *
+ * v1.106.13 — this is now the ONLY 12-hour time formatter on the server. There were six:
+ * this one, formatTime12h in sessions.js, two inline IIFEs also in sessions.js, one in
+ * push.js and one in jobMatching.js. They agreed on the easy cases and disagreed on the
+ * ragged ones, which is the whole problem with six copies — a caregiver could be told
+ * "2:00 PM" by a push and "2:0 PM" by the screen it opened.
+ *
+ * The minute guard (`m || 0`) comes from the sessions.js copy: a bare "14" with no colon
+ * yielded "NaN" here and "00" there. Hours get the same treatment so a malformed value
+ * degrades to empty rather than printing "NaN:00 AM" at somebody.
  */
 function formatTimeForDisplay(timeStr) {
   if (!timeStr) return "";
-  const [h, m] = timeStr.split(":").map(Number);
+  const [h, m] = String(timeStr).split(":").map(Number);
+  if (!Number.isFinite(h)) return "";
   const ampm = h >= 12 ? "PM" : "AM";
   const h12 = h % 12 || 12;
-  return `${h12}:${String(m).padStart(2, "0")} ${ampm}`;
+  return `${h12}:${String(Number.isFinite(m) ? m : 0).padStart(2, "0")} ${ampm}`;
 }
 
 /**

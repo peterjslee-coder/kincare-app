@@ -449,16 +449,20 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   // Listen for time change WebSocket events — refresh dashboard
   useEffect(() => {
     if (typeof onSocketEvent !== 'function') return;
-    const c1 = onSocketEvent('time_change_proposed', () => {
+    // v1.106.13 — was three byte-identical handlers, and adding a fourth event meant a fourth
+    // copy. One reload function, one list of the events that should trigger it.
+    const reload = () => {
       apiFetch('/api/dashboard').then(res => res?.ok && res.json().then(d => setData(d))).catch(() => {});
-    });
-    const c2 = onSocketEvent('time_change_accepted', () => {
-      apiFetch('/api/dashboard').then(res => res?.ok && res.json().then(d => setData(d))).catch(() => {});
-    });
-    const c3 = onSocketEvent('time_change_rejected', () => {
-      apiFetch('/api/dashboard').then(res => res?.ok && res.json().then(d => setData(d))).catch(() => {});
-    });
-    return () => { if (c1) c1(); if (c2) c2(); if (c3) c3(); };
+    };
+    const offs = [
+      'time_change_proposed',
+      'time_change_accepted',
+      'time_change_rejected',
+      // A change nobody answered now expires on its own (poller 112). Without this the stale
+      // "asked to move a visit" card stays on screen until the next manual refresh.
+      'time_change_expired',
+    ].map(ev => onSocketEvent(ev, reload));
+    return () => { offs.forEach(off => { if (off) off(); }); };
   }, []);
 
   // Mark availability as visited when the tab is opened
