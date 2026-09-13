@@ -7,7 +7,7 @@ build red.
 
 Hand-written sections (§3 "Where is…") are preserved across regeneration; edit those freely.
 
-At generation time: **APP_VERSION 1.105.194** · 522 HTTP routes across 55 mounts ·
+Structure at last generation: 522 HTTP routes across 55 mounts ·
 89 `CREATE TABLE` statements · 9 background jobs · 35 socket events
 (15 with no client listener) · 58 push event types · 54 `window.__*` globals.
 

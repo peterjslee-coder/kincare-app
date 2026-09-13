@@ -52,6 +52,12 @@ jobs:
       # A hardcoded hex text colour on a theme-variable background is fine in light mode and
       # 3:1 in dark, and nothing in the build could see it. Hardcoded-on-hardcoded is left
       # alone — that pair is self-consistent; only the mixed case flips.
+      # The legacy migrations array is '000_legacy_baseline' and runs once, on a database
+      # that has never seen it. A schema change added there reaches the tests and never
+      # reaches prod — which is how location_source was broken for three weeks.
+      - name: Frozen migration baseline untouched
+        run: npm run lint:frozen-migrations
+
       - name: Dark-mode contrast
         run: npm run lint:contrast
 

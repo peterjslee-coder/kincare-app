@@ -2213,6 +2213,34 @@ async function initializeDatabase() {
         `ALTER TABLE care_task_occurrences ADD COLUMN IF NOT EXISTS assigned_user_id TEXT REFERENCES users(id)`,
       ],
     },
+    {
+      // ─── 030 — reconcile columns stranded in the frozen legacy array ───
+      //
+      // `location_source` was added on Aug 20 (v1.105.121) INSIDE the `migrations` array above.
+      // That array is the `000_legacy_baseline` and it only ever runs on a database that has
+      // not recorded the baseline — prod and staging both recorded it in July. So the column
+      // was never created on either, and `POST /api/caregivers/me/location` has been throwing
+      // since the day it shipped: verified Sep 13, 500 on prod AND staging.
+      //
+      // The damage was not a null field. The whole UPDATE fails, so latitude and longitude were
+      // never written either — a caregiver who tapped "share my location" instead of typing an
+      // address got an error and kept NULL coordinates, which by design makes her invisible to
+      // families and empties her job list. Exactly the cold-start trap v1.105.121 existed to fix.
+      //
+      // The four columns after it belong to the older v1.5.0 group (the comment was inserted
+      // mid-block), so they are almost certainly present already. IF NOT EXISTS makes including
+      // them free, and guessing wrong in the other direction is what caused this. So: all five.
+      //
+      // `scripts/lint-frozen-migrations.js` now fails CI if anyone edits that array again.
+      id: "030_reconcile_frozen_array_columns",
+      statements: [
+        `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS location_source TEXT`,
+        `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS care_stoplight TEXT`,
+        `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS terms_accepted_at TIMESTAMPTZ`,
+        `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS terms_version TEXT`,
+        `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS onboarding_complete INTEGER DEFAULT 0`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

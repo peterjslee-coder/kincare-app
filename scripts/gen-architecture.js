@@ -294,11 +294,9 @@ function countTables() {
   const s = rd("src/models/database.js");
   return (s.match(/CREATE TABLE IF NOT EXISTS\s+(\w+)/g) || []).length;
 }
-function appVersion() {
-  const s = rd("src/server.js");
-  const m = s.match(/APP_VERSION\s*=\s*["'`]([^"'`]+)["'`]/);
-  return m ? m[1] : "unknown";
-}
+// (APP_VERSION deliberately NOT recorded here: embedding it would make every version bump
+// fail the --check gate, which would train people to regenerate without reading. The gate
+// should fire on STRUCTURAL drift — a new route, job or event — and nothing else.)
 
 // ─── assemble ─────────────────────────────────────────────────────────────────
 const rm = routeMap(), pl = pollers(), rt = realtime(), pt = pushTypes(), cg = clientGlobals();
@@ -340,7 +338,7 @@ build red.
 
 Hand-written sections (§3 "Where is…") are preserved across regeneration; edit those freely.
 
-At generation time: **APP_VERSION ${appVersion()}** · ${rm.grand} HTTP routes across ${rm.mounts} mounts ·
+Structure at last generation: ${rm.grand} HTTP routes across ${rm.mounts} mounts ·
 ${countTables()} \`CREATE TABLE\` statements · ${pl.count} background jobs · ${rt.total} socket events
 (${rt.orphans} with no client listener) · ${pt.count} push event types · ${cg.count} \`window.__*\` globals.
 

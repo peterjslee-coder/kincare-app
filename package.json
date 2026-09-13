@@ -15,6 +15,7 @@
     "gen:architecture": "node scripts/gen-architecture.js",
     "lint:requires": "node scripts/lint-requires.js",
     "lint:sql-columns": "node scripts/lint-sql-columns.js",
+    "lint:frozen-migrations": "node scripts/lint-frozen-migrations.js",
     "collect-feedback": "node scripts/collect-feedback.js",
     "test:integration": "jest --forceExit --runInBand --testMatch \"**/tests/integration/**/*.itest.js\""
   },
