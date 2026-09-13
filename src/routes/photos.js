@@ -5,13 +5,16 @@ const { getDb } = require("../models/database");
 const { uploadQuota } = require("../utils/usageLimits");
 const { authenticate, requireRole } = require("../middleware/auth");
 const { validateMagicBytes } = require("../utils/fileValidation");
-const { IMAGE_MIMES } = require("../utils/serveMedia");
+const { IMAGE_MIMES, sendStoredFile, storedImageUrl } = require("../utils/serveMedia");
+const storage = require("../utils/storage");
 const { captureException } = require("../utils/sentry");
 
 const router = express.Router();
 // v1.106.5 — a per-account daily byte ceiling. Rate limits count requests; the Sept 2
 // outage was about bytes, and 5 MB at a permitted rate still fills the volume.
 router.use(authenticate, uploadQuota());
+
+const photoUrlFor = (row) => storedImageUrl("/api/photos", row);
 
 // Check if user is on the care team for a given care recipient
 async function isCareTeamMember(db, careRecipientId, userId) {
@@ -143,7 +146,7 @@ router.get("/visit/:visitLogId", async (req, res) => {
     )
     .all(req.params.visitLogId);
 
-  res.json({ photos });
+  res.json({ photos: photos.map((p) => ({ ...p, photo_url: photoUrlFor(p) })) });
 });
 
 // ─── POST /api/photos/session/:sessionId ───
@@ -239,7 +242,56 @@ router.get("/session/:sessionId", async (req, res) => {
     )
     .all(visitLog.id);
 
-  res.json({ photos });
+  res.json({ photos: photos.map((p) => ({ ...p, photo_url: photoUrlFor(p) })) });
+});
+
+// ─── v1.106.7 — photos by URL, not by value ───
+//
+// Every list endpoint here returned `photo_url`, which is not a URL: it is the whole image,
+// base64, inline in the JSON. Twelve recent photos on the family dashboard is 4–6 MB of JSON
+// parsed on the main thread before the page can paint, re-fetched on every dashboard load,
+// and impossible for the browser to cache because it is not a resource, it is a field.
+//
+// So return a real URL and stream the bytes here. The browser then does what browsers are
+// good at: one request per image, in parallel, cached for a day, and never re-downloaded.
+// This is the same shape `/api/messages/:id/photo` has had since v1.105.181; the auth cookie
+// is what lets an <img src> reach it, so nothing about who can see what changes.
+//
+// 404 rather than 403 on a failed check — the convention everywhere in this codebase, so
+// probing ids tells you nothing.
+
+/** Everyone allowed to see a photo is allowed to see it through either shape. One rule. */
+async function mayViewPhoto(db, photoId, user) {
+  const row = await db.prepare(`
+    SELECT vp.id, vp.photo_url, cs.family_user_id, cs.caregiver_id, cs.care_recipient_id
+    FROM visit_photos vp
+    JOIN visit_logs vl ON vp.visit_log_id = vl.id
+    JOIN care_sessions cs ON vl.session_id = cs.id
+    WHERE vp.id = ?
+  `).get(photoId);
+  if (!row) return null;
+  if (row.family_user_id === user.id || row.caregiver_id === user.id) return row;
+  if (user.isAdmin || user.is_admin) return row;
+  if (await isCareTeamMember(db, row.care_recipient_id, user.id)) return row;
+  return null;
+}
+
+router.get("/:photoId/image", async (req, res) => {
+  try {
+    const db = await getDb();
+    const row = await mayViewPhoto(db, req.params.photoId, req.user);
+    if (!row) return res.status(404).json({ error: "Photo not found" });
+    if (/^https?:\/\//i.test(row.photo_url || "")) {
+      // Not ours to stream, and never a redirect we follow on the caller's behalf — an
+      // authenticated open redirect is what v1.106.3 removed from /api/media.
+      return res.status(404).json({ error: "Photo not found" });
+    }
+    const fileData = await storage.resolveFileData(row.photo_url);
+    return sendStoredFile(res, fileData, { allow: IMAGE_MIMES, filename: `photo-${row.id}.jpg` });
+  } catch (err) {
+    captureException(err, { where: "photos: stream image" });
+    res.status(500).json({ error: "Failed to load photo" });
+  }
 });
 
 // ─── DELETE /api/photos/:photoId ───

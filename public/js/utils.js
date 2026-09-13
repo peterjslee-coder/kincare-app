@@ -666,6 +666,35 @@ const apiFetch = window.apiFetch = async (url, options = {}) => {
   }
   if (timer) clearTimeout(timer);
 
+  // ─── v1.106.7 — 426 means "you are the old bundle"; reload rather than fail oddly ───
+  //
+  // The server only sends this when a release genuinely broke old clients (see MIN_APP_VERSION
+  // in server.js), which is rare. When it does, the honest response is to go get the new
+  // bundle — index.html is no-store, so one reload is enough.
+  //
+  // Bounded, because a reload triggered by a server response is one bad deploy away from being
+  // an infinite loop: at most three reloads per tab session and never twice inside a minute.
+  // Past that, stop reloading, tell the console why, and let the "Update available" pill and
+  // the service worker's safe-moment path handle it — a stuck app the user can still read
+  // beats a tab that reloads forever.
+  if (response.status === 426) {
+    try {
+      const KEY = 'inplace_upgrade_reloads';
+      const now = Date.now();
+      const prior = JSON.parse(sessionStorage.getItem(KEY) || '[]').filter((t) => now - t < 10 * 60 * 1000);
+      if (prior.length < 3 && (prior.length === 0 || now - prior[prior.length - 1] > 60000)) {
+        prior.push(now);
+        sessionStorage.setItem(KEY, JSON.stringify(prior));
+        console.warn('Server requires a newer app version — reloading to get it.');
+        window.location.reload();
+        return null;
+      }
+      console.error('Server keeps asking for a newer app version but reloading is not fixing it. ' +
+                    'Stopping to avoid a reload loop; try a hard refresh.');
+    } catch { /* storage unavailable — do not reload blind */ }
+    return null;
+  }
+
   // ─── IP Verification Challenge ───
   // If admin endpoint returns 403 with IP_VERIFICATION_REQUIRED, trigger passkey re-auth
   if (response.status === 403 && url.startsWith('/api/admin')) {

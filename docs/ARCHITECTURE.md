@@ -7,7 +7,7 @@ build red.
 
 Hand-written sections (§3 "Where is…") are preserved across regeneration; edit those freely.
 
-Structure at last generation: 523 HTTP routes across 55 mounts ·
+Structure at last generation: 524 HTTP routes across 55 mounts ·
 91 `CREATE TABLE` statements · 9 background jobs · 36 socket events
 (15 with no client listener) · 58 push event types · 55 `window.__*` globals.
 
@@ -80,7 +80,7 @@ JSX is *not* compiled in the browser; Babel-standalone is not loaded. Editing an
 | `/api/passkeys` | `src/routes/passkeys.js` | 7 |  |
 | `/api/password-reset` | `src/routes/passwordReset.js` | 2 |  |
 | `/api/payments` | `src/routes/payments.js` | 20 |  |
-| `/api/photos` | `src/routes/photos.js` | 5 |  |
+| `/api/photos` | `src/routes/photos.js` | 6 |  |
 | `/api/platform-invites` | `src/routes/platformInvites.js` | 6 |  |
 | `/api/push` | `src/routes/push.js` | 10 |  |
 | `/api/reactions` | `src/routes/reactions.js` | 2 |  |
@@ -126,15 +126,15 @@ Every job runs through `guardedPoller` → `withPollerLock` (`src/models/databas
 
 | Lock | Job | Interval | Declared |
 |---:|---|---|---|
-| 101 | Daily demo data refresh | 24 h | `src/server.js:957` |
-| 102 | Session notification poller (every 60s) | 1 min | `src/server.js:1051` |
-| 103 | Session Accountability Poller | 1 min | `src/server.js:1310` |
-| 104 | Reimbursement push digest sweeper (v1.98.15) | 30 s | `src/server.js:1329` |
-| 105 | Auto-pay cron: charge overdue sessions | 5 min | `src/server.js:1423` |
-| 106 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1542` |
-| 107 | Care Tasks poller (v1.99.0) | 1 min | `src/server.js:1552` |
-| 108 | Care Events poller (v1.100.0) | 1 min | `src/server.js:1570` |
-| 109 | Kindred Reminder Delivery Poller | 1 min | `src/server.js:1345` |
+| 101 | Daily demo data refresh | 24 h | `src/server.js:1007` |
+| 102 | Session notification poller (every 60s) | 1 min | `src/server.js:1101` |
+| 103 | Session Accountability Poller | 1 min | `src/server.js:1360` |
+| 104 | Reimbursement push digest sweeper (v1.98.15) | 30 s | `src/server.js:1379` |
+| 105 | Auto-pay cron: charge overdue sessions | 5 min | `src/server.js:1473` |
+| 106 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1592` |
+| 107 | Care Tasks poller (v1.99.0) | 1 min | `src/server.js:1602` |
+| 108 | Care Events poller (v1.100.0) | 1 min | `src/server.js:1620` |
+| 109 | Kindred Reminder Delivery Poller | 1 min | `src/server.js:1395` |
 
 ---
 
@@ -274,7 +274,7 @@ State travels through `window`, not props. This table is the registry.
 | `window.__safeAreaTop` | app.js | 8 |
 | `window.__sandboxMode` | app.js | 2 |
 | `window.__sessionIsPersistent` | app.js | 2 |
-| `window.__setSessionActive` | app.js | 3 |
+| `window.__setSessionActive` | app.js | 4 |
 | `window.__setUiPref` | uiPrefs.js | 5 |
 | `window.__setUiPrefs` | app.js, uiPrefs.js | 9 |
 | `window.__showToast` | VisitDetailModal.js, utils.js | 13 |

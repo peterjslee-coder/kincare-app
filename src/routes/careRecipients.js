@@ -2,6 +2,9 @@ const express = require("express");
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { validateImageDataUrl } = require("../utils/serveMedia");
+// v1.106.7 — ONE recipient-photo endpoint, the one media.js already owns (it carries the
+// demo-boundary rule too). A second copy here is the "same thing in three places" waste.
+const { recipientPhotoUrl } = require("./media");
 const { authenticate, requireRole } = require("../middleware/auth");
 const { geocodeAddress, buildAddressString } = require("../utils/geocode");
 
@@ -46,6 +49,7 @@ router.get("/", requireRole("family", "admin", "care_for"), async (req, res) => 
     ).get(req.user.id);
     const parsed = self ? [{
       ...self,
+      photo: recipientPhotoUrl(self),
       name: self.called_by || [self.first_name, self.last_name].filter(Boolean).join(' ') || 'Unknown',
       healthConditions: JSON.parse(self.health_conditions || "[]"),
       observedConcerns: JSON.parse(self.observed_concerns || "[]"),
@@ -92,6 +96,10 @@ router.get("/", requireRole("family", "admin", "care_for"), async (req, res) => 
   // Parse JSON fields + compute display name
   const parsed = all.map((r) => ({
     ...r,
+    // v1.106.7 — a URL, not the image. Same field, same truthiness, same <img src>; the
+    // difference is that a list of six recipients is kilobytes instead of megabytes, and the
+    // browser can cache each face instead of re-parsing it out of JSON on every load.
+    photo: recipientPhotoUrl(r),
     name: r.called_by || [r.first_name, r.last_name].filter(Boolean).join(' ') || 'Unknown',
     healthConditions: JSON.parse(r.health_conditions || "[]"),
     observedConcerns: JSON.parse(r.observed_concerns || "[]"),
@@ -232,6 +240,7 @@ router.get("/:id", requireRole("family", "admin"), async (req, res) => {
   res.json({
     careRecipient: {
       ...recipient,
+      photo: recipientPhotoUrl(recipient),
       healthConditions: JSON.parse(recipient.health_conditions || "[]"),
       observedConcerns: JSON.parse(recipient.observed_concerns || "[]"),
       medications: JSON.parse(recipient.medications || "[]"),
@@ -411,7 +420,7 @@ router.put("/:id/photo", requireRole("family"), async (req, res) => {
     if (!okPhoto.ok) return res.status(400).json({ error: okPhoto.error });
 
     await db.prepare("UPDATE care_recipients SET photo = ?, updated_at = NOW() WHERE id = ?").run(photo, req.params.id);
-    res.json({ message: "Photo updated", photoUrl: photo });
+    res.json({ message: "Photo updated", photoUrl: `/api/media/recipient/${req.params.id}/photo` });
   } catch (err) {
     console.error("Care recipient photo upload error:", err);
     res.status(500).json({ error: "Failed to upload photo" });

@@ -22,7 +22,46 @@ batch by batch. Where it stands:
 | 1b | stored-file safety, upload validation, **impersonation now requires a passkey, no bypass** | v1.106.3 | shipped |
 | 1c | session revocation, trusted devices, Checkr fail-closed, CSV injection, schema-drift endpoint | v1.106.4 | shipped |
 | 2 | abuse & denial-of-service (below) | v1.106.5 | shipped |
-| 3–8 | waste, data leanness, correctness, de-duplication, guardrails, native/PWA | — | not started |
+| 3a | self-inflicted waste: cache headers, build phase, dead weight | v1.106.6 | shipped |
+| 3b | payload weight, 'restoring' state, version-skew guard | v1.106.7 | shipped |
+| 4–8 | data leanness, correctness, de-duplication, guardrails, native/PWA | — | not started |
+
+### What Batch 3 added
+
+**3a (v1.106.6) — nothing behavioural, everything cheaper.**
+- Cache headers. One line sent `no-store` on every `.js` and `.css`; verified on prod before
+  the change, `GET /js-compiled/bundle.js` really did return it, so ~700 KB came down on every
+  visit. Fingerprinted assets are now `immutable` for a year, index.html/sw.js/manifest stay
+  `no-store`, and the same asset without `?v=` gets five minutes rather than a year.
+- The build stamp is the content hash alone. It used to append `Date.now()`, so a crash-loop
+  restart invented a new cache key for byte-identical files.
+- **`bundle.js.map` was live.** Never committed — the build wrote it into `public/` inside the
+  running container and `express.static` served it. Confirmed: 200, 4.1 MB of `sourcesContent`,
+  the whole client source with every comment. Maps now build to `build/maps/`, the bundle
+  carries no `sourceMappingURL`, and the server 404s any `.map` regardless.
+- `npm start` no longer runs a 29-second Babel+terser build before listening — that was the
+  per-deploy 502 window, duplicating what Nixpacks already does at build time.
+  `scripts/ensure-build.js` only builds if there is genuinely nothing to serve.
+  `railway.json` gained `healthcheckPath`.
+- Three script tags removed: synchronous Stripe.js (now on demand), a dead Connect.js, and
+  624 KB of Twilio shipped to everyone. `utils.js` warms the video SDK when a call rings.
+- The three background polls skip the tick while the tab is hidden. Dashboard's
+  `visibilitychange` listener was added with an inline arrow and never removed.
+
+**3b (v1.106.7) — payload weight and two states that looked like failures.**
+- Visit photos and recipient photos travel as URLs. The dashboard was returning twelve visit
+  photos and every recipient avatar as inline base64 — megabytes of JSON parsed on the main
+  thread before the page could paint. Same field names, so the client did not change.
+- A returning user no longer sees the marketing page while `/me` runs, and a deploy 502 no
+  longer looks exactly like being logged out: `appState` goes to `restoring`, says
+  "Reconnecting…", and retries with backoff for 60 s. A 401 is treated as final.
+- `426 Upgrade Required` when a client is older than `MIN_APP_VERSION`. **That constant is
+  NOT `APP_VERSION`** — it moves only when a release genuinely breaks old clients. Bumping it
+  every deploy would force-reload every user every time. Missing/unparseable headers pass;
+  `/api/version`, `/api/health`, `/api/auth/*` and both webhooks are exempt.
+- CaretakerHub's six independent calls no longer wait on `/api/dashboard`, it asks Stripe once
+  per mount instead of twice, and `stripe.accounts.retrieve` is cached for 60 s — bypassed
+  with `?fresh=1` on the return from onboarding, and dropped by the `account.updated` webhook.
 
 ### What Batch 2 actually added
 

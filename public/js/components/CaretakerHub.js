@@ -380,21 +380,27 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
 
   useEffect(() => {
     const fetchData = async () => {
+      // ─── v1.106.7 — six of these were waiting on /api/dashboard for no reason ───
+      //
+      // They all sat inside `if (res?.ok)` after the await, so opening the caregiver hub was
+      // one slow request followed by six more, serially gated on it. Not one of them reads
+      // anything from the dashboard response. Fire them alongside it instead: the hub's
+      // time-to-usable becomes the slowest single call rather than the sum of two rounds.
+      //
+      // Each still swallows its own failure — a missing referral code must not cost you the
+      // hub — and each sets its own state, so they paint as they land.
+      fetchAvailability();
+      apiFetch('/api/caregivers/platform-config').then(r => r?.ok && r.json().then(c => setPlatformConfig(c))).catch(() => {});
+      apiFetch('/api/referrals/my-code').then(r => r?.ok && r.json().then(d => setReferralData(d))).catch(() => {});
+      apiFetch('/api/referrals/list').then(r => r?.ok && r.json().then(d => setReferralList(d.referrals || []))).catch(() => {});
+      apiFetch('/api/referrals/milestones').then(r => r?.ok && r.json().then(d => { setMilestones(d.milestones || []); setUnackedMilestones(d.unacknowledged || []); })).catch(() => {});
+      apiFetch('/api/push/notifications?limit=10').then(r => r?.ok && r.json().then(d => { setNotifications(d.notifications || []); setUnreadNotifCount(d.unreadCount || 0); })).catch(() => {});
+      // Stripe status is NOT requested here: the mount effect below already asks for it, and
+      // asking twice meant two live Stripe API calls every time the hub opened.
       try {
         const res = await apiFetch('/api/dashboard');
         if (res?.ok) {
-          const d = await res.json();
-          setData(d);
-          // Always fetch availability, stripe status, and platform config for accurate step tracking
-          fetchAvailability();
-          apiFetch('/api/payments/connect/status').then(r => r?.ok && r.json().then(s => setStripeStatus(s))).catch(() => {});
-          apiFetch('/api/caregivers/platform-config').then(r => r?.ok && r.json().then(c => setPlatformConfig(c))).catch(() => {});
-          // Fetch referral data and milestones
-          apiFetch('/api/referrals/my-code').then(r => r?.ok && r.json().then(d => setReferralData(d))).catch(() => {});
-          apiFetch('/api/referrals/list').then(r => r?.ok && r.json().then(d => setReferralList(d.referrals || []))).catch(() => {});
-          apiFetch('/api/referrals/milestones').then(r => r?.ok && r.json().then(d => { setMilestones(d.milestones || []); setUnackedMilestones(d.unacknowledged || []); })).catch(() => {});
-          // In-app notifications (v1.56.0)
-          apiFetch('/api/push/notifications?limit=10').then(r => r?.ok && r.json().then(d => { setNotifications(d.notifications || []); setUnreadNotifCount(d.unreadCount || 0); })).catch(() => {});
+          setData(await res.json());
         } else if (res?.status === 404) {
           setNoProfile(true);
         }
@@ -411,7 +417,8 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       setActiveTab('financials');
       (async () => {
         try {
-          const sRes = await apiFetch('/api/payments/connect/status');
+          // ?fresh=1 — they have just come back from Stripe; a cached answer is the wrong one.
+          const sRes = await apiFetch('/api/payments/connect/status?fresh=1');
           if (sRes?.ok) setStripeStatus(await sRes.json());
         } catch {}
       })();

@@ -93,4 +93,22 @@ function validateImageDataUrl(dataUrl, { allow = IMAGE_MIMES, maxBytes = 2 * 102
   return { ok: true, mime: parsed.mime, bytes: parsed.buffer.length };
 }
 
-module.exports = { sendStoredFile, parseDataUrl, validateImageDataUrl, IMAGE_MIMES, DOCUMENT_MIMES };
+/**
+ * Turn a stored image value into something safe to put in JSON (v1.106.7).
+ *
+ * A data URL or an `r2:` marker becomes a URL pointing at the endpoint that streams it; an
+ * ordinary http(s) URL — older rows, and anything a future writer stores by reference —
+ * passes straight through. Lives here rather than in a router because dashboard.js and
+ * photos.js must agree on the answer, and a router is not a library.
+ *
+ * @param {string} basePath e.g. "/api/photos"
+ * @param {{id: string, photo_url?: string}} row
+ */
+function storedImageUrl(basePath, row, field = "photo_url") {
+  const v = row && row[field];
+  if (!v) return null;
+  if (/^https?:\/\//i.test(v)) return v;
+  return `${basePath}/${row.id}/image`;
+}
+
+module.exports = { sendStoredFile, parseDataUrl, validateImageDataUrl, storedImageUrl, IMAGE_MIMES, DOCUMENT_MIMES };

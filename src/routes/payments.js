@@ -401,6 +401,9 @@ router.post("/webhook", express.raw({ type: "application/json" }), async (req, r
       case "account.updated": {
         // Caregiver's Connect account was updated (onboarding completed, etc.)
         const account = event.data.object;
+        // v1.106.7 — /connect/status caches accounts.retrieve for a minute. This event IS the
+        // change that cache would otherwise be a minute behind on, so drop it now.
+        invalidateConnectAccount(account.id);
         const isComplete = account.charges_enabled && account.payouts_enabled;
         if (isComplete) {
           await db.prepare(
@@ -896,6 +899,34 @@ router.post("/connect/link", requireRole("caregiver"), requirePaymentsEnabled, a
   }
 });
 
+// ─── v1.106.7 — a 60-second cache in front of stripe.accounts.retrieve ───
+//
+// This endpoint is hit on every open of the caregiver hub — twice, until this release — and
+// each hit was a live round trip to Stripe on the request path. Nothing here changes minute to
+// minute: charges_enabled and payouts_enabled flip once, at the end of onboarding, and the
+// webhook (account.updated) is what tells us the instant they do.
+//
+// 60 seconds is chosen against the one case that matters: a caregiver finishing onboarding and
+// tapping back into the app to see whether it took. A minute is inside their patience, and the
+// webhook usually beats them to it anyway. Any error path skips the cache entirely, so a
+// failure is never remembered.
+const _connectAccountCache = new Map(); // stripe_account_id -> { at, account }
+const CONNECT_CACHE_MS = 60 * 1000;
+
+async function retrieveConnectAccount(stripe, accountId, fresh = false) {
+  const hit = fresh ? null : _connectAccountCache.get(accountId);
+  if (hit && Date.now() - hit.at < CONNECT_CACHE_MS) return hit.account;
+  const account = await stripe.accounts.retrieve(accountId);
+  if (_connectAccountCache.size > 500) _connectAccountCache.clear();
+  _connectAccountCache.set(accountId, { at: Date.now(), account });
+  return account;
+}
+
+/** The webhook knows before we do. Drop the cached copy so the next read is fresh. */
+function invalidateConnectAccount(accountId) {
+  if (accountId) _connectAccountCache.delete(accountId);
+}
+
 // ─── GET /api/payments/connect/status ───
 // Check caregiver's Stripe Connect account status
 router.get("/connect/status", requireRole("caregiver"), async (req, res) => {
@@ -913,7 +944,10 @@ router.get("/connect/status", requireRole("caregiver"), async (req, res) => {
   }
 
   try {
-    const account = await stripe.accounts.retrieve(profile.stripe_account_id);
+    // ?fresh=1 bypasses the 60s cache. The caregiver returning from Stripe onboarding is the
+    // one caller who cannot be shown a minute-old "pending" — that is the exact moment they
+    // are looking for the answer to change.
+    const account = await retrieveConnectAccount(stripe, profile.stripe_account_id, req.query.fresh === "1");
 
     const isComplete = account.charges_enabled && account.payouts_enabled;
 

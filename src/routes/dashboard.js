@@ -2,6 +2,7 @@ const express = require("express");
 const { activeVouchesFor } = require("../utils/vouches");
 const { maySeeRecipientDetails, isTrustedCaregiver, detailsWithheldReason } = require("../utils/caregiverTrust");
 const { recipientPhotoUrl } = require("./media");
+const { storedImageUrl } = require("../utils/serveMedia");
 const { getDb } = require("../models/database");
 const { authenticate } = require("../middleware/auth");
 const { getNowInZone, getTodayStringInZone } = require("../utils/timezone");
@@ -266,7 +267,7 @@ async function familyDashboard(db, userId, res) {
           healthConditions: JSON.parse(primary.health_conditions || "[]"),
           medications: JSON.parse(primary.medications || "[]"),
           preferences: primary.preferences,
-          photo: primary.photo ? `/api/media/recipient/${primary.id}/photo` : null,
+          photo: recipientPhotoUrl(primary),  // v1.106.7 — one owner for this URL shape
           emoji: primary.emoji || null,
           consent_status: primary.consent_status || 'pending',
           authorization_tier: primary.authorization_tier || 'unset',
@@ -284,6 +285,10 @@ async function familyDashboard(db, userId, res) {
       isNewUser: recipients.length === 0,
       careRecipients: recipients.map((r) => ({
         ...r,
+        // v1.106.7 — `parent.photo` above has been a URL since v1.66.0; this list, built from
+        // the same rows a few lines later, was still spreading the raw base64. Six recipients
+        // with photos is several megabytes of JSON on every dashboard load.
+        photo: recipientPhotoUrl(r),
         healthConditions: JSON.parse(r.health_conditions || "[]"),
         medications: JSON.parse(r.medications || "[]"),
       })),
@@ -369,7 +374,10 @@ async function familyDashboard(db, userId, res) {
       })),
       recentPhotos: recentPhotos.map(p => ({
         id: p.id,
-        photoUrl: p.photo_url,
+        // v1.106.7 — twelve visit photos inline was the single biggest thing in this response:
+        // 4–6 MB of base64 parsed on the main thread before the dashboard could paint, and
+        // re-fetched in full every time. Now twelve <img> requests the browser caches for a day.
+        photoUrl: storedImageUrl("/api/photos", p),
         caption: p.caption,
         createdAt: p.created_at,
         caregiverName: p.caregiver_name,
@@ -1157,7 +1165,7 @@ async function careForDashboard(db, userId, res) {
       pets: recipient.pets,
       foodAllergies: parseJson(recipient.food_allergies),
       medicalConditions: recipient.medical_conditions,
-      photo: recipient.photo ? `/api/media/recipient/${recipient.id}/photo` : null,
+      photo: recipientPhotoUrl(recipient),  // v1.106.7 — one owner for this URL shape
       emoji: recipient.emoji,
       locationCity: recipient.location_city,
       locationState: recipient.location_state,

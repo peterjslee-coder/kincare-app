@@ -1178,8 +1178,33 @@ const App = () => {
       || localStorage.getItem('pendingInviteToken');
     if (!hasActiveSession && !hasInviteToken) return;
 
-    // Restore session from httpOnly cookie (server reads cookie automatically)
-    apiFetch('/api/auth/me').then(async r => {
+    // ─── v1.106.7 — a returning user is not a stranger, and a 502 is not a logout ───
+    //
+    // This effect used to fire /api/auth/me and leave appState at 'splash' until it came back.
+    // Two consequences, both bad. On a good day the returning user saw the MARKETING page for
+    // as long as the round trip took. On a bad day — a deploy 502, a phone waking on one bar,
+    // Railway swapping containers — the .catch() below swallowed it and they STAYED on the
+    // marketing page, which looks exactly like having been logged out. Pete has hit this: the
+    // app is fine, the session is fine, and the screen says "sign up".
+    //
+    // So: say "Reconnecting…" instead of "sign up", and keep asking. A 401 is a real answer
+    // and ends it; anything else is the network, and the network usually comes back.
+    if (hasActiveSession) setAppState((prev) => (prev === 'splash' ? 'restoring' : prev));
+
+    const RESTORE_DEADLINE_MS = 60000;
+    const restoreStartedAt = Date.now();
+    let restoreAttempt = 0;
+
+    const restoreFailed = (permanent) => {
+      // Permanent (the server said 401): the session really is gone. Clear the flag so the
+      // next load does not do this dance again, and show the splash honestly.
+      if (permanent) { try { window.__setSessionActive(false); } catch {} }
+      setAppState((prev) => (prev === 'restoring' ? 'splash' : prev));
+    };
+
+    const attemptRestore = () => {
+      restoreAttempt += 1;
+      return apiFetch('/api/auth/me').then(async r => {
         if (r?.ok) {
           const data = await r.json();
           // Server includes token for in-memory use (WebSocket auth)
@@ -1192,7 +1217,7 @@ const App = () => {
             if (data.user.is_demo) {
               setAuthToken(null);
               if (typeof disconnectSocket === 'function') disconnectSocket();
-              return;
+              return restoreFailed(true);   // v1.106.7 — a real answer; leave 'restoring'
             }
             // Apply user's saved theme now that we know they're authenticated
             if (typeof window.__applyUserTheme === 'function') window.__applyUserTheme();
@@ -1260,9 +1285,29 @@ const App = () => {
               pendingInviteRef.current = null;
               setInviteInfo(null);
             }
+          } else {
+            // 200 with no user is as final as a 401 — retrying cannot change it.
+            return restoreFailed(true);
           }
+          return;
         }
-      }).catch(() => {});
+        // A 401 means the cookie is gone or dead — a real answer, not a blip.
+        if (r && r.status === 401) return restoreFailed(true);
+        throw new Error(`restore failed: ${r ? r.status : 'no response'}`);
+      });
+    };
+
+    const retryRestore = (err) => {
+      if (Date.now() - restoreStartedAt > RESTORE_DEADLINE_MS) {
+        console.warn('Session restore gave up after 60s:', err && err.message);
+        return restoreFailed(false);
+      }
+      // 1s, 2s, 4s, 8s, capped at 8s. A container swap is back inside that.
+      const delay = Math.min(1000 * Math.pow(2, restoreAttempt - 1), 8000);
+      setTimeout(() => { attemptRestore().catch(retryRestore); }, delay);
+    };
+
+    attemptRestore().catch(retryRestore);
     const params = new URLSearchParams(window.location.search);
     // Preserve original search params before any replaceState calls strip them
     window.__originalSearch = window.location.search;
@@ -1660,6 +1705,29 @@ const App = () => {
       }).catch(() => {});
     }
   };
+
+  // ─── v1.106.7 — "Reconnecting…", not the marketing page ───
+  // Deliberately plain and brand-coloured, matching the "App updated" card in index.html, so
+  // the two transient full-screen states look like the same app rather than two bugs.
+  if (appState === 'restoring') {
+    return (
+      <div style={{
+        position: 'fixed', inset: 0, display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center', gap: 14,
+        background: '#1b6b5a', color: '#fff', textAlign: 'center', padding: 32,
+      }} role="status" aria-live="polite">
+        <div style={{
+          width: 56, height: 56, borderRadius: 14, background: 'rgba(255,255,255,.14)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontWeight: 800, fontSize: 22,
+        }}>iP</div>
+        <div style={{ fontSize: 20, fontWeight: 700 }}>Reconnecting…</div>
+        <div style={{ opacity: .85, maxWidth: '26ch', lineHeight: 1.45 }}>
+          Getting your care details back. This only takes a moment.
+        </div>
+      </div>
+    );
+  }
 
   // Platform invite onboarding flow (caregiver, family, or care_for)
   if (appState === 'platform-onboarding' && platformInviteToken) {
