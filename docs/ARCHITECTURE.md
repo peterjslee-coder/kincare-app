@@ -9,7 +9,7 @@ Hand-written sections (§3 "Where is…") are preserved across regeneration; edi
 
 Structure at last generation: 524 HTTP routes across 55 mounts ·
 91 `CREATE TABLE` statements · 11 background jobs · 36 socket events
-(15 with no client listener) · 58 push event types · 55 `window.__*` globals.
+(15 with no client listener) · 59 push event types · 55 `window.__*` globals.
 
 ---
 
@@ -218,11 +218,11 @@ Opt-out key is `notification_prefs["push_" + eventType]`. Capability gating live
 
 `overdue_check_out` · `overdue_check_out_family` · `payment_authorization_failed` · `payment_hold`
 
-`phone_verified` · `proposal_accepted` · `proposal_declined` · `request_declined`
+`payment_method_needed` · `phone_verified` · `proposal_accepted` · `proposal_declined`
 
-`session_cancelled` · `team_join` · `time_change` · `time_proposal`
+`request_declined` · `session_cancelled` · `team_join` · `time_change`
 
-`unblocked` · `waitlist_signup`
+`time_proposal` · `unblocked` · `waitlist_signup`
 
 ---
 

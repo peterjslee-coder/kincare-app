@@ -859,14 +859,11 @@ router.post("/", requireRole("family", "care_for"), validateSession, async (req,
   try {
     const { getStripe } = require("./payments");
     const stripe = getStripe();
-    // Check all accepted payment method types — card, link, and bank account
-    let hasMethod = false;
-    for (const pmType of ["card", "link", "us_bank_account"]) {
-      try {
-        const methods = await stripe.paymentMethods.list({ customer: payerCustomerId, type: pmType, limit: 1 });
-        if (methods.data.length) { hasMethod = true; break; }
-      } catch { /* some types may not be supported */ }
-    }
+    // v1.106.11 — the same resolver the hold and the charge use. This gate accepted card,
+    // link and bank; auto-pay looked for bank and card only. A family whose saved method is
+    // Link passed here at booking and could not be charged afterwards.
+    const { resolvePaymentMethod } = require("../utils/paymentMethod");
+    const hasMethod = !!(await resolvePaymentMethod(stripe, payerCustomerId));
     if (!hasMethod) {
       return res.status(402).json({
         error: 'No saved payment method found. Please add a card or bank account before booking care.',

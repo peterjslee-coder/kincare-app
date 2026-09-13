@@ -27,6 +27,7 @@ const { captureException } = require("../utils/sentry");
 const { appUrl } = require("../utils/env");
 const PLATFORM_URL = `${appUrl}/business`;
 const { calculateSessionCost, isShortNotice, SURCHARGE_CAREGIVER_SHARE, SURCHARGE_PLATFORM_SHARE } = require("../utils/rateCalculator");
+const { resolvePaymentMethod, describePaymentMethod } = require("../utils/paymentMethod");
 
 const router = express.Router();
 
@@ -1668,12 +1669,11 @@ async function processOverduePayments(pushFn) {
           continue;
         }
 
-        // Get default payment method — prefer bank account (ACH: 0.8% capped $5) over card (2.9% + 30¢)
-        let paymentMethods = await stripe.paymentMethods.list({ customer: customerId, type: "us_bank_account", limit: 1 });
-        if (!paymentMethods.data.length) {
-          paymentMethods = await stripe.paymentMethods.list({ customer: customerId, type: "card", limit: 1 });
-        }
-        if (!paymentMethods.data.length) {
+        // v1.106.11 — one resolver for every money path (see utils/paymentMethod.js). Prefers
+        // ACH (0.8% capped at $5) over card (2.9% + 30¢), and now also finds Link, which this
+        // copy missed even though the booking gate accepted it.
+        const chosenPM = await resolvePaymentMethod(stripe, customerId);
+        if (!chosenPM) {
           console.warn(`[auto-pay] Session ${s.id}: customer ${customerId} has no saved payment methods — skipping`);
           const notifyUserId2 = s.billing_user_id || s.family_user_id;
           if (pushFn && notifyUserId2) {
@@ -1686,9 +1686,7 @@ async function processOverduePayments(pushFn) {
           continue;
         }
 
-        const chosenPM = paymentMethods.data[0];
-        const pmType = chosenPM.type === 'us_bank_account' ? 'ACH bank' : 'card';
-        console.log(`[auto-pay] Session ${s.id}: using ${pmType} (${chosenPM.type}) ending ${chosenPM[chosenPM.type]?.last4 || '????'}`);
+        console.log(`[auto-pay] Session ${s.id}: using ${describePaymentMethod(chosenPM)}`);
 
         // Calculate cost — use the estimated_cost already computed at checkout (single source of truth)
         // CORE PRINCIPLE: Caregiver gets EXACTLY their pay + tip. Fees go on top, charged to family.
@@ -1766,8 +1764,11 @@ async function processOverduePayments(pushFn) {
         // transaction open across a network call to a third party is the shape that exhausted
         // the pool in v1.105.50, and Stripe cannot be rolled back anyway. Our writes either
         // all land or none do; Stripe's idempotency key covers the retry.
-        const pmBrand = chosenPM.card ? chosenPM.card.brand : (chosenPM.us_bank_account ? (chosenPM.us_bank_account.bank_name || 'bank') : chosenPM.type);
-        const pmLast4 = (chosenPM.card && chosenPM.card.last4) || (chosenPM.us_bank_account && chosenPM.us_bank_account.last4) || null;
+        // v1.106.11 — from the resolver, which knows every accepted type. This read
+        // chosenPM.card / chosenPM.us_bank_account directly, so a Link payment would have
+        // written a blank brand and last4 onto the family's receipt.
+        const pmBrand = chosenPM.brand;
+        const pmLast4 = chosenPM.last4;
         const paymentId = uuid();
         await db.transaction(async (tx) => {
           await tx.prepare(`

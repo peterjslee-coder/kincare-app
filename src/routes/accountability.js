@@ -12,6 +12,7 @@ const { sendPushToUser } = require("./push");
 const ticketRouter = require("./tickets");
 const { captureException } = require("../utils/sentry");
 const { caregiverIdentityVerified } = require("../utils/identity");
+const { resolvePaymentMethod, describePaymentMethod } = require("../utils/paymentMethod");
 
 // emitToUser injected from server.js at startup
 let _emitToUser = null;
@@ -70,7 +71,13 @@ async function authorizeSessionPayment(sessionId) {
       LEFT JOIN users u2 ON cp.user_id = u2.id
       LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
       LEFT JOIN users fam ON cs.family_user_id = fam.id
-      LEFT JOIN care_teams ct ON ct.care_recipient_id = cs.care_recipient_id
+      -- v1.106.11 — the billing_user_id IS NOT NULL filter. Without it, a recipient with more
+      -- than one care_teams row could match the one whose billing contact is unset, .get()
+      -- would take that arbitrary row, and the payer would silently fall back to
+      -- family_user_id — the same "no filter, no LIMIT, take whichever" shape that put
+      -- personal DMs in the InPlace Support thread (v1.105.102). payments.js has always
+      -- filtered; this side never did.
+      LEFT JOIN care_teams ct ON ct.care_recipient_id = cs.care_recipient_id AND ct.billing_user_id IS NOT NULL
       LEFT JOIN users bill ON ct.billing_user_id = bill.id
       WHERE cs.id = ?
     `).get(sessionId);
@@ -84,7 +91,7 @@ async function authorizeSessionPayment(sessionId) {
     // card could fail pre-authorization and then be charged successfully hours later
     // by auto-pay. Two money paths disagreeing about who the payer is.
     const payerCustomerId = session.billing_stripe_customer_id || session.stripe_customer_id;
-    if (!payerCustomerId) return { error: "Family has no payment method on file" };
+    if (!payerCustomerId) return { error: "no_payment_method", payerUserId: session.billing_user_id || session.family_user_id };
 
     if (!session.stripe_account_id || !session.stripe_onboard_complete) return { error: "Caregiver Stripe not set up" };
 
@@ -133,11 +140,25 @@ async function authorizeSessionPayment(sessionId) {
       platformFeeCents += Math.round(surchargeCents * SURCHARGE_PLATFORM_SHARE);
     }
 
+    // ─── v1.106.11 — actually name the payment method ───
+    //
+    // This passed `payment_method: undefined` with the comment "will use customer's default".
+    // Stripe does not do that: a PaymentIntent with `confirm: true, off_session: true` and no
+    // payment_method is rejected outright, and the rejection was being forwarded to Pete's
+    // phone verbatim, once a minute, for the whole 25-hour window before the shift.
+    //
+    // Same resolver auto-pay uses, so the hold and the charge can no longer disagree about
+    // which card is being used.
+    const pm = await resolvePaymentMethod(stripe, payerCustomerId);
+    if (!pm) return { error: "no_payment_method", payerUserId: session.billing_user_id || session.family_user_id };
+
     // Create PaymentIntent with manual capture (authorize only, don't charge yet)
     const paymentIntent = await stripe.paymentIntents.create({
       amount: totalCents,
       currency: "usd",
       customer: payerCustomerId,
+      payment_method: pm.id,
+      payment_method_types: [pm.type],
       capture_method: "manual",
       application_fee_amount: platformFeeCents,
       transfer_data: {
@@ -150,9 +171,7 @@ async function authorizeSessionPayment(sessionId) {
         type: "session_authorization",
       },
       description: `Care session — ${session.recipient_name || "Care Recipient"} on ${session.scheduled_date} (${durationHours}h)`,
-      // Attempt to confirm immediately using customer's default payment method
       confirm: true,
-      payment_method: undefined, // will use customer's default
       off_session: true,
     }, {
       // v1.105.66 — this is an authorization hold on a family's card, placed by a poller.
@@ -171,7 +190,7 @@ async function authorizeSessionPayment(sessionId) {
       WHERE id = ?
     `).run(paymentIntent.id, totalCents, sessionId);
 
-    console.log(`[accountability] Authorized $${(totalCents / 100).toFixed(2)} for session ${sessionId.slice(0, 8)} (PI: ${paymentIntent.id})`);
+    console.log(`[accountability] Authorized $${(totalCents / 100).toFixed(2)} for session ${sessionId.slice(0, 8)} on ${describePaymentMethod(pm)} (PI: ${paymentIntent.id})`);
     return { success: true, paymentIntentId: paymentIntent.id, amount: totalCents };
 
   } catch (err) {
@@ -712,12 +731,20 @@ async function pollPaymentAuthorizations() {
     // Include care recipient timezone for accurate timing
     const sessions = await db.prepare(`
       SELECT cs.id, cs.scheduled_date, cs.scheduled_time, cs.family_user_id,
-        cr.timezone AS care_timezone
+        cs.notifications_sent,
+        cr.timezone AS care_timezone,
+        cr.first_name AS recipient_first_name,
+        u2.first_name || ' ' || u2.last_name AS caregiver_name,
+        ct.billing_user_id,
+        COALESCE(bill.first_name, u.first_name) AS payer_first_name
       FROM care_sessions cs
       JOIN users u ON cs.family_user_id = u.id
       LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
       LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
       LEFT JOIN users cu ON cp.user_id = cu.id
+      LEFT JOIN users u2 ON cp.user_id = u2.id
+      LEFT JOIN care_teams ct ON ct.care_recipient_id = cs.care_recipient_id AND ct.billing_user_id IS NOT NULL
+      LEFT JOIN users bill ON ct.billing_user_id = bill.id
       WHERE cs.status = 'confirmed'
         AND cs.stripe_payment_intent_id IS NULL
         AND cs.payment_status IS NULL
@@ -737,6 +764,8 @@ async function pollPaymentAuthorizations() {
         const sessionStart = buildDateTimeInZone(dateStr, s.scheduled_time, tz);
         const hoursUntil = (sessionStart - now) / 3600000;
 
+        const warnedAlready = (s.notifications_sent || "").includes("unfunded_warned");
+
         // Authorize if within 23-25 hour window (or if session is <24hrs out and not yet authorized)
         if (hoursUntil > 0 && hoursUntil <= 25) {
           console.log(`[accountability] Authorizing payment for session ${s.id.slice(0, 8)} (${hoursUntil.toFixed(1)}h away)`);
@@ -750,20 +779,68 @@ async function pollPaymentAuthorizations() {
             // cost the chance to fix it before she left the house.
             //
             // `demo_session_blocked` is the one expected outcome and stays quiet.
-            if (result.error !== "demo_session_blocked") {
+            // ─── v1.106.11 — tell the person who can fix it, once, in words ───
+            //
+            // Three things were wrong with this alert, and Pete hit all three at once:
+            //
+            //  1. It fired EVERY MINUTE for the whole 25-hour window. Fourteen identical
+            //     pushes in thirteen minutes. Nothing recorded that the warning had been sent.
+            //  2. The body was Stripe's developer prose forwarded verbatim — "You cannot
+            //     confirm this PaymentIntent because it's missing a payment method. You can
+            //     either update the PaymentIntent with..." — truncated on a phone to a
+            //     fragment that ends mid-word and means nothing to anyone.
+            //  3. It went only to admins, and tapping it opened the SESSION screen, which
+            //     offers "change time" and "cancel". The one thing that would fix it — adding
+            //     a card — was not reachable from the thing telling you it was missing.
+            //
+            // So: once per session, in plain language, and when the cause is a missing payment
+            // method the payer gets it too, with a tap that lands on their payment settings.
+            if (result.error !== "demo_session_blocked" && !warnedAlready) {
+              const noCard = result.error === "no_payment_method";
               captureException(new Error(`Payment authorization skipped: ${result.error}`), {
                 where: "accountability: pollPaymentAuthorizations",
                 sessionId: s.id,
                 reason: result.error,
                 hoursUntilSession: Number(hoursUntil.toFixed(1)),
               });
+
+              const who = s.caregiver_name || "A caregiver";
+              const when = hoursUntil < 1 ? "in under an hour" : `in ${hoursUntil.toFixed(0)}h`;
+              const forWhom = s.recipient_first_name ? ` for ${s.recipient_first_name}` : "";
+
               try {
-                const { notifyAdmins } = require("./push");
-                notifyAdmins("payment_authorization_failed", {
-                  title: "A shift is not funded",
-                  body: `${s.caregiver_name || "A caregiver"} works in ${hoursUntil.toFixed(0)}h and payment could not be authorized: ${result.error}`,
-                  data: { type: "payment_authorization_failed", sessionId: s.id, reason: result.error },
-                });
+                const { notifyAdmins, sendPushToUser } = require("./push");
+
+                if (noCard) {
+                  // The payer is the only person who can resolve this.
+                  const payerId = result.payerUserId || s.billing_user_id || s.family_user_id;
+                  if (payerId) {
+                    sendPushToUser(payerId, {
+                      title: "Add a payment method",
+                      body: `${who} is booked${forWhom} ${when}, and there's no card or bank account saved to pay for it. Tap to add one.`,
+                      data: { type: "payment_method_needed", sessionId: s.id, page: "payments" },
+                    }, "payment_method_needed").catch(() => {});
+                  }
+                  notifyAdmins("payment_authorization_failed", {
+                    title: "A shift is not funded",
+                    body: `${who} works ${when}${forWhom} and ${s.payer_first_name || "the payer"} has no saved payment method. They've been asked to add one.`,
+                    data: { type: "payment_authorization_failed", sessionId: s.id, reason: result.error, page: "sessions" },
+                  });
+                } else {
+                  // A real failure. Say what we know without pasting a stack trace at a human;
+                  // the full reason is in Sentry, tagged with the session.
+                  notifyAdmins("payment_authorization_failed", {
+                    title: "A shift is not funded",
+                    body: `${who} works ${when}${forWhom} and the card couldn't be pre-authorized. Check Sentry for session ${s.id.slice(0, 8)}.`,
+                    data: { type: "payment_authorization_failed", sessionId: s.id, reason: result.error, page: "sessions" },
+                  });
+                }
+
+                // Record it so this is a warning, not a drumbeat. Same shape the check-in
+                // nudge and no-show flags use.
+                await db.prepare(
+                  "UPDATE care_sessions SET notifications_sent = COALESCE(notifications_sent, '') || ',unfunded_warned' WHERE id = ?"
+                ).run(s.id);
               } catch (e) {
                 captureException(e, { where: "accountability: unfunded-shift notify failed" });
               }
