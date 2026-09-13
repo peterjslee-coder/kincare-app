@@ -144,6 +144,28 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
   // Tick counter for live countdown on in-progress and imminent sessions (re-renders every 30-60s)
   const [tick, setTick] = useState(0);
   const [imminentId, setImminentId] = useState(null); // track which session is the hero card
+  // v1.106.17 — Pete: an appointment inside 24 hours should be promoted the same way a session
+  // inside 24 hours is, "not just an upcoming task". Computed once here rather than in both the
+  // hero and the Next Up filter, so the two can never disagree about what is imminent and show
+  // the same appointment twice.
+  const imminentEventIds = useMemo(() => {
+    const ids = new Set();
+    const nowMs = TimezoneHelper.realNowMs();
+    for (const ev of (careEventsUpcoming?.events || [])) {
+      const tz = ev.timezone || TimezoneHelper.DEFAULT_TZ;
+      // All-day events have no time; anchor them at the start of their day, so one dated
+      // tomorrow becomes imminent at midnight tonight — which is when "tomorrow" starts being
+      // the honest word for it.
+      const startMs = TimezoneHelper.buildDateTime(
+        (ev.event_date || '').split('T')[0], ev.event_time || '00:00', tz,
+      ).getTime();
+      const msUntil = startMs - nowMs;
+      // Same 24h window the session hero uses. The lower bound keeps something that began an
+      // hour ago on screen (you may still be at it) and drops what is properly over.
+      if (msUntil <= 24 * 3600000 && msUntil > -60 * 60000) ids.add(ev.id);
+    }
+    return ids;
+  }, [careEventsUpcoming]);
   const [lightboxPhoto, setLightboxPhoto] = useState(null); // full-screen photo viewer
   const [overduePopupDismissedIds, setOverduePopupDismissedIds] = useState({}); // track dismissed overdue popups per session
 
@@ -1524,6 +1546,28 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
         );
       })()}
 
+      {/* Imminent Care Event Hero(es) — an appointment within 24h, same treatment as a session */}
+      {(() => {
+        if (!imminentEventIds.size) return null;
+        const nowMs = TimezoneHelper.realNowMs();
+        const rows = (careEventsUpcoming?.events || [])
+          .filter(ev => imminentEventIds.has(ev.id))
+          .map(ev => {
+            const tz = ev.timezone || TimezoneHelper.DEFAULT_TZ;
+            const startMs = TimezoneHelper.buildDateTime(
+              (ev.event_date || '').split('T')[0], ev.event_time || '00:00', tz,
+            ).getTime();
+            return { ev, msUntil: startMs - nowMs };
+          })
+          .sort((a, b) => a.msUntil - b.msUntil)
+          // Three is a hero section; ten is a list with a shimmer on it. The rest stay in Next Up.
+          .slice(0, 3);
+        return rows.map(({ ev, msUntil }) => (
+          <CareEventHeroRow key={`ce-hero-${ev.id}`} ev={ev} msUntil={msUntil}
+            onOpenSheet={() => setEventSheet(ev)} />
+        ));
+      })()}
+
       {/* Open Requests — unclaimed jobs the family posted */}
       {(() => {
         const tz = upcoming[0]?.timezone || TimezoneHelper.DEFAULT_TZ;
@@ -1735,6 +1779,10 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
         // feed should always point at the NEXT thing. (All-day events keep
         // their day; starts_at is a true instant as of v1.100.0.)
         const careEventItems = (careEventsUpcoming?.events || [])
+          // v1.106.17 — promoted to a hero above, so it must not also appear here. Sessions have
+          // been de-duplicated this way since the hero existed (`s.id !== imminentId` below);
+          // events were not, because they were never promoted.
+          .filter(ev => !imminentEventIds.has(ev.id))
           .filter(ev => ev.all_day || !ev.starts_at || nowMs - new Date(ev.starts_at).getTime() < 60 * 60000)
           .map(ev => ({
             __careEvent: true, id: `ce-${ev.id}`, ev,

@@ -80,6 +80,73 @@ const CareEventNextUpRow = window.CareEventNextUpRow = ({ ev, onOpenSheet, onRem
   );
 };
 
+// ─── Imminent hero row — an appointment inside 24 hours ───
+//
+// Pete, 13 Sep: "the appointment with Dr. Lambert that's inside of 24 hours should also be
+// above [the recipient] card like the appointment with Tina is... it needs the orange shimmer
+// effect above her name so that it stands out that it's tomorrow, not just an upcoming task."
+//
+// A session inside 24 hours has been promoted out of Next Up into a hero card since v1.100 —
+// bigger, bordered, counted down, with the orange shimmer. A care event never was: it rendered
+// as a dashed-outline row in the list whatever its time, so a doctor's appointment tomorrow
+// looked exactly like one a fortnight out. The two things a family is looking at are "who is
+// coming" and "where do we have to be", and only one of them was being surfaced.
+//
+// Same shimmer class as the session hero on purpose. It means one thing on this screen —
+// this is inside a day — and it should not learn a second meaning.
+const CareEventHeroRow = window.CareEventHeroRow = ({ ev, onOpenSheet, msUntil }) => {
+  const tz = ev.timezone || TimezoneHelper.DEFAULT_TZ;
+  const withinAnHour = msUntil <= 3600000;
+  const started = msUntil <= 0;
+
+  // Deliberately not a live-ticking countdown. The session hero counts down because someone is
+  // arriving at your door; an appointment is somewhere you have to BE, so the useful framing is
+  // the day and the hour, not the minute.
+  let lead;
+  if (started) lead = 'Happening now';
+  else if (withinAnHour) lead = `In ${Math.max(1, Math.round(msUntil / 60000))} min`;
+  else {
+    const hrs = Math.floor(msUntil / 3600000);
+    const mins = Math.floor((msUntil % 3600000) / 60000);
+    lead = hrs >= 1 ? `In ${hrs}h ${mins}m` : `In ${mins}m`;
+  }
+
+  const borderColor = withinAnHour ? 'var(--accent-color)' : 'var(--role-color)';
+  const bg = withinAnHour
+    ? 'linear-gradient(135deg, var(--bg-accent-light) 0%, var(--bg-card) 100%)'
+    : 'linear-gradient(135deg, var(--bg-highlight) 0%, var(--bg-card) 100%)';
+
+  return (
+    <div className="next-up-hero-shimmer" onClick={onOpenSheet} style={{
+      marginBottom: 16, padding: '18px 20px', cursor: 'pointer', borderRadius: 14,
+      border: `3px solid ${borderColor}`,
+      background: bg,
+      boxShadow: withinAnHour ? '0 4px 16px rgba(232, 114, 74, 0.18)' : '0 4px 16px rgba(27, 107, 90, 0.10)',
+      position: 'relative', overflow: 'hidden',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+        <div style={{
+          width: 42, height: 42, minWidth: 42, borderRadius: 12, display: 'flex',
+          alignItems: 'center', justifyContent: 'center', fontSize: 21, background: 'var(--bg-card)',
+        }}>{careEventIcon(ev.category)}</div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{
+            fontSize: 11, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase',
+            color: borderColor, marginBottom: 3,
+          }}>{lead}</div>
+          <div style={{
+            fontWeight: 700, fontSize: 17, color: 'var(--text-primary)',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>{ev.title}</div>
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 3 }}>
+            {careEventWhen(ev, tz)} · for {ev.recipientFirstName}{ev.location ? ` · ${ev.location}` : ''}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ─── Detail sheet: what/when/where + Add to my calendar + edit/delete ───
 const CareEventSheet = window.CareEventSheet = ({ ev, canManage, onClose, onEdit, onChanged }) => {
   const { showToast } = useToast();
