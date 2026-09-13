@@ -10,6 +10,7 @@ const { authenticate } = require("../middleware/auth");
 const { sendPushToUser } = require("./push");
 const { screenMessage } = require("../utils/messageSafety");
 const { validateMagicBytes } = require("../utils/fileValidation");
+const { sendStoredFile, IMAGE_MIMES, DOCUMENT_MIMES } = require("../utils/serveMedia");
 
 const router = express.Router();
 router.use(authenticate);
@@ -32,8 +33,12 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith("image/")) cb(null, true);
-    else cb(new Error("Only image files are allowed"));
+    // v1.106.3 — this was `startsWith("image/")`, which accepts image/svg+xml. An SVG is a
+    // script container, and the file comes back from our own origin, so that was stored XSS.
+    // Allowlist the raster formats we can actually verify by magic bytes.
+    const mime = String(file.mimetype || "").split(";")[0].trim().toLowerCase();
+    if (IMAGE_MIMES.includes(mime)) cb(null, true);
+    else cb(new Error("Photos must be JPEG, PNG, WebP, GIF or HEIC"));
   },
 });
 
@@ -724,11 +729,8 @@ router.get("/:id/photo", async (req, res) => {
     const dataUrl = meta && meta.photoUrl;
     if (!dataUrl) return res.status(404).json({ error: "Photo not found" });
 
-    const m = String(dataUrl).match(/^data:([^;]+);base64,(.+)$/s);
-    if (!m) return res.status(500).json({ error: "Stored photo is corrupt" });
-    res.set("Content-Type", m[1]);
-    res.set("Cache-Control", "private, max-age=86400");
-    res.send(Buffer.from(m[2], "base64"));
+    // v1.106.3 — never echo the stored mime; see src/utils/serveMedia.js.
+    return sendStoredFile(res, String(dataUrl), { allow: IMAGE_MIMES, filename: "photo" });
   } catch (err) {
     captureException(err, { where: "messages: photo" });
     res.status(500).json({ error: "Could not load that photo" });

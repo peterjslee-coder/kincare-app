@@ -37,12 +37,28 @@ router.post("/impersonate/:userId/challenge", async (req, res) => {
       "SELECT credential_id, transports FROM user_passkeys WHERE user_id = ?"
     ).all(req.user.id);
 
+    // v1.106.3 — the bypass is gone. Pete: "no impersonation without passkey. period."
+    //
+    // This used to hand back a challenge marked `bypass: true` when the admin had no passkey on
+    // file, and the verify step below then skipped WebAuthn entirely. So two POSTs minted a
+    // two-hour token for any non-admin account — every note, every photo, messaging as them —
+    // behind nothing but an admin session. Combined with the admin IP gate being dead code and
+    // sessions never being revoked on a password change, a stolen admin cookie was the platform.
+    //
+    // Impersonation stays: diagnosing what someone is actually seeing on their phone is worth
+    // having. It now costs one passkey, which is the point of it being a second factor.
     if (allPasskeys.length === 0) {
-      // No passkeys registered — allow without verification but log it
-      console.warn(`[admin] Impersonation challenge: no passkeys on file for admin ${req.user.id.slice(0,8)}, granting bypass`);
-      const bypassKey = `impersonate_bypass_${req.user.id}_${req.params.userId}`;
-      setPasskeyChallenge(bypassKey, { bypass: true, targetId: req.params.userId });
-      return res.json({ noPasskey: true, _challengeKey: bypassKey });
+      writeAuditLog({
+        userId: req.user.id, userEmail: req.user.email, userRole: 'admin',
+        action: 'impersonate_blocked_no_passkey',
+        endpoint: `/api/admin/impersonate/${req.params.userId}`,
+        method: 'POST', ipAddress: getClientIp(req),
+        userAgent: (req.headers["user-agent"] || "").substring(0, 200),
+      }).catch(() => {});
+      return res.status(403).json({
+        error: "Test Mode needs a passkey. Add one under Account → Security on this device, then try again.",
+        needsPasskey: true,
+      });
     }
 
     const allowCredentials = allPasskeys.map(pk => ({
@@ -70,7 +86,7 @@ router.post("/impersonate/:userId/challenge", async (req, res) => {
 });
 
 // ─── POST /api/admin/impersonate/:userId — View app as another user (test mode) ───
-// Requires passkey verification (or bypass if no passkeys registered).
+// Requires verified passkey authentication. There is no bypass (v1.106.3).
 // Generates a short-lived JWT that lets admin see exactly what the target user sees.
 // Sessions checked in/out while impersonating skip payment gates and flag visit logs as test.
 router.post("/impersonate/:userId", async (req, res) => {
@@ -90,8 +106,10 @@ router.post("/impersonate/:userId", async (req, res) => {
       return res.status(400).json({ error: "Challenge mismatch." });
     }
 
-    // If not a bypass (admin has passkeys), verify the passkey response
-    if (!stored.bypass) {
+    // v1.106.3 — no `stored.bypass` branch any more: there is no code path here that reaches an
+    // impersonation token without a verified passkey. A challenge minted before this deploy
+    // cannot carry one either, since the challenge store is in-process and a deploy clears it.
+    {
       const credentialIdB64 = req.body.id;
       const passkey = await db.prepare(
         "SELECT * FROM user_passkeys WHERE credential_id = ? AND user_id = ?"
@@ -134,7 +152,7 @@ router.post("/impersonate/:userId", async (req, res) => {
       ).run(verification.authenticationInfo.newCounter, credentialIdB64);
     }
 
-    // Passkey verified (or bypassed) — generate impersonation token
+    // Passkey verified — generate impersonation token
     const target = await db.prepare(
       "SELECT id, email, first_name, last_name, roles, role, is_active, is_admin FROM users WHERE id = ?"
     ).get(req.params.userId);

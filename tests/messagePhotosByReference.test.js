@@ -8,7 +8,7 @@
 // conversation downloaded ~24 MB before a single bubble appeared. It is also half of why the
 // Postgres volume filled: boot snapshots copied all of it, five times over.
 
-const { code } = require("./helpers/source");
+const { code, raw } = require("./helpers/source");
 const fs = require("fs");
 const path = require("path");
 const route = fs.readFileSync(path.join(__dirname, "..", "src", "routes", "messages.js"), "utf8");
@@ -78,8 +78,21 @@ describe("and there is somewhere to get them from", () => {
     expect(handler).toMatch(/msg\.sender_id === req\.user\.id \|\| msg\.recipient_id === req\.user\.id/);
   });
 
-  test("it is cached privately — the bytes for an id never change", () => {
-    expect(handler).toMatch(/private, max-age=86400/);
+  // v1.106.3 — the headers moved into src/utils/serveMedia.js, which now serves all five stored
+  // -file routes. This asserted the literal string in the handler, so it failed on a refactor
+  // that changed nothing about the behaviour. Assert the property where it actually lives, and
+  // assert that this handler still routes through the thing that guarantees it.
+  test("it goes through the shared safe sender", () => {
+    expect(handler).toMatch(/sendStoredFile\(/);
+    // and never hand-rolls a Content-Type out of the stored data again
+    expect(handler).not.toMatch(/res\.set\("Content-Type", m\[1\]\)/);
+  });
+
+  test("the shared sender caches privately and serves the file inert", () => {
+    const media = raw("src/utils/serveMedia.js");
+    expect(media).toMatch(/private, max-age=/);
+    expect(media).toMatch(/X-Content-Type-Options.*nosniff/);
+    expect(media).toMatch(/default-src 'none'; sandbox/);
   });
 });
 

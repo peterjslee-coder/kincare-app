@@ -21,6 +21,7 @@ const { recipientAccess } = require("../utils/access");
 const { attachReactions } = require("../utils/reactions"); // v1.105.170
 const { coarsenCoordinate, geofenceEvidence } = require("../utils/geocode");
 const { validateMagicBytes } = require("../utils/fileValidation");
+const { sendStoredFile, IMAGE_MIMES, DOCUMENT_MIMES } = require("../utils/serveMedia");
 const { captureException } = require("../utils/sentry");
 
 const router = express.Router();
@@ -265,11 +266,8 @@ async function sendVisitPhoto(req, res, index) {
     const access = await recipientAccess(db, row.care_recipient_id, req.user.id);
     if (!access) return res.status(404).json({ error: "Photo not found" });
 
-    const m = data.match(/^data:([^;]+);base64,(.+)$/s);
-    if (!m) return res.status(500).json({ error: "Stored photo is corrupt" });
-    res.set("Content-Type", m[1]);
-    res.set("Cache-Control", "private, max-age=86400");
-    res.send(Buffer.from(m[2], "base64"));
+    // v1.106.3 — never echo the stored mime; see src/utils/serveMedia.js.
+    return sendStoredFile(res, data, { allow: IMAGE_MIMES, filename: "visit-photo" });
   } catch (err) {
     console.error("Family visit photo error:", err);
     captureException(err, { where: "familyVisits: photo" });

@@ -3,6 +3,7 @@
 // ./index.js. Shared state (passkey challenge store, helpers) lives in ./shared.js.
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../../models/database");
+const { validateImageDataUrl } = require("../../utils/serveMedia");
 const { authenticate, requireAdmin } = require("../../middleware/auth");
 const { captureException } = require("../../utils/sentry");
 const { activeVouchesFor } = require("../../utils/vouches");
@@ -264,6 +265,9 @@ router.put("/users/:id/photo", async (req, res) => {
     if (!photo) return res.status(400).json({ error: "photo is required" });
     const user = await db.prepare("SELECT id, email FROM users WHERE id = ?").get(req.params.id);
     if (!user) return res.status(404).json({ error: "User not found" });
+    // v1.106.3 — an admin setting someone else's photo went through the same unvalidated path.
+    const okPhoto = validateImageDataUrl(photo);
+    if (!okPhoto.ok) return res.status(400).json({ error: okPhoto.error });
     await db.prepare("UPDATE users SET profile_photo = ?, avatar_url = ?, updated_at = NOW() WHERE id = ?").run(photo, photo, req.params.id);
     res.json({ success: true, email: user.email });
   } catch (err) {

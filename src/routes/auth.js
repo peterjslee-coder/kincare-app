@@ -3,6 +3,7 @@ const bcrypt = require("bcryptjs");
 const crypto = require("crypto");
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
+const { validateImageDataUrl } = require("../utils/serveMedia");
 const { generateToken, authenticate, setAuthCookie, clearAuthCookie, generateRefreshToken, setRefreshCookie, revokeRefreshToken, revokeAllUserRefreshTokens, setCsrfCookie } = require("../middleware/auth");
 const { validateRegister, validateLogin, validateProfileUpdate } = require("../middleware/validate");
 const { sendEmail, brandedHtml } = require("../utils/email");
@@ -1116,7 +1117,10 @@ router.put("/me/photo", authenticate, async (req, res) => {
     const db = await getDb();
     const { photo } = req.body; // base64 data URL
     if (!photo) return res.status(400).json({ error: "No photo provided" });
-    if (photo.length > 2 * 1024 * 1024) return res.status(400).json({ error: "Photo too large (max 1.5MB)" });
+    // v1.106.3 — this stored ANY string. `data:text/html;base64,<script>` was served back as
+    // executable HTML from our own origin by /api/media (stored XSS -> account takeover).
+    const ok = validateImageDataUrl(photo);
+    if (!ok.ok) return res.status(400).json({ error: ok.error });
     await db.prepare("UPDATE users SET profile_photo = ?, avatar_url = ?, updated_at = NOW() WHERE id = ?").run(photo, photo, req.user.id);
     res.json({ message: "Profile photo updated", photoUrl: photo });
   } catch (err) {

@@ -7,22 +7,18 @@
 const express = require("express");
 const { getDb } = require("../models/database");
 const { authenticate } = require("../middleware/auth");
+const { sendStoredFile, IMAGE_MIMES, DOCUMENT_MIMES } = require("../utils/serveMedia");
 
 const router = express.Router();
 router.use(authenticate);
 
+// v1.106.3 — this echoed the STORED mime straight back as the Content-Type, and the three
+// write paths stored any string a caller sent. `data:text/html;base64,<script>` therefore came
+// back as executable HTML from our own origin. It also 302'd to any `https://` string it found,
+// which is an authenticated open redirect; nothing writes remote URLs any more (seed.js has
+// stored real bytes since v1.105.95), so that branch is gone rather than patched.
 function sendDataUrl(res, dataUrl) {
-  if (!dataUrl || typeof dataUrl !== "string") return res.status(404).end();
-  // Remote URL — redirect instead of proxying. Note this hands the fetch to the browser, so
-  // the URL must be reachable under the page's img-src. Demo avatars no longer rely on this
-  // path: seed.js downloads them once and stores real bytes as data URLs (v1.105.95).
-  if (/^https?:\/\//i.test(dataUrl)) return res.redirect(302, dataUrl);
-  const m = dataUrl.match(/^data:([^;]+);base64,(.+)$/s);
-  if (!m) return res.status(404).end();
-  const buf = Buffer.from(m[2], "base64");
-  res.set("Content-Type", m[1]);
-  res.set("Cache-Control", "private, max-age=86400"); // 1 day; photos change rarely
-  return res.send(buf);
+  return sendStoredFile(res, dataUrl, { allow: IMAGE_MIMES, filename: "photo" });
 }
 
 // GET /api/media/user/:id/photo

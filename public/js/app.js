@@ -1823,21 +1823,22 @@ const App = () => {
       const challengeData = await challengeRes.json();
       const challengeKey = challengeData._challengeKey;
 
-      let impersonateBody = { _challengeKey: challengeKey };
-      if (!challengeData.noPasskey) {
-        // Step 2: Passkey verification
-        if (!window.SimpleWebAuthnBrowser?.startAuthentication) {
-          alert('Passkey library not available. Try impersonating from desktop.');
-          return;
-        }
-        try {
-          const authResp = await window.SimpleWebAuthnBrowser.startAuthentication({ optionsJSON: challengeData });
-          impersonateBody = { ...authResp, _challengeKey: challengeKey };
-        } catch (passkeyErr) {
-          console.error('Passkey verification failed:', passkeyErr);
-          alert(`Passkey verification failed: ${passkeyErr.message || passkeyErr}.\n\nTry from desktop, or register a passkey on this device.`);
-          return;
-        }
+      // v1.106.3 — the passkey step is unconditional. It used to be skipped when the server
+      // answered `noPasskey: true`, which it did for any admin with no passkey on file; the
+      // server no longer offers that, and not branching here means a future server change
+      // cannot quietly re-enable a skip from this side either.
+      let impersonateBody;
+      if (!window.SimpleWebAuthnBrowser?.startAuthentication) {
+        alert('Passkey library not available. Try Test Mode from desktop.');
+        return;
+      }
+      try {
+        const authResp = await window.SimpleWebAuthnBrowser.startAuthentication({ optionsJSON: challengeData });
+        impersonateBody = { ...authResp, _challengeKey: challengeKey };
+      } catch (passkeyErr) {
+        console.error('Passkey verification failed:', passkeyErr);
+        alert(`Passkey verification failed: ${passkeyErr.message || passkeyErr}.\n\nTry from desktop, or add a passkey on this device under Account → Security.`);
+        return;
       }
 
       // Step 3: Impersonate with passkey proof

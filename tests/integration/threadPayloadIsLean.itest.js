@@ -19,7 +19,14 @@ jest.setTimeout(180000);
 const ROUTERS = { "/api/messages": "../../src/routes/messages" };
 
 // A recognisable data URI, big enough that a leak is unmistakable in a length check.
-const BIG = "data:image/jpeg;base64," + "A".repeat(300000);
+// v1.106.3 — this was `"A".repeat(300000)`, which is not a JPEG: it decodes to zero bytes and
+// would never have come off a camera. Since stored files are now verified against their magic
+// bytes before being served (a mislabelled payload was stored XSS), the fixture has to be a
+// real image. Still ~300 KB, which is the point of this test.
+const BIG = "data:image/jpeg;base64," + Buffer.concat([
+  Buffer.from([0xff, 0xd8, 0xff, 0xe0]), // SOI + APP0 — a real JPEG header
+  Buffer.alloc(225000, 0x41),
+]).toString("base64");
 
 let h, a, b, convId, photoId;
 

@@ -11,6 +11,7 @@ const { getDb } = require("../models/database");
 const { authenticate } = require("../middleware/auth");
 const { captureException } = require("../utils/sentry");
 const { validateMagicBytes } = require("../utils/fileValidation");
+const { sendStoredFile, IMAGE_MIMES, DOCUMENT_MIMES } = require("../utils/serveMedia");
 const { writeAuditLog, getClientIp } = require("../middleware/auditLog");
 const storage = require("../utils/storage"); // v1.91.0 — env-gated R2 offload for receipt blobs
 
@@ -417,13 +418,11 @@ router.get("/receipt/:receiptId", async (req, res) => {
     if (!access || !access.canView) return res.status(404).json({ error: "Receipt not found" });
 
     const fileData = await storage.resolveFileData(receipt.file_data); // v1.91.0 — fetches from R2 when marker
-    const m = fileData.match(/^data:([^;]+);base64,(.+)$/s);
-    if (!m) return res.status(500).json({ error: "Stored receipt is corrupt" });
-    const buf = Buffer.from(m[2], "base64");
-    res.set("Content-Type", receipt.mime_type || m[1]);
-    res.set("Content-Disposition", `inline; filename="${(receipt.file_name || "receipt").replace(/[^\w.\- ]/g, "_")}"`);
-    res.set("Cache-Control", "private, max-age=86400");
-    res.send(buf);
+    // v1.106.3 — the stored mime_type was trusted too. Receipts are images or PDFs.
+    return sendStoredFile(res, fileData, {
+      allow: DOCUMENT_MIMES,
+      filename: receipt.file_name || "receipt",
+    });
   } catch (err) {
     console.error("Receipt fetch error:", err);
     captureException(err, { where: "reimbursements: receipt" });

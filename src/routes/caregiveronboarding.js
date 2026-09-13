@@ -11,12 +11,14 @@ const storage = require("../utils/storage"); // v1.91.0 — env-gated R2 offload
 const router = express.Router();
 
 // Multer config — memory storage, 10MB per file, images + PDFs
-const ALLOWED_MIMES = ["image/", "application/pdf"];
+// v1.106.3 — was ["image/", "application/pdf"] as PREFIXES, which let image/svg+xml through.
+const { DOCUMENT_MIMES } = require("../utils/serveMedia");
+const ALLOWED_MIMES = DOCUMENT_MIMES;
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max per file
   fileFilter: (req, file, cb) => {
-    if (ALLOWED_MIMES.some((m) => file.mimetype.startsWith(m))) {
+    if (ALLOWED_MIMES.includes(String(file.mimetype || "").split(";")[0].trim().toLowerCase())) {
       cb(null, true);
     } else {
       cb(new Error("Only image and PDF files are allowed"));

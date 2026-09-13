@@ -1,6 +1,7 @@
 const express = require("express");
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
+const { validateImageDataUrl } = require("../utils/serveMedia");
 const { authenticate, requireRole } = require("../middleware/auth");
 const { geocodeAddress, buildAddressString } = require("../utils/geocode");
 
@@ -405,6 +406,9 @@ router.put("/:id/photo", requireRole("family"), async (req, res) => {
     const { photo } = req.body; // base64 data URL
     if (!photo) return res.status(400).json({ error: "No photo provided" });
     if (photo.length > 2 * 1024 * 1024) return res.status(400).json({ error: "Photo too large (max 1.5MB)" });
+    // v1.106.3 — see auth.js: an unvalidated photo field is stored XSS via /api/media.
+    const okPhoto = validateImageDataUrl(photo);
+    if (!okPhoto.ok) return res.status(400).json({ error: okPhoto.error });
 
     await db.prepare("UPDATE care_recipients SET photo = ?, updated_at = NOW() WHERE id = ?").run(photo, req.params.id);
     res.json({ message: "Photo updated", photoUrl: photo });

@@ -4,6 +4,7 @@ const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { authenticate, requireRole } = require("../middleware/auth");
 const { validateMagicBytes } = require("../utils/fileValidation");
+const { IMAGE_MIMES } = require("../utils/serveMedia");
 const { captureException } = require("../utils/sentry");
 
 const router = express.Router();
@@ -25,11 +26,12 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max
   fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith("image/")) {
-      cb(null, true);
-    } else {
-      cb(new Error("Only image files are allowed"));
-    }
+    // v1.106.3 — this was `startsWith("image/")`, which accepts image/svg+xml. An SVG is a
+    // script container, and the file comes back from our own origin, so that was stored XSS.
+    // Allowlist the raster formats we can actually verify by magic bytes.
+    const mime = String(file.mimetype || "").split(";")[0].trim().toLowerCase();
+    if (IMAGE_MIMES.includes(mime)) cb(null, true);
+    else cb(new Error("Photos must be JPEG, PNG, WebP, GIF or HEIC"));
   },
 });
 

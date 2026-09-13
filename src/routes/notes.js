@@ -4,6 +4,7 @@ const { getDb } = require("../models/database");
 const { authenticate } = require("../middleware/auth");
 const { captureException } = require("../utils/sentry");
 const { validateMagicBytes } = require("../utils/fileValidation");
+const { sendStoredFile, IMAGE_MIMES, DOCUMENT_MIMES } = require("../utils/serveMedia");
 const { attachReactions } = require("../utils/reactions"); // v1.105.170
 
 // v1.76.0 — parse stored JSON defensively (one malformed row must not 500 the list)
@@ -304,11 +305,8 @@ router.get("/:id/photo", async (req, res) => {
     if (note.note_type === "observation" && isLinkedRecipient && note.author_id !== req.user.id) {
       return res.status(404).json({ error: "Photo not found" });
     }
-    const m = note.photo.match(/^data:([^;]+);base64,(.+)$/s);
-    if (!m) return res.status(500).json({ error: "Stored photo is corrupt" });
-    res.set("Content-Type", m[1]);
-    res.set("Cache-Control", "private, max-age=86400");
-    res.send(Buffer.from(m[2], "base64"));
+    // v1.106.3 — never echo the stored mime; see src/utils/serveMedia.js.
+    return sendStoredFile(res, note.photo, { allow: IMAGE_MIMES, filename: "note-photo" });
   } catch (err) {
     captureException(err, { where: "notes: photo" });
     res.status(500).json({ error: "Failed to load photo" });
