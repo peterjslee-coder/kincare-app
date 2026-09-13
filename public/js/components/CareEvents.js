@@ -141,9 +141,14 @@ const CareEventHeroRow = window.CareEventHeroRow = ({ ev, onOpenSheet, msUntil }
             fontSize: 11, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase',
             color: borderColor, marginBottom: 3,
           }}>{lead}</div>
+          {/* Wraps to two lines rather than truncating. On a 375px phone the list row's
+              single-line ellipsis turns "Appointment with Dr. Lambert" into "Appointment with
+              Dr. Lamb…", which loses the one word that says whose appointment it is — and this
+              card exists precisely so that reads at a glance. */}
           <div style={{
-            fontWeight: 700, fontSize: 17, color: 'var(--text-primary)',
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            fontWeight: 700, fontSize: 17, color: 'var(--text-primary)', lineHeight: 1.25,
+            display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+            overflow: 'hidden', overflowWrap: 'anywhere',
           }}>{ev.title}</div>
           <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 3 }}>
             {careEventWhen(ev, tz)} · for {ev.recipientFirstName}{ev.location ? ` · ${ev.location}` : ''}

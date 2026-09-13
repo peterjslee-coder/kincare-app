@@ -38,6 +38,15 @@ describe("I1 — the event hero exists and wears the same shimmer", () => {
     expect(css.slice(i, i + 600)).toMatch(/rgba\(232, 114, 74/);
   });
 
+  test("the title wraps instead of truncating — the hero exists to be readable at a glance", () => {
+    // On a 375px phone the list row's single-line ellipsis renders "Appointment with Dr.
+    // Lambert" as "Appointment with Dr. Lamb…", losing the word that says whose it is.
+    const fn = events.slice(events.indexOf("const CareEventHeroRow"), events.indexOf("const CareEventHeroRow") + 3800);
+    const title = fn.slice(fn.indexOf("{ev.title}") - 400, fn.indexOf("{ev.title}"));
+    expect(title).toMatch(/WebkitLineClamp: 2/);
+    expect(title).not.toMatch(/whiteSpace: 'nowrap'/);
+  });
+
   test("it carries the hero's visual weight, not a list row's", () => {
     const fn = events.slice(events.indexOf("const CareEventHeroRow"), events.indexOf("const CareEventHeroRow") + 3000);
     expect(fn).toMatch(/border: `3px solid/);        // list rows are 2px, and dashed
