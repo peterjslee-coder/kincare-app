@@ -19,6 +19,7 @@
     "lint:authz": "node scripts/lint-authz.js",
     "collect-feedback": "node scripts/collect-feedback.js",
     "test:integration": "jest --forceExit --runInBand --testMatch \"**/tests/integration/**/*.itest.js\"",
+    "lint:dual-names": "node scripts/lint-dual-names.js",
     "lint:blobs": "node scripts/lint-blobs.js",
     "backfill:r2": "node scripts/backfill-blobs-to-r2.js"
   },

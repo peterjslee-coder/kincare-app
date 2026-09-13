@@ -69,6 +69,14 @@ jobs:
       - name: Blobs go to object storage, not Postgres
         run: npm run lint:blobs
 
+      # 36 fields are read as `x.foo_bar || x.fooBar` because /api/sessions spreads raw rows
+      # and /api/dashboard hand-builds. Renaming breaks ~200 unguarded reads either way, so the
+      # debt is frozen rather than paid: no NEW pairs. The other half is
+      # tests/integration/apiFieldContract.itest.js, which checks the existing fallbacks
+      # actually resolve — an unmatched one is a blank cell, not an error.
+      - name: No new dual-name API reads
+        run: npm run lint:dual-names
+
       - name: Dark-mode contrast
         run: npm run lint:contrast
 
