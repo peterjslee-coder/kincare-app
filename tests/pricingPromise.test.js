@@ -44,11 +44,39 @@ describe("the promise is on the page", () => {
 });
 
 describe("...and the code still backs it", () => {
-  test("the platform fee is a constant, identical for everyone", () => {
-    // "a flat 20% for everyone" — if this ever becomes a lookup, per-user or per-tier, the
-    // word "flat" stops being true.
-    expect(readStripped("src/routes/payments.js")).toMatch(/const PLATFORM_FEE_PERCENT = 20;/);
-    expect(readStripped("src/routes/accountability.js")).toMatch(/const PLATFORM_FEE_PERCENT = 20;/);
+  // v1.106.18 — this used to assert `const PLATFORM_FEE_PERCENT = 20` in payments.js and
+  // accountability.js. That was the wrong shape of check, and it was protecting the wrong half.
+  //
+  // Those two constants WERE the bug: the quote side (sessions.js, dashboard.js) read
+  // platform_settings.platform_fee_percent, the charge side used the hardcoded 20, and
+  // PUT /api/admin/financials/platform-fee writes that setting and accepts 0 to 50. Move the
+  // dial and the family is quoted one fee and charged another. This test would have passed
+  // throughout, because it was checking the literal rather than the promise.
+  //
+  // The promise on the splash page is "a flat 20% for everyone". Two things have to hold for
+  // that sentence to be true, and they are different things:
+  test("the fee is FLAT — one number for everyone, not a per-user or per-tier lookup", () => {
+    // The word "flat" is about who, not about where the number is stored. getPlatformFeePercent
+    // takes only a db handle: there is no user, no tier, nothing to vary it by.
+    const feeSrc = readStripped("src/utils/platformFee.js");
+    expect(feeSrc).toMatch(/async function getPlatformFeePercent\(db\)/);
+    expect(feeSrc).not.toMatch(/userId|user_id|tier|caregiverId/);
+  });
+
+  test("...and it is ONE number — no module keeps its own copy any more", () => {
+    for (const f of ["src/routes/payments.js", "src/routes/accountability.js",
+                     "src/routes/sessions.js", "src/routes/dashboard.js"]) {
+      expect(readStripped(f)).not.toMatch(/const PLATFORM_FEE_PERCENT\s*=\s*\d+/);
+    }
+  });
+
+  test("the number the page promises is the number the code defaults to", () => {
+    // If someone changes the default, this fails and the copy has to change with it.
+    const { DEFAULT_PLATFORM_FEE_PERCENT } = require("../src/utils/platformFee");
+    expect(DEFAULT_PLATFORM_FEE_PERCENT).toBe(20);
+    expect(read("public/js/components/SplashPage.js")).toMatch(
+      new RegExp(`a flat ${DEFAULT_PLATFORM_FEE_PERCENT}% for everyone`)
+    );
   });
 
   test("three-quarters of the surcharge really is the caregiver's", () => {

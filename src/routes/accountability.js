@@ -21,7 +21,20 @@ function setEmitToUser(fn) { _emitToUser = fn; }
 const router = express.Router();
 router.use(authenticate);
 
-const PLATFORM_FEE_PERCENT = 20;
+// ─── v1.106.18 — the fee the family is QUOTED and the fee we CHARGE must be one number ───
+//
+// This file computed the platform fee from a hardcoded 20 while the quote side —
+// sessions.js cost-preview, sessions.js booking, dashboard.js — read
+// platform_settings.platform_fee_percent through getPlatformFeePercent(db). There is a live
+// admin endpoint, PUT /api/admin/financials/platform-fee, that writes that setting and accepts
+// anything from 0 to 50.
+//
+// So the moment anyone moved that dial, the family would be shown one fee and charged another,
+// and the caregiver's payout would be computed against a percentage nobody had agreed. Nothing
+// would have failed; the numbers would simply have stopped matching.
+//
+// Latent while the setting says 20, which is the default. Not a reason to leave it.
+const { getPlatformFeePercent } = require("../utils/platformFee");
 const LATE_GRACE_MINUTES = 10;
 const FAMILY_NO_SHOW_WAIT_MINUTES = 30;
 
@@ -135,7 +148,8 @@ async function authorizeSessionPayment(sessionId) {
     }
 
     // Platform fee
-    let platformFeeCents = Math.round(baseCostCents * PLATFORM_FEE_PERCENT / 100);
+    const feePercent = await getPlatformFeePercent(db);
+    let platformFeeCents = Math.round(baseCostCents * feePercent / 100);
     if (surchargeCents > 0) {
       platformFeeCents += Math.round(surchargeCents * SURCHARGE_PLATFORM_SHARE);
     }
