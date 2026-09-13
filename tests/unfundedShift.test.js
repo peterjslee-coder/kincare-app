@@ -96,6 +96,30 @@ describe("one resolver, so the money paths cannot disagree again", () => {
   });
 });
 
+describe("an idempotency key must change when the request changes", () => {
+  const a = code("src/routes/accountability.js");
+
+  test("the hold key includes the payment method", () => {
+    // Without this, fixing the payment_method bug could not fund the shift: the broken
+    // attempts had burned `inplace_authhold_<session>_<amount>`, Stripe remembers keys for 24
+    // hours, and every corrected retry came back "Keys for idempotent requests can only be
+    // used with the same parameters they were first used with."
+    expect(a).toMatch(/idempotencyKey: `inplace_authhold_\$\{sessionId\}_\$\{totalCents\}_\$\{pm\.id\}`/);
+  });
+
+  test("it still keys on session AND amount, so a duplicate hold is still impossible", () => {
+    expect(a).toMatch(/inplace_authhold_\$\{sessionId\}_\$\{totalCents\}_/);
+  });
+
+  test("auto-pay's key is deliberately NOT changed", () => {
+    // That key guards a CHARGE, not a hold. Making it vary by payment method would let the
+    // same session be charged twice if a family swapped cards mid-flight — a worse outcome
+    // than the stuck-key problem it would solve, and auto-pay has always sent a payment
+    // method, so its parameters were never unstable in the first place.
+    expect(code("src/routes/payments.js")).toMatch(/idempotencyKey: `inplace_autopay_\$\{s\.id\}_\$\{totalCents\}`/);
+  });
+});
+
 describe("telling the right person, once, in words", () => {
   const a = code("src/routes/accountability.js");
 

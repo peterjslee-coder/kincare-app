@@ -177,7 +177,20 @@ async function authorizeSessionPayment(sessionId) {
       // v1.105.66 — this is an authorization hold on a family's card, placed by a poller.
       // Duplicate holds tie up real money in someone's account even though only one is ever
       // captured. Keyed on the session and the authorized amount.
-      idempotencyKey: `inplace_authhold_${sessionId}_${totalCents}`,
+      //
+      // v1.106.11 — and on the payment method, because an idempotency key must change when
+      // the REQUEST changes. It did not, and that is how the payment_method bug above became
+      // unrecoverable: the broken attempts (no payment_method) burned this key, Stripe
+      // remembers keys for 24 hours, and every corrected retry then failed with
+      //
+      //   "Keys for idempotent requests can only be used with the same parameters they were
+      //    first used with."
+      //
+      // So fixing the first bug was not enough to fund the shift — the fix could not get past
+      // the cached failure. Including pm.id keeps the guarantee that matters (one hold per
+      // session, amount and card) while letting a genuinely different request through, and
+      // makes a stuck session heal itself on the next tick instead of needing 24 hours.
+      idempotencyKey: `inplace_authhold_${sessionId}_${totalCents}_${pm.id}`,
     });
 
     // Store authorization on session
