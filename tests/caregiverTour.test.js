@@ -108,8 +108,8 @@ describe("wired in", () => {
     expect(app).toContain("data-tour={`nav-${item.id}`}");
   });
   test("the anchors it lights exist, and Help can replay it", () => {
-    expect(code("public/js/components/FindWork.js")).toContain('data-tour="jobs"');
-    expect(code("public/js/components/Messages.js")).toContain('data-tour="conversations"');
+    expect(code("public/js/components/FindWork.js")).toContain("data-tour={filteredRequests[0] === s ? 'job-first' : undefined}");
+    expect(code("public/js/components/Messages.js")).toContain('data-tour="conversation-row"');
     expect(code("public/js/components/HelpPage.js")).toContain("'Show me around again'");
     expect(code("public/js/uiPrefs.js")).toContain("window.__setUiPref = (key, value) => {");
     expect(code("scripts/build-client.js")).toContain('"js/components/CaregiverTour.js"');

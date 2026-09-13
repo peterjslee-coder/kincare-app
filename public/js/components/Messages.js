@@ -2015,7 +2015,7 @@ const Messages = window.Messages = () => {
           const typeIcon = c.type === 'care_team' ? '👥' : c.type === 'group' ? '💬' : null;
           const isSwiping = swipingId === c.id;
           return (
-            <div key={c.id} style={{ position: 'relative', overflow: 'hidden' }}>
+            <div key={c.id} data-tour="conversation-row" style={{ position: 'relative', overflow: 'hidden' }}>
               {/* Archive + Delete background revealed on swipe */}
               <div style={{
                 position: 'absolute', top: 0, right: 0, bottom: 0, width: 120,

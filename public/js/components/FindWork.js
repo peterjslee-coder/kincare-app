@@ -1011,7 +1011,7 @@ const FindWork = window.FindWork = () => {
                 const dayLabel = sDate ? TimezoneHelper.getDateLabel(sDate, sTz) : '';
 
                 return (
-                  <div key={s.id} className="card" style={{
+                  <div key={s.id} className="card" data-tour={filteredRequests[0] === s ? 'job-first' : undefined} style={{
                     borderLeft: activeOffer ? '4px solid #7c3aed' : hasConflict ? '4px solid #ffd89b' : matchQuality === 'great' ? '4px solid #1b6b5a' : '4px solid #fb8c00',
                     padding: 16, cursor: 'pointer', minWidth: 0,
                     transition: 'box-shadow 0.15s',

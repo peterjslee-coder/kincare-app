@@ -30,10 +30,11 @@ const CaregiverTour = window.CaregiverTour = ({ onNavigate, onClose, firstName }
     { id: 'home', page: 'dashboard', anchors: ['[data-tour="up-next"]', '[data-tour="calendar"]'],
       title: 'This is your day',
       body: 'Every visit you’ve accepted, and any care task due while you’re there, in the order it happens. Tap one to open it.' },
-    { id: 'find-work', page: 'find-work', anchors: ['[data-tour="jobs"]'],
+    // The FIRST card, not the whole list — lighting a full-screen list dims nothing.
+    { id: 'find-work', page: 'find-work', anchors: ['[data-tour="job-first"]', '[data-tour="jobs"]'],
       title: 'Work finds you here',
       body: 'Families who know you can send a visit straight to you — those sit at the top. Accepting a weekly one means the whole series, so you won’t be asked six times.' },
-    { id: 'messages', page: 'messages', anchors: ['[data-tour="conversations"]', '[data-tour="nav-care-notes"]'],
+    { id: 'messages', page: 'messages', anchors: ['[data-tour="conversation-row"]', '[data-tour="nav-care-notes"]'],
       title: 'Talk here, read there',
       body: 'Messages is the family and their care team. Care Notes, in the bottom bar, is their record of how things are going — it’s there only when a family shares it with you.' },
     { id: 'p-briefing', practice: true },
@@ -53,6 +54,16 @@ const CaregiverTour = window.CaregiverTour = ({ onNavigate, onClose, firstName }
   const next = () => (i + 1 < total ? setI(i + 1) : finish('done'));
   const back = () => setI(Math.max(0, i - 1));
 
+  // The PWA install banner sits at z-index 1200, exactly where the coach card lands. Hide it for
+  // the tour's lifetime; it comes back on its own when the tour closes.
+  React.useEffect(() => {
+    const banner = document.querySelector('.pwa-install-banner');
+    if (!banner) return undefined;
+    const prev = banner.style.display;
+    banner.style.display = 'none';
+    return () => { banner.style.display = prev; };
+  }, []);
+
   // ── Coachmark stops: go to the page, find the thing, light it ──
   React.useEffect(() => {
     if (!stop || stop.practice || stop.id === 'map') { setRects([]); return undefined; }
@@ -61,10 +72,13 @@ const CaregiverTour = window.CaregiverTour = ({ onNavigate, onClose, firstName }
     let tries = 0;
     const measure = () => {
       if (cancelled) return;
+      // The first selector that matches is the primary (the hole in the scrim); a nav
+      // selector, when present, is a second outline. Fallback selectors never stack.
       const found = [];
       for (const sel of stop.anchors) {
         const el = document.querySelector(sel);
-        if (el) found.push(el);
+        if (!el) continue;
+        if (sel.includes('nav-') || found.length === 0) found.push(el);
       }
       if (found.length === 0 && tries < 12) { tries += 1; setTimeout(measure, 150); return; }
       if (found[0] && tries < 12) {
@@ -128,7 +142,7 @@ const CaregiverTour = window.CaregiverTour = ({ onNavigate, onClose, firstName }
   // ── Coachmark ──
   if (!stop.practice && stop.id !== 'map') {
     return (
-      <div role="dialog" aria-label="Tour" style={{ position: 'fixed', inset: 0, zIndex: 1200, pointerEvents: 'none' }}>
+      <div role="dialog" aria-label="Tour" style={{ position: 'fixed', inset: 0, zIndex: 1300, pointerEvents: 'none' }}>
         {rects.length === 0 && <div style={{ position: 'absolute', inset: 0, background: TOUR_SCRIM }} />}
         {rects.map((r, k) => (
           <div key={k} style={{
@@ -153,13 +167,13 @@ const CaregiverTour = window.CaregiverTour = ({ onNavigate, onClose, firstName }
 
   // ── Practice screens (full-screen, over everything, ribboned) ──
   const shell = (children) => (
-    <div role="dialog" aria-label="Practice visit" style={{ position: 'fixed', inset: 0, zIndex: 1200, background: 'var(--bg-primary)', overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
+    <div role="dialog" aria-label="Practice visit" style={{ position: 'fixed', inset: 0, zIndex: 1300, background: 'var(--bg-primary)', overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
       <div aria-hidden="true" style={{
-        position: 'fixed', top: 34, right: -38, transform: 'rotate(38deg)', background: 'var(--accent-color)', color: 'var(--text-on-primary)',
+        position: 'fixed', top: 22, right: -46, transform: 'rotate(38deg)', background: 'var(--accent-color)', color: 'var(--text-on-primary)',
         fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', padding: '4px 48px', textTransform: 'uppercase', zIndex: 1,
       }}>Practice</div>
       <div style={{ maxWidth: 520, margin: '0 auto', padding: '18px 16px calc(env(safe-area-inset-bottom, 0px) + 24px)', display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent-color)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Practice visit {'·'} nothing is recorded</div>
+        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent-color)', letterSpacing: '0.1em', textTransform: 'uppercase', paddingRight: 96, lineHeight: 1.4 }}>Practice visit {'·'} nothing is recorded</div>
         {children}
       </div>
     </div>
@@ -189,7 +203,7 @@ const CaregiverTour = window.CaregiverTour = ({ onNavigate, onClose, firstName }
         <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.45 }}>Evening Meds at 7 PM {'—'} remind, don{'’'}t administer. You{'’'}ll check it off as done or skipped.</div>
       </>)}
       {coach('Every visit starts here.', 'The family writes this and it changes, so read it each time. The button below takes you to check-in.')}
-      {footer('I’ve read this — on to check-in')}
+      {footer('On to check-in')}
     </>);
   }
 
