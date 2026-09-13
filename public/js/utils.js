@@ -1022,6 +1022,9 @@ function probeSocket() {
   if (!sock) return;
   // Never connected, or knows it is gone: just reconnect. socket.io will not do this by itself
   // if it believes the disconnect was deliberate.
+  // Refused for the connection cap: reconnecting is exactly the wrong reaction — it is what
+  // the cap is there to stop. The user has to close a tab; a probe cannot fix it.
+  if (_refusedForConnectionCap) return;
   if (!sock.connected) { try { sock.connect(); } catch {} return; }
   if (typeof sock.timeout !== 'function') return; // older client build; nothing to ask with
   try {
@@ -1040,6 +1043,8 @@ function probeSocket() {
 }
 window.__probeSocket = probeSocket;
 
+let _refusedForConnectionCap = false;
+
 const connectSocket = window.connectSocket = (token) => {
   if (_socket) _socket.disconnect();
   if (!token || typeof io === 'undefined') return;
@@ -1052,8 +1057,20 @@ const connectSocket = window.connectSocket = (token) => {
     transports: ['websocket', 'polling'],
   });
   window._socket = _socket;
-  _socket.on('connect', () => console.log('WS connected'));
+  _socket.on('connect', () => { _refusedForConnectionCap = false; console.log('WS connected'); });
   _socket.on('disconnect', () => console.log('WS disconnected'));
+  // v1.106.5 — the server now caps how many sockets one account may hold and disconnects the
+  // one over the line. socket.io's default reaction to being disconnected is to reconnect, so
+  // without this the refused tab would knock politely every few seconds forever. Stop trying,
+  // and say why in the console so the next person to see it does not have to guess.
+  _socket.on('connect_error_reason', (d) => {
+    if (d && d.reason === 'too_many_connections') {
+      _refusedForConnectionCap = true;
+      console.warn('WS refused: this account already has the maximum number of open connections. ' +
+                   'Close another tab or device, then reload.');
+      try { _socket.io.opts.reconnection = false; } catch {}
+    }
+  });
   // Re-register all listeners
   for (const [event, callbacks] of _socketListeners) {
     for (const cb of callbacks) {

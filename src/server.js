@@ -66,7 +66,33 @@ const io = new Server(server, {
   cors: { origin: ALLOWED_ORIGINS, credentials: true },
   pingInterval: 10000,
   pingTimeout: 10000,
+  // v1.106.5 — the default is 1 MB per message. Nothing this app sends over a socket is
+  // anywhere near that (the largest is a typing indicator), and an unbounded frame size on an
+  // authenticated socket is a cheap way to make the process allocate.
+  maxHttpBufferSize: 64 * 1024,
 });
+
+// ─── Socket abuse limits (v1.106.5) ───
+//
+// Every handler below is authenticated, and until now that was the only limit: one JWT could
+// open unlimited sockets and fire unlimited events. `typing_start` is the sharp end — it looks
+// up conversation membership, and the 15-second cache is keyed by the conversation id the
+// CLIENT supplies, so a fresh random uuid on every event misses the cache and costs one
+// database query each, forever, from a single socket.
+const MAX_SOCKETS_PER_USER = 12;   // a laptop, a phone, a tablet, and room for stale ones
+const MAX_EVENTS_PER_10S = 120;    // ~12/s sustained; typing fires far below this
+
+const _socketEvents = new Map(); // socket.id -> { count, windowStart }
+function socketEventAllowed(socketId) {
+  const now = Date.now();
+  const e = _socketEvents.get(socketId);
+  if (!e || now - e.windowStart > 10000) {
+    _socketEvents.set(socketId, { count: 1, windowStart: now });
+    return true;
+  }
+  e.count++;
+  return e.count <= MAX_EVENTS_PER_10S;
+}
 
 // JWT auth middleware for socket connections
 io.use((socket, next) => {
@@ -167,7 +193,29 @@ async function mayCall(callerId, targetUserId) {
 io.on("connection", (socket) => {
   const userId = socket.user.id;
   if (!connectedUsers.has(userId)) connectedUsers.set(userId, new Set());
-  connectedUsers.get(userId).add(socket.id);
+
+  // One token must not be able to hold the process open with an unbounded number of sockets.
+  const existing = connectedUsers.get(userId);
+  if (existing.size >= MAX_SOCKETS_PER_USER) {
+    console.warn(`WS refused: ${socket.user.email} already has ${existing.size} sockets`);
+    socket.emit("connect_error_reason", { reason: "too_many_connections" });
+    return socket.disconnect(true);
+  }
+  existing.add(socket.id);
+
+  // Throttle EVERY inbound event on this socket, whatever it is, before the handler runs.
+  // Done with a middleware rather than per-handler so a new socket.on() is covered by default
+  // instead of by remembering.
+  socket.use((packet, next) => {
+    if (!socketEventAllowed(socket.id)) {
+      return next(new Error("rate_limited"));
+    }
+    next();
+  });
+  socket.on("error", (err) => {
+    if (err && err.message === "rate_limited") return; // expected; do not report as a crash
+    captureException(err, { where: "socket: handler error" });
+  });
   console.log(`WS connected: ${socket.user.email} (${connectedUsers.get(userId).size} sockets)`);
 
   // The name shown on an incoming call comes from the database, once per connection, not from
@@ -379,6 +427,8 @@ io.on("connection", (socket) => {
   });
 
   socket.on("disconnect", () => {
+    _socketEvents.delete(socket.id);
+    _callRate.delete(socket.id);
     viewingConversation.close(socket.id);
     const sockets = connectedUsers.get(userId);
     if (sockets) {
@@ -523,6 +573,12 @@ app.use("/api/password-reset", authLimiter);
 app.use("/api/auth/verify", authLimiter);
 app.use("/api/auth/resend-verification", authLimiter);
 app.use("/api/waitlist", authLimiter);
+// v1.106.5 — every unauthenticated route below causes us to send a real email to an address
+// the caller chose. They were the amplification surface: no login required, and our sending
+// reputation is what gets spent. (utils/email.js adds the per-ADDRESS ceiling, which is the
+// half that survives an attacker rotating IPs; this is the per-IP half.)
+app.use("/api/auth/signup-intent", authLimiter);
+app.use("/api/consent/respond", authLimiter);
 
 const apiLimiter = rateLimit({
   windowMs: 1 * 60 * 1000,  // 1 minute
@@ -653,7 +709,7 @@ app.use("/api/media", require("./routes/media"));
 app.use("/api/safety", require("./routes/safety"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.106.4";
+const APP_VERSION = "1.106.5";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });

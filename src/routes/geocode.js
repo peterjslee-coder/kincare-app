@@ -7,6 +7,7 @@
 const express = require("express");
 const { authenticate } = require("../middleware/auth");
 const { captureException } = require("../utils/sentry");
+const { consumeDaily } = require("../utils/usageLimits");
 
 const router = express.Router();
 router.use(authenticate);
@@ -45,6 +46,11 @@ router.get("/suggest", async (req, res) => {
   const key = q.toLowerCase();
   const hit = cacheGet(key);
   if (hit) return res.json({ suggestions: hit });
+  // v1.106.5 — every keystroke past the cache is an outbound call to a free third-party API on
+  // our User-Agent. Cached hits above are free; this caps the uncached ones per account per day.
+  // Degrades to an empty suggestion list, which the fields already handle — they stay editable.
+  const quota = await consumeDaily(req.user.id, "address_suggest", 600);
+  if (!quota.allowed) return res.json({ suggestions: [] });
   try {
     const url = `https://photon.komoot.io/api/?${new URLSearchParams({ q, limit: "10", lang: "en" })}`;
     const r = await fetch(url, {

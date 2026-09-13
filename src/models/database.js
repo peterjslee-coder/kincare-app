@@ -56,6 +56,27 @@ function getPool() {
     // discarded and the next caller gets a fresh one. The only thing that made it fatal
     // was that nobody was listening. So listen, report, and carry on. Do not rethrow,
     // do not exit, and do not try to "reconnect" — the pool already does that.
+    // ─── v1.106.5 — a deadline on every statement ───
+    //
+    // There was none. One query that never finishes holds one of ten pool clients forever;
+    // ten of those is a total outage with nothing in the logs to say why, and it does not
+    // take an attacker — one missing index on a growing table gets there on its own.
+    //
+    // Set here, on the connection, rather than in the Pool options string: pg queues queries
+    // per client in FIFO order, so this SET is enqueued before the pool hands the client to
+    // its first caller. That avoids depending on the server accepting an `options` startup
+    // parameter, which would turn a rejected parameter into "no database at all".
+    //
+    // 20 seconds, not 2: this is the runaway backstop, not a latency budget. Nothing healthy
+    // in this app is within an order of magnitude of it. Migrations and index builds legitimately
+    // are, which is why the migration runner clears it with SET LOCAL inside its transaction —
+    // that was the reason there was no timeout here before.
+    pool.on("connect", (client) => {
+      client.query("SET statement_timeout = 20000").catch((err) => {
+        console.error("[db] could not set statement_timeout (continuing without one):", err && err.message);
+      });
+    });
+
     pool.on("error", (err, client) => {
       console.error("[db] idle client error (pool recovers, process must not die):", err && err.message);
       try {
@@ -2214,6 +2235,27 @@ async function initializeDatabase() {
       ],
     },
     {
+      // v1.106.5 — a persistent geocode cache. Every save handler and every caregiver search
+      // with an ?address= called Nominatim inline, uncached: the same address geocoded again on
+      // every edit, and an attacker could make us issue one outbound request per inbound request
+      // to a free public API that rate-limits by User-Agent. Caching makes the repeat case free
+      // and, with the queue in utils/geocode.js, the attack case bounded.
+      id: "033_geocode_cache",
+      statements: [
+        `CREATE TABLE IF NOT EXISTS geocode_cache (
+          query_key TEXT PRIMARY KEY,
+          lat DOUBLE PRECISION,
+          lng DOUBLE PRECISION,
+          display TEXT,
+          found INTEGER NOT NULL DEFAULT 1,
+          hit_count INTEGER NOT NULL DEFAULT 1,
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          last_used_at TIMESTAMPTZ DEFAULT NOW()
+        )`,
+        `CREATE INDEX IF NOT EXISTS idx_geocode_cache_last_used ON geocode_cache(last_used_at)`,
+      ],
+    },
+    {
       // ─── 030 — reconcile columns stranded in the frozen legacy array ───
       //
       // `location_source` was added on Aug 20 (v1.105.121) INSIDE the `migrations` array above.
@@ -2236,6 +2278,21 @@ async function initializeDatabase() {
       // userAgent|screen|timezone, prefixed "dev_". They are guessable, so every one of them is
       // a standing 2FA bypass for anyone who has the password. Delete them: the affected people
       // see one extra 2FA prompt and their next "remember this device" issues a real token.
+      // v1.106.5 — daily usage counters that survive a restart. The iPAi quota lived in a Map
+      // in process memory, so every deploy reset it and "30 a day" meant "30 per deploy".
+      id: "032_usage_counters",
+      statements: [
+        `CREATE TABLE IF NOT EXISTS usage_counters (
+          user_id TEXT NOT NULL,
+          kind TEXT NOT NULL,
+          day DATE NOT NULL,
+          count INTEGER NOT NULL DEFAULT 0,
+          PRIMARY KEY (user_id, kind, day)
+        )`,
+        `CREATE INDEX IF NOT EXISTS idx_usage_counters_day ON usage_counters(day)`,
+      ],
+    },
+    {
       id: "031_drop_guessable_trusted_devices",
       statements: [
         `DELETE FROM trusted_devices WHERE device_fingerprint LIKE 'dev\\_%'`,
@@ -2255,6 +2312,11 @@ async function initializeDatabase() {
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;
     await db.transaction(async (tx) => {
+      // The pool sets a 20s statement_timeout on every connection (see getPool). A migration
+      // is the one thing here that may legitimately exceed it — an index build or a backfill
+      // over a table that has grown. SET LOCAL lifts it for this transaction only; it reverts
+      // when the transaction ends, so the client goes back into the pool with the deadline on.
+      await tx.exec("SET LOCAL statement_timeout = 0");
       for (const sql of m.statements) await tx.exec(sql);
       await tx.prepare("INSERT INTO schema_migrations (id) VALUES (?) ON CONFLICT (id) DO NOTHING").run(m.id);
     });

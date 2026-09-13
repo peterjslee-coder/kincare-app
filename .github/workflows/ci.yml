@@ -80,3 +80,11 @@ jobs:
 
       - name: Client bundle build
         run: node scripts/build-client.js
+
+      # v1.106.5 — the review found 40 advisories, 3 of them critical, on a stack nobody had
+      # audited. Fixing them once is worthless without a gate: the next critical arrives on
+      # its own schedule, not ours. Runs LAST so an advisory published overnight fails the
+      # build after the real signal, never instead of it. Production dependencies only —
+      # a ReDoS in a dev-only test helper is not reachable from the internet.
+      - name: No high or critical advisories in production dependencies
+        run: npm audit --omit=dev --audit-level=high

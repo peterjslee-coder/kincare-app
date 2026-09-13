@@ -5,6 +5,7 @@ const { userPhotoUrl } = require("./media");
 const multer = require("multer");
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
+const { uploadQuota } = require("../utils/usageLimits");
 const { getBlockedIds, isBlockedBetween } = require("../utils/blocks");
 const { authenticate } = require("../middleware/auth");
 const { sendPushToUser } = require("./push");
@@ -13,7 +14,9 @@ const { validateMagicBytes } = require("../utils/fileValidation");
 const { sendStoredFile, IMAGE_MIMES, DOCUMENT_MIMES } = require("../utils/serveMedia");
 
 const router = express.Router();
-router.use(authenticate);
+// v1.106.5 — a per-account daily byte ceiling. Rate limits count requests; the Sept 2
+// outage was about bytes, and 5 MB at a permitted rate still fills the volume.
+router.use(authenticate, uploadQuota());
 
 // v1.84: rate-limit message sends (infra #4) — global apiLimiter (120/min) is
 // too loose for spam via send endpoints. 30 sends/min per IP is far above any

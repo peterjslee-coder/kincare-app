@@ -62,35 +62,20 @@ async function callClaudeChat(apiKey, system, messages, maxTokens = 300) {
   return result.content?.[0]?.text || "";
 }
 
-// Rate limiting: Map of userId -> { count, resetTime }
-const rateLimitMap = new Map();
+// v1.106.5 — the daily cap now lives in Postgres (utils/usageLimits.js). It was a Map in
+// process memory, which every deploy reset — and Pete deploys several times a day, so a cap
+// meant to bound paid Anthropic calls bounded almost nothing.
+const { consumeDaily } = require("./usageLimits");
 const RATE_LIMIT_PER_DAY = 30;
 
 /**
- * Check and enforce rate limit
+ * Check and enforce the daily cap. Async since v1.106.5 — it is a database counter now.
  */
-function checkRateLimit(userId) {
-  const now = Date.now();
-  const limit = rateLimitMap.get(userId);
-
-  if (!limit) {
-    rateLimitMap.set(userId, { count: 1, resetTime: now + 24 * 60 * 60 * 1000 });
-    return { allowed: true, remaining: RATE_LIMIT_PER_DAY - 1 };
-  }
-
-  if (now > limit.resetTime) {
-    limit.count = 1;
-    limit.resetTime = now + 24 * 60 * 60 * 1000;
-    return { allowed: true, remaining: RATE_LIMIT_PER_DAY - 1 };
-  }
-
-  if (limit.count >= RATE_LIMIT_PER_DAY) {
-    return { allowed: false, remaining: 0 };
-  }
-
-  limit.count++;
-  return { allowed: true, remaining: RATE_LIMIT_PER_DAY - limit.count };
+async function checkRateLimit(userId) {
+  const r = await consumeDaily(userId, "ipai_message", RATE_LIMIT_PER_DAY);
+  return { allowed: r.allowed, remaining: r.remaining };
 }
+
 
 /**
  * Classify user intent using Claude Haiku
@@ -430,7 +415,7 @@ async function handleIPAiMessage(userId, messageText) {
   const db = await getDb();
 
   // Check rate limit
-  const rateLimitCheck = checkRateLimit(userId);
+  const rateLimitCheck = await checkRateLimit(userId);
   if (!rateLimitCheck.allowed) {
     return {
       response: `I've reached my daily message limit. For urgent questions, contact support at support@yourinplace.com`,

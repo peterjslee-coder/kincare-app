@@ -69,8 +69,62 @@ function stripPlusTag(email) {
   return email.replace(/\+[^@]*@/, "@");
 }
 
+// ─── v1.106.5 — a per-address ceiling on outbound mail ───
+//
+// The IP rate limits in server.js protect us from one noisy client. They do nothing about the
+// shape that actually costs us: an attacker cycling IPs and posting the SAME victim address to
+// signup-intent, password-reset and resend-verification. Every one of those is a real email we
+// send to a stranger who did not ask for it, and enough of them get our sending domain marked
+// as a spam source — which breaks password resets for every real user at once.
+//
+// Two limits, deliberately different in kind. The daily counter is per address and survives a
+// restart (that is the durable one). The in-memory cooldown stops an identical message being
+// resent within the minute, which is the tight-loop case and is not worth a database round trip.
+//
+// Both fail OPEN. Suppressing a real password reset because a counter table hiccuped is worse
+// than sending one extra email.
+const MAX_EMAILS_PER_ADDRESS_PER_DAY = 25;
+const SAME_MESSAGE_COOLDOWN_MS = 60 * 1000;
+const _recentSends = new Map();
+
+function _addressKey(addr) {
+  return "email:" + String(addr || "").trim().toLowerCase().slice(0, 200);
+}
+
+// Keyed on the BODY, not the subject. Two different "New message from Maria" notifications a
+// minute apart are legitimate and must both go out; the same rendered email twice is the
+// duplicate worth dropping.
+function _cooledDown(addr, subject, html) {
+  const bodyHash = require("crypto").createHash("sha1")
+    .update(String(subject || "") + "\u0000" + String(html || "")).digest("hex");
+  const k = _addressKey(addr) + "|" + bodyHash;
+  const last = _recentSends.get(k);
+  const now = Date.now();
+  if (last && now - last < SAME_MESSAGE_COOLDOWN_MS) return false;
+  if (_recentSends.size > 5000) _recentSends.clear();
+  _recentSends.set(k, now);
+  return true;
+}
+
+function _resetEmailThrottle() { _recentSends.clear(); }
+
 async function sendEmail({ to, subject, html, replyTo }) {
   to = stripPlusTag(to);
+
+  if (!_cooledDown(to, subject, html)) {
+    console.warn(`  [email] suppressed duplicate "${subject}" to ${to} (sent within the last minute)`);
+    return { success: false, error: "duplicate_suppressed", suppressed: true };
+  }
+
+  try {
+    const { consumeDaily } = require("./usageLimits");
+    const quota = await consumeDaily(_addressKey(to), "outbound_email", MAX_EMAILS_PER_ADDRESS_PER_DAY);
+    if (!quota.allowed) {
+      console.warn(`  [email] suppressed "${subject}" to ${to} — ${quota.used} messages to this address today`);
+      return { success: false, error: "address_daily_limit", suppressed: true };
+    }
+  } catch { /* counter unavailable — send anyway */ }
+
   const resend = getResend();
 
   if (!resend) {
@@ -144,4 +198,4 @@ function brandedHtml({ title, greeting, body, ctaUrl, ctaText, footnote }) {
   return sections.join("\n");
 }
 
-module.exports = { sendEmail, brandedHtml, getFromAddress };
+module.exports = { sendEmail, brandedHtml, getFromAddress, _resetEmailThrottle, MAX_EMAILS_PER_ADDRESS_PER_DAY };

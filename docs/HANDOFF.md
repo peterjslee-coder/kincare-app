@@ -7,6 +7,67 @@
 >
 > Overwrite this file at the end of a working session; do not append.
 
+---
+
+## Sept 13, 2026 · v1.106.5 on `main` — remediation Batches 0, 1 and 2 shipped
+
+The Sept 13 code review (`docs/plans/InPlace_Remediation_Plan_2026-09-13.md`) is being worked
+batch by batch. Where it stands:
+
+| Batch | What | Version | State |
+|---|---|---|---|
+| 0 | CLAUDE.md rewritten, `docs/` split out, `scripts/gen-architecture.js` + `--check` gate | v1.106.0 | shipped |
+| — | `location_source` hotfix (migration 030) + frozen-array lint | v1.106.1 | shipped |
+| 1a | session/offer authorization → `sessionAccess()`, `lint-authz` gate | v1.106.2 | shipped |
+| 1b | stored-file safety, upload validation, **impersonation now requires a passkey, no bypass** | v1.106.3 | shipped |
+| 1c | session revocation, trusted devices, Checkr fail-closed, CSV injection, schema-drift endpoint | v1.106.4 | shipped |
+| 2 | abuse & denial-of-service (below) | v1.106.5 | shipped |
+| 3–8 | waste, data leanness, correctness, de-duplication, guardrails, native/PWA | — | not started |
+
+### What Batch 2 actually added
+
+- **Sockets.** 64 KB frame cap, 12 sockets per account, 120 events / 10 s enforced by
+  `socket.use` middleware (so a new `socket.on` is covered by default, not by remembering),
+  and both per-socket maps cleaned on disconnect. The refused client stops reconnecting
+  instead of knocking every five seconds forever.
+- **Per-account daily counters** (`usage_counters`, migration 032, `src/utils/usageLimits.js`).
+  50 MB/day of uploaded bytes across all six blob routers, counted from `Content-Length`
+  before the body is stored. The iPAi cap moved here too — it was a `Map` in process memory,
+  so "30 a day" really meant "30 per deploy".
+- **Geocoding.** Two-layer cache (`geocode_cache`, migration 033) plus a serialising queue that
+  refuses rather than piles up, and per-account daily budgets on `/api/caregivers?address=`
+  and `/api/geocode/suggest`. Every call site went through one function already, which is why
+  this was cheap.
+- **Outbound email.** Per-ADDRESS daily ceiling and identical-body suppression inside
+  `sendEmail` — the half that survives an attacker rotating IPs — plus `authLimiter` on
+  `/api/auth/signup-intent` and `/api/consent/respond`.
+- **`statement_timeout = 20000`** on every pool connection, with `SET LOCAL statement_timeout = 0`
+  inside the migration transaction. That escape is the whole reason there was no timeout before.
+- **Dependencies:** 42 advisories → 10, and **zero high or critical**. Every fix landed inside
+  the existing semver ranges, so `package.json` did not change. CI now runs
+  `npm audit --omit=dev --audit-level=high`.
+- **Cloudflare:** one rate-limiting rule, live and verified (block at 20 req/10 s per IP on the
+  expensive and upload paths, webhooks excluded).
+- **`docs/OPS_RUNBOOK.md`** gained an incident runbook: triage, rollback, pool exhaustion,
+  disk, under-attack, compromise, third-party outages.
+
+### Two things Pete needs to decide
+
+1. **Cloudflare Pro (~$20/mo).** The free plan gives one rate-limiting rule with a
+   ten-second window and a ten-second block, and no managed WAF. That is the ceiling on what
+   Cloudflare can do for us today. Detail in `docs/OPS_RUNBOOK.md` → "Under attack".
+2. **Retention windows** (Batch 3/4: how much chat history, how many photos, for how long).
+   Possibly a question for a lawyer, not just a product call.
+
+### Correction to the review — read this before acting on it
+
+The review claimed the Cloudflare proxy could be bypassed by hitting the Railway origin
+directly. It cannot: `ab31xrt3.up.railway.app` returns Railway's own "train has not arrived"
+404, because Railway routes by Host header. **The "origin lock" finding is downgraded** —
+do not spend time on it.
+
+---
+
 
 
 **Aug 19, 2026, 10pm ET · baseline v1.105.113 on `main`, staging and prod both current.**

@@ -16,6 +16,7 @@
 const express = require("express");
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
+const { uploadQuota } = require("../utils/usageLimits");
 const { authenticate } = require("../middleware/auth");
 const { recipientAccess } = require("../utils/access");
 const { attachReactions } = require("../utils/reactions"); // v1.105.170
@@ -25,7 +26,9 @@ const { sendStoredFile, IMAGE_MIMES, DOCUMENT_MIMES } = require("../utils/serveM
 const { captureException } = require("../utils/sentry");
 
 const router = express.Router();
-router.use(authenticate);
+// v1.106.5 — a per-account daily byte ceiling. Rate limits count requests; the Sept 2
+// outage was about bytes, and 5 MB at a permitted rate still fills the volume.
+router.use(authenticate, uploadQuota());
 
 const MAX_SUMMARY = 5000;
 const ACTIVITIES = ["meal", "medication_reminder", "errand", "appointment", "housework", "company"];

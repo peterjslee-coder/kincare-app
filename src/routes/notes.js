@@ -1,6 +1,7 @@
 const express = require("express");
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
+const { uploadQuota } = require("../utils/usageLimits");
 const { authenticate } = require("../middleware/auth");
 const { captureException } = require("../utils/sentry");
 const { validateMagicBytes } = require("../utils/fileValidation");
@@ -14,7 +15,9 @@ function safeJson(raw, fallback) {
 }
 
 const router = express.Router();
-router.use(authenticate);
+// v1.106.5 — a per-account daily byte ceiling. Rate limits count requests; the Sept 2
+// outage was about bytes, and 5 MB at a permitted rate still fills the volume.
+router.use(authenticate, uploadQuota());
 
 // ─── Access control (same pattern as careRecipients.js) ───
 async function hasAccess(db, recipientId, userId) {

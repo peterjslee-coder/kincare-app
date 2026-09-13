@@ -6,6 +6,7 @@ const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { authenticate, requireRole } = require("../middleware/auth");
 const { geocodeAddress, buildAddressString, haversineDistance, coarsenCoordinate } = require("../utils/geocode");
+const { consumeDaily } = require("../utils/usageLimits");
 
 const router = express.Router();
 router.use(authenticate);
@@ -57,10 +58,17 @@ router.get("/", async (req, res) => {
   let searchLng = lng ? parseFloat(lng) : null;
 
   if (!searchLat && address) {
-    const geo = await geocodeAddress(address);
-    if (geo) {
-      searchLat = geo.lat;
-      searchLng = geo.lng;
+    // v1.106.5 — a per-account daily ceiling on address lookups. The cache in utils/geocode.js
+    // makes repeats free, so this only ever bites someone feeding us fresh strings, which is
+    // the abuse shape. Over the cap we skip geocoding rather than erroring: the search still
+    // returns caregivers, just without a distance-sorted centre.
+    const geoQuota = await consumeDaily(req.user.id, "geocode_lookup", 200);
+    if (geoQuota.allowed) {
+      const geo = await geocodeAddress(address);
+      if (geo) {
+        searchLat = geo.lat;
+        searchLng = geo.lng;
+      }
     }
   }
 

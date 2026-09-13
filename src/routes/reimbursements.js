@@ -8,6 +8,7 @@
 const express = require("express");
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
+const { uploadQuota } = require("../utils/usageLimits");
 const { authenticate } = require("../middleware/auth");
 const { captureException } = require("../utils/sentry");
 const { validateMagicBytes } = require("../utils/fileValidation");
@@ -16,7 +17,9 @@ const { writeAuditLog, getClientIp } = require("../middleware/auditLog");
 const storage = require("../utils/storage"); // v1.91.0 — env-gated R2 offload for receipt blobs
 
 const router = express.Router();
-router.use(authenticate);
+// v1.106.5 — a per-account daily byte ceiling. Rate limits count requests; the Sept 2
+// outage was about bytes, and 5 MB at a permitted rate still fills the volume.
+router.use(authenticate, uploadQuota());
 
 const MAX_AMOUNT = 10000;
 const MAX_RECEIPTS = 5;

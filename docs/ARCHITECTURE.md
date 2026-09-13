@@ -8,7 +8,7 @@ build red.
 Hand-written sections (§3 "Where is…") are preserved across regeneration; edit those freely.
 
 Structure at last generation: 523 HTTP routes across 55 mounts ·
-89 `CREATE TABLE` statements · 9 background jobs · 35 socket events
+91 `CREATE TABLE` statements · 9 background jobs · 36 socket events
 (15 with no client listener) · 58 push event types · 54 `window.__*` globals.
 
 ---
@@ -126,15 +126,15 @@ Every job runs through `guardedPoller` → `withPollerLock` (`src/models/databas
 
 | Lock | Job | Interval | Declared |
 |---:|---|---|---|
-| 101 | Daily demo data refresh | 24 h | `src/server.js:864` |
-| 102 | Session notification poller (every 60s) | 1 min | `src/server.js:958` |
-| 103 | Session Accountability Poller | 1 min | `src/server.js:1217` |
-| 104 | Reimbursement push digest sweeper (v1.98.15) | 30 s | `src/server.js:1236` |
-| 105 | Auto-pay cron: charge overdue sessions | 5 min | `src/server.js:1330` |
-| 106 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1449` |
-| 107 | Care Tasks poller (v1.99.0) | 1 min | `src/server.js:1459` |
-| 108 | Care Events poller (v1.100.0) | 1 min | `src/server.js:1477` |
-| 109 | Kindred Reminder Delivery Poller | 1 min | `src/server.js:1252` |
+| 101 | Daily demo data refresh | 24 h | `src/server.js:920` |
+| 102 | Session notification poller (every 60s) | 1 min | `src/server.js:1014` |
+| 103 | Session Accountability Poller | 1 min | `src/server.js:1273` |
+| 104 | Reimbursement push digest sweeper (v1.98.15) | 30 s | `src/server.js:1292` |
+| 105 | Auto-pay cron: charge overdue sessions | 5 min | `src/server.js:1386` |
+| 106 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1505` |
+| 107 | Care Tasks poller (v1.99.0) | 1 min | `src/server.js:1515` |
+| 108 | Care Events poller (v1.100.0) | 1 min | `src/server.js:1533` |
+| 109 | Kindred Reminder Delivery Poller | 1 min | `src/server.js:1308` |
 
 ---
 
@@ -154,6 +154,7 @@ why this app runs on exactly one Railway replica.
 | `call_ring_status` | `server.js` | yes |
 | `care_team_invite` | `routes/careTeams.js` | yes |
 | `checkin_nudge` | `routes/accountability.js` | 🔶 **none** |
+| `connect_error_reason` | `server.js` | yes |
 | `family_no_show` | `routes/accountability.js` | 🔶 **none** |
 | `interview_accepted` | `routes/interviews.js` | 🔶 **none** |
 | `interview_cancelled` | `routes/interviews.js` | 🔶 **none** |

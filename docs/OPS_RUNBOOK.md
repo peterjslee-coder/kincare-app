@@ -1,5 +1,5 @@
 # InPlace Ops Runbook — safety net & staging
-_Last updated: July 10, 2026 (v1.89.0)_
+_Last updated: September 13, 2026 (v1.106.5 — Batch 2 of the remediation plan)_
 
 This documents the hardening added in the July 2026 safety-net pass and the
 console actions only Pete can do. Work through **"Pete's console checklist"**
@@ -63,9 +63,10 @@ workflows" is on (it is by default) and emails go somewhere you read.
 
 ## How the pieces work
 
-**CI (`.github/workflows/ci.yml`)** — every push runs the unit suite (47
-tests), the embedded-PostgreSQL integration suite (27 tests), and a client
-bundle build. With Railway "Wait for CI" on, red = no deploy.
+**CI (`.github/workflows/ci.yml`)** — every push runs seven lint gates, the unit
+suite, the embedded-PostgreSQL integration suite, a client bundle build, and
+`npm audit --omit=dev --audit-level=high`. Counts move every week; `npx jest`
+prints the current ones. With Railway "Wait for CI" on, red = no deploy.
 
 **Backups (`.github/workflows/db-backup.yml`)** — nightly 3am ET: pg_dump
 (custom format) → AES-256 encrypt → upload to R2 → prune >30 days → decrypt +
@@ -121,3 +122,128 @@ node scripts/repair-support-dm-split.js --apply --only <conversationId>
 Read the report before applying. `CLEAR` means the thread was only ever a DM wearing the wrong
 name and just gets untitled — no message moves. `SPLIT` lists the messages that will move.
 It never deletes anything, and re-running it is a no-op.
+
+
+---
+
+# Incident runbook (v1.106.5)
+
+Written for one person at 2am. Each section is: **how you find out → what to look at →
+what to do.** Nothing here needs a second pair of hands.
+
+## The one-minute triage
+
+```bash
+curl -s https://yourinplace.com/api/health          # is the process up?
+curl -s https://yourinplace.com/api/version         # is the code you think is live, live?
+```
+
+`/api/health` answering but the site feeling dead almost always means the **database pool
+is exhausted**, not that the app is down. Go to "Site is slow or half-loading" below.
+
+Three places hold the answer, in the order worth checking:
+
+| Where | What it tells you |
+|---|---|
+| Railway → service → **Deployments** | did something ship in the last hour? Roll it back first, diagnose second. |
+| Railway → service → **Logs** | the actual error. Filter for `[db]`, `statement_timeout`, `ECONNREFUSED`. |
+| **Sentry** | the same error with a stack, a release tag, and how many people it hit. |
+
+## Roll back (do this before you diagnose, if a deploy is in the frame)
+
+Railway → service → Deployments → find the last green one → **Redeploy**. It takes about
+90 seconds. Then verify the footer version changed back. Diagnosing a live outage while
+users are in it is a choice, not a requirement.
+
+If the bad commit is already on `main`, also `git revert` it so the next push does not
+re-deploy the same thing.
+
+## Site is slow or half-loading
+
+Almost always the Postgres pool (10 clients, `src/models/database.js`).
+
+1. Railway → Postgres → **Metrics**: active connections. At 10 with the API alive, one or
+   more queries are stuck.
+2. Since v1.106.5 every connection carries `statement_timeout = 20000`, so a genuinely
+   stuck query now dies after 20 seconds and logs. If you see repeated
+   `canceling statement due to statement timeout` for the same query, that query is the
+   incident — find it in the logs, note the route, and either add the missing index or
+   disable the route.
+3. `idle_in_transaction_session_timeout = 30000` covers the other shape: a transaction
+   left open across a hung network call.
+
+**If it is not the pool**, check whether one account is responsible:
+
+```sql
+SELECT user_id, kind, count FROM usage_counters
+WHERE day = CURRENT_DATE ORDER BY count DESC LIMIT 20;
+```
+
+`upload_bytes` in the tens of millions, or `ipai_message` at its cap, names the account.
+Admin → People → suspend, or set a lower ceiling in `src/utils/usageLimits.js`.
+
+## Disk is filling (the Sept 2 outage, on purpose)
+
+The Postgres volume is 50 GB and photos live in it as base64. Railway → Postgres →
+Metrics → **Volume**. Over 70%:
+
+```sql
+SELECT relname, pg_size_pretty(pg_total_relation_size(relid)) AS size
+FROM pg_catalog.pg_statio_user_tables ORDER BY pg_total_relation_size(relid) DESC LIMIT 10;
+```
+
+`visit_photos`, `messages` and `caregiver_profiles` are the ones that grow. The v1.106.5
+per-account daily ceiling (50 MB) bounds how fast anyone can push it, but does not shrink
+it — Batch 3 moves photos to R2. Immediate relief: raise the Railway volume (Settings →
+Volume → Resize, no downtime), then find the account with the `upload_bytes` query above.
+
+## Under attack
+
+Symptoms: request rate far above normal, or one endpoint dominating the logs.
+
+1. **Cloudflare → Security → Events** — is it one IP, one ASN, one path?
+2. **Under Attack Mode**: Cloudflare → the domain → Security → Settings →
+   Security Level → *I'm Under Attack*. Every visitor gets a 5-second interstitial.
+   Blunt, immediate, and it breaks the native apps' API calls — accept that trade only
+   while you are actually under attack.
+3. The standing rate-limit rule ("API abuse — expensive and upload paths", 20 req / 10 s
+   per IP, block 10 s) already covers `/api/ipai`, `/api/care-intelligence`, `/api/notes`,
+   `/api/photos`, `/api/family-visits`, `/api/reimbursements`, `/api/self-onboarding`,
+   `/api/caregiver-onboarding` and `/api/auth/demo-login`. Webhooks are deliberately
+   excluded — rate-limiting Stripe or Checkr silently loses money and background checks.
+4. **The free plan is the constraint, and it is worth knowing before you need it.**
+   Managed WAF rulesets require a paid plan. The free plan allows exactly **one**
+   rate-limiting rule, and both its window and its block duration cap at **10 seconds**.
+   So the ceiling on what Cloudflare can do for us today is: one rule, ten-second memory.
+   Cloudflare Pro (~$20/mo) lifts all three. That is a decision, not a task.
+5. Blocking one source by hand: Cloudflare → Security → WAF → Tools → **IP Access Rules**
+   → Block. Unlimited, and it is the right tool for a single bad actor.
+
+## Someone got in
+
+1. Railway → Variables → rotate `JWT_SECRET`. **Every session on the platform ends
+   immediately, including yours.** That is the point.
+2. If a specific account is compromised: Admin → People → force password reset. Since
+   v1.106.4 a password change stamps `password_changed_at` and every token issued before
+   it stops working, so the reset alone ends their sessions.
+3. `audit_log` is the record of what was done. Filter by `user_id` and by hour.
+4. Trusted devices survive a password change by design; if the concern is device theft,
+   clear them: `DELETE FROM trusted_devices WHERE user_id = '<id>'`.
+
+## A third party is down
+
+Each one degrades rather than fails, and knowing which is which saves an hour:
+
+| Down | What breaks | What still works |
+|---|---|---|
+| Stripe | new checkouts, Connect onboarding | everything else; the admin kill switch turns payments off cleanly |
+| Resend | all outbound email | the app; users just get no mail |
+| Checkr | background-check initiation | existing verified caregivers |
+| Nominatim / Photon | new address geocoding, autocomplete | cached addresses (v1.106.5), and every field stays hand-editable |
+| Anthropic | iPAi replies | everything else |
+| Railway Postgres | everything | nothing — this is the real outage |
+
+## After it is over
+
+Write what happened into `docs/HANDOFF.md` the same night, while the detail is still
+there. An incident nobody wrote down happens twice.
