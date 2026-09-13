@@ -11,6 +11,7 @@ const { computeJobConflicts, computeMatchScore } = require("../utils/jobMatching
 const { calculateSessionCost } = require("../utils/rateCalculator");
 const { scoreMatch } = require("../utils/aiMatching");
 const { expireStaleProposals } = require("./sessions");
+const { phaseFor: checkrPhaseFor } = require("../constants/checkrStatus");
 
 const router = express.Router();
 router.use(authenticate);
@@ -687,6 +688,10 @@ async function caregiverDashboard(db, userId, res) {
       ).get(userId).catch(() => null)),
       isBackgroundChecked: !!profile.is_background_checked,
       checkrStatus: profile.is_background_checked ? 'clear' : (profile.checkr_status || 'pending'),
+      // v1.106.13 — the derived situation, from the one owner. CaretakerHub's banner enumerated
+      // five raw statuses and rendered nothing for the other ten, including did_not_pass and
+      // suspended. See src/constants/checkrStatus.js.
+      checkrPhase: checkrPhaseFor(profile.checkr_status, profile.is_background_checked),
       adminVouches: (await activeVouchesFor(db, userId)).map((v) => ({ familyName: v.family_name, familyBrought: v.note === 'family-brought' /* v1.105.186 */ })),
       stripeConnected: !!profile.stripe_onboard_complete,
       stripeOnboardComplete: !!profile.stripe_onboard_complete,

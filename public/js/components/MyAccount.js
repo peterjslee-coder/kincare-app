@@ -226,6 +226,10 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
   const [bgCheckPaid, setBgCheckPaid] = useState(false);
 
   // Caregiver - Checkr Background Check state
+  // v1.106.13 — the server now derives a phase (src/constants/checkrStatus.js). checkrStatus
+  // stays for the optimistic local transitions the buttons below set; checkrPhase is what the
+  // render chain branches on, because it is exhaustive and this one was not.
+  const [checkrPhase, setCheckrPhase] = useState(null);
   const [checkrStatus, setCheckrStatus] = useState(null); // null | 'not_initiated' | 'in_progress' | 'complete' | 'error'
   const [myVouches, setMyVouches] = useState([]); // v1.64.0: active admin vouches (per-family, not a bg check)
   const [checkrError, setCheckrError] = useState(null);
@@ -574,7 +578,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
       }).catch(() => {});
       // Fetch Checkr status
       apiFetch('/api/checkr/status').then(async r => {
-        if (r?.ok) { const d = await r.json(); setCheckrStatus(d.status || 'not_initiated'); setCheckrStaging(!!d.staging); if (d.paid) setBgCheckPaid(true); setMyVouches(d.vouches || []); }
+        if (r?.ok) { const d = await r.json(); setCheckrStatus(d.status || 'not_initiated'); setCheckrPhase(d.phase || null); setCheckrStaging(!!d.staging); if (d.paid) setBgCheckPaid(true); setMyVouches(d.vouches || []); }
       }).catch(() => { setCheckrStatus('not_initiated'); });
       apiFetch('/api/caregivers/me').then(async r => {
         if (r?.ok) { const d = await r.json(); setEditRates({ daytime: d.profile?.rate_daytime || '24', nighttime: d.profile?.rate_nighttime || '28', overnight: d.profile?.rate_overnight || '30' }); }
@@ -1942,7 +1946,58 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                 <span style={{ fontSize: 18 }}>✓</span>
                 <span style={{ fontSize: 14, color: 'var(--role-color)', fontWeight: 600 }}>Background check complete</span>
               </div>
-            ) : checkrStatus === 'in_progress' || checkrStatus === 'processing' || checkrStatus === 'invitation_created' ? (
+            ) : checkrPhase === 'not_approved' ? (
+              // v1.106.13 — this branch did not exist. A caregiver whose check came back
+              // did_not_pass / rejected / adverse_action / suspended fell all the way through to
+              // "✓ Payment received" and a blank Checkr form: no statement of the outcome, and an
+              // invitation to quietly run a second check. Deliberately does NOT offer a retry —
+              // an adverse result has a process attached and this is not it.
+              <div style={{ padding: 14, background: 'var(--bg-error-subtle)', borderRadius: 8, border: '1px solid var(--color-error)' }}>
+                <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--color-error)', marginBottom: 6 }}>
+                  Background check not approved
+                </div>
+                <p style={{ margin: '0 0 8px', fontSize: 13, color: 'var(--text-secondary)' }}>
+                  We can't approve you to work on InPlace based on the result of your background check.
+                  Checkr will have emailed you a copy of the report and your rights regarding it.
+                </p>
+                <p style={{ margin: 0, fontSize: 13, color: 'var(--text-secondary)' }}>
+                  If you believe the report is wrong, you can dispute it with Checkr directly, and you
+                  can reach us at <a href="mailto:support@yourinplace.com" style={{ color: 'var(--role-color)' }}>support@yourinplace.com</a>.
+                </p>
+              </div>
+            ) : checkrPhase === 'under_review' ? (
+              <div style={{ padding: 14, background: 'var(--color-warning-bg, #fff8e1)', borderRadius: 8, border: '1px solid var(--color-warning)' }}>
+                <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)', marginBottom: 6 }}>
+                  Background check under review
+                </div>
+                <p style={{ margin: 0, fontSize: 13, color: 'var(--text-secondary)' }}>
+                  Your report came back with something that needs a person to look at it. Nothing is
+                  decided yet and there's nothing you need to do — we'll email you when it's resolved.
+                </p>
+              </div>
+            ) : checkrPhase === 'awaiting_caregiver' ? (
+              <div style={{ padding: 14, background: 'var(--color-warning-bg, #fff8e1)', borderRadius: 8, border: '1px solid var(--color-warning)' }}>
+                <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)', marginBottom: 6 }}>
+                  Check your email
+                </div>
+                <p style={{ margin: 0, fontSize: 13, color: 'var(--text-secondary)' }}>
+                  Checkr has emailed you a link to finish your background check. It can't move forward
+                  until you complete it.
+                </p>
+              </div>
+            ) : checkrPhase === 'unknown' ? (
+              // A status src/constants/checkrStatus.js has not been taught. Say nothing about the
+              // outcome — the old behaviour of guessing "start a new check" is what caused this.
+              <div style={{ padding: 14, background: 'var(--bg-neutral)', borderRadius: 8, border: '1px solid #e0e0e0' }}>
+                <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)', marginBottom: 6 }}>
+                  Background check status unavailable
+                </div>
+                <p style={{ margin: 0, fontSize: 13, color: 'var(--text-secondary)' }}>
+                  We can't read the status of your check right now. Please contact{' '}
+                  <a href="mailto:support@yourinplace.com" style={{ color: 'var(--role-color)' }}>support@yourinplace.com</a> and we'll sort it out.
+                </p>
+              </div>
+            ) : checkrStatus === 'in_progress' || checkrStatus === 'processing' || checkrStatus === 'invitation_created' || checkrPhase === 'in_progress' ? (
               <div style={{ color: 'var(--text-secondary)', fontSize: 14 }}>
                 <div style={{ marginBottom: 12 }}>
                   <strong style={{ color: 'var(--role-color)' }}>Processing your background check...</strong>

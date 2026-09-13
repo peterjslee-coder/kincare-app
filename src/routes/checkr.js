@@ -5,6 +5,7 @@ const { getDb } = require("../models/database");
 const { authenticate, requireRole } = require("../middleware/auth");
 const { writeAuditLog } = require("../middleware/auditLog");
 const { captureException } = require("../utils/sentry");
+const { phaseFor, PHASE } = require("../constants/checkrStatus");
 
 const router = express.Router();
 
@@ -352,6 +353,12 @@ router.get("/status", authenticate, requireRole("caregiver"), async (req, res) =
       staging: process.env.CHECKR_STAGING === "true",
       paid: !!profile.background_check_paid,
       status: profile.is_background_checked ? "complete" : (profile.checkr_status || "pending"),
+      // v1.106.13 — `status` above is a Checkr implementation detail, and the two screens that
+      // consumed it each enumerated a different subset of the fifteen possible values, silently
+      // funnelling the rest into a default. `phase` is the derived situation the UI actually
+      // needs; src/constants/checkrStatus.js owns the mapping, and an unmapped status resolves
+      // to 'unknown' rather than inheriting a branch that means something else.
+      phase: phaseFor(profile.checkr_status, profile.is_background_checked),
       cleared: !!profile.is_background_checked,
       vouches: (await activeVouchesFor(db, req.user.id)).map((v) => ({ familyName: v.family_name, since: v.created_at })),
       candidateId: profile.checkr_candidate_id || null,

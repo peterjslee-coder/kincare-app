@@ -1432,6 +1432,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       {!profile.isAvailable && (() => {
         const onboardingDone = profile.onboardingComplete;
         const checkrStatus = profile.checkrStatus;
+        const checkrPhase = profile.checkrPhase;
         if (!onboardingDone) return (
           <div className="card" style={{ marginBottom: 16, borderLeft: '4px solid #e8724a', display: 'flex', alignItems: 'center', gap: 12 }}>
             <span style={{ fontSize: 24 }}>⏳</span>
@@ -1492,6 +1493,47 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
             <div>
               <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>Background Check Processing</div>
               <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>Your background check is being processed. This usually takes 2–5 business days.</div>
+            </div>
+          </div>
+        );
+        // ─── v1.106.13 — the ten statuses this chain never handled ───
+        //
+        // Above this line the banner enumerates pending, rejected, consider, processing and
+        // disputed, then falls to `return null`. did_not_pass, suspended, adverse_action,
+        // canceled, invitation_sent, invitation_expired and the rest rendered NOTHING — a
+        // caregiver whose check had failed saw an ordinary hub with no banner at all, while
+        // MyAccount showed them a fresh submission form. Phase comes from the server
+        // (src/constants/checkrStatus.js) so there is one mapping, not two enumerations.
+        if (checkrPhase === 'not_approved') return (
+          <div className="card" style={{ marginBottom: 16, borderLeft: '4px solid #ef4444', display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontSize: 24 }}>{'\u{1F6D1}'}</span>
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--color-error)' }}>Background Check — Not Approved</div>
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>
+                We can't approve you to work on InPlace based on your background check result. See Account for what to do next.
+              </div>
+            </div>
+          </div>
+        );
+        if (checkrPhase === 'awaiting_caregiver') return (
+          <div className="card" style={{ marginBottom: 16, borderLeft: '4px solid #f59e0b', display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontSize: 24 }}>{'\u2709\uFE0F'}</span>
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>Background Check — Check Your Email</div>
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>
+                Checkr emailed you a link to finish your check. It can't move forward until you complete it.
+              </div>
+            </div>
+          </div>
+        );
+        if (checkrPhase === 'restartable') return (
+          <div className="card" style={{ marginBottom: 16, borderLeft: '4px solid #f59e0b', display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontSize: 24 }}>{'\u21BB'}</span>
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>Background Check — Needs Restarting</div>
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>
+                Your check ended without a result. Start a new one from Account.
+              </div>
             </div>
           </div>
         );
