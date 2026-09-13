@@ -12,7 +12,7 @@
  */
 
 const { getDb } = require("../models/database");
-const { MODEL_HAIKU } = require("./aiModels");
+const { MODEL_HAIKU, getAnthropic } = require("./aiModels");
 
 // Parse mood value — handles both legacy single strings and new JSON arrays
 function parseMoodDisplay(val) {
@@ -25,9 +25,8 @@ function parseMoodDisplay(val) {
  * Helper: call Claude API using the Anthropic SDK (same as working careRecipients.js)
  */
 async function callClaude(apiKey, model, maxTokens, messages, system) {
-  const Anthropic = require("@anthropic-ai/sdk");
   // v1.105.51 — SDK default is a 10-minute timeout with 2 retries (~30 min held).
-  const client = new Anthropic({ apiKey, timeout: 30000, maxRetries: 1 });
+  const client = getAnthropic(apiKey);
   const params = { model, max_tokens: maxTokens, messages };
   if (system) params.system = system;
   const result = await client.messages.create(params);

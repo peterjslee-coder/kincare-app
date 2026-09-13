@@ -8,7 +8,7 @@ const { recipientPhotoUrl } = require("./media");
 const { authenticate, requireRole } = require("../middleware/auth");
 const { geocodeAddress, buildAddressString } = require("../utils/geocode");
 
-const { MODEL_SONNET, MODEL_HAIKU } = require("../utils/aiModels");
+const { MODEL_SONNET, MODEL_HAIKU, getAnthropic } = require("../utils/aiModels");
 const { captureException } = require("../utils/sentry");
 const storage = require("../utils/storage");
 // ─── v1.105.122: a point the client already had beats no point at all ───
@@ -604,8 +604,7 @@ router.post("/:id/generate-summary", async (req, res) => {
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) return res.status(500).json({ error: "AI service not configured" });
 
-    const Anthropic = require("@anthropic-ai/sdk");
-    const client = new Anthropic({ apiKey });
+    const client = getAnthropic(apiKey);
 
     // Gather all context about the care recipient
     const name = `${recipient.first_name} ${recipient.last_name}`.trim();
@@ -778,8 +777,7 @@ router.post("/:id/doctor-report/questions", async (req, res) => {
       return `[${date} — ${n.author_first || ''}] ${(n.content || '').substring(0, 500)}`;
     }).join('\n');
 
-    const Anthropic = require("@anthropic-ai/sdk");
-    const client = new Anthropic({ apiKey });
+    const client = getAnthropic(apiKey);
     const msg = await client.messages.create({
       model: MODEL_HAIKU,
       max_tokens: 500,
@@ -934,8 +932,7 @@ router.post("/:id/doctor-report", async (req, res) => {
     const familyPhone = familyUser?.phone || '';
     const familyEmail = familyUser?.email || '';
 
-    const Anthropic = require("@anthropic-ai/sdk");
-    const client = new Anthropic({ apiKey });
+    const client = getAnthropic(apiKey);
 
     // v1.93.0 — the AI care profile (recipient.ai_care_summary) is deliberately NOT
     // fed to this prompt: it is itself AI-derived and has carried interpolations

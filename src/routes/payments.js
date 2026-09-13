@@ -1748,33 +1748,51 @@ async function processOverduePayments(pushFn) {
           idempotencyKey: `inplace_autopay_${s.id}_${totalCents}`,
         });
 
-        // Record payment (v1.79.0: card details from the saved payment method — no extra API call)
+        // ─── v1.106.10 — the ledger is written as ONE thing ───
+        //
+        // The money has already moved at this point: the PaymentIntent above has
+        // `confirm: true, off_session: true`, so the card is charged before this line. What
+        // follows recorded that fact in THREE separate statements — a payments row, a tips
+        // row, a session status — with no BEGIN between them. Any failure in the middle left
+        // a half-written ledger, and each half fails differently:
+        //
+        //   payments row written, session not marked paid  -> the family keeps seeing an
+        //       unpaid banner for a session they have been charged for, and the next sweep
+        //       finds it again (only the Stripe idempotency key stops a second charge)
+        //   session marked paid, no payments row           -> the caregiver is never paid,
+        //       and there is no record of the charge anywhere in our own database
+        //
+        // The Stripe call stays OUTSIDE the transaction, deliberately: holding a database
+        // transaction open across a network call to a third party is the shape that exhausted
+        // the pool in v1.105.50, and Stripe cannot be rolled back anyway. Our writes either
+        // all land or none do; Stripe's idempotency key covers the retry.
         const pmBrand = chosenPM.card ? chosenPM.card.brand : (chosenPM.us_bank_account ? (chosenPM.us_bank_account.bank_name || 'bank') : chosenPM.type);
         const pmLast4 = (chosenPM.card && chosenPM.card.last4) || (chosenPM.us_bank_account && chosenPM.us_bank_account.last4) || null;
         const paymentId = uuid();
-        await db.prepare(`
-          INSERT INTO payments (id, session_id, family_user_id, caregiver_id, amount, platform_fee, caregiver_payout, status, payment_method, stripe_payment_intent, tip_cents, tip_reason, auto_charged, card_brand, card_last4, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, 'completed', 'stripe', ?, ?, ?, 1, ?, ?, NOW())
-        `).run(
-          paymentId, s.id, s.billing_user_id || s.family_user_id, s.caregiver_id,
-          totalCents / 100, platformFeeCents / 100, caregiverTotalCents / 100,
-          intent.id, tipCents, s.pending_tip_reason || null, pmBrand, pmLast4
-        );
+        await db.transaction(async (tx) => {
+          await tx.prepare(`
+            INSERT INTO payments (id, session_id, family_user_id, caregiver_id, amount, platform_fee, caregiver_payout, status, payment_method, stripe_payment_intent, tip_cents, tip_reason, auto_charged, card_brand, card_last4, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'completed', 'stripe', ?, ?, ?, 1, ?, ?, NOW())
+          `).run(
+            paymentId, s.id, s.billing_user_id || s.family_user_id, s.caregiver_id,
+            totalCents / 100, platformFeeCents / 100, caregiverTotalCents / 100,
+            intent.id, tipCents, s.pending_tip_reason || null, pmBrand, pmLast4
+          );
 
-        // Create tip record if tip was included (so it shows in caregiver dashboard)
-        if (tipCents > 0) {
-          try {
-            const existingTip = await db.prepare("SELECT id FROM tips WHERE session_id = ?").get(s.id);
+          // The tip is part of the amount already charged, so it is part of the same record —
+          // it was a separate non-blocking try/catch, which meant a tip could be charged and
+          // never appear on the caregiver's dashboard.
+          if (tipCents > 0) {
+            const existingTip = await tx.prepare("SELECT id FROM tips WHERE session_id = ?").get(s.id);
             if (!existingTip) {
-              await db.prepare(
+              await tx.prepare(
                 "INSERT INTO tips (id, session_id, family_user_id, caregiver_id, amount_cents, reason_text) VALUES (?, ?, ?, ?, ?, ?)"
               ).run(uuid(), s.id, s.billing_user_id || s.family_user_id, s.caregiver_id, tipCents, s.pending_tip_reason || null);
             }
-          } catch (tipErr) { console.error("[auto-pay] Tip record error (non-blocking):", tipErr.message); }
-        }
+          }
 
-        // Mark session as paid
-        await db.prepare("UPDATE care_sessions SET payment_status = 'paid', updated_at = NOW() WHERE id = ?").run(s.id);
+          await tx.prepare("UPDATE care_sessions SET payment_status = 'paid', updated_at = NOW() WHERE id = ?").run(s.id);
+        });
 
         console.log(`💳 Auto-pay: session ${s.id} — caregiver=$${(caregiverTotalCents/100).toFixed(2)}${tipCents > 0 ? ` (includes $${(tipCents/100).toFixed(2)} tip)` : ''} platform=$${(platformFeeCents/100).toFixed(2)} total=$${(totalCents/100).toFixed(2)}`);
 

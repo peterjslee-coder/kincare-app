@@ -626,21 +626,61 @@ async function pollCareTasks(sendPushToUser) {
   `).all();
 
   const now = new Date();
+
+  // ─── v1.106.10 — two of the three per-task queries are now per-TICK ───
+  //
+  // This ran at least three queries for every active task, every minute: materialize, roll
+  // yesterday's to missed, fetch today's. The middle two do not depend on each other's results
+  // and were only per-task because the loop was.
+  //
+  // "Today" differs per task because it is computed in the care recipient's timezone — but
+  // there are at most a handful of distinct dates across the whole platform at any instant,
+  // so grouping by date collapses N updates into one or two. The occurrence fetch becomes one
+  // query keyed by (task, date). Materialization stays in the loop: it writes per task and
+  // untangling it is a bigger change than this is worth.
+  const todayByTask = new Map();
+  for (const t of tasks) todayByTask.set(t.id, getTodayStringInZone(taskTz(t, t.recipient_tz)));
+
+  const byDate = new Map();
+  for (const [taskId, day] of todayByTask) {
+    if (!byDate.has(day)) byDate.set(day, []);
+    byDate.get(day).push(taskId);
+  }
+  for (const [day, ids] of byDate) {
+    if (!ids.length) continue;
+    const ph = ids.map(() => "?").join(",");
+    await db.prepare(
+      `UPDATE care_task_occurrences SET status = 'missed'
+        WHERE task_id IN (${ph}) AND status = 'pending' AND due_date < ?`
+    ).run(...ids, day);
+  }
+
+  const occByTask = new Map();
+  if (tasks.length) {
+    const ph = tasks.map(() => "?").join(",");
+    const rows = await db.prepare(
+      `SELECT * FROM care_task_occurrences
+        WHERE task_id IN (${ph}) AND status = 'pending'`
+    ).all(...tasks.map((t) => t.id));
+    for (const r of rows) {
+      // Only today's, in that task's own timezone — the same filter the per-task query had.
+      if (String(r.due_date).slice(0, 10) === todayByTask.get(r.task_id)) occByTask.set(r.task_id, r);
+    }
+  }
+
   for (const t of tasks) {
-    const tz = taskTz(t, t.recipient_tz);
-    const today = getTodayStringInZone(tz);
+    const today = todayByTask.get(t.id);
     try {
       await materializeOccurrence(db, t, t.recipient_tz, today);
 
-      // Missed: any pending occurrence whose due_date is before today (in
-      // this task's timezone) never got checked off.
-      await db.prepare(
-        "UPDATE care_task_occurrences SET status = 'missed' WHERE task_id = ? AND status = 'pending' AND due_date < ?"
-      ).run(t.id, today);
-
-      const occ = await db.prepare(
-        "SELECT * FROM care_task_occurrences WHERE task_id = ? AND due_date = ? AND status = 'pending'"
-      ).get(t.id, today);
+      // Materialization may have just created today's occurrence, which the batched read
+      // above could not have seen. Fall back to a single lookup only in that case.
+      let occ = occByTask.get(t.id);
+      if (!occ) {
+        occ = await db.prepare(
+          "SELECT * FROM care_task_occurrences WHERE task_id = ? AND due_date = ? AND status = 'pending'"
+        ).get(t.id, today);
+      }
       if (!occ) continue;
       const dueAt = new Date(occ.due_at);
       if (now < dueAt) continue;

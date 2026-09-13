@@ -14,7 +14,7 @@
 
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
-const { MODEL_HAIKU } = require("./aiModels");
+const { MODEL_HAIKU, getAnthropic } = require("./aiModels");
 const { captureException } = require("./sentry");
 
 const SAFETY_SYSTEM_PROMPT = `You are a safety classifier for InPlace, a caregiving platform that connects families with caregivers for elderly and vulnerable adults.
@@ -118,9 +118,8 @@ async function screenMessage(messageContent, senderId, conversationId, senderInf
     if (!hasSignal) return; // No signals → skip AI call
 
     // Call Claude Haiku for contextual analysis
-    const Anthropic = require("@anthropic-ai/sdk");
     // v1.105.51 — SDK default is a 10-minute timeout with 2 retries (~30 min held).
-    const client = new Anthropic({ apiKey, timeout: 30000, maxRetries: 1 });
+    const client = getAnthropic(apiKey);
     const result = await client.messages.create({
       model: MODEL_HAIKU,
       max_tokens: 200,

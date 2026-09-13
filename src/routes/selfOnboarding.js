@@ -10,7 +10,7 @@ const { getDb } = require("../models/database");
 const { authenticate } = require("../middleware/auth");
 const { classifyDocument } = require("../utils/documentAI");
 const { identityDecision, verdictLabel, VERDICT } = require("../utils/identityDecision");
-const { MODEL_SONNET } = require("../utils/aiModels");
+const { MODEL_SONNET, getAnthropic } = require("../utils/aiModels");
 const storage = require("../utils/storage"); // v1.91.0 — env-gated R2 offload for document blobs
 const { geocodeAddress, buildAddressString } = require("../utils/geocode");
 const router = express.Router();
@@ -26,8 +26,7 @@ async function compareFaces(selfieBase64, idPhotoBase64) {
   }
 
   try {
-    const Anthropic = require("@anthropic-ai/sdk");
-    const client = new Anthropic({ apiKey });
+    const client = getAnthropic(apiKey);
 
     const stripDataUri = (d) => d.replace(/^data:[^;]+;base64,/, "");
     const getMime = (d) => { const m = d.match(/^data:([^;]+);/); return m ? m[1] : "image/jpeg"; };

@@ -10,6 +10,8 @@
 // The third is the one worth naming: "no caregivers found near you" and "no open requests"
 // are answers. Rendering them because a fetch failed is the app making something up.
 
+const fs = require("fs");
+const path = require("path");
 const { code } = require("./helpers/source");
 
 const hub = code("public/js/components/CaretakerHub.js");
@@ -146,10 +148,32 @@ describe("an offline check-in doesn't wait for a coincidence", () => {
 
 describe("third-party calls are bounded", () => {
   test("the AI clients don't hold a request for half an hour", () => {
-    // The SDK default is a 10-minute timeout with 2 automatic retries.
-    for (const f of ["careIntelligence", "ipaiChat", "kindredBrain", "documentAI", "messageSafety"]) {
-      expect(code(`src/utils/${f}.js`)).toMatch(/new Anthropic\(\{ apiKey, timeout: 30000, maxRetries: 1 \}\)/);
-    }
+    // The SDK default is a 10-minute timeout with 2 automatic retries — up to half an hour on
+    // one request, holding an Express handler and any pool client it took.
+    //
+    // v1.106.10 — this used to check five util files for the literal options object, which
+    // said nothing about the ELEVEN route paths that were constructing clients with the bare
+    // default. The property is now global and enforceable: exactly one place builds a client.
+    const factory = code("src/utils/aiModels.js");
+    expect(factory).toMatch(/new Anthropic\(\{ apiKey, timeout: AI_TIMEOUT_MS, maxRetries: AI_MAX_RETRIES \}\)/);
+    expect(factory).toMatch(/const AI_TIMEOUT_MS = 30000/);
+    expect(factory).toMatch(/const AI_MAX_RETRIES = 1/);
+  });
+
+  test("and nowhere else builds one, so a twelfth call site cannot get the default", () => {
+    const dirs = [path.join(__dirname, "..", "src")];
+    const offenders = [];
+    const walk = (dir) => {
+      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+        const p = path.join(dir, e.name);
+        if (e.isDirectory()) { walk(p); continue; }
+        if (!e.name.endsWith(".js") || e.name === "aiModels.js") continue;
+        const rel = path.relative(path.join(__dirname, ".."), p);
+        if (/new Anthropic\(/.test(code(rel))) offenders.push(rel);
+      }
+    };
+    dirs.forEach(walk);
+    expect(offenders).toEqual([]);
   });
 
   test("Checkr and the OAuth exchange can't hang the flow they're in", () => {

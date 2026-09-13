@@ -28,7 +28,7 @@ const {
   CATEGORIES, addDaysToDateString, eventStartInstant,
   validateEventInput, reminderStage, buildIcs,
 } = require("../utils/careEventUtils");
-const { MODEL_HAIKU } = require("../utils/aiModels");
+const { MODEL_HAIKU, getAnthropic } = require("../utils/aiModels");
 
 const router = express.Router();
 
@@ -157,8 +157,7 @@ router.post("/parse", async (req, res) => {
     const today = getTodayStringInZone(tz);
     const weekday = new Intl.DateTimeFormat("en-US", { timeZone: tz, weekday: "long" }).format(new Date());
 
-    const Anthropic = require("@anthropic-ai/sdk");
-    const client = new Anthropic({ apiKey });
+    const client = getAnthropic(apiKey);
     const result = await client.messages.create({
       model: MODEL_HAIKU,
       max_tokens: 300,

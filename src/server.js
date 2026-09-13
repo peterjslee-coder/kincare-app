@@ -30,6 +30,29 @@ const { limitBodySize } = require("./middleware/validate");
 const { withPollerLock } = require("./models/database");
 // v1.82.0 (H5): every poller tick runs under a pg advisory lock so a second app
 // instance can never double-fire (double auto-pay, duplicate reminders).
+
+// ─── v1.106.10 — a poller failure is news, and a schema error is the biggest news of all ───
+//
+// Six pollers caught their errors and then FILTERED OUT any message containing "relation" or
+// "column" before logging — which is to say, they discarded precisely the errors that mean a
+// query names a table or column that does not exist. That is the exact failure the Aug 11
+// sweep found six live instances of: a feature that has never worked once, indistinguishable
+// from a feature nobody enabled, because the only evidence was suppressed on purpose.
+//
+// Everything now reaches Sentry. A missing relation is tagged so it sorts to the top: it is
+// not a transient failure, it is a feature that is off and nobody knows.
+function reportPollerFailure(name, err) {
+  const msg = (err && err.message) || String(err);
+  const schemaBug = /relation|column/i.test(msg);
+  console.error(`  ${name} error${schemaBug ? " (SCHEMA — this query can never have worked)" : ""}:`, msg);
+  try {
+    captureException(err instanceof Error ? err : new Error(msg), {
+      where: `poller: ${name}`,
+      schemaBug,
+    });
+  } catch { /* reporting must never be the thing that throws */ }
+}
+
 const guardedPoller = (lockKey, fn) => () =>
   withPollerLock(lockKey, fn).catch((e) => console.error(`[poller ${lockKey}]`, e.message));
 const { getNowInZone, getTodayStringInZone, buildDateTimeInZone } = require("./utils/timezone");
@@ -797,7 +820,7 @@ app.use("/api/media", require("./routes/media"));
 app.use("/api/safety", require("./routes/safety"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.106.9";
+const APP_VERSION = "1.106.10";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION, minAppVersion: MIN_APP_VERSION });
@@ -1102,6 +1125,39 @@ async function start() {
   setInterval(guardedPoller(102, async () => {
     try {
       const pollDb = await getDb();
+
+      // ─── v1.106.10 — offer expiry belongs here, not on the dashboard GET ───
+      //
+      // These two UPDATEs used to run fire-and-forget on EVERY family dashboard load, seq
+      // scanning an unindexed column each time, to do housekeeping that has nothing to do
+      // with the request. A read endpoint that writes is a read endpoint that can be made
+      // to write by anyone who refreshes, and the work is the same whether one family loads
+      // the dashboard or fifty do. It is a poller's job, and poller 102 already runs every
+      // minute and already owns session state transitions.
+      try {
+        await pollDb.prepare(`
+          UPDATE care_sessions
+          SET status = 'cancelled', cancelled_at = NOW(), cancel_reason = 'Private request expired - scheduled date passed'
+          WHERE offered_to_caregiver_id IS NOT NULL
+            AND COALESCE(private_only, 0) = 1
+            AND scheduled_date::date < CURRENT_DATE
+            AND status IN ('pending', 'open', 'requested')
+        `).run();
+        await pollDb.prepare(`
+          UPDATE care_sessions
+          SET offered_to_caregiver_id = NULL, exclusive_until = NULL, status = 'open'
+          WHERE offered_to_caregiver_id IS NOT NULL
+            AND exclusive_until IS NOT NULL
+            AND exclusive_until < NOW()
+            AND COALESCE(private_only, 0) = 0
+            AND status IN ('pending', 'open', 'requested')
+        `).run();
+      } catch (e) {
+        // Reported, not swallowed: this is the code that stops a private request sitting
+        // open forever, and it failing silently is how it would stop mattering.
+        captureException(e, { where: "poller 102: offer expiry" });
+      }
+
       // ─── Per-session timezone-aware notification logic ───
       // Each session uses its care recipient's timezone for all timing decisions.
       // We query sessions whose scheduled_date is "today" in ANY US timezone
@@ -1333,15 +1389,11 @@ async function start() {
         }
       } catch (ivErr) {
         // Don't crash — interview reminders are non-critical
-        if (ivErr.message && !ivErr.message.includes("relation")) {
-          console.error("  Interview reminder error:", ivErr.message);
-        }
+        reportPollerFailure("interview reminders", ivErr);
       }
     } catch (err) {
       // Silent — don't crash server for notification polling failures
-      if (err.message && !err.message.includes("relation") && !err.message.includes("column")) {
-        console.error("  Notification poller error:", err.message);
-      }
+      reportPollerFailure("notification poller", err);
     }
   }), NOTIFICATION_POLL_INTERVAL);
   console.log(`  Session notification poller started (every ${NOTIFICATION_POLL_INTERVAL / 1000}s)`);
@@ -1366,9 +1418,7 @@ async function start() {
       await pollLateResolutionDefaults();
       await pollCancellationFees();
     } catch (err) {
-      if (err.message && !err.message.includes("relation") && !err.message.includes("column")) {
-        console.error("  Accountability poller error:", err.message);
-      }
+      reportPollerFailure("accountability poller", err);
     }
   }), NOTIFICATION_POLL_INTERVAL);
   console.log("  Accountability poller started (payment auth, late check-ins, no-shows)");
@@ -1381,9 +1431,7 @@ async function start() {
     try {
       await sweepReimbursementDigests();
     } catch (err) {
-      if (err.message && !err.message.includes("relation") && !err.message.includes("column")) {
-        console.error("  Reimbursement digest sweeper error:", err.message);
-      }
+      reportPollerFailure("reimbursement digest sweeper", err);
     }
   }), 30 * 1000); // every 30s (window is 2 min)
   console.log("  Reimbursement digest sweeper started (coalesces approve/pay/confirm pushes)");
@@ -1491,84 +1539,71 @@ async function start() {
   }), 5 * 60000); // Every 5 minutes
   console.log("  Auto-pay cron started (checks every 5 min for overdue payments + session holds)");
 
-  // ─── Backfill missing caregiver coordinates from zip/city/state ───
-  // One-time pass on startup: geocode caregivers who have zip but no lat/lng
-  (async () => {
-    try {
+  // ─── Geocode backfill (v1.106.10, poller 111) ───
+  //
+  // Two blocks used to run on EVERY boot, unlocked, walking every row with NULL coordinates at
+  // one request per second to a free public API. On a deploy-heavy day that is the same rows
+  // geocoded again and again, and with two instances it is both of them doing it at once.
+  // Since v1.106.5 those lookups also hit the geocode cache, so the repeat work is now mostly
+  // free — but "mostly free work nobody asked for, on every restart" is still the shape.
+  //
+  // A poller instead: advisory-locked (one instance only), 5 minutes after boot so it is out
+  // of the way of the first requests, then hourly. It is self-terminating in the way that
+  // matters — once every row has coordinates it finds nothing and costs one indexed query.
+  //
+  // Capped per run so a large backlog is spread over hours rather than held in one tick, and
+  // the whole thing skips instantly when there is nothing to do.
+  {
+    const GEOCODE_BATCH = 25;
+    const runGeocodeBackfill = guardedPoller(111, async () => {
       const { geocodeAddress, buildAddressString } = require("./utils/geocode");
-      const missing = await db.prepare(`
+      const gdb = await getDb();
+      let done = 0;
+
+      const caregivers = await gdb.prepare(`
         SELECT cp.user_id, cp.address_line1, cp.location_city, cp.location_state, cp.zip
         FROM caregiver_profiles cp
         WHERE cp.latitude IS NULL AND cp.longitude IS NULL
           AND (cp.zip IS NOT NULL OR cp.location_city IS NOT NULL)
+        LIMIT ${GEOCODE_BATCH}
       `).all();
-      if (missing.length > 0) {
-        console.log(`  Geocode backfill: ${missing.length} caregiver(s) missing coordinates`);
-        for (const cg of missing) {
-          const addrStr = buildAddressString({
-            address: cg.address_line1,
-            city: cg.location_city,
-            state: cg.location_state,
-            zip: cg.zip,
-          });
-          if (!addrStr) continue;
-          const geo = await geocodeAddress(addrStr);
-          if (geo) {
-            await db.prepare(
-              "UPDATE caregiver_profiles SET latitude = ?, longitude = ? WHERE user_id = ?"
-            ).run(geo.lat, geo.lng, cg.user_id);
-            console.log(`    Geocoded ${cg.location_city || cg.zip} → ${geo.lat}, ${geo.lng}`);
-          }
-          // Nominatim rate limit: 1 req/sec
-          await new Promise(r => setTimeout(r, 1100));
+      for (const cg of caregivers) {
+        const addrStr = buildAddressString({ address: cg.address_line1, city: cg.location_city, state: cg.location_state, zip: cg.zip });
+        if (!addrStr) continue;
+        const geo = await geocodeAddress(addrStr);
+        if (geo) {
+          await gdb.prepare("UPDATE caregiver_profiles SET latitude = ?, longitude = ? WHERE user_id = ?").run(geo.lat, geo.lng, cg.user_id);
+          done++;
         }
       }
-    } catch (err) {
-      console.log("  Geocode backfill skipped:", err.message);
-    }
-  })();
 
-  // ─── v1.105.122: the same backfill, for care recipients ───
-  //
-  // This half never existed, and the population it repairs is not an edge case: until
-  // v1.105.122 the self-onboarding endpoint never geocoded at all, so EVERY care recipient who
-  // signed themselves up has NULL coordinates, and so does every family recipient whose
-  // geocode happened to time out. A recipient with no point is missing from
-  // /caregivers/nearby, centres no map, and gives every caregiver a blank distance on the job.
-  (async () => {
-    try {
-      const { geocodeAddress, buildAddressString } = require("./utils/geocode");
-      const missing = await db.prepare(`
+      // v1.105.122 — the recipient half. Until then self-onboarding never geocoded at all, so
+      // EVERY care recipient who signed themselves up has NULL coordinates. A recipient with
+      // no point is missing from /caregivers/nearby, centres no map, and shows every caregiver
+      // a blank distance on the job.
+      const recipients = await gdb.prepare(`
         SELECT id, location_address, location_city, location_state, location_zip
         FROM care_recipients
         WHERE latitude IS NULL AND longitude IS NULL
           AND (location_zip IS NOT NULL OR location_city IS NOT NULL)
+        LIMIT ${GEOCODE_BATCH}
       `).all();
-      if (missing.length > 0) {
-        console.log(`  Geocode backfill: ${missing.length} care recipient(s) missing coordinates`);
-        for (const cr of missing) {
-          const addrStr = buildAddressString({
-            address: cr.location_address,
-            city: cr.location_city,
-            state: cr.location_state,
-            zip: cr.location_zip,
-          });
-          if (!addrStr) continue;
-          const geo = await geocodeAddress(addrStr);
-          if (geo) {
-            await db.prepare(
-              "UPDATE care_recipients SET latitude = ?, longitude = ? WHERE id = ?"
-            ).run(geo.lat, geo.lng, cr.id);
-            console.log(`    Geocoded recipient ${cr.location_city || cr.location_zip} → ${geo.lat}, ${geo.lng}`);
-          }
-          // Nominatim rate limit: 1 req/sec
-          await new Promise(r => setTimeout(r, 1100));
+      for (const cr of recipients) {
+        const addrStr = buildAddressString({ address: cr.location_address, city: cr.location_city, state: cr.location_state, zip: cr.location_zip });
+        if (!addrStr) continue;
+        const geo = await geocodeAddress(addrStr);
+        if (geo) {
+          await gdb.prepare("UPDATE care_recipients SET latitude = ?, longitude = ? WHERE id = ?").run(geo.lat, geo.lng, cr.id);
+          done++;
         }
       }
-    } catch (err) {
-      console.log("  Care recipient geocode backfill skipped:", err.message);
-    }
-  })();
+
+      if (done > 0) console.log(`  [geocode backfill] filled ${done} coordinate(s)`);
+    });
+    setTimeout(runGeocodeBackfill, 5 * 60 * 1000);
+    setInterval(runGeocodeBackfill, 60 * 60 * 1000);
+    console.log("  Geocode backfill poller started (hourly, cached, advisory-locked)");
+  }
 
   // ─── One-time migration: merge Daniel Lee's duplicate Apple-relay account ───
   // Apple "Hide My Email" created v7vx2xsc8z@privaterelay.appleid.com instead of linking to danbecklee@me.com
@@ -1604,9 +1639,7 @@ async function start() {
       try {
         await careTasksRouter.pollCareTasks(careTaskPush);
       } catch (err) {
-        if (err.message && !err.message.includes("relation") && !err.message.includes("column")) {
-          console.error("  Care tasks poller error:", err.message);
-        }
+        reportPollerFailure("care tasks poller", err);
       }
     }), 60 * 1000);
     console.log("  Care tasks poller started (materialize, remind, escalate, missed)");
@@ -1622,9 +1655,7 @@ async function start() {
       try {
         await careEventsRouter.pollCareEvents(careEventPush);
       } catch (err) {
-        if (err.message && !err.message.includes("relation") && !err.message.includes("column")) {
-          console.error("  Care events poller error:", err.message);
-        }
+        reportPollerFailure("care events poller", err);
       }
     }), 60 * 1000);
     console.log("  Care events poller started (day-before + same-day notices, family-only)");

@@ -13,6 +13,7 @@ const { getDb } = require("../models/database");
 const { authenticate, denyDemo } = require("../middleware/auth");
 const { handleIPAiMessage } = require("../utils/ipaiChat");
 const { captureException } = require("../utils/sentry");
+const { getAnthropic } = require("../utils/aiModels");
 
 const router = express.Router();
 // v1.106.4 — demo sessions are free and passwordless; every call here bills Anthropic.
@@ -288,8 +289,7 @@ router.post("/detect-instructions", async (req, res) => {
       return `- Session ${s.id}: ${cg} with ${s.cr_first} ${s.cr_last} on ${s.scheduled_date} at ${s.scheduled_time || 'TBD'} (${s.status})`;
     }).join('\n');
 
-    const Anthropic = require("@anthropic-ai/sdk");
-    const client = new Anthropic({ apiKey });
+    const client = getAnthropic(apiKey);
     const result = await client.messages.create({
       model: require("../utils/aiModels").MODEL_HAIKU,
       max_tokens: 400,

@@ -26,7 +26,48 @@ batch by batch. Where it stands:
 | 3b | payload weight, 'restoring' state, version-skew guard | v1.106.7 | shipped |
 | 4a | photos to R2, one photo column, the blob guardrail | v1.106.8 | shipped |
 | 4b | read caps and the retention poller | v1.106.9 | shipped |
-| 5–8 | correctness, de-duplication, guardrails, native/PWA | — | not started |
+| 5 | correctness and efficiency debt | v1.106.10 | shipped |
+| 6–8 | de-duplication, guardrails, native/PWA | — | not started |
+
+### What Batch 5 added
+
+- **The money paths write a whole ledger or none of it.** Auto-pay recorded the payment row,
+  the tip row and the session status in three separate statements AFTER the card was already
+  charged; a failure between them left the caregiver unpaid with no record, or the family
+  looking at an unpaid banner for a charge that went through. Checkout marked the session
+  `completed` with payment due and closed the visit log on the other side of a Stripe call —
+  so the amount owed could be computed from a check-out that was never recorded. Both are one
+  transaction now, with the Stripe call outside it.
+- **One Anthropic client.** Eleven route paths used `new Anthropic({ apiKey })` and got the
+  SDK default: a **ten-minute timeout with two retries**, up to half an hour holding a handler
+  and a pool client. `getAnthropic()` in `utils/aiModels.js` is the only way to build one now
+  (30s, one retry), and a test fails on any file that constructs its own.
+- **Pollers stopped hiding schema errors.** Six of them caught their errors and then filtered
+  out any message containing "relation" or "column" — exactly the errors that mean a query
+  names something that does not exist, which is the Aug 11 class of silent failure. Everything
+  reaches Sentry now, tagged `schemaBug`.
+- **The dashboard GET stopped writing.** Two offer-expiry UPDATEs ran fire-and-forget on every
+  family dashboard load, and a third, awaited, on every caregiver load — the same rule in two
+  places, seq scanning an unindexed column. Poller 102 owns it.
+- **The conversation list is 3 queries, not 1 + 3×C.** It ran three queries per conversation
+  in an await loop, and the client polls it every 30s per tab. The joined-at privacy cut
+  (v1.105.92) is carried over exactly — a preview is a message body on a list screen.
+- **Eight indexes** (migration 035), including the three `created_at` columns the new nightly
+  retention sweep scans. Plain `CREATE INDEX`, not CONCURRENTLY: CONCURRENTLY cannot run in a
+  transaction and every V2 migration does. If a table here ever gets large, build the next one
+  outside the migration system and say so there.
+- **The geocode backfill is poller 111**, advisory-locked, hourly, capped at 25 rows a side.
+  It was two unlocked loops on every boot, walking every NULL-coordinate row at 1 req/sec.
+- **The care-task poller** rolls missed occurrences grouped by date and fetches today's in one
+  query instead of two per task per minute. Each task still resolves "today" in its own care
+  recipient's timezone — collapsing that would mark a live task missed.
+- **14 admin dashboard `catch (e) { /* */ }` blocks** now report. Each left its declared
+  default, so a broken query rendered as "0 open tickets" — a broken feature and a
+  switched-off feature looking identical, again.
+
+**On the review's "95 silent catches":** on the payment, auth and session paths, every catch
+that swallows a write is already documented and deliberate — v1.105.48 fixed the dangerous
+ones. The real remaining concentration was `admin/overview.js`, and that is what got fixed.
 
 ### What Batch 4a added, and one thing to know before touching it
 
@@ -85,7 +126,23 @@ concluded from a partial list. Check the panel, not a scrape.
   a setInterval), and the generator only matched the inline form — so a real poller was absent
   from the map that every session reads, which is the exact thing that file exists to prevent.
 
-### Known, not fixed
+### Known, not fixed — the unaccomplished list
+
+Carry this forward. Nothing here is done.
+
+1. **Staging has no R2 credentials.** So the marker path — the headline of Batch 4 — cannot be
+   exercised on staging, and shipped to prod proved only by `tests/r2RoundTrip.test.js` against
+   a fake bucket. Fix: a second bucket (`inplace-uploads-staging`) and four `R2_*` variables on
+   the `inplace-staging` service. Pete's console; ~10 minutes.
+2. **The R2 backfill has never been run.** `npm run backfill:r2` reports; `--apply` moves.
+   Existing base64 rows are still in Postgres. Take a backup first.
+3. **Cloudflare is on the free plan.** One rate-limiting rule, a ten-second window, a
+   ten-second block, no managed WAF. Pro is ~$20/mo. Decision, not a task.
+4. **OAuth avatars do not render.** Google hands us a remote https URL in `avatar_url`, and
+   `/api/media/user/:id/photo` cannot serve one — v1.106.3 removed the 302 deliberately. Fix:
+   fetch and store the bytes at signup, the way `seed.js` already does.
+
+### Other known gaps
 
 An OAuth avatar from Google is a remote https URL in `avatar_url`, and `/api/media/user/:id/photo`
 cannot serve one — v1.106.3 removed the 302 branch deliberately (authenticated open redirect).

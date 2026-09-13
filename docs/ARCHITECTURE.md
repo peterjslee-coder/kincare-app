@@ -8,7 +8,7 @@ build red.
 Hand-written sections (§3 "Where is…") are preserved across regeneration; edit those freely.
 
 Structure at last generation: 524 HTTP routes across 55 mounts ·
-91 `CREATE TABLE` statements · 10 background jobs · 36 socket events
+91 `CREATE TABLE` statements · 11 background jobs · 36 socket events
 (15 with no client listener) · 58 push event types · 55 `window.__*` globals.
 
 ---
@@ -126,16 +126,17 @@ Every job runs through `guardedPoller` → `withPollerLock` (`src/models/databas
 
 | Lock | Job | Interval | Declared |
 |---:|---|---|---|
-| 101 | Daily demo data refresh | 24 h | `src/server.js:1008` |
-| 102 | Session notification poller (every 60s) | 1 min | `src/server.js:1102` |
-| 103 | Session Accountability Poller | 1 min | `src/server.js:1361` |
-| 104 | Reimbursement push digest sweeper (v1.98.15) | 30 s | `src/server.js:1380` |
-| 105 | Auto-pay cron: charge overdue sessions | 5 min | `src/server.js:1474` |
-| 106 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1593` |
-| 107 | Care Tasks poller (v1.99.0) | 1 min | `src/server.js:1603` |
-| 108 | Care Events poller (v1.100.0) | 1 min | `src/server.js:1621` |
-| 109 | Kindred Reminder Delivery Poller | 1 min | `src/server.js:1396` |
-| 110 | Retention (v1.106.9, poller 110) | 24 h | `src/server.js:1660` |
+| 101 | Daily demo data refresh | 24 h | `src/server.js:1031` |
+| 102 | Session notification poller (every 60s) | 1 min | `src/server.js:1125` |
+| 103 | Session Accountability Poller | 1 min | `src/server.js:1413` |
+| 104 | Reimbursement push digest sweeper (v1.98.15) | 30 s | `src/server.js:1430` |
+| 105 | Auto-pay cron: charge overdue sessions | 5 min | `src/server.js:1522` |
+| 106 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1628` |
+| 107 | Care Tasks poller (v1.99.0) | 1 min | `src/server.js:1638` |
+| 108 | Care Events poller (v1.100.0) | 1 min | `src/server.js:1654` |
+| 109 | Kindred Reminder Delivery Poller | 1 min | `src/server.js:1444` |
+| 110 | Retention (v1.106.9, poller 110) | 24 h | `src/server.js:1691` |
+| 111 | (see src/server.js:1604) | 1 h | `src/server.js:1604` |
 
 ---
 

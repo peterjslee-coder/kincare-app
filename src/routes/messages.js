@@ -90,35 +90,77 @@ router.get("/conversations", async (req, res) => {
     ORDER BY c.updated_at DESC
   `).all(userId);
 
-  let conversations = []; // reassigned by the v1.105.18 block filter below
-  for (const conv of convRows) {
-    // Get last message
-    // v1.105.92 — the preview is a message body on a list screen. Cutting the thread but
-    // leaving the preview would have leaked the very thing being hidden, one line at a time.
-    const lastMsg = await db.prepare(`
-      SELECT content, sender_id, created_at FROM messages
-      WHERE conversation_id = ? AND created_at >= ?
-      ORDER BY created_at DESC LIMIT 1
-    `).get(conv.id, conv.history_from);
+  // ─── v1.106.10 — one round trip for the whole list, not 1 + 3×C ───
+  //
+  // This ran three queries PER CONVERSATION inside a for-await loop: last message, unread
+  // count, members. Ten conversations was 31 sequential round trips, and the client polls
+  // this endpoint every 30 seconds per open tab, which makes it the highest-frequency query
+  // in the app by a distance.
+  //
+  // One query now. LATERAL gives each conversation its own last-message lookup, and the two
+  // aggregates come from grouped scans. Every filter below is carried over EXACTLY — in
+  // particular `history_from`, which is the v1.105.92 privacy boundary: a preview is a message
+  // body on a list screen, so cutting the thread while leaving the preview would leak the very
+  // thing being hidden, one line at a time.
+  const convIds = convRows.map((c) => c.id);
+  const lastByConv = new Map();
+  const unreadByConv = new Map();
+  const membersByConv = new Map();
 
-    // Get unread count (exclude Kindred relay messages — user sees those in Kindred chat)
-    const unreadRow = await db.prepare(`
-      SELECT COUNT(*) AS count FROM messages
-      WHERE conversation_id = ? AND sender_id != ?
-        AND created_at > COALESCE(?::TIMESTAMPTZ, '1970-01-01'::TIMESTAMPTZ)
-        /* v1.105.92 — never count messages from before they joined: an unread badge you
-           cannot clear by opening the thread is its own small bug. */
-        AND created_at >= ?
-        AND sender_id NOT IN (SELECT id FROM users WHERE email = 'kindred@yourinplace.com')
-    `).get(conv.id, userId, conv.last_read_at, conv.history_from);
+  if (convIds.length) {
+    const ph = convIds.map(() => "?").join(",");
+    const histories = convRows.map((c) => c.history_from);
+    const lastReads = convRows.map((c) => c.last_read_at);
 
-    // Get members
-    const members = await db.prepare(`
-      SELECT u.id, u.first_name, u.last_name, u.role, ${hasPhotoSql('u')}
+    // Last message per conversation, cut at each member's own joined_at.
+    const lasts = await db.prepare(`
+      SELECT v.cid, lm.content, lm.sender_id, lm.created_at
+      FROM (SELECT UNNEST(ARRAY[${ph}]::text[]) AS cid,
+                   UNNEST(ARRAY[${ph}]::timestamptz[]) AS history_from) v
+      CROSS JOIN LATERAL (
+        SELECT m.content, m.sender_id, m.created_at
+        FROM messages m
+        WHERE m.conversation_id = v.cid AND m.created_at >= v.history_from
+        ORDER BY m.created_at DESC
+        LIMIT 1
+      ) lm
+    `).all(...convIds, ...histories);
+    for (const r of lasts) lastByConv.set(r.cid, r);
+
+    // Unread per conversation. Same two cuts as before: after last_read_at, and never before
+    // the person joined — an unread badge you cannot clear by opening the thread is its own bug.
+    const unreads = await db.prepare(`
+      SELECT v.cid, COUNT(m.id) AS count
+      FROM (SELECT UNNEST(ARRAY[${ph}]::text[]) AS cid,
+                   UNNEST(ARRAY[${ph}]::timestamptz[]) AS history_from,
+                   UNNEST(ARRAY[${ph}]::timestamptz[]) AS last_read_at) v
+      LEFT JOIN messages m
+        ON m.conversation_id = v.cid
+       AND m.sender_id != ?
+       AND m.created_at > COALESCE(v.last_read_at, '1970-01-01'::TIMESTAMPTZ)
+       AND m.created_at >= v.history_from
+       AND m.sender_id NOT IN (SELECT id FROM users WHERE email = 'kindred@yourinplace.com')
+      GROUP BY v.cid
+    `).all(...convIds, ...histories, ...lastReads, userId);
+    for (const r of unreads) unreadByConv.set(r.cid, parseInt(r.count || 0, 10));
+
+    const allMembers = await db.prepare(`
+      SELECT cm.conversation_id, u.id, u.first_name, u.last_name, u.role, ${hasPhotoSql('u')}
       FROM conversation_members cm
       JOIN users u ON cm.user_id = u.id
-      WHERE cm.conversation_id = ?
-    `).all(conv.id);
+      WHERE cm.conversation_id IN (${ph})
+    `).all(...convIds);
+    for (const m of allMembers) {
+      if (!membersByConv.has(m.conversation_id)) membersByConv.set(m.conversation_id, []);
+      membersByConv.get(m.conversation_id).push(m);
+    }
+  }
+
+  let conversations = []; // reassigned by the v1.105.18 block filter below
+  for (const conv of convRows) {
+    const lastMsg = lastByConv.get(conv.id) || null;
+    const unreadRow = { count: unreadByConv.get(conv.id) || 0 };
+    const members = membersByConv.get(conv.id) || [];
 
     // For direct conversations, use partner name as conversation name
     // EXCEPT when conversation has an explicit name like "InPlace Support" or "iPAi"

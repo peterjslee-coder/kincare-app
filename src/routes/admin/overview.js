@@ -5,6 +5,22 @@ const { v4: uuid } = require("uuid");
 const { getDb } = require("../../models/database");
 const { authenticate, requireAdmin } = require("../../middleware/auth");
 const { captureException } = require("../../utils/sentry");
+
+// ─── v1.106.10 — a stat that failed is not a stat that is zero ───
+//
+// Fourteen `catch (e) { /* */ }` blocks around admin dashboard queries. Each leaves the
+// declared default in place, so a query that throws — a missing table, a renamed column, a
+// timeout — renders as "0 open tickets" or "no safety flags". That is the exact shape the
+// Aug 11 sweep found six live instances of: a broken feature and a switched-off feature look
+// identical, and the only evidence was being discarded on purpose.
+//
+// Still non-fatal: one broken panel must not take down the whole admin overview. But it is
+// reported now, and the caller keeps its default.
+function statFailed(where, e) {
+  console.error(`  [admin/overview] ${where} failed:`, (e && e.message) || e);
+  try { captureException(e instanceof Error ? e : new Error(String(e)), { where: `admin/overview: ${where}` }); } catch {}
+}
+
 const { activeVouchesFor } = require("../../utils/vouches");
 const { sendVerificationEmail } = require("../auth");
 const {
@@ -244,16 +260,16 @@ router.get("/stats", async (req, res) => {
     let openTickets = { count: 0 }, safetyFlags = { count: 0 }, avgRating = { avg: 0, total: 0 }, revenueMtd = { total: 0 };
     try {
       openTickets = await db.prepare("SELECT COUNT(*) as count FROM admin_tickets WHERE status IN ('open', 'in_progress')").get() || { count: 0 };
-    } catch (e) { /* table may not exist yet */ }
+    } catch (e) { statFailed("care_sessions", e); }  // table may not exist yet
     try {
       safetyFlags = await db.prepare("SELECT COUNT(*) as count FROM safety_flags WHERE status IN ('pending', 'open', 'investigating', 'escalated')").get() || { count: 0 };
-    } catch (e) { /* */ }
+    } catch (e) { statFailed("care_sessions", e); }
     let ratingDist = {};
     try {
       avgRating = await db.prepare("SELECT ROUND(AVG(r.rating), 1) as avg, COUNT(*) as total FROM reviews r JOIN users fu ON r.family_user_id = fu.id WHERE COALESCE(fu.is_demo, 0) = 0").get() || { avg: 0, total: 0 };
       const distRows = await db.prepare("SELECT r.rating, COUNT(*) as cnt FROM reviews r JOIN users fu ON r.family_user_id = fu.id WHERE COALESCE(fu.is_demo, 0) = 0 GROUP BY r.rating").all();
       for (const d of distRows) ratingDist[d.rating] = d.cnt;
-    } catch (e) { /* */ }
+    } catch (e) { statFailed("admin_tickets", e); }
     try {
       // Use care_sessions.estimated_cost (source of truth), exclude demo users on both sides
       revenueMtd = await db.prepare(`
@@ -265,7 +281,7 @@ router.get("/stats", async (req, res) => {
           AND NOT EXISTS (SELECT 1 FROM caregiver_profiles _cp JOIN users _cu ON _cp.user_id = _cu.id WHERE _cp.id = cs.caregiver_id AND _cu.is_demo = 1)
           AND COALESCE(cs.completed_at, cs.updated_at, cs.created_at) >= date_trunc('month', NOW())
       `).get() || { total: 0 };
-    } catch (e) { /* */ }
+    } catch (e) { statFailed("reviews", e); }
     let revenueYtd = { total: 0 };
     try {
       revenueYtd = await db.prepare(`
@@ -277,13 +293,13 @@ router.get("/stats", async (req, res) => {
           AND NOT EXISTS (SELECT 1 FROM caregiver_profiles _cp JOIN users _cu ON _cp.user_id = _cu.id WHERE _cp.id = cs.caregiver_id AND _cu.is_demo = 1)
           AND COALESCE(cs.completed_at, cs.updated_at, cs.created_at) >= date_trunc('year', NOW())
       `).get() || { total: 0 };
-    } catch (e) { /* */ }
+    } catch (e) { statFailed("care_sessions", e); }
 
     // Visits this week
     let visitsThisWeek = { count: 0 };
     try {
       visitsThisWeek = await db.prepare("SELECT COUNT(*) as count FROM care_sessions WHERE scheduled_date >= date_trunc('week', NOW())::date::text AND status NOT IN ('cancelled')").get() || { count: 0 };
-    } catch (e) { /* */ }
+    } catch (e) { statFailed("care_sessions", e); }
 
     res.json({
       totalUsers: parseInt(users.count),
@@ -399,7 +415,7 @@ router.get("/users/:id/detail", async (req, res) => {
       caregiverProfile = await db.prepare(`
         SELECT cp.*, u.email FROM caregiver_profiles cp JOIN users u ON cp.user_id = u.id WHERE cp.user_id = ?
       `).get(userId);
-    } catch (e) { /* */ }
+    } catch (e) { statFailed("users", e); }
 
     // Session counts
     const sessionStats = await db.prepare(`
@@ -420,7 +436,7 @@ router.get("/users/:id/detail", async (req, res) => {
         WHERE (family_user_id = ? OR caregiver_id = (SELECT id FROM caregiver_profiles WHERE user_id = ?))
         AND status = 'completed'
       `).get(userId, userId) || { total: 0 };
-    } catch (e) { /* */ }
+    } catch (e) { statFailed("care_sessions", e); }
 
     // Reviews (given and received)
     let reviewStats = { given: 0, received: 0, avgReceived: 0 };
@@ -431,7 +447,7 @@ router.get("/users/:id/detail", async (req, res) => {
         WHERE caregiver_id = (SELECT id FROM caregiver_profiles WHERE user_id = ?)
       `).get(userId);
       reviewStats = { given: parseInt(given?.count || 0), received: parseInt(received?.count || 0), avgReceived: parseFloat(received?.avg || 0) };
-    } catch (e) { /* */ }
+    } catch (e) { statFailed("caregiver_profiles", e); }
 
     // Care team membership
     let careTeams = [];
@@ -444,7 +460,7 @@ router.get("/users/:id/detail", async (req, res) => {
         JOIN care_recipients cr ON ct.care_recipient_id = cr.id
         WHERE ctm.user_id = ?
       `).all(userId);
-    } catch (e) { /* */ }
+    } catch (e) { statFailed("care_team_members", e); }
 
     // Related tickets
     let tickets = [];
@@ -455,7 +471,7 @@ router.get("/users/:id/detail", async (req, res) => {
         WHERE reporter_user_id = ? OR related_user_id = ?
         ORDER BY created_at DESC LIMIT 10
       `).all(userId, userId);
-    } catch (e) { /* */ }
+    } catch (e) { statFailed("admin_tickets", e); }
 
     // Safety flags involving this user
     let safetyFlags = [];
@@ -519,7 +535,7 @@ router.get("/users/:id/detail", async (req, res) => {
       const lastActivity = await db.prepare("SELECT MAX(created_at) as ts FROM activity_feed WHERE family_user_id = ?").get(userId);
       const candidates = [user.updated_at, lastMsg?.ts, lastActivity?.ts].filter(Boolean);
       lastActive = candidates.sort().pop() || user.created_at;
-    } catch (e) { /* */ }
+    } catch (e) { statFailed("messages", e); }
 
     // ─── Compute Customer Journey Stage ───
     // Signup → Verified → Team Built → First Visit → Active → Churned
@@ -564,7 +580,7 @@ router.get("/users/:id/detail", async (req, res) => {
       for (const oa of oauthAccounts) {
         authMethods.push({ type: 'oauth', provider: oa.provider });
       }
-    } catch (e) { /* tables may not exist yet */ }
+    } catch (e) { statFailed("users", e); }  // tables may not exist yet
 
     res.json({
       user,
@@ -599,7 +615,7 @@ router.put("/users/:id/admin-notes", async (req, res) => {
       await db.prepare(
         "INSERT INTO admin_audit_log (id, admin_user_id, action, target_type, target_id, details) VALUES (?, ?, ?, ?, ?, ?)"
       ).run(uuid(), req.user.id, 'admin_notes_updated', 'user', req.params.id, JSON.stringify({ preview: (notes || '').slice(0, 100) }));
-    } catch (e) { /* */ }
+    } catch (e) { statFailed("stat query", e); }
 
     res.json({ ok: true });
   } catch (err) {

@@ -2240,6 +2240,39 @@ async function initializeDatabase() {
       ],
     },
     {
+      // ─── v1.106.10 — five indexes for five queries that scan ───
+      //
+      // Each of these is a foreign key the app joins on constantly with nothing to join
+      // against. They are cheap now and expensive later, which is exactly when nobody has
+      // time to add them.
+      //
+      // Plain CREATE INDEX rather than CONCURRENTLY, deliberately. CONCURRENTLY cannot run
+      // inside a transaction and every V2 migration runs in one; the alternative is a second
+      // migration mechanism outside the transaction, whose failure mode is an INVALID index
+      // nobody notices. On today's row counts each build is milliseconds, and the migration
+      // runner lifts statement_timeout anyway. If a table here ever gets large, build the
+      // NEXT index with CONCURRENTLY outside the migration system and say so here.
+      id: "035_missing_indexes",
+      statements: [
+        // visit_photos are read by visit log on every session detail view.
+        `CREATE INDEX IF NOT EXISTS idx_visit_photos_visit_log ON visit_photos(visit_log_id)`,
+        // Both directions of conversation_members: "which threads am I in" (every 30s, per
+        // client — the highest-frequency query in the app) and "who is in this thread".
+        `CREATE INDEX IF NOT EXISTS idx_conv_members_user ON conversation_members(user_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_conv_members_conversation ON conversation_members(conversation_id)`,
+        // Partial: the column is NULL for almost every row, and the queries that use it only
+        // ever ask for the non-NULL ones. A partial index is a fraction of the size.
+        `CREATE INDEX IF NOT EXISTS idx_sessions_offered_to ON care_sessions(offered_to_caregiver_id) WHERE offered_to_caregiver_id IS NOT NULL`,
+        // "Which care teams is this person on" — asked on nearly every authorization check.
+        `CREATE INDEX IF NOT EXISTS idx_care_team_members_user ON care_team_members(user_id)`,
+        // v1.106.9 added a daily retention sweep over these; without these it is a seq scan
+        // per table per night, growing forever.
+        `CREATE INDEX IF NOT EXISTS idx_audit_log_created ON audit_log(created_at)`,
+        `CREATE INDEX IF NOT EXISTS idx_activity_feed_created ON activity_feed(created_at)`,
+        `CREATE INDEX IF NOT EXISTS idx_notifications_created ON notifications(created_at)`,
+      ],
+    },
+    {
       // ─── v1.106.8 — one column of record for a user's photo ───
       //
       // `avatar_url` and `profile_photo` held IDENTICAL bytes, written together at five call

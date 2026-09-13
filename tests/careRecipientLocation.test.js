@@ -76,7 +76,7 @@ describe("the server prefers its own answer, and takes the client's rather than 
   });
 });
 
-describe("everyone already broken gets repaired on boot", () => {
+describe("everyone already broken gets repaired", () => {
   test("the backfill covers care recipients, not just caregivers", () => {
     expect(server).toMatch(/FROM care_recipients\s+WHERE latitude IS NULL AND longitude IS NULL/);
     expect(server).toMatch(/UPDATE care_recipients SET latitude = \?, longitude = \? WHERE id = \?/);
@@ -84,7 +84,25 @@ describe("everyone already broken gets repaired on boot", () => {
 
   test("and it still respects the rate limit it is borrowing", () => {
     // Nominatim is 1 req/sec, and this is a free service being used politely.
-    const half = server.slice(server.indexOf("care recipient(s) missing coordinates"));
-    expect(half.slice(0, 1200)).toMatch(/setTimeout\(r, 1100\)/);
+    //
+    // v1.106.10 — this used to assert a `setTimeout(r, 1100)` inside the backfill loop. That
+    // sleep is gone because v1.106.5 moved the spacing INTO geocodeAddress: a serialising
+    // queue in front of the one function every caller goes through. The property is stronger
+    // where it is now — a caller that forgets to sleep cannot get around it — so assert it
+    // there, and assert that the backfill does go through that function.
+    const geocode = read("src", "utils", "geocode.js");
+    expect(geocode).toMatch(/NOMINATIM_MIN_INTERVAL_MS = 1100/);
+    expect(geocode).toMatch(/const wait = NOMINATIM_MIN_INTERVAL_MS - \(Date\.now\(\) - _geoLastCall\)/);
+    const backfill = server.slice(server.indexOf("Geocode backfill (v1.106.10"));
+    expect(backfill.slice(0, 3000)).toMatch(/await geocodeAddress\(addrStr\)/);
+  });
+
+  test("it is a locked poller now, not something every boot redoes", () => {
+    // Two blocks used to run on every single boot, unlocked, so two instances would both walk
+    // the same rows and a deploy-heavy day meant doing it over and over.
+    expect(server).toMatch(/guardedPoller\(111, async \(\) => \{/);
+    expect(server).toMatch(/setInterval\(runGeocodeBackfill, 60 \* 60 \* 1000\)/);
+    const backfill = server.slice(server.indexOf("Geocode backfill (v1.106.10"));
+    expect(backfill.slice(0, 3000)).toMatch(/LIMIT \$\{GEOCODE_BATCH\}/);
   });
 });

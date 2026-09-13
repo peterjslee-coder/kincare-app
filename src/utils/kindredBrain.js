@@ -15,15 +15,14 @@
  */
 
 const { getDb } = require("../models/database");
-const { MODEL_HAIKU } = require("./aiModels");
+const { MODEL_HAIKU, getAnthropic } = require("./aiModels");
 
 /**
  * Helper: call Claude API using the Anthropic SDK
  */
 async function callClaudeChat(apiKey, system, messages, maxTokens = 300) {
-  const Anthropic = require("@anthropic-ai/sdk");
   // v1.105.51 — SDK default is a 10-minute timeout with 2 retries (~30 min held).
-  const client = new Anthropic({ apiKey, timeout: 30000, maxRetries: 1 });
+  const client = getAnthropic(apiKey);
   const result = await client.messages.create({
     model: MODEL_HAIKU,
     max_tokens: maxTokens,

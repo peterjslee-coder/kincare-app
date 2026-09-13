@@ -4,7 +4,7 @@ const router = express.Router();
 const { authenticate, denyDemo } = require("../middleware/auth");
 const { getDb } = require("../models/database");
 const { generateCareIntelligence, generateSessionSummary, analyzePatterns, gatherVisitData, generateCarePlan } = require("../utils/careIntelligence");
-const { MODEL_HAIKU } = require("../utils/aiModels");
+const { MODEL_HAIKU, getAnthropic } = require("../utils/aiModels");
 const { captureException } = require("../utils/sentry");
 
 // ─── Shared access checks (IDOR guards) ───
@@ -154,8 +154,7 @@ router.get("/test/ai", authenticate, denyDemo, async (req, res) => {
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) return res.json({ error: "ANTHROPIC_API_KEY not set", hasKey: false });
 
-    const Anthropic = require("@anthropic-ai/sdk");
-    const client = new Anthropic({ apiKey });
+    const client = getAnthropic(apiKey);
     const result = await client.messages.create({
       model: MODEL_HAIKU,
       max_tokens: 50,
@@ -218,8 +217,7 @@ router.get("/test/data/:recipientId", authenticate, denyDemo, async (req, res) =
     try {
       const apiKey = process.env.ANTHROPIC_API_KEY;
       if (apiKey) {
-        const Anthropic = require("@anthropic-ai/sdk");
-        const client = new Anthropic({ apiKey });
+        const client = getAnthropic(apiKey);
         const result = await client.messages.create({
           model: MODEL_HAIKU,
           max_tokens: 100,

@@ -31,6 +31,7 @@ const { handleKindredMessage } = require("../utils/kindredBrain");
 
 const { sendPushToUser } = require("./push");
 const { clampLimit, clampOffset } = require("../utils/queryLimits");
+const { getAnthropic } = require("../utils/aiModels");
 
 const router = express.Router();
 router.use(authenticate);
@@ -960,8 +961,7 @@ router.post("/admin/summarize", async (req, res) => {
     }).join('\n');
 
     // Call Claude to generate care-relevant summary
-    const Anthropic = require("@anthropic-ai/sdk");
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const client = getAnthropic();
 
     const aiResponse = await client.messages.create({
       model: "claude-haiku-4-5-20251001",

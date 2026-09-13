@@ -45,34 +45,13 @@ router.get("/", async (req, res) => {
 async function familyDashboard(db, userId, res) {
   const t0 = Date.now();
   try {
-    // Fire-and-forget: housekeeping writes run in background, don't block dashboard load
+    // v1.106.10 — the two offer-expiry UPDATEs that used to run here, fire-and-forget, on
+    // every single dashboard load moved to poller 102. They seq-scanned an unindexed column
+    // to do housekeeping unrelated to this request, and a read endpoint that writes is one
+    // anybody can make write by holding down refresh. expireStaleProposals stays: it is
+    // scoped to what this response is about to show, and returning a proposal the viewer can
+    // still act on after it has expired is a correctness problem, not housekeeping.
     expireStaleProposals(db, null, null).catch(() => {});
-    db.exec(`
-      UPDATE care_sessions
-      SET status = 'cancelled', cancelled_at = NOW(), cancel_reason = 'Private request expired - scheduled date passed'
-      WHERE offered_to_caregiver_id IS NOT NULL
-        AND COALESCE(private_only, 0) = 1
-        AND scheduled_date::date < CURRENT_DATE
-        AND status IN ('pending', 'open', 'requested')
-    `).catch(e => console.warn('Private-only expiry query failed:', e.message));
-    db.exec(`
-      UPDATE care_sessions
-      SET offered_to_caregiver_id = NULL, exclusive_until = NULL, status = 'open'
-      WHERE offered_to_caregiver_id IS NOT NULL
-        AND exclusive_until IS NOT NULL
-        AND exclusive_until < NOW()
-        AND COALESCE(private_only, 0) = 0
-        AND status IN ('pending', 'open', 'requested')
-    `).catch(() => {
-      db.exec(`
-        UPDATE care_sessions
-        SET offered_to_caregiver_id = NULL, exclusive_until = NULL, status = 'open'
-        WHERE offered_to_caregiver_id IS NOT NULL
-          AND exclusive_until IS NOT NULL
-          AND exclusive_until < NOW()
-          AND status IN ('pending', 'open', 'requested')
-      `).catch(() => {});
-    });
 
     // Parallel batch 1: fee + all three recipient sources at once
     const [feePercent, ownedRecipients, sharedRecipients, teamRecipients] = await Promise.all([
@@ -448,29 +427,12 @@ async function caregiverDashboard(db, userId, res) {
   // Expire time proposals that have passed their 2-hour response window
   await expireStaleProposals(db, null, null).catch(() => {});
 
-  // Private-only sessions: NO timer-based expiry here. They persist until scheduled_date passes.
-  // (Family dashboard handles date-based expiry for private-only sessions.)
-  // Non-private exclusive offers: open to all caregivers after 1-hour window
-  try {
-    await db.exec(`
-      UPDATE care_sessions
-      SET offered_to_caregiver_id = NULL, exclusive_until = NULL, status = 'open'
-      WHERE offered_to_caregiver_id IS NOT NULL
-        AND exclusive_until IS NOT NULL
-        AND exclusive_until < NOW()
-        AND COALESCE(private_only, 0) = 0
-        AND status IN ('pending', 'open', 'requested')
-    `);
-  } catch (e) {
-    await db.exec(`
-      UPDATE care_sessions
-      SET offered_to_caregiver_id = NULL, exclusive_until = NULL, status = 'open'
-      WHERE offered_to_caregiver_id IS NOT NULL
-        AND exclusive_until IS NOT NULL
-        AND exclusive_until < NOW()
-        AND status IN ('pending', 'open', 'requested')
-    `);
-  }
+  // v1.106.10 — the exclusive-offer expiry that used to run here too, AWAITED, so every
+  // caregiver dashboard load waited on a seq scan of an unindexed column before it could
+  // return. It was also a second copy of the family dashboard's version, with its own
+  // fallback branch, which is two places to fix a housekeeping rule. Poller 102 owns it now
+  // and runs it every minute for everyone, which is more often than either dashboard was
+  // being opened.
 
   const profile = await db.prepare("SELECT * FROM caregiver_profiles WHERE user_id = ?").get(userId);
   if (!profile) return res.status(404).json({ error: "Caregiver profile not found" });

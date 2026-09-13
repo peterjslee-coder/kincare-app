@@ -13,7 +13,7 @@ const { getNowInZone, getTodayStringInZone, buildDateTimeInZone, zonedDateTimeTo
 const { geofenceEvidence, coarsenCoordinate } = require("../utils/geocode");
 const { hasActiveVouch } = require("../utils/vouches");
 const { decideCancellationCharge, CANCEL_FEE_WINDOW_HOURS } = require("../utils/cancellationFee");
-const { MODEL_HAIKU } = require("../utils/aiModels");
+const { MODEL_HAIKU, getAnthropic } = require("../utils/aiModels");
 const { clampLimit, clampOffset } = require("../utils/queryLimits");
 
 const router = express.Router();
@@ -1424,8 +1424,7 @@ router.get("/:id/care-briefing", async (req, res) => {
       try {
         const apiKey = process.env.ANTHROPIC_API_KEY;
         if (apiKey) {
-          const Anthropic = require("@anthropic-ai/sdk");
-          const client = new Anthropic({ apiKey });
+          const client = getAnthropic(apiKey);
 
           // Build context for iPAi
           const notesText = recentNotes.map(n => {
@@ -1921,21 +1920,81 @@ router.post("/:id/check-out", async (req, res) => {
       }
     }
 
-    // Transition to completed with adjusted cost, actual duration, overtime, and mark review required
-    // payment_due_at = 1 hour from now — family has that long to review+tip before auto-pay
-    await db.prepare(`
-      UPDATE care_sessions SET
-        status = 'completed',
-        estimated_cost = ?,
-        duration_hours = ?,
-        overtime_minutes = ?,
-        overtime_cost = ?,
-        review_required = 1,
-        completed_at = NOW(),
-        payment_due_at = NOW() + INTERVAL '1 hour',
-        updated_at = NOW()
-      WHERE id = ?
-    `).run(adjustedCost, actualDurationHours, overtimeMinutes, overtimeCost, req.params.id);
+    // ─── v1.106.10 — the session and its visit log close together, or not at all ───
+    //
+    // These were two UPDATEs with a Stripe capture between them. The half-state that leaves is
+    // the bad one: `care_sessions` says completed with payment due, and `visit_logs` has no
+    // check_out_time — so the amount owed was computed from a check-out that is not recorded
+    // anywhere. The caregiver's own record of the visit is the thing missing, and it is the
+    // record that would settle a dispute about the money.
+    //
+    // Both writes now commit as one, BEFORE the capture. The Stripe call stays outside the
+    // transaction: holding one open across a third-party network call is what exhausted the
+    // pool in v1.105.50, and a capture cannot be rolled back by us anyway.
+
+    // Computed here rather than after the capture, because the transaction below needs them.
+    let earlyMinutes = 0;
+    if (visitLog && visitLog.check_in_time && session.scheduled_time && session.duration_hours) {
+      const dateStr = (session.scheduled_date || '').split('T')[0];
+      const sessionStart = buildDateTimeInZone(dateStr, session.scheduled_time, careTz);
+      const schedEnd = new Date(sessionStart.getTime() + parseFloat(session.duration_hours) * 60 * 60000);
+      const nowCare = getNowInZone(careTz);
+      earlyMinutes = Math.max(0, (schedEnd - nowCare) / 60000);
+    }
+    const coGeo = geofenceEvidence(checkOutLatitude, checkOutLongitude, session.recipient_lat, session.recipient_lng);
+
+    await db.transaction(async (tx) => {
+      // Transition to completed with adjusted cost, actual duration, overtime, and mark review
+      // required. payment_due_at = 1 hour from now — the family has that long to review + tip
+      // before auto-pay.
+      await tx.prepare(`
+        UPDATE care_sessions SET
+          status = 'completed',
+          estimated_cost = ?,
+          duration_hours = ?,
+          overtime_minutes = ?,
+          overtime_cost = ?,
+          review_required = 1,
+          completed_at = NOW(),
+          payment_due_at = NOW() + INTERVAL '1 hour',
+          updated_at = NOW()
+        WHERE id = ?
+      `).run(adjustedCost, actualDurationHours, overtimeMinutes, overtimeCost, req.params.id);
+
+      if (visitLog) {
+        await tx.prepare(`
+          UPDATE visit_logs SET
+            check_out_time = NOW(),
+            departure_mood = ?,
+            condition_tags = ?,
+            care_feedback = ?,
+            service_feedback = ?,
+            summary = ?,
+            mood_rating = ?,
+            early_departure_reason = ?,
+            early_departure_minutes = ?,
+            check_out_lat = ?,
+            check_out_lng = ?,
+            check_out_distance_ft = ?,
+            check_out_geo_flag = ?
+          WHERE id = ?
+        `).run(
+          departureMood ? (Array.isArray(departureMood) ? JSON.stringify(departureMood) : departureMood) : null,
+          conditionTags ? JSON.stringify(conditionTags) : null,
+          careFeedback || null,
+          serviceFeedback || null,
+          summary || null,
+          departureMood ? (Array.isArray(departureMood) ? JSON.stringify(departureMood) : departureMood) : null,
+          earlyMinutes > 15 ? (earlyDepartureReason || null) : null,
+          earlyMinutes > 15 ? Math.round(earlyMinutes) : null,
+          coarsenCoordinate(checkOutLatitude),
+          coarsenCoordinate(checkOutLongitude),
+          coGeo.distanceFt,
+          coGeo.flag,
+          visitLog.id
+        );
+      }
+    });
 
     // ─── Capture payment (Stripe auth → charge) ───
     // Skip when admin is impersonating (test mode) — don't charge real money
@@ -1990,51 +2049,7 @@ router.post("/:id/check-out", async (req, res) => {
       `).run(req.params.id);
     }
 
-    // Calculate how many minutes early (for storage and notification)
-    // Use care recipient's timezone — not server or device timezone
-    let earlyMinutes = 0;
-    if (visitLog && visitLog.check_in_time && session.scheduled_time && session.duration_hours) {
-      const dateStr = (session.scheduled_date || '').split('T')[0];
-      const sessionStart = buildDateTimeInZone(dateStr, session.scheduled_time, careTz);
-      const schedEnd = new Date(sessionStart.getTime() + parseFloat(session.duration_hours) * 60 * 60000);
-      const nowCare = getNowInZone(careTz);
-      earlyMinutes = Math.max(0, (schedEnd - nowCare) / 60000);
-    }
-
-    const coGeo = geofenceEvidence(checkOutLatitude, checkOutLongitude, session.recipient_lat, session.recipient_lng);
-    if (visitLog) {
-      await db.prepare(`
-        UPDATE visit_logs SET
-          check_out_time = NOW(),
-          departure_mood = ?,
-          condition_tags = ?,
-          care_feedback = ?,
-          service_feedback = ?,
-          summary = ?,
-          mood_rating = ?,
-          early_departure_reason = ?,
-          early_departure_minutes = ?,
-          check_out_lat = ?,
-          check_out_lng = ?,
-          check_out_distance_ft = ?,
-          check_out_geo_flag = ?
-        WHERE id = ?
-      `).run(
-        departureMood ? (Array.isArray(departureMood) ? JSON.stringify(departureMood) : departureMood) : null,
-        conditionTags ? JSON.stringify(conditionTags) : null,
-        careFeedback || null,
-        serviceFeedback || null,
-        summary || null,
-        departureMood ? (Array.isArray(departureMood) ? JSON.stringify(departureMood) : departureMood) : null,
-        earlyMinutes > 15 ? (earlyDepartureReason || null) : null,
-        earlyMinutes > 15 ? Math.round(earlyMinutes) : null,
-        coarsenCoordinate(checkOutLatitude),
-        coarsenCoordinate(checkOutLongitude),
-        coGeo.distanceFt,
-        coGeo.flag,
-        visitLog.id
-      );
-    }
+    // (the visit log closed inside the transaction above — v1.106.10)
 
     // ─── Auto-create care note from checkout summary ───
     // Bridge visit_logs → recipient_notes so checkout observations appear in Care Profile
