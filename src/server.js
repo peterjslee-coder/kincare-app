@@ -590,6 +590,57 @@ const apiLimiter = rateLimit({
 });
 app.use("/api/", apiLimiter);
 
+// ─── v1.106.7 — tell an incompatible client so, instead of letting it fail strangely ───
+//
+// Every request already carries X-App-Version, and until now the server only WROTE IT DOWN.
+// Pete, Sep 9: a deploy landed while the app was closed; the next open ran the old bundle
+// against the new server and "every screen switch spun for a minute". Nothing told the client
+// it was the problem — it just got shapes it did not understand, one endpoint at a time.
+//
+// This is the smallest honest answer: 426 Upgrade Required, plus the minimum, so apiFetch can
+// reload at a safe moment instead of guessing.
+//
+// Deliberately conservative, because the failure mode of getting this wrong is locking every
+// user out of a working app:
+//   · MIN_APP_VERSION moves only when a release genuinely breaks old clients. It is NOT
+//     APP_VERSION. Bumping it on every deploy would force-reload everyone every time.
+//   · A missing or unparseable header PASSES. Native shells, curl, webhooks and Stripe do not
+//     send it and must never be turned away.
+//   · The recovery paths are exempt. A client that cannot call /api/version, /api/health or
+//     /api/auth/* cannot reload itself out of the hole this is meant to get it out of.
+const MIN_APP_VERSION = "1.106.0";
+
+function parseVersion(v) {
+  const m = /^(\d+)\.(\d+)\.(\d+)/.exec(String(v || "").trim());
+  return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null;
+}
+
+function isOlder(a, b) {
+  for (let i = 0; i < 3; i++) {
+    if (a[i] < b[i]) return true;
+    if (a[i] > b[i]) return false;
+  }
+  return false;
+}
+
+const VERSION_GATE_EXEMPT = ["/api/version", "/api/health", "/api/auth/", "/api/payments/webhook", "/api/checkr/webhook"];
+
+app.use("/api/", (req, res, next) => {
+  const full = req.originalUrl || req.path;
+  if (VERSION_GATE_EXEMPT.some((p) => full.startsWith(p))) return next();
+  const client = parseVersion(req.headers["x-app-version"]);
+  if (!client) return next();                      // not a browser client of ours — not our business
+  const min = parseVersion(MIN_APP_VERSION);
+  if (!min || !isOlder(client, min)) return next();
+  res.set("X-Min-App-Version", MIN_APP_VERSION);
+  return res.status(426).json({
+    error: "This version of the app is out of date. Reloading to get the current one.",
+    minAppVersion: MIN_APP_VERSION,
+    upgradeRequired: true,
+  });
+});
+
+
 // ─── Serve Frontend ───
 //
 // v1.106.6 — this used to send `no-store` on EVERY .js and .css, which defeated the browser
@@ -744,56 +795,6 @@ app.use("/api/care-events", careEventsRouter);
 app.use("/api/legal", require("./routes/legal"));
 app.use("/api/media", require("./routes/media"));
 app.use("/api/safety", require("./routes/safety"));
-
-// ─── v1.106.7 — tell an incompatible client so, instead of letting it fail strangely ───
-//
-// Every request already carries X-App-Version, and until now the server only WROTE IT DOWN.
-// Pete, Sep 9: a deploy landed while the app was closed; the next open ran the old bundle
-// against the new server and "every screen switch spun for a minute". Nothing told the client
-// it was the problem — it just got shapes it did not understand, one endpoint at a time.
-//
-// This is the smallest honest answer: 426 Upgrade Required, plus the minimum, so apiFetch can
-// reload at a safe moment instead of guessing.
-//
-// Deliberately conservative, because the failure mode of getting this wrong is locking every
-// user out of a working app:
-//   · MIN_APP_VERSION moves only when a release genuinely breaks old clients. It is NOT
-//     APP_VERSION. Bumping it on every deploy would force-reload everyone every time.
-//   · A missing or unparseable header PASSES. Native shells, curl, webhooks and Stripe do not
-//     send it and must never be turned away.
-//   · The recovery paths are exempt. A client that cannot call /api/version, /api/health or
-//     /api/auth/* cannot reload itself out of the hole this is meant to get it out of.
-const MIN_APP_VERSION = "1.106.0";
-
-function parseVersion(v) {
-  const m = /^(\d+)\.(\d+)\.(\d+)/.exec(String(v || "").trim());
-  return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null;
-}
-
-function isOlder(a, b) {
-  for (let i = 0; i < 3; i++) {
-    if (a[i] < b[i]) return true;
-    if (a[i] > b[i]) return false;
-  }
-  return false;
-}
-
-const VERSION_GATE_EXEMPT = ["/api/version", "/api/health", "/api/auth/", "/api/payments/webhook", "/api/checkr/webhook"];
-
-app.use("/api/", (req, res, next) => {
-  const full = req.originalUrl || req.path;
-  if (VERSION_GATE_EXEMPT.some((p) => full.startsWith(p))) return next();
-  const client = parseVersion(req.headers["x-app-version"]);
-  if (!client) return next();                      // not a browser client of ours — not our business
-  const min = parseVersion(MIN_APP_VERSION);
-  if (!min || !isOlder(client, min)) return next();
-  res.set("X-Min-App-Version", MIN_APP_VERSION);
-  return res.status(426).json({
-    error: "This version of the app is out of date. Reloading to get the current one.",
-    minAppVersion: MIN_APP_VERSION,
-    upgradeRequired: true,
-  });
-});
 
 // ─── App version check (lightweight, no auth) ───
 const APP_VERSION = "1.106.7";

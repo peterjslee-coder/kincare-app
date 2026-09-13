@@ -173,6 +173,24 @@ describe("P3 — the server tells an incompatible client, instead of failing odd
     return out;
   };
 
+  // Staging caught what the handler tests could not: the gate was REGISTERED after every
+  // router, so Express handed /api/dashboard to the dashboard router and the gate never ran.
+  // A correct middleware mounted in the wrong place is an unmounted middleware.
+  test("the gate is registered BEFORE the routers it is supposed to guard", () => {
+    const src = raw("src/server.js");
+    const gateAt = src.indexOf('app.use("/api/", (req, res, next) => {\n  const full');
+    const firstRouter = src.indexOf('app.use("/api/auth", require("./routes/auth"));');
+    expect(gateAt).toBeGreaterThan(-1);
+    expect(firstRouter).toBeGreaterThan(-1);
+    expect(gateAt).toBeLessThan(firstRouter);
+  });
+
+  test("and after the rate limiters, so a flood is refused before it is version-checked", () => {
+    const src = raw("src/server.js");
+    expect(src.indexOf('app.use("/api/", apiLimiter);'))
+      .toBeLessThan(src.indexOf('app.use("/api/", (req, res, next) => {\n  const full'));
+  });
+
   test("an out-of-date client is actually turned away, with the minimum it needs", () => {
     const r = callGate("/api/dashboard", "1.105.113");
     expect(r.nexted).toBe(false);

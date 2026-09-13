@@ -126,15 +126,15 @@ Every job runs through `guardedPoller` → `withPollerLock` (`src/models/databas
 
 | Lock | Job | Interval | Declared |
 |---:|---|---|---|
-| 101 | Daily demo data refresh | 24 h | `src/server.js:1007` |
-| 102 | Session notification poller (every 60s) | 1 min | `src/server.js:1101` |
-| 103 | Session Accountability Poller | 1 min | `src/server.js:1360` |
-| 104 | Reimbursement push digest sweeper (v1.98.15) | 30 s | `src/server.js:1379` |
-| 105 | Auto-pay cron: charge overdue sessions | 5 min | `src/server.js:1473` |
-| 106 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1592` |
-| 107 | Care Tasks poller (v1.99.0) | 1 min | `src/server.js:1602` |
-| 108 | Care Events poller (v1.100.0) | 1 min | `src/server.js:1620` |
-| 109 | Kindred Reminder Delivery Poller | 1 min | `src/server.js:1395` |
+| 101 | Daily demo data refresh | 24 h | `src/server.js:1008` |
+| 102 | Session notification poller (every 60s) | 1 min | `src/server.js:1102` |
+| 103 | Session Accountability Poller | 1 min | `src/server.js:1361` |
+| 104 | Reimbursement push digest sweeper (v1.98.15) | 30 s | `src/server.js:1380` |
+| 105 | Auto-pay cron: charge overdue sessions | 5 min | `src/server.js:1474` |
+| 106 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1593` |
+| 107 | Care Tasks poller (v1.99.0) | 1 min | `src/server.js:1603` |
+| 108 | Care Events poller (v1.100.0) | 1 min | `src/server.js:1621` |
+| 109 | Kindred Reminder Delivery Poller | 1 min | `src/server.js:1396` |
 
 ---
 
