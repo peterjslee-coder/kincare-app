@@ -9,17 +9,17 @@ npm install
 npm run dev          # starts on http://localhost:3001
 ```
 
-The server auto-seeds demo data on first run. No build step — Babel compiles JSX in-browser.
+The server auto-seeds demo data on first run. `npm start` builds the client bundle (`scripts/build-client.js`) before starting, so rebuild after any change under `public/js/`.
 
 ## Demo Accounts
 
 | Role | Email | Password | View |
 |------|-------|----------|------|
-| Care Team | pete@inplace.care | inplace123 | Full dashboard — manages Betty's care |
-| Sibling | david.lee@inplace.care | inplace123 | Pete's brother — coordinates Betty's care |
-| Sibling | susan.lee@inplace.care | inplace123 | Pete's sister — coordinates Betty's care |
+| Care Team | paul@inplace.care | inplace123 | Full dashboard — manages Barbara's care |
+| Sibling | david.lowe@inplace.care | inplace123 | Coordinates Barbara's care |
+| Sibling | susan.lowe@inplace.care | inplace123 | Coordinates Barbara's care |
 | Caregiver | maria@inplace.care | inplace123 | Caregiver hub — schedule, families, earnings |
-| Care Recipient | betty@inplace.care | inplace123 | Limited view — calendar & personal notes |
+| Care Recipient | barbara@inplace.care | inplace123 | Limited view — calendar & personal notes |
 
 ## API Endpoints
 
@@ -83,7 +83,7 @@ All authenticated routes require: `Authorization: Bearer <token>`
 - **Runtime:** Node.js + Express
 - **Database:** PostgreSQL via pg (connection pooling)
 - **Auth:** JWT (jsonwebtoken + bcryptjs)
-- **Frontend:** React 18 + Babel standalone (no build step)
+- **Frontend:** React 18, self-hosted from `/vendor/`; JSX compiled at build time by `scripts/build-client.js` into `public/js-compiled/bundle.js`
 - **Deployment:** Railway.app + Cloudflare
 
 ## Scripts
@@ -96,3 +96,8 @@ All authenticated routes require: `Authorization: Bearer <token>`
 ## Deploying
 
 Railway auto-deploys on `git push origin main`. After pushing frontend changes, bump the `?v=X.Y.Z` cache-bust parameter in `index.html` to bust Cloudflare's cache.
+
+---
+
+_Architecture, the route map and a "Where is…" index: `docs/ARCHITECTURE.md`._
+_Project context and the rules that matter: `CLAUDE.md`._

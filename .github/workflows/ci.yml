@@ -55,6 +55,12 @@ jobs:
       - name: Dark-mode contrast
         run: npm run lint:contrast
 
+      # docs/ARCHITECTURE.md is generated from the code. If a new route, poller or
+      # socket event lands without regenerating it, the map every session reads is
+      # already wrong. Fail here instead.
+      - name: Architecture doc is current
+        run: npm run gen:architecture -- --check
+
       - name: Unit tests
         run: npm test
 
