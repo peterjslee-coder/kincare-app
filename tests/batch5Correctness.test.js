@@ -188,6 +188,44 @@ describe("C5 — the conversation list is one round trip, not 1 + 3×C", () => {
   });
 });
 
+describe("C5b — two messages in the same instant cannot be lost or mis-previewed", () => {
+  const m = code("src/routes/messages.js");
+
+  test("the list preview breaks ties on id, so it agrees with the thread", () => {
+    // Found on staging: an iPAi question and its reply were inserted at the same microsecond,
+    // and the list previewed the QUESTION while the thread ended with the ANSWER.
+    const block = m.slice(m.indexOf("const convIds = convRows.map"), m.indexOf("let conversations = []"));
+    expect(block).toMatch(/ORDER BY m\.created_at DESC, m\.id DESC\s*\n\s*LIMIT 1/);
+  });
+
+  test("the thread page is ordered deterministically too", () => {
+    expect(m).toMatch(/ORDER BY m\.created_at DESC, m\.id DESC\s*\n\s*LIMIT \?/);
+  });
+
+  test("the cursor is (created_at, id) — a bare timestamp SKIPS a tied message forever", () => {
+    // Not on the first page (cut by LIMIT), not on the next (excluded by <). A dropped
+    // message in a care conversation, appearing only at random, only when two land together.
+    expect(m).toMatch(/\(m\.created_at, m\.id\) < \(\?::timestamptz, \?\)/);
+    expect(m).not.toMatch(/m\.created_at < \?::timestamptz/);
+  });
+
+  test("the server hands back both halves of the cursor", () => {
+    expect(m).toMatch(/const oldestOnPageId = messages\.length \? messages\[0\]\.id : null/);
+    expect(m).toMatch(/oldestOnPageId,/);
+  });
+
+  test("and the client sends both back", () => {
+    const c = code("public/js/components/Messages.js");
+    expect(c).toMatch(/beforeId=\$\{encodeURIComponent\(oldestOnPageId\)\}/);
+    expect(c).toMatch(/setOldestOnPageId\(data\.oldestOnPageId \|\| null\)/);
+  });
+
+  test("an older client that sends only `before` still works", () => {
+    // '' sorts below every uuid, so the tuple comparison degrades to "strictly older".
+    expect(m).toMatch(/beforeId \|\| ''/);
+  });
+});
+
 describe("C6 — indexes, and the backfill that stopped running on every boot", () => {
   const db = raw("src/models/database.js");
 

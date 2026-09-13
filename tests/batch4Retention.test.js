@@ -50,7 +50,8 @@ describe("R2 — a thread is a page, not a transcript", () => {
 
   test("the thread query is limited", () => {
     expect(m).toMatch(/const pageSize = clampLimit\(req\.query\.limit, 60, 200\)/);
-    expect(m).toMatch(/ORDER BY m\.created_at DESC\s*\n\s*LIMIT \?/);
+    // v1.106.10 — the id tie-break joined it; see C5b in batch5Correctness for why.
+    expect(m).toMatch(/ORDER BY m\.created_at DESC, m\.id DESC\s*\n\s*LIMIT \?/);
   });
 
   test("it takes the NEWEST page, then hands it back oldest-first", () => {
@@ -63,7 +64,7 @@ describe("R2 — a thread is a page, not a transcript", () => {
 
   test("a cursor walks backwards, and no cursor means the latest page", () => {
     expect(m).toMatch(/const before = typeof req\.query\.before === "string" && req\.query\.before \? req\.query\.before : null/);
-    expect(m).toMatch(/\(\?::timestamptz IS NULL OR m\.created_at < \?::timestamptz\)/);
+    expect(m).toMatch(/\(\?::timestamptz IS NULL OR \(m\.created_at, m\.id\) < \(\?::timestamptz, \?\)\)/);
   });
 
   test("the response says whether anything is above the page", () => {
@@ -81,7 +82,7 @@ describe("R2 — a thread is a page, not a transcript", () => {
   test("the client can reach the older pages — pagination without that is data loss", () => {
     const c = code("public/js/components/Messages.js");
     expect(c).toMatch(/const loadEarlier = async \(\) => \{/);
-    expect(c).toMatch(/\?before=\$\{encodeURIComponent\(oldestOnPage\)\}/);
+    expect(c).toMatch(/before=\$\{encodeURIComponent\(oldestOnPage\)\}/);
     expect(c).toMatch(/Load earlier messages/);
   });
 

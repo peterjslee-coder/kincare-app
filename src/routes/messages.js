@@ -121,7 +121,11 @@ router.get("/conversations", async (req, res) => {
         SELECT m.content, m.sender_id, m.created_at
         FROM messages m
         WHERE m.conversation_id = v.cid AND m.created_at >= v.history_from
-        ORDER BY m.created_at DESC
+        -- v1.106.10 — the id tie-break is not decoration. Two messages can share a created_at to
+        -- the microsecond (an iPAi question and its reply are inserted in the same instant),
+        -- and with only created_at to order by, Postgres may return either. Staging showed the
+        -- list previewing the QUESTION while the thread ended with the ANSWER.
+        ORDER BY m.created_at DESC, m.id DESC
         LIMIT 1
       ) lm
     `).all(...convIds, ...histories);
@@ -678,6 +682,9 @@ router.get("/conversations/:id", async (req, res) => {
   // the shape people already see rather than inventing a second one.
   const pageSize = clampLimit(req.query.limit, 60, 200);
   const before = typeof req.query.before === "string" && req.query.before ? req.query.before : null;
+  // Paired with `before`. An older client that sends only `before` still works: '' sorts below
+  // every uuid, so the tuple comparison degrades to "strictly older", which is the old behaviour.
+  const beforeId = typeof req.query.beforeId === "string" ? req.query.beforeId : null;
 
   // Get messages with reply-to info
   const messages = await db.prepare(`
@@ -708,10 +715,16 @@ router.get("/conversations/:id", async (req, res) => {
     LEFT JOIN users ru ON rm.sender_id = ru.id
     WHERE m.conversation_id = ?
       AND m.created_at >= ?
-      AND (?::timestamptz IS NULL OR m.created_at < ?::timestamptz)
-    ORDER BY m.created_at DESC
+      -- v1.106.10 — the cursor is (created_at, id), not created_at alone. With a bare
+      -- bare created_at comparison, two messages sharing a timestamp across a page boundary
+      -- means the second is never returned by any page: not on the first (cut by LIMIT), and
+      -- not on the next (excluded by the strict comparison). A dropped message in a care
+      -- conversation is the worst bug this pagination could have, and it needs a tie — which
+      -- is to say it would have shown up rarely, at random, and been impossible to reproduce.
+      AND (?::timestamptz IS NULL OR (m.created_at, m.id) < (?::timestamptz, ?))
+    ORDER BY m.created_at DESC, m.id DESC
     LIMIT ?
-  `).all(convId, historyFrom, before, before, pageSize);
+  `).all(convId, historyFrom, before, before, beforeId || '', pageSize);
   // Newest-first out of the database so LIMIT takes the RECENT page, oldest-first on the way
   // to the client, which is the order the thread renders in.
   messages.reverse();
@@ -768,6 +781,7 @@ router.get("/conversations/:id", async (req, res) => {
   // A full page means there is probably more above it. Cheaper and honest enough for a
   // "load earlier" affordance; the exact count is not worth a second COUNT(*) per open.
   const oldestOnPage = messages.length ? messages[0].created_at : null;
+  const oldestOnPageId = messages.length ? messages[0].id : null;
   const hasMore = messages.length === pageSize;
 
   res.json({
@@ -777,6 +791,7 @@ router.get("/conversations/:id", async (req, res) => {
     hiddenBefore,
     hasMore,
     oldestOnPage,
+    oldestOnPageId,
     pageSize,
   });
 });

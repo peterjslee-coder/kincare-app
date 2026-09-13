@@ -24,6 +24,7 @@ const Messages = window.Messages = () => {
   // we have; `oldestOnPage` is the cursor to ask for the next one.
   const [hasMoreAbove, setHasMoreAbove] = useState(false);
   const [oldestOnPage, setOldestOnPage] = useState(null);
+  const [oldestOnPageId, setOldestOnPageId] = useState(null);
   const [loadingEarlier, setLoadingEarlier] = useState(false);
   const [inputText, setInputText] = useState('');
   // Drafts persist to localStorage so they survive page navigation
@@ -384,7 +385,9 @@ const Messages = window.Messages = () => {
     const box = messagesAreaRef.current || null;
     const heightBefore = box ? box.scrollHeight : 0;
     try {
-      const res = await apiFetch(`/api/messages/conversations/${activeConvId}?before=${encodeURIComponent(oldestOnPage)}`);
+      const cursor = `before=${encodeURIComponent(oldestOnPage)}` +
+        (oldestOnPageId ? `&beforeId=${encodeURIComponent(oldestOnPageId)}` : '');
+      const res = await apiFetch(`/api/messages/conversations/${activeConvId}?${cursor}`);
       if (res?.ok) {
         const data = await res.json();
         const older = data.messages || [];
@@ -394,6 +397,7 @@ const Messages = window.Messages = () => {
             return [...older.filter((m) => !seen.has(m.id)), ...prev];
           });
           setOldestOnPage(data.oldestOnPage || null);
+          setOldestOnPageId(data.oldestOnPageId || null);
         }
         setHasMoreAbove(!!data.hasMore && older.length > 0);
         if (box) requestAnimationFrame(() => { box.scrollTop += box.scrollHeight - heightBefore; });
@@ -428,6 +432,7 @@ const Messages = window.Messages = () => {
         setHiddenBefore(data.hiddenBefore || 0);
         setHasMoreAbove(!!data.hasMore);
         setOldestOnPage(data.oldestOnPage || null);
+        setOldestOnPageId(data.oldestOnPageId || null);
         setThreadState('loaded');
       }
     } catch (err) {
