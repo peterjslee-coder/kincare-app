@@ -325,6 +325,124 @@ function findHooksAfterEarlyReturn(files, PUBLIC) {
   return findings;
 }
 
+// ─── v1.106.13 — a `const` used above where it is declared, inside the same function ───
+//
+// Deduplicating two copies of a post-onboarding handler into one
+// `const restoreAfterOnboarding = (token) => {...}` put the declaration below the two
+// `return <CaregiverOnboarding onComplete={...} />` branches that call it. `const` is not
+// hoisted and those branches return first, so the binding never initialises in that render
+// and the callback throws "Cannot access 'restoreAfterOnboarding' before initialization" —
+// at the exact moment a caregiver finishes onboarding.
+//
+// lint:client's other rules all passed: the identifier IS declared, just not yet. Same family
+// as findHooksAfterEarlyReturn — a structural mistake that reads fine and fails at runtime.
+//
+// The narrowing that makes this usable: a reference above a declaration is only a BUG if the
+// declaration can be skipped before the reference's code runs. `useEffect(() => loadUsers())`
+// on line 649 with `const loadUsers` on line 1024 is completely fine — the effect fires after
+// the body has finished, so the binding is initialised by then. AdminPanel alone has 19 of
+// those and none is a defect.
+//
+// What made restoreAfterOnboarding throw was an EARLY RETURN sitting between the two: the
+// render returned at line 1735, so line 1771 never executed in that pass, and the closure it
+// handed to onComplete captured a binding that was never initialised. So the rule fires only
+// when a top-level statement between the reference and the declaration can return out of the
+// function.
+function findConstUsedBeforeDeclaration(files, PUBLIC) {
+  const findings = [];
+
+  for (const rel of files) {
+    const abs = path.join(PUBLIC, rel);
+    if (!fs.existsSync(abs)) continue;
+    let ast;
+    try {
+      ast = espree.parse(fs.readFileSync(abs, "utf8"), {
+        ecmaVersion: 2022, sourceType: "script", ecmaFeatures: { jsx: true }, loc: true, range: true,
+      });
+    } catch { continue; }
+
+    const scanFunctionBody = (body) => {
+      if (!Array.isArray(body)) return;
+
+      // const/let NAME = (arrow|function) — the bindings that can be hit before initialisation.
+      const decls = new Map();
+      for (const stmt of body) {
+        if (stmt.type !== "VariableDeclaration" || stmt.kind === "var") continue;
+        for (const d of stmt.declarations) {
+          if (d.id.type !== "Identifier" || !d.init) continue;
+          if (d.init.type !== "ArrowFunctionExpression" && d.init.type !== "FunctionExpression") continue;
+          decls.set(d.id.name, { start: d.range[0], line: d.loc.start.line });
+        }
+      }
+      if (!decls.size) return;
+
+      // Can this top-level statement return out of the enclosing function? (Nested functions
+      // do not count — their returns end the callback, not the render.) Same test
+      // findHooksAfterEarlyReturn uses.
+      const canReturn = (node) => {
+        let found = false;
+        (function walk(n) {
+          if (found || !n || typeof n !== "object") return;
+          if (Array.isArray(n)) return n.forEach(walk);
+          if (n.type === "FunctionExpression" || n.type === "ArrowFunctionExpression" || n.type === "FunctionDeclaration") return;
+          if (n.type === "ReturnStatement") { found = true; return; }
+          for (const k of Object.keys(n)) { if (k === "loc" || k === "range") continue; const v = n[k]; if (v && typeof v === "object") walk(v); }
+        })(node);
+        return found;
+      };
+
+      // Any Identifier reference positioned before its own declaration, anywhere in this body
+      // including inside nested callbacks — but only where an early return can strand it.
+      for (const stmt of body) {
+        (function walk(n, parent) {
+          if (!n || typeof n !== "object") return;
+          if (Array.isArray(n)) return n.forEach((c) => walk(c, parent));
+          if (n.type === "Identifier" && decls.has(n.name)) {
+            const isPropertyKey = parent && parent.type === "Property" && parent.key === n && !parent.computed;
+            const isMemberProp = parent && parent.type === "MemberExpression" && parent.property === n && !parent.computed;
+            const d = decls.get(n.name);
+            if (!isPropertyKey && !isMemberProp && n.range[0] < d.start) {
+              // Is there a return between this statement and the declaration?
+              const stranding = body.find(
+                (b) => b.range[0] >= stmt.range[0] && b.range[1] <= d.start && canReturn(b)
+              );
+              if (stranding) {
+                findings.push({
+                  file: rel, line: n.loc.start.line, name: n.name,
+                  declaredAt: d.line, returnAt: stranding.loc.start.line,
+                });
+              }
+            }
+          }
+          for (const k of Object.keys(n)) {
+            if (k === "loc" || k === "range" || k === "parent") continue;
+            const v = n[k];
+            if (v && typeof v === "object") walk(v, n);
+          }
+        })(stmt, null);
+      }
+    };
+
+    (function walk(n) {
+      if (!n || typeof n !== "object") return;
+      if (Array.isArray(n)) return n.forEach(walk);
+      if ((n.type === "ArrowFunctionExpression" || n.type === "FunctionExpression" || n.type === "FunctionDeclaration")
+          && n.body && n.body.type === "BlockStatement") {
+        scanFunctionBody(n.body.body);
+      }
+      for (const k of Object.keys(n)) { const v = n[k]; if (v && typeof v === "object") walk(v); }
+    })(ast);
+  }
+  // De-duplicate: one report per (file, name, line).
+  const seen = new Set();
+  return findings.filter((f) => {
+    const k = `${f.file}:${f.name}:${f.line}`;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+}
+
 async function main() {
   const eslint = new ESLint({
     useEslintrc: false,
@@ -372,9 +490,10 @@ async function main() {
 
   const missingJsx = findUndefinedJsxComponents(combined, locate);
   const lateHooks = findHooksAfterEarlyReturn(files, PUBLIC);
+  const earlyConsts = findConstUsedBeforeDeclaration(files, PUBLIC);
 
-  if (errors.length === 0 && missingJsx.length === 0 && lateHooks.length === 0) {
-    console.log(`  [lint] ✓ ${files.length} client files, no NEW undeclared identifiers / dupe keys / dead code / undefined JSX components / unreachable functions / late hooks${baseNote}`);
+  if (errors.length === 0 && missingJsx.length === 0 && lateHooks.length === 0 && earlyConsts.length === 0) {
+    console.log(`  [lint] ✓ ${files.length} client files, no NEW undeclared identifiers / dupe keys / dead code / undefined JSX components / unreachable functions / late hooks / TDZ uses${baseNote}`);
     return 0;
   }
 
@@ -397,6 +516,12 @@ async function main() {
     console.error(`\n  [lint] \u2717 ${lateHooks.length} React hook(s) called AFTER an early return — these throw "Rendered more hooks than during the previous render":\n`);
     for (const h of lateHooks) {
       console.error(`    ${h.file}:${h.line}  ${h.name}() runs only when the function gets past the return on line ${h.returnedAt}`);
+    }
+  }
+  if (earlyConsts.length) {
+    console.error(`\n  [lint] \u2717 ${earlyConsts.length} const/let function(s) referenced ABOVE their own declaration — these throw "Cannot access 'X' before initialization" when the earlier code path runs:\n`);
+    for (const c of earlyConsts) {
+      console.error(`    ${c.file}:${c.line}  ${c.name} is used here, declared on line ${c.declaredAt}, and the return on line ${c.returnAt} can skip that declaration`);
     }
   }
   console.error("");

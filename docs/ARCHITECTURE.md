@@ -268,7 +268,7 @@ State travels through `window`, not props. This table is the registry.
 | `window.__pendingPage` | app.js | 10 |
 | `window.__pendingScheduleDate` | ActivityFeed.js | 7 |
 | `window.__pendingTeam` | app.js | 5 |
-| `window.__postOnboarding` | app.js | 5 |
+| `window.__postOnboarding` | app.js | 4 |
 | `window.__probeSocket` | utils.js | 1 |
 | `window.__pwaInstallPrompt` | app.js | 3 |
 | `window.__refetchAdminAlerts` | app.js | 3 |
@@ -280,7 +280,7 @@ State travels through `window`, not props. This table is the registry.
 | `window.__sessionIsPersistent` | app.js | 2 |
 | `window.__setSessionActive` | app.js | 4 |
 | `window.__setUiPref` | uiPrefs.js | 5 |
-| `window.__setUiPrefs` | app.js, uiPrefs.js | 9 |
+| `window.__setUiPrefs` | app.js, uiPrefs.js | 7 |
 | `window.__showToast` | VisitDetailModal.js, utils.js | 13 |
 | `window.__skipPopstate` | VisitDetailModal.js | 3 |
 | `window.__startCaregiverTour` | app.js | 8 |

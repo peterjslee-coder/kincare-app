@@ -637,6 +637,11 @@ const apiFetch = window.apiFetch = async (url, options = {}) => {
   const csrf = getCsrfToken();
   if (csrf) headers['X-CSRF-Token'] = csrf;
 
+  // v1.106.13 — any write to the user's own record invalidates the cached identity. Put here
+  // rather than at the call sites because a missed invalidation is invisible until someone
+  // sees a stale name or an old photo, and there are eight such writes.
+  if (options.method && options.method !== 'GET' && url.startsWith('/api/auth/me')) invalidateMe();
+
   // Respect a signal the caller already supplied; otherwise impose our own deadline.
   const timeoutMs = options.timeoutMs || (isFormData ? API_UPLOAD_TIMEOUT_MS : API_TIMEOUT_MS);
   let timer = null;
@@ -750,6 +755,61 @@ const apiFetch = window.apiFetch = async (url, options = {}) => {
   }
   return response;
 };
+
+// ─── v1.106.13 — one identity read, however many components ask ───
+//
+// Sixteen places called GET /api/auth/me and each one fetched it independently. In production
+// that shows up as bursts — four calls inside the same second on a logged-in boot, as Dashboard,
+// Messages, the verification banner and MyAccount all mount and each asks who the user is. Not
+// a crisis (they are mostly 304s), but it is the same answer fetched four times, and it grows by
+// one every time a screen is added.
+//
+// The cache is keyed on the EFFECTIVE TOKEN, not on a timer alone. That is the part that makes
+// it safe: an admin starting or ending impersonation is a different token, so it is a different
+// key and a different fetch. There is no invalidation to remember and therefore none to forget —
+// which matters here, because the failure mode of forgetting is an admin seeing their own
+// identity while impersonating, or keeping someone else's after they stop.
+//
+// The TTL is short on top of that, so a server-side change (an account approved, an ID verified)
+// is never stale for long. The goal is only to collapse the burst, not to hold identity.
+//
+// Returns exactly what `await res.json()` returned before — { user, ... } — so every call site
+// is a straight swap and no caller has to learn a new shape.
+const ME_TTL_MS = 10000;
+let _meKey = null, _mePromise = null, _meCache = null;
+
+const _meCacheKey = () =>
+  IMPERSONATION_TOKEN
+    ? `imp:${IMPERSONATION_TOKEN}`
+    : `own:${AUTH_TOKEN || ''}|${ACTIVE_ROLE || ''}`;
+
+const fetchMe = window.fetchMe = (opts = {}) => {
+  const key = _meCacheKey();
+  if (!opts.force && key === _meKey) {
+    if (_mePromise) return _mePromise;
+    if (_meCache && Date.now() - _meCache.at < ME_TTL_MS) return Promise.resolve(_meCache.body);
+  }
+  _meKey = key;
+  _meCache = null;
+  _mePromise = apiFetch('/api/auth/me')
+    .then(async (res) => {
+      if (!res || !res.ok) return null;
+      const body = await res.json().catch(() => null);
+      if (!body || !(body.user || body.id)) return null;
+      // Only cache under the key that was current when the request went out. If the token
+      // changed mid-flight (login completing, impersonation starting) this answer belongs to
+      // the old identity and must not be served to the new one.
+      if (_meCacheKey() === key) _meCache = { at: Date.now(), body };
+      return body;
+    })
+    .catch(() => null)
+    .finally(() => { if (_meKey === key) _mePromise = null; });
+  return _mePromise;
+};
+
+// Anything that changes who the user is, or what the server would say about them, drops it.
+const invalidateMe = window.invalidateMe = () => { _meKey = null; _mePromise = null; _meCache = null; };
+
 
 // ─── Auth/Flow Event Tracking ───
 // Fire-and-forget event tracker for login, registration, password reset, demo, etc.

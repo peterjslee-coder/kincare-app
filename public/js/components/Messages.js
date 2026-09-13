@@ -328,8 +328,8 @@ const Messages = window.Messages = () => {
   useEffect(() => {
     (async () => {
       try {
-        const res = await apiFetch('/api/auth/me');
-        if (res?.ok) { const d = await res.json(); setCurrentUser(d.user); }
+        const d = await fetchMe();
+        if (d?.user) setCurrentUser(d.user);
       } catch {}
     })();
   }, []);

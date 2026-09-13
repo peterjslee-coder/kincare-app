@@ -9,7 +9,7 @@ const EmailVerificationBanner = window.EmailVerificationBanner = ({ userId }) =>
 
   // On mount, double-check if already verified (catches stale state)
   useEffect(() => {
-    apiFetch('/api/auth/me').then(r => r?.json()).then(data => {
+    fetchMe().then(data => {
       if (data?.user?.email_verified) setVerified(true);
     }).catch(() => {});
   }, []);

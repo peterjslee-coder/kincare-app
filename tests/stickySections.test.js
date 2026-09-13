@@ -47,12 +47,30 @@ describe("it follows the account, not the device", () => {
   });
 
   test("the app seeds it from the user at every place the user arrives", () => {
-    // Four sites read accessibility_prefs from /me; a fifth that forgot this would leave
-    // sections resetting on one login path only — the hardest kind of bug to be told about.
+    // Every arrival path reads ui_prefs and accessibility_prefs from /me; one that forgot would
+    // leave sections resetting on a single login path only — the hardest kind of bug to be told
+    // about. The count is a proxy for that, so it moves when the number of paths genuinely
+    // changes: v1.106.13 merged two byte-identical post-onboarding restores into
+    // restoreAfterOnboarding, taking four sites to three. Fewer copies, same paths covered.
+    //
+    // The pairing below is the assertion that actually guards the bug — the two always travel
+    // together, so a path that seeds one and not the other fails regardless of the total.
     const seeds = (app.match(/window\.__setUiPrefs\(data\.user\.ui_prefs\)/g) || []).length;
     const a11y = (app.match(/data\.user\.accessibility_prefs \? JSON\.parse/g) || []).length;
     expect(seeds).toBe(a11y);
-    expect(seeds).toBeGreaterThanOrEqual(4);
+    expect(seeds).toBeGreaterThanOrEqual(3);
+  });
+
+  test("the merged onboarding restore is one of them — it serves two arrival paths", () => {
+    // If restoreAfterOnboarding ever stops seeding prefs, BOTH the resume-onboarding and
+    // signup-onboarding paths lose them at once, which is the cost of having merged them.
+    const i = app.indexOf("const restoreAfterOnboarding");
+    expect(i).toBeGreaterThan(-1);
+    const body = app.slice(i, i + 2000);
+    expect(body).toMatch(/window\.__setUiPrefs\(data\.user\.ui_prefs\)/);
+    expect(body).toMatch(/data\.user\.accessibility_prefs \? JSON\.parse/);
+    // …and both callers actually go through it.
+    expect((app.match(/restoreAfterOnboarding\(token\)/g) || []).length).toBe(2);
   });
 
   test("nothing about this uses localStorage", () => {

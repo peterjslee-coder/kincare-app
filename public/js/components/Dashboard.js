@@ -312,8 +312,8 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
 
   const fetchUser = async () => {
     try {
-      const res = await apiFetch('/api/auth/me');
-      if (res?.ok) { const d = await res.json(); _dashCache.user = d.user; setUser(d.user); }
+      const d = await fetchMe();
+      if (d?.user) { _dashCache.user = d.user; setUser(d.user); }
     } catch {}
   };
 

@@ -981,11 +981,9 @@ const App = () => {
     if (typeof onSocketEvent !== 'function') return;
     const cleanup = onSocketEvent('account_approved', () => {
       // Re-fetch user to pick up account_approved = true
-      apiFetch('/api/auth/me').then(async res => {
-        if (res?.ok) {
-          const data = await res.json();
-          setCurrentUser(prev => ({ ...prev, ...data.user, account_approved: true }));
-        }
+      // force: the whole point is to observe a change the server just made.
+      fetchMe({ force: true }).then((data) => {
+        if (data?.user) setCurrentUser(prev => ({ ...prev, ...data.user, account_approved: true }));
       }).catch(() => {});
     });
     return cleanup;
@@ -1099,7 +1097,7 @@ const App = () => {
           trackAuthEvent('email-verify', 'success', { loggedIn });
           setVerifyMessage({ type: 'success', text: 'Email verified! Sign in to continue.' });
           if (loggedIn) {
-            apiFetch('/api/auth/me').then(r2 => r2?.json()).then(meData => {
+            fetchMe({ force: true }).then(meData => {
               if (meData?.user) setCurrentUser(prev => prev ? { ...prev, emailVerified: !!meData.user.email_verified } : prev);
             }).catch(() => {});
           } else {
@@ -1539,37 +1537,34 @@ const App = () => {
     window.setActiveRole(null);
     setActiveRoleState(null);
     // Fetch full user data to get disclaimer status
-    apiFetch('/api/auth/me').then(async r => {
-      if (r?.ok) {
-        const data = await r.json();
-        if (data.user) {
-          // Apply user's saved theme now that we know they're authenticated
-          if (typeof window.__applyUserTheme === 'function') window.__applyUserTheme();
-          let userRoles;
-          try { userRoles = data.user.roles ? (typeof data.user.roles === 'string' ? JSON.parse(data.user.roles) : data.user.roles) : [data.user.role]; }
-          catch { userRoles = [data.user.role]; }
-          setCurrentUser(toClientUser(data.user));
-          // Sync activeRole to new user's primary role
-          if (userRoles.length === 1) {
-            window.setActiveRole(userRoles[0]);
-            setActiveRoleState(userRoles[0]);
-          }
-          // Check if legal documents need to be accepted (skip if not yet approved)
-          if (data.user.account_approved) {
-            if (data.user.pendingLegalDocs && data.user.pendingLegalDocs.length > 0) {
-              setPendingLegalDocs(data.user.pendingLegalDocs);
-              setShowDisclaimer(true);
-            } else if (!data.user.disclaimer_accepted_at || data.user.disclaimer_version !== '1.0') {
-              setShowDisclaimer(true);
-            }
-          }
-          // Apply accessibility text size
-          try {
-            if (typeof window.__setUiPrefs === 'function') window.__setUiPrefs(data.user.ui_prefs); // v1.105.171 — which sections he keeps folded
-              const a11y = data.user.accessibility_prefs ? JSON.parse(data.user.accessibility_prefs) : {};
-            if (a11y.textSize && typeof applyTextSize === 'function') applyTextSize(a11y.textSize);
-          } catch {}
+    fetchMe().then((data) => {
+      if (data?.user) {
+        // Apply user's saved theme now that we know they're authenticated
+        if (typeof window.__applyUserTheme === 'function') window.__applyUserTheme();
+        let userRoles;
+        try { userRoles = data.user.roles ? (typeof data.user.roles === 'string' ? JSON.parse(data.user.roles) : data.user.roles) : [data.user.role]; }
+        catch { userRoles = [data.user.role]; }
+        setCurrentUser(toClientUser(data.user));
+        // Sync activeRole to new user's primary role
+        if (userRoles.length === 1) {
+          window.setActiveRole(userRoles[0]);
+          setActiveRoleState(userRoles[0]);
         }
+        // Check if legal documents need to be accepted (skip if not yet approved)
+        if (data.user.account_approved) {
+          if (data.user.pendingLegalDocs && data.user.pendingLegalDocs.length > 0) {
+            setPendingLegalDocs(data.user.pendingLegalDocs);
+            setShowDisclaimer(true);
+          } else if (!data.user.disclaimer_accepted_at || data.user.disclaimer_version !== '1.0') {
+            setShowDisclaimer(true);
+          }
+        }
+        // Apply accessibility text size
+        try {
+          if (typeof window.__setUiPrefs === 'function') window.__setUiPrefs(data.user.ui_prefs); // v1.105.171 — which sections he keeps folded
+            const a11y = data.user.accessibility_prefs ? JSON.parse(data.user.accessibility_prefs) : {};
+          if (a11y.textSize && typeof applyTextSize === 'function') applyTextSize(a11y.textSize);
+        } catch {}
       }
     }).catch(() => {});
     setCurrentPage('dashboard');
@@ -1706,6 +1701,46 @@ const App = () => {
     }
   };
 
+  // Declared before the first early return on purpose. `const` is not hoisted, and both
+  // callers below sit inside `return <CaregiverOnboarding onComplete={...} />` branches — put
+  // this after them and the render returns before the binding initialises, so onComplete throws
+  // "Cannot access 'restoreAfterOnboarding' before initialization" the moment a caregiver
+  // finishes onboarding. Exactly the path this function exists to serve.
+  // ─── v1.106.13 — one post-onboarding restore, not two ───
+  //
+  // This was two byte-identical 29-line copies, on the resume-onboarding and signup-onboarding
+  // branches. The v1.105.76 comment inside it describes exactly the bug duplication causes — a
+  // field added to one copy of a user-object build and not the others, which sent Julia's
+  // Identity Verification card back to "Not Verified" the moment she finished onboarding — and
+  // then that very fix was pasted twice. The next field goes in one place.
+  const restoreAfterOnboarding = (token) => {
+    if (!token) { setAppState('splash'); return; }
+    AUTH_TOKEN = token;
+    // Token stored in httpOnly cookie by server; keep in-memory for WebSocket
+    if (typeof connectSocket === 'function') connectSocket(token);
+    // force: the token just changed, and this has to be the new user — never a cached answer
+    // for whoever was signed in a moment ago.
+    fetchMe({ force: true }).then((data) => {
+      if (!data?.user) return;
+      setCurrentUser(toClientUser(data.user, { isDemo: false }));
+      if (data.user.pendingLegalDocs && data.user.pendingLegalDocs.length > 0) {
+        setPendingLegalDocs(data.user.pendingLegalDocs);
+        setShowDisclaimer(true);
+      } else if (!data.user.disclaimer_accepted_at || data.user.disclaimer_version !== '1.0') {
+        setShowDisclaimer(true);
+      }
+      try {
+        if (typeof window.__setUiPrefs === 'function') window.__setUiPrefs(data.user.ui_prefs); // v1.105.171 — which sections he keeps folded
+        const a11y = data.user.accessibility_prefs ? JSON.parse(data.user.accessibility_prefs) : {};
+        if (a11y.textSize && typeof applyTextSize === 'function') applyTextSize(a11y.textSize);
+      } catch {}
+      // Post-onboarding: send caregiver to dashboard where First Steps guides them
+      window.__postOnboarding = true;
+      setCurrentPage('dashboard');
+      setAppState('app');
+    }).catch(() => setAppState('splash'));
+  };
+
   // ─── v1.106.7 — "Reconnecting…", not the marketing page ───
   // Deliberately plain and brand-coloured, matching the "App updated" card in index.html, so
   // the two transient full-screen states look like the same app rather than two bugs.
@@ -1733,37 +1768,7 @@ const App = () => {
   if (appState === 'platform-onboarding' && platformInviteToken) {
     return <CaregiverOnboarding inviteToken={platformInviteToken} onComplete={(token) => {
       setPlatformInviteToken(null);
-      // Restore user from the token
-      if (token) {
-        AUTH_TOKEN = token;
-        // Token stored in httpOnly cookie by server; keep in-memory for WebSocket
-        if (typeof connectSocket === 'function') connectSocket(token);
-        apiFetch('/api/auth/me').then(async r => {
-          if (r?.ok) {
-            const data = await r.json();
-            if (data.user) {
-              // v1.105.76 — THIS is the path Julia takes. It used to rebuild her user object
-              // by hand and drop identityStatus, so the moment she finished onboarding her
-              // Identity Verification card went back to "Not Verified".
-              setCurrentUser(toClientUser(data.user, { isDemo: false }));
-              if (data.user.pendingLegalDocs && data.user.pendingLegalDocs.length > 0) {
-                setPendingLegalDocs(data.user.pendingLegalDocs);
-                setShowDisclaimer(true);
-              } else if (!data.user.disclaimer_accepted_at || data.user.disclaimer_version !== '1.0') {
-                setShowDisclaimer(true);
-              }
-              try { if (typeof window.__setUiPrefs === 'function') window.__setUiPrefs(data.user.ui_prefs); // v1.105.171 — which sections he keeps folded
-              const a11y = data.user.accessibility_prefs ? JSON.parse(data.user.accessibility_prefs) : {}; if (a11y.textSize && typeof applyTextSize === 'function') applyTextSize(a11y.textSize); } catch {}
-              // Post-onboarding: send caregiver to dashboard where First Steps guides them
-              window.__postOnboarding = true;
-              setCurrentPage('dashboard');
-              setAppState('app');
-            }
-          }
-        }).catch(() => setAppState('splash'));
-      } else {
-        setAppState('splash');
-      }
+      restoreAfterOnboarding(token);
     }} />;
   }
 
@@ -1787,36 +1792,7 @@ const App = () => {
   if (appState === 'signup-onboarding' && signupPrefill) {
     return <CaregiverOnboarding signupToken={signupPrefill.signupToken} signupEmail={signupPrefill.email} onComplete={(token) => {
       setSignupPrefill(null);
-      if (token) {
-        AUTH_TOKEN = token;
-        // Token stored in httpOnly cookie by server; keep in-memory for WebSocket
-        if (typeof connectSocket === 'function') connectSocket(token);
-        apiFetch('/api/auth/me').then(async r => {
-          if (r?.ok) {
-            const data = await r.json();
-            if (data.user) {
-              // v1.105.76 — THIS is the path Julia takes. It used to rebuild her user object
-              // by hand and drop identityStatus, so the moment she finished onboarding her
-              // Identity Verification card went back to "Not Verified".
-              setCurrentUser(toClientUser(data.user, { isDemo: false }));
-              if (data.user.pendingLegalDocs && data.user.pendingLegalDocs.length > 0) {
-                setPendingLegalDocs(data.user.pendingLegalDocs);
-                setShowDisclaimer(true);
-              } else if (!data.user.disclaimer_accepted_at || data.user.disclaimer_version !== '1.0') {
-                setShowDisclaimer(true);
-              }
-              try { if (typeof window.__setUiPrefs === 'function') window.__setUiPrefs(data.user.ui_prefs); // v1.105.171 — which sections he keeps folded
-              const a11y = data.user.accessibility_prefs ? JSON.parse(data.user.accessibility_prefs) : {}; if (a11y.textSize && typeof applyTextSize === 'function') applyTextSize(a11y.textSize); } catch {}
-              // Post-onboarding: send caregiver to dashboard where First Steps guides them
-              window.__postOnboarding = true;
-              setCurrentPage('dashboard');
-              setAppState('app');
-            }
-          }
-        }).catch(() => setAppState('splash'));
-      } else {
-        setAppState('splash');
-      }
+      restoreAfterOnboarding(token);
     }} />;
   }
 
@@ -2048,13 +2024,10 @@ const App = () => {
         const selfOnboardingDone = currentUser?.selfOnboardingComplete || currentUser?.self_onboarding_complete;
         if (!selfOnboardingDone) {
           return <SelfOnboardingWizard key={pageKey} user={currentUser} careRecipientId={currentUser?.careRecipientId} onComplete={() => {
-                    apiFetch('/api/auth/me').then(async r => {
-                      if (r?.ok) {
-                        const data = await r.json();
-                        if (data.user) {
-                          const userRoles = data.user.roles || [data.user.role];
-                          setCurrentUser(toClientUser(data.user, { roles: userRoles }));
-                        }
+                    fetchMe({ force: true }).then((data) => {
+                      if (data?.user) {
+                        const userRoles = data.user.roles || [data.user.role];
+                        setCurrentUser(toClientUser(data.user, { roles: userRoles }));
                       }
                     });
                   }} />;

@@ -249,9 +249,8 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
 
   const fetchUser = async () => {
     try {
-      const res = await apiFetch('/api/auth/me');
-      if (res?.ok) {
-        const data = await res.json();
+      const data = await fetchMe();
+      if (data?.user) {
         setUser(data.user);
         setLinkedAccounts(data.user.linkedAccounts || []);
         if (data.user.notification_prefs) {
@@ -1211,9 +1210,8 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                               if (res?.ok) {
                                 const data = await res.json();
                                 if (data.token) { setAuthToken(data.token); }
-                                const meRes = await apiFetch('/api/auth/me');
-                                if (meRes?.ok) {
-                                  const meData = await meRes.json();
+                                const meData = await fetchMe({ force: true });
+                                if (meData?.user) {
                                   setUser(meData.user);
                                   if (setCurrentUser && meData.user) {
                                     const ur = meData.user.roles || [meData.user.role];
@@ -2388,9 +2386,8 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                     if (res?.ok) {
                       const data = await res.json();
                       if (data.token) { setAuthToken(data.token); }
-                      const meRes = await apiFetch('/api/auth/me');
-                      if (meRes?.ok) {
-                        const meData = await meRes.json();
+                      const meData = await fetchMe({ force: true });
+                      if (meData?.user) {
                         setUser(meData.user);
                         if (setCurrentUser && meData.user) {
                           const ur = meData.user.roles || [meData.user.role];

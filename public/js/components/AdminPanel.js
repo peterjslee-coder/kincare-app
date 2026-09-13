@@ -859,7 +859,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
       }
     }).catch(() => {});
     // Fetch current user for settings tab
-    apiFetch('/api/auth/me').then(r => r.json()).then(data => setUser(data)).catch(() => {});
+    fetchMe().then(data => { if (data) setUser(data); }).catch(() => {});
   }, []);
 
   // ─── IP Verification Listener ───
