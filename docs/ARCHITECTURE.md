@@ -7,7 +7,7 @@ build red.
 
 Hand-written sections (§3 "Where is…") are preserved across regeneration; edit those freely.
 
-Structure at last generation: 522 HTTP routes across 55 mounts ·
+Structure at last generation: 523 HTTP routes across 55 mounts ·
 89 `CREATE TABLE` statements · 9 background jobs · 35 socket events
 (15 with no client listener) · 58 push event types · 54 `window.__*` globals.
 
@@ -40,7 +40,7 @@ JSX is *not* compiled in the browser; Babel-standalone is not loaded. Editing an
 |---|---|---:|---|
 | `/api/accountability` | `src/routes/accountability.js` | 12 |  |
 | `/api/activity` | `src/routes/activity.js` | 4 |  |
-| `/api/admin` | `src/routes/admin/` | 95 |  |
+| `/api/admin` | `src/routes/admin/` | 96 |  |
 | `/api/admin/financials` | `src/routes/financials.js` | 12 |  |
 | `/api/admin/tickets` | `src/routes/tickets.js` | 7 |  |
 | `/api/admin/treasury` | `src/routes/treasury.js` | 1 |  |
@@ -126,15 +126,15 @@ Every job runs through `guardedPoller` → `withPollerLock` (`src/models/databas
 
 | Lock | Job | Interval | Declared |
 |---:|---|---|---|
-| 101 | Daily demo data refresh | 24 h | `src/server.js:794` |
-| 102 | Session notification poller (every 60s) | 1 min | `src/server.js:888` |
-| 103 | Session Accountability Poller | 1 min | `src/server.js:1147` |
-| 104 | Reimbursement push digest sweeper (v1.98.15) | 30 s | `src/server.js:1166` |
-| 105 | Auto-pay cron: charge overdue sessions | 5 min | `src/server.js:1260` |
-| 106 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1379` |
-| 107 | Care Tasks poller (v1.99.0) | 1 min | `src/server.js:1389` |
-| 108 | Care Events poller (v1.100.0) | 1 min | `src/server.js:1407` |
-| 109 | Kindred Reminder Delivery Poller | 1 min | `src/server.js:1182` |
+| 101 | Daily demo data refresh | 24 h | `src/server.js:864` |
+| 102 | Session notification poller (every 60s) | 1 min | `src/server.js:958` |
+| 103 | Session Accountability Poller | 1 min | `src/server.js:1217` |
+| 104 | Reimbursement push digest sweeper (v1.98.15) | 30 s | `src/server.js:1236` |
+| 105 | Auto-pay cron: charge overdue sessions | 5 min | `src/server.js:1330` |
+| 106 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1449` |
+| 107 | Care Tasks poller (v1.99.0) | 1 min | `src/server.js:1459` |
+| 108 | Care Events poller (v1.100.0) | 1 min | `src/server.js:1477` |
+| 109 | Kindred Reminder Delivery Poller | 1 min | `src/server.js:1252` |
 
 ---
 

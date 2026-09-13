@@ -4,7 +4,7 @@ const crypto = require("crypto");
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { validateImageDataUrl } = require("../utils/serveMedia");
-const { generateToken, authenticate, setAuthCookie, clearAuthCookie, generateRefreshToken, setRefreshCookie, revokeRefreshToken, revokeAllUserRefreshTokens, setCsrfCookie } = require("../middleware/auth");
+const { generateToken, authenticate, readTrustedDeviceHash, setAuthCookie, clearAuthCookie, generateRefreshToken, setRefreshCookie, revokeRefreshToken, revokeAllUserRefreshTokens, setCsrfCookie } = require("../middleware/auth");
 const { validateRegister, validateLogin, validateProfileUpdate } = require("../middleware/validate");
 const { sendEmail, brandedHtml } = require("../utils/email");
 const { sendPushToAdmins, notifyAdmins } = require("./push");
@@ -336,7 +336,7 @@ router.post("/register", validateRegister, async (req, res) => {
 // ─── POST /api/auth/login ───
 router.post("/login", validateLogin, async (req, res) => {
   try {
-    const { email, password, deviceFingerprint, keepSignedIn } = req.body;
+    const { email, password, keepSignedIn } = req.body; // deviceFingerprint is no longer trusted from the body (v1.106.4)
     // Persist cookies across browser/app close only when the user opted in
     // ("Keep me signed in on this device"). Otherwise issue session cookies so a
     // shared/unknown device won't silently re-auth after close. (v1.98.11)
@@ -393,10 +393,14 @@ router.post("/login", validateLogin, async (req, res) => {
     if (twoFa) {
       // Check for trusted device
       let deviceTrusted = false;
-      if (deviceFingerprint) {
+      // v1.106.4 — read the httpOnly cookie the server issued, never `deviceFingerprint` from
+      // the request body. The body value was a guessable hash of the device's public
+      // characteristics; see middleware/auth.js.
+      const deviceHash = readTrustedDeviceHash(req);
+      if (deviceHash) {
         const device = await db.prepare(
           "SELECT id FROM trusted_devices WHERE user_id = ? AND device_fingerprint = ? AND expires_at > NOW()"
-        ).get(user.id, deviceFingerprint);
+        ).get(user.id, deviceHash);
         if (device) {
           deviceTrusted = true;
           await db.prepare("UPDATE trusted_devices SET last_used = NOW() WHERE id = ?").run(device.id);
@@ -600,7 +604,24 @@ router.post("/change-password", authenticate, async (req, res) => {
       "UPDATE users SET password_hash = ?, must_change_password = 0, password_changed_at = NOW(), updated_at = NOW() WHERE id = ?"
     ).run(newHash, req.user.id);
 
-    res.json({ message: "Password changed successfully" });
+    // v1.106.4 — changing your password now actually ends the other sessions. Every refresh
+    // token is destroyed, and middleware/auth.js refuses any access token issued before this
+    // moment, so a stolen token dies here instead of lasting its full 7 days.
+    await revokeAllUserRefreshTokens(req.user.id).catch((e) =>
+      captureException(e, { where: "auth: revoke on change-password" }));
+
+    // ...including the one making this request, so THIS device is re-issued rather than being
+    // silently logged out by the change it just made.
+    const fresh = await db.prepare(
+      "SELECT id, email, role, roles, is_admin FROM users WHERE id = ?"
+    ).get(req.user.id);
+    const newToken = generateToken(fresh);
+    setAuthCookie(res, newToken);
+    setCsrfCookie(res);
+    const newRefresh = await generateRefreshToken(req.user.id);
+    setRefreshCookie(res, newRefresh);
+
+    res.json({ message: "Password changed successfully", token: newToken });
   } catch (err) {
     console.error("Change password error:", err);
     res.status(500).json({ error: "Failed to change password" });

@@ -749,10 +749,14 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
         method: 'POST',
         body: JSON.stringify({ currentPassword: pwData.current, newPassword: pwData.new })
       });
+      const pwResult = await res?.json().catch(() => null);
       if (!res?.ok) {
-        const data = await res?.json();
-        throw new Error(data?.error || 'Password change failed');
+        throw new Error(pwResult?.error || 'Password change failed');
       }
+      // v1.106.4 — the server now ends every session on a password change, including this one,
+      // and hands back a replacement. Without storing it the user would be signed out by their
+      // own password change.
+      if (pwResult?.token && typeof setAuthToken === 'function') setAuthToken(pwResult.token);
       setPwData({ current: '', new: '', confirm: '' });
       setChangingPassword(false);
       showToast('Password changed successfully', 'success');

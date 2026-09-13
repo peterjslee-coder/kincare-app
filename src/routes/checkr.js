@@ -413,7 +413,16 @@ router.post("/webhook", express.raw({ type: "application/json", limit: "100kb" }
 
   // Verify webhook signature if secret is configured
   const webhookSecret = process.env.CHECKR_WEBHOOK_SECRET;
-  if (webhookSecret) {
+  // v1.106.4 — this was `if (webhookSecret) { ...verify... }`, so with the variable unset the
+  // whole verification block was skipped and an unauthenticated POST could set
+  // is_background_checked = 1 for any candidate. The secret IS set on Railway today, which made
+  // this latent rather than live — but "we currently happen to have configured it" is not a
+  // control. payments.js:85 already fails closed on its Stripe secret; same shape here.
+  if (!webhookSecret) {
+    console.error("[checkr-webhook] CHECKR_WEBHOOK_SECRET is not set — refusing to process");
+    return res.status(503).json({ error: "Webhook not configured" });
+  }
+  {
     const signature = req.headers["x-checkr-signature"];
     if (!signature) {
       console.warn("[checkr-webhook] Missing signature header");
@@ -425,7 +434,12 @@ router.post("/webhook", express.raw({ type: "application/json", limit: "100kb" }
       .createHmac("sha256", webhookSecret)
       .update(rawBody)
       .digest("hex");
-    if (signature !== expectedSig && signature !== `sha256=${expectedSig}`) {
+    // Constant-time: a plain !== leaks where the first byte differs, one request at a time.
+    const timingSafeEqual = (a, b) => {
+      const ab = Buffer.from(String(a)), bb = Buffer.from(String(b));
+      return ab.length === bb.length && crypto.timingSafeEqual(ab, bb);
+    };
+    if (!timingSafeEqual(signature, expectedSig) && !timingSafeEqual(signature, `sha256=${expectedSig}`)) {
       console.warn("[checkr-webhook] Invalid signature");
       return res.status(401).json({ error: "Invalid signature" });
     }

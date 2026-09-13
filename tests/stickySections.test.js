@@ -31,7 +31,12 @@ describe("it follows the account, not the device", () => {
   test("GET /api/auth/me actually returns it", () => {
     // A column missing from the explicit SELECT list never reaches the client, and the
     // feature fails silently by always looking like a fresh account.
-    const selects = auth.match(/SELECT id, email, role, roles[^"]+FROM users WHERE id = \?/g) || [];
+    // v1.106.4 — this matched EVERY such select in the file, which now includes the small
+    // lookup feeding generateToken() after a password change. That one has no business carrying
+    // UI preferences, so the test failed on a correct query. Narrow it to the selects that build
+    // a user PAYLOAD (the ones already fetching notification_prefs), which is the real property.
+    const selects = (auth.match(/SELECT id, email, role, roles[^"]+FROM users WHERE id = \?/g) || [])
+      .filter((sel) => /notification_prefs/.test(sel));
     expect(selects.length).toBeGreaterThanOrEqual(2);
     for (const sel of selects) expect(sel).toMatch(/ui_prefs/);
   });

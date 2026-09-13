@@ -210,7 +210,18 @@ router.post("/reset-password", async (req, res) => {
 
     const bcrypt = require("bcryptjs");
     const hash = await bcrypt.hash(newPassword, 10);
-    await db.prepare("UPDATE users SET password_hash = ?, updated_at = NOW() WHERE id = ?").run(hash, userId);
+    // v1.106.4 — password_changed_at was not being stamped here, so middleware/auth.js had
+    // nothing to compare a token's `iat` against and old sessions survived an admin reset.
+    await db.prepare(
+      "UPDATE users SET password_hash = ?, password_changed_at = NOW(), updated_at = NOW() WHERE id = ?"
+    ).run(hash, userId);
+
+    // v1.106.4 — an admin resetting someone's password must end that person's sessions too,
+    // or the reset is cosmetic: the existing token keeps working for its full 7 days.
+    try {
+      const { revokeAllUserRefreshTokens } = require("../../middleware/auth");
+      await revokeAllUserRefreshTokens(userId);
+    } catch (e) { /* the password is already changed; revocation is best-effort */ }
 
     await logAdminAction(req, "reset_password", "user", userId, { email: user.email });
     res.json({ success: true, message: `Password reset for ${user.email}` });
@@ -662,7 +673,17 @@ router.post("/users/:id/reset-password", async (req, res) => {
     // 1. Invalidate old password — set to random hash so old password stops working immediately
     const randomPw = crypto.randomBytes(32).toString("hex");
     const invalidHash = await bcrypt.hash(randomPw, 10);
-    await db.prepare("UPDATE users SET password_hash = ?, must_change_password = 1, updated_at = NOW() WHERE id = ?").run(invalidHash, user.id);
+    await db.prepare(
+      "UPDATE users SET password_hash = ?, must_change_password = 1, password_changed_at = NOW(), updated_at = NOW() WHERE id = ?"
+    ).run(invalidHash, user.id);
+
+    // v1.106.4 — an admin resetting someone's password must end that person's sessions too,
+    // or the reset is cosmetic: the existing token keeps working for its full 7 days.
+    try {
+      const { revokeAllUserRefreshTokens } = require("../../middleware/auth");
+      await revokeAllUserRefreshTokens(user.id);
+    } catch (e) { /* the password is already changed; revocation is best-effort */ }
+
 
     // 2. Create reset token
     const token = crypto.randomBytes(32).toString("hex");

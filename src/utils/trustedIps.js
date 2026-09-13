@@ -13,8 +13,13 @@ async function registerTrustedIp(userId, ipAddress, { userAgent, verifiedVia = "
   try {
     const db = await getDb();
     // Check if user is admin
-    const user = await db.prepare("SELECT role FROM users WHERE id = ?").get(userId);
-    if (!user || user.role !== "admin") return false;
+    // v1.106.4 — this checked `role === "admin"`. Admin-ness lives in users.is_admin and the
+    // two are independent: Pete is role "family" AND is_admin. So this returned false for every
+    // real admin, trusted_admin_ips stayed permanently empty, and the "empty table means first
+    // boot" bootstrap in routes/admin/index.js auto-trusted every request forever. The IP gate
+    // has never once run.
+    const user = await db.prepare("SELECT is_admin FROM users WHERE id = ?").get(userId);
+    if (!user || !user.is_admin) return false;
 
     await db.prepare(`
       INSERT INTO trusted_admin_ips (user_id, ip_address, user_agent, label, verified_via, last_seen_at, expires_at)

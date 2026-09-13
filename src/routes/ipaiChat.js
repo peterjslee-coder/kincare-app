@@ -10,12 +10,13 @@
 const express = require("express");
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
-const { authenticate } = require("../middleware/auth");
+const { authenticate, denyDemo } = require("../middleware/auth");
 const { handleIPAiMessage } = require("../utils/ipaiChat");
 const { captureException } = require("../utils/sentry");
 
 const router = express.Router();
-router.use(authenticate);
+// v1.106.4 — demo sessions are free and passwordless; every call here bills Anthropic.
+router.use(authenticate, denyDemo);
 
 /**
  * Get or create iPAi user (system user for conversations)

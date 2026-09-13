@@ -43,8 +43,17 @@ function cleanFailedLogins() {
 
 // Get real IP from proxy headers
 function getClientIp(req) {
-  return req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
+  // v1.106.4 — the first entry of X-Forwarded-For is whatever the CLIENT put there; every proxy
+  // appends, so the left-hand end is the least trustworthy part of the header. Anything keyed on
+  // this (the admin IP gate, audit trails) was trivially spoofable.
+  //
+  // Behind Cloudflare, CF-Connecting-IP is set by the edge and cannot be forged from outside, so
+  // prefer it. `req.ip` respects Express's `trust proxy` setting and is the next best answer;
+  // the raw header stays only as a last resort for local development.
+  return req.headers["cf-connecting-ip"] ||
+    req.ip ||
     req.headers["x-real-ip"] ||
+    req.headers["x-forwarded-for"]?.split(",").pop()?.trim() ||
     req.socket?.remoteAddress || "unknown";
 }
 

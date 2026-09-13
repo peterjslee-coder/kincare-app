@@ -17,11 +17,12 @@ function generateToken(user) {
     roles = [user.role || "family"];
   }
 
-  return jwt.sign(
-    { id: user.id, email: user.email, roles, role: roles[0] },
-    JWT_SECRET,
-    { expiresIn: "7d" }
-  );
+  // v1.106.4 — carry is_demo in the token. `POST /api/auth/demo-login` hands anyone a real
+  // 7-day JWT with no password, so "is this a demo session" is a question the expensive and
+  // real-data routes have to be able to ask, and asking it should not cost a query per request.
+  const payload = { id: user.id, email: user.email, roles, role: roles[0] };
+  if (user.is_demo) payload.demo = true;
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: "7d" });
 }
 
 async function authenticate(req, res, next) {
@@ -96,9 +97,29 @@ async function authenticate(req, res, next) {
     if (decoded.id && decoded.id !== 'api-key-admin') {
       const { getDb } = require("../models/database");
       const db = await getDb();
-      const userCheck = await db.prepare("SELECT is_active FROM users WHERE id = ?").get(decoded.id);
+      const userCheck = await db.prepare(
+        "SELECT is_active, password_changed_at FROM users WHERE id = ?"
+      ).get(decoded.id);
       if (!userCheck || !userCheck.is_active) {
         return res.status(401).json({ error: "Account has been deleted" });
+      }
+
+      // v1.106.4 — a token issued before the password changed is dead.
+      //
+      // Changing your password did not end any session: `revokeAllUserRefreshTokens` was
+      // written, exported and imported into routes/auth.js, and then never called from
+      // anywhere. So a stolen access token stayed good for its full 7 days, and a stolen
+      // refresh token renewed itself forever — the one action a person takes when they think
+      // they have been compromised did nothing at all.
+      //
+      // The 5-second grace is for clock granularity, not for security: `iat` is whole seconds
+      // while password_changed_at has sub-second precision, so a token minted in the same
+      // second as the change would otherwise be rejected as older than it.
+      if (decoded.iat && userCheck.password_changed_at) {
+        const changedAt = new Date(userCheck.password_changed_at).getTime();
+        if (Number.isFinite(changedAt) && decoded.iat * 1000 < changedAt - 5000) {
+          return res.status(401).json({ error: "Session ended — please sign in again." });
+        }
       }
     }
 
@@ -219,6 +240,41 @@ async function revokeAllUserRefreshTokens(userId) {
   await db.prepare("DELETE FROM refresh_tokens WHERE user_id = ?").run(userId);
 }
 
+// ─── Trusted-device token (v1.106.4) ───
+//
+// The old "device fingerprint" was computed in the browser as a 32-bit hash of
+// userAgent | screenSize | timeZone, sent in the login body, and matched against
+// trusted_devices to skip 2FA. It was neither secret nor unique: given a password, an attacker
+// could enumerate a few dozen common iPhone and Android combinations and land on a valid value,
+// and correct-password attempts do not increment failed_login_attempts. A second factor you can
+// guess from a device's public characteristics is not a second factor.
+//
+// It is now a 256-bit random value the SERVER issues, held in an httpOnly cookie the page cannot
+// read, and stored only as a SHA-256 hash — so a database copy does not let anyone skip 2FA either.
+const TRUSTED_DEVICE_COOKIE = "td";
+const TRUSTED_DEVICE_DAYS = 30;
+
+function hashDeviceToken(raw) {
+  return crypto.createHash("sha256").update(String(raw)).digest("hex");
+}
+
+function issueTrustedDeviceToken(res) {
+  const raw = crypto.randomBytes(32).toString("hex");
+  res.cookie(TRUSTED_DEVICE_COOKIE, raw, {
+    httpOnly: true,
+    secure: cookiesSecure,
+    sameSite: "lax",
+    path: "/api/auth",
+    maxAge: TRUSTED_DEVICE_DAYS * 24 * 60 * 60 * 1000,
+  });
+  return hashDeviceToken(raw);
+}
+
+function readTrustedDeviceHash(req) {
+  const raw = req.cookies?.[TRUSTED_DEVICE_COOKIE];
+  return raw ? hashDeviceToken(raw) : null;
+}
+
 function clearAuthCookie(res) {
   res.clearCookie("auth_token", { path: "/" });
   res.clearCookie("refresh_token", { path: "/api/auth/refresh" });
@@ -278,4 +334,38 @@ function verifyCsrf(req, res, next) {
   next();
 }
 
-module.exports = { generateToken, authenticate, requireRole, requireAdmin, setAuthCookie, clearAuthCookie, generateRefreshToken, setRefreshCookie, revokeRefreshToken, revokeAllUserRefreshTokens, setCsrfCookie, verifyCsrf };
+/**
+ * Block demo sessions (v1.106.4).
+ *
+ * `POST /api/auth/demo-login` issues a full 7-day JWT for five seeded accounts with no
+ * credentials at all — that is the point of it, so anyone can try the product. What it must not
+ * be is a free key to things that cost money or touch real people: the AI routes bill Anthropic
+ * per call, and the user directory returns real families' names and email addresses.
+ *
+ * Reads the token claim first and only falls back to a query for tokens minted before this
+ * shipped, so the common case costs nothing.
+ */
+async function denyDemo(req, res, next) {
+  try {
+    if (!req.user) return next();
+    let isDemo = req.user.demo === true;
+    if (!isDemo && req.user.demo === undefined && req.user.id !== "api-key-admin") {
+      const { getDb } = require("../models/database");
+      const db = await getDb();
+      const row = await db.prepare("SELECT is_demo FROM users WHERE id = ?").get(req.user.id);
+      isDemo = !!row?.is_demo;
+    }
+    if (isDemo) {
+      return res.status(403).json({
+        error: "This is a demo account. Sign up for a free account to use this.",
+        demoBlocked: true,
+      });
+    }
+    return next();
+  } catch (e) {
+    return next(e);
+  }
+}
+
+module.exports = { generateToken, authenticate, denyDemo,
+  issueTrustedDeviceToken, readTrustedDeviceHash, TRUSTED_DEVICE_DAYS, requireRole, requireAdmin, setAuthCookie, clearAuthCookie, generateRefreshToken, setRefreshCookie, revokeRefreshToken, revokeAllUserRefreshTokens, setCsrfCookie, verifyCsrf };

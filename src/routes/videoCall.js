@@ -9,8 +9,9 @@
  */
 
 const express = require("express");
+// v1.106.4 — denyDemo on every route: this mints a paid Twilio room grant.
 const router = express.Router();
-const { authenticate } = require("../middleware/auth");
+const { authenticate, denyDemo } = require("../middleware/auth");
 const { v4: uuid } = require("uuid");
 
 /**
@@ -19,7 +20,7 @@ const { v4: uuid } = require("uuid");
  * Body: { roomName: string }
  * Returns: { token: string, roomName: string }
  */
-router.post("/token", authenticate, async (req, res) => {
+router.post("/token", authenticate, denyDemo, async (req, res) => {
   const accountSid = process.env.TWILIO_ACCOUNT_SID;
   const apiKeySid = process.env.TWILIO_API_KEY_SID;
   const apiKeySecret = process.env.TWILIO_API_KEY_SECRET;

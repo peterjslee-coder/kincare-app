@@ -1,6 +1,7 @@
 const express = require("express");
+// v1.106.4 — denyDemo on every route: each of these calls Anthropic.
 const router = express.Router();
-const { authenticate } = require("../middleware/auth");
+const { authenticate, denyDemo } = require("../middleware/auth");
 const { getDb } = require("../models/database");
 const { generateCareIntelligence, generateSessionSummary, analyzePatterns, gatherVisitData, generateCarePlan } = require("../utils/careIntelligence");
 const { MODEL_HAIKU } = require("../utils/aiModels");
@@ -45,7 +46,7 @@ async function userCanAccessSession(db, userId, sessionId) {
 }
 
 // ─── GET /api/care-intelligence/:recipientId — Generate full care intelligence report ───
-router.get("/:recipientId", authenticate, async (req, res) => {
+router.get("/:recipientId", authenticate, denyDemo, async (req, res) => {
   try {
     const db = await getDb();
 
@@ -146,7 +147,7 @@ router.get("/:recipientId", authenticate, async (req, res) => {
 });
 
 // ─── GET /api/care-intelligence/test — Test AI connectivity ───
-router.get("/test/ai", authenticate, async (req, res) => {
+router.get("/test/ai", authenticate, denyDemo, async (req, res) => {
   try {
     const db = await getDb();
     if (!(await userIsAdmin(db, req.user.id))) return res.status(403).json({ error: "Access denied" });
@@ -168,7 +169,7 @@ router.get("/test/ai", authenticate, async (req, res) => {
 });
 
 // ─── GET /api/care-intelligence/test/data/:recipientId — Diagnose data pipeline ───
-router.get("/test/data/:recipientId", authenticate, async (req, res) => {
+router.get("/test/data/:recipientId", authenticate, denyDemo, async (req, res) => {
   const steps = {};
   try {
     const db = await getDb();
@@ -237,7 +238,7 @@ router.get("/test/data/:recipientId", authenticate, async (req, res) => {
 });
 
 // ─── GET /api/care-intelligence/:recipientId/patterns — Quick patterns (no AI call) ───
-router.get("/:recipientId/patterns", authenticate, async (req, res) => {
+router.get("/:recipientId/patterns", authenticate, denyDemo, async (req, res) => {
   try {
     const db = await getDb();
     if (!(await userCanAccessRecipient(db, req.user.id, req.params.recipientId)))
@@ -253,7 +254,7 @@ router.get("/:recipientId/patterns", authenticate, async (req, res) => {
 });
 
 // ─── POST /api/care-intelligence/session-summary/:sessionId — Generate post-session summary ───
-router.post("/session-summary/:sessionId", authenticate, async (req, res) => {
+router.post("/session-summary/:sessionId", authenticate, denyDemo, async (req, res) => {
   try {
     const db = await getDb();
     const ok = await userCanAccessSession(db, req.user.id, req.params.sessionId);
@@ -269,7 +270,7 @@ router.post("/session-summary/:sessionId", authenticate, async (req, res) => {
 });
 
 // ─── GET /api/care-intelligence/coaching/:sessionId — Get coaching tips for a completed session ───
-router.get("/coaching/:sessionId", authenticate, async (req, res) => {
+router.get("/coaching/:sessionId", authenticate, denyDemo, async (req, res) => {
   try {
     const db = await getDb();
     const ok = await userCanAccessSession(db, req.user.id, req.params.sessionId);
@@ -298,7 +299,7 @@ router.get("/coaching/:sessionId", authenticate, async (req, res) => {
 });
 
 // ─── POST /api/care-intelligence/:recipientId/care-plan — Generate or regenerate the care plan ───
-router.post("/:recipientId/care-plan", authenticate, async (req, res) => {
+router.post("/:recipientId/care-plan", authenticate, denyDemo, async (req, res) => {
   try {
     const db = await getDb();
 
@@ -337,7 +338,7 @@ router.post("/:recipientId/care-plan", authenticate, async (req, res) => {
 });
 
 // ─── GET /api/care-intelligence/:recipientId/care-plan — Retrieve the stored care plan ───
-router.get("/:recipientId/care-plan", authenticate, async (req, res) => {
+router.get("/:recipientId/care-plan", authenticate, denyDemo, async (req, res) => {
   try {
     const db = await getDb();
 

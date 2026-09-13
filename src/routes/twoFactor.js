@@ -121,7 +121,7 @@ router.post("/verify-setup", authenticate, async (req, res) => {
 // ─── POST /api/auth/2fa/verify ─── Verify TOTP code during login (uses tempToken, not JWT)
 router.post("/verify", async (req, res) => {
   try {
-    const { tempToken, code, deviceFingerprint, rememberDevice, keepSignedIn } = req.body;
+    const { tempToken, code, rememberDevice, keepSignedIn } = req.body; // deviceFingerprint retired v1.106.4
     if (!tempToken || !code) {
       return res.status(400).json({ error: "Temporary token and verification code required" });
     }
@@ -179,16 +179,21 @@ router.post("/verify", async (req, res) => {
     const token = generateToken(user);
 
     // Remember device if requested
-    if (rememberDevice && deviceFingerprint) {
+    if (rememberDevice) {
+      // v1.106.4 — the server issues a 256-bit random token into an httpOnly cookie and stores
+      // only its hash. Previously this trusted a value the browser computed from its own user
+      // agent, screen size and time zone, which an attacker holding the password could guess.
+      const { issueTrustedDeviceToken, TRUSTED_DEVICE_DAYS } = require("../middleware/auth");
       const deviceId = uuid();
-      const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(); // 30 days
+      const expiresAt = new Date(Date.now() + TRUSTED_DEVICE_DAYS * 24 * 60 * 60 * 1000).toISOString();
       const deviceName = req.headers["user-agent"]
         ? req.headers["user-agent"].substring(0, 100)
         : "Unknown device";
 
+      const tokenHash = issueTrustedDeviceToken(res);
       await db.prepare(
         "INSERT INTO trusted_devices (id, user_id, device_fingerprint, device_name, expires_at) VALUES (?, ?, ?, ?, ?)"
-      ).run(deviceId, decoded.id, deviceFingerprint, deviceName, expiresAt);
+      ).run(deviceId, decoded.id, tokenHash, deviceName, expiresAt);
     }
 
     // Session-persistence opt-in (distinct from trusted-device rememberDevice above)

@@ -2,10 +2,11 @@ const express = require("express");
 const { PERSONAL_DIRECT_WHERE } = require("../utils/conversations");
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
-const { authenticate } = require("../middleware/auth");
+const { authenticate, denyDemo } = require("../middleware/auth");
 
 const router = express.Router();
-router.use(authenticate);
+// v1.106.4 — demo sessions are free and passwordless; the user directory returns real families' names and email addresses.
+router.use(authenticate, denyDemo);
 
 // ─── GET /api/connections/search?q=... ─── Search for users by name or email
 router.get("/search", async (req, res) => {

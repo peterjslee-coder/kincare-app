@@ -626,6 +626,13 @@ router.post("/users/:id/set-password", async (req, res) => {
       "UPDATE users SET password_hash = ?, must_change_password = 1, password_changed_at = NOW(), updated_at = NOW() WHERE id = ?"
     ).run(passwordHash, req.params.id);
 
+    // v1.106.4 — an admin resetting someone's password must end that person's sessions too,
+    // or the reset is cosmetic: the existing token keeps working for its full 7 days.
+    try {
+      const { revokeAllUserRefreshTokens } = require("../../middleware/auth");
+      await revokeAllUserRefreshTokens(req.params.id);
+    } catch (e) { /* the password is already changed; revocation is best-effort */ }
+
     // Audit log
     await logAdminAction(req, "set_password", "user", req.params.id, {
       userName: `${user.first_name} ${user.last_name}`,

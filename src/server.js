@@ -124,11 +124,61 @@ async function conversationMemberIds(conversationId) {
   }
 }
 
+// v1.106.4 — who may ring whom, and under what name.
+//
+// `call_invite` took `targetUserId` and `callerName` straight off the wire and rang them. Any
+// authenticated socket could therefore make any user's phone light up, all night, showing any
+// name it liked — "InPlace Support" on an 82-year-old's lock screen, as often as it wanted.
+//
+// The rule is the one people already understand from the rest of the app: you can call someone
+// you can already message. Membership of a shared conversation is exactly that, and it is what
+// every other reach-the-person path in this codebase is gated on.
+const _callRate = new Map(); // socket.id -> timestamps
+const CALL_INVITES_PER_MIN = 6;
+function callInviteThrottled(socketId) {
+  const now = Date.now();
+  const recent = (_callRate.get(socketId) || []).filter((t) => now - t < 60000);
+  recent.push(now);
+  _callRate.set(socketId, recent);
+  return recent.length > CALL_INVITES_PER_MIN;
+}
+
+async function mayCall(callerId, targetUserId) {
+  if (!callerId || !targetUserId || callerId === targetUserId) return false;
+  const db = await getDb();
+  const [me, them] = await Promise.all([
+    db.prepare("SELECT is_admin, first_name, last_name FROM users WHERE id = ?").get(callerId),
+    db.prepare("SELECT is_admin, COALESCE(is_active,1) AS is_active FROM users WHERE id = ?").get(targetUserId),
+  ]);
+  if (!them || !them.is_active) return false;
+  try {
+    const { isBlockedBetween } = require("./utils/blocks");
+    if (await isBlockedBetween(db, callerId, targetUserId)) return false;
+  } catch { /* blocks unavailable — fall through to the membership test */ }
+  if (me?.is_admin || them.is_admin) return true;
+  const shared = await db.prepare(`
+    SELECT 1 FROM conversation_members a
+    JOIN conversation_members b ON a.conversation_id = b.conversation_id
+    WHERE a.user_id = ? AND b.user_id = ? LIMIT 1
+  `).get(callerId, targetUserId);
+  return !!shared;
+}
+
 io.on("connection", (socket) => {
   const userId = socket.user.id;
   if (!connectedUsers.has(userId)) connectedUsers.set(userId, new Set());
   connectedUsers.get(userId).add(socket.id);
   console.log(`WS connected: ${socket.user.email} (${connectedUsers.get(userId).size} sockets)`);
+
+  // The name shown on an incoming call comes from the database, once per connection, not from
+  // whatever the client puts in the event payload.
+  (async () => {
+    try {
+      const db = await getDb();
+      const u = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(userId);
+      if (u) socket.user.displayName = `${u.first_name || ""} ${u.last_name || ""}`.trim() || null;
+    } catch (e) { captureException(e, { where: "socket: resolve display name" }); }
+  })();
 
   // ─── Call signaling ───
   socket.on("call_invite", (data) => {
@@ -158,6 +208,20 @@ io.on("connection", (socket) => {
     const ack = (via, devices) => {
       socket.emit("call_ring_status", { roomName: data.roomName, via, devices: devices || 0 });
     };
+
+    // v1.106.4 — see mayCall() above. Both checks answer through the normal ack path rather
+    // than throwing, so the caller's screen stops saying "Ringing…" either way.
+    if (callInviteThrottled(socket.id)) return ack("nowhere", 0);
+    (async () => {
+      let allowed = false;
+      try { allowed = await mayCall(userId, data.targetUserId); }
+      catch (e) { captureException(e, { where: "socket: call_invite mayCall" }); }
+      if (!allowed) return ack("nowhere", 0);
+      ringTarget();
+    })();
+    return;
+
+    function ringTarget() {
     const targetSockets = connectedUsers.get(data.targetUserId);
     const liveSockets = targetSockets && targetSockets.size > 0;
     if (liveSockets) {
@@ -166,13 +230,15 @@ io.on("connection", (socket) => {
           roomName: data.roomName,
           callType: data.callType,
           callerId: userId,
-          callerName: data.callerName,
+          // v1.106.4 — resolved server-side. This was `data.callerName`, so a caller could
+          // put any words they liked on someone else's lock screen.
+          callerName: socket.user.displayName || "InPlace",
         });
       }
       ack("app", targetSockets.size);
     } else {
       const kind = data.callType === "video" ? "Video call" : "Call";
-      const who = data.callerName || "Someone";
+      const who = socket.user.displayName || "Someone";
       // Fire and forget, but never silently: a push that fails is the difference between a
       // ringing phone and nothing at all, so it is logged and reported.
       (async () => {
@@ -205,6 +271,7 @@ io.on("connection", (socket) => {
         }
       })();
     }
+    } // end ringTarget
   });
 
   socket.on("call_accept", (data) => {
@@ -448,6 +515,9 @@ const authLimiter = rateLimit({
   validate: { trustProxy: false, xForwardedForHeader: false },
 });
 app.use("/api/auth/login", authLimiter);
+// v1.106.4 — demo-login mints a real 7-day JWT with no credentials; it was the one auth
+// route not rate-limited, so it was a free, unmetered token dispenser.
+app.use("/api/auth/demo-login", authLimiter);
 app.use("/api/auth/register", authLimiter);
 app.use("/api/password-reset", authLimiter);
 app.use("/api/auth/verify", authLimiter);
@@ -583,7 +653,7 @@ app.use("/api/media", require("./routes/media"));
 app.use("/api/safety", require("./routes/safety"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.106.3";
+const APP_VERSION = "1.106.4";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });

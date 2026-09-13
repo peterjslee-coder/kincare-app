@@ -366,4 +366,58 @@ router.get("/client-versions", authenticate, checkAdmin, requireAdmin, async (re
     res.status(500).json({ error: err.message });
   }
 });
+
+// ─── GET /api/admin/schema-drift ───
+//
+// v1.106.4. On 2026-09-13 `caregiver_profiles.location_source` turned out not to exist on prod
+// or staging: it had been added inside the frozen legacy `migrations` array, which only runs on
+// a database that has never seen it. Every test passed the whole time, because tests build a
+// fresh database and therefore DO run that array. `lint:sql-columns` could not catch it either
+// — it parses the same array and so believed the column existed.
+//
+// The thing that was missing was any way to ask a running deployment what its schema actually
+// is. Finding a three-week-old outage took a hand-written probe against a live endpoint. This
+// answers it in one request, and it will surface the whole class rather than one instance.
+router.get("/schema-drift", authenticate, checkAdmin, requireAdmin, async (req, res) => {
+  try {
+    const db = await getDb();
+    const { loadSchema } = require("../../utils/expectedSchema");
+    const expected = loadSchema();
+
+    const rows = await db.prepare(
+      "SELECT table_name, column_name FROM information_schema.columns WHERE table_schema = 'public'"
+    ).all();
+    const actual = new Map();
+    for (const r of rows) {
+      if (!actual.has(r.table_name)) actual.set(r.table_name, new Set());
+      actual.get(r.table_name).add(r.column_name);
+    }
+
+    const missingTables = [];
+    const missingColumns = [];
+    for (const [table, cols] of expected) {
+      const have = actual.get(table);
+      if (!have) { missingTables.push(table); continue; }
+      for (const col of cols) if (!have.has(col)) missingColumns.push(`${table}.${col}`);
+    }
+
+    const applied = await db.prepare("SELECT id FROM schema_migrations ORDER BY id").all();
+
+    res.json({
+      ok: missingTables.length === 0 && missingColumns.length === 0,
+      // What the code declares but this database does not have. Anything here is a live bug:
+      // some query is naming a column that is not there, and failing at runtime only.
+      missingTables,
+      missingColumns,
+      counts: { expectedTables: expected.size, actualTables: actual.size },
+      migrationsApplied: applied.map((a) => a.id),
+      note: missingColumns.length
+        ? "Add these in MIGRATIONS_V2 (src/models/database.js). Never in the frozen legacy array — it does not replay."
+        : "This database has every column the code declares.",
+    });
+  } catch (err) {
+    captureException(err, { where: "admin: schema-drift" });
+    res.status(500).json({ error: err.message });
+  }
+});
 };

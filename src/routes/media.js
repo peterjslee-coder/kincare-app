@@ -21,12 +21,23 @@ function sendDataUrl(res, dataUrl) {
   return sendStoredFile(res, dataUrl, { allow: IMAGE_MIMES, filename: "photo" });
 }
 
+// v1.106.4 — a demo token is free and passwordless, so it must not reach a real person's face.
+// Blanket-blocking demo here would break the demo itself (it needs its own avatars), so the
+// rule is the boundary rather than the role: a demo session may only load demo people.
+async function demoBoundaryBlocks(req, db, targetIsDemo) {
+  if (req.user?.demo !== true) return false;   // real session: unaffected
+  return !targetIsDemo;
+}
+
 // GET /api/media/user/:id/photo
 router.get("/user/:id/photo", async (req, res) => {
   try {
     const db = await getDb();
-    const row = await db.prepare("SELECT profile_photo, avatar_url FROM users WHERE id = ?").get(req.params.id);
+    const row = await db.prepare(
+      "SELECT profile_photo, avatar_url, is_demo FROM users WHERE id = ?"
+    ).get(req.params.id);
     if (!row) return res.status(404).end();
+    if (await demoBoundaryBlocks(req, db, !!row.is_demo)) return res.status(404).end();
     return sendDataUrl(res, row.profile_photo || row.avatar_url);
   } catch (err) { return res.status(500).end(); }
 });
@@ -35,8 +46,11 @@ router.get("/user/:id/photo", async (req, res) => {
 router.get("/recipient/:id/photo", async (req, res) => {
   try {
     const db = await getDb();
-    const row = await db.prepare("SELECT photo FROM care_recipients WHERE id = ?").get(req.params.id);
+    const row = await db.prepare(
+      "SELECT cr.photo, u.is_demo FROM care_recipients cr LEFT JOIN users u ON cr.family_user_id = u.id WHERE cr.id = ?"
+    ).get(req.params.id);
     if (!row) return res.status(404).end();
+    if (await demoBoundaryBlocks(req, db, !!row.is_demo)) return res.status(404).end();
     return sendDataUrl(res, row.photo);
   } catch (err) { return res.status(500).end(); }
 });

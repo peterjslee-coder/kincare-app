@@ -2,6 +2,7 @@ const express = require("express");
 const crypto = require("crypto");
 const bcrypt = require("bcryptjs");
 const { getDb } = require("../models/database");
+const { captureException } = require("../utils/sentry");
 const { sendEmail, brandedHtml } = require("../utils/email");
 
 const router = express.Router();
@@ -100,6 +101,13 @@ router.post("/confirm", async (req, res) => {
 
     // Delete the used token
     await db.prepare("DELETE FROM password_reset_tokens WHERE user_id = ?").run(resetToken.user_id);
+
+    // v1.106.4 — and end every existing session. Someone resetting a password they did not
+    // change themselves is exactly the person whose sessions must not survive it.
+    try {
+      const { revokeAllUserRefreshTokens } = require("../middleware/auth");
+      await revokeAllUserRefreshTokens(resetToken.user_id);
+    } catch (e) { captureException(e, { where: "passwordReset: revoke sessions" }); }
 
     console.log(`  [password-reset] Password reset for user ${resetToken.user_id}`);
     res.json({ message: "Password reset successfully. You can now sign in with your new password." });

@@ -2232,6 +2232,16 @@ async function initializeDatabase() {
       // them free, and guessing wrong in the other direction is what caused this. So: all five.
       //
       // `scripts/lint-frozen-migrations.js` now fails CI if anyone edits that array again.
+      // v1.106.4 — the old trusted-device fingerprints were a 32-bit browser-computed hash of
+      // userAgent|screen|timezone, prefixed "dev_". They are guessable, so every one of them is
+      // a standing 2FA bypass for anyone who has the password. Delete them: the affected people
+      // see one extra 2FA prompt and their next "remember this device" issues a real token.
+      id: "031_drop_guessable_trusted_devices",
+      statements: [
+        `DELETE FROM trusted_devices WHERE device_fingerprint LIKE 'dev\\_%'`,
+      ],
+    },
+    {
       id: "030_reconcile_frozen_array_columns",
       statements: [
         `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS location_source TEXT`,

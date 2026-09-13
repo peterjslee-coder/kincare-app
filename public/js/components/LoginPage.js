@@ -108,12 +108,10 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBa
     }
   }, []);
 
-  const getDeviceFingerprint = () => {
-    const data = [navigator.userAgent, screen.width + 'x' + screen.height, Intl.DateTimeFormat().resolvedOptions().timeZone].join('|');
-    let hash = 0;
-    for (let i = 0; i < data.length; i++) { hash = ((hash << 5) - hash) + data.charCodeAt(i); hash = hash & hash; }
-    return 'dev_' + Math.abs(hash).toString(36);
-  };
+  // v1.106.4 — the browser no longer computes a "device fingerprint". It was a 32-bit hash of
+  // userAgent|screen|timezone, which is public information about the device and therefore
+  // guessable by anyone holding the password. Trusting a device is now a server-issued random
+  // token in an httpOnly cookie, which this code cannot see and does not need to.
 
   const demoAccounts = [
     { label: 'Paul (Family)', email: 'paul@inplace.care', icon: '👨‍👩‍👦', desc: 'Care coordinator' },
@@ -132,7 +130,7 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBa
     try {
       const response = await apiFetch('/api/auth/login', {
         method: 'POST',
-        body: JSON.stringify({ email, password, deviceFingerprint: getDeviceFingerprint(), keepSignedIn })
+        body: JSON.stringify({ email, password, keepSignedIn })
       });
       if (!response) throw new Error('Login failed');
       const data = await response.json();
@@ -188,7 +186,6 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBa
         method: 'POST',
         body: JSON.stringify({
           tempToken, code: twoFACode,
-          deviceFingerprint: rememberDevice ? getDeviceFingerprint() : null,
           rememberDevice, keepSignedIn,
         })
       });
@@ -220,6 +217,9 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBa
       if (!response) throw new Error('Password change failed');
       const data = await response.json();
       if (!response.ok) throw new Error(data?.error || 'Password change failed');
+      // v1.106.4 — see MyAccount: the change revokes every session and returns a replacement
+      // token for this device. Store it before continuing, or the next call 401s.
+      if (data?.token && typeof setAuthToken === 'function') setAuthToken(data.token);
       trackAuthEvent('login', 'password_changed', { email });
       onLogin(pendingUser, keepSignedIn);
     } catch (err) {

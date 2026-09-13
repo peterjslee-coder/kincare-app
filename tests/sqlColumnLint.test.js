@@ -116,9 +116,17 @@ describe("the false-positive traps that nearly disabled it", () => {
 
   test("the schema parser strips block comments and matches parens", () => {
     // Trap 2. "(C2 rule)" inside a comment, and REFERENCES foo(id), both truncated the parse.
-    expect(source).toMatch(/replace\(\/\\\/\\\*\[\\s\\S\]\*\?\\\*\\\/\/g/);
-    expect(source).toMatch(/depth\+\+/);
-    expect(source).toMatch(/if \(ch === "," && d === 0\)/);
+    //
+    // v1.106.4 — loadSchema moved to src/utils/expectedSchema.js so that
+    // GET /api/admin/schema-drift and this linter answer from ONE parser. Two implementations
+    // of "which columns should exist" is how a real gap hides. Assert the traps where the
+    // code now lives, and assert the linter still delegates rather than growing a copy back.
+    const parser = fs.readFileSync(path.join(__dirname, "..", "src", "utils", "expectedSchema.js"), "utf8");
+    expect(parser).toMatch(/replace\(\/\\\/\\\*\[\\s\\S\]\*\?\\\*\\\/\/g/);
+    expect(parser).toMatch(/depth\+\+/);
+    expect(parser).toMatch(/if \(ch === "," && d === 0\)/);
+    expect(source).toMatch(/expectedSchema/);
+    expect(source).not.toMatch(/^function loadSchema\(\)/m);
   });
 
   test("it blanks SQL comments before reading column references", () => {

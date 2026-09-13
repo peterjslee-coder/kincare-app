@@ -1,11 +1,36 @@
 const express = require("express");
 const { getDb } = require("../models/database");
-const { authenticate } = require("../middleware/auth");
+const { authenticate, denyDemo } = require("../middleware/auth");
 const { sendEmail } = require("../utils/email");
 const { getTodayStringInZone } = require("../utils/timezone");
 
 const router = express.Router();
-router.use(authenticate);
+
+// v1.106.4 — every value below is interpolated into an HTML email, and none of it was escaped.
+// A caregiver controls their own first/last name and academic_program, so this route would
+// render whatever markup they put there inside a message sent from our own address.
+const esc = (v) => String(v == null ? "" : v)
+  .replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+// A subject line is a header, not markup: HTML-escaping it would show the reader "&amp;".
+// What it must never contain is a line break, which would let a crafted name append headers.
+const escHeader = (v) => String(v == null ? "" : v).replace(/[\r\n]+/g, " ").trim().slice(0, 200);
+
+// The report goes to an address the caregiver types, which is the feature (a school supervisor).
+// That also makes it a way to send mail from hello@yourinplace.com to anywhere, so it is metered
+// per account rather than per IP, and every send is written to the audit log.
+const HOURLY_EMAIL_CAP = 5;
+const _reportSends = new Map(); // userId -> timestamps
+function tooManyReportEmails(userId) {
+  const now = Date.now();
+  const recent = (_reportSends.get(userId) || []).filter((t) => now - t < 60 * 60 * 1000);
+  recent.push(now);
+  _reportSends.set(userId, recent);
+  if (_reportSends.size > 5000) _reportSends.clear(); // bounded; this is a per-instance heuristic
+  return recent.length > HOURLY_EMAIL_CAP;
+}
+// v1.106.4 — demo sessions are free and passwordless; this route sends email from the platform's own address.
+router.use(authenticate, denyDemo);
 
 // ─── GET /api/reports/hours ───
 // Generate hour report data for the logged-in caregiver
@@ -76,7 +101,7 @@ router.get("/hours", async (req, res) => {
         generatedAt: new Date().toISOString(),
         dateRange: { from: fromDate, to: toDate },
         student: {
-          name: `${user.first_name} ${user.last_name}`,
+          name: `${esc(user.first_name)} ${esc(user.last_name)}`,
           email: user.email,
           academicProgram,
           academicProgramYear,
@@ -117,6 +142,12 @@ router.post("/hours/email", async (req, res) => {
 
     const { recipientEmail, recipientName, from, to } = req.body;
     if (!recipientEmail) return res.status(400).json({ error: "recipientEmail is required" });
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(recipientEmail).trim())) {
+      return res.status(400).json({ error: "That doesn't look like an email address" });
+    }
+    if (tooManyReportEmails(userId)) {
+      return res.status(429).json({ error: `You can send ${HOURLY_EMAIL_CAP} reports an hour. Try again shortly.` });
+    }
 
     // Get caregiver info
     const profile = await db.prepare("SELECT * FROM caregiver_profiles WHERE user_id = ?").get(userId);
@@ -158,11 +189,11 @@ router.post("/hours/email", async (req, res) => {
 
     const sessionRows = sessions.map(s => `
       <tr>
-        <td style="padding:8px 12px;border-bottom:1px solid #eee;font-size:13px">${formatDate(s.scheduled_date)}</td>
-        <td style="padding:8px 12px;border-bottom:1px solid #eee;font-size:13px">${s.scheduled_time || "—"}</td>
-        <td style="padding:8px 12px;border-bottom:1px solid #eee;font-size:13px;text-align:right;font-weight:600">${s.duration_hours || 0}h</td>
-        <td style="padding:8px 12px;border-bottom:1px solid #eee;font-size:13px">${serviceLabel(s.service_type)}</td>
-        <td style="padding:8px 12px;border-bottom:1px solid #eee;font-size:13px">${s.recipient_name || "—"}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #eee;font-size:13px">${esc(formatDate(s.scheduled_date))}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #eee;font-size:13px">${esc(s.scheduled_time || "—")}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #eee;font-size:13px;text-align:right;font-weight:600">${esc(s.duration_hours || 0)}h</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #eee;font-size:13px">${esc(serviceLabel(s.service_type))}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #eee;font-size:13px">${esc(s.recipient_name || "—")}</td>
       </tr>
     `).join("");
 
@@ -176,19 +207,19 @@ router.post("/hours/email", async (req, res) => {
           <table style="width:100%;border-collapse:collapse;margin-bottom:20px">
             <tr>
               <td style="padding:6px 0;font-size:13px;color:#888;width:120px">Student Name</td>
-              <td style="padding:6px 0;font-size:14px;font-weight:600">${user.first_name} ${user.last_name}</td>
+              <td style="padding:6px 0;font-size:14px;font-weight:600">${esc(user.first_name)} ${esc(user.last_name)}</td>
             </tr>
             <tr>
               <td style="padding:6px 0;font-size:13px;color:#888">Email</td>
-              <td style="padding:6px 0;font-size:14px">${user.email}</td>
+              <td style="padding:6px 0;font-size:14px">${esc(user.email)}</td>
             </tr>
             ${profile.academic_program ? `<tr>
               <td style="padding:6px 0;font-size:13px;color:#888">Program</td>
-              <td style="padding:6px 0;font-size:14px">${profile.academic_program}${profile.academic_program_year ? ` (${profile.academic_program_year})` : ""}</td>
+              <td style="padding:6px 0;font-size:14px">${esc(profile.academic_program)}${profile.academic_program_year ? ` (${esc(profile.academic_program_year)})` : ""}</td>
             </tr>` : ""}
             <tr>
               <td style="padding:6px 0;font-size:13px;color:#888">Report Period</td>
-              <td style="padding:6px 0;font-size:14px">${formatDate(fromDate)} — ${formatDate(toDate)}</td>
+              <td style="padding:6px 0;font-size:14px">${esc(formatDate(fromDate))} — ${esc(formatDate(toDate))}</td>
             </tr>
             <tr>
               <td style="padding:6px 0;font-size:13px;color:#888">Total Hours</td>
@@ -227,7 +258,7 @@ router.post("/hours/email", async (req, res) => {
             <p style="margin:0;font-size:12px;color:#666;line-height:1.6">
               This report was generated by <strong>InPlace</strong> (yourinplace.com), an on-demand care coordination platform.
               All sessions listed above have been verified as completed through the platform.
-              For questions about this report, please contact ${user.first_name} at ${user.email}.
+              For questions about this report, please contact ${esc(user.first_name)} at ${esc(user.email)}.
             </p>
             <p style="margin:8px 0 0;font-size:11px;color:#999">
               Report generated: ${new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
@@ -240,7 +271,7 @@ router.post("/hours/email", async (req, res) => {
     // Send email
     const result = await sendEmail({
       to: recipientEmail,
-      subject: `Clinical Hours Report — ${user.first_name} ${user.last_name} (${formatDate(fromDate)} to ${formatDate(toDate)})`,
+      subject: escHeader(`Clinical Hours Report — ${user.first_name} ${user.last_name} (${formatDate(fromDate)} to ${formatDate(toDate)})`),
       html: emailHtml,
       replyTo: user.email,
     });

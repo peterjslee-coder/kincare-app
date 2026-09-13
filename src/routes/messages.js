@@ -333,7 +333,12 @@ router.post("/conversations", async (req, res) => {
   }
 
   // ── Connection check: only allow messaging connected users (or admins) ──
-  if (type === "direct") {
+  //
+  // v1.106.4 — this was `if (type === "direct")`, so every check below was skipped for a group.
+  // `{ type: "group", memberIds: [...] }` therefore opened a thread with any user ids at all —
+  // including an uncleared caregiver reaching families, which is the exact thing the vetting
+  // gate twenty lines above exists to prevent. A group is more reach than a DM, not less.
+  if (type === "direct" || type === "group") {
     for (const memberId of memberIds) {
       if (memberId === req.user.id) continue;
 
