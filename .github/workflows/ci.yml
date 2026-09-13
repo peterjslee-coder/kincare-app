@@ -55,6 +55,11 @@ jobs:
       # The legacy migrations array is '000_legacy_baseline' and runs once, on a database
       # that has never seen it. A schema change added there reaches the tests and never
       # reaches prod — which is how location_source was broken for three weeks.
+      # A role in the caller's own token is not an authorization check. Twice this shape
+      # let any account act on any session by id — Aug 4 and again Sep 13.
+      - name: No route authorizes on a role string
+        run: npm run lint:authz
+
       - name: Frozen migration baseline untouched
         run: npm run lint:frozen-migrations
 

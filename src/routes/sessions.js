@@ -395,6 +395,8 @@ router.post("/request", async (req, res) => {
 router.put("/:id/decline", async (req, res) => {
   try {
     const db = await getDb();
+    // authz-ok: eligibility only — the row check is `isDirectedAtMe` below, which requires
+    // this caregiver's profile id on the session's caregiver_id or offered_to_caregiver_id.
     if (!req.user.roles?.includes("caregiver") && req.user.role !== "caregiver") {
       return res.status(403).json({ error: "Only caregivers can decline care requests" });
     }
@@ -2251,14 +2253,27 @@ router.post("/:id/propose-time-change", async (req, res) => {
       return res.status(400).json({ error: "A time change is already pending for this session" });
     }
 
+    // v1.106.2 — authorization, not just authentication.
+    //
+    // This read `activeRole === "caregiver"`, and `activeRole` is whatever role sits in the
+    // caller's own JWT. The caregiver role is free: anyone can register with it, or add it to an
+    // existing account via POST /api/auth/add-role, with no vetting and no background check. So
+    // "is a caregiver" was standing in for "is THE caregiver on THIS session", and any account on
+    // the platform could act on any session by id.
+    //
+    // sessionAccess() answers the question that was actually being asked, and answers 404 rather
+    // than 403 so probing ids tells you nothing.
+    const access = await sessionAccess(db, req.params.id, userId);
+    if (!access) return res.status(404).json({ error: "Session not found" });
+
     // Determine who is proposing
     let proposedBy;
-    if (activeRole === "caregiver" || userId === session.caregiver_user_id) {
+    if (access.isCaregiver) {
       proposedBy = "caregiver";
-    } else if (userId === session.family_user_id) {
+    } else if (access.isFamily || access.isAdmin) {
       proposedBy = "family";
     } else {
-      return res.status(403).json({ error: "You are not part of this session" });
+      return res.status(404).json({ error: "Session not found" });
     }
 
     // Check if within 24 hours
@@ -2374,9 +2389,23 @@ router.put("/:id/time-change/:proposalId/respond", async (req, res) => {
 
     if (!session) return res.status(404).json({ error: "Session not found" });
 
+    // v1.106.2 — this handler had NO ownership check at all, and derived the responder's side
+    // from their own JWT role. Two requests (propose, then accept) rewrote the time of any
+    // confirmed visit on the platform.
+    const access = await sessionAccess(db, req.params.id, userId);
+    if (!access) return res.status(404).json({ error: "Session not found" });
+    if (!access.isCaregiver && !access.isFamily && !access.isAdmin) {
+      return res.status(404).json({ error: "Session not found" });
+    }
+    // A proposal is an offer to the OTHER party. Accepting your own was how one account moved a
+    // visit on its own, and it is meaningless even when done by the legitimate proposer.
+    if (proposal.proposed_by_user_id === userId) {
+      return res.status(400).json({ error: "You proposed this change — the other person responds to it." });
+    }
+
     const emitToUser = req.app.get("emitToUser");
-    const isResponderCaregiver = activeRole === "caregiver" || userId === session.caregiver_user_id;
-    const isResponderFamily = userId === session.family_user_id;
+    const isResponderCaregiver = access.isCaregiver;
+    const isResponderFamily = access.isFamily;
     const notifyUserId = isResponderCaregiver ? session.family_user_id : session.caregiver_user_id;
     const responderName = isResponderCaregiver ? session.caregiver_name : session.family_name;
 
@@ -2537,6 +2566,9 @@ router.put("/:id/time-change/:proposalId/respond", async (req, res) => {
 router.get("/:id/time-change", async (req, res) => {
   try {
     const db = await getDb();
+    // v1.106.2 — this leaked the proposer's name and reason for any session id.
+    const access = await sessionAccess(db, req.params.id, req.user.id);
+    if (!access || !access.canView) return res.status(404).json({ error: "Session not found" });
     const proposal = await db.prepare(`
       SELECT tcp.*, u.first_name || ' ' || u.last_name AS proposer_name
       FROM time_change_proposals tcp
@@ -2585,7 +2617,7 @@ router.put("/:id/instructions", async (req, res) => {
     const cleaned = sanitize(specialInstructions).slice(0, 2000);
 
     const session = await db.prepare(`
-      SELECT cs.*, cr.family_user_id AS owner_id
+      SELECT cs.*, cr.family_user_id AS owner_id, cr.linked_user_id AS recipient_user_id
       FROM care_sessions cs
       LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
       WHERE cs.id = ?
@@ -2593,12 +2625,20 @@ router.put("/:id/instructions", async (req, res) => {
 
     if (!session) return res.status(404).json({ error: "Session not found" });
 
-    // Only family owner, session booker, or care_for can edit instructions
+    // v1.106.2 — `activeRole === "care_for"` meant ANY account holding the (self-assignable)
+    // care_for role could append to ANY session's instructions. The caregiver reads this text at
+    // check-in, so that is a physical-safety hole, not a data one: "give her the second dose too"
+    // arriving on a stranger's visit.
+    //
+    // The care recipient may of course edit their own instructions — but only their own, which is
+    // what care_recipients.linked_user_id records.
     const isOwner = userId === session.owner_id || userId === session.family_user_id;
-    const isCareFor = activeRole === "care_for";
-    const isAdmin = activeRole === "admin";
+    const isCareFor = activeRole === "care_for" && session.recipient_user_id === userId;
+    const isAdmin = activeRole === "admin" && !!(await db.prepare(
+      "SELECT is_admin FROM users WHERE id = ?"
+    ).get(userId))?.is_admin;
     if (!isOwner && !isCareFor && !isAdmin) {
-      return res.status(403).json({ error: "Not authorized to edit instructions" });
+      return res.status(404).json({ error: "Session not found" });
     }
 
     // Cannot edit completed or cancelled sessions
@@ -2805,9 +2845,12 @@ router.get("/:id/cancel-preview", async (req, res) => {
     `).get(req.params.id);
     if (!session) return res.status(404).json({ error: "Session not found" });
 
-    const isCaregiver = activeRole === "caregiver" || userId === session.caregiver_user_id;
-    const isFamily = userId === session.family_user_id;
-    if (!isCaregiver && !isFamily) return res.status(403).json({ error: "Not your session" });
+    // v1.106.2 — same role-only gate as /cancel; see the note there.
+    const cpAccess = await sessionAccess(db, req.params.id, userId);
+    if (!cpAccess) return res.status(404).json({ error: "Session not found" });
+    const isCaregiver = cpAccess.isCaregiver;
+    const isFamily = cpAccess.isFamily || cpAccess.isAdmin;
+    if (!isCaregiver && !isFamily) return res.status(404).json({ error: "Session not found" });
     const cancelledBy = isCaregiver ? "caregiver" : "family";
 
     const tz = session.care_timezone || "America/New_York";
@@ -3001,14 +3044,28 @@ router.put("/:id/cancel", async (req, res) => {
       return res.status(400).json({ error: `Cannot cancel a session with status '${session.status}'` });
     }
 
-    // Determine who is cancelling
+    // v1.106.2 — authorization, not just authentication.
+    //
+    // This read `activeRole === "caregiver"`, and `activeRole` is whatever role sits in the
+    // caller's own JWT. The caregiver role is free: anyone can register with it, or add it to an
+    // existing account via POST /api/auth/add-role, with no vetting and no background check. So
+    // "is a caregiver" was standing in for "is THE caregiver on THIS session", and any account on
+    // the platform could act on any session by id.
+    //
+    // sessionAccess() answers the question that was actually being asked, and answers 404 rather
+    // than 403 so probing ids tells you nothing.
+    const access = await sessionAccess(db, req.params.id, userId);
+    if (!access) return res.status(404).json({ error: "Session not found" });
+
+    // Determine who is cancelling. Deliberately NOT `access.canManage`: that also covers a care
+    // team member with edit rights, and widening who may cancel a visit is not this change's job.
     let cancelledBy;
-    if (activeRole === "caregiver" || userId === session.caregiver_user_id) {
+    if (access.isCaregiver) {
       cancelledBy = "caregiver";
-    } else if (userId === session.family_user_id) {
+    } else if (access.isFamily || access.isAdmin) {
       cancelledBy = "family";
     } else {
-      return res.status(403).json({ error: "You are not authorized to cancel this session" });
+      return res.status(404).json({ error: "Session not found" });
     }
 
     // Check if this is a late cancellation (<24 hours before session)
@@ -3640,6 +3697,8 @@ router.post("/:id/propose-time", async (req, res) => {
     const rawRoles = req.user.roles || activeRole || "";
     const roles = Array.isArray(rawRoles) ? rawRoles : String(rawRoles).split(",").map(r => r.trim());
 
+    // authz-ok: eligibility only — the vetting gate that actually decides is below, once the
+    // session (and therefore the family a vouch would be scoped to) is known.
     if (!roles.includes("caregiver")) {
       return res.status(403).json({ error: "Only caregivers can propose times" });
     }
@@ -3649,6 +3708,9 @@ router.post("/:id/propose-time", async (req, res) => {
 
     const profile = await db.prepare("SELECT * FROM caregiver_profiles WHERE user_id = ?").get(userId);
     if (!profile) return res.status(404).json({ error: "Caregiver profile not found" });
+    if (profile.account_paused) {
+      return res.status(403).json({ error: "Your account is paused. Contact support for assistance." });
+    }
 
     const session = await db.prepare(`
       SELECT cs.*, cr.first_name AS recipient_first_name
@@ -3660,6 +3722,17 @@ router.post("/:id/propose-time", async (req, res) => {
     if (!session) return res.status(404).json({ error: "Session not found" });
     if (!["open", "requested", "pending"].includes(session.status)) {
       return res.status(400).json({ error: "This session is no longer available for proposals" });
+    }
+
+    // v1.106.2 — proposing a time notifies the family and puts a name in front of them, so it is
+    // the same trust decision as claiming the job, and it was ungated. Mirrors the claim gate
+    // (sessions.js ~528) and the offers gate: a real Checkr result clears any job; an admin
+    // vouch clears only the vouched family's jobs.
+    if (!profile.is_background_checked) {
+      const vouched = await hasActiveVouch(db, userId, session.family_user_id);
+      if (!vouched) {
+        return res.status(403).json({ error: "You must complete your background check before proposing times." });
+      }
     }
 
     // Check if this caregiver already has a pending proposal for this session

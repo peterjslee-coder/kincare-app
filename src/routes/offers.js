@@ -5,6 +5,8 @@ const express = require("express");
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { authenticate } = require("../middleware/auth");
+const { sessionAccess } = require("../utils/access");
+const { hasActiveVouch } = require("../utils/vouches");
 
 const router = express.Router();
 router.use(authenticate);
@@ -37,16 +39,38 @@ router.post("/:sessionId/offers", async (req, res) => {
 
   if (!session) return res.status(404).json({ error: "Session not found" });
 
-  // Determine who can make offers: family (session owner) or caregiver (assigned or open request)
+  // v1.106.2 — this read `roles.includes("caregiver")`, i.e. "is a caregiver", not "is a
+  // caregiver with any business here". The caregiver role is free (register, or
+  // POST /api/auth/add-role), so any account could open a negotiation on any confirmed visit
+  // and flip it to `negotiating`.
+  //
+  // Bidding on an OPEN job genuinely is open to caregivers who are not yet attached — that is
+  // the marketplace. So the rule mirrors the claim gate in sessions.js rather than replacing it:
+  // the booking family, the assigned caregiver, or a VETTED caregiver on a job that is actually
+  // open for bids.
   const isFamily = req.user.id === session.family_user_id;
-  const userRoles = req.user.roles || [req.user.role];
-  const isCaregiver = userRoles.includes("caregiver");
+  const isAssignedCaregiver = !!session.caregiver_user_id && req.user.id === session.caregiver_user_id;
 
-  if (!isFamily && !isCaregiver) {
-    return res.status(403).json({ error: "Only the family or a caregiver can make offers" });
+  let isBiddingCaregiver = false;
+  if (!isFamily && !isAssignedCaregiver && !session.caregiver_id
+      && ["requested", "open", "pending", "negotiating"].includes(session.status)) {
+    const profile = await db.prepare(
+      "SELECT is_background_checked, account_paused FROM caregiver_profiles WHERE user_id = ?"
+    ).get(req.user.id);
+    if (profile && !profile.account_paused) {
+      // Same honest gate as claiming (v1.64.0): a real Checkr result clears any job; an admin
+      // vouch clears only the vouched family's jobs.
+      isBiddingCaregiver = !!profile.is_background_checked
+        || await hasActiveVouch(db, req.user.id, session.family_user_id);
+    }
+  }
+
+  if (!isFamily && !isAssignedCaregiver && !isBiddingCaregiver) {
+    return res.status(404).json({ error: "Session not found" });
   }
 
   // Determine the "to" user
+  const isCaregiver = isAssignedCaregiver || isBiddingCaregiver;
   let toUserId;
   if (isFamily) {
     if (!session.caregiver_user_id) {
@@ -191,14 +215,11 @@ router.get("/:sessionId/offers", async (req, res) => {
 
   if (!session) return res.status(404).json({ error: "Session not found" });
 
-  const isFamily = req.user.id === session.family_user_id;
-  const isCaregiver = req.user.id === session.caregiver_user_id;
-  const offerRoles = req.user.roles || [req.user.role];
-  const isAdmin = offerRoles.includes('admin');
-
-  if (!isFamily && !isCaregiver && !isAdmin) {
-    return res.status(403).json({ error: "Access denied" });
-  }
+  // v1.106.2 — `roles.includes('admin')` was also wrong in the other direction: admin-ness lives
+  // in users.is_admin, not in the role string (Pete is role:family + is_admin:true), so real
+  // admins were being denied. sessionAccess reads the right column.
+  const access = await sessionAccess(db, sessionId, req.user.id);
+  if (!access || !access.canView) return res.status(404).json({ error: "Session not found" });
 
   // Expire any stale pending offers
   await db.prepare(`

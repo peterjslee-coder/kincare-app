@@ -225,8 +225,22 @@ describe("cancel preview", () => {
     }
   });
 
-  test("only the two parties to the session can preview it", () => {
-    expect(previewOnly).toMatch(/Not your session/);
+  // v1.106.2 — this used to assert the literal string "Not your session", which is a test of
+  // the wording rather than of the property. The wording changed (403 -> the 404 convention, so
+  // that probing ids cannot distinguish "not yours" from "does not exist") and the test failed
+  // while the protection was actually getting stronger.
+  //
+  // What matters is HOW the handler decides. The old gate read `activeRole === "caregiver"` —
+  // the caller's own JWT role — which any account could hold, so it authorised strangers.
+  test("the preview decides access from the session, not from the caller's role", () => {
+    expect(previewOnly).toMatch(/sessionAccess\(/);
+    expect(previewOnly).not.toMatch(/activeRole === "caregiver"/);
+  });
+
+  test("a failed preview check is indistinguishable from a missing session", () => {
+    // No 403 anywhere in the handler: every refusal is a 404.
+    expect(previewOnly).not.toMatch(/status\(403\)/);
+    expect(previewOnly).toMatch(/status\(404\)/);
   });
 });
 

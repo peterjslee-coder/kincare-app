@@ -965,6 +965,8 @@ router.put("/:teamId/member-prefs/:userId", authenticate, async (req, res) => {
       "SELECT ctm.*, u.role FROM care_team_members ctm JOIN users u ON ctm.user_id = u.id WHERE ctm.care_team_id = ? AND ctm.user_id = ?"
     ).get(teamId, targetUserId) : null;
 
+    // authz-ok: this reads the TARGET user's role out of the database (JOIN users u), not the
+    // caller's token. The caller was authorized above by `callerMember` team membership.
     if (!linkedRecipient && (!targetMember || targetMember.role !== 'care_for')) {
       return res.status(403).json({ error: "Can only set preferences for care recipients in your team" });
     }

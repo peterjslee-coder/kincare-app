@@ -16,6 +16,7 @@
     "lint:requires": "node scripts/lint-requires.js",
     "lint:sql-columns": "node scripts/lint-sql-columns.js",
     "lint:frozen-migrations": "node scripts/lint-frozen-migrations.js",
+    "lint:authz": "node scripts/lint-authz.js",
     "collect-feedback": "node scripts/collect-feedback.js",
     "test:integration": "jest --forceExit --runInBand --testMatch \"**/tests/integration/**/*.itest.js\""
   },
