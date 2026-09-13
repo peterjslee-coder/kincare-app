@@ -6,6 +6,7 @@ const { authenticate, requireRole } = require("../middleware/auth");
 const { writeAuditLog } = require("../middleware/auditLog");
 const { captureException } = require("../utils/sentry");
 const { phaseFor, PHASE } = require("../constants/checkrStatus");
+const { blockPendingAdminReview } = require("../utils/caregiverBlock");
 
 const router = express.Router();
 
@@ -142,6 +143,26 @@ router.get("/config", authenticate, async (req, res) => {
 router.post("/initiate", authenticate, requireRole("caregiver"), async (req, res) => {
   const db = await getDb();
 
+  // ─── v1.106.14 — a caregiver under review is told that, before anything else ───
+  //
+  // Ahead of the kill switch and the configured-check on purpose. Both answer 503, and
+  // "the background check service is not configured yet" is not what is true for this person:
+  // they are stopped pending an admin, and that stays true whatever state the integration is
+  // in. Getting the order wrong here sends someone who has been blocked to support asking why
+  // the service is broken.
+  //
+  // The pause IS the "wait for Pete" state — set by the adverse Checkr webhooks and by the
+  // admin reject, both through utils/caregiverBlock.
+  const paused = await db.prepare(
+    "SELECT account_paused FROM caregiver_profiles WHERE user_id = ?"
+  ).get(req.user.id);
+  if (paused?.account_paused) {
+    return res.status(403).json({
+      error: "Your background check is under review. There's nothing you need to do right now — we'll be in touch.",
+      code: "PENDING_ADMIN_REVIEW",
+    });
+  }
+
   // Kill switch check
   if (!(await bgChecksEnabled())) {
     return res.status(503).json({ error: "Background checks are currently disabled by the administrator." });
@@ -181,8 +202,18 @@ router.post("/initiate", authenticate, requireRole("caregiver"), async (req, res
       console.log(`[checkr] Staging: auto-set background_check_consent for user ${req.user.id}`);
     }
 
-    // Check if already initiated — allow re-initiation for expired, canceled, rejected, or did_not_pass
-    const reInitiatableStatuses = ['invitation_expired', 'invitation_canceled', 'rejected', 'did_not_pass'];
+    // ─── v1.106.14 — a failed check is not self-service ───
+    //
+    // This used to include 'rejected' and 'did_not_pass', so a caregiver who had failed could
+    // press the button and start a fresh check with nobody told. Pete's rule is the opposite:
+    // "they don't get an invitation to do anything until I am in the loop and have reviewed
+    // their check." Re-initiating is now limited to checks that ended WITHOUT a result — an
+    // expired or cancelled invitation, where starting again is simply finishing what was begun.
+    //
+    // An adverse outcome needs an admin. RESTARTABLE in constants/checkrStatus.js is the same
+    // set for the same reason, and the test pins them equal so they cannot drift.
+    const { RESTARTABLE } = require("../constants/checkrStatus");
+    const reInitiatableStatuses = RESTARTABLE;
     if (profile.checkr_candidate_id && profile.checkr_invitation_id) {
       if (!reInitiatableStatuses.includes(profile.checkr_status)) {
         return res.json({
@@ -414,6 +445,66 @@ router.get("/status", authenticate, requireRole("caregiver"), async (req, res) =
 // This endpoint must be publicly accessible (no auth)
 // Configure in Checkr Dashboard → Developer Settings → New Webhook → URL: https://yourinplace.com/api/checkr/webhook
 // Body is parsed here (skipped in global middleware) so we can verify the signature against raw bytes.
+// ─── v1.106.14 — an adverse Checkr result stops work and pages an admin ───
+//
+// Pete's rule: a caregiver who fails does not get jobs and is not invited to do anything until
+// he has reviewed the check. blockPendingAdminReview does the stopping (see utils/caregiverBlock
+// for what was broken); this adds the telling. post_adverse_action wrote an activity_feed row
+// and no push at all, so "I am in the loop" depended on an admin happening to scroll their feed.
+async function blockOnAdverse(db, candidateId, source, caregiverReason) {
+  try {
+    const result = await blockPendingAdminReview(db, {
+      candidateId, reason: caregiverReason, source: `checkr:${source}`,
+    });
+    if (!result.blocked) {
+      console.warn(`[checkr-webhook] ${source}: no caregiver profile for candidate ${candidateId}`);
+      return result;
+    }
+
+    // ─── Nothing identifying on a lock screen ───
+    //
+    // The first version of this put the caregiver's name in the title and the reason in the
+    // body: "Background check — Jane Smith blocked. post adverse action." That is a person's
+    // background-check outcome, readable by anyone glancing at a phone on a table, and
+    // tests/pushPhi.test.js caught it — correctly.
+    //
+    // The urgency survives without the identity: an admin learns someone was stopped and
+    // whether they had been working, and everything else is in the data payload, behind the
+    // unlock, where the admin screen reads it.
+    const body = result.wasCleared
+      ? "A caregiver who was cleared to work has been blocked. Open InPlace to review."
+      : "A caregiver has been blocked pending review. Open InPlace to review.";
+
+    const { sendPushToUser } = require("../utils/push");
+    const admins = await db.prepare(
+      "SELECT id FROM users WHERE is_admin = 1 AND COALESCE(is_demo, 0) = 0"
+    ).all();
+    for (const admin of admins) {
+      await sendPushToUser(db, admin.id,
+        "Background check needs review",
+        body,
+        {
+          type: "checkr_blocked",
+          userId: result.userId,
+          source,
+          wasCleared: result.wasCleared,
+          vouchesRevoked: result.vouchesRevoked,
+          page: "admin",
+        }
+      ).catch(() => {});
+    }
+
+    console.log(`[checkr-webhook] ${source}: blocked ${result.userId} (wasCleared=${result.wasCleared}, vouchesRevoked=${result.vouchesRevoked})`);
+    return result;
+  } catch (e) {
+    // Never let the notification take down the block — but this must be loud, because a
+    // silent failure here is a caregiver who failed and nobody knows.
+    console.error(`[checkr-webhook] ${source}: block/notify failed:`, e.message);
+    captureException(e, { where: `checkr: blockOnAdverse ${source}`, candidateId });
+    throw e;
+  }
+}
+
 router.post("/webhook", express.raw({ type: "application/json", limit: "100kb" }), async (req, res) => {
   const db = await getDb();
   const rawBody = req.body; // Buffer (raw bytes)
@@ -692,6 +783,10 @@ router.post("/webhook", express.raw({ type: "application/json", limit: "100kb" }
         await db.prepare(
           "UPDATE caregiver_profiles SET checkr_status = 'suspended', checkr_report_id = ?, updated_at = NOW() WHERE checkr_candidate_id = ?"
         ).run(reportId, candidate_id);
+        // v1.106.14 — and actually stop them working. Setting the status alone left
+        // is_background_checked untouched, and that is the column every work gate reads.
+        await blockOnAdverse(db, candidate_id, "suspended",
+          "Your background check is suspended and under review.");
 
         // Notify admins — this is an action item, candidate needs to fix something
         try {
@@ -785,6 +880,11 @@ router.post("/webhook", express.raw({ type: "application/json", limit: "100kb" }
         await db.prepare(
           "UPDATE caregiver_profiles SET checkr_status = 'adverse_action', updated_at = NOW() WHERE checkr_candidate_id = ?"
         ).run(candidate_id);
+        // v1.106.14 — pre-adverse means the report contains something disqualifying and the
+        // clock has started. Hold work now rather than after the notice period: this branch
+        // used to set a string and not even tell an admin.
+        await blockOnAdverse(db, candidate_id, "pre_adverse_action",
+          "Your background check is under review.");
 
         writeAuditLog({
           action: "checkr_adverse_action",
@@ -889,6 +989,9 @@ router.post("/webhook", express.raw({ type: "application/json", limit: "100kb" }
         await db.prepare(
           "UPDATE caregiver_profiles SET checkr_status = 'did_not_pass', updated_at = NOW() WHERE checkr_candidate_id = ?"
         ).run(candidate_id);
+        // v1.106.14 — the definitive one, and the one that most needed this.
+        await blockOnAdverse(db, candidate_id, "post_adverse_action",
+          "Your background check is under review.");
 
         // Notify admins
         try {

@@ -1946,23 +1946,27 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                 <span style={{ fontSize: 18 }}>✓</span>
                 <span style={{ fontSize: 14, color: 'var(--role-color)', fontWeight: 600 }}>Background check complete</span>
               </div>
-            ) : checkrPhase === 'not_approved' ? (
-              // v1.106.13 — this branch did not exist. A caregiver whose check came back
-              // did_not_pass / rejected / adverse_action / suspended fell all the way through to
-              // "✓ Payment received" and a blank Checkr form: no statement of the outcome, and an
-              // invitation to quietly run a second check. Deliberately does NOT offer a retry —
-              // an adverse result has a process attached and this is not it.
-              <div style={{ padding: 14, background: 'var(--bg-error-subtle)', borderRadius: 8, border: '1px solid var(--color-error)' }}>
-                <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--color-error)', marginBottom: 6 }}>
-                  Background check not approved
+            ) : checkrPhase === 'blocked_pending_review' ? (
+              // v1.106.14 — Pete: "they don't get jobs, they don't get an invitation to do
+              // anything until I am in the loop and have reviewed their check."
+              //
+              // So this states the HOLD, not a verdict. The first version of this branch said
+              // "we can't approve you" — an adverse determination announced before Pete had
+              // looked, on a screen he'd never seen it on. pre_adverse_action is the start of a
+              // notice period, not the end, and saying otherwise is both wrong and his call to
+              // make, not the platform's. No retry button either: re-running your own check is
+              // exactly the "invitation to do something" the rule rules out.
+              <div style={{ padding: 14, background: 'var(--color-warning-bg, #fff8e1)', borderRadius: 8, border: '1px solid var(--color-warning)' }}>
+                <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)', marginBottom: 6 }}>
+                  Background check under review
                 </div>
                 <p style={{ margin: '0 0 8px', fontSize: 13, color: 'var(--text-secondary)' }}>
-                  We can't approve you to work on InPlace based on the result of your background check.
-                  Checkr will have emailed you a copy of the report and your rights regarding it.
+                  Your background check came back with something that needs a person here to look
+                  at it. We've paused new work while we do. Nothing is decided.
                 </p>
                 <p style={{ margin: 0, fontSize: 13, color: 'var(--text-secondary)' }}>
-                  If you believe the report is wrong, you can dispute it with Checkr directly, and you
-                  can reach us at <a href="mailto:support@yourinplace.com" style={{ color: 'var(--role-color)' }}>support@yourinplace.com</a>.
+                  There's nothing you need to do — we'll contact you. If you'd like to reach us in
+                  the meantime, we're at <a href="mailto:support@yourinplace.com" style={{ color: 'var(--role-color)' }}>support@yourinplace.com</a>.
                 </p>
               </div>
             ) : checkrPhase === 'under_review' ? (

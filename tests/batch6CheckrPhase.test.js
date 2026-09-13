@@ -66,16 +66,16 @@ describe("F1 — every status the server can store is classified", () => {
 
   test("and 'unknown' never offers to start a check — that was the bug", () => {
     expect(C.mayStart(C.PHASE.UNKNOWN)).toBe(false);
-    expect(C.mayStart(C.PHASE.NOT_APPROVED)).toBe(false);
+    expect(C.mayStart(C.PHASE.BLOCKED_PENDING_REVIEW)).toBe(false);
     expect(C.mayStart(C.PHASE.UNDER_REVIEW)).toBe(false);
     // Only these two mean "no check is running and starting one is correct".
     expect(C.mayStart(C.PHASE.NOT_STARTED)).toBe(true);
     expect(C.mayStart(C.PHASE.RESTARTABLE)).toBe(true);
   });
 
-  test("the four that were showing a submission form are all not_approved", () => {
+  test("the four that were showing a submission form are all blocked_pending_review", () => {
     for (const s of ["did_not_pass", "rejected", "adverse_action", "suspended"]) {
-      expect(C.phaseFor(s, false)).toBe(C.PHASE.NOT_APPROVED);
+      expect(C.phaseFor(s, false)).toBe(C.PHASE.BLOCKED_PENDING_REVIEW);
     }
   });
 
@@ -93,7 +93,7 @@ describe("F1 — every status the server can store is classified", () => {
 
   test("no status is classified into two groups", () => {
     const all = [...C.CLEARED, ...C.IN_PROGRESS, ...C.AWAITING_CAREGIVER,
-                 ...C.UNDER_REVIEW, ...C.NOT_APPROVED, ...C.RESTARTABLE];
+                 ...C.UNDER_REVIEW, ...C.BLOCKED_PENDING_REVIEW, ...C.RESTARTABLE];
     expect(all.length).toBe(new Set(all).size);
   });
 });
@@ -121,8 +121,8 @@ describe("F3 — the states that rendered wrongly now render", () => {
   const myAccount = code("public/js/components/MyAccount.js");
   const hub = code("public/js/components/CaretakerHub.js");
 
-  test("MyAccount handles not_approved BEFORE it can reach the submission form", () => {
-    const branch = myAccount.indexOf("checkrPhase === 'not_approved'");
+  test("MyAccount handles the blocked phase BEFORE it can reach the submission form", () => {
+    const branch = myAccount.indexOf("checkrPhase === 'blocked_pending_review'");
     const embed = myAccount.indexOf("CheckrEmbed");
     expect(branch).toBeGreaterThan(-1);
     expect(embed).toBeGreaterThan(-1);
@@ -131,10 +131,16 @@ describe("F3 — the states that rendered wrongly now render", () => {
     expect(branch).toBeLessThan(embed);
   });
 
-  test("…and it does not offer them a retry", () => {
-    const i = myAccount.indexOf("checkrPhase === 'not_approved'");
+  test("…and it neither offers a retry nor announces a verdict", () => {
+    const i = myAccount.indexOf("checkrPhase === 'blocked_pending_review'");
     const block = myAccount.slice(i, i + 1600);
     expect(block).not.toMatch(/CheckrEmbed|Start Background Check|Try Again/);
+    // Pete reviews first — the platform must not announce an outcome before he has.
+    // pre_adverse_action is the START of a notice period, so "not approved" would be wrong
+    // as well as his call to make rather than ours.
+    expect(block).not.toMatch(/can't approve|cannot approve|not approved|did not pass|failed/i);
+    expect(block).toMatch(/under review/i);
+    expect(block).toMatch(/Nothing is decided/);
     expect(block).toMatch(/support@yourinplace\.com/);
   });
 
@@ -142,7 +148,7 @@ describe("F3 — the states that rendered wrongly now render", () => {
     ["under_review", myAccount],
     ["awaiting_caregiver", myAccount],
     ["unknown", myAccount],
-    ["not_approved", hub],
+    ["blocked_pending_review", hub],
     ["awaiting_caregiver", hub],
     ["restartable", hub],
   ])("phase '%s' has a branch", (phase, src) => {
@@ -154,7 +160,7 @@ describe("F3 — the states that rendered wrongly now render", () => {
     const decl = hub.indexOf("const checkrPhase = profile.checkrPhase;");
     expect(decl).toBeGreaterThan(-1);
     const chain = hub.slice(decl, hub.indexOf("return null;", decl));
-    expect(chain).toMatch(/checkrPhase === 'not_approved'/);
+    expect(chain).toMatch(/checkrPhase === 'blocked_pending_review'/);
   });
 
   test("the unknown branch says nothing about the outcome", () => {
@@ -162,5 +168,104 @@ describe("F3 — the states that rendered wrongly now render", () => {
     const block = myAccount.slice(i, i + 1200);
     expect(block).not.toMatch(/complete|approved|passed|failed/i);
     expect(block).toMatch(/support@yourinplace\.com/);
+  });
+});
+
+describe("F4 — an adverse result stops work and waits for an admin", () => {
+  const checkr = code("src/routes/checkr.js");
+  const verif = code("src/routes/admin/verification.js");
+  const block = code("src/utils/caregiverBlock.js");
+
+  test("all three adverse webhooks call the block", () => {
+    for (const source of ["suspended", "pre_adverse_action", "post_adverse_action"]) {
+      expect(checkr).toMatch(new RegExp(`blockOnAdverse\\(db, candidate_id, "${source}"`));
+    }
+  });
+
+  test("each one's block sits right after the status write, not somewhere hopeful", () => {
+    // The bug was a status string and nothing else. Pin them adjacent so a later edit cannot
+    // reintroduce a branch that sets the status and walks away.
+    for (const [status, source] of [
+      ["'suspended'", "suspended"],
+      ["'adverse_action'", "pre_adverse_action"],
+      ["'did_not_pass'", "post_adverse_action"],
+    ]) {
+      const at = checkr.indexOf(`checkr_status = ${status}`);
+      expect(at).toBeGreaterThan(-1);
+      const after = checkr.slice(at, at + 700);
+      expect(after).toMatch(new RegExp(`blockOnAdverse\\(db, candidate_id, "${source}"`));
+    }
+  });
+
+  test("the block clears the column the work gates actually read", () => {
+    // Setting checkr_status was never enough: every gate reads is_background_checked.
+    expect(block).toMatch(/is_background_checked = 0/);
+    expect(block).toMatch(/account_paused = 1/);
+    expect(block).toMatch(/is_available = 0/);
+  });
+
+  test("…and revokes vouches, the other way through the gate", () => {
+    expect(block).toMatch(/UPDATE bg_admin_vouches SET revoked_at = NOW\(\), revoked_by = \?/);
+    expect(block).toMatch(/revoked_at IS NULL/);
+  });
+
+  test("both halves are one transaction", () => {
+    const i = block.indexOf("await db.transaction");
+    expect(i).toBeGreaterThan(-1);
+    const tx = block.slice(i, i + 1400);
+    expect(tx).toMatch(/is_background_checked = 0/);
+    expect(tx).toMatch(/UPDATE bg_admin_vouches/);
+  });
+
+  test("an admin is pushed, not just given a feed row", () => {
+    // post_adverse_action wrote activity_feed and sent no push, so "in the loop" depended on
+    // someone scrolling.
+    const i = checkr.indexOf("async function blockOnAdverse");
+    const fn = checkr.slice(i, i + 3000);
+    expect(fn).toMatch(/sendPushToUser/);
+    expect(fn).toMatch(/is_admin = 1/);
+  });
+
+  test("…and the push names nobody — a lock screen is not the place for this", () => {
+    // The first version put the caregiver's name in the title and the reason in the body.
+    // tests/pushPhi.test.js caught it; this pins the shape so it cannot come back.
+    const i = checkr.indexOf("async function blockOnAdverse");
+    const fn = checkr.slice(i, i + 3000);
+    const pushCall = fn.slice(fn.indexOf("await sendPushToUser"), fn.indexOf(").catch(() => {});"));
+    expect(pushCall).not.toMatch(/first_name|last_name|\$\{name\}|email/);
+    expect(pushCall).toMatch(/"Background check needs review"/);
+    // the specifics live in the data payload, behind the unlock
+    expect(fn).toMatch(/wasCleared: result\.wasCleared/);
+    expect(fn).toMatch(/vouchesRevoked: result\.vouchesRevoked/);
+  });
+
+  test("the urgency survives without the identity", () => {
+    // An admin still learns the one thing that changes how fast they act.
+    const i = checkr.indexOf("const body = result.wasCleared");
+    expect(i).toBeGreaterThan(-1);
+    expect(checkr.slice(i, i + 260)).toMatch(/cleared to work has been blocked/);
+  });
+
+  test("the admin reject path uses the same block", () => {
+    expect(verif).toMatch(/blockPendingAdminReview\(db, \{/);
+    // and no longer un-pauses on the way through
+    const i = verif.indexOf("checkr_status = 'rejected'");
+    expect(verif.slice(i, i + 200)).not.toMatch(/account_paused = 0/);
+  });
+
+  test("the caregiver is not invited to restart, and /initiate checks the pause first", () => {
+    const i = checkr.indexOf('router.post("/initiate"');
+    const head = checkr.slice(i, i + 1400);
+    expect(head).toMatch(/PENDING_ADMIN_REVIEW/);
+    // Before the kill switch and the configured-check, both of which answer 503 and would
+    // tell a blocked caregiver the service is broken instead of the truth.
+    expect(head.indexOf("PENDING_ADMIN_REVIEW")).toBeLessThan(head.indexOf("bgChecksEnabled"));
+  });
+
+  test("the re-initiate allow-list IS the restartable set — one definition", () => {
+    expect(checkr).toMatch(/const reInitiatableStatuses = RESTARTABLE;/);
+    const C2 = require("../src/constants/checkrStatus");
+    expect(C2.RESTARTABLE).not.toContain("did_not_pass");
+    expect(C2.RESTARTABLE).not.toContain("rejected");
   });
 });

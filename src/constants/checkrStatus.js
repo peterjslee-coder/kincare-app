@@ -31,12 +31,20 @@ const AWAITING_CAREGIVER = ["invitation_sent"];
 // A human has to decide. Not a failure, and must never be shown as one.
 const UNDER_REVIEW = ["consider", "disputed"];
 
-// Over, and not in the caregiver's favour. These are the ones that were showing a blank
-// submission form. There is no self-service retry here: an adverse result has a process
-// attached to it, and inviting someone to quietly run a second check is not that process.
-const NOT_APPROVED = ["did_not_pass", "rejected", "adverse_action", "suspended"];
+// An adverse outcome. Work stops and it goes to an admin — Pete, 13 Sep: "if someone fails a
+// background check, they don't get jobs, they don't get an invitation to do anything until I am
+// in the loop and have reviewed their check."
+//
+// Named for what it IS rather than what it looks like. These are not a decision the platform has
+// made and must never be reported to the caregiver as one: pre_adverse_action in particular is
+// the START of a notice period, not the end of it. The phase means "stopped, pending a human",
+// and the copy on both screens says exactly that and nothing more.
+const BLOCKED_PENDING_REVIEW = ["did_not_pass", "rejected", "adverse_action", "suspended"];
 
-// Ended without a result. Starting again IS the right action for these.
+// Ended without a result — nothing was decided, so starting again is just finishing what was
+// begun. This list is ALSO the allow-list POST /api/checkr/initiate uses to decide whether a
+// caregiver may re-run their own check, which is why 'rejected' and 'did_not_pass' are not in
+// it: an adverse outcome waits for an admin.
 const RESTARTABLE = ["canceled", "invitation_canceled", "invitation_expired"];
 
 const PHASE = {
@@ -44,7 +52,7 @@ const PHASE = {
   IN_PROGRESS: "in_progress",
   AWAITING_CAREGIVER: "awaiting_caregiver",
   UNDER_REVIEW: "under_review",
-  NOT_APPROVED: "not_approved",
+  BLOCKED_PENDING_REVIEW: "blocked_pending_review",
   RESTARTABLE: "restartable",
   NOT_STARTED: "not_started",
   // A status this file has not been taught. Deliberately NOT folded into not_started: the
@@ -55,7 +63,7 @@ const PHASE = {
 
 const ALL_STATUSES = [
   ...CLEARED, ...IN_PROGRESS, ...AWAITING_CAREGIVER,
-  ...UNDER_REVIEW, ...NOT_APPROVED, ...RESTARTABLE,
+  ...UNDER_REVIEW, ...BLOCKED_PENDING_REVIEW, ...RESTARTABLE,
 ];
 
 const _byStatus = new Map();
@@ -63,7 +71,7 @@ for (const s of CLEARED) _byStatus.set(s, PHASE.CLEARED);
 for (const s of IN_PROGRESS) _byStatus.set(s, PHASE.IN_PROGRESS);
 for (const s of AWAITING_CAREGIVER) _byStatus.set(s, PHASE.AWAITING_CAREGIVER);
 for (const s of UNDER_REVIEW) _byStatus.set(s, PHASE.UNDER_REVIEW);
-for (const s of NOT_APPROVED) _byStatus.set(s, PHASE.NOT_APPROVED);
+for (const s of BLOCKED_PENDING_REVIEW) _byStatus.set(s, PHASE.BLOCKED_PENDING_REVIEW);
 for (const s of RESTARTABLE) _byStatus.set(s, PHASE.RESTARTABLE);
 
 /**
@@ -84,5 +92,5 @@ function mayStart(phase) {
 
 module.exports = {
   PHASE, ALL_STATUSES, phaseFor, mayStart,
-  CLEARED, IN_PROGRESS, AWAITING_CAREGIVER, UNDER_REVIEW, NOT_APPROVED, RESTARTABLE,
+  CLEARED, IN_PROGRESS, AWAITING_CAREGIVER, UNDER_REVIEW, BLOCKED_PENDING_REVIEW, RESTARTABLE,
 };

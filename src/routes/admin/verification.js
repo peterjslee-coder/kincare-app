@@ -13,6 +13,7 @@ const {
 } = require("@simplewebauthn/server");
 const { isTrustedIp, registerTrustedIp, getTrustedIps, removeTrustedIp } = require("../../utils/trustedIps");
 const { getClientIp, writeAuditLog } = require("../../middleware/auditLog");
+const { blockPendingAdminReview } = require("../../utils/caregiverBlock");
 const {
   RP_ID, ORIGIN,
   setPasskeyChallenge, getPasskeyChallenge, setNukeChallenge, getNukeChallenge,
@@ -668,16 +669,34 @@ router.put("/users/:id/reject-bgcheck", requireAdmin, async (req, res) => {
     const user = await db.prepare("SELECT id, first_name, last_name, email FROM users WHERE id = ?").get(req.params.id);
     if (!user) return res.status(404).json({ error: "User not found" });
 
-    // Update checkr status to rejected and store reason
+    // ─── v1.106.14 — rejecting now actually stops them working ───
+    //
+    // This set a status string and `account_paused = 0`, and left is_background_checked alone.
+    // For the common path that was harmless — someone under review was never cleared, so the
+    // work gates already said no. But a caregiver who HAD been cleared, and whose later report
+    // an admin then rejected, kept is_background_checked = 1 and kept getting jobs; and any
+    // admin vouch survived regardless, so a vouched caregiver kept working for that family.
+    //
+    // Same block the adverse Checkr webhooks use, so the manual and automatic paths cannot
+    // disagree about what "rejected" does.
+    const rejectReason = reason || 'Background check did not meet requirements';
     await db.prepare(
-      "UPDATE caregiver_profiles SET checkr_status = 'rejected', bg_check_rejection_reason = ?, account_paused = 0, updated_at = NOW() WHERE user_id = ?"
-    ).run(reason || 'Background check did not meet requirements', req.params.id);
+      "UPDATE caregiver_profiles SET checkr_status = 'rejected', bg_check_rejection_reason = ?, updated_at = NOW() WHERE user_id = ?"
+    ).run(rejectReason, req.params.id);
+    const blockResult = await blockPendingAdminReview(db, {
+      caregiverUserId: req.params.id,
+      reason: rejectReason,
+      source: `admin:${req.user.id}`,
+    });
 
     // Log the action
     await logAdminAction(req, "bgcheck_rejected", "user", req.params.id, {
       userName: `${user.first_name} ${user.last_name}`.trim(),
       email: user.email,
-      reason: reason || 'Background check did not meet requirements',
+      reason: rejectReason,
+      // What the rejection actually did, so the log answers "was this person working?"
+      wasCleared: blockResult.wasCleared,
+      vouchesRevoked: blockResult.vouchesRevoked,
     });
 
     // Send them an in-app message from admin explaining the decision

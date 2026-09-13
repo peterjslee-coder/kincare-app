@@ -1504,13 +1504,13 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         // caregiver whose check had failed saw an ordinary hub with no banner at all, while
         // MyAccount showed them a fresh submission form. Phase comes from the server
         // (src/constants/checkrStatus.js) so there is one mapping, not two enumerations.
-        if (checkrPhase === 'not_approved') return (
-          <div className="card" style={{ marginBottom: 16, borderLeft: '4px solid #ef4444', display: 'flex', alignItems: 'center', gap: 12 }}>
-            <span style={{ fontSize: 24 }}>{'\u{1F6D1}'}</span>
+        if (checkrPhase === 'blocked_pending_review') return (
+          <div className="card" style={{ marginBottom: 16, borderLeft: '4px solid #f59e0b', display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontSize: 24 }}>{'\u23F8\uFE0F'}</span>
             <div>
-              <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--color-error)' }}>Background Check — Not Approved</div>
+              <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>Background Check — Under Review</div>
               <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>
-                We can't approve you to work on InPlace based on your background check result. See Account for what to do next.
+                We've paused new work while someone here reviews your check. Nothing is decided and there's nothing you need to do — we'll be in touch.
               </div>
             </div>
           </div>
