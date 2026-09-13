@@ -123,11 +123,8 @@ function computeMatchScore(job, profile, hasConflict, distanceMiles) {
 /**
  * Parse "HH:MM" time string to minutes since midnight.
  */
-function parseTimeToMinutes(timeStr) {
-  if (!timeStr) return 0;
-  const [h, m] = timeStr.split(':').map(Number);
-  return (h || 0) * 60 + (m || 0);
-}
+// v1.106.16 — one owner for time parsing. See utils/timezone.
+const { parseTimeToMinutes } = require('./timezone');
 
 // v1.106.13 — one owner for 12-hour time. See utils/timezone.
 const formatTime12 = require('./timezone').formatTimeForDisplay;

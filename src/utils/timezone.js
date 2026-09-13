@@ -135,6 +135,20 @@ function formatDateRelative(dateStr, tz = DEFAULT_TIMEZONE) {
   });
 }
 
+/**
+ * "14:30" → 870. Minutes since midnight. (v1.106.16)
+ *
+ * Was defined twice: routes/sessions.js used `h * 60`, utils/jobMatching.js used `(h || 0) * 60`.
+ * They agree on every well-formed time and disagree on a malformed one — sessions returned NaN,
+ * jobMatching returned 0. NaN then propagates silently through overlap and duration arithmetic,
+ * so the more defensive version wins, and there is only one.
+ */
+function parseTimeToMinutes(timeStr) {
+  if (!timeStr) return 0;
+  const [h, m] = String(timeStr).split(":").map(Number);
+  return (Number.isFinite(h) ? h : 0) * 60 + (Number.isFinite(m) ? m : 0);
+}
+
 module.exports = {
   DEFAULT_TIMEZONE,
   getNowInZone,
@@ -142,5 +156,6 @@ module.exports = {
   buildDateTimeInZone,
   zonedDateTimeToInstant,
   formatTimeForDisplay,
+  parseTimeToMinutes,
   formatDateRelative,
 };

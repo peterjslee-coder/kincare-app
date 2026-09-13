@@ -175,11 +175,11 @@ why this app runs on exactly one Railway replica.
 | `new_job` | `routes/sessions.js` | yes |
 | `new_message` | `routes/admin/safety.js`, `routes/interviews.js` | yes |
 | `offer_update` | `routes/offers.js` | yes |
-| `proposal_expired` | `routes/sessions.js` | 🔶 **none** |
+| `proposal_expired` | `utils/proposals.js` | 🔶 **none** |
 | `reminder_delivered` | `server.js` | 🔶 **none** |
 | `session_update` | `routes/accountability.js`, `routes/activity.js` | yes |
 | `time_change_accepted` | `routes/sessions.js` | yes |
-| `time_change_expired` | `routes/sessions.js` | yes |
+| `time_change_expired` | `utils/proposals.js` | yes |
 | `time_change_proposed` | `routes/sessions.js` | yes |
 | `time_change_rejected` | `routes/sessions.js` | yes |
 | `time_proposal` | `routes/sessions.js` | 🔶 **none** |

@@ -10,19 +10,15 @@ const { haversineDistance } = require("../utils/geocode");
 const { computeJobConflicts, computeMatchScore } = require("../utils/jobMatching");
 const { calculateSessionCost } = require("../utils/rateCalculator");
 const { scoreMatch } = require("../utils/aiMatching");
-const { expireStaleProposals } = require("./sessions");
+const { expireStaleProposals } = require("../utils/proposals");
+const { getPlatformFeePercent } = require("../utils/platformFee");
 const { phaseFor: checkrPhaseFor } = require("../constants/checkrStatus");
 
 const router = express.Router();
 router.use(authenticate);
 
 // Helper: get platform fee percent from DB (default 20)
-async function getPlatformFeePercent(db) {
-  try {
-    const row = await db.prepare("SELECT value FROM platform_settings WHERE key = 'platform_fee_percent'").get();
-    return row ? parseFloat(row.value) : 20;
-  } catch { return 20; }
-}
+// v1.106.16 — was a byte-identical second copy, default and all. See utils/platformFee.
 
 // ─── GET /api/dashboard ───
 // Role-aware dashboard data

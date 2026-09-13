@@ -9,7 +9,14 @@ const { captureException } = require("../utils/sentry");
 const availabilityRouter = require("./availability");
 const { sendPushToUser, notifyAdmins, sendSessionReminders } = require("./push");
 const { calculateSessionCost, isShortNotice } = require("../utils/rateCalculator");
-const { getNowInZone, getTodayStringInZone, buildDateTimeInZone, zonedDateTimeToInstant, formatTimeForDisplay } = require("../utils/timezone");
+const { getNowInZone, getTodayStringInZone, buildDateTimeInZone, zonedDateTimeToInstant, formatTimeForDisplay, parseTimeToMinutes } = require("../utils/timezone");
+// v1.106.16 — these were defined in this file and required OUT of it by dashboard.js and
+// server.js. A 4,056-line router is not a library. See each module for what was wrong.
+const { expireStaleProposals } = require("../utils/proposals");
+const { ensureAssignment } = require("../utils/assignments");
+const { checkPaymentStanding } = require("../utils/paymentStanding");
+const { generateRecurringDates } = require("../utils/recurrence");
+const { getPlatformFeePercent } = require("../utils/platformFee");
 const { geofenceEvidence, coarsenCoordinate } = require("../utils/geocode");
 const { hasActiveVouch } = require("../utils/vouches");
 const { decideCancellationCharge, CANCEL_FEE_WINDOW_HOURS } = require("../utils/cancellationFee");
@@ -24,164 +31,13 @@ router.use(authenticate);
 // "Request Care" list for that care recipient. This was previously only
 // created via POST /api/assignments, leaving caregivers who were matched
 // through Kindred or session claiming invisible in the care request modal.
-async function ensureAssignment(db, { careRecipientId, familyUserId, caregiverProfileId }) {
-  if (!careRecipientId || !familyUserId || !caregiverProfileId) return;
-  const existing = await db.prepare(`
-    SELECT id, is_active FROM caregiver_assignments
-    WHERE care_recipient_id = ? AND family_user_id = ? AND caregiver_profile_id = ?
-  `).get(careRecipientId, familyUserId, caregiverProfileId);
-
-  if (existing && existing.is_active) return; // already active
-
-  if (existing && !existing.is_active) {
-    // Reactivate a previously deactivated assignment
-    await db.prepare("UPDATE caregiver_assignments SET is_active = 1 WHERE id = ?").run(existing.id);
-    console.log(`[ensureAssignment] Reactivated assignment ${existing.id} for caregiver ${caregiverProfileId.slice(0,8)}`);
-    return;
-  }
-
-  // Create new assignment
-  const id = uuid();
-  await db.prepare(`
-    INSERT INTO caregiver_assignments (id, care_recipient_id, family_user_id, caregiver_profile_id, is_active, is_favorite)
-    VALUES (?, ?, ?, ?, 1, 0)
-  `).run(id, careRecipientId, familyUserId, caregiverProfileId);
-  console.log(`[ensureAssignment] Created assignment ${id.slice(0,8)} for caregiver ${caregiverProfileId.slice(0,8)} → recipient ${careRecipientId.slice(0,8)}`);
-}
+/* ensureAssignment moved to utils — see the require at the top of this file */
 
 // ─── Payment gates: check for unpaid sessions and saved payment method ───
-async function checkPaymentStanding(db, familyUserId) {
-  // Only block families whose auto-pay has actually FAILED (card declined, auth required, etc.)
-  // Sessions still in the grace period (payment_status IS NULL) or processing should NOT block.
-  const unpaid = await db.prepare(`
-    SELECT cs.id, cs.scheduled_date, cs.caregiver_id,
-      u.first_name || ' ' || u.last_name AS caregiver_name
-    FROM care_sessions cs
-    LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
-    LEFT JOIN users u ON cp.user_id = u.id
-    WHERE cs.family_user_id = ?
-      AND cs.status = 'completed'
-      AND cs.payment_status = 'failed'
-      AND NOT EXISTS (
-        SELECT 1 FROM payments p WHERE p.session_id = cs.id AND p.status IN ('completed', 'processing')
-      )
-      AND cs.estimated_cost > 0
-    ORDER BY cs.scheduled_date DESC
-  `).all(familyUserId);
-
-  // Check if family has a saved payment method (Stripe customer with card on file)
-  const user = await db.prepare("SELECT stripe_customer_id FROM users WHERE id = ?").get(familyUserId);
-  const hasCustomer = !!user?.stripe_customer_id;
-
-  // We'll verify the card exists with Stripe at booking time (in the route handler)
-  return { unpaidSessions: unpaid || [], hasStripeCustomer: hasCustomer, stripeCustomerId: user?.stripe_customer_id || null };
-}
+/* checkPaymentStanding moved to utils — see the require at the top of this file */
 
 // ─── Auto-expire stale time proposals (2-hour window) ───
-async function expireStaleProposals(db, emitToUser, sendPushToUserFn) {
-  try {
-    const expired = await db.prepare(`
-      SELECT tp.id, tp.session_id, tp.caregiver_user_id, tp.proposed_date, tp.proposed_time,
-        cs.family_user_id, cr.first_name AS recipient_first_name,
-        u.first_name AS cg_first_name, u.last_name AS cg_last_name
-      FROM time_proposals tp
-      JOIN care_sessions cs ON tp.session_id = cs.id
-      LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
-      LEFT JOIN users u ON tp.caregiver_user_id = u.id
-      WHERE tp.status = 'pending' AND tp.expires_at IS NOT NULL AND tp.expires_at < NOW()
-      LIMIT 20
-    `).all();
-
-    for (const p of expired) {
-      await db.prepare("UPDATE time_proposals SET status = 'expired', responded_at = NOW() WHERE id = ?").run(p.id);
-
-      // Notify caregiver that their proposal expired
-      const caregiverName = `${p.cg_first_name} ${p.cg_last_name}`;
-      if (emitToUser) {
-        emitToUser(p.caregiver_user_id, "proposal_expired", { sessionId: p.session_id, proposalId: p.id });
-      }
-      if (sendPushToUserFn) {
-        sendPushToUserFn(p.caregiver_user_id, {
-          title: "Time proposal expired",
-          body: `Your proposal for ${p.recipient_first_name || 'a care visit'} wasn't responded to in time. The job is back in the open pool.`,
-          data: { type: "proposal_expired", sessionId: p.session_id },
-        }, "proposal_expired").catch(() => {});
-      }
-    }
-    // Also clean up proposals whose sessions are already confirmed with the proposing caregiver
-    // (e.g. family accepted via a different path, or proposal accept partially succeeded)
-    const orphaned = await db.prepare(`
-      SELECT tp.id, tp.session_id, tp.caregiver_user_id
-      FROM time_proposals tp
-      JOIN care_sessions cs ON tp.session_id = cs.id
-      JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id AND cp.user_id = tp.caregiver_user_id
-      WHERE tp.status = 'pending'
-        AND cs.status IN ('confirmed', 'in_progress', 'completed')
-      LIMIT 20
-    `).all();
-
-    for (const p of orphaned) {
-      await db.prepare("UPDATE time_proposals SET status = 'accepted', responded_at = NOW() WHERE id = ?").run(p.id);
-    }
-
-    // ─── v1.106.13 — the OTHER proposal table, which nothing swept ───
-    //
-    // time_change_proposals is a request to move an already-booked visit. It had no deadline
-    // and no sweeper, and care_sessions.pending_time_change_id was cleared only by an explicit
-    // answer. An ignored request therefore blocked every future time change on that session
-    // permanently and left an unclearable card in the other party's Needs You feed.
-    //
-    // Both halves are one transaction for the same reason the propose handler is: expiring the
-    // proposal without clearing the pointer leaves the session just as stuck, and clearing the
-    // pointer without expiring the proposal orphans a 'pending' row the UI can no longer reach.
-    //
-    // Terminal sessions are swept too, without waiting for the deadline — there is nothing to
-    // answer about a cancelled visit.
-    const staleChanges = await db.prepare(`
-      SELECT tcp.id, tcp.session_id, tcp.proposed_by, tcp.proposed_by_user_id,
-             cs.family_user_id, cp.user_id AS caregiver_user_id,
-             cr.first_name AS recipient_first_name
-        FROM time_change_proposals tcp
-        JOIN care_sessions cs ON cs.id = tcp.session_id
-        LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
-        LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
-       WHERE tcp.status = 'pending'
-         AND ((tcp.expires_at IS NOT NULL AND tcp.expires_at < NOW())
-              OR cs.status IN ('cancelled', 'completed'))
-       LIMIT 20
-    `).all();
-
-    for (const c of staleChanges) {
-      await db.transaction(async (tx) => {
-        await tx.prepare(
-          "UPDATE time_change_proposals SET status = 'expired', acknowledged_at = NOW() WHERE id = ? AND status = 'pending'"
-        ).run(c.id);
-        await tx.prepare(
-          "UPDATE care_sessions SET pending_time_change_id = NULL, updated_at = NOW() WHERE id = ? AND pending_time_change_id = ?"
-        ).run(c.session_id, c.id);
-      });
-
-      // Tell the proposer, so "nothing happened" is not the only signal they get. The visit
-      // is unchanged and still on the calendar — say that, because the alternative reading
-      // (the visit is off) is the dangerous one.
-      if (emitToUser) {
-        emitToUser(c.proposed_by_user_id, "time_change_expired", { sessionId: c.session_id, proposalId: c.id });
-      }
-      if (sendPushToUserFn) {
-        sendPushToUserFn(c.proposed_by_user_id, {
-          title: "Time change expired",
-          body: `Your request to move ${c.recipient_first_name || "the"}'s visit wasn't answered. The visit is unchanged, at its original time.`,
-          data: { type: "time_change_expired", sessionId: c.session_id },
-        }, "time_change").catch(() => {});
-      }
-    }
-
-    return expired.length + orphaned.length + staleChanges.length;
-  } catch (e) {
-    console.log("expireStaleProposals skipped:", e.message);
-    return 0;
-  }
-}
+/* expireStaleProposals moved to utils — see the require at the top of this file */
 
 // ─── GET /api/sessions ───
 // List sessions for the current user (family or caregiver)
@@ -317,21 +173,7 @@ router.get("/", async (req, res) => {
 });
 
 // ─── Helper: generate recurring dates ───
-function generateRecurringDates(startDate, rule, weeks) {
-  const dates = [];
-  // Parse date safely without UTC offset issues
-  const [y, mo, d] = startDate.split("-").map(Number);
-  const start = new Date(y, mo - 1, d, 12, 0, 0);
-  const interval = rule === "biweekly" ? 14 : 7; // weekly or biweekly
-
-  for (let i = 0; i < weeks; i++) {
-    const dt = new Date(start);
-    dt.setDate(dt.getDate() + i * interval);
-    const dateStr = dt.getFullYear() + "-" + String(dt.getMonth() + 1).padStart(2, "0") + "-" + String(dt.getDate()).padStart(2, "0");
-    dates.push(dateStr);
-  }
-  return dates;
-}
+/* generateRecurringDates moved to utils — see the require at the top of this file */
 
 // ─── POST /api/sessions/request — Care recipient creates a "help wanted" request ───
 router.post("/request", async (req, res) => {
@@ -1264,12 +1106,7 @@ router.post("/:id/match", requireRole("family", "admin"), async (req, res) => {
 });
 
 // ─── Helper: get platform fee percent from DB (default 20) ───
-async function getPlatformFeePercent(db) {
-  try {
-    const row = await db.prepare("SELECT value FROM platform_settings WHERE key = 'platform_fee_percent'").get();
-    return row ? parseFloat(row.value) : 20;
-  } catch { return 20; }
-}
+/* getPlatformFeePercent moved to utils — see the require at the top of this file */
 
 // ─── GET /api/sessions/cost-preview ───
 // Calculate cost breakdown without creating a session (for live preview in booking UI)
@@ -2680,11 +2517,7 @@ router.get("/:id/time-change", async (req, res) => {
 });
 
 // Helper: parse "HH:MM" to minutes since midnight
-function parseTimeToMinutes(timeStr) {
-  if (!timeStr) return 0;
-  const [h, m] = timeStr.split(":").map(Number);
-  return h * 60 + (m || 0);
-}
+/* parseTimeToMinutes moved to utils — see the require at the top of this file */
 
 // v1.106.13 — was a sixth copy of the same formatter. The name stays because call sites
 // read better with it; the implementation is now utils/timezone's single owner.
@@ -4053,4 +3886,5 @@ router.put("/:id/proposals/:proposalId/decline", async (req, res) => {
 });
 
 module.exports = router;
-module.exports.expireStaleProposals = expireStaleProposals;
+// v1.106.16 — the expireStaleProposals re-export is gone. It lives in utils/proposals now, and
+// leaving a second address for it here is exactly the duplication this batch is removing.

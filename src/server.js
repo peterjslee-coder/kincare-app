@@ -820,7 +820,7 @@ app.use("/api/media", require("./routes/media"));
 app.use("/api/safety", require("./routes/safety"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.106.15";
+const APP_VERSION = "1.106.16";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION, minAppVersion: MIN_APP_VERSION });
@@ -1708,7 +1708,7 @@ async function start() {
   // whose browser happens to be open. The dashboard calls stay as an opportunistic sweep.
   {
     const runProposalSweep = guardedPoller(112, async () => {
-      const { expireStaleProposals } = require("./routes/sessions");
+      const { expireStaleProposals } = require("./utils/proposals");
       // sendPushToUser is not a module-level binding in this file — every other poller
       // requires it locally, and so does this one.
       const { sendPushToUser: pushFn } = require("./routes/push");

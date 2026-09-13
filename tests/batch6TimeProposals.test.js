@@ -17,6 +17,9 @@ process.env.JWT_SECRET = process.env.JWT_SECRET || "batch6-test-secret";
 const { code, raw } = require("./helpers/source");
 
 const sess = code("src/routes/sessions.js");
+// v1.106.16 — expireStaleProposals moved out of the router into its own module. The sweeper
+// assertions follow it; the propose/respond handlers stay in the router.
+const proposals = code("src/utils/proposals.js");
 const db = code("src/models/database.js");
 const tz = code("src/utils/timezone.js");
 
@@ -72,20 +75,28 @@ describe("D2 — a time change now has an end", () => {
   });
 
   test("the sweeper expires them AND clears the pointer, in one transaction", () => {
-    const i = sess.indexOf("const staleChanges = await db.prepare(");
+    const i = proposals.indexOf("const staleChanges = await db.prepare(");
     expect(i).toBeGreaterThan(-1);
-    const query = sess.slice(i, i + 1200);
+    const query = proposals.slice(i, i + 1200);
     expect(query).toMatch(/tcp\.expires_at IS NOT NULL AND tcp\.expires_at < NOW\(\)/);
     // A dead session's proposal goes too, deadline or not.
     expect(query).toMatch(/cs\.status IN \('cancelled', 'completed'\)/);
 
-    const block = txBlock(sess, i);
+    const block = txBlock(proposals, i);
     expect(block).toMatch(/UPDATE time_change_proposals SET status = 'expired'/);
     expect(block).toMatch(/UPDATE care_sessions SET pending_time_change_id = NULL/);
   });
 
   test("the sweep is counted, so a silent no-op is visible", () => {
-    expect(sess).toMatch(/return expired\.length \+ orphaned\.length \+ staleChanges\.length;/);
+    expect(proposals).toMatch(/return expired\.length \+ orphaned\.length \+ staleChanges\.length;/);
+  });
+
+  test("and it is a library now, not a function hanging off a router", () => {
+    // The point of the move: dashboard.js and server.js call this, and used to load the whole
+    // sessions router to reach it.
+    expect(require("../src/utils/proposals").expireStaleProposals).toBeInstanceOf(Function);
+    expect(code("src/routes/dashboard.js")).toMatch(/require\("\.\.\/utils\/proposals"\)/);
+    expect(code("src/server.js")).toMatch(/require\("\.\/utils\/proposals"\)/);
   });
 });
 

@@ -20,7 +20,8 @@ let h, db, expireStaleProposals;
 beforeAll(async () => {
   h = await startHarness({ routers: { "/api/sessions": "../../src/routes/sessions" } });
   db = h.db;
-  ({ expireStaleProposals } = require("../../src/routes/sessions"));
+  // v1.106.16 — moved out of the router into its own module.
+  ({ expireStaleProposals } = require("../../src/utils/proposals"));
 });
 
 afterAll(async () => { await stopHarness(h); });
