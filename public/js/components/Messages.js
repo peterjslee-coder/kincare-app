@@ -1886,7 +1886,7 @@ const Messages = window.Messages = () => {
   };
 
   const renderConversationList = () => (
-    <div className="msg-panel" style={{ display: 'flex', flexDirection: 'column', height: isMobile ? 'auto' : '100%', flex: isMobile ? '1 1 0%' : undefined, minHeight: isMobile ? 0 : undefined, overflow: 'hidden' }}>
+    <div className="msg-panel" data-tour="conversations" style={{ display: 'flex', flexDirection: 'column', height: isMobile ? 'auto' : '100%', flex: isMobile ? '1 1 0%' : undefined, minHeight: isMobile ? 0 : undefined, overflow: 'hidden' }}>
       <div className="msg-list-header" style={isMobile ? { paddingTop: 16 } : undefined}>
         <h1 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
           {selectMode ? `${selectedIds.length} selected` : 'Messages'}

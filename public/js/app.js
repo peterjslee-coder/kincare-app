@@ -1121,6 +1121,14 @@ const App = () => {
   }, []);
 
   const [pendingInviteToken, setPendingInviteToken] = useState(null);
+  // v1.105.194 — the caregiver's first-visit tour. Started from the hub's offer card, the
+  // "Where things live" card, or Help → "Show me around again". Lives here because stops 1–3
+  // change pages underneath it.
+  const [tourOpen, setTourOpen] = useState(false);
+  useEffect(() => {
+    window.__startCaregiverTour = () => setTourOpen(true);
+    return () => { if (window.__startCaregiverTour) window.__startCaregiverTour = null; };
+  }, []);
   // v1.105.186 — a platform invite (today: a family adding a caregiver it knows) opened by
   // someone who already has an account. Accepting it is one POST; the server does the rest.
   const acceptPendingPlatformInvite = () => {
@@ -2325,7 +2333,7 @@ const App = () => {
       {/* Bottom navigation bar — visible on mobile only (CSS hides on desktop) */}
       <nav className="bottom-nav" style={window.__safeAreaBottom ? { paddingBottom: window.__safeAreaBottom } : undefined}>
         {getBottomNavItems().map(item => (
-          <button key={item.id} className={`bottom-nav-item ${currentPage === item.id ? 'active' : ''}`} onClick={item.disabled ? (item.id === 'find-work' ? explainLockedFindWork : undefined) : item.isKindred ? () => window.open(`/kindred?token=${encodeURIComponent(AUTH_TOKEN)}`, '_blank') : () => handlePageChange(item.id)} style={{ position: 'relative', ...(item.disabled ? { opacity: 0.35, cursor: 'not-allowed' } : {}), ...(item.isAccent && currentPage !== item.id && !item.disabled ? { color: 'var(--accent-color)' } : {}), ...(item.isKindred ? { color: 'var(--color-info)' } : {}) }}>
+          <button key={item.id} data-tour={`nav-${item.id}`} className={`bottom-nav-item ${currentPage === item.id ? 'active' : ''}`} onClick={item.disabled ? (item.id === 'find-work' ? explainLockedFindWork : undefined) : item.isKindred ? () => window.open(`/kindred?token=${encodeURIComponent(AUTH_TOKEN)}`, '_blank') : () => handlePageChange(item.id)} style={{ position: 'relative', ...(item.disabled ? { opacity: 0.35, cursor: 'not-allowed' } : {}), ...(item.isAccent && currentPage !== item.id && !item.disabled ? { color: 'var(--accent-color)' } : {}), ...(item.isKindred ? { color: 'var(--color-info)' } : {}) }}>
             <span className="bottom-nav-icon" style={item.isAccent && currentPage !== item.id ? { background: 'var(--bg-accent-light)', borderRadius: '50%', padding: '2px' } : undefined}>{item.icon}</span>
             {item.id === 'messages' && unreadMsgCount > 0 && (
               <span style={{
@@ -2351,6 +2359,11 @@ const App = () => {
       </nav>
       {showRequestCareModal && <RequestCareModal onClose={() => setShowRequestCareModal(false)} />}
       {(currentUser?.is_tester || currentUser?.isAdmin) && <FeedbackButton currentPage={currentPage} userRole={currentUser?.role} currentUser={currentUser} onNavigate={setCurrentPage} />}
+      {/* v1.105.194 — the caregiver's first-visit tour, above everything, across pages */}
+      {tourOpen && role === 'caregiver' && typeof CaregiverTour !== 'undefined' && (
+        <CaregiverTour onNavigate={handlePageChange} firstName={currentUser?.firstName || ''}
+          onClose={() => setTourOpen(false)} />
+      )}
       <PWAInstallBanner />
       <OfflineIndicator />
     </React.Fragment>

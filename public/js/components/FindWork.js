@@ -948,7 +948,7 @@ const FindWork = window.FindWork = () => {
       {viewMode === 'list' && (
         <>
         {/* Open Care Requests */}
-        <div style={{ marginBottom: 24 }}>
+        <div data-tour="jobs" style={{ marginBottom: 24 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
             <h2 style={{ margin: 0, fontSize: 17, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{

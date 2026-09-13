@@ -1639,6 +1639,13 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         );
       })()}
 
+      {/* ─── v1.105.194 — the First Steps card's last state ───
+          The list is empty. Offer the tour once, right here where the list was; "Later" folds
+          it; done → the five-cell map until her first real check-out. Never for demo accounts. */}
+      {firstStepsResolved && !showFirstSteps && !profile.isDemo && typeof CaregiverTourCard !== 'undefined' && (
+        <CaregiverTourCard firstName={(profile.name || '').split(' ')[0]} completedCount={(completedSessions || []).length} />
+      )}
+
       {/* Calendar Placeholder — shown when no availability set yet */}
       {showFirstSteps && !hasAvailability && (
         <div style={{ background: 'var(--bg-surface)', borderRadius: '14px', border: '1px solid var(--border-color)', padding: '28px 22px', textAlign: 'center', marginBottom: '20px' }}>
@@ -1986,6 +1993,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       })()}
 
       {/* UP NEXT — any session <24 hours away + in_progress, with check-in/out */}
+      {/* v1.105.194 — `data-tour="up-next"` on the block below is what the tour lights on stop 1. */}
       {/* Filter out sessions that have a pending OR expired counter-proposal — family never accepted the time change */}
       {(() => {
         const proposalSessionIds = new Set((data.myProposals || []).filter(p => p.status === 'pending' || p.status === 'expired').map(p => p.sessionId));
@@ -2001,7 +2009,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         });
 
         return (
-          <div style={{ marginBottom: 16 }}>
+          <div data-tour="up-next" style={{ marginBottom: 16 }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>Up Next</div>
             {sorted.map(s => {
               const isReady = readySet.has(s.id);
@@ -3102,7 +3110,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
 
       {/* Calendar — always rendered */}
       <div ref={calendarRef} style={{ marginBottom: 16 }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>📅 Calendar</div>
+        <div data-tour="calendar" style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>📅 Calendar</div>
         <CaregiverCalendar
           caregiverId={profile.id}
           sessions={sessions}

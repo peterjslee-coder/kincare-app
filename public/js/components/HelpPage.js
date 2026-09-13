@@ -263,6 +263,24 @@ const HelpPage = window.HelpPage = ({ currentUser, onNavigate }) => {
       style: { color: 'var(--text-secondary)', marginBottom: '24px', fontSize: '15px' }
     }, 'Find answers to common questions about using InPlace.'),
 
+    // v1.105.194 — "Show me around again": the caregiver's tour, replayable from here forever.
+    (currentUser && (currentUser.role === 'caregiver' || (window.__currentRole === 'caregiver')) && window.__startCaregiverTour)
+      ? React.createElement('button', {
+          onClick: () => { if (onNavigate) onNavigate('dashboard'); setTimeout(() => window.__startCaregiverTour && window.__startCaregiverTour(), 50); },
+          style: {
+            display: 'flex', alignItems: 'center', gap: '10px', width: '100%', textAlign: 'left', marginBottom: '20px',
+            padding: '12px 14px', borderRadius: '12px', border: '1px solid var(--border-color)', background: 'var(--bg-card)',
+            color: 'var(--text-primary)', font: 'inherit', fontSize: '14px', cursor: 'pointer',
+          },
+        },
+          React.createElement('span', { style: { fontSize: '20px' } }, '\uD83E\uDDED'),
+          React.createElement('span', null,
+            React.createElement('b', { style: { display: 'block' } }, 'Show me around again'),
+            React.createElement('span', { style: { color: 'var(--text-secondary)', fontSize: '13px' } }, 'The two-minute tour and the practice visit. Nothing gets recorded.')
+          )
+        )
+      : null,
+
     // Search bar
     React.createElement('div', { style: { marginBottom: '20px', position: 'relative' } },
       React.createElement('input', {

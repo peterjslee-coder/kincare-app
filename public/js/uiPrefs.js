@@ -98,3 +98,12 @@ const useStickySection = window.useStickySection = (key, fallback = true) => {
 };
 
 window.__flushUiPrefs = flush; // tests, and anything that needs the queue emptied now
+
+// v1.105.194 — a single remembered value (not a section). Same queue, same account.
+// `null` forgets it. Used by the caregiver tour: done / later.
+window.__setUiPref = (key, value) => {
+  if (!key) return;
+  if (value === null || value === undefined) delete window.__uiPrefs[key];
+  else window.__uiPrefs[key] = value;
+  queue(key, value === undefined ? null : value);
+};
