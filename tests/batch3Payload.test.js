@@ -93,6 +93,12 @@ describe("P1 — images travel as URLs, not as JSON", () => {
     expect((p.match(/photo_url: photoUrlFor\(p\)/g) || []).length).toBe(2);
   });
 
+  test("uploading a photo does not hand the bytes straight back", () => {
+    const p = code("src/routes/photos.js");
+    expect(p).not.toMatch(/photoUrl: base64/);
+    expect((p.match(/photoUrl: `\/api\/photos\/\$\{id\}\/image`/g) || []).length).toBe(2);
+  });
+
   test("photoUrlFor is declared before its first use — a const arrow does not hoist", () => {
     const p = raw("src/routes/photos.js");
     const declaredAt = p.indexOf("const photoUrlFor =");

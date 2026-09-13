@@ -90,7 +90,9 @@ router.post(
         )
         .run(id, visitLogId, base64, captions[i] || null);
 
-      photos.push({ id, visitLogId, photoUrl: base64, caption: captions[i] || null });
+      // v1.106.7 — a URL, not the bytes. The client just sent us this image; echoing a
+      // megabyte of base64 back at it was the upload paid for twice.
+      photos.push({ id, visitLogId, photoUrl: `/api/photos/${id}/image`, caption: captions[i] || null });
     }
 
     // Real-time: notify family that photos were added
@@ -199,7 +201,7 @@ router.post(
       await db.prepare(
         "INSERT INTO visit_photos (id, visit_log_id, photo_url, caption) VALUES (?, ?, ?, ?)"
       ).run(id, visitLog.id, base64, captions[i] || null);
-      photos.push({ id, visitLogId: visitLog.id, photoUrl: base64, caption: captions[i] || null });
+      photos.push({ id, visitLogId: visitLog.id, photoUrl: `/api/photos/${id}/image`, caption: captions[i] || null });
     }
 
     // Real-time notify the other party
