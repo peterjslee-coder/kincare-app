@@ -8,6 +8,7 @@ const router = express.Router();
 // v1.84: rate-limit feedback submissions (infra #4). /anonymous is
 // unauthenticated and reachable from the splash page — keep it tight.
 const rateLimit = require("express-rate-limit");
+const { clampLimit, clampOffset } = require("../utils/queryLimits");
 const feedbackLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,
@@ -144,7 +145,7 @@ router.get("/", async (req, res) => {
   }
 
   query += " ORDER BY f.created_at DESC LIMIT ? OFFSET ?";
-  params.push(parseInt(limit), parseInt(offset));
+  params.push(clampLimit(limit, 50, 200), clampOffset(offset));
 
   try {
     const items = await db.prepare(query).all(...params);

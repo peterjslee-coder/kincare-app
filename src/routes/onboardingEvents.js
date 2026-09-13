@@ -2,6 +2,7 @@ const express = require("express");
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { authenticate } = require("../middleware/auth");
+const { clampLimit, clampOffset } = require("../utils/queryLimits");
 
 const router = express.Router();
 
@@ -92,7 +93,7 @@ router.get("/", authenticate, async (req, res) => {
     }
 
     query += " ORDER BY created_at DESC LIMIT ? OFFSET ?";
-    params.push(parseInt(limit), parseInt(offset));
+    params.push(clampLimit(limit, 100, 500), clampOffset(offset));
 
     const events = await db.prepare(query).all(...params);
 

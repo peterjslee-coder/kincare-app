@@ -25,7 +25,7 @@ batch by batch. Where it stands:
 | 3a | self-inflicted waste: cache headers, build phase, dead weight | v1.106.6 | shipped |
 | 3b | payload weight, 'restoring' state, version-skew guard | v1.106.7 | shipped |
 | 4a | photos to R2, one photo column, the blob guardrail | v1.106.8 | shipped |
-| 4b | read caps and the retention poller | — | next |
+| 4b | read caps and the retention poller | v1.106.9 | shipped |
 | 5–8 | correctness, de-duplication, guardrails, native/PWA | — | not started |
 
 ### What Batch 4a added, and one thing to know before touching it
@@ -58,6 +58,32 @@ concluded from a partial list. Check the panel, not a scrape.
 - **`scripts/backfill-blobs-to-r2.js`** — reports by default, moves with `--apply`, resumable,
   uploads before it rewrites a row, and pins the rewrite to the value it read. **Not yet run
   against production.** Take a backup first.
+
+### What Batch 4b added
+
+- **Retention, poller 110, daily.** `src/utils/retention.js`. Windows are Pete's:
+  audit_log 180d, admin_audit_log 365d, notifications 60d, activity_feed 60d,
+  onboarding_events 30d. **The care record is deliberately excluded** — messages, sessions,
+  visit logs, notes, photos, reviews, payments. Deleting a family's history of their mother's
+  care because it is old is not a disk-space decision, and nothing in that file should make it
+  look like one. Deletes in 1,000-row batches, 50 batches per table per run, and reports a
+  broken rule to Sentry rather than swallowing it.
+- **Thread pagination.** `GET /api/messages/conversations/:id` returned every message in the
+  conversation, forever. It now returns the newest 60 (`?limit=`, capped at 200) with
+  `?before=<ISO>` walking backwards, and the client has a "Load earlier messages" control that
+  preserves scroll position and de-duplicates on prepend. The joined-at privacy boundary
+  (v1.105.92) sits OUTSIDE the pager — you still cannot page past the day you joined.
+- **Every client-supplied limit is clamped** (`src/utils/queryLimits.js`), across nine routers.
+  `?limit=999999999` was one authenticated request that made Postgres assemble the whole table.
+  Unparseable and zero fall back to the endpoint's default, never to zero — a limit that
+  silently becomes 0 turns a working list into an empty one, which reads as data loss.
+- **Boot snapshots stop copying blobs.** `messages.metadata` (the Sept 2 root cause, copied
+  five times) and `users.avatar_url` are now excluded explicitly rather than left to the 4 MB
+  byte cap. A cap is a backstop; an exclude list is the intent.
+- **`scripts/gen-architecture.js` learned a second poller shape.** The retention poller binds
+  `guardedPoller` to a const (its body is too long to write twice for a setTimeout kickoff and
+  a setInterval), and the generator only matched the inline form — so a real poller was absent
+  from the map that every session reads, which is the exact thing that file exists to prevent.
 
 ### Known, not fixed
 

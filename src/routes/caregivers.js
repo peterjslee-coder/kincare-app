@@ -7,6 +7,7 @@ const { getDb } = require("../models/database");
 const { authenticate, requireRole } = require("../middleware/auth");
 const { geocodeAddress, buildAddressString, haversineDistance, coarsenCoordinate } = require("../utils/geocode");
 const { consumeDaily } = require("../utils/usageLimits");
+const { clampLimit, clampOffset } = require("../utils/queryLimits");
 
 const router = express.Router();
 router.use(authenticate);
@@ -41,7 +42,7 @@ router.get("/", async (req, res) => {
   }
 
   query += " ORDER BY cp.rating_avg DESC LIMIT ?";
-  params.push(parseInt(limit));
+  params.push(clampLimit(limit, 20, 100));
 
   let caregivers = await db.prepare(query).all(...params);
 

@@ -797,7 +797,7 @@ app.use("/api/media", require("./routes/media"));
 app.use("/api/safety", require("./routes/safety"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.106.8";
+const APP_VERSION = "1.106.9";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION, minAppVersion: MIN_APP_VERSION });
@@ -1628,6 +1628,37 @@ async function start() {
       }
     }), 60 * 1000);
     console.log("  Care events poller started (day-before + same-day notices, family-only)");
+  }
+
+  // ─── Retention (v1.106.9, poller 110) ───
+  //
+  // Five tables that nothing ever deleted from. Windows are Pete's decision and live in
+  // src/utils/retention.js beside the reasoning; the care record is deliberately not among
+  // them. Daily rather than monthly: a daily run deletes a day's worth and is invisible,
+  // whereas a monthly one deletes a month's worth in one go and is a lock nobody expected.
+  //
+  // 30 seconds after boot, then every 24 hours. The delay keeps it out of the way of the
+  // first requests after a deploy, which is when the app is slowest anyway.
+  {
+    const { applyRetention } = require("./utils/retention");
+    const runRetention = guardedPoller(110, async () => {
+      const db = await getDb();
+      const results = await applyRetention(db);
+      const moved = results.filter((r) => r.deleted > 0 || r.error);
+      if (moved.length) {
+        for (const r of moved) {
+          if (r.error) {
+            console.error(`  [retention] ${r.table}: ${r.error}`);
+            captureException(new Error(`retention ${r.table}: ${r.error}`), { where: "poller: retention" });
+          } else {
+            console.log(`  [retention] ${r.table}: deleted ${r.deleted} row(s) older than ${r.days}d${r.hitCeiling ? " (hit the per-run ceiling — will continue tomorrow)" : ""}`);
+          }
+        }
+      }
+    });
+    setTimeout(runRetention, 30 * 1000);
+    setInterval(runRetention, 24 * 60 * 60 * 1000);
+    console.log("  Retention poller started (audit 180d, admin audit 365d, notifications 60d, activity 60d, onboarding events 30d)");
   }
 
   // v1.105.50 — bound the inbound side too. Node's defaults leave `server.timeout` at 0,

@@ -30,6 +30,7 @@ const { generateSpeech } = require("../utils/voiceService");
 const { handleKindredMessage } = require("../utils/kindredBrain");
 
 const { sendPushToUser } = require("./push");
+const { clampLimit, clampOffset } = require("../utils/queryLimits");
 
 const router = express.Router();
 router.use(authenticate);
@@ -851,7 +852,7 @@ router.get("/conversations", async (req, res) => {
       GROUP BY conversation_id
       ORDER BY updated_at DESC
       LIMIT ? OFFSET ?
-    `).all(care_recipient_id, parseInt(limit), parseInt(offset));
+    `).all(care_recipient_id, clampLimit(limit, 50, 200), clampOffset(offset));
 
     // Get messages for each conversation
     const result = [];

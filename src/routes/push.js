@@ -2,6 +2,7 @@ const express = require("express");
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { authenticate } = require("../middleware/auth");
+const { clampLimit, clampOffset } = require("../utils/queryLimits");
 
 const router = express.Router();
 
@@ -998,7 +999,7 @@ const { groupNotifications } = require("../utils/notificationGroups");
 router.get("/notifications", authenticate, async (req, res) => {
   try {
     const db = await getDb();
-    const limit = parseInt(req.query.limit) || 30;
+    const limit = clampLimit(req.query.limit, 30, 100);
     // Read wider than we return, because grouping only shrinks the list. Bounded so a busy
     // account cannot turn one dashboard load into an unbounded scan.
     const scan = Math.min(limit * 8, 200);

@@ -127,8 +127,27 @@ function pollers() {
   const lines = server.split("\n");
   const rows = [];
   for (let i = 0; i < lines.length; i++) {
-    const m = lines[i].match(/(setInterval|setTimeout)\(\s*guardedPoller\(\s*(\d+)\s*,/);
-    if (!m) continue;
+    // Two shapes exist. The common one wraps guardedPoller inline in the timer call; the other
+    // binds it to a const first, because the body is too long to write twice for a
+    // setTimeout kickoff AND a setInterval. Missing the second shape means a real poller is
+    // absent from the map every session reads, which is precisely what this file is for.
+    //   setInterval(guardedPoller(110, async () => {...}), ms)
+    //   const runX = guardedPoller(110, async () => {...}); setInterval(runX, ms)
+    let m = lines[i].match(/(setInterval|setTimeout)\(\s*guardedPoller\(\s*(\d+)\s*,/);
+    if (!m) {
+      const bound = lines[i].match(/const\s+(\w+)\s*=\s*guardedPoller\(\s*(\d+)\s*,/);
+      if (!bound) continue;
+      // Find the timer that runs it, preferring the longest interval (the recurring one over
+      // a one-off kickoff), and report from there.
+      const uses = [...server.matchAll(new RegExp(`(setInterval|setTimeout)\\(\\s*${bound[1]}\\s*,`, "g"))];
+      if (!uses.length) continue;
+      const recurring = uses.find((u) => u[1] === "setInterval") || uses[0];
+      const useLine = server.slice(0, recurring.index).split("\n").length - 1;
+      m = [recurring[0], recurring[1], bound[2]];
+      i = useLine;                       // measure the interval from the timer call
+      lines[i] = lines[useLine];
+      m.boundName = bound[1];
+    }
     // Interval: parse the timer call properly and take its LAST top-level argument.
     const absIdx = lines.slice(0, i).join("\n").length + (i ? 1 : 0) + lines[i].indexOf(m[1]);
     const openIdx = server.indexOf("(", absIdx);

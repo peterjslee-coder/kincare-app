@@ -14,6 +14,7 @@ const { geofenceEvidence, coarsenCoordinate } = require("../utils/geocode");
 const { hasActiveVouch } = require("../utils/vouches");
 const { decideCancellationCharge, CANCEL_FEE_WINDOW_HOURS } = require("../utils/cancellationFee");
 const { MODEL_HAIKU } = require("../utils/aiModels");
+const { clampLimit, clampOffset } = require("../utils/queryLimits");
 
 const router = express.Router();
 router.use(authenticate);
@@ -234,7 +235,7 @@ router.get("/", async (req, res) => {
   }
 
   query += " ORDER BY cs.scheduled_date ASC, cs.scheduled_time ASC LIMIT ?";
-  params.push(parseInt(limit));
+  params.push(clampLimit(limit, 20, 200));
 
   let sessions = await db.prepare(query).all(...params);
 

@@ -5,6 +5,7 @@ const { getDb } = require("../models/database");
 const { authenticate } = require("../middleware/auth");
 const { recipientAccess } = require("../utils/access"); // v1.105.35
 const { sendPushToUser } = require("./push");
+const { clampLimit, clampOffset } = require("../utils/queryLimits");
 
 const router = express.Router();
 router.use(authenticate);
@@ -16,7 +17,7 @@ router.get("/care-history/:caregiverId/:recipientId", async (req, res) => {
   try {
     const db = await getDb();
     const { caregiverId, recipientId } = req.params;
-    const limit = parseInt(req.query.limit) || 5;
+    const limit = clampLimit(req.query.limit, 5, 50);
 
     // v1.105.35 — was authenticate-only. The visits below carry arrival/departure mood,
     // condition tags and care feedback for a named recipient: health information about

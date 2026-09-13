@@ -5,6 +5,7 @@ const { getDb } = require("../models/database");
 const { authenticate, requireAdmin } = require("../middleware/auth");
 const { sendEmail, brandedHtml } = require("../utils/email");
 const KNOWN = require("../utils/knownCaregivers"); // v1.105.186
+const { clampLimit, clampOffset } = require("../utils/queryLimits");
 
 const router = express.Router();
 
@@ -241,7 +242,7 @@ router.get("/", async (req, res) => {
     }
 
     sql += ` ORDER BY pi.created_at DESC LIMIT ? OFFSET ?`;
-    params.push(parseInt(limit), parseInt(offset));
+    params.push(clampLimit(limit, 50, 200), clampOffset(offset));
 
     const invites = await db.prepare(sql).all(...params);
 

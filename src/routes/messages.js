@@ -3,6 +3,7 @@ const { PERSONAL_DIRECT_WHERE } = require("../utils/conversations");
 const { hasAnyActiveVouch } = require("../utils/vouches");
 const { userPhotoUrl, hasPhotoSql } = require("./media");
 const storage = require("../utils/storage");
+const { clampLimit } = require("../utils/queryLimits");
 const multer = require("multer");
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
@@ -622,6 +623,20 @@ router.get("/conversations/:id", async (req, res) => {
   // which is the failure direction that matters here.
   const historyFrom = membership.joined_at || conv?.created_at || new Date(0).toISOString();
 
+  // ─── v1.106.9 — a thread is a page, not a transcript ───
+  //
+  // This returned EVERY message in the conversation, forever. It is bounded today only by the
+  // fact that nobody has been talking for very long; a year of daily coordination between a
+  // family and a caregiver is thousands of rows, assembled in Postgres, held in Node and
+  // parsed on a phone, every time the thread is opened.
+  //
+  // The newest page comes back by default. `?before=<ISO timestamp>` walks backwards from
+  // there, and `hasMore` says whether there is anything above the page — the client already
+  // understands a boundary at the top of a thread (hiddenBefore, v1.105.92), so this reuses
+  // the shape people already see rather than inventing a second one.
+  const pageSize = clampLimit(req.query.limit, 60, 200);
+  const before = typeof req.query.before === "string" && req.query.before ? req.query.before : null;
+
   // Get messages with reply-to info
   const messages = await db.prepare(`
     SELECT
@@ -651,8 +666,13 @@ router.get("/conversations/:id", async (req, res) => {
     LEFT JOIN users ru ON rm.sender_id = ru.id
     WHERE m.conversation_id = ?
       AND m.created_at >= ?
-    ORDER BY m.created_at ASC
-  `).all(convId, historyFrom);
+      AND (?::timestamptz IS NULL OR m.created_at < ?::timestamptz)
+    ORDER BY m.created_at DESC
+    LIMIT ?
+  `).all(convId, historyFrom, before, before, pageSize);
+  // Newest-first out of the database so LIMIT takes the RECENT page, oldest-first on the way
+  // to the client, which is the order the thread renders in.
+  messages.reverse();
 
   // Get reactions for all messages in this conversation
   const msgIds = messages.map(m => m.id);
@@ -703,11 +723,19 @@ router.get("/conversations/:id", async (req, res) => {
   ).get(convId, historyFrom);
   const hiddenBefore = parseInt(earlier?.c || 0, 10);
 
+  // A full page means there is probably more above it. Cheaper and honest enough for a
+  // "load earlier" affordance; the exact count is not worth a second COUNT(*) per open.
+  const oldestOnPage = messages.length ? messages[0].created_at : null;
+  const hasMore = messages.length === pageSize;
+
   res.json({
     messages: enriched,
     conversationType: conv?.type || "direct",
     historyFrom,
     hiddenBefore,
+    hasMore,
+    oldestOnPage,
+    pageSize,
   });
 });
 

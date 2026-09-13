@@ -230,7 +230,12 @@ async function getDb() {
 // Fail-open: a snapshot failure logs loudly + reports to Sentry but never
 // blocks boot (a blocked boot would be a worse outage than a missing snapshot).
 const SNAPSHOT_TABLES = {
-  users: { exclude: ["profile_photo"] },            // exclude base64 photo blobs
+  // v1.106.9 — every blob column is excluded EXPLICITLY, not left to the 4 MB byte cap. The
+  // Sept 2 root cause was base64 in `messages` being copied here five times over; the cap
+  // catches that now, but a cap is a backstop and an exclude list is the intent. `avatar_url`
+  // joins the list because it held a duplicate of profile_photo until v1.106.8, and rows
+  // written before then still do.
+  users: { exclude: ["profile_photo", "avatar_url"] },
   care_recipients: { exclude: ["photo"] },
   caregiver_profiles: {},
   payments: {},
@@ -240,7 +245,7 @@ const SNAPSHOT_TABLES = {
   background_check_payments: {},
   conversations: {},
   conversation_members: {},
-  messages: {},
+  messages: { exclude: ["metadata"] },   // photo data URIs live in here
   admin_audit_log: {},
   audit_log: {},
   reviews: {},

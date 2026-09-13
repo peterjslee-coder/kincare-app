@@ -8,7 +8,7 @@ build red.
 Hand-written sections (§3 "Where is…") are preserved across regeneration; edit those freely.
 
 Structure at last generation: 524 HTTP routes across 55 mounts ·
-91 `CREATE TABLE` statements · 9 background jobs · 36 socket events
+91 `CREATE TABLE` statements · 10 background jobs · 36 socket events
 (15 with no client listener) · 58 push event types · 55 `window.__*` globals.
 
 ---
@@ -135,6 +135,7 @@ Every job runs through `guardedPoller` → `withPollerLock` (`src/models/databas
 | 107 | Care Tasks poller (v1.99.0) | 1 min | `src/server.js:1603` |
 | 108 | Care Events poller (v1.100.0) | 1 min | `src/server.js:1621` |
 | 109 | Kindred Reminder Delivery Poller | 1 min | `src/server.js:1396` |
+| 110 | Retention (v1.106.9, poller 110) | 24 h | `src/server.js:1660` |
 
 ---
 

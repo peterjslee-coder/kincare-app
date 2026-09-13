@@ -20,6 +20,11 @@ const Messages = window.Messages = () => {
   const [activeConvType, setActiveConvType] = useState('direct');
   const [messages, setMessages] = useState([]);
   const [hiddenBefore, setHiddenBefore] = useState(0);
+  // v1.106.9 — the thread is paginated now. `hasMore` is whether anything sits above the page
+  // we have; `oldestOnPage` is the cursor to ask for the next one.
+  const [hasMoreAbove, setHasMoreAbove] = useState(false);
+  const [oldestOnPage, setOldestOnPage] = useState(null);
+  const [loadingEarlier, setLoadingEarlier] = useState(false);
   const [inputText, setInputText] = useState('');
   // Drafts persist to localStorage so they survive page navigation
   const DRAFTS_KEY = 'inplace_msg_drafts';
@@ -367,6 +372,39 @@ const Messages = window.Messages = () => {
   // So the empty state now requires a load that actually came back and actually said zero.
   const [threadState, setThreadState] = useState('idle'); // idle | loading | loaded | failed
 
+  // ─── v1.106.9 — walk backwards a page at a time ───
+  //
+  // The server returns the newest page and a cursor. This prepends the page above it, keeping
+  // scroll position by measuring the thread before and after and restoring the delta — without
+  // that, loading earlier messages yanks the reader to a different part of the conversation,
+  // which is worse than not offering it.
+  const loadEarlier = async () => {
+    if (loadingEarlier || !oldestOnPage || !activeConvId) return;
+    setLoadingEarlier(true);
+    const box = messagesAreaRef.current || null;
+    const heightBefore = box ? box.scrollHeight : 0;
+    try {
+      const res = await apiFetch(`/api/messages/conversations/${activeConvId}?before=${encodeURIComponent(oldestOnPage)}`);
+      if (res?.ok) {
+        const data = await res.json();
+        const older = data.messages || [];
+        if (older.length) {
+          setMessages((prev) => {
+            const seen = new Set(prev.map((m) => m.id));
+            return [...older.filter((m) => !seen.has(m.id)), ...prev];
+          });
+          setOldestOnPage(data.oldestOnPage || null);
+        }
+        setHasMoreAbove(!!data.hasMore && older.length > 0);
+        if (box) requestAnimationFrame(() => { box.scrollTop += box.scrollHeight - heightBefore; });
+      }
+    } catch (err) {
+      console.error('Load earlier messages error:', err);
+    } finally {
+      setLoadingEarlier(false);
+    }
+  };
+
   const fetchMessages = async (convId) => {
     setThreadState((prev) => (prev === 'loaded' ? prev : 'loading'));
     try {
@@ -388,6 +426,8 @@ const Messages = window.Messages = () => {
         // v1.105.92 — how many messages predate this person joining. Shown as a line at the
         // top of the thread so it reads as a boundary rather than a broken load.
         setHiddenBefore(data.hiddenBefore || 0);
+        setHasMoreAbove(!!data.hasMore);
+        setOldestOnPage(data.oldestOnPage || null);
         setThreadState('loaded');
       }
     } catch (err) {
@@ -2479,7 +2519,18 @@ const Messages = window.Messages = () => {
             <React.Fragment>
             {/* v1.105.92 — the thread starts where you joined. Say so, rather than opening
                 mid-conversation and letting the reader assume something failed to load. */}
-            {hiddenBefore > 0 && (
+            {hasMoreAbove && (
+              <div style={{ textAlign: 'center', margin: '4px 0 14px' }}>
+                <button
+                  onClick={loadEarlier}
+                  disabled={loadingEarlier}
+                  style={{ padding: '6px 14px', borderRadius: 999, background: 'var(--bg-primary)', border: '1px solid var(--border-light)', fontSize: 12.5, color: 'var(--text-secondary)', cursor: loadingEarlier ? 'default' : 'pointer' }}
+                >
+                  {loadingEarlier ? 'Loading\u2026' : 'Load earlier messages'}
+                </button>
+              </div>
+            )}
+            {hiddenBefore > 0 && !hasMoreAbove && (
               <div style={{ textAlign: 'center', margin: '4px 0 14px' }}>
                 <span style={{ display: 'inline-block', padding: '5px 12px', borderRadius: 999, background: 'var(--bg-primary)', border: '1px solid var(--border-light)', fontSize: 11.5, color: 'var(--text-tertiary)', lineHeight: 1.4 }}>
                   Earlier messages aren{'\u2019'}t shown {'\u2014'} this conversation starts when you joined
