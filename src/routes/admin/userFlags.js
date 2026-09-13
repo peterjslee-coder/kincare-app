@@ -14,6 +14,7 @@ const {
 } = require("@simplewebauthn/server");
 const { isTrustedIp, registerTrustedIp, getTrustedIps, removeTrustedIp } = require("../../utils/trustedIps");
 const { getClientIp, writeAuditLog } = require("../../middleware/auditLog");
+const storage = require("../../utils/storage");
 const {
   RP_ID, ORIGIN,
   setPasskeyChallenge, getPasskeyChallenge, setNukeChallenge, getNukeChallenge,
@@ -268,7 +269,8 @@ router.put("/users/:id/photo", async (req, res) => {
     // v1.106.3 — an admin setting someone else's photo went through the same unvalidated path.
     const okPhoto = validateImageDataUrl(photo);
     if (!okPhoto.ok) return res.status(400).json({ error: okPhoto.error });
-    await db.prepare("UPDATE users SET profile_photo = ?, avatar_url = ?, updated_at = NOW() WHERE id = ?").run(photo, photo, req.params.id);
+    const stored = await storage.storeFileData("profile-photo", photo);
+    await db.prepare("UPDATE users SET profile_photo = ?, avatar_url = NULL, updated_at = NOW() WHERE id = ?").run(stored, req.params.id);
     res.json({ success: true, email: user.email });
   } catch (err) {
     console.error("Admin photo update error:", err);

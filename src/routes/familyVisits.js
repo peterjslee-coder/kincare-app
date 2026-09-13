@@ -24,6 +24,7 @@ const { coarsenCoordinate, geofenceEvidence } = require("../utils/geocode");
 const { validateMagicBytes } = require("../utils/fileValidation");
 const { sendStoredFile, IMAGE_MIMES, DOCUMENT_MIMES } = require("../utils/serveMedia");
 const { captureException } = require("../utils/sentry");
+const storage = require("../utils/storage");
 
 const router = express.Router();
 // v1.106.5 — a per-account daily byte ceiling. Rate limits count requests; the Sept 2
@@ -122,6 +123,10 @@ router.post("/", async (req, res) => {
       if (bad) return res.status(400).json({ error: bad });
       photoList = [photo];
     }
+    // v1.106.8 — the lead photo AND every one in the list go to R2 when it is configured.
+    // Storing the list as markers matters more than the lead: `photos` is a JSON array of
+    // full data URIs, so a five-photo visit was five images in one TEXT column.
+    photoList = await Promise.all(photoList.map((p) => storage.storeFileData("family-visit", p)));
     const photoData = photoList[0] || null;
 
     // 404 rather than 403: "not yours" and "not there" look identical to someone probing ids.
@@ -270,7 +275,7 @@ async function sendVisitPhoto(req, res, index) {
     if (!access) return res.status(404).json({ error: "Photo not found" });
 
     // v1.106.3 — never echo the stored mime; see src/utils/serveMedia.js.
-    return sendStoredFile(res, data, { allow: IMAGE_MIMES, filename: "visit-photo" });
+    return await sendStoredFile(res, data, { allow: IMAGE_MIMES, filename: "visit-photo" });
   } catch (err) {
     console.error("Family visit photo error:", err);
     captureException(err, { where: "familyVisits: photo" });

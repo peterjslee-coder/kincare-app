@@ -24,7 +24,47 @@ batch by batch. Where it stands:
 | 2 | abuse & denial-of-service (below) | v1.106.5 | shipped |
 | 3a | self-inflicted waste: cache headers, build phase, dead weight | v1.106.6 | shipped |
 | 3b | payload weight, 'restoring' state, version-skew guard | v1.106.7 | shipped |
-| 4–8 | data leanness, correctness, de-duplication, guardrails, native/PWA | — | not started |
+| 4a | photos to R2, one photo column, the blob guardrail | v1.106.8 | shipped |
+| 4b | read caps and the retention poller | — | next |
+| 5–8 | correctness, de-duplication, guardrails, native/PWA | — | not started |
+
+### What Batch 4a added, and one thing to know before touching it
+
+**R2 was already on.** All four `R2_*` variables are set on the production service; the bucket
+`inplace-uploads` had 33 objects when this batch started. I reported the opposite mid-session
+after scraping Railway's variables list, which is virtualised — I read the visible portion and
+concluded from a partial list. Check the panel, not a scrape.
+
+- **The five missing writers.** `storage.js` has existed since v1.91.0 and receipts, verified
+  documents and consent uploads used it — visit photos, note photos, family-visit photos,
+  profile photos and message photos never did. That is what filled the volume on Sept 2. All
+  five now store an `r2:<key>` marker. Family visits store every photo in the list, not just
+  the lead one: `photos` is a JSON array of data URIs, so a five-photo visit was five images
+  in one TEXT column.
+- **`sendStoredFile` resolves markers itself, and is async now.** Six readers called it; three
+  resolved the marker first and three did not, so those three would have started 404ing every
+  new upload the moment R2 took effect — silently, one image at a time. Doing it at the choke
+  point means the next reader is right without having to know. **`await` it** — `lint:blobs`
+  fails the build on a call that does not.
+- **One column for a user's photo.** `avatar_url` and `profile_photo` held identical bytes,
+  written together at five sites, and `/api/auth/me` returned both — nine times per boot.
+  `profile_photo` is now the only one written; `avatar_url` is a read-only fallback. Migration
+  034 fills the column of record first and only then clears duplicates, so it cannot lose an
+  image. "Has a photo" now means one we can SERVE: a remote https avatar (Google OAuth, demo
+  pravatar) is not counted, because v1.106.3 removed the 302 and it would render broken.
+- **`scripts/lint-blobs.js`**, in CI. Any INSERT/UPDATE binding a `?` to a photo/image/receipt/
+  document/attachment/file_data column must route through `storage.storeFileData`. Four
+  exemptions, each with a written reason in `scripts/lint-blobs-baseline.js`.
+- **`scripts/backfill-blobs-to-r2.js`** — reports by default, moves with `--apply`, resumable,
+  uploads before it rewrites a row, and pins the rewrite to the value it read. **Not yet run
+  against production.** Take a backup first.
+
+### Known, not fixed
+
+An OAuth avatar from Google is a remote https URL in `avatar_url`, and `/api/media/user/:id/photo`
+cannot serve one — v1.106.3 removed the 302 branch deliberately (authenticated open redirect).
+So Google-signup users have had no avatar since then. The fix is to fetch and store the bytes at
+signup, the way `seed.js` already does. Left out of this batch to keep it about data leanness.
 
 ### What Batch 3 added
 

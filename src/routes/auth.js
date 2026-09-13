@@ -11,6 +11,8 @@ const { sendPushToAdmins, notifyAdmins } = require("./push");
 const { registerTrustedIp } = require("../utils/trustedIps");
 const { getClientIp } = require("../middleware/auditLog");
 const { captureException } = require("../utils/sentry");
+const storage = require("../utils/storage");
+const { userPhotoUrl, HAS_PHOTO_SQL } = require("./media");
 
 const router = express.Router();
 
@@ -491,7 +493,7 @@ router.post("/demo-login", async (req, res) => {
       user: {
         id: user.id, email: user.email, role: user.role, roles,
         first_name: user.first_name, last_name: user.last_name,
-        profile_photo: user.profile_photo || null,
+        profile_photo: userPhotoUrl(user),
         is_demo: true,
       },
       token,
@@ -632,7 +634,11 @@ router.post("/change-password", authenticate, async (req, res) => {
 router.get("/me", authenticate, async (req, res) => {
   const db = await getDb();
   const user = await db.prepare(
-    "SELECT id, email, role, roles, first_name, last_name, phone, avatar_url, profile_photo, notification_prefs, accessibility_prefs, ui_prefs, email_verified, is_demo, is_admin, is_tester, account_approved, companion_access, password_changed_at, disclaimer_accepted_at, disclaimer_version, pets, pet_allergies, food_allergies, medical_conditions, address_line1, address_line2, city, state, zip, created_at FROM users WHERE id = ?"
+    // v1.106.8 — `avatar_url, profile_photo` used to be selected here, which meant every
+    // /api/auth/me shipped the user's avatar TWICE, in base64, in JSON. The app calls this
+    // endpoint nine times on boot. Ask whether they have one; serve the bytes from
+    // /api/media/user/:id/photo, where a browser will cache them.
+    `SELECT u.id, u.email, u.role, u.roles, u.first_name, u.last_name, u.phone, ${HAS_PHOTO_SQL}, u.notification_prefs, u.accessibility_prefs, u.ui_prefs, u.email_verified, u.is_demo, u.is_admin, u.is_tester, u.account_approved, u.companion_access, u.password_changed_at, u.disclaimer_accepted_at, u.disclaimer_version, u.pets, u.pet_allergies, u.food_allergies, u.medical_conditions, u.address_line1, u.address_line2, u.city, u.state, u.zip, u.created_at FROM users u WHERE u.id = ?`
   ).get(req.user.id);
 
   if (!user) return res.status(404).json({ error: "User not found" });
@@ -793,6 +799,9 @@ router.get("/me", authenticate, async (req, res) => {
   res.json({
     user: {
       ...user,
+      // The client reads `profile_photo` straight into an <img src> / CSS url(), so a URL
+      // slots in where the bytes were and nothing on the client changes.
+      profile_photo: userPhotoUrl(user),
       roles: userRoles,
       email_verified: !!user.email_verified,
       is_demo: !!user.is_demo,
@@ -906,7 +915,9 @@ router.put("/me", authenticate, validateProfileUpdate, async (req, res) => {
 
     // Return updated user
     const user = await db.prepare(
-      "SELECT id, email, role, roles, first_name, last_name, phone, avatar_url, profile_photo, notification_prefs, accessibility_prefs, ui_prefs, pets, pet_allergies, food_allergies, medical_conditions, address_line1, address_line2, city, state, zip, created_at FROM users WHERE id = ?" /* v1.74.5: profile_photo was missing — saving an address blanked the avatar in the UI */
+      /* v1.74.5: profile_photo was missing — saving an address blanked the avatar in the UI.
+         v1.106.8: it is a URL now, not the bytes; same field, same effect, ~1 MB less. */
+      `SELECT u.id, u.email, u.role, u.roles, u.first_name, u.last_name, u.phone, ${HAS_PHOTO_SQL}, u.notification_prefs, u.accessibility_prefs, u.ui_prefs, u.pets, u.pet_allergies, u.food_allergies, u.medical_conditions, u.address_line1, u.address_line2, u.city, u.state, u.zip, u.created_at FROM users u WHERE u.id = ?`
     ).get(req.user.id);
 
     // Parse roles
@@ -914,7 +925,7 @@ router.put("/me", authenticate, validateProfileUpdate, async (req, res) => {
     try { parsedRoles = user.roles ? JSON.parse(user.roles) : [user.role]; }
     catch { parsedRoles = [user.role]; }
 
-    res.json({ user: { ...user, roles: parsedRoles } });
+    res.json({ user: { ...user, profile_photo: userPhotoUrl(user), roles: parsedRoles } });
   } catch (err) {
     console.error("Update profile error:", err);
     res.status(500).json({ error: "Failed to update profile" });
@@ -1142,8 +1153,12 @@ router.put("/me/photo", authenticate, async (req, res) => {
     // executable HTML from our own origin by /api/media (stored XSS -> account takeover).
     const ok = validateImageDataUrl(photo);
     if (!ok.ok) return res.status(400).json({ error: ok.error });
-    await db.prepare("UPDATE users SET profile_photo = ?, avatar_url = ?, updated_at = NOW() WHERE id = ?").run(photo, photo, req.user.id);
-    res.json({ message: "Profile photo updated", photoUrl: photo });
+    // v1.106.8 — ONE column, and to R2 when it is configured. This wrote the same bytes to
+    // profile_photo AND avatar_url, and then handed them straight back in the response: the
+    // same image stored twice and returned a third time, for an upload the client already has.
+    const stored = await storage.storeFileData("profile-photo", photo);
+    await db.prepare("UPDATE users SET profile_photo = ?, avatar_url = NULL, updated_at = NOW() WHERE id = ?").run(stored, req.user.id);
+    res.json({ message: "Profile photo updated", photoUrl: `/api/media/user/${req.user.id}/photo` });
   } catch (err) {
     console.error("Photo upload error:", err);
     res.status(500).json({ error: "Failed to upload photo" });

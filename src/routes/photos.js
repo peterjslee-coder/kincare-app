@@ -83,12 +83,16 @@ router.post(
       }
       const base64 = `data:${file.mimetype};base64,${file.buffer.toString("base64")}`;
       const id = uuid();
+      // v1.106.8 — to R2 when it is configured, unchanged base64 when it is not. The marker
+      // and the data URI are both readable by every reader (storage.resolveFileData), so this
+      // is safe to ship before the credentials exist and needs no second deploy after.
+      const stored = await storage.storeFileData("visit-photo", base64);
 
       await db
         .prepare(
           "INSERT INTO visit_photos (id, visit_log_id, photo_url, caption) VALUES (?, ?, ?, ?)"
         )
-        .run(id, visitLogId, base64, captions[i] || null);
+        .run(id, visitLogId, stored, captions[i] || null);
 
       // v1.106.7 — a URL, not the bytes. The client just sent us this image; echoing a
       // megabyte of base64 back at it was the upload paid for twice.
@@ -198,9 +202,10 @@ router.post(
       }
       const base64 = `data:${file.mimetype};base64,${file.buffer.toString("base64")}`;
       const id = uuid();
+      const stored = await storage.storeFileData("visit-photo", base64);
       await db.prepare(
         "INSERT INTO visit_photos (id, visit_log_id, photo_url, caption) VALUES (?, ?, ?, ?)"
-      ).run(id, visitLog.id, base64, captions[i] || null);
+      ).run(id, visitLog.id, stored, captions[i] || null);
       photos.push({ id, visitLogId: visitLog.id, photoUrl: `/api/photos/${id}/image`, caption: captions[i] || null });
     }
 
@@ -288,8 +293,7 @@ router.get("/:photoId/image", async (req, res) => {
       // authenticated open redirect is what v1.106.3 removed from /api/media.
       return res.status(404).json({ error: "Photo not found" });
     }
-    const fileData = await storage.resolveFileData(row.photo_url);
-    return sendStoredFile(res, fileData, { allow: IMAGE_MIMES, filename: `photo-${row.id}.jpg` });
+    return await sendStoredFile(res, row.photo_url, { allow: IMAGE_MIMES, filename: `photo-${row.id}.jpg` });
   } catch (err) {
     captureException(err, { where: "photos: stream image" });
     res.status(500).json({ error: "Failed to load photo" });

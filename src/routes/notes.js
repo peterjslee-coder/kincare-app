@@ -7,6 +7,7 @@ const { captureException } = require("../utils/sentry");
 const { validateMagicBytes } = require("../utils/fileValidation");
 const { sendStoredFile, IMAGE_MIMES, DOCUMENT_MIMES } = require("../utils/serveMedia");
 const { attachReactions } = require("../utils/reactions"); // v1.105.170
+const storage = require("../utils/storage");
 
 // v1.76.0 — parse stored JSON defensively (one malformed row must not 500 the list)
 function safeJson(raw, fallback) {
@@ -177,7 +178,9 @@ router.post("/", async (req, res) => {
     if (buf.length > 5 * 1024 * 1024) return res.status(400).json({ error: "Photo too large (5MB max)" });
     const magic = validateMagicBytes(buf, mime);
     if (!magic.valid) return res.status(400).json({ error: "Photo content does not match its type" });
-    photoData = photo;
+    // v1.106.8 — to R2 when configured, unchanged base64 when not. Every reader already
+    // goes through storage.resolveFileData, so both shapes read the same.
+    photoData = await storage.storeFileData("note-photo", photo);
   }
 
   // Access check — must have at least view access to add notes
@@ -309,7 +312,7 @@ router.get("/:id/photo", async (req, res) => {
       return res.status(404).json({ error: "Photo not found" });
     }
     // v1.106.3 — never echo the stored mime; see src/utils/serveMedia.js.
-    return sendStoredFile(res, note.photo, { allow: IMAGE_MIMES, filename: "note-photo" });
+    return await sendStoredFile(res, note.photo, { allow: IMAGE_MIMES, filename: "note-photo" });
   } catch (err) {
     captureException(err, { where: "notes: photo" });
     res.status(500).json({ error: "Failed to load photo" });

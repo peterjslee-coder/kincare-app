@@ -2235,6 +2235,36 @@ async function initializeDatabase() {
       ],
     },
     {
+      // ─── v1.106.8 — one column of record for a user's photo ───
+      //
+      // `avatar_url` and `profile_photo` held IDENTICAL bytes, written together at five call
+      // sites since the beginning, and both were returned by /api/auth/me — which the app
+      // calls nine times on boot. Every avatar was stored twice and sent eighteen times.
+      //
+      // Two steps, in this order, and both provably lossless:
+      //   1. Fill profile_photo from avatar_url wherever profile_photo is empty, so the
+      //      column of record is COMPLETE before anything stops reading the other one.
+      //   2. Clear avatar_url only where it is now byte-identical to profile_photo. A row
+      //      where they differ keeps both, and the read path still falls back to avatar_url,
+      //      so nothing can be lost by this migration even if step 1 missed something.
+      //
+      // Remote https avatars (Google OAuth, demo pravatar URLs) are deliberately NOT copied:
+      // profile_photo means "an image we hold", and media.js cannot serve a remote URL anyway.
+      id: "034_one_user_photo_column",
+      statements: [
+        `UPDATE users
+            SET profile_photo = avatar_url
+          WHERE profile_photo IS NULL
+            AND avatar_url IS NOT NULL
+            AND (avatar_url LIKE 'data:%' OR avatar_url LIKE 'r2:%')`,
+        `UPDATE users
+            SET avatar_url = NULL
+          WHERE avatar_url IS NOT NULL
+            AND profile_photo IS NOT NULL
+            AND avatar_url = profile_photo`,
+      ],
+    },
+    {
       // v1.106.5 — a persistent geocode cache. Every save handler and every caregiver search
       // with an ?address= called Nominatim inline, uncached: the same address geocoded again on
       // every edit, and an attacker could make us issue one outbound request per inbound request

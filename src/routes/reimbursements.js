@@ -420,9 +420,9 @@ router.get("/receipt/:receiptId", async (req, res) => {
     const access = await teamAccess(db, receipt.care_team_id, req.user.id);
     if (!access || !access.canView) return res.status(404).json({ error: "Receipt not found" });
 
-    const fileData = await storage.resolveFileData(receipt.file_data); // v1.91.0 — fetches from R2 when marker
     // v1.106.3 — the stored mime_type was trusted too. Receipts are images or PDFs.
-    return sendStoredFile(res, fileData, {
+    // v1.106.8 — sendStoredFile resolves the R2 marker itself (was storage.resolveFileData here).
+    return await sendStoredFile(res, receipt.file_data, {
       allow: DOCUMENT_MIMES,
       filename: receipt.file_name || "receipt",
     });

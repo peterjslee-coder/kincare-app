@@ -48,10 +48,23 @@ function parseDataUrl(dataUrl) {
  * that should never have been accepted. Saying "unsupported type" would confirm the row exists
  * and describe its contents.
  *
- * @returns the express response, so callers can `return sendStoredFile(...)`
+ * ─── v1.106.8 — it resolves R2 markers itself, and that is deliberate ───
+ *
+ * From v1.106.8 a stored value may be an "r2:<key>" marker instead of a data URI. Six readers
+ * called this; three of them resolved the marker first and three did not, so those three would
+ * have started serving 404s for every new upload the moment R2 took effect — silently, one
+ * image at a time, with nothing in the logs.
+ *
+ * Doing it here rather than at each call site means the NEXT reader someone adds is correct
+ * without having to know. It is async for that reason; callers must `await`, and
+ * scripts/lint-blobs.js fails the build on one that does not, because a forgotten await turns
+ * a failed fetch into an unhandled rejection instead of the 500 the handler already has.
+ *
+ * @returns the express response, so callers can `return await sendStoredFile(...)`
  */
-function sendStoredFile(res, dataUrl, { allow = IMAGE_MIMES, filename = null, maxAge = 86400 } = {}) {
-  const parsed = parseDataUrl(dataUrl);
+async function sendStoredFile(res, dataUrl, { allow = IMAGE_MIMES, filename = null, maxAge = 86400 } = {}) {
+  const resolved = await require("./storage").resolveFileData(dataUrl);
+  const parsed = parseDataUrl(resolved);
   if (!parsed) return res.status(404).end();
   if (!allow.includes(parsed.mime)) return res.status(404).end();
 

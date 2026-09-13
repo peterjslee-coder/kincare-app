@@ -1,7 +1,7 @@
 const express = require("express");
 const { hasActiveVouch, activeVouchesFor } = require("../utils/vouches");
 const { FAMILY_BROUGHT_NOTE } = require("../utils/knownCaregivers"); // v1.105.186
-const { userPhotoUrl } = require("./media");
+const { userPhotoUrl, userHasPhoto } = require("./media");
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { authenticate, requireRole } = require("../middleware/auth");
@@ -705,7 +705,7 @@ router.put("/mark-onboarding-complete", async (req, res) => {
   try {
     const db = await getDb();
     const profile = await db.prepare(`
-      SELECT cp.*, u.avatar_url
+      SELECT cp.*, u.avatar_url, u.profile_photo
       FROM caregiver_profiles cp
       JOIN users u ON cp.user_id = u.id
       WHERE cp.user_id = ?
@@ -729,7 +729,9 @@ router.put("/mark-onboarding-complete", async (req, res) => {
     if (!profile.bio || !profile.hourly_rate) missing.push("Profile (bio & hourly rate)");
     if (!availRules || availRules.length === 0) missing.push("Availability");
     if (!profile.care_stoplight && !profile.care_preferences) missing.push("Care preferences");
-    if (!profile.avatar_url) missing.push("Profile photo");
+    // v1.106.8 — this read avatar_url ALONE. profile_photo is the column of record now, so
+    // a caregiver who had just uploaded a photo would have been told it was still missing.
+    if (!userHasPhoto(profile)) missing.push("Profile photo");
 
     // Conditional gates: only required when the service is configured
     const stripeConfigured = !!(process.env.STRIPE_SECRET_KEY || process.env.stripe_secret_key);

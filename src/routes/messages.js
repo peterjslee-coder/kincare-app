@@ -1,7 +1,8 @@
 const express = require("express");
 const { PERSONAL_DIRECT_WHERE } = require("../utils/conversations");
 const { hasAnyActiveVouch } = require("../utils/vouches");
-const { userPhotoUrl } = require("./media");
+const { userPhotoUrl, hasPhotoSql } = require("./media");
+const storage = require("../utils/storage");
 const multer = require("multer");
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
@@ -112,7 +113,7 @@ router.get("/conversations", async (req, res) => {
 
     // Get members
     const members = await db.prepare(`
-      SELECT u.id, u.first_name, u.last_name, u.role, u.profile_photo, u.avatar_url
+      SELECT u.id, u.first_name, u.last_name, u.role, ${hasPhotoSql('u')}
       FROM conversation_members cm
       JOIN users u ON cm.user_id = u.id
       WHERE cm.conversation_id = ?
@@ -169,7 +170,7 @@ router.get("/conversations", async (req, res) => {
     if (existingConv) continue;
 
     // Build a virtual conversation from legacy messages
-    const partner = await db.prepare("SELECT id, first_name, last_name, role, profile_photo, avatar_url, is_admin FROM users WHERE id = ?").get(row.partner_id);
+    const partner = await db.prepare(`SELECT id, first_name, last_name, role, ${hasPhotoSql('')}, is_admin FROM users WHERE id = ?`).get(row.partner_id);
     if (!partner) continue;
 
     // Skip legacy conversations with unconnected users (unless admin)
@@ -441,7 +442,7 @@ router.get("/contacts", async (req, res) => {
   const cleared = await isCaregiverCleared(db, req.user);
   if (!cleared) {
     const admins = await db.prepare(`
-      SELECT id, first_name, last_name, role, email, profile_photo, avatar_url FROM users
+      SELECT id, first_name, last_name, role, email, ${hasPhotoSql('')} FROM users
       WHERE is_admin = 1 AND is_active = 1 AND COALESCE(is_demo, 0) = ?
       ORDER BY first_name ASC
     `).all(isDemo);
@@ -515,7 +516,7 @@ router.get("/contacts", async (req, res) => {
   let users;
   if (search) {
     users = await db.prepare(`
-      SELECT id, first_name, last_name, role, email, profile_photo, avatar_url FROM users
+      SELECT id, first_name, last_name, role, email, ${hasPhotoSql('')} FROM users
       WHERE id IN (${placeholders}) AND COALESCE(is_demo, 0) = ? AND is_active = 1
         AND (LOWER(first_name || ' ' || last_name) LIKE ? OR LOWER(email) LIKE ?)
       ORDER BY first_name ASC
@@ -523,7 +524,7 @@ router.get("/contacts", async (req, res) => {
     `).all(...idList, isDemo, `%${search}%`, `%${search}%`);
   } else {
     users = await db.prepare(`
-      SELECT id, first_name, last_name, role, email, profile_photo, avatar_url FROM users
+      SELECT id, first_name, last_name, role, email, ${hasPhotoSql('')} FROM users
       WHERE id IN (${placeholders}) AND COALESCE(is_demo, 0) = ? AND is_active = 1
       ORDER BY first_name ASC
     `).all(...idList, isDemo);
@@ -565,7 +566,10 @@ router.get("/conversations/:id", async (req, res) => {
       -- replaced IN THE DATABASE. The caption and originalName survive, which is why this is a
       -- surgical replace rather than dropping metadata for photo rows: the caption renders
       -- under the photo and is not recoverable from anywhere else the client reads.
-      regexp_replace(m.metadata, '"photoUrl"\s*:\s*"data:[^"]*"', '"hasPhoto":true') AS metadata,
+      -- v1.106.8 — matches an "r2:" marker as well as inline base64. With R2 on, photoUrl becomes
+      -- "r2:message-photo/..." which the old pattern did not match, so the marker would have
+      -- ridden out to the client and Messages.js would have used it as an <img src> verbatim.
+      regexp_replace(m.metadata, '"photoUrl"\s*:\s*"(data:|r2:)[^"]*"', '"hasPhoto":true') AS metadata,
         su.first_name AS sender_first_name, su.last_name AS sender_last_name
       FROM messages m
       JOIN users su ON m.sender_id = su.id
@@ -634,7 +638,10 @@ router.get("/conversations/:id", async (req, res) => {
       -- replaced IN THE DATABASE. The caption and originalName survive, which is why this is a
       -- surgical replace rather than dropping metadata for photo rows: the caption renders
       -- under the photo and is not recoverable from anywhere else the client reads.
-      regexp_replace(m.metadata, '"photoUrl"\s*:\s*"data:[^"]*"', '"hasPhoto":true') AS metadata,
+      -- v1.106.8 — matches an "r2:" marker as well as inline base64. With R2 on, photoUrl becomes
+      -- "r2:message-photo/..." which the old pattern did not match, so the marker would have
+      -- ridden out to the client and Messages.js would have used it as an <img src> verbatim.
+      regexp_replace(m.metadata, '"photoUrl"\s*:\s*"(data:|r2:)[^"]*"', '"hasPhoto":true') AS metadata,
       su.first_name AS sender_first_name, su.last_name AS sender_last_name,
       rm.content AS reply_content, rm.sender_id AS reply_sender_id,
       ru.first_name AS reply_sender_first, ru.last_name AS reply_sender_last
@@ -738,7 +745,9 @@ router.get("/:id/photo", async (req, res) => {
     if (!dataUrl) return res.status(404).json({ error: "Photo not found" });
 
     // v1.106.3 — never echo the stored mime; see src/utils/serveMedia.js.
-    return sendStoredFile(res, String(dataUrl), { allow: IMAGE_MIMES, filename: "photo" });
+    // v1.106.8 — sendStoredFile resolves an "r2:" marker itself and passes a legacy base64
+    // row through untouched, so both shapes read identically.
+    return await sendStoredFile(res, String(dataUrl), { allow: IMAGE_MIMES, filename: "photo" });
   } catch (err) {
     captureException(err, { where: "messages: photo" });
     res.status(500).json({ error: "Could not load that photo" });
@@ -791,7 +800,11 @@ router.post("/conversations/:id/photo", sendLimiter, upload.single("photo"), asy
 
     const msgId = uuid();
     const displayContent = caption || "📷 Photo";
-    const metadata = JSON.stringify({ photoUrl: dataUrl, caption, originalName: req.file.originalname });
+    // v1.106.8 — to R2 when configured, unchanged base64 when not. The reader below already
+    // resolves both shapes, and the list queries strip `photoUrl` on the way out regardless
+    // (regexp_replace -> hasPhoto), so the wire format is unaffected either way.
+    const storedPhoto = await storage.storeFileData("message-photo", dataUrl);
+    const metadata = JSON.stringify({ photoUrl: storedPhoto, caption, originalName: req.file.originalname });
 
     await db.prepare(
       "INSERT INTO messages (id, sender_id, recipient_id, content, conversation_id, message_type, metadata) VALUES (?, ?, ?, ?, ?, 'photo', ?)"
@@ -1067,7 +1080,10 @@ router.get("/:partnerId", async (req, res) => {
       SELECT
         m.id, m.sender_id, m.recipient_id, m.content, m.is_read, m.created_at,
         m.conversation_id, m.message_type, m.reply_to_id, m.sender_label, m.is_deleted, m.updated_at,
-        regexp_replace(m.metadata, '"photoUrl"\s*:\s*"data:[^"]*"', '"hasPhoto":true') AS metadata,
+        -- v1.106.8 — matches an "r2:" marker as well as inline base64. With R2 on, photoUrl becomes
+      -- "r2:message-photo/..." which the old pattern did not match, so the marker would have
+      -- ridden out to the client and Messages.js would have used it as an <img src> verbatim.
+      regexp_replace(m.metadata, '"photoUrl"\s*:\s*"(data:|r2:)[^"]*"', '"hasPhoto":true') AS metadata,
         su.first_name AS sender_first_name, su.last_name AS sender_last_name
       FROM messages m JOIN users su ON m.sender_id = su.id
       WHERE m.conversation_id = ?
@@ -1082,7 +1098,10 @@ router.get("/:partnerId", async (req, res) => {
       SELECT
         m.id, m.sender_id, m.recipient_id, m.content, m.is_read, m.created_at,
         m.conversation_id, m.message_type, m.reply_to_id, m.sender_label, m.is_deleted, m.updated_at,
-        regexp_replace(m.metadata, '"photoUrl"\s*:\s*"data:[^"]*"', '"hasPhoto":true') AS metadata,
+        -- v1.106.8 — matches an "r2:" marker as well as inline base64. With R2 on, photoUrl becomes
+      -- "r2:message-photo/..." which the old pattern did not match, so the marker would have
+      -- ridden out to the client and Messages.js would have used it as an <img src> verbatim.
+      regexp_replace(m.metadata, '"photoUrl"\s*:\s*"(data:|r2:)[^"]*"', '"hasPhoto":true') AS metadata,
         su.first_name AS sender_first_name, su.last_name AS sender_last_name
       FROM messages m JOIN users su ON m.sender_id = su.id
       WHERE ((m.sender_id = ? AND m.recipient_id = ?) OR (m.sender_id = ? AND m.recipient_id = ?))

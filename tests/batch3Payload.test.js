@@ -70,7 +70,9 @@ describe("P1 — images travel as URLs, not as JSON", () => {
     const p = code("src/routes/photos.js");
     expect(p).toMatch(/router\.get\("\/:photoId\/image"/);
     expect(p).toMatch(/mayViewPhoto\(db, req\.params\.photoId, req\.user\)/);
-    expect(p).toMatch(/sendStoredFile\(res, fileData, \{ allow: IMAGE_MIMES/);
+    // v1.106.8 — sendStoredFile resolves the R2 marker itself now, so the row value goes
+    // straight in and there is no intermediate `fileData`.
+    expect(p).toMatch(/await sendStoredFile\(res, row\.photo_url, \{ allow: IMAGE_MIMES/);
   });
 
   test("the streamer answers 404, never 403 — probing ids must tell you nothing", () => {

@@ -35,7 +35,12 @@ describe("it follows the account, not the device", () => {
     // lookup feeding generateToken() after a password change. That one has no business carrying
     // UI preferences, so the test failed on a correct query. Narrow it to the selects that build
     // a user PAYLOAD (the ones already fetching notification_prefs), which is the real property.
-    const selects = (auth.match(/SELECT id, email, role, roles[^"]+FROM users WHERE id = \?/g) || [])
+    // v1.106.8 — these became template literals (the avatar columns were replaced by a
+    // has_photo flag), so a pattern anchored on a double-quoted string with `SELECT id, email`
+    // and no alias prefixes matched nothing and the test passed zero selects, vacuously.
+    // Match the PROPERTY instead — any user-payload select, whatever quoting or aliasing it
+    // uses — and require at least two, so a select that stops carrying prefs still fails.
+    const selects = (auth.match(/SELECT (?:u\.)?id, (?:u\.)?email[\s\S]{0,900}?FROM users(?: u)? WHERE (?:u\.)?id = \?/g) || [])
       .filter((sel) => /notification_prefs/.test(sel));
     expect(selects.length).toBeGreaterThanOrEqual(2);
     for (const sel of selects) expect(sel).toMatch(/ui_prefs/);

@@ -37,7 +37,7 @@ function stubRes() {
 }
 
 describe("the write side refuses anything that is not a verifiable image", () => {
-  test("a text/html payload is rejected", () => {
+  test("a text/html payload is rejected", async () => {
     const r = validateImageDataUrl(HTML_PAYLOAD);
     expect(r.ok).toBe(false);
   });
@@ -70,45 +70,45 @@ describe("the write side refuses anything that is not a verifiable image", () =>
 });
 
 describe("the read side is the backstop for rows written before the write side was fixed", () => {
-  test("a stored text/html payload is not served", () => {
+  test("a stored text/html payload is not served", async () => {
     const res = stubRes();
-    sendStoredFile(res, HTML_PAYLOAD);
+    await sendStoredFile(res, HTML_PAYLOAD);
     expect(res.statusCode).toBe(404);
     expect(res.body).toBeNull();
   });
 
-  test("a stored SVG is not served", () => {
+  test("a stored SVG is not served", async () => {
     const res = stubRes();
-    sendStoredFile(res, SVG_PAYLOAD);
+    await sendStoredFile(res, SVG_PAYLOAD);
     expect(res.statusCode).toBe(404);
   });
 
-  test("a stored remote URL is not redirected to — that was an authenticated open redirect", () => {
+  test("a stored remote URL is not redirected to — that was an authenticated open redirect", async () => {
     const res = stubRes();
-    sendStoredFile(res, "https://evil.example/tracker.png");
+    await sendStoredFile(res, "https://evil.example/tracker.png");
     expect(res.statusCode).toBe(404);
     expect(res.headers.location).toBeUndefined();
   });
 
-  test("a real PNG is served, with the mime from OUR allowlist", () => {
+  test("a real PNG is served, with the mime from OUR allowlist", async () => {
     const res = stubRes();
-    sendStoredFile(res, REAL_PNG);
+    await sendStoredFile(res, REAL_PNG);
     expect(res.statusCode).toBe(200);
     expect(res.headers["content-type"]).toBe("image/png");
     expect(Buffer.isBuffer(res.body)).toBe(true);
   });
 
-  test("what is served is inert even if something unexpected gets through", () => {
+  test("what is served is inert even if something unexpected gets through", async () => {
     const res = stubRes();
-    sendStoredFile(res, REAL_PNG);
+    await sendStoredFile(res, REAL_PNG);
     expect(res.headers["x-content-type-options"]).toBe("nosniff");
     expect(res.headers["content-security-policy"]).toMatch(/default-src 'none'; sandbox/);
     expect(res.headers["content-disposition"]).toMatch(/^inline/);
   });
 
-  test("the filename in Content-Disposition cannot carry a quote or a newline out", () => {
+  test("the filename in Content-Disposition cannot carry a quote or a newline out", async () => {
     const res = stubRes();
-    sendStoredFile(res, REAL_PNG, { filename: 'evil"; x=\n<script>' });
+    await sendStoredFile(res, REAL_PNG, { filename: 'evil"; x=\n<script>' });
     const header = res.headers["content-disposition"];
     // the header legitimately wraps the value in quotes — it is the VALUE that must be clean,
     // so that a crafted file_name cannot close the quote and inject another header parameter

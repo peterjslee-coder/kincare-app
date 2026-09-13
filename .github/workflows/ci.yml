@@ -63,6 +63,12 @@ jobs:
       - name: Frozen migration baseline untouched
         run: npm run lint:frozen-migrations
 
+      # Photos-in-Postgres has been the same outage twice. storage.js has existed since
+      # v1.91.0 to end it and five writers never used it, which is what filled the volume on
+      # Sept 2. A review finds that once; a gate finds the sixth one.
+      - name: Blobs go to object storage, not Postgres
+        run: npm run lint:blobs
+
       - name: Dark-mode contrast
         run: npm run lint:contrast
 

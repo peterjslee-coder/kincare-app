@@ -10,6 +10,7 @@ const { geocodeAddress, buildAddressString } = require("../utils/geocode");
 
 const { MODEL_SONNET, MODEL_HAIKU } = require("../utils/aiModels");
 const { captureException } = require("../utils/sentry");
+const storage = require("../utils/storage");
 // ─── v1.105.122: a point the client already had beats no point at all ───
 //
 // Both handlers below geocode the typed address, which is the right primary source: it is
@@ -419,7 +420,8 @@ router.put("/:id/photo", requireRole("family"), async (req, res) => {
     const okPhoto = validateImageDataUrl(photo);
     if (!okPhoto.ok) return res.status(400).json({ error: okPhoto.error });
 
-    await db.prepare("UPDATE care_recipients SET photo = ?, updated_at = NOW() WHERE id = ?").run(photo, req.params.id);
+    const stored = await storage.storeFileData("recipient-photo", photo);
+    await db.prepare("UPDATE care_recipients SET photo = ?, updated_at = NOW() WHERE id = ?").run(stored, req.params.id);
     res.json({ message: "Photo updated", photoUrl: `/api/media/recipient/${req.params.id}/photo` });
   } catch (err) {
     console.error("Care recipient photo upload error:", err);
