@@ -591,13 +591,50 @@ const apiLimiter = rateLimit({
 app.use("/api/", apiLimiter);
 
 // ─── Serve Frontend ───
-// Prevent browser from caching index.html so users always get fresh JS references
+//
+// v1.106.6 — this used to send `no-store` on EVERY .js and .css, which defeated the browser
+// cache, Cloudflare's edge and the service worker in one line. Every visit, every navigation,
+// every deploy re-downloaded the whole client: ~700 KB compressed, on a caregiver's phone, on
+// cellular, before anything appeared.
+//
+// The `?v=build-<hash>` scheme already guarantees freshness — the URL changes when the bytes
+// change — so the hashed assets can be cached forever. What must NEVER be cached is the small
+// set of files that POINT at them: index.html and the service worker. Those stay `no-store`,
+// because a stale index.html is how a user gets pinned to a build that no longer exists.
+const IMMUTABLE_PREFIXES = ["/js-compiled/", "/vendor/", "/css/", "/icons/", "/fonts/"];
+const NEVER_CACHE_PATHS = new Set(["/", "/index.html", "/sw.js", "/manifest.json", "/business.html"]);
+
 app.use((req, res, next) => {
-  if (req.path === "/" || req.path === "/index.html" || req.path.endsWith(".js") || req.path.endsWith(".css")) {
+  if (NEVER_CACHE_PATHS.has(req.path)) {
     res.set("Cache-Control", "no-cache, no-store, must-revalidate");
     res.set("Pragma", "no-cache");
     res.set("Expires", "0");
+    return next();
   }
+  // Only fingerprinted requests get the immutable treatment. A hashed asset fetched WITHOUT
+  // ?v= (a hand-typed URL, an old service worker, a native shell that lost its query string)
+  // gets a short revalidating cache instead — long enough to help, short enough to recover.
+  if (IMMUTABLE_PREFIXES.some((prefix) => req.path.startsWith(prefix))) {
+    res.set("Cache-Control", req.query.v
+      ? "public, max-age=31536000, immutable"
+      : "public, max-age=300, must-revalidate");
+    return next();
+  }
+  // Anything else that looks like client code — including the raw /js/** sources, which are
+  // no longer referenced by index.html but are still on disk — revalidates every time.
+  if (req.path.endsWith(".js") || req.path.endsWith(".css")) {
+    res.set("Cache-Control", "no-cache, must-revalidate");
+  }
+  next();
+});
+
+// v1.106.6 — source maps are built, but they are NOT the public's business. bundle.js.map is
+// 4.2 MB of `sourcesContent`: the entire client source, comments and all, including the ones
+// that name real users by name while explaining a bug they hit. The build now writes maps
+// outside public/, so this is a belt to that braces — a stray .map in public/ from an older
+// build, or from someone's local run, still does not get served.
+app.use((req, res, next) => {
+  if (req.path.endsWith(".map")) return res.status(404).end();
   next();
 });
 // Apple App Site Association — must serve as application/json (no file extension)
@@ -709,7 +746,7 @@ app.use("/api/media", require("./routes/media"));
 app.use("/api/safety", require("./routes/safety"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.106.5";
+const APP_VERSION = "1.106.6";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION });

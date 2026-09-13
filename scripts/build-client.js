@@ -16,6 +16,7 @@ const MINIFY = process.env.MINIFY !== "0";
 
 const PUBLIC = path.join(__dirname, "..", "public");
 const OUT_DIR = path.join(PUBLIC, "js-compiled");
+const MAP_DIR = path.join(__dirname, "..", "build", "maps"); // outside public/ — never served
 
 // Source files in dependency order.
 // v1.85 (infra #5): split into CORE (everyone) and ADMIN (lazy-loaded via
@@ -158,10 +159,14 @@ async function buildBundle(fileList, label) {
     compress: { passes: 2 },
     mangle: true, // toplevel stays false (default) — see note above
     format: { comments: false },
+    // v1.106.6 — no `url:` on purpose. The map is still produced (it is what makes a Sentry
+    // stack readable), but the shipped bundle must not advertise where to find it, and the
+    // map itself no longer lands in public/. bundle.js.map is 4.2 MB of full `sourcesContent`
+    // — the entire client source with every comment, including the ones that name real users
+    // while explaining a bug they hit. That was being served to anyone who asked.
     sourceMap: {
       content: result.map,
       filename: `${label}.js`,
-      url: `${label}.js.map`,
     },
   });
   if (!min.code) {
@@ -183,17 +188,28 @@ const adminCode = admin.code;
 
 fs.writeFileSync(path.join(OUT_DIR, "bundle.js"), coreCode, "utf-8");
 fs.writeFileSync(path.join(OUT_DIR, "bundle-admin.js"), adminCode, "utf-8");
-if (core.map) fs.writeFileSync(path.join(OUT_DIR, "bundle.js.map"), core.map, "utf-8");
-if (admin.map) fs.writeFileSync(path.join(OUT_DIR, "bundle-admin.js.map"), admin.map, "utf-8");
+// Maps go to build/maps/, which is gitignored and outside the static root. Keep any map an
+// older build left in public/js-compiled from lingering there.
+if (!fs.existsSync(MAP_DIR)) fs.mkdirSync(MAP_DIR, { recursive: true });
+if (core.map) fs.writeFileSync(path.join(MAP_DIR, "bundle.js.map"), core.map, "utf-8");
+if (admin.map) fs.writeFileSync(path.join(MAP_DIR, "bundle-admin.js.map"), admin.map, "utf-8");
+for (const stale of ["bundle.js.map", "bundle-admin.js.map"]) {
+  const p = path.join(OUT_DIR, stale);
+  if (fs.existsSync(p)) { fs.unlinkSync(p); console.log(`  removed stale ${stale} from public/`); }
+}
 console.log(`  bundle.js:       ${(Buffer.byteLength(coreCode, "utf-8") / 1024).toFixed(1)} KB${MINIFY ? " (minified)" : ""}`);
 console.log(`  bundle-admin.js: ${(Buffer.byteLength(adminCode, "utf-8") / 1024).toFixed(1)} KB${MINIFY ? " (minified)" : ""}`);
 
 // ─── Auto-bump cache-buster in sw.js and index.html ───
 // Uses content hash + timestamp so SW always updates on every deploy.
 // Hash covers BOTH bundles so an admin-only change still busts caches.
+// v1.106.6 — content hash ONLY. This used to append Date.now(), which meant every container
+// restart — a crash-loop restart included — invented a new cache key for byte-identical files.
+// Each restart cost every device three fresh downloads and a spurious "App updated" reload,
+// for a build that had not changed. The hash covers BOTH bundles, so an admin-only change
+// still busts the cache; if the hash is the same, nothing changed and nothing should refetch.
 const bundleHash = crypto.createHash("md5").update(coreCode).update(adminCode).digest("hex").slice(0, 8);
-const buildTs = Date.now().toString(36);
-const buildVersion = `build-${bundleHash}-${buildTs}`;
+const buildVersion = `build-${bundleHash}`;
 
 // Update sw.js CACHE_NAME and SW_VERSION
 const swPath = path.join(PUBLIC, "sw.js");

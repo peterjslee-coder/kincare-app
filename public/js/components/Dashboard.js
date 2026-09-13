@@ -493,12 +493,16 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
         fetchDashboard();
       }
     };
+    // v1.106.6 — this visibilitychange listener was added with an inline arrow and never
+    // removed, so every mount of Dashboard left one behind. Navigate to Messages and back ten
+    // times and ten stale listeners each fire a dashboard refetch on the next tab focus. Name
+    // the handler so the cleanup can actually remove it.
+    const onVisible = () => { if (document.visibilityState === 'visible') onFocus(); };
     window.addEventListener('focus', onFocus);
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') onFocus();
-    });
+    document.addEventListener('visibilitychange', onVisible);
     return () => {
       window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisible);
     };
   }, []);
 

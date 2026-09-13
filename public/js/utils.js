@@ -1043,6 +1043,55 @@ function probeSocket() {
 }
 window.__probeSocket = probeSocket;
 
+// ─── v1.106.6 — a poll that runs in a hidden tab is a request nobody asked for ───
+//
+// Three background polls in app.js (unread messages 30s, admin alerts 60s, notification count
+// 30s) ran forever regardless of whether anyone was looking. A phone in a pocket with the PWA
+// open, or a laptop tab left open overnight, made thousands of authenticated requests a day
+// each — every one a database round trip — to keep a badge current that nobody was reading.
+// That is most of the app's idle load and all of it is waste.
+//
+// Two rules: skip the tick while the page is hidden, and fetch once on becoming visible, so
+// the badge is right the moment it is actually seen. Not a hook — an ordinary function called
+// from inside useEffect, returning the cleanup — so it carries no rules-of-hooks baggage.
+const startVisiblePoll = window.startVisiblePoll = (fn, ms) => {
+  let stopped = false;
+  const run = () => { if (!stopped && document.visibilityState === 'visible') fn(); };
+  run();
+  const interval = setInterval(run, ms);
+  const onVisible = () => { if (document.visibilityState === 'visible') run(); };
+  document.addEventListener('visibilitychange', onVisible);
+  return () => {
+    stopped = true;
+    clearInterval(interval);
+    document.removeEventListener('visibilitychange', onVisible);
+  };
+};
+
+// ─── v1.106.6 — warm the video SDK the moment a call starts, not when it is answered ───
+//
+// twilio-video.min.js is 624 KB and used to be a synchronous <script> on every page load, for
+// everyone, whether or not they ever placed a call. It is lazy now (VideoCallOverlay has had
+// its own loader with CDN fallbacks since v1.105.140), and the only cost of that is the
+// download landing at answer time. So don't wait for answer time: the instant a call is
+// ringing — outgoing or incoming — start fetching in the background. By the time a human has
+// reached for the phone the SDK is there.
+//
+// Deliberately fire-and-forget. If it fails, VideoCallOverlay's loader tries again with its
+// full fallback chain and reports properly; this is a head start, not a dependency.
+let _twilioWarming = false;
+const warmVideoSdk = window.warmVideoSdk = () => {
+  if (_twilioWarming || (window.Twilio && window.Twilio.Video)) return;
+  _twilioWarming = true;
+  try {
+    const s = document.createElement('script');
+    s.src = '/vendor/twilio-video.min.js';
+    s.async = true;
+    s.onerror = () => { _twilioWarming = false; };
+    document.head.appendChild(s);
+  } catch { _twilioWarming = false; }
+};
+
 let _refusedForConnectionCap = false;
 
 const connectSocket = window.connectSocket = (token) => {

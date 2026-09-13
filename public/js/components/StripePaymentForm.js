@@ -24,7 +24,12 @@ const StripePaymentForm = window.StripePaymentForm = ({ amount, description, onS
         }
 
         if (cancelled) return;
-        const stripeInstance = Stripe(config.publishableKey);
+        // v1.106.6 — Stripe.js is no longer a synchronous <script> in index.html; it was
+        // blocking every page load on a third-party host for a form most people never open.
+        // Load it here, where it is actually needed.
+        const StripeCtor = await window.__loadStripeJs();
+        if (cancelled) return;
+        const stripeInstance = StripeCtor(config.publishableKey);
         setStripe(stripeInstance);
 
         // Mount card element

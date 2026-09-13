@@ -9,7 +9,7 @@ Hand-written sections (§3 "Where is…") are preserved across regeneration; edi
 
 Structure at last generation: 523 HTTP routes across 55 mounts ·
 91 `CREATE TABLE` statements · 9 background jobs · 36 socket events
-(15 with no client listener) · 58 push event types · 54 `window.__*` globals.
+(15 with no client listener) · 58 push event types · 55 `window.__*` globals.
 
 ---
 
@@ -126,15 +126,15 @@ Every job runs through `guardedPoller` → `withPollerLock` (`src/models/databas
 
 | Lock | Job | Interval | Declared |
 |---:|---|---|---|
-| 101 | Daily demo data refresh | 24 h | `src/server.js:920` |
-| 102 | Session notification poller (every 60s) | 1 min | `src/server.js:1014` |
-| 103 | Session Accountability Poller | 1 min | `src/server.js:1273` |
-| 104 | Reimbursement push digest sweeper (v1.98.15) | 30 s | `src/server.js:1292` |
-| 105 | Auto-pay cron: charge overdue sessions | 5 min | `src/server.js:1386` |
-| 106 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1505` |
-| 107 | Care Tasks poller (v1.99.0) | 1 min | `src/server.js:1515` |
-| 108 | Care Events poller (v1.100.0) | 1 min | `src/server.js:1533` |
-| 109 | Kindred Reminder Delivery Poller | 1 min | `src/server.js:1308` |
+| 101 | Daily demo data refresh | 24 h | `src/server.js:957` |
+| 102 | Session notification poller (every 60s) | 1 min | `src/server.js:1051` |
+| 103 | Session Accountability Poller | 1 min | `src/server.js:1310` |
+| 104 | Reimbursement push digest sweeper (v1.98.15) | 30 s | `src/server.js:1329` |
+| 105 | Auto-pay cron: charge overdue sessions | 5 min | `src/server.js:1423` |
+| 106 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1542` |
+| 107 | Care Tasks poller (v1.99.0) | 1 min | `src/server.js:1552` |
+| 108 | Care Events poller (v1.100.0) | 1 min | `src/server.js:1570` |
+| 109 | Kindred Reminder Delivery Poller | 1 min | `src/server.js:1345` |
 
 ---
 
@@ -250,6 +250,7 @@ State travels through `window`, not props. This table is the registry.
 | `window.__handlePushNavigate` | app.js | 12 |
 | `window.__hasActiveSession` | app.js | 6 |
 | `window.__isAdmin` | app.js | 2 |
+| `window.__loadStripeJs` | — | 1 |
 | `window.__navHistory` | app.js | 3 |
 | `window.__navigateTo` | app.js | 50 |
 | `window.__openConversationId` | Messages.js, utils.js | 5 |

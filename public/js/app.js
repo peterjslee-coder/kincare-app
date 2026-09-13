@@ -885,9 +885,9 @@ const App = () => {
         }
       } catch {}
     };
-    fetchUnread();
-    const interval = setInterval(fetchUnread, 30000); // refresh every 30s
-    return () => clearInterval(interval);
+    // v1.106.6 — only while the tab is visible; `new_message` over the socket already keeps
+    // this badge honest for anyone actually looking at the app.
+    return startVisiblePoll(fetchUnread, 30000);
   }, [appState, currentUser?.id]);
 
   // ─── Admin alert count polling (admin users only) ───
@@ -907,9 +907,7 @@ const App = () => {
     // suppressible by the snapshot, so the honest count after a dismiss is whatever the server
     // still says is outstanding.
     window.__refetchAdminAlerts = fetchAlerts;
-    fetchAlerts();
-    const interval = setInterval(fetchAlerts, 60000); // refresh every 60s
-    return () => clearInterval(interval);
+    return startVisiblePoll(fetchAlerts, 60000);
   }, [appState, currentUser?.id, currentUser?.isAdmin]);
 
   // ─── In-app notification count polling (v1.56.0) ───
@@ -924,9 +922,7 @@ const App = () => {
         }
       } catch {}
     };
-    fetchNotifCount();
-    const interval = setInterval(fetchNotifCount, 30000);
-    return () => clearInterval(interval);
+    return startVisiblePoll(fetchNotifCount, 30000);
   }, [appState, currentUser?.id]);
 
   // ─── Version heartbeat — notify (not auto-reload) when a new deploy lands ───
@@ -999,6 +995,8 @@ const App = () => {
   useEffect(() => {
     if (typeof onSocketEvent !== 'function') return;
     const cleanup = onSocketEvent('call_incoming', (data) => {
+      // Start pulling the 624 KB video SDK now, while the phone is still ringing (v1.106.6).
+      if (typeof warmVideoSdk === 'function') warmVideoSdk();
       // If on Messages page, the Messages component handles the banner UI
       // But always fire browser notification if tab is hidden/unfocused
       // v1.105.49 — navigate FIRST. This used to come after `new Notification(...)`, which

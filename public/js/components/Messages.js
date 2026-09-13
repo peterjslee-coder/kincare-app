@@ -1207,6 +1207,8 @@ const Messages = window.Messages = () => {
 
     // Signal the other user via Socket.io
     if (otherMember && window._socket) {
+      // Warm the video SDK as the outgoing call starts ringing (v1.106.6).
+      if (typeof warmVideoSdk === 'function') warmVideoSdk();
       window._socket.emit('call_invite', {
         targetUserId: otherMember.id,
         roomName: roomName,
@@ -1305,6 +1307,7 @@ const Messages = window.Messages = () => {
       setRingStatus(data?.via || null);
     });
     const cleanup = onSocketEvent('call_incoming', (data) => {
+      if (typeof warmVideoSdk === 'function') warmVideoSdk();
       if (!callState.active) {
         setIncomingCall(data);
         // Auto-dismiss after 30 seconds if not answered

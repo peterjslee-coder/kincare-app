@@ -49,7 +49,7 @@
   <!-- PWA Manifest -->
   <link rel="manifest" href="/manifest.json">
 
-  <link rel="stylesheet" href="/css/styles.css?v=build-020118d1-mtzc1ydj">
+  <link rel="stylesheet" href="/css/styles.css?v=build-677528e4">
 
   <!-- Leaflet CSS for maps (self-hosted — no CDN dependency) -->
   <link rel="stylesheet" href="/vendor/leaflet.css">
@@ -70,18 +70,51 @@
   <script src="/vendor/socket.io.min.js"></script>
   <!-- Leaflet JS for maps (self-hosted — no CDN dependency) -->
   <script src="/vendor/leaflet.js"></script>
-  <!-- Stripe.js for payments (no SRI — Stripe serves dynamic versions) -->
-  <script src="https://js.stripe.com/v3/"></script>
-  <!-- Stripe Connect.js for embedded onboarding (no SRI — dynamic) -->
-  <script src="https://connect-js.stripe.com/v1.0/connect.js" async></script>
-  <!-- Twilio Video SDK for in-app video/voice calls (self-hosted — no CDN dependency) -->
-  <script src="/vendor/twilio-video.min.js"></script>
+  <!--
+    v1.106.6 — three script tags were removed from here, and none of them were being used by
+    the page that paid for them:
+
+      js.stripe.com/v3          synchronous and external. It blocked everything below it on a
+                                third-party host, on every single page load, for one component
+                                (StripePaymentForm) that most people never open. It now loads
+                                itself, on demand, via window.__loadStripeJs() below.
+      connect-js.stripe.com     dead. The embedded Connect flow was replaced by the redirect
+                                flow (CareRecipients.handleStripeConnect) and nothing has
+                                called loadConnectAndInitialize since. One fewer third-party
+                                origin that can white-screen the app.
+      /vendor/twilio-video      624 KB, shipped to every visitor including the ones who will
+                                never place a call. VideoCallOverlay has had its own loader
+                                with CDN fallbacks since v1.105.140 — this tag only meant the
+                                loader never had anything to do. utils.js now warms it when a
+                                call actually starts ringing, so answering is no slower.
+  -->
+  <script>
+    // On-demand Stripe.js. Returns the same promise to concurrent callers, so mounting two
+    // payment forms loads one script. Rejects rather than hanging if Stripe is unreachable —
+    // the caller already shows "Payment system is not configured yet".
+    window.__loadStripeJs = (function () {
+      var p = null;
+      return function () {
+        if (window.Stripe) return Promise.resolve(window.Stripe);
+        if (p) return p;
+        p = new Promise(function (resolve, reject) {
+          var s = document.createElement('script');
+          s.src = 'https://js.stripe.com/v3/';
+          s.async = true;
+          s.onload = function () { window.Stripe ? resolve(window.Stripe) : reject(new Error('Stripe.js loaded but window.Stripe is missing')); };
+          s.onerror = function () { p = null; reject(new Error('Stripe.js could not be loaded')); };
+          document.head.appendChild(s);
+        });
+        return p;
+      };
+    })();
+  </script>
 
   <!-- Pre-compiled app bundle (built by scripts/build-client.js) -->
   <script>
-    window.APP_VERSION = '1.106.5';
+    window.APP_VERSION = '1.106.6';
     // v1.85: admin components live in a separate lazy bundle (infra #5)
-    window.__ADMIN_BUNDLE_URL = '/js-compiled/bundle-admin.js?v=build-020118d1-mtzc1ydj';
+    window.__ADMIN_BUNDLE_URL = '/js-compiled/bundle-admin.js?v=build-677528e4';
   </script>
   <script>
     // ─── Theme initialization ───
@@ -133,7 +166,7 @@
       });
     })();
   </script>
-  <script src="/js-compiled/bundle.js?v=build-020118d1-mtzc1ydj"></script>
+  <script src="/js-compiled/bundle.js?v=build-677528e4"></script>
 
   <script>
     // Service worker: register/update and auto-reload on new version

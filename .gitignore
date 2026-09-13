@@ -27,3 +27,8 @@ FEEDBACK_INBOX.md
 *.mobileprovision
 *.p12
 *.cer
+
+# v1.106.6 — source maps are built for stack traces but never served or committed:
+# bundle.js.map is 4.2MB of full sourcesContent, comments and all.
+build/maps/
+public/js-compiled/*.map
