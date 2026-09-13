@@ -101,15 +101,22 @@ const CareEventHeroRow = window.CareEventHeroRow = ({ ev, onOpenSheet, msUntil }
 
   // Deliberately not a live-ticking countdown. The session hero counts down because someone is
   // arriving at your door; an appointment is somewhere you have to BE, so the useful framing is
-  // the day and the hour, not the minute.
+  // the DAY, which is what Pete asked for: "so that it stands out that it's tomorrow".
+  //
+  // "In 20h 0m" is technically the same fact and lands as noise — you have to do arithmetic to
+  // learn the one thing you wanted. The hour only becomes the useful unit once it is today, and
+  // the minute only inside the hour.
+  // getDaysUntil already answers this in the care timezone — 0 today, 1 tomorrow — and is what
+  // getDateLabel uses, so the hero and the line beneath it can never disagree about the day.
+  const days = TimezoneHelper.getDaysUntil(ev.event_date, tz);
   let lead;
   if (started) lead = 'Happening now';
   else if (withinAnHour) lead = `In ${Math.max(1, Math.round(msUntil / 60000))} min`;
-  else {
+  else if (days <= 0) {
     const hrs = Math.floor(msUntil / 3600000);
-    const mins = Math.floor((msUntil % 3600000) / 60000);
-    lead = hrs >= 1 ? `In ${hrs}h ${mins}m` : `In ${mins}m`;
-  }
+    lead = hrs >= 1 ? `Today · in ${hrs}h` : 'Today';
+  } else if (days === 1) lead = 'Tomorrow';
+  else lead = `In ${Math.floor(msUntil / 3600000)}h`;
 
   const borderColor = withinAnHour ? 'var(--accent-color)' : 'var(--role-color)';
   const bg = withinAnHour

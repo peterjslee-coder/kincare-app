@@ -70,6 +70,35 @@ describe("I2 — what counts as imminent", () => {
   });
 });
 
+describe("I2b — the label says the thing Pete asked it to say", () => {
+  const fn = events.slice(events.indexOf("const CareEventHeroRow"), events.indexOf("const CareEventHeroRow") + 3500);
+
+  test("tomorrow reads 'Tomorrow', not an hour count", () => {
+    // "In 20h 0m" is the same fact and lands as noise — you have to do arithmetic to learn the
+    // one thing you wanted. Pete: "so that it stands out that it's tomorrow".
+    expect(fn).toMatch(/days === 1\) lead = 'Tomorrow'/);
+    expect(fn).not.toMatch(/lead = `In \$\{hrs\}h \$\{mins\}m`/);
+  });
+
+  test("the hour only matters once it's today, and the minute inside the hour", () => {
+    expect(fn).toMatch(/days <= 0/);
+    expect(fn).toMatch(/Today · in \$\{hrs\}h/);
+    expect(fn).toMatch(/withinAnHour\) lead = `In \$\{Math\.max\(1,/);
+  });
+
+  test("the day comes from the same helper the line beneath it uses", () => {
+    // Otherwise the badge could say Tomorrow while the detail line says a date, or vice versa.
+    expect(fn).toMatch(/TimezoneHelper\.getDaysUntil\(ev\.event_date, tz\)/);
+    expect(events).toMatch(/const careEventWhen = \(ev, tz\) => \{[\s\S]{0,200}getDateLabel/);
+  });
+
+  test("getDaysUntil is really exported — a typo here would silently kill the label", () => {
+    const tzsrc = code("public/js/components/TimezoneHelper.js");
+    expect(tzsrc).toMatch(/function getDaysUntil\(dateStr, tz\)/);
+    expect(tzsrc).toMatch(/^\s*getDaysUntil,$/m);
+  });
+});
+
 describe("I3 — promoted means moved, not copied", () => {
   test("an imminent event is filtered OUT of the Next Up list", () => {
     const i = dash.indexOf("const careEventItems = (careEventsUpcoming?.events || [])");
