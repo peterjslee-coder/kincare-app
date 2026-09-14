@@ -16,18 +16,36 @@ const { code } = require("./helpers/source");
 const src = code("scripts/collect-feedback.js");
 
 describe("the address the script presents", () => {
-  test("is pinned to one family", () => {
-    expect(src).toContain("family: IP_FAMILY");
-  });
-
   test("Happy Eyeballs is explicitly off", () => {
     // `family` alone is not enough on Node 20+: autoSelectFamily defaults on and will still
-    // race both records unless it is disabled.
+    // race both records unless it is disabled. That race is the entire bug.
     expect(src).toContain("autoSelectFamily: false");
   });
 
-  test("defaults to IPv4 but can be overridden", () => {
-    expect(src).toContain('Number(process.env.INPLACE_IP_FAMILY || 4)');
+  test("IPv6 is tried FIRST — it is the family the browser uses", () => {
+    // v1.106.36. v1.106.35 pinned to IPv4 on the reasoning that a residential IPv4 is
+    // stable. Wrong half of the problem: only a BROWSER can verify an address via passkey,
+    // so the script must present the family the browser does. Pete's trusted list is three
+    // rows and every one is IPv6 — there is no IPv4 row and there never would have been,
+    // because the browser that would create one does not use IPv4.
+    expect(src).toContain("const FAMILY_ORDER = IP_FAMILY ? [IP_FAMILY] : [6, 4];");
+  });
+
+  test("the families are tried in ORDER, never raced", () => {
+    // A fallback is fine; a race is not. Racing is what made the address unpredictable.
+    expect(src).toContain("for (const family of FAMILY_ORDER)");
+    expect(src).not.toMatch(/Promise\.(race|any)\(/);
+  });
+
+  test("it only falls back when the family genuinely cannot connect", () => {
+    // A 403 from the admin gate must NOT trigger a retry on the other family — that would
+    // present two addresses for one command and put the flip straight back.
+    expect(src).toContain("if (!isUnreachable(err)) throw err;");
+    expect(src).toContain('"ENETUNREACH", "EHOSTUNREACH"');
+  });
+
+  test("the family can still be forced", () => {
+    expect(src).toContain("process.env.INPLACE_IP_FAMILY");
   });
 
   test("every request goes through the one helper that sets it", () => {
@@ -40,6 +58,11 @@ describe("the address the script presents", () => {
 });
 
 describe("when the gate refuses", () => {
+  test("it names both families, since either could be the one that needs verifying", () => {
+    expect(src).toContain("tries IPv6 first and only");
+    expect(src).toContain("INPLACE_IP_FAMILY=6 (or 4)");
+  });
+
   test("it says what to do, not just what happened", () => {
     expect(src).toContain("This network hasn't been verified for admin access yet");
     expect(src).toContain("go to the Admin panel — it will prompt for your passkey");

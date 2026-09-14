@@ -35,24 +35,38 @@ const isMarkReviewed = process.argv.includes("--mark-reviewed");
 const isPull = process.argv.includes("--pull");
 const BASE_URL = isLocal ? LOCAL_URL : PROD_URL;
 
-// ─── v1.106.35 — pin to one address family ───
+// ─── v1.106.36 — leave by the door that is already open ───
 //
 // Pete's pull failed twice in one day with IP_VERIFICATION_REQUIRED from two DIFFERENT
-// addresses: 2606:a800:9d80:... in the morning and 204.111.165.7 in the evening. Same
-// machine, same desk. v1.106.21 fixed the first one — macOS rotates the low 64 bits of an
-// IPv6 address daily, so trust is keyed on the /64 now.
+// addresses, same machine, same desk: 2606:a800:9d80:2630:... in the morning and
+// 204.111.165.7 in the evening. Node 18+ dials dual-stack hosts with Happy Eyeballs
+// (autoSelectFamily): it races the A and AAAA records and keeps whichever connects first, so
+// the same command presents a different address run to run.
 //
-// This is the other half, and it is this script's fault rather than the server's. Node 18+
-// dial dual-stack hosts with Happy Eyeballs (autoSelectFamily): it races A and AAAA and
-// keeps whichever connects first. So the same command leaves by IPv6 on one run and IPv4 on
-// the next, presents a different address each way, and the admin gate quite correctly does
-// not recognise it. Verifying one does nothing for the other, and there is no number of
-// passkey prompts that ends it.
+// v1.106.35 pinned that to IPv4 on the reasoning that a residential IPv4 is stable. That was
+// the wrong half. The constraint is not stability — it is that ONLY A BROWSER CAN VERIFY AN
+// ADDRESS, via passkey, so the script has to present the same family the browser does. His
+// trusted list is three rows and every one is IPv6:
 //
-// Pinning to IPv4 makes the address stable and predictable: verify once, trusted for 90
-// days. IPv4 because it is the one a residential connection always has, and because
-// ipTrustKey treats a single IPv4 as the household exactly — no prefix to get wrong.
-const IP_FAMILY = Number(process.env.INPLACE_IP_FAMILY || 4);
+//   2606:a800:9d80:2630:b938:...  Mac / Chrome     (the machine this runs on)
+//   2606:a800:9d80:2630:288d:...  iPhone, home
+//   2605:59c0:54b:cb10:e19a:...   iPhone, cellular
+//
+// There is no IPv4 row and there never will be, because the browser that would create one
+// does not use IPv4. Pinning to v4 asked him to verify an address he had no way to verify.
+//
+// IPv6 first, then. His Mac's /64 has been trusted since Sept 13 and v1.106.21 keys on the
+// /64, so this works with no passkey prompt at all. IPv4 remains as a FALLBACK — tried only
+// when IPv6 cannot connect, never raced against it, so the address stays deterministic on
+// any given network. On a v6-less network it will present the v4 address and the explainer
+// below says what to do about it.
+const IP_FAMILY = process.env.INPLACE_IP_FAMILY ? Number(process.env.INPLACE_IP_FAMILY) : null;
+const FAMILY_ORDER = IP_FAMILY ? [IP_FAMILY] : [6, 4];
+
+/** True for the errors that mean "this address family cannot get there from here". */
+function isUnreachable(err) {
+  return ["ENETUNREACH", "EHOSTUNREACH", "EAI_AGAIN", "ENOTFOUND", "EAFNOSUPPORT"].includes(err?.code);
+}
 
 /** An unrecognised-network refusal is a two-minute fix, not a bug. Say so. */
 function explainIpGate(data) {
@@ -66,17 +80,20 @@ function explainIpGate(data) {
   console.error("     2. go to the Admin panel — it will prompt for your passkey");
   console.error("     3. verify, then re-run this script");
   console.error("");
-  console.error("   Trust lasts 90 days per network. This script now pins to IPv" + IP_FAMILY +
-                ", so the address stops changing between runs.");
+  console.error("   Trust lasts 90 days per network. This script tries IPv6 first and only");
+  console.error("   falls back to IPv4, so the address it presents stays the same run to run.");
+  console.error("   Force one with INPLACE_IP_FAMILY=6 (or 4).");
   console.error("");
 }
 
-function request(url, options = {}) {
+function requestOn(family, url, options = {}) {
   return new Promise((resolve, reject) => {
     const mod = url.startsWith("https") ? https : http;
     const req = mod.request(url, {
       method: options.method || "GET",
-      family: IP_FAMILY,
+      family,
+      // `family` alone is not enough on Node 20+: autoSelectFamily defaults on and will
+      // still race both records, which is the whole bug.
       autoSelectFamily: false,
       headers: {
         "Content-Type": "application/json",
@@ -97,6 +114,20 @@ function request(url, options = {}) {
     if (options.body) req.write(JSON.stringify(options.body));
     req.end();
   });
+}
+
+/** Tries each family IN ORDER — never in parallel, so the address we present is predictable. */
+async function request(url, options = {}) {
+  let lastErr;
+  for (const family of FAMILY_ORDER) {
+    try {
+      return await requestOn(family, url, options);
+    } catch (err) {
+      lastErr = err;
+      if (!isUnreachable(err)) throw err; // a real failure, not a family problem
+    }
+  }
+  throw lastErr;
 }
 
 async function getAuthHeaders() {
