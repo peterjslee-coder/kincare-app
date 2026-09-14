@@ -160,6 +160,26 @@ const TimezoneHelper = window.TimezoneHelper = (() => {
   }
 
   /**
+   * The weekday name for a date string ("Tuesday"), in the care location's timezone.
+   *
+   * v1.106.24 — a recurring offer card says "Every Tuesday at 9:00 AM". The weekday comes
+   * from the DATE, not from the recurrence rule: the rule only records how often ("weekly",
+   * "biweekly"). Built here rather than with `new Date(str).getDay()` for the reason this
+   * whole module exists — that parses as UTC midnight and shows the wrong day to anyone west
+   * of Greenwich for the first hours of every date.
+   */
+  function getWeekdayName(dateStr, tz) {
+    const clean = (dateStr || "").split("T")[0];
+    const [y, mo, d] = clean.split("-").map(Number);
+    if (!y || !mo || !d) return "";
+    // Noon UTC: far enough from either midnight that no timezone offset moves the date.
+    const at = new Date(Date.UTC(y, mo - 1, d, 12, 0, 0));
+    try {
+      return at.toLocaleDateString("en-US", { weekday: "long", timeZone: tz || DEFAULT_TZ });
+    } catch { return ""; }
+  }
+
+  /**
    * Get the real current UTC epoch (milliseconds).
    * Use this for all time-until / countdown comparisons.
    *
@@ -184,5 +204,6 @@ const TimezoneHelper = window.TimezoneHelper = (() => {
     formatTimestamp,
     getDateLabel,
     getDaysUntil,
+    getWeekdayName,
   };
 })();

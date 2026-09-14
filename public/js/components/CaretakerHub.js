@@ -22,6 +22,187 @@ const clearCheckOutDraft = (sessionId) => {
   } catch {}
 };
 
+// ─── v1.106.24 — one card for a recurring offer, with the dates on it ───
+//
+// Pete: "Appointments grouped on recurring basis should not require individual acceptance."
+// He chose per-date selection over all-or-nothing, and he is right: a standing Tuesday is an
+// arrangement, but two of the twelve may clash with something, and making her refuse the
+// whole series over one conflict costs the family the other eleven.
+//
+// Everything is ticked to start. The common case is "yes, all of them", and that has to be
+// one tap. Unticking is the exception and the dates only unfold when she asks for them.
+//
+// What she unticks is RELEASED to the open pool by the server in the same transaction, not
+// left sitting under her name until the exclusive window lapses. She has effectively declined
+// those days and the family's clock to find someone else should start immediately.
+const ExclusiveSeriesCard = window.ExclusiveSeriesCard = ({
+  entry, exclusiveNow, profile, claiming, onAccept, onPropose, onDecline,
+}) => {
+  const jobs = entry.jobs;
+  const [openDates, setOpenDates] = React.useState(false);
+  const [picked, setPicked] = React.useState(() => new Set(jobs.map((j) => j.id)));
+
+  // Jobs can vanish under her (someone else takes one, the family cancels it). Keep the
+  // selection to ids that still exist rather than sending the server a stale list it will
+  // 409 — she should not be punished for a card she has had open for ten minutes.
+  React.useEffect(() => {
+    const live = new Set(jobs.map((j) => j.id));
+    setPicked((prev) => {
+      const next = new Set([...prev].filter((id) => live.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [jobs.map((j) => j.id).join(',')]);
+
+  const toggle = (id) => setPicked((prev) => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+
+  const first = jobs[0];
+  const tz = first.timezone || TimezoneHelper.DEFAULT_TZ;
+  const pickedJobs = jobs.filter((j) => picked.has(j.id));
+  const total = pickedJobs.reduce((sum, j) => sum + (jobPay(j).total || 0), 0);
+  const anyBonus = pickedJobs.some((j) => jobPay(j).hasBonus);
+
+  const timeLabel = TimezoneHelper.formatTime(first.time || first.scheduled_time) || '';
+  const cadence = (() => {
+    const rule = first.recurrenceRule;
+    const d = (first.date || '').split('T')[0];
+    // The weekday comes from the date, not the rule — the rule only says how often.
+    const day = TimezoneHelper.getWeekdayName(d, tz);
+    if (rule === 'biweekly') return day ? `Every other ${day}` : 'Every other week';
+    return day ? `Every ${day}` : 'Weekly';
+  })();
+  const span = (() => {
+    const a = TimezoneHelper.getDateLabel((jobs[0].date || '').split('T')[0], tz);
+    const b = TimezoneHelper.getDateLabel((jobs[jobs.length - 1].date || '').split('T')[0], tz);
+    return a && b ? `${a} \u2013 ${b}` : '';
+  })();
+
+  const remaining = exclusiveMinutesLeft(first, exclusiveNow);
+  const urgent = remaining !== null && remaining <= 10;
+
+  const canAccept = profile.caregiverCleared && !profile.accountPaused && picked.size > 0;
+  const acceptLabel = claiming
+    ? 'Accepting\u2026'
+    : profile.accountPaused ? '\u274C Account Paused'
+    : picked.size === 0 ? 'Pick at least one date'
+    : picked.size === jobs.length ? `Accept all ${jobs.length} visits`
+    : `Accept ${picked.size} of ${jobs.length}`;
+
+  return (
+    <div className="card" style={{
+      marginBottom: 10, padding: '16px 18px',
+      border: '2px solid #7c3aed', borderRadius: 12,
+      background: 'var(--bg-exclusive-card)',
+      boxShadow: '0 2px 8px rgba(124,58,237,0.15)',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, flexWrap: 'wrap' }}>
+        <span className={urgent ? 'exclusive-urgent' : ''} style={{
+          background: urgent ? 'var(--accent-color)' : 'var(--color-purple-light)', color: 'var(--text-on-primary)',
+          padding: '3px 10px', borderRadius: 12, fontSize: 12, fontWeight: 700,
+        }}>
+          {remaining !== null ? (urgent ? `\u23F1 ${remaining} min left!` : `\u2728 JUST FOR YOU \u00B7 ${remaining} min left`) : '\u2728 JUST FOR YOU'}
+        </span>
+        <span style={{ background: 'var(--role-color)', color: 'var(--text-on-primary)', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700 }}>
+          {'\uD83D\uDD01'} {jobs.length} VISITS
+        </span>
+        {anyBonus && (
+          <span style={{ background: 'var(--accent-color)', color: 'var(--text-on-primary)', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700 }}>BONUS PAY</span>
+        )}
+      </div>
+
+      <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>{formatServiceType(first.serviceType)}</div>
+      <div style={{ fontSize: 14, color: 'var(--text-secondary)', marginTop: 3 }}>
+        {cadence}{timeLabel ? ` at ${timeLabel}` : ''}{first.durationHours ? ` \u2022 ${first.durationHours}hr each` : ''}
+      </div>
+      {span && <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>{span}</div>}
+      {first.recipientCity && <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>{'\uD83D\uDCCD'} {first.recipientCity}</div>}
+      {first.familyName && <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 1 }}>Requested by {first.familyName}</div>}
+
+      {total > 0 && (
+        <div style={{ marginTop: 8 }}>
+          <span style={{ fontWeight: 800, color: 'var(--role-color)', fontSize: 24 }}>{formatMoney(total)}</span>
+          <span style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 600 }}>
+            {' '}total for {picked.size} visit{picked.size === 1 ? '' : 's'}
+          </span>
+        </div>
+      )}
+
+      <button onClick={() => setOpenDates(!openDates)} style={{
+        display: 'block', marginTop: 10, background: 'none', border: 'none', padding: 0, font: 'inherit',
+        fontSize: 12, fontWeight: 700, color: 'var(--color-purple-light)', cursor: 'pointer',
+      }}>
+        {openDates ? 'Hide dates' : `Choose dates (${picked.size} of ${jobs.length} selected)`}
+      </button>
+
+      {openDates && (
+        <div style={{ marginTop: 8, borderTop: '1px solid var(--border-light)', paddingTop: 8 }}>
+          {jobs.map((j) => {
+            const d = (j.date || '').split('T')[0];
+            const on = picked.has(j.id);
+            return (
+              <label key={j.id} style={{
+                display: 'flex', alignItems: 'center', gap: 10, padding: '7px 2px', cursor: 'pointer',
+                fontSize: 13, color: on ? 'var(--text-primary)' : 'var(--text-muted)',
+              }}>
+                <input type="checkbox" checked={on} onChange={() => toggle(j.id)}
+                  style={{ width: 18, height: 18, accentColor: '#7c3aed', cursor: 'pointer', flexShrink: 0 }} />
+                <span style={{ flex: 1, textDecoration: on ? 'none' : 'line-through' }}>
+                  {TimezoneHelper.getDateLabel(d, j.timezone || tz)}
+                </span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: on ? 'var(--role-color)' : 'var(--text-muted)' }}>
+                  {formatMoney(jobPay(j).total || 0)}
+                </span>
+              </label>
+            );
+          })}
+          <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 6, lineHeight: 1.4 }}>
+            Anything you untick goes back to the open pool so the family can find someone else for that day.
+          </div>
+        </div>
+      )}
+
+      <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+        {first.isOwnRequest ? (
+          <div style={{ padding: '10px 14px', background: 'var(--bg-primary)', border: '1px solid var(--border-light)', borderRadius: 10, fontSize: 11.5, color: 'var(--text-secondary)', lineHeight: 1.45 }}>
+            <strong style={{ display: 'block', color: 'var(--text-primary)', marginBottom: 2 }}>You posted this</strong>
+            It{'\u2019'}s live and others can accept it {'\u2014'} you just can{'\u2019'}t accept your own request.
+          </div>
+        ) : profile.caregiverCleared ? (
+          <button onClick={(e) => { if (canAccept && !claiming) onAccept([...picked], e, total); }}
+            disabled={!canAccept || claiming}
+            title={profile.accountPaused ? 'Your account is paused. Contact support for assistance.' : ''}
+            style={{
+              padding: '12px 24px', background: (!canAccept || claiming) ? 'var(--border-light)' : 'var(--color-purple-light)',
+              color: 'var(--text-on-primary)', border: 'none', borderRadius: 12, fontSize: 15, fontWeight: 700,
+              cursor: (!canAccept || claiming) ? 'not-allowed' : 'pointer',
+              boxShadow: (!canAccept || claiming) ? 'none' : '0 2px 8px rgba(124,58,237,0.3)',
+            }}>{acceptLabel}</button>
+        ) : (
+          <div style={{ padding: '8px 14px', background: 'var(--bg-primary)', borderRadius: 10, fontSize: 11, color: 'var(--text-tertiary)', textAlign: 'center', maxWidth: 140 }}>Complete setup to accept</div>
+        )}
+
+        {/* A time change is per-visit by nature — proposing a new time for twelve visits at
+            once is a different request than the family made. So it opens on the first one. */}
+        {!first.isOwnRequest && (
+          <button onClick={(e) => { e.stopPropagation(); onPropose(first); }} style={{
+            padding: '7px 14px', background: 'var(--bg-surface)', color: 'var(--color-purple-light)',
+            border: '2px solid #7c3aed', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+          }}>Propose Different Time</button>
+        )}
+        {!first.isOwnRequest && first.isDirectedAtMe && (
+          <button onClick={(e) => { e.stopPropagation(); onDecline(first); }} style={{
+            padding: '7px 14px', background: 'none', color: 'var(--text-tertiary)', border: 'none',
+            fontSize: 12, fontWeight: 600, cursor: 'pointer', textDecoration: 'underline',
+          }}>Can't make it</button>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) => {
   const { showToast } = useToast();
   const [data, setData] = useState(null);
@@ -889,6 +1070,43 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       }
     } catch (err) {
       console.error('Claim job error:', err);
+    }
+    setClaimingJobId(null);
+  };
+
+  // v1.106.24 — accept a recurring series in one call. One request, not one per visit: a
+  // client loop leaves her half-booked when call seven fails, and half-booked across a
+  // series is worse than not booked, because the family believes the month is covered.
+  const handleClaimSeries = async (groupId, sessionIds, e, amount) => {
+    const btnEl = e?.currentTarget || null;
+    setClaimingJobId(groupId);
+    try {
+      const res = await apiFetch(`/api/sessions/recurring/${groupId}/claim`, {
+        method: 'PUT', body: JSON.stringify({ sessionIds }),
+      });
+      if (res?.ok) {
+        const d = await res.json().catch(() => ({}));
+        if (amount > 0 && btnEl) flyMoney(Math.round(amount), btnEl);
+        const n = d.claimed || sessionIds.length;
+        showToast && showToast(
+          d.released ? `${n} visit${n === 1 ? '' : 's'} accepted — the other ${d.released} went back to the pool.`
+                     : `${n} visit${n === 1 ? '' : 's'} accepted!`,
+          'success'
+        );
+        const dashRes = await apiFetch('/api/dashboard');
+        if (dashRes?.ok) setData(await dashRes.json());
+      } else {
+        const err = await res.json().catch(() => ({}));
+        showToast && showToast(err.error || 'Could not accept those visits', 'error');
+        // A 409 means her list is stale — reload so she is choosing from what is real.
+        if (res?.status === 409) {
+          const dashRes = await apiFetch('/api/dashboard');
+          if (dashRes?.ok) setData(await dashRes.json());
+        }
+      }
+    } catch (err) {
+      console.error('Claim series error:', err);
+      showToast && showToast('Could not accept those visits', 'error');
     }
     setClaimingJobId(null);
   };
@@ -2211,7 +2429,24 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
             <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-purple-light)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>
               {'\u2728'} Just for You
             </div>
-            {exclusiveOffers.map(job => {
+            {groupExclusiveOffers(exclusiveOffers).map(entry => {
+              // v1.106.24 — a recurring offer is ONE card with the dates on it. See
+              // groupExclusiveOffers in utils.js for why, and whose morning it cost.
+              if (entry.kind === 'series') {
+                return (
+                  <ExclusiveSeriesCard
+                    key={entry.key}
+                    entry={entry}
+                    exclusiveNow={exclusiveNow}
+                    profile={profile}
+                    claiming={claimingJobId === entry.groupId}
+                    onAccept={(ids, e, total) => handleClaimSeries(entry.groupId, ids, e, total)}
+                    onPropose={openProposalModal}
+                    onDecline={setDecliningJob}
+                  />
+                );
+              }
+              const job = entry.job;
               const sDate = (job.date || '').split('T')[0];
               const jobTz = job.timezone || TimezoneHelper.DEFAULT_TZ;
               const dayDiff = sDate ? TimezoneHelper.getDaysUntil(sDate, jobTz) : null;

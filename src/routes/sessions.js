@@ -14,6 +14,8 @@ const { getNowInZone, getTodayStringInZone, buildDateTimeInZone, zonedDateTimeTo
 // server.js. A 4,056-line router is not a library. See each module for what was wrong.
 const { expireStaleProposals } = require("../utils/proposals");
 const { ensureAssignment } = require("../utils/assignments");
+const { caregiverGate, sessionGate, CLAIMABLE } = require("../utils/claimGates");
+const { applySeriesClaim } = require("../utils/seriesClaim");
 const { checkPaymentStanding } = require("../utils/paymentStanding");
 const { generateRecurringDates } = require("../utils/recurrence");
 const { getPlatformFeePercent } = require("../utils/platformFee");
@@ -362,72 +364,20 @@ router.put("/:id/decline", async (req, res) => {
 
 // ─── PUT /api/sessions/:id/claim — Caregiver claims a care request ───
 router.put("/:id/claim", async (req, res) => {
-  const claimRoles = req.user.roles || [req.user.role];
-  if (!claimRoles.includes("caregiver")) {
-    return res.status(403).json({ error: "Only caregivers can claim care requests" });
-  }
-
   const db = await getDb();
-  // ─── v1.105.90: you cannot accept a request you posted yourself ───
-  //
-  // Narrower than v1.105.89, which blocked any job for a recipient you are the family for.
-  // Pete: "if sara posts a job and i have to take it, I'll take the pay for it. do not
-  // prohibit members of the team from also doing things for money if they can't hire
-  // someone." Correct — the point of the team is that the work gets covered, and someone
-  // covering a shift nobody else will take should be paid for it.
-  //
-  // What remains is only the incoherent case: accepting your own request means paying
-  // yourself for it.
-  //
-  // It lives here rather than in the dashboard query because hiding the job made the endpoint
-  // unreachable through the UI while leaving it open to anything that knew a session id — and
-  // the job is now deliberately visible. It runs BEFORE the Stripe/preferences gates so the
-  // reason given is the real one, not "set your care preferences".
-  {
-    const s0 = await db.prepare("SELECT family_user_id FROM care_sessions WHERE id = ?").get(req.params.id);
-    if (s0 && s0.family_user_id === req.user.id) {
-      return res.status(403).json({ error: "You can't accept a request you posted yourself." });
-    }
-  }
 
-  const profile = await db.prepare("SELECT id, background_check_paid, is_background_checked, bg_check_admin_approved, stripe_onboard_complete, is_available, care_stoplight, care_preferences, account_paused FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
-  if (!profile) return res.status(404).json({ error: "Caregiver profile not found" });
-
-  // Gate: account must not be paused
-  if (profile.account_paused) {
-    return res.status(403).json({ error: "Your account is paused. Contact support for assistance." });
-  }
-
-  // Gate: background check — enforced BELOW once the session (and its family) is
-  // known, because an admin vouch is scoped to one family, not the whole platform.
-  // (v1.64.0: the global bg_check_admin_approved bypass is retired; vouches in
-  // bg_admin_vouches are the only non-Checkr path, and only for the vouched family.)
-
-  // Gate: Stripe — skipped for now (not live yet). Admin is_available override also bypasses.
-  // if (!profile.stripe_onboard_complete && !profile.is_available) {
-  //   return res.status(403).json({ error: "You must set up payment (Stripe) before accepting care requests. Go to Account → Payments." });
-  // }
-
-  // Gate: must have set care preferences (stoplight)
-  if (!profile.care_stoplight && !profile.care_preferences) {
-    return res.status(403).json({ error: "Please set your care preferences before accepting jobs. Go to Account → Care Preferences." });
-  }
-
+  // v1.106.24 — these were inline. They moved to utils/claimGates so the recurring-series
+  // claim below enforces the SAME ones rather than a second copy that drifts.
   const session = await db.prepare("SELECT * FROM care_sessions WHERE id = ?").get(req.params.id);
-  if (!session) return res.status(404).json({ error: "Session not found" });
-  if (!["requested", "open", "pending"].includes(session.status)) {
-    return res.status(400).json({ error: "This session is not available for claiming (status: " + session.status + ")" });
-  }
 
-  // Honest background-check gate (v1.64.0):
-  //  - a real Checkr result clears the caregiver for any job;
-  //  - an admin vouch clears them ONLY for the vouched family's jobs.
-  if (!profile.is_background_checked) {
-    const vouched = await hasActiveVouch(db, req.user.id, session.family_user_id);
-    if (!vouched) {
-      return res.status(403).json({ error: "You must complete your background check before accepting care requests. If you have an existing relationship with this family, ask the platform admin to approve you for them." });
-    }
-  }
+  const gate = await caregiverGate(db, req, session);
+  if (gate.error) return res.status(gate.status).json({ error: gate.error });
+  const { profile } = gate;
+
+  if (!session) return res.status(404).json({ error: "Session not found" });
+
+  const sGate = await sessionGate(db, req, session, profile);
+  if (sGate) return res.status(sGate.status).json({ error: sGate.error });
 
   // If interview is required by the family, claim the job but mark as pending interview
   const newStatus = session.interview_required ? 'confirmed' : 'confirmed';
@@ -596,6 +546,129 @@ router.put("/:id/claim", async (req, res) => {
   }
 
   res.json({ session: updated });
+});
+
+// ─── PUT /api/sessions/recurring/:groupId/claim ───
+//
+// v1.106.24 — accept a recurring series in one act, choosing which dates.
+//
+// A recurring direct offer inserts one care_sessions row per occurrence, each carrying
+// offered_to_caregiver_id, and every one of them surfaced as its own full-height "Just for
+// You" card. Twelve Tuesdays meant twelve cards and twelve taps, which is what buried Tina's
+// check-in under eleven of them. Pete: "Appointments grouped on recurring basis should not
+// require individual acceptance."
+//
+// She picks dates, because a standing arrangement is not all-or-nothing — two of the twelve
+// may clash with something. What she does NOT pick is released back to the open pool
+// immediately, in the same transaction: the family still needs those days covered, and
+// leaving them sitting under her name until the exclusive window lapses wastes the time they
+// have to find someone else.
+//
+// Atomic on purpose. The loop-the-client-through-N-calls version leaves her half-booked when
+// call seven fails, and half-booked across a recurring series is worse than not booked: the
+// family believes the month is covered.
+//
+// Registered before POST "/" and above every "/:id" pattern. "/recurring/:groupId/claim" has
+// three segments so "/:id/claim" cannot shadow it, but DELETE /recurring/:groupId already
+// established the position and tests/sessionsRouteOrder.test.js pins it.
+router.put("/recurring/:groupId/claim", async (req, res) => {
+  const db = await getDb();
+
+  const requested = Array.isArray(req.body?.sessionIds) ? [...new Set(req.body.sessionIds)] : null;
+  if (!requested || requested.length === 0) {
+    return res.status(400).json({ error: "Pick at least one date to accept." });
+  }
+
+  // Everything in the group that is still hers to take. Read before the gates so the
+  // own-request check has a session to look at; the family is the same on every row.
+  const inGroup = await db.prepare(`
+    SELECT * FROM care_sessions
+    WHERE recurrence_group_id = ?
+    ORDER BY scheduled_date ASC
+  `).all(req.params.groupId);
+  if (inGroup.length === 0) return res.status(404).json({ error: "Series not found" });
+
+  const gate = await caregiverGate(db, req, inGroup[0]);
+  if (gate.error) return res.status(gate.status).json({ error: gate.error });
+  const { profile } = gate;
+
+  const mine = inGroup.filter(
+    (x) => x.offered_to_caregiver_id === profile.id && CLAIMABLE.includes(x.status)
+  );
+  const mineIds = new Set(mine.map((x) => x.id));
+
+  // Asking for something not on offer is a mistake worth naming, not something to silently
+  // drop — a client that sends a stale list should be told its list is stale.
+  const unknown = requested.filter((id) => !mineIds.has(id));
+  if (unknown.length) {
+    return res.status(409).json({
+      error: "Some of those visits are no longer available. Refresh and try again.",
+      unavailable: unknown,
+    });
+  }
+
+  // Every gate that guards a single claim, asked per session. The vouch is family-scoped and
+  // status can differ row to row, so this is not hoistable.
+  for (const sess of mine.filter((x) => requested.includes(x.id))) {
+    const sGate = await sessionGate(db, req, sess, profile);
+    if (sGate) return res.status(sGate.status).json({ error: sGate.error });
+  }
+
+  const declined = mine.filter((x) => !requested.includes(x.id)).map((x) => x.id);
+
+  try {
+    await applySeriesClaim(db, {
+      caregiverProfileId: profile.id,
+      confirmIds: requested,
+      releaseIds: declined,
+    });
+  } catch (e) {
+    if (e.status) return res.status(e.status).json({ error: e.userMessage });
+    throw e;
+  }
+
+  try {
+    await ensureAssignment(db, {
+      careRecipientId: inGroup[0].care_recipient_id,
+      familyUserId: inGroup[0].family_user_id,
+      caregiverProfileId: profile.id,
+    });
+  } catch (e) { captureException(e, { where: "series claim: ensureAssignment" }); }
+
+  // ONE notification for the series. Twelve pushes saying the same thing is how a family
+  // turns push off.
+  const emitToUser = req.app.get("emitToUser");
+  const caregiverName = `${req.user.firstName || ""} ${req.user.lastName || ""}`.trim() || "A caregiver";
+  const recip = await db.prepare("SELECT first_name FROM care_recipients WHERE id = ?")
+    .get(inGroup[0].care_recipient_id);
+  const recipName = recip?.first_name || "your loved one";
+  const n = requested.length;
+  const body = declined.length
+    ? `${caregiverName} accepted ${n} of ${mine.length} visits for ${recipName}. ${declined.length} went back to the open pool.`
+    : `${caregiverName} accepted all ${n} visit${n === 1 ? "" : "s"} for ${recipName}.`;
+  const payload = {
+    title: "Care Request Accepted!",
+    body,
+    data: { type: "care_request_accepted", recurrenceGroupId: req.params.groupId, page: "schedule" },
+  };
+
+  const notify = new Set();
+  if (inGroup[0].family_user_id) notify.add(inGroup[0].family_user_id);
+  try {
+    const team = await db.prepare(`
+      SELECT DISTINCT ctm.user_id FROM care_team_members ctm
+      JOIN care_teams ct ON ctm.care_team_id = ct.id
+      WHERE ct.care_recipient_id = ?
+    `).all(inGroup[0].care_recipient_id);
+    for (const m of team) notify.add(m.user_id);
+  } catch (e) { captureException(e, { where: "series claim: notify team" }); }
+
+  for (const userId of notify) {
+    if (emitToUser) emitToUser(userId, "session_update", { recurrenceGroupId: req.params.groupId, status: "confirmed" });
+    sendPushToUser(userId, payload, "care_request_accepted").catch(() => {});
+  }
+
+  res.json({ claimed: requested.length, released: declined.length, recurrenceGroupId: req.params.groupId });
 });
 
 // ─── POST /api/sessions ───

@@ -39,6 +39,8 @@ const EXPECTED = [
   "POST /request",
   "PUT /:id/decline",
   "PUT /:id/claim",
+  // v1.106.24 — accepting a recurring series in one act, with the dates she picks.
+  "PUT /recurring/:groupId/claim",
   "POST /",
   "DELETE /recurring/:groupId",
   "POST /:id/match",
@@ -85,6 +87,18 @@ describe("the sessions router", () => {
       expect(at).toBeGreaterThan(-1);
       expect(at).toBeLessThan(idIndex);
     }
+  });
+
+  test("the recurring-series routes are not shadowed by the /:id patterns", () => {
+    // v1.106.24 — "/recurring/:groupId/claim" has three segments so "/:id/claim" (two)
+    // cannot match it, but "/:id" is one pattern away from a reorder that would. Both
+    // recurring routes are asserted, not just the new one.
+    const claimIdx = actual.indexOf("PUT /:id/claim");
+    for (const literal of ["PUT /recurring/:groupId/claim", "DELETE /recurring/:groupId"]) {
+      expect(actual.indexOf(literal)).toBeGreaterThan(-1);
+    }
+    expect(actual.indexOf("PUT /recurring/:groupId/claim")).toBeGreaterThan(claimIdx);
+    expect(actual.indexOf("PUT /recurring/:groupId/claim")).toBeLessThan(actual.indexOf("GET /:id"));
   });
 
   test("it no longer doubles as a library", () => {

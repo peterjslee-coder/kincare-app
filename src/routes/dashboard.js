@@ -773,6 +773,11 @@ async function caregiverDashboard(db, userId, res) {
         timezone: s.care_timezone || "America/New_York",
         offeredToCaregiverId: s.offered_to_caregiver_id || null,
         exclusiveUntil: s.exclusive_until || null,
+        // v1.106.24 — a recurring direct offer is one arrangement, not twelve jobs. The
+        // caregiver card groups on this; without it every occurrence is its own full-height
+        // card, which is what put eleven of them above Tina's check-in.
+        recurrenceGroupId: s.recurrence_group_id || null,
+        recurrenceRule: s.recurrence_rule || null,
         familyName: s.family_name || null,
         healthTags: (() => { try { return JSON.parse(s.cr_health_conditions || '[]').slice(0, 3); } catch { return []; } })(),
         // v1.105.91 — sent in FULL. It was cut to 200 characters here, so v1.105.88's

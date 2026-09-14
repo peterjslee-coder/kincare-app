@@ -156,6 +156,44 @@ const formatMoney = window.formatMoney = (n) => {
   return Number.isInteger(v) ? `$${v}` : `$${v.toFixed(2)}`;
 };
 
+// ─── v1.106.24 — a recurring offer is one arrangement, not N jobs ───
+//
+// A recurring direct offer inserts one care_sessions row per occurrence, each carrying
+// offered_to_caregiver_id, so each surfaced as its own full-height "Just for You" card.
+// Twelve Tuesdays meant twelve cards and twelve taps — and eleven of them sitting above the
+// check-in Tina was standing at the door trying to reach. Pete: "Appointments grouped on
+// recurring basis should not require individual acceptance."
+//
+// In utils rather than in the component because the caregiver hub and Find Work both list
+// offers, and a grouping rule that exists twice is a grouping rule that disagrees with
+// itself. Order is preserved: a group takes the position of its earliest visit, so the list
+// still reads soonest-first.
+const groupExclusiveOffers = window.groupExclusiveOffers = (jobs) => {
+  const out = [];
+  const byGroup = new Map();
+  for (const job of jobs || []) {
+    const gid = job.recurrenceGroupId || null;
+    if (!gid) { out.push({ kind: 'single', key: job.id, job }); continue; }
+    let g = byGroup.get(gid);
+    if (!g) {
+      // A group holds its position from the FIRST occurrence encountered, which is the
+      // earliest one given the caller sorts by date.
+      g = { kind: 'series', key: gid, groupId: gid, jobs: [] };
+      byGroup.set(gid, g);
+      out.push(g);
+    }
+    g.jobs.push(job);
+  }
+  // A "series" that turned out to hold one visit — eleven of twelve already taken, say — is
+  // a single job wearing a group id, and rendering a date list with one checkbox for it
+  // would be silly. Collapse it back.
+  return out.map((e) =>
+    e.kind === 'series' && e.jobs.length === 1
+      ? { kind: 'single', key: e.jobs[0].id, job: e.jobs[0] }
+      : e
+  );
+};
+
 const formatServiceType = window.formatServiceType = (type) => {
   if (!type) return '';
   // Handle "other:Custom text" format
