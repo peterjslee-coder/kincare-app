@@ -2,7 +2,7 @@
 // Zero behavior change: global middleware runs first (verbatim), then each
 // module registers its routes on THIS router in the original file order.
 const express = require("express");
-const { authenticate, requireAdmin } = require("../../middleware/auth");
+const { authenticate, requireAdmin, API_KEY_SAFE_PATHS } = require("../../middleware/auth");
 const { getDb } = require("../../models/database");
 const { isTrustedIp, registerTrustedIp } = require("../../utils/trustedIps");
 const { getClientIp } = require("../../middleware/auditLog");
@@ -27,6 +27,31 @@ router.use(async (req, res, next) => {
   const path = req.path;
   // Skip IP check for exempt endpoints
   if (IP_CHECK_EXEMPT.some(p => path === p || path.startsWith(p))) return next();
+
+  // ─── v1.106.37 — a provisioned machine credential is not a hijacked session ───
+  //
+  // This gate exists so a STOLEN SESSION COOKIE cannot be replayed from an unfamiliar
+  // network. An admin API key is the opposite thing: a secret deliberately issued to a
+  // machine, held in an env var, never in a browser. verifyCsrf in middleware/auth.js
+  // already draws exactly this distinction and exempts key callers — "server-to-server, no
+  // cookie" — and CSRF is the same class of browser-session control.
+  //
+  // Until now the gate did not know keys existed, so it refused them and told the caller to
+  // go find a passkey. scripts/collect-feedback.js sends the key on every call and could
+  // never get past this, which is how Pete spent a day being asked to verify addresses in a
+  // browser that could not reach them. The designed path for machine access was dead on
+  // arrival.
+  //
+  // Scoped hard: ONLY the paths an API key may already reach without TOTP — the same
+  // exported list, so the two cannot drift. Anything sensitive still demands a TOTP code,
+  // and every cookie-authenticated admin request still demands a verified network.
+  if (req.authVia === "admin_api_key") {
+    const fullPath = req.originalUrl || req.path;
+    if (API_KEY_SAFE_PATHS.some(p => fullPath.startsWith(p))) {
+      req.trustedIp = true;
+      return next();
+    }
+  }
 
   try {
     const ip = getClientIp(req);

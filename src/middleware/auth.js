@@ -25,19 +25,28 @@ function generateToken(user) {
   return jwt.sign(payload, JWT_SECRET, { expiresIn: "7d" });
 }
 
+// ─── The endpoints an admin API key alone may reach ───
+//
+// Read-only feedback + treasury: safe with the key on its own, no TOTP. This list exists for
+// scripts/collect-feedback.js and has since the key was introduced.
+//
+// v1.106.37 — exported, because routes/admin/index.js needs the SAME list to decide which
+// requests may skip the network check. Two copies of a security boundary is two places for it
+// to drift, and the drift would be silent: a path added here and not there would authenticate
+// and then be refused for the wrong reason.
+const API_KEY_SAFE_PATHS = [
+  "/api/admin/feedback/triage",
+  "/api/admin/feedback/bulk-update",
+  "/api/feedback",
+  "/api/admin/treasury",
+];
+
 async function authenticate(req, res, next) {
   // Option 1: Admin API key (+ TOTP for sensitive endpoints)
   const apiKey = req.headers["x-admin-api-key"];
   if (apiKey && ADMIN_API_KEY && apiKey === ADMIN_API_KEY) {
-    // Read-only feedback + treasury endpoints are safe with API key alone
-    const TOTP_EXEMPT_PATHS = [
-      "/api/admin/feedback/triage",
-      "/api/admin/feedback/bulk-update",
-      "/api/feedback",
-      "/api/admin/treasury",
-    ];
     const fullPath = req.originalUrl || req.path;
-    const isTotpExempt = TOTP_EXEMPT_PATHS.some(p => fullPath.startsWith(p));
+    const isTotpExempt = API_KEY_SAFE_PATHS.some(p => fullPath.startsWith(p));
 
     const totpCode = req.headers["x-admin-totp"];
     if (!totpCode && !isTotpExempt) {
@@ -57,6 +66,7 @@ async function authenticate(req, res, next) {
           if (anyAdmin) {
             req.user = { id: anyAdmin.id, email: anyAdmin.email, roles: ["family"], role: "family" };
             req.isAdmin = true;
+            req.authVia = "admin_api_key";
             return next();
           }
         }
@@ -72,6 +82,7 @@ async function authenticate(req, res, next) {
       }
       req.user = { id: adminUser.id, email: adminUser.email, roles: ["family"], role: "family" };
       req.isAdmin = true;
+      req.authVia = "admin_api_key";
       return next();
     } catch (err) {
       return res.status(401).json({ error: "TOTP verification failed" });
@@ -368,4 +379,4 @@ async function denyDemo(req, res, next) {
 }
 
 module.exports = { generateToken, authenticate, denyDemo,
-  issueTrustedDeviceToken, readTrustedDeviceHash, TRUSTED_DEVICE_DAYS, requireRole, requireAdmin, setAuthCookie, clearAuthCookie, generateRefreshToken, setRefreshCookie, revokeRefreshToken, revokeAllUserRefreshTokens, setCsrfCookie, verifyCsrf };
+  issueTrustedDeviceToken, readTrustedDeviceHash, TRUSTED_DEVICE_DAYS, requireRole, requireAdmin, setAuthCookie, clearAuthCookie, generateRefreshToken, setRefreshCookie, revokeRefreshToken, revokeAllUserRefreshTokens, setCsrfCookie, verifyCsrf , API_KEY_SAFE_PATHS};
