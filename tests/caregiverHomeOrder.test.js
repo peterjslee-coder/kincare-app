@@ -119,6 +119,28 @@ describe("the split itself", () => {
     expect(r.ready.map((x) => x.id)).toEqual(["a"]);
   });
 
+  // The caregiver tour lights [data-tour="up-next"] by querying the live DOM. Splitting one
+  // block into two can produce zero anchors (tour silently does nothing on stop 1) or two
+  // (querySelector takes whichever is first, which may be the one that rendered null). So the
+  // flag has to be exactly-one, and that is worth executing rather than eyeballing.
+  describe("the tour anchor survives the split", () => {
+    const anchorCount = (ready, rest) =>
+      (rest.length === 0 && ready.length > 0 ? 1 : 0) + (rest.length > 0 ? 1 : 0);
+
+    test("one anchor when only the pinned block renders", () => {
+      expect(anchorCount([s("a")], [])).toBe(1);
+    });
+    test("one anchor when only the ordinary block renders", () => {
+      expect(anchorCount([], [s("b")])).toBe(1);
+    });
+    test("one anchor — not two — when both render", () => {
+      expect(anchorCount([s("a")], [s("b")])).toBe(1);
+    });
+    test("no anchor when neither renders, as before the split", () => {
+      expect(anchorCount([], [])).toBe(0);
+    });
+  });
+
   test("nothing ready to check in means an empty pin, not a crash", () => {
     const r = build([s("a"), s("b")], [], []);
     expect(r.ready).toEqual([]);

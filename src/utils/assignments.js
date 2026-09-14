@@ -4,6 +4,13 @@
  * Moved out of routes/sessions.js. Called from three places there and from the proposal
  * accept path; none of them is a route handler's own logic.
  */
+// v1.106.23 — this import did not come with the function when it moved out of sessions.js in
+// v1.106.16, so `uuid()` below threw ReferenceError on every FIRST claim by a caregiver for a
+// family. The caller wraps it in try/catch and logs, so it degraded to a console line: the
+// caregiver got the job and never joined the family's roster, and the family had to go find
+// her by hand every time. Found by the first behavioural test ever written for /claim.
+const { v4: uuid } = require("uuid");
+
 async function ensureAssignment(db, { careRecipientId, familyUserId, caregiverProfileId }) {
   if (!careRecipientId || !familyUserId || !caregiverProfileId) return;
   const existing = await db.prepare(`

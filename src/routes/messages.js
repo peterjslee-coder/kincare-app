@@ -12,6 +12,7 @@ const { getBlockedIds, isBlockedBetween } = require("../utils/blocks");
 const { authenticate } = require("../middleware/auth");
 const { sendPushToUser } = require("./push");
 const { screenMessage } = require("../utils/messageSafety");
+const { captureException } = require("../utils/sentry");
 const { validateMagicBytes } = require("../utils/fileValidation");
 const { sendStoredFile, IMAGE_MIMES, DOCUMENT_MIMES } = require("../utils/serveMedia");
 

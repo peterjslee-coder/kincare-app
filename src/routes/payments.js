@@ -102,8 +102,24 @@ router.post("/webhook", express.raw({ type: "application/json" }), async (req, r
   }
 
   const sig = req.headers["stripe-signature"];
+  // v1.106.23 — this was `const stripe = getStripe()` INSIDE the try below, so it went out of
+  // scope at the closing brace while six later lines in this same handler still used it. Both
+  // of those sites sit in their own try/catch, so the ReferenceError never surfaced as an
+  // error — it surfaced as two features quietly not existing: `payout_expected_date` was never
+  // computed (the caregiver is never told when the money lands in her bank) and card
+  // brand/last4 were never captured for checkout payments.
+  //
+  // getStripe() throws when the key is absent. Inside the try that was swallowed and answered
+  // 400 "signature verification failed", which is a lie about which thing is broken. Say the
+  // true one, with the same 503 the missing-secret check above already uses.
+  let stripe;
   try {
-    const stripe = getStripe();
+    stripe = getStripe();
+  } catch (cfgErr) {
+    console.error("FATAL: STRIPE_SECRET_KEY not configured — cannot verify webhooks");
+    return res.status(503).json({ error: "Webhook not configured" });
+  }
+  try {
     event = stripe.webhooks.constructEvent(req.body, sig, WEBHOOK_SECRET);
   } catch (err) {
     console.error("⚠️  Webhook signature verification failed:", err.message);

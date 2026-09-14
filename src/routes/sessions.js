@@ -2480,7 +2480,12 @@ router.put("/:id/time-change/:proposalId/respond", async (req, res) => {
 
         res.json({
           ok: true, action: "cancelled", cancelledBy: "caregiver",
-          feeHours, feeCents: tcCharge.action === 'capture' ? tcCharge.amountCents : 0, hourlyRate,
+          // v1.106.23 — `hourlyRate` was still listed here after v1.105.19 deleted the
+          // local fee calculation that defined it. Building this response threw
+          // ReferenceError, so a caregiver who declined a late family time change got a 500
+          // — AFTER the session had been cancelled and the fee captured. Nothing on the
+          // client ever read the field.
+          feeHours, feeCents: tcCharge.action === 'capture' ? tcCharge.amountCents : 0,
           chargeApplies: feeHours > 0,
         });
 

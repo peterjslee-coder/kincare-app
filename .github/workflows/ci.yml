@@ -77,6 +77,12 @@ jobs:
       - name: No new dual-name API reads
         run: npm run lint:dual-names
 
+      # v1.106.23 — lint-requires catches a bad require PATH. This catches the other half:
+      # a module that never requires something it uses. Ten of those were live in src/, all
+      # inside try/catch, all invisible. See scripts/lint-server-undef.js.
+      - name: No undefined identifiers in src/
+        run: npm run lint:server-undef
+
       - name: Dark-mode contrast
         run: npm run lint:contrast
 

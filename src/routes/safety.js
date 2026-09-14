@@ -24,6 +24,7 @@
 const express = require("express");
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
+const { captureException } = require("../utils/sentry");
 const { authenticate } = require("../middleware/auth");
 const { canBlockDirectly, findApproverForRequester, getOutgoingBlocks, isBlockedBetween } = require("../utils/blocks");
 const { decideCancellationCharge } = require("../utils/cancellationFee");

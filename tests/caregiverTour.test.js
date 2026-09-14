@@ -99,7 +99,14 @@ describe("wired in", () => {
   test("the hub shows the card only when First Steps are resolved, empty, and not a demo", () => {
     const hub = code("public/js/components/CaretakerHub.js");
     expect(hub).toContain("{firstStepsResolved && !showFirstSteps && !profile.isDemo && typeof CaregiverTourCard !== 'undefined' && (");
-    expect(hub).toContain('data-tour="up-next"');
+    // v1.106.23 — the anchor is dynamic now, the same way FindWork's 'job-first' is: Up Next
+    // was split so a session inside its check-in window pins above the offers that buried
+    // Tina's check-in. Exactly one of the two blocks carries the anchor. The exclusivity is
+    // asserted behaviourally in tests/caregiverHomeOrder.test.js — here we only pin that the
+    // attribute still exists to be found, because the tour queries the live DOM for it.
+    expect(hub).toContain("data-tour={tour ? 'up-next' : undefined}");
+    expect(hub).toContain("tour: upNextSplit.rest.length === 0");
+    expect(hub).toContain("tour: upNextSplit.rest.length > 0");
   });
   test("app.js hosts it above everything and starts it from anywhere", () => {
     const app = code("public/js/app.js");
