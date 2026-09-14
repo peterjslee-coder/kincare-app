@@ -7,9 +7,9 @@ build red.
 
 Hand-written sections (§3 "Where is…") are preserved across regeneration; edit those freely.
 
-Structure at last generation: 526 HTTP routes across 56 mounts ·
-91 `CREATE TABLE` statements · 12 background jobs · 37 socket events
-(15 with no client listener) · 59 push event types · 56 `window.__*` globals.
+Structure at last generation: 528 HTTP routes across 56 mounts ·
+92 `CREATE TABLE` statements · 12 background jobs · 38 socket events
+(16 with no client listener) · 60 push event types · 57 `window.__*` globals.
 
 ---
 
@@ -49,7 +49,7 @@ JSX is *not* compiled in the browser; Babel-standalone is not loaded. Editing an
 | `/api/auth` | `src/routes/auth.js` | 19 |  |
 | `/api/auth/2fa` | `src/routes/twoFactor.js` | 8 |  |
 | `/api/availability` | `src/routes/availability.js` | 5 |  |
-| `/api/care-events` | `src/routes/careEvents.js` | 7 |  |
+| `/api/care-events` | `src/routes/careEvents.js` | 9 |  |
 | `/api/care-intelligence` | `src/routes/careIntelligence.js` | 8 |  |
 | `/api/care-recipients` | `src/routes/careRecipients.js` | 14 |  |
 | `/api/care-tasks` | `src/routes/careTasks.js` | 9 |  |
@@ -156,6 +156,7 @@ why this app runs on exactly one Railway replica.
 | `call_ended` | `server.js` | yes |
 | `call_incoming` | `server.js` | yes |
 | `call_ring_status` | `server.js` | yes |
+| `care_event_update` | `routes/careEvents.js` | 🔶 **none** |
 | `care_team_invite` | `routes/careTeams.js` | yes |
 | `checkin_nudge` | `routes/accountability.js` | 🔶 **none** |
 | `connect_error_reason` | `server.js` | yes |
@@ -188,7 +189,7 @@ why this app runs on exactly one Railway replica.
 | `visit_photos` | `routes/photos.js` | yes |
 
 
-🔶 **15 event(s) are emitted with no client listener**: `call_accepted`, `checkin_nudge`, `family_no_show`, `interview_accepted`, `interview_cancelled`, `interview_completed`, `interview_declined`, `interview_request`, `ipai_coaching`, `ipai_session_summary`, `late_resolution`, `new_feedback`, `proposal_expired`, `reminder_delivered`, `time_proposal`. Either the feature is unfinished or the emit is dead code.
+🔶 **16 event(s) are emitted with no client listener**: `call_accepted`, `care_event_update`, `checkin_nudge`, `family_no_show`, `interview_accepted`, `interview_cancelled`, `interview_completed`, `interview_declined`, `interview_request`, `ipai_coaching`, `ipai_session_summary`, `late_resolution`, `new_feedback`, `proposal_expired`, `reminder_delivered`, `time_proposal`. Either the feature is unfinished or the emit is dead code.
 
 ---
 
@@ -201,31 +202,31 @@ Opt-out key is `notification_prefs["push_" + eventType]`. Capability gating live
 
 `cancel_fee_disputed` · `cancel_fee_notice` · `cancel_fee_pending` · `cancel_fee_waived`
 
-`care_event` · `care_request` · `care_request_accepted` · `care_request_created`
+`care_event` · `care_event_tagged` · `care_request` · `care_request_accepted`
 
-`care_task` · `care_team_invite` · `caregiver_arriving` · `caregiver_arriving_recipient`
+`care_request_created` · `care_task` · `care_team_invite` · `caregiver_arriving`
 
-`caregiver_leaving_recipient` · `caregiver_no_show` · `check_out_imminent` · `check_out_reminder`
+`caregiver_arriving_recipient` · `caregiver_leaving_recipient` · `caregiver_no_show` · `check_out_imminent`
 
-`checkin_nudge` · `content_report` · `dispute_filed` · `document_classified`
+`check_out_reminder` · `checkin_nudge` · `content_report` · `dispute_filed`
 
-`document_deleted` · `document_uploaded` · `identity_submitted` · `interview_accepted`
+`document_classified` · `document_deleted` · `document_uploaded` · `identity_submitted`
 
-`interview_cancelled` · `interview_declined` · `interview_request` · `invite_accepted`
+`interview_accepted` · `interview_cancelled` · `interview_declined` · `interview_request`
 
-`kindred_relay` · `managed_mode_activated` · `missing_address` · `new_registration`
+`invite_accepted` · `kindred_relay` · `managed_mode_activated` · `missing_address`
 
-`new_signup_intent` · `no_show_cancelled` · `on_my_way` · `on_my_way_recipient`
+`new_registration` · `new_signup_intent` · `no_show_cancelled` · `on_my_way`
 
-`outreach_response` · `outreach_sent` · `overdue_check_in` · `overdue_check_in_family`
+`on_my_way_recipient` · `outreach_response` · `outreach_sent` · `overdue_check_in`
 
-`overdue_check_out` · `overdue_check_out_family` · `payment_authorization_failed` · `payment_hold`
+`overdue_check_in_family` · `overdue_check_out` · `overdue_check_out_family` · `payment_authorization_failed`
 
-`payment_method_needed` · `phone_verified` · `proposal_accepted` · `proposal_declined`
+`payment_hold` · `payment_method_needed` · `phone_verified` · `proposal_accepted`
 
-`request_declined` · `session_cancelled` · `team_join` · `time_change`
+`proposal_declined` · `request_declined` · `session_cancelled` · `team_join`
 
-`time_proposal` · `unblocked` · `waitlist_signup`
+`time_change` · `time_proposal` · `unblocked` · `waitlist_signup`
 
 ---
 
@@ -258,7 +259,7 @@ State travels through `window`, not props. This table is the registry.
 | `window.__linkifyTrim` | utils.js | 1 |
 | `window.__loadStripeJs` | — | 1 |
 | `window.__navHistory` | app.js | 3 |
-| `window.__navigateTo` | app.js | 50 |
+| `window.__navigateTo` | app.js, Caregivers.js | 52 |
 | `window.__openConversationId` | Messages.js, utils.js | 5 |
 | `window.__openRequestCareModal` | app.js | 19 |
 | `window.__openTaskCreate` | — | 1 |
@@ -289,6 +290,7 @@ State travels through `window`, not props. This table is the registry.
 | `window.__startImpersonation` | app.js | 3 |
 | `window.__swApplyPendingUpdate` | — | 2 |
 | `window.__uiPrefs` | uiPrefs.js | 9 |
+| `window.__viewCaregiverId` | Caregivers.js | 2 |
 | `window.__visitGeoAllowed` | FamilyVisitLog.js | 1 |
 | `window.__visitHaversineFeet` | FamilyVisitLog.js | 1 |
 

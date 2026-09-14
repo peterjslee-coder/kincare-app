@@ -388,7 +388,6 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const [idVerError, setIdVerError] = useState(null);
 
   // Platform config (which services are configured)
-  const [platformConfig, setPlatformConfig] = useState({ stripeConfigured: true, checkrConfigured: true });
 
   // Payout speed managed by Stripe directly — no surcharge from InPlace
   const [bgCheckPaid, setBgCheckPaid] = useState(false);
@@ -571,7 +570,6 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       // Each still swallows its own failure — a missing referral code must not cost you the
       // hub — and each sets its own state, so they paint as they land.
       fetchAvailability();
-      apiFetch('/api/caregivers/platform-config').then(r => r?.ok && r.json().then(c => setPlatformConfig(c))).catch(() => {});
       apiFetch('/api/referrals/my-code').then(r => r?.ok && r.json().then(d => setReferralData(d))).catch(() => {});
       apiFetch('/api/referrals/list').then(r => r?.ok && r.json().then(d => setReferralList(d.referrals || []))).catch(() => {});
       apiFetch('/api/referrals/milestones').then(r => r?.ok && r.json().then(d => { setMilestones(d.milestones || []); setUnackedMilestones(d.unacknowledged || []); })).catch(() => {});

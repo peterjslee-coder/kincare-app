@@ -163,6 +163,59 @@ const CareEventHeroRow = window.CareEventHeroRow = ({ ev, onOpenSheet, msUntil }
 const CareEventSheet = window.CareEventSheet = ({ ev, canManage, onClose, onEdit, onChanged }) => {
   const { showToast } = useToast();
   const [deleting, setDeleting] = useState(false);
+
+  // ─── v1.106.30 — what actually happened at the appointment ───
+  //
+  // Pete: "I'm going to Betty's doctors appointment today and I would like to be able to
+  // leave notes like the doctor said mom should do this or that and this is the new
+  // medication. Otherwise, the only thing that [iPAi] knows is that an appointment happened."
+  //
+  // These are ordinary care notes carrying this event's id, not a field on the appointment.
+  // One care record: the team gets pushed, iPAi files it, and it shows up everywhere notes
+  // already show up — with the appointment attached rather than floating loose.
+  const [notes, setNotes] = useState(null);
+  const [newNote, setNewNote] = useState('');
+  const [addingNote, setAddingNote] = useState(false);
+  const addingRef = React.useRef(false);
+
+  const loadNotes = React.useCallback(async () => {
+    try {
+      const res = await apiFetch(`/api/care-events/${ev.id}/notes`);
+      if (!res?.ok) { setNotes([]); return; }
+      const d = await res.json();
+      setNotes(d.notes || []);
+    } catch { setNotes([]); }
+  }, [ev.id]);
+
+  React.useEffect(() => { loadNotes(); }, [loadNotes]);
+
+  const addNote = async () => {
+    if (addingRef.current || !newNote.trim()) return;
+    addingRef.current = true;
+    setAddingNote(true);
+    try {
+      const res = await apiFetch('/api/notes', {
+        method: 'POST',
+        body: JSON.stringify({
+          careRecipientId: ev.care_recipient_id,
+          careEventId: ev.id,
+          content: newNote.trim(),
+          noteType: 'observation',
+        }),
+      });
+      if (res?.ok) {
+        setNewNote('');
+        showToast('Added to the care record', 'success');
+        await loadNotes();
+      } else {
+        const d = await res?.json().catch(() => ({}));
+        showToast(d.error || 'Could not add that note', 'error');
+      }
+    } catch { showToast('Could not add that note', 'error'); }
+    setAddingNote(false);
+    addingRef.current = false;
+  };
+
   const remove = async () => {
     if (deleting) return;
     if (!window.confirm(`Remove "${ev.title}"?`)) return;
@@ -189,13 +242,80 @@ const CareEventSheet = window.CareEventSheet = ({ ev, canManage, onClose, onEdit
         <div style={{ fontSize: 14, color: 'var(--text-secondary)', marginTop: 4 }}>
           {careEventWhen(ev)}{ev.recipientFirstName ? ` · for ${ev.recipientFirstName}` : ''}
         </div>
-        {ev.location && <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 6 }}>📍 {ev.location}</div>}
+        {/* v1.106.30 — the address opens the map. openExternalUrl, not <a target="_blank">:
+            WKWebView drops window.open after an await and Capacitor installs no download
+            delegate, which is why that helper exists (v1.105.49). */}
+        {ev.location && (
+          <button onClick={(e) => { e.stopPropagation(); const u = mapsUrlFor(ev.location); if (u) openExternalUrl(u); }}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6, marginTop: 6, minHeight: 44,
+              background: 'none', border: 'none', padding: 0, font: 'inherit', textAlign: 'left',
+              fontSize: 13, color: 'var(--role-color)', fontWeight: 600, cursor: 'pointer',
+            }}>
+            <span aria-hidden="true">📍</span>
+            <span style={{ textDecoration: 'underline' }}>{ev.location}</span>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>Directions</span>
+          </button>
+        )}
         {ev.details && <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 6, whiteSpace: 'pre-wrap' }}>{ev.details}</div>}
+        {(ev.attendees || []).length > 0 && (
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 8 }}>
+            {'\uD83D\uDC65'} Also going: {ev.attendees.map((a) => a.first_name).join(', ')}
+          </div>
+        )}
         {ev.created_by_first_name && (
           <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 8 }}>
             Added by {ev.created_by_first_name}{ev.source === 'email' ? ' via email' : ''}
           </div>
         )}
+
+        {/* ─── v1.106.30 — notes from the appointment ─── */}
+        <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--border-light)' }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 }}>
+            What happened
+          </div>
+          {notes === null ? (
+            <div style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>Loading{'\u2026'}</div>
+          ) : notes.length === 0 ? (
+            <div style={{ fontSize: 13, color: 'var(--text-tertiary)', marginBottom: 10 }}>
+              Nothing recorded yet {'\u2014'} what the doctor said, a new medication, what to watch for.
+            </div>
+          ) : (
+            <div style={{ marginBottom: 10 }}>
+              {notes.map((n) => (
+                <div key={n.id} style={{ padding: '8px 0', borderBottom: '1px solid var(--border-light)' }}>
+                  <div style={{ fontSize: 13.5, color: 'var(--text-primary)', lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                    {linkify(n.content)}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3 }}>
+                    {n.author_first_name || 'Someone'}
+                    {n.needs_attention ? ' \u00B7 needs attention' : ''}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          <textarea value={newNote} onChange={(e) => setNewNote(e.target.value)}
+            placeholder={`e.g. "Dr. Lambert started her on a new blood-pressure tablet, mornings. Back in six weeks."`}
+            rows={3}
+            style={{
+              width: '100%', padding: '10px 12px', border: '1px solid var(--border-color)', borderRadius: 8,
+              fontSize: 14, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box',
+              background: 'var(--bg-surface)', color: 'var(--text-primary)',
+            }} />
+          <button onClick={addNote} disabled={addingNote || !newNote.trim()}
+            style={{
+              marginTop: 8, minHeight: 44, padding: '0 18px', borderRadius: 10, border: 'none',
+              background: (addingNote || !newNote.trim()) ? 'var(--border-light)' : 'var(--role-color)',
+              color: 'var(--text-on-primary)', font: 'inherit', fontWeight: 700, fontSize: 14,
+              cursor: (addingNote || !newNote.trim()) ? 'not-allowed' : 'pointer',
+            }}>
+            {addingNote ? '\u2026' : 'Add to the care record'}
+          </button>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
+            Goes in {ev.recipientFirstName || 'their'} care notes, and the team is told.
+          </div>
+        </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 16 }}>
           <a href={ev.ics_url} style={{ ...btn, background: 'var(--accent-color)', color: 'var(--text-on-primary)', border: 'none', fontWeight: 700 }}>
@@ -232,6 +352,25 @@ const CareEventFormModal = window.CareEventFormModal = ({ recipientId, recipient
   const [location, setLocation] = useState(ex.location || '');
   const [details, setDetails] = useState(ex.details || '');
   const [saving, setSaving] = useState(false);
+  // v1.106.30 — who else is going. Pete: "today I am going to the Dr. Lambert appointment,
+  // but Tina is also going. So I would like to be able to tag her so that she gets updates
+  // about that appointment as well."
+  const [taggable, setTaggable] = useState([]);
+  const [tagged, setTagged] = useState(() => new Set((ex.attendees || []).map((a) => a.user_id)));
+
+  React.useEffect(() => {
+    if (!recipientId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await apiFetch(`/api/care-events/taggable/${recipientId}`);
+        if (cancelled || !res?.ok) return;
+        const d = await res.json();
+        setTaggable(d.people || []);
+      } catch { /* the picker just stays empty; the rest of the form still works */ }
+    })();
+    return () => { cancelled = true; };
+  }, [recipientId]);
 
   const parse = async () => {
     if (!quickText.trim() || parsing) return;
@@ -266,6 +405,7 @@ const CareEventFormModal = window.CareEventFormModal = ({ recipientId, recipient
       care_recipient_id: recipientId, title: title.trim(), category,
       event_date: date, event_time: allDay ? null : time, end_time: allDay ? null : (endTime || null),
       location: location.trim() || null, details: details.trim() || null,
+      attendee_user_ids: [...tagged],
     };
     setSaving(true);
     try {
@@ -337,6 +477,37 @@ const CareEventFormModal = window.CareEventFormModal = ({ recipientId, recipient
 
         <div style={label}>Where <span style={{ fontWeight: 400, textTransform: 'none' }}>(optional)</span></div>
         <input style={input} value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Carilion Clinic, Radford" />
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+          Whoever opens this can tap it for directions.
+        </div>
+
+        {/* ─── v1.106.30 — who else is going ───
+            Only people already on this person's care team appear here, and the server
+            enforces the same list. A tag decides who gets TOLD about an appointment, never
+            who is allowed to know about it. */}
+        {taggable.length > 0 && (
+          <React.Fragment>
+            <div style={label}>Who else is going <span style={{ fontWeight: 400, textTransform: 'none' }}>(optional)</span></div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {taggable.map((pp) => {
+                const on = tagged.has(pp.user_id);
+                return (
+                  <button key={pp.user_id} style={chip(on)}
+                    onClick={() => setTagged((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(pp.user_id)) next.delete(pp.user_id); else next.add(pp.user_id);
+                      return next;
+                    })}>
+                    {on ? '\u2713 ' : ''}{pp.first_name}{pp.isCaregiver ? ' \u00B7 caregiver' : ''}
+                  </button>
+                );
+              })}
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
+              They{'\u2019'}ll be told they{'\u2019'}re on it, and get the reminders too.
+            </div>
+          </React.Fragment>
+        )}
 
         <div style={label}>Notes <span style={{ fontWeight: 400, textTransform: 'none' }}>(optional)</span></div>
         <textarea style={{ ...input, resize: 'vertical' }} rows={2} value={details} onChange={(e) => setDetails(e.target.value)}

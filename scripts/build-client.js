@@ -60,6 +60,7 @@ const scripts = [
   "js/components/ActivityFeed.js",
   "js/components/CaregiverScheduleModal.js",
   "js/components/Caregivers.js",
+  "js/components/CaregiverProfilePage.js", // v1.106.29 — tap a caregiver, see who she is
   "js/components/CareRecipients.js",
   "js/components/ConsentVerification.js",
   "js/components/ConsentResponsePage.js",

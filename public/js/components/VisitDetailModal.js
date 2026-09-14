@@ -395,12 +395,43 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, 
                     </div>
                   )}
 
-                  {/* Location */}
-                  {v.check_in_latitude && v.check_in_longitude && (
-                    <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 6 }}>
-                      📍 Check-in location recorded ({parseFloat(v.check_in_latitude).toFixed(4)}, {parseFloat(v.check_in_longitude).toFixed(4)})
-                    </div>
-                  )}
+                  {/* ─── v1.106.30 — say the evidence, not the coordinate ───
+                      This printed the stored lat/lng to four decimal places. Since v1.105.23
+                      that value is deliberately ROUNDED TO TWO — a ~1.1km grid cell, chosen
+                      to sit outside the 1,750ft "precise location" line that Washington's My
+                      Health My Data Act treats as health data. So the four decimals were two
+                      real digits and two zeros, and Pete read it exactly as it looks:
+                      "(37.1800, -80.58) which isn't super accurate."
+                      It was accurate. The coordinate is not the evidence — check_in_distance_ft
+                      is, computed at FULL precision before the rounding. Show that. It answers
+                      the question the line is there to answer ("was she at the house?") and
+                      stops publishing a coordinate to say it. */}
+                  {(() => {
+                    const flag = v.check_in_geo_flag;
+                    const ft = v.check_in_distance_ft;
+                    if (flag === 'no_geo' || (!v.check_in_latitude && !v.check_in_longitude)) {
+                      return (
+                        <div style={{ fontSize: 12, color: 'var(--color-warning)', marginTop: 6 }}>
+                          {'\u26A0'} No location recorded at check-in
+                        </div>
+                      );
+                    }
+                    if (flag === 'no_home_geo' || ft === null || ft === undefined) {
+                      return (
+                        <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 6 }}>
+                          {'\uD83D\uDCCD'} Location recorded {'\u2014'} no address on file to check it against
+                        </div>
+                      );
+                    }
+                    const far = flag === 'far';
+                    const feet = Math.round(ft);
+                    const dist = feet < 1000 ? `${feet} ft` : `${(feet / 5280).toFixed(1)} miles`;
+                    return (
+                      <div style={{ fontSize: 12, color: far ? 'var(--color-warning)' : 'var(--color-success)', marginTop: 6 }}>
+                        {far ? '\u26A0' : '\u2713'} Checked in {dist} from the care address
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
 

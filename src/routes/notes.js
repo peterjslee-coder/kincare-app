@@ -154,7 +154,7 @@ router.post("/", async (req, res) => {
   // Express 4 leaves the request HANGING (the client just spins forever).
   try {
   const db = await getDb();
-  const { careRecipientId, content, noteType = "general", offlineTimestamp, offlineSync, needsAttention, photo } = req.body;
+  const { careRecipientId, content, noteType = "general", offlineTimestamp, offlineSync, needsAttention, photo, careEventId } = req.body;
 
   if (!careRecipientId || !content) {
     return res.status(400).json({ error: "careRecipientId and content required" });
@@ -195,14 +195,31 @@ router.post("/", async (req, res) => {
     console.log(`[notes] Offline sync — original time: ${offlineTimestamp}, recipient ${careRecipientId.slice(0, 8)}`);
   }
 
+  // v1.106.30 — a note can be ABOUT an appointment. Pete: "I'm going to Betty's doctors
+  // appointment today and I would like to be able to leave notes like the doctor said mom
+  // should do this or that and this is the new medication. Otherwise, the only thing that
+  // [iPAi] knows is that an appointment happened."
+  //
+  // It stays a note in the care record — same table, same team push, same iPAi categoriser —
+  // and only carries which appointment it came from. Verified against the SAME recipient, so
+  // an event id cannot be used to attach a note to a person the caller has no access to.
+  let linkedEventId = null;
+  if (careEventId) {
+    const ev = await db.prepare("SELECT id, care_recipient_id FROM care_events WHERE id = ?").get(careEventId);
+    if (!ev || ev.care_recipient_id !== careRecipientId) {
+      return res.status(400).json({ error: "That appointment does not belong to this care recipient" });
+    }
+    linkedEventId = ev.id;
+  }
+
   const id = uuid();
   const createdAtSQL = isOfflineSync && offlineTimestamp
     ? `'${new Date(offlineTimestamp).toISOString()}'`
     : 'NOW()';
   await db.prepare(`
-    INSERT INTO recipient_notes (id, care_recipient_id, author_id, content, note_type, needs_attention, photo, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ${createdAtSQL})
-  `).run(id, careRecipientId, req.user.id, content, noteType, needsAttention ? 1 : 0, photoData);
+    INSERT INTO recipient_notes (id, care_recipient_id, author_id, content, note_type, needs_attention, photo, care_event_id, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ${createdAtSQL})
+  `).run(id, careRecipientId, req.user.id, content, noteType, needsAttention ? 1 : 0, photoData, linkedEventId);
 
   // v1.76.0 — harvest structure from observations (non-blocking; chips appear when done)
   if (noteType === "observation" || noteType === "general") {

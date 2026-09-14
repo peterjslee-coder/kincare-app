@@ -251,7 +251,8 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
   const [preferences, setPreferences] = useState(null);
   const [savingPrefs, setSavingPrefs] = useState(false);
   // Caregiver - Rate editing state
-  const [editRates, setEditRates] = useState({ daytime: '24', nighttime: '28', overnight: '30' });
+  // v1.106.29 — replaces `editRates`, which was fetched into state and never rendered.
+  const [cgProfile, setCgProfile] = useState(null);
   const [savingRates, setSavingRates] = useState(false);
 
   const fetchUser = async () => {
@@ -584,7 +585,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
         if (r?.ok) { const d = await r.json(); setCheckrStatus(d.status || 'not_initiated'); setCheckrPhase(d.phase || null); setCheckrStaging(!!d.staging); if (d.paid) setBgCheckPaid(true); setMyVouches(d.vouches || []); }
       }).catch(() => { setCheckrStatus('not_initiated'); });
       apiFetch('/api/caregivers/me').then(async r => {
-        if (r?.ok) { const d = await r.json(); setEditRates({ daytime: d.profile?.rate_daytime || '24', nighttime: d.profile?.rate_nighttime || '28', overnight: d.profile?.rate_overnight || '30' }); }
+        if (r?.ok) { const d = await r.json(); setCgProfile(d.profile || null); }
       }).catch(() => {});
     }
   }, [activeTab]);
@@ -653,6 +654,19 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
       city: user?.city || '',
       state: user?.state || '',
       zip: user?.zip || '',
+      // v1.106.29 — a caregiver could write her bio and set her rates during signup and
+      // then never change either again, anywhere in the app. CaretakerHub has an editor for
+      // both, but it renders under `activeTab === 'profile'` and NOTHING ever sets that tab
+      // — `initialTab` is not passed by app.js and setActiveTab is only ever called with
+      // 'schedule' or 'financials'. It has been unreachable code. MyAccount also fetched the
+      // rates into `editRates` and never rendered them.
+      //
+      // It matters more now: the caregiver profile page makes that paragraph the main thing a
+      // family reads about her, and a paragraph you cannot revise is not much of a profile.
+      bio: cgProfile?.bio || '',
+      rateDaytime: cgProfile?.rate_daytime ?? cgProfile?.hourly_rate ?? '',
+      rateNighttime: cgProfile?.rate_nighttime ?? '',
+      rateOvernight: cgProfile?.rate_overnight ?? '',
     });
     setEditing(true);
   };
@@ -685,6 +699,32 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
         // (profile_photo did), replacing wiped it from the UI ("saving my address
         // deleted my photo"). The DB was never touched — display-only loss.
         setUser(prev => ({ ...(prev || {}), ...data.user }));
+
+        // v1.106.29 — the caregiver half lives on a different record and a different
+        // endpoint. Saved after the account succeeds, and reported separately: telling her
+        // "Profile updated" when her rate did not save is the class of lie this codebase
+        // keeps finding (the export toast, the clipboard toast, the reminder log).
+        if (isCaregiver) {
+          const cgRes = await apiFetch('/api/caregivers/me', {
+            method: 'PUT',
+            body: JSON.stringify({
+              bio: editData.bio,
+              rateDaytime: editData.rateDaytime === '' ? null : Number(editData.rateDaytime),
+              rateNighttime: editData.rateNighttime === '' ? null : Number(editData.rateNighttime),
+              rateOvernight: editData.rateOvernight === '' ? null : Number(editData.rateOvernight),
+            }),
+          });
+          if (cgRes?.ok) {
+            const cd = await cgRes.json().catch(() => ({}));
+            if (cd.profile) setCgProfile(cd.profile);
+          } else {
+            setEditing(false);
+            showToast('Your details saved, but your bio and rates did not — try again.', 'error');
+            setSaving(false);
+            return;
+          }
+        }
+
         setEditing(false);
         showToast('Profile updated', 'success');
       } else {
@@ -1125,6 +1165,48 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                   <div style={fieldLabel}>Medical conditions to be aware of</div>
                   <input style={inputStyle} value={editData.medicalConditions} onChange={(e) => ed('medicalConditions', e.target.value)} placeholder="E.g., diabetes, hypertension, asthma" />
                 </div>
+                {/* ─── v1.106.29 — the caregiver's own two fields ───
+                    Both were write-once at signup: CaretakerHub's editor for them lives
+                    behind a tab nothing ever opens. The profile page families now read makes
+                    the bio the main thing they see about her. */}
+                {isCaregiver && (
+                  <React.Fragment>
+                    <div style={{ gridColumn: '1 / -1', borderTop: '1px solid #eee', paddingTop: 12, marginTop: 4 }}>
+                      <div style={{ ...fieldLabel, fontWeight: 700, fontSize: 14, marginBottom: 8 }}>Your caregiver profile</div>
+                    </div>
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <div style={fieldLabel}>About you</div>
+                      <textarea
+                        style={{ ...inputStyle, minHeight: 96, resize: 'vertical', fontFamily: 'inherit' }}
+                        value={editData.bio || ''}
+                        onChange={(e) => ed('bio', e.target.value)}
+                        placeholder="What families see when they're deciding. Your experience, the kind of care you're best at — e.g. 'Six years with dementia patients' or 'I work well with special-needs kids.'" />
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                        Shown on your profile page to families browsing caregivers.
+                      </div>
+                    </div>
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <div style={fieldLabel}>Your rates ($/hr)</div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(96px, 1fr))', gap: 10 }}>
+                        {[
+                          ['rateDaytime', 'Daytime', '6a\u20136p'],
+                          ['rateNighttime', 'Nighttime', '6p\u201310p'],
+                          ['rateOvernight', 'Overnight', '10p\u20136a'],
+                        ].map(([key, label, when]) => (
+                          <div key={key}>
+                            <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 4 }}>{label} <span style={{ color: 'var(--text-muted)' }}>{when}</span></div>
+                            <input type="number" inputMode="decimal" min="0" step="1"
+                              style={inputStyle}
+                              value={editData[key] ?? ''}
+                              onChange={(e) => ed(key, e.target.value)}
+                              placeholder="\u2014" />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </React.Fragment>
+                )}
+
                 <div style={{ gridColumn: '1 / -1', borderTop: '1px solid #eee', paddingTop: 12, marginTop: 4 }}>
                   <div style={{ ...fieldLabel, fontWeight: 700, fontSize: 14, marginBottom: 8 }}>Address</div>
                 </div>

@@ -405,10 +405,26 @@ router.post("/me/location", requireRole("caregiver"), async (req, res) => {
 });
 
 // ─── GET /api/caregivers/:id ───
+// ─── GET /api/caregivers/platform-config ───
+// Returns which optional services are configured (for frontend graceful degradation)
+//
+// v1.106.29 — this was registered at the BOTTOM of the file, 370 lines below "/:id". Express
+// matches in registration order and "/:id" matches the word "platform-config" perfectly well,
+// so this endpoint has never once run: every call got {"error":"Caregiver not found"} with a
+// 404, and the caller's `r?.ok &&` swallowed it. Same class as the 426 version gate in
+// v1.106.7 and the reason tests/sessionsRouteOrder.test.js exists; this router now has the
+// same guard in tests/caregiversRouteOrder.test.js.
+router.get("/platform-config", async (req, res) => {
+  res.json({
+    stripeConfigured: !!(process.env.STRIPE_SECRET_KEY || process.env.stripe_secret_key),
+    checkrConfigured: !!process.env.CHECKR_API_KEY,
+  });
+});
+
 router.get("/:id", async (req, res) => {
   const db = await getDb();
   const cg = await db.prepare(`
-    SELECT cp.*, u.first_name, u.last_name, u.phone, u.avatar_url
+    SELECT cp.*, u.first_name, u.last_name, u.phone, u.avatar_url, u.profile_photo
     FROM caregiver_profiles cp
     JOIN users u ON cp.user_id = u.id
     WHERE cp.id = ?
@@ -437,6 +453,10 @@ router.get("/:id", async (req, res) => {
     caregiver: {
       id: cg.id,
       name: `${cg.first_name} ${cg.last_name}`,
+      firstName: cg.first_name,
+      // v1.106.29 — the profile page is the one screen that is mostly about who she IS, and
+      // it had no way to show her face. avatar_url was selected here and never returned.
+      photoUrl: userPhotoUrl({ id: cg.user_id, avatar_url: cg.avatar_url, profile_photo: cg.profile_photo }),
       bio: cg.bio,
       yearsExperience: cg.years_experience,
       hourlyRate: cg.hourly_rate,
@@ -771,15 +791,6 @@ router.put("/mark-onboarding-complete", async (req, res) => {
     console.error("[caregivers] mark-onboarding-complete failed:", err);
     res.status(500).json({ error: "Could not complete onboarding. Please try again." });
   }
-});
-
-// ─── GET /api/caregivers/platform-config ───
-// Returns which optional services are configured (for frontend graceful degradation)
-router.get("/platform-config", async (req, res) => {
-  res.json({
-    stripeConfigured: !!(process.env.STRIPE_SECRET_KEY || process.env.stripe_secret_key),
-    checkrConfigured: !!process.env.CHECKR_API_KEY,
-  });
 });
 
 module.exports = router;

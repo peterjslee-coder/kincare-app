@@ -2391,6 +2391,43 @@ async function initializeDatabase() {
       //
       // The backfill computes the key in SQL for the rows already there rather than leaving
       // them to the NULL fallback forever.
+      // ─── v1.106.30 — an appointment other people are part of ───
+      //
+      // Pete: "today I am going to the Dr. Lambert appointment, but Tina is also going. So I
+      // would like to be able to tag her so that she gets updates about that appointment as
+      // well." And separately: "Appointments need to be [editable] with notes as well...
+      // Otherwise, the only thing that Kitay knows is that an appointment happened."
+      //
+      // Two tables' worth of intent, one of which already exists. ATTENDEES are new. NOTES
+      // are not — recipient_notes is the care record, it already pushes the team and already
+      // feeds iPAi's categoriser, so an appointment note is a note that knows which
+      // appointment it came from, not a text column on care_events that nothing reads.
+      // A second place to write about someone's health is the duplication this batch exists
+      // to remove.
+      id: "038_care_event_attendees_and_notes",
+      statements: [
+        `CREATE TABLE IF NOT EXISTS care_event_attendees (
+          id TEXT PRIMARY KEY,
+          care_event_id TEXT NOT NULL REFERENCES care_events(id) ON DELETE CASCADE,
+          user_id TEXT NOT NULL REFERENCES users(id),
+          added_by TEXT REFERENCES users(id),
+          created_at TIMESTAMPTZ DEFAULT NOW()
+        )`,
+        // One row per person per appointment. Tagging someone twice is the same fact.
+        `CREATE UNIQUE INDEX IF NOT EXISTS idx_event_attendee_unique
+           ON care_event_attendees(care_event_id, user_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_event_attendee_user
+           ON care_event_attendees(user_id)`,
+        // The note stays in the care record; this only records which appointment it is about.
+        // Nullable and ON DELETE SET NULL: deleting an appointment must never delete what
+        // someone wrote about a person's health.
+        `ALTER TABLE recipient_notes ADD COLUMN IF NOT EXISTS care_event_id TEXT
+           REFERENCES care_events(id) ON DELETE SET NULL`,
+        `CREATE INDEX IF NOT EXISTS idx_recipient_notes_event
+           ON recipient_notes(care_event_id) WHERE care_event_id IS NOT NULL`,
+      ],
+    },
+    {
       id: "037_trusted_ip_network_key",
       statements: [
         `ALTER TABLE trusted_admin_ips ADD COLUMN IF NOT EXISTS trust_key TEXT`,

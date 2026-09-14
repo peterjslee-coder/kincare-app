@@ -495,6 +495,13 @@ const Caregivers = window.Caregivers = () => {
   if (loading) return <LoadingSpinner text="Loading caregivers..." />;
 
   // ─── Caregiver Card (reused across tabs) ───
+  // v1.106.29 — the profile page reads the id off window rather than a route param, the
+  // same way CareTeamPage takes selectedTeamId. One page, one subject at a time.
+  const openCaregiverProfile = (cg) => {
+    window.__viewCaregiverId = cg.id;
+    if (typeof window.__navigateTo === 'function') window.__navigateTo('caregiver-profile');
+  };
+
   const CaregiverCard = ({ cg, showDistance }) => {
     const avail = CAREGIVER_AVAILABILITY[cg.name];
     const isAssigned = assignedCaregiverIds.includes(cg.id);
@@ -503,7 +510,14 @@ const Caregivers = window.Caregivers = () => {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div style={{ flex: 1 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: '20px', fontWeight: 700, color: 'var(--text-primary)' }}>{privacyName(cg, isAssigned)}</span>
+              {/* v1.106.29 — the name opens the profile. Pete: "if I click on Tina, I should
+                  see that she's in Christiansburg." A <button> rather than a styled div so
+                  it is reachable by keyboard and announced as an action. */}
+              <button onClick={() => openCaregiverProfile(cg)} style={{
+                background: 'none', border: 'none', padding: 0, font: 'inherit',
+                fontSize: '20px', fontWeight: 700, color: 'var(--text-primary)',
+                cursor: 'pointer', textAlign: 'left',
+              }}>{privacyName(cg, isAssigned)}</button>
               {isAssigned && (
                 <span style={{ padding: '2px 8px', background: 'var(--color-success-bg)', color: 'var(--color-success)', borderRadius: '10px', fontSize: '10px', fontWeight: 600 }}>Assigned</span>
               )}
@@ -522,8 +536,12 @@ const Caregivers = window.Caregivers = () => {
               {cg.city && <> • {cg.city}, {cg.state || ''}</>}
             </div>
             {cg.bio && (
-              <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '4px', lineHeight: '1.4' }}>
-                {cg.bio.length > 120 ? cg.bio.slice(0, 120) + '...' : cg.bio}
+              <div onClick={() => openCaregiverProfile(cg)}
+                style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '4px', lineHeight: '1.4', cursor: 'pointer' }}>
+                {cg.bio.length > 120 ? cg.bio.slice(0, 120) + '\u2026' : cg.bio}
+                {cg.bio.length > 120 && (
+                  <span style={{ color: 'var(--role-color)', fontWeight: 700 }}> More</span>
+                )}
               </div>
             )}
             <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>

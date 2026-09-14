@@ -52,6 +52,86 @@ function serializeEvent(ev, extra = {}) {
   };
 }
 
+// ─── v1.106.30 — who else is going ───
+//
+// Pete: "today I am going to the Dr. Lambert appointment, but Tina is also going. So I would
+// like to be able to tag her so that she gets updates about that appointment as well."
+//
+// Tagging is bounded by the care team on purpose. Anyone you can tag is already someone who
+// can see this person's record; the tag decides who gets TOLD, not who is allowed to know.
+// Letting it reach further would make an appointment a way to disclose a health event to
+// someone with no access to the person it is about.
+async function attendeesFor(db, eventId) {
+  return db.prepare(`
+    SELECT a.user_id, u.first_name, u.last_name
+    FROM care_event_attendees a
+    JOIN users u ON u.id = a.user_id
+    WHERE a.care_event_id = ?
+    ORDER BY u.first_name
+  `).all(eventId);
+}
+
+/**
+ * Replace an event's attendee list, returning who is NEW so only they are notified.
+ * Re-saving an appointment must not re-announce it to everyone already on it.
+ */
+async function setAttendees(db, ev, userIds, addedBy) {
+  const allowed = new Set((await teamUserIds(db, ev.care_recipient_id)).map((u) => u.id));
+  const wanted = [...new Set((userIds || []).filter((id) => allowed.has(id)))];
+
+  const existing = (await db.prepare(
+    "SELECT user_id FROM care_event_attendees WHERE care_event_id = ?"
+  ).all(ev.id)).map((r) => r.user_id);
+  const existingSet = new Set(existing);
+
+  const added = wanted.filter((id) => !existingSet.has(id));
+  const removed = existing.filter((id) => !wanted.includes(id));
+
+  await db.transaction(async (tx) => {
+    for (const id of removed) {
+      await tx.prepare("DELETE FROM care_event_attendees WHERE care_event_id = ? AND user_id = ?")
+        .run(ev.id, id);
+    }
+    for (const id of added) {
+      await tx.prepare(`
+        INSERT INTO care_event_attendees (id, care_event_id, user_id, added_by)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT (care_event_id, user_id) DO NOTHING
+      `).run(uuid(), ev.id, id, addedBy);
+    }
+  });
+
+  return { added, removed, current: wanted };
+}
+
+/** Tell the people just tagged that they are on an appointment. */
+async function notifyTagged(db, req, ev, userIds) {
+  if (!userIds || userIds.length === 0) return;
+  const cr = await db.prepare("SELECT first_name FROM care_recipients WHERE id = ?")
+    .get(ev.care_recipient_id);
+  const who = cr?.first_name || "your loved one";
+  const when = ev.event_time ? `${ev.event_date} at ${ev.event_time}` : ev.event_date;
+  const emitToUser = req.app.get("emitToUser");
+  const { sendPushToUser } = require("./push");
+
+  for (const userId of userIds) {
+    // Never notify the person doing the tagging about their own action.
+    if (userId === req.user.id) continue;
+    if (emitToUser) emitToUser(userId, "care_event_update", { eventId: ev.id });
+    // NO TITLE. I wrote "title only" here and shipped the appointment title into the body,
+    // which tests/pushPhi.test.js caught: the title IS the health information — "Dr. Lambert"
+    // names the clinician, "Oncology follow-up" names the condition. v1.105.39 settled this
+    // for the reminder push already ("no phi on lock screens"), and this is the same screen.
+    //
+    // First name and when. That is enough to act on; the rest is one tap away behind auth.
+    sendPushToUser(userId, {
+      title: "You're on an appointment",
+      body: `For ${who} — ${when}. Tap for details.`,
+      data: { type: "care_event_tagged", eventId: ev.id, page: "dashboard" },
+    }, "care_event_tagged").catch(() => {});
+  }
+}
+
 // ─── GET /api/care-events/:id/ics ── UNAUTHENTICATED (HMAC-signed URL) ───
 // Registered before the auth middleware on purpose: calendar apps and the
 // iOS share sheet fetch this URL with no InPlace session.
@@ -94,12 +174,30 @@ router.get("/upcoming", async (req, res) => {
           AND e.event_date >= ? AND e.event_date <= ?
         ORDER BY e.event_date ASC, e.event_time ASC NULLS FIRST
       `).all(cr.id, today, horizon);
+      // v1.106.30 — attendees for the whole page in ONE query. Per-event would be a round
+      // trip per card on the screen someone opens most.
+      const byEvent = new Map();
+      if (rows.length) {
+        const placeholders = rows.map(() => "?").join(",");
+        const att = await db.prepare(`
+          SELECT a.care_event_id, a.user_id, u.first_name, u.last_name
+          FROM care_event_attendees a
+          JOIN users u ON u.id = a.user_id
+          WHERE a.care_event_id IN (${placeholders})
+          ORDER BY u.first_name
+        `).all(...rows.map((r) => r.id));
+        for (const a of att) {
+          if (!byEvent.has(a.care_event_id)) byEvent.set(a.care_event_id, []);
+          byEvent.get(a.care_event_id).push({ user_id: a.user_id, first_name: a.first_name, last_name: a.last_name });
+        }
+      }
       for (const ev of rows) {
         events.push(serializeEvent(ev, {
           recipientFirstName: cr.first_name,
           recipientName: `${cr.first_name} ${cr.last_name}`.trim(),
           timezone: tz,
           canManage: canScheduleEvents(access),
+          attendees: byEvent.get(ev.id) || [],
         }));
       }
     }
@@ -130,8 +228,23 @@ router.get("/recipient/:recipientId", async (req, res) => {
       ORDER BY e.event_date ASC, e.event_time ASC NULLS FIRST
       LIMIT 50
     `).all(req.params.recipientId, addDaysToDateString(today, -7));
+    const byEvent = new Map();
+    if (rows.length) {
+      const placeholders = rows.map(() => "?").join(",");
+      const att = await db.prepare(`
+        SELECT a.care_event_id, a.user_id, u.first_name, u.last_name
+        FROM care_event_attendees a
+        JOIN users u ON u.id = a.user_id
+        WHERE a.care_event_id IN (${placeholders})
+        ORDER BY u.first_name
+      `).all(...rows.map((r) => r.id));
+      for (const a of att) {
+        if (!byEvent.has(a.care_event_id)) byEvent.set(a.care_event_id, []);
+        byEvent.get(a.care_event_id).push({ user_id: a.user_id, first_name: a.first_name, last_name: a.last_name });
+      }
+    }
     return res.json({
-      events: rows.map((ev) => serializeEvent(ev, { timezone: tz })),
+      events: rows.map((ev) => serializeEvent(ev, { timezone: tz, attendees: byEvent.get(ev.id) || [] })),
       today,
       canManage: canManage(access),
     });
@@ -139,6 +252,69 @@ router.get("/recipient/:recipientId", async (req, res) => {
     captureException(err);
     console.error("Care events list error:", err.message);
     return res.status(500).json({ error: "Failed to load events" });
+  }
+});
+
+// ─── GET /api/care-events/taggable/:recipientId ───
+//
+// v1.106.30 — who can be put on an appointment for this person. The care team, minus
+// yourself. Deliberately the same set setAttendees will accept, so the picker cannot offer a
+// name the save will then silently drop.
+router.get("/taggable/:recipientId", async (req, res) => {
+  try {
+    const db = await getDb();
+    const access = await hasAccess(db, req.params.recipientId, req.user.id);
+    if (!access) return res.status(403).json({ error: "Not authorized for this care recipient" });
+    const team = await teamUserIds(db, req.params.recipientId);
+    return res.json({
+      people: team
+        .filter((u) => u.id !== req.user.id)
+        .map((u) => ({
+          user_id: u.id,
+          first_name: u.first_name,
+          last_name: u.last_name,
+          isCaregiver: (() => {
+            try { return (JSON.parse(u.roles || "[]") || []).includes("caregiver"); }
+            catch { return u.role === "caregiver"; }
+          })(),
+        })),
+    });
+  } catch (err) {
+    captureException(err);
+    return res.status(500).json({ error: "Failed to load people" });
+  }
+});
+
+// ─── GET /api/care-events/:id/notes ───
+//
+// v1.106.30 — Pete: "Appointments need to be [editable] with notes as well... Otherwise, the
+// only thing that Kitay knows is that an appointment happened."
+//
+// These are recipient_notes carrying this event's id, NOT a column on care_events. The care
+// record is one place: it already pushes the whole team, already feeds iPAi's categoriser,
+// and is already what every other surface reads. A second store for "what the doctor said"
+// would be a second place to look for someone's health history.
+router.get("/:id/notes", async (req, res) => {
+  try {
+    const db = await getDb();
+    const ev = await db.prepare("SELECT * FROM care_events WHERE id = ?").get(req.params.id);
+    if (!ev) return res.status(404).json({ error: "Event not found" });
+    const access = await hasAccess(db, ev.care_recipient_id, req.user.id);
+    if (!access) return res.status(403).json({ error: "Not authorized for this appointment" });
+
+    const notes = await db.prepare(`
+      SELECT n.id, n.content, n.note_type, n.needs_attention, n.created_at,
+             u.first_name AS author_first_name, u.last_name AS author_last_name,
+             (n.photo IS NOT NULL) AS has_photo
+      FROM recipient_notes n
+      LEFT JOIN users u ON u.id = n.author_id
+      WHERE n.care_event_id = ?
+      ORDER BY n.created_at ASC
+    `).all(ev.id);
+    return res.json({ notes });
+  } catch (err) {
+    captureException(err);
+    return res.status(500).json({ error: "Failed to load appointment notes" });
   }
 });
 
@@ -237,7 +413,16 @@ router.post("/", async (req, res) => {
     } catch (feedErr) { /* non-critical */ }
 
     const ev = await db.prepare("SELECT * FROM care_events WHERE id = ?").get(id);
-    return res.status(201).json({ event: serializeEvent(ev) });
+
+    // v1.106.30 — who else is going.
+    let attendees = [];
+    if (Array.isArray(req.body.attendee_user_ids)) {
+      const { added } = await setAttendees(db, ev, req.body.attendee_user_ids, req.user.id);
+      await notifyTagged(db, req, ev, added);
+      attendees = await attendeesFor(db, ev.id);
+    }
+
+    return res.status(201).json({ event: serializeEvent(ev, { attendees }) });
   } catch (err) {
     captureException(err);
     console.error("Care event create error:", err.message);
@@ -279,7 +464,17 @@ router.put("/:id", async (req, res) => {
       ev.id
     );
     const updated = await db.prepare("SELECT * FROM care_events WHERE id = ?").get(ev.id);
-    return res.json({ event: serializeEvent(updated) });
+
+    // v1.106.30 — only the NEWLY tagged hear about it. Re-saving an appointment to fix a
+    // typo must not re-announce it to everyone already on it.
+    let attendees = await attendeesFor(db, ev.id);
+    if (Array.isArray(req.body.attendee_user_ids)) {
+      const { added } = await setAttendees(db, updated, req.body.attendee_user_ids, req.user.id);
+      await notifyTagged(db, req, updated, added);
+      attendees = await attendeesFor(db, ev.id);
+    }
+
+    return res.json({ event: serializeEvent(updated, { attendees }) });
   } catch (err) {
     captureException(err);
     console.error("Care event update error:", err.message);
@@ -330,7 +525,16 @@ async function pollCareEvents(sendPushToUser) {
       if (!stage) continue;
 
       const team = await teamUserIds(db, ev.care_recipient_id);
-      const notifiable = team.filter(isFamilyNotifiable); // family-only (Pete's 7/22 rule)
+      // v1.99.2 kept event reminders FAMILY-ONLY (Pete's 7/22 rule) because no caregiver had
+      // asked to be on one. v1.106.30 — being tagged IS that ask, and it is the whole point
+      // of tagging: "Tina is also going... so that she gets updates about that appointment as
+      // well." So the recipients are the notifiable family PLUS anyone tagged, whatever their
+      // role. setAttendees only admits people already on the care team, so this widens who is
+      // TOLD and never who is allowed to know.
+      const tagged = new Set((await db.prepare(
+        "SELECT user_id FROM care_event_attendees WHERE care_event_id = ?"
+      ).all(ev.id)).map((r) => r.user_id));
+      const notifiable = team.filter((m) => isFamilyNotifiable(m) || tagged.has(m.id));
       const timeLabel = ev.event_time
         ? new Date(ev.starts_at).toLocaleTimeString("en-US", { timeZone: tz, hour: "numeric", minute: "2-digit" })
         : null;

@@ -156,6 +156,30 @@ const formatMoney = window.formatMoney = (n) => {
   return Number.isInteger(v) ? `$${v}` : `$${v.toFixed(2)}`;
 };
 
+// ─── v1.106.30 — an address you can tap ───
+//
+// Pete: "I would like to also be able to put addresses in the appointment so that when Tina
+// opens it. She can just click the link and it gives her where the appointment is on the map."
+//
+// care_events.location has existed since 011_care_events and the form has always collected
+// it — it was just printed as text, so the caregiver read it off the screen and typed it into
+// Maps herself, standing in a car park.
+//
+// Apple Maps on iOS, Google Maps everywhere else. Not because Google's URL fails on iOS, but
+// because it opens a browser tab asking to install the app rather than the map she wanted;
+// the point is one tap to directions, and on an iPhone that means maps.apple.com.
+const mapsUrlFor = window.mapsUrlFor = (address) => {
+  const q = String(address || "").trim();
+  if (!q) return null;
+  const isIOS = typeof navigator !== "undefined"
+    && (/iPad|iPhone|iPod/.test(navigator.userAgent || "")
+        // iPadOS 13+ reports as Macintosh; the touch points give it away.
+        || (/Macintosh/.test(navigator.userAgent || "") && (navigator.maxTouchPoints || 0) > 1));
+  return isIOS
+    ? `https://maps.apple.com/?q=${encodeURIComponent(q)}`
+    : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
+};
+
 // ─── v1.106.27 — a link someone typed should be a link ───
 //
 // Pete: "I texted a link and it came through plain Tex. I want it to be a clickable link."

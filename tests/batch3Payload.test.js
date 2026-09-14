@@ -270,7 +270,12 @@ describe("P4 — the caregiver hub stops waiting on itself", () => {
     const fetchData = h.slice(h.indexOf("const fetchData = async () => {"), h.indexOf("setLoading(false);"));
     const awaitAt = fetchData.indexOf("await apiFetch('/api/dashboard')");
     expect(awaitAt).toBeGreaterThan(-1);
-    for (const call of ["fetchAvailability()", "/api/caregivers/platform-config", "/api/referrals/my-code",
+    // v1.106.29 — the platform-config call was removed, not moved. It had been registered
+    // BELOW "/:id" in routes/caregivers.js, so every one of these hub loads got a 404
+    // ("Caregiver not found") that `r?.ok &&` swallowed, into state nothing rendered. The
+    // route order is fixed and the endpoint works; the dead call is gone. P4's property —
+    // independent calls do not sit behind an earlier await — is unchanged for the rest.
+    for (const call of ["fetchAvailability()", "/api/referrals/my-code",
                         "/api/referrals/list", "/api/referrals/milestones", "/api/push/notifications"]) {
       expect(fetchData.indexOf(call)).toBeGreaterThan(-1);
       expect(fetchData.indexOf(call)).toBeLessThan(awaitAt);

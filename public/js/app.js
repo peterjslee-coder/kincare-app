@@ -2048,6 +2048,13 @@ const App = () => {
     if (currentPage === 'find-work') return <FindWork key={pageKey} />;
     if (currentPage === 'schedule') return <Schedule key={pageKey} />;
     if (currentPage === 'caregivers') return <Caregivers key={pageKey} />;
+    // v1.106.29 — one caregiver, in full. Guarded like every other optional component: a
+    // missing bundle entry must not white-screen the app.
+    if (currentPage === 'caregiver-profile') {
+      return typeof CaregiverProfilePage !== 'undefined'
+        ? <CaregiverProfilePage key={pageKey} caregiverId={window.__viewCaregiverId} onNavigate={setCurrentPage} />
+        : <Caregivers key={pageKey} />;
+    }
     if (currentPage === 'documents') { window.__accountTab = 'documents'; return <MyAccount key={pageKey} setCurrentUser={setCurrentUser} onNavigate={setCurrentPage} />; }
     if (currentPage === 'analytics') return <Analytics key={pageKey} />;
     if (currentPage === 'activity') return <ActivityFeed key={pageKey} />;
