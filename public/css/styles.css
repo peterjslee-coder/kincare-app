@@ -2226,6 +2226,26 @@
       to { opacity: 0; }
     }
 
+    /* ─── v1.106.28 — the map's own controls sat ON TOP of the nav bar ───
+       Pete: "The bottom of this page has some sort of add link or something from our map
+       page. It makes the footer navigation buttons unusable because they are behind this
+       link."
+       The "link" is Leaflet's OpenStreetMap attribution. leaflet.css ships
+       `.leaflet-top, .leaflet-bottom { z-index: 1000 }`, and neither the map container nor
+       any ancestor creates a stacking context, so those corners compete with .bottom-nav
+       (900) at the root and win. overflow:hidden on the map wrapper clips them to the map
+       box, but that box extends under the fixed nav when the page is scrolled down — and
+       .leaflet-control sets `pointer-events: auto`, so the attribution ate the taps as
+       well as covering the buttons.
+       800 keeps them above every map pane (popups are 700) and below the nav. Global rather
+       than inside the mobile query: desktop has no bottom nav, but a modal at 1000 would tie
+       with these corners and the map could paint over it. Only the corners are touched, and
+       vendor/leaflet.css is left alone so a Leaflet upgrade does not silently drop the fix. */
+    .leaflet-top,
+    .leaflet-bottom {
+      z-index: 800;
+    }
+
     /* ===== Bottom Nav (hidden on desktop) ===== */
     .bottom-nav {
       display: none;

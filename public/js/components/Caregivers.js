@@ -117,6 +117,10 @@ const Caregivers = window.Caregivers = () => {
   const leafletMap = useRef(null);
   const markersRef = useRef([]);
   const circleRef = useRef(null);
+  // v1.106.28 — handles for everything the map effect schedules, so the cleanup can actually
+  // stop it. Five setTimeouts and a ResizeObserver used to escape it entirely.
+  const pending = useRef([]);
+  const observer = useRef(null);
   const autoSearchedRef = useRef(false);
 
   const fetchData = async () => {
@@ -246,6 +250,14 @@ const Caregivers = window.Caregivers = () => {
         leafletMap.current.remove();
         leafletMap.current = null;
       }
+      // v1.106.28 — markersRef and circleRef OUTLIVED the map they belonged to. On the next
+      // render, renderMarkers() called map.removeLayer(m) with markers from the destroyed
+      // instance; Leaflet then read _leaflet_pos off an element whose panes no longer exist:
+      //     TypeError: undefined is not an object (evaluating 't._leaflet_pos')
+      // which appears in two separate pieces of Pete's feedback from this page. A layer
+      // belongs to one map; when the map goes, so do the references to it.
+      markersRef.current = [];
+      circleRef.current = null;
 
       const map = L.map(mapRef.current, {
         center: searchCenter ? [searchCenter.lat, searchCenter.lng] : [37.2296, -80.4139],
@@ -261,18 +273,18 @@ const Caregivers = window.Caregivers = () => {
 
       leafletMap.current = map;
       map.invalidateSize(true);
-      // Force multiple invalidateSize calls to handle layout timing
+      // Force multiple invalidateSize calls to handle layout timing.
+      // v1.106.28 — every one of these was fire-and-forget: five timers and a ResizeObserver
+      // that the cleanup below never touched. They are collected now so switching tabs stops
+      // them, rather than leaving them to fire against whatever map exists by then.
       const forceResize = () => { if (leafletMap.current) leafletMap.current.invalidateSize(true); };
       forceResize();
-      setTimeout(forceResize, 100);
-      setTimeout(forceResize, 300);
-      setTimeout(forceResize, 600);
-      setTimeout(forceResize, 1200);
-      // Also use ResizeObserver for robust detection of container sizing
+      for (const ms of [100, 300, 600, 1200]) pending.current.push(setTimeout(forceResize, ms));
       if (window.ResizeObserver && mapRef.current) {
         const ro = new ResizeObserver(() => forceResize());
         ro.observe(mapRef.current);
-        setTimeout(() => ro.disconnect(), 3000);
+        observer.current = ro;
+        pending.current.push(setTimeout(() => ro.disconnect(), 3000));
       }
 
       // If no search center, try recipient coords or browser geolocation as fallback
@@ -288,19 +300,30 @@ const Caregivers = window.Caregivers = () => {
 
     return () => {
       clearTimeout(timer);
+      for (const t of pending.current) clearTimeout(t);
+      pending.current = [];
+      if (observer.current) { observer.current.disconnect(); observer.current = null; }
       if (leafletMap.current) {
         leafletMap.current.remove();
         leafletMap.current = null;
       }
+      markersRef.current = [];
+      circleRef.current = null;
     };
   }, [activeTab, searchCenter]);
 
   // Update map markers when search results change
   useEffect(() => {
     if (activeTab !== 'nearby') return;
-    // Map is created with a 100ms delay, so wait for it
+    // Map is created with a 100ms delay, so wait for it.
+    // v1.106.28 — this recursed through setTimeout with nothing holding the handle, so on
+    // unmount or a tab switch it polled every 50ms for the life of the page, and when a map
+    // did appear it rendered markers from a closure over stale results.
+    let cancelled = false;
+    let waitTimer = null;
     const waitForMap = () => {
-      if (!leafletMap.current) return setTimeout(waitForMap, 50);
+      if (cancelled) return;
+      if (!leafletMap.current) { waitTimer = setTimeout(waitForMap, 50); return; }
       renderMarkers();
     };
     const markerCleanup = { fn: null };
@@ -454,7 +477,11 @@ const Caregivers = window.Caregivers = () => {
     markerCleanup.fn = () => { if (container) container.removeEventListener('click', handlePopupClick); };
     };
     waitForMap();
-    return () => { if (markerCleanup.fn) markerCleanup.fn(); };
+    return () => {
+      cancelled = true;
+      if (waitTimer) clearTimeout(waitTimer);
+      if (markerCleanup.fn) markerCleanup.fn();
+    };
   }, [locationResults, searchCenter, activeTab, assignments, caregivers, recipients]);
 
   // Build a lookup: which caregiver profiles are assigned
