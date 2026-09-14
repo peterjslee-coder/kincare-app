@@ -35,11 +35,49 @@ const isMarkReviewed = process.argv.includes("--mark-reviewed");
 const isPull = process.argv.includes("--pull");
 const BASE_URL = isLocal ? LOCAL_URL : PROD_URL;
 
+// ─── v1.106.35 — pin to one address family ───
+//
+// Pete's pull failed twice in one day with IP_VERIFICATION_REQUIRED from two DIFFERENT
+// addresses: 2606:a800:9d80:... in the morning and 204.111.165.7 in the evening. Same
+// machine, same desk. v1.106.21 fixed the first one — macOS rotates the low 64 bits of an
+// IPv6 address daily, so trust is keyed on the /64 now.
+//
+// This is the other half, and it is this script's fault rather than the server's. Node 18+
+// dial dual-stack hosts with Happy Eyeballs (autoSelectFamily): it races A and AAAA and
+// keeps whichever connects first. So the same command leaves by IPv6 on one run and IPv4 on
+// the next, presents a different address each way, and the admin gate quite correctly does
+// not recognise it. Verifying one does nothing for the other, and there is no number of
+// passkey prompts that ends it.
+//
+// Pinning to IPv4 makes the address stable and predictable: verify once, trusted for 90
+// days. IPv4 because it is the one a residential connection always has, and because
+// ipTrustKey treats a single IPv4 as the household exactly — no prefix to get wrong.
+const IP_FAMILY = Number(process.env.INPLACE_IP_FAMILY || 4);
+
+/** An unrecognised-network refusal is a two-minute fix, not a bug. Say so. */
+function explainIpGate(data) {
+  if (!data || data.code !== "IP_VERIFICATION_REQUIRED") return;
+  console.error("");
+  console.error("   This network hasn't been verified for admin access yet.");
+  console.error(`   Address seen by the server: ${data.ip}`);
+  console.error("");
+  console.error("   To fix, on THIS machine:");
+  console.error("     1. open https://yourinplace.com and sign in");
+  console.error("     2. go to the Admin panel — it will prompt for your passkey");
+  console.error("     3. verify, then re-run this script");
+  console.error("");
+  console.error("   Trust lasts 90 days per network. This script now pins to IPv" + IP_FAMILY +
+                ", so the address stops changing between runs.");
+  console.error("");
+}
+
 function request(url, options = {}) {
   return new Promise((resolve, reject) => {
     const mod = url.startsWith("https") ? https : http;
     const req = mod.request(url, {
       method: options.method || "GET",
+      family: IP_FAMILY,
+      autoSelectFamily: false,
       headers: {
         "Content-Type": "application/json",
         ...(options.headers || {}),
@@ -100,6 +138,7 @@ async function triageMode() {
   const res = await request(`${BASE_URL}/api/admin/feedback/triage`, { headers: authHeaders });
   if (res.status !== 200) {
     console.error("❌ Triage fetch failed:", res.data);
+    explainIpGate(res.data);
     process.exit(1);
   }
 
@@ -140,6 +179,7 @@ async function markReviewedMode() {
   const triageRes = await request(`${BASE_URL}/api/admin/feedback/triage`, { headers: authHeaders });
   if (triageRes.status !== 200) {
     console.error("❌ Triage fetch failed:", triageRes.data);
+    explainIpGate(triageRes.data);
     process.exit(1);
   }
 
@@ -173,7 +213,7 @@ async function pullMode() {
 
   // 1. Snapshot what's NEW right now
   const t = await request(`${BASE_URL}/api/admin/feedback/triage`, { headers: authHeaders });
-  if (t.status !== 200) { console.error("❌ Triage fetch failed:", t.data); process.exit(1); }
+  if (t.status !== 200) { console.error("❌ Triage fetch failed:", t.data); explainIpGate(t.data); process.exit(1); }
   const newItems = t.data.newItems || [];
   console.log(`🆕 ${newItems.length} new item(s) since last pull`);
 
