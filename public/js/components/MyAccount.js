@@ -369,7 +369,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
         body: JSON.stringify({ photo: dataUrl }),
       });
       if (res?.ok) {
-        setUser(prev => prev ? { ...prev, profile_photo: dataUrl, avatar_url: dataUrl } : prev);
+        setUser(prev => prev ? { ...prev, profile_photo: dataUrl } : prev);
         if (setCurrentUser) setCurrentUser(prev => prev ? { ...prev, profilePhoto: dataUrl } : prev);
         showToast('Profile photo updated!', 'success');
       } else {
@@ -388,7 +388,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
     try {
       const res = await apiFetch('/api/auth/me/photo', { method: 'DELETE' });
       if (res?.ok) {
-        setUser(prev => prev ? { ...prev, profile_photo: null, avatar_url: null } : prev);
+        setUser(prev => prev ? { ...prev, profile_photo: null } : prev);
         if (setCurrentUser) setCurrentUser(prev => prev ? { ...prev, profilePhoto: null } : prev);
         showToast('Photo removed', 'success');
       }

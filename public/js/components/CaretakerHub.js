@@ -646,7 +646,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
     !!(_autoP.bio && (_autoP.rateDaytime || _autoP.hourlyRate)),
     availRules.length > 0,
     !!stoplightData,
-    !!_autoP.avatar_url,
+    !!_autoP.hasPhoto,
     stripeStatus?.status === 'active',
     // v1.105.68 — an active admin vouch counts here, because it counts on the SERVER. The gate
     // in routes/caregivers.js has accepted a vouch in place of a background check since
@@ -1040,8 +1040,10 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         body: JSON.stringify({ photo: dataUrl }),
       });
       if (res?.ok) {
-        // Update local state to reflect the new avatar
-        setData(prev => prev ? { ...prev, profile: { ...prev.profile, avatar_url: dataUrl } } : prev);
+        // v1.106.22 — this optimistically set `avatar_url`, which is the one field the
+        // upload just NULLed on the server. So the checklist appeared to tick and then
+        // un-ticked on the next fetch. Set what the checklist actually reads.
+        setData(prev => prev ? { ...prev, profile: { ...prev.profile, hasPhoto: true, photoUrl: dataUrl } } : prev);
         showToast('Profile photo updated!', 'success');
       } else {
         showToast('Failed to upload photo', 'error');
@@ -1113,7 +1115,9 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
 
   // First Steps checklist — encouraging but NEVER blocks dashboard access
   // New 5-step order per Pete's specs
-  const hasPhoto = !!profile.avatar_url;
+  // v1.106.22 — `avatar_url` is NULLed by the upload that is supposed to satisfy this
+  // step, so reading it meant the box could never tick. The server answers this now.
+  const hasPhoto = !!profile.hasPhoto;
   const hasAvailability = availRules.length > 0;
   const hasRates = !!(profile.rateDaytime || profile.hourlyRate);
   const securityReviewed = !!localStorage.getItem('inplace_security_reviewed');

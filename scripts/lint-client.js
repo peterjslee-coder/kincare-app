@@ -443,6 +443,36 @@ function findConstUsedBeforeDeclaration(files, PUBLIC) {
   });
 }
 
+// ─── v1.106.22 — `avatar_url` is a storage column, and a lying one ───
+//
+// An upload writes `profile_photo` and sets `avatar_url = NULL` (routes/auth.js). So on the
+// client the column is not merely stale, it is inverted: the more recently someone uploaded a
+// photo, the more certainly `avatar_url` is empty. Four places read it anyway — the First
+// Steps checkbox, the auto-complete counter that decides whether onboarding can ever finish,
+// the care-team thumbnails, and the optimistic patch after the upload itself. Tina could not
+// leave onboarding because of it.
+//
+// media.js owns the question ("does this user have a photo, and where is it"). The client asks
+// the server, which answers with `hasPhoto` / `photoUrl` / `avatarUrl`. No client file has any
+// business naming this column, so the rule is absolute rather than clever about context.
+function findRawAvatarColumnReads(files, PUBLIC) {
+  const findings = [];
+  for (const rel of files) {
+    const abs = path.join(PUBLIC, rel);
+    if (!fs.existsSync(abs)) continue;
+    const lines = fs.readFileSync(abs, "utf8").split("\n");
+    lines.forEach((line, i) => {
+      // Comments are not code. `code()` here is deliberate: three tests in this repo have
+      // silently passed by anchoring on a comment that mentioned the thing they meant to ban.
+      const code = line.replace(/\/\/.*$/, "").replace(/\/\*.*?\*\//g, "");
+      if (/\bavatar_url\b/.test(code)) {
+        findings.push({ file: rel, line: i + 1, text: line.trim().slice(0, 110) });
+      }
+    });
+  }
+  return findings;
+}
+
 async function main() {
   const eslint = new ESLint({
     useEslintrc: false,
@@ -491,9 +521,10 @@ async function main() {
   const missingJsx = findUndefinedJsxComponents(combined, locate);
   const lateHooks = findHooksAfterEarlyReturn(files, PUBLIC);
   const earlyConsts = findConstUsedBeforeDeclaration(files, PUBLIC);
+  const rawAvatars = findRawAvatarColumnReads(files, PUBLIC);
 
-  if (errors.length === 0 && missingJsx.length === 0 && lateHooks.length === 0 && earlyConsts.length === 0) {
-    console.log(`  [lint] ✓ ${files.length} client files, no NEW undeclared identifiers / dupe keys / dead code / undefined JSX components / unreachable functions / late hooks / TDZ uses${baseNote}`);
+  if (errors.length === 0 && missingJsx.length === 0 && lateHooks.length === 0 && earlyConsts.length === 0 && rawAvatars.length === 0) {
+    console.log(`  [lint] ✓ ${files.length} client files, no NEW undeclared identifiers / dupe keys / dead code / undefined JSX components / unreachable functions / late hooks / TDZ uses / raw avatar_url reads${baseNote}`);
     return 0;
   }
 
@@ -522,6 +553,12 @@ async function main() {
     console.error(`\n  [lint] \u2717 ${earlyConsts.length} const/let function(s) referenced ABOVE their own declaration — these throw "Cannot access 'X' before initialization" when the earlier code path runs:\n`);
     for (const c of earlyConsts) {
       console.error(`    ${c.file}:${c.line}  ${c.name} is used here, declared on line ${c.declaredAt}, and the return on line ${c.returnAt} can skip that declaration`);
+    }
+  }
+  if (rawAvatars.length) {
+    console.error(`\n  [lint] \u2717 ${rawAvatars.length} client reference(s) to the raw \`avatar_url\` column — an upload NULLs it, so anything deciding on it is wrong the moment a photo exists. Use hasPhoto / photoUrl / avatarUrl from the server:\n`);
+    for (const a of rawAvatars) {
+      console.error(`    ${a.file}:${a.line}  ${a.text}`);
     }
   }
   console.error("");

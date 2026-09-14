@@ -1,7 +1,7 @@
 const express = require("express");
 const { activeVouchesFor } = require("../utils/vouches");
 const { maySeeRecipientDetails, isTrustedCaregiver, detailsWithheldReason } = require("../utils/caregiverTrust");
-const { recipientPhotoUrl } = require("./media");
+const { recipientPhotoUrl, userPhotoUrl, userHasPhoto, hasPhotoSql } = require("./media");
 const { storedImageUrl } = require("../utils/serveMedia");
 const { getDb } = require("../models/database");
 const { authenticate } = require("../middleware/auth");
@@ -434,7 +434,15 @@ async function caregiverDashboard(db, userId, res) {
   const profile = await db.prepare("SELECT * FROM caregiver_profiles WHERE user_id = ?").get(userId);
   if (!profile) return res.status(404).json({ error: "Caregiver profile not found" });
 
-  const user = await db.prepare("SELECT first_name, last_name, avatar_url FROM users WHERE id = ?").get(userId);
+  // v1.106.22 — this read `avatar_url` alone and the payload handed it straight to the
+  // client as the answer to "does she have a photo". Since v1.106.8 an upload writes
+  // `profile_photo` and NULLs `avatar_url`, so uploading a photo made this field *less*
+  // true, not more. Tina uploaded hers three times and the First Steps item never ticked —
+  // and the same read feeds the auto-complete counter below, so onboarding could never
+  // finish either. media.js already owns this question; ask it.
+  const user = await db.prepare(
+    `SELECT id, first_name, last_name, avatar_url, profile_photo, ${hasPhotoSql("users")} FROM users WHERE id = ?`
+  ).get(userId);
 
   // Assigned families (deduplicate by care_recipient — siblings may each have an assignment for same recipient)
   const assignments = await db.prepare(`
@@ -705,7 +713,10 @@ async function caregiverDashboard(db, userId, res) {
       dlState: profile.dl_state,
       care_stoplight: profile.care_stoplight,
       care_preferences: profile.care_preferences,
-      avatar_url: user.avatar_url || null,
+      // v1.106.22 — one fact, one name. `avatar_url` is a storage column, not an answer;
+      // nothing on the client should be deciding anything from it.
+      hasPhoto: userHasPhoto(user),
+      photoUrl: userPhotoUrl(user),
       academicProgram: profile.academic_program || null,
       academicProgramYear: profile.academic_program_year || null,
       needsHourReports: !!profile.needs_hour_reports,

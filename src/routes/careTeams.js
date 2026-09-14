@@ -265,7 +265,7 @@ router.get("/:id/caregivers", requireRole("family"), async (req, res) => {
     // Get caregivers from sessions AND assignments (union to catch assigned-but-no-sessions)
     const caregivers = await db.prepare(`
       SELECT cp.id AS caregiver_profile_id, u.id AS user_id,
-        u.first_name, u.last_name, u.avatar_url,
+        u.first_name, u.last_name, u.avatar_url, u.profile_photo,
         COUNT(DISTINCT cs.id) AS visit_count,
         MAX(cs.scheduled_date) AS last_visit_date,
         MAX(CASE WHEN ca.is_favorite = 1 THEN 1 ELSE 0 END) AS is_favorite,
@@ -278,13 +278,24 @@ router.get("/:id/caregivers", requireRole("family"), async (req, res) => {
       LEFT JOIN caregiver_assignments ca ON ca.caregiver_profile_id = cp.id
         AND ca.care_recipient_id = ? AND ca.is_active = 1
       WHERE (cs.id IS NOT NULL OR ca.id IS NOT NULL)
-      GROUP BY cp.id, u.id, u.first_name, u.last_name, u.avatar_url
+      GROUP BY cp.id, u.id, u.first_name, u.last_name, u.avatar_url, u.profile_photo
       ORDER BY MAX(CASE WHEN ca.is_favorite = 1 THEN 1 ELSE 0 END) DESC,
                MAX(CASE WHEN ca.is_active = 1 THEN 1 ELSE 0 END) DESC,
                COUNT(DISTINCT cs.id) DESC
     `).all(team.care_recipient_id, team.care_recipient_id);
 
-    res.json({ caregivers, careRecipientId: team.care_recipient_id });
+    // v1.106.22 — this handed `avatar_url` back and CareTeamManage put it straight in an
+    // <img src>. Uploads have written `profile_photo` and NULLed `avatar_url` since
+    // v1.106.8, so every caregiver who uploaded a photo showed as initials here.
+    res.json({
+      caregivers: caregivers.map((c) => ({
+        ...c,
+        avatarUrl: userPhotoUrl({ id: c.user_id, avatar_url: c.avatar_url, profile_photo: c.profile_photo }),
+        avatar_url: undefined,
+        profile_photo: undefined,
+      })),
+      careRecipientId: team.care_recipient_id,
+    });
   } catch (err) {
     console.error("Get care team caregivers error:", err);
     res.status(500).json({ error: "Failed to get caregivers" });

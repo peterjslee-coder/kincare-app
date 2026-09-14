@@ -840,8 +840,8 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
         )}
         {recipientCaregivers.map(cg => (
           <div key={cg.caregiver_profile_id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0', borderBottom: '1px solid #f0f0f0' }}>
-            {cg.avatar_url ? (
-              <img src={cg.avatar_url} alt={`${cg.first_name?.[0]}${cg.last_name?.[0]}`} style={{ width: 42, height: 42, borderRadius: '50%', objectFit: 'cover' }} />
+            {cg.avatarUrl ? (
+              <img src={cg.avatarUrl} alt={`${cg.first_name?.[0]}${cg.last_name?.[0]}`} style={{ width: 42, height: 42, borderRadius: '50%', objectFit: 'cover' }} />
             ) : (
               <div style={{ width: 42, height: 42, borderRadius: '50%', background: 'var(--color-success-bg)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
