@@ -924,12 +924,31 @@ router.post("/", requireRole("family", "care_for"), validateSession, async (req,
   const estimatedCost = costResult.total;
 
   // Determine dates to create
-  const validRules = ["weekly", "biweekly"];
+  //
+  // v1.106.33 — "days" joins weekly/biweekly. Pete: "Would it be easier for me to make an
+  // appointment for MTWThF from 9-5 for four weeks instead of doing separate appointments
+  // for every day?" It would; it could not be done. Mon–Fri for a month was five bookings,
+  // five recurrence groups and five cards for the caregiver. It is now one of each.
+  const validRules = ["weekly", "biweekly", "days"];
   const isRecurring = recurrenceRule && validRules.includes(recurrenceRule);
   const weeks = Math.min(Math.max(parseInt(recurrenceWeeks) || 4, 2), 12);
-  const dates = isRecurring
-    ? generateRecurringDates(scheduledDate, recurrenceRule, weeks)
+  let dates = isRecurring
+    ? generateRecurringDates(scheduledDate, recurrenceRule, weeks, req.body.recurrenceDays)
     : [scheduledDate];
+
+  // A day-set over twelve weeks is up to 84 visits in one request. Every one of them is a
+  // row, a payment authorization and a line on somebody's screen, and the caregiver has to
+  // read the list before accepting it. Capped so a mis-tap cannot commit a family to a
+  // quarter of care in one submit.
+  const MAX_SESSIONS_PER_REQUEST = 40;
+  if (dates.length > MAX_SESSIONS_PER_REQUEST) {
+    return res.status(400).json({
+      error: `That's ${dates.length} visits in one request. Book up to ${MAX_SESSIONS_PER_REQUEST} at a time — shorten the run or pick fewer days.`,
+    });
+  }
+  if (dates.length === 0) {
+    return res.status(400).json({ error: "Pick at least one day of the week." });
+  }
 
   // Allow 'open' status for care requests without caregiver
   const sessionStatus = requestedStatus === "open" ? "open" : "pending";

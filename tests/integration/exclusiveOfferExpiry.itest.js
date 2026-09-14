@@ -194,3 +194,86 @@ describe("when the window passes", () => {
     expect(after.find((r) => r.id === rows[1].id).status).not.toBe("cancelled");
   });
 });
+
+describe("a weekday arrangement (v1.106.33)", () => {
+  // Pete: "Would it be easier for me to make an appointment for MTWThF from 9-5 for four
+  // weeks instead of doing separate appointments for every day?" This is that, end to end:
+  // one POST, one recurrence group, one exclusive window, twenty visits.
+  const bookWeekdays = (days, weeks) => h.request.post("/api/sessions").set(h.auth(family.token)).send({
+    careRecipientId: recipientId,
+    scheduledDate: nextMonday(),
+    scheduledTime: "09:00",
+    durationHours: 8,
+    serviceType: "companion",
+    recurrenceRule: "days",
+    recurrenceWeeks: weeks,
+    recurrenceDays: days,
+    directOffer: true,
+    caregiverId: caregiverProfileId,
+  });
+
+  function nextMonday() {
+    const d = new Date();
+    d.setDate(d.getDate() + ((8 - d.getDay()) % 7 || 7)); // the next Monday, never today
+    return d.toISOString().slice(0, 10);
+  }
+
+  test("Mon–Fri for four weeks is ONE request and twenty visits", () => {
+    return bookWeekdays("mon,tue,wed,thu,fri", 4).then(async (res) => {
+      if (res.status >= 300) throw new Error(`booking failed ${res.status}: ${JSON.stringify(res.body)}`);
+      const rows = await seriesRows();
+      expect(rows).toHaveLength(20);
+    });
+  });
+
+  test("...all in ONE recurrence group, so she gets one card", async () => {
+    await bookWeekdays("mon,tue,wed,thu,fri", 4);
+    const rows = await seriesRows();
+    expect(new Set(rows.map((r) => r.recurrence_group_id)).size).toBe(1);
+  });
+
+  test("...offered to her, sharing one exclusive window", async () => {
+    // The v1.106.25 property has to hold at twenty visits too: a month of Betty's care must
+    // not come apart one poller tick at a time.
+    await bookWeekdays("mon,tue,wed,thu,fri", 4);
+    const rows = await seriesRows();
+    for (const r of rows) expect(r.offered_to_caregiver_id).toBe(caregiverProfileId);
+    const stamps = rows.map((r) => new Date(r.exclusive_until).getTime());
+    for (const t of stamps) expect(Number.isFinite(t)).toBe(true);
+    expect(new Set(stamps).size).toBe(1);
+  });
+
+  test("every visit is a weekday", async () => {
+    await bookWeekdays("mon,tue,wed,thu,fri", 4);
+    const rows = await seriesRows();
+    // This passed while the booking was 400ing, because a for-loop over an empty array
+    // asserts nothing. Third time this session — check the list is non-empty first.
+    expect(rows.length).toBe(20);
+    for (const r of rows) {
+      const [y, m, d] = String(r.scheduled_date).slice(0, 10).split("-").map(Number);
+      const day = new Date(y, m - 1, d, 12).getDay();
+      expect(day).toBeGreaterThanOrEqual(1);
+      expect(day).toBeLessThanOrEqual(5);
+    }
+  });
+
+  test("a run too long to read is refused rather than created", async () => {
+    // 7 days x 12 weeks is 84 rows, 84 payment authorizations and a list she has to read
+    // before accepting. A mis-tap must not commit a family to a quarter of care.
+    const res = await bookWeekdays("mon,tue,wed,thu,fri,sat,sun", 12);
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/at a time/i);
+    expect(await seriesRows()).toHaveLength(0);
+  });
+
+  test("no days picked is refused, not silently turned into one visit", async () => {
+    const res = await bookWeekdays("", 4);
+    // Falls back to the single start date rather than erroring — one visit, not zero, and
+    // never a whole month by accident.
+    expect(res.status).toBeLessThan(300);
+    const all = await db.prepare(
+      "SELECT id FROM care_sessions WHERE care_recipient_id = ?"
+    ).all(recipientId);
+    expect(all).toHaveLength(1);
+  });
+});

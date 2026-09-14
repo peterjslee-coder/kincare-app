@@ -68,11 +68,25 @@ const ExclusiveSeriesCard = window.ExclusiveSeriesCard = ({
   const timeLabel = TimezoneHelper.formatTime(first.time || first.scheduled_time) || '';
   const cadence = (() => {
     const rule = first.recurrenceRule;
-    const d = (first.date || '').split('T')[0];
-    // The weekday comes from the date, not the rule — the rule only says how often.
-    const day = TimezoneHelper.getWeekdayName(d, tz);
-    if (rule === 'biweekly') return day ? `Every other ${day}` : 'Every other week';
-    return day ? `Every ${day}` : 'Weekly';
+    // v1.106.33 — derived from the DATES, not from a stored label. A day-set ("days") can
+    // be Mon/Wed/Fri or all five, and the first visit's weekday says nothing about the rest;
+    // "Every Thursday" on a Monday-to-Friday month would be confidently wrong. Reading the
+    // rows means the card cannot disagree with what she is actually being offered.
+    const names = [];
+    for (const j of jobs) {
+      const n = TimezoneHelper.getWeekdayName((j.date || '').split('T')[0], j.timezone || tz);
+      if (n && names.indexOf(n) === -1) names.push(n);
+    }
+    const ORDER = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    names.sort((a, b) => ORDER.indexOf(a) - ORDER.indexOf(b));
+
+    if (rule === 'biweekly') return names[0] ? `Every other ${names[0]}` : 'Every other week';
+    if (names.length === 0) return 'Repeating';
+    if (names.length === 1) return `Every ${names[0]}`;
+    const weekdays = ORDER.slice(0, 5);
+    if (names.length === 5 && weekdays.every((d) => names.indexOf(d) !== -1)) return 'Weekdays';
+    if (names.length === 7) return 'Every day';
+    return names.map((n) => n.slice(0, 3)).join(', ');
   })();
   const span = (() => {
     const a = TimezoneHelper.getDateLabel((jobs[0].date || '').split('T')[0], tz);

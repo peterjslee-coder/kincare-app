@@ -17,6 +17,11 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
   const [instructions, setInstructions] = useState('');
   const [recurrence, setRecurrence] = useState('none');
   const [recurrenceWeeks, setRecurrenceWeeks] = useState('4');
+  // v1.106.33 — Pete: "Would it be easier for me to make an appointment for MTWThF from 9-5
+  // for four weeks instead of doing separate appointments for every day?" Mon–Fri for a
+  // month used to be five bookings, five recurrence groups and five cards for the caregiver
+  // to accept. One of each now.
+  const [recurrenceDays, setRecurrenceDays] = useState(['mon', 'tue', 'wed', 'thu', 'fri']);
   const [selectedCaregiver, setSelectedCaregiver] = useState(() => {
     if (window.__requestCareCaregiver) {
       const cg = window.__requestCareCaregiver;
@@ -334,7 +339,9 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
       } catch {} // If check fails, allow booking (graceful degradation)
     }
 
-    const recurrenceLabel = recurrence !== 'none' ? ` (${recurrence}, ${recurrenceWeeks} sessions)` : '';
+    const recurrenceLabel = recurrence === 'days'
+      ? ` (${recurrenceDays.length} days a week, ${recurrenceWeeks} weeks)`
+      : recurrence !== 'none' ? ` (${recurrence}, ${recurrenceWeeks} sessions)` : '';
     const recipientId = selectedRecipientId || (careRecipients.length > 0 ? careRecipients[0].id : '');
     if (!recipientId) { setSubmitError('No care recipient found. Please add a care recipient first.'); return; }
     const body = {
@@ -343,6 +350,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
       status: isOpenRequest ? 'open' : undefined,
       recurrenceRule: recurrence !== 'none' ? recurrence : undefined,
       recurrenceWeeks: recurrence !== 'none' ? parseInt(recurrenceWeeks) : undefined,
+      recurrenceDays: recurrence === 'days' ? recurrenceDays.join(',') : undefined,
       caregiverId: selectedCaregiver?.caregiverId || undefined,
       directOffer: selectedCaregiver ? true : undefined,
       privateOnly: selectedCaregiver && privateOnly ? true : undefined,
@@ -363,7 +371,8 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
         details.push(`${date} at ${formatTime12(time)}`);
         details.push(`${duration} hour(s) of ${formatServiceType(resolvedServiceType)}`);
         if (proposedRate) details.push(`Offered rate: $${proposedRate}/hr`);
-        if (recurrence !== 'none') details.push(`${recurrence}, ${recurrenceWeeks} sessions`);
+        if (recurrence === 'days') details.push(`${recurrenceDays.length} days a week, ${recurrenceWeeks} weeks`);
+        else if (recurrence !== 'none') details.push(`${recurrence}, ${recurrenceWeeks} sessions`);
         setConfirmationData({
           title: isOpenRequest ? 'Care request posted!' : 'Care request sent!',
           details,
@@ -756,12 +765,35 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
               <div style={{ marginBottom: 12 }}>
                 <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>Repeat</div>
                 <div style={{ display: 'flex', gap: 6 }}>
-                  {[{ value: 'none', label: 'One-time' }, { value: 'weekly', label: 'Weekly' }, { value: 'biweekly', label: 'Biweekly' }].map(opt => (
+                  {[{ value: 'none', label: 'One-time' }, { value: 'weekly', label: 'Weekly' }, { value: 'biweekly', label: 'Biweekly' }, { value: 'days', label: 'Certain days' }].map(opt => (
                     <button key={opt.value} type="button" onClick={() => setRecurrence(opt.value)} style={pill(recurrence === opt.value)}>
                       {opt.label}
                     </button>
                   ))}
                 </div>
+                {recurrence === 'days' && (
+                  <div style={{ marginTop: 8 }}>
+                    <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                      {[['mon', 'M'], ['tue', 'T'], ['wed', 'W'], ['thu', 'Th'], ['fri', 'F'], ['sat', 'Sa'], ['sun', 'Su']].map(([key, dayLabel]) => {
+                        const on = recurrenceDays.indexOf(key) !== -1;
+                        return (
+                          <button key={key} type="button"
+                            onClick={() => setRecurrenceDays((prev) => (
+                              prev.indexOf(key) !== -1 ? prev.filter((k) => k !== key) : [...prev, key]
+                            ))}
+                            style={{ ...pill(on), minWidth: 42, padding: '8px 6px' }}>
+                            {dayLabel}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
+                      {recurrenceDays.length === 0
+                        ? 'Pick at least one day.'
+                        : `${recurrenceDays.length} day${recurrenceDays.length === 1 ? '' : 's'} a week \u00D7 ${recurrenceWeeks} weeks = ${recurrenceDays.length * parseInt(recurrenceWeeks, 10)} visits, offered as one request.`}
+                    </div>
+                  </div>
+                )}
                 {recurrence !== 'none' && (
                   <div style={{ marginTop: 8 }}>
                     <select className="modal-select" value={recurrenceWeeks} onChange={(e) => setRecurrenceWeeks(e.target.value)} style={{ fontSize: 13 }}>
@@ -801,7 +833,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
                 <span>{(() => { const p = date.split('-').map(Number); return new Date(p[0], p[1]-1, p[2]).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }); })()}</span>
                 <span>{formatTime12(time)}</span>
                 <span>{duration}h</span>
-                {recurrence !== 'none' && <span style={{ color: 'var(--role-color)', fontWeight: 600 }}>{recurrence === 'weekly' ? 'Weekly' : 'Biweekly'} x{recurrenceWeeks}</span>}
+                {recurrence !== 'none' && <span style={{ color: 'var(--role-color)', fontWeight: 600 }}>{recurrence === 'weekly' ? 'Weekly' : recurrence === 'biweekly' ? 'Biweekly' : `${recurrenceDays.length}\u00D7/week`} x{recurrenceWeeks}</span>}
               </div>
             </div>
 

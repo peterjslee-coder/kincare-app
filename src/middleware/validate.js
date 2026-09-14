@@ -212,10 +212,24 @@ function validateSession(req, res, next) {
   }
 
   // Validate recurrence fields
+  //
+  // v1.106.33 — "days" (a weekday pattern: Mon–Fri for four weeks) joins weekly/biweekly.
+  // This list is the SECOND copy of it; routes/sessions.js has the other. Two lists that
+  // must agree is a thing to notice — the route's was updated first and this one rejected
+  // every request before the handler ever ran, which the integration test caught and no
+  // amount of reading the route would have.
   if (recurrenceRule !== undefined) {
-    const validRules = ["weekly", "biweekly"];
+    const validRules = ["weekly", "biweekly", "days"];
     if (!validRules.includes(recurrenceRule)) {
-      return res.status(400).json({ error: "Recurrence rule must be 'weekly' or 'biweekly'" });
+      return res.status(400).json({ error: "Recurrence rule must be 'weekly', 'biweekly' or 'days'" });
+    }
+    if (recurrenceRule === "days") {
+      const DAYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+      const picked = String(req.body.recurrenceDays || "")
+        .split(",").map((d) => d.trim().toLowerCase().slice(0, 3)).filter(Boolean);
+      if (picked.length && picked.some((d) => !DAYS.includes(d))) {
+        return res.status(400).json({ error: "Pick days as mon,tue,wed,thu,fri,sat,sun" });
+      }
     }
   }
 
