@@ -229,6 +229,9 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
   // v1.106.13 — the server now derives a phase (src/constants/checkrStatus.js). checkrStatus
   // stays for the optimistic local transitions the buttons below set; checkrPhase is what the
   // render chain branches on, because it is exhaustive and this one was not.
+  // v1.106.19 — read, not retyped. The Rush Surcharge line just below states a DIFFERENT 20%
+  // (the short-notice surcharge) and is deliberately left alone.
+  const { feePercent: platformFeePercent } = usePlatformFee();
   const [checkrPhase, setCheckrPhase] = useState(null);
   const [checkrStatus, setCheckrStatus] = useState(null); // null | 'not_initiated' | 'in_progress' | 'complete' | 'error'
   const [myVouches, setMyVouches] = useState([]); // v1.64.0: active admin vouches (per-family, not a bg check)
@@ -2171,7 +2174,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
             <div className="card-header">Fee Breakdown</div>
             <div style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
               <p>
-                <strong>Platform Fee:</strong> InPlace adds a <span style={{ fontSize: 18, fontWeight: 800, color: 'var(--role-color)' }}>20%</span> platform fee to the family's cost. This does not reduce your earnings.
+                <strong>Platform Fee:</strong> InPlace adds a <span style={{ fontSize: 18, fontWeight: 800, color: 'var(--role-color)' }}>{platformFeePercent}%</span> platform fee to the family's cost. This does not reduce your earnings.
               </p>
               <p>
                 <strong>Rush Surcharge:</strong> Short-notice bookings (less than 24 hours) include a <span style={{ fontSize: 18, fontWeight: 800, color: 'var(--role-color)' }}>20%</span> rush surcharge. <span style={{ fontSize: 18, fontWeight: 800, color: 'var(--role-color)' }}>75%</span> of the surcharge goes to you as an incentive.

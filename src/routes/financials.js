@@ -1,6 +1,7 @@
 const express = require("express");
 const { getDb } = require("../models/database");
 const { authenticate, requireAdmin } = require("../middleware/auth");
+const { getPlatformFeePercent } = require("../utils/platformFee");
 
 const router = express.Router();
 
@@ -750,13 +751,18 @@ router.get("/insights", async (req, res) => {
         "SELECT COALESCE(SUM(platform_fee), 0) AS total FROM payments WHERE status = 'completed'"
       ).get();
       const effectiveRate = Math.round((allPlatformFee.total / totalAllRevenue.total) * 1000) / 10;
-      if (effectiveRate < 18) {
+      // v1.106.19 — the target IS the configured fee, and the threshold is relative to it.
+      // Hardcoded, this insight would have fired constantly the moment the fee was set below
+      // 18% and never fired at all if it were raised — telling an admin their own setting was
+      // a problem.
+      const targetRate = await getPlatformFeePercent(db);
+      if (effectiveRate < targetRate * 0.9) {
         insights.push({
           id: 'fee_rate_low', type: 'revenue', severity: 'warning',
           title: 'Effective Platform Rate Below Target',
-          description: `Your effective platform fee rate is ${effectiveRate}%, below the 20% target.`,
+          description: `Your effective platform fee rate is ${effectiveRate}%, below the ${targetRate}% target.`,
           metric: `${effectiveRate}%`,
-          recommendation: 'Check if any discount codes or fee waivers are active. Ensure all checkout sessions correctly apply the 20% platform fee.',
+          recommendation: `Check if any discount codes or fee waivers are active. Ensure all checkout sessions correctly apply the ${targetRate}% platform fee.`,
         });
       }
     }

@@ -756,6 +756,58 @@ const apiFetch = window.apiFetch = async (url, options = {}) => {
   return response;
 };
 
+// ─── v1.106.19 — the platform fee, read rather than retyped ───
+//
+// Pete: "if I change that later... I don't want a bunch of old hard-coded 20s to wreak havoc."
+// The number lived in six pieces of user-facing copy, including the logged-out splash page.
+//
+// PRICING_FALLBACK_FEE_PERCENT is the ONE place the client states it, used only until the
+// fetch lands and when the network is gone — a marketing page must never render "a flat
+// undefined%". tests/pricingPromise.test.js pins it equal to the server's
+// DEFAULT_PLATFORM_FEE_PERCENT, so the two cannot drift.
+//
+// Note the three unrelated 20s nearby that this must NOT touch: the short-notice surcharge,
+// the 20% tip preset, and aiMatching's scoring weights. Same digits, different facts.
+const PRICING_FALLBACK_FEE_PERCENT = window.PRICING_FALLBACK_FEE_PERCENT = 20;
+
+let _pricing = null, _pricingPromise = null;
+
+/** Resolves to { platformFeePercent, caregiverSharePercent }. Never rejects. */
+const fetchPricing = window.fetchPricing = () => {
+  if (_pricing) return Promise.resolve(_pricing);
+  if (_pricingPromise) return _pricingPromise;
+  _pricingPromise = fetch(API_BASE + '/api/pricing', { credentials: 'same-origin' })
+    .then((r) => (r && r.ok ? r.json() : null))
+    .then((j) => {
+      const pct = Number(j && j.platformFeePercent);
+      _pricing = Number.isFinite(pct)
+        ? { platformFeePercent: pct, caregiverSharePercent: 100 - pct }
+        : { platformFeePercent: PRICING_FALLBACK_FEE_PERCENT, caregiverSharePercent: 100 - PRICING_FALLBACK_FEE_PERCENT };
+      return _pricing;
+    })
+    .catch(() => ({
+      platformFeePercent: PRICING_FALLBACK_FEE_PERCENT,
+      caregiverSharePercent: 100 - PRICING_FALLBACK_FEE_PERCENT,
+    }))
+    .finally(() => { _pricingPromise = null; });
+  return _pricingPromise;
+};
+
+/**
+ * Hook form. Renders the fallback on the first paint and corrects itself when the fetch lands,
+ * so the splash page never flashes a gap where a number should be. Today both are 20 and
+ * nothing visibly changes; the day Pete moves the dial, the copy moves with it.
+ */
+const usePlatformFee = window.usePlatformFee = () => {
+  const [pct, setPct] = useState((_pricing && _pricing.platformFeePercent) || PRICING_FALLBACK_FEE_PERCENT);
+  useEffect(() => {
+    let alive = true;
+    fetchPricing().then((p) => { if (alive && p && p.platformFeePercent !== pct) setPct(p.platformFeePercent); });
+    return () => { alive = false; };
+  }, []);
+  return { feePercent: pct, caregiverSharePercent: 100 - pct };
+};
+
 // ─── v1.106.13 — one identity read, however many components ask ───
 //
 // Sixteen places called GET /api/auth/me and each one fetched it independently. In production

@@ -40,7 +40,10 @@ const setFee = (pct) => db.prepare(
 ).run(String(pct), String(pct));
 
 beforeAll(async () => {
-  h = await startHarness({ routers: { "/api/sessions": "../../src/routes/sessions" } });
+  h = await startHarness({ routers: {
+    "/api/sessions": "../../src/routes/sessions",
+    "/api/pricing": "../../src/routes/pricing",
+  } });
   db = h.db;
 
   family = await h.createUser({ firstName: "Fee", lastName: "Family" });
@@ -121,6 +124,35 @@ describe("the quote and the charge agree", () => {
     const q = await quotedFee();
     expect(q.percent).toBe(20);
     expect(await chargedFeeCents()).toBe(2400);
+  });
+});
+
+describe("the published fee — what the logged-out splash page reads", () => {
+  test("GET /api/pricing reports the setting, and the derived caregiver share", async () => {
+    await setFee(20);
+    let r = await h.request.get("/api/pricing");
+    expect(r.status).toBe(200);
+    expect(r.body).toEqual({ platformFeePercent: 20, caregiverSharePercent: 80 });
+
+    // Pete's actual requirement: move the dial and the COPY moves, not just the maths.
+    await setFee(12);
+    r = await h.request.get("/api/pricing");
+    expect(r.body.platformFeePercent).toBe(12);
+    expect(r.body.caregiverSharePercent).toBe(88);
+  });
+
+  test("it needs no auth — the page that reads it has no session", async () => {
+    const r = await h.request.get("/api/pricing");   // deliberately no Authorization header
+    expect(r.status).toBe(200);
+    expect(typeof r.body.platformFeePercent).toBe("number");
+  });
+
+  test("the two halves always sum to 100 — the share is derived, never stored", async () => {
+    for (const pct of [0, 7, 20, 33, 50]) {
+      await setFee(pct);
+      const r = await h.request.get("/api/pricing");
+      expect(r.body.platformFeePercent + r.body.caregiverSharePercent).toBe(100);
+    }
   });
 });
 

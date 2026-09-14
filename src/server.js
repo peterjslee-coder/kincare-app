@@ -646,7 +646,7 @@ function isOlder(a, b) {
   return false;
 }
 
-const VERSION_GATE_EXEMPT = ["/api/version", "/api/health", "/api/auth/", "/api/payments/webhook", "/api/checkr/webhook"];
+const VERSION_GATE_EXEMPT = ["/api/version", "/api/pricing", "/api/health", "/api/auth/", "/api/payments/webhook", "/api/checkr/webhook"];
 
 app.use("/api/", (req, res, next) => {
   const full = req.originalUrl || req.path;
@@ -785,6 +785,7 @@ app.use("/api/waitlist", require("./routes/waitlist"));
 app.use("/api/password-reset", require("./routes/passwordReset"));
 app.use("/api/availability", require("./routes/availability"));
 app.use("/api/admin", require("./routes/admin"));
+app.use("/api/pricing", require("./routes/pricing"));
 app.use("/api/admin/financials", require("./routes/financials"));
 app.use("/api/admin/treasury", require("./routes/treasury"));
 app.use("/api/admin/tickets", require("./routes/tickets"));
@@ -820,7 +821,7 @@ app.use("/api/media", require("./routes/media"));
 app.use("/api/safety", require("./routes/safety"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.106.18";
+const APP_VERSION = "1.106.19";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION, minAppVersion: MIN_APP_VERSION });

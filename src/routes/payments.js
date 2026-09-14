@@ -1160,7 +1160,7 @@ router.post("/checkout", requireRole("family"), requirePaymentsEnabled, async (r
         currency: "usd",
         product_data: {
           name: "InPlace service fee",
-          description: `20% platform fee ($${(platformFeeCents / 100).toFixed(2)})`,
+          description: `${feePercent}% platform fee ($${(platformFeeCents / 100).toFixed(2)})`,
         },
         unit_amount: platformFeeCents,
       },
@@ -2090,7 +2090,7 @@ router.post("/manual", requireRole("family"), requirePaymentsEnabled, async (req
             currency: "usd",
             product_data: {
               name: "InPlace service fee",
-              description: "20% platform fee",
+              description: `${feePercent}% platform fee`,
             },
             unit_amount: platformFeeCents,
           },

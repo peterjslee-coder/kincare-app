@@ -70,13 +70,60 @@ describe("...and the code still backs it", () => {
     }
   });
 
-  test("the number the page promises is the number the code defaults to", () => {
-    // If someone changes the default, this fails and the copy has to change with it.
+  // v1.106.19 — Pete: "if I change that later, I don't want a bunch of old hard-coded 20s to
+  // wreak havoc." So the copy reads the fee instead of restating it, and this is the gate.
+  test("the public copy renders the fee rather than restating it", () => {
+    const splash = readStripped("public/js/components/SplashPage.js");
+    expect(splash).toMatch(/a flat \{feePercent\}% for everyone/);
+    expect(splash).toMatch(/takes a \{feePercent\}% commission/);
+    // "Caregivers keep 80%" is the same number said the other way — derived, never stored.
+    expect(splash).toMatch(/Caregivers Keep \{caregiverSharePercent\}%/);
+    expect(splash).toMatch(/usePlatformFee\(\)/);
+  });
+
+  test("no user-facing platform-fee copy hardcodes the number any more", () => {
+    // Scoped to PLATFORM FEE wording on purpose. Three unrelated 20s live nearby and must
+    // survive untouched: the short-notice surcharge, the 20% tip preset, and aiMatching's
+    // scoring weights. Same digits, different facts.
+    const offenders = [];
+    for (const f of [
+      "public/js/components/SplashPage.js", "public/js/components/MyAccount.js",
+      "src/routes/payments.js", "src/routes/financials.js",
+    ]) {
+      for (const line of readStripped(f).split("\n")) {
+        if (/\b\d+% (platform fee|commission)|platform fee rate is[^`]*\b\d+%|a flat \d+%/.test(line)) {
+          offenders.push(`${f}: ${line.trim().slice(0, 90)}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  test("the surcharge and tip copy are NOT swept up — they are different numbers", () => {
+    // A blanket find-and-replace on "20%" would have rewritten these into the platform fee.
+    expect(read("public/js/components/RequestCareModal.js")).toMatch(/20% rush surcharge/i);
+    expect(read("public/js/components/MyAccount.js")).toMatch(/Rush Surcharge/);
+    expect(read("public/js/components/Dashboard.js")).toMatch(/label: '20%'/);
+  });
+
+  test("the client's fallback and the server's default are the same number", () => {
+    // The client needs SOME number before the fetch lands — a marketing page must never paint
+    // "a flat undefined%". This keeps that one number honest.
     const { DEFAULT_PLATFORM_FEE_PERCENT } = require("../src/utils/platformFee");
     expect(DEFAULT_PLATFORM_FEE_PERCENT).toBe(20);
-    expect(read("public/js/components/SplashPage.js")).toMatch(
-      new RegExp(`a flat ${DEFAULT_PLATFORM_FEE_PERCENT}% for everyone`)
-    );
+    const m = readStripped("public/js/utils.js").match(/PRICING_FALLBACK_FEE_PERCENT = window\.PRICING_FALLBACK_FEE_PERCENT = (\d+)/);
+    expect(m).toBeTruthy();
+    expect(Number(m[1])).toBe(DEFAULT_PLATFORM_FEE_PERCENT);
+  });
+
+  test("the fee is published on a public endpoint, because the splash is logged-out", () => {
+    const server = readStripped("src/server.js");
+    expect(server).toMatch(/app\.use\("\/api\/pricing", require\("\.\/routes\/pricing"\)\)/);
+    // A router, not an inline app.get — anything defined directly on `app` in server.js cannot
+    // be mounted by the integration harness, and therefore cannot be integration-tested.
+    expect(readStripped("src/routes/pricing.js")).toMatch(/caregiverSharePercent: 100 - platformFeePercent/);
+    // and it must not be version-gated, or an old client renders no number at all
+    expect(server).toMatch(/VERSION_GATE_EXEMPT = \["\/api\/version", "\/api\/pricing"/);
   });
 
   test("three-quarters of the surcharge really is the caregiver's", () => {

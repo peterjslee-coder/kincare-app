@@ -1,4 +1,9 @@
 const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
+  // v1.106.19 — the commission is read, not retyped. This page makes a factual claim about
+  // what the platform charges, to people who are not logged in; if an admin moves the fee, the
+  // claim has to move with it or the page is simply untrue. Falls back to the published default
+  // until the fetch lands, so this never paints "a flat undefined%".
+  const { feePercent, caregiverSharePercent } = usePlatformFee();
   const [showInstallTip, setShowInstallTip] = React.useState(false);
   const [activeTab, setActiveTab] = React.useState('families');
   const [showStory, setShowStory] = React.useState(false);
@@ -513,7 +518,7 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
             </div>
             <p style={{ fontSize: '14.5px', color: 'var(--text-secondary)', lineHeight: 1.7, marginBottom: '12px' }}>
               Caregivers name their own rate, and that is the rate they are paid. Our commission is
-              a flat 20% for everyone. It does not go up because you booked at 6pm on a Sunday,
+              a flat {feePercent}% for everyone. It does not go up because you booked at 6pm on a Sunday,
               because you have booked before, or because something decided you would probably pay
               more. There is no surge pricing and no personalized pricing.
             </p>
@@ -543,9 +548,9 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
               </p>
             </div>
             <div style={{ padding: '36px', background: 'var(--bg-highlight)', borderRadius: '12px', border: '1px solid #d0e8e3', flex: '1 1 280px', maxWidth: '420px' }}>
-              <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--role-color)', marginBottom: '12px' }}>Caregivers Keep 80%</div>
+              <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--role-color)', marginBottom: '12px' }}>Caregivers Keep {caregiverSharePercent}%</div>
               <p style={{ fontSize: '15px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-                inPlace takes a 20% commission on each transaction. Caregivers keep 80% and get paid within 48 hours. Both sides get a better deal than traditional agencies.
+                inPlace takes a {feePercent}% commission on each transaction. Caregivers keep {caregiverSharePercent}% and get paid within 48 hours. Both sides get a better deal than traditional agencies.
               </p>
             </div>
           </div>
