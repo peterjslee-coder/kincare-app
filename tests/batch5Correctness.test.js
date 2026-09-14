@@ -146,11 +146,21 @@ describe("C4 — the dashboard GET stopped writing", () => {
   });
 
   test("and into poller 102, where a failure is reported", () => {
+    // v1.106.25 — the two statements moved into utils/exclusiveOffers so a real database
+    // could be pointed at them; a recurring series has to expire as a unit and that had no
+    // test. What C4 is about is unchanged and still asserted: this work runs in the poller,
+    // not in a GET, and a failure is reported rather than swallowed.
     const s = code("src/server.js");
     const p102 = s.slice(s.indexOf("guardedPoller(102"), s.indexOf("Per-session timezone-aware"));
-    expect(p102).toMatch(/Private request expired - scheduled date passed/);
-    expect(p102).toMatch(/SET offered_to_caregiver_id = NULL, exclusive_until = NULL/);
+    expect(p102).toMatch(/await cancelPassedPrivateOffers\(pollDb\)/);
+    expect(p102).toMatch(/await releaseExpiredExclusiveOffers\(pollDb\)/);
     expect(p102).toMatch(/captureException\(e, \{ where: "poller 102: offer expiry" \}\)/);
+
+    // And the SQL still exists somewhere — an extraction that dropped a statement would
+    // otherwise read as a pass here.
+    const u = code("src/utils/exclusiveOffers.js");
+    expect(u).toMatch(/Private request expired - scheduled date passed/);
+    expect(u).toMatch(/SET offered_to_caregiver_id = NULL, exclusive_until = NULL/);
   });
 
   test("expireStaleProposals stays — it is about what this response is about to show", () => {

@@ -821,7 +821,8 @@ app.use("/api/media", require("./routes/media"));
 app.use("/api/safety", require("./routes/safety"));
 
 // ─── App version check (lightweight, no auth) ───
-const APP_VERSION = "1.106.24";
+const { cancelPassedPrivateOffers, releaseExpiredExclusiveOffers } = require("./utils/exclusiveOffers");
+const APP_VERSION = "1.106.25";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION, minAppVersion: MIN_APP_VERSION });
@@ -1135,24 +1136,11 @@ async function start() {
       // to write by anyone who refreshes, and the work is the same whether one family loads
       // the dashboard or fifty do. It is a poller's job, and poller 102 already runs every
       // minute and already owns session state transitions.
+      // v1.106.25 — the two statements moved to utils/exclusiveOffers so they can be tested
+      // against a real database. A recurring series must expire as a unit; see the note there.
       try {
-        await pollDb.prepare(`
-          UPDATE care_sessions
-          SET status = 'cancelled', cancelled_at = NOW(), cancel_reason = 'Private request expired - scheduled date passed'
-          WHERE offered_to_caregiver_id IS NOT NULL
-            AND COALESCE(private_only, 0) = 1
-            AND scheduled_date::date < CURRENT_DATE
-            AND status IN ('pending', 'open', 'requested')
-        `).run();
-        await pollDb.prepare(`
-          UPDATE care_sessions
-          SET offered_to_caregiver_id = NULL, exclusive_until = NULL, status = 'open'
-          WHERE offered_to_caregiver_id IS NOT NULL
-            AND exclusive_until IS NOT NULL
-            AND exclusive_until < NOW()
-            AND COALESCE(private_only, 0) = 0
-            AND status IN ('pending', 'open', 'requested')
-        `).run();
+        await cancelPassedPrivateOffers(pollDb);
+        await releaseExpiredExclusiveOffers(pollDb);
       } catch (e) {
         // Reported, not swallowed: this is the code that stops a private request sitting
         // open forever, and it failing silently is how it would stop mattering.

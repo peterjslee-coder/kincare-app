@@ -937,6 +937,25 @@ router.post("/", requireRole("family", "care_for"), validateSession, async (req,
   const recurrenceGroupId = isRecurring ? uuid() : null;
   const createdSessions = [];
 
+  // ─── v1.106.25 — ONE exclusive window for the whole series ───
+  //
+  // Computed once, here, and bound to every row. It used to be the SQL literal
+  // "NOW() + INTERVAL '1 hour'" evaluated inside the insert loop, which produced identical
+  // values only because Postgres NOW() is the TRANSACTION timestamp and the loop happens to
+  // sit inside db.transaction. That is the right answer reached by accident: move the loop
+  // out, or swap NOW() for clock_timestamp(), and the rows drift apart by however long the
+  // loop takes. Drifted rows mean poller 102 takes whichever have passed on a given tick, so
+  // a caregiver still deciding about week 1 finds week 7 already public and nobody is told —
+  // the family offered a standing Tuesday to one person and half of it quietly went to
+  // market. Pete's call: "one 1-hour window for the whole series... it opens together."
+  //
+  // Private-only offers get no timer at all; they stay hers until the date passes.
+  const isExclusive = !!(directOffer && bookCaregiverId);
+  const isPrivateOnly = isExclusive && !!privateOnly;
+  const exclusiveUntil = isExclusive && !isPrivateOnly
+    ? new Date(Date.now() + 60 * 60 * 1000)
+    : null;
+
   // ─── Transaction: re-check consent under row lock, then insert sessions ───
   try { await db.transaction(async (tx) => {
     // Lock the care_recipients row to prevent concurrent consent changes
@@ -953,11 +972,6 @@ router.post("/", requireRole("family", "care_for"), validateSession, async (req,
       // costResult already uses proposedRate when set (see rate logic above)
       const finalCost = estimatedCost;
 
-      const isExclusive = directOffer && bookCaregiverId;
-      const isPrivateOnly = isExclusive && privateOnly;
-      // Private-only = no timer, stays pending until scheduled date passes
-      // Non-private exclusive = 1-hour timer, then opens to all caregivers
-      const exclusiveUntilSql = isExclusive && !isPrivateOnly ? "NOW() + INTERVAL '1 hour'" : 'NULL';
       await tx.prepare(`
         INSERT INTO care_sessions
         (id, care_recipient_id, family_user_id, service_type, status,
@@ -965,7 +979,7 @@ router.post("/", requireRole("family", "care_for"), validateSession, async (req,
          special_instructions, estimated_cost, recurrence_rule, recurrence_group_id,
          short_notice_surcharge, rate_tier, proposed_rate, offered_to_caregiver_id,
          exclusive_until, private_only, interview_required, interview_type, flex_timing)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${exclusiveUntilSql}, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         id, careRecipientId, req.user.id, serviceType, sessionStatus,
         sessionDate, scheduledTime, durationHours,
@@ -976,6 +990,7 @@ router.post("/", requireRole("family", "care_for"), validateSession, async (req,
         JSON.stringify(costResult.tierBreakdown),
         proposedRate ? parseFloat(proposedRate) : null,
         isExclusive ? bookCaregiverId : null,
+        exclusiveUntil,
         isPrivateOnly ? 1 : 0,
         interviewRequired ? 1 : 0,
         interviewRequired ? (interviewType || 'video') : null,
