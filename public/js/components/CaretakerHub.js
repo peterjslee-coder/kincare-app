@@ -1306,6 +1306,407 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const totalEarned = completedSessions.reduce((sum, s) => sum + (s.actual_cost || s.estimated_cost || 0), 0);
   const avgHourlyRate = totalHours > 0 ? (totalEarned / totalHours).toFixed(0) : (profile.hourlyRate || '--');
 
+
+  // ─── v1.106.23 — the check-in outranks everything ───
+  //
+  // Tina could not check in on the morning of her first visit. Eleven "Just for You" cards
+  // were stacked above the session she was standing outside the door for: the offers block
+  // renders before UP NEXT, it is unbounded, and each card is full height. She never scrolled
+  // far enough to find the button. Pete: "The number one thing at the top of the app every
+  // time has to be the appointment that is 15 minutes away."
+  //
+  // So a session inside its check-in window is lifted out of Up Next and pinned above
+  // everything — offers, proposals, banners, First Steps. The only thing allowed above it is
+  // the incomplete-check-in banner, which is the same job already half-done and expiring.
+  //
+  // Split rather than duplicated: one renderer, two lists, and a session is in exactly one of
+  // them. Rendering the card in both places would have given her two check-in buttons for the
+  // same visit, which is worse than burying one.
+  const upNextSplit = (() => {
+    const proposalSessionIds = new Set((data.myProposals || []).filter(p => p.status === 'pending' || p.status === 'expired').map(p => p.sessionId));
+    const filtered = upNextSessions.filter(s => !proposalSessionIds.has(s.id));
+    const ready = new Set(readyToCheckIn.map(s => s.id));
+    return { ready: filtered.filter(s => ready.has(s.id)), rest: filtered.filter(s => !ready.has(s.id)) };
+  })();
+
+  const renderUpNext = (list, { pinned, tour }) => {
+        if (list.length === 0) return null;
+
+
+        const readySet = new Set(readyToCheckIn.map(s => s.id));
+        const sorted = [...list].sort((a, b) => {
+          if (a.status === 'in_progress' && b.status !== 'in_progress') return -1;
+          if (b.status === 'in_progress' && a.status !== 'in_progress') return 1;
+          const aKey = (a.date || a.scheduled_date || '') + (a.time || a.scheduled_time || '');
+          const bKey = (b.date || b.scheduled_date || '') + (b.time || b.scheduled_time || '');
+          return aKey.localeCompare(bKey);
+        });
+
+        return (
+          <div data-tour={tour ? 'up-next' : undefined}
+            className={pinned ? 'next-up-hero-shimmer' : undefined}
+            style={pinned
+              ? { marginBottom: 16, padding: '12px 12px 4px', borderRadius: 14, border: '3px solid var(--color-success)', background: 'var(--bg-surface)' }
+              : { marginBottom: 16 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: pinned ? 'var(--color-success)' : 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>{pinned ? '\u23F0 Ready to check in' : 'Up Next'}</div>
+            {sorted.map(s => {
+              const isReady = readySet.has(s.id);
+              const isActive = s.status === 'in_progress';
+              const sDate = (s.date || s.scheduled_date || '').split('T')[0];
+              const tz = s.timezone || TimezoneHelper.DEFAULT_TZ;
+              const sessionStartET = TimezoneHelper.buildDateTime(sDate, s.time || s.scheduled_time || '00:00', tz);
+              const minsUntil = (sessionStartET.getTime() - TimezoneHelper.realNowMs()) / 60000;
+              const dayLabel = TimezoneHelper.getDateLabel(sDate, tz);
+              const timeLabel = TimezoneHelper.formatTime(s.time || s.scheduled_time);
+              const duration = s.durationHours || s.duration_hours;
+              const svcType = s.serviceType || s.service_type;
+              const recipName = s.recipientName || s.recipient_name || 'Session';
+              const loc = s.location || (s.location_address ? `${s.location_address}, ${s.location_city || ''}` : s.location_city || '');
+              const noAddress = !s.hasAddress && s.status === 'confirmed';
+
+              // Countdown label + upcoming check-in state (15-60 min window)
+              const isUpcoming = !isReady && !isActive && s.status === 'confirmed' && minsUntil > 0 && minsUntil <= 60;
+              const minsUntilCheckIn = Math.max(0, minsUntil - 15); // check-in opens 15 min before session
+              const countdownLabel = (() => {
+                if (isReady || isActive) return null;
+                if (minsUntilCheckIn <= 0) return null;
+                const hours = Math.floor(minsUntilCheckIn / 60);
+                const mins = Math.round(minsUntilCheckIn % 60);
+                if (hours > 0) return `${hours}h ${mins}m until check-in`;
+                return `${Math.ceil(minsUntilCheckIn)} min until check-in`;
+              })();
+
+              // Styling
+              const hasPendingTimeChange = !!s.pendingTimeChangeId;
+              const borderColor = hasPendingTimeChange ? 'var(--color-purple)' : isActive ? 'var(--color-warning)' : isReady ? 'var(--accent-color)' : isUpcoming ? 'var(--accent-color)' : noAddress ? 'var(--color-error)' : 'var(--role-color)';
+              const borderWidth = hasPendingTimeChange ? 3 : isActive || isReady ? 3 : isUpcoming ? 2 : 2;
+              const bgStyle = hasPendingTimeChange ? 'linear-gradient(135deg, var(--color-purple-bg) 0%, var(--bg-card) 100%)' : isActive ? 'linear-gradient(135deg, #fffde7 0%, #fff 100%)' : isReady ? 'linear-gradient(135deg, #fff3e0 0%, #fff 100%)' : 'var(--text-on-primary)';
+              const shadow = hasPendingTimeChange ? '0 2px 12px rgba(123, 31, 162, 0.15)' : (isReady || isActive) ? '0 2px 12px rgba(232, 114, 74, 0.15)' : '0 1px 4px rgba(0,0,0,0.06)';
+
+              return (
+                <div key={s.id} className="card" onClick={(e) => {
+                  if (e.target.tagName === 'BUTTON') return;
+                  if (s.id) setVisitDetailSessionId(s.id);
+                }} style={{
+                  marginBottom: 10, padding: '16px 18px', cursor: 'pointer',
+                  border: `${borderWidth}px solid ${borderColor}`,
+                  borderRadius: 12,
+                  background: bgStyle,
+                  boxShadow: shadow,
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                    <div style={{ flex: 1, minWidth: '180px' }}>
+                      {isActive && (() => {
+                        // v1.105.33 — the SCHEDULED end, not check-in + booked hours. The
+                        // caregiver's own card is where this matters most: it should show
+                        // the time the family is expecting them to finish, not a finish
+                        // line that quietly slid because they arrived late. Pay is
+                        // unaffected — that is computed server-side from real check-in and
+                        // check-out, in 15-minute blocks.
+                        const endMs = sessionStartET.getTime() + ((duration || 2) * 3600000);
+                        const leftMs = endMs - Date.now();
+                        const totalSec = Math.max(0, Math.floor(leftMs / 1000));
+                        const hrs = Math.floor(totalSec / 3600);
+                        const mins = Math.floor((totalSec % 3600) / 60);
+                        const remainLabel = leftMs > 0 ? (hrs > 0 ? `${hrs}h ${mins}m remaining` : `${mins}m remaining`) : 'Expected end time passed';
+                        const isPast = leftMs <= 0;
+                        return React.createElement(React.Fragment, null,
+                          React.createElement('div', { style: { fontSize: 11, fontWeight: 700, color: 'var(--color-warning)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 2 } }, 'In Progress Now'),
+                          React.createElement('span', { style: {
+                            display: 'inline-block', fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 6, marginBottom: 4,
+                            color: isPast ? 'var(--color-error)' : 'var(--role-color)',
+                            background: isPast ? 'var(--color-error-bg)' : 'var(--color-success-bg)',
+                          }}, remainLabel)
+                        );
+                      })()}
+                      {isReady && !isActive && <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent-color)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 3 }}>Ready to Check In</div>}
+                      {countdownLabel && <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--accent-color)', marginBottom: 3 }}>{countdownLabel}</div>}
+                      {hasPendingTimeChange && (
+                        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-purple)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 2 }}>
+                          ⏰ Time Change Requested
+                        </div>
+                      )}
+                      <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)' }}>{recipName}</div>
+                      {hasPendingTimeChange && s.tcProposedTime ? (
+                        <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>
+                          {dayLabel} at{' '}
+                          <span style={{ textDecoration: 'line-through', opacity: 0.5 }}>{timeLabel}</span>
+                          {' '}
+                          <span style={{ color: 'var(--color-purple)', fontWeight: 700 }}>{TimezoneHelper.formatTime(s.tcProposedTime)}</span>
+                          {s.tcProposedDuration && parseFloat(s.tcProposedDuration) !== parseFloat(duration) ? (
+                            <>{' \u2022 '}<span style={{ textDecoration: 'line-through', opacity: 0.5 }}>{duration}hr</span>{' '}<span style={{ color: 'var(--color-purple)', fontWeight: 700 }}>{s.tcProposedDuration}hr</span></>
+                          ) : duration ? ` \u2022 ${duration}hr` : ''}
+                          {svcType ? ` \u2022 ${formatServiceType(svcType)}` : ''}
+                        </div>
+                      ) : (
+                        <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>
+                          {dayLabel}{timeLabel ? ` at ${timeLabel}` : ''}{duration ? ` \u2022 ${duration}hr` : ''}{svcType ? ` \u2022 ${formatServiceType(svcType)}` : ''}
+                        </div>
+                      )}
+                      {loc ? (
+                        <a href={`https://maps.google.com/?q=${encodeURIComponent(loc)}`} target="_blank" rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          style={{ display: 'block', fontSize: 12, color: 'var(--role-color)', marginTop: 2, textDecoration: 'none' }}>
+                          {'\uD83D\uDCCD'} {loc}
+                        </a>
+                      ) : noAddress ? (
+                        <div style={{ fontSize: 12, color: 'var(--color-error)', marginTop: 2, fontWeight: 600 }}>{'\u26A0\uFE0F'} No care address on file</div>
+                      ) : null}
+                      {s.specialInstructions && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4, fontStyle: 'italic' }}>{s.specialInstructions}</div>}
+                      {/* View Care Profile toggle */}
+                      <button onClick={(e) => {
+                        e.stopPropagation();
+                        if (expandedProfileId === s.id) {
+                          setExpandedProfileId(null);
+                        } else {
+                          setExpandedProfileId(s.id);
+                          if (!profileBriefings[s.id]) {
+                            setProfileLoading(s.id);
+                            apiFetch('/api/sessions/' + s.id + '/care-briefing')
+                              .then(r => r?.ok ? r.json() : null)
+                              .then(d => { if (d) setProfileBriefings(prev => ({...prev, [s.id]: d})); })
+                              .catch(err => console.warn('Profile fetch failed:', err))
+                              .finally(() => setProfileLoading(null));
+                          }
+                        }
+                      }} style={{
+                        marginTop: 8, padding: '4px 10px', background: 'transparent', border: '1px solid #ddd',
+                        borderRadius: 6, fontSize: 11, fontWeight: 600, color: 'var(--role-color)', cursor: 'pointer',
+                      }}>{expandedProfileId === s.id ? 'Hide Care Profile' : 'View Care Profile'}</button>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+                      {(s.caregiverPayout > 0 || s.estimatedCost > 0) && (
+                        <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--role-color)' }}>
+                          ${(s.caregiverPayout || parseFloat(s.estimatedCost) || 0).toFixed(2)}
+                        </div>
+                      )}
+                      {isActive && (<>
+                        <button onClick={() => {
+                          setCheckOutMood([]);
+                          setCheckOutTags([]);
+                          setCheckOutCareFeedback('');
+                          setCheckOutServiceFeedback('');
+                          setCheckOutSummary('');
+                          setCheckOutPhotos([]);
+                          setCheckOutPhotoUrls(prev => { prev.forEach(u => URL.revokeObjectURL(u)); return []; });
+                          setEarlyDepartureReason('');
+                          setEarlyDepartureAcked(false);
+                          setCheckOutSession(s);
+                        }} style={{
+                          padding: '10px 22px', background: 'var(--color-error)', color: 'var(--text-on-primary)', border: 'none',
+                          borderRadius: '10px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
+                          boxShadow: '0 2px 8px rgba(198,40,40,0.3)', whiteSpace: 'nowrap',
+                        }}>Check Out</button>
+                        {/* Nobody Home removed from post-check-in — moved to pre-check-in block below */}
+                      </>)}
+                      {isReady && !isActive && !s.family_no_show && (
+                          <button onClick={async () => {
+                            if (!confirm('Flag that nobody is home? You will need to wait 30 minutes before checking out for full pay.')) return;
+                            try {
+                              const r = await apiFetch(`/api/accountability/family-no-show/${s.id}`, { method: 'POST' });
+                              if (r?.ok) {
+                                const d = await r.json();
+                                showToast(d.message || 'Family no-show flagged. Wait 30 minutes.', 'info');
+                                // Refresh data
+                                try { const dr = await apiFetch('/api/dashboard'); if (dr?.ok) setData(await dr.json()); } catch {}
+                              } else {
+                                const err = await r?.json().catch(() => ({}));
+                                showToast(err?.error || 'Failed to flag no-show', 'error');
+                              }
+                            } catch { showToast('Network error', 'error'); }
+                          }} style={{
+                            padding: '8px 14px', background: 'var(--color-warning-bg)', color: 'var(--color-warning)', border: '1px solid #ffcc80',
+                            borderRadius: '10px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
+                          }}>Nobody Home</button>
+                      )}
+                      {isReady && !isActive && (
+                        <button onClick={async () => {
+                          setCheckInMood([]);
+                          setCheckInNotes(null);
+                          setCheckInLocation(null);
+                          setLocationError(null);
+                          setBriefingData(null);
+                          setBriefingAcked(false);
+                          setCheckInStep('briefing');
+                          setBriefingLoading(true);
+                          // Start geolocation early (skip in test mode)
+                          if (window.getImpersonationToken && window.getImpersonationToken()) {
+                            setCheckInLocation({ lat: 0, lng: 0, accuracy: 0, testMode: true });
+                          } else {
+                            // v1.105.54 — plugin-first; see getDeviceLocation.
+                            getDeviceLocation({ timeoutMs: 8000 }).then(({ pos, reason }) => {
+                              if (pos) {
+                                setCheckInLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy });
+                              } else {
+                                setLocationError(reason === 'denied'
+                                  ? 'Location is off for InPlace — turn it on in Settings to record your arrival.'
+                                  : "Couldn't get your location. You can still check in.");
+                              }
+                            });
+                          }
+                          setCheckInSession(s);
+                          // Fetch care briefing
+                          try {
+                            const bRes = await apiFetch('/api/sessions/' + s.id + '/care-briefing');
+                            if (bRes?.ok) {
+                              setBriefingData(await bRes.json());
+                            }
+                          } catch (e) { console.warn('Briefing fetch failed:', e); }
+                          setBriefingLoading(false);
+                        }} style={{
+                          padding: '10px 22px', background: 'var(--accent-color)', color: 'var(--text-on-primary)', border: 'none',
+                          borderRadius: '10px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
+                          boxShadow: '0 2px 8px rgba(232,114,74,0.3)', whiteSpace: 'nowrap',
+                        }}>Check In Now</button>
+                      )}
+                      {/* On My Way button — show for upcoming confirmed sessions that haven't been signaled */}
+                      {(isUpcoming || isReady) && !isActive && s.status === 'confirmed' && !onMyWaySent[s.id] && !s.on_my_way_at && (
+                        <button
+                          disabled={onMyWaySending === s.id}
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            setOnMyWaySending(s.id);
+                            try {
+                              // Get current location for ETA calculation
+                              let body = {};
+                              try {
+                                // v1.105.54 — plugin-first, and it always settles.
+                                const { pos } = await getDeviceLocation({ timeoutMs: 5000 });
+                                if (pos) body = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+                              } catch {} // location optional — still send on-my-way
+                              const r = await apiFetch(`/api/sessions/${s.id}/on-my-way`, {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(body),
+                              });
+                              if (r?.ok) {
+                                setOnMyWaySent(prev => ({ ...prev, [s.id]: true }));
+                                showToast('Care team notified — you\'re on your way!', 'success');
+                                // Open maps for directions
+                                if (loc) {
+                                  openExternalUrl(`https://maps.google.com/?q=${encodeURIComponent(loc)}&navigate=yes`); // v1.105.49
+                                }
+                              } else {
+                                const err = await r?.json().catch(() => ({}));
+                                showToast(err?.error || 'Failed to send', 'error');
+                              }
+                            } catch { showToast('Network error', 'error'); }
+                            setOnMyWaySending(null);
+                          }}
+                          style={{
+                            padding: '8px 16px', background: 'linear-gradient(135deg, #1b6b5a, #2a9d8f)', color: '#fff', border: 'none',
+                            borderRadius: '10px', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
+                            boxShadow: '0 2px 8px rgba(27,107,90,0.3)', whiteSpace: 'nowrap',
+                            display: 'flex', alignItems: 'center', gap: 6,
+                            opacity: onMyWaySending === s.id ? 0.6 : 1,
+                          }}>
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polygon points="3 11 22 2 13 21 11 13 3 11"></polygon>
+                          </svg>
+                          {onMyWaySending === s.id ? 'Sending...' : 'On My Way'}
+                        </button>
+                      )}
+                      {(onMyWaySent[s.id] || s.on_my_way_at) && !isActive && (
+                        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-success)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                          En route
+                        </span>
+                      )}
+                      {isUpcoming && (
+                        <button disabled style={{
+                          padding: '10px 22px', background: 'var(--bg-primary)', color: 'var(--text-muted)', border: '1px solid #ddd',
+                          borderRadius: '10px', fontSize: '14px', fontWeight: 600, cursor: 'default',
+                          whiteSpace: 'nowrap',
+                        }}>Check in {Math.ceil(minsUntilCheckIn)} min</button>
+                      )}
+                      {s.status === 'confirmed' && !hasPendingTimeChange && !isReady && !isActive && (
+                        <button onClick={(e) => { e.stopPropagation(); setTimeChangeModal({ sessionId: s.id, session: s }); setTcNewTime(s.scheduled_time || ''); setTcNewDuration(String(duration || 2)); setTcReason(''); }}
+                          style={{ padding: '3px 8px', borderRadius: 6, border: '1px solid var(--color-purple)', background: 'var(--color-purple-bg)', color: 'var(--color-purple)', fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>
+                          Change Time
+                        </button>
+                      )}
+                      {hasPendingTimeChange && (
+                        <button onClick={async (e) => {
+                          e.stopPropagation();
+                          try {
+                            const r = await apiFetch(`/api/sessions/${s.id}/time-change`);
+                            if (r?.ok) { const d = await r.json(); setTimeChangeProposal({ ...d.proposal, session: s }); }
+                          } catch {}
+                        }}
+                          style={{ padding: '3px 8px', borderRadius: 6, border: 'none', background: 'var(--color-purple)', color: 'var(--text-on-primary)', fontSize: 10, fontWeight: 700, cursor: 'pointer', animation: 'pulse 2s infinite' }}>
+                          Review Change
+                        </button>
+                      )}
+                      {s.status === 'payment_hold' && (
+                        <span style={{
+                          padding: '5px 12px', borderRadius: 10, fontSize: 11, fontWeight: 600,
+                          background: '#fff3e0', color: '#e65100',
+                        }}>On Hold — Payment</span>
+                      )}
+                      {!isReady && !isActive && !isUpcoming && s.status !== 'payment_hold' && (
+                        <span style={{
+                          padding: '5px 12px', borderRadius: 10, fontSize: 11, fontWeight: 600,
+                          background: s.status === 'confirmed' ? 'var(--color-success-bg)' : 'var(--color-warning-bg)',
+                          color: s.status === 'confirmed' ? 'var(--color-success)' : 'var(--color-warning)',
+                          textTransform: 'capitalize',
+                        }}>{s.status}</span>
+                      )}
+                    </div>
+                  </div>
+                  {/* Expandable Care Profile */}
+                  {expandedProfileId === s.id && (
+                    <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #eee' }}>
+                      {profileLoading === s.id && <div style={{ fontSize: 12, color: 'var(--text-tertiary)', padding: '8px 0' }}>Loading care profile...</div>}
+                      {profileBriefings[s.id] && (() => {
+                        const pb = profileBriefings[s.id];
+                        return (
+                          <div style={{ fontSize: 12, lineHeight: 1.5 }}>
+                            {pb.isExperienced && <div style={{ fontSize: 11, color: 'var(--role-color)', fontWeight: 600, marginBottom: 6 }}>{'\u2705'} You've cared for {pb.recipientName} {pb.visitCount} time{pb.visitCount != 1 ? 's' : ''}</div>}
+                            {pb.caregiverBriefing && (
+                              <div style={{ padding: '8px 10px', background: '#f8f8f8', borderLeft: '3px solid #e8724a', borderRadius: 4, marginBottom: 8, color: 'var(--text-secondary)', whiteSpace: 'pre-line' }}>
+                                {pb.caregiverBriefing}
+                              </div>
+                            )}
+                            {pb.healthConditions && pb.healthConditions.length > 0 && (
+                              <div style={{ marginBottom: 6 }}>
+                                <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>Health: </span>
+                                {pb.healthConditions.map((c, i) => (
+                                  <span key={i} style={{ background: 'var(--color-warning-bg)', color: 'var(--color-warning)', padding: '1px 6px', borderRadius: 8, fontSize: 10, fontWeight: 600, marginRight: 4 }}>{c}</span>
+                                ))}
+                              </div>
+                            )}
+                            {pb.medications && pb.medications.length > 0 && (
+                              <div style={{ marginBottom: 6 }}>
+                                <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>Medications: </span>
+                                <span style={{ color: 'var(--text-secondary)' }}>{pb.medications.join(', ')}</span>
+                              </div>
+                            )}
+                            {pb.foodAllergies && (
+                              <div style={{ marginBottom: 6 }}>
+                                <span style={{ fontWeight: 600, color: 'var(--color-error)' }}>Allergies: </span>
+                                <span style={{ color: 'var(--color-error)' }}>{pb.foodAllergies}</span>
+                              </div>
+                            )}
+                            {pb.recentMoods && pb.recentMoods.length > 0 && (
+                              <div style={{ marginBottom: 4 }}>
+                                <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>Recent moods: </span>
+                                {pb.recentMoods.slice(0, 3).map((m, i) => (
+                                  <span key={i} style={{ fontSize: 11, color: 'var(--text-secondary)', marginRight: 6 }}>{m.arrivalMood}{'\u2192'}{m.departureMood}</span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        );
+  };
+
   return (
     <div>
       {/* Push notification prompt — shows if not yet enabled */}
@@ -1358,6 +1759,46 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
           </div>
         </div>
       </div>
+      {/* ── INCOMPLETE CHECK-IN BANNER ── */}
+      {incompleteCheckIn && (() => {
+        const elapsed = Math.floor((Date.now() - incompleteCheckIn.startedAt) / 60000);
+        const remaining = Math.max(0, 30 - elapsed);
+        const sess = incompleteCheckIn.session;
+        const recipName = (sess.recipientName || sess.recipient_name || 'Care Session');
+        return (
+          <div onClick={() => {
+            // Resume the check-in flow
+            setCheckInSession(incompleteCheckIn.session);
+            setIncompleteCheckIn(null);
+          }} style={{
+            margin: '0 0 12px 0', padding: '14px 16px', borderRadius: 12, cursor: 'pointer',
+            background: 'linear-gradient(135deg, rgba(239,68,68,0.08), rgba(234,179,8,0.06))',
+            border: '1px solid rgba(239,68,68,0.25)',
+            display: 'flex', alignItems: 'center', gap: 12,
+          }}>
+            <span style={{ fontSize: 24, flexShrink: 0 }}>🚨</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-error)', marginBottom: 2 }}>
+                Check-in incomplete for {recipName}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                You haven't finished checking in
+                <span style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 6px',
+                  borderRadius: 6, fontSize: 11, fontWeight: 700,
+                  background: remaining <= 10 ? 'rgba(239,68,68,0.15)' : 'rgba(234,179,8,0.15)',
+                  color: remaining <= 10 ? 'var(--color-error)' : 'var(--color-warning)',
+                  animation: remaining <= 10 ? 'incompleteCheckInPulse 2s infinite' : 'none',
+                }}>⏱ No-show in {remaining} min</span>
+              </div>
+            </div>
+            <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-success)', whiteSpace: 'nowrap' }}>Finish →</span>
+          </div>
+        );
+      })()}
+
+      {/* ── v1.106.23 — pinned above everything: see upNextSplit ── */}
+      {renderUpNext(upNextSplit.ready, { pinned: true, tour: upNextSplit.rest.length === 0 })}
 
       {/* ─── Needs your attention: a care-team invite (v1.105.82) ─── */}
       {/*
@@ -2011,420 +2452,9 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         );
       })()}
 
-      {/* ── INCOMPLETE CHECK-IN BANNER ── */}
-      {incompleteCheckIn && (() => {
-        const elapsed = Math.floor((Date.now() - incompleteCheckIn.startedAt) / 60000);
-        const remaining = Math.max(0, 30 - elapsed);
-        const sess = incompleteCheckIn.session;
-        const recipName = (sess.recipientName || sess.recipient_name || 'Care Session');
-        return (
-          <div onClick={() => {
-            // Resume the check-in flow
-            setCheckInSession(incompleteCheckIn.session);
-            setIncompleteCheckIn(null);
-          }} style={{
-            margin: '0 0 12px 0', padding: '14px 16px', borderRadius: 12, cursor: 'pointer',
-            background: 'linear-gradient(135deg, rgba(239,68,68,0.08), rgba(234,179,8,0.06))',
-            border: '1px solid rgba(239,68,68,0.25)',
-            display: 'flex', alignItems: 'center', gap: 12,
-          }}>
-            <span style={{ fontSize: 24, flexShrink: 0 }}>🚨</span>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-error)', marginBottom: 2 }}>
-                Check-in incomplete for {recipName}
-              </div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                You haven't finished checking in
-                <span style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 6px',
-                  borderRadius: 6, fontSize: 11, fontWeight: 700,
-                  background: remaining <= 10 ? 'rgba(239,68,68,0.15)' : 'rgba(234,179,8,0.15)',
-                  color: remaining <= 10 ? 'var(--color-error)' : 'var(--color-warning)',
-                  animation: remaining <= 10 ? 'incompleteCheckInPulse 2s infinite' : 'none',
-                }}>⏱ No-show in {remaining} min</span>
-              </div>
-            </div>
-            <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-success)', whiteSpace: 'nowrap' }}>Finish →</span>
-          </div>
-        );
-      })()}
-
-      {/* UP NEXT — any session <24 hours away + in_progress, with check-in/out */}
-      {/* v1.105.194 — `data-tour="up-next"` on the block below is what the tour lights on stop 1. */}
-      {/* Filter out sessions that have a pending OR expired counter-proposal — family never accepted the time change */}
-      {(() => {
-        const proposalSessionIds = new Set((data.myProposals || []).filter(p => p.status === 'pending' || p.status === 'expired').map(p => p.sessionId));
-        const filteredUpNext = upNextSessions.filter(s => !proposalSessionIds.has(s.id));
-        if (filteredUpNext.length === 0) return null;
-        const readySet = new Set(readyToCheckIn.map(s => s.id));
-        const sorted = [...filteredUpNext].sort((a, b) => {
-          if (a.status === 'in_progress' && b.status !== 'in_progress') return -1;
-          if (b.status === 'in_progress' && a.status !== 'in_progress') return 1;
-          const aKey = (a.date || a.scheduled_date || '') + (a.time || a.scheduled_time || '');
-          const bKey = (b.date || b.scheduled_date || '') + (b.time || b.scheduled_time || '');
-          return aKey.localeCompare(bKey);
-        });
-
-        return (
-          <div data-tour="up-next" style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>Up Next</div>
-            {sorted.map(s => {
-              const isReady = readySet.has(s.id);
-              const isActive = s.status === 'in_progress';
-              const sDate = (s.date || s.scheduled_date || '').split('T')[0];
-              const tz = s.timezone || TimezoneHelper.DEFAULT_TZ;
-              const sessionStartET = TimezoneHelper.buildDateTime(sDate, s.time || s.scheduled_time || '00:00', tz);
-              const minsUntil = (sessionStartET.getTime() - TimezoneHelper.realNowMs()) / 60000;
-              const dayLabel = TimezoneHelper.getDateLabel(sDate, tz);
-              const timeLabel = TimezoneHelper.formatTime(s.time || s.scheduled_time);
-              const duration = s.durationHours || s.duration_hours;
-              const svcType = s.serviceType || s.service_type;
-              const recipName = s.recipientName || s.recipient_name || 'Session';
-              const loc = s.location || (s.location_address ? `${s.location_address}, ${s.location_city || ''}` : s.location_city || '');
-              const noAddress = !s.hasAddress && s.status === 'confirmed';
-
-              // Countdown label + upcoming check-in state (15-60 min window)
-              const isUpcoming = !isReady && !isActive && s.status === 'confirmed' && minsUntil > 0 && minsUntil <= 60;
-              const minsUntilCheckIn = Math.max(0, minsUntil - 15); // check-in opens 15 min before session
-              const countdownLabel = (() => {
-                if (isReady || isActive) return null;
-                if (minsUntilCheckIn <= 0) return null;
-                const hours = Math.floor(minsUntilCheckIn / 60);
-                const mins = Math.round(minsUntilCheckIn % 60);
-                if (hours > 0) return `${hours}h ${mins}m until check-in`;
-                return `${Math.ceil(minsUntilCheckIn)} min until check-in`;
-              })();
-
-              // Styling
-              const hasPendingTimeChange = !!s.pendingTimeChangeId;
-              const borderColor = hasPendingTimeChange ? 'var(--color-purple)' : isActive ? 'var(--color-warning)' : isReady ? 'var(--accent-color)' : isUpcoming ? 'var(--accent-color)' : noAddress ? 'var(--color-error)' : 'var(--role-color)';
-              const borderWidth = hasPendingTimeChange ? 3 : isActive || isReady ? 3 : isUpcoming ? 2 : 2;
-              const bgStyle = hasPendingTimeChange ? 'linear-gradient(135deg, var(--color-purple-bg) 0%, var(--bg-card) 100%)' : isActive ? 'linear-gradient(135deg, #fffde7 0%, #fff 100%)' : isReady ? 'linear-gradient(135deg, #fff3e0 0%, #fff 100%)' : 'var(--text-on-primary)';
-              const shadow = hasPendingTimeChange ? '0 2px 12px rgba(123, 31, 162, 0.15)' : (isReady || isActive) ? '0 2px 12px rgba(232, 114, 74, 0.15)' : '0 1px 4px rgba(0,0,0,0.06)';
-
-              return (
-                <div key={s.id} className="card" onClick={(e) => {
-                  if (e.target.tagName === 'BUTTON') return;
-                  if (s.id) setVisitDetailSessionId(s.id);
-                }} style={{
-                  marginBottom: 10, padding: '16px 18px', cursor: 'pointer',
-                  border: `${borderWidth}px solid ${borderColor}`,
-                  borderRadius: 12,
-                  background: bgStyle,
-                  boxShadow: shadow,
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-                    <div style={{ flex: 1, minWidth: '180px' }}>
-                      {isActive && (() => {
-                        // v1.105.33 — the SCHEDULED end, not check-in + booked hours. The
-                        // caregiver's own card is where this matters most: it should show
-                        // the time the family is expecting them to finish, not a finish
-                        // line that quietly slid because they arrived late. Pay is
-                        // unaffected — that is computed server-side from real check-in and
-                        // check-out, in 15-minute blocks.
-                        const endMs = sessionStartET.getTime() + ((duration || 2) * 3600000);
-                        const leftMs = endMs - Date.now();
-                        const totalSec = Math.max(0, Math.floor(leftMs / 1000));
-                        const hrs = Math.floor(totalSec / 3600);
-                        const mins = Math.floor((totalSec % 3600) / 60);
-                        const remainLabel = leftMs > 0 ? (hrs > 0 ? `${hrs}h ${mins}m remaining` : `${mins}m remaining`) : 'Expected end time passed';
-                        const isPast = leftMs <= 0;
-                        return React.createElement(React.Fragment, null,
-                          React.createElement('div', { style: { fontSize: 11, fontWeight: 700, color: 'var(--color-warning)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 2 } }, 'In Progress Now'),
-                          React.createElement('span', { style: {
-                            display: 'inline-block', fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 6, marginBottom: 4,
-                            color: isPast ? 'var(--color-error)' : 'var(--role-color)',
-                            background: isPast ? 'var(--color-error-bg)' : 'var(--color-success-bg)',
-                          }}, remainLabel)
-                        );
-                      })()}
-                      {isReady && !isActive && <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent-color)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 3 }}>Ready to Check In</div>}
-                      {countdownLabel && <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--accent-color)', marginBottom: 3 }}>{countdownLabel}</div>}
-                      {hasPendingTimeChange && (
-                        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-purple)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 2 }}>
-                          ⏰ Time Change Requested
-                        </div>
-                      )}
-                      <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)' }}>{recipName}</div>
-                      {hasPendingTimeChange && s.tcProposedTime ? (
-                        <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>
-                          {dayLabel} at{' '}
-                          <span style={{ textDecoration: 'line-through', opacity: 0.5 }}>{timeLabel}</span>
-                          {' '}
-                          <span style={{ color: 'var(--color-purple)', fontWeight: 700 }}>{TimezoneHelper.formatTime(s.tcProposedTime)}</span>
-                          {s.tcProposedDuration && parseFloat(s.tcProposedDuration) !== parseFloat(duration) ? (
-                            <>{' \u2022 '}<span style={{ textDecoration: 'line-through', opacity: 0.5 }}>{duration}hr</span>{' '}<span style={{ color: 'var(--color-purple)', fontWeight: 700 }}>{s.tcProposedDuration}hr</span></>
-                          ) : duration ? ` \u2022 ${duration}hr` : ''}
-                          {svcType ? ` \u2022 ${formatServiceType(svcType)}` : ''}
-                        </div>
-                      ) : (
-                        <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>
-                          {dayLabel}{timeLabel ? ` at ${timeLabel}` : ''}{duration ? ` \u2022 ${duration}hr` : ''}{svcType ? ` \u2022 ${formatServiceType(svcType)}` : ''}
-                        </div>
-                      )}
-                      {loc ? (
-                        <a href={`https://maps.google.com/?q=${encodeURIComponent(loc)}`} target="_blank" rel="noopener noreferrer"
-                          onClick={(e) => e.stopPropagation()}
-                          style={{ display: 'block', fontSize: 12, color: 'var(--role-color)', marginTop: 2, textDecoration: 'none' }}>
-                          {'\uD83D\uDCCD'} {loc}
-                        </a>
-                      ) : noAddress ? (
-                        <div style={{ fontSize: 12, color: 'var(--color-error)', marginTop: 2, fontWeight: 600 }}>{'\u26A0\uFE0F'} No care address on file</div>
-                      ) : null}
-                      {s.specialInstructions && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4, fontStyle: 'italic' }}>{s.specialInstructions}</div>}
-                      {/* View Care Profile toggle */}
-                      <button onClick={(e) => {
-                        e.stopPropagation();
-                        if (expandedProfileId === s.id) {
-                          setExpandedProfileId(null);
-                        } else {
-                          setExpandedProfileId(s.id);
-                          if (!profileBriefings[s.id]) {
-                            setProfileLoading(s.id);
-                            apiFetch('/api/sessions/' + s.id + '/care-briefing')
-                              .then(r => r?.ok ? r.json() : null)
-                              .then(d => { if (d) setProfileBriefings(prev => ({...prev, [s.id]: d})); })
-                              .catch(err => console.warn('Profile fetch failed:', err))
-                              .finally(() => setProfileLoading(null));
-                          }
-                        }
-                      }} style={{
-                        marginTop: 8, padding: '4px 10px', background: 'transparent', border: '1px solid #ddd',
-                        borderRadius: 6, fontSize: 11, fontWeight: 600, color: 'var(--role-color)', cursor: 'pointer',
-                      }}>{expandedProfileId === s.id ? 'Hide Care Profile' : 'View Care Profile'}</button>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
-                      {(s.caregiverPayout > 0 || s.estimatedCost > 0) && (
-                        <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--role-color)' }}>
-                          ${(s.caregiverPayout || parseFloat(s.estimatedCost) || 0).toFixed(2)}
-                        </div>
-                      )}
-                      {isActive && (<>
-                        <button onClick={() => {
-                          setCheckOutMood([]);
-                          setCheckOutTags([]);
-                          setCheckOutCareFeedback('');
-                          setCheckOutServiceFeedback('');
-                          setCheckOutSummary('');
-                          setCheckOutPhotos([]);
-                          setCheckOutPhotoUrls(prev => { prev.forEach(u => URL.revokeObjectURL(u)); return []; });
-                          setEarlyDepartureReason('');
-                          setEarlyDepartureAcked(false);
-                          setCheckOutSession(s);
-                        }} style={{
-                          padding: '10px 22px', background: 'var(--color-error)', color: 'var(--text-on-primary)', border: 'none',
-                          borderRadius: '10px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
-                          boxShadow: '0 2px 8px rgba(198,40,40,0.3)', whiteSpace: 'nowrap',
-                        }}>Check Out</button>
-                        {/* Nobody Home removed from post-check-in — moved to pre-check-in block below */}
-                      </>)}
-                      {isReady && !isActive && !s.family_no_show && (
-                          <button onClick={async () => {
-                            if (!confirm('Flag that nobody is home? You will need to wait 30 minutes before checking out for full pay.')) return;
-                            try {
-                              const r = await apiFetch(`/api/accountability/family-no-show/${s.id}`, { method: 'POST' });
-                              if (r?.ok) {
-                                const d = await r.json();
-                                showToast(d.message || 'Family no-show flagged. Wait 30 minutes.', 'info');
-                                // Refresh data
-                                try { const dr = await apiFetch('/api/dashboard'); if (dr?.ok) setData(await dr.json()); } catch {}
-                              } else {
-                                const err = await r?.json().catch(() => ({}));
-                                showToast(err?.error || 'Failed to flag no-show', 'error');
-                              }
-                            } catch { showToast('Network error', 'error'); }
-                          }} style={{
-                            padding: '8px 14px', background: 'var(--color-warning-bg)', color: 'var(--color-warning)', border: '1px solid #ffcc80',
-                            borderRadius: '10px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
-                          }}>Nobody Home</button>
-                      )}
-                      {isReady && !isActive && (
-                        <button onClick={async () => {
-                          setCheckInMood([]);
-                          setCheckInNotes(null);
-                          setCheckInLocation(null);
-                          setLocationError(null);
-                          setBriefingData(null);
-                          setBriefingAcked(false);
-                          setCheckInStep('briefing');
-                          setBriefingLoading(true);
-                          // Start geolocation early (skip in test mode)
-                          if (window.getImpersonationToken && window.getImpersonationToken()) {
-                            setCheckInLocation({ lat: 0, lng: 0, accuracy: 0, testMode: true });
-                          } else {
-                            // v1.105.54 — plugin-first; see getDeviceLocation.
-                            getDeviceLocation({ timeoutMs: 8000 }).then(({ pos, reason }) => {
-                              if (pos) {
-                                setCheckInLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy });
-                              } else {
-                                setLocationError(reason === 'denied'
-                                  ? 'Location is off for InPlace — turn it on in Settings to record your arrival.'
-                                  : "Couldn't get your location. You can still check in.");
-                              }
-                            });
-                          }
-                          setCheckInSession(s);
-                          // Fetch care briefing
-                          try {
-                            const bRes = await apiFetch('/api/sessions/' + s.id + '/care-briefing');
-                            if (bRes?.ok) {
-                              setBriefingData(await bRes.json());
-                            }
-                          } catch (e) { console.warn('Briefing fetch failed:', e); }
-                          setBriefingLoading(false);
-                        }} style={{
-                          padding: '10px 22px', background: 'var(--accent-color)', color: 'var(--text-on-primary)', border: 'none',
-                          borderRadius: '10px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
-                          boxShadow: '0 2px 8px rgba(232,114,74,0.3)', whiteSpace: 'nowrap',
-                        }}>Check In Now</button>
-                      )}
-                      {/* On My Way button — show for upcoming confirmed sessions that haven't been signaled */}
-                      {(isUpcoming || isReady) && !isActive && s.status === 'confirmed' && !onMyWaySent[s.id] && !s.on_my_way_at && (
-                        <button
-                          disabled={onMyWaySending === s.id}
-                          onClick={async (e) => {
-                            e.stopPropagation();
-                            setOnMyWaySending(s.id);
-                            try {
-                              // Get current location for ETA calculation
-                              let body = {};
-                              try {
-                                // v1.105.54 — plugin-first, and it always settles.
-                                const { pos } = await getDeviceLocation({ timeoutMs: 5000 });
-                                if (pos) body = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-                              } catch {} // location optional — still send on-my-way
-                              const r = await apiFetch(`/api/sessions/${s.id}/on-my-way`, {
-                                method: 'PUT',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify(body),
-                              });
-                              if (r?.ok) {
-                                setOnMyWaySent(prev => ({ ...prev, [s.id]: true }));
-                                showToast('Care team notified — you\'re on your way!', 'success');
-                                // Open maps for directions
-                                if (loc) {
-                                  openExternalUrl(`https://maps.google.com/?q=${encodeURIComponent(loc)}&navigate=yes`); // v1.105.49
-                                }
-                              } else {
-                                const err = await r?.json().catch(() => ({}));
-                                showToast(err?.error || 'Failed to send', 'error');
-                              }
-                            } catch { showToast('Network error', 'error'); }
-                            setOnMyWaySending(null);
-                          }}
-                          style={{
-                            padding: '8px 16px', background: 'linear-gradient(135deg, #1b6b5a, #2a9d8f)', color: '#fff', border: 'none',
-                            borderRadius: '10px', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
-                            boxShadow: '0 2px 8px rgba(27,107,90,0.3)', whiteSpace: 'nowrap',
-                            display: 'flex', alignItems: 'center', gap: 6,
-                            opacity: onMyWaySending === s.id ? 0.6 : 1,
-                          }}>
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <polygon points="3 11 22 2 13 21 11 13 3 11"></polygon>
-                          </svg>
-                          {onMyWaySending === s.id ? 'Sending...' : 'On My Way'}
-                        </button>
-                      )}
-                      {(onMyWaySent[s.id] || s.on_my_way_at) && !isActive && (
-                        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-success)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                          En route
-                        </span>
-                      )}
-                      {isUpcoming && (
-                        <button disabled style={{
-                          padding: '10px 22px', background: 'var(--bg-primary)', color: 'var(--text-muted)', border: '1px solid #ddd',
-                          borderRadius: '10px', fontSize: '14px', fontWeight: 600, cursor: 'default',
-                          whiteSpace: 'nowrap',
-                        }}>Check in {Math.ceil(minsUntilCheckIn)} min</button>
-                      )}
-                      {s.status === 'confirmed' && !hasPendingTimeChange && !isReady && !isActive && (
-                        <button onClick={(e) => { e.stopPropagation(); setTimeChangeModal({ sessionId: s.id, session: s }); setTcNewTime(s.scheduled_time || ''); setTcNewDuration(String(duration || 2)); setTcReason(''); }}
-                          style={{ padding: '3px 8px', borderRadius: 6, border: '1px solid var(--color-purple)', background: 'var(--color-purple-bg)', color: 'var(--color-purple)', fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>
-                          Change Time
-                        </button>
-                      )}
-                      {hasPendingTimeChange && (
-                        <button onClick={async (e) => {
-                          e.stopPropagation();
-                          try {
-                            const r = await apiFetch(`/api/sessions/${s.id}/time-change`);
-                            if (r?.ok) { const d = await r.json(); setTimeChangeProposal({ ...d.proposal, session: s }); }
-                          } catch {}
-                        }}
-                          style={{ padding: '3px 8px', borderRadius: 6, border: 'none', background: 'var(--color-purple)', color: 'var(--text-on-primary)', fontSize: 10, fontWeight: 700, cursor: 'pointer', animation: 'pulse 2s infinite' }}>
-                          Review Change
-                        </button>
-                      )}
-                      {s.status === 'payment_hold' && (
-                        <span style={{
-                          padding: '5px 12px', borderRadius: 10, fontSize: 11, fontWeight: 600,
-                          background: '#fff3e0', color: '#e65100',
-                        }}>On Hold — Payment</span>
-                      )}
-                      {!isReady && !isActive && !isUpcoming && s.status !== 'payment_hold' && (
-                        <span style={{
-                          padding: '5px 12px', borderRadius: 10, fontSize: 11, fontWeight: 600,
-                          background: s.status === 'confirmed' ? 'var(--color-success-bg)' : 'var(--color-warning-bg)',
-                          color: s.status === 'confirmed' ? 'var(--color-success)' : 'var(--color-warning)',
-                          textTransform: 'capitalize',
-                        }}>{s.status}</span>
-                      )}
-                    </div>
-                  </div>
-                  {/* Expandable Care Profile */}
-                  {expandedProfileId === s.id && (
-                    <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #eee' }}>
-                      {profileLoading === s.id && <div style={{ fontSize: 12, color: 'var(--text-tertiary)', padding: '8px 0' }}>Loading care profile...</div>}
-                      {profileBriefings[s.id] && (() => {
-                        const pb = profileBriefings[s.id];
-                        return (
-                          <div style={{ fontSize: 12, lineHeight: 1.5 }}>
-                            {pb.isExperienced && <div style={{ fontSize: 11, color: 'var(--role-color)', fontWeight: 600, marginBottom: 6 }}>{'\u2705'} You've cared for {pb.recipientName} {pb.visitCount} time{pb.visitCount != 1 ? 's' : ''}</div>}
-                            {pb.caregiverBriefing && (
-                              <div style={{ padding: '8px 10px', background: '#f8f8f8', borderLeft: '3px solid #e8724a', borderRadius: 4, marginBottom: 8, color: 'var(--text-secondary)', whiteSpace: 'pre-line' }}>
-                                {pb.caregiverBriefing}
-                              </div>
-                            )}
-                            {pb.healthConditions && pb.healthConditions.length > 0 && (
-                              <div style={{ marginBottom: 6 }}>
-                                <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>Health: </span>
-                                {pb.healthConditions.map((c, i) => (
-                                  <span key={i} style={{ background: 'var(--color-warning-bg)', color: 'var(--color-warning)', padding: '1px 6px', borderRadius: 8, fontSize: 10, fontWeight: 600, marginRight: 4 }}>{c}</span>
-                                ))}
-                              </div>
-                            )}
-                            {pb.medications && pb.medications.length > 0 && (
-                              <div style={{ marginBottom: 6 }}>
-                                <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>Medications: </span>
-                                <span style={{ color: 'var(--text-secondary)' }}>{pb.medications.join(', ')}</span>
-                              </div>
-                            )}
-                            {pb.foodAllergies && (
-                              <div style={{ marginBottom: 6 }}>
-                                <span style={{ fontWeight: 600, color: 'var(--color-error)' }}>Allergies: </span>
-                                <span style={{ color: 'var(--color-error)' }}>{pb.foodAllergies}</span>
-                              </div>
-                            )}
-                            {pb.recentMoods && pb.recentMoods.length > 0 && (
-                              <div style={{ marginBottom: 4 }}>
-                                <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>Recent moods: </span>
-                                {pb.recentMoods.slice(0, 3).map((m, i) => (
-                                  <span key={i} style={{ fontSize: 11, color: 'var(--text-secondary)', marginRight: 6 }}>{m.arrivalMood}{'\u2192'}{m.departureMood}</span>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })()}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        );
-      })()}
+      {/* UP NEXT — sessions <24h away and in-progress. The ones inside their check-in
+          window are NOT here; they are pinned at the top (v1.106.23). */}
+      {renderUpNext(upNextSplit.rest, { pinned: false, tour: upNextSplit.rest.length > 0 })}
 
       {/* Find Work — shows available jobs */}
       {bgCheckPaid && (() => {

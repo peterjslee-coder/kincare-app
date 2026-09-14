@@ -22,6 +22,11 @@ VA — that is the real case the product is designed against. Live at https://yo
 **It has real users.** A real caregiver works real visits through it and a real family pays real
 money. Treat production accordingly: staging first, always.
 
+Staging is **https://inplace-staging-production.up.railway.app** — `staging.yourinplace.com`
+is in OPS_RUNBOOK but does not resolve, which has cost two sessions a detour through the
+Railway dashboard to rediscover the real URL. `/api/version` and `/api/health` there are the
+post-push check.
+
 ## Stack (verified 2026-09-13, v1.105.194)
 
 - **Backend** Node 22 + Express 4, port 3001 · **DB** PostgreSQL 17 via `pg` (one Railway service,
