@@ -2377,6 +2377,43 @@ async function initializeDatabase() {
       ],
     },
     {
+      // v1.106.21 — admins were being locked out of their own admin panel on a schedule.
+      //
+      // trusted_admin_ips matched the client address EXACTLY. On IPv6 the low 64 bits are the
+      // interface identifier, and macOS/iOS/Windows randomise and regenerate it roughly daily
+      // (RFC 4941 privacy extensions). So a trusted laptop stops being trusted overnight,
+      // without moving, and Pete's own feedback-pull script started answering
+      // IP_VERIFICATION_REQUIRED from the same house it was verified in.
+      //
+      // trust_key is what gets matched: the /64 for IPv6, the exact address for IPv4. See
+      // utils/ipTrustKey. ip_address is kept as-is — it is what the admin panel lists and what
+      // an audit wants, and it stays the conflict target so existing rows update in place.
+      //
+      // The backfill computes the key in SQL for the rows already there rather than leaving
+      // them to the NULL fallback forever.
+      id: "037_trusted_ip_network_key",
+      statements: [
+        `ALTER TABLE trusted_admin_ips ADD COLUMN IF NOT EXISTS trust_key TEXT`,
+        // IPv4 (including ::ffff: mapped) keeps its exact address; IPv6 collapses to its /64.
+        // split_part on an EXPANDED address would be wrong for compressed forms, so anything
+        // containing '::' is left for the app to rewrite on next use rather than guessed at.
+        `UPDATE trusted_admin_ips
+            SET trust_key = CASE
+              WHEN ip_address ~ '^(\\d{1,3}\\.){3}\\d{1,3}$' THEN ip_address
+              WHEN ip_address ~ '^::ffff:(\\d{1,3}\\.){3}\\d{1,3}$' THEN regexp_replace(ip_address, '^::ffff:', '')
+              WHEN position('::' in ip_address) > 0 THEN NULL
+              WHEN position(':' in ip_address) > 0 THEN
+                lpad(split_part(ip_address, ':', 1), 4, '0') || ':' ||
+                lpad(split_part(ip_address, ':', 2), 4, '0') || ':' ||
+                lpad(split_part(ip_address, ':', 3), 4, '0') || ':' ||
+                lpad(split_part(ip_address, ':', 4), 4, '0') || '::/64'
+              ELSE ip_address
+            END
+          WHERE trust_key IS NULL`,
+        `CREATE INDEX IF NOT EXISTS idx_trusted_ips_key ON trusted_admin_ips(user_id, trust_key)`,
+      ],
+    },
+    {
       // v1.106.13 — a pending time change never ended.
       //
       // time_proposals (a caregiver bidding on an OPEN request) has expires_at and a sweeper.

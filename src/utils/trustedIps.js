@@ -4,6 +4,7 @@
 // Unknown IPs trigger a passkey re-verification challenge.
 
 const { getDb } = require("../models/database");
+const { ipTrustKey } = require("./ipTrustKey");
 
 /**
  * Register an IP as trusted for an admin user.
@@ -21,14 +22,19 @@ async function registerTrustedIp(userId, ipAddress, { userAgent, verifiedVia = "
     const user = await db.prepare("SELECT is_admin FROM users WHERE id = ?").get(userId);
     if (!user || !user.is_admin) return false;
 
+    // v1.106.21 — ip_address stays as the exact address that registered the trust, because it
+    // is what the admin panel shows and what an audit needs. trust_key is what is MATCHED, and
+    // for IPv6 that is the /64: see utils/ipTrustKey for why an exact match locks admins out on
+    // a schedule.
     await db.prepare(`
-      INSERT INTO trusted_admin_ips (user_id, ip_address, user_agent, label, verified_via, last_seen_at, expires_at)
-      VALUES (?, ?, ?, ?, ?, NOW(), NOW() + INTERVAL '90 days')
+      INSERT INTO trusted_admin_ips (user_id, ip_address, trust_key, user_agent, label, verified_via, last_seen_at, expires_at)
+      VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW() + INTERVAL '90 days')
       ON CONFLICT (user_id, ip_address)
       DO UPDATE SET last_seen_at = NOW(), expires_at = NOW() + INTERVAL '90 days',
+        trust_key = EXCLUDED.trust_key,
         user_agent = COALESCE(EXCLUDED.user_agent, trusted_admin_ips.user_agent),
         verified_via = EXCLUDED.verified_via
-    `).run(userId, ipAddress, userAgent || null, label || null, verifiedVia);
+    `).run(userId, ipAddress, ipTrustKey(ipAddress), userAgent || null, label || null, verifiedVia);
 
     return true;
   } catch (err) {
@@ -44,10 +50,15 @@ async function registerTrustedIp(userId, ipAddress, { userAgent, verifiedVia = "
 async function isTrustedIp(userId, ipAddress) {
   try {
     const db = await getDb();
+    // Match the network, not the rotating host part. The ip_address fallback keeps rows that
+    // predate the column working until the migration backfills them.
+    const key = ipTrustKey(ipAddress);
     const row = await db.prepare(`
       SELECT * FROM trusted_admin_ips
-      WHERE user_id = ? AND ip_address = ? AND expires_at > NOW()
-    `).get(userId, ipAddress);
+      WHERE user_id = ?
+        AND (trust_key = ? OR (trust_key IS NULL AND ip_address = ?))
+        AND expires_at > NOW()
+    `).get(userId, key, ipAddress);
     return row || null;
   } catch (err) {
     console.error("isTrustedIp error:", err.message);
