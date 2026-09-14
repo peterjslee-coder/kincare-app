@@ -61,6 +61,53 @@ function serializeEvent(ev, extra = {}) {
 // can see this person's record; the tag decides who gets TOLD, not who is allowed to know.
 // Letting it reach further would make an appointment a way to disclose a health event to
 // someone with no access to the person it is about.
+/**
+ * Everyone who can be put on an appointment for this person.
+ *
+ * v1.106.31 — this was teamUserIds() and it was the wrong set, which Pete found within the
+ * hour: "Literally, the only two people not included for me to select as going to the meeting
+ * are the two people that are here. Me and Tina." Both exclusions were mine.
+ *
+ * TINA. teamUserIds covers the family owner, care_team_members and shares. A caregiver who
+ * works this person's visits is in none of those — the v1.105.153 note says so out loud
+ * ("a caregiver who is only assigned to a session appears in none of those sets") and I read
+ * it while writing the wrong query anyway. hasAccess() has always granted her "member"
+ * through a confirmed session; the picker just asked a different question. So the set is now
+ * "who has access", which is what the privacy rule was about all along: a tag decides who is
+ * TOLD about a health event, never who is allowed to know. Nobody new can see anything.
+ *
+ * PETE. I excluded the caller as tidiness. He is standing in the waiting room — of course he
+ * is on the appointment. Whoever is going is going, and that includes you.
+ */
+async function peopleWithAccess(db, recipientId) {
+  return db.prepare(`
+    SELECT DISTINCT u.id, u.first_name, u.last_name, u.role, u.roles
+    FROM users u
+    WHERE u.id IN (
+      SELECT family_user_id FROM care_recipients WHERE id = ?
+      UNION
+      SELECT ctm.user_id FROM care_team_members ctm
+      JOIN care_teams ct ON ctm.care_team_id = ct.id
+      WHERE ct.care_recipient_id = ?
+      UNION
+      SELECT shared_with_user_id FROM care_recipient_shares WHERE care_recipient_id = ?
+      UNION
+      -- A caregiver who works this person's visits. Booked OR already worked: the roster
+      -- relationship is what matters, not whether today happens to have a session on it.
+      SELECT cp.user_id FROM care_sessions cs
+      JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      WHERE cs.care_recipient_id = ?
+        AND cs.status IN ('confirmed', 'in_progress', 'completed')
+      UNION
+      -- And one the family has assigned but who has no session yet.
+      SELECT cp2.user_id FROM caregiver_assignments ca
+      JOIN caregiver_profiles cp2 ON ca.caregiver_profile_id = cp2.id
+      WHERE ca.care_recipient_id = ? AND ca.is_active = 1
+    ) AND COALESCE(u.is_active, 1) = 1
+    ORDER BY u.first_name
+  `).all(recipientId, recipientId, recipientId, recipientId, recipientId);
+}
+
 async function attendeesFor(db, eventId) {
   return db.prepare(`
     SELECT a.user_id, u.first_name, u.last_name
@@ -76,7 +123,9 @@ async function attendeesFor(db, eventId) {
  * Re-saving an appointment must not re-announce it to everyone already on it.
  */
 async function setAttendees(db, ev, userIds, addedBy) {
-  const allowed = new Set((await teamUserIds(db, ev.care_recipient_id)).map((u) => u.id));
+  // The SAME set the picker offers. Two different answers here is how a name gets shown,
+  // ticked, saved, and silently dropped.
+  const allowed = new Set((await peopleWithAccess(db, ev.care_recipient_id)).map((u) => u.id));
   const wanted = [...new Set((userIds || []).filter((id) => allowed.has(id)))];
 
   const existing = (await db.prepare(
@@ -265,11 +314,11 @@ router.get("/taggable/:recipientId", async (req, res) => {
     const db = await getDb();
     const access = await hasAccess(db, req.params.recipientId, req.user.id);
     if (!access) return res.status(403).json({ error: "Not authorized for this care recipient" });
-    const team = await teamUserIds(db, req.params.recipientId);
+    const team = await peopleWithAccess(db, req.params.recipientId);
     return res.json({
       people: team
-        .filter((u) => u.id !== req.user.id)
         .map((u) => ({
+          isYou: u.id === req.user.id,
           user_id: u.id,
           first_name: u.first_name,
           last_name: u.last_name,
@@ -524,7 +573,9 @@ async function pollCareEvents(sendPushToUser) {
       const stage = reminderStage({ ...ev, tz }, nowMs);
       if (!stage) continue;
 
-      const team = await teamUserIds(db, ev.care_recipient_id);
+      // v1.106.31 — peopleWithAccess, not teamUserIds: a tagged caregiver is not on the
+      // care team and was therefore never in the list the reminder iterated.
+      const team = await peopleWithAccess(db, ev.care_recipient_id);
       // v1.99.2 kept event reminders FAMILY-ONLY (Pete's 7/22 rule) because no caregiver had
       // asked to be on one. v1.106.30 — being tagged IS that ask, and it is the whole point
       // of tagging: "Tina is also going... so that she gets updates about that appointment as

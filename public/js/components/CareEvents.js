@@ -260,7 +260,7 @@ const CareEventSheet = window.CareEventSheet = ({ ev, canManage, onClose, onEdit
         {ev.details && <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 6, whiteSpace: 'pre-wrap' }}>{ev.details}</div>}
         {(ev.attendees || []).length > 0 && (
           <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 8 }}>
-            {'\uD83D\uDC65'} Also going: {ev.attendees.map((a) => a.first_name).join(', ')}
+            {'\uD83D\uDC65'} Going: {ev.attendees.map((a) => a.first_name).join(', ')}
           </div>
         )}
         {ev.created_by_first_name && (
@@ -366,7 +366,10 @@ const CareEventFormModal = window.CareEventFormModal = ({ recipientId, recipient
         const res = await apiFetch(`/api/care-events/taggable/${recipientId}`);
         if (cancelled || !res?.ok) return;
         const d = await res.json();
-        setTaggable(d.people || []);
+        // v1.106.31 — you first, then the caregivers. Pete had to hunt past a list that
+        // did not contain either of the two people actually in the room.
+        const rank = (pp) => (pp.isYou ? 0 : pp.isCaregiver ? 1 : 2);
+        setTaggable([...(d.people || [])].sort((a, b) => rank(a) - rank(b)));
       } catch { /* the picker just stays empty; the rest of the form still works */ }
     })();
     return () => { cancelled = true; };
@@ -476,9 +479,26 @@ const CareEventFormModal = window.CareEventFormModal = ({ recipientId, recipient
         </div>
 
         <div style={label}>Where <span style={{ fontWeight: 400, textTransform: 'none' }}>(optional)</span></div>
-        <input style={input} value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Carilion Clinic, Radford" />
+        {/* ─── v1.106.31 — a real address, not free text ───
+            Pete: "The address should not be Freeform. I would like to see something that has
+            they type in an address they can select it."
+            AddressAutocomplete (v1.75.0) already existed and was already used for care
+            addresses; this field never got it. It matters more now that the address is a
+            tappable map link — "Dr. Lambert" typed into Maps finds nothing, and the caregiver
+            is the one standing in a car park discovering that. Typing freely still works, so
+            "the clinic on Main" is not rejected; the suggestions are a nudge, not a wall. */}
+        {typeof AddressAutocomplete !== 'undefined' ? (
+          <AddressAutocomplete
+            value={location}
+            onChange={setLocation}
+            onSelect={(sel) => setLocation(sel.label || [sel.line1, sel.city, sel.state].filter(Boolean).join(', '))}
+            placeholder="Start typing an address…"
+            style={input} />
+        ) : (
+          <input style={input} value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Carilion Clinic, Radford" />
+        )}
         <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-          Whoever opens this can tap it for directions.
+          Pick a suggestion so the map link lands in the right place. Whoever opens this can tap it for directions.
         </div>
 
         {/* ─── v1.106.30 — who else is going ───
@@ -487,7 +507,7 @@ const CareEventFormModal = window.CareEventFormModal = ({ recipientId, recipient
             who is allowed to know about it. */}
         {taggable.length > 0 && (
           <React.Fragment>
-            <div style={label}>Who else is going <span style={{ fontWeight: 400, textTransform: 'none' }}>(optional)</span></div>
+            <div style={label}>Who's going <span style={{ fontWeight: 400, textTransform: 'none' }}>(optional)</span></div>
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
               {taggable.map((pp) => {
                 const on = tagged.has(pp.user_id);
@@ -498,7 +518,7 @@ const CareEventFormModal = window.CareEventFormModal = ({ recipientId, recipient
                       if (next.has(pp.user_id)) next.delete(pp.user_id); else next.add(pp.user_id);
                       return next;
                     })}>
-                    {on ? '\u2713 ' : ''}{pp.first_name}{pp.isCaregiver ? ' \u00B7 caregiver' : ''}
+                    {on ? '\u2713 ' : ''}{pp.isYou ? 'You' : pp.first_name}{pp.isCaregiver ? ' \u00B7 caregiver' : ''}
                   </button>
                 );
               })}

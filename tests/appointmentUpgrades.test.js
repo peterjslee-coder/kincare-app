@@ -73,6 +73,32 @@ describe("wired into the appointment", () => {
     expect(near).not.toContain("target=\"_blank\"");
   });
 
+  test("the address field is the autocomplete, not a bare text input", () => {
+    // v1.106.31 — Pete: "The address should not be Freeform." AddressAutocomplete has
+    // existed since v1.75.0 and was already used for care addresses; this field never got
+    // it. It matters more now the address is a tappable map link — "Dr. Lambert" typed into
+    // Maps finds nothing, and the caregiver is the one who discovers that in a car park.
+    expect(ev).toContain("<AddressAutocomplete");
+    expect(ev).toContain("onSelect={(sel) => setLocation(");
+  });
+
+  test("typing freely still works — the suggestions are a nudge, not a wall", () => {
+    // "the clinic on Main" must not be rejected. AddressAutocomplete is a plain input when
+    // no suggestion is picked, and the fallback branch is a plain input too.
+    expect(ev).toContain("onChange={setLocation}");
+    expect(ev).toContain("typeof AddressAutocomplete !== 'undefined'");
+  });
+
+  test("AddressAutocomplete is defined BEFORE CareEvents in the bundle", () => {
+    const build = code("scripts/build-client.js");
+    expect(build.indexOf("AddressAutocomplete.js")).toBeLessThan(build.indexOf("CareEvents.js"));
+  });
+
+  test("you appear in the picker, labelled as you, and sorted first", () => {
+    expect(ev).toContain("pp.isYou ? 'You' : pp.first_name");
+    expect(ev).toContain("pp.isYou ? 0 : pp.isCaregiver ? 1 : 2");
+  });
+
   test("the form offers the people you can tag, and sends them", () => {
     expect(ev).toContain("/api/care-events/taggable/${recipientId}");
     expect(ev).toContain("attendee_user_ids: [...tagged]");

@@ -19,6 +19,9 @@ const { v4: uuid } = require("uuid");
 jest.setTimeout(180000);
 
 let h, db, pete, tina, daniel, stranger, recipientId, teamId;
+// The case the first version of this file missed entirely: a caregiver who is NOT on the
+// care team, only attached through the work. That is Tina.
+let sessionOnlyCg, assignedOnlyCg;
 
 const soon = (d = 2) => {
   const x = new Date(); x.setDate(x.getDate() + d);
@@ -57,6 +60,29 @@ beforeAll(async () => {
   ({ recipientId, teamId } = await h.createCareTeam({ familyUserId: pete.user.id }));
   await h.addTeamMember(teamId, tina.user.id, "member");
   await h.addTeamMember(teamId, daniel.user.id, "member");
+
+  // Tina in real life: a caregiver with a confirmed visit and no care_team_members row.
+  sessionOnlyCg = await h.createUser({ roles: ["caregiver"], firstName: "Sessiony", lastName: "ITest" });
+  const soProfile = uuid();
+  await db.prepare(`
+    INSERT INTO caregiver_profiles (id, user_id, hourly_rate, created_at) VALUES (?, ?, 25, NOW())
+  `).run(soProfile, sessionOnlyCg.user.id);
+  await db.prepare(`
+    INSERT INTO care_sessions (id, care_recipient_id, family_user_id, caregiver_id, service_type,
+      status, scheduled_date, scheduled_time, duration_hours, estimated_cost, created_at)
+    VALUES (?, ?, ?, ?, 'companion', 'confirmed', ?, '09:00', 2, 100, NOW())
+  `).run(uuid(), recipientId, pete.user.id, soProfile, soon(1));
+
+  // And one the family put on the roster who has no session yet.
+  assignedOnlyCg = await h.createUser({ roles: ["caregiver"], firstName: "Rostered", lastName: "ITest" });
+  const aoProfile = uuid();
+  await db.prepare(`
+    INSERT INTO caregiver_profiles (id, user_id, hourly_rate, created_at) VALUES (?, ?, 25, NOW())
+  `).run(aoProfile, assignedOnlyCg.user.id);
+  await db.prepare(`
+    INSERT INTO caregiver_assignments (id, caregiver_profile_id, care_recipient_id, family_user_id, is_active, created_at)
+    VALUES (?, ?, ?, ?, 1, NOW())
+  `).run(uuid(), aoProfile, recipientId, pete.user.id);
 });
 
 afterEach(async () => {
@@ -66,13 +92,61 @@ afterEach(async () => {
 afterAll(async () => { await stopHarness(h); });
 
 describe("tagging people on an appointment", () => {
-  test("who can be tagged is the care team, minus yourself", async () => {
+  test("who can be tagged is everyone with access — INCLUDING you", async () => {
+    // v1.106.31 — Pete, an hour after this shipped: "Literally, the only two people not
+    // included for me to select as going to the meeting are the two people that are here.
+    // Me and Tina." Both exclusions were mine. He is standing in the waiting room; of course
+    // he is on the appointment.
     const res = await h.request.get(`/api/care-events/taggable/${recipientId}`).set(h.auth(pete.token));
     expect(res.status).toBe(200);
     const ids = res.body.people.map((p) => p.user_id).sort();
-    expect(ids).toEqual([tina.user.id, daniel.user.id].sort());
-    expect(ids).not.toContain(pete.user.id);
+    expect(ids).toEqual([
+      pete.user.id,          // the family owner — and the caller
+      tina.user.id,          // care team
+      daniel.user.id,        // care team
+      sessionOnlyCg.user.id, // a confirmed visit, no team row
+      assignedOnlyCg.user.id, // on the roster, no visit yet
+    ].sort());
+    // Still bounded. Someone with no access to this person is not on the list, and that is
+    // the property the whole restriction exists for.
     expect(ids).not.toContain(stranger.user.id);
+    expect(res.body.people.find((p) => p.user_id === pete.user.id).isYou).toBe(true);
+  });
+
+  test("the caregiver who works the visits is taggable, though she is NOT on the care team", async () => {
+    // THE bug. teamUserIds covers the owner, care_team_members and shares. A caregiver who
+    // only works this person's sessions is in none of them — v1.105.153 says so out loud and
+    // I read it while writing the wrong query anyway. hasAccess has always granted her
+    // "member" through a confirmed session.
+    const onTeam = await db.prepare(`
+      SELECT ctm.user_id FROM care_team_members ctm
+      JOIN care_teams ct ON ctm.care_team_id = ct.id
+      WHERE ct.care_recipient_id = ? AND ctm.user_id = ?
+    `).get(recipientId, sessionOnlyCg.user.id);
+    expect(onTeam).toBeFalsy(); // she really is not on the team
+
+    const res = await h.request.get(`/api/care-events/taggable/${recipientId}`).set(h.auth(pete.token));
+    const ids = res.body.people.map((p) => p.user_id);
+    expect(ids).toContain(sessionOnlyCg.user.id);
+  });
+
+  test("...and tagging her actually saves, rather than being silently dropped", async () => {
+    // The picker and the save must agree. Offering a name the save discards is worse than
+    // not offering it.
+    const res = await createEvent(pete.token, { attendee_user_ids: [sessionOnlyCg.user.id] });
+    expect(res.status).toBe(201);
+    expect(await attendeeIds(res.body.event.id)).toEqual([sessionOnlyCg.user.id]);
+  });
+
+  test("a caregiver assigned but with no session yet is taggable too", async () => {
+    const res = await h.request.get(`/api/care-events/taggable/${recipientId}`).set(h.auth(pete.token));
+    expect(res.body.people.map((p) => p.user_id)).toContain(assignedOnlyCg.user.id);
+  });
+
+  test("you can put yourself on it", async () => {
+    const res = await createEvent(pete.token, { attendee_user_ids: [pete.user.id, sessionOnlyCg.user.id] });
+    expect(res.status).toBe(201);
+    expect(await attendeeIds(res.body.event.id)).toEqual([pete.user.id, sessionOnlyCg.user.id].sort());
   });
 
   test("the caregiver is marked as one, so the picker can say so", async () => {

@@ -49,6 +49,10 @@ const scripts = [
   "js/careTaskSync.js",
   "js/components/AttentionCard.js",
   "js/components/CareTasks.js",
+  // v1.106.31 — before CareEvents, which renders it. The `typeof` guard would hold
+  // either way (render runs after the whole bundle), but ordering it correctly means
+  // there is no guard to reason about.
+  "js/components/AddressAutocomplete.js",
   "js/components/CareEvents.js",
   "js/components/CancelSessionModal.js",
   "js/components/Dashboard.js",
@@ -71,7 +75,6 @@ const scripts = [
   "js/components/VisitDetailModal.js",
   "js/components/TwoFactorSetup.js",
   "js/components/MyAccount.js",
-  "js/components/AddressAutocomplete.js",
   "js/components/Reimbursements.js",
   "js/components/MoneyView.js",
   "js/components/CareTeamManage.js",
