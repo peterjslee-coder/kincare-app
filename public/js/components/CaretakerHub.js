@@ -1670,7 +1670,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                       ) : noAddress ? (
                         <div style={{ fontSize: 12, color: 'var(--color-error)', marginTop: 2, fontWeight: 600 }}>{'\u26A0\uFE0F'} No care address on file</div>
                       ) : null}
-                      {s.specialInstructions && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4, fontStyle: 'italic' }}>{s.specialInstructions}</div>}
+                      {s.specialInstructions && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4, fontStyle: 'italic' }}>{linkify(s.specialInstructions)}</div>}
                       {/* View Care Profile toggle */}
                       <button onClick={(e) => {
                         e.stopPropagation();

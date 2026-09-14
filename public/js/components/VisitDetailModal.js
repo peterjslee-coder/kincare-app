@@ -299,7 +299,7 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, 
                         </div>
                       </div>
                     ) : hasInstructions ? (
-                      <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{s.special_instructions}</div>
+                      <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{linkify(s.special_instructions)}</div>
                     ) : null}
                   </div>
                 );

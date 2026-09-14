@@ -1486,7 +1486,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                   {!!n.needs_attention && (
                     <span style={{ display: 'inline-block', fontSize: 11, fontWeight: 700, color: '#e65100', background: '#fff3e0', padding: '2px 8px', borderRadius: 10, marginBottom: 4 }}>{'\u26A0'} Needs attention</span>
                   )}
-                  <div style={{ fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{n.content}</div>
+                  <div style={{ fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{linkify(n.content)}</div>
                   {Array.isArray(n.categories) && n.categories.length > 0 && (
                     <div style={{ marginTop: 5, display: 'flex', gap: 5, flexWrap: 'wrap' }}>
                       {n.categories.map((c) => (

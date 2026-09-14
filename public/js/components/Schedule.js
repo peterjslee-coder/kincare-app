@@ -352,7 +352,7 @@ const Schedule = window.Schedule = () => {
                       {s.special_instructions && (
                         <div style={{ marginTop: 8, padding: '8px', background: 'var(--bg-surface)', borderRadius: 6, border: '1px solid #eee' }}>
                           <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 2 }}>Special Instructions</div>
-                          <div>{s.special_instructions}</div>
+                          <div>{linkify(s.special_instructions)}</div>
                         </div>
                       )}
                       {s.caregiver_rating > 0 && (

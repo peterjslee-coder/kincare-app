@@ -1597,32 +1597,17 @@ const Messages = window.Messages = () => {
       );
     }
 
-    // Legacy Google Meet link support (for old messages)
-    const meetLinkRegex = /https:\/\/meet\.google\.com\/\S+/g;
-    const parts = content.split(meetLinkRegex);
-    const links = content.match(meetLinkRegex) || [];
-
-    if (links.length === 0) {
-      return content;
-    }
-
-    return React.createElement(React.Fragment, null,
-      parts.map((part, i) => [
-        part && React.createElement(React.Fragment, { key: `text-${i}` }, part),
-        i < links.length && React.createElement('a', {
-          key: `link-${i}`,
-          href: links[i],
-          target: '_blank',
-          rel: 'noopener noreferrer',
-          style: {
-            color: 'var(--role-color)',
-            textDecoration: 'underline',
-            fontWeight: 600,
-            cursor: 'pointer',
-          }
-        }, links[i])
-      ]).filter(Boolean).flat()
-    );
+    // v1.106.27 — every link, not just Google Meet.
+    //
+    // This branch used to match /https:\/\/meet\.google\.com\/\S+/ and nothing else. It was
+    // written for call invites, so a pharmacy URL, a doctor's booking page or a Maps pin all
+    // arrived as text to be retyped by hand. Pete: "I texted a link and it came through plain
+    // Tex. I want it to be a clickable link."
+    //
+    // linkify() lives in utils.js because messages are not the only place people paste a
+    // link; care notes and special instructions get the same treatment from the same
+    // function. It returns React nodes, so the escaping stays React's job.
+    return linkify(content);
   };
 
   const activeConv = conversations.find(c => c.id === activeConvId);

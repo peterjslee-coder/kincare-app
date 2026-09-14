@@ -156,6 +156,79 @@ const formatMoney = window.formatMoney = (n) => {
   return Number.isInteger(v) ? `$${v}` : `$${v.toFixed(2)}`;
 };
 
+// ─── v1.106.27 — a link someone typed should be a link ───
+//
+// Pete: "I texted a link and it came through plain Tex. I want it to be a clickable link."
+// Nothing in this codebase linkified anything, except one regex in Messages.js that matched
+// https://meet.google.com/ and nothing else — written for call invites, so a pharmacy URL, a
+// doctor's booking page or a Maps pin all arrived as text to be retyped by hand.
+//
+// Returns REACT NODES, not an HTML string. That is the whole safety design: message bodies
+// are user input, and React escapes text children, so there is no path from what someone
+// types to markup. A dangerouslySetInnerHTML version of this would need its own escaping and
+// would be one missed case away from stored XSS in a thread a family and a stranger share.
+//
+// Returns the plain string unchanged when there is nothing to link, so callers that render
+// it directly keep behaving exactly as before.
+const LINKIFY_RE = /\b(?:https?:\/\/|www\.)[^\s<>"']+|\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/gi;
+
+// A URL at the end of a sentence swallows the punctuation. Closing brackets are only trimmed
+// when unbalanced, because plenty of real URLs contain them (Wikipedia, Maps).
+const trimTrailing = window.__linkifyTrim = (raw) => {
+  let url = raw;
+  for (;;) {
+    const last = url.slice(-1);
+    if (".,;:!?".includes(last)) { url = url.slice(0, -1); continue; }
+    if (last === ")" && (url.match(/\(/g) || []).length < (url.match(/\)/g) || []).length) { url = url.slice(0, -1); continue; }
+    if (last === "]" && (url.match(/\[/g) || []).length < (url.match(/\]/g) || []).length) { url = url.slice(0, -1); continue; }
+    break;
+  }
+  return url;
+};
+
+const linkify = window.linkify = (text, opts) => {
+  const str = typeof text === "string" ? text : (text == null ? "" : String(text));
+  if (!str || !LINKIFY_RE.test(str)) { LINKIFY_RE.lastIndex = 0; return str; }
+  LINKIFY_RE.lastIndex = 0;
+
+  const style = Object.assign({
+    color: "var(--role-color)", textDecoration: "underline", fontWeight: 600, wordBreak: "break-word",
+  }, (opts && opts.style) || {});
+
+  const out = [];
+  let last = 0;
+  let m;
+  let key = 0;
+  while ((m = LINKIFY_RE.exec(str)) !== null) {
+    const matched = trimTrailing(m[0]);
+    if (!matched) continue;
+    const start = m.index;
+    const end = start + matched.length;
+
+    // Only these three schemes are ever produced. `javascript:` and `data:` cannot appear
+    // because the pattern never matches them and the href is BUILT here rather than copied
+    // from the match — a bare "www.x" becomes "https://www.x", never "www.x", which the
+    // browser would resolve as a relative path inside the app.
+    const isEmail = matched.indexOf("@") !== -1 && !/^https?:\/\//i.test(matched);
+    const href = isEmail
+      ? `mailto:${matched}`
+      : (/^https?:\/\//i.test(matched) ? matched : `https://${matched}`);
+
+    if (start > last) out.push(str.slice(last, start));
+    out.push(React.createElement("a", {
+      key: `lnk-${key++}`,
+      href,
+      target: "_blank",
+      rel: "noopener noreferrer",
+      style,
+      onClick: (e) => e.stopPropagation(),
+    }, matched));
+    last = end;
+  }
+  if (last < str.length) out.push(str.slice(last));
+  return out;
+};
+
 // ─── v1.106.24 — a recurring offer is one arrangement, not N jobs ───
 //
 // A recurring direct offer inserts one care_sessions row per occurrence, each carrying

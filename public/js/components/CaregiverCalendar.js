@@ -663,7 +663,7 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
                         )}
                         {(s.specialInstructions || s.special_instructions) && (
                           <div style={{ fontSize: 11, color: 'var(--text-tertiary)', fontStyle: 'italic', marginTop: 4 }}>
-                            {s.specialInstructions || s.special_instructions}
+                            {linkify(s.specialInstructions || s.special_instructions)}
                           </div>
                         )}
                       </div>
@@ -719,7 +719,7 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
                         </div>
                         {(s.specialInstructions || s.special_instructions) && (
                           <div style={{ fontSize: 11, color: 'var(--text-tertiary)', fontStyle: 'italic', marginTop: 4 }}>
-                            {s.specialInstructions || s.special_instructions}
+                            {linkify(s.specialInstructions || s.special_instructions)}
                           </div>
                         )}
                       </div>

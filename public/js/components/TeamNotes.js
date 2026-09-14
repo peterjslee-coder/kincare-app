@@ -11,11 +11,22 @@
 // and a caregiver who is only assigned to a session appears in none of those sets, gets an
 // empty list, and never sees this page in the nav.
 //
-// Read-only on purpose. Writing a note is an act with a subject — it goes in someone's care
-// record and pushes the whole team — and the places to do that already exist with their own
-// framing (the check-out summary, the family's own profile). This is for the person who was
-// told a note exists and, until now, had nowhere to open it.
+// v1.105.153 made it read-only on purpose, reasoning that "the places to write already exist
+// with their own framing (the check-out summary, the family's own profile)". Julia, Sep 12:
+// "I have the Care Notes tab now! I can't add any notes though."
+//
+// The reasoning was wrong in a way that is only visible from her side. The check-out summary
+// exists during a visit; the family's profile page is not hers. Between visits — which is
+// when you remember the thing you meant to say — she had the care record open in front of her
+// and no way to add to it. Read-only was a decision about where writing belongs that
+// accidentally became a decision that she does not write.
+//
+// So: the same composer the family has, posting to the same POST /api/notes, which has
+// authorised her all along (hasAccess covers team members). Pete's call on scope was full
+// parity including the photo and the attention flag — she is the one at the visit, so she is
+// the one most likely to have the photo.
 const TeamNotes = window.TeamNotes = ({ onNavigate }) => {
+  const { showToast } = useToast();
   const [recipients, setRecipients] = React.useState(null);
   const [selectedId, setSelectedId] = React.useState(null);
   const [notes, setNotes] = React.useState(null);
@@ -27,6 +38,13 @@ const TeamNotes = window.TeamNotes = ({ onNavigate }) => {
   const [loadFailed, setLoadFailed] = React.useState(false);
   const [showAll, setShowAll] = React.useState(false);
   const [highlightId, setHighlightId] = React.useState(null);
+  const [newNote, setNewNote] = React.useState('');
+  const [noteUrgent, setNoteUrgent] = React.useState(false);
+  const [notePhoto, setNotePhoto] = React.useState(null); // { data, name }
+  const [addingNote, setAddingNote] = React.useState(false);
+  // A tap and an Enter arriving together saved Daniel's note twice on Sep 11 (14:27:14 and
+  // 14:27:15). React state is too slow to be the lock; a ref is not. Same guard as CareProfile.
+  const addingNoteRef = React.useRef(false);
   const PREVIEW = 8;
 
   React.useEffect(() => {
@@ -149,6 +167,59 @@ const TeamNotes = window.TeamNotes = ({ onNavigate }) => {
     } catch { /* a reaction that does not save is a reaction that does not appear */ }
   };
 
+  const addNote = async () => {
+    if (addingNoteRef.current) return;
+    addingNoteRef.current = true;
+    try { await addNoteInner(); } finally { addingNoteRef.current = false; }
+  };
+  const addNoteInner = async () => {
+    if (!newNote.trim() || !selectedId) return;
+    setAddingNote(true);
+    const payload = {
+      careRecipientId: selectedId,
+      content: newNote.trim(),
+      noteType: 'observation',
+      needsAttention: noteUrgent,
+    };
+    if (notePhoto) payload.photo = notePhoto.data;
+    try {
+      const res = await apiFetch('/api/notes', { method: 'POST', body: JSON.stringify(payload) });
+      if (res?.ok) {
+        setNewNote(''); setNoteUrgent(false); setNotePhoto(null);
+        showToast('Note added', 'success');
+        // Re-read rather than splice a guess in: the server attaches the author name and the
+        // reaction rows, and iPAi may add chips to it.
+        const fresh = await apiFetch(`/api/notes/${selectedId}`);
+        if (fresh?.ok) { const d = await fresh.json(); setNotes(d.notes || []); }
+      } else if (res?.status === 503 || !navigator.onLine) {
+        // She is often in a house with no signal. The family composer queues; so does this.
+        if (window.OfflineQueue) {
+          await window.OfflineQueue.queueNote(payload);
+          setNewNote(''); setNoteUrgent(false); setNotePhoto(null);
+          showToast('Note saved offline — will sync when reconnected', 'success');
+        } else { showToast("You're offline — try again later", 'error'); }
+      } else {
+        // v1.103.2 — never fall through silently: the spinner stops, the box clears, and
+        // nothing says the note is gone.
+        const d = await res?.json().catch(() => ({}));
+        showToast(
+          res?.status === 413 ? 'That photo is too large — try a smaller one.'
+            : (d.error || 'Could not add that note — please try again.'),
+          'error'
+        );
+      }
+    } catch {
+      if (!navigator.onLine && window.OfflineQueue) {
+        try {
+          await window.OfflineQueue.queueNote(payload);
+          setNewNote(''); setNoteUrgent(false); setNotePhoto(null);
+          showToast('Note saved offline — will sync when reconnected', 'success');
+        } catch { showToast('Failed to add note', 'error'); }
+      } else { showToast('Failed to add note', 'error'); }
+    }
+    setAddingNote(false);
+  };
+
   const visible = timeline && (showAll ? timeline : timeline.slice(0, PREVIEW));
 
   return (
@@ -175,9 +246,74 @@ const TeamNotes = window.TeamNotes = ({ onNavigate }) => {
         )}
 
         <p style={{ fontSize: 12, color: 'var(--text-tertiary)', margin: '4px 0 0' }}>
-          Notes and visits from the care team. You can read these; the family writes them.
+          Notes and visits from the care team {'\u2014'} yours and theirs.
         </p>
       </div>
+
+      {/* ─── v1.106.26 — the composer Julia was missing ─── */}
+      {selected && (
+        <div className="card" style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>
+            Add a note about {selected.firstName}
+          </div>
+          <textarea value={newNote} onChange={(e) => setNewNote(e.target.value)}
+            placeholder={`What did you notice? e.g. '${selected.firstName} ate well and was in good spirits. Left foot still looks swollen \u2014 worth a look.'`}
+            rows={4}
+            style={{
+              width: '100%', minHeight: 80, padding: '10px 12px', border: '1px solid var(--border-color)',
+              borderRadius: 8, fontSize: 14, fontFamily: 'inherit', resize: 'vertical',
+              boxSizing: 'border-box', marginBottom: 8, background: 'var(--bg-surface)', color: 'var(--text-primary)',
+            }}
+            /* Enter sends, Shift+Enter is a newline — same as the family composer. The ref
+               above is what stops a tap and an Enter arriving together saving it twice. */
+            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && newNote.trim()) { e.preventDefault(); addNote(); } }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <button onClick={() => addNote()} disabled={addingNote || !newNote.trim()}
+              style={{
+                minHeight: 44, padding: '10px 20px',
+                background: (addingNote || !newNote.trim()) ? 'var(--text-muted)' : 'var(--role-color)',
+                color: 'var(--text-on-primary)', border: 'none', borderRadius: 8,
+                fontWeight: 600, fontSize: 14, cursor: addingNote ? 'wait' : 'pointer', whiteSpace: 'nowrap',
+              }}>
+              {addingNote ? '\u2026' : 'Add note'}
+            </button>
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-secondary)', cursor: 'pointer' }}>
+              <input type="checkbox" checked={noteUrgent} onChange={(e) => setNoteUrgent(e.target.checked)}
+                style={{ accentColor: '#e65100', width: 18, height: 18 }} />
+              Needs attention
+            </label>
+            <label style={{ fontSize: 13, color: notePhoto ? 'var(--role-color)' : 'var(--text-secondary)', cursor: 'pointer' }}>
+              {notePhoto ? '\uD83D\uDCCE ' + notePhoto.name + ' \u2715' : '\uD83D\uDCF7 Add photo'}
+              {/* v1.103.3 — no capture attr: it forced the camera. Without it, iOS offers
+                  Photo Library / Take Photo / Choose File. */}
+              <input type="file" accept="image/*" style={{ display: 'none' }}
+                onClick={(e) => { if (notePhoto) { e.preventDefault(); setNotePhoto(null); } }}
+                onChange={(e) => {
+                  const file = e.target.files && e.target.files[0];
+                  e.target.value = '';
+                  if (!file || !file.type.startsWith('image/')) return;
+                  const img = new Image();
+                  const url = URL.createObjectURL(file);
+                  img.onload = () => {
+                    URL.revokeObjectURL(url);
+                    const MAX = 1600;
+                    let { width, height } = img;
+                    if (width > MAX || height > MAX) { const sc = MAX / Math.max(width, height); width = Math.round(width * sc); height = Math.round(height * sc); }
+                    const canvas = document.createElement('canvas');
+                    canvas.width = width; canvas.height = height;
+                    canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+                    setNotePhoto({ data: canvas.toDataURL('image/jpeg', 0.85), name: (file.name || 'photo').replace(/\.[^.]+$/, '') + '.jpg' });
+                  };
+                  img.onerror = () => URL.revokeObjectURL(url);
+                  img.src = url;
+                }} />
+            </label>
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>
+            Visible to {selected.firstName}'s care team {'\u00B7'} everyone on it gets notified
+          </div>
+        </div>
+      )}
 
       {timeline === null ? (
         <LoadingSpinner text="Loading notes…" />
@@ -214,7 +350,7 @@ const TeamNotes = window.TeamNotes = ({ onNavigate }) => {
                 )}
               </div>
               <div style={{ fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                {item.body}
+                {linkify(item.body)}
               </div>
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 5 }}>
                 {item.who}

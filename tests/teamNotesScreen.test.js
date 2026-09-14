@@ -94,22 +94,27 @@ describe("visits share the screen", () => {
 });
 
 describe("what the page will and will not do", () => {
-  test("it never changes anyone's care record", () => {
-    // Writing, editing or deleting a note goes in someone's care record and pushes the whole
-    // team. The places to do that exist already, with their own framing. This screen is for
-    // reading.
+  test("she can ADD a note — but still cannot edit or delete anyone's", () => {
+    // v1.106.26 — this used to forbid POST /api/notes as well. Julia, Sep 12: "I have the
+    // Care Notes tab now! I can't add any notes though." The read-only rule reasoned that
+    // "the places to write already exist" — but the check-out summary exists during a visit
+    // and the family's profile is not hers, so between visits she had the care record open
+    // and no way to add to it.
+    //
+    // Adding is now hers. Changing what someone ELSE wrote is not, and that is what stays
+    // asserted: a care record you can quietly edit is not a record.
     expect(view).not.toMatch(/method: 'DELETE'/);
     expect(view).not.toMatch(/method: 'PUT'/);
-    expect(view).not.toMatch(/apiFetch\('\/api\/notes'/);
   });
 
-  test("the ONE thing it may write is a reaction", () => {
-    // v1.105.170. Pete: "socialize anywhere that we're leaving feedback." A reaction does not
-    // alter the note, does not appear in the record as content, and does not push anybody —
-    // so it is the one write that belongs on a read-only screen. This test exists to keep
-    // that list at one: the assertion above became narrower, and this is what took its place.
-    const posts = [...view.matchAll(/apiFetch\(`([^`]+)`,\s*\{\s*\n?\s*method: 'POST'/g)].map((m) => m[1]);
-    expect(posts).toEqual(["/api/reactions/${targetType}/${targetId}"]);
+  test("the writes it may make are exactly two: a note and a reaction", () => {
+    // v1.105.170 kept this list at one. v1.106.26 makes it two. It is still a list, and the
+    // point of the test is that adding a third is a decision somebody has to make on purpose.
+    const posts = [...view.matchAll(/apiFetch\(\s*[`']([^`']+)[`'],\s*\{\s*\n?\s*method: 'POST'/g)].map((m) => m[1]);
+    expect(posts.sort()).toEqual([
+      "/api/notes",
+      "/api/reactions/${targetType}/${targetId}",
+    ]);
   });
 
   test("nothing shared is an honest empty state, not an error", () => {

@@ -262,7 +262,7 @@ const CaredForView = window.CaredForView = () => {
         </div>
         {s.specialInstructions && (
           <div style={{ fontSize: 12, color: 'var(--text-tertiary)', fontStyle: 'italic', marginTop: 6, paddingTop: 6, borderTop: '1px solid var(--border-color)' }}>
-            {s.specialInstructions}
+            {linkify(s.specialInstructions)}
           </div>
         )}
       </div>

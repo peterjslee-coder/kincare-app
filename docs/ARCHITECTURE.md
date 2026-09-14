@@ -9,7 +9,7 @@ Hand-written sections (§3 "Where is…") are preserved across regeneration; edi
 
 Structure at last generation: 526 HTTP routes across 56 mounts ·
 91 `CREATE TABLE` statements · 12 background jobs · 37 socket events
-(15 with no client listener) · 59 push event types · 55 `window.__*` globals.
+(15 with no client listener) · 59 push event types · 56 `window.__*` globals.
 
 ---
 
@@ -255,6 +255,7 @@ State travels through `window`, not props. This table is the registry.
 | `window.__handlePushNavigate` | app.js | 12 |
 | `window.__hasActiveSession` | app.js | 6 |
 | `window.__isAdmin` | app.js | 2 |
+| `window.__linkifyTrim` | utils.js | 1 |
 | `window.__loadStripeJs` | — | 1 |
 | `window.__navHistory` | app.js | 3 |
 | `window.__navigateTo` | app.js | 50 |
