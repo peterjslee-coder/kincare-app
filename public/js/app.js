@@ -622,6 +622,19 @@ const App = () => {
   const [showDemoOrientation, setShowDemoOrientation] = useState(false);
   // Dual-role: active role for users with multiple roles
   const [activeRole, setActiveRoleState] = useState(getActiveRole());
+  // ─── v1.106.34 — how many jobs are waiting just for her ───
+  //
+  // Pete: "I'm not sure she even realizes they're there." The offers block collapses past
+  // two now, so the pile no longer buries the screen — but a pile she cannot see is a pile
+  // she still does not know about. The hub publishes the count; the bottom bar shows it on
+  // Find Work, the tab she already has.
+  const [offerCount, setOfferCount] = useState(0);
+  useEffect(() => {
+    const onCount = (e) => setOfferCount(Number(e?.detail) || 0);
+    window.addEventListener('inplace:offerCount', onCount);
+    return () => window.removeEventListener('inplace:offerCount', onCount);
+  }, []);
+
   // Unread message count for nav badge
   const [unreadMsgCount, setUnreadMsgCount] = useState(0);
   // Admin alert count for nav badge
@@ -2390,6 +2403,15 @@ const App = () => {
                 minWidth: 16, textAlign: 'center', lineHeight: '14px',
                 boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
               }}>{unreadMsgCount > 99 ? '99+' : unreadMsgCount}</span>
+            )}
+            {item.id === 'find-work' && offerCount > 0 && (
+              <span style={{
+                position: 'absolute', top: 2, right: '50%', marginRight: -18,
+                background: 'var(--color-purple-light)', color: 'var(--text-on-primary)', borderRadius: 10,
+                padding: '1px 5px', fontSize: 9, fontWeight: 700,
+                minWidth: 16, textAlign: 'center', lineHeight: '14px',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+              }}>{offerCount > 99 ? '99+' : offerCount}</span>
             )}
             {item.id === 'admin' && adminAlertCount > 0 && (
               <span style={{

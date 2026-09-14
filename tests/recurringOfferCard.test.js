@@ -33,7 +33,14 @@ const getWeekdayName = (() => {
   return new Function("DEFAULT_TZ", m[0] + "\nreturn getWeekdayName;")("America/New_York");
 })();
 
+// A job with no shape fields — the pre-v1.106.34 fixture. These must stay singletons.
 const job = (id, groupId, date) => ({ id, recurrenceGroupId: groupId, date });
+// A real one, with the fields shape-grouping keys on.
+const realJob = (id, date, over = {}) => ({
+  id, date, recurrenceGroupId: null,
+  careRecipientId: 'betty', time: '09:00', durationHours: 8, serviceType: 'companion',
+  ...over,
+});
 
 describe("grouping recurring offers", () => {
   test("twelve occurrences of one series become one entry", () => {
@@ -45,9 +52,52 @@ describe("grouping recurring offers", () => {
     expect(out[0].jobs).toHaveLength(12);
   });
 
-  test("one-off offers stay one-off", () => {
+  test("a job with no recipient or time is never shape-grouped", () => {
+    // v1.106.34 — the shape key needs both to mean anything. The first cut joined whatever
+    // was there, so two jobs missing every field hashed to the same empty key and merged.
     const out = groupExclusiveOffers([job("a", null, "2026-09-15"), job("b", null, "2026-09-16")]);
     expect(out.map((e) => e.kind)).toEqual(["single", "single"]);
+  });
+
+  test("twenty separate bookings of the SAME shape collapse to one card", () => {
+    // Pete's actual screen: twenty one-off days booked before "Certain days" existed, so
+    // not one of them carries a recurrence_group_id. Twenty full-height tiles buried her
+    // check-in. From her side they are one arrangement.
+    const jobs = Array.from({ length: 20 }, (_, i) => realJob(`s${i}`, `2026-09-${String(i + 1).padStart(2, '0')}`));
+    const out = groupExclusiveOffers(jobs);
+    expect(out).toHaveLength(1);
+    expect(out[0].kind).toBe("series");
+    expect(out[0].jobs).toHaveLength(20);
+    expect(out[0].groupId).toBeNull(); // inferred, not a real series
+  });
+
+  test("different times do NOT merge — a morning and an evening visit are two jobs", () => {
+    const out = groupExclusiveOffers([
+      realJob("morning", "2026-09-15", { time: "09:00" }),
+      realJob("evening", "2026-09-15", { time: "18:00" }),
+    ]);
+    expect(out).toHaveLength(2);
+  });
+
+  test("different people do NOT merge", () => {
+    const out = groupExclusiveOffers([
+      realJob("betty", "2026-09-15", { careRecipientId: 'betty' }),
+      realJob("arthur", "2026-09-16", { careRecipientId: 'arthur' }),
+    ]);
+    expect(out).toHaveLength(2);
+  });
+
+  test("a real series id beats the inferred one", () => {
+    // Stated intent wins over a guess: same shape, but one was booked as a series.
+    const out = groupExclusiveOffers([
+      realJob("a", "2026-09-15", { recurrenceGroupId: "g1" }),
+      realJob("b", "2026-09-22", { recurrenceGroupId: "g1" }),
+      realJob("c", "2026-09-16"),
+      realJob("d", "2026-09-17"),
+    ]);
+    expect(out).toHaveLength(2);
+    expect(out.find((e) => e.groupId === "g1").jobs).toHaveLength(2);
+    expect(out.find((e) => e.groupId === null).jobs).toHaveLength(2);
   });
 
   test("two different series do not merge", () => {
@@ -128,7 +178,10 @@ describe("wired into the hub", () => {
   const hub = code("public/js/components/CaretakerHub.js");
 
   test("the offers block groups before it renders", () => {
-    expect(hub).toContain("groupExclusiveOffers(exclusiveOffers).map(entry =>");
+    // v1.106.34 — grouped, then sliced to two with the rest behind a summary line. See
+    // tests/offerPileup.test.js for the collapse itself.
+    expect(hub).toContain("groupExclusiveOffers(exclusiveOffers)");
+    expect(hub).toContain("shownEntries.map(entry =>");
   });
 
   test("a series renders the series card, a single still renders the old one", () => {
@@ -139,7 +192,9 @@ describe("wired into the hub", () => {
   test("accepting a series is ONE request, not a loop of claims", () => {
     // The loop version leaves her half-booked when call seven fails, and the family believes
     // the month is covered. The server route is atomic; the client must actually use it.
-    expect(hub).toContain("/api/sessions/recurring/${groupId}/claim");
+    // v1.106.34 — claim-batch rather than the group route: a shape-grouped card (Pete's
+    // twenty one-off days) has no recurrence_group_id to claim by.
+    expect(hub).toContain("apiFetch('/api/sessions/claim-batch'");
     // And the per-visit endpoint is still called exactly once in the file — by the
     // single-job path. A second occurrence would mean somebody added a loop.
     const perVisit = (hub.match(/\/api\/sessions\/\$\{jobId\}\/claim/g) || []).length;

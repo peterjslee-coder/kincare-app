@@ -7,9 +7,9 @@ build red.
 
 Hand-written sections (§3 "Where is…") are preserved across regeneration; edit those freely.
 
-Structure at last generation: 529 HTTP routes across 56 mounts ·
+Structure at last generation: 530 HTTP routes across 56 mounts ·
 92 `CREATE TABLE` statements · 12 background jobs · 38 socket events
-(16 with no client listener) · 60 push event types · 57 `window.__*` globals.
+(16 with no client listener) · 61 push event types · 57 `window.__*` globals.
 
 ---
 
@@ -91,7 +91,7 @@ JSX is *not* compiled in the browser; Babel-standalone is not loaded. Editing an
 | `/api/safety` | `src/routes/safety.js` | 6 |  |
 | `/api/scheduling` | `src/routes/nlScheduling.js` | 1 |  |
 | `/api/self-onboarding` | `src/routes/selfOnboarding.js` | 3 |  |
-| `/api/sessions` | `src/routes/sessions.js` **+** `src/routes/offers.js` | 37 | ⚠️ **multi-file mount — routes for this prefix live in more than one file** |
+| `/api/sessions` | `src/routes/sessions.js` **+** `src/routes/offers.js` | 38 | ⚠️ **multi-file mount — routes for this prefix live in more than one file** |
 | `/api/video` | `src/routes/videoCall.js` | 1 |  |
 | `/api/waitlist` | `src/routes/waitlist.js` | 3 |  |
 
@@ -216,17 +216,19 @@ Opt-out key is `notification_prefs["push_" + eventType]`. Capability gating live
 
 `invite_accepted` · `kindred_relay` · `managed_mode_activated` · `missing_address`
 
-`new_registration` · `new_signup_intent` · `no_show_cancelled` · `on_my_way`
+`new_job` · `new_registration` · `new_signup_intent` · `no_show_cancelled`
 
-`on_my_way_recipient` · `outreach_response` · `outreach_sent` · `overdue_check_in`
+`on_my_way` · `on_my_way_recipient` · `outreach_response` · `outreach_sent`
 
-`overdue_check_in_family` · `overdue_check_out` · `overdue_check_out_family` · `payment_authorization_failed`
+`overdue_check_in` · `overdue_check_in_family` · `overdue_check_out` · `overdue_check_out_family`
 
-`payment_hold` · `payment_method_needed` · `phone_verified` · `proposal_accepted`
+`payment_authorization_failed` · `payment_hold` · `payment_method_needed` · `phone_verified`
 
-`proposal_declined` · `request_declined` · `session_cancelled` · `team_join`
+`proposal_accepted` · `proposal_declined` · `request_declined` · `session_cancelled`
 
-`time_change` · `time_proposal` · `unblocked` · `waitlist_signup`
+`team_join` · `time_change` · `time_proposal` · `unblocked`
+
+`waitlist_signup`
 
 ---
 

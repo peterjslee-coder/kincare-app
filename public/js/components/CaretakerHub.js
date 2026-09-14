@@ -185,7 +185,11 @@ const ExclusiveSeriesCard = window.ExclusiveSeriesCard = ({
             It{'\u2019'}s live and others can accept it {'\u2014'} you just can{'\u2019'}t accept your own request.
           </div>
         ) : profile.caregiverCleared ? (
-          <button onClick={(e) => { if (canAccept && !claiming) onAccept([...picked], e, total); }}
+          <button onClick={(e) => {
+            if (!canAccept || claiming) return;
+            const declined = jobs.map((j) => j.id).filter((id) => !picked.has(id));
+            onAccept([...picked], declined, e, total);
+          }}
             disabled={!canAccept || claiming}
             title={profile.accountPaused ? 'Your account is paused. Contact support for assistance.' : ''}
             style={{
@@ -370,6 +374,18 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   // the description and expand it. I can't as is." It was truncated at 150 characters with no
   // way to see the rest — which is the part that tells her whether she wants the job.
   const [expandedSummaryJobId, setExpandedSummaryJobId] = useState(null);
+  // v1.106.34 — the offers block shows two and collapses the rest; this opens it.
+  const [offersExpanded, setOffersExpanded] = useState(false);
+
+  // Publish how many visits are on offer so the bottom bar can badge Find Work. An event
+  // rather than a prop: app.js owns the nav and the hub owns the data, and threading a
+  // count up through the page switch would put hub state in the router.
+  const offerVisitCount = (data?.openJobs || []).filter(
+    (j) => j.offeredToCaregiverId && !isExclusiveExpired(j, Date.now())
+  ).length;
+  useEffect(() => {
+    try { window.dispatchEvent(new CustomEvent('inplace:offerCount', { detail: offerVisitCount })); } catch { /* no CustomEvent, no badge */ }
+  }, [offerVisitCount]);
 
   // v1.105.100 — "Not for me" on an OPEN job. It is not a decline: nobody offered it to her,
   // so there is no family waiting on an answer and nothing to send. It just stops cluttering
@@ -1089,12 +1105,15 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   // v1.106.24 — accept a recurring series in one call. One request, not one per visit: a
   // client loop leaves her half-booked when call seven fails, and half-booked across a
   // series is worse than not booked, because the family believes the month is covered.
-  const handleClaimSeries = async (groupId, sessionIds, e, amount) => {
+  // v1.106.34 — claim-batch, not the group route. A card can now be an INFERRED group
+  // (offers that match on shape but carry no recurrence_group_id — Pete's twenty one-off
+  // days), and those have no groupId to claim by. Both kinds send the ids they showed.
+  const handleClaimSeries = async (key, sessionIds, declineIds, e, amount) => {
     const btnEl = e?.currentTarget || null;
-    setClaimingJobId(groupId);
+    setClaimingJobId(key);
     try {
-      const res = await apiFetch(`/api/sessions/recurring/${groupId}/claim`, {
-        method: 'PUT', body: JSON.stringify({ sessionIds }),
+      const res = await apiFetch('/api/sessions/claim-batch', {
+        method: 'PUT', body: JSON.stringify({ accept: sessionIds, decline: declineIds || [] }),
       });
       if (res?.ok) {
         const d = await res.json().catch(() => ({}));
@@ -2441,7 +2460,31 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
             <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-purple-light)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>
               {'\u2728'} Just for You
             </div>
-            {groupExclusiveOffers(exclusiveOffers).map(entry => {
+            {(() => {
+              // ─── v1.106.34 — two cards, then a line ───
+              //
+              // Pete: "when you send someone 20 days worth, it buries everything... this
+              // morning it caused her to miss where check-in was." The check-in itself pins
+              // above all of this now (v1.106.23), but a wall of full-height tiles still
+              // pushes Find Work, Up Next, Scheduled and the rest off the end of the screen,
+              // and she has to scroll past every one of them to reach any of it.
+              //
+              // The two soonest keep their cards — an offer for tomorrow is worth seeing at
+              // a glance. The rest collapse into one line saying how many and what they are
+              // worth, opening in place. Nothing is hidden; it just stops being the screen.
+              const OFFER_PREVIEW = 2;
+              const entries = groupExclusiveOffers(exclusiveOffers);
+              const shownEntries = offersExpanded ? entries : entries.slice(0, OFFER_PREVIEW);
+              const hiddenEntries = entries.slice(shownEntries.length);
+              const visitsIn = (e) => (e.kind === 'series' ? e.jobs.length : 1);
+              const payIn = (e) => (e.kind === 'series'
+                ? e.jobs.reduce((t, j) => t + (jobPay(j).total || 0), 0)
+                : (jobPay(e.job).total || 0));
+              const hiddenVisits = hiddenEntries.reduce((n, e) => n + visitsIn(e), 0);
+              const hiddenTotal = hiddenEntries.reduce((t, e) => t + payIn(e), 0);
+              return (
+                <React.Fragment>
+            {shownEntries.map(entry => {
               // v1.106.24 — a recurring offer is ONE card with the dates on it. See
               // groupExclusiveOffers in utils.js for why, and whose morning it cost.
               if (entry.kind === 'series') {
@@ -2451,8 +2494,8 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                     entry={entry}
                     exclusiveNow={exclusiveNow}
                     profile={profile}
-                    claiming={claimingJobId === entry.groupId}
-                    onAccept={(ids, e, total) => handleClaimSeries(entry.groupId, ids, e, total)}
+                    claiming={claimingJobId === entry.key}
+                    onAccept={(ids, declined, e, total) => handleClaimSeries(entry.key, ids, declined, e, total)}
                     onPropose={openProposalModal}
                     onDecline={setDecliningJob}
                   />
@@ -2572,6 +2615,38 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                 </div>
               );
             })}
+                  {hiddenEntries.length > 0 && (
+                    <button onClick={() => setOffersExpanded(true)} style={{
+                      display: 'flex', alignItems: 'center', gap: 10, width: '100%', minHeight: 48,
+                      padding: '12px 16px', marginBottom: 10, borderRadius: 12,
+                      border: '2px dashed #7c3aed', background: 'var(--bg-exclusive-card)',
+                      color: 'var(--text-primary)', font: 'inherit', cursor: 'pointer', textAlign: 'left',
+                    }}>
+                      <span style={{ fontSize: 18 }} aria-hidden="true">{'\u2728'}</span>
+                      <span style={{ flex: 1 }}>
+                        <span style={{ display: 'block', fontWeight: 700, fontSize: 14 }}>
+                          {hiddenVisits} more visit{hiddenVisits === 1 ? '' : 's'} just for you
+                        </span>
+                        {hiddenTotal > 0 && (
+                          <span style={{ display: 'block', fontSize: 12, color: 'var(--text-secondary)' }}>
+                            {formatMoney(hiddenTotal)} in total
+                          </span>
+                        )}
+                      </span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-purple-light)', whiteSpace: 'nowrap' }}>
+                        See all {'\u2192'}
+                      </span>
+                    </button>
+                  )}
+                  {offersExpanded && entries.length > OFFER_PREVIEW && (
+                    <button onClick={() => setOffersExpanded(false)} style={{
+                      background: 'none', border: 'none', padding: '0 0 10px', font: 'inherit',
+                      fontSize: 13, fontWeight: 700, color: 'var(--color-purple-light)', cursor: 'pointer',
+                    }}>Show fewer</button>
+                  )}
+                </React.Fragment>
+              );
+            })()}
           </div>
         );
       })()}

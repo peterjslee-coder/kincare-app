@@ -571,35 +571,47 @@ router.put("/:id/claim", async (req, res) => {
 // Registered before POST "/" and above every "/:id" pattern. "/recurring/:groupId/claim" has
 // three segments so "/:id/claim" cannot shadow it, but DELETE /recurring/:groupId already
 // established the position and tests/sessionsRouteOrder.test.js pins it.
-router.put("/recurring/:groupId/claim", async (req, res) => {
-  const db = await getDb();
-
-  const requested = Array.isArray(req.body?.sessionIds) ? [...new Set(req.body.sessionIds)] : null;
-  if (!requested || requested.length === 0) {
+// ─── PUT /api/sessions/claim-batch ───
+//
+// v1.106.34 — accept a set of visits by id, atomically. Generalises
+// /recurring/:groupId/claim, which could only address a real recurrence group.
+//
+// The caregiver card now also groups offers by SHAPE — same recipient, time, duration and
+// service — because twenty one-off days booked before "Certain days" existed carry no group
+// id and buried Tina's screen as twenty tiles. Those cards have no groupId to claim by, so
+// the claim keys on the ids she is actually looking at.
+//
+// `accept` and `decline` are both explicit. The group route could infer "the rest of the
+// group" as declined; an inferred group has no such boundary, so the client says what it
+// showed. Both lists are verified against what is really hers before anything moves.
+async function claimBatch(db, req, res, { acceptIds, declineIds }) {
+  const accept = [...new Set(acceptIds || [])];
+  const decline = [...new Set(declineIds || [])].filter((id) => !accept.includes(id));
+  if (accept.length === 0) {
     return res.status(400).json({ error: "Pick at least one date to accept." });
   }
 
-  // Everything in the group that is still hers to take. Read before the gates so the
-  // own-request check has a session to look at; the family is the same on every row.
-  const inGroup = await db.prepare(`
-    SELECT * FROM care_sessions
-    WHERE recurrence_group_id = ?
-    ORDER BY scheduled_date ASC
-  `).all(req.params.groupId);
-  if (inGroup.length === 0) return res.status(404).json({ error: "Series not found" });
+  const all = [...accept, ...decline];
+  const placeholders = all.map(() => "?").join(",");
+  const rows = await db.prepare(
+    `SELECT * FROM care_sessions WHERE id IN (${placeholders})`
+  ).all(...all);
+  if (rows.length === 0) return res.status(404).json({ error: "Those visits no longer exist." });
 
-  const gate = await caregiverGate(db, req, inGroup[0]);
+  // The gates read a session for the own-request check; every row here belongs to one
+  // family in practice, and if it does not, the per-session gate below catches it.
+  const gate = await caregiverGate(db, req, rows[0]);
   if (gate.error) return res.status(gate.status).json({ error: gate.error });
   const { profile } = gate;
 
-  const mine = inGroup.filter(
-    (x) => x.offered_to_caregiver_id === profile.id && CLAIMABLE.includes(x.status)
+  const mine = new Map(
+    rows.filter((x) => x.offered_to_caregiver_id === profile.id && CLAIMABLE.includes(x.status))
+      .map((x) => [x.id, x])
   );
-  const mineIds = new Set(mine.map((x) => x.id));
 
   // Asking for something not on offer is a mistake worth naming, not something to silently
-  // drop — a client that sends a stale list should be told its list is stale.
-  const unknown = requested.filter((id) => !mineIds.has(id));
+  // drop — a client with a stale list should be told its list is stale.
+  const unknown = all.filter((id) => !mine.has(id));
   if (unknown.length) {
     return res.status(409).json({
       error: "Some of those visits are no longer available. Refresh and try again.",
@@ -609,66 +621,114 @@ router.put("/recurring/:groupId/claim", async (req, res) => {
 
   // Every gate that guards a single claim, asked per session. The vouch is family-scoped and
   // status can differ row to row, so this is not hoistable.
-  for (const sess of mine.filter((x) => requested.includes(x.id))) {
-    const sGate = await sessionGate(db, req, sess, profile);
+  for (const id of accept) {
+    const sGate = await sessionGate(db, req, mine.get(id), profile);
     if (sGate) return res.status(sGate.status).json({ error: sGate.error });
   }
-
-  const declined = mine.filter((x) => !requested.includes(x.id)).map((x) => x.id);
 
   try {
     await applySeriesClaim(db, {
       caregiverProfileId: profile.id,
-      confirmIds: requested,
-      releaseIds: declined,
+      confirmIds: accept,
+      releaseIds: decline,
     });
   } catch (e) {
     if (e.status) return res.status(e.status).json({ error: e.userMessage });
     throw e;
   }
 
+  const first = mine.get(accept[0]);
   try {
     await ensureAssignment(db, {
-      careRecipientId: inGroup[0].care_recipient_id,
-      familyUserId: inGroup[0].family_user_id,
+      careRecipientId: first.care_recipient_id,
+      familyUserId: first.family_user_id,
       caregiverProfileId: profile.id,
     });
-  } catch (e) { captureException(e, { where: "series claim: ensureAssignment" }); }
+  } catch (e) { captureException(e, { where: "claim batch: ensureAssignment" }); }
 
-  // ONE notification for the series. Twelve pushes saying the same thing is how a family
+  // ONE notification for the batch. Twenty pushes saying the same thing is how a family
   // turns push off.
   const emitToUser = req.app.get("emitToUser");
   const caregiverName = `${req.user.firstName || ""} ${req.user.lastName || ""}`.trim() || "A caregiver";
   const recip = await db.prepare("SELECT first_name FROM care_recipients WHERE id = ?")
-    .get(inGroup[0].care_recipient_id);
+    .get(first.care_recipient_id);
   const recipName = recip?.first_name || "your loved one";
-  const n = requested.length;
-  const body = declined.length
-    ? `${caregiverName} accepted ${n} of ${mine.length} visits for ${recipName}. ${declined.length} went back to the open pool.`
-    : `${caregiverName} accepted all ${n} visit${n === 1 ? "" : "s"} for ${recipName}.`;
+  const body = decline.length
+    ? `${caregiverName} accepted ${accept.length} of ${all.length} visits for ${recipName}. ${decline.length} went back to the open pool.`
+    : `${caregiverName} accepted all ${accept.length} visit${accept.length === 1 ? "" : "s"} for ${recipName}.`;
   const payload = {
     title: "Care Request Accepted!",
     body,
-    data: { type: "care_request_accepted", recurrenceGroupId: req.params.groupId, page: "schedule" },
+    data: { type: "care_request_accepted", page: "schedule" },
   };
 
   const notify = new Set();
-  if (inGroup[0].family_user_id) notify.add(inGroup[0].family_user_id);
+  if (first.family_user_id) notify.add(first.family_user_id);
   try {
     const team = await db.prepare(`
       SELECT DISTINCT ctm.user_id FROM care_team_members ctm
       JOIN care_teams ct ON ctm.care_team_id = ct.id
       WHERE ct.care_recipient_id = ?
-    `).all(inGroup[0].care_recipient_id);
+    `).all(first.care_recipient_id);
     for (const m of team) notify.add(m.user_id);
-  } catch (e) { captureException(e, { where: "series claim: notify team" }); }
+  } catch (e) { captureException(e, { where: "claim batch: notify team" }); }
 
   for (const userId of notify) {
-    if (emitToUser) emitToUser(userId, "session_update", { recurrenceGroupId: req.params.groupId, status: "confirmed" });
+    if (emitToUser) emitToUser(userId, "session_update", { status: "confirmed" });
     sendPushToUser(userId, payload, "care_request_accepted").catch(() => {});
   }
 
-  res.json({ claimed: requested.length, released: declined.length, recurrenceGroupId: req.params.groupId });
+  return res.json({ claimed: accept.length, released: decline.length });
+}
+
+router.put("/claim-batch", async (req, res) => {
+  const db = await getDb();
+  return claimBatch(db, req, res, {
+    acceptIds: Array.isArray(req.body?.accept) ? req.body.accept : [],
+    declineIds: Array.isArray(req.body?.decline) ? req.body.decline : [],
+  });
+});
+
+// ─── PUT /api/sessions/recurring/:groupId/claim ───
+//
+// v1.106.24's route, now a thin resolver over claimBatch: it turns a group id into the ids
+// that are hers and lets the one implementation do the work. Two claim paths with two
+// implementations is the duplication this batch keeps removing.
+router.put("/recurring/:groupId/claim", async (req, res) => {
+  const db = await getDb();
+
+  const requested = Array.isArray(req.body?.sessionIds) ? [...new Set(req.body.sessionIds)] : null;
+  if (!requested || requested.length === 0) {
+    return res.status(400).json({ error: "Pick at least one date to accept." });
+  }
+
+  const inGroup = await db.prepare(`
+    SELECT id, offered_to_caregiver_id, status FROM care_sessions
+    WHERE recurrence_group_id = ?
+    ORDER BY scheduled_date ASC
+  `).all(req.params.groupId);
+  if (inGroup.length === 0) return res.status(404).json({ error: "Series not found" });
+
+  // This route addresses ONE series, so an id from outside it is a stale or mixed list and
+  // is refused rather than quietly accepted. claimBatch cannot make that call — it only
+  // knows "is this hers", which a session in a different group can also be true of.
+  const groupIds = new Set(inGroup.map((x) => x.id));
+  const outside = requested.filter((id) => !groupIds.has(id));
+  if (outside.length) {
+    return res.status(409).json({
+      error: "Some of those visits are no longer available. Refresh and try again.",
+      unavailable: outside,
+    });
+  }
+
+  // Everything in the group she was offered and has not picked is a decline — the family
+  // still needs those days covered and their clock to find someone else starts now.
+  const claimableInGroup = inGroup
+    .filter((x) => CLAIMABLE.includes(x.status))
+    .map((x) => x.id);
+  const decline = claimableInGroup.filter((id) => !requested.includes(id));
+
+  return claimBatch(db, req, res, { acceptIds: requested, declineIds: decline });
 });
 
 // ─── POST /api/sessions ───
@@ -1052,10 +1112,28 @@ router.post("/", requireRole("family", "care_for"), validateSession, async (req,
       : `${bookerName} requested a session for ${scheduledDate} at ${scheduledTime}`
   );
 
-  // Notify caregivers about new open/available jobs via WebSocket
-  // Notify: all assigned caregivers for this care recipient + any nearby caregivers
+  // ─── v1.106.34 — tell the person the job is actually FOR ───
+  //
+  // Pete: "I'm not sure she even realizes they're there." She didn't, and this is why.
+  //
+  // This block notified `caregiver_assignments WHERE family_user_id = ?` — caregivers who
+  // have ALREADY worked for this family. Every ensureAssignment call site runs after a
+  // caregiver is confirmed onto a session, so that table contains nobody until they have
+  // accepted something. A direct offer to a caregiver who has never accepted one therefore
+  // notified NOBODY, while showing up silently as a tile on her home screen.
+  //
+  // Tina's case was worse still: ensureAssignment had been throwing `uuid is not defined`
+  // since v1.106.16 (fixed this morning in v1.106.23), so the table had no row for her at
+  // all. Twenty offers, zero notifications.
+  //
+  // The offered-to caregiver is now always notified, and gets a message about HER offer
+  // rather than the generic broadcast.
+  // v1.106.34 — this whole block used to sit inside `if (emitToUser)`, so every PUSH
+  // notification about a new job depended on the websocket layer having registered. A push
+  // is not a socket emit; they fail independently and one must not silence the other. Only
+  // the emits are conditional now.
   const emitToUser = req.app.get("emitToUser");
-  if (emitToUser) {
+  {
     try {
       // Get all caregivers assigned to this family
       const assignedCgs = await db.prepare(`
@@ -1063,6 +1141,11 @@ router.post("/", requireRole("family", "care_for"), validateSession, async (req,
         JOIN caregiver_profiles cp ON ca.caregiver_profile_id = cp.id
         WHERE ca.family_user_id = ? AND ca.is_active = 1
       `).all(req.user.id);
+
+      // The caregiver this was offered to directly, whether or not she has worked here before.
+      const offeredTo = (isExclusive && bookCaregiverId)
+        ? await db.prepare("SELECT user_id FROM caregiver_profiles WHERE id = ?").get(bookCaregiverId)
+        : null;
 
       const rateLabel = proposedRate ? `$${proposedRate}/hr` : '';
       const surchargeLabel = costResult.surcharge > 0 ? ' (includes short-notice bonus)' : '';
@@ -1076,18 +1159,44 @@ router.post("/", requireRole("family", "care_for"), validateSession, async (req,
         hasBonus: costResult.surcharge > 0,
       };
 
-      for (const cg of assignedCgs) {
-        emitToUser(cg.user_id, "new_job", jobInfo);
+      const timeLabel = formatTimeForDisplay(scheduledTime);
+
+      // ─── The caregiver it was offered to ───
+      //
+      // ONE notification for the whole request, saying its real shape. Twenty separate
+      // bookings this morning meant twenty identical pings, which is how someone learns to
+      // ignore them; a twenty-visit series must never become twenty.
+      if (offeredTo?.user_id) {
+        if (emitToUser) emitToUser(offeredTo.user_id, "new_job", { ...jobInfo, offeredToYou: true, count: dates.length });
+        const recip = await db.prepare("SELECT first_name FROM care_recipients WHERE id = ?")
+          .get(careRecipientId);
+        const who = recip?.first_name || "a client";
+        const body = dates.length > 1
+          ? `${dates.length} visits for ${who}, starting ${scheduledDate} at ${timeLabel}. Tap to accept or pick dates.`
+          : `${who} on ${scheduledDate} at ${timeLabel} (${durationHours}hr). Tap to accept.`;
+        sendPushToUser(offeredTo.user_id, {
+          title: `Work offered to you${rateLabel ? ' — ' + rateLabel + surchargeLabel : ''}`,
+          body,
+          data: { url: '/#caretaker', type: 'new_job', page: 'find-work' },
+        }, 'new_job').catch(err => console.error('Push to offered caregiver error:', err));
       }
 
-      // Push notification to assigned caregivers
-      const timeLabel = formatTimeForDisplay(scheduledTime);
-      for (const cg of assignedCgs) {
-        sendPushToUser(cg.user_id, {
-          title: `New care request${rateLabel ? ' — ' + rateLabel + surchargeLabel : ''}`,
-          body: `${serviceType.replace(/_/g, ' ')} on ${scheduledDate} at ${timeLabel} (${durationHours}hr)`,
-          data: { url: '/#caretaker', type: 'new_job' },
-        }, 'new_job').catch(err => console.error('Push to caregiver error:', err));
+      // ─── Everyone else on this family's roster ───
+      //
+      // Skipped entirely when the request was directed at one person: a job that is
+      // exclusively Tina's for the next hour is not news anybody else can act on, and
+      // telling them is how an "exclusive" offer stops meaning anything.
+      if (!offeredTo?.user_id) {
+        for (const cg of assignedCgs) {
+          if (emitToUser) emitToUser(cg.user_id, "new_job", jobInfo);
+          sendPushToUser(cg.user_id, {
+            title: `New care request${rateLabel ? ' — ' + rateLabel + surchargeLabel : ''}`,
+            body: dates.length > 1
+              ? `${dates.length} visits, starting ${scheduledDate} at ${timeLabel} (${durationHours}hr each)`
+              : `${serviceType.replace(/_/g, ' ')} on ${scheduledDate} at ${timeLabel} (${durationHours}hr)`,
+            data: { url: '/#caretaker', type: 'new_job' },
+          }, 'new_job').catch(err => console.error('Push to caregiver error:', err));
+        }
       }
     } catch (err) {
       console.error("Job notification error (non-blocking):", err);

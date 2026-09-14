@@ -269,13 +269,32 @@ const groupExclusiveOffers = window.groupExclusiveOffers = (jobs) => {
   const out = [];
   const byGroup = new Map();
   for (const job of jobs || []) {
-    const gid = job.recurrenceGroupId || null;
+    // ─── v1.106.34 — group by SHAPE when there is no series id ───
+    //
+    // Pete booked twenty separate one-off days before "Certain days" existed, so none of
+    // them carry a recurrence_group_id and v1.106.24's grouping could not see them: twenty
+    // full-height tiles that buried her check-in. Offers that match on recipient, time,
+    // duration and service are the same arrangement from her side whatever the booking
+    // history says, so they collapse into one card with one accept.
+    //
+    // Keyed on the shape rather than on adjacency of dates, because "every weekday" and
+    // "Mondays and Thursdays" should both fold. A real recurrence_group_id still wins — it
+    // is a stated intent rather than an inferred one.
+    // The shape key needs a recipient AND a time to mean anything. Without them every
+    // incomplete job hashes to the same empty string and unrelated offers merge — which is
+    // exactly what the first cut did, and what a one-off with missing fields would still do
+    // if this guard were dropped.
+    const shapeable = !job.recurrenceGroupId && job.careRecipientId && job.time;
+    const gid = job.recurrenceGroupId
+      || (shapeable
+        ? ['shape', job.careRecipientId, job.time, job.durationHours || '', job.serviceType || ''].join('|')
+        : null);
     if (!gid) { out.push({ kind: 'single', key: job.id, job }); continue; }
     let g = byGroup.get(gid);
     if (!g) {
       // A group holds its position from the FIRST occurrence encountered, which is the
       // earliest one given the caller sorts by date.
-      g = { kind: 'series', key: gid, groupId: gid, jobs: [] };
+      g = { kind: 'series', key: gid, groupId: job.recurrenceGroupId || null, jobs: [] };
       byGroup.set(gid, g);
       out.push(g);
     }
