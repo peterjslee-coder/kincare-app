@@ -178,6 +178,106 @@ const CareEventSheet = window.CareEventSheet = ({ ev, canManage, onClose, onEdit
   const [addingNote, setAddingNote] = useState(false);
   const addingRef = React.useRef(false);
 
+  // ─── v1.106.32 — record the appointment, keep the words, bin the audio ───
+  //
+  // Pete asked twice. He chose record → transcribe → delete the audio, and the server does
+  // better than delete: it never writes it. Here the recording lives in one Blob that is
+  // uploaded and dropped; nothing touches storage on this side either.
+  //
+  // The consent step is not a formality and not a checkbox buried in settings. Virginia is
+  // one-party, but families travel and a practice can refuse recording whatever the state
+  // says — so it asks every time, and the server records that it asked.
+  const [recState, setRecState] = useState('idle'); // idle | consent | recording | working
+  const [recSeconds, setRecSeconds] = useState(0);
+  const recorderRef = React.useRef(null);
+  const chunksRef = React.useRef([]);
+  const streamRef = React.useRef(null);
+  const tickRef = React.useRef(null);
+
+  const releaseMic = React.useCallback(() => {
+    if (tickRef.current) { clearInterval(tickRef.current); tickRef.current = null; }
+    // v1.105.140's lesson: stop the tracks WE acquired, or the mic indicator stays lit and
+    // the OS keeps the device open.
+    if (streamRef.current) {
+      for (const t of streamRef.current.getTracks()) { try { t.stop(); } catch { /* already gone */ } }
+      streamRef.current = null;
+    }
+    recorderRef.current = null;
+  }, []);
+
+  React.useEffect(() => releaseMic, [releaseMic]);
+
+  const startRecording = async () => {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === 'undefined') {
+      showToast('This device can\u2019t record in the app.', 'error');
+      setRecState('idle');
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      chunksRef.current = [];
+      // Let the platform pick: Safari gives mp4, Chrome webm. ElevenLabs takes both.
+      const rec = new MediaRecorder(stream);
+      rec.ondataavailable = (e) => { if (e.data && e.data.size) chunksRef.current.push(e.data); };
+      rec.onstop = () => { void uploadRecording(rec.mimeType || 'audio/webm'); };
+      recorderRef.current = rec;
+      rec.start();
+      setRecSeconds(0);
+      tickRef.current = setInterval(() => setRecSeconds((n) => n + 1), 1000);
+      setRecState('recording');
+    } catch (err) {
+      releaseMic();
+      setRecState('idle');
+      showToast(
+        err && err.name === 'NotAllowedError'
+          ? 'Microphone access was declined \u2014 you can still type notes below.'
+          : 'Couldn\u2019t start recording.',
+        'error'
+      );
+    }
+  };
+
+  const stopRecording = () => {
+    if (recorderRef.current && recorderRef.current.state !== 'inactive') {
+      setRecState('working');
+      try { recorderRef.current.stop(); } catch { releaseMic(); setRecState('idle'); }
+    } else {
+      releaseMic();
+      setRecState('idle');
+    }
+  };
+
+  const uploadRecording = async (mimeType) => {
+    const blob = new Blob(chunksRef.current, { type: mimeType });
+    chunksRef.current = [];
+    releaseMic();
+    if (!blob.size) { setRecState('idle'); showToast('That recording was empty.', 'error'); return; }
+
+    const form = new FormData();
+    form.append('audio', blob, mimeType.includes('mp4') ? 'appointment.mp4' : 'appointment.webm');
+    form.append('consent_confirmed', 'true');
+    try {
+      // apiFetch already leaves FormData alone so the browser sets its own boundary, and
+      // already gives uploads the 120s deadline. Transcription runs on top of the upload —
+      // ElevenLabs gets 120s of its own server-side — so this one needs longer than the
+      // default or a 20-minute recording times out on the client while succeeding on the
+      // server, filing the note and telling the user it failed.
+      const res = await apiFetch(`/api/care-events/${ev.id}/transcribe`, {
+        method: 'POST', body: form, timeoutMs: 240000,
+      });
+      if (res?.ok) {
+        const d = await res.json();
+        showToast(d.extracted ? 'Transcribed and filed in the care record' : 'Transcript filed \u2014 couldn\u2019t pull out the key points', 'success');
+        await loadNotes();
+      } else {
+        const d = await res?.json().catch(() => ({}));
+        showToast(d.error || 'Could not transcribe that recording.', 'error');
+      }
+    } catch { showToast('Could not transcribe that recording.', 'error'); }
+    setRecState('idle');
+  };
+
   const loadNotes = React.useCallback(async () => {
     try {
       const res = await apiFetch(`/api/care-events/${ev.id}/notes`);
@@ -295,6 +395,82 @@ const CareEventSheet = window.CareEventSheet = ({ ev, canManage, onClose, onEdit
               ))}
             </div>
           )}
+          {/* ─── v1.106.32 — record it instead of typing it ───
+              Consent is asked every time, in front of the button, not buried in settings.
+              The audio is uploaded and never stored — not by us, not on the phone. */}
+          {recState === 'idle' && (
+            <button onClick={() => setRecState('consent')} style={{
+              display: 'flex', alignItems: 'center', gap: 8, width: '100%', minHeight: 44,
+              padding: '10px 14px', marginBottom: 10, borderRadius: 10,
+              border: '1px solid var(--border-color)', background: 'var(--bg-surface)',
+              color: 'var(--text-primary)', font: 'inherit', fontWeight: 600, fontSize: 14, cursor: 'pointer',
+            }}>
+              <span aria-hidden="true">🎙</span> Record the appointment
+              <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>writes the notes for you</span>
+            </button>
+          )}
+
+          {recState === 'consent' && (
+            <div style={{
+              marginBottom: 10, padding: 14, borderRadius: 10,
+              border: '1px solid var(--color-warning)', background: 'var(--color-warning-bg, #fff8e1)',
+            }}>
+              <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>
+                Before you record
+              </div>
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                Tell everyone in the room you{'\u2019'}re recording, and check the practice allows it {'\u2014'}
+                many don{'\u2019'}t. Recording laws also differ by state.
+                <br /><br />
+                InPlace transcribes the recording and files the notes. <strong>The audio itself is
+                never saved</strong> {'\u2014' } not here and not on your phone.
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+                <button onClick={startRecording} style={{
+                  minHeight: 44, padding: '0 16px', borderRadius: 10, border: 'none',
+                  background: 'var(--role-color)', color: 'var(--text-on-primary)',
+                  font: 'inherit', fontWeight: 700, fontSize: 14, cursor: 'pointer',
+                }}>Everyone agreed {'\u2014'} start</button>
+                <button onClick={() => setRecState('idle')} style={{
+                  minHeight: 44, padding: '0 16px', borderRadius: 10,
+                  border: '1px solid var(--border-color)', background: 'var(--bg-card)',
+                  color: 'var(--text-secondary)', font: 'inherit', fontWeight: 600, fontSize: 14, cursor: 'pointer',
+                }}>Cancel</button>
+              </div>
+            </div>
+          )}
+
+          {recState === 'recording' && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10,
+              padding: '10px 14px', borderRadius: 10,
+              border: '1px solid var(--color-error)', background: 'var(--bg-surface)',
+            }}>
+              <span style={{
+                width: 10, height: 10, borderRadius: '50%', background: 'var(--color-error)',
+                animation: 'pulse 1s infinite', flexShrink: 0,
+              }} />
+              <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
+                Recording {String(Math.floor(recSeconds / 60)).padStart(2, '0')}:{String(recSeconds % 60).padStart(2, '0')}
+              </span>
+              <button onClick={stopRecording} style={{
+                marginLeft: 'auto', minHeight: 44, padding: '0 16px', borderRadius: 10, border: 'none',
+                background: 'var(--color-error)', color: 'var(--text-on-primary)',
+                font: 'inherit', fontWeight: 700, fontSize: 14, cursor: 'pointer',
+              }}>Stop &amp; file it</button>
+            </div>
+          )}
+
+          {recState === 'working' && (
+            <div style={{
+              marginBottom: 10, padding: '10px 14px', borderRadius: 10,
+              border: '1px solid var(--border-color)', background: 'var(--bg-surface)',
+              fontSize: 13.5, color: 'var(--text-secondary)',
+            }}>
+              Transcribing and pulling out the key points{'\u2026'} this can take a minute for a long visit.
+            </div>
+          )}
+
           <textarea value={newNote} onChange={(e) => setNewNote(e.target.value)}
             placeholder={`e.g. "Dr. Lambert started her on a new blood-pressure tablet, mornings. Back in six weeks."`}
             rows={3}

@@ -17,6 +17,7 @@
  */
 const express = require("express");
 const crypto = require("crypto");
+const multer = require("multer");
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { authenticate } = require("../middleware/auth");
@@ -29,6 +30,7 @@ const {
   validateEventInput, reminderStage, buildIcs,
 } = require("../utils/careEventUtils");
 const { MODEL_HAIKU, getAnthropic } = require("../utils/aiModels");
+const { transcribeAudio, extractAppointmentNotes, TranscriptionError, MAX_AUDIO_BYTES } = require("../utils/transcription");
 
 const router = express.Router();
 
@@ -331,6 +333,106 @@ router.get("/taggable/:recipientId", async (req, res) => {
   } catch (err) {
     captureException(err);
     return res.status(500).json({ error: "Failed to load people" });
+  }
+});
+
+// ─── POST /api/care-events/:id/transcribe ───
+//
+// v1.106.32 — Pete, twice: "smart transcription feature that could record and put notes in
+// automatically" / "AI transcription of the meeting to add salient points". He chose record →
+// transcribe → delete the audio.
+//
+// THE AUDIO IS NEVER WRITTEN. memoryStorage, straight to the transcriber, buffer out of
+// scope. Not "deleted after" — never stored, so there is no row, no object, no temp file and
+// nothing to purge or hand over. A recording of a medical consultation is the most sensitive
+// thing this product could hold.
+//
+// CONSENT IS RECORDED, NOT ASSUMED. The client must send consent_confirmed, and who confirmed
+// it and when goes into the note's own text. Virginia is one-party, but the family travels
+// and a practice can refuse recording regardless of state law — so the app asks every time
+// and writes down that it asked.
+//
+// What lands is a care note against this appointment: the same recipient_notes row any other
+// note is, so iPAi files it and the team sees it. The transcript is kept in the note body
+// because the extraction can be wrong and the words actually said are the record.
+const uploadAudio = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_AUDIO_BYTES, files: 1 },
+});
+
+router.post("/:id/transcribe", uploadAudio.single("audio"), async (req, res) => {
+  try {
+    const db = await getDb();
+    const ev = await db.prepare("SELECT * FROM care_events WHERE id = ?").get(req.params.id);
+    if (!ev) return res.status(404).json({ error: "Appointment not found" });
+
+    // Anyone with access may record — the caregiver at the visit most of all. Recording is
+    // not a management act; it is writing down what happened, which canCheckOff already
+    // covers everywhere else.
+    const access = await hasAccess(db, ev.care_recipient_id, req.user.id);
+    if (!access) return res.status(403).json({ error: "Not authorized for this appointment" });
+
+    if (String(req.body.consent_confirmed) !== "true") {
+      return res.status(400).json({ error: "Recording needs the consent step first." });
+    }
+    if (!req.file || !req.file.buffer) {
+      return res.status(400).json({ error: "No audio received." });
+    }
+
+    const cr = await db.prepare("SELECT first_name FROM care_recipients WHERE id = ?")
+      .get(ev.care_recipient_id);
+
+    let transcript;
+    try {
+      transcript = await transcribeAudio(req.file.buffer, req.file.mimetype, req.file.originalname || "appointment.webm");
+    } catch (e) {
+      // Only OUR error type is safe to show. `e.status || 502` with `e.message` would echo
+      // any internal failure straight to the user — and a transcription path is exactly
+      // where a stray message could carry a fragment of what was said.
+      if (e instanceof TranscriptionError) {
+        return res.status(e.status || 502).json({ error: e.message });
+      }
+      throw e; // to the handler's own catch: Sentry, and a generic 500
+    }
+
+    const extracted = await extractAppointmentNotes(transcript.text, {
+      recipientFirstName: cr?.first_name || "the patient",
+    });
+
+    const me = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(req.user.id);
+    const who = `${me?.first_name || ""} ${me?.last_name || ""}`.trim() || "A care team member";
+
+    const lines = [];
+    if (extracted?.summary) lines.push(extracted.summary);
+    if (extracted?.items?.length) {
+      const LABEL = { medication: "Medication", follow_up: "Follow-up", instruction: "Instruction", observation: "Noted" };
+      lines.push("");
+      for (const it of extracted.items) lines.push(`• ${LABEL[it.kind]}: ${it.text}`);
+    }
+    lines.push("");
+    lines.push("— Transcript —");
+    lines.push(transcript.text);
+    lines.push("");
+    lines.push(`Recorded by ${who}, who confirmed consent to record. Audio was not kept.`);
+
+    const noteId = uuid();
+    await db.prepare(`
+      INSERT INTO recipient_notes (id, care_recipient_id, author_id, content, note_type, care_event_id, created_at)
+      VALUES (?, ?, ?, ?, 'visit_summary', ?, NOW())
+    `).run(noteId, ev.care_recipient_id, req.user.id, lines.join("\n").slice(0, 5000), ev.id);
+
+    return res.json({
+      note_id: noteId,
+      summary: extracted?.summary || null,
+      items: extracted?.items || [],
+      transcript: transcript.text,
+      speakers: transcript.speakers,
+      extracted: !!extracted,
+    });
+  } catch (err) {
+    captureException(err, { where: "careEvents: transcribe" });
+    console.error("Transcribe error:", err.message);
+    return res.status(500).json({ error: "Could not transcribe that recording." });
   }
 });
 
