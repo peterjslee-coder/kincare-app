@@ -24,6 +24,8 @@
 // Anything that cannot be traced to a document does not belong on this screen.
 
 const DemoOrientation = window.DemoOrientation = ({ onAcknowledge }) => {
+  // v1.106.19 — read, not retyped. See utils.js/usePlatformFee.
+  const { caregiverSharePercent } = usePlatformFee();
   const points = [
     {
       icon: '📅',
@@ -33,7 +35,7 @@ const DemoOrientation = window.DemoOrientation = ({ onAcknowledge }) => {
     {
       icon: '🤝',
       title: 'Caregivers are independent, and stay that way',
-      body: 'They are not our employees. They set their own hours and their own rates, and accept or decline any request. Caregivers keep 80% of what a family pays.',
+      body: `They are not our employees. They set their own hours and their own rates, and accept or decline any request. Caregivers keep ${caregiverSharePercent}% of what a family pays.`,
     },
     {
       icon: '🩺',

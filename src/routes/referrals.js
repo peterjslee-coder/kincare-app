@@ -4,6 +4,7 @@ const router = express.Router();
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { authenticate } = require("../middleware/auth");
+const { getPlatformFeePercent } = require("../utils/platformFee");
 
 // Ensure user has a referral code (lazy-generate on first access)
 async function ensureReferralCode(db, userId) {
@@ -101,6 +102,8 @@ router.post("/send", authenticate, async (req, res) => {
         const { sendEmail, brandedHtml } = require("../utils/email");
         const refLink = `${process.env.BASE_URL || "https://yourinplace.com"}/register?ref=${code}&role=caregiver`;
         const recipientName = name?.trim() || "there";
+        // v1.106.19 — read once, not retyped and not re-queried per line of the email.
+        const caregiverSharePercent = 100 - (await getPlatformFeePercent(db));
 
         await sendEmail({
           to: email.trim(),
@@ -108,7 +111,7 @@ router.post("/send", authenticate, async (req, res) => {
           html: brandedHtml({
             title: "You've Been Referred!",
             greeting: `Hi ${recipientName},`,
-            body: `${referrerName} is a caregiver on inPlace — an on-demand home care platform where caregivers keep 80% of every session. They think you'd be great at it.<br><br>inPlace connects vetted caregivers with families who need help with companionship, meal prep, medication reminders, and transportation. You set your own schedule — it flexes around classes, another job, or family — and you build real relationships with families in your community. Typical caregivers earn $25–35/hr, paid within 48 hours.`,
+            body: `${referrerName} is a caregiver on inPlace — an on-demand home care platform where caregivers keep ${caregiverSharePercent}% of every session. They think you'd be great at it.<br><br>inPlace connects vetted caregivers with families who need help with companionship, meal prep, medication reminders, and transportation. You set your own schedule — it flexes around classes, another job, or family — and you build real relationships with families in your community. Typical caregivers earn $25–35/hr, paid within 48 hours.`,
             ctaUrl: refLink,
             ctaText: "Check It Out",
             footnote: `When you sign up, ${referrerName} gets credit for referring you. Questions? Just reply to this email.`,

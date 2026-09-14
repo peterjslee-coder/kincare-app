@@ -99,7 +99,7 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
             Vetted local caregivers. Fair wages. Real-time peace of mind for families.
           </div>
           <p className="splash-hero-body" style={{ fontSize: '16px', color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: '16px', maxWidth: '480px' }}>
-            inPlace matches families with vetted caregivers in hours — by the visit, no contracts, no agency markup. Caregivers keep 80%. Families see everything in real time.
+            inPlace matches families with vetted caregivers in hours — by the visit, no contracts, no agency markup. Caregivers keep {caregiverSharePercent}%. Families see everything in real time.
           </p>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: 'var(--bg-highlight)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '8px 14px', fontSize: '13px', color: 'var(--role-color)', fontWeight: 500, marginBottom: '20px' }}>
             <span style={{ fontSize: '15px' }}>{'\u{1F4CD}'}</span> Now serving the New River Valley — expanding across Virginia soon. Limited early signups.
@@ -192,7 +192,7 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
       <div className="splash-value-strip" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', background: 'var(--bg-highlight)', borderTop: '1px solid #d0e8e3', borderBottom: '1px solid #d0e8e3' }}>
         {[
           { icon: '\u26A1', title: 'Matched in Hours', desc: 'Not weeks of agency waiting' },
-          { icon: '\uD83D\uDCB0', title: 'Caregivers Keep 80%', desc: 'Fair pay, fast payouts' },
+          { icon: '\uD83D\uDCB0', title: `Caregivers Keep ${caregiverSharePercent}%`, desc: 'Fair pay, fast payouts' },
           { icon: '\uD83D\uDEE1\uFE0F', title: 'Vetted & Checked', desc: 'Background-verified caregivers' },
           { icon: '\uD83D\uDCF1', title: 'Real-Time Updates', desc: 'Know how your loved one is doing' },
         ].map((item, i) => (
@@ -331,7 +331,7 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
                 {[
                   { label: 'Doing it all yourself', detail: 'Free — until it consumes your life.', us: false },
                   { label: 'Agency home care', detail: 'Typically $30\u201350+/hr with contracts and minimums. Caregivers rotate and take home less than half of what you pay.', us: false },
-                  { label: 'inPlace', detail: 'One flat price for the whole visit \u2014 most run $45\u201385 total, not per hour. No contracts, no minimums. The same vetted caregiver every time, chosen by you \u2014 and caregivers keep 80%, so the good ones stay.', us: true },
+                  { label: 'inPlace', detail: `One flat price for the whole visit \u2014 most run $45\u201385 total, not per hour. No contracts, no minimums. The same vetted caregiver every time, chosen by you \u2014 and caregivers keep ${caregiverSharePercent}%, so the good ones stay.`, us: true },
                   { label: 'Assisted living / facility', detail: 'Often $5,000\u20138,000+ per month \u2014 and it means leaving home.', us: false },
                 ].map((row, i) => (
                   <div key={i} style={{
@@ -387,12 +387,12 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
             <div style={{ textAlign: 'center', marginBottom: '32px' }}>
               <h3 style={{ fontSize: '24px', color: 'var(--text-primary)', marginBottom: '8px' }}>Fair Pay. Flexible Hours. Your Career.</h3>
               <p style={{ fontSize: '15px', color: 'var(--text-secondary)', maxWidth: '600px', margin: '0 auto', lineHeight: 1.6 }}>
-                Traditional agencies take up to 40%. On inPlace, you keep 80% and set your own schedule.
+                Traditional agencies take up to 40%. On inPlace, you keep {caregiverSharePercent}% and set your own schedule.
               </p>
             </div>
             <div style={{ display: 'flex', gap: '16px', justifyContent: 'center', flexWrap: 'wrap', marginBottom: '24px' }}>
               {[
-                { num: '80%', label: 'You keep' },
+                { num: `${caregiverSharePercent}%`, label: 'You keep' },
                 { num: '$25-35/hr', label: 'Typical earnings' },
                 { num: '48hr', label: 'Payout speed' },
               ].map((s, i) => (
@@ -431,7 +431,7 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
               {[
                 { icon: '\uD83E\uDE7A', title: 'Real Care Experience', desc: 'Dementia care, personal care, geriatric support — in real homes, with real families. The experience clinicals don\u2019t give you time for.' },
                 { icon: '\uD83D\uDCCB', title: 'Hours & Care Events, Documented', desc: 'Every visit is logged: your hours, the type of care (dementia, personal, geriatric), and family ratings. Get a report of your care history to bring to interviews.' },
-                { icon: '\uD83D\uDCB0', title: 'Pay That Beats Campus Jobs', desc: 'Keep 80% of every visit — typical caregivers earn $25\u201335/hr, paid within 48 hours.' },
+                { icon: '\uD83D\uDCB0', title: 'Pay That Beats Campus Jobs', desc: `Keep ${caregiverSharePercent}% of every visit — typical caregivers earn $25\u201335/hr, paid within 48 hours.` },
                 { icon: '\uD83D\uDCC5', title: 'Flexes Around Classes', desc: 'Accept only the visits that fit your schedule. No shift minimums, no manager.' },
                 { icon: '\uD83D\uDCCD', title: 'Minutes from Campus', desc: 'Families in Radford, Fairlawn, Christiansburg, Blacksburg, and Pulaski County.' },
                 { icon: '\uD83E\uDD1D', title: 'Bring a Classmate', desc: 'Every caregiver gets a personal referral link after signup — refer friends who\u2019d be great at this.' },

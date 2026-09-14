@@ -81,6 +81,26 @@ describe("...and the code still backs it", () => {
     expect(splash).toMatch(/usePlatformFee\(\)/);
   });
 
+  test("nor does any copy hardcode the caregiver's SHARE", () => {
+    // The first pass at this only looked for "N% platform fee" / "N% commission" / "a flat N%",
+    // and missed six places saying "caregivers keep 80%" — the same number, said the other way.
+    // Rendering the actual page is what found them, not the grep. So the grep is wider now.
+    const offenders = [];
+    for (const f of [
+      "public/js/components/SplashPage.js", "public/js/components/DemoOrientation.js",
+      "src/routes/referrals.js",
+    ]) {
+      for (const line of readStripped(f).split("\n")) {
+        // "take up to 40%" is a claim about OTHER agencies and is not ours to derive.
+        if (/(keep|Keep)\s+\d+%\s+(of|and|,|\.)|[Kk]eep[s]? \d+%\b|'\d+%', label: 'You keep'/.test(line)
+            && !/up to 40%/.test(line)) {
+          offenders.push(`${f}: ${line.trim().slice(0, 100)}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
   test("no user-facing platform-fee copy hardcodes the number any more", () => {
     // Scoped to PLATFORM FEE wording on purpose. Three unrelated 20s live nearby and must
     // survive untouched: the short-notice surcharge, the 20% tip preset, and aiMatching's
