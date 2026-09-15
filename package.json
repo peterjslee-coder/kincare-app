@@ -10,6 +10,7 @@
     "seed": "node src/seed.js",
     "setup": "node src/seed.js && node src/server.js",
     "test": "jest --forceExit --detectOpenHandles --testPathIgnorePatterns tests/integration",
+    "lint:bundle-fresh": "node scripts/lint-bundle-fresh.js",
     "lint:client": "node scripts/lint-client.js",
     "lint:contrast": "node scripts/lint-contrast.js",
     "gen:architecture": "node scripts/gen-architecture.js",

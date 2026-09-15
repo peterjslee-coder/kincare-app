@@ -66,6 +66,9 @@ jobs:
       - name: Impersonation cannot write credentials
         run: npm run lint:impersonation
 
+      - name: The committed bundle matches its source
+        run: npm run lint:bundle-fresh
+
       - name: Frozen migration baseline untouched
         run: npm run lint:frozen-migrations
 
