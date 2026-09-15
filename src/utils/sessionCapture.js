@@ -50,10 +50,12 @@ async function captureForSession(db, sessionId, amountCents, { where, testMode }
   };
 
   try {
-    const { captureSessionPayment } = require("../routes/accountability");
+    // v1.107.0 — amountCents is what the CAREGIVER is owed. captureSessionPay adds the
+    // platform fee on top and sets it at capture (utils/pricing), per Pete's fee rule.
+    const { captureSessionPay } = require("../routes/accountability");
     const cents = Math.round(amountCents);
     if (cents <= 0) return { captured: false };
-    const result = await captureSessionPayment(sessionId, cents);
+    const result = await captureSessionPay(sessionId, cents);
     if (result && result.error) {
       console.warn(`[${where}] Payment capture skipped: ${result.error}`);
       await failCapture(result.error);

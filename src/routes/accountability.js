@@ -35,6 +35,7 @@ router.use(authenticate);
 //
 // Latent while the setting says 20, which is the default. Not a reason to leave it.
 const { getPlatformFeePercent } = require("../utils/platformFee");
+const { familyChargeFor, planCapture } = require("../utils/pricing"); // v1.107.0
 const LATE_GRACE_MINUTES = 10;
 const FAMILY_NO_SHOW_WAIT_MINUTES = 30;
 
@@ -123,14 +124,34 @@ async function authorizeSessionPayment(sessionId) {
     const identityOk = await caregiverIdentityVerified(db, session.caregiver_user_id, session.caregiver_id);
     if (!identityOk) return { error: "Caregiver identity not verified" };
 
-    // Calculate cost
+    // ─── v1.107.0 — hold what the family was QUOTED, with the fee ON TOP ───
+    //
+    // Two things were wrong here, and a real visit hit both (Sep 14: Tina, $22 × 8h).
+    //
+    //  1. The amount. This recomputed the price from the caregiver's PROFILE rates
+    //     (rate_daytime / hourly_rate) unless an offer had set agreed_rate. A booking made at a
+    //     family's proposed rate stores that price in estimated_cost and proposed_rate, never
+    //     agreed_rate — so the hold was priced at $24/h while the family had been quoted, and the
+    //     caregiver told, $22/h. estimated_cost is the number both of them were shown
+    //     (GET /api/sessions: caregiver_payout = estimated_cost, family_total = + fee), and it is
+    //     what check-out and release capture against. The hold now uses it.
+    //
+    //  2. The fee. This took the platform fee OUT of the held amount, while auto-pay and
+    //     checkout add it on top. Pete's rule: the caregiver is paid rate × time, the family
+    //     pays that plus the fee, and Stripe's cost comes out of the fee. Stripe also does not
+    //     prorate a hold-time fee, so captureSessionPay() now sets it at capture.
+    //
+    // Result on Sep 14: held $192 (fee $38.40 inside), captured $176, Tina received $137.60.
+    // Under the rule: Tina $176, InPlace $35.20, Sara $211.20.
     const durationHours = session.duration_hours || 2;
-    let totalCents, baseCostCents, surchargeCents = 0;
+    let totalCents, caregiverCents;
+    const quotedCents = Math.round((parseFloat(session.estimated_cost) || 0) * 100);
 
-    if (session.agreed_rate) {
-      baseCostCents = Math.round(session.agreed_rate * durationHours * 100);
-      surchargeCents = Math.round((session.short_notice_surcharge || 0) * 100);
-      totalCents = baseCostCents + surchargeCents;
+    if (quotedCents > 0) {
+      caregiverCents = quotedCents;
+    } else if (session.agreed_rate) {
+      caregiverCents = Math.round(session.agreed_rate * durationHours * 100)
+        + Math.round((session.short_notice_surcharge || 0) * 100);
     } else {
       const costResult = calculateSessionCost(session.scheduled_time, null, {
         daytime: session.rate_daytime || session.hourly_rate || 28,
@@ -142,17 +163,11 @@ async function authorizeSessionPayment(sessionId) {
         durationHours,
         shortNotice: (session.short_notice_surcharge || 0) > 0,
       });
-      baseCostCents = Math.round(costResult.subtotal * 100);
-      surchargeCents = Math.round(costResult.surcharge * 100);
-      totalCents = Math.round(costResult.total * 100);
+      caregiverCents = Math.round(costResult.total * 100);
     }
 
-    // Platform fee
-    const feePercent = await getPlatformFeePercent(db);
-    let platformFeeCents = Math.round(baseCostCents * feePercent / 100);
-    if (surchargeCents > 0) {
-      platformFeeCents += Math.round(surchargeCents * SURCHARGE_PLATFORM_SHARE);
-    }
+    const { platformFeeCents, familyTotalCents } = await familyChargeFor(db, caregiverCents);
+    totalCents = familyTotalCents;
 
     // ─── v1.106.11 — actually name the payment method ───
     //
@@ -223,6 +238,124 @@ async function authorizeSessionPayment(sessionId) {
   } catch (err) {
     console.error(`[accountability] Auth failed for session ${sessionId.slice(0, 8)}:`, err.message);
     return { error: err.message };
+  }
+}
+
+/**
+ * v1.107.0 — settle a finished visit so the caregiver receives exactly `caregiverCents`.
+ *
+ * Used by check-out and release (utils/sessionCapture). The family pays caregiverCents plus
+ * the platform fee (utils/pricing). The fee is set AT CAPTURE — Stripe allows
+ * application_fee_amount on capture — because the hold-time fee was fixed against the full
+ * booking and Stripe does not prorate it: a shorter visit used to lose the whole fee out of a
+ * smaller capture, and the caregiver absorbed the difference.
+ *
+ * If the hold is smaller than what is owed (overtime, or a hold placed before v1.107.0 that
+ * did not include the fee), the rest is charged as a second PaymentIntent on the same card:
+ * the caregiver's share of it (if any) is transferred to her, and the remainder is the fee.
+ * A failed remainder never un-pays the capture; it is reported loudly instead.
+ *
+ * Returns { success, captured, remainder? } or { error }.
+ */
+async function captureSessionPay(sessionId, caregiverCents) {
+  {
+    const dbGuard = await getDb();
+    if (await isDemoSession(dbGuard, sessionId)) {
+      console.warn(`[accountability] BLOCKED capture for demo session ${String(sessionId).slice(0, 8)} — Dev Rule #7`);
+      return { error: "demo_session_blocked" };
+    }
+  }
+  try {
+    const db = await getDb();
+    const stripe = getStripe();
+
+    const session = await db.prepare(`
+      SELECT cs.stripe_payment_intent_id, cs.authorized_amount, cp.stripe_account_id
+        FROM care_sessions cs
+        LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+       WHERE cs.id = ?
+    `).get(sessionId);
+    if (!session?.stripe_payment_intent_id) return { error: "No payment authorization found" };
+
+    const price = await familyChargeFor(db, caregiverCents);
+    const plan = planCapture({
+      caregiverCents: price.caregiverCents,
+      platformFeeCents: price.platformFeeCents,
+      authorizedCents: session.authorized_amount,
+    });
+    if (plan.captureCents <= 0) return { error: "Nothing to capture" };
+
+    const captured = await stripe.paymentIntents.capture(
+      session.stripe_payment_intent_id,
+      { amount_to_capture: plan.captureCents, application_fee_amount: plan.captureFeeCents },
+      { idempotencyKey: `inplace_capture_${sessionId}_${plan.captureCents}_${plan.captureFeeCents}` }
+    );
+
+    await db.prepare(`
+      UPDATE care_sessions SET
+        payment_captured_at = NOW(),
+        payment_status = 'paid'
+      WHERE id = ?
+    `).run(sessionId);
+
+    console.log(`[accountability] Captured $${(plan.captureCents / 100).toFixed(2)} (fee $${(plan.captureFeeCents / 100).toFixed(2)}) for session ${sessionId.slice(0, 8)}; caregiver owed $${(price.caregiverCents / 100).toFixed(2)}`);
+
+    let remainder = null;
+    if (plan.remainderCents > 0) {
+      remainder = await chargeRemainder(stripe, sessionId, session, plan);
+    }
+    return { success: true, captured: captured.amount_received, plan, remainder };
+  } catch (err) {
+    console.error(`[accountability] Capture failed for session ${sessionId.slice(0, 8)}:`, err.message);
+    return { error: err.message };
+  }
+}
+
+async function chargeRemainder(stripe, sessionId, session, plan) {
+  // Stripe's minimum charge is $0.50. Below it the difference is left uncollected and said so.
+  if (plan.remainderCents < 50) {
+    if (plan.remainderToCaregiver > 0) {
+      captureException(new Error(`Caregiver short ${plan.remainderToCaregiver}c, below Stripe minimum`), {
+        where: "accountability: remainder", sessionId,
+      });
+    }
+    return { skipped: "below_minimum", cents: plan.remainderCents };
+  }
+  try {
+    const pi = await stripe.paymentIntents.retrieve(session.stripe_payment_intent_id);
+    const args = {
+      amount: plan.remainderCents,
+      currency: "usd",
+      customer: pi.customer,
+      payment_method: pi.payment_method,
+      confirm: true,
+      off_session: true,
+      metadata: {
+        inplace_session_id: sessionId,
+        type: "session_remainder",
+        caregiver_cents: String(plan.remainderToCaregiver),
+      },
+      description: `Care session balance (${sessionId.slice(0, 8)})`,
+    };
+    if (plan.remainderToCaregiver > 0) {
+      if (!session.stripe_account_id) throw new Error("caregiver has no Stripe account for the balance");
+      args.transfer_data = { destination: session.stripe_account_id };
+      args.application_fee_amount = plan.remainderCents - plan.remainderToCaregiver;
+    }
+    const intent = await stripe.paymentIntents.create(args, {
+      idempotencyKey: `inplace_remainder_${sessionId}_${plan.remainderCents}_${plan.remainderToCaregiver}`,
+    });
+    console.log(`[accountability] Remainder $${(plan.remainderCents / 100).toFixed(2)} charged for session ${sessionId.slice(0, 8)} (PI: ${intent.id})`);
+    return { charged: true, id: intent.id, cents: plan.remainderCents };
+  } catch (err) {
+    // The capture above stands. This is money still owed — to the caregiver if
+    // remainderToCaregiver > 0, otherwise to InPlace — and a human has to see it.
+    console.error(`[accountability] Remainder charge failed for ${sessionId.slice(0, 8)}:`, err.message);
+    captureException(new Error(`Session remainder charge failed: ${err.message}`), {
+      where: "accountability: remainder", sessionId,
+      remainderCents: plan.remainderCents, caregiverShortCents: plan.remainderToCaregiver,
+    });
+    return { charged: false, error: err.message, cents: plan.remainderCents };
   }
 }
 
@@ -1333,6 +1466,7 @@ router.post("/no-show/:sessionId/acknowledge", async (req, res) => {
 module.exports = router;
 module.exports.authorizeSessionPayment = authorizeSessionPayment;
 module.exports.captureSessionPayment = captureSessionPayment;
+module.exports.captureSessionPay = captureSessionPay; // v1.107.0
 module.exports.voidSessionPayment = voidSessionPayment;
 module.exports.pollPaymentAuthorizations = pollPaymentAuthorizations;
 
