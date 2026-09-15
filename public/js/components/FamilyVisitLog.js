@@ -646,17 +646,41 @@ const VisitGeoStatus = ({ recipients }) => {
   );
 };
 
-const VisitNudgeCard = window.VisitNudgeCard = ({ recipients, alreadyLoggedToday, onLog }) => {
+// ─── v1.106.44 — "it should understand that I've logged a visit" ───
+//
+// Pete: "I hit log this visit when it tagged me at mom's house. I left a note. The log visit
+// option is still remaining at the top of the screen."
+//
+// Two faults, and the second is the one that would have kept nagging him tomorrow:
+//
+//  1. `alreadyLoggedToday` was consulted in the effect and in the two early returns, and NOT
+//     in the branch that actually draws the card. Once `match` was set, logging the visit
+//     flipped the flag and changed nothing on screen — which is precisely the sequence Pete
+//     describes, because the nudge is what he tapped to get there.
+//
+//  2. It was a single boolean that the SERVER never set. It started false on every load and
+//     was only ever flipped by the save handler in the same session, so the nudge returned on
+//     the next open, about a visit already in the record. It is now a list of recipient ids
+//     from /api/dashboard, per person: logging a visit to Betty must not silence the nudge
+//     about someone else.
+const VisitNudgeCard = window.VisitNudgeCard = ({ recipients, loggedTodayIds, onLog }) => {
   const [match, setMatch] = useState(null); // { recipient, position }
   const [dismissed, setDismissed] = useState(false);
   const [allowed, setAllowed] = useState(null); // null = still deciding
   const [retry, setRetry] = useState(0);        // bumped when the opt-in is accepted
 
+  // A Set so the checks below read as a question about ONE person. Recomputed rather than
+  // memoised: the list is at most a handful of ids.
+  const logged = new Set(loggedTodayIds || []);
+  const loggedFor = (r) => !!r && logged.has(r.id);
+  const everyoneLogged = (recipients || []).length > 0 && (recipients || []).every(loggedFor);
+
   useEffect(() => {
     let cancelled = false;
     const run = async () => {
       try {
-        if (alreadyLoggedToday) return;
+        // Nothing to nudge about if every person here already has a visit recorded today.
+        if (everyoneLogged) return;
         // Storage throws in private mode and locked-down webviews — see v1.105.35.
         try {
           const until = parseInt(localStorage.getItem(VISIT_NUDGE_DISMISS_KEY) || '0', 10);
@@ -694,23 +718,26 @@ const VisitNudgeCard = window.VisitNudgeCard = ({ recipients, alreadyLoggedToday
     };
     run();
     return () => { cancelled = true; };
-  }, [recipients, alreadyLoggedToday, retry]);
+  }, [recipients, (loggedTodayIds || []).join(','), retry]);
 
   // No usable permission yet → offer the opt-in instead of silently doing nothing. This is
   // the branch iOS has always landed in; before v1.105.45 it rendered nothing, and there was
   // no way to tell the feature apart from a broken one.
-  if (allowed === false && !alreadyLoggedToday) {
+  if (allowed === false && !everyoneLogged) {
     return <VisitGeoInvite recipients={recipients} onEnabled={() => setRetry((n) => n + 1)} />;
   }
 
   // v1.105.59 — opted in, but not near the house (or dismissed). This used to be `null`:
   // the feature was on and looked identical to the feature being broken, which is the
   // whole complaint. One muted line instead.
-  if (allowed === true && (!match || dismissed) && !alreadyLoggedToday) {
+  if (allowed === true && (!match || dismissed) && !everyoneLogged) {
     return <VisitGeoStatus recipients={recipients} />;
   }
 
-  if (!match || dismissed) return null;
+  // This is the line that was missing. Every other branch asked whether the visit was
+  // already logged; the one that draws the card did not, so tapping "Log this visit" and
+  // saving left it sitting there — the exact thing Pete reported.
+  if (!match || dismissed || loggedFor(match.recipient)) return null;
   const first = match.recipient.first_name || match.recipient.firstName || 'them';
 
   return (

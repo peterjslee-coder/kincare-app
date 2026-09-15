@@ -295,17 +295,21 @@ const CaregiverTour = window.CaregiverTour = ({ onNavigate, onClose, firstName }
         </div>
       ))}
     </>, { padding: '10px 14px' })}
-    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>This list stays on your Home screen until your first real visit, and lives in Help after that.</div>
+    {/* v1.106.44 — this used to promise "This list stays on your Home screen until your first
+        real visit". It no longer does, and a tour whose last screen tells a caregiver where to
+        find something that will not be there is worse than one that says nothing. */}
+    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Any time you want this again: Account {'\u2192'} Show me around the app.</div>
     {footer('Done', { onNext: () => finish('done') })}
   </>);
 };
 
 // ── The card on Home: the offer, then the map ──
 //
-// The First Steps card's last state. When the list empties this takes its place: offer the
-// tour once; "Later" folds it to one line; done → the five-cell map until her first real
-// check-out. Demo accounts never see it (there is nothing to practise for).
-const CaregiverTourCard = window.CaregiverTourCard = ({ firstName, completedCount }) => {
+// The First Steps card's last state. When the list empties this takes its place and offers
+// the tour ONCE. Answering it either way — taking it, or "Later" — retires it from the home
+// screen for good (v1.106.44); it lives in Account and in Help after that. Demo accounts never
+// see it (there is nothing to practise for).
+const CaregiverTourCard = window.CaregiverTourCard = ({ firstName }) => {
   const prefs = window.__uiPrefs || {};
   const [, force] = React.useState(0);
   const done = !!prefs['tour.caregiver.done'];
@@ -313,34 +317,27 @@ const CaregiverTourCard = window.CaregiverTourCard = ({ firstName, completedCoun
   const start = () => { if (window.__startCaregiverTour) window.__startCaregiverTour(); };
   const setLater = () => { try { window.__setUiPref('tour.caregiver.later', true); } catch { /* ignore */ } force((n) => n + 1); };
 
-  if (done) {
-    if ((completedCount || 0) > 0) return null;
-    const cells = [
-      ['🏠', 'Home', 'your day'], ['🔍', 'Find Work', 'offers to you, then open jobs'],
-      ['💬', 'Messages', 'the family'], ['📝', 'Care Notes', 'their record, when shared'],
-      ['👤', 'Account', 'earnings, availability, rate'],
-    ];
-    return (
-      <div data-tour="map" style={{ background: 'var(--bg-surface)', borderRadius: 14, border: '1px solid var(--border-color)', padding: '12px 16px', marginBottom: 20 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ fontSize: 11, fontWeight: 500, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>Where things live</div>
-          <button onClick={start} style={{ background: 'none', border: 'none', font: 'inherit', fontSize: 12, color: 'var(--role-color)', fontWeight: 600, cursor: 'pointer' }}>Tour again</button>
-        </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 14px', marginTop: 6, fontSize: 12.5, color: 'var(--text-secondary)' }}>
-          {cells.map(([ic, t, d]) => <span key={t}>{ic} <b style={{ color: 'var(--text-primary)' }}>{t}</b> {'—'} {d}</span>)}
-        </div>
-      </div>
-    );
-  }
-
-  if (later) {
-    return (
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, background: 'var(--bg-surface)', borderRadius: 12, border: '1px solid var(--border-color)', padding: '10px 14px', marginBottom: 16, fontSize: 13 }}>
-        <span style={{ color: 'var(--text-secondary)' }}>Two-minute tour of the app, whenever you like.</span>
-        <button onClick={start} style={{ background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, padding: '7px 12px', font: 'inherit', fontWeight: 700, fontSize: 12.5, cursor: 'pointer', whiteSpace: 'nowrap' }}>Show me</button>
-      </div>
-    );
-  }
+  // ─── v1.106.44 — once she has answered, the home screen stops asking ───
+  //
+  // Pete: "Tina's app seems to be stuck on showing her the tour again. If she takes the tour
+  // or skips the tour, it should disappear from the home screen until she goes to her
+  // account."
+  //
+  // Both of the states below outlived their welcome, in the same way and for the same reason:
+  // each was written as a gentle remnant rather than an ending. Taking the tour left the
+  // "Where things live" map with a "Tour again" button sitting on her home screen until her
+  // first completed visit — and a caregiver whose first visit is still ahead of her has no way
+  // to reach that condition, so for Tina it was permanent. Skipping it left a "Two-minute tour
+  // of the app, whenever you like" strip, forever.
+  //
+  // Neither is a bug in isolation. Together they mean the answer "not now" and the answer
+  // "yes, I did it" both look like being asked again, which is the thing she is reporting.
+  //
+  // So: answered is answered. The tour is replayable from Account (and from Help, since
+  // v1.105.194) — the map's five lines are dropped rather than moved, because she has just
+  // been walked through the same five places and a card that repeats the tour she finished is
+  // the shape of the complaint.
+  if (done || later) return null;
 
   return (
     <div className="ip-path-step" style={{ background: 'var(--bg-surface)', borderRadius: 14, border: '1.5px solid var(--role-color)', padding: '16px 18px', marginBottom: 20 }}>

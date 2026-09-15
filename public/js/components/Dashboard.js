@@ -131,7 +131,10 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
   const [taskSheet, setTaskSheet] = useState(null); // { occ, group } → CareTaskCheckSheet
   const [showTaskCreate, setShowTaskCreate] = useState(false); // kept: CareTeamManage opens this via window.__openTaskCreate
   const [showLogVisit, setShowLogVisit] = useState(null); // v1.105.38 — { recipientId, position }
-  const [visitsToday, setVisitsToday] = useState(false);  // suppresses the nudge once you've logged
+  // v1.106.44 — the ids logged in THIS session, unioned with what the server already knows
+  // (data.visitLoggedToday). It used to be a boolean that started false on every load and was
+  // never seeded from the server, so the nudge came back about a visit already in the record.
+  const [visitsToday, setVisitsToday] = useState([]);
   // ─── Care Events (v1.100.0): upcoming events, inline in Next Up ───
   const [careEventsUpcoming, setCareEventsUpcoming] = useState(_dashCache.careEvents);
   const [eventSheet, setEventSheet] = useState(null); // ev → CareEventSheet
@@ -859,7 +862,8 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
           the OS for location. If permission isn't already granted it stays silent forever.
           Everything about it degrades to nothing; the "+ Log Visit" pill is unaffected. */}
       {typeof VisitNudgeCard !== 'undefined' && (
-        <VisitNudgeCard recipients={data?.careRecipients || []} alreadyLoggedToday={visitsToday}
+        <VisitNudgeCard recipients={data?.careRecipients || []}
+          loggedTodayIds={[...new Set([...(data?.visitLoggedToday || []), ...visitsToday])]}
           onLog={(recipientId, position) => setShowLogVisit({ recipientId, position })} />
       )}
 
@@ -2674,7 +2678,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
         <LogVisitSheet recipients={data?.careRecipients || []}
           presetRecipientId={showLogVisit.recipientId} position={showLogVisit.position}
           onClose={() => setShowLogVisit(null)}
-          onSaved={() => { setVisitsToday(true); fetchDashboard(); }} />
+          onSaved={() => { setVisitsToday((prev) => [...prev, showLogVisit.recipientId]); fetchDashboard(); }} />
       )}
       {eventSheet && (
         <CareEventSheet ev={eventSheet} canManage={!!eventSheet.canManage}

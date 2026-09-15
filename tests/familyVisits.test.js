@@ -113,7 +113,7 @@ describe("the nudge nudges, it does not nag", () => {
     // Rendering nothing is indistinguishable from being broken — which is exactly how this
     // went unnoticed from v1.105.38 until Pete asked to try it.
     expect(client).toMatch(/const VisitGeoInvite/);
-    expect(client).toMatch(/allowed === false && !alreadyLoggedToday/);
+    expect(client).toMatch(/allowed === false && !everyoneLogged/);
     expect(client).toMatch(/onEnabled=\{\(\) => setRetry/);
   });
 
@@ -214,7 +214,14 @@ describe("the nudge nudges, it does not nag", () => {
   });
 
   test("it suppresses itself once a visit is logged today", () => {
-    expect(client).toMatch(/if \(alreadyLoggedToday\) return;/);
+    // v1.106.44 — this used to pin `if (alreadyLoggedToday) return;` in the effect, and that
+    // line was never the problem. Pete: "I hit log this visit... The log visit option is still
+    // remaining at the top of the screen." The effect bailed correctly; the branch that DRAWS
+    // the card never asked, so once `match` was set, logging the visit changed nothing on
+    // screen. And the flag was one boolean the server never set, so it also came back on the
+    // next load. Both halves are pinned here now, per recipient.
+    expect(client).toMatch(/if \(everyoneLogged\) return;/);
+    expect(client).toMatch(/if \(!match \|\| dismissed \|\| loggedFor\(match\.recipient\)\) return null;/);
   });
 
   test("every storage touch is guarded", () => {

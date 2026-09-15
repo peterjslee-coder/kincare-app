@@ -2455,7 +2455,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
           The list is empty. Offer the tour once, right here where the list was; "Later" folds
           it; done → the five-cell map until her first real check-out. Never for demo accounts. */}
       {firstStepsResolved && !showFirstSteps && !profile.isDemo && typeof CaregiverTourCard !== 'undefined' && (
-        <CaregiverTourCard firstName={(profile.name || '').split(' ')[0]} completedCount={(completedSessions || []).length} />
+        <CaregiverTourCard firstName={(profile.name || '').split(' ')[0]} />
       )}
 
       {/* Calendar Placeholder — shown when no availability set yet */}

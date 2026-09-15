@@ -281,7 +281,12 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
         body: JSON.stringify({ status, admin_notes: safetyReviewNotes }),
       });
       if (res?.ok) {
-        const label = status === 'escalated' ? 'escalated' : status === 'resolved' ? 'resolved' : 'dismissed';
+        // v1.106.44 — 'misclassified' says something different from the other three, and the
+        // toast should say it: this one goes back to the screener as an example.
+        const label = status === 'escalated' ? 'escalated'
+          : status === 'resolved' ? 'resolved'
+          : status === 'misclassified' ? 'marked not a concern — the screener will learn from it'
+          : 'dismissed';
         showToast(`Flag ${label}`, 'success');
         setSafetyReviewNotes('');
         setFlagPasskeyConfirm(null);
@@ -2293,6 +2298,21 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                         {(flagPasskeyConfirm?.flagId === flag.id && flagPasskeyConfirm?.status === 'resolved')
                           ? (flagPasskeyLoading ? '\u{1F510} Verifying...' : '\u{1F510} Tap passkey to resolve')
                           : '\u2713 Resolve'}
+                      </button>
+                      {/* v1.106.44 — Pete, after being flagged for telling a caregiver to lock
+                          a stove so his mother couldn't turn it on: "I would like the
+                          opportunity to give feedback to adjust the AI sensitivity to
+                          messages... That escalated as a neglect signal, which is ridiculous."
+                          This is that feedback, and it is deliberately NOT "Dismiss" — dismiss
+                          is a judgement about the situation, this is a judgement about the
+                          classifier, and only this one is fed back to it as an example. */}
+                      <button onClick={(e) => { e.stopPropagation(); handleReviewFlag(flag.id, 'misclassified'); }}
+                        disabled={flagPasskeyLoading}
+                        title="The screener was wrong — this was never a safety concern. It will be used as an example."
+                        style={{ padding: '6px 12px', background: 'var(--bg-primary)', color: 'var(--text-secondary)', border: '1px solid var(--border-color)', borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer', opacity: flagPasskeyLoading ? 0.6 : 1 }}>
+                        {(flagPasskeyConfirm?.flagId === flag.id && flagPasskeyConfirm?.status === 'misclassified')
+                          ? (flagPasskeyLoading ? '\u{1F510} Verifying...' : '\u{1F510} Tap passkey to confirm')
+                          : '\u{1F916} Not a concern'}
                       </button>
                       <button onClick={(e) => { e.stopPropagation(); handleReviewFlag(flag.id, 'dismissed'); }}
                         disabled={flagPasskeyLoading}

@@ -293,12 +293,39 @@ router.get("/safety-flags", authenticate, checkAdmin, requireAdmin, async (req, 
   }
 });
 
+// The five things a safety flag can be.
+//
+//   pending        nobody has looked yet
+//   escalated      a person is acting on it
+//   resolved       a person looked, it was real, it has been dealt with
+//   dismissed      a person looked, and it needed no action
+//   misclassified  the SCREENER was wrong — this was never a safety concern
+//
+// The last two are deliberately different. "Dismissed" is a judgement about the situation;
+// "misclassified" is a judgement about the AI, and only that one is fed back to it as an
+// example. Pete, after being flagged for telling a caregiver to lock a stove: "I would like
+// the opportunity to give feedback to adjust the AI sensitivity to messages."
+const FLAG_STATUSES = ["pending", "escalated", "resolved", "dismissed", "misclassified"];
+
 // ─── PUT /api/admin/safety-flags/:id — Review a safety flag ───
 router.put("/safety-flags/:id", authenticate, checkAdmin, requireAdmin, async (req, res) => {
   try {
     const db = await getDb();
     const { status, admin_notes } = req.body;
     if (!status) return res.status(400).json({ error: "Status is required" });
+
+    // ─── v1.106.44 — a status is one of five things, not any string ───
+    //
+    // There was no allowlist here, so whatever arrived went into the column. The client lists
+    // only 'pending' and 'escalated', which means a typo'd status made a suspected-abuse flag
+    // disappear from every screen while sitting in the table marked reviewed.
+    //
+    // It matters more now: 'misclassified' is not just a label, it is the feedback that tunes
+    // the message screener (utils/messageSafety.falsePositiveExamples). A status that steers a
+    // classifier is not something to accept as free text.
+    if (!FLAG_STATUSES.includes(status)) {
+      return res.status(400).json({ error: `Status must be one of: ${FLAG_STATUSES.join(", ")}` });
+    }
 
     // ─── v1.105.177 — the same answer twice is one answer ───
     //

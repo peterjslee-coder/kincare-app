@@ -75,23 +75,33 @@ describe("the tour", () => {
 describe("the card on Home", () => {
   test("offers once, where the First Steps list was", () => {
     win.__uiPrefs = {};
-    const t = text(React.createElement(CaregiverTourCard, { firstName: "Tina", completedCount: 0 }));
+    const t = text(React.createElement(CaregiverTourCard, { firstName: "Tina" }));
     expect(t).toContain("That's everything, Tina. You're set up.");
     expect(t).toContain("Show me around");
     expect(t).toContain("Later");
   });
-  test("'later' folds it to one line", () => {
+  // ─── v1.106.44 — the two tests below asserted the behaviour Pete reported as the bug ───
+  //
+  // "Tina's app seems to be stuck on showing her the tour again. If she takes the tour or
+  // skips the tour, it should disappear from the home screen until she goes to her account."
+  //
+  // Both remnants were designed on purpose and both were wrong in the same way. "Later" left
+  // a one-line strip offering the tour, forever. "Done" left the five-cell map with a "Tour
+  // again" button until her first COMPLETED visit — and a caregiver whose first visit has not
+  // happened yet cannot reach that condition, so for Tina it never went away. From where she
+  // is standing, answering yes and answering no both look like being asked again.
+  test("'later' retires it from Home", () => {
     win.__uiPrefs = { "tour.caregiver.later": true };
-    const t = text(React.createElement(CaregiverTourCard, { firstName: "Tina", completedCount: 0 }));
-    expect(t).toContain("Two-minute tour of the app, whenever you like.");
-    expect(t).not.toContain("That's everything");
+    expect(text(React.createElement(CaregiverTourCard, { firstName: "Tina" }))).toBe("");
   });
-  test("done → the five-cell map until her first real visit, then nothing", () => {
+  test("done retires it too — immediately, not after some later milestone", () => {
     win.__uiPrefs = { "tour.caregiver.done": 1 };
-    const t = text(React.createElement(CaregiverTourCard, { firstName: "Tina", completedCount: 0 }));
-    expect(t).toContain("Where things live");
-    for (const n of ["Home", "Find Work", "Messages", "Care Notes", "Account"]) expect(t).toContain(n);
-    expect(text(React.createElement(CaregiverTourCard, { firstName: "Tina", completedCount: 1 }))).toBe("");
+    expect(text(React.createElement(CaregiverTourCard, { firstName: "Tina" }))).toBe("");
+  });
+  test("but an unanswered card still offers, so this retires the remnants and not the tour", () => {
+    win.__uiPrefs = {};
+    const t = text(React.createElement(CaregiverTourCard, { firstName: "Tina" }));
+    expect(t).toContain("Show me around");
   });
 });
 

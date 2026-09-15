@@ -5,7 +5,7 @@ const { recipientPhotoUrl, userPhotoUrl, userHasPhoto, hasPhotoSql } = require("
 const { storedImageUrl } = require("../utils/serveMedia");
 const { getDb } = require("../models/database");
 const { authenticate } = require("../middleware/auth");
-const { getNowInZone, getTodayStringInZone } = require("../utils/timezone");
+const { getNowInZone, getTodayStringInZone, DEFAULT_TIMEZONE } = require("../utils/timezone");
 const { haversineDistance } = require("../utils/geocode");
 const { computeJobConflicts, computeMatchScore } = require("../utils/jobMatching");
 const { calculateSessionCost } = require("../utils/rateCalculator");
@@ -94,7 +94,7 @@ async function familyDashboard(db, userId, res) {
     const sevenDaysAgoStr = sevenDaysAgo.getFullYear() + '-' + String(sevenDaysAgo.getMonth() + 1).padStart(2, '0') + '-' + String(sevenDaysAgo.getDate()).padStart(2, '0');
 
     // Parallel batch 2: ALL read queries at once (none depend on each other)
-    const [monthlyStats, upcoming, recentCompleted, recentActivity, unreadCount, recentPhotos, pendingProposals, avgRating, assignedCount] = await Promise.all([
+    const [monthlyStats, upcoming, recentCompleted, recentActivity, unreadCount, recentPhotos, pendingProposals, avgRating, assignedCount, visitsLoggedRecently] = await Promise.all([
       // Monthly stats
       db.prepare(`
         SELECT
@@ -232,8 +232,29 @@ async function familyDashboard(db, userId, res) {
         LEFT JOIN care_recipients cr ON ca.care_recipient_id = cr.id
         WHERE (ca.family_user_id = ? OR ca.care_recipient_id IN (${recipientPlaceholders})) AND ca.is_active = 1
       `).get(userId, ...allRecipientIds),
+
+      // ─── v1.106.44 — visits this person has already logged ───
+      //
+      // Pete: "I hit log this visit when it tagged me at mom's house. I left a note. The log
+      // visit option is still remaining at the top of the screen. It should understand that
+      // I've logged a visit and then not prompt me again."
+      //
+      // The client had a `visitsToday` flag for exactly this and it was never once seeded from
+      // the server — it started false on every load and was only ever flipped by the save
+      // handler in the same session. So the nudge came back on the next open, the next
+      // refresh, and the next device, about a visit already in the record.
+      //
+      // 36 hours rather than a date expression: "today" is a question about the RECIPIENT's
+      // timezone, and this family may be in another one. The window is deliberately wider
+      // than a day so the comparison can be made properly below.
+      db.prepare(`
+        SELECT fv.care_recipient_id, fv.visited_at, cr.timezone
+          FROM family_visits fv
+          JOIN care_recipients cr ON cr.id = fv.care_recipient_id
+         WHERE fv.user_id = ? AND fv.visited_at >= NOW() - INTERVAL '36 hours'
+      `).all(userId).catch(() => []),
     ]);
-    console.log(`[dashboard] batch2 (9 queries) ${Date.now() - t0}ms`);
+    console.log(`[dashboard] batch2 (10 queries) ${Date.now() - t0}ms`);
 
     const primary = recipients[0];
     const parent = primary
@@ -256,9 +277,27 @@ async function familyDashboard(db, userId, res) {
         }
       : null;
 
+    // v1.106.44 — which of these people has this person already logged a visit for TODAY, in
+    // that person's own timezone. Computed here rather than in SQL because "today" differs per
+    // recipient, and answered per recipient rather than as one boolean because logging a visit
+    // to Betty should not silence the nudge about someone else.
+    const visitLoggedToday = [...new Set(
+      (visitsLoggedRecently || [])
+        .filter((v) => {
+          try {
+            const tz = v.timezone || DEFAULT_TIMEZONE;
+            return getTodayStringInZone(tz) ===
+              new Date(v.visited_at).toLocaleDateString("en-CA", { timeZone: tz });
+          } catch { return false; }
+        })
+        .map((v) => v.care_recipient_id)
+    )];
+
     console.log(`[dashboard] family ${Date.now() - t0}ms`);
     res.json({
       role: "family",
+      // The ids, not a boolean: see above.
+      visitLoggedToday,
       parent,
       isNewUser: recipients.length === 0,
       careRecipients: recipients.map((r) => ({

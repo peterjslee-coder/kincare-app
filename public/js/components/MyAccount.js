@@ -2575,6 +2575,32 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
         </button>
       </div>
 
+      {/* ─── v1.106.44 — the tour, where Pete said to put it ───
+          "If she takes the tour or skips the tour, it should disappear from the home screen
+          until she goes to her account." It has been replayable from Help since v1.105.194,
+          but Account is where he told Tina to look and Account is one tap closer. Caregivers
+          only, and only when the tour is actually loaded — there is nothing to offer a family
+          account, and a dead button is worse than no button. */}
+      {(window.__currentRole === 'caregiver' || user?.role === 'caregiver') && window.__startCaregiverTour && (
+        <button
+          onClick={() => {
+            if (onNavigate) onNavigate('dashboard');
+            // The tour points at things on the hub, so it has to start after the page is there.
+            setTimeout(() => window.__startCaregiverTour && window.__startCaregiverTour(), 50);
+          }}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+            padding: '14px 18px', marginTop: 20, background: 'var(--bg-surface)',
+            border: '1px solid var(--border-color)', borderRadius: 12, cursor: 'pointer',
+            fontSize: 15, fontWeight: 500, color: 'var(--text-primary)',
+          }}
+        >
+          <span style={{ fontSize: 20 }} aria-hidden="true">🧭</span>
+          <span>Show me around the app</span>
+          <span style={{ marginLeft: 'auto', color: 'var(--text-muted)', fontSize: 18 }}>›</span>
+        </button>
+      )}
+
       {/* Help & Support — always visible, especially important on mobile where sidebar is hidden */}
       <button
         onClick={() => onNavigate && onNavigate('help')}

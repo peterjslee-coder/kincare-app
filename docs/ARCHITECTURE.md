@@ -250,7 +250,7 @@ State travels through `window`, not props. This table is the registry.
 | `window.__caregiverFirstStepsRemain` | CaretakerHub.js | 2 |
 | `window.__clearSessionActive` | app.js | 4 |
 | `window.__currentPage` | app.js | 2 |
-| `window.__currentRole` | app.js, HelpPage.js | 5 |
+| `window.__currentRole` | app.js, HelpPage.js, MyAccount.js | 6 |
 | `window.__currentUserId` | app.js | 6 |
 | `window.__documentsTab` | Dashboard.js | 6 |
 | `window.__findWorkTab` | CaretakerHub.js | 4 |
@@ -288,7 +288,7 @@ State travels through `window`, not props. This table is the registry.
 | `window.__setUiPrefs` | app.js, uiPrefs.js | 7 |
 | `window.__showToast` | VisitDetailModal.js, utils.js | 13 |
 | `window.__skipPopstate` | VisitDetailModal.js | 3 |
-| `window.__startCaregiverTour` | app.js | 8 |
+| `window.__startCaregiverTour` | app.js | 11 |
 | `window.__startImpersonation` | app.js | 3 |
 | `window.__swApplyPendingUpdate` | — | 2 |
 | `window.__uiPrefs` | uiPrefs.js | 9 |
