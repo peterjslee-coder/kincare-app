@@ -24,6 +24,7 @@ const { hasActiveVouch } = require("../utils/vouches");
 const { decideCancellationCharge, CANCEL_FEE_WINDOW_HOURS } = require("../utils/cancellationFee");
 const { MODEL_HAIKU, getAnthropic } = require("../utils/aiModels");
 const { clampLimit, clampOffset } = require("../utils/queryLimits");
+const { storedImageUrl } = require("../utils/serveMedia"); // v1.106.46
 const { summarizeBreaks, breakMinutes, breakNotice } = require("../utils/visitBreaks"); // v1.106.41
 
 const router = express.Router();
@@ -3847,8 +3848,27 @@ router.get("/:id", async (req, res) => {
     "SELECT * FROM visit_logs WHERE session_id = ?"
   ).get(req.params.id);
 
+  // ─── v1.106.46 — a photo URL that is actually a URL ───
+  //
+  // Pete: "Pictures uploaded to visits are displaying. Shows an upload but just black box with
+  // an x." The black box is a broken <img>, and this SELECT * is why.
+  //
+  // `visit_photos.photo_url` is not a URL and never was — it is the stored image. v1.106.7
+  // fixed exactly this shape in routes/photos.js and in the family dashboard, converting the
+  // column to a real URL with storedImageUrl() before it reaches a client. It missed this
+  // endpoint, and this endpoint is the one behind the visit sheet.
+  //
+  // Nothing broke at the time, because a base64 data URI in an <img src> renders fine — it is
+  // wasteful, but it works. Then v1.106.8 turned R2 on, the column started holding
+  // "r2:visit-photo/<date>/<uuid>", and the client dutifully set that as the src of an image.
+  // A browser cannot load a scheme it has never heard of, so it draws the broken-image glyph
+  // and the alt text. That is the black box with an x.
+  //
+  // Columns are named rather than starred, so the blob cannot come back by accident again.
   const photos = visitLog
-    ? await db.prepare("SELECT * FROM visit_photos WHERE visit_log_id = ?").all(visitLog.id)
+    ? (await db.prepare(
+        "SELECT id, visit_log_id, photo_url, caption, created_at FROM visit_photos WHERE visit_log_id = ? ORDER BY created_at ASC"
+      ).all(visitLog.id)).map((p) => ({ ...p, photo_url: storedImageUrl("/api/photos", p) }))
     : [];
 
   // Cost breakdown — proposed_rate (family's offer) ALWAYS wins when stored on session.
