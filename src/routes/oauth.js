@@ -1,4 +1,5 @@
 const express = require("express");
+const { linkTargetFromToken } = require("../middleware/noImpersonation"); // v1.106.40
 const crypto = require("crypto");
 const jwt = require("jsonwebtoken");
 const { v4: uuid } = require("uuid");
@@ -375,14 +376,31 @@ router.post("/apple/callback", express.urlencoded({ extended: false }), async (r
     if (savedState.includes('|link|')) {
       const linkToken = savedState.split('|link|')[1];
       if (linkToken) {
-        try {
-          const decoded = jwt.verify(linkToken, process.env.JWT_SECRET);
-          linkUserId = decoded.id;
-          console.log(`[Apple OAuth] Link mode — attaching to user ${linkUserId?.slice(0, 8)}`);
-        } catch (e) {
-          console.error("[Apple OAuth] Link mode token invalid:", e.message);
+        const target = linkTargetFromToken(linkToken, (t) => jwt.verify(t, process.env.JWT_SECRET));
+        if (!target.ok && target.reason === "impersonation") {
+          // v1.106.40 — see middleware/noImpersonation.js. An admin inside an impersonation
+          // window tapped "Link Apple ID" on someone else's My Account; the Apple ID that
+          // would have been attached is the admin's own.
+          console.error(`[Apple OAuth] Link mode REFUSED — impersonation token (admin ${String(target.impersonatedBy).slice(0, 8)} as ${String(target.userId).slice(0, 8)})`);
+          try {
+            const { writeAuditLog, getClientIp } = require("../middleware/auditLog");
+            writeAuditLog({
+              userId: target.userId, userEmail: target.email,
+              action: "impersonation_blocked_write",
+              endpoint: "/api/oauth/apple/callback", method: req.method,
+              ipAddress: getClientIp(req), userAgent: req.headers["user-agent"] || null,
+              details: { impersonatedBy: target.impersonatedBy, blocked: "link an Apple ID" },
+              severity: "warning",
+            }).catch(() => {});
+          } catch { /* the refusal does not depend on the log */ }
+          return failTo("link_impersonation");
+        }
+        if (!target.ok) {
+          console.error("[Apple OAuth] Link mode token invalid");
           return failTo("link_expired");
         }
+        linkUserId = target.userId;
+        console.log(`[Apple OAuth] Link mode — attaching to user ${linkUserId.slice(0, 8)}`);
       }
     }
 

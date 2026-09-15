@@ -101,6 +101,11 @@ const LoginPage = window.LoginPage = ({ onLogin, onNavigate, banner, onDismissBa
         ? 'This Apple ID is already linked to a different account.'
         : oauthError === 'link_expired'
         ? 'Your session expired. Please sign in and try linking Apple again.'
+        // v1.106.40 — an admin tried to link an Apple ID while viewing someone else's
+        // account. Say what happened rather than "Sign-in failed", which would read as a
+        // bug and invite a retry of the exact thing that was refused.
+        : oauthError === 'link_impersonation'
+        ? 'You were viewing another account as an admin, so nothing was linked. Sign in as yourself to link an Apple ID.'
         : 'Sign-in failed. Please try again.';
       trackAuthEvent('login', 'error', { error: oauthError, source: 'oauth' });
       setError(errorMsg);

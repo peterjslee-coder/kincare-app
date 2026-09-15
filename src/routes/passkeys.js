@@ -4,6 +4,7 @@ const { getDb } = require("../models/database");
 const { generateToken, authenticate, setAuthCookie, setCsrfCookie, generateRefreshToken, setRefreshCookie } = require("../middleware/auth");
 const { registerTrustedIp } = require("../utils/trustedIps");
 const { getClientIp } = require("../middleware/auditLog");
+const { blockWhileImpersonating } = require("../middleware/noImpersonation"); // v1.106.40
 const {
   generateRegistrationOptions,
   verifyRegistrationResponse,
@@ -84,7 +85,7 @@ router.get("/", authenticate, async (req, res) => {
 });
 
 // ─── POST /api/passkeys/register/options ─── Generate registration options
-router.post("/register/options", authenticate, async (req, res) => {
+router.post("/register/options", authenticate, blockWhileImpersonating("add a passkey"), async (req, res) => {
   try {
     const db = await getDb();
     const user = await db.prepare("SELECT id, email, first_name, last_name FROM users WHERE id = ?").get(req.user.id);
@@ -120,7 +121,7 @@ router.post("/register/options", authenticate, async (req, res) => {
 });
 
 // ─── POST /api/passkeys/register/verify ─── Verify registration response
-router.post("/register/verify", authenticate, async (req, res) => {
+router.post("/register/verify", authenticate, blockWhileImpersonating("add a passkey"), async (req, res) => {
   try {
     const expectedChallenge = getChallenge(`reg_${req.user.id}`);
     if (!expectedChallenge) {
@@ -335,7 +336,7 @@ router.post("/authenticate/verify", async (req, res) => {
 });
 
 // ─── DELETE /api/passkeys/:id ─── Remove a passkey
-router.delete("/:id", authenticate, async (req, res) => {
+router.delete("/:id", authenticate, blockWhileImpersonating("remove a passkey"), async (req, res) => {
   try {
     const db = await getDb();
     const passkey = await db.prepare(
@@ -356,7 +357,7 @@ router.delete("/:id", authenticate, async (req, res) => {
 });
 
 // ─── PUT /api/passkeys/:id ─── Rename a passkey
-router.put("/:id", authenticate, async (req, res) => {
+router.put("/:id", authenticate, blockWhileImpersonating("rename a passkey"), async (req, res) => {
   try {
     const { name } = req.body;
     if (!name || name.length > 50) {

@@ -245,12 +245,16 @@ if (fs.existsSync(indexPath)) {
       // was replaced. window.APP_VERSION is what a phone reports into user_client_info, and
       // it is how Pete checks whether a fix has actually reached Tina's handset — a stale
       // one there is a wrong answer to the question he asks it.
-      const before = html;
-      html = html.replace(/window\.APP_VERSION\s*=\s*['"][^'"]*['"]/, `window.APP_VERSION = "${vMatch[1]}"`);
-      if (html === before) {
-        console.error(`  ✗ APP_VERSION sync FAILED — no window.APP_VERSION assignment matched in index.html`);
+      //
+      // The check is whether the PATTERN matched, not whether the text changed: rebuilding
+      // without a version bump is a no-op and must not read as a failure. (It did, for one
+      // build — the same mistake in miniature as the one above.)
+      const pattern = /window\.APP_VERSION\s*=\s*['"][^'"]*['"]/;
+      if (!pattern.test(html)) {
+        console.error(`  ✗ APP_VERSION sync FAILED — no window.APP_VERSION assignment in index.html`);
         process.exitCode = 1;
       } else {
+        html = html.replace(pattern, `window.APP_VERSION = "${vMatch[1]}"`);
         console.log(`  APP_VERSION synced: ${vMatch[1]}`);
       }
     }

@@ -63,6 +63,9 @@ jobs:
       - name: Identity is resolved in one place
         run: npm run lint:identity-reads
 
+      - name: Impersonation cannot write credentials
+        run: npm run lint:impersonation
+
       - name: Frozen migration baseline untouched
         run: npm run lint:frozen-migrations
 

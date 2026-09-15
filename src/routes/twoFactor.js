@@ -8,6 +8,7 @@ const getOtplib = () => { if (!_otplib) _otplib = require("otplib"); return _otp
 const getQRCode = () => { if (!_QRCode) _QRCode = require("qrcode"); return _QRCode; };
 const { getDb } = require("../models/database");
 const { authenticate } = require("../middleware/auth");
+const { blockWhileImpersonating } = require("../middleware/noImpersonation"); // v1.106.40
 
 const router = express.Router();
 
@@ -33,7 +34,7 @@ function reset2faRateLimit(userId) {
 }
 
 // ─── POST /api/auth/2fa/setup ─── Generate TOTP secret + QR code
-router.post("/setup", authenticate, async (req, res) => {
+router.post("/setup", authenticate, blockWhileImpersonating("set up two-factor authentication"), async (req, res) => {
   try {
     const db = await getDb();
 
@@ -72,7 +73,7 @@ router.post("/setup", authenticate, async (req, res) => {
 });
 
 // ─── POST /api/auth/2fa/verify-setup ─── Verify TOTP code and enable 2FA
-router.post("/verify-setup", authenticate, async (req, res) => {
+router.post("/verify-setup", authenticate, blockWhileImpersonating("set up two-factor authentication"), async (req, res) => {
   try {
     const { code } = req.body;
     if (!code) return res.status(400).json({ error: "Verification code required" });
@@ -220,7 +221,7 @@ router.post("/verify", async (req, res) => {
 });
 
 // ─── POST /api/auth/2fa/disable ─── Disable 2FA (requires current TOTP code)
-router.post("/disable", authenticate, async (req, res) => {
+router.post("/disable", authenticate, blockWhileImpersonating("turn off two-factor authentication"), async (req, res) => {
   try {
     const { code } = req.body;
     if (!code) return res.status(400).json({ error: "Current 2FA code required to disable" });
@@ -249,7 +250,7 @@ router.post("/disable", authenticate, async (req, res) => {
 });
 
 // ─── POST /api/auth/2fa/backup-codes ─── Regenerate backup codes
-router.post("/backup-codes", authenticate, async (req, res) => {
+router.post("/backup-codes", authenticate, blockWhileImpersonating("generate backup codes"), async (req, res) => {
   try {
     const { code } = req.body;
     if (!code) return res.status(400).json({ error: "Current 2FA code required" });
@@ -319,7 +320,7 @@ router.get("/devices", authenticate, async (req, res) => {
 });
 
 // ─── DELETE /api/auth/2fa/devices/:id ─── Revoke a trusted device
-router.delete("/devices/:id", authenticate, async (req, res) => {
+router.delete("/devices/:id", authenticate, blockWhileImpersonating("revoke a trusted device"), async (req, res) => {
   try {
     const db = await getDb();
     await db.prepare("DELETE FROM trusted_devices WHERE id = ? AND user_id = ?").run(req.params.id, req.user.id);

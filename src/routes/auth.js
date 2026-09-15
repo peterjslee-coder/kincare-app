@@ -14,6 +14,7 @@ const { captureException } = require("../utils/sentry");
 const storage = require("../utils/storage");
 const { userPhotoUrl, HAS_PHOTO_SQL } = require("./media");
 const { identityStatusFor } = require("../utils/identity"); // v1.106.39
+const { blockWhileImpersonating } = require("../middleware/noImpersonation"); // v1.106.40
 
 const router = express.Router();
 
@@ -908,7 +909,7 @@ router.put("/me", authenticate, validateProfileUpdate, async (req, res) => {
 
 // ─── POST /api/auth/add-role ───
 // Add a second role to the current user's account
-router.post("/add-role", authenticate, async (req, res) => {
+router.post("/add-role", authenticate, blockWhileImpersonating("add a role to this account"), async (req, res) => {
   try {
     const { role: newRole } = req.body;
 
@@ -965,7 +966,7 @@ router.post("/add-role", authenticate, async (req, res) => {
 
 // ─── POST /api/auth/remove-role ───
 // Remove a role from the current user's account (must keep at least one)
-router.post("/remove-role", authenticate, async (req, res) => {
+router.post("/remove-role", authenticate, blockWhileImpersonating("remove a role from this account"), async (req, res) => {
   try {
     const { role: removeRole } = req.body;
 
@@ -1169,7 +1170,7 @@ router.put("/me/disclaimer", authenticate, async (req, res) => {
 // ─── DELETE /api/auth/me — Self-service account deletion (soft-delete) ───
 // Anonymizes PII and deactivates the account. Retains messages, session
 // history, payment records, and activity feed for legal/audit purposes.
-router.delete("/me", authenticate, async (req, res) => {
+router.delete("/me", authenticate, blockWhileImpersonating("delete this account"), async (req, res) => {
   try {
     const db = await getDb();
     const userId = req.user.id;

@@ -16,6 +16,7 @@
     "lint:requires": "node scripts/lint-requires.js",
     "lint:sql-columns": "node scripts/lint-sql-columns.js",
     "lint:frozen-migrations": "node scripts/lint-frozen-migrations.js",
+    "lint:impersonation": "node scripts/lint-impersonation.js",
     "lint:identity-reads": "node scripts/lint-identity-reads.js",
     "lint:authz": "node scripts/lint-authz.js",
     "collect-feedback": "node scripts/collect-feedback.js",
