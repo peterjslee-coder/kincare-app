@@ -1593,10 +1593,11 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const onboardingGated = false;
   const shouldBlur = false;
 
-  // Average hourly rate from completed sessions
-  const totalHours = completedSessions.reduce((sum, s) => sum + (s.duration_hours || 0), 0);
-  const totalEarned = completedSessions.reduce((sum, s) => sum + (s.actual_cost || s.estimated_cost || 0), 0);
-  const avgHourlyRate = totalHours > 0 ? (totalEarned / totalHours).toFixed(0) : (profile.hourlyRate || '--');
+  // v1.106.45 — three lines computing an average hourly rate that nothing rendered, from a
+  // list that is empty here anyway: `completedSessions` is fetched only while the Earnings tab
+  // is open (see its effect above), so on this screen it is always []. Found while checking
+  // why the tour card would not go away — it was fed `completedSessions.length` as its
+  // "has she finished a visit yet" signal, which was therefore always 0 for everyone.
 
 
   // ─── v1.106.23 — the check-in outranks everything ───

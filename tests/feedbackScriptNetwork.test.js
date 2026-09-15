@@ -79,3 +79,118 @@ describe("when the gate refuses", () => {
     expect(explained).toBe(failures + 1);
   });
 });
+
+// ─── v1.106.45 — the failure that is not an error ───
+//
+// Pete, watching the script sit on "Feedback pull (closed loop) from https://yourinplace.com…":
+// "unable to pull feedback...appears stuck."
+//
+// There was no timeout anywhere in the file, so a connection that opened and then said nothing
+// waited on the operating system, which is to say forever. And it compounded with v1.106.36
+// above: the IPv4 fallback fires on isUnreachable, which is a list of ERROR CODES, and a hang
+// produces no error at all. Putting IPv6 first — correctly — made the fallback unreachable on
+// any network where IPv6 stalls rather than refuses.
+//
+// These tests use a real socket that accepts and never answers, because that is the only way
+// to tell a bounded wait from an unbounded one.
+const net = require("net");
+// Bounded low on purpose: the point is that the wait ENDS, not how long the default is, and a
+// suite that takes 30 seconds to prove it is a suite people stop running. The default itself is
+// asserted separately, from the source.
+process.env.INPLACE_TIMEOUT_MS = "1200";
+const { request, isUnreachable, ATTEMPT_TIMEOUT_MS } = require("../scripts/collect-feedback");
+
+// Shared with the fallover test below, which needs somewhere that accepts and stays quiet.
+let silentServerPort = null;
+const silentPort = () => silentServerPort;
+
+describe("a server that never answers", () => {
+  let server, port;
+  const sockets = new Set();
+
+  beforeAll((done) => {
+    // Accepts the connection, reads the request, and replies with nothing. This is the shape
+    // the OS will not resolve on its own.
+    server = net.createServer((sock) => {
+      sockets.add(sock);
+      sock.on("close", () => sockets.delete(sock));
+      /* deliberately silent */
+    });
+    server.listen(0, "127.0.0.1", () => { port = server.address().port; silentServerPort = port; done(); });
+  });
+  afterAll((done) => {
+    // close() waits on open connections, and these are open by design.
+    for (const s of sockets) s.destroy();
+    server.close(done);
+  });
+
+  test("the attempt is bounded rather than waiting on the OS", async () => {
+    const started = Date.now();
+    await expect(
+      request(`http://127.0.0.1:${port}/api/admin/feedback/triage`, {}, )
+    ).rejects.toMatchObject({ code: "ETIMEDOUT" });
+    const took = Date.now() - started;
+    // It really waited (rather than failing fast for some unrelated reason) and it really
+    // stopped. FAMILY_ORDER is two families, so the bound is two attempts plus slack.
+    expect(took).toBeGreaterThanOrEqual(ATTEMPT_TIMEOUT_MS * 0.8);
+    expect(took).toBeLessThan(ATTEMPT_TIMEOUT_MS * 4);
+  }, 60000);
+
+  test("the timeout says which family and how long, not just 'ETIMEDOUT'", async () => {
+    await expect(request(`http://127.0.0.1:${port}/x`)).rejects.toThrow(/no answer over IPv\d+ within \d+s/);
+  }, 60000);
+});
+
+describe("what counts as 'try the other family'", () => {
+  test("a stall does — this is the case that could not fall back", () => {
+    expect(isUnreachable({ code: "ETIMEDOUT" })).toBe(true);
+  });
+
+  test("so does a refusal — something answered, and it said no", () => {
+    expect(isUnreachable({ code: "ECONNREFUSED" })).toBe(true);
+  });
+
+  test("the routing errors it always handled still do", () => {
+    for (const code of ["ENETUNREACH", "EHOSTUNREACH", "EAI_AGAIN", "ENOTFOUND", "EAFNOSUPPORT"]) {
+      expect([code, isUnreachable({ code })]).toEqual([code, true]);
+    }
+  });
+
+  test("a real failure is NOT swallowed as a family problem", () => {
+    // Falling through on these would turn one genuine error into two attempts and a confusing
+    // message about address families.
+    for (const code of ["ECONNRESET", "EPROTO", "CERT_HAS_EXPIRED", undefined]) {
+      expect([String(code), isUnreachable({ code })]).toEqual([String(code), false]);
+    }
+  });
+});
+
+describe("the timeout is configurable and sane", () => {
+  test("it defaults to something a person will wait for", () => {
+    // Read from the source, because this process overrode it to keep the suite quick.
+    const m = src.match(/INPLACE_TIMEOUT_MS \|\| (\d+)\)/);
+    expect(m).toBeTruthy();
+    expect(Number(m[1])).toBeGreaterThanOrEqual(5000);
+    expect(Number(m[1])).toBeLessThanOrEqual(30000);
+  });
+
+  test("the request carries it, rather than relying on the socket default", () => {
+    expect(src).toMatch(/timeout: ATTEMPT_TIMEOUT_MS/);
+    expect(src).toMatch(/req\.on\("timeout"/);
+  });
+
+  // Asserted by RUNNING it, not by reading the source. The first cut of this test matched the
+  // template literal in the file, so breaking the fallover message left it green.
+  test("falling over to the other family is announced", async () => {
+    // A script that is quietly failing over looks identical to one that has hung, which is
+    // how this run got reported as stuck in the first place.
+    const said = [];
+    const real = console.error;
+    console.error = (...a) => said.push(a.join(" "));
+    try {
+      // 127.0.0.1 over IPv6 cannot work, so the first family fails and the second is tried.
+      await request(`http://127.0.0.1:${silentPort()}/x`).catch(() => {});
+    } finally { console.error = real; }
+    expect(said.join("\n")).toMatch(/IPv6: .* — trying IPv4/);
+  }, 60000);
+});

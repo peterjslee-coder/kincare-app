@@ -63,9 +63,33 @@ const BASE_URL = isLocal ? LOCAL_URL : PROD_URL;
 const IP_FAMILY = process.env.INPLACE_IP_FAMILY ? Number(process.env.INPLACE_IP_FAMILY) : null;
 const FAMILY_ORDER = IP_FAMILY ? [IP_FAMILY] : [6, 4];
 
+// ─── v1.106.45 — a request that never answers ───
+//
+// Pete, watching it sit on "Feedback pull (closed loop) from https://yourinplace.com...":
+// "unable to pull feedback...appears stuck."
+//
+// Stuck is the right word: there was no timeout anywhere in this file. `http.request` with
+// none waits on the operating system, which for a connection that opens and then says nothing
+// is forever.
+//
+// And it is worse than a slow script, because of a change I made in v1.106.36. That one put
+// IPv6 first on purpose, so the address the server sees stays the same between runs. The
+// fallback to IPv4 fires on `isUnreachable`, which is a list of ERRORS — and a hang is not an
+// error. So IPv6-first plus no timeout means a network where IPv6 stalls rather than refuses
+// never reaches the fallback at all. I built the fallback and then made it unreachable.
+//
+// Every attempt is now bounded, a timeout counts as "this family cannot get there", and the
+// script says which one it is trying so that waiting is legible instead of silent.
+const ATTEMPT_TIMEOUT_MS = Number(process.env.INPLACE_TIMEOUT_MS || 15000);
+
 /** True for the errors that mean "this address family cannot get there from here". */
 function isUnreachable(err) {
-  return ["ENETUNREACH", "EHOSTUNREACH", "EAI_AGAIN", "ENOTFOUND", "EAFNOSUPPORT"].includes(err?.code);
+  return [
+    "ENETUNREACH", "EHOSTUNREACH", "EAI_AGAIN", "ENOTFOUND", "EAFNOSUPPORT",
+    // v1.106.45. ETIMEDOUT is the stall this fix is about. ECONNREFUSED means something
+    // answered with a refusal, which is as definite a "not this way" as a routing error.
+    "ETIMEDOUT", "ECONNREFUSED",
+  ].includes(err?.code);
 }
 
 /** An unrecognised-network refusal is a two-minute fix, not a bug. Say so. */
@@ -92,6 +116,9 @@ function requestOn(family, url, options = {}) {
     const req = mod.request(url, {
       method: options.method || "GET",
       family,
+      // An inactivity timeout, so it covers both halves: a connect that never completes and a
+      // connection that opens and then never answers.
+      timeout: ATTEMPT_TIMEOUT_MS,
       // `family` alone is not enough on Node 20+: autoSelectFamily defaults on and will
       // still race both records, which is the whole bug.
       autoSelectFamily: false,
@@ -110,6 +137,12 @@ function requestOn(family, url, options = {}) {
         }
       });
     });
+    req.on("timeout", () => {
+      // destroy(err) surfaces as the 'error' event below, so there is one exit path.
+      const err = new Error(`no answer over IPv${family} within ${Math.round(ATTEMPT_TIMEOUT_MS / 1000)}s`);
+      err.code = "ETIMEDOUT";
+      req.destroy(err);
+    });
     req.on("error", reject);
     if (options.body) req.write(JSON.stringify(options.body));
     req.end();
@@ -125,6 +158,11 @@ async function request(url, options = {}) {
     } catch (err) {
       lastErr = err;
       if (!isUnreachable(err)) throw err; // a real failure, not a family problem
+      // Said out loud. A script that is quietly failing over looks identical to one that has
+      // hung, which is the whole reason this run was reported as stuck.
+      const next = FAMILY_ORDER[FAMILY_ORDER.indexOf(family) + 1];
+      console.error(`   IPv${family}: ${err.code === "ETIMEDOUT" ? err.message : err.code}` +
+        (next ? ` — trying IPv${next}` : ""));
     }
   }
   throw lastErr;
@@ -454,7 +492,14 @@ async function collectMode() {
   }
 }
 
-main().catch((err) => {
-  console.error("❌ Error:", err.message);
-  process.exit(1);
-});
+// v1.106.45 — exported so tests/feedbackScriptNetwork.test.js can drive the transport against
+// a server that deliberately never answers. That case cannot be reached from the outside, and
+// it is the one that had Pete watching a spinner.
+module.exports = { request, requestOn, isUnreachable, ATTEMPT_TIMEOUT_MS };
+
+if (require.main === module) {
+  main().catch((err) => {
+    console.error("❌ Error:", err.message);
+    process.exit(1);
+  });
+}
