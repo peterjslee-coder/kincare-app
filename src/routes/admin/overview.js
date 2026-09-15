@@ -68,6 +68,7 @@ router.get("/alerts", async (req, res) => {
       db.prepare(`
         SELECT COUNT(*) as count FROM verified_documents
         WHERE category = 'identity' AND document_type != 'selfie' AND status = 'pending'
+        -- identity-read-ok: a COUNT for the admin queue, not a verdict about a person
       `).get().catch(() => ({ count: 0 })),
       // v1.105.70 — identity documents the AI approved on its own, that no person has since
       // looked at. Counting only 'pending' missed these entirely, and they are the ones that
@@ -78,6 +79,7 @@ router.get("/alerts", async (req, res) => {
         SELECT COUNT(*) as count FROM verified_documents
         WHERE category = 'identity' AND document_type != 'selfie'
           AND status = 'approved' AND admin_reviewed_by IS NULL
+        -- identity-read-ok: a COUNT for the admin queue, not a verdict about a person
       `).get().catch(() => ({ count: 0 })),
       // Unread Checkr webhook events in the last 7 days
       db.prepare(`SELECT COUNT(*) as count FROM activity_feed WHERE event_type IN ('checkr_submitted', 'checkr_cleared', 'checkr_flagged', 'checkr_expired', 'checkr_suspended', 'checkr_resumed', 'checkr_disputed') AND is_read = 0 AND created_at > NOW() - INTERVAL '7 days'`).get().catch(() => ({ count: 0 })),

@@ -45,35 +45,87 @@
 // when the AI is unsure — not the rule. Anything reasoning about this gate should know that.
 
 /**
- * The most recent non-selfie identity document belonging to this caregiver, under either
- * storage shape. Returns null when nothing has been submitted.
+ * v1.106.39 — this used to be the THIRD of four answers, and routes/auth.js was the fourth.
+ * Pete, about Tina: "Tina is verified. Her id is in, a person reviewed it, and it's in her
+ * documents. This shouldn't be asking her again. We went through this with Julia earlier."
  *
- * @returns {Promise<{id: string, status: string, is_verified: number, owner_type: string} | null>}
+ * He is right that we went through it with Julia. v1.105.80 found three faults in the
+ * /api/auth/me copy of this lookup and fixed them THERE, in a query written out longhand,
+ * and left this resolver — the one every other surface reads — with fault #1 intact:
+ *
+ *   ORDER BY created_at DESC LIMIT 1, so the NEWEST submission won.
+ *
+ * Which produces exactly what Tina is seeing. The app tells her to verify her identity; she
+ * does it again; the new document sits at 'pending' on top of her APPROVED one; and from
+ * then on /api/auth/me says verified (it prefers the approval) while this resolver says
+ * pending. Her blue check is on, and her First Steps checklist still asks. An approval is
+ * not undone by a later resubmission — only by a rejection.
+ *
+ * So the order is now approved-first, as auth.js has had since v1.105.80. Revocation still
+ * works: the admin toggle rejects the document this resolver returns, and once that row is
+ * no longer approved there is nothing for approved-first to prefer.
+ *
+ * ── Two shapes, and one that was quietly dropped ──
+ *
+ * The `owner_type='user'` branch used to carry `AND uploaded_by = <the caregiver>`, which
+ * the `owner_type='caregiver'` branch never did. So the same government ID counted or did
+ * not depending on which door it came through AND who operated the upload — an admin
+ * filing a caregiver's ID for her under the user shape produced a real, human-approved
+ * document that nothing could see. The OWNER is the subject of the document; who held the
+ * phone is not. Dropped.
+ *
+ * Going the other way, auth.js matched a bare `uploaded_by = <you>` with no owner_type at
+ * all, which is a hole, not a feature: a caregiver who uploads a CARE RECIPIENT's ID —
+ * something documents.js lets her do — was reading as identity-verified herself. That shape
+ * is gone. Net: stricter where it was dangerous, looser only where the subject is right.
+ *
+ * @param {string[]} extraOwnerIds  additional owner_ids that are also THIS person's own
+ *        identity — /api/auth/me passes the care_recipient id of a linked self-onboarding
+ *        user, whose ID document is filed against the recipient record.
+ * @returns {Promise<{id, status, is_verified, owner_type, created_at} | null>}
  */
-async function caregiverIdentityDoc(db, userId, profileId) {
-  if (!userId && !profileId) return null;
-  // Ordered by created_at so the newest submission wins regardless of which door it came
-  // through — a caregiver who was rejected in the wizard and re-submitted from My Account
-  // must not be judged on the older document.
+async function caregiverIdentityDoc(db, userId, profileId, extraOwnerIds = []) {
+  const owners = [
+    ...(profileId ? [["caregiver", profileId]] : []),
+    ...(userId ? [["user", userId]] : []),
+    ...extraOwnerIds.filter(Boolean).map((id) => ["care_recipient", id]),
+  ];
+  if (owners.length === 0) return null;
+
+  const clause = owners.map(() => "(owner_type = ? AND owner_id = ?)").join(" OR ");
+  const params = owners.flat();
+
   const rows = await db.prepare(
     `SELECT id, status, is_verified, owner_type, created_at
        FROM verified_documents
       WHERE category = 'identity'
         AND document_type != 'selfie'
-        AND (
-          (owner_type = 'caregiver' AND owner_id = ?)
-          OR (owner_type = 'user' AND owner_id = ? AND uploaded_by = ?)
-        )
-      ORDER BY created_at DESC
+        AND (${clause})
+      ORDER BY (status = 'approved' OR is_verified = 1) DESC, created_at DESC
       LIMIT 1`
-  ).all(profileId || null, userId || null, userId || null);
+  ).all(...params);
   return rows && rows.length > 0 ? rows[0] : null;
 }
 
-/** Convenience: has an ADMIN-APPROVED identity document, under either shape. */
-async function caregiverIdentityVerified(db, userId, profileId) {
-  const doc = await caregiverIdentityDoc(db, userId, profileId);
-  return !!doc && doc.status === "approved";
+/** Convenience: has an APPROVED identity document, under any of this person's own shapes. */
+async function caregiverIdentityVerified(db, userId, profileId, extraOwnerIds = []) {
+  const doc = await caregiverIdentityDoc(db, userId, profileId, extraOwnerIds);
+  return !!doc && (doc.status === "approved" || !!doc.is_verified);
 }
 
-module.exports = { caregiverIdentityDoc, caregiverIdentityVerified };
+/**
+ * The shape /api/auth/me reports: 'not_started' | 'pending' | 'verified' | 'rejected'.
+ * Here rather than in the route, so the blue check and the onboarding checklist cannot
+ * describe the same document differently — which is the whole reason this file exists.
+ */
+async function identityStatusFor(db, userId, profileId, extraOwnerIds = []) {
+  const doc = await caregiverIdentityDoc(db, userId, profileId, extraOwnerIds);
+  if (!doc) return { identityVerified: false, identityStatus: "not_started" };
+  if (doc.status === "approved" || doc.is_verified) {
+    return { identityVerified: true, identityStatus: "verified" };
+  }
+  if (doc.status === "rejected") return { identityVerified: false, identityStatus: "rejected" };
+  return { identityVerified: false, identityStatus: "pending" };
+}
+
+module.exports = { caregiverIdentityDoc, caregiverIdentityVerified, identityStatusFor };

@@ -60,6 +60,9 @@ jobs:
       - name: No route authorizes on a role string
         run: npm run lint:authz
 
+      - name: Identity is resolved in one place
+        run: npm run lint:identity-reads
+
       - name: Frozen migration baseline untouched
         run: npm run lint:frozen-migrations
 

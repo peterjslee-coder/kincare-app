@@ -480,10 +480,13 @@ router.get("/status", authenticate, async (req, res) => {
       return res.status(404).json({ error: "Care recipient record not found" });
     }
 
-    // Check for verified identity document
-    const identityDoc = await db.prepare(
-      "SELECT id, is_verified FROM verified_documents WHERE owner_id = ? AND category = 'identity' ORDER BY verified_at DESC LIMIT 1"
-    ).get(careRecipient.id);
+    // v1.106.39 — a FIFTH answer to "is this identity verified?", and the loosest of them:
+    // no owner_type (any entity with a colliding id), no `document_type != 'selfie'` (a
+    // selfie on its own counted as a government ID), and ORDER BY verified_at, which is NULL
+    // on everything unapproved so the ordering among them was whatever Postgres felt like.
+    // Same resolver as everywhere else now.
+    const { caregiverIdentityVerified } = require("../utils/identity");
+    const identityVerified = await caregiverIdentityVerified(db, null, null, [careRecipient.id]);
 
     res.json({
       complete: !!careRecipient.self_onboarding_complete,
@@ -501,7 +504,7 @@ router.get("/status", authenticate, async (req, res) => {
         foodAllergies: careRecipient.food_allergies,
         petAllergies: careRecipient.pet_allergies,
         emergencyContactName: careRecipient.emergency_contact_name,
-        identityVerified: !!identityDoc?.is_verified,
+        identityVerified,
       },
     });
   } catch (err) {

@@ -345,6 +345,7 @@ router.get("/admin/pending", authenticate, checkDocAdmin, requireAdmin, async (r
     let selfieMap = {};
     if (identityDocIds.length > 0) {
       const selfies = await db.prepare(
+        // identity-read-ok: fetches the PAIRED selfie for documents already selected; decides nothing
         `SELECT id, ai_classification FROM verified_documents WHERE document_type = 'selfie' AND owner_id IN (${identityDocIds.map(() => '?').join(',')}) AND category = 'identity'`
       ).all(...docs.filter(d => d.category === 'identity' && d.document_type !== 'selfie').map(d => d.owner_id));
       for (const s of selfies) {

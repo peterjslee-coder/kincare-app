@@ -37,17 +37,36 @@ function fakeDb(rows = []) {
 }
 
 describe("one answer to 'has this caregiver verified their identity'", () => {
-  test("it looks for BOTH storage shapes in a single query", async () => {
+  test("it looks for every shape that IS this person, in a single query", async () => {
     const db = fakeDb([]);
     await caregiverIdentityDoc(db, "user-1", "profile-1");
     expect(db.seen).toHaveLength(1);
     const { sql, params } = db.seen[0];
-    // The wizard's shape...
-    expect(sql).toMatch(/owner_type = 'caregiver' AND owner_id = \?/);
-    // ...and My Account's, pinned to the person who uploaded it so one user's document can
-    // never satisfy another user's gate.
-    expect(sql).toMatch(/owner_type = 'user' AND owner_id = \? AND uploaded_by = \?/);
-    expect(params).toEqual(["profile-1", "user-1", "user-1"]);
+    // Owner pairs, bound rather than interpolated, so a caller cannot widen the shape by
+    // passing a string. The wizard's, then My Account's.
+    expect(sql).toMatch(/\(owner_type = \? AND owner_id = \?\) OR \(owner_type = \? AND owner_id = \?\)/);
+    expect(params).toEqual(["caregiver", "profile-1", "user", "user-1"]);
+  });
+
+  test("v1.106.39 — the user shape no longer turns on WHO uploaded it", async () => {
+    // It used to carry `AND uploaded_by = <the caregiver>`, which the caregiver shape never
+    // did, so an admin filing a caregiver's licence for her produced a real, human-approved
+    // document that nothing could see. The owner is the subject of a document; the operator
+    // of the upload is not.
+    const db = fakeDb([]);
+    await caregiverIdentityDoc(db, "user-1", "profile-1");
+    expect(db.seen[0].sql).not.toMatch(/uploaded_by/);
+  });
+
+  test("an extra owner id is accepted, and nothing else is", async () => {
+    // /api/auth/me passes the care_recipient id of a linked self-onboarding user, whose ID
+    // document is filed against the recipient record rather than the user row.
+    const db = fakeDb([]);
+    await caregiverIdentityDoc(db, "user-1", null, ["rec-1"]);
+    expect(db.seen[0].params).toEqual(["user", "user-1", "care_recipient", "rec-1"]);
+    const db2 = fakeDb([]);
+    await caregiverIdentityDoc(db2, "user-1", null, [null, undefined, ""]);
+    expect(db2.seen[0].params).toEqual(["user", "user-1"]);
   });
 
   test("selfies never count as the identity document", async () => {
@@ -57,12 +76,20 @@ describe("one answer to 'has this caregiver verified their identity'", () => {
     expect(db.seen[0].sql).toMatch(/category = 'identity'/);
   });
 
-  test("the newest submission wins, whichever door it came through", async () => {
-    // A caregiver rejected in the wizard who re-submits from My Account must be judged on
-    // the new document, not the old one.
+  test("v1.106.39 — an APPROVAL wins over a later submission; newest only breaks the tie", async () => {
+    // This assertion used to read "the newest submission wins", and that is the bug Tina
+    // hit. The app told her to verify, she did it again, the new 'pending' row landed on
+    // top of her approved one, and the checklist went on asking forever. auth.js has
+    // preferred the approval since v1.105.80 — this resolver did not, so the blue check and
+    // the checklist disagreed about the same two documents.
+    //
+    // A rejected-then-resubmitted caregiver is still judged on the new document: there is no
+    // approval to prefer, so created_at breaks the tie exactly as before. The behaviour of
+    // both cases is proved against a real database in
+    // tests/integration/identityOneAnswer.itest.js; this is the query shape.
     const db = fakeDb([]);
     await caregiverIdentityDoc(db, "user-1", "profile-1");
-    expect(db.seen[0].sql).toMatch(/ORDER BY created_at DESC/);
+    expect(db.seen[0].sql).toMatch(/ORDER BY \(status = 'approved' OR is_verified = 1\) DESC, created_at DESC/);
     expect(db.seen[0].sql).toMatch(/LIMIT 1/);
   });
 

@@ -239,8 +239,20 @@ if (fs.existsSync(indexPath)) {
     const serverSrc = fs.readFileSync(serverPath, "utf-8");
     const vMatch = serverSrc.match(/const APP_VERSION\s*=\s*"([^"]+)"/);
     if (vMatch) {
-      html = html.replace(/window\.APP_VERSION\s*=\s*'[^']*'/, `window.APP_VERSION = '${vMatch[1]}'`);
-      console.log(`  APP_VERSION synced: ${vMatch[1]}`);
+      // v1.106.39 — this pattern only matched SINGLE quotes while index.html carries double,
+      // so the sync had quietly stopped working and said "synced" anyway: the log sat inside
+      // `if (vMatch)`, which only asks whether server.js has a version, not whether anything
+      // was replaced. window.APP_VERSION is what a phone reports into user_client_info, and
+      // it is how Pete checks whether a fix has actually reached Tina's handset — a stale
+      // one there is a wrong answer to the question he asks it.
+      const before = html;
+      html = html.replace(/window\.APP_VERSION\s*=\s*['"][^'"]*['"]/, `window.APP_VERSION = "${vMatch[1]}"`);
+      if (html === before) {
+        console.error(`  ✗ APP_VERSION sync FAILED — no window.APP_VERSION assignment matched in index.html`);
+        process.exitCode = 1;
+      } else {
+        console.log(`  APP_VERSION synced: ${vMatch[1]}`);
+      }
     }
   }
 
