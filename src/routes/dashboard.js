@@ -14,6 +14,7 @@ const { expireStaleProposals } = require("../utils/proposals");
 const { getPlatformFeePercent } = require("../utils/platformFee");
 const { phaseFor: checkrPhaseFor } = require("../constants/checkrStatus");
 const { noteVisibility, isTeamOrOwner } = require("../utils/noteVisibility"); // v1.106.38
+const { breakBudgetMinutes } = require("../utils/visitBreaks"); // v1.106.41
 
 const router = express.Router();
 router.use(authenticate);
@@ -476,6 +477,14 @@ async function caregiverDashboard(db, userId, res) {
       cp.hourly_rate AS cg_hourly_rate, cp.rate_daytime AS cg_rate_daytime,
       cp.rate_nighttime AS cg_rate_nighttime, cp.rate_overnight AS cg_rate_overnight,
       vl.check_in_time,
+      -- v1.106.41 — the caregiver's own card needs to know whether she is out right now, and
+      -- how much of her paid break budget is left, without a second request per session.
+      -- Aggregated in the SELECT rather than joined: a join against visit_breaks multiplies
+      -- the session row once per break, which would silently double a day's earnings total.
+      (SELECT COUNT(*) FROM visit_breaks vb WHERE vb.session_id = cs.id AND vb.ended_at IS NULL) AS open_breaks,
+      (SELECT COALESCE(SUM(EXTRACT(EPOCH FROM (COALESCE(vb.ended_at, NOW()) - vb.started_at)) / 60), 0)
+         FROM visit_breaks vb WHERE vb.session_id = cs.id) AS break_minutes_total,
+      (SELECT MAX(vb.started_at) FROM visit_breaks vb WHERE vb.session_id = cs.id AND vb.ended_at IS NULL) AS break_started_at,
       tcp.proposed_time AS tc_proposed_time,
       tcp.proposed_duration AS tc_proposed_duration,
       tcp.proposed_by AS tc_proposed_by
@@ -793,6 +802,11 @@ async function caregiverDashboard(db, userId, res) {
         interviewType: s.interview_type || null,
         interviewStatus: s.interview_status || null,
         checkInTime: s.check_in_time || null,
+        // v1.106.41 — see src/utils/visitBreaks.js for the rule these numbers come from.
+        onBreak: Number(s.open_breaks || 0) > 0,
+        breakStartedAt: s.break_started_at || null,
+        breakBudgetMinutes: breakBudgetMinutes(s.duration_hours),
+        breakMinutesUsed: Math.round(Number(s.break_minutes_total || 0)),
         pendingTimeChangeId: s.pending_time_change_id || null,
         tcProposedTime: s.tc_proposed_time || null,
         tcProposedDuration: s.tc_proposed_duration || null,

@@ -240,6 +240,9 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const [checkInMood, setCheckInMood] = useState([]);
   const [checkInNotes, setCheckInNotes] = useState(null);
   const [checkOutSession, setCheckOutSession] = useState(null);
+  // v1.106.41 — which session's Step out / I'm back is mid-request. A ref would not re-render
+  // the button, and two taps on a slow connection is how a break gets started twice.
+  const [breakBusy, setBreakBusy] = useState(null);
   const [checkOutMood, setCheckOutMood] = useState([]);
   const [checkOutTags, setCheckOutTags] = useState([]);
   const [checkOutCareFeedback, setCheckOutCareFeedback] = useState('');
@@ -1058,6 +1061,46 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
     });
   };
 
+  // ─── v1.106.41 — pause the visit, don't end it ───
+  //
+  // Check Out ends the visit: it closes the log, captures the payment and asks for the
+  // summary. None of that should happen because she went to pick up a prescription. This
+  // pauses the clock and leaves the session in_progress, so the family's live view stays
+  // honest — the visit has not ended, she is out.
+  //
+  // The toast on the way out is Pete's: "she should get a notice...'ok, take a break...you
+  // have X minutes left to resume for your agreed pay'". The server composes that sentence,
+  // because the server owns the rule; repeating it here is how the two drift.
+  const toggleBreak = async (s) => {
+    if (breakBusy) return;
+    setBreakBusy(s.id);
+    try {
+      const going = !s.onBreak;
+      // Best-effort, and only that: a caregiver who stepped outside with no signal must still
+      // be able to pause her visit. Same plugin-first helper check-in uses (v1.105.54), and
+      // the server coarsens whatever arrives.
+      let coords = {};
+      try {
+        const { pos } = await getDeviceLocation({ timeoutMs: 6000 });
+        if (pos) coords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+      } catch { /* a break must not depend on a location fix */ }
+
+      const res = await apiFetch(`/api/sessions/${s.id}/break/${going ? 'start' : 'end'}`, {
+        method: 'POST', body: JSON.stringify(coords),
+      });
+      const d = await res?.json().catch(() => ({}));
+      if (res?.ok) {
+        showToast(going ? (d.notice || 'Break started.') : 'Welcome back — the clock is running again.', going ? 'info' : 'success');
+        try { const dr = await apiFetch('/api/dashboard'); if (dr?.ok) setData(await dr.json()); } catch {}
+      } else {
+        showToast(d?.error || (going ? 'Could not pause the visit' : 'Could not resume the visit'), 'error');
+      }
+    } catch {
+      showToast('Could not reach the server — check your connection', 'error');
+    }
+    setBreakBusy(null);
+  };
+
   const submitDecline = async () => {
     if (!decliningJob) return;
     setDecliningBusy(true);
@@ -1730,6 +1773,28 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                         </div>
                       )}
                       {isActive && (<>
+                        {/* ─── v1.106.41 — step out, and come back ───
+                            Pete: "It's possible that Tina will take a job, need to leave for
+                            a couple hours, maybe come back... part of the intent here is that
+                            caregivers have a little bit more flexibility in their own
+                            schedule." Above Check Out, and visually quieter than it, because
+                            these are different things: one pauses the visit, one ends it. */}
+                        <button onClick={() => toggleBreak(s)} disabled={breakBusy === s.id} style={{
+                          padding: '10px 18px',
+                          background: s.onBreak ? 'var(--color-success)' : 'var(--bg-surface)',
+                          color: s.onBreak ? 'var(--text-on-primary)' : 'var(--text-primary)',
+                          border: s.onBreak ? 'none' : '1px solid var(--border-color)',
+                          borderRadius: 10, fontSize: 14, fontWeight: 600,
+                          cursor: breakBusy === s.id ? 'default' : 'pointer',
+                          opacity: breakBusy === s.id ? 0.6 : 1, whiteSpace: 'nowrap',
+                        }}>
+                          {breakBusy === s.id ? '…' : s.onBreak ? "\u21A9 I'm back" : '\u23F8 Step out'}
+                        </button>
+                        {s.onBreak && (
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'right', maxWidth: 190 }}>
+                            Paused{s.breakStartedAt ? ` since ${TimezoneHelper.formatTimestamp(s.breakStartedAt, s.timezone, { hour: 'numeric', minute: '2-digit' }) || ''}` : ''}
+                          </div>
+                        )}
                         <button onClick={() => {
                           setCheckOutMood([]);
                           setCheckOutTags([]);

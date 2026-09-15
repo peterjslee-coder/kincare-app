@@ -2391,6 +2391,44 @@ async function initializeDatabase() {
       //
       // The backfill computes the key in SQL for the rows already there rather than leaving
       // them to the NULL fallback forever.
+      // ─── v1.106.41 — stepping out mid-visit ───
+      //
+      // Pete: "It's possible that Tina will take a job, need to leave for a couple hours,
+      // maybe come back... As long as it's inside of the time of the original appointment.
+      // Remember that part of the intent here is that caregivers have a little bit more
+      // flexibility in their own schedule."
+      //
+      // A separate table rather than more columns on visit_logs, because a visit can have
+      // several breaks and visit_logs is deliberately one row per session — the check-out
+      // maths reads exactly one check_in_time and one check_out_time, and turning that into
+      // a multi-row scan would rewrite the money path to store a list.
+      //
+      // ended_at NULL means she is out right now. The partial unique index is what makes
+      // that a single fact: two open breaks on one session cannot exist, so a double tap on
+      // "Step out" cannot quietly start the clock twice.
+      id: "039_visit_breaks",
+      statements: [
+        `CREATE TABLE IF NOT EXISTS visit_breaks (
+          id TEXT PRIMARY KEY,
+          session_id TEXT NOT NULL REFERENCES care_sessions(id) ON DELETE CASCADE,
+          visit_log_id TEXT REFERENCES visit_logs(id),
+          caregiver_user_id TEXT NOT NULL REFERENCES users(id),
+          started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          ended_at TIMESTAMPTZ,
+          ended_by TEXT,
+          start_latitude REAL,
+          start_longitude REAL,
+          end_latitude REAL,
+          end_longitude REAL,
+          created_at TIMESTAMPTZ DEFAULT NOW()
+        )`,
+        `CREATE UNIQUE INDEX IF NOT EXISTS idx_visit_breaks_one_open
+           ON visit_breaks(session_id) WHERE ended_at IS NULL`,
+        `CREATE INDEX IF NOT EXISTS idx_visit_breaks_session
+           ON visit_breaks(session_id, started_at)`,
+      ],
+    },
+    {
       // ─── v1.106.30 — an appointment other people are part of ───
       //
       // Pete: "today I am going to the Dr. Lambert appointment, but Tina is also going. So I

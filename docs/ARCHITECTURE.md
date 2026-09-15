@@ -7,9 +7,9 @@ build red.
 
 Hand-written sections (§3 "Where is…") are preserved across regeneration; edit those freely.
 
-Structure at last generation: 530 HTTP routes across 56 mounts ·
-92 `CREATE TABLE` statements · 12 background jobs · 38 socket events
-(16 with no client listener) · 61 push event types · 57 `window.__*` globals.
+Structure at last generation: 532 HTTP routes across 56 mounts ·
+93 `CREATE TABLE` statements · 12 background jobs · 38 socket events
+(16 with no client listener) · 62 push event types · 57 `window.__*` globals.
 
 ---
 
@@ -91,7 +91,7 @@ JSX is *not* compiled in the browser; Babel-standalone is not loaded. Editing an
 | `/api/safety` | `src/routes/safety.js` | 6 |  |
 | `/api/scheduling` | `src/routes/nlScheduling.js` | 1 |  |
 | `/api/self-onboarding` | `src/routes/selfOnboarding.js` | 3 |  |
-| `/api/sessions` | `src/routes/sessions.js` **+** `src/routes/offers.js` | 38 | ⚠️ **multi-file mount — routes for this prefix live in more than one file** |
+| `/api/sessions` | `src/routes/sessions.js` **+** `src/routes/offers.js` | 40 | ⚠️ **multi-file mount — routes for this prefix live in more than one file** |
 | `/api/video` | `src/routes/videoCall.js` | 1 |  |
 | `/api/waitlist` | `src/routes/waitlist.js` | 3 |  |
 
@@ -226,9 +226,9 @@ Opt-out key is `notification_prefs["push_" + eventType]`. Capability gating live
 
 `proposal_accepted` · `proposal_declined` · `request_declined` · `session_cancelled`
 
-`team_join` · `time_change` · `time_proposal` · `unblocked`
+`session_in_progress` · `team_join` · `time_change` · `time_proposal`
 
-`waitlist_signup`
+`unblocked` · `waitlist_signup`
 
 ---
 

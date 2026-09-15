@@ -24,6 +24,7 @@ const { hasActiveVouch } = require("../utils/vouches");
 const { decideCancellationCharge, CANCEL_FEE_WINDOW_HOURS } = require("../utils/cancellationFee");
 const { MODEL_HAIKU, getAnthropic } = require("../utils/aiModels");
 const { clampLimit, clampOffset } = require("../utils/queryLimits");
+const { summarizeBreaks, breakMinutes, breakNotice } = require("../utils/visitBreaks"); // v1.106.41
 
 const router = express.Router();
 router.use(authenticate);
@@ -1918,6 +1919,180 @@ router.post("/:id/check-in", async (req, res) => {
 
 // ─── POST /api/sessions/:id/check-out ───
 // Caregiver checks out — updates visit_log, sets session to completed
+// ═══════════════════════════════════════════════════════════════════════════
+// ─── Stepping out mid-visit — POST /:id/break/start and /:id/break/end ───
+//
+// v1.106.41. Pete: "It's possible that Tina will take a job, need to leave for a couple
+// hours, maybe come back... As long as it's inside of the time of the original appointment.
+// Remember that part of the intent here is that caregivers have a little bit more flexibility
+// in their own schedule."
+//
+// Deliberately NOT a second check-out. A check-out ends the visit, closes the visit log,
+// captures the payment and asks for the summary; none of that should happen because she went
+// to pick up a prescription. This pauses the clock and leaves the session in_progress, which
+// is also what keeps the family's live view honest — the visit has not ended, she is out.
+//
+// What it costs is decided entirely in utils/visitBreaks (see that file for Pete's rule:
+// 30 cumulative paid minutes, but only on a visit longer than four scheduled hours).
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** The session plus the fields both break routes need, or null. */
+async function loadSessionForBreak(db, sessionId) {
+  return db.prepare(`
+    SELECT cs.id, cs.status, cs.duration_hours, cs.family_user_id, cs.care_recipient_id,
+           cs.caregiver_id,
+           cp.user_id AS caregiver_user_id,
+           cr.first_name AS recipient_first_name, cr.timezone AS care_timezone
+      FROM care_sessions cs
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+     WHERE cs.id = ?
+  `).get(sessionId);
+}
+
+async function breaksFor(db, sessionId) {
+  return db.prepare(
+    "SELECT id, started_at, ended_at FROM visit_breaks WHERE session_id = ? ORDER BY started_at ASC"
+  ).all(sessionId);
+}
+
+/**
+ * Tell the family, both ways. Pete asked for a push on the way out AND on the way back:
+ * Betty is on her own in between, and that is the thing the family would want to know in the
+ * moment rather than discover on a timeline afterwards.
+ *
+ * First name and a time only — no mood, no note, no reason. tests/pushPhi.test.js is the
+ * standing check on that, and it has caught me putting an appointment title in a push body
+ * once already.
+ */
+async function notifyFamilyOfBreak(req, db, session, { back, awayMinutes }) {
+  if (req.user.impersonatedBy) return;   // test mode — same rule as check-in/check-out
+  const cg = await db.prepare("SELECT first_name FROM users WHERE id = ?").get(req.user.id);
+  const who = cg ? cg.first_name : "Your caregiver";
+  const title = back ? `${who} is back with ${session.recipient_first_name}` : `${who} stepped out`;
+  const body = back
+    ? (awayMinutes >= 1 ? `Away about ${Math.round(awayMinutes)} min. The visit is continuing.` : "The visit is continuing.")
+    : `${who} has paused the visit with ${session.recipient_first_name} and will be back.`;
+
+  try {
+    await sendPushToUser(session.family_user_id, {
+      title, body,
+      data: { type: back ? "visit_break_end" : "visit_break_start", sessionId: session.id, page: "home" },
+      // sendPushToUser prepends `push_` to build the preference key, so this is
+      // `push_session_in_progress` — the same opt-out that governs the check-in push, because
+      // a family that muted "the visit started" has said what they want about this class of
+      // update. Passing "push_session_status" here, as the first cut did, would have looked
+      // up `push_push_session_status`: a key nobody can ever have set, so an opt-out that can
+      // never be honoured.
+    }, "session_in_progress");
+  } catch (e) { captureException(e, { where: "sessions: notify family of break" }); }
+
+  try {
+    await db.prepare(
+      "INSERT INTO activity_feed (id, family_user_id, care_recipient_id, event_type, title, message, metadata) VALUES (?, ?, ?, ?, ?, ?, ?)"
+    ).run(
+      require("uuid").v4(), session.family_user_id, session.care_recipient_id,
+      back ? "visit_break_end" : "visit_break_start", title, body,
+      JSON.stringify({ sessionId: session.id, awayMinutes: back ? Math.round(awayMinutes) : undefined })
+    );
+  } catch (e) { captureException(e, { where: "sessions: activity for break" }); }
+
+  const emitToUser = req.app.get("emitToUser");
+  if (emitToUser) {
+    emitToUser(session.family_user_id, "session_update", {
+      sessionId: session.id, status: "in_progress", onBreak: !back,
+    });
+    emitToUser(session.family_user_id, "activity_update", {});
+  }
+}
+
+router.post("/:id/break/start", async (req, res) => {
+  try {
+    const db = await getDb();
+    const { latitude, longitude } = req.body || {};
+    const session = await loadSessionForBreak(db, req.params.id);
+    if (!session) return res.status(404).json({ error: "Session not found" });
+    if (session.caregiver_user_id !== req.user.id) {
+      return res.status(403).json({ error: "Only the assigned caregiver can pause this visit" });
+    }
+    // "Inside of the time of the original appointment" is exactly what in_progress means:
+    // she has checked in and not checked out.
+    if (session.status !== "in_progress") {
+      return res.status(400).json({ error: "You can only step out during a visit you're checked into" });
+    }
+
+    const id = require("uuid").v4();
+    const visitLog = await db.prepare(
+      "SELECT id FROM visit_logs WHERE session_id = ? ORDER BY created_at DESC LIMIT 1"
+    ).get(req.params.id);
+
+    try {
+      await db.prepare(`
+        INSERT INTO visit_breaks (id, session_id, visit_log_id, caregiver_user_id,
+                                  started_at, start_latitude, start_longitude, created_at)
+        VALUES (?, ?, ?, ?, NOW(), ?, ?, NOW())
+      `).run(id, req.params.id, visitLog ? visitLog.id : null, req.user.id,
+             coarsenCoordinate(latitude), coarsenCoordinate(longitude));
+    } catch (e) {
+      // idx_visit_breaks_one_open. The DB, not a read-then-write in here, is what makes "she
+      // is out right now" a single fact — a double tap races itself otherwise.
+      if (String(e.message || "").includes("idx_visit_breaks_one_open") || e.code === "23505") {
+        return res.status(409).json({ error: "You're already on a break — tap \"I'm back\" to resume." });
+      }
+      throw e;
+    }
+
+    const rows = await breaksFor(db, req.params.id);
+    const summary = summarizeBreaks(rows, session.duration_hours);
+    await notifyFamilyOfBreak(req, db, session, { back: false });
+
+    return res.json({
+      onBreak: true,
+      breakId: id,
+      notice: breakNotice(summary),
+      ...summary,
+      openBreak: undefined,
+    });
+  } catch (err) {
+    captureException(err, { where: "sessions: break start", sessionId: req.params.id });
+    return res.status(500).json({ error: "Could not pause the visit" });
+  }
+});
+
+router.post("/:id/break/end", async (req, res) => {
+  try {
+    const db = await getDb();
+    const { latitude, longitude } = req.body || {};
+    const session = await loadSessionForBreak(db, req.params.id);
+    if (!session) return res.status(404).json({ error: "Session not found" });
+    if (session.caregiver_user_id !== req.user.id) {
+      return res.status(403).json({ error: "Only the assigned caregiver can resume this visit" });
+    }
+
+    // Conditional UPDATE rather than read-then-write: the row is chosen and closed in one
+    // statement, so two taps cannot both believe they closed it.
+    const closed = await db.prepare(`
+      UPDATE visit_breaks SET ended_at = NOW(), ended_by = 'caregiver',
+             end_latitude = ?, end_longitude = ?
+       WHERE session_id = ? AND ended_at IS NULL
+    `).run(coarsenCoordinate(latitude), coarsenCoordinate(longitude), req.params.id);
+
+    if (!closed || closed.changes === 0) {
+      return res.status(409).json({ error: "You're not on a break right now." });
+    }
+
+    const rows = await breaksFor(db, req.params.id);
+    const summary = summarizeBreaks(rows, session.duration_hours);
+    const justEnded = rows.filter((r) => r.ended_at).slice(-1)[0];
+    await notifyFamilyOfBreak(req, db, session, { back: true, awayMinutes: breakMinutes(justEnded) });
+
+    return res.json({ onBreak: false, ...summary, openBreak: undefined });
+  } catch (err) {
+    captureException(err, { where: "sessions: break end", sessionId: req.params.id });
+    return res.status(500).json({ error: "Could not resume the visit" });
+  }
+});
+
 router.post("/:id/check-out", async (req, res) => {
   try {
     const db = await getDb();
@@ -1979,6 +2154,36 @@ router.post("/:id/check-out", async (req, res) => {
     const flexPolicy = session.flex_timing || 'strict';
     const flexCapMinutes = flexPolicy === 'open' ? 120 : flexPolicy === 'flexible' ? 30 : 0;
 
+    // ─── v1.106.41 — time she stepped out comes off the clock before anything else ───
+    //
+    // Pete: "if she needs to run somewhere for a personal reason for an hour, she can, but
+    // won't be paid... has to be cumulative...so no more than 30 minutes break before we stop
+    // pay", and "for sessions longer than 4 hours, they get a 30 min break."
+    //
+    // The deduction is applied AFTER the scheduled / overtime / early branches below, not
+    // before them, and the first cut of this had it the other way round. Those branches carry
+    // a ±15-minute grace around the scheduled end, which exists to forgive arrival and
+    // departure timing — so subtracting break minutes first let the grace absorb them too,
+    // and Pete's "no more than 30 minutes break before we stop pay" quietly became 45. The
+    // integration test for four ten-minute breaks is what showed it.
+    //
+    // Applied afterwards, the grace still forgives when she arrived and left, the break
+    // deduction is exact to the minute, and both keep the visit's own effective rate —
+    // including an overtime rate, if she earned one.
+    //
+    // An unfinished break is measured to the check-out moment: stepping out and never coming
+    // back is being away until she leaves, not being away for nothing.
+    const breakRows = await db.prepare(
+      "SELECT id, started_at, ended_at FROM visit_breaks WHERE session_id = ? ORDER BY started_at ASC"
+    ).all(req.params.id);
+    const breakSummary = summarizeBreaks(breakRows, scheduledDuration, effectiveCheckOutTime);
+    if (breakSummary.openBreak) {
+      await db.prepare(
+        "UPDATE visit_breaks SET ended_at = ?, ended_by = 'checkout' WHERE id = ? AND ended_at IS NULL"
+      ).run(effectiveCheckOutTime.toISOString(), breakSummary.openBreak.id);
+    }
+    const unpaidBreakMinutes = breakSummary.unpaidMinutes;
+
     if (visitLog && visitLog.check_in_time) {
       const checkInTime = new Date(visitLog.check_in_time);
       const checkOutTime = effectiveCheckOutTime; // use offline timestamp if syncing
@@ -2020,6 +2225,17 @@ router.post("/:id/check-out", async (req, res) => {
           adjustedCost = Math.round((actualDurationHours / scheduledDuration) * parseFloat(session.estimated_cost || 0) * 100) / 100;
         }
       }
+    }
+
+    // ─── v1.106.41 — and now the break comes off ───
+    // Exact minutes at the visit's own per-minute rate, so the deduction matches the rule
+    // rather than the grace, and clamped at zero: a break can never bill negative time.
+    if (unpaidBreakMinutes > 0 && actualDurationHours > 0) {
+      const billedBefore = actualDurationHours * 60;
+      const perMinute = adjustedCost / billedBefore;
+      const billedMinutes = Math.max(0, billedBefore - unpaidBreakMinutes);
+      actualDurationHours = Math.round((billedMinutes / 60) * 100) / 100;
+      adjustedCost = Math.round(billedMinutes * perMinute * 100) / 100;
     }
 
     // ─── v1.106.10 — the session and its visit log close together, or not at all ───

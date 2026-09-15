@@ -52,6 +52,11 @@ const EXPECTED = [
   "PUT /:id/status",
   "GET /:id/care-briefing",
   "POST /:id/check-in",
+  // v1.106.41 — stepping out mid-visit. Both are strictly more specific than "/:id" and are
+  // registered above it, so neither is shadowed and neither shadows anything: "break" is a
+  // literal segment, so "/:id/break/start" cannot swallow a real session id.
+  "POST /:id/break/start",
+  "POST /:id/break/end",
   "POST /:id/check-out",
   "POST /:id/pending-tip",
   "POST /:id/propose-time-change",
