@@ -119,4 +119,12 @@ async function main() {
   process.exit(0);
 }
 
-main().catch((err) => { console.error(err); process.exit(1); });
+// v1.106.44 — exported so scripts/check-r2.js samples the SAME columns rather than a second
+// hand-written list. The first draft of that script had one table wrong and one column that
+// does not exist, and its own error handling hid both: it reported fewer tables and looked
+// healthy. One list, in the file that has always owned it.
+module.exports = { TARGETS };
+
+if (require.main === module) {
+  main().catch((err) => { console.error(err); process.exit(1); });
+}
