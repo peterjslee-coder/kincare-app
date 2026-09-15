@@ -13,6 +13,7 @@ const { scoreMatch } = require("../utils/aiMatching");
 const { expireStaleProposals } = require("../utils/proposals");
 const { getPlatformFeePercent } = require("../utils/platformFee");
 const { phaseFor: checkrPhaseFor } = require("../constants/checkrStatus");
+const { noteVisibility, isTeamOrOwner } = require("../utils/noteVisibility"); // v1.106.38
 
 const router = express.Router();
 router.use(authenticate);
@@ -1098,13 +1099,34 @@ async function careForDashboard(db, userId, res) {
     `).get(recipient.id, monthStr),
 
     // Notes
-    db.prepare(`
-      SELECT rn.*, u.first_name AS author_first_name, u.last_name AS author_last_name, u.role AS author_role
-      FROM recipient_notes rn
-      JOIN users u ON rn.author_id = u.id
-      WHERE rn.care_recipient_id = ?
-      ORDER BY rn.created_at DESC
-    `).all(recipient.id),
+    //
+    // v1.106.38 — two bugs in one query, both invisible from this screen.
+    //
+    // 1. `SELECT rn.*` pulled the `photo` column — a base64 data URI up to 5MB per row,
+    //    for legacy rows written before R2 — into memory for EVERY note, on every load
+    //    of this dashboard, and then dropped it in the shaper below. Nothing ever read it.
+    //
+    // 2. There was no visibility filter at all. GET /api/notes/:careRecipientId refuses
+    //    to show the linked care recipient the observations her family wrote about her;
+    //    this screen, which is HER screen, showed her all of them. Same record, same
+    //    person, two different answers, because the rule was written out in one route and
+    //    not the other. It now comes from utils/noteVisibility for both.
+    (async () => {
+      const cr = { linked_user_id: recipient.linked_user_id, family_user_id: recipient.family_user_id };
+      const teamOrOwner = await isTeamOrOwner(db, recipient.id, userId);
+      const { sql: filterSql, params: filterParams } =
+        noteVisibility({ cr, teamOrOwner, access: null, userId });
+      return db.prepare(`
+        SELECT rn.id, rn.content, rn.note_type, rn.needs_attention,
+               (rn.photo IS NOT NULL) AS has_photo,
+               rn.created_at, rn.updated_at,
+               u.first_name AS author_first_name, u.last_name AS author_last_name, u.role AS author_role
+        FROM recipient_notes rn
+        JOIN users u ON rn.author_id = u.id
+        WHERE rn.care_recipient_id = ?${filterSql}
+        ORDER BY rn.created_at DESC
+      `).all(recipient.id, ...filterParams);
+    })(),
 
     // Recent completed (for review/tips)
     db.prepare(`
@@ -1225,6 +1247,10 @@ async function careForDashboard(db, userId, res) {
       noteType: n.note_type,
       authorName: `${n.author_first_name} ${n.author_last_name}`,
       authorRole: n.author_role,
+      // v1.106.38 — the flag, never the blob. Pete: "Added a picture to a visit note today
+      // and it doesn't show up." It was saved; no screen but the family Care Profile ever
+      // drew it, because no other list was told a photo existed.
+      hasPhoto: n.has_photo === true || n.has_photo === 1,
       createdAt: n.created_at,
       updatedAt: n.updated_at,
     })),

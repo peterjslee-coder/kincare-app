@@ -45,6 +45,11 @@ const TeamNotes = window.TeamNotes = ({ onNavigate }) => {
   // A tap and an Enter arriving together saved Daniel's note twice on Sep 11 (14:27:14 and
   // 14:27:15). React state is too slow to be the lock; a ref is not. Same guard as CareProfile.
   const addingNoteRef = React.useRef(false);
+  // v1.106.38 — Pete: "Added a picture to a visit note today and it doesn't show up."
+  // It was there. The composer below has uploaded photos since v1.106.27 and the server
+  // has returned has_photo since v1.76.0; this timeline just never drew one. Same lightbox
+  // as CareProfile so a photo opens the same way wherever it is tapped.
+  const [viewingAttachments, setViewingAttachments] = React.useState(null);
   const PREVIEW = 8;
 
   React.useEffect(() => {
@@ -140,6 +145,11 @@ const TeamNotes = window.TeamNotes = ({ onNavigate }) => {
       kind: 'note', id: n.id, at: n.created_at, body: n.content,
       who: `${n.author_first_name || ''} ${n.author_last_name || ''}`.trim(),
       urgent: !!n.needs_attention,
+      // The flag and a count, never the blob — a 5MB data URI per row would make a
+      // fifty-note timeline unusable. `photos` is the list the thumbnails fetch by id.
+      photos: n.has_photo
+        ? [{ path: `/api/notes/${n.id}/photo`, name: 'Care note photo', mime: '' }]
+        : [],
       targetType: 'note', targetId: n.id, reactions: n.reactions || [],
     })),
     ...visits.map((v) => ({
@@ -148,6 +158,15 @@ const TeamNotes = window.TeamNotes = ({ onNavigate }) => {
       who: v.authorName || v.authorFirstName || '',
       minutes: v.durationMinutes || null,
       mood: v.moodRating || null,
+      // v1.105.111 — a visit carries up to four. `/photo` is index 0 for every row ever
+      // written, `/photo/N` reaches the rest.
+      photos: (v.photoCount > 0 || v.hasPhoto)
+        ? Array.from({ length: v.photoCount || 1 }, (_, i) => ({
+            path: i === 0 ? `/api/family-visits/${v.id}/photo` : `/api/family-visits/${v.id}/photo/${i}`,
+            name: (v.photoCount || 1) > 1 ? `Visit photo ${i + 1} of ${v.photoCount}` : 'Visit photo',
+            mime: '',
+          }))
+        : [],
       targetType: 'family_visit', targetId: v.id, reactions: v.reactions || [],
     })),
   ].sort((a, b) => String(b.at || '').localeCompare(String(a.at || '')));
@@ -352,6 +371,17 @@ const TeamNotes = window.TeamNotes = ({ onNavigate }) => {
               <div style={{ fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                 {linkify(item.body)}
               </div>
+              {/* AttachmentThumb, not a bare <img src>: a plain src is an UNAUTHENTICATED
+                  request, and in the native app that renders "Authentication required"
+                  where the picture should be (AttachmentViewer.js). */}
+              {item.photos.length > 0 && typeof AttachmentThumb !== 'undefined' && (
+                <div style={{ marginTop: 6, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {item.photos.map((att, i) => (
+                    <AttachmentThumb key={att.path} size={64} attachment={att}
+                      onOpen={() => setViewingAttachments({ list: item.photos, index: i })} />
+                  ))}
+                </div>
+              )}
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 5 }}>
                 {item.who}
                 {item.at ? ` · ${TimezoneHelper.formatTimestamp(item.at, selected?.timezone, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) || ''}` : ''}
@@ -372,6 +402,11 @@ const TeamNotes = window.TeamNotes = ({ onNavigate }) => {
             </button>
           )}
         </div>
+      )}
+
+      {viewingAttachments && typeof AttachmentViewer !== 'undefined' && (
+        <AttachmentViewer attachments={viewingAttachments.list} startIndex={viewingAttachments.index}
+          onClose={() => setViewingAttachments(null)} />
       )}
     </div>
   );

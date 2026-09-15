@@ -8,6 +8,7 @@ const { validateMagicBytes } = require("../utils/fileValidation");
 const { sendStoredFile, IMAGE_MIMES, DOCUMENT_MIMES } = require("../utils/serveMedia");
 const { attachReactions } = require("../utils/reactions"); // v1.105.170
 const storage = require("../utils/storage");
+const { noteVisibility, isTeamOrOwner, mayReadNote } = require("../utils/noteVisibility"); // v1.106.38
 
 // v1.76.0 — parse stored JSON defensively (one malformed row must not 500 the list)
 function safeJson(raw, fallback) {
@@ -51,6 +52,24 @@ async function hasAccess(db, recipientId, userId) {
     LIMIT 1
   `).get(recipientId, userId);
   if (assignedCg) return "view";
+  // v1.106.38 — the person the record is ABOUT. She was a stranger to it here: every copy of
+  // hasAccess in the codebase knew the owner, the share, the team and the assigned caregiver,
+  // and none of them knew her, so Betty got 403 from her own care notes. The "Save Note"
+  // button on her screen (CaredForView) has been posting into that 403.
+  //
+  // The giveaway that this was an omission and not a decision: the GET below already computes
+  // `isLinkedRecipient` to filter what she may read, and that branch could never once have
+  // run — she never got past this function.
+  //
+  // "self", deliberately not "owner" or "edit": PUT and DELETE grant on owner/edit/admin OR
+  // authorship, so this lets her write, edit and delete HER OWN notes and touch none of her
+  // family's. What she may READ is decided by utils/noteVisibility, not by this level.
+  //
+  // Last, so an explicit grant the family made — a share, a team seat — still wins.
+  const linked = await db.prepare(
+    "SELECT id FROM care_recipients WHERE id = ? AND linked_user_id = ?"
+  ).get(recipientId, userId);
+  if (linked) return "self";
   return null;
 }
 
@@ -98,30 +117,13 @@ router.get("/:careRecipientId", async (req, res) => {
     return res.status(403).json({ error: "Not authorized to view notes for this care recipient" });
   }
 
-  // v1.76.0 — visibility rules for family observations:
-  //  • the linked care recipient sees their OWN notes + visit summaries, but not
-  //    observations the family wrote about them (candor vs. dignity — team decision)
-  //  • assigned caregivers (view-only via active session) get observations via the
-  //    AI-digested briefing, never raw
+  // v1.76.0 — visibility rules for family observations.
+  // v1.106.38 — the rule itself now lives in utils/noteVisibility, because the care-for
+  // dashboard was answering the same question a different way. See that file.
   const cr = await db.prepare("SELECT linked_user_id, family_user_id FROM care_recipients WHERE id = ?").get(recipientId);
-  const isLinkedRecipient = cr && cr.linked_user_id === req.user.id && cr.family_user_id !== req.user.id;
-  const teamOrOwner = await db.prepare(`
-    SELECT 1 FROM care_recipients c
-    LEFT JOIN care_teams ct ON ct.care_recipient_id = c.id
-    LEFT JOIN care_team_members ctm ON ctm.care_team_id = ct.id AND ctm.user_id = ?
-    WHERE c.id = ? AND (c.family_user_id = ? OR ctm.user_id IS NOT NULL)
-    LIMIT 1
-  `).get(req.user.id, recipientId, req.user.id);
-  const caregiverOnly = !teamOrOwner && access !== "admin" && !isLinkedRecipient;
-
-  let filterSql = "";
-  const filterParams = [];
-  if (isLinkedRecipient) {
-    filterSql = " AND (rn.note_type != 'observation' OR rn.author_id = ?)";
-    filterParams.push(req.user.id);
-  } else if (caregiverOnly) {
-    filterSql = " AND rn.note_type != 'observation'";
-  }
+  const teamOrOwner = await isTeamOrOwner(db, recipientId, req.user.id);
+  const { sql: filterSql, params: filterParams } =
+    noteVisibility({ cr, teamOrOwner, access, userId: req.user.id });
 
   const notes = await db.prepare(`
     SELECT rn.id, rn.care_recipient_id, rn.author_id, rn.content, rn.note_type,
@@ -323,9 +325,12 @@ router.get("/:id/photo", async (req, res) => {
     if (!note || !note.photo) return res.status(404).json({ error: "Photo not found" });
     const access = await hasAccess(db, note.care_recipient_id, req.user.id);
     if (!access) return res.status(404).json({ error: "Photo not found" });
+    // v1.106.38 — was a third longhand copy of the visibility rule, and a partial one: it
+    // covered the linked recipient and not the view-only caregiver, so a caregiver refused
+    // the observation in the list could still fetch the photo attached to it by id.
     const cr = await db.prepare("SELECT linked_user_id, family_user_id FROM care_recipients WHERE id = ?").get(note.care_recipient_id);
-    const isLinkedRecipient = cr && cr.linked_user_id === req.user.id && cr.family_user_id !== req.user.id;
-    if (note.note_type === "observation" && isLinkedRecipient && note.author_id !== req.user.id) {
+    const teamOrOwner = await isTeamOrOwner(db, note.care_recipient_id, req.user.id);
+    if (!mayReadNote({ cr, teamOrOwner, access, userId: req.user.id }, note)) {
       return res.status(404).json({ error: "Photo not found" });
     }
     // v1.106.3 — never echo the stored mime; see src/utils/serveMedia.js.

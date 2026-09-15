@@ -174,6 +174,8 @@ const CareEventSheet = window.CareEventSheet = ({ ev, canManage, onClose, onEdit
   // One care record: the team gets pushed, iPAi files it, and it shows up everywhere notes
   // already show up — with the appointment attached rather than floating loose.
   const [notes, setNotes] = useState(null);
+  // v1.106.38 — the lightbox for an appointment-note photo, same one as CareProfile.
+  const [viewingAttachments, setViewingAttachments] = useState(null);
   const [newNote, setNewNote] = useState('');
   const [addingNote, setAddingNote] = useState(false);
   const addingRef = React.useRef(false);
@@ -387,6 +389,21 @@ const CareEventSheet = window.CareEventSheet = ({ ev, canManage, onClose, onEdit
                   <div style={{ fontSize: 13.5, color: 'var(--text-primary)', lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                     {linkify(n.content)}
                   </div>
+                  {/* v1.106.38 — a note filed against an appointment is the same row in the
+                      same table as any other note, photo included. This list read has_photo
+                      off the wire and dropped it, so the picture of the discharge sheet went
+                      nowhere. AttachmentThumb, never a bare <img src> — a plain src is an
+                      unauthenticated request and renders "Authentication required" in the
+                      native app. */}
+                  {!!n.has_photo && typeof AttachmentThumb !== 'undefined' && (
+                    <div style={{ marginTop: 6 }}>
+                      <AttachmentThumb size={64}
+                        attachment={{ path: `/api/notes/${n.id}/photo`, name: 'Appointment photo', mime: '' }}
+                        onOpen={() => setViewingAttachments({
+                          list: [{ path: `/api/notes/${n.id}/photo`, name: 'Appointment photo', mime: '' }], index: 0,
+                        })} />
+                    </div>
+                  )}
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3 }}>
                     {n.author_first_name || 'Someone'}
                     {n.needs_attention ? ' \u00B7 needs attention' : ''}
@@ -508,6 +525,16 @@ const CareEventSheet = window.CareEventSheet = ({ ev, canManage, onClose, onEdit
           )}
         </div>
       </div>
+
+      {/* Outside the scrolling sheet, but still inside the overlay whose onClick is
+          onClose — so every click in the viewer has to be stopped here or dismissing the
+          photo would dismiss the whole appointment behind it. */}
+      {viewingAttachments && typeof AttachmentViewer !== 'undefined' && (
+        <div onClick={(e) => e.stopPropagation()}>
+          <AttachmentViewer attachments={viewingAttachments.list} startIndex={viewingAttachments.index}
+            onClose={() => setViewingAttachments(null)} />
+        </div>
+      )}
     </div>
   );
 };

@@ -473,6 +473,75 @@ function findRawAvatarColumnReads(files, PUBLIC) {
   return findings;
 }
 
+// ─── v1.106.38 — a list that shows notes must show the photos on them ───
+//
+// Pete: "Added a picture to a visit note today and it doesn't show up." It had been saved
+// correctly since v1.76.0 and every one of these endpoints returns a photo flag, but only
+// ONE of the four screens that draw notes ever read it. The other three rendered the text
+// and dropped the picture on the floor — no error, no empty box, nothing to notice.
+//
+// The rule: a file that reads one of these feeds AND renders the rows must also build that
+// feed's photo URL somewhere. The URL is the check, not the flag name: the first cut of
+// this lint looked for `has_photo|hasPhoto` and passed a deliberately broken TeamNotes,
+// because the visit half of the same file said `v.hasPhoto` and that satisfied the notes
+// half. The photo ENDPOINT is per-feed and can't be borrowed from the neighbour.
+//
+// `renders` keeps a screen that only counts rows (a badge, say) out of it — the rule is
+// about lists that draw the row and omit its picture.
+const PHOTO_FEEDS = [
+  {
+    name: "notes list (GET /api/notes/:careRecipientId)",
+    fetch: /apiFetch\(\s*[`'"]\/api\/notes\/\$\{(?:selectedId|recipientId|careRecipientId|id)\}[`'"]/,
+    renders: /\.content\b/,
+    url: /\/api\/notes\/\$\{[^}]*\}\/photo/,
+    want: "/api/notes/${n.id}/photo",
+  },
+  {
+    name: "appointment notes (GET /api/care-events/:id/notes)",
+    fetch: /apiFetch\(\s*[`'"]\/api\/care-events\/\$\{[^}]*\}\/notes/,
+    renders: /\.content\b/,
+    url: /\/api\/notes\/\$\{[^}]*\}\/photo/,
+    want: "/api/notes/${n.id}/photo",
+  },
+  {
+    // CaredForView gets its notes as a prop off the care-for dashboard payload, not from a
+    // fetch of its own, so there is no call site to key on. `authorRole` is that payload's
+    // note shape and appears nowhere else in the client — it is the fingerprint of the
+    // feed, and it is what identifies the screen that renders it.
+    name: "care-for dashboard notes (GET /api/dashboard, role care_for)",
+    fetch: /\bn\.authorRole\b/,
+    renders: /\.content\b/,
+    url: /\/api\/notes\/\$\{[^}]*\}\/photo/,
+    want: "/api/notes/${n.id}/photo",
+  },
+  {
+    name: "family visit feed (GET /api/family-visits/:careRecipientId)",
+    fetch: /apiFetch\(\s*[`'"]\/api\/family-visits\/\$\{[^}]*\}(?:\?|[`'"])/,
+    renders: /\.summary\b/,
+    url: /\/api\/family-visits\/\$\{[^}]*\}\/photo/,
+    want: "/api/family-visits/${v.id}/photo",
+  },
+];
+
+function findFeedsIgnoringPhotos(files, PUBLIC) {
+  const findings = [];
+  for (const rel of files) {
+    const abs = path.join(PUBLIC, rel);
+    if (!fs.existsSync(abs)) continue;
+    // Comments stripped on BOTH sides. A file that only mentions the photo URL in a comment
+    // has rendered nothing, and a comment naming an endpoint is not a call to it.
+    const code = fs.readFileSync(abs, "utf8")
+      .replace(/^\s*\/\/.*$/gm, "")
+      .replace(/\/\*[\s\S]*?\*\//g, "");
+    for (const feed of PHOTO_FEEDS) {
+      if (feed.fetch.test(code) && feed.renders.test(code) && !feed.url.test(code)) {
+        findings.push({ file: rel, feed: feed.name, want: feed.want });
+      }
+    }
+  }
+  return findings;
+}
+
 async function main() {
   const eslint = new ESLint({
     useEslintrc: false,
@@ -522,9 +591,10 @@ async function main() {
   const lateHooks = findHooksAfterEarlyReturn(files, PUBLIC);
   const earlyConsts = findConstUsedBeforeDeclaration(files, PUBLIC);
   const rawAvatars = findRawAvatarColumnReads(files, PUBLIC);
+  const blindFeeds = findFeedsIgnoringPhotos(files, PUBLIC);
 
-  if (errors.length === 0 && missingJsx.length === 0 && lateHooks.length === 0 && earlyConsts.length === 0 && rawAvatars.length === 0) {
-    console.log(`  [lint] ✓ ${files.length} client files, no NEW undeclared identifiers / dupe keys / dead code / undefined JSX components / unreachable functions / late hooks / TDZ uses / raw avatar_url reads${baseNote}`);
+  if (errors.length === 0 && missingJsx.length === 0 && lateHooks.length === 0 && earlyConsts.length === 0 && rawAvatars.length === 0 && blindFeeds.length === 0) {
+    console.log(`  [lint] ✓ ${files.length} client files, no NEW undeclared identifiers / dupe keys / dead code / undefined JSX components / unreachable functions / late hooks / TDZ uses / raw avatar_url reads / photo-blind note feeds${baseNote}`);
     return 0;
   }
 
@@ -559,6 +629,13 @@ async function main() {
     console.error(`\n  [lint] \u2717 ${rawAvatars.length} client reference(s) to the raw \`avatar_url\` column — an upload NULLs it, so anything deciding on it is wrong the moment a photo exists. Use hasPhoto / photoUrl / avatarUrl from the server:\n`);
     for (const a of rawAvatars) {
       console.error(`    ${a.file}:${a.line}  ${a.text}`);
+    }
+  }
+
+  if (blindFeeds.length) {
+    console.error(`\n  [lint] \u2717 ${blindFeeds.length} client screen(s) read a note/visit feed and ignore its photo flag \u2014 the picture is saved and served, the list just never draws it:\n`);
+    for (const b of blindFeeds) {
+      console.error(`    ${b.file}  reads the ${b.feed}, renders the rows, and never builds ${b.want}`);
     }
   }
   console.error("");

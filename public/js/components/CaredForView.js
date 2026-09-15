@@ -8,6 +8,8 @@ const CaredForView = window.CaredForView = () => {
   const [activeTab, setActiveTab] = useState('home');
   const [newNote, setNewNote] = useState('');
   const [editingNote, setEditingNote] = useState(null);
+  // v1.106.38 — the photo lightbox, same one the family's Care Profile uses.
+  const [viewingAttachments, setViewingAttachments] = useState(null);
   const [editContent, setEditContent] = useState('');
   const [saving, setSaving] = useState(false);
   const [monthOffset, setMonthOffset] = useState(0);
@@ -844,6 +846,18 @@ const CaredForView = window.CaredForView = () => {
                       )}
                     </div>
                     <div style={{ fontSize: '14px', color: 'var(--text-primary)', lineHeight: 1.5 }}>{n.content}</div>
+                    {/* v1.106.38 — her own record, her own photos. This list read the notes
+                        and never the flag, so a picture on a note about her showed up on the
+                        family's screen and not on hers. */}
+                    {!!n.hasPhoto && typeof AttachmentThumb !== 'undefined' && (
+                      <div style={{ marginTop: 6 }}>
+                        <AttachmentThumb size={64}
+                          attachment={{ path: `/api/notes/${n.id}/photo`, name: 'Care note photo', mime: '' }}
+                          onOpen={() => setViewingAttachments({
+                            list: [{ path: `/api/notes/${n.id}/photo`, name: 'Care note photo', mime: '' }], index: 0,
+                          })} />
+                      </div>
+                    )}
                     <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '6px' }}>{n.createdAt ? TimezoneHelper.formatTimestamp(n.createdAt, null, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : ''}</div>
                   </div>
                 )}
@@ -856,6 +870,11 @@ const CaredForView = window.CaredForView = () => {
             </div>
           )}
         </div>
+      )}
+
+      {viewingAttachments && typeof AttachmentViewer !== 'undefined' && (
+        <AttachmentViewer attachments={viewingAttachments.list} startIndex={viewingAttachments.index}
+          onClose={() => setViewingAttachments(null)} />
       )}
     </div>
   );
