@@ -7,8 +7,8 @@ build red.
 
 Hand-written sections (§3 "Where is…") are preserved across regeneration; edit those freely.
 
-Structure at last generation: 533 HTTP routes across 56 mounts ·
-93 `CREATE TABLE` statements · 12 background jobs · 38 socket events
+Structure at last generation: 534 HTTP routes across 56 mounts ·
+93 `CREATE TABLE` statements · 13 background jobs · 38 socket events
 (16 with no client listener) · 63 push event types · 57 `window.__*` globals.
 
 ---
@@ -91,7 +91,7 @@ JSX is *not* compiled in the browser; Babel-standalone is not loaded. Editing an
 | `/api/safety` | `src/routes/safety.js` | 6 |  |
 | `/api/scheduling` | `src/routes/nlScheduling.js` | 1 |  |
 | `/api/self-onboarding` | `src/routes/selfOnboarding.js` | 3 |  |
-| `/api/sessions` | `src/routes/sessions.js` **+** `src/routes/offers.js` | 41 | ⚠️ **multi-file mount — routes for this prefix live in more than one file** |
+| `/api/sessions` | `src/routes/sessions.js` **+** `src/routes/offers.js` | 42 | ⚠️ **multi-file mount — routes for this prefix live in more than one file** |
 | `/api/video` | `src/routes/videoCall.js` | 1 |  |
 | `/api/waitlist` | `src/routes/waitlist.js` | 3 |  |
 
@@ -139,6 +139,7 @@ Every job runs through `guardedPoller` → `withPollerLock` (`src/models/databas
 | 110 | Retention (v1.106.9, poller 110) | 24 h | `src/server.js:1685` |
 | 111 | (see src/server.js:1598) | 1 h | `src/server.js:1598` |
 | 112 | v1.106.13 — poller 112: proposals that nobody answered | 10 min | `src/server.js:1714` |
+| 113 | (see src/server.js:1757) | 1 min | `src/server.js:1757` |
 
 ---
 

@@ -15,6 +15,7 @@ const { getPlatformFeePercent } = require("../utils/platformFee");
 const { phaseFor: checkrPhaseFor } = require("../constants/checkrStatus");
 const { noteVisibility, isTeamOrOwner } = require("../utils/noteVisibility"); // v1.106.38
 const { breakBudgetMinutes } = require("../utils/visitBreaks"); // v1.106.41
+const { conditionReadDue } = require("../utils/settledCheck"); // v1.106.48
 
 const router = express.Router();
 router.use(authenticate);
@@ -516,6 +517,11 @@ async function caregiverDashboard(db, userId, res) {
       cp.hourly_rate AS cg_hourly_rate, cp.rate_daytime AS cg_rate_daytime,
       cp.rate_nighttime AS cg_rate_nighttime, cp.rate_overnight AS cg_rate_overnight,
       vl.check_in_time,
+      -- v1.106.48 — the settled-in question. Both facts, not the verdict: the caregiver's card
+      -- decides with conditionReadDue() so the rule lives in one file rather than in this
+      -- SELECT and in the poller separately.
+      vl.arrival_mood,
+      vl.check_out_time,
       -- v1.106.41 — the caregiver's own card needs to know whether she is out right now, and
       -- how much of her paid break budget is left, without a second request per session.
       -- Aggregated in the SELECT rather than joined: a join against visit_breaks multiplies
@@ -841,6 +847,9 @@ async function caregiverDashboard(db, userId, res) {
         interviewType: s.interview_type || null,
         interviewStatus: s.interview_status || null,
         checkInTime: s.check_in_time || null,
+        // v1.106.48 — has she been there long enough to be asked how she found things, and
+        // not answered yet. The same helper the poller's sibling question uses.
+        conditionReadDue: conditionReadDue(s),
         // v1.106.41 — see src/utils/visitBreaks.js for the rule these numbers come from.
         onBreak: Number(s.open_breaks || 0) > 0,
         breakStartedAt: s.break_started_at || null,

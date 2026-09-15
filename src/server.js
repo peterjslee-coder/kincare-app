@@ -822,7 +822,7 @@ app.use("/api/safety", require("./routes/safety"));
 
 // ─── App version check (lightweight, no auth) ───
 const { cancelPassedPrivateOffers, releaseExpiredExclusiveOffers } = require("./utils/exclusiveOffers");
-const APP_VERSION = "1.106.47";
+const APP_VERSION = "1.106.48";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION, minAppVersion: MIN_APP_VERSION });
@@ -1713,6 +1713,49 @@ async function start() {
     setTimeout(runProposalSweep, 90 * 1000);
     setInterval(runProposalSweep, 10 * 60 * 1000);
     console.log("  Proposal expiry poller started (time offers + time changes, every 10m)");
+  }
+
+  // ─── The settled-in question (v1.106.48) ───
+  //
+  // Pete: "There needs to be a mechanism to have the caregiver leave feedback on found
+  // condition 15 minutes after start... A trigger 15 minutes later to ask them to return to
+  // check-in would be ideal."
+  //
+  // Every minute, because the window it is looking for opens on a per-visit clock and a
+  // fifteen-minute question asked at twenty-two is a worse question. Its own lock key, 113:
+  // v1.105.50 had two unrelated pollers on key 104, each silently skipping turns whenever the
+  // other ticked first.
+  //
+  // The prompt is marked sent whether or not the push lands. A caregiver whose phone is off
+  // must not be asked sixty times when she turns it on, and her own screen keeps offering the
+  // question regardless — see conditionReadDue, which is a different question on purpose.
+  {
+    const runConditionPrompts = guardedPoller(113, async () => {
+      const { visitsDueConditionRead, SETTLED_MINUTES } = require("./utils/settledCheck");
+      const { sendPushToUser: pushFn } = require("./routes/push");
+      const db = await getDb();
+      const due = await visitsDueConditionRead(db);
+      for (const v of due) {
+        await db.prepare(
+          "UPDATE visit_logs SET condition_prompt_sent_at = NOW() WHERE id = ? AND condition_prompt_sent_at IS NULL"
+        ).run(v.visit_log_id);
+        if (!v.caregiver_user_id) continue;
+        try {
+          await pushFn(v.caregiver_user_id, {
+            title: `How is ${v.recipient_first_name || "she"} today?`,
+            // No condition in the body — it is a question, and the answer is the PHI.
+            body: `You've been there ${SETTLED_MINUTES} minutes. Tap to record how you found her.`,
+            data: { type: "condition_read", sessionId: v.session_id, page: "dashboard" },
+          }, "condition_read");
+        } catch (e) {
+          reportPollerFailure("settled-in condition prompt", e);
+        }
+      }
+      if (due.length > 0) console.log(`  [condition] asked ${due.length} caregiver(s) how they found things`);
+    });
+    setTimeout(runConditionPrompts, 45 * 1000);
+    setInterval(runConditionPrompts, 60 * 1000);
+    console.log("  Settled-in condition poller started (asks 15m after check-in, every 60s)");
   }
 
   // v1.105.50 — bound the inbound side too. Node's defaults leave `server.timeout` at 0,

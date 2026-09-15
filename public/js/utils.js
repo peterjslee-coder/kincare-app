@@ -1570,20 +1570,8 @@ const subscribeNativePush = window.subscribeNativePush = async () => {
         resolved = true;
         console.log('NativePush: registered with token', token.value?.substring(0, 20) + '...');
 
-        // Send token to our server
-        try {
-          const platform = window.Capacitor.getPlatform(); // 'android' or 'ios'
-          await apiFetch('/api/push/subscribe-native', {
-            method: 'POST',
-            body: JSON.stringify({
-              token: token.value,
-              platform: platform,
-            }),
-          });
-          console.log('NativePush: token saved to server');
-        } catch (err) {
-          console.error('NativePush: failed to save token to server:', err);
-        }
+        // Send token to our server — retried, see saveNativePushToken.
+        await saveNativePushToken(token.value, window.Capacitor.getPlatform(), { label: 'token' });
 
         resolve(token);
       });
@@ -1641,6 +1629,49 @@ const subscribeNativePush = window.subscribeNativePush = async () => {
 
 // ─── Native push token refresh handler ───
 // FCM/APNS may rotate the device token at any time. This listener catches
+// ─── v1.106.48 — a push token that failed to save must be tried again ───
+//
+// Pete's iPhone logged five of these in one session while his internet was patchy:
+//   "NativePush: failed to save refreshed token: ApiTimeoutError"
+// He has not noticed a missing notification, and the likeliest reading is the honest one — a
+// flaky connection, not a server fault.
+//
+// But both save paths gave up after one attempt and logged. That is the bad half regardless of
+// what caused it: APNs hands the device a NEW token when it rotates, the server keeps the old
+// one, and every push from then on goes to an address nobody is at. Nothing on the phone or
+// the server would say so. A caregiver stops being reachable and finds out by missing a visit.
+//
+// Three attempts with a widening gap, then a genuine complaint. Deliberately no queue and no
+// persistence: a token is only worth saving while the app is open and holding it, and a stale
+// one replayed later is worse than none.
+const saveNativePushToken = window.saveNativePushToken = async (token, platform, { label = 'token' } = {}) => {
+  const waits = [0, 3000, 12000];
+  let lastErr = null;
+  for (let attempt = 0; attempt < waits.length; attempt++) {
+    if (waits[attempt]) await new Promise((r) => setTimeout(r, waits[attempt]));
+    try {
+      const res = await apiFetch('/api/push/subscribe-native', {
+        method: 'POST',
+        body: JSON.stringify({ token, platform }),
+      });
+      // apiFetch resolves for a 4xx/5xx too, and a token the server refused is not saved.
+      if (res && res.ok) {
+        if (attempt > 0) console.log(`NativePush: ${label} saved on attempt ${attempt + 1}`);
+        else console.log(`NativePush: ${label} saved to server`);
+        return true;
+      }
+      lastErr = new Error(`server answered ${res ? res.status : 'nothing'}`);
+      // A refusal is a decision, not a blip — retrying it just repeats the answer.
+      if (res && res.status >= 400 && res.status < 500) break;
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+  console.error(`NativePush: gave up saving ${label} after ${waits.length} attempts:`,
+    lastErr && lastErr.message ? lastErr.message : lastErr);
+  return false;
+};
+
 // the new token and re-registers it with the server. Should be called once
 // on app startup (after login) — separate from the initial subscribe flow.
 const initNativeTokenRefresh = window.initNativeTokenRefresh = () => {
@@ -1653,16 +1684,7 @@ const initNativeTokenRefresh = window.initNativeTokenRefresh = () => {
       // Re-register the core listeners
       PushNotifications.addListener('registration', async (token) => {
         console.log('NativePush: token refreshed', token.value?.substring(0, 20) + '...');
-        try {
-          const platform = window.Capacitor.getPlatform();
-          await apiFetch('/api/push/subscribe-native', {
-            method: 'POST',
-            body: JSON.stringify({ token: token.value, platform }),
-          });
-          console.log('NativePush: refreshed token saved to server');
-        } catch (err) {
-          console.error('NativePush: failed to save refreshed token:', err);
-        }
+        await saveNativePushToken(token.value, window.Capacitor.getPlatform(), { label: 'refreshed token' });
       });
 
       PushNotifications.addListener('registrationError', (err) => {

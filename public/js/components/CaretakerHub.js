@@ -237,7 +237,42 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const photoInputRef = useRef(null);
   // Check-in/check-out state
   const [checkInSession, setCheckInSession] = useState(null);
-  const [checkInMood, setCheckInMood] = useState([]);
+  // v1.106.48 — the same eight faces, asked fifteen minutes in instead of at the door. Keyed
+  // by session id because two visits can overlap on a busy day.
+  const [conditionMood, setConditionMood] = useState([]);
+  const [conditionFor, setConditionFor] = useState(null);
+  const [savingCondition, setSavingCondition] = useState(false);
+
+  const CONDITION_FACES = [
+    { key: 'happy', emoji: '\uD83D\uDE0A', label: 'Happy' },
+    { key: 'surprised', emoji: '\uD83D\uDE2E', label: 'Surprised' },
+    { key: 'sleepy', emoji: '\uD83D\uDE34', label: 'Sleepy' },
+    { key: 'busy', emoji: '\uD83E\uDD17', label: 'Busy' },
+    { key: 'neutral', emoji: '\uD83D\uDE10', label: 'Neutral' },
+    { key: 'sad', emoji: '\uD83D\uDE22', label: 'Sad' },
+    { key: 'upset', emoji: '\uD83D\uDE20', label: 'Upset' },
+    { key: 'warm', emoji: '\uD83E\uDD70', label: 'Warm' },
+  ];
+
+  const saveCondition = async (sessionId) => {
+    if (savingCondition || conditionMood.length === 0) return;
+    setSavingCondition(true);
+    try {
+      const res = await apiFetch(`/api/sessions/${sessionId}/arrival-condition`, {
+        method: 'POST', body: JSON.stringify({ mood: conditionMood }),
+      });
+      const d = await res?.json().catch(() => ({}));
+      if (res?.ok) {
+        showToast('Thanks — noted', 'success');
+        setConditionFor(null);
+        setConditionMood([]);
+        try { const dr = await apiFetch('/api/dashboard'); if (dr?.ok) setData(await dr.json()); } catch {}
+      } else {
+        showToast(d?.error || 'Could not save that', 'error');
+      }
+    } catch { showToast('Could not reach the server — check your connection', 'error'); }
+    setSavingCondition(false);
+  };
   const [checkInNotes, setCheckInNotes] = useState(null);
   const [checkOutSession, setCheckOutSession] = useState(null);
   // v1.106.41 — which session's Step out / I'm back is mid-request. A ref would not re-render
@@ -1836,7 +1871,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                       )}
                       {isReady && !isActive && (
                         <button onClick={async () => {
-                          setCheckInMood([]);
+                          // v1.106.48 — the mood question left check-in; nothing to reset here any more.
                           setCheckInNotes(null);
                           setCheckInLocation(null);
                           setLocationError(null);
@@ -2013,6 +2048,61 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                           </div>
                         );
                       })()}
+                    </div>
+                  )}
+
+                  {/* ─── v1.106.48 — the settled-in question ───
+                      Pete: "There needs to be a mechanism to have the caregiver leave feedback
+                      on found condition 15 minutes after start." The push at fifteen minutes is
+                      the nudge; this is where the answer goes, and it keeps offering until she
+                      actually answers — a notification she swiped away must not take the
+                      question with it. */}
+                  {isActive && s.conditionReadDue && (
+                    <div style={{
+                      marginTop: 10, padding: '12px 14px', borderRadius: 12,
+                      border: '1.5px solid var(--role-color)', background: 'var(--bg-teal-light)',
+                    }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
+                        How did you find {recipName ? recipName.split(' ')[0] : 'her'}?
+                      </div>
+                      <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', marginTop: 2 }}>
+                        Now that you{'\u2019'}ve been there a bit. Pick as many as fit.
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginTop: 10 }}>
+                        {CONDITION_FACES.map((m) => {
+                          const on = conditionFor === s.id && conditionMood.includes(m.key);
+                          return (
+                            <button key={m.key} onClick={(e) => {
+                              e.stopPropagation();
+                              // Switching sessions clears the selection rather than carrying
+                              // one visit's answer onto another.
+                              if (conditionFor !== s.id) { setConditionFor(s.id); setConditionMood([m.key]); return; }
+                              setConditionMood((prev) => prev.includes(m.key) ? prev.filter((k) => k !== m.key) : [...prev, m.key]);
+                            }} style={{
+                              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                              padding: '10px 4px', borderRadius: 10, cursor: 'pointer',
+                              border: on ? '2px solid var(--color-success)' : '2px solid var(--border-light)',
+                              background: on ? 'var(--color-success-bg)' : 'var(--bg-card)',
+                            }}>
+                              <span style={{ fontSize: 22 }} aria-hidden="true">{m.emoji}</span>
+                              <span style={{ fontSize: 9.5, fontWeight: 500, color: on ? 'var(--color-success)' : 'var(--text-muted)' }}>{m.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); saveCondition(s.id); }}
+                        disabled={savingCondition || conditionFor !== s.id || conditionMood.length === 0}
+                        style={{
+                          width: '100%', minHeight: 44, marginTop: 10, borderRadius: 9, border: 'none',
+                          font: 'inherit', fontWeight: 700, fontSize: 13.5,
+                          background: (conditionFor === s.id && conditionMood.length > 0) ? 'var(--role-color)' : 'var(--border-light)',
+                          color: (conditionFor === s.id && conditionMood.length > 0) ? 'var(--text-on-primary)' : 'var(--text-muted)',
+                          cursor: (conditionFor === s.id && conditionMood.length > 0) ? 'pointer' : 'default',
+                          opacity: savingCondition ? 0.6 : 1,
+                        }}>
+                        {savingCondition ? 'Saving\u2026' : 'Save'}
+                      </button>
                     </div>
                   )}
                 </div>
@@ -3594,7 +3684,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
           earlyCheckInAllowed={profile.earlyCheckInAllowed}
           onLogVisit={(s) => {
             if (s.action === 'check-in') {
-              setCheckInMood([]);
+              // v1.106.48 — the mood question left check-in; nothing to reset here any more.
               setCheckInNotes(null);
               setCheckInLocation(null);
               setLocationError(null);
@@ -4007,40 +4097,17 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
             )}
 
             {/* ── STEP 2: Check In (mood, location, confirm) ── */}
+            {/* ─── v1.106.48 — check-in stops asking a question she cannot answer yet ───
+                Pete: "We're asking them to declare how the patient is doing before they've had
+                a chance to interact when they start their day." She is at the door with her
+                coat on. Whatever she picks is a guess, and a guess recorded as an observation
+                is worse than none, because the family reads it as one. The eight faces now
+                appear fifteen minutes in — see the settled-in card on the active visit. */}
             {checkInStep === 'checkin' && React.createElement('div', null,
               React.createElement('div', { style: { textAlign: 'center', marginBottom: 20 } },
                 React.createElement('h3', { style: { marginTop: 0, marginBottom: 4, fontSize: 22 } }, 'Almost there!'),
                 React.createElement('p', { style: { fontSize: 13, color: 'var(--text-secondary)', margin: 0 } },
-                  'How is ' + ((checkInSession.recipientName || checkInSession.recipient_name || '').split(' ')[0] || 'the care recipient') + ' right now?'
-                )
-              ),
-
-              React.createElement('div', { style: { marginBottom: 20 } },
-                React.createElement('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 } },
-                  [
-                    { key: 'happy', emoji: '😊', label: 'Happy' },
-                    { key: 'surprised', emoji: '😮', label: 'Surprised' },
-                    { key: 'sleepy', emoji: '😴', label: 'Sleepy' },
-                    { key: 'busy', emoji: '🤗', label: 'Busy' },
-                    { key: 'neutral', emoji: '😐', label: 'Neutral' },
-                    { key: 'sad', emoji: '😢', label: 'Sad' },
-                    { key: 'upset', emoji: '😠', label: 'Upset' },
-                    { key: 'warm', emoji: '🥰', label: 'Warm' },
-                  ].map(m =>
-                    React.createElement('button', {
-                      key: m.key, onClick: () => setCheckInMood(prev => prev.includes(m.key) ? prev.filter(k => k !== m.key) : [...prev, m.key]),
-                      style: {
-                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
-                        padding: '14px 8px', borderRadius: 12,
-                        border: checkInMood.includes(m.key) ? '2px solid var(--color-success)' : '2px solid var(--border-light)',
-                        background: checkInMood.includes(m.key) ? 'var(--color-success-bg)' : 'var(--bg-primary)',
-                        cursor: 'pointer', transition: 'all 0.15s',
-                      }
-                    },
-                      React.createElement('span', { style: { fontSize: 28 } }, m.emoji),
-                      React.createElement('span', { style: { fontSize: 10, fontWeight: 500, color: checkInMood.includes(m.key) ? 'var(--color-success)' : 'var(--text-muted)' } }, m.label)
-                    )
-                  )
+                  'We\u2019ll ask how ' + ((checkInSession.recipientName || checkInSession.recipient_name || '').split(' ')[0] || 'she') + ' is doing in a little while, once you\u2019ve settled in.'
                 )
               ),
 
@@ -4150,7 +4217,6 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                 setCheckSubmitting(true);
                 setIncompleteCheckIn(null);
                 const checkInData = {
-                  arrivalMood: checkInMood.length > 0 ? checkInMood : null,
                   checkInLatitude: checkInLocation?.lat || null,
                   checkInLongitude: checkInLocation?.lng || null,
                   briefingAcknowledged: true,

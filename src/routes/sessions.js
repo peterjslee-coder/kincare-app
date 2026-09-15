@@ -26,6 +26,7 @@ const { MODEL_HAIKU, getAnthropic } = require("../utils/aiModels");
 const { clampLimit, clampOffset } = require("../utils/queryLimits");
 const { storedImageUrl } = require("../utils/serveMedia"); // v1.106.46
 const { captureForSession } = require("../utils/sessionCapture"); // v1.106.47
+const { SETTLED_MINUTES, conditionReadDue } = require("../utils/settledCheck"); // v1.106.48
 const { summarizeBreaks, breakMinutes, breakNotice } = require("../utils/visitBreaks"); // v1.106.41
 
 const router = express.Router();
@@ -1921,6 +1922,76 @@ router.post("/:id/check-in", async (req, res) => {
 
 // ─── POST /api/sessions/:id/check-out ───
 // Caregiver checks out — updates visit_log, sets session to completed
+// ─── POST /:id/arrival-condition — how she found her, once she has looked ───
+//
+// v1.106.48. Pete: "We're asking them to declare how the patient is doing before they've had
+// a chance to interact when they start their day."
+//
+// Check-in no longer asks. This is where the answer arrives, from the prompt fifteen minutes
+// in — and it writes the SAME column check-in used to, `visit_logs.arrival_mood`, because it
+// is the same fact recorded at a moment when the caregiver can actually know it. A second
+// column would split one question in two and leave every reader deciding which to trust.
+router.post("/:id/arrival-condition", async (req, res) => {
+  try {
+    const db = await getDb();
+    const { mood } = req.body || {};
+    const list = Array.isArray(mood) ? mood.filter((m) => typeof m === "string").slice(0, 8) : [];
+    if (list.length === 0) return res.status(400).json({ error: "Pick at least one." });
+
+    const session = await db.prepare(`
+      SELECT cs.id, cs.status, cp.user_id AS caregiver_user_id
+        FROM care_sessions cs
+        LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+       WHERE cs.id = ?
+    `).get(req.params.id);
+    if (!session) return res.status(404).json({ error: "Session not found" });
+    if (session.caregiver_user_id !== req.user.id) {
+      return res.status(403).json({ error: "Only the caregiver on this visit can record how she's doing" });
+    }
+    if (session.status !== "in_progress") {
+      return res.status(400).json({ error: "That visit isn't in progress" });
+    }
+
+    // Conditional on arrival_mood still being empty: this is a first impression, and a second
+    // one recorded over it would quietly rewrite what the family already read. Changing her
+    // mind about how the day is going is what the check-out summary is for.
+    const done = await db.prepare(`
+      UPDATE visit_logs SET arrival_mood = ?
+       WHERE session_id = ? AND check_out_time IS NULL AND arrival_mood IS NULL
+    `).run(JSON.stringify(list), req.params.id);
+
+    if (!done || done.changes === 0) {
+      return res.status(409).json({ error: "That's already recorded for this visit." });
+    }
+
+    // The family hears about it in the feed, not as a push: she is fine, someone is with her,
+    // and a buzz for "Betty seems sleepy" is the noise that makes real alerts ignorable.
+    try {
+      const cr = await db.prepare(
+        "SELECT care_recipient_id, family_user_id FROM care_sessions WHERE id = ?"
+      ).get(req.params.id);
+      const cg = await db.prepare("SELECT first_name FROM users WHERE id = ?").get(req.user.id);
+      if (cr && cr.family_user_id) {
+        await db.prepare(
+          "INSERT INTO activity_feed (id, family_user_id, care_recipient_id, event_type, title, message, metadata) VALUES (?, ?, ?, 'condition_read', ?, ?, ?)"
+        ).run(
+          require("uuid").v4(), cr.family_user_id, cr.care_recipient_id,
+          `${cg ? cg.first_name : "Your caregiver"} settled in`,
+          `Recorded how things were about ${SETTLED_MINUTES} minutes into the visit.`,
+          JSON.stringify({ sessionId: req.params.id })
+        );
+      }
+      const emitToUser = req.app.get("emitToUser");
+      if (emitToUser && cr) emitToUser(cr.family_user_id, "activity_update", {});
+    } catch (e) { captureException(e, { where: "sessions: condition read activity" }); }
+
+    return res.json({ recorded: true, mood: list });
+  } catch (err) {
+    captureException(err, { where: "sessions: arrival condition", sessionId: req.params.id });
+    return res.status(500).json({ error: "Could not record that" });
+  }
+});
+
 // ═══════════════════════════════════════════════════════════════════════════
 // ─── POST /:id/release — "go home, you're paid for the day" ───
 //

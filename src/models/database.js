@@ -2391,6 +2391,29 @@ async function initializeDatabase() {
       //
       // The backfill computes the key in SQL for the rows already there rather than leaving
       // them to the NULL fallback forever.
+      // ─── v1.106.48 — ask how she is once, a quarter of an hour in ───
+      //
+      // Pete: "There needs to be a mechanism to have the caregiver leave feedback on found
+      // condition 15 minutes after start. We're asking them to declare how the patient is
+      // doing before they've had a chance to interact when they start their day."
+      //
+      // One column, and it is about the PROMPT rather than the answer: the answer already has
+      // a home in visit_logs.arrival_mood. What was missing is a record that we asked, without
+      // which a poller running every minute asks every minute.
+      //
+      // Deliberately not a boolean. "When did we ask" answers "why has she not replied yet"
+      // and "did this visit get asked at all", and a flag answers neither.
+      id: "041_condition_prompt_sent",
+      statements: [
+        `ALTER TABLE visit_logs ADD COLUMN IF NOT EXISTS condition_prompt_sent_at TIMESTAMPTZ`,
+        // The poller's exact question: open visits that have not been asked yet. Partial, so
+        // the index stays small — the answered ones are the overwhelming majority.
+        `CREATE INDEX IF NOT EXISTS idx_visit_logs_condition_prompt
+           ON visit_logs(check_in_time)
+           WHERE check_out_time IS NULL AND condition_prompt_sent_at IS NULL`,
+      ],
+    },
+    {
       // ─── v1.106.47 — released with pay ───
       //
       // Pete: "Sara arrives with Betty on Friday. When she gets there, she would like to let

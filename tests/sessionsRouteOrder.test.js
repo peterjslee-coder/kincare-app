@@ -55,6 +55,8 @@ const EXPECTED = [
   // v1.106.41 — stepping out mid-visit. Both are strictly more specific than "/:id" and are
   // registered above it, so neither is shadowed and neither shadows anything: "break" is a
   // literal segment, so "/:id/break/start" cannot swallow a real session id.
+  // v1.106.48 — the found-condition read, fifteen minutes in.
+  "POST /:id/arrival-condition",
   // v1.106.47 — release with full pay. Above "/:id" like the rest, and "release" is a literal
   // segment so it cannot swallow a session id.
   "POST /:id/release",
