@@ -32,7 +32,10 @@ const { v4: uuid } = require("uuid");
 
 jest.setTimeout(180000);
 
-const ROUTERS = { "/api/sessions": "../../src/routes/sessions" };
+const ROUTERS = {
+  "/api/sessions": "../../src/routes/sessions",
+  "/api/dashboard": "../../src/routes/dashboard",
+};
 
 let h, db, family, tina, tinaProfileId, recipientId;
 
@@ -341,5 +344,69 @@ describe("the opt-out key is one that can actually be set", () => {
     const fn = src.slice(src.indexOf("async function notifyFamilyOfBreak"), src.indexOf("router.post(\"/:id/break/start\""));
     expect(fn).toMatch(/\},\s*"session_in_progress"\)/);
     expect(fn).not.toMatch(/"push_[a-z_]+"\)/);
+  });
+});
+
+describe("the caregiver's own dashboard, which is where the button lives", () => {
+  // The caregiver branch of /api/dashboard had no integration coverage before this — only the
+  // family branch did — and v1.106.41 put three correlated subqueries against visit_breaks
+  // into it. A wrong one there is not a wrong number on a screen, it is a 500 on Tina's phone
+  // with no way for her to check in or out.
+  // The caregiver branch returns `upcomingSessions`; `sessions` is the family shape. Getting
+  // that wrong is precisely the drift tests/integration/apiFieldContract.itest.js exists for.
+  const dash = async () => {
+    const res = await h.request.get("/api/dashboard").set(h.auth(tina.token));
+    expect(res.status).toBe(200);
+    return res.body.upcomingSessions || [];
+  };
+
+  test("it loads at all for a caregiver mid-visit", async () => {
+    const id = await activeVisit();
+    expect((await dash()).some((x) => x.id === id)).toBe(true);
+  });
+
+  test("a visit with no break reports the budget and nothing used", async () => {
+    const id = await activeVisit({ hours: 8 });
+    const s = (await dash()).find((x) => x.id === id);
+    expect(s).toBeTruthy();
+    expect(s.onBreak).toBe(false);
+    expect(s.breakBudgetMinutes).toBe(30);
+    expect(s.breakMinutesUsed).toBe(0);
+  });
+
+  test("a short visit reports no budget, so the card can say so", async () => {
+    const id = await activeVisit({ hours: 2, checkedInMinutesAgo: 60, cost: 50 });
+    const s = (await dash()).find((x) => x.id === id);
+    expect(s.breakBudgetMinutes).toBe(0);
+  });
+
+  test("while she is out it says so, and says since when", async () => {
+    const id = await activeVisit();
+    await post(id, "break/start");
+    const s = (await dash()).find((x) => x.id === id);
+    expect(s.onBreak).toBe(true);
+    expect(s.breakStartedAt).toBeTruthy();
+  });
+
+  test("minutes used accumulate across breaks", async () => {
+    const id = await activeVisit();
+    await recordBreak(id, 200, 190);
+    await recordBreak(id, 100, 88);
+    const s = (await dash()).find((x) => x.id === id);
+    expect(s.onBreak).toBe(false);
+    expect(s.breakMinutesUsed).toBe(22);
+  });
+
+  test("breaks do not multiply the session row — two breaks is still ONE card", async () => {
+    // The subqueries are correlated rather than joined for exactly this reason: a join against
+    // visit_breaks returns the session once per break, which would put three copies of the
+    // same visit on her hub and treble that day's earnings total.
+    const id = await activeVisit();
+    await recordBreak(id, 300, 290);
+    await recordBreak(id, 200, 190);
+    await recordBreak(id, 100, 90);
+    const rows = (await dash()).filter((x) => x.id === id);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].breakMinutesUsed).toBe(30);
   });
 });
