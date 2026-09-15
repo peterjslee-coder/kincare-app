@@ -95,15 +95,28 @@ describe("storing by reference and reading it back", () => {
   });
 
   test("a marker whose object is gone is a 404, not a crash", async () => {
+    // v1.106.43 — this test asserted a THROW while its own name said 404, and the comment
+    // under it argued the throw was right: "every caller wraps this in try/catch with a 500,
+    // which is the honest answer... Silently 404ing would make a storage outage look like a
+    // deleted photo."
+    //
+    // The concern is real and the conclusion was wrong, and Pete found out how: "Pictures
+    // uploaded to visits are displaying. Shows an upload but just black box with an x." The
+    // 500 reached a family looking at their mother's care record as a black screen with a
+    // close button. It did not tell them anything true, and it did not tell anyone who could
+    // fix it anything either — a 500 from a photo route is noise.
+    //
+    // The word the old comment needed was SILENTLY. A 404 with nothing behind it would
+    // indeed hide an outage. A 404 with a reasoned Sentry event behind it — not_configured,
+    // missing_object or read_failed, see tests/storageResolve.test.js — tells the family the
+    // truth about their picture and the operator the truth about the bucket, which is a
+    // better answer to the old comment's worry than the 500 was.
     jest.resetModules();
     const { sendStoredFile } = require("../src/utils/serveMedia");
     let status = 200;
     const res = { set: () => {}, status(c) { status = c; return this; }, end() { return this; }, send() { return this; } };
-    await expect(sendStoredFile(res, "r2:visit-photo/2026-01-01/missing")).rejects.toThrow();
-    // The throw is deliberate: every caller wraps this in try/catch with a 500, which is the
-    // honest answer for "the row points at an object that is not there". Silently 404ing
-    // would make a storage outage look like a deleted photo.
-    expect(status).toBe(200);
+    await expect(sendStoredFile(res, "r2:visit-photo/2026-01-01/missing")).resolves.toBeDefined();
+    expect(status).toBe(404);
   });
 
   test("deleting a row's object is best-effort and never throws", async () => {

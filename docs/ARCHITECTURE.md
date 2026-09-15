@@ -127,18 +127,18 @@ Every job runs through `guardedPoller` → `withPollerLock` (`src/models/databas
 
 | Lock | Job | Interval | Declared |
 |---:|---|---|---|
-| 101 | Daily demo data refresh | 24 h | `src/server.js:1033` |
-| 102 | Session notification poller (every 60s) | 1 min | `src/server.js:1127` |
-| 103 | Session Accountability Poller | 1 min | `src/server.js:1402` |
-| 104 | Reimbursement push digest sweeper (v1.98.15) | 30 s | `src/server.js:1419` |
-| 105 | Auto-pay cron: charge overdue sessions | 5 min | `src/server.js:1511` |
-| 106 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1617` |
-| 107 | Care Tasks poller (v1.99.0) | 1 min | `src/server.js:1627` |
-| 108 | Care Events poller (v1.100.0) | 1 min | `src/server.js:1643` |
-| 109 | Kindred Reminder Delivery Poller | 1 min | `src/server.js:1433` |
-| 110 | Retention (v1.106.9, poller 110) | 24 h | `src/server.js:1680` |
-| 111 | (see src/server.js:1593) | 1 h | `src/server.js:1593` |
-| 112 | v1.106.13 — poller 112: proposals that nobody answered | 10 min | `src/server.js:1709` |
+| 101 | Daily demo data refresh | 24 h | `src/server.js:1038` |
+| 102 | Session notification poller (every 60s) | 1 min | `src/server.js:1132` |
+| 103 | Session Accountability Poller | 1 min | `src/server.js:1407` |
+| 104 | Reimbursement push digest sweeper (v1.98.15) | 30 s | `src/server.js:1424` |
+| 105 | Auto-pay cron: charge overdue sessions | 5 min | `src/server.js:1516` |
+| 106 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1622` |
+| 107 | Care Tasks poller (v1.99.0) | 1 min | `src/server.js:1632` |
+| 108 | Care Events poller (v1.100.0) | 1 min | `src/server.js:1648` |
+| 109 | Kindred Reminder Delivery Poller | 1 min | `src/server.js:1438` |
+| 110 | Retention (v1.106.9, poller 110) | 24 h | `src/server.js:1685` |
+| 111 | (see src/server.js:1598) | 1 h | `src/server.js:1598` |
+| 112 | v1.106.13 — poller 112: proposals that nobody answered | 10 min | `src/server.js:1714` |
 
 ---
 

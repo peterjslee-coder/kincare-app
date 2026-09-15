@@ -822,7 +822,7 @@ app.use("/api/safety", require("./routes/safety"));
 
 // ─── App version check (lightweight, no auth) ───
 const { cancelPassedPrivateOffers, releaseExpiredExclusiveOffers } = require("./utils/exclusiveOffers");
-const APP_VERSION = "1.106.42";
+const APP_VERSION = "1.106.43";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION, minAppVersion: MIN_APP_VERSION });
@@ -842,6 +842,11 @@ app.get("/api/health", (req, res) => {
     // the Secure flag is being set — anyone can already observe that in DevTools.
     environment,
     secureCookies: cookiesSecure,
+    // v1.106.43 — the same argument as the two above. Whether uploads go to R2 or stay in the
+    // database decides which code path serves every photo, and it was invisible from outside:
+    // chasing "the picture shows a black box" meant guessing at which of two systems was in
+    // play. A label, never a value — no account id, no bucket name, no key.
+    blobStorage: require("./utils/storage").storageMode(),
     timestamp: new Date().toISOString(),
   });
 });

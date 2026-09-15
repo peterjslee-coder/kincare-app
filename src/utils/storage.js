@@ -97,22 +97,79 @@ async function storeFileData(prefix, dataUri) {
 /**
  * Resolve a file_data column value back to a base64 data URI.
  * Pass-through for plain values (legacy base64 rows, or storage disabled).
- * Throws if an "r2:" marker can't be fetched — callers already have
- * try/catch + 500 paths for corrupt data.
+ *
+ * v1.106.43 — returns null when an "r2:" marker cannot be read, instead of throwing.
+ *
+ * Pete: "Pictures uploaded to visits are displaying. Shows an upload but just black box with
+ * an x." This is the mechanism. The previous version of this comment said "Throws if an 'r2:'
+ * marker can't be fetched — callers already have try/catch + 500 paths for corrupt data",
+ * and that was a deliberate choice that produced a bad outcome twice over:
+ *
+ *   · A 500 is the wrong STORY. "This picture is not where the database says it is" became
+ *     "the server is broken", which is what the family actually sees: a black viewer with a
+ *     close button and an error. A 404 is the truth, and the client already renders it
+ *     calmly as "No preview".
+ *
+ *   · And it was not even a throw in the worst case. `getClient()` returns NULL when R2 is
+ *     not configured, so a row written while R2 was on and read after it was off crashed on
+ *     `null.send(...)` — a TypeError, from a line that reads like a network call.
+ *
+ * Returning null routes both into sendStoredFile's existing 404, and BOTH are reported: a
+ * photo that quietly 404s forever is its own kind of lie, so the operator hears about it via
+ * Sentry even though the family does not get an error. That split is the point — the person
+ * looking at their mother's care record gets a calm, true answer, and the person who can fix
+ * the bucket gets woken up.
  */
 async function resolveFileData(value) {
   if (!isRemote(value)) return value;
   const key = value.slice(MARKER.length);
-  const { GetObjectCommand } = require("@aws-sdk/client-s3");
-  const resp = await getClient().send(new GetObjectCommand({
-    Bucket: process.env.R2_UPLOADS_BUCKET,
-    Key: key,
-  }));
-  const chunks = [];
-  for await (const chunk of resp.Body) chunks.push(chunk);
-  const buf = Buffer.concat(chunks);
-  const mime = resp.ContentType || "application/octet-stream";
-  return `data:${mime};base64,${buf.toString("base64")}`;
+  const client = getClient();
+
+  if (!client) {
+    // The row says R2 and this deployment has no R2. That is a configuration fault, not a
+    // missing picture, and it means EVERY blob written while it was on is unreadable.
+    report(new Error("Blob row points at R2 but R2 is not configured here"), {
+      where: "storage: resolveFileData", key, reason: "not_configured",
+    });
+    return null;
+  }
+
+  try {
+    const { GetObjectCommand } = require("@aws-sdk/client-s3");
+    const resp = await client.send(new GetObjectCommand({
+      Bucket: process.env.R2_UPLOADS_BUCKET,
+      Key: key,
+    }));
+    const chunks = [];
+    for await (const chunk of resp.Body) chunks.push(chunk);
+    const buf = Buffer.concat(chunks);
+    const mime = resp.ContentType || "application/octet-stream";
+    return `data:${mime};base64,${buf.toString("base64")}`;
+  } catch (err) {
+    report(err, {
+      where: "storage: resolveFileData", key,
+      reason: err && (err.name === "NoSuchKey" || err.Code === "NoSuchKey") ? "missing_object" : "read_failed",
+    });
+    return null;
+  }
+}
+
+/** Sentry, without making this module depend on it loading. */
+function report(err, context) {
+  try {
+    require("./sentry").captureException(err, context);
+  } catch { /* reporting must never be the thing that fails a read */ }
+  console.error(`[storage] ${context.reason}: ${err && err.message} (key ${context.key})`);
+}
+
+/**
+ * Which backing store new uploads go to. Surfaced on /api/health for the same reason
+ * `environment` and `secureCookies` are (v1.105.3): a deployment's own idea of itself was
+ * invisible from outside, and that is how a misconfiguration lives for months. A label, never
+ * a value — no account id, no bucket name, no key.
+ */
+function storageMode() {
+  return isEnabled() ? "r2" : "database";
 }
 
 /** Best-effort delete of the backing object when a row is removed. Never throws. */
@@ -129,4 +186,4 @@ async function deleteFileData(value) {
   }
 }
 
-module.exports = { isEnabled, isRemote, storeFileData, resolveFileData, deleteFileData };
+module.exports = { isEnabled, isRemote, storeFileData, resolveFileData, deleteFileData, storageMode };
