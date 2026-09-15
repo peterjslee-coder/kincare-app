@@ -60,11 +60,25 @@ describe("C1 — the money paths write a whole ledger or none of it", () => {
   });
 
   test("and does it BEFORE the capture, so a Stripe failure cannot leave the log unclosed", () => {
+    // v1.106.47 — the capture moved into utils/sessionCapture (one implementation, now that a
+    // release can also end a visit), so the landmark is the call rather than the require. The
+    // ordering property is unchanged and is the whole point: the session and its visit log
+    // commit together, and only then does anything touch Stripe — a capture cannot be rolled
+    // back by us, and a half-state where the money is owed against an unrecorded check-out is
+    // the bad one.
     const txAt = sess.indexOf("const coGeo = geofenceEvidence(checkOutLatitude");
-    const captureAt = sess.indexOf("const { captureSessionPayment } = require(\"./accountability\");");
+    const captureAt = sess.indexOf('captureForSession(db, req.params.id, adjustedCost * 100');
     expect(txAt).toBeGreaterThan(-1);
     expect(captureAt).toBeGreaterThan(-1);
     expect(txAt).toBeLessThan(captureAt);
+  });
+
+  test("the release ends the visit before it charges, for the same reason", () => {
+    const relTx = sess.indexOf('"UPDATE visit_breaks SET ended_at = NOW(), ended_by = \'released\'');
+    const relCapture = sess.indexOf("captureForSession(db, req.params.id, fullCost * 100");
+    expect(relTx).toBeGreaterThan(-1);
+    expect(relCapture).toBeGreaterThan(-1);
+    expect(relTx).toBeLessThan(relCapture);
   });
 
   test("the second visit_logs UPDATE is gone — it must not run twice", () => {

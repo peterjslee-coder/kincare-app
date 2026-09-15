@@ -2391,6 +2391,27 @@ async function initializeDatabase() {
       //
       // The backfill computes the key in SQL for the rows already there rather than leaving
       // them to the NULL fallback forever.
+      // ─── v1.106.47 — released with pay ───
+      //
+      // Pete: "Sara arrives with Betty on Friday. When she gets there, she would like to let
+      // Tina take the rest of the day off with pay. Right now there's no ability for Tina to
+      // check out without her pay being [cut]. Care team should be able to end session that
+      // would send Tina a message, letting her know she can leave with pay."
+      //
+      // Three columns on care_sessions rather than on visit_logs, because a release is a
+      // BILLING decision — somebody chose to pay for hours nobody worked — and care_sessions
+      // is the money record. The reason is free text and optional; the two ids are not, because
+      // "who decided this" is the whole point of writing it down.
+      id: "040_session_released_with_pay",
+      statements: [
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS released_by_user_id TEXT REFERENCES users(id)`,
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS released_at TIMESTAMPTZ`,
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS release_reason TEXT`,
+        `CREATE INDEX IF NOT EXISTS idx_care_sessions_released
+           ON care_sessions(released_at) WHERE released_at IS NOT NULL`,
+      ],
+    },
+    {
       // ─── v1.106.41 — stepping out mid-visit ───
       //
       // Pete: "It's possible that Tina will take a job, need to leave for a couple hours,

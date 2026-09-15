@@ -25,6 +25,7 @@ const { decideCancellationCharge, CANCEL_FEE_WINDOW_HOURS } = require("../utils/
 const { MODEL_HAIKU, getAnthropic } = require("../utils/aiModels");
 const { clampLimit, clampOffset } = require("../utils/queryLimits");
 const { storedImageUrl } = require("../utils/serveMedia"); // v1.106.46
+const { captureForSession } = require("../utils/sessionCapture"); // v1.106.47
 const { summarizeBreaks, breakMinutes, breakNotice } = require("../utils/visitBreaks"); // v1.106.41
 
 const router = express.Router();
@@ -1921,6 +1922,177 @@ router.post("/:id/check-in", async (req, res) => {
 // ─── POST /api/sessions/:id/check-out ───
 // Caregiver checks out — updates visit_log, sets session to completed
 // ═══════════════════════════════════════════════════════════════════════════
+// ─── POST /:id/release — "go home, you're paid for the day" ───
+//
+// v1.106.47. Pete: "Sara arrives with Betty on Friday. When she gets there, she would like to
+// let Tina take the rest of the day off with pay. Right now there's no ability for Tina to
+// check out without her pay being [cut]. Care team should be able to end session that would
+// send Tina a message, letting her know she can leave with pay."
+//
+// Deliberately NOT a check-out performed by somebody else. Check-out is the caregiver's own
+// account of her visit — her departure mood, her summary, her geofence point — and the
+// early-departure branch exists to dock pay when she leaves before the end. Running that on
+// her behalf would put Sara's decision on Tina's record and then charge Tina for it.
+//
+// So this is its own ending: the session completes at the FULL booked amount, the visit log
+// closes with no early-departure penalty and no break deduction, and the row records who
+// decided it. Tina is told, in those words.
+//
+// ── Who may do it ──
+//
+// CAP.BOOK_CARE, which Pete chose when he said "care-team members with edit rights" — `edit`
+// maps to every capability, so that is exactly the set. It is also the right capability by
+// this codebase's own reasoning rather than by coincidence: BOOK_CARE exists because "booking
+// a caregiver spends the billing contact's money and puts a stranger in Betty's house"
+// (capabilities.js, v1.105.165), and paying for four hours nobody worked is the same kind of
+// trust. A viewer who can read the care plan cannot spend on it.
+//
+// ── What it does NOT forgive ──
+//
+// Nothing about the break rule is re-litigated here; it is simply not applied, because Pete
+// answered that directly: full day, no deductions at all. A caregiver released at 2pm having
+// taken a 45-minute lunch is paid the whole booking. The breaks stay on the record — the
+// family can see she stepped out — they just do not reach the bill.
+// ═══════════════════════════════════════════════════════════════════════════
+router.post("/:id/release", async (req, res) => {
+  try {
+    const db = await getDb();
+    const reason = typeof req.body?.reason === "string" ? req.body.reason.trim().slice(0, 500) : null;
+
+    const session = await db.prepare(`
+      SELECT cs.*, cp.user_id AS caregiver_user_id,
+             cr.first_name AS recipient_first_name, cr.timezone AS care_timezone
+        FROM care_sessions cs
+        LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+        LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+       WHERE cs.id = ?
+    `).get(req.params.id);
+    if (!session) return res.status(404).json({ error: "Session not found" });
+
+    // ── A caregiver cannot release herself ──
+    //
+    // That is an early check-out with the penalty removed, which is the one thing this must
+    // not become. The guard is load-bearing rather than theoretical because of the Julia shape
+    // this codebase has hit before — "Julia IS on Betty's care team AND she's a caregiver".
+    // Give a caregiver an 'edit' share and she holds BOOK_CARE, so the capability gate below
+    // lets her through and only this stops her sending herself home on full pay.
+    //
+    // It is checked FIRST for a smaller reason, and I first wrote a larger one that was wrong:
+    // the order does not decide who is refused (Julia is refused either way, and the revert
+    // test proves it). It decides what an ORDINARY caregiver is told. Below the gate, Tina is
+    // refused for lacking booking access and advised to ask for some — advice that would never
+    // help her, because no amount of booking access lets her release herself.
+    if (session.caregiver_user_id === req.user.id) {
+      return res.status(403).json({ error: "A caregiver can't release herself. Check out as normal, or ask the family to release you." });
+    }
+
+    // Asked of the row, never of a role string (lint:authz).
+    const { recipientCapabilities } = require("../utils/access");
+    const { can, CAP } = require("../utils/capabilities");
+    const caps = await recipientCapabilities(db, session.care_recipient_id, req.user.id);
+    if (!can(caps, CAP.BOOK_CARE)) {
+      return res.status(403).json({
+        error: "Letting a caregiver go early with full pay is a booking decision, so it needs booking access. Ask the care team leader to release her, or to give you booking access.",
+      });
+    }
+
+    if (session.status !== "in_progress") {
+      return res.status(400).json({
+        error: session.status === "completed"
+          ? "That visit has already ended."
+          : `That visit isn't in progress — its status is '${session.status}'.`,
+      });
+    }
+
+    const visitLog = await db.prepare(
+      "SELECT id FROM visit_logs WHERE session_id = ? ORDER BY created_at DESC LIMIT 1"
+    ).get(req.params.id);
+
+    // The full booked amount, whatever it currently is. `estimated_cost` and `duration_hours`
+    // are deliberately NOT recalculated: they already hold what was agreed, including any
+    // accepted time change, and the whole point of a release is that the clock stops mattering.
+    const fullCost = parseFloat(session.estimated_cost) || 0;
+
+    await db.transaction(async (tx) => {
+      await tx.prepare(`
+        UPDATE care_sessions SET
+          status = 'completed',
+          released_by_user_id = ?,
+          released_at = NOW(),
+          release_reason = ?,
+          overtime_minutes = 0,
+          overtime_cost = 0,
+          review_required = 1,
+          completed_at = NOW(),
+          payment_due_at = NOW() + INTERVAL '1 hour',
+          updated_at = NOW()
+        WHERE id = ? AND status = 'in_progress'
+      `).run(req.user.id, reason, req.params.id);
+
+      if (visitLog) {
+        // No early_departure_reason and no early_departure_minutes: she did not leave early,
+        // she was sent home. Writing those would dock her in every report that reads them.
+        await tx.prepare(
+          "UPDATE visit_logs SET check_out_time = NOW() WHERE id = ? AND check_out_time IS NULL"
+        ).run(visitLog.id);
+      }
+
+      // An open break is closed so nothing is left running, and it changes no money here.
+      await tx.prepare(
+        "UPDATE visit_breaks SET ended_at = NOW(), ended_by = 'released' WHERE session_id = ? AND ended_at IS NULL"
+      ).run(req.params.id);
+    });
+
+    // Same capture, same retry path, same alerting as a check-out — one implementation.
+    await captureForSession(db, req.params.id, fullCost * 100, {
+      where: "release", testMode: !!req.user.impersonatedBy,
+    });
+
+    // ── Tell her, in Pete's words ──
+    const releaser = await db.prepare("SELECT first_name FROM users WHERE id = ?").get(req.user.id);
+    const who = releaser ? releaser.first_name : "The family";
+    if (session.caregiver_user_id && !req.user.impersonatedBy) {
+      try {
+        await sendPushToUser(session.caregiver_user_id, {
+          title: `You're free to go — with pay`,
+          // First name and the fact of it. No condition, no reason text: the reason is the
+          // family's note to itself and may say anything at all.
+          body: `${who} has taken over with ${session.recipient_first_name}. You're checked out and you'll be paid for the full visit.`,
+          data: { type: "session_released", sessionId: req.params.id, page: "dashboard" },
+        }, "session_complete");
+      } catch (e) { captureException(e, { where: "sessions: notify caregiver of release" }); }
+    }
+
+    const emitToUser = req.app.get("emitToUser");
+    if (emitToUser) {
+      if (session.caregiver_user_id) {
+        emitToUser(session.caregiver_user_id, "session_update", {
+          sessionId: req.params.id, status: "completed", released: true,
+        });
+      }
+      emitToUser(session.family_user_id, "session_update", { sessionId: req.params.id, status: "completed" });
+      emitToUser(session.family_user_id, "activity_update", {});
+    }
+
+    try {
+      await db.prepare(
+        "INSERT INTO activity_feed (id, family_user_id, care_recipient_id, event_type, title, message, metadata) VALUES (?, ?, ?, 'session_released', ?, ?, ?)"
+      ).run(
+        require("uuid").v4(), session.family_user_id, session.care_recipient_id,
+        `Visit ended early with full pay`,
+        `${who} released the caregiver for the rest of the visit with ${session.recipient_first_name}. The full booking is still being paid.`,
+        JSON.stringify({ sessionId: req.params.id, releasedBy: req.user.id, fullCost })
+      );
+    } catch (e) { captureException(e, { where: "sessions: activity for release" }); }
+
+    return res.json({ released: true, paid: fullCost, caregiverNotified: !!session.caregiver_user_id });
+  } catch (err) {
+    captureException(err, { where: "sessions: release", sessionId: req.params.id });
+    return res.status(500).json({ error: "Could not end that visit" });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
 // ─── Stepping out mid-visit — POST /:id/break/start and /:id/break/end ───
 //
 // v1.106.41. Pete: "It's possible that Tina will take a job, need to leave for a couple
@@ -2317,56 +2489,13 @@ router.post("/:id/check-out", async (req, res) => {
 
     // ─── Capture payment (Stripe auth → charge) ───
     // Skip when admin is impersonating (test mode) — don't charge real money
+    // v1.106.47 — the capture, its retry path and its alerting moved to
+    // utils/sessionCapture so the new release-with-pay route runs the same one. The v1.105.48
+    // reasoning that makes it careful is preserved in that file.
     const isTestCheckout = !!req.user.impersonatedBy;
-    if (!isTestCheckout) {
-      // ─── v1.105.48 — a failed capture used to end its life in a console.warn ───
-      //
-      // Not failing check-out over a payment problem is right: the visit happened, and the
-      // caregiver shouldn't be held at the door by Stripe. But the session then kept
-      // payment_status = 'authorized', and NOTHING retries that state — the auto-pay
-      // sweeper takes only NULL or 'pending' (payments.js), and the family lockout banner
-      // fires only on 'failed'. So the money never moved: caregiver never paid, family
-      // never charged, no dunning, no banner, nothing in Sentry, and the authorization
-      // quietly expired about a week later. Nobody was positioned to notice.
-      //
-      // A failure now hands the session to the retry path AND raises an alert.
-      const failCapture = async (why) => {
-        try {
-          await db.prepare(`
-            UPDATE care_sessions SET payment_status = 'pending'
-            WHERE id = ? AND (payment_status = 'authorized' OR payment_status IS NULL)
-          `).run(req.params.id);
-        } catch (e) {
-          captureException(e, { where: "checkout: mark capture for retry", sessionId: req.params.id });
-        }
-        captureException(new Error(`Session payment capture failed: ${why}`), {
-          where: "checkout: capture", sessionId: req.params.id,
-        });
-      };
-
-      // If payment was pre-authorized, capture the appropriate amount now
-      try {
-        const { captureSessionPayment } = require("./accountability");
-        const captureAmountCents = Math.round(adjustedCost * 100);
-        if (captureAmountCents > 0) {
-          const captureResult = await captureSessionPayment(req.params.id, captureAmountCents);
-          if (captureResult.error) {
-            console.warn(`[checkout] Payment capture skipped: ${captureResult.error}`);
-            await failCapture(captureResult.error);
-          }
-        }
-      } catch (captureErr) {
-        // Still non-blocking for check-out itself — but no longer invisible.
-        console.error("[checkout] Payment capture error (non-blocking):", captureErr.message);
-        await failCapture(captureErr.message);
-      }
-    } else {
-      console.log(`[checkout] TEST MODE — skipping payment capture for session ${req.params.id.slice(0,8)}`);
-      // Waive payment and review for test sessions so they don't trigger lockout banners
-      await db.prepare(`
-        UPDATE care_sessions SET payment_status = 'waived', review_required = 0, payment_due_at = NULL WHERE id = ?
-      `).run(req.params.id);
-    }
+    await captureForSession(db, req.params.id, adjustedCost * 100, {
+      where: "checkout", testMode: isTestCheckout,
+    });
 
     // (the visit log closed inside the transaction above — v1.106.10)
 

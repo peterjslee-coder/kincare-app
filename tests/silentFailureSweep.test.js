@@ -47,10 +47,22 @@ describe("things that were legally or financially broken", () => {
     // only NULL or 'pending'; the lockout banner fires only on 'failed'. So the caregiver
     // was never paid, the family never charged, and the hold expired a week later in
     // silence. Check-out still succeeds — the visit happened — but the money is now chased.
+    //
+    // v1.106.47 — this lived inline in the check-out handler until a second way to end a visit
+    // appeared (a care-team member releasing the caregiver with full pay). Two copies of a
+    // Stripe capture with two copies of the retry-and-alert logic is how the second one
+    // quietly stops retrying later, which is the same class of silence this test is about. One
+    // implementation now, in utils/sessionCapture, and BOTH endings are asserted to use it.
+    const cap = code("src/utils/sessionCapture.js");
+    expect(cap).toMatch(/const failCapture = async \(why\) => \{/);
+    expect(cap).toMatch(/UPDATE care_sessions SET payment_status = 'pending'/);
+    expect(cap).toMatch(/where: `\$\{where\}: capture`/);
+
     const s = code("src/routes/sessions.js");
-    expect(s).toMatch(/const failCapture = async \(why\) => \{/);
-    expect(s).toMatch(/UPDATE care_sessions SET payment_status = 'pending'/);
-    expect(s).toMatch(/where: "checkout: capture"/);
+    expect(s).toMatch(/captureForSession\(db, req\.params\.id, adjustedCost \* 100, \{[\s\S]{0,80}where: "checkout"/);
+    expect(s).toMatch(/captureForSession\(db, req\.params\.id, fullCost \* 100, \{[\s\S]{0,80}where: "release"/);
+    // And nobody has re-grown a local copy beside them.
+    expect(s).not.toMatch(/const failCapture = async/);
   });
 
   test("we only say 'you have not been charged' when the hold actually released", () => {

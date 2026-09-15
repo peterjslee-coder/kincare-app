@@ -9,6 +9,40 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, 
   const [editingInstructions, setEditingInstructions] = useState(false);
   const [instructionsText, setInstructionsText] = useState('');
   const [savingInstructions, setSavingInstructions] = useState(false);
+  // v1.106.47 — "let her go, with pay". Two-step on purpose: it ends a visit and charges the
+  // whole booking, so it is not something to do with one stray tap.
+  const [releaseStep, setReleaseStep] = useState(null);
+  const [releaseReason, setReleaseReason] = useState('');
+  const [releasing, setReleasing] = useState(false);
+  const [releaseError, setReleaseError] = useState('');
+
+  const doRelease = async () => {
+    if (releasing) return;
+    setReleasing(true);
+    setReleaseError('');
+    try {
+      const res = await apiFetch(`/api/sessions/${sessionId}/release`, {
+        method: 'POST',
+        body: JSON.stringify({ reason: releaseReason.trim() || null }),
+      });
+      const d = await res?.json().catch(() => ({}));
+      if (res?.ok) {
+        setReleaseStep(null);
+        setReleaseReason('');
+        if (typeof showToast === 'function') {
+          showToast(`Visit ended \u2014 she'll be paid $${Number(d.paid || 0).toFixed(2)} for the full booking`, 'success');
+        }
+        if (onRefresh) onRefresh();
+        handleClose();
+      } else {
+        // The server owns the permission decision, so its words are the ones to show.
+        setReleaseError(d?.error || 'Could not end that visit.');
+      }
+    } catch {
+      setReleaseError('Could not reach the server — check your connection.');
+    }
+    setReleasing(false);
+  };
 
   // Push history state so back button / swipe-back closes the modal instead of navigating away
   useEffect(() => {
@@ -236,6 +270,48 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, 
                   )}
                 </div>
               </div>
+
+              {/* ─── v1.106.47 — release the caregiver with full pay ───
+                  Pete: "Sara arrives with Betty on Friday... she would like to let Tina take
+                  the rest of the day off with pay. Right now there's no ability for Tina to
+                  check out without her pay being [cut]."
+                  Family side only, and only while the visit is running. The server decides
+                  whether this caller may actually do it (CAP.BOOK_CARE) — this button is the
+                  offer, not the permission, so a refusal is shown rather than assumed. */}
+              {role !== 'caregiver' && s.status === 'in_progress' && (
+                <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 10, padding: 14, marginBottom: 14 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>Taking over from here?</div>
+                  <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', marginTop: 3, lineHeight: 1.45 }}>
+                    End the visit now and pay {s.caregiver_name ? s.caregiver_name.split(' ')[0] : 'the caregiver'} for the whole booking. She{'\u2019'}ll be told she can leave.
+                  </div>
+                  {releaseStep === 'confirm' ? (
+                    <div style={{ marginTop: 10 }}>
+                      <input value={releaseReason} onChange={(e) => setReleaseReason(e.target.value)}
+                        placeholder="Why, for your own records (optional)" maxLength={500}
+                        style={{ width: '100%', padding: '9px 11px', borderRadius: 8, border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-primary)', font: 'inherit', fontSize: 13, boxSizing: 'border-box' }} />
+                      <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                        <button onClick={doRelease} disabled={releasing} style={{
+                          flex: 1, minHeight: 44, borderRadius: 9, border: 'none', font: 'inherit', fontWeight: 700, fontSize: 13.5,
+                          background: 'var(--color-success)', color: 'var(--text-on-primary)', cursor: releasing ? 'default' : 'pointer', opacity: releasing ? 0.6 : 1,
+                        }}>{releasing ? 'Ending…' : `Yes — end it and pay in full`}</button>
+                        <button onClick={() => { setReleaseStep(null); setReleaseReason(''); }} disabled={releasing} style={{
+                          minHeight: 44, padding: '0 16px', borderRadius: 9, border: '1px solid var(--border-color)', font: 'inherit', fontSize: 13.5,
+                          background: 'var(--bg-card)', color: 'var(--text-secondary)', cursor: 'pointer',
+                        }}>Cancel</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button onClick={() => setReleaseStep('confirm')} style={{
+                      width: '100%', minHeight: 44, marginTop: 10, borderRadius: 9,
+                      border: '1px solid var(--border-color)', background: 'var(--bg-card)',
+                      color: 'var(--text-primary)', font: 'inherit', fontWeight: 600, fontSize: 13.5, cursor: 'pointer',
+                    }}>Let her go, with pay</button>
+                  )}
+                  {releaseError && (
+                    <div style={{ fontSize: 12, color: 'var(--color-error)', marginTop: 8, lineHeight: 1.4 }}>{releaseError}</div>
+                  )}
+                </div>
+              )}
 
               {/* Caregiver Instructions — editable by family/care_for, read-only for caregiver */}
               {(() => {
