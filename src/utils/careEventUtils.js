@@ -138,6 +138,39 @@ function buildIcs(ev, { now = new Date() } = {}) {
   return lines.join("\r\n") + "\r\n";
 }
 
+// v1.107.5 — does this event fall inside one of her shifts? Minutes are counted from midnight
+// of `today` in the person's zone, so a shift that began yesterday or runs past midnight works.
+// All-day events are shown (they are happening while she is there). An event with no end is
+// treated as its start time. A visit still running past its booked end stays open until now.
+function hhmmToMin(t) {
+  const m = /^(\d{1,2}):(\d{2})\s*(am|pm)?/i.exec(String(t || "").trim());
+  if (!m) return null;
+  let h = Number(m[1]) % 24;
+  if (m[3]) { h %= 12; if (/pm/i.test(m[3])) h += 12; }
+  return h * 60 + Number(m[2]);
+}
+function dayDiff(from, to) {
+  return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86400000);
+}
+function duringShift(ev, shifts, today, tz) {
+  if (!ev.event_time) return String(ev.event_date).slice(0, 10) === today;
+  const evDay = dayDiff(today, String(ev.event_date).slice(0, 10)) * 1440;
+  const evStart = evDay + hhmmToMin(ev.event_time);
+  let evEnd = ev.end_time ? evDay + hhmmToMin(ev.end_time) : evStart;
+  if (evEnd < evStart) evEnd += 1440;
+  const parts = new Intl.DateTimeFormat("en-GB", { timeZone: tz, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date());
+  const nowMin = Number(parts.find((p) => p.type === "hour").value) * 60 + Number(parts.find((p) => p.type === "minute").value);
+  return (shifts || []).some((sh) => {
+    const startMin = hhmmToMin(sh.time);
+    if (startMin == null) return false;
+    const start = dayDiff(today, String(sh.date).slice(0, 10)) * 1440 + startMin;
+    let end = start + Math.round((sh.durationHours || 0) * 60);
+    if (sh.status === "in_progress") end = Math.max(end, nowMin);
+    return evStart === evEnd ? (evStart >= start && evStart < end) : (evStart < end && evEnd > start);
+  });
+}
+
+
 module.exports = {
   CATEGORIES,
   localDateStringInZone,
@@ -147,4 +180,5 @@ module.exports = {
   validateEventInput,
   reminderStage,
   buildIcs,
+  duringShift, // v1.107.5
 };

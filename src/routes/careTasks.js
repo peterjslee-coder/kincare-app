@@ -146,21 +146,28 @@ async function accessibleRecipients(db, userId) {
   const seen = new Set(rows.map((r) => r.id));
   const visits = await db.prepare(`
     SELECT cr.id, cr.first_name, cr.last_name, cr.family_user_id, cr.timezone,
-           cs.status, cs.scheduled_date
+           cs.status, cs.scheduled_date, cs.scheduled_time, cs.duration_hours
     FROM care_sessions cs
     JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
     JOIN care_recipients cr ON cr.id = cs.care_recipient_id
     WHERE cp.user_id = ? AND cs.status IN ('confirmed', 'in_progress')
     ORDER BY cs.scheduled_date ASC
   `).all(userId);
+  const byId = new Map();
   for (const v of visits) {
     if (seen.has(v.id)) continue;
     const today = getTodayStringInZone(v.timezone || DEFAULT_TZ);
     // An in-progress visit counts whatever its date (an overnight that began yesterday).
     if (v.status !== "in_progress" && v.scheduled_date !== today) continue;
-    seen.add(v.id);
-    rows.push({ id: v.id, first_name: v.first_name, last_name: v.last_name,
-      family_user_id: v.family_user_id, timezone: v.timezone, viaVisit: true });
+    let row = byId.get(v.id);
+    if (!row) {
+      row = { id: v.id, first_name: v.first_name, last_name: v.last_name,
+        family_user_id: v.family_user_id, timezone: v.timezone, viaVisit: true, shifts: [] };
+      byId.set(v.id, row);
+      rows.push(row);
+    }
+    row.shifts.push({ date: v.scheduled_date, time: v.scheduled_time,
+      durationHours: Number(v.duration_hours) || 0, status: v.status });
   }
   return rows;
 }
@@ -195,6 +202,37 @@ async function teamUserIds(db, recipientId) {
     ) AND COALESCE(u.is_active, 1) = 1
   `).all(recipientId, recipientId, recipientId);
   return rows;
+}
+
+// v1.107.5 — the caregiver(s) working this person's visit on `dateStr`. Pete: "want the option
+// to select a caretaker today (tina). She's not selectable right now." They join the
+// who-did-it / whose-turn picker for that day only; teamUserIds (and so escalation) is unchanged.
+async function visitCaregiversOn(db, recipientId, dateStr) {
+  return db.prepare(`
+    SELECT DISTINCT u.id, u.first_name, u.last_name, u.role, u.roles
+    FROM care_sessions cs
+    JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+    JOIN users u ON u.id = cp.user_id
+    WHERE cs.care_recipient_id = ?
+      AND (cs.status = 'in_progress' OR (cs.status = 'confirmed' AND cs.scheduled_date = ?))
+      AND COALESCE(u.is_active, 1) = 1
+  `).all(recipientId, dateStr);
+}
+
+async function pickerPeople(db, recipientId, dateStr) {
+  const team = await teamUserIds(db, recipientId);
+  const ids = new Set(team.map((m) => m.id));
+  for (const c of await visitCaregiversOn(db, recipientId, dateStr)) {
+    if (!ids.has(c.id)) { ids.add(c.id); team.push({ ...c, visitCaregiver: true }); }
+  }
+  return team;
+}
+
+// Whether `userId` belongs on this occurrence's picker: the care team, or a caregiver working a
+// visit on the occurrence's day. (hasAccess alone admits a caregiver booked for any day.)
+async function onPickerFor(db, occ, userId) {
+  const day = String(occ.due_date).slice(0, 10);
+  return (await pickerPeople(db, occ.care_recipient_id, day)).some((m) => m.id === userId);
 }
 
 // v1.99.2 — Pete's rule (7/22): task notices are FAMILY-ONLY for now.
@@ -266,7 +304,7 @@ router.get("/today", async (req, res) => {
         timezone: cr.timezone || DEFAULT_TZ,
         today,
         occurrences,
-        teamMembers: await teamUserIds(db, cr.id),
+        teamMembers: await pickerPeople(db, cr.id, today),
         helpers: await helpersFor(db, cr.id),
       });
     }
@@ -306,7 +344,8 @@ router.get("/recipient/:recipientId", async (req, res) => {
     return res.json({
       tasks,
       canManage: canManage(access),
-      teamMembers: await teamUserIds(db, req.params.recipientId),
+      teamMembers: await pickerPeople(db, req.params.recipientId,
+        getTodayStringInZone((await db.prepare("SELECT timezone FROM care_recipients WHERE id = ?").get(req.params.recipientId))?.timezone || DEFAULT_TZ)),
       helpers: await helpersFor(db, req.params.recipientId),
     });
   } catch (err) {
@@ -500,7 +539,7 @@ router.post("/occurrences/:id/check", blockWhileImpersonating("check off a care 
     if (!byUserId && !byName) byUserId = req.user.id; // default: the tapper did it
     if (byUserId) {
       const memberAccess = await hasAccess(db, occ.care_recipient_id, byUserId);
-      if (!memberAccess) return res.status(400).json({ error: "That person isn't on the care team" });
+      if (!memberAccess || !(await onPickerFor(db, occ, byUserId))) return res.status(400).json({ error: "That person isn't on the care team" });
     }
     const note = (req.body?.note || "").trim().slice(0, 1000) || null;
 
@@ -596,6 +635,7 @@ router.post("/occurrences/:id/assign", async (req, res) => {
     if (userId) {
       const theirs = await hasAccess(db, occ.care_recipient_id, userId);
       if (!theirs || !canCheckOff(theirs)) return res.status(400).json({ error: "That person can't check off tasks for this care recipient" });
+      if (!(await onPickerFor(db, occ, userId))) return res.status(400).json({ error: "That caregiver isn't working a visit that day" });
     }
     await db.prepare("UPDATE care_task_occurrences SET assigned_user_id = ? WHERE id = ?").run(userId, occ.id);
 
@@ -770,7 +810,13 @@ async function pollCareTasks(sendPushToUser) {
       if (!sent.includes("due") && now - dueAt < staleMs) {
         // v1.105.191 — tonight's person, if the task was handed to someone, else the default.
         const assigneeId = occ.assigned_user_id || t.assigned_user_id;
-        const assignee = assigneeId ? notifiable.find((m) => m.id === assigneeId) : null;
+        let assignee = assigneeId ? notifiable.find((m) => m.id === assigneeId) : null;
+        // v1.107.5 — tonight's person may be the caregiver on today's visit. Family-only was
+        // "until the caregiver-side surface ships"; it has, and she was chosen by name.
+        if (!assignee && assigneeId) {
+          const onVisit = await visitCaregiversOn(db, t.care_recipient_id, today);
+          assignee = onVisit.find((m) => m.id === assigneeId) || null;
+        }
         const targets = assignee ? [assignee.id] : notifiable.map((m) => m.id);
         for (const uid of targets) {
           // v1.105.39 — `t.title` is user-authored and routinely names a condition or a
@@ -813,4 +859,4 @@ module.exports = router;
 module.exports.pollCareTasks = pollCareTasks;
 // Shared access/team helpers — reused by careEvents.js (v1.100.0) so the
 // access model stays defined in exactly one place.
-module.exports._shared = { hasAccess, canManage, canScheduleEvents, accessibleRecipients, teamUserIds, isFamilyNotifiable };
+module.exports._shared = { visitCaregiversOn, hasAccess, canManage, canScheduleEvents, accessibleRecipients, teamUserIds, isFamilyNotifiable };

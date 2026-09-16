@@ -629,8 +629,10 @@ const CaregiverTodayAtVisit = window.CaregiverTodayAtVisit = ({ recipientIds }) 
         apiFetch('/api/care-events/upcoming').then((r) => (r && r.ok ? r.json() : { events: [] })),
       ]);
       setGroups((t.groups || []).filter((g) => ids.has(g.careRecipientId)));
+      // onShift events were already cut to her shift by the server (an overnight can reach into
+      // tomorrow morning). Anyone else here is on the team, and gets today's.
       setEvents((e.events || []).filter((ev) => ids.has(ev.care_recipient_id)
-        && ev.event_date === TimezoneHelper.getToday(ev.timezone || TimezoneHelper.DEFAULT_TZ)));
+        && (ev.onShift || ev.event_date === TimezoneHelper.getToday(ev.timezone || TimezoneHelper.DEFAULT_TZ))));
     } catch { /* the visit card above still works; this list re-reads on the next change */ }
   };
   useEffect(() => { load(); }, [idsKey]);
@@ -657,10 +659,12 @@ const CaregiverTodayAtVisit = window.CaregiverTodayAtVisit = ({ recipientIds }) 
 
   const rows = [];
   for (const ev of events) {
-    rows.push({ key: `e-${ev.id}`, sort: ev.event_time || '00:00', ev });
+    const tz = ev.timezone || TimezoneHelper.DEFAULT_TZ;
+    const dayKey = ev.event_date === TimezoneHelper.getToday(tz) ? '0' : '1';
+    rows.push({ key: `e-${ev.id}`, sort: `${dayKey}${ev.event_time || '00:00'}`, ev });
   }
   for (const g of groups) {
-    for (const occ of g.occurrences) rows.push({ key: `t-${occ.id}`, sort: occ.occ_time || occ.due_time || '', occ, group: g });
+    for (const occ of g.occurrences) rows.push({ key: `t-${occ.id}`, sort: `0${occ.occ_time || occ.due_time || ''}`, occ, group: g });
   }
   if (rows.length === 0) return null;
   rows.sort((a, b) => a.sort.localeCompare(b.sort));

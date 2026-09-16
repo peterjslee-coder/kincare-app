@@ -27,7 +27,7 @@ const { noteAccess } = require("../utils/noteVisibility"); // v1.107.2
 const { hasAccess, canManage, canScheduleEvents, accessibleRecipients, teamUserIds, isFamilyNotifiable } =
   require("./careTasks")._shared;
 const {
-  CATEGORIES, addDaysToDateString, eventStartInstant,
+  CATEGORIES, addDaysToDateString, eventStartInstant, duringShift,
   validateEventInput, reminderStage, buildIcs,
 } = require("../utils/careEventUtils");
 const { MODEL_HAIKU, getAnthropic } = require("../utils/aiModels");
@@ -216,8 +216,10 @@ router.get("/upcoming", async (req, res) => {
     for (const cr of recipients) {
       const tz = cr.timezone || DEFAULT_TZ;
       const today = getTodayStringInZone(tz);
-      // v1.107.5 — a caregiver here only for today's visit sees today, not the fortnight.
-      const horizon = cr.viaVisit ? today : addDaysToDateString(today, UPCOMING_DAYS);
+      // v1.107.5 — a caregiver here only for a visit sees what falls inside her shift, not the
+      // fortnight. Pete: "Only populate the events that happen when she's on shift." The query
+      // reaches one day ahead so an overnight shift still sees its early-morning appointment.
+      const horizon = cr.viaVisit ? addDaysToDateString(today, 1) : addDaysToDateString(today, UPCOMING_DAYS);
       const access = await hasAccess(db, cr.id, req.user.id);
       if (!access) continue;
       const rows = await db.prepare(`
@@ -246,12 +248,14 @@ router.get("/upcoming", async (req, res) => {
         }
       }
       for (const ev of rows) {
+        if (cr.viaVisit && !duringShift(ev, cr.shifts, today, tz)) continue;
         events.push(serializeEvent(ev, {
           recipientFirstName: cr.first_name,
           recipientName: `${cr.first_name} ${cr.last_name}`.trim(),
           timezone: tz,
           canManage: canScheduleEvents(access),
           attendees: byEvent.get(ev.id) || [],
+          onShift: !!cr.viaVisit,
         }));
       }
     }
