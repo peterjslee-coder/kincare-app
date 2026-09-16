@@ -285,11 +285,25 @@ async function captureSessionPay(sessionId, caregiverCents) {
     });
     if (plan.captureCents <= 0) return { error: "Nothing to capture" };
 
-    const captured = await stripe.paymentIntents.capture(
-      session.stripe_payment_intent_id,
-      { amount_to_capture: plan.captureCents, application_fee_amount: plan.captureFeeCents },
-      { idempotencyKey: `inplace_capture_${sessionId}_${plan.captureCents}_${plan.captureFeeCents}` }
-    );
+    let captured;
+    try {
+      captured = await stripe.paymentIntents.capture(
+        session.stripe_payment_intent_id,
+        { amount_to_capture: plan.captureCents, application_fee_amount: plan.captureFeeCents },
+        { idempotencyKey: `inplace_capture_${sessionId}_${plan.captureCents}_${plan.captureFeeCents}` }
+      );
+    } catch (capErr) {
+      // v1.107.1 — a timeout can arrive AFTER Stripe captured. Treating that as a failure sent the
+      // visit to the auto-pay sweep, which charged the card again. Ask before believing it.
+      let pi = null;
+      try { pi = await stripe.paymentIntents.retrieve(session.stripe_payment_intent_id); } catch { /* fall through */ }
+      if (pi && pi.status === "succeeded") {
+        captured = pi;
+        captureException(capErr, { where: "accountability: capture errored but Stripe shows it captured", sessionId });
+      } else {
+        throw capErr;
+      }
+    }
 
     await db.prepare(`
       UPDATE care_sessions SET

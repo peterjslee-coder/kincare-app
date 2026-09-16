@@ -56,6 +56,11 @@ async function captureForSession(db, sessionId, amountCents, { where, testMode }
     const cents = Math.round(amountCents);
     if (cents <= 0) return { captured: false };
     const result = await captureSessionPay(sessionId, cents);
+    if (result && result.error === "demo_session_blocked") {
+      // v1.107.1 — Dev Rule #7 working as intended, not a failure to retry. Marking it
+      // 'pending' handed a demo visit to the auto-pay sweep.
+      return { captured: false, error: result.error };
+    }
     if (result && result.error) {
       console.warn(`[${where}] Payment capture skipped: ${result.error}`);
       await failCapture(result.error);

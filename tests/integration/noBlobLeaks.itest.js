@@ -21,6 +21,10 @@
 const { startHarness, stopHarness } = require("./harness");
 const { v4: uuid } = require("uuid");
 
+// Today in the care location's zone. These visits used to carry a hard-coded date, and every
+// suite that reads "today's" sessions went red at midnight on the day after it was written.
+const TODAY = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(new Date());
+
 jest.setTimeout(180000);
 
 const ROUTERS = {
@@ -49,7 +53,7 @@ beforeAll(async () => {
   await h.db.prepare(`
     INSERT INTO care_sessions (id, care_recipient_id, family_user_id, caregiver_id, service_type,
                                status, scheduled_date, scheduled_time, duration_hours, estimated_cost, created_at)
-    VALUES (?, ?, ?, ?, 'companionship', 'in_progress', '2026-09-15', '09:00', 8, 211.20, NOW())
+    VALUES (?, ?, ?, ?, 'companionship', 'in_progress', '${TODAY}', '09:00', 8, 211.20, NOW())
   `).run(sessionId, recipientId, family.user.id, tinaProfileId);
 
   visitLogId = uuid();

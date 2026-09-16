@@ -26,6 +26,7 @@ const { MODEL_HAIKU, getAnthropic } = require("../utils/aiModels");
 const { clampLimit, clampOffset } = require("../utils/queryLimits");
 const { storedImageUrl } = require("../utils/serveMedia"); // v1.106.46
 const { captureForSession } = require("../utils/sessionCapture"); // v1.106.47
+const { blockWhileImpersonating } = require("../middleware/noImpersonation"); // v1.107.1 — no money movement in Test Mode
 const { SETTLED_MINUTES, conditionReadDue } = require("../utils/settledCheck"); // v1.106.48
 const { summarizeBreaks, breakMinutes, breakNotice } = require("../utils/visitBreaks"); // v1.106.41
 
@@ -2025,7 +2026,7 @@ router.post("/:id/arrival-condition", async (req, res) => {
 // taken a 45-minute lunch is paid the whole booking. The breaks stay on the record — the
 // family can see she stepped out — they just do not reach the bill.
 // ═══════════════════════════════════════════════════════════════════════════
-router.post("/:id/release", async (req, res) => {
+router.post("/:id/release", blockWhileImpersonating("release a caregiver with pay"), async (req, res) => {
   try {
     const db = await getDb();
     const reason = typeof req.body?.reason === "string" ? req.body.reason.trim().slice(0, 500) : null;
@@ -2084,8 +2085,9 @@ router.post("/:id/release", async (req, res) => {
     // accepted time change, and the whole point of a release is that the clock stops mattering.
     const fullCost = parseFloat(session.estimated_cost) || 0;
 
-    await db.transaction(async (tx) => {
-      await tx.prepare(`
+    let released;
+    try { await db.transaction(async (tx) => {
+      released = await tx.prepare(`
         UPDATE care_sessions SET
           status = 'completed',
           released_by_user_id = ?,
@@ -2099,6 +2101,11 @@ router.post("/:id/release", async (req, res) => {
           updated_at = NOW()
         WHERE id = ? AND status = 'in_progress'
       `).run(req.user.id, reason, req.params.id);
+      // v1.107.1 — the guard above was written and its result never read, so two releases (or
+      // a release racing a check-out) both went on to capture.
+      if (!released || released.changes !== 1) {
+        throw Object.assign(new Error("visit already ended"), { alreadyEnded: true });
+      }
 
       if (visitLog) {
         // No early_departure_reason and no early_departure_minutes: she did not leave early,
@@ -2112,11 +2119,14 @@ router.post("/:id/release", async (req, res) => {
       await tx.prepare(
         "UPDATE visit_breaks SET ended_at = NOW(), ended_by = 'released' WHERE session_id = ? AND ended_at IS NULL"
       ).run(req.params.id);
-    });
+    }); } catch (e) {
+      if (e && e.alreadyEnded) return res.status(400).json({ error: "That visit has already ended." });
+      throw e;
+    }
 
     // Same capture, same retry path, same alerting as a check-out — one implementation.
     await captureForSession(db, req.params.id, fullCost * 100, {
-      where: "release", testMode: !!req.user.impersonatedBy,
+      where: "release", testMode: false, // impersonation is refused at the route (v1.107.1)
     });
 
     // ── Tell her, in Pete's words ──
@@ -2337,7 +2347,7 @@ router.post("/:id/break/end", async (req, res) => {
   }
 });
 
-router.post("/:id/check-out", async (req, res) => {
+router.post("/:id/check-out", blockWhileImpersonating("end a real visit and settle its pay"), async (req, res) => {
   try {
     const db = await getDb();
     const { departureMood, conditionTags, careFeedback, serviceFeedback, summary, earlyDepartureReason, checkOutLatitude, checkOutLongitude, offlineTimestamp, offlineSync } = req.body;
@@ -2505,11 +2515,12 @@ router.post("/:id/check-out", async (req, res) => {
     }
     const coGeo = geofenceEvidence(checkOutLatitude, checkOutLongitude, session.recipient_lat, session.recipient_lng);
 
-    await db.transaction(async (tx) => {
+    let ended;
+    try { await db.transaction(async (tx) => {
       // Transition to completed with adjusted cost, actual duration, overtime, and mark review
       // required. payment_due_at = 1 hour from now — the family has that long to review + tip
       // before auto-pay.
-      await tx.prepare(`
+      ended = await tx.prepare(`
         UPDATE care_sessions SET
           status = 'completed',
           estimated_cost = ?,
@@ -2520,8 +2531,13 @@ router.post("/:id/check-out", async (req, res) => {
           completed_at = NOW(),
           payment_due_at = NOW() + INTERVAL '1 hour',
           updated_at = NOW()
-        WHERE id = ?
+        WHERE id = ? AND status = 'in_progress'
       `).run(adjustedCost, actualDurationHours, overtimeMinutes, overtimeCost, req.params.id);
+      // v1.107.1 — only the request that actually ended the visit may settle it. A second
+      // check-out, or one racing a release, used to fall through to a second capture.
+      if (!ended || ended.changes !== 1) {
+        throw Object.assign(new Error("visit already ended"), { alreadyEnded: true });
+      }
 
       if (visitLog) {
         await tx.prepare(`
@@ -2556,14 +2572,18 @@ router.post("/:id/check-out", async (req, res) => {
           visitLog.id
         );
       }
-    });
+    }); } catch (e) {
+      if (e && e.alreadyEnded) return res.status(409).json({ error: "This visit has already ended." });
+      throw e;
+    }
 
     // ─── Capture payment (Stripe auth → charge) ───
     // Skip when admin is impersonating (test mode) — don't charge real money
     // v1.106.47 — the capture, its retry path and its alerting moved to
     // utils/sessionCapture so the new release-with-pay route runs the same one. The v1.105.48
     // reasoning that makes it careful is preserved in that file.
-    const isTestCheckout = !!req.user.impersonatedBy;
+    // v1.107.1 — impersonation is refused at the route, so this is always a real settlement.
+    const isTestCheckout = false;
     await captureForSession(db, req.params.id, adjustedCost * 100, {
       where: "checkout", testMode: isTestCheckout,
     });

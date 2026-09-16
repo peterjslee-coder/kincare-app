@@ -1065,7 +1065,7 @@ router.post("/checkout", requireRole("family"), requirePaymentsEnabled, async (r
     LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
     LEFT JOIN users u ON cp.user_id = u.id
     LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
-    LEFT JOIN care_teams ct ON ct.care_recipient_id = cs.care_recipient_id
+    LEFT JOIN care_teams ct ON ct.care_recipient_id = cs.care_recipient_id AND ct.billing_user_id IS NOT NULL
     LEFT JOIN users bu ON ct.billing_user_id = bu.id
     WHERE cs.id = ? AND (cs.family_user_id = ? OR ct.billing_user_id = ?)
   `).get(sessionId, req.user.id, req.user.id);
@@ -1084,6 +1084,15 @@ router.post("/checkout", requireRole("family"), requirePaymentsEnabled, async (r
     "SELECT id FROM payments WHERE session_id = ? AND status = 'completed'"
   ).get(sessionId);
   if (completedPayment) return res.status(400).json({ error: "Payment already processed for this session" });
+
+  // v1.107.1 — a visit settled through its pre-shift hold has no payments row, so the check
+  // above let the family pay it a second time. A held visit is settled by capture, not here.
+  if (session.payment_status === "paid" || session.payment_status === "waived") {
+    return res.status(400).json({ error: "This visit has already been paid." });
+  }
+  if (session.stripe_payment_intent_id && ["authorized", "pending"].includes(session.payment_status)) {
+    return res.status(400).json({ error: "This visit is paid from the card hold placed before it — there is nothing to pay here." });
+  }
 
   // Clear any stuck 'processing' records from failed checkout attempts so we can retry
   await db.prepare(
@@ -1651,7 +1660,7 @@ async function processOverduePayments(pushFn) {
   try {
     // Find sessions that are completed, past payment_due_at, unpaid, and have a caregiver with Stripe
     const overdue = await db.prepare(`
-      SELECT cs.id, cs.family_user_id, cs.caregiver_id, cs.estimated_cost, cs.duration_hours,
+      SELECT DISTINCT ON (cs.id) cs.id, cs.stripe_payment_intent_id, cs.family_user_id, cs.caregiver_id, cs.estimated_cost, cs.duration_hours,
         cs.short_notice_surcharge, cs.scheduled_date, cs.scheduled_time, cs.service_type,
         cs.care_recipient_id, cs.pending_tip_cents, cs.pending_tip_reason,
         cp.stripe_account_id, cp.stripe_onboard_complete, cp.user_id AS caregiver_user_id,
@@ -1667,7 +1676,9 @@ async function processOverduePayments(pushFn) {
       LEFT JOIN users u ON cp.user_id = u.id
       LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
       LEFT JOIN users fu ON cs.family_user_id = fu.id
-      LEFT JOIN care_teams ct ON ct.care_recipient_id = cs.care_recipient_id
+      -- v1.107.1 — only a team row that actually names a billing contact, and DISTINCT ON
+      -- below: a recipient with two care_teams rows produced two rows here and two charges.
+      LEFT JOIN care_teams ct ON ct.care_recipient_id = cs.care_recipient_id AND ct.billing_user_id IS NOT NULL
       LEFT JOIN users bu ON ct.billing_user_id = bu.id
       WHERE cs.status = 'completed'
         AND cs.payment_due_at IS NOT NULL
@@ -1679,10 +1690,43 @@ async function processOverduePayments(pushFn) {
           SELECT 1 FROM payments p WHERE p.session_id = cs.id AND p.status IN ('completed', 'processing')
         )
         AND COALESCE(fu.is_demo, 0) = 0
+      ORDER BY cs.id
     `).all();
 
     for (const s of overdue) {
+      let charged = null; // v1.107.1 — set once Stripe has taken the money
       try {
+        // ─── v1.107.1 — a visit that already has a card hold is settled by CAPTURING it ───
+        //
+        // A failed or timed-out capture marks the visit 'pending', and this sweep used to answer
+        // that with a brand-new charge — while the hold was still on the card, or after Stripe had
+        // in fact captured it. Ask Stripe what state the hold is in and act on that.
+        if (s.stripe_payment_intent_id) {
+          let held;
+          try {
+            held = await stripe.paymentIntents.retrieve(s.stripe_payment_intent_id);
+          } catch (e) {
+            captureException(e, { where: "auto-pay: retrieve hold", sessionId: s.id });
+            continue; // try again next tick; never charge blind
+          }
+          if (held.status === "succeeded" || held.status === "processing") {
+            await db.prepare("UPDATE care_sessions SET payment_status = 'paid', payment_captured_at = COALESCE(payment_captured_at, NOW()), updated_at = NOW() WHERE id = ?").run(s.id);
+            captureException(new Error("Hold was already captured; session marked paid by auto-pay"), {
+              where: "auto-pay: hold already captured", sessionId: s.id, paymentIntent: held.id,
+            });
+            continue;
+          }
+          if (held.status === "requires_capture") {
+            const { captureSessionPay } = require("./accountability");
+            const r = await captureSessionPay(s.id, Math.round((parseFloat(s.estimated_cost) || 0) * 100));
+            if (r && r.error) {
+              captureException(new Error(`Auto-pay capture retry failed: ${r.error}`), { where: "auto-pay: capture retry", sessionId: s.id });
+            }
+            continue;
+          }
+          // canceled / requires_payment_method etc.: the hold is gone — charge normally below.
+        }
+
         // Determine which Stripe customer to charge (billing contact or family)
         const customerId = s.billing_stripe_customer_id || s.family_stripe_customer_id;
         if (!customerId) {
@@ -1798,6 +1842,7 @@ async function processOverduePayments(pushFn) {
         // v1.106.11 — from the resolver, which knows every accepted type. This read
         // chosenPM.card / chosenPM.us_bank_account directly, so a Link payment would have
         // written a blank brand and last4 onto the family's receipt.
+        charged = intent;
         const pmBrand = chosenPM.brand;
         const pmLast4 = chosenPM.last4;
         const paymentId = uuid();
@@ -1844,6 +1889,21 @@ async function processOverduePayments(pushFn) {
         // Check if family's held sessions can be restored
         await restoreHeldSessions(s.family_user_id || s.billing_user_id, pushFn);
       } catch (err) {
+        // ─── v1.107.1 — after Stripe took the money, this is never a "payment failed" ───
+        //
+        // If the charge succeeded and our own ledger write threw, the old code marked the visit
+        // 'failed' and pushed the family "Payment failed" — an open invitation to pay twice.
+        // The money moved; say so, and put the missing ledger row in front of a human.
+        if (charged && (charged.status === "succeeded" || charged.status === "processing")) {
+          try {
+            await db.prepare("UPDATE care_sessions SET payment_status = 'paid', updated_at = NOW() WHERE id = ?").run(s.id);
+          } catch { /* the Sentry event below is the record that matters */ }
+          captureException(err, {
+            where: "auto-pay: ledger write failed AFTER a successful charge — reconcile by hand",
+            sessionId: s.id, paymentIntent: charged.id,
+          });
+          continue;
+        }
         // Mark the session payment as failed so lockout logic can distinguish
         // "hasn't been charged yet" from "charge was attempted and failed"
         await db.prepare("UPDATE care_sessions SET payment_status = 'failed', updated_at = NOW() WHERE id = ?").run(s.id);

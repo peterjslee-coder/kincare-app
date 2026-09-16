@@ -28,6 +28,10 @@ jest.mock("stripe", () => jest.fn(() => ({
 const { startHarness, stopHarness } = require("./harness");
 const { v4: uuid } = require("uuid");
 
+// Today in the care location's zone. These visits used to carry a hard-coded date, and every
+// suite that reads "today's" sessions went red at midnight on the day after it was written.
+const TODAY = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(new Date());
+
 jest.setTimeout(180000);
 
 const ROUTERS = { "/api/sessions": "../../src/routes/sessions" };
@@ -79,7 +83,7 @@ async function activeVisit({ hours = 8, cost = 211.2, agoMinutes = 300, status =
     INSERT INTO care_sessions (id, care_recipient_id, family_user_id, caregiver_id, service_type,
                                status, scheduled_date, scheduled_time, duration_hours, estimated_cost, flex_timing,
                                stripe_payment_intent_id, authorized_amount, payment_status, created_at)
-    VALUES (?, ?, ?, ?, 'companionship', ?, '2026-09-18', '09:00', ?, ?, 'strict', ?, ?, 'authorized', NOW())
+    VALUES (?, ?, ?, ?, 'companionship', ?, '${TODAY}', '09:00', ?, ?, 'strict', ?, ?, 'authorized', NOW())
   `).run(id, recipientId, pete.user.id, tinaProfileId, status, hours, cost,
          `pi_${uuid().slice(0, 8)}`, Math.round(cost * 100));
   if (status === "in_progress") {
@@ -255,7 +259,7 @@ describe("who cannot do it", () => {
       INSERT INTO care_sessions (id, care_recipient_id, family_user_id, caregiver_id, service_type,
                                  status, scheduled_date, scheduled_time, duration_hours, estimated_cost,
                                  stripe_payment_intent_id, authorized_amount, payment_status, created_at)
-      VALUES (?, ?, ?, ?, 'companionship', 'in_progress', '2026-09-18', '09:00', 8, 240, ?, 24000, 'authorized', NOW())
+      VALUES (?, ?, ?, ?, 'companionship', 'in_progress', '${TODAY}', '09:00', 8, 240, ?, 24000, 'authorized', NOW())
     `).run(id, recipientId, pete.user.id, juliaProfile, `pi_${uuid().slice(0, 8)}`);
     await db.prepare(`
       INSERT INTO visit_logs (id, session_id, caregiver_id, check_in_time, created_at)

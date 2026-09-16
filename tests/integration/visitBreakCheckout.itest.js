@@ -30,6 +30,10 @@ jest.mock("stripe", () => jest.fn(() => ({
 const { startHarness, stopHarness } = require("./harness");
 const { v4: uuid } = require("uuid");
 
+// Today in the care location's zone. These visits used to carry a hard-coded date, and every
+// suite that reads "today's" sessions went red at midnight on the day after it was written.
+const TODAY = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(new Date());
+
 jest.setTimeout(180000);
 
 const ROUTERS = {
@@ -64,7 +68,7 @@ async function activeVisit({ hours = 8, checkedInMinutesAgo = 480, cost = 200 } 
     INSERT INTO care_sessions
       (id, care_recipient_id, family_user_id, caregiver_id, service_type, status,
        scheduled_date, scheduled_time, duration_hours, agreed_rate, estimated_cost, flex_timing, created_at)
-    VALUES (?, ?, ?, ?, 'companionship', 'in_progress', '2026-09-15', '09:00', ?, 25, ?, 'strict', NOW())
+    VALUES (?, ?, ?, ?, 'companionship', 'in_progress', '${TODAY}', '09:00', ?, 25, ?, 'strict', NOW())
   `).run(sessionId, recipientId, family.user.id, tinaProfileId, hours, cost);
   await db.prepare(`
     INSERT INTO visit_logs (id, session_id, caregiver_id, check_in_time, created_at)
@@ -175,7 +179,7 @@ describe("who may pause whose visit", () => {
     await db.prepare(`
       INSERT INTO care_sessions (id, care_recipient_id, family_user_id, caregiver_id, service_type,
                                  status, scheduled_date, scheduled_time, duration_hours, estimated_cost, created_at)
-      VALUES (?, ?, ?, ?, 'companionship', 'confirmed', '2026-09-15', '09:00', 8, 200, NOW())
+      VALUES (?, ?, ?, ?, 'companionship', 'confirmed', '${TODAY}', '09:00', 8, 200, NOW())
     `).run(id, recipientId, family.user.id, tinaProfileId);
     const res = await post(id, "break/start");
     expect(res.status).toBe(400);
@@ -314,7 +318,7 @@ describe("the opt-out key is one that can actually be set", () => {
     await db.prepare(`
       INSERT INTO care_sessions (id, care_recipient_id, family_user_id, caregiver_id, service_type,
                                  status, scheduled_date, scheduled_time, duration_hours, estimated_cost, created_at)
-      VALUES (?, ?, ?, ?, 'companionship', 'in_progress', '2026-09-15', '09:00', 8, 200, NOW())
+      VALUES (?, ?, ?, ?, 'companionship', 'in_progress', '${TODAY}', '09:00', 8, 200, NOW())
     `).run(sessionId, rid, quiet.user.id, tinaProfileId);
     await db.prepare(`
       INSERT INTO visit_logs (id, session_id, caregiver_id, check_in_time, created_at)
