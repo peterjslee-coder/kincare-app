@@ -1819,6 +1819,46 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
               </label>
             ))}
           </div>
+          {/* ─── v1.107.3 — quiet hours ───
+              Pete: "Need a quiet hours option to prevent notifications selectable by
+              user/family." Your own window, in this phone's time zone. Safety flags, visit
+              problems and payment problems still come through; everything else waits and
+              arrives as one summary when the window ends. Activity still shows each thing as
+              it happens. */}
+          {(() => {
+            const q = notifications.quiet_hours || {};
+            const deviceTz = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/New_York'; } catch { return 'America/New_York'; } })();
+            const save = (patch) => handleNotificationChange('quiet_hours', {
+              enabled: !!q.enabled, start: q.start || '22:00', end: q.end || '07:00', ...patch, tz: deviceTz,
+            });
+            const timeInput = { padding: '8px 10px', border: '1px solid var(--border-color)', borderRadius: 8, fontSize: 15, background: 'var(--bg-surface)', color: 'var(--text-primary)', minHeight: 40 };
+            return (
+              <div className="card" style={{ marginTop: 16 }} data-testid="quiet-hours">
+                <div className="card-header"><span>🌙 Quiet hours</span></div>
+                <label className="toggle-label">
+                  <input type="checkbox" className="toggle-input" checked={!!q.enabled}
+                    onChange={(e) => save({ enabled: e.target.checked })} />
+                  <span>Hold notifications during quiet hours</span>
+                </label>
+                {q.enabled && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', margin: '8px 0 4px' }}>
+                    <label style={{ fontSize: 13, color: 'var(--text-secondary)' }}>From{' '}
+                      <input type="time" value={q.start || '22:00'} style={timeInput}
+                        onChange={(e) => e.target.value && save({ start: e.target.value })} />
+                    </label>
+                    <label style={{ fontSize: 13, color: 'var(--text-secondary)' }}>to{' '}
+                      <input type="time" value={q.end || '07:00'} style={timeInput}
+                        onChange={(e) => e.target.value && save({ end: e.target.value })} />
+                    </label>
+                  </div>
+                )}
+                <p style={{ fontSize: 12.5, color: 'var(--text-tertiary)', margin: '8px 0 0', lineHeight: 1.5 }}>
+                  Safety alerts, visit problems (a caregiver late, a missed check-in or check-out) and payment problems still come through.
+                  Everything else waits, and you get one summary when quiet hours end. Times are in this phone's time zone ({deviceTz}).
+                </p>
+              </div>
+            );
+          })()}
           {/* ─── Keyboard diagnostics (v1.105.136, admin only) ───
               Pete, on being told to load "yourinplace.com/?kbdebug=1": "i don't know what you
               mean by that" — and he was right twice over. It is jargon, and the app he uses is

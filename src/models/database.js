@@ -2571,6 +2571,23 @@ async function initializeDatabase() {
            ON time_change_proposals(expires_at) WHERE status = 'pending'`,
       ],
     },
+    {
+      // ─── v1.107.3 — quiet hours ───
+      //
+      // Pete: "Need a quiet hours option to prevent notifications selectable by user/family."
+      // The window itself lives in users.notification_prefs (quiet_hours). This table only
+      // counts what was held, so one summary can be sent when the window ends. A row exists
+      // only while something is waiting; the poller deletes it once the summary goes out.
+      id: "042_quiet_hours_held",
+      statements: [
+        `CREATE TABLE IF NOT EXISTS quiet_hours_held (
+           user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+           held_count INTEGER NOT NULL DEFAULT 0,
+           first_held_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+           last_held_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+         )`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

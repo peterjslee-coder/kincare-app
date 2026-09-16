@@ -565,6 +565,20 @@ async function sendPushToUser(userId, payload, eventType) {
       // Non-blocking — in-app notification is a bonus, never block push delivery
       console.log("In-app notification insert failed (non-blocking):", inAppErr.message);
     }
+
+    // ─── v1.107.3 — quiet hours: the record above is written, the buzz is held ───
+    // Safety, visit problems and payment-action pushes are exempt (utils/quietHours).
+    // Checked here, after the in-app row, so Activity still shows it when she looks.
+    try {
+      const { shouldHold, recordHeld } = require("../utils/quietHours");
+      if (shouldHold(targetUser?.notification_prefs, eventType, payload)) {
+        await recordHeld(db, userId);
+        return { sent: 0, failed: 0, removed: 0, reason: "quiet_hours" };
+      }
+    } catch (qhErr) {
+      // A broken quiet-hours check must never silence a real notification.
+      captureException(qhErr, { where: "push: quiet hours" });
+    }
   } catch (e) { /* proceed if prefs check fails */ }
 
   try {

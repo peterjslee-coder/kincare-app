@@ -822,7 +822,7 @@ app.use("/api/safety", require("./routes/safety"));
 
 // ─── App version check (lightweight, no auth) ───
 const { cancelPassedPrivateOffers, releaseExpiredExclusiveOffers } = require("./utils/exclusiveOffers");
-const APP_VERSION = "1.107.2";
+const APP_VERSION = "1.107.3";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION, minAppVersion: MIN_APP_VERSION });
@@ -1756,6 +1756,25 @@ async function start() {
     setTimeout(runConditionPrompts, 45 * 1000);
     setInterval(runConditionPrompts, 60 * 1000);
     console.log("  Settled-in condition poller started (asks 15m after check-in, every 60s)");
+  }
+
+  // ─── Quiet hours summary (v1.107.3, poller 114) ───
+  //
+  // Pushes held during someone's quiet hours are counted in quiet_hours_held. Once their
+  // window ends, one "While you were away" push goes out and the count is cleared. Every five
+  // minutes: a summary a few minutes after 7:00 is fine; a second one is not, which is what the
+  // count-matched delete in utils/quietHours prevents.
+  {
+    const runQuietSummaries = guardedPoller(114, async () => {
+      const { sendQuietHourSummaries } = require("./utils/quietHours");
+      const { sendPushToUser: pushFn } = require("./routes/push");
+      const db = await getDb();
+      const n = await sendQuietHourSummaries(db, pushFn);
+      if (n > 0) console.log(`  [quiet-hours] sent ${n} summary push(es)`);
+    });
+    setTimeout(runQuietSummaries, 60 * 1000);
+    setInterval(runQuietSummaries, 5 * 60 * 1000);
+    console.log("  Quiet hours summary poller started (every 5m)");
   }
 
   // v1.105.50 — bound the inbound side too. Node's defaults leave `server.timeout` at 0,

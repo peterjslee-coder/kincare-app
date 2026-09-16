@@ -8,7 +8,7 @@ build red.
 Hand-written sections (§3 "Where is…") are preserved across regeneration; edit those freely.
 
 Structure at last generation: 534 HTTP routes across 56 mounts ·
-93 `CREATE TABLE` statements · 13 background jobs · 38 socket events
+94 `CREATE TABLE` statements · 14 background jobs · 38 socket events
 (16 with no client listener) · 63 push event types · 58 `window.__*` globals.
 
 ---
@@ -140,6 +140,7 @@ Every job runs through `guardedPoller` → `withPollerLock` (`src/models/databas
 | 111 | (see src/server.js:1598) | 1 h | `src/server.js:1598` |
 | 112 | v1.106.13 — poller 112: proposals that nobody answered | 10 min | `src/server.js:1714` |
 | 113 | (see src/server.js:1757) | 1 min | `src/server.js:1757` |
+| 114 | Quiet hours summary (v1.107.3, poller 114) | 5 min | `src/server.js:1776` |
 
 ---
 
