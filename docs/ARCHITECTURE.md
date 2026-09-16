@@ -9,7 +9,7 @@ Hand-written sections (§3 "Where is…") are preserved across regeneration; edi
 
 Structure at last generation: 534 HTTP routes across 56 mounts ·
 94 `CREATE TABLE` statements · 14 background jobs · 38 socket events
-(16 with no client listener) · 63 push event types · 59 `window.__*` globals.
+(16 with no client listener) · 64 push event types · 59 `window.__*` globals.
 
 ---
 
@@ -226,11 +226,11 @@ Opt-out key is `notification_prefs["push_" + eventType]`. Capability gating live
 
 `payment_authorization_failed` · `payment_hold` · `payment_method_needed` · `phone_verified`
 
-`proposal_accepted` · `proposal_declined` · `request_declined` · `session_cancelled`
+`proposal_accepted` · `proposal_declined` · `request_declined` · `review`
 
-`session_complete` · `session_in_progress` · `team_join` · `time_change`
+`session_cancelled` · `session_complete` · `session_in_progress` · `team_join`
 
-`time_proposal` · `unblocked` · `waitlist_signup`
+`time_change` · `time_proposal` · `unblocked` · `waitlist_signup`
 
 ---
 
@@ -252,7 +252,7 @@ State travels through `window`, not props. This table is the registry.
 | `window.__caregiverFirstStepsRemain` | CaretakerHub.js | 2 |
 | `window.__clearSessionActive` | app.js | 4 |
 | `window.__currentPage` | app.js | 2 |
-| `window.__currentRole` | app.js, HelpPage.js, MyAccount.js | 6 |
+| `window.__currentRole` | app.js, HelpPage.js, MyAccount.js | 7 |
 | `window.__currentUserId` | app.js | 7 |
 | `window.__documentsTab` | Dashboard.js | 6 |
 | `window.__findWorkTab` | CaretakerHub.js | 4 |
@@ -296,7 +296,7 @@ State travels through `window`, not props. This table is the registry.
 | `window.__startImpersonation` | app.js | 3 |
 | `window.__swApplyPendingUpdate` | — | 2 |
 | `window.__uiPrefs` | uiPrefs.js | 9 |
-| `window.__viewCaregiverId` | Caregivers.js | 2 |
+| `window.__viewCaregiverId` | app.js, Caregivers.js | 3 |
 | `window.__visitGeoAllowed` | FamilyVisitLog.js | 1 |
 | `window.__visitHaversineFeet` | FamilyVisitLog.js | 1 |
 

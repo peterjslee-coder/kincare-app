@@ -35,7 +35,9 @@ const CaregiverProfilePage = window.CaregiverProfilePage = ({ caregiverId, onNav
     return () => { cancelled = true; };
   }, [caregiverId]);
 
-  const back = () => onNavigate && onNavigate('caregivers');
+  // v1.107.8 — a caregiver arrives here from "your session was reviewed"; her way back is Home,
+  // not the family's caregiver directory.
+  const back = () => onNavigate && onNavigate((window.__currentRole || 'family') === 'caregiver' ? 'dashboard' : 'caregivers');
 
   if (failed) {
     return (

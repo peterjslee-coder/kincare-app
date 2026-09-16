@@ -757,6 +757,10 @@ const App = () => {
         // nothing. Pete: "just dead ends. found it when i went looking in admin."
         if (d.flagId && !d.focus) window.__pendingFocus = `safetyFlag:${d.flagId}`;
         target = 'admin';
+      } else if (t === 'review_received') {
+        // v1.107.8 — her own profile, where the review is.
+        if (d.caregiverId) window.__viewCaregiverId = d.caregiverId;
+        target = 'caregiver-profile';
       } else if (t === 'kindred_relay') {
         target = 'messages';
       } else if (t === 'admin_setting_change') {

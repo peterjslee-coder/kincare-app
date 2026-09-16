@@ -3952,6 +3952,28 @@ router.post("/:id/review", async (req, res) => {
       "UPDATE care_sessions SET review_completed = 1 WHERE id = ?"
     ).run(req.params.id);
 
+    // v1.107.8 — tell her. Pete: "'your session with Betty has been reviewed by Peter' is
+    // enough. They click on it, it takes them to their page where they can investigate the
+    // review if they want." No stars and no words on the lock screen: the tap is the choice.
+    try {
+      const who = await db.prepare(`
+        SELECT cp.user_id AS caregiver_user_id, cr.first_name AS recipient_first_name,
+               ru.first_name AS reviewer_first_name
+          FROM caregiver_profiles cp
+          JOIN care_sessions cs ON cs.id = ?
+          LEFT JOIN care_recipients cr ON cr.id = cs.care_recipient_id
+          LEFT JOIN users ru ON ru.id = ?
+         WHERE cp.id = ?
+      `).get(req.params.id, userId, caregiverId);
+      if (who && who.caregiver_user_id && who.caregiver_user_id !== userId) {
+        sendPushToUser(who.caregiver_user_id, {
+          title: "New review",
+          body: `Your session with ${who.recipient_first_name || "your client"} was reviewed by ${who.reviewer_first_name || "the family"}.`,
+          data: { type: "review_received", page: "caregiver-profile", caregiverId, sessionId: req.params.id },
+        }, "review").catch(() => {});
+      }
+    } catch (e) { /* the review stands whether or not the push does */ }
+
     res.json({ review: { id: reviewId, rating, comment, reviewType } });
   } catch (err) {
     console.error("Review error:", err);

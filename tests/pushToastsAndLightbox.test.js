@@ -49,3 +49,10 @@ describe("the caregiver map", () => {
     expect(block).not.toMatch(/\$\{cg\.bio/);
   });
 });
+
+test("v1.107.8 — tapping a review push opens her own profile", () => {
+  const app = read("app.js");
+  const branch = app.slice(app.indexOf("t === 'review_received'"), app.indexOf("t === 'kindred_relay'"));
+  expect(branch).toMatch(/window\.__viewCaregiverId = d\.caregiverId/);
+  expect(branch).toMatch(/target = 'caregiver-profile'/);
+});
