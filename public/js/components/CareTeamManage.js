@@ -356,20 +356,6 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
     setEditingName(false);
   };
 
-  const handleChangeRole = async (userId, newRole) => {
-    try {
-      const res = await apiFetch(`/api/care-teams/${careTeamId}/members/${userId}`, {
-        method: 'PUT',
-        body: JSON.stringify({ role: newRole }),
-      });
-      if (!res?.ok) return failToast(res, 'Failed to change role');
-      showToast('Role updated', 'success');
-      fetchTeam();
-    } catch {
-      showToast('Failed to change role', 'error');
-    }
-  };
-
   const handleSaveLabel = async () => {
     try {
       const res = await apiFetch(`/api/care-teams/${careTeamId}/my-label`, {
@@ -733,16 +719,9 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
                       border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 650, cursor: 'pointer' }}>
                     Change access
                   </button>
-                  <button onClick={(e) => { e.stopPropagation(); handleChangeRole(m.userId, 'member'); }}
-                    style={{ padding: '6px 14px', background: m.role === 'member' ? 'var(--role-color)' : 'var(--bg-card)', color: m.role === 'member' ? 'var(--bg-card)' : 'var(--role-color)',
-                      border: '1px solid #1b6b5a', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-                    Member
-                  </button>
-                  <button onClick={(e) => { e.stopPropagation(); handleChangeRole(m.userId, 'viewer'); }}
-                    style={{ padding: '6px 14px', background: m.role === 'viewer' ? 'var(--text-secondary)' : 'var(--bg-card)', color: m.role === 'viewer' ? 'var(--bg-card)' : 'var(--text-secondary)',
-                      border: '1px solid #999', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-                    View Only
-                  </button>
+                  {/* v1.107.2 — "Member" / "View Only" removed. They changed a label the checkboxes
+                      above overrule, so the screen offered two controls that disagreed (Julia:
+                      "View Only" while allowed to write notes). "Change access" is the control. */}
                   <div style={{ flex: 1 }}></div>
                   <button onClick={(e) => { e.stopPropagation(); handleRemoveMember(m.userId, `${m.firstName} ${m.lastName}`); }}
                     style={{ padding: '6px 14px', background: 'var(--bg-surface)', color: 'var(--color-error)', border: '1px solid #dc3545',

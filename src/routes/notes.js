@@ -8,7 +8,7 @@ const { validateMagicBytes } = require("../utils/fileValidation");
 const { sendStoredFile, IMAGE_MIMES, DOCUMENT_MIMES } = require("../utils/serveMedia");
 const { attachReactions } = require("../utils/reactions"); // v1.105.170
 const storage = require("../utils/storage");
-const { noteVisibility, isTeamOrOwner, mayReadNote } = require("../utils/noteVisibility"); // v1.106.38
+const { noteAccess, noteRowReadable } = require("../utils/noteVisibility"); // v1.106.38, v1.107.2
 
 // v1.76.0 — parse stored JSON defensively (one malformed row must not 500 the list)
 function safeJson(raw, fallback) {
@@ -21,57 +21,7 @@ const router = express.Router();
 // outage was about bytes, and 5 MB at a permitted rate still fills the volume.
 router.use(authenticate, uploadQuota());
 
-// ─── Access control (same pattern as careRecipients.js) ───
-async function hasAccess(db, recipientId, userId) {
-  // Admin bypasses all checks
-  const user = await db.prepare("SELECT is_admin FROM users WHERE id = ?").get(userId);
-  if (user?.is_admin) return "admin";
-  // Owner
-  const owned = await db.prepare(
-    "SELECT id FROM care_recipients WHERE id = ? AND family_user_id = ?"
-  ).get(recipientId, userId);
-  if (owned) return "owner";
-  // Shared
-  const shared = await db.prepare(
-    "SELECT permission FROM care_recipient_shares WHERE care_recipient_id = ? AND shared_with_user_id = ?"
-  ).get(recipientId, userId);
-  if (shared) return shared.permission;
-  // Care team membership
-  const teamMember = await db.prepare(`
-    SELECT ctm.role FROM care_team_members ctm
-    JOIN care_teams ct ON ctm.care_team_id = ct.id
-    WHERE ct.care_recipient_id = ? AND ctm.user_id = ?
-  `).get(recipientId, userId);
-  if (teamMember) return teamMember.role === 'leader' ? 'edit' : 'view';
-  // Assigned caregiver (has an active/confirmed session)
-  const assignedCg = await db.prepare(`
-    SELECT cs.id FROM care_sessions cs
-    JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
-    WHERE cs.care_recipient_id = ? AND cp.user_id = ?
-      AND cs.status IN ('confirmed', 'in_progress')
-    LIMIT 1
-  `).get(recipientId, userId);
-  if (assignedCg) return "view";
-  // v1.106.38 — the person the record is ABOUT. She was a stranger to it here: every copy of
-  // hasAccess in the codebase knew the owner, the share, the team and the assigned caregiver,
-  // and none of them knew her, so Betty got 403 from her own care notes. The "Save Note"
-  // button on her screen (CaredForView) has been posting into that 403.
-  //
-  // The giveaway that this was an omission and not a decision: the GET below already computes
-  // `isLinkedRecipient` to filter what she may read, and that branch could never once have
-  // run — she never got past this function.
-  //
-  // "self", deliberately not "owner" or "edit": PUT and DELETE grant on owner/edit/admin OR
-  // authorship, so this lets her write, edit and delete HER OWN notes and touch none of her
-  // family's. What she may READ is decided by utils/noteVisibility, not by this level.
-  //
-  // Last, so an explicit grant the family made — a share, a team seat — still wins.
-  const linked = await db.prepare(
-    "SELECT id FROM care_recipients WHERE id = ? AND linked_user_id = ?"
-  ).get(recipientId, userId);
-  if (linked) return "self";
-  return null;
-}
+// ─── Access control — v1.107.2: utils/noteVisibility noteAccess() is the only door ───
 
 // GET /api/notes/:careRecipientId — get notes for a care recipient
 // Accessible by: family (owner), shared users, care team members, assigned caregivers, admins
@@ -89,16 +39,28 @@ router.get("/mine/recipients", async (req, res) => {
     const db = await getDb();
     const { recipientsWithCapabilityFor } = require("../utils/access");
     const { CAP } = require("../utils/capabilities");
-    const recipients = await recipientsWithCapabilityFor(db, req.user.id, CAP.READ_NOTES);
-    // v1.105.156 — visits ride on the same screen, under their own capability. Asked here so
-    // the client never requests a history it is not allowed to see and then handles a 403.
-    const withVisits = new Set(
-      (await recipientsWithCapabilityFor(db, req.user.id, CAP.READ_VISITS)).map((r) => r.id)
-    );
+    // v1.107.2 — the Care Notes screen is for anyone who may do ANY of the four things on
+    // it, and it is told which. Julia (read+write notes, read+log visits) and Peggy (write
+    // notes, log visits, read nothing) both land here; this used to list only READ_NOTES, so a
+    // write-only helper had no screen at all and nobody could log a visit from caregiver mode.
+    const [rn, wn, rv, wv] = await Promise.all([
+      recipientsWithCapabilityFor(db, req.user.id, CAP.READ_NOTES),
+      recipientsWithCapabilityFor(db, req.user.id, CAP.WRITE_NOTES),
+      recipientsWithCapabilityFor(db, req.user.id, CAP.READ_VISITS),
+      recipientsWithCapabilityFor(db, req.user.id, CAP.WRITE_VISITS),
+    ]);
+    const ids = (list) => new Set(list.map((r) => r.id));
+    const [RN, WN, RV, WV] = [ids(rn), ids(wn), ids(rv), ids(wv)];
+    const byId = new Map();
+    for (const r of [...rn, ...wn, ...rv, ...wv]) if (!byId.has(r.id)) byId.set(r.id, r);
+    const recipients = [...byId.values()].sort((a, b) => String(a.first_name).localeCompare(String(b.first_name)));
     res.json({
       recipients: recipients.map((r) => ({
         id: r.id, firstName: r.first_name, lastName: r.last_name, timezone: r.timezone,
-        canReadVisits: withVisits.has(r.id),
+        canReadNotes: RN.has(r.id),
+        canWriteNotes: WN.has(r.id),
+        canReadVisits: RV.has(r.id),
+        canWriteVisits: WV.has(r.id),
       })),
     });
   } catch (err) {
@@ -112,18 +74,12 @@ router.get("/:careRecipientId", async (req, res) => {
   const db = await getDb();
   const recipientId = req.params.careRecipientId;
 
-  const access = await hasAccess(db, recipientId, req.user.id);
-  if (!access) {
+  // v1.107.2 — capability, not share level: see utils/noteVisibility noteAccess().
+  const na = await noteAccess(db, recipientId, req.user.id);
+  if (!na.read) {
     return res.status(403).json({ error: "Not authorized to view notes for this care recipient" });
   }
-
-  // v1.76.0 — visibility rules for family observations.
-  // v1.106.38 — the rule itself now lives in utils/noteVisibility, because the care-for
-  // dashboard was answering the same question a different way. See that file.
-  const cr = await db.prepare("SELECT linked_user_id, family_user_id FROM care_recipients WHERE id = ?").get(recipientId);
-  const teamOrOwner = await isTeamOrOwner(db, recipientId, req.user.id);
-  const { sql: filterSql, params: filterParams } =
-    noteVisibility({ cr, teamOrOwner, access, userId: req.user.id });
+  const { sql: filterSql, params: filterParams } = na.filter;
 
   const notes = await db.prepare(`
     SELECT rn.id, rn.care_recipient_id, rn.author_id, rn.content, rn.note_type,
@@ -185,9 +141,9 @@ router.post("/", async (req, res) => {
     photoData = await storage.storeFileData("note-photo", photo);
   }
 
-  // Access check — must have at least view access to add notes
-  const access = await hasAccess(db, careRecipientId, req.user.id);
-  if (!access) {
+  // v1.107.2 — write_notes, or the care recipient on a full/collaborative account.
+  const na = await noteAccess(db, careRecipientId, req.user.id);
+  if (!na.write) {
     return res.status(403).json({ error: "Not authorized to add notes for this care recipient" });
   }
 
@@ -305,10 +261,7 @@ router.post("/", async (req, res) => {
     }
   } catch (e) { captureException(e, { where: "notes: team push" }); }
 
-  const note = await db.prepare(`
-    SELECT rn.*, u.first_name AS author_first_name, u.last_name AS author_last_name, u.role AS author_role
-    FROM recipient_notes rn JOIN users u ON rn.author_id = u.id WHERE rn.id = ?
-  `).get(id);
+  const note = await readNoteForResponse(db, id);
   res.status(201).json({ note });
   } catch (err) {
     captureException(err, { where: "notes: create" });
@@ -323,16 +276,8 @@ router.get("/:id/photo", async (req, res) => {
     const db = await getDb();
     const note = await db.prepare("SELECT care_recipient_id, author_id, note_type, photo FROM recipient_notes WHERE id = ?").get(req.params.id);
     if (!note || !note.photo) return res.status(404).json({ error: "Photo not found" });
-    const access = await hasAccess(db, note.care_recipient_id, req.user.id);
-    if (!access) return res.status(404).json({ error: "Photo not found" });
-    // v1.106.38 — was a third longhand copy of the visibility rule, and a partial one: it
-    // covered the linked recipient and not the view-only caregiver, so a caregiver refused
-    // the observation in the list could still fetch the photo attached to it by id.
-    const cr = await db.prepare("SELECT linked_user_id, family_user_id FROM care_recipients WHERE id = ?").get(note.care_recipient_id);
-    const teamOrOwner = await isTeamOrOwner(db, note.care_recipient_id, req.user.id);
-    if (!mayReadNote({ cr, teamOrOwner, access, userId: req.user.id }, note)) {
-      return res.status(404).json({ error: "Photo not found" });
-    }
+    const na = await noteAccess(db, note.care_recipient_id, req.user.id);
+    if (!noteRowReadable(na, note)) return res.status(404).json({ error: "Photo not found" });
     // v1.106.3 — never echo the stored mime; see src/utils/serveMedia.js.
     return await sendStoredFile(res, note.photo, { allow: IMAGE_MIMES, filename: "note-photo" });
   } catch (err) {
@@ -352,8 +297,9 @@ router.put("/:id", async (req, res) => {
   // v1.105.35 — this used to read "author, OR anyone holding the family role", which is
   // every family user on the platform, on every note about every recipient. The correct
   // helper was already defined 230 lines above and used by the GET on this same router.
-  const access = await hasAccess(db, existing.care_recipient_id, req.user.id);
-  const canEdit = existing.author_id === req.user.id || access === "owner" || access === "edit" || access === "admin";
+  // v1.107.2 — your own note while you still may write here, or anyone's with manage.
+  const na = await noteAccess(db, existing.care_recipient_id, req.user.id);
+  const canEdit = na.manage || (na.write && existing.author_id === req.user.id);
   if (!canEdit) {
     return res.status(403).json({ error: "Not authorized to edit this note" });
   }
@@ -363,10 +309,7 @@ router.put("/:id", async (req, res) => {
     WHERE id = ?
   `).run(content, noteType, req.params.id);
 
-  const note = await db.prepare(`
-    SELECT rn.*, u.first_name AS author_first_name, u.last_name AS author_last_name, u.role AS author_role
-    FROM recipient_notes rn JOIN users u ON rn.author_id = u.id WHERE rn.id = ?
-  `).get(req.params.id);
+  const note = await readNoteForResponse(db, req.params.id);
   res.json({ note });
 });
 
@@ -377,8 +320,8 @@ router.delete("/:id", async (req, res) => {
   if (!existing) return res.status(404).json({ error: "Note not found" });
 
   // v1.105.35 — same fix as the edit above: scoped to this recipient, not to the role.
-  const access = await hasAccess(db, existing.care_recipient_id, req.user.id);
-  const canDelete = existing.author_id === req.user.id || access === "owner" || access === "edit" || access === "admin";
+  const na = await noteAccess(db, existing.care_recipient_id, req.user.id);
+  const canDelete = na.manage || (na.write && existing.author_id === req.user.id);
   if (!canDelete) {
     return res.status(403).json({ error: "Not authorized" });
   }
@@ -386,5 +329,19 @@ router.delete("/:id", async (req, res) => {
   await db.prepare("DELETE FROM recipient_notes WHERE id = ?").run(req.params.id);
   res.json({ success: true });
 });
+
+// v1.107.2 — never `rn.*` in a response: that shipped the stored photo (an r2: marker, or a
+// legacy base64 blob) back to the client, which drew the marker as an <img src>.
+async function readNoteForResponse(db, id) {
+  const n = await db.prepare(`
+    SELECT rn.id, rn.care_recipient_id, rn.author_id, rn.content, rn.note_type, rn.needs_attention,
+           rn.categories, rn.ai_highlights, rn.care_event_id, (rn.photo IS NOT NULL) AS has_photo,
+           rn.created_at, rn.updated_at,
+           u.first_name AS author_first_name, u.last_name AS author_last_name, u.role AS author_role
+    FROM recipient_notes rn JOIN users u ON rn.author_id = u.id WHERE rn.id = ?
+  `).get(id);
+  if (!n) return n;
+  return { ...n, categories: safeJson(n.categories, []), ai_highlights: safeJson(n.ai_highlights, null) };
+}
 
 module.exports = router;

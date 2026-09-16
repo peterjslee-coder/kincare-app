@@ -49,8 +49,9 @@ describe("access control", () => {
   test("every route goes through recipientAccess", () => {
     // The helper added in v1.105.35 after the audit found six endpoints that were
     // authenticated and nothing more.
-    expect(route).toMatch(/const \{ recipientAccess \} = require\("\.\.\/utils\/access"\)/);
-    expect((route.match(/await recipientAccess\(/g) || []).length).toBeGreaterThanOrEqual(2);
+    // v1.107.2 — and the checkbox on top (mayVisits); behaviour in notesByCheckbox.itest.js.
+    expect(route).toMatch(/const \{ recipientAccess, recipientCapabilities \} = require\("\.\.\/utils\/access"\)/);
+    expect((route.match(/await (recipientAccess|mayVisits)\(/g) || []).length).toBeGreaterThanOrEqual(3);
   });
 
   test("a failed check answers 404, not 403", () => {

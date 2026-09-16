@@ -72,7 +72,7 @@ describe("a rejected care-team action says why", () => {
     expect(team).toMatch(/const failToast = async \(res, fallback\) => \{/);
     for (const fallback of [
       "Failed to remove member", "Failed to cancel invite", "Failed to resend invite",
-      "Failed to change role", "Failed to update team name",
+      "Failed to update team name", // v1.107.2 — "change role" handler removed with its buttons
     ]) {
       expect(team).toMatch(new RegExp(`failToast\\(res, '${fallback}'\\)`));
     }

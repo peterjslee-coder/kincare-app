@@ -2426,6 +2426,8 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         </div>
       )}
 
+      {/* v1.107.2 — "Add a note" / "Log a visit" for the people whose care team she is on. */}
+      {typeof CareTeamQuickActions !== 'undefined' && <CareTeamQuickActions />}
       {/* ─── First steps, quietly (v1.105.118) ───
           Pete, on the version that listed all seven as rows: "the finished stuff...small, greyed
           out, lined through... We don't want this to be a catalogue in your face of how hard it

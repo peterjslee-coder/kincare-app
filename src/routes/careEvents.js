@@ -23,6 +23,7 @@ const { getDb } = require("../models/database");
 const { authenticate } = require("../middleware/auth");
 const { captureException } = require("../utils/sentry");
 const { getTodayStringInZone } = require("../utils/timezone");
+const { noteAccess } = require("../utils/noteVisibility"); // v1.107.2
 const { hasAccess, canManage, canScheduleEvents, accessibleRecipients, teamUserIds, isFamilyNotifiable } =
   require("./careTasks")._shared;
 const {
@@ -360,7 +361,23 @@ const uploadAudio = multer({
   limits: { fileSize: MAX_AUDIO_BYTES, files: 1 },
 });
 
-router.post("/:id/transcribe", uploadAudio.single("audio"), async (req, res) => {
+// v1.107.2 — a recording becomes a care NOTE, so it needs write_notes; and the check runs
+// BEFORE multer, which otherwise buffers up to 25 MB for a caller it is about to refuse.
+async function mayRecordNote(req, res, next) {
+  try {
+    const db = await getDb();
+    const ev = await db.prepare("SELECT care_recipient_id FROM care_events WHERE id = ?").get(req.params.id);
+    if (!ev) return res.status(404).json({ error: "Appointment not found" });
+    const na = await noteAccess(db, ev.care_recipient_id, req.user.id);
+    if (!na.write) return res.status(403).json({ error: "Not authorized to add notes for this appointment" });
+    return next();
+  } catch (err) {
+    captureException(err, { where: "careEvents: transcribe gate" });
+    return res.status(500).json({ error: "Could not start the recording" });
+  }
+}
+
+router.post("/:id/transcribe", mayRecordNote, uploadAudio.single("audio"), async (req, res) => {
   try {
     const db = await getDb();
     const ev = await db.prepare("SELECT * FROM care_events WHERE id = ?").get(req.params.id);
@@ -450,8 +467,12 @@ router.get("/:id/notes", async (req, res) => {
     const db = await getDb();
     const ev = await db.prepare("SELECT * FROM care_events WHERE id = ?").get(req.params.id);
     if (!ev) return res.status(404).json({ error: "Event not found" });
-    const access = await hasAccess(db, ev.care_recipient_id, req.user.id);
-    if (!access) return res.status(403).json({ error: "Not authorized for this appointment" });
+    // v1.107.2 — these are care notes, so the notes rule applies: read_notes, the care
+    // recipient's managed-account settings, and the observation filter. This read had
+    // none of it — Betty could read "PRIVATE: doctor thinks…" through her appointment.
+    const na = await noteAccess(db, ev.care_recipient_id, req.user.id);
+    if (!na.read) return res.status(403).json({ error: "Not authorized for this appointment" });
+    const filterSql = na.filter.sql.replace(/\brn\./g, "n.");
 
     const notes = await db.prepare(`
       SELECT n.id, n.content, n.note_type, n.needs_attention, n.created_at,
@@ -459,9 +480,9 @@ router.get("/:id/notes", async (req, res) => {
              (n.photo IS NOT NULL) AS has_photo
       FROM recipient_notes n
       LEFT JOIN users u ON u.id = n.author_id
-      WHERE n.care_event_id = ?
+      WHERE n.care_event_id = ?${filterSql}
       ORDER BY n.created_at ASC
-    `).all(ev.id);
+    `).all(ev.id, ...na.filter.params);
     return res.json({ notes });
   } catch (err) {
     captureException(err);

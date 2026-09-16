@@ -25,6 +25,11 @@
 // authorised her all along (hasAccess covers team members). Pete's call on scope was full
 // parity including the photo and the attention flag — she is the one at the visit, so she is
 // the one most likely to have the photo.
+// v1.107.2 — Pete, Sep 16: Julia "can't leave notes. there's no 'log visit' with her." Her
+// checkboxes allow both. The screen was listed only for READ_NOTES and never offered a visit
+// log at all. Now the server says which of the four things this person may do for each
+// recipient (canReadNotes / canWriteNotes / canReadVisits / canWriteVisits) and this screen
+// draws exactly those — nothing about her being a caregiver enters into it.
 const TeamNotes = window.TeamNotes = ({ onNavigate }) => {
   const { showToast } = useToast();
   const [recipients, setRecipients] = React.useState(null);
@@ -50,6 +55,7 @@ const TeamNotes = window.TeamNotes = ({ onNavigate }) => {
   // has returned has_photo since v1.76.0; this timeline just never drew one. Same lightbox
   // as CareProfile so a photo opens the same way wherever it is tapped.
   const [viewingAttachments, setViewingAttachments] = React.useState(null);
+  const [showLogVisit, setShowLogVisit] = React.useState(false);
   const PREVIEW = 8;
 
   React.useEffect(() => {
@@ -64,6 +70,9 @@ const TeamNotes = window.TeamNotes = ({ onNavigate }) => {
         const wanted = window.__pendingNoteRecipientId;
         const match = wanted && list.find((r) => r.id === wanted);
         setSelectedId(match ? match.id : (list[0]?.id || null));
+        // Home's "Log a visit" lands here with the sheet already open.
+        if (window.__pendingLogVisit && match && match.canWriteVisits) setShowLogVisit(true);
+        window.__pendingLogVisit = false;
       } catch { setLoadFailed(true); }
     })();
   }, []);
@@ -74,17 +83,22 @@ const TeamNotes = window.TeamNotes = ({ onNavigate }) => {
     (async () => {
       setNotes(null);
       setVisits([]);
-      try {
-        const res = await apiFetch(`/api/notes/${selectedId}`);
-        if (cancelled) return;
-        if (!res?.ok) { setLoadFailed(true); return; }
-        const data = await res.json();
-        setNotes(data.notes || []);
-        setLoadFailed(false);
-      } catch { if (!cancelled) setLoadFailed(true); }
-
-      // Only where the capability says so — never ask for a history we would be refused.
       const rec = (recipients || []).find((r) => r.id === selectedId);
+      // Only what the checkboxes allow — never ask for something we would be refused.
+      if (rec && rec.canReadNotes === false) {
+        setNotes([]);
+        setLoadFailed(false);
+      } else {
+        try {
+          const res = await apiFetch(`/api/notes/${selectedId}`);
+          if (cancelled) return;
+          if (!res?.ok) { setLoadFailed(true); return; }
+          const data = await res.json();
+          setNotes(data.notes || []);
+          setLoadFailed(false);
+        } catch { if (!cancelled) setLoadFailed(true); }
+      }
+
       if (!rec?.canReadVisits) return;
       try {
         const vr = await apiFetch(`/api/family-visits/${selectedId}?limit=50`);
@@ -208,8 +222,10 @@ const TeamNotes = window.TeamNotes = ({ onNavigate }) => {
         showToast('Note added', 'success');
         // Re-read rather than splice a guess in: the server attaches the author name and the
         // reaction rows, and iPAi may add chips to it.
-        const fresh = await apiFetch(`/api/notes/${selectedId}`);
-        if (fresh?.ok) { const d = await fresh.json(); setNotes(d.notes || []); }
+        if (selected && selected.canReadNotes !== false) {
+          const fresh = await apiFetch(`/api/notes/${selectedId}`);
+          if (fresh?.ok) { const d = await fresh.json(); setNotes(d.notes || []); }
+        }
       } else if (res?.status === 503 || !navigator.onLine) {
         // She is often in a house with no signal. The family composer queues; so does this.
         if (window.OfflineQueue) {
@@ -265,12 +281,33 @@ const TeamNotes = window.TeamNotes = ({ onNavigate }) => {
         )}
 
         <p style={{ fontSize: 12, color: 'var(--text-tertiary)', margin: '4px 0 0' }}>
-          Notes and visits from the care team {'\u2014'} yours and theirs.
+          {selected && selected.canReadNotes === false && !selected.canReadVisits
+            ? `You can add to ${selected.firstName}'s care record; reading it isn't part of your access.`
+            : <>Notes and visits from the care team {'\u2014'} yours and theirs.</>}
         </p>
+        {selected && selected.canWriteVisits && typeof LogVisitSheet !== 'undefined' && (
+          <button onClick={() => setShowLogVisit(true)} style={{
+            marginTop: 10, minHeight: 44, padding: '10px 16px', borderRadius: 10, cursor: 'pointer',
+            border: '1px solid var(--role-color)', background: 'var(--bg-card)', color: 'var(--role-color)',
+            font: 'inherit', fontSize: 14, fontWeight: 700,
+          }}>👣 Log a visit with {selected.firstName}</button>
+        )}
       </div>
 
+      {showLogVisit && selected && typeof LogVisitSheet !== 'undefined' && (
+        <LogVisitSheet recipients={[selected]} presetRecipientId={selected.id}
+          onClose={() => setShowLogVisit(false)}
+          onSaved={async () => {
+            if (!selected.canReadVisits) return;
+            try {
+              const vr = await apiFetch(`/api/family-visits/${selected.id}?limit=50`);
+              if (vr?.ok) { const vd = await vr.json(); setVisits(vd.visits || []); }
+            } catch { /* the visit is saved; the list refreshes on the next open */ }
+          }} />
+      )}
+
       {/* ─── v1.106.26 — the composer Julia was missing ─── */}
-      {selected && (
+      {selected && selected.canWriteNotes !== false && (
         <div className="card" style={{ marginBottom: 12 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>
             Add a note about {selected.firstName}
@@ -334,7 +371,7 @@ const TeamNotes = window.TeamNotes = ({ onNavigate }) => {
         </div>
       )}
 
-      {timeline === null ? (
+      {selected && selected.canReadNotes === false && !selected.canReadVisits ? null : timeline === null ? (
         <LoadingSpinner text="Loading notes…" />
       ) : timeline.length === 0 ? (
         <div className="card" style={{ color: 'var(--text-secondary)', fontSize: 14 }}>
@@ -409,5 +446,65 @@ const TeamNotes = window.TeamNotes = ({ onNavigate }) => {
           onClose={() => setViewingAttachments(null)} />
       )}
     </div>
+  );
+};
+
+
+// ─── v1.107.2 — the way in from Home ───
+//
+// Julia looks for "add a note" and "log a visit" where she starts her day, not behind a tab
+// she has to know exists. One card per person whose care team lets her write; each button does
+// only what her checkboxes allow. Renders nothing for a caregiver who is on nobody's team.
+const CareTeamQuickActions = window.CareTeamQuickActions = ({ onNavigate }) => {
+  const [list, setList] = React.useState([]);
+  const [logFor, setLogFor] = React.useState(null);
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await apiFetch('/api/notes/mine/recipients');
+        if (!res?.ok) return;
+        const d = await res.json();
+        if (!cancelled) setList((d.recipients || []).filter((r) => r.canWriteNotes || r.canWriteVisits));
+      } catch { /* optional card — absent is fine */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+  if (!list.length) return null;
+  const go = (r) => {
+    window.__pendingNoteRecipientId = r.id;
+    if (typeof onNavigate === 'function') onNavigate('care-notes');
+    else if (window.__navigateTo) window.__navigateTo('care-notes');
+  };
+  const btn = {
+    minHeight: 44, padding: '10px 14px', borderRadius: 10, cursor: 'pointer', flex: '1 1 140px',
+    border: '1px solid var(--role-color)', background: 'var(--bg-card)', color: 'var(--role-color)',
+    font: 'inherit', fontSize: 14, fontWeight: 700,
+  };
+  return (
+    <>
+      {list.map((r) => (
+        <div key={r.id} className="card" style={{ marginBottom: 12 }} data-testid="care-team-quick-actions">
+          <div className="card-header" style={{ marginBottom: 8 }}>
+            <span className="card-icon">🤝</span>{r.firstName}'s care team
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {r.canWriteNotes && <button style={btn} onClick={() => go(r)}>📝 Add a note</button>}
+            {r.canWriteVisits && typeof LogVisitSheet !== 'undefined' && (
+              <button style={btn} onClick={() => setLogFor(r)}>👣 Log a visit</button>
+            )}
+            {(r.canReadNotes || r.canReadVisits) && (
+              <button style={{ ...btn, border: '1px solid var(--border-light)', color: 'var(--text-secondary)' }}
+                onClick={() => go(r)}>Care notes</button>
+            )}
+          </div>
+        </div>
+      ))}
+      {logFor && typeof LogVisitSheet !== 'undefined' && (
+        <LogVisitSheet recipients={[logFor]} presetRecipientId={logFor.id}
+          onClose={() => setLogFor(null)}
+          onSaved={() => setLogFor(null)} />
+      )}
+    </>
   );
 };

@@ -94,7 +94,8 @@ describe("fetching a photo is access-controlled the same as the visit", () => {
     // v1.105.111 — the body moved into sendVisitPhoto(), shared by /:id/photo and
     // /:id/photo/:idx. Same rules, one implementation.
     const fn = route.slice(route.indexOf('async function sendVisitPhoto'), route.indexOf('router.delete("/:id"'));
-    expect(fn).toMatch(/recipientAccess\(db, row\.care_recipient_id, req\.user\.id\)/);
+    // v1.107.2 — read_visits, or it is your own visit.
+    expect(fn).toMatch(/mayVisits\(db, row\.care_recipient_id, req\.user\.id, CAP\.READ_VISITS\)/);
   });
 
   test("'not yours' and 'not there' both answer 404", () => {

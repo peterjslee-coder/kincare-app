@@ -66,8 +66,11 @@ describe("which recipients' notes are shared with me", () => {
     const [r] = await mine(teamCaregiver);
     // v1.105.156 — plus whether visits are readable, so the client never asks for a history
     // it would be refused and then has to handle a 403.
-    expect(Object.keys(r).sort()).toEqual(["canReadVisits", "firstName", "id", "lastName", "timezone"]);
-    expect(typeof r.canReadVisits).toBe("boolean");
+    // v1.107.2 — and all four things the Care Notes screen can do, so it draws only those.
+    expect(Object.keys(r).sort()).toEqual(
+      ["canReadNotes", "canReadVisits", "canWriteNotes", "canWriteVisits", "firstName", "id", "lastName", "timezone"]
+    );
+    for (const k of ["canReadNotes", "canWriteNotes", "canReadVisits", "canWriteVisits"]) expect(typeof r[k]).toBe("boolean");
   });
 });
 

@@ -13,7 +13,7 @@ const { scoreMatch } = require("../utils/aiMatching");
 const { expireStaleProposals } = require("../utils/proposals");
 const { getPlatformFeePercent } = require("../utils/platformFee");
 const { phaseFor: checkrPhaseFor } = require("../constants/checkrStatus");
-const { noteVisibility, isTeamOrOwner } = require("../utils/noteVisibility"); // v1.106.38
+const { noteAccess } = require("../utils/noteVisibility"); // v1.106.38, v1.107.2
 const { breakBudgetMinutes } = require("../utils/visitBreaks"); // v1.106.41
 const { conditionReadDue } = require("../utils/settledCheck"); // v1.106.48
 
@@ -1173,11 +1173,11 @@ async function careForDashboard(db, userId, res) {
     //    this screen, which is HER screen, showed her all of them. Same record, same
     //    person, two different answers, because the rule was written out in one route and
     //    not the other. It now comes from utils/noteVisibility for both.
+    // v1.107.2 — and her managed-account settings decide whether she sees notes at all.
     (async () => {
-      const cr = { linked_user_id: recipient.linked_user_id, family_user_id: recipient.family_user_id };
-      const teamOrOwner = await isTeamOrOwner(db, recipient.id, userId);
-      const { sql: filterSql, params: filterParams } =
-        noteVisibility({ cr, teamOrOwner, access: null, userId });
+      const na = await noteAccess(db, recipient.id, userId);
+      if (!na.read) return [];
+      const { sql: filterSql, params: filterParams } = na.filter;
       return db.prepare(`
         SELECT rn.id, rn.content, rn.note_type, rn.needs_attention,
                (rn.photo IS NOT NULL) AS has_photo,

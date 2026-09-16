@@ -75,4 +75,62 @@ function mayReadNote({ cr, teamOrOwner, access, userId }, note) {
   return sql.includes("author_id") && note.author_id === userId;
 }
 
-module.exports = { noteVisibility, isTeamOrOwner, mayReadNote };
+/**
+ * v1.107.2 — the ONE answer to "what may this person do with this recipient's notes?"
+ *
+ * Every notes reader and writer asks this, instead of its own copy of hasAccess. Two rules
+ * Pete set, both enforced here rather than only on a screen:
+ *
+ *  • Care-team members (Julia, Peggy, siblings) get exactly what their checkboxes say:
+ *    read_notes to read, write_notes to write, manage to edit or delete someone else's.
+ *    A share level ("view") is no longer read as "may read notes".
+ *  • The care recipient herself follows the managed-account settings on her record:
+ *    permission_tier 'full' → her notes tab is on; otherwise visibility_settings.notes
+ *    decides. She may write when the tier is full or collaborative (CaredForView's rule).
+ *    She never sees the observations her family wrote about her.
+ *
+ * @returns {Promise<{read:boolean, write:boolean, manage:boolean, isLinked:boolean,
+ *                    filter:{sql:string, params:any[]}, cr:object|null}>}
+ */
+async function noteAccess(db, recipientId, userId) {
+  const none = { read: false, write: false, manage: false, isLinked: false, filter: { sql: "", params: [] }, cr: null };
+  if (!recipientId || !userId) return none;
+  const cr = await db.prepare(
+    "SELECT id, linked_user_id, family_user_id, permission_tier, visibility_settings FROM care_recipients WHERE id = ?"
+  ).get(recipientId);
+  if (!cr) return none;
+
+  const isLinked = !!cr.linked_user_id && cr.linked_user_id === userId && cr.family_user_id !== userId;
+  if (isLinked) {
+    const tier = cr.permission_tier || "full";
+    let vis = null;
+    try { vis = cr.visibility_settings ? JSON.parse(cr.visibility_settings) : null; } catch { vis = null; }
+    const read = tier === "full" || !vis || !!vis.notes;
+    const write = tier === "full" || tier === "collaborative";
+    return { read, write, manage: false, isLinked, cr, filter: noteVisibility({ cr, teamOrOwner: false, access: null, userId }) };
+  }
+
+  const { recipientCapabilities } = require("./access");
+  const { can, CAP } = require("./capabilities");
+  const caps = await recipientCapabilities(db, recipientId, userId);
+  const user = await db.prepare("SELECT is_admin FROM users WHERE id = ?").get(userId);
+  const teamOrOwner = await isTeamOrOwner(db, recipientId, userId);
+  return {
+    read: can(caps, CAP.READ_NOTES),
+    write: can(caps, CAP.WRITE_NOTES),
+    manage: can(caps, CAP.MANAGE),
+    isLinked: false,
+    cr,
+    filter: noteVisibility({ cr, teamOrOwner, access: user?.is_admin ? "admin" : null, userId }),
+  };
+}
+
+/** Does this access permit reading this one note? */
+function noteRowReadable(na, note) {
+  if (!na || !na.read || !note) return false;
+  if (!na.filter.sql) return true;
+  if (note.note_type !== "observation") return true;
+  return na.filter.sql.includes("author_id") && note.author_id === na.filter.params[0];
+}
+
+module.exports = { noteVisibility, isTeamOrOwner, mayReadNote, noteAccess, noteRowReadable };

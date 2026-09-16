@@ -18,7 +18,8 @@ const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { uploadQuota } = require("../utils/usageLimits");
 const { authenticate } = require("../middleware/auth");
-const { recipientAccess } = require("../utils/access");
+const { recipientAccess, recipientCapabilities } = require("../utils/access");
+const { can, CAP } = require("../utils/capabilities"); // v1.107.2
 const { attachReactions } = require("../utils/reactions"); // v1.105.170
 const { coarsenCoordinate, geofenceEvidence } = require("../utils/geocode");
 const { validateMagicBytes } = require("../utils/fileValidation");
@@ -126,6 +127,11 @@ router.post("/", async (req, res) => {
     // v1.106.8 — the lead photo AND every one in the list go to R2 when it is configured.
     // Storing the list as markers matters more than the lead: `photos` is a JSON array of
     // full data URIs, so a five-photo visit was five images in one TEXT column.
+    // v1.107.2 — capability, and BEFORE anything is written to storage: a refused caller
+    // used to leave its photos behind in R2.
+    if (!(await mayVisits(db, careRecipientId, req.user.id, CAP.WRITE_VISITS))) {
+      return res.status(404).json({ error: "Care recipient not found" });
+    }
     photoList = await Promise.all(photoList.map((p) => storage.storeFileData("family-visit", p)));
     const photoData = photoList[0] || null;
 
@@ -210,8 +216,9 @@ router.post("/", async (req, res) => {
 router.get("/:careRecipientId", async (req, res) => {
   try {
     const db = await getDb();
-    const access = await recipientAccess(db, req.params.careRecipientId, req.user.id);
-    if (!access) return res.status(404).json({ error: "Care recipient not found" });
+    if (!(await mayVisits(db, req.params.careRecipientId, req.user.id, CAP.READ_VISITS))) {
+      return res.status(404).json({ error: "Care recipient not found" });
+    }
 
     const limit = Math.min(parseInt(req.query.limit, 10) || 50, 200);
     const rows = await db.prepare(`
@@ -256,7 +263,7 @@ async function sendVisitPhoto(req, res, index) {
   try {
     const db = await getDb();
     const row = await db.prepare(
-      "SELECT care_recipient_id, photo, photos FROM family_visits WHERE id = ?"
+      "SELECT care_recipient_id, user_id, photo, photos FROM family_visits WHERE id = ?"
     ).get(req.params.id);
     if (!row) return res.status(404).json({ error: "Photo not found" });
 
@@ -271,8 +278,10 @@ async function sendVisitPhoto(req, res, index) {
 
     // Access checked AFTER we know the photo exists but BEFORE we send it, and both failures
     // answer 404 — so probing ids cannot distinguish "not yours" from "not there".
-    const access = await recipientAccess(db, row.care_recipient_id, req.user.id);
-    if (!access) return res.status(404).json({ error: "Photo not found" });
+    const mine = row.user_id === req.user.id;
+    if (!mine && !(await mayVisits(db, row.care_recipient_id, req.user.id, CAP.READ_VISITS))) {
+      return res.status(404).json({ error: "Photo not found" });
+    }
 
     // v1.106.3 — never echo the stored mime; see src/utils/serveMedia.js.
     return await sendStoredFile(res, data, { allow: IMAGE_MIMES, filename: "visit-photo" });
@@ -311,6 +320,13 @@ router.delete("/:id", async (req, res) => {
     res.status(500).json({ error: "Could not remove that visit" });
   }
 });
+
+// v1.107.2 — the checkbox, not the share level. recipientAccess() said "yes" to any share at
+// all, so a person granted only read_profile could list the family's visits.
+async function mayVisits(db, recipientId, userId, cap) {
+  if (!(await recipientAccess(db, recipientId, userId))) return false;
+  return can(await recipientCapabilities(db, recipientId, userId), cap);
+}
 
 async function getOne(db, id) {
   const row = await db.prepare(`

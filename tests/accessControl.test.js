@@ -150,7 +150,9 @@ describe("the patched handlers still ask", () => {
     // The old check was `!(req.user.roles||[]).includes("family")` — i.e. any family user on
     // the platform could edit or delete any note about anyone.
     expect(notes).not.toMatch(/existing\.author_id !== req\.user\.id && !\(req\.user\.roles/);
-    expect((notes.match(/await hasAccess\(db, existing\.care_recipient_id, req\.user\.id\)/g) || [])).toHaveLength(2);
+    // v1.107.2 — through noteAccess(): own note while you may still write, or manage.
+    // Behaviour is pinned in tests/integration/notesByCheckbox.itest.js.
+    expect((notes.match(/await noteAccess\(db, existing\.care_recipient_id, req\.user\.id\)/g) || [])).toHaveLength(2);
   });
 });
 

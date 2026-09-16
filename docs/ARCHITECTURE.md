@@ -9,7 +9,7 @@ Hand-written sections (§3 "Where is…") are preserved across regeneration; edi
 
 Structure at last generation: 534 HTTP routes across 56 mounts ·
 93 `CREATE TABLE` statements · 13 background jobs · 38 socket events
-(16 with no client listener) · 63 push event types · 57 `window.__*` globals.
+(16 with no client listener) · 63 push event types · 58 `window.__*` globals.
 
 ---
 
@@ -262,7 +262,7 @@ State travels through `window`, not props. This table is the registry.
 | `window.__linkifyTrim` | utils.js | 1 |
 | `window.__loadStripeJs` | — | 1 |
 | `window.__navHistory` | app.js | 3 |
-| `window.__navigateTo` | app.js, Caregivers.js | 52 |
+| `window.__navigateTo` | app.js, Caregivers.js | 54 |
 | `window.__openConversationId` | Messages.js, utils.js | 5 |
 | `window.__openRequestCareModal` | app.js | 19 |
 | `window.__openTaskCreate` | — | 1 |
@@ -270,7 +270,8 @@ State travels through `window`, not props. This table is the registry.
 | `window.__pendingCall` | app.js, Messages.js | 5 |
 | `window.__pendingConversation` | app.js | 5 |
 | `window.__pendingFocus` | app.js, AttentionCard.js, CareProfile.js | 28 |
-| `window.__pendingNoteRecipientId` | app.js, TeamNotes.js | 3 |
+| `window.__pendingLogVisit` | TeamNotes.js | 2 |
+| `window.__pendingNoteRecipientId` | app.js, TeamNotes.js | 4 |
 | `window.__pendingPage` | app.js | 10 |
 | `window.__pendingScheduleDate` | ActivityFeed.js | 7 |
 | `window.__pendingTeam` | app.js | 5 |
