@@ -68,7 +68,7 @@ const CareTaskNextUpRow = window.CareTaskNextUpRow = ({ occ, group, onQuickCheck
   // "meds were done hours ago" swipe folds the row into the Done-earlier
   // strip immediately instead of waiting out the 30-min linger (v1.103.0).
   const swipeActions = (!done && !skipped) ? [
-    { label: '✓ Done', background: 'var(--color-success)', onTap: onQuickCheck },
+    { label: occ.task_type === 'medication' ? '✓ Taken' : '✓ Done', background: 'var(--color-success)', onTap: onQuickCheck },
     ...(onDismiss ? [{ label: 'Dismiss', background: 'var(--text-muted)', onTap: onDismiss }] : []),
   ] : (onClear ? [
     { label: 'Clear', background: 'var(--text-muted)', onTap: onClear },
@@ -104,7 +104,7 @@ const CareTaskNextUpRow = window.CareTaskNextUpRow = ({ occ, group, onQuickCheck
           </div>
           <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>
             {occ.__saving ? 'Saving\u2026'
-              : done ? `Done · ${careTaskDoneBy(occ, true)}${occ.note ? ' · 📝' : ''}`
+              : done ? `${occ.task_type === 'medication' ? 'Taken' : 'Done'} · ${careTaskDoneBy(occ, true)}${occ.note ? ' · 📝' : ''}`
               : skipped ? `Skipped · ${careTaskDoneBy(occ, true)}`
               : <>Today at {timeLabel} · for {group.recipientFirstName}{detail ? ` · ${detail}` : ''}</>}
           </div>
@@ -237,7 +237,7 @@ const CareTaskCheckSheet = window.CareTaskCheckSheet = ({ occ, group, onClose, o
           <button disabled={saving} onClick={() => submit('done')} style={{
             flex: 1, padding: '13px 0', borderRadius: 12, border: 'none', background: 'var(--color-success)',
             color: 'var(--text-on-primary)', fontSize: 15, fontWeight: 700, cursor: 'pointer', opacity: saving ? 0.6 : 1,
-          }}>✓ Done</button>
+          }}>{occ.task_type === 'medication' ? '\u2713 Taken' : '\u2713 Done'}</button>
           <button disabled={saving} onClick={() => submit('skipped')} style={{
             padding: '13px 18px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-surface)',
             color: 'var(--text-secondary)', fontSize: 14, fontWeight: 600, cursor: 'pointer',
@@ -595,6 +595,103 @@ const CareTasksSection = window.CareTasksSection = ({ recipientId, recipientFirs
         <CareTaskFormModal recipientId={recipientId} recipientFirstName={recipientFirstName}
           teamMembers={teamMembers} existing={editing}
           onClose={() => setShowForm(false)} onSaved={load} />
+      )}
+    </div>
+  );
+};
+
+// ─── v1.107.5 — Today at Betty's, on the caregiver's Home ───
+//
+// Pete, 9/15: "I need the caregiver to be able to be the one to mark off tasks. Yes, even
+// medications...they're just going to mark off that the person took them, not that they are
+// administering them ... Tina sees the events below the 'in progress' card, like today for
+// instance, there's two appointments at betty's that Tina should be tracking."
+//
+// The server has let an assigned caregiver check a task off since v1.99; she was never shown
+// one. This sits directly under the pinned visit card and lists, for the people she is with
+// TODAY, today's appointments and today's tasks. Scoped by the hub's own sessions, so a
+// caregiver who is also someone's family doesn't get her family's list repeated here.
+const CaregiverTodayAtVisit = window.CaregiverTodayAtVisit = ({ recipientIds }) => {
+  const { showToast } = useToast();
+  const [groups, setGroups] = useState([]);
+  const [events, setEvents] = useState([]);
+  const [taskSheet, setTaskSheet] = useState(null);
+  const [eventSheet, setEventSheet] = useState(null);
+  const saving = useRef(new Set());
+  const idsKey = (recipientIds || []).slice().sort().join(',');
+
+  const load = async () => {
+    if (!idsKey) { setGroups([]); setEvents([]); return; }
+    const ids = new Set(idsKey.split(','));
+    try {
+      const [t, e] = await Promise.all([
+        apiFetch('/api/care-tasks/today').then((r) => (r && r.ok ? r.json() : { groups: [] })),
+        apiFetch('/api/care-events/upcoming').then((r) => (r && r.ok ? r.json() : { events: [] })),
+      ]);
+      setGroups((t.groups || []).filter((g) => ids.has(g.careRecipientId)));
+      setEvents((e.events || []).filter((ev) => ids.has(ev.care_recipient_id)
+        && ev.event_date === TimezoneHelper.getToday(ev.timezone || TimezoneHelper.DEFAULT_TZ)));
+    } catch { /* the visit card above still works; this list re-reads on the next change */ }
+  };
+  useEffect(() => { load(); }, [idsKey]);
+  useEffect(() => CareTaskSync.onChange(() => load()), [idsKey]);
+
+  const patch = (occId, fields) => setGroups((prev) => prev.map((g) => ({
+    ...g, occurrences: g.occurrences.map((o) => (o.id === occId ? { ...o, ...fields } : o)),
+  })));
+  const quickCheck = async (occ) => {
+    if (saving.current.has(occ.id)) return;
+    saving.current.add(occ.id);
+    patch(occ.id, { status: 'done', completed_by_user_id: window.__currentUserId || null, completed_by_name: null, __saving: true });
+    const r = await CareTaskSync.write(occ.id, { status: 'done' });
+    saving.current.delete(occ.id);
+    if (!r.ok) { patch(occ.id, { status: occ.status, __saving: false }); showToast(r.error, 'error'); }
+    else if (occ.task_type === 'medication') showToast('Marked taken', 'success');
+    load();
+  };
+  const undo = async (occ) => {
+    const r = await CareTaskSync.undo(occ.id);
+    if (!r.ok) showToast(r.error, 'error');
+    load();
+  };
+
+  const rows = [];
+  for (const ev of events) {
+    rows.push({ key: `e-${ev.id}`, sort: ev.event_time || '00:00', ev });
+  }
+  for (const g of groups) {
+    for (const occ of g.occurrences) rows.push({ key: `t-${occ.id}`, sort: occ.occ_time || occ.due_time || '', occ, group: g });
+  }
+  if (rows.length === 0) return null;
+  rows.sort((a, b) => a.sort.localeCompare(b.sort));
+
+  const names = [...new Set([...groups.map((g) => g.recipientFirstName), ...events.map((e) => e.recipientFirstName)].filter(Boolean))];
+  const title = names.length === 1 ? `Today at ${names[0]}’s` : 'Today at your visits';
+  const hasMeds = groups.some((g) => g.occurrences.some((o) => o.task_type === 'medication'));
+
+  return (
+    <div data-testid="caregiver-today-at-visit" style={{ marginBottom: 16 }}>
+      <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', margin: '4px 2px 8px' }}>{title}</div>
+      {hasMeds && (
+        <div style={{ fontSize: 12, color: 'var(--text-tertiary)', margin: '-4px 2px 8px' }}>
+          Checking off a medication records that it was taken. It doesn{'’'}t mean you gave it.
+        </div>
+      )}
+      {rows.map((r) => r.ev ? (
+        <CareEventNextUpRow key={r.key} ev={r.ev} onOpenSheet={() => setEventSheet(r.ev)} />
+      ) : (
+        <CareTaskNextUpRow key={r.key} occ={r.occ} group={r.group}
+          onQuickCheck={() => quickCheck(r.occ)}
+          onOpenSheet={() => setTaskSheet({ occ: r.occ, group: r.group })}
+          onUndo={() => undo(r.occ)} />
+      ))}
+      {taskSheet && (
+        <CareTaskCheckSheet occ={taskSheet.occ} group={taskSheet.group}
+          onClose={() => setTaskSheet(null)} onDone={() => load()} />
+      )}
+      {eventSheet && (
+        <CareEventSheet ev={eventSheet} canManage={false}
+          onClose={() => setEventSheet(null)} onChanged={() => load()} onEdit={() => setEventSheet(null)} />
       )}
     </div>
   );

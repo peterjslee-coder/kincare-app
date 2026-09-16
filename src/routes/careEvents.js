@@ -216,8 +216,10 @@ router.get("/upcoming", async (req, res) => {
     for (const cr of recipients) {
       const tz = cr.timezone || DEFAULT_TZ;
       const today = getTodayStringInZone(tz);
-      const horizon = addDaysToDateString(today, UPCOMING_DAYS);
+      // v1.107.5 — a caregiver here only for today's visit sees today, not the fortnight.
+      const horizon = cr.viaVisit ? today : addDaysToDateString(today, UPCOMING_DAYS);
       const access = await hasAccess(db, cr.id, req.user.id);
+      if (!access) continue;
       const rows = await db.prepare(`
         SELECT e.*, cu.first_name AS created_by_first_name
         FROM care_events e

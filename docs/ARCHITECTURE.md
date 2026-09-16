@@ -253,7 +253,7 @@ State travels through `window`, not props. This table is the registry.
 | `window.__clearSessionActive` | app.js | 4 |
 | `window.__currentPage` | app.js | 2 |
 | `window.__currentRole` | app.js, HelpPage.js, MyAccount.js | 6 |
-| `window.__currentUserId` | app.js | 6 |
+| `window.__currentUserId` | app.js | 7 |
 | `window.__documentsTab` | Dashboard.js | 6 |
 | `window.__findWorkTab` | CaretakerHub.js | 4 |
 | `window.__flushUiPrefs` | uiPrefs.js | 1 |

@@ -28,6 +28,7 @@ const { isDueOn, validateTaskInput, taskTimes } = require("../utils/careTaskSche
 const router = express.Router();
 router.use(authenticate);
 
+const { blockWhileImpersonating } = require("../middleware/noImpersonation"); // v1.107.5
 const DEFAULT_TZ = "America/New_York";
 
 // ─── Access control (same pattern as notes.js / careRecipients.js) ───
@@ -126,8 +127,13 @@ async function materializeOccurrence(db, task, recipientTz, dateStr) {
 }
 
 // Care recipients this user can see tasks for (owner + shares + team member).
+// v1.107.5 — plus the recipient of a visit the user is working TODAY (Pete, 9/15: "I want
+// Tina to be able to complete those tasks ... Tina sees the events below the 'in progress'
+// card"). hasAccess already let an assigned caregiver check a task off; the list endpoints
+// never showed her one to check. Those rows carry viaVisit so callers can keep her window
+// to today: she is there for the visit, not for Betty's calendar.
 async function accessibleRecipients(db, userId) {
-  return db.prepare(`
+  const rows = await db.prepare(`
     SELECT DISTINCT cr.id, cr.first_name, cr.last_name, cr.family_user_id, cr.timezone
     FROM care_recipients cr
     LEFT JOIN care_recipient_shares s
@@ -137,6 +143,39 @@ async function accessibleRecipients(db, userId) {
       ON ctm.care_team_id = ct.id AND ctm.user_id = ?
     WHERE cr.family_user_id = ? OR s.id IS NOT NULL OR ctm.id IS NOT NULL
   `).all(userId, userId, userId);
+  const seen = new Set(rows.map((r) => r.id));
+  const visits = await db.prepare(`
+    SELECT cr.id, cr.first_name, cr.last_name, cr.family_user_id, cr.timezone,
+           cs.status, cs.scheduled_date
+    FROM care_sessions cs
+    JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+    JOIN care_recipients cr ON cr.id = cs.care_recipient_id
+    WHERE cp.user_id = ? AND cs.status IN ('confirmed', 'in_progress')
+    ORDER BY cs.scheduled_date ASC
+  `).all(userId);
+  for (const v of visits) {
+    if (seen.has(v.id)) continue;
+    const today = getTodayStringInZone(v.timezone || DEFAULT_TZ);
+    // An in-progress visit counts whatever its date (an overnight that began yesterday).
+    if (v.status !== "in_progress" && v.scheduled_date !== today) continue;
+    seen.add(v.id);
+    rows.push({ id: v.id, first_name: v.first_name, last_name: v.last_name,
+      family_user_id: v.family_user_id, timezone: v.timezone, viaVisit: true });
+  }
+  return rows;
+}
+
+// v1.107.5 — hasAccess admits a caregiver on ANY booked visit, so Friday's caregiver could
+// have checked off Tuesday's pills. Visit-only access means today's list, today's visit.
+// Returns an error string to refuse with, or null.
+async function visitDayGate(db, userId, occ, access) {
+  if (access === "admin") return null;
+  const mine = (await accessibleRecipients(db, userId)).find((r) => r.id === occ.care_recipient_id);
+  if (!mine) return "Access denied";
+  if (mine.viaVisit && occ.due_date !== getTodayStringInZone(mine.timezone || DEFAULT_TZ)) {
+    return "You can check off tasks on the day of your visit";
+  }
+  return null;
 }
 
 // Everyone on the "team" for a recipient: the owner + care team members.
@@ -437,7 +476,7 @@ router.get("/:id/history", async (req, res) => {
 // ─── POST /api/care-tasks/occurrences/:id/check ───
 // The check-off. Body: { status: 'done'|'skipped', completed_by_user_id? |
 // completed_by_name?, note? }. Defaults: done, by the tapper.
-router.post("/occurrences/:id/check", async (req, res) => {
+router.post("/occurrences/:id/check", blockWhileImpersonating("check off a care task"), async (req, res) => {
   try {
     const db = await getDb();
     const occ = await db.prepare(`
@@ -448,6 +487,8 @@ router.post("/occurrences/:id/check", async (req, res) => {
     if (!occ) return res.status(404).json({ error: "Occurrence not found" });
     const access = await hasAccess(db, occ.care_recipient_id, req.user.id);
     if (!canCheckOff(access)) return res.status(403).json({ error: "Access denied" });
+    const gate = await visitDayGate(db, req.user.id, occ, access);
+    if (gate) return res.status(403).json({ error: gate });
     if (occ.status === "done" || occ.status === "skipped") {
       return res.status(409).json({ error: "Already checked off", occurrence: occ });
     }
@@ -463,12 +504,17 @@ router.post("/occurrences/:id/check", async (req, res) => {
     }
     const note = (req.body?.note || "").trim().slice(0, 1000) || null;
 
-    await db.prepare(`
+    // Two people tapping the same dose: the second gets 409, not a silent overwrite of who did it.
+    const upd = await db.prepare(`
       UPDATE care_task_occurrences
       SET status = ?, completed_at = NOW(), recorded_by = ?,
           completed_by_user_id = ?, completed_by_name = ?, note = ?
-      WHERE id = ?
+      WHERE id = ? AND status NOT IN ('done', 'skipped')
     `).run(status, req.user.id, byUserId, byName, note, occ.id);
+    if (!upd || upd.changes !== 1) {
+      const now = await db.prepare("SELECT * FROM care_task_occurrences WHERE id = ?").get(occ.id);
+      return res.status(409).json({ error: "Already checked off", occurrence: now });
+    }
 
     // Remember manual helpers so the picker pre-fills them next time.
     if (byName) {
@@ -581,7 +627,7 @@ router.post("/occurrences/:id/assign", async (req, res) => {
   }
 });
 
-router.post("/occurrences/:id/undo", async (req, res) => {
+router.post("/occurrences/:id/undo", blockWhileImpersonating("undo a care task"), async (req, res) => {
   try {
     const db = await getDb();
     const occ = await db.prepare(`
@@ -591,6 +637,8 @@ router.post("/occurrences/:id/undo", async (req, res) => {
     if (!occ) return res.status(404).json({ error: "Occurrence not found" });
     const access = await hasAccess(db, occ.care_recipient_id, req.user.id);
     if (!canCheckOff(access)) return res.status(403).json({ error: "Access denied" });
+    const gate = await visitDayGate(db, req.user.id, occ, access);
+    if (gate) return res.status(403).json({ error: gate });
     if (occ.status !== "done" && occ.status !== "skipped") {
       return res.status(409).json({ error: "Nothing to undo" });
     }

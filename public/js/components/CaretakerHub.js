@@ -1650,6 +1650,15 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   // Split rather than duplicated: one renderer, two lists, and a session is in exactly one of
   // them. Rendering the card in both places would have given her two check-in buttons for the
   // same visit, which is worse than burying one.
+  // v1.107.5 — whose Home she is standing in today: an in-progress visit, or one booked today.
+  const visitRecipientIdsToday = [...new Set(sessions.filter((s) => {
+    if (!s.careRecipientId) return false;
+    if (s.status === 'in_progress') return true;
+    if (s.status !== 'confirmed') return false;
+    const day = (s.date || s.scheduled_date || '').split('T')[0];
+    return day === TimezoneHelper.getToday(s.timezone || TimezoneHelper.DEFAULT_TZ);
+  }).map((s) => s.careRecipientId))];
+
   const upNextSplit = (() => {
     const proposalSessionIds = new Set((data.myProposals || []).filter(p => p.status === 'pending' || p.status === 'expired').map(p => p.sessionId));
     const filtered = upNextSessions.filter(s => !proposalSessionIds.has(s.id));
@@ -2204,6 +2213,11 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
 
       {/* ── v1.106.23 — pinned above everything: see upNextSplit ── */}
       {renderUpNext(upNextSplit.ready, { pinned: true, tour: upNextSplit.rest.length === 0 })}
+
+      {/* ── v1.107.5 — today's appointments and tasks for the people she is with today ── */}
+      {typeof CaregiverTodayAtVisit !== 'undefined' && (
+        <CaregiverTodayAtVisit recipientIds={visitRecipientIdsToday} />
+      )}
 
       {/* ─── Needs your attention: a care-team invite (v1.105.82) ─── */}
       {/*
