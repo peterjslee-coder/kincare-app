@@ -75,9 +75,12 @@ describe("...and the code still backs it", () => {
   test("the public copy renders the fee rather than restating it", () => {
     const splash = readStripped("public/js/components/SplashPage.js");
     expect(splash).toMatch(/a flat \{feePercent\}% for everyone/);
-    expect(splash).toMatch(/takes a \{feePercent\}% commission/);
-    // "Caregivers keep 80%" is the same number said the other way — derived, never stored.
-    expect(splash).toMatch(/Caregivers Keep \{caregiverSharePercent\}%/);
+    // v1.107.x — Pete's fee rule: the caregiver keeps her full rate and the fee goes ON TOP.
+    // "Caregivers keep 80%" was never true under that rule (she gets 100/120 of what is paid),
+    // so the copy now says what actually happens, still reading the fee.
+    expect(splash).toMatch(/inPlace adds \{feePercent\}% on top/);
+    expect(splash).toMatch(/Caregivers Keep Their Full Rate/);
+    expect(splash).not.toMatch(/caregiverSharePercent/);
     expect(splash).toMatch(/usePlatformFee\(\)/);
   });
 
@@ -93,7 +96,10 @@ describe("...and the code still backs it", () => {
       for (const line of readStripped(f).split("\n")) {
         // "take up to 40%" is a claim about OTHER agencies and is not ours to derive.
         if (/(keep|Keep)\s+\d+%\s+(of|and|,|\.)|[Kk]eep[s]? \d+%\b|'\d+%', label: 'You keep'/.test(line)
-            && !/up to 40%/.test(line)) {
+            && !/up to 40%/.test(line)
+            // "100% of your rate" is the caregiver-facing statement of the fee-on-top rule, not a
+            // restated fee — it does not change when the fee does.
+            && !/[Kk]eep 100% of (your|the) rate/.test(line)) {
           offenders.push(`${f}: ${line.trim().slice(0, 100)}`);
         }
       }

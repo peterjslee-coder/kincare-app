@@ -49,7 +49,7 @@ describe("what we tell Stripe about ourselves", () => {
     );
     for (const needed of [
       "Companionship", "Respite care", "Transportation",
-      "20% commission", "keep 80%", "$45 to $85",
+      "adds 20% on top", "full rate", "$45 to $85",
       "support@yourinplace.com", "New River Valley",
     ]) {
       expect([needed, page.includes(needed)]).toEqual([needed, true]);

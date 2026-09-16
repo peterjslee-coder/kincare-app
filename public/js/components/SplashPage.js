@@ -3,7 +3,7 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
   // what the platform charges, to people who are not logged in; if an admin moves the fee, the
   // claim has to move with it or the page is simply untrue. Falls back to the published default
   // until the fetch lands, so this never paints "a flat undefined%".
-  const { feePercent, caregiverSharePercent } = usePlatformFee();
+  const { feePercent } = usePlatformFee();
   const [showInstallTip, setShowInstallTip] = React.useState(false);
   const [activeTab, setActiveTab] = React.useState('families');
   const [showStory, setShowStory] = React.useState(false);
@@ -99,7 +99,7 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
             Vetted local caregivers. Fair wages. Real-time peace of mind for families.
           </div>
           <p className="splash-hero-body" style={{ fontSize: '16px', color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: '16px', maxWidth: '480px' }}>
-            inPlace matches families with vetted caregivers in hours — by the visit, no contracts, no agency markup. Caregivers keep {caregiverSharePercent}%. Families see everything in real time.
+            inPlace matches families with vetted caregivers in hours — by the visit, no contracts, no agency markup. Your caregiver keeps her full rate; inPlace adds {feePercent}% on top. Families see everything in real time.
           </p>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: 'var(--bg-highlight)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '8px 14px', fontSize: '13px', color: 'var(--role-color)', fontWeight: 500, marginBottom: '20px' }}>
             <span style={{ fontSize: '15px' }}>{'\u{1F4CD}'}</span> Now serving the New River Valley — expanding across Virginia soon. Limited early signups.
@@ -192,7 +192,7 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
       <div className="splash-value-strip" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', background: 'var(--bg-highlight)', borderTop: '1px solid #d0e8e3', borderBottom: '1px solid #d0e8e3' }}>
         {[
           { icon: '\u26A1', title: 'Matched in Hours', desc: 'Not weeks of agency waiting' },
-          { icon: '\uD83D\uDCB0', title: `Caregivers Keep ${caregiverSharePercent}%`, desc: 'Fair pay, fast payouts' },
+          { icon: '\uD83D\uDCB0', title: 'Caregivers Keep Their Full Rate', desc: `inPlace adds ${feePercent}% on top \u2014 fair pay, fast payouts` },
           { icon: '\uD83D\uDEE1\uFE0F', title: 'Vetted & Checked', desc: 'Background-verified caregivers' },
           { icon: '\uD83D\uDCF1', title: 'Real-Time Updates', desc: 'Know how your loved one is doing' },
         ].map((item, i) => (
@@ -331,7 +331,7 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
                 {[
                   { label: 'Doing it all yourself', detail: 'Free — until it consumes your life.', us: false },
                   { label: 'Agency home care', detail: 'Typically $30\u201350+/hr with contracts and minimums. Caregivers rotate and take home less than half of what you pay.', us: false },
-                  { label: 'inPlace', detail: `One flat price for the whole visit \u2014 most run $45\u201385 total, not per hour. No contracts, no minimums. The same vetted caregiver every time, chosen by you \u2014 and caregivers keep ${caregiverSharePercent}%, so the good ones stay.`, us: true },
+                  { label: 'inPlace', detail: `One flat price for the whole visit \u2014 most run $45\u201385 total, not per hour. No contracts, no minimums. The same vetted caregiver every time, chosen by you \u2014 and caregivers keep their full rate, so the good ones stay.`, us: true },
                   { label: 'Assisted living / facility', detail: 'Often $5,000\u20138,000+ per month \u2014 and it means leaving home.', us: false },
                 ].map((row, i) => (
                   <div key={i} style={{
@@ -387,12 +387,12 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
             <div style={{ textAlign: 'center', marginBottom: '32px' }}>
               <h3 style={{ fontSize: '24px', color: 'var(--text-primary)', marginBottom: '8px' }}>Fair Pay. Flexible Hours. Your Career.</h3>
               <p style={{ fontSize: '15px', color: 'var(--text-secondary)', maxWidth: '600px', margin: '0 auto', lineHeight: 1.6 }}>
-                Traditional agencies take up to 40%. On inPlace, you keep {caregiverSharePercent}% and set your own schedule.
+                On inPlace, you keep 100% of the rate you set, and you set your own schedule. inPlace's fee is added on top for the family, never taken out of your pay.
               </p>
             </div>
             <div style={{ display: 'flex', gap: '16px', justifyContent: 'center', flexWrap: 'wrap', marginBottom: '24px' }}>
               {[
-                { num: `${caregiverSharePercent}%`, label: 'You keep' },
+                { num: '100%', label: 'Of your rate' },
                 { num: '$25-35/hr', label: 'Typical earnings' },
                 { num: '48hr', label: 'Payout speed' },
               ].map((s, i) => (
@@ -431,7 +431,7 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
               {[
                 { icon: '\uD83E\uDE7A', title: 'Real Care Experience', desc: 'Dementia care, personal care, geriatric support — in real homes, with real families. The experience clinicals don\u2019t give you time for.' },
                 { icon: '\uD83D\uDCCB', title: 'Hours & Care Events, Documented', desc: 'Every visit is logged: your hours, the type of care (dementia, personal, geriatric), and family ratings. Get a report of your care history to bring to interviews.' },
-                { icon: '\uD83D\uDCB0', title: 'Pay That Beats Campus Jobs', desc: `Keep ${caregiverSharePercent}% of every visit — typical caregivers earn $25\u201335/hr, paid within 48 hours.` },
+                { icon: '\uD83D\uDCB0', title: 'Pay That Beats Campus Jobs', desc: `Keep 100% of your rate — typical caregivers earn $25\u201335/hr, paid within 48 hours.` },
                 { icon: '\uD83D\uDCC5', title: 'Flexes Around Classes', desc: 'Accept only the visits that fit your schedule. No shift minimums, no manager.' },
                 { icon: '\uD83D\uDCCD', title: 'Minutes from Campus', desc: 'Families in Radford, Fairlawn, Christiansburg, Blacksburg, and Pulaski County.' },
                 { icon: '\uD83E\uDD1D', title: 'Bring a Classmate', desc: 'Every caregiver gets a personal referral link after signup — refer friends who\u2019d be great at this.' },
@@ -548,9 +548,9 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
               </p>
             </div>
             <div style={{ padding: '36px', background: 'var(--bg-highlight)', borderRadius: '12px', border: '1px solid #d0e8e3', flex: '1 1 280px', maxWidth: '420px' }}>
-              <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--role-color)', marginBottom: '12px' }}>Caregivers Keep {caregiverSharePercent}%</div>
+              <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--role-color)', marginBottom: '12px' }}>Caregivers Keep Their Full Rate</div>
               <p style={{ fontSize: '15px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-                inPlace takes a {feePercent}% commission on each transaction. Caregivers keep {caregiverSharePercent}% and get paid within 48 hours. Both sides get a better deal than traditional agencies.
+                Your caregiver keeps her full rate. inPlace adds {feePercent}% on top, and that's it {'\u2014'} no agency markup. Fair pay for important work, and more hours of care for your budget. Caregivers are paid within 48 hours.
               </p>
             </div>
           </div>
