@@ -98,9 +98,12 @@ describe("both callers use it", () => {
   });
 
   test("and so does the refresh — the path that actually logged five failures", () => {
+    // v1.107.7 — a rotated token arrives on the ONE registration listener, which retries.
+    const listeners = src.slice(src.indexOf("const ensureNativePushListeners"), src.indexOf("const subscribeNativePush"));
+    expect(listeners).toMatch(/addListener\('registration'[\s\S]*?saveNativePushToken\(token\.value/);
     const refresh = src.slice(src.indexOf("const initNativeTokenRefresh"));
-    expect(refresh).toMatch(/saveNativePushToken\(token\.value.*refreshed token/s);
-    expect(refresh).not.toMatch(/failed to save refreshed token/);
+    expect(refresh).toMatch(/ensureNativePushListeners\(PushNotifications\)/);
+    expect(src).not.toMatch(/failed to save refreshed token/);
   });
 
   test("neither one still posts to the endpoint directly", () => {

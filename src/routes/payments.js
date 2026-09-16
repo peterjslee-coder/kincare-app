@@ -1106,9 +1106,12 @@ router.post("/checkout", requireRole("family"), requirePaymentsEnabled, async (r
   const durationHours = Math.ceil(rawDurationHours * 12) / 12; // round up to nearest 5 min (1/12 hour)
 
   let caregiverPayCents, surchargeCents = 0;
-  const effectiveRate = (session.proposed_rate && parseFloat(session.proposed_rate) > 0)
-    ? parseFloat(session.proposed_rate)
-    : session.agreed_rate || null;
+  // v1.107.7 — a negotiated rate replaces the first proposal; it was the other way round.
+  const effectiveRate = (session.agreed_rate && parseFloat(session.agreed_rate) > 0)
+    ? parseFloat(session.agreed_rate)
+    : (session.proposed_rate && parseFloat(session.proposed_rate) > 0)
+      ? parseFloat(session.proposed_rate)
+      : null;
 
   if (effectiveRate) {
     // Family offered a specific rate (or negotiated) — caregiver gets exactly this × time

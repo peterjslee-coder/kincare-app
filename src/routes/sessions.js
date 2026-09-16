@@ -2990,9 +2990,22 @@ router.put("/:id/time-change/:proposalId/respond", async (req, res) => {
           "UPDATE time_change_proposals SET status = 'accepted', acknowledged_by_user_id = ?, acknowledged_at = NOW() WHERE id = ?"
         ).run(userId, proposal.id);
 
-        await tx.prepare(
-          "UPDATE care_sessions SET scheduled_time = ?, duration_hours = ?, pending_time_change_id = NULL, updated_at = NOW() WHERE id = ?"
-        ).run(proposal.proposed_time, proposal.proposed_duration, req.params.id);
+        // v1.107.7 — a longer or shorter visit is a different price. duration_hours moved and
+        // estimated_cost did not, so the hold, the capture and her pay card kept the old
+        // length. Same hourly (the agreed rate, else the booking's own), new hours; any
+        // short-notice amount stays as it was. Right-hand sides read the row as it WAS.
+        await tx.prepare(`
+          UPDATE care_sessions SET
+            scheduled_time = ?,
+            duration_hours = ?,
+            estimated_cost = COALESCE(ROUND(
+              COALESCE(NULLIF(agreed_rate, 0)::numeric,
+                       (estimated_cost::numeric - COALESCE(short_notice_surcharge, 0)::numeric)
+                         / NULLIF(duration_hours, 0)::numeric)
+              * ?::numeric + COALESCE(short_notice_surcharge, 0)::numeric, 2), estimated_cost),
+            pending_time_change_id = NULL, updated_at = NOW()
+          WHERE id = ?
+        `).run(proposal.proposed_time, proposal.proposed_duration, parseFloat(proposal.proposed_duration) || 0, req.params.id);
       });
 
       // Notify proposer

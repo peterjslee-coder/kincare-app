@@ -110,7 +110,8 @@ describe("D3 — every proposal mutation is all-or-nothing", () => {
   test("accepting a time change moves the visit and closes the proposal together", () => {
     const block = txBlock(sess, sess.indexOf('if (action === "accept") {'));
     expect(block).toMatch(/UPDATE time_change_proposals SET status = 'accepted'/);
-    expect(block).toMatch(/UPDATE care_sessions SET scheduled_time = \?, duration_hours = \?, pending_time_change_id = NULL/);
+    // v1.107.7 — and re-prices the visit for its new length, in the same statement.
+    expect(block).toMatch(/UPDATE care_sessions SET\s+scheduled_time = \?,\s+duration_hours = \?,\s+estimated_cost = [\s\S]*?pending_time_change_id = NULL/);
   });
 
   test("rejecting releases the pointer in the same transaction", () => {

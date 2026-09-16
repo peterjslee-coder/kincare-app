@@ -22,5 +22,6 @@ test("all three Find Work buttons explain when locked — sidebar action, sideba
 
 test("window.__showToast exists now — it had callers and no definition", () => {
   expect(utils).toContain("window.__showToast = showToast;");
-  expect((utils.match(/window\.__showToast\?\.\(/g) || []).length).toBeGreaterThanOrEqual(2);
+  // v1.107.7 — one push listener now (it was two copies, which is how one push became twelve toasts).
+  expect((utils.match(/window\.__showToast\?\.\(/g) || []).length).toBeGreaterThanOrEqual(1);
 });

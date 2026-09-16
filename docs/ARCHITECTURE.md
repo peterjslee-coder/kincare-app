@@ -9,7 +9,7 @@ Hand-written sections (§3 "Where is…") are preserved across regeneration; edi
 
 Structure at last generation: 534 HTTP routes across 56 mounts ·
 94 `CREATE TABLE` statements · 14 background jobs · 38 socket events
-(16 with no client listener) · 63 push event types · 58 `window.__*` globals.
+(16 with no client listener) · 63 push event types · 59 `window.__*` globals.
 
 ---
 
@@ -243,7 +243,7 @@ State travels through `window`, not props. This table is the registry.
 | `window.__ADMIN_API_KEY` | — | 2 |
 | `window.__ADMIN_BUNDLE_URL` | — | 1 |
 | `window.__accountTab` | app.js, CaretakerHub.js, Dashboard.js | 17 |
-| `window.__activeConversationId` | app.js, Messages.js, utils.js | 6 |
+| `window.__activeConversationId` | app.js, Messages.js, utils.js | 5 |
 | `window.__applyUserTheme` | app.js | 4 |
 | `window.__attachmentBlobCache` | AttachmentViewer.js | 1 |
 | `window.__calDayBlocks` | CaregiverCalendar.js | 2 |
@@ -257,13 +257,14 @@ State travels through `window`, not props. This table is the registry.
 | `window.__documentsTab` | Dashboard.js | 6 |
 | `window.__findWorkTab` | CaretakerHub.js | 4 |
 | `window.__flushUiPrefs` | uiPrefs.js | 1 |
-| `window.__handlePushNavigate` | app.js | 12 |
+| `window.__handlePushNavigate` | app.js | 10 |
 | `window.__hasActiveSession` | app.js | 6 |
 | `window.__isAdmin` | app.js | 2 |
 | `window.__linkifyTrim` | utils.js | 1 |
 | `window.__loadStripeJs` | — | 1 |
+| `window.__nativePush` | utils.js | 2 |
 | `window.__navHistory` | app.js | 3 |
-| `window.__navigateTo` | app.js, Caregivers.js | 54 |
+| `window.__navigateTo` | app.js, Caregivers.js | 53 |
 | `window.__openConversationId` | Messages.js, utils.js | 5 |
 | `window.__openRequestCareModal` | app.js | 19 |
 | `window.__openTaskCreate` | — | 1 |
@@ -289,7 +290,7 @@ State travels through `window`, not props. This table is the registry.
 | `window.__setSessionActive` | app.js | 4 |
 | `window.__setUiPref` | uiPrefs.js | 5 |
 | `window.__setUiPrefs` | app.js, uiPrefs.js | 7 |
-| `window.__showToast` | VisitDetailModal.js, utils.js | 13 |
+| `window.__showToast` | VisitDetailModal.js, utils.js | 12 |
 | `window.__skipPopstate` | VisitDetailModal.js | 3 |
 | `window.__startCaregiverTour` | app.js | 11 |
 | `window.__startImpersonation` | app.js | 3 |

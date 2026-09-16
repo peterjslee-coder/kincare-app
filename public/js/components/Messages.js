@@ -14,6 +14,148 @@ function bubbleRadius(isSent, runStart, runEnd) {
   return `${r.topLeft}px ${r.topRight}px ${r.bottomRight}px ${r.bottomLeft}px`;
 }
 
+// ─── Photo Lightbox (pinch-to-zoom, tap to dismiss) ───
+// v1.107.7 — a top-level component. It was declared INSIDE Messages' render, so it was a brand
+// new component type on every re-render (a socket event, a typing dot, a poll), and React
+// unmounted and remounted it — throwing away the zoom mid-pinch. Pete: "Pinching to zoom…
+// keeps snapping back and resizing."
+const MessagePhotoLightbox = ({ photo, onClose }) => {
+  const imgRef = useRef(null);
+  const containerRef = useRef(null);
+  const stateRef = useRef({ scale: 1, translateX: 0, translateY: 0, initialDist: 0, initialScale: 1, isPinching: false, startX: 0, startY: 0, lastTapTime: 0 });
+
+  const applyTransform = () => {
+    if (!imgRef.current) return;
+    const s = stateRef.current;
+    imgRef.current.style.transform = `translate(${s.translateX}px, ${s.translateY}px) scale(${s.scale})`;
+  };
+
+  const resetZoom = () => {
+    const s = stateRef.current;
+    s.scale = 1; s.translateX = 0; s.translateY = 0;
+    applyTransform();
+  };
+
+  const getTouchDist = (t1, t2) => Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+
+  const onTouchStart = (e) => {
+    const s = stateRef.current;
+    if (e.touches.length === 2) {
+      e.preventDefault();
+      s.isPinching = true;
+      s.initialDist = getTouchDist(e.touches[0], e.touches[1]);
+      s.initialScale = s.scale;
+    } else if (e.touches.length === 1) {
+      s.startX = e.touches[0].clientX;
+      s.startY = e.touches[0].clientY;
+      s.isPinching = false;
+    }
+  };
+
+  const onTouchMove = (e) => {
+    const s = stateRef.current;
+    if (e.touches.length === 2 && s.isPinching) {
+      e.preventDefault();
+      const dist = getTouchDist(e.touches[0], e.touches[1]);
+      s.scale = Math.min(5, Math.max(0.5, s.initialScale * (dist / s.initialDist)));
+      applyTransform();
+    } else if (e.touches.length === 1 && s.scale > 1) {
+      e.preventDefault();
+      const dx = e.touches[0].clientX - s.startX;
+      const dy = e.touches[0].clientY - s.startY;
+      s.translateX += dx;
+      s.translateY += dy;
+      s.startX = e.touches[0].clientX;
+      s.startY = e.touches[0].clientY;
+      applyTransform();
+    }
+  };
+
+  const onTouchEnd = (e) => {
+    const s = stateRef.current;
+    if (e.touches.length < 2) s.isPinching = false;
+    // Double-tap to toggle zoom
+    if (e.changedTouches.length === 1 && e.touches.length === 0 && !s.isPinching) {
+      const now = Date.now();
+      if (now - s.lastTapTime < 300) {
+        if (s.scale > 1.1) { resetZoom(); } else {
+          s.scale = 2.5;
+          // Zoom toward tap point
+          const rect = containerRef.current?.getBoundingClientRect();
+          if (rect) {
+            const cx = e.changedTouches[0].clientX - rect.left - rect.width / 2;
+            const cy = e.changedTouches[0].clientY - rect.top - rect.height / 2;
+            s.translateX = -cx; s.translateY = -cy;
+          }
+          applyTransform();
+        }
+        s.lastTapTime = 0;
+        return;
+      }
+      s.lastTapTime = now;
+      // Single tap — dismiss if not zoomed
+      setTimeout(() => {
+        if (s.lastTapTime !== 0 && s.scale <= 1.1) {
+          onClose();
+        }
+        s.lastTapTime = 0;
+      }, 300);
+    }
+    // Snap back if zoomed out too far
+    if (s.scale < 1) { s.scale = 1; s.translateX = 0; s.translateY = 0; applyTransform(); }
+  };
+
+  // Mouse wheel zoom for desktop
+  const onWheel = (e) => {
+    e.preventDefault();
+    const s = stateRef.current;
+    const delta = e.deltaY > 0 ? 0.9 : 1.1;
+    s.scale = Math.min(5, Math.max(0.5, s.scale * delta));
+    if (s.scale < 1) { s.scale = 1; s.translateX = 0; s.translateY = 0; }
+    applyTransform();
+  };
+
+  return React.createElement('div', {
+    ref: containerRef,
+    onClick: (e) => { if (e.target === containerRef.current) onClose(); },
+    onTouchStart, onTouchMove, onTouchEnd, onWheel,
+    style: {
+      position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999,
+      background: 'rgba(0,0,0,0.92)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      touchAction: 'none', cursor: 'zoom-out',
+    },
+  },
+    // Close button
+    React.createElement('button', {
+      onClick: () => onClose(),
+      style: {
+        position: 'absolute', top: 16, right: 16, zIndex: 10000,
+        background: 'rgba(0,0,0,0.5)', border: 'none', borderRadius: '50%',
+        width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        color: '#fff', fontSize: 24, cursor: 'pointer',
+      },
+    }, '\u00D7'),
+    // Image
+    React.createElement('img', {
+      ref: imgRef,
+      src: photo.src,
+      alt: photo.caption || 'Photo',
+      style: {
+        maxWidth: '95vw', maxHeight: '90vh', objectFit: 'contain',
+        transformOrigin: 'center center', transition: 'none',
+        userSelect: 'none', WebkitUserSelect: 'none', pointerEvents: 'none',
+      },
+    }),
+    // Caption
+    photo.caption ? React.createElement('div', {
+      style: {
+        position: 'absolute', bottom: 24, left: 16, right: 16, textAlign: 'center',
+        color: '#fff', fontSize: 15, textShadow: '0 1px 4px rgba(0,0,0,0.8)',
+      },
+    }, photo.caption) : null,
+  );
+};
+
 const Messages = window.Messages = () => {
   const [conversations, setConversations] = useState([]);
   const [activeConvId, setActiveConvId] = useState(null);
@@ -3045,148 +3187,11 @@ const Messages = window.Messages = () => {
     );
   };
 
-  // ─── Photo Lightbox (pinch-to-zoom, tap to dismiss) ───
   const renderPhotoLightbox = () => {
     if (!lightboxPhoto) return null;
-
-    const LightboxInner = () => {
-      const imgRef = useRef(null);
-      const containerRef = useRef(null);
-      const stateRef = useRef({ scale: 1, translateX: 0, translateY: 0, initialDist: 0, initialScale: 1, isPinching: false, startX: 0, startY: 0, lastTapTime: 0 });
-
-      const applyTransform = () => {
-        if (!imgRef.current) return;
-        const s = stateRef.current;
-        imgRef.current.style.transform = `translate(${s.translateX}px, ${s.translateY}px) scale(${s.scale})`;
-      };
-
-      const resetZoom = () => {
-        const s = stateRef.current;
-        s.scale = 1; s.translateX = 0; s.translateY = 0;
-        applyTransform();
-      };
-
-      const getTouchDist = (t1, t2) => Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
-
-      const onTouchStart = (e) => {
-        const s = stateRef.current;
-        if (e.touches.length === 2) {
-          e.preventDefault();
-          s.isPinching = true;
-          s.initialDist = getTouchDist(e.touches[0], e.touches[1]);
-          s.initialScale = s.scale;
-        } else if (e.touches.length === 1) {
-          s.startX = e.touches[0].clientX;
-          s.startY = e.touches[0].clientY;
-          s.isPinching = false;
-        }
-      };
-
-      const onTouchMove = (e) => {
-        const s = stateRef.current;
-        if (e.touches.length === 2 && s.isPinching) {
-          e.preventDefault();
-          const dist = getTouchDist(e.touches[0], e.touches[1]);
-          s.scale = Math.min(5, Math.max(0.5, s.initialScale * (dist / s.initialDist)));
-          applyTransform();
-        } else if (e.touches.length === 1 && s.scale > 1) {
-          e.preventDefault();
-          const dx = e.touches[0].clientX - s.startX;
-          const dy = e.touches[0].clientY - s.startY;
-          s.translateX += dx;
-          s.translateY += dy;
-          s.startX = e.touches[0].clientX;
-          s.startY = e.touches[0].clientY;
-          applyTransform();
-        }
-      };
-
-      const onTouchEnd = (e) => {
-        const s = stateRef.current;
-        if (e.touches.length < 2) s.isPinching = false;
-        // Double-tap to toggle zoom
-        if (e.changedTouches.length === 1 && e.touches.length === 0 && !s.isPinching) {
-          const now = Date.now();
-          if (now - s.lastTapTime < 300) {
-            if (s.scale > 1.1) { resetZoom(); } else {
-              s.scale = 2.5;
-              // Zoom toward tap point
-              const rect = containerRef.current?.getBoundingClientRect();
-              if (rect) {
-                const cx = e.changedTouches[0].clientX - rect.left - rect.width / 2;
-                const cy = e.changedTouches[0].clientY - rect.top - rect.height / 2;
-                s.translateX = -cx; s.translateY = -cy;
-              }
-              applyTransform();
-            }
-            s.lastTapTime = 0;
-            return;
-          }
-          s.lastTapTime = now;
-          // Single tap — dismiss if not zoomed
-          setTimeout(() => {
-            if (s.lastTapTime !== 0 && s.scale <= 1.1) {
-              setLightboxPhoto(null);
-            }
-            s.lastTapTime = 0;
-          }, 300);
-        }
-        // Snap back if zoomed out too far
-        if (s.scale < 1) { s.scale = 1; s.translateX = 0; s.translateY = 0; applyTransform(); }
-      };
-
-      // Mouse wheel zoom for desktop
-      const onWheel = (e) => {
-        e.preventDefault();
-        const s = stateRef.current;
-        const delta = e.deltaY > 0 ? 0.9 : 1.1;
-        s.scale = Math.min(5, Math.max(0.5, s.scale * delta));
-        if (s.scale < 1) { s.scale = 1; s.translateX = 0; s.translateY = 0; }
-        applyTransform();
-      };
-
-      return React.createElement('div', {
-        ref: containerRef,
-        onClick: (e) => { if (e.target === containerRef.current) setLightboxPhoto(null); },
-        onTouchStart, onTouchMove, onTouchEnd, onWheel,
-        style: {
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999,
-          background: 'rgba(0,0,0,0.92)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-          touchAction: 'none', cursor: 'zoom-out',
-        },
-      },
-        // Close button
-        React.createElement('button', {
-          onClick: () => setLightboxPhoto(null),
-          style: {
-            position: 'absolute', top: 16, right: 16, zIndex: 10000,
-            background: 'rgba(0,0,0,0.5)', border: 'none', borderRadius: '50%',
-            width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: '#fff', fontSize: 24, cursor: 'pointer',
-          },
-        }, '\u00D7'),
-        // Image
-        React.createElement('img', {
-          ref: imgRef,
-          src: lightboxPhoto.src,
-          alt: lightboxPhoto.caption || 'Photo',
-          style: {
-            maxWidth: '95vw', maxHeight: '90vh', objectFit: 'contain',
-            transformOrigin: 'center center', transition: 'none',
-            userSelect: 'none', WebkitUserSelect: 'none', pointerEvents: 'none',
-          },
-        }),
-        // Caption
-        lightboxPhoto.caption ? React.createElement('div', {
-          style: {
-            position: 'absolute', bottom: 24, left: 16, right: 16, textAlign: 'center',
-            color: '#fff', fontSize: 15, textShadow: '0 1px 4px rgba(0,0,0,0.8)',
-          },
-        }, lightboxPhoto.caption) : null,
-      );
-    };
-
-    return React.createElement(LightboxInner);
+    return React.createElement(MessagePhotoLightbox, {
+      key: lightboxPhoto.src, photo: lightboxPhoto, onClose: () => setLightboxPhoto(null),
+    });
   };
 
   // ─── Layout ───

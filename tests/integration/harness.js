@@ -71,7 +71,8 @@ async function startHarness({ routers = ROUTERS } = {}) {
   const app = express();
   app.use(express.json({ limit: "10mb" }));
   for (const [mount, mod] of Object.entries(routers)) {
-    app.use(mount, require(mod));
+    // An array mounts several routers on one path, in order (offers + sessions, as server.js).
+    for (const m of [].concat(mod)) app.use(mount, require(m));
   }
 
   const { generateToken } = require("../../src/middleware/auth");

@@ -789,7 +789,12 @@ async function caregiverDashboard(db, userId, res) {
       // If family offered a specific rate (proposed_rate), use it — the offer is the offer.
       // Only fall back to caregiver profile rates when no offer was made.
       let caregiverPayout;
-      if (s.proposed_rate && parseFloat(s.proposed_rate) > 0) {
+      // v1.107.7 — estimated_cost first: it is the number the hold, the capture and the payout
+      // are made from (agreed offer × time, or actual time once the visit is finished). The
+      // fallbacks below only cover a row that somehow has none.
+      if (parseFloat(s.estimated_cost) > 0) {
+        caregiverPayout = Math.round(parseFloat(s.estimated_cost) * 100) / 100;
+      } else if (s.proposed_rate && parseFloat(s.proposed_rate) > 0) {
         // Family's offered rate × duration = what the caregiver earns
         caregiverPayout = Math.round(parseFloat(s.proposed_rate) * parseFloat(s.duration_hours || 2) * 100) / 100;
       } else {
@@ -987,7 +992,12 @@ async function caregiverDashboard(db, userId, res) {
     recentlyCompleted: recentCompletedCg.map(s => {
       // If family offered a specific rate (proposed_rate), use it — the offer is the offer.
       let caregiverPayout;
-      if (s.proposed_rate && parseFloat(s.proposed_rate) > 0) {
+      // v1.107.7 — estimated_cost first: it is the number the hold, the capture and the payout
+      // are made from (agreed offer × time, or actual time once the visit is finished). The
+      // fallbacks below only cover a row that somehow has none.
+      if (parseFloat(s.estimated_cost) > 0) {
+        caregiverPayout = Math.round(parseFloat(s.estimated_cost) * 100) / 100;
+      } else if (s.proposed_rate && parseFloat(s.proposed_rate) > 0) {
         caregiverPayout = Math.round(parseFloat(s.proposed_rate) * parseFloat(s.duration_hours || 2) * 100) / 100;
       } else {
         const rates = {

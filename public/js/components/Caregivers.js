@@ -358,7 +358,7 @@ const Caregivers = window.Caregivers = () => {
         iconAnchor: [9, 9],
       });
       const cm = L.marker([searchCenter.lat, searchCenter.lng], { icon: centerIcon }).addTo(map);
-      cm.bindPopup(`<div style="font-family:sans-serif;font-size:12px"><strong>Search Center</strong><br/>${searchAddress}</div>`);
+      cm.bindPopup(`<div style="font-family:sans-serif;font-size:12px"><strong>Search Center</strong><br/>${String(searchAddress || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))}</div>`);
       markersRef.current.push(cm);
       bounds.push([searchCenter.lat, searchCenter.lng]);
     }
@@ -406,11 +406,19 @@ const Caregivers = window.Caregivers = () => {
       }
 
       const isAssigned = cg.isAssigned || assignedCgIds.has(cg.id);
-      const displayName = privacyName(cg, isAssigned);
+      // v1.107.7 — everything below is built as an HTML string for Leaflet, and the name, the
+      // specialties and the bio are all typed by the caregiver. Escaped, every one.
+      const esc = (v) => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+      const displayName = esc(privacyName(cg, isAssigned));
+      // Pete: "on a map her thumbnail and a quick bio can help customers choose who they want
+      // to hire." The first sentence or so of her own paragraph, in her own words.
+      const bioText = String(cg.bio || '').replace(/\s+/g, ' ').trim();
+      const quickBio = bioText.length > 110 ? bioText.slice(0, 110).replace(/\s+\S*$/, '') + '\u2026' : bioText;
       const pinColor = isAssigned ? 'var(--accent-color)' : '#2563eb';
       const distLabel = cg.distance != null ? ` &bull; ${cg.distance}mi` : '';
       const photoHtml = cg.profilePhoto
-        ? `<img src="${cg.profilePhoto}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;border:2px solid ${pinColor};margin-right:8px;flex-shrink:0" />`
+        ? `<img src="${esc(cg.profilePhoto)}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;border:2px solid ${pinColor};margin-right:8px;flex-shrink:0" />`
         : `<div style="width:32px;height:32px;border-radius:50%;background:${pinColor};color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;border:2px solid #fff;margin-right:8px;flex-shrink:0">${(displayName || '?').split(' ').map(n => n[0]).join('').slice(0, 2)}</div>`;
 
       const icon = L.divIcon({
@@ -435,6 +443,7 @@ const Caregivers = window.Caregivers = () => {
           <div>
             <div style="font-weight:700;font-size:12px">${displayName}</div>
             <div style="font-size:10px;color:#666">${isAssigned ? 'Assigned' : ''}${cg.distance != null ? `${isAssigned ? ' · ' : ''}${cg.distance}mi away` : ''}</div>
+            ${quickBio ? `<div style="font-size:11px;color:#333;max-width:200px;white-space:normal;margin-top:2px">${esc(quickBio)}</div>` : ''}
           </div>
         </div>
       `, { direction: 'top', offset: [0, -35], className: 'caregiver-tooltip' });
@@ -449,10 +458,11 @@ const Caregivers = window.Caregivers = () => {
               ${isAssigned ? '<div style="font-size:10px;color:#e8724a;font-weight:600">⭐ Assigned</div>' : ''}
             </div>
           </div>
-          ${cg.distance != null ? `<div style="font-size:11px;color:#666">${cg.distance} miles away</div>` : ''}
-          <div style="font-size:11px;color:#888;margin-top:2px"><span title="Family rating">⭐ ${cg.rating || '—'}</span> &bull; Day $${cg.rateDaytime || cg.hourlyRate}${cg.rateNighttime && cg.rateNighttime !== cg.rateDaytime ? ` · Night $${cg.rateNighttime}` : ''}/hr</div>
-          <div style="font-size:10px;color:#1b6b5a;margin-top:4px">${(cg.specialties || []).join(', ') || 'General care'}</div>
-          <button data-cg-id="${cg.id}" class="map-view-profile-btn" style="margin-top:8px;width:100%;padding:6px;background:#1b6b5a;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">View Profile</button>
+          ${quickBio ? `<div style="font-size:12px;color:#333;line-height:1.35;margin:2px 0 6px">${esc(quickBio)}</div>` : ''}
+          ${cg.distance != null ? `<div style="font-size:11px;color:#666">${esc(cg.distance)} miles away</div>` : ''}
+          <div style="font-size:11px;color:#888;margin-top:2px"><span title="Family rating">⭐ ${esc(cg.rating || '—')}</span> &bull; Day $${esc(cg.rateDaytime || cg.hourlyRate)}${cg.rateNighttime && cg.rateNighttime !== cg.rateDaytime ? ` · Night $${esc(cg.rateNighttime)}` : ''}/hr</div>
+          <div style="font-size:10px;color:#1b6b5a;margin-top:4px">${esc((cg.specialties || []).join(', ')) || 'General care'}</div>
+          <button data-cg-id="${esc(cg.id)}" class="map-view-profile-btn" style="margin-top:8px;width:100%;padding:6px;background:#1b6b5a;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">View Profile</button>
         </div>
       `);
       markersRef.current.push(marker);

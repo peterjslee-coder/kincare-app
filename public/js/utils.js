@@ -1542,6 +1542,51 @@ const subscribeToPush = window.subscribeToPush = async () => {
   }
 };
 
+// ─── v1.107.7 — one set of native push listeners per page ───
+// Registration (and every later token rotation) saves the token and settles anyone waiting on
+// subscribeNativePush. A foreground push shows ONE toast: badge-only pushes (utils/badgeSync,
+// no title and no body) show nothing, and the same title within a few seconds is shown once.
+const _nativePush = window.__nativePush || (window.__nativePush = { ready: null, waiters: [], lastToast: { text: '', at: 0 } });
+const ensureNativePushListeners = window.ensureNativePushListeners = (PushNotifications) => {
+  if (_nativePush.ready) return _nativePush.ready;
+  _nativePush.ready = (async () => {
+    // Leftovers from an earlier copy of this page (a web-layer reload keeps the native plugin).
+    try { await PushNotifications.removeAllListeners(); } catch { /* nothing to remove */ }
+
+    PushNotifications.addListener('registration', async (token) => {
+      console.log('NativePush: registered with token', token.value?.substring(0, 20) + '...');
+      await saveNativePushToken(token.value, window.Capacitor.getPlatform(), { label: 'token' });
+      _nativePush.waiters.slice().forEach((w) => w(token));
+    });
+
+    PushNotifications.addListener('registrationError', (err) => {
+      console.error('NativePush: registration error:', err);
+      _nativePush.waiters.slice().forEach((w) => w(null));
+    });
+
+    PushNotifications.addListener('pushNotificationReceived', (notification) => {
+      const nData = notification.data || {};
+      const text = notification.title || notification.body || '';
+      // A badge-only push has nothing to say; it used to toast "New notification".
+      if (!text) return;
+      // Suppress toast if user is already viewing this conversation
+      if (nData.type === 'message' && nData.conversationId && window.__activeConversationId === nData.conversationId) return;
+      const now = Date.now();
+      if (_nativePush.lastToast.text === text && now - _nativePush.lastToast.at < 4000) return;
+      _nativePush.lastToast = { text, at: now };
+      try { window.__showToast?.(text, 'info'); } catch { /* a toast is a courtesy */ }
+    });
+
+    PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
+      const data = action.notification?.data;
+      // v1.97.0 — central router: same deep-link handling as web push and the in-app list
+      if (window.__handlePushNavigate) window.__handlePushNavigate(data || {});
+      else if (data?.page) window.__navigateTo?.(data.page);
+    });
+  })();
+  return _nativePush.ready;
+};
+
 // Subscribe to native push notifications via Capacitor plugin
 // Used in native Android/iOS apps where Web Push (PushManager) isn't available
 const subscribeNativePush = window.subscribeNativePush = async () => {
@@ -1559,66 +1604,25 @@ const subscribeNativePush = window.subscribeNativePush = async () => {
       return null;
     }
 
-    // Register with FCM (Android) / APNS (iOS)
-    // This triggers the 'registration' event with the device token
+    // v1.107.7 — listeners are installed ONCE per page (ensureNativePushListeners). This used
+    // to add four fresh listeners on every call, and ensurePushRegistered calls it on every
+    // resume AND every visibilitychange — so after six trips away from the app one push drew
+    // twelve identical toasts. Pete: "when I get a notification I get like 12 of them at once."
+    await ensureNativePushListeners(PushNotifications);
     return new Promise((resolve) => {
-      let resolved = false;
-
-      // Listen for successful registration
-      PushNotifications.addListener('registration', async (token) => {
-        if (resolved) return;
-        resolved = true;
-        console.log('NativePush: registered with token', token.value?.substring(0, 20) + '...');
-
-        // Send token to our server — retried, see saveNativePushToken.
-        await saveNativePushToken(token.value, window.Capacitor.getPlatform(), { label: 'token' });
-
-        resolve(token);
-      });
-
-      // Listen for registration errors
-      PushNotifications.addListener('registrationError', (err) => {
-        if (resolved) return;
-        resolved = true;
-        console.error('NativePush: registration error:', err);
-        resolve(null);
-      });
-
-      // Also set up notification received/action listeners
-      PushNotifications.addListener('pushNotificationReceived', (notification) => {
-        console.log('NativePush: notification received in foreground:', notification.title);
-        const nData = notification.data || {};
-        // Suppress toast if user is already viewing this conversation
-        if (nData.type === 'message' && nData.conversationId && window.__activeConversationId === nData.conversationId) {
-          console.log('NativePush: suppressed — user is viewing this conversation');
-          return;
-        }
-        // Show in-app toast for foreground notifications
-        if (window.useToast) {
-          try { window.__showToast?.(notification.title || 'New notification', 'info'); } catch {}
-        }
-      });
-
-      PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
-        console.log('NativePush: notification tapped:', action.notification?.title);
-        const data = action.notification?.data;
-        // v1.97.0 — central router: same deep-link handling as web push and
-        // the in-app notification list (page + item focus, e.g. straight to
-        // a reimbursement's approve view)
-        if (window.__handlePushNavigate) window.__handlePushNavigate(data || {});
-        else if (data?.page) window.__navigateTo?.(data.page);
-      });
-
-      // Trigger the registration
+      let done = false;
+      const finish = (v) => {
+        if (done) return;
+        done = true;
+        _nativePush.waiters = _nativePush.waiters.filter((w) => w !== finish);
+        resolve(v);
+      };
+      _nativePush.waiters.push(finish);
+      // Trigger the registration; the one 'registration' listener saves the token and settles us.
       PushNotifications.register();
-
-      // Timeout after 15 seconds
       setTimeout(() => {
-        if (!resolved) {
-          resolved = true;
-          console.warn('NativePush: registration timed out');
-          resolve(null);
-        }
+        if (!done) console.warn('NativePush: registration timed out');
+        finish(null);
       }, 15000);
     });
   } catch (err) {
@@ -1678,36 +1682,9 @@ const initNativeTokenRefresh = window.initNativeTokenRefresh = () => {
   try {
     const PushNotifications = window.Capacitor?.Plugins?.PushNotifications;
     if (!PushNotifications) return;
-
-    // Remove any existing listener to avoid duplicates, then re-add
-    PushNotifications.removeAllListeners().then(() => {
-      // Re-register the core listeners
-      PushNotifications.addListener('registration', async (token) => {
-        console.log('NativePush: token refreshed', token.value?.substring(0, 20) + '...');
-        await saveNativePushToken(token.value, window.Capacitor.getPlatform(), { label: 'refreshed token' });
-      });
-
-      PushNotifications.addListener('registrationError', (err) => {
-        console.error('NativePush: registration error during refresh:', err);
-      });
-
-      PushNotifications.addListener('pushNotificationReceived', (notification) => {
-        console.log('NativePush: foreground notification:', notification.title);
-        const nData = notification.data || {};
-        // Suppress toast if user is already viewing this conversation
-        if (nData.type === 'message' && nData.conversationId && window.__activeConversationId === nData.conversationId) return;
-        if (window.useToast) {
-          try { window.__showToast?.(notification.title || 'New notification', 'info'); } catch {}
-        }
-      });
-
-      PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
-        const data = action.notification?.data;
-        // v1.97.0 — central router (see above)
-        if (window.__handlePushNavigate) window.__handlePushNavigate(data || {});
-        else if (data?.page) window.__navigateTo?.(data.page);
-      });
-    }).catch(() => {});
+    // v1.107.7 — the same single set of listeners as subscribeNativePush. This used to
+    // removeAllListeners() and re-add, racing the listeners subscribeNativePush was adding.
+    ensureNativePushListeners(PushNotifications).catch(() => {});
   } catch (err) {
     console.warn('NativePush: token refresh init error:', err);
   }

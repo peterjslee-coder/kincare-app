@@ -166,11 +166,58 @@ router.put("/:sessionId/offers/:offerId/respond", async (req, res) => {
   }
 
   if (action === 'accept') {
-    await db.prepare("UPDATE session_offers SET status = 'accepted' WHERE id = ?").run(offerId);
-    // Set agreed rate on the session and move to confirmed
-    await db.prepare(`
-      UPDATE care_sessions SET agreed_rate = ?, status = 'confirmed', updated_at = NOW() WHERE id = ?
-    `).run(offer.offered_rate, sessionId);
+    // v1.107.7 — the accepted offer IS the price. This set agreed_rate and left estimated_cost
+    // at whatever the booking was first quoted at, and estimated_cost is what the hold, the
+    // capture and the caregiver's pay card all read first — so a caregiver who negotiated
+    // $22/h was held, paid and shown the old number. Pete's rule: "Time x rate agreed in the
+    // offer accepted = caregiver pay." Any short-notice amount already on the booking stays.
+    // Conditional on 'pending' so two taps (or both parties at once) accept exactly once.
+    //
+    // A bid on an OPEN job (no caregiver yet) also has to put the bidder on the visit —
+    // accepting it used to leave the job 'confirmed' with nobody assigned. She is re-checked
+    // now, not only when she bid: a day can pass, and a check can come back non-clear.
+    const cur = await db.prepare(`
+      SELECT cs.caregiver_id, cs.family_user_id, cp.user_id AS caregiver_user_id
+        FROM care_sessions cs LEFT JOIN caregiver_profiles cp ON cp.id = cs.caregiver_id
+       WHERE cs.id = ?
+    `).get(sessionId);
+    let assignProfileId = null;
+    if (!cur.caregiver_id) {
+      const bidder = await db.prepare(
+        "SELECT id, is_background_checked, account_paused FROM caregiver_profiles WHERE user_id = ?"
+      ).get(offer.from_user_id);
+      const cleared = !!bidder && !bidder.account_paused && (!!bidder.is_background_checked
+        || await hasActiveVouch(db, offer.from_user_id, cur.family_user_id));
+      if (!cleared) {
+        return res.status(409).json({ error: "This caregiver can't take the visit right now" });
+      }
+      assignProfileId = bidder.id;
+    } else if (cur.caregiver_user_id !== offer.from_user_id && cur.caregiver_user_id !== offer.to_user_id) {
+      return res.status(409).json({ error: "Another caregiver already has this visit" });
+    }
+    const rate = parseFloat(offer.offered_rate) || 0;
+    let conflict = null;
+    try {
+      await db.transaction(async (tx) => {
+        const won = await tx.prepare(
+          "UPDATE session_offers SET status = 'accepted' WHERE id = ? AND status = 'pending'"
+        ).run(offerId);
+        if (!won || won.changes !== 1) { conflict = "This offer was already answered"; throw new Error("offer_taken"); }
+        const upd = await tx.prepare(`
+          UPDATE care_sessions
+             SET agreed_rate = ?,
+                 estimated_cost = ROUND((?::numeric * COALESCE(duration_hours, 0)::numeric)
+                                        + COALESCE(short_notice_surcharge, 0)::numeric, 2),
+                 caregiver_id = COALESCE(caregiver_id, ?),
+                 status = 'confirmed', updated_at = NOW()
+           WHERE id = ? AND (caregiver_id IS NOT NULL) = ?
+        `).run(offer.offered_rate, rate, assignProfileId, sessionId, !assignProfileId);
+        if (!upd || upd.changes !== 1) { conflict = "Another caregiver already has this visit"; throw new Error("session_taken"); }
+      });
+    } catch (e) {
+      if (conflict) return res.status(409).json({ error: conflict });
+      throw e;
+    }
   } else {
     await db.prepare("UPDATE session_offers SET status = 'rejected' WHERE id = ?").run(offerId);
     // If max rounds reached, return session to previous state
