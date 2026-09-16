@@ -386,6 +386,11 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, 
                 <div style={{ background: 'var(--bg-surface)', border: '1px solid #e0e0e0', borderRadius: 10, padding: 14, marginBottom: 14 }}>
                   <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--role-color)', marginBottom: 10 }}>Visit Details</div>
 
+                  {/* v1.108.0 — the visit report, first: it is what the family came to read */}
+                  {typeof VisitReportCard !== 'undefined' && (data.visitReport || data.visitSummaryText) && (
+                    <VisitReportCard report={data.visitReport} summaryText={data.visitSummaryText} />
+                  )}
+
                   {/* Check-in/out times */}
                   <div style={{ display: 'flex', gap: 16, marginBottom: 10, flexWrap: 'wrap' }}>
                     {v.check_in_time && (

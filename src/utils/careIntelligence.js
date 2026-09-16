@@ -435,7 +435,21 @@ async function generateSessionSummary(sessionId) {
 
   // Use summary (Care Notes from checkout form) as primary; fall back to care_feedback for legacy visits
   const caregiverNotes = session?.summary || session?.care_feedback;
-  if (!session || !caregiverNotes) return null;
+  // v1.108.0 — the visit report is raw caregiver input (taps, not AI output), so it may feed
+  // this summary. A visit with a report and no free-text note still gets a summary.
+  let reportLines = [];
+  if (session) {
+    try {
+      const { CATALOG, _internal } = require("./visitReport");
+      const rows = await db.prepare("SELECT topic, ref, value, note FROM visit_report_answers WHERE session_id = ?").all(sessionId);
+      reportLines = rows.filter((r) => r.value !== "na").map((r) => {
+        const o = _internal.optionOf(r.topic, r.value);
+        const what = r.topic === "meal" ? r.ref : r.topic === "med" ? "a medication dose" : r.topic === "appt" ? "an appointment" : (CATALOG[r.topic] ? CATALOG[r.topic].short(r.ref, null) : r.topic);
+        return `${what}: ${o ? o.label : r.value}${r.note ? ` (${r.note})` : ""}`;
+      });
+    } catch { reportLines = []; }
+  }
+  if (!session || (!caregiverNotes && reportLines.length === 0)) return null;
 
   const conditions = (() => { try { return JSON.parse(session.health_conditions || "[]"); } catch { return []; } })();
   const tags = (() => { try { return JSON.parse(session.condition_tags || "[]"); } catch { return []; } })();
@@ -467,11 +481,11 @@ VISIT DETAILS:
 - Arrival mood: ${parseMoodDisplay(session.arrival_mood) || "not recorded"}
 - Departure mood: ${parseMoodDisplay(session.departure_mood) || "not recorded"}
 - Condition tags: ${tags.join(", ") || "none"}
-- Caregiver notes: "${caregiverNotes}"
-${session.service_feedback ? `- Service notes: "${session.service_feedback}"` : ""}${recentContext}
+- Caregiver notes: ${caregiverNotes ? `"${caregiverNotes}"` : "none"}
+${reportLines.length ? `- Visit report (what the caregiver recorded): ${reportLines.join("; ")}\n` : ""}${session.service_feedback ? `- Service notes: "${session.service_feedback}"` : ""}${recentContext}
 
 INSTRUCTIONS:
-Write a 3-4 sentence warm summary for the family about THIS visit. Be specific about what happened — reference actual observations from the caregiver's notes above. Do NOT just list or rephrase the care notes — synthesize them into a natural narrative. If the mood changed, note it. If there are concerning observations, flag them gently with a suggestion. End on a positive or constructive note. Keep it conversational, like a thoughtful caregiver texting the family.
+Write a 3-4 sentence warm summary for the family about THIS visit. Be specific about what happened — reference actual observations from the caregiver's notes above. Do NOT just list or rephrase the care notes — synthesize them into a natural narrative. If the mood changed, note it. If there are concerning observations, state them plainly and kindly — never give medical, health or care advice, and never guess at causes. End on a positive or constructive note. Keep it conversational, like a thoughtful caregiver texting the family.
 
 If recent care history is provided, use it only to note meaningful changes or trends (e.g. "mood has been improving over the last few visits"). Do NOT summarize past visits.
 

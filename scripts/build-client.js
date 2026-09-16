@@ -72,6 +72,7 @@ const scripts = [
   "js/components/VideoCallOverlay.js",
   "js/components/Messages.js",
   "js/components/RequestCareModal.js",
+  "js/components/VisitReport.js", // v1.108.0 — before VisitDetailModal and CaretakerHub, which render it
   "js/components/VisitDetailModal.js",
   "js/components/TwoFactorSetup.js",
   "js/components/MyAccount.js",

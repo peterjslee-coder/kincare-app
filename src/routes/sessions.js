@@ -2347,10 +2347,31 @@ router.post("/:id/break/end", async (req, res) => {
   }
 });
 
+// ─── GET /api/sessions/:id/visit-report/form — v1.108.0 ───
+// The questions for THIS visit, with follow-ups from the last report. The assigned caregiver
+// only, while the visit is running.
+router.get("/:id/visit-report/form", async (req, res) => {
+  try {
+    const db = await getDb();
+    const s = await db.prepare(`
+      SELECT cs.status, cp.user_id AS caregiver_user_id
+        FROM care_sessions cs LEFT JOIN caregiver_profiles cp ON cp.id = cs.caregiver_id
+       WHERE cs.id = ?
+    `).get(req.params.id);
+    if (!s || s.caregiver_user_id !== req.user.id) return res.status(404).json({ error: "Session not found" });
+    if (s.status !== "in_progress") return res.status(400).json({ error: "The report is filled in during the visit" });
+    const form = await require("../utils/visitReport").buildReportForm(db, req.params.id);
+    res.json({ form });
+  } catch (err) {
+    captureException(err, { where: "sessions: visit report form" });
+    res.status(500).json({ error: "Couldn't load the visit report" });
+  }
+});
+
 router.post("/:id/check-out", blockWhileImpersonating("end a real visit and settle its pay"), async (req, res) => {
   try {
     const db = await getDb();
-    const { departureMood, conditionTags, careFeedback, serviceFeedback, summary, earlyDepartureReason, checkOutLatitude, checkOutLongitude, offlineTimestamp, offlineSync } = req.body;
+    const { departureMood, conditionTags, careFeedback, serviceFeedback, summary, earlyDepartureReason, checkOutLatitude, checkOutLongitude, offlineTimestamp, offlineSync, visitReport } = req.body;
 
     const session = await db.prepare(`
       SELECT cs.*, cp.user_id AS caregiver_user_id,
@@ -2388,6 +2409,25 @@ router.post("/:id/check-out", blockWhileImpersonating("end a real visit and sett
     }
     if (isOfflineSync) {
       console.log(`[check-out] Offline sync — original time: ${offlineTimestamp}, session ${req.params.id.slice(0, 8)}`);
+    }
+
+    // ─── v1.108.0 — the visit report ───
+    // Sent by current clients only; an older app (or a queued offline check-out) that sends
+    // none still checks out. When it IS sent, every row must be answered — "Didn't come up"
+    // counts — except on an offline replay, where the form may have moved on since she tapped.
+    let reportClean = null;
+    if (Array.isArray(visitReport)) {
+      const vr = require("../utils/visitReport");
+      const form = await vr.buildReportForm(db, req.params.id, { phrase: false });
+      const checked = vr.checkAnswers(form, visitReport);
+      if (!checked.ok && !isOfflineSync) {
+        return res.status(400).json({
+          error: `Please answer every row (or tap "Didn't come up"): ${checked.missing.join(", ")}`,
+          code: "VISIT_REPORT_INCOMPLETE",
+          missing: checked.missing,
+        });
+      }
+      reportClean = checked.clean;
     }
 
     // All timing uses care recipient's timezone
@@ -2572,6 +2612,12 @@ router.post("/:id/check-out", blockWhileImpersonating("end a real visit and sett
           visitLog.id
         );
       }
+      if (reportClean && reportClean.length) {
+        await require("../utils/visitReport").saveAnswers(tx, {
+          sessionId: req.params.id, careRecipientId: session.care_recipient_id,
+          userId: req.user.id, clean: reportClean,
+        });
+      }
     }); } catch (e) {
       if (e && e.alreadyEnded) return res.status(409).json({ error: "This visit has already ended." });
       throw e;
@@ -2589,6 +2635,18 @@ router.post("/:id/check-out", blockWhileImpersonating("end a real visit and sett
     });
 
     // (the visit log closed inside the transaction above — v1.106.10)
+
+    // ─── v1.108.0 — what the report sets in motion (doses closed, falls raised) ───
+    if (reportClean && reportClean.length) {
+      try {
+        const me = await db.prepare("SELECT first_name FROM users WHERE id = ?").get(req.user.id);
+        await require("../utils/visitReport").applySideEffects(db, {
+          sessionId: req.params.id, careRecipientId: session.care_recipient_id, userId: req.user.id,
+          clean: reportClean, caregiverName: (me && me.first_name) || "Your caregiver",
+          recipientFirstName: session.recipient_first_name || "your person",
+        });
+      } catch (e) { captureException(e, { where: "checkout: visit report side effects" }); }
+    }
 
     // ─── Auto-create care note from checkout summary ───
     // Bridge visit_logs → recipient_notes so checkout observations appear in Care Profile
@@ -4174,7 +4232,25 @@ router.get("/:id", async (req, res) => {
     costBreakdown.flexPolicy = session.flex_timing || 'strict';
   }
 
-  res.json({ session, visitLog, photos, costBreakdown });
+  // v1.108.0 — the report, labelled for reading, and the AI's summary sentence (only the
+  // summary: its "suggestions" are advice, which the app does not give).
+  let visitReport = null;
+  let visitSummaryText = null;
+  try {
+    // Her own report, or anyone allowed to read this person's visits.
+    let mayRead = !!(access.isCaregiver || access.isAdmin);
+    if (!mayRead) {
+      const { recipientCapabilities } = require("../utils/access");
+      const { can, CAP } = require("../utils/capabilities");
+      mayRead = can(await recipientCapabilities(db, session.care_recipient_id, req.user.id), CAP.READ_VISITS);
+    }
+    if (mayRead) visitReport = await require("../utils/visitReport").reportForDisplay(db, req.params.id);
+  } catch (e) { captureException(e, { where: "sessions: visit report display" }); }
+  if (visitLog && visitLog.ai_summary) {
+    try { visitSummaryText = JSON.parse(visitLog.ai_summary).summary || null; } catch { visitSummaryText = null; }
+  }
+
+  res.json({ session, visitLog, photos, costBreakdown, visitReport, visitSummaryText });
 });
 
 // ═══════════════════════════════════════════════════════════════════════

@@ -2588,6 +2588,27 @@ async function initializeDatabase() {
          )`,
       ],
     },
+    {
+      // v1.108.0 — the visit report. One row per question answered at check-out. `ref` names
+      // WHICH meal / dose / appointment ('' for single rows); a dose is "<task_id>:<slot>" so
+      // the same dose can be followed up on another day.
+      id: "043_visit_report_answers",
+      statements: [
+        `CREATE TABLE IF NOT EXISTS visit_report_answers (
+           id TEXT PRIMARY KEY,
+           session_id TEXT NOT NULL REFERENCES care_sessions(id) ON DELETE CASCADE,
+           care_recipient_id TEXT NOT NULL REFERENCES care_recipients(id) ON DELETE CASCADE,
+           topic TEXT NOT NULL,
+           ref TEXT NOT NULL DEFAULT '',
+           value TEXT NOT NULL,
+           note TEXT /* PHI */,
+           answered_by TEXT REFERENCES users(id),
+           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+           UNIQUE (session_id, topic, ref)
+         )`,
+        `CREATE INDEX IF NOT EXISTS idx_visit_report_recipient ON visit_report_answers (care_recipient_id, created_at DESC)`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

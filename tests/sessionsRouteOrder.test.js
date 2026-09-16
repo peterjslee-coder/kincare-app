@@ -62,6 +62,7 @@ const EXPECTED = [
   "POST /:id/release",
   "POST /:id/break/start",
   "POST /:id/break/end",
+  "GET /:id/visit-report/form", // v1.108.0 — three segments; cannot be shadowed by GET /:id
   "POST /:id/check-out",
   "POST /:id/pending-tip",
   "POST /:id/propose-time-change",

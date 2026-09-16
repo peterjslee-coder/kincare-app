@@ -279,6 +279,11 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   // the button, and two taps on a slow connection is how a break gets started twice.
   const [breakBusy, setBreakBusy] = useState(null);
   const [checkOutMood, setCheckOutMood] = useState([]);
+  // v1.108.0 — the visit report: the form the server built for this visit, and her answers.
+  const [reportForm, setReportForm] = useState(null);
+  const [reportAnswers, setReportAnswers] = useState({});
+  const [reportState, setReportState] = useState('idle'); // idle | loading | ready | unavailable
+  const [reportShowMissing, setReportShowMissing] = useState(false);
   const [checkOutTags, setCheckOutTags] = useState([]);
   const [checkOutCareFeedback, setCheckOutCareFeedback] = useState('');
   const [checkOutServiceFeedback, setCheckOutServiceFeedback] = useState('');
@@ -602,6 +607,31 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
     rehydratedSessionIdRef.current = checkOutSession.id;
   }, [checkOutSession?.id]);
 
+  // ─── v1.108.0 — load the visit report for the visit being closed ───
+  // If it cannot load (offline, older server), check-out still works without it.
+  useEffect(() => {
+    setReportShowMissing(false);
+    if (!checkOutSession?.id) { setReportForm(null); setReportAnswers({}); setReportState('idle'); return; }
+    let cancelled = false;
+    setReportState('loading');
+    (async () => {
+      try {
+        const res = await apiFetch(`/api/sessions/${checkOutSession.id}/visit-report/form`);
+        if (cancelled) return;
+        if (!res || !res.ok) { setReportForm(null); setReportState('unavailable'); return; }
+        const { form } = await res.json();
+        if (cancelled) return;
+        const draft = loadCheckOutDraft(checkOutSession.id);
+        setReportForm(form);
+        setReportAnswers({ ...visitReportInitial(form), ...((draft && draft.report) || {}) });
+        setReportState('ready');
+      } catch {
+        if (!cancelled) { setReportForm(null); setReportState('unavailable'); }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [checkOutSession?.id]);
+
   // ─── Check-out draft: auto-save on every change ───
   // Only saves once rehydrate has run for the current session (guarded by ref),
   // and only if there's something worth saving — avoids stomping a stored
@@ -614,7 +644,8 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       (checkOutTags && checkOutTags.length > 0) ||
       (checkOutSummary && checkOutSummary.trim()) ||
       (checkOutServiceFeedback && checkOutServiceFeedback.trim()) ||
-      (earlyDepartureReason && earlyDepartureReason.trim())
+      (earlyDepartureReason && earlyDepartureReason.trim()) ||
+      Object.keys(reportAnswers || {}).length > 0
     );
     if (!hasContent) return;
     saveCheckOutDraft(checkOutSession.id, {
@@ -623,8 +654,9 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       summary: checkOutSummary,
       serviceFeedback: checkOutServiceFeedback,
       earlyDepartureReason,
+      report: reportAnswers,
     });
-  }, [checkOutSession?.id, checkOutMood, checkOutTags, checkOutSummary, checkOutServiceFeedback, earlyDepartureReason]);
+  }, [checkOutSession?.id, checkOutMood, checkOutTags, checkOutSummary, checkOutServiceFeedback, earlyDepartureReason, reportAnswers]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -4379,6 +4411,13 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               </div>
             )}
 
+            {reportState === 'loading' && (
+              <div style={{ fontSize: 13, color: 'var(--text-tertiary)', marginBottom: 16 }}>Loading the visit report{'\u2026'}</div>
+            )}
+            {reportState === 'ready' && typeof VisitReportForm !== 'undefined' && (
+              <VisitReportForm form={reportForm} answers={reportAnswers} onChange={setReportAnswers} showMissing={reportShowMissing} />
+            )}
+
             <div style={{ marginBottom: 20 }}>
               <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 8 }}>
                 How is {(checkOutSession.recipientName || checkOutSession.recipient_name || '').split(' ')[0] || 'the care recipient'} now? (tap all that apply)
@@ -4406,7 +4445,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
 
             <div style={{ marginBottom: 20 }}>
               <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 8 }}>
-                What did you observe? (tap all that apply)
+                Anything else you noticed? (optional)
               </label>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                 {[
@@ -4571,8 +4610,22 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                     return;
                   }
                 }
+                if (reportState === 'loading') {
+                  showToast('One moment \u2014 the visit report is still loading', 'info');
+                  return;
+                }
+                if (reportState === 'ready' && reportForm) {
+                  const missingRows = visitReportMissing(reportForm, reportAnswers);
+                  if (missingRows.length) {
+                    setReportShowMissing(true);
+                    showToast(`${missingRows.length} report ${missingRows.length === 1 ? 'row needs' : 'rows need'} a tap`, 'error');
+                    try { document.querySelector(`[data-report-row="${missingRows[0].key}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch {}
+                    return;
+                  }
+                }
                 setCheckSubmitting(true);
                 const checkOutPayload = {
+                  visitReport: reportState === 'ready' ? visitReportPayload(reportForm, reportAnswers) : undefined,
                   departureMood: checkOutMood.length > 0 ? checkOutMood : null,
                   conditionTags: checkOutTags.length > 0 ? checkOutTags : null,
                   careFeedback: checkOutCareFeedback.trim() || null,
