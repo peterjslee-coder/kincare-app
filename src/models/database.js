@@ -2609,6 +2609,17 @@ async function initializeDatabase() {
         `CREATE INDEX IF NOT EXISTS idx_visit_report_recipient ON visit_report_answers (care_recipient_id, created_at DESC)`,
       ],
     },
+    {
+      // v1.108.1 — a tip is now a real charge of its own. status: 'charging' while the card is
+      // being charged (a reservation, so two taps cannot tip twice), 'paid' once it went
+      // through. Rows written before this are paid tips (the auto-pay sweep charged them).
+      id: "044_tip_charges",
+      statements: [
+        `ALTER TABLE tips ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'paid'`,
+        `ALTER TABLE tips ADD COLUMN IF NOT EXISTS stripe_payment_intent TEXT`,
+        `ALTER TABLE tips ADD COLUMN IF NOT EXISTS card_fee_cents INTEGER NOT NULL DEFAULT 0`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

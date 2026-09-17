@@ -4041,50 +4041,87 @@ router.post("/:id/review", async (req, res) => {
 
 // ─── POST /api/sessions/:id/tip ───
 // Family leaves a tip + gratitude reason for the caregiver after a session
-router.post("/:id/tip", async (req, res) => {
+router.post("/:id/tip", blockWhileImpersonating("charge a tip"), async (req, res) => {
+  // v1.108.1 — a tip on a visit that is already PAID, charged now to the card that paid it.
+  // Pete (9/17): the caregiver gets the whole tip, the family also covers the card fee, and it
+  // is offered until the visit is reviewed. Before payment, the pay-later path still uses
+  // POST /:id/pending-tip. This route used to write a tips row and charge nothing.
   try {
     const db = await getDb();
     const userId = req.user.id;
-    const { amount_cents, reason_text } = req.body;
+    const cents = Math.round(Number(req.body?.amount_cents));
+    const reason = (req.body?.reason_text || "").trim().slice(0, 300) || null;
+    if (!Number.isFinite(cents) || cents < 100) return res.status(400).json({ error: "Minimum tip is $1.00" });
+    if (cents > 50000) return res.status(400).json({ error: "Maximum tip is $500" });
 
-    if (!amount_cents || amount_cents < 100) {
-      return res.status(400).json({ error: "Minimum tip is $1.00" });
-    }
-    if (amount_cents > 50000) {
-      return res.status(400).json({ error: "Maximum tip is $500" });
-    }
-
-    const session = await db.prepare("SELECT * FROM care_sessions WHERE id = ?").get(req.params.id);
+    const session = await db.prepare(`
+      SELECT cs.*, cp.user_id AS caregiver_user_id, cr.first_name AS recipient_first_name,
+             (SELECT ct.billing_user_id FROM care_teams ct WHERE ct.care_recipient_id = cs.care_recipient_id AND ct.billing_user_id IS NOT NULL LIMIT 1) AS billing_user_id
+        FROM care_sessions cs
+        LEFT JOIN caregiver_profiles cp ON cp.id = cs.caregiver_id
+        LEFT JOIN care_recipients cr ON cr.id = cs.care_recipient_id
+       WHERE cs.id = ?
+    `).get(req.params.id);
     if (!session) return res.status(404).json({ error: "Session not found" });
-    if (session.status !== "completed") return res.status(400).json({ error: "Can only tip on completed sessions" });
-    if (userId !== session.family_user_id) return res.status(403).json({ error: "Only the family can leave a tip" });
+    if (userId !== session.family_user_id && userId !== session.billing_user_id) {
+      return res.status(404).json({ error: "Session not found" });
+    }
     if (!session.caregiver_id) return res.status(400).json({ error: "No caregiver on this session" });
+    if (session.status !== "completed" || session.payment_status !== "paid") {
+      return res.status(409).json({ error: "A tip can be sent once the visit is paid" });
+    }
+    if (Number(session.review_completed) === 1) {
+      return res.status(409).json({ error: "Tips are sent before the review" });
+    }
 
-    // Prevent duplicate tips
-    const existing = await db.prepare("SELECT id FROM tips WHERE session_id = ? AND family_user_id = ?").get(req.params.id, userId);
-    if (existing) return res.status(409).json({ error: "You already tipped for this session" });
-
+    // Reserve, so two taps cannot both charge.
     const tipId = uuid();
-    await db.prepare(
-      "INSERT INTO tips (id, session_id, family_user_id, caregiver_id, amount_cents, reason_text) VALUES (?, ?, ?, ?, ?, ?)"
-    ).run(tipId, req.params.id, userId, session.caregiver_id, amount_cents, reason_text || null);
+    let taken = false;
+    await db.transaction(async (tx) => {
+      await tx.prepare("SELECT id FROM care_sessions WHERE id = ? FOR UPDATE").get(req.params.id);
+      const existing = await tx.prepare("SELECT id FROM tips WHERE session_id = ?").get(req.params.id);
+      if (existing) { taken = true; return; }
+      await tx.prepare(
+        "INSERT INTO tips (id, session_id, family_user_id, caregiver_id, amount_cents, reason_text, status) VALUES (?, ?, ?, ?, ?, ?, 'charging')"
+      ).run(tipId, req.params.id, userId, session.caregiver_id, cents, reason);
+    });
+    if (taken) return res.status(409).json({ error: "A tip was already sent for this visit" });
 
-    // Update gratitude_keywords on caregiver_profiles if reason provided
-    if (reason_text && reason_text.trim()) {
+    const { chargeTip } = require("./accountability");
+    const r = await chargeTip(req.params.id, cents);
+    if (!r.charged) {
+      await db.prepare("DELETE FROM tips WHERE id = ? AND status = 'charging'").run(tipId);
+      const demo = r.error === "demo_session_blocked";
+      return res.status(demo ? 400 : 402).json({ error: demo ? "Demo visits can't be tipped" : r.error });
+    }
+    await db.prepare(
+      "UPDATE tips SET status = 'paid', stripe_payment_intent = ?, card_fee_cents = ? WHERE id = ?"
+    ).run(r.id, r.feeCents, tipId);
+
+    if (reason) {
       try {
         const profile = await db.prepare("SELECT gratitude_keywords FROM caregiver_profiles WHERE id = ?").get(session.caregiver_id);
         const keywords = profile?.gratitude_keywords ? JSON.parse(profile.gratitude_keywords) : [];
-        keywords.push({ text: reason_text.trim(), date: new Date().toISOString().slice(0, 10), session_id: req.params.id });
-        // Keep last 50 entries
-        const trimmed = keywords.slice(-50);
-        await db.prepare("UPDATE caregiver_profiles SET gratitude_keywords = ? WHERE id = ?").run(JSON.stringify(trimmed), session.caregiver_id);
-      } catch (e) { console.error("Gratitude keywords update error:", e); }
+        keywords.push({ text: reason, date: new Date().toISOString().slice(0, 10), session_id: req.params.id });
+        await db.prepare("UPDATE caregiver_profiles SET gratitude_keywords = ? WHERE id = ?").run(JSON.stringify(keywords.slice(-50)), session.caregiver_id);
+      } catch (e) { captureException(e, { where: "tip: gratitude" }); }
     }
 
-    res.json({ tip: { id: tipId, amount_cents, reason_text } });
+    try {
+      const from = await db.prepare("SELECT first_name FROM users WHERE id = ?").get(userId);
+      if (session.caregiver_user_id) {
+        sendPushToUser(session.caregiver_user_id, {
+          title: "You got a tip",
+          body: `${(from && from.first_name) || "The family"} sent you a $${(cents / 100).toFixed(2)} tip for your visit with ${session.recipient_first_name || "your client"}.`,
+          data: { type: "tip_received", sessionId: req.params.id, page: "dashboard" },
+        }, "tip").catch(() => {});
+      }
+    } catch (e) { /* the tip stands whether or not the push does */ }
+
+    res.json({ tip: { id: tipId, amount_cents: cents, reason_text: reason, card_fee_cents: r.feeCents, charged_cents: r.totalCents } });
   } catch (err) {
-    console.error("Tip error:", err);
-    res.status(500).json({ error: "Failed to save tip" });
+    captureException(err, { where: "sessions: tip" });
+    res.status(500).json({ error: "Failed to send tip" });
   }
 });
 
@@ -4103,7 +4140,7 @@ router.get("/tips/caregiver", async (req, res) => {
       FROM tips t
       JOIN care_sessions cs ON t.session_id = cs.id
       JOIN users u ON t.family_user_id = u.id
-      WHERE t.caregiver_id = ?
+      WHERE t.caregiver_id = ? AND COALESCE(t.status, 'paid') = 'paid'
       ORDER BY t.created_at DESC
       LIMIT 100
     `).all(profile.id);

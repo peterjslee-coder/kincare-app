@@ -2,6 +2,15 @@
 // Shows stale data instantly while fresh fetch runs in background
 const _dashCache = { data: null, user: null, careTeams: null, careTasks: null, careEvents: null, ts: 0 };
 
+// v1.108.1 — the card total for a tip, including the processing fee the family covers.
+// Must match src/utils/pricing.js tipWithCardFee (tests/tipAfterPayment.test.js pins them).
+const tipCardTotal = (tipCents) => {
+  const tip = Math.max(0, Math.round(Number(tipCents) || 0));
+  if (!tip) return { tipCents: 0, feeCents: 0, totalCents: 0 };
+  const totalCents = Math.ceil((tip + 30) / (1 - 0.029));
+  return { tipCents: tip, feeCents: totalCents - tip, totalCents };
+};
+
 const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
   const { showToast } = useToast();
   const [data, setData] = useState(_dashCache.data);
@@ -1306,6 +1315,87 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                     {tipState.saved && <span style={{ fontSize: 11, color: 'var(--color-success)', fontWeight: 600 }}>{'\u2713'} Tip saved</span>}
                   </div>
                 )}
+
+                {/* v1.108.1 — a tip after the visit is paid. Pete: offered until the review is
+                    written; the caregiver gets all of it and the family also covers the card fee. */}
+                {hasCost && isPaid && !alreadyReviewed && (() => {
+                  const sent = tipState.sentCents || parseInt(pr.tip_sent_cents) || 0;
+                  if (sent > 0) {
+                    return (
+                      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-success)', marginBottom: 8 }}>
+                        {'\u2713'} ${(sent / 100).toFixed(2)} tip sent to {firstName}
+                      </div>
+                    );
+                  }
+                  const draft = tipState.draftCents || 0;
+                  const q = tipCardTotal(draft);
+                  const pick = (c) => setPendingTips(prev => ({ ...prev, [pr.id]: { ...prev[pr.id], draftCents: prev[pr.id]?.draftCents === c ? 0 : c } }));
+                  const send = async () => {
+                    if (!draft || tipState.sending) return;
+                    setPendingTips(prev => ({ ...prev, [pr.id]: { ...prev[pr.id], sending: true } }));
+                    try {
+                      const res = await apiFetch(`/api/sessions/${pr.id}/tip`, { method: 'POST', body: JSON.stringify({ amount_cents: draft }) });
+                      const d = res ? await res.json().catch(() => ({})) : {};
+                      if (res && res.ok) {
+                        setPendingTips(prev => ({ ...prev, [pr.id]: { sentCents: draft } }));
+                        showToast(`$${(draft / 100).toFixed(2)} tip sent to ${firstName}`, 'success');
+                      } else {
+                        setPendingTips(prev => ({ ...prev, [pr.id]: { ...prev[pr.id], sending: false } }));
+                        showToast(d.error || 'The tip didn\u2019t go through', 'error');
+                      }
+                    } catch {
+                      setPendingTips(prev => ({ ...prev, [pr.id]: { ...prev[pr.id], sending: false } }));
+                      showToast('Couldn\u2019t reach InPlace', 'error');
+                    }
+                  };
+                  return (
+                    <div style={{ marginBottom: 10 }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>Add a tip for {firstName}?</div>
+                      <div style={{ display: 'flex', gap: 6, marginBottom: 6, flexWrap: 'wrap' }}>
+                        {tipPresets.map(tp => (
+                          <button key={tp.label} onClick={() => pick(tp.cents)} disabled={tipState.sending} style={{
+                            padding: '6px 12px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                            border: draft === tp.cents ? '2px solid var(--role-color)' : '2px solid var(--border-color)',
+                            background: draft === tp.cents ? 'var(--role-color-light)' : 'var(--bg-card)',
+                            color: draft === tp.cents ? 'var(--role-color)' : 'var(--text-secondary)',
+                          }}>{tp.label} (${(tp.cents / 100).toFixed(2)})</button>
+                        ))}
+                        {customTipInput[pr.id] == null ? (
+                          <button onClick={() => setCustomTipInput(prev => ({ ...prev, [pr.id]: '' }))} disabled={tipState.sending} style={{
+                            padding: '6px 12px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                            border: '2px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-secondary)',
+                          }}>Custom</button>
+                        ) : (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                            <span style={{ fontSize: 14, color: 'var(--text-secondary)' }}>$</span>
+                            <input type="number" min="1" max="500" step="0.01" placeholder="0.00" value={customTipInput[pr.id]}
+                              onChange={e => {
+                                const v = e.target.value;
+                                setCustomTipInput(prev => ({ ...prev, [pr.id]: v }));
+                                const c = Math.round(parseFloat(v || '0') * 100);
+                                setPendingTips(prev => ({ ...prev, [pr.id]: { ...prev[pr.id], draftCents: c > 0 ? c : 0 } }));
+                              }}
+                              style={{ width: 80, padding: '6px 8px', borderRadius: 6, border: '1px solid var(--border-color)', fontSize: 14 }} />
+                          </span>
+                        )}
+                      </div>
+                      {draft > 0 && (
+                        <button onClick={send} disabled={tipState.sending || draft < 100 || draft > 50000} style={{
+                          width: '100%', padding: '10px 0', borderRadius: 10, border: 'none', cursor: 'pointer',
+                          background: 'var(--role-color)', color: 'white', fontSize: 13, fontWeight: 700,
+                          opacity: (tipState.sending || draft < 100 || draft > 50000) ? 0.6 : 1,
+                        }}>
+                          {tipState.sending ? 'Sending\u2026' : `Send $${(draft / 100).toFixed(2)} tip \u00B7 $${(q.totalCents / 100).toFixed(2)} with card fee`}
+                        </button>
+                      )}
+                      {draft > 0 && (
+                        <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 4 }}>
+                          {firstName} gets the full ${(draft / 100).toFixed(2)}. The ${(q.feeCents / 100).toFixed(2)} covers the card processing fee. Charged to the card that paid for this visit.
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 {/* Action row: review link (always available if not reviewed) */}
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>

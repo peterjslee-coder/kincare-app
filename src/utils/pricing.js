@@ -52,4 +52,20 @@ function planCapture({ caregiverCents, platformFeeCents, authorizedCents }) {
   return { captureCents, captureFeeCents, remainderCents, remainderToCaregiver };
 }
 
-module.exports = { priceFromCaregiverCents, familyChargeFor, planCapture };
+/**
+ * v1.108.1 — a tip after the visit is paid. Pete (9/17): "Tip + Stripe fee only" — the
+ * caregiver receives the whole tip, the family also covers the card fee, and InPlace keeps
+ * nothing. Grossed up so that after Stripe's 2.9% + 30¢ on the total, what is left is the tip:
+ *   total = ceil((tip + 30) / (1 − 0.029));  fee = total − tip
+ * The client shows the same total (Dashboard.js tipCardTotal); a test pins the two together.
+ */
+const CARD_PCT = 0.029;
+const CARD_FIXED_CENTS = 30;
+function tipWithCardFee(tipCents) {
+  const tip = Math.max(0, Math.round(Number(tipCents) || 0));
+  if (!tip) return { tipCents: 0, feeCents: 0, totalCents: 0 };
+  const totalCents = Math.ceil((tip + CARD_FIXED_CENTS) / (1 - CARD_PCT));
+  return { tipCents: tip, feeCents: totalCents - tip, totalCents };
+}
+
+module.exports = { priceFromCaregiverCents, familyChargeFor, planCapture, tipWithCardFee };

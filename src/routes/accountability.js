@@ -374,6 +374,50 @@ async function chargeRemainder(stripe, sessionId, session, plan) {
 }
 
 /**
+ * v1.108.1 — charge a tip on a visit that is already paid, to the card that paid it. The
+ * caregiver receives the whole tip; the application fee is only the card-fee gross-up.
+ * Returns { charged, id, totalCents, feeCents } or { error }.
+ */
+async function chargeTip(sessionId, tipCents) {
+  const db = await getDb();
+  if (await isDemoSession(db, sessionId)) return { error: "demo_session_blocked" };
+  const { tipWithCardFee } = require("../utils/pricing");
+  const q = tipWithCardFee(tipCents);
+  if (q.totalCents < 50) return { error: "Tip is too small" };
+  try {
+    const stripe = getStripe();
+    const s = await db.prepare(`
+      SELECT cs.stripe_payment_intent_id, cp.stripe_account_id
+        FROM care_sessions cs LEFT JOIN caregiver_profiles cp ON cp.id = cs.caregiver_id
+       WHERE cs.id = ?
+    `).get(sessionId);
+    if (!s || !s.stripe_payment_intent_id) return { error: "No card on file for this visit" };
+    if (!s.stripe_account_id) return { error: "The caregiver can't receive payments yet" };
+    const paid = await stripe.paymentIntents.retrieve(s.stripe_payment_intent_id);
+    if (!paid || !paid.customer || !paid.payment_method) return { error: "No card on file for this visit" };
+    const intent = await stripe.paymentIntents.create({
+      amount: q.totalCents,
+      currency: "usd",
+      customer: paid.customer,
+      payment_method: paid.payment_method,
+      confirm: true,
+      off_session: true,
+      application_fee_amount: q.feeCents,
+      transfer_data: { destination: s.stripe_account_id },
+      metadata: { inplace_session_id: sessionId, type: "session_tip", tip_cents: String(q.tipCents) },
+      description: `Tip for care session (${String(sessionId).slice(0, 8)})`,
+    }, { idempotencyKey: `inplace_tip_${sessionId}_${q.tipCents}` });
+    if (intent.status !== "succeeded") return { error: "Your card needs attention before this tip can go through" };
+    return { charged: true, id: intent.id, totalCents: q.totalCents, feeCents: q.feeCents };
+  } catch (err) {
+    captureException(err, { where: "accountability: tip charge", sessionId });
+    return { error: err && err.code === "authentication_required"
+      ? "Your bank asked to confirm this charge. Please update your card and try again."
+      : "The tip couldn't be charged. Please try again." };
+  }
+}
+
+/**
  * Capture (charge) an authorized payment — called after caregiver checks out.
  * Can capture a partial amount if session was shortened.
  */
@@ -628,6 +672,7 @@ router.get("/pending-reviews", requireRole("family"), async (req, res) => {
         cs.payment_due_at, cs.payment_status, cs.estimated_cost, cs.short_notice_surcharge,
         cs.service_type, cs.proposed_rate, cs.review_completed,
         cs.pending_tip_cents, cs.pending_tip_reason,
+        (SELECT t.amount_cents FROM tips t WHERE t.session_id = cs.id AND COALESCE(t.status, 'paid') = 'paid' LIMIT 1) AS tip_sent_cents,
         u.first_name || ' ' || u.last_name AS caregiver_name,
         cr.first_name AS recipient_first_name,
         cs.review_reminded_at
@@ -1481,6 +1526,7 @@ module.exports = router;
 module.exports.authorizeSessionPayment = authorizeSessionPayment;
 module.exports.captureSessionPayment = captureSessionPayment;
 module.exports.captureSessionPay = captureSessionPay; // v1.107.0
+module.exports.chargeTip = chargeTip; // v1.108.1
 module.exports.voidSessionPayment = voidSessionPayment;
 module.exports.pollPaymentAuthorizations = pollPaymentAuthorizations;
 

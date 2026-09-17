@@ -99,7 +99,13 @@ describe("and so does a visit", () => {
     });
     expect([200, 201]).toContain(res.status);
 
-    const found = await rows("family_visit");
+    // notifyTeam runs after the response on purpose (a push must not hold up saving a visit),
+    // so the row lands a moment later. Wait for it rather than racing it.
+    let found = [];
+    for (let i = 0; i < 40 && found.length === 0; i += 1) {
+      found = await rows("family_visit");
+      if (!found.length) await new Promise((r) => setTimeout(r, 50));
+    }
     expect(found.length).toBe(1);
     expect(JSON.parse(found[0].metadata).visitId).toBeTruthy();
   });
