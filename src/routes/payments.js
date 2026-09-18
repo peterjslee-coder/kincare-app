@@ -269,6 +269,28 @@ router.post("/webhook", express.raw({ type: "application/json" }), async (req, r
           "UPDATE payments SET status = 'completed', stripe_payment_intent = ? WHERE stripe_checkout_id = ?"
         ).run(session.payment_intent, session.id);
 
+        // v1.109.0 — the ledger row for a family-present checkout, written where the money moved.
+        try {
+          const row = await db.prepare("SELECT * FROM payments WHERE stripe_checkout_id = ?").get(session.id);
+          if (row) {
+            const ledger = require("../utils/ledger");
+            await ledger.record(db, {
+              sessionId: row.session_id, ...(await ledger.partiesFor(db, row.session_id)),
+              kind: "checkout",
+              familyCents: Math.round(row.amount * 100),
+              caregiverCents: Math.round(row.caregiver_payout * 100),
+              platformCents: Math.round(row.platform_fee * 100),
+              stripePaymentIntent: session.payment_intent || null,
+              breakdown: {
+                settledAt: "checkout",
+                caregiverCents: Math.round(row.caregiver_payout * 100),
+                platformFeeCents: Math.round(row.platform_fee * 100),
+                tipCents: row.tip_cents || 0,
+              },
+            });
+          }
+        } catch (e) { captureException(e, { where: "payments: checkout ledger" }); }
+
         // v1.79.0 — capture which card/account paid (non-blocking, for the payments page)
         try {
           if (session.payment_intent) {
@@ -1487,12 +1509,60 @@ router.get("/history", requireRole("family"), async (req, res) => {
   }
 
   // Combine both into a unified list
-  const sessionTotal = payments.filter(p => p.status === 'completed').reduce((sum, p) => sum + (p.amount || 0), 0);
   const manualTotal = manualPayments.filter(p => p.status === 'completed').reduce((sum, p) => sum + ((p.amount_cents || 0) / 100), 0);
-  const totalSpent = sessionTotal + manualTotal;
+
+  // ─── v1.109.0 — the ledger is the history ───
+  // Every charge, including the ones `payments` never had a row for (the capture at check-out,
+  // the balance charge, a cancel fee, a tip), each with the arithmetic behind it. Legacy rows
+  // in `payments` are kept for sessions the ledger never saw.
+  const ledger = require("../utils/ledger");
+  let ledgerRows = [];
+  try {
+    ledgerRows = await db.prepare(`
+      SELECT le.*, cs.service_type, cs.scheduled_date,
+             u.first_name || ' ' || u.last_name AS caregiver_name,
+             cr.first_name || ' ' || cr.last_name AS recipient_name
+        FROM ledger_entries le
+        LEFT JOIN care_sessions cs ON cs.id = le.session_id
+        LEFT JOIN caregiver_profiles cp ON cp.id = le.caregiver_id
+        LEFT JOIN users u ON u.id = cp.user_id
+        LEFT JOIN care_recipients cr ON cr.id = cs.care_recipient_id
+       WHERE le.kind <> 'authorization'
+         AND (le.family_user_id = ? OR cs.family_user_id = ?)
+       ORDER BY le.created_at DESC
+       LIMIT 100
+    `).all(req.user.id, req.user.id);
+  } catch (e) { captureException(e, { where: "payments: history ledger" }); }
+
+  const ledgerSessions = new Set(ledgerRows.map((r) => r.session_id).filter(Boolean));
+  const ledgerTotal = ledgerRows
+    .filter((r) => r.status === "succeeded")
+    .reduce((sum, r) => sum + (r.family_cents || 0), 0) / 100;
 
   const combined = [
-    ...payments.map(p => ({
+    ...ledgerRows.map((r) => {
+      const d = ledger.describe(r);
+      return {
+        id: r.id,
+        sessionId: r.session_id,
+        amount: d.charged,
+        status: r.status === "succeeded" ? "completed" : r.status,
+        serviceType: r.kind === "tip" ? "Tip" : r.kind === "cancel_fee" ? "Late cancellation" : (r.service_type || "Care visit"),
+        scheduledDate: r.scheduled_date,
+        caregiverName: r.caregiver_name,
+        recipientName: r.recipient_name,
+        createdAt: r.created_at,
+        paidBy: r.family_user_id === req.user.id ? null : (payerNames[r.family_user_id] || null),
+        kind: r.kind,
+        label: d.label,
+        toCaregiver: d.toCaregiver,
+        toInPlace: d.toInPlace,
+        cardFee: d.cardFee,
+        lines: d.lines,
+        type: 'session',
+      };
+    }),
+    ...payments.filter((p) => !p.session_id || !ledgerSessions.has(p.session_id)).map(p => ({
       id: p.id,
       sessionId: p.session_id,
       amount: p.amount,
@@ -1520,7 +1590,11 @@ router.get("/history", requireRole("family"), async (req, res) => {
   ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 50);
 
   res.json({
-    totalSpent: Math.round(totalSpent * 100) / 100,
+    // Legacy rows only count where the ledger has nothing for that session, or the same visit
+    // would be counted twice.
+    totalSpent: Math.round((ledgerTotal + manualTotal
+      + payments.filter((p) => p.status === 'completed' && (!p.session_id || !ledgerSessions.has(p.session_id)))
+        .reduce((sum, p) => sum + (p.amount || 0), 0)) * 100) / 100,
     payments: combined,
   });
 });
@@ -1872,6 +1946,21 @@ async function processOverduePayments(pushFn) {
           }
 
           await tx.prepare("UPDATE care_sessions SET payment_status = 'paid', updated_at = NOW() WHERE id = ?").run(s.id);
+
+          // v1.109.0 — the same movement, on the ledger, with its arithmetic.
+          await require("../utils/ledger").record(tx, {
+            sessionId: s.id, careRecipientId: s.care_recipient_id || null,
+            familyUserId: s.billing_user_id || s.family_user_id, caregiverId: s.caregiver_id,
+            kind: "autopay",
+            familyCents: totalCents, caregiverCents: caregiverTotalCents, platformCents: platformFeeCents,
+            stripePaymentIntent: intent.id,
+            breakdown: {
+              baseCents: caregiverPayCents, tipCents, platformFeeCents, feePercent,
+              caregiverCents: caregiverTotalCents, familyTotalCents: totalCents,
+              settledAt: "auto-pay", hours: parseFloat(s.duration_hours) || null,
+              hourlyCents: s.duration_hours ? Math.round(caregiverPayCents / parseFloat(s.duration_hours)) : null,
+            },
+          });
         });
 
         console.log(`💳 Auto-pay: session ${s.id} — caregiver=$${(caregiverTotalCents/100).toFixed(2)}${tipCents > 0 ? ` (includes $${(tipCents/100).toFixed(2)} tip)` : ''} platform=$${(platformFeeCents/100).toFixed(2)} total=$${(totalCents/100).toFixed(2)}`);

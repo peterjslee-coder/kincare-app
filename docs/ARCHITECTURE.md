@@ -8,7 +8,7 @@ build red.
 Hand-written sections (§3 "Where is…") are preserved across regeneration; edit those freely.
 
 Structure at last generation: 535 HTTP routes across 56 mounts ·
-95 `CREATE TABLE` statements · 14 background jobs · 38 socket events
+96 `CREATE TABLE` statements · 14 background jobs · 38 socket events
 (16 with no client listener) · 65 push event types · 59 `window.__*` globals.
 
 ---

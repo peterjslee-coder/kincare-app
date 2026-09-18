@@ -2,6 +2,8 @@
 const FamilyPayments = window.FamilyPayments = () => {
   const [myReimbursements, setMyReimbursements] = useState([]);
   const [payments, setPayments] = useState([]);
+  // v1.109.0 — which charge's breakdown is open. Pete: "breakdown of all costs and adjustments."
+  const [openBreakdown, setOpenBreakdown] = useState(null);
   const [totalSpent, setTotalSpent] = useState(0);
   const [loading, setLoading] = useState(true);
   const [stripeStatus, setStripeStatus] = useState(null); // null | 'not_setup' | 'pending' | 'complete'
@@ -448,9 +450,17 @@ const FamilyPayments = window.FamilyPayments = () => {
                 </tr>
               </thead>
               <tbody>
-                {payments.map(p => (
-                  <tr key={p.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
-                    <td style={{ padding: '10px 12px' }}>{formatDate(p.scheduledDate || p.createdAt)}</td>
+                {payments.map(p => [(
+                  <tr key={p.id} onClick={() => (p.lines || []).length && setOpenBreakdown(openBreakdown === p.id ? null : p.id)}
+                    style={{ borderBottom: '1px solid #f0f0f0', cursor: (p.lines || []).length ? 'pointer' : 'default' }}>
+                    <td style={{ padding: '10px 12px' }}>
+                      {formatDate(p.scheduledDate || p.createdAt)}
+                      {(p.lines || []).length > 0 && (
+                        <span style={{ marginLeft: 6, fontSize: 11, color: 'var(--text-muted)' }}>
+                          {openBreakdown === p.id ? '\u25BE' : '\u25B8'}
+                        </span>
+                      )}
+                    </td>
                     <td style={{ padding: '10px 12px' }}>
                       {p.caregiverName || '\u2014'}
                       {(p.cardBrand || p.paidBy) && (
@@ -465,7 +475,30 @@ const FamilyPayments = window.FamilyPayments = () => {
                     <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600 }}>${(p.amount || 0).toFixed(2)}</td>
                     <td style={{ padding: '10px 12px', textAlign: 'center' }}>{statusBadge(p.status)}</td>
                   </tr>
-                ))}
+                ), openBreakdown === p.id && (p.lines || []).length > 0 ? (
+                  <tr key={`${p.id}-breakdown`} style={{ borderBottom: '1px solid #f0f0f0', background: 'var(--bg-surface)' }}>
+                    <td colSpan={5} style={{ padding: '10px 16px 14px' }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>
+                        {p.label || 'Charge'}
+                      </div>
+                      {p.lines.map((l, i) => (
+                        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '3px 0', paddingLeft: l.sub ? 14 : 0, fontSize: 13, color: l.sub ? 'var(--text-tertiary)' : 'var(--text-secondary)' }}>
+                          <span>{l.label}</span>
+                          <span style={{ fontVariantNumeric: 'tabular-nums' }}>{l.amount < 0 ? '\u2212' : ''}${Math.abs(l.amount).toFixed(2)}</span>
+                        </div>
+                      ))}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginTop: 6, paddingTop: 6, borderTop: '1px solid var(--border-color)', fontSize: 13, fontWeight: 700 }}>
+                        <span>Charged</span>
+                        <span style={{ fontVariantNumeric: 'tabular-nums' }}>${(p.amount || 0).toFixed(2)}</span>
+                      </div>
+                      <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>
+                        {p.caregiverName ? `${String(p.caregiverName).split(' ')[0]} received $${(p.toCaregiver || 0).toFixed(2)}` : `Caregiver received $${(p.toCaregiver || 0).toFixed(2)}`}
+                        {p.toInPlace ? ` \u00B7 InPlace $${p.toInPlace.toFixed(2)}` : ''}
+                        {p.cardFee ? ` \u00B7 card fee $${p.cardFee.toFixed(2)}` : ''}
+                      </div>
+                    </td>
+                  </tr>
+                ) : null])}
               </tbody>
             </table>
           </div>

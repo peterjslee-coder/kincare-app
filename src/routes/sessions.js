@@ -8,7 +8,7 @@ const { validateSession } = require("../middleware/validate");
 const { captureException } = require("../utils/sentry");
 const availabilityRouter = require("./availability");
 const { sendPushToUser, notifyAdmins, sendSessionReminders } = require("./push");
-const { calculateSessionCost, isShortNotice } = require("../utils/rateCalculator");
+const { calculateSessionCost, isShortNotice, SURCHARGE_CAREGIVER_SHARE } = require("../utils/rateCalculator");
 const { getNowInZone, getTodayStringInZone, buildDateTimeInZone, zonedDateTimeToInstant, formatTimeForDisplay, parseTimeToMinutes } = require("../utils/timezone");
 // v1.106.16 — these were defined in this file and required OUT of it by dashboard.js and
 // server.js. A 4,056-line router is not a library. See each module for what was wrong.
@@ -2127,6 +2127,11 @@ router.post("/:id/release", blockWhileImpersonating("release a caregiver with pa
     // Same capture, same retry path, same alerting as a check-out — one implementation.
     await captureForSession(db, req.params.id, fullCost * 100, {
       where: "release", testMode: false, // impersonation is refused at the route (v1.107.1)
+      settlement: { billedHours: parseFloat(session.duration_hours) || null,
+        breakdown: { quotedCents: Math.round(fullCost * 100), releasedEarly: true,
+          scheduledHours: parseFloat(session.duration_hours) || null,
+          hourlyCents: session.duration_hours ? Math.round(fullCost * 100 / parseFloat(session.duration_hours)) : null,
+          settledAt: "released with full pay" } },
     });
 
     // ── Tell her, in Pete's words ──
@@ -2555,6 +2560,28 @@ router.post("/:id/check-out", blockWhileImpersonating("end a real visit and sett
     }
     const coGeo = geofenceEvidence(checkOutLatitude, checkOutLongitude, session.recipient_lat, session.recipient_lng);
 
+    // ─── v1.109.0 — freeze the arithmetic before the row is overwritten ───
+    // The UPDATE below replaces estimated_cost and duration_hours with the adjusted values, so
+    // this is the last moment the quote, the overtime, the unpaid breaks and the early
+    // departure can be told apart. It goes on the ledger row with the charge.
+    const quotedCents = Math.round((parseFloat(session.estimated_cost) || 0) * 100);
+    const adjustedCents = Math.round(adjustedCost * 100);
+    const overtimeCents = Math.round(overtimeCost * 100);
+    const perMinuteCents = scheduledDuration > 0 ? (quotedCents / (scheduledDuration * 60)) : 0;
+    const settlementBreakdown = {
+      quotedCents,
+      scheduledHours: scheduledDuration,
+      billedHours: actualDurationHours,
+      hourlyCents: scheduledDuration > 0 ? Math.round(quotedCents / scheduledDuration) : null,
+      overtimeMinutes,
+      overtimeCents,
+      breakMinutes: unpaidBreakMinutes,
+      breakDeductionCents: Math.round(unpaidBreakMinutes * perMinuteCents),
+      earlyMinutes: earlyMinutes > 15 ? Math.round(earlyMinutes) : 0,
+      earlyDepartureCents: Math.max(0, quotedCents + overtimeCents - adjustedCents - Math.round(unpaidBreakMinutes * perMinuteCents)),
+      settledAt: "check-out",
+    };
+
     let ended;
     try { await db.transaction(async (tx) => {
       // Transition to completed with adjusted cost, actual duration, overtime, and mark review
@@ -2632,6 +2659,7 @@ router.post("/:id/check-out", blockWhileImpersonating("end a real visit and sett
     const isTestCheckout = false;
     await captureForSession(db, req.params.id, adjustedCost * 100, {
       where: "checkout", testMode: isTestCheckout,
+      settlement: { billedHours: actualDurationHours, breakdown: settlementBreakdown },
     });
 
     // (the visit log closed inside the transaction above — v1.106.10)
@@ -4246,7 +4274,7 @@ router.get("/:id", async (req, res) => {
 
     // 75/25 split: caregiver gets subtotal + 75% of surcharge
     const feePercent = await getPlatformFeePercent(db);
-    const surchargeToCaregiver = Math.round((costBreakdown.surcharge || 0) * 0.75 * 100) / 100;
+    const surchargeToCaregiver = Math.round((costBreakdown.surcharge || 0) * SURCHARGE_CAREGIVER_SHARE * 100) / 100;
     costBreakdown.caregiverPayout = Math.round((costBreakdown.subtotal + surchargeToCaregiver) * 100) / 100;
     costBreakdown.caregiverSurchargeShare = surchargeToCaregiver;
     costBreakdown.platformFeePercent = feePercent;
@@ -4287,7 +4315,31 @@ router.get("/:id", async (req, res) => {
     try { visitSummaryText = JSON.parse(visitLog.ai_summary).summary || null; } catch { visitSummaryText = null; }
   }
 
-  res.json({ session, visitLog, photos, costBreakdown, visitReport, visitSummaryText });
+  // v1.109.0 — every charge on this visit, itemised, for whoever is allowed to see the money.
+  // Pete: "payment records with breakdown of all costs and adjustments."
+  let receipt = null;
+  try {
+    const billing = await db.prepare(`
+      SELECT billing_user_id FROM care_teams
+       WHERE care_recipient_id = ? AND billing_user_id IS NOT NULL LIMIT 1
+    `).get(session.care_recipient_id);
+    const maySeeMoney = access.isAdmin || access.isCaregiver
+      || req.user.id === session.family_user_id
+      || (billing && billing.billing_user_id === req.user.id);
+    if (maySeeMoney) {
+      receipt = await require("../utils/ledger").forSession(db, req.params.id);
+      // A caregiver sees what she was paid, not what the family's card was charged.
+      if (access.isCaregiver && !access.isAdmin && receipt) {
+        receipt = {
+          entries: receipt.entries.map((e) => ({ ...e, charged: undefined, toInPlace: undefined,
+            lines: (e.lines || []).filter((l) => !/InPlace fee|Card processing/.test(l.label)) })),
+          totals: { toCaregiver: receipt.totals.toCaregiver },
+        };
+      }
+    }
+  } catch (e) { captureException(e, { where: "sessions: receipt" }); }
+
+  res.json({ session, visitLog, photos, costBreakdown, visitReport, visitSummaryText, receipt });
 });
 
 // ═══════════════════════════════════════════════════════════════════════

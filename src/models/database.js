@@ -2620,6 +2620,44 @@ async function initializeDatabase() {
         `ALTER TABLE tips ADD COLUMN IF NOT EXISTS card_fee_cents INTEGER NOT NULL DEFAULT 0`,
       ],
     },
+    {
+      // ─── v1.109.0 — the ledger ───
+      //
+      // Pete (9/18): "def need payment records with breakdown of all costs and adjustments."
+      // Four live money paths wrote nothing here: the capture at check-out, the remainder
+      // charge, the cancel fee and the new tip. `payments` only ever had rows for the two
+      // paths nobody uses any more, so admin financials read estimated_cost × 0.2 instead and
+      // the family's history was missing real charges.
+      //
+      // One row per MOVEMENT of money, append-only, with the arithmetic that produced it
+      // frozen in `breakdown` — because check-out overwrites estimated_cost and duration_hours
+      // with the adjusted values, so the quote is unrecoverable half a second later.
+      // kind: authorization | capture | remainder | cancel_fee | tip | checkout | autopay | refund
+      // family_cents = charged to the family · caregiver_cents = hers · platform_cents = ours
+      // card_fee_cents = processing passed through (tips) · breakdown = JSON, the arithmetic
+      id: "045_ledger_entries",
+      statements: [
+        `CREATE TABLE IF NOT EXISTS ledger_entries (
+           id TEXT PRIMARY KEY,
+           session_id TEXT REFERENCES care_sessions(id) ON DELETE SET NULL,
+           care_recipient_id TEXT REFERENCES care_recipients(id) ON DELETE SET NULL,
+           kind TEXT NOT NULL,
+           status TEXT NOT NULL DEFAULT 'succeeded',
+           family_user_id TEXT REFERENCES users(id),
+           caregiver_id TEXT,
+           family_cents INTEGER NOT NULL DEFAULT 0,
+           caregiver_cents INTEGER NOT NULL DEFAULT 0,
+           platform_cents INTEGER NOT NULL DEFAULT 0,
+           card_fee_cents INTEGER NOT NULL DEFAULT 0,
+           stripe_payment_intent TEXT,
+           breakdown TEXT,
+           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+         )`,
+        `CREATE UNIQUE INDEX IF NOT EXISTS idx_ledger_pi_kind ON ledger_entries (stripe_payment_intent, kind) WHERE stripe_payment_intent IS NOT NULL`,
+        `CREATE INDEX IF NOT EXISTS idx_ledger_session ON ledger_entries (session_id, created_at)`,
+        `CREATE INDEX IF NOT EXISTS idx_ledger_family ON ledger_entries (family_user_id, created_at DESC)`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

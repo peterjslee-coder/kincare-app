@@ -166,8 +166,22 @@ async function authorizeSessionPayment(sessionId) {
       caregiverCents = Math.round(costResult.total * 100);
     }
 
-    const { platformFeeCents, familyTotalCents } = await familyChargeFor(db, caregiverCents);
-    totalCents = familyTotalCents;
+    // v1.109.0 — the rush surcharge is its own pot, split 80/20 (Pete, 9/18), so the fee is
+    // charged on the base pay and the caregiver keeps four fifths of the surcharge. Without a
+    // surcharge this is the same arithmetic as before.
+    const { priceVisit } = require("../utils/pricing");
+    const { getPlatformFeePercent } = require("../utils/platformFee");
+    const surchargeCents = Math.min(
+      Math.max(0, Math.round((parseFloat(session.short_notice_surcharge) || 0) * 100)),
+      caregiverCents,
+    );
+    const price = priceVisit({
+      baseCents: caregiverCents - surchargeCents,
+      surchargeCents,
+      feePercent: await getPlatformFeePercent(db),
+    });
+    const platformFeeCents = price.platformFeeCents;
+    totalCents = price.familyTotalCents;
 
     // ─── v1.106.11 — actually name the payment method ───
     //
@@ -232,6 +246,21 @@ async function authorizeSessionPayment(sessionId) {
       WHERE id = ?
     `).run(paymentIntent.id, totalCents, sessionId);
 
+    await require("../utils/ledger").record(db, {
+      sessionId, careRecipientId: session.care_recipient_id, kind: "authorization", status: "held",
+      familyUserId: session.billing_user_id || session.family_user_id, caregiverId: session.caregiver_id,
+      familyCents: totalCents, caregiverCents: price.caregiverCents, platformCents: platformFeeCents,
+      stripePaymentIntent: paymentIntent.id,
+      breakdown: {
+        quotedFor: "the booking", hours: durationHours,
+        hourlyCents: durationHours ? Math.round(price.baseCents / durationHours) : null,
+        baseCents: price.baseCents, surchargeCents: price.surchargeCents,
+        surchargeToCaregiverCents: price.surchargeToCaregiverCents,
+        surchargeToPlatformCents: price.surchargeToPlatformCents,
+        platformFeeCents, feePercent: price.feePercent, authorizedCents: totalCents,
+      },
+    });
+
     console.log(`[accountability] Authorized $${(totalCents / 100).toFixed(2)} for session ${sessionId.slice(0, 8)} on ${describePaymentMethod(pm)} (PI: ${paymentIntent.id})`);
     return { success: true, paymentIntentId: paymentIntent.id, amount: totalCents };
 
@@ -257,7 +286,7 @@ async function authorizeSessionPayment(sessionId) {
  *
  * Returns { success, captured, remainder? } or { error }.
  */
-async function captureSessionPay(sessionId, caregiverCents) {
+async function captureSessionPay(sessionId, billedCents, settlement = {}) {
   {
     const dbGuard = await getDb();
     if (await isDemoSession(dbGuard, sessionId)) {
@@ -270,14 +299,30 @@ async function captureSessionPay(sessionId, caregiverCents) {
     const stripe = getStripe();
 
     const session = await db.prepare(`
-      SELECT cs.stripe_payment_intent_id, cs.authorized_amount, cp.stripe_account_id
+      SELECT cs.stripe_payment_intent_id, cs.authorized_amount, cs.short_notice_surcharge,
+             cp.stripe_account_id
         FROM care_sessions cs
         LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
        WHERE cs.id = ?
     `).get(sessionId);
     if (!session?.stripe_payment_intent_id) return { error: "No payment authorization found" };
 
-    const price = await familyChargeFor(db, caregiverCents);
+    // v1.109.0 — `billedCents` is what the visit came to for the caregiver's side, surcharge
+    // included (estimated_cost, adjusted at check-out). The surcharge is separated back out
+    // here so its 80/20 split can be applied; with no surcharge this is what it always was.
+    const { priceVisit } = require("../utils/pricing");
+    const { getPlatformFeePercent } = require("../utils/platformFee");
+    const surchargeCents = Math.min(
+      Math.max(0, Math.round(Number(settlement.surchargeCents != null
+        ? settlement.surchargeCents
+        : (parseFloat(session.short_notice_surcharge) || 0) * 100))),
+      Math.max(0, Math.round(billedCents)),
+    );
+    const price = priceVisit({
+      baseCents: Math.round(billedCents) - surchargeCents,
+      surchargeCents,
+      feePercent: await getPlatformFeePercent(db),
+    });
     const plan = planCapture({
       caregiverCents: price.caregiverCents,
       platformFeeCents: price.platformFeeCents,
@@ -314,9 +359,37 @@ async function captureSessionPay(sessionId, caregiverCents) {
 
     console.log(`[accountability] Captured $${(plan.captureCents / 100).toFixed(2)} (fee $${(plan.captureFeeCents / 100).toFixed(2)}) for session ${sessionId.slice(0, 8)}; caregiver owed $${(price.caregiverCents / 100).toFixed(2)}`);
 
+    const parties = await require("../utils/ledger").partiesFor(db, sessionId);
+    const breakdown = {
+      ...(settlement.breakdown || {}),
+      hours: settlement.billedHours != null ? settlement.billedHours : (settlement.breakdown || {}).hours,
+      baseCents: price.baseCents, surchargeCents: price.surchargeCents,
+      surchargeToCaregiverCents: price.surchargeToCaregiverCents,
+      surchargeToPlatformCents: price.surchargeToPlatformCents,
+      platformFeeCents: price.platformFeeCents, feePercent: price.feePercent,
+      caregiverCents: price.caregiverCents, familyTotalCents: price.familyTotalCents,
+      authorizedCents: Math.round(session.authorized_amount || 0),
+      capturedCents: plan.captureCents, remainderCents: plan.remainderCents,
+    };
+    await require("../utils/ledger").record(db, {
+      sessionId, ...parties, kind: "capture",
+      familyCents: plan.captureCents, caregiverCents: Math.min(price.caregiverCents, plan.captureCents),
+      platformCents: plan.captureFeeCents, stripePaymentIntent: session.stripe_payment_intent_id,
+      breakdown,
+    });
+
     let remainder = null;
     if (plan.remainderCents > 0) {
       remainder = await chargeRemainder(stripe, sessionId, session, plan);
+      if (remainder && remainder.charged) {
+        await require("../utils/ledger").record(db, {
+          sessionId, ...parties, kind: "remainder",
+          familyCents: plan.remainderCents, caregiverCents: plan.remainderToCaregiver,
+          platformCents: plan.remainderCents - plan.remainderToCaregiver,
+          stripePaymentIntent: remainder.id,
+          breakdown: { why: "the hold was smaller than the visit came to", ...breakdown },
+        });
+      }
     }
     return { success: true, captured: captured.amount_received, plan, remainder };
   } catch (err) {
@@ -408,6 +481,14 @@ async function chargeTip(sessionId, tipCents) {
       description: `Tip for care session (${String(sessionId).slice(0, 8)})`,
     }, { idempotencyKey: `inplace_tip_${sessionId}_${q.tipCents}` });
     if (intent.status !== "succeeded") return { error: "Your card needs attention before this tip can go through" };
+    const ledger = require("../utils/ledger");
+    await ledger.record(db, {
+      sessionId, ...(await ledger.partiesFor(db, sessionId)), kind: "tip",
+      familyCents: q.totalCents, caregiverCents: q.tipCents, platformCents: 0,
+      cardFeeCents: q.feeCents, stripePaymentIntent: intent.id,
+      breakdown: { tipCents: q.tipCents, cardFeeCents: q.feeCents, feePercent: 0,
+        note: "the caregiver receives the whole tip; the family covers the card fee" },
+    });
     return { charged: true, id: intent.id, totalCents: q.totalCents, feeCents: q.feeCents };
   } catch (err) {
     captureException(err, { where: "accountability: tip charge", sessionId });
@@ -455,6 +536,16 @@ async function captureSessionPayment(sessionId, captureAmountCents = null) {
         payment_status = 'paid'
       WHERE id = ?
     `).run(sessionId);
+
+    // v1.109.0 — the cancel fee is money that moved and had no record of its own.
+    const ledger = require("../utils/ledger");
+    const cents = Math.round(captureAmountCents || session.authorized_amount || 0);
+    await ledger.record(db, {
+      sessionId, ...(await ledger.partiesFor(db, sessionId)), kind: "cancel_fee",
+      familyCents: cents, caregiverCents: 0, platformCents: cents,
+      stripePaymentIntent: session.stripe_payment_intent_id,
+      breakdown: { cancelFeeCents: cents, authorizedCents: Math.round(session.authorized_amount || 0) },
+    });
 
     console.log(`[accountability] Captured $${((captureAmountCents || session.authorized_amount) / 100).toFixed(2)} for session ${sessionId.slice(0, 8)}`);
     return { success: true, captured: captured.amount_received };

@@ -25,7 +25,7 @@ const { captureException } = require("./sentry");
  * @param {boolean} testMode true while an admin is impersonating; captures nothing
  * @returns {Promise<{captured: boolean, waived?: boolean, error?: string}>}
  */
-async function captureForSession(db, sessionId, amountCents, { where, testMode }) {
+async function captureForSession(db, sessionId, amountCents, { where, testMode, settlement }) {
   if (testMode) {
     console.log(`[${where}] TEST MODE — skipping payment capture for session ${sessionId.slice(0, 8)}`);
     // Waive payment and review for test sessions so they don't trigger lockout banners.
@@ -55,7 +55,7 @@ async function captureForSession(db, sessionId, amountCents, { where, testMode }
     const { captureSessionPay } = require("../routes/accountability");
     const cents = Math.round(amountCents);
     if (cents <= 0) return { captured: false };
-    const result = await captureSessionPay(sessionId, cents);
+    const result = await captureSessionPay(sessionId, cents, settlement || {});
     if (result && result.error === "demo_session_blocked") {
       // v1.107.1 — Dev Rule #7 working as intended, not a failure to retry. Marking it
       // 'pending' handed a demo visit to the auto-pay sweep.

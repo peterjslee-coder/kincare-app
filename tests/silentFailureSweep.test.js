@@ -59,8 +59,10 @@ describe("things that were legally or financially broken", () => {
     expect(cap).toMatch(/where: `\$\{where\}: capture`/);
 
     const s = code("src/routes/sessions.js");
-    expect(s).toMatch(/captureForSession\(db, req\.params\.id, adjustedCost \* 100, \{[\s\S]{0,80}where: "checkout"/);
-    expect(s).toMatch(/captureForSession\(db, req\.params\.id, fullCost \* 100, \{[\s\S]{0,80}where: "release"/);
+    // v1.109.0 — both calls now also carry the settlement breakdown for the ledger, so the
+    // match reaches past it to the `where`, which is what this test is actually about.
+    expect(s).toMatch(/captureForSession\(db, req\.params\.id, adjustedCost \* 100, \{[\s\S]{0,120}where: "checkout"/);
+    expect(s).toMatch(/captureForSession\(db, req\.params\.id, fullCost \* 100, \{[\s\S]{0,120}where: "release"/);
     // And nobody has re-grown a local copy beside them.
     expect(s).not.toMatch(/const failCapture = async/);
   });

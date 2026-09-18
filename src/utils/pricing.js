@@ -68,4 +68,42 @@ function tipWithCardFee(tipCents) {
   return { tipCents: tip, feeCents: totalCents - tip, totalCents };
 }
 
-module.exports = { priceFromCaregiverCents, familyChargeFor, planCapture, tipWithCardFee };
+/**
+ * ─── v1.109.0 — a visit with a short-notice surcharge ───
+ *
+ * Pete (9/18): "Short notice is supposed to be they get 80, IP gets 20, same as before. So
+ * there's a 20% surcharge for rush inside 24 hours...of that extra 20%, the caregiver gets 80,
+ * IP gets 20."
+ *
+ * So the surcharge is its own pot, split 80/20, and the platform fee is charged on the base
+ * pay only:
+ *   caregiver = base + 80% of surcharge
+ *   platform  = feePercent of base + 20% of surcharge
+ *   family    = base + feePercent of base + surcharge
+ *
+ * $176 base with a $35.20 rush surcharge: Tina $204.16, InPlace $42.24, the family $246.40.
+ *
+ * v1.107.0 folded the whole surcharge into the caregiver's pay (estimated_cost carries it), so
+ * she was getting the platform's fifth of it as well. With no surcharge this is exactly
+ * priceFromCaregiverCents, which is every ordinary visit.
+ */
+const SURCHARGE_TO_CAREGIVER = 0.8;
+
+function priceVisit({ baseCents, surchargeCents = 0, feePercent }) {
+  const base = Math.max(0, Math.round(Number(baseCents) || 0));
+  const surcharge = Math.max(0, Math.round(Number(surchargeCents) || 0));
+  const pct = Number.isFinite(Number(feePercent)) ? Number(feePercent) : 0;
+  const surchargeToCaregiver = Math.round(surcharge * SURCHARGE_TO_CAREGIVER);
+  const surchargeToPlatform = surcharge - surchargeToCaregiver;
+  const baseFee = Math.round(base * pct / 100);
+  const caregiverCents = base + surchargeToCaregiver;
+  const platformFeeCents = baseFee + surchargeToPlatform;
+  return {
+    baseCents: base, surchargeCents: surcharge, feePercent: pct,
+    surchargeToCaregiverCents: surchargeToCaregiver, surchargeToPlatformCents: surchargeToPlatform,
+    baseFeeCents: baseFee,
+    caregiverCents, platformFeeCents, familyTotalCents: caregiverCents + platformFeeCents,
+  };
+}
+
+module.exports = { priceFromCaregiverCents, familyChargeFor, planCapture, tipWithCardFee, priceVisit, SURCHARGE_TO_CAREGIVER };

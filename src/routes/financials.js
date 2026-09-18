@@ -425,8 +425,55 @@ router.get("/transactions", async (req, res) => {
       ORDER BY p.created_at DESC
     `).all();
 
+    // ─── v1.109.0 — the ledger, which is where the money actually is ───
+    // `payments` only ever had rows for the family-present checkout and the auto-pay sweep. The
+    // capture at check-out, the balance charge, cancel fees and tips are all ledger-only.
+    let ledgerTx = [];
+    try {
+      ledgerTx = await db.prepare(`
+        SELECT le.id, le.session_id, le.created_at, le.kind, le.status, le.breakdown,
+               le.family_cents, le.caregiver_cents, le.platform_cents, le.card_fee_cents,
+               le.stripe_payment_intent,
+               fu.first_name AS family_first_name, fu.last_name AS family_last_name, fu.email AS family_email,
+               cu.first_name AS caregiver_first_name, cu.last_name AS caregiver_last_name, cu.email AS caregiver_email,
+               cr.first_name AS cr_first_name, cr.last_name AS cr_last_name,
+               cs.service_type, cs.scheduled_date, cs.scheduled_time, cs.duration_hours,
+               cs.status AS session_status, cs.completed_at, cs.review_completed
+          FROM ledger_entries le
+          LEFT JOIN users fu ON fu.id = le.family_user_id
+          LEFT JOIN caregiver_profiles cp ON cp.id = le.caregiver_id
+          LEFT JOIN users cu ON cu.id = cp.user_id
+          LEFT JOIN care_sessions cs ON cs.id = le.session_id
+          LEFT JOIN care_recipients cr ON cr.id = cs.care_recipient_id
+         WHERE le.kind <> 'authorization'
+           AND COALESCE(fu.is_demo, 0) = 0 AND COALESCE(cu.is_demo, 0) = 0
+         ORDER BY le.created_at DESC
+      `).all();
+    } catch (err) {
+      console.error("Financials ledger read failed:", err.message);
+    }
+    const ledgerSessions = new Set(ledgerTx.map((t) => t.session_id).filter(Boolean));
+    const asTx = (t) => {
+      let b = null;
+      try { b = t.breakdown ? JSON.parse(t.breakdown) : null; } catch { b = null; }
+      return {
+        ...t,
+        amount: (t.family_cents || 0) / 100,
+        platform_fee: (t.platform_cents || 0) / 100,
+        caregiver_payout: (t.caregiver_cents || 0) / 100,
+        tip_cents: t.kind === "tip" ? (t.caregiver_cents || 0) : (b && b.tipCents) || 0,
+        auto_charged: t.kind === "autopay" ? 1 : 0,
+        status: t.status === "succeeded" ? "completed" : t.status,
+        payout_speed: "standard",
+        breakdownJson: b,
+      };
+    };
+
     // Filter
-    let filtered = allTransactions;
+    let filtered = [
+      ...ledgerTx.map(asTx),
+      ...allTransactions.filter((t) => !t.session_id || !ledgerSessions.has(t.session_id)),
+    ].sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
     if (status) filtered = filtered.filter(t => t.status === status);
     if (req.query.dateFrom) filtered = filtered.filter(t => t.created_at >= req.query.dateFrom);
     if (req.query.dateTo) filtered = filtered.filter(t => t.created_at <= req.query.dateTo);
@@ -466,6 +513,9 @@ router.get("/transactions", async (req, res) => {
         stripeCheckoutId: t.stripe_checkout_id,
         tipCents: t.tip_cents || 0,
         autoCharged: !!t.auto_charged,
+        kind: t.kind || 'legacy',
+        cardFee: (t.card_fee_cents || 0) / 100,
+        breakdown: t.breakdownJson || null,
       })),
       total,
       page,

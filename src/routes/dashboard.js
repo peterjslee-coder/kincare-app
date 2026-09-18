@@ -8,7 +8,7 @@ const { authenticate } = require("../middleware/auth");
 const { getNowInZone, getTodayStringInZone, DEFAULT_TIMEZONE } = require("../utils/timezone");
 const { haversineDistance } = require("../utils/geocode");
 const { computeJobConflicts, computeMatchScore } = require("../utils/jobMatching");
-const { calculateSessionCost } = require("../utils/rateCalculator");
+const { calculateSessionCost, SURCHARGE_CAREGIVER_SHARE, SURCHARGE_PLATFORM_SHARE } = require("../utils/rateCalculator");
 const { scoreMatch } = require("../utils/aiMatching");
 const { expireStaleProposals } = require("../utils/proposals");
 const { getPlatformFeePercent } = require("../utils/platformFee");
@@ -811,7 +811,7 @@ async function caregiverDashboard(db, userId, res) {
           durationHours: parseFloat(s.duration_hours || 2),
           shortNotice,
         });
-        const surchargeToCaregiver = Math.round((costResult.surcharge || 0) * 0.75 * 100) / 100;
+        const surchargeToCaregiver = Math.round((costResult.surcharge || 0) * SURCHARGE_CAREGIVER_SHARE * 100) / 100;
         caregiverPayout = Math.round((costResult.subtotal + surchargeToCaregiver) * 100) / 100;
       }
       return {
@@ -1013,7 +1013,7 @@ async function caregiverDashboard(db, userId, res) {
           durationHours: parseFloat(s.duration_hours || 2),
           shortNotice,
         });
-        const surchargeToCaregiver = Math.round((costResult.surcharge || 0) * 0.75 * 100) / 100;
+        const surchargeToCaregiver = Math.round((costResult.surcharge || 0) * SURCHARGE_CAREGIVER_SHARE * 100) / 100;
         caregiverPayout = Math.round((costResult.subtotal + surchargeToCaregiver) * 100) / 100;
       }
       return {
@@ -1034,9 +1034,9 @@ async function caregiverDashboard(db, userId, res) {
     stats: {
       completedThisMonth: monthlyStats.completed_sessions || 0,
       // 75/25 split: caregiver earns total minus 25% of surcharges
-      monthlyEarnings: Math.round(((monthlyStats.total_earnings || 0) - (monthlyStats.total_surcharges || 0) * 0.25) * 100) / 100,
+      monthlyEarnings: Math.round(((monthlyStats.total_earnings || 0) - (monthlyStats.total_surcharges || 0) * SURCHARGE_PLATFORM_SHARE) * 100) / 100,
       hoursThisMonth: Math.round((monthlyStats.total_hours || 0) * 10) / 10,
-      pendingEarnings: Math.round(((pending.pending_earnings || 0) - (pending.pending_surcharges || 0) * 0.25) * 100) / 100,
+      pendingEarnings: Math.round(((pending.pending_earnings || 0) - (pending.pending_surcharges || 0) * SURCHARGE_PLATFORM_SHARE) * 100) / 100,
       assignedFamilies: assignments.length,
     },
     myProposals: myProposals.map(p => ({

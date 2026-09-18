@@ -152,13 +152,14 @@ describe("...and the code still backs it", () => {
     expect(server).toMatch(/VERSION_GATE_EXEMPT = \["\/api\/version", "\/api\/pricing"/);
   });
 
-  test("three-quarters of the surcharge really is the caregiver's", () => {
+  test("four-fifths of the surcharge really is the caregiver's", () => {
     const { SURCHARGE_PLATFORM_SHARE } = (() => {
       const src = read("src/utils/rateCalculator.js");
       const m = src.match(/SURCHARGE_PLATFORM_SHARE\s*=\s*([\d.]+)/);
       return { SURCHARGE_PLATFORM_SHARE: Number(m[1]) };
     })();
-    expect(1 - SURCHARGE_PLATFORM_SHARE).toBeCloseTo(0.75, 5);
+    // v1.109.0 — Pete, 9/18: "of that extra 20%, the caregiver gets 80, IP gets 20."
+    expect(1 - SURCHARGE_PLATFORM_SHARE).toBeCloseTo(0.8, 5);
   });
 
   test("caregivers set their own rate — nothing else writes it", () => {

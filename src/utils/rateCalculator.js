@@ -11,9 +11,11 @@ const TIER_BOUNDARIES = [
 const OVERNIGHT_MIN_HOURS = 6;          // default; overridable per caregiver
 const SHORT_NOTICE_HOURS = 24;
 const SHORT_NOTICE_SURCHARGE_PCT = 0.20; // 20% rush surcharge
-// Rush surcharge split: caregiver gets 75% (incentive), platform gets 25%.
-const SURCHARGE_CAREGIVER_SHARE = 0.75;
-const SURCHARGE_PLATFORM_SHARE = 0.25;
+// Rush surcharge split. Pete, 9/18: "there's a 20% surcharge for rush inside 24 hours...of
+// that extra 20%, the caregiver gets 80, IP gets 20." (Was 75/25 until v1.109.0, and v1.107.0
+// had briefly given her all of it by folding the surcharge into her pay.)
+const SURCHARGE_CAREGIVER_SHARE = 0.8;
+const SURCHARGE_PLATFORM_SHARE = 0.2;
 
 /**
  * Detect which rate tier applies for a given hour (0–23).
