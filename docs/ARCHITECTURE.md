@@ -7,7 +7,7 @@ build red.
 
 Hand-written sections (§3 "Where is…") are preserved across regeneration; edit those freely.
 
-Structure at last generation: 535 HTTP routes across 56 mounts ·
+Structure at last generation: 536 HTTP routes across 56 mounts ·
 96 `CREATE TABLE` statements · 14 background jobs · 38 socket events
 (16 with no client listener) · 65 push event types · 59 `window.__*` globals.
 
@@ -52,7 +52,7 @@ JSX is *not* compiled in the browser; Babel-standalone is not loaded. Editing an
 | `/api/care-events` | `src/routes/careEvents.js` | 10 |  |
 | `/api/care-intelligence` | `src/routes/careIntelligence.js` | 8 |  |
 | `/api/care-recipients` | `src/routes/careRecipients.js` | 14 |  |
-| `/api/care-tasks` | `src/routes/careTasks.js` | 9 |  |
+| `/api/care-tasks` | `src/routes/careTasks.js` | 10 |  |
 | `/api/care-teams` | `src/routes/careTeams.js` | 17 |  |
 | `/api/caregiver-onboarding` | `src/routes/caregiveronboarding.js` | 6 |  |
 | `/api/caregivers` | `src/routes/caregivers.js` | 11 |  |

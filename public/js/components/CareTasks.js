@@ -427,6 +427,118 @@ const CareTaskFormModal = ({ recipientId, recipientFirstName, teamMembers, exist
   );
 };
 
+// ─── Task history (v1.109.3) ───
+//
+// Pete, 9/18: "i can pause them, delete them, but they stay there. can we archive? it's a
+// great idea to archive and be able to see how long or who did what previously."
+//
+// Remove now archives: the task leaves the list, every occurrence stays. This is where that
+// record is read — how long it ran, how much of it got done, and who did it.
+
+// 'YYYY-MM-DD' is a naive date. new Date('2026-09-18') parses it as UTC midnight and renders
+// as the 17th west of Greenwich, so it is built and read in UTC on purpose.
+const careTaskDay = window.careTaskDay = (d, opts) => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(d || ''));
+  if (!m) return '';
+  return new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]))
+    .toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric', ...(opts || {}) });
+};
+
+const careTaskRan = window.careTaskRan = (summary) => {
+  if (!summary || !summary.firstDue) return null;
+  const span = careTaskDay(summary.firstDue) + (summary.lastDue && summary.lastDue !== summary.firstDue ? ` – ${careTaskDay(summary.lastDue)}` : '');
+  const d = summary.days || 0;
+  const how = d >= 60 ? `${Math.round(d / 30)} months` : d >= 14 ? `${Math.round(d / 7)} weeks` : d === 1 ? '1 day' : `${d} days`;
+  return `${how} · ${span}`;
+};
+
+const CareTaskHistorySheet = window.CareTaskHistorySheet = ({ task, onClose }) => {
+  const [data, setData] = useState(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await apiFetch(`/api/care-tasks/${task.id}/history`);
+        if (res?.ok) { setData(await res.json()); return; }
+      } catch {}
+      setFailed(true);
+    })();
+  }, [task.id]);
+
+  const s = data?.summary;
+  const STATUS = {
+    done: { label: 'Done', color: 'var(--color-success)' },
+    skipped: { label: 'Dismissed', color: 'var(--text-muted)' },
+    missed: { label: 'Missed', color: 'var(--color-error)' },
+    pending: { label: 'Not recorded', color: 'var(--text-tertiary)' },
+  };
+
+  return (
+    <div onClick={onClose} data-testid="care-task-history" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1000, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+      <div onClick={(e) => e.stopPropagation()} style={{
+        background: 'var(--bg-card)', borderRadius: '16px 16px 0 0', width: '100%', maxWidth: 480,
+        maxHeight: '85vh', overflowY: 'auto', padding: 20, paddingBottom: 'calc(20px + env(safe-area-inset-bottom, 0px))',
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, marginBottom: 4 }}>
+          <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--text-primary)' }}>
+            {careTaskIcon(task.task_type)} {task.title}
+          </div>
+          <button onClick={onClose} style={{ border: 'none', background: 'none', fontSize: 20, color: 'var(--text-muted)', cursor: 'pointer', lineHeight: 1 }}>{'×'}</button>
+        </div>
+
+        {failed && <div style={{ fontSize: 13, color: 'var(--text-tertiary)', padding: '10px 0' }}>Couldn{'’'}t load the history just now.</div>}
+        {!data && !failed && <div style={{ fontSize: 13, color: 'var(--text-tertiary)', padding: '10px 0' }}>Loading{'…'}</div>}
+
+        {s && (
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{careTaskRan(s) || 'Nothing recorded yet'}</div>
+            {s.answered > 0 && (
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>
+                Done {s.done} of {s.answered}{s.doneRate !== null ? ` · ${s.doneRate}%` : ''}
+                {s.missed ? ` · ${s.missed} missed` : ''}{s.skipped ? ` · ${s.skipped} dismissed` : ''}
+              </div>
+            )}
+            {s.people.length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                {s.people.map((p) => (
+                  <span key={p.name} style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 12, padding: '3px 10px' }}>
+                    {p.name} {'·'} {p.count}
+                  </span>
+                ))}
+              </div>
+            )}
+            {data.task.archived_at && (
+              <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 8 }}>
+                Removed {careTaskDay(String(data.task.archived_at).slice(0, 10))}
+                {data.task.archived_by_first_name ? ` by ${data.task.archived_by_first_name}` : ''} {'·'} the record stays.
+              </div>
+            )}
+          </div>
+        )}
+
+        {data && data.occurrences.length === 0 && !failed && (
+          <div style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>Nothing was ever recorded for this one.</div>
+        )}
+        {data && data.occurrences.map((o) => {
+          const st = STATUS[o.status] || STATUS.pending;
+          return (
+            <div key={o.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '7px 0', borderBottom: '1px solid var(--border-light)' }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 13, color: 'var(--text-primary)' }}>
+                  {careTaskDay(o.dueDate, { weekday: 'short' })}
+                  {o.by && <span style={{ color: 'var(--text-tertiary)' }}> {'·'} {o.by}</span>}
+                </div>
+                {o.note && <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{o.note}</div>}
+              </div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: st.color, flexShrink: 0 }}>{st.label}</div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 // ─── Quick-create from the dashboard "+ Task" pill (v1.99.3) ───
 // Pete: task creation must be obvious to someone just opening the app — a
 // "+ Task" pill lives next to "+ Request Care" in Next Up. This wrapper
@@ -484,6 +596,8 @@ const CareTasksSection = window.CareTasksSection = ({ recipientId, recipientFirs
   const [data, setData] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [historyFor, setHistoryFor] = useState(null);
+  const [showArchived, setShowArchived] = useState(false);
 
   const load = async () => {
     try {
@@ -499,6 +613,7 @@ const CareTasksSection = window.CareTasksSection = ({ recipientId, recipientFirs
 
   if (!data) return null;
   const { tasks, canManage, teamMembers } = data;
+  const archived = data.archived || [];
 
   const scheduleLine = (t) => {
     const time = careTaskTimesOf(t).map((x) => TimezoneHelper.formatTime(x)).join(', ');
@@ -511,11 +626,11 @@ const CareTasksSection = window.CareTasksSection = ({ recipientId, recipientFirs
   };
 
   const removeTask = async (t) => {
-    if (!window.confirm(`Remove "${t.title}"? It won\u2019t come up again. What\u2019s already been recorded stays in the history.`)) return;
+    if (!window.confirm(`Remove "${t.title}"? It moves to Archived \u2014 it stops coming up, and everything already recorded stays where you can read it.`)) return;
     try {
       const res = await apiFetch(`/api/care-tasks/${t.id}`, { method: 'DELETE' });
       const d = res ? await res.json().catch(() => ({})) : {};
-      if (res?.ok) { showToast('Task removed', 'success'); load(); if (typeof CareTaskSync !== 'undefined') CareTaskSync.announce(null); }
+      if (res?.ok) { showToast('Moved to Archived \u2014 history kept', 'success'); setShowArchived(true); load(); if (typeof CareTaskSync !== 'undefined') CareTaskSync.announce(null); }
       else showToast(d.error || 'Couldn\u2019t remove that', 'error');
     } catch { showToast('Couldn\u2019t reach InPlace', 'error'); }
   };
@@ -524,6 +639,15 @@ const CareTasksSection = window.CareTasksSection = ({ recipientId, recipientFirs
       const res = await apiFetch(`/api/care-tasks/${t.id}`, { method: 'PUT', body: JSON.stringify({ is_active: t.is_active ? 0 : 1 }) });
       if (res?.ok) load(); else showToast('Could not update', 'error');
     } catch { showToast('Could not update', 'error'); }
+  };
+  // Back on the list PAUSED: a course that stopped six weeks ago must not start reminding
+  // anyone the second it returns. Resume is one more tap, and it is a deliberate one.
+  const restoreTask = async (t) => {
+    try {
+      const res = await apiFetch(`/api/care-tasks/${t.id}/restore`, { method: 'POST' });
+      if (res?.ok) { showToast('Back on the list \u2014 paused', 'success'); load(); if (typeof CareTaskSync !== 'undefined') CareTaskSync.announce(null); }
+      else showToast('Could not restore that', 'error');
+    } catch { showToast('Could not restore that', 'error'); }
   };
 
   return (
@@ -571,9 +695,11 @@ const CareTasksSection = window.CareTasksSection = ({ recipientId, recipientFirs
               <CareTaskStrip recent={t.recent} />
             </div>
             {canManage && (
-              <div style={{ display: 'flex', gap: 6 }}>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                 <button onClick={() => { setEditing(t); setShowForm(true); }}
                   style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--bg-surface)', color: 'var(--text-secondary)', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>Edit</button>
+                <button onClick={() => setHistoryFor(t)}
+                  style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--bg-surface)', color: 'var(--text-secondary)', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>History</button>
                 <button onClick={() => toggleActive(t)}
                   style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--bg-surface)', color: 'var(--text-tertiary)', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
                   {t.is_active ? 'Pause' : 'Resume'}
@@ -590,7 +716,37 @@ const CareTasksSection = window.CareTasksSection = ({ recipientId, recipientFirs
           </div>
         </div>
       ))}
+
+      {/* v1.109.3 — archived tasks. Out of the way, never gone: this is how long it ran and
+          who did it. Restore brings it back paused. */}
+      {archived.length > 0 && (
+        <div data-testid="care-tasks-archived" style={{ marginTop: 10, borderTop: '1px solid var(--border-light)', paddingTop: 10 }}>
+          <button onClick={() => setShowArchived(!showArchived)} aria-expanded={showArchived}
+            style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', fontSize: 12, fontWeight: 700, color: 'var(--text-muted)' }}>
+            Archived ({archived.length}) {showArchived ? '\u25B2' : '\u25BC'}
+          </button>
+          {showArchived && archived.map((t) => (
+            <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, padding: '8px 0', borderBottom: '1px solid var(--border-light)' }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-secondary)' }}>{careTaskIcon(t.task_type)} {t.title}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>
+                  Removed {careTaskDay(String(t.archived_at).slice(0, 10))}{t.archived_by_first_name ? ` by ${t.archived_by_first_name}` : ''}
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                <button onClick={() => setHistoryFor(t)}
+                  style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--bg-surface)', color: 'var(--text-secondary)', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>History</button>
+                {canManage && (
+                  <button onClick={() => restoreTask(t)}
+                    style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--bg-surface)', color: 'var(--text-tertiary)', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>Restore</button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
       </div>
+      {historyFor && <CareTaskHistorySheet task={historyFor} onClose={() => setHistoryFor(null)} />}
       {showForm && (
         <CareTaskFormModal recipientId={recipientId} recipientFirstName={recipientFirstName}
           teamMembers={teamMembers} existing={editing}

@@ -269,7 +269,7 @@ router.get("/today", async (req, res) => {
     const groups = [];
     for (const cr of recipients) {
       const tasks = await db.prepare(
-        "SELECT * FROM care_tasks WHERE care_recipient_id = ? AND is_active = 1"
+        "SELECT * FROM care_tasks WHERE care_recipient_id = ? AND is_active = 1 AND archived_at IS NULL"
       ).all(cr.id);
       if (tasks.length === 0) continue;
       const today = getTodayStringInZone(cr.timezone || DEFAULT_TZ);
@@ -327,13 +327,20 @@ router.get("/recipient/:recipientId", async (req, res) => {
     // v1.105.78 — seeing Betty's medication schedule is its own grant. A helper who is on the
     // team to leave a note and record a visit does not get the health record thrown in.
     if (!canSeeTasks(access)) return res.status(403).json({ error: "Access denied" });
-    const tasks = await db.prepare(`
-      SELECT t.*, au.first_name AS assignee_first_name, au.last_name AS assignee_last_name
+    const allTasks = await db.prepare(`
+      SELECT t.*, au.first_name AS assignee_first_name, au.last_name AS assignee_last_name,
+             ar.first_name AS archived_by_first_name
       FROM care_tasks t
       LEFT JOIN users au ON t.assigned_user_id = au.id
+      LEFT JOIN users ar ON t.archived_by = ar.id
       WHERE t.care_recipient_id = ?
       ORDER BY t.is_active DESC, t.due_time ASC, t.created_at ASC
     `).all(req.params.recipientId);
+    // v1.109.3 — archived tasks come back in their own list, newest first. They are history,
+    // not a to-do: no adherence strip, no reminders, nothing to check off.
+    const tasks = allTasks.filter((t) => !t.archived_at);
+    const archived = allTasks.filter((t) => t.archived_at)
+      .sort((a, b) => String(b.archived_at).localeCompare(String(a.archived_at)));
     for (const t of tasks) {
       t.recent = await db.prepare(`
         SELECT due_date, status, completed_by_name, completed_by_user_id
@@ -343,6 +350,7 @@ router.get("/recipient/:recipientId", async (req, res) => {
     }
     return res.json({
       tasks,
+      archived,
       canManage: canManage(access),
       teamMembers: await pickerPeople(db, req.params.recipientId,
         getTodayStringInZone((await db.prepare("SELECT timezone FROM care_recipients WHERE id = ?").get(req.params.recipientId))?.timezone || DEFAULT_TZ)),
@@ -475,11 +483,16 @@ router.delete("/:id", async (req, res) => {
     if (!task) return res.status(404).json({ error: "Task not found" });
     const access = await hasAccess(db, task.care_recipient_id, req.user.id);
     if (!canManage(access)) return res.status(403).json({ error: "Only the family owner or care team leaders can remove tasks" });
-    await db.prepare("UPDATE care_tasks SET is_active = 0, updated_at = NOW() WHERE id = ?").run(task.id);
+    // v1.109.3 — archive, don't delete. This used to set is_active = 0, which is exactly what
+    // Pause does, so a finished course sat on the list forever looking like one on hold. The
+    // task leaves the list; every occurrence stays, because that is the record of who did what.
+    await db.prepare(
+      "UPDATE care_tasks SET is_active = 0, archived_at = COALESCE(archived_at, NOW()), archived_by = COALESCE(archived_by, ?), updated_at = NOW() WHERE id = ?"
+    ).run(req.user.id, task.id);
     await db.prepare(
       "DELETE FROM care_task_occurrences WHERE task_id = ? AND status = 'pending' AND due_date >= ?"
     ).run(task.id, getTodayStringInZone(DEFAULT_TZ));
-    return res.json({ success: true });
+    return res.json({ success: true, archived: true });
   } catch (err) {
     captureException(err);
     console.error("Care task delete error:", err.message);
@@ -487,28 +500,90 @@ router.delete("/:id", async (req, res) => {
   }
 });
 
-// ─── GET /api/care-tasks/:id/history?days=30 ───
-router.get("/:id/history", async (req, res) => {
+// ─── POST /api/care-tasks/:id/restore — v1.109.3 ───
+// Back onto the list, paused, so nothing starts reminding people the moment it returns.
+router.post("/:id/restore", async (req, res) => {
   try {
     const db = await getDb();
     const task = await db.prepare("SELECT * FROM care_tasks WHERE id = ?").get(req.params.id);
     if (!task) return res.status(404).json({ error: "Task not found" });
     const access = await hasAccess(db, task.care_recipient_id, req.user.id);
-    if (!access) return res.status(403).json({ error: "Access denied" });
-    const days = Math.min(Math.max(parseInt(req.query.days, 10) || 30, 1), 120);
-    const occurrences = await db.prepare(`
-      SELECT o.*, cu.first_name AS completed_by_first_name, cu.last_name AS completed_by_last_name,
-             ru.first_name AS recorded_by_first_name
-      FROM care_task_occurrences o
-      LEFT JOIN users cu ON o.completed_by_user_id = cu.id
-      LEFT JOIN users ru ON o.recorded_by = ru.id
-      WHERE o.task_id = ? ORDER BY o.due_date DESC LIMIT ?
-    `).all(task.id, days);
-    return res.json({ task, occurrences });
+    if (!canManage(access)) return res.status(403).json({ error: "Only the family owner or care team leaders can restore tasks" });
+    await db.prepare(
+      "UPDATE care_tasks SET archived_at = NULL, archived_by = NULL, is_active = 0, updated_at = NOW() WHERE id = ?"
+    ).run(task.id);
+    return res.json({ success: true, restored: true });
+  } catch (err) {
+    captureException(err);
+    return res.status(500).json({ error: "Failed to restore that task" });
+  }
+});
+
+// ─── GET /api/care-tasks/:id/history — v1.109.3 ───
+//
+// Pete: "it's a great idea to archive and be able to see how long or who did what previously."
+// How long it ran, how often it was done, who did it, and the record itself.
+router.get("/:id/history", async (req, res) => {
+  try {
+    const db = await getDb();
+    const task = await db.prepare(`
+      SELECT t.*, ar.first_name AS archived_by_first_name
+        FROM care_tasks t LEFT JOIN users ar ON ar.id = t.archived_by
+       WHERE t.id = ?
+    `).get(req.params.id);
+    if (!task) return res.status(404).json({ error: "Task not found" });
+    const access = await hasAccess(db, task.care_recipient_id, req.user.id);
+    if (!access || !canSeeTasks(access)) return res.status(403).json({ error: "Access denied" });
+
+    const rows = await db.prepare(`
+      SELECT o.id, o.due_date, o.due_at, o.slot_index, o.status, o.completed_at, o.note,
+             o.completed_by_name, cu.first_name AS completed_by_first_name, cu.last_name AS completed_by_last_name
+        FROM care_task_occurrences o
+        LEFT JOIN users cu ON cu.id = o.completed_by_user_id
+       WHERE o.task_id = ?
+       ORDER BY o.due_at DESC
+       LIMIT 400
+    `).all(task.id);
+
+    const counts = { done: 0, skipped: 0, missed: 0, pending: 0 };
+    const byPerson = new Map();
+    for (const r of rows) {
+      if (counts[r.status] !== undefined) counts[r.status] += 1;
+      if (r.status !== "done") continue;
+      const who = r.completed_by_name
+        || (r.completed_by_first_name ? `${r.completed_by_first_name} ${(r.completed_by_last_name || "")[0] || ""}`.trim() : "someone on the team");
+      byPerson.set(who, (byPerson.get(who) || 0) + 1);
+    }
+    const dates = rows.map((r) => String(r.due_date).slice(0, 10)).sort();
+    const answered = counts.done + counts.skipped + counts.missed;
+
+    return res.json({
+      task: {
+        id: task.id, title: task.title, task_type: task.task_type, details: task.details,
+        recurrence: task.recurrence, due_time: task.due_time, due_times: task.due_times,
+        start_date: task.start_date, end_date: task.end_date, is_active: !!task.is_active,
+        archived_at: task.archived_at, archived_by_first_name: task.archived_by_first_name,
+      },
+      summary: {
+        firstDue: dates[0] || null,
+        lastDue: dates[dates.length - 1] || null,
+        days: dates.length ? Math.round((Date.parse(`${dates[dates.length - 1]}T00:00:00Z`) - Date.parse(`${dates[0]}T00:00:00Z`)) / 86400000) + 1 : 0,
+        ...counts,
+        answered,
+        doneRate: answered ? Math.round((counts.done / answered) * 100) : null,
+        people: [...byPerson.entries()].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count),
+      },
+      occurrences: rows.map((r) => ({
+        id: r.id, dueDate: r.due_date, dueAt: r.due_at, slot: r.slot_index, status: r.status,
+        completedAt: r.completed_at, note: r.note,
+        by: r.completed_by_name
+          || (r.completed_by_first_name ? `${r.completed_by_first_name} ${(r.completed_by_last_name || "")[0] || ""}`.trim() : null),
+      })),
+    });
   } catch (err) {
     captureException(err);
     console.error("Care task history error:", err.message);
-    return res.status(500).json({ error: "Failed to load history" });
+    return res.status(500).json({ error: "Failed to load that task's history" });
   }
 });
 
@@ -710,7 +785,7 @@ async function pollCareTasks(sendPushToUser) {
     FROM care_tasks t
     JOIN care_recipients cr ON t.care_recipient_id = cr.id
     LEFT JOIN users u ON cr.family_user_id = u.id
-    WHERE t.is_active = 1
+    WHERE t.is_active = 1 AND t.archived_at IS NULL
   `).all();
 
   const now = new Date();

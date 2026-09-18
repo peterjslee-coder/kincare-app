@@ -2621,6 +2621,22 @@ async function initializeDatabase() {
       ],
     },
     {
+      // v1.109.3 — archiving a task instead of deleting it. Pete (9/18): "i would like to get
+      // the ability to remove tasks like meds. i can pause them, delete them, but they stay
+      // there. can we archive? it's a great idea to archive and be able to see how long or who
+      // did what previously."
+      //
+      // Remove already meant is_active = 0 — the same state as Pause — so a finished course of
+      // antibiotics sat on the list forever, indistinguishable from one on hold. Archiving
+      // takes it off the list and keeps every occurrence, which is the history.
+      id: "046_care_task_archive",
+      statements: [
+        `ALTER TABLE care_tasks ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ`,
+        `ALTER TABLE care_tasks ADD COLUMN IF NOT EXISTS archived_by TEXT REFERENCES users(id)`,
+        `CREATE INDEX IF NOT EXISTS idx_care_tasks_archived ON care_tasks (care_recipient_id, archived_at)`,
+      ],
+    },
+    {
       // ─── v1.109.0 — the ledger ───
       //
       // Pete (9/18): "def need payment records with breakdown of all costs and adjustments."

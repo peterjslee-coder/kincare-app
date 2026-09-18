@@ -27,10 +27,13 @@ test("the new person is told, without the medication on the lock screen", () => 
   expect(block).toContain("if (u && u.id !== req.user.id)");
 });
 
+// v1.109.3 — Remove archives now. The confirm has to say where it went, because "remove"
+// that silently keeps the record is a promise either way and the user should know which.
 test("a task can be removed from the list, with a confirm that says history stays", () => {
   expect(ui).toContain("const removeTask = async (t) => {");
   expect(ui).toContain("method: 'DELETE'");
   expect(ui).toMatch(/window\.confirm\(`Remove "\$\{t\.title\}"\?/);
-  expect(ui).toContain("stays in the history");
+  expect(ui).toContain("It moves to Archived");
+  expect(ui).toContain("everything already recorded stays");
   expect(ui).toMatch(/onClick=\{\(\) => removeTask\(t\)\}/);
 });
