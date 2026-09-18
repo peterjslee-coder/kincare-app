@@ -188,3 +188,28 @@ describe("day two", () => {
     expect(lunch.changedFrom).toBeNull();
   });
 });
+
+describe("day three — patterns, not just yesterday (v1.109.2)", () => {
+  test("the same answer twice running is described as a run, and asked about", async () => {
+    // Day one and day two both had lunch flagged? No — day two was "all". So set up a run of
+    // long naps across the two days that already exist, then open a third visit.
+    for (const sid of (await db.prepare(
+      "SELECT DISTINCT session_id FROM visit_report_answers WHERE care_recipient_id = ? ORDER BY session_id"
+    ).all(recipientId)).map((r) => r.session_id)) {
+      await db.prepare("UPDATE visit_report_answers SET value = 'long' WHERE session_id = ? AND topic = 'nap'").run(sid);
+    }
+    const v3 = await visit("2030-01-17");
+    const form = await getForm(v3.sid);
+    const nap = form.groups.flatMap((g) => g.rows).find((r) => r.key === "nap|");
+    expect(nap.followUp).toMatch(/Rest has been “long nap \(1h\+\)” on the last 2 visits for Betty/);
+    expect(nap.followUp).toMatch(/Is that true today\?/);
+    expect(nap.trend).toEqual(expect.objectContaining({ run: 2, answer: "long" }));
+  });
+
+  test("a report older than the window is not a pattern", async () => {
+    await db.prepare("UPDATE visit_report_answers SET created_at = NOW() - interval '20 days' WHERE care_recipient_id = ?").run(recipientId);
+    const v4 = await visit("2030-01-18");
+    const form = await getForm(v4.sid);
+    expect(form.followUps).toEqual([]);
+  });
+});

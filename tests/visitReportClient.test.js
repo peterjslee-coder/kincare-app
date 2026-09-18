@@ -91,3 +91,56 @@ test("the AI is told to word, never to advise", () => {
   const routes = fs.readFileSync(path.join(__dirname, "..", "src", "routes", "sessions.js"), "utf8");
   expect(routes).toMatch(/visitSummaryText = JSON\.parse\(visitLog\.ai_summary\)\.summary/);
 });
+
+describe("v1.109.2 — trends", () => {
+  const { trendsFrom, TREND_DAYS, TREND_RUN, _internal } = require("../src/utils/visitReport");
+  const visit = (day, answers) => ({ at: new Date(`2026-09-${day}T12:00:00Z`), answers });
+
+  test("Pete's rule: fourteen days, two in a row or three of five", () => {
+    expect(TREND_DAYS).toBe(14);
+    expect(TREND_RUN).toBe(2);
+  });
+
+  test("two in a row is a pattern; one flagged visit is not", () => {
+    const t = trendsFrom([
+      visit(17, [{ topic: "nap", ref: "", value: "long" }, { topic: "meal", ref: "lunch", value: "little" }]),
+      visit(16, [{ topic: "nap", ref: "", value: "long" }, { topic: "meal", ref: "lunch", value: "all" }]),
+    ]);
+    const nap = t.find((x) => x.topic === "nap");
+    const lunch = t.find((x) => x.topic === "meal");
+    expect(nap).toEqual(expect.objectContaining({ run: 2, streak: true }));
+    expect(lunch).toEqual(expect.objectContaining({ run: 1, streak: false }));
+    expect(t[0].topic).toBe("nap"); // the pattern outranks the single flag
+  });
+
+  test("three of the last five counts even when they are not consecutive", () => {
+    const t = trendsFrom([
+      visit(18, [{ topic: "meal", ref: "lunch", value: "little" }]),
+      visit(17, [{ topic: "meal", ref: "lunch", value: "all" }]),
+      visit(16, [{ topic: "meal", ref: "lunch", value: "little" }]),
+      visit(15, [{ topic: "meal", ref: "lunch", value: "all" }]),
+      visit(14, [{ topic: "meal", ref: "lunch", value: "little" }]),
+    ]);
+    expect(t[0]).toEqual(expect.objectContaining({ run: 1, of: 3, ofTotal: 5, streak: true }));
+  });
+
+  test("answers that are not flagged are never a pattern, however often they repeat", () => {
+    const t = trendsFrom([
+      visit(18, [{ topic: "meal", ref: "lunch", value: "all" }]),
+      visit(17, [{ topic: "meal", ref: "lunch", value: "all" }]),
+      visit(16, [{ topic: "meal", ref: "lunch", value: "all" }]),
+    ]);
+    expect(t).toEqual([]);
+  });
+
+  test("the wording describes what she saw, and asks — it never explains", () => {
+    const v = { recipient_first_name: "Betty", tz: "America/New_York" };
+    const run = _internal.templateTrend(v, { topic: "nap", ref: "", answer: "long", run: 3, of: 3, ofTotal: 3, streak: true, at: new Date("2026-09-17T12:00:00Z") }, { short: "Rest" });
+    expect(run).toBe("Rest has been “long nap (1h+)” on the last 3 visits for Betty. Is that true today?");
+    const single = _internal.templateTrend(v, { topic: "meal", ref: "lunch", answer: "little", run: 1, of: 1, ofTotal: 2, streak: false, at: new Date("2026-09-17T12:00:00Z"), note: "said she wasn't hungry" }, { short: "Lunch" });
+    expect(single).toMatch(/^Last visit \(Thursday\): Lunch — “A little” \(said she wasn't hungry\)\. How about today\?$/);
+    for (const text of [run, single]) {
+      expect(text).not.toMatch(/should|try|recommend|may be|because|suggest/i);
+    }
+  });
+});

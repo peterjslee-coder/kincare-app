@@ -279,6 +279,92 @@ async function previousFlags(db, v, before = new Date()) {
   return { sessionId: last.session_id, at: new Date(last.at), answers, flagged };
 }
 
+/**
+ * ─── v1.109.2 — trends, not just yesterday ───
+ *
+ * Pete (9/18): "i want it looking back enough to build a review focused on past indicators for
+ * the next visit, and to add additional points for the checkout, like 'Betty has napped for
+ * more than an hour for the last two days and been reported as tired, is that true today?' It
+ * would show that the info caretakers are entering is worth paying attention to."
+ *
+ * His rule: fourteen days, and a pattern is the same answer on the last TWO reports, or three
+ * of the last five. Anything shorter is one bad day; anything longer is not news at check-out.
+ *
+ * Streaks are described, never interpreted: "napped over an hour on the last two visits" is
+ * something the caregiver saw. No cause, no advice (feedback_ai_medical_guidance_rule).
+ */
+const TREND_DAYS = 14;
+const TREND_RUN = 2;        // the same answer this many reports in a row
+const TREND_OF_RECENT = 5;  // ...or this many of the recent ones
+const TREND_WITHIN = 3;     // ...at least this many times
+
+/** The recipient's reports over the window, newest first, one entry per visit. */
+async function recentReports(db, v, before = new Date()) {
+  const since = new Date(before.getTime() - TREND_DAYS * 86400000).toISOString();
+  const rows = await db.prepare(`
+    SELECT a.session_id, a.topic, a.ref, a.value, a.note, a.created_at
+      FROM visit_report_answers a
+     WHERE a.care_recipient_id = ? AND a.session_id <> ?
+       AND a.created_at < ? AND a.created_at >= ?
+     ORDER BY a.created_at DESC
+  `).all(v.care_recipient_id, v.id, before.toISOString(), since);
+  const byVisit = new Map();
+  for (const r of rows) {
+    if (!byVisit.has(r.session_id)) byVisit.set(r.session_id, { sessionId: r.session_id, at: new Date(r.created_at), answers: [] });
+    byVisit.get(r.session_id).answers.push(r);
+  }
+  return [...byVisit.values()];
+}
+
+/**
+ * Patterns worth asking about today, strongest first.
+ * Each is { key, topic, ref, answer, run, of, streak, at, note }.
+ */
+function trendsFrom(visits) {
+  const seen = new Map(); // rowKey → [{value, note, at} newest first]
+  for (const visit of visits) {
+    for (const a of visit.answers) {
+      const k = rowKey(a.topic, a.ref);
+      if (!seen.has(k)) seen.set(k, []);
+      seen.get(k).push({ value: a.value, note: a.note, at: visit.at });
+    }
+  }
+  const out = [];
+  for (const [key, history] of seen) {
+    const [topic, ref] = [key.split("|")[0], key.split("|").slice(1).join("|")];
+    const newest = history[0];
+    const o = optionOf(topic, newest.value);
+    if (!o || !(o.concern || o.watch)) continue;
+    let run = 0;
+    while (run < history.length && history[run].value === newest.value) run += 1;
+    const recent = history.slice(0, TREND_OF_RECENT);
+    const of = recent.filter((h) => h.value === newest.value).length;
+    const isTrend = run >= TREND_RUN || of >= TREND_WITHIN;
+    out.push({
+      key, topic, ref, answer: newest.value, note: newest.note, at: newest.at,
+      run, of, ofTotal: recent.length, streak: isTrend,
+      concern: !!o.concern,
+    });
+  }
+  return out.sort((a, b) => (b.streak - a.streak) || (b.concern - a.concern)
+    || (FOLLOW_ORDER.indexOf(a.topic) - FOLLOW_ORDER.indexOf(b.topic)) || (b.run - a.run));
+}
+
+function templateTrend(v, t, row) {
+  const name = v.recipient_first_name || "they";
+  const o = optionOf(t.topic, t.answer);
+  const what = row ? row.short : CATALOG[t.topic].short(t.ref);
+  const answer = o ? o.label.toLowerCase() : t.answer;
+  if (t.streak && t.run >= TREND_RUN) {
+    return `${what} has been “${answer}” on the last ${t.run} visits for ${name}${t.note ? ` (last time: ${t.note})` : ""}. Is that true today?`;
+  }
+  if (t.streak) {
+    return `${what} has been “${answer}” on ${t.of} of the last ${t.ofTotal} visits for ${name}. Is that true today?`;
+  }
+  const day = new Intl.DateTimeFormat("en-US", { timeZone: v.tz, weekday: "long" }).format(t.at);
+  return `Last visit (${day}): ${what} — “${o ? o.label : t.answer}”${t.note ? ` (${t.note})` : ""}. How about today?`;
+}
+
 function templateFollowUp(v, prevAt, a, row) {
   const day = new Intl.DateTimeFormat("en-US", { timeZone: v.tz, weekday: "long" }).format(prevAt);
   const o = optionOf(a.topic, a.value);
@@ -325,25 +411,22 @@ async function buildReportForm(db, sessionId, { phrase = true } = {}) {
   const v = await loadVisit(db, sessionId);
   if (!v) return null;
   const rows = await buildRows(db, v);
-  const prev = await previousFlags(db, v);
-  let followUps = [];
-  if (prev) {
-    const byKey = new Map(rows.map((r) => [followKey(r.topic, r.ref), r]));
-    const picked = prev.flagged
-      .map((a) => ({ a, row: byKey.get(followKey(a.topic, a.ref)) }))
-      .filter((x) => x.row)
-      .sort((x, y) => {
-        const cx = optionOf(x.a.topic, x.a.value)?.concern ? 0 : 1;
-        const cy = optionOf(y.a.topic, y.a.value)?.concern ? 0 : 1;
-        return cx - cy || FOLLOW_ORDER.indexOf(x.a.topic) - FOLLOW_ORDER.indexOf(y.a.topic);
-      })
-      .slice(0, MAX_FOLLOW_UPS);
-    followUps = picked.map(({ a, row }) => ({ key: row.key, text: templateFollowUp(v, prev.at, a, row) }));
-    if (phrase) followUps = await phraseFollowUps(followUps, v.recipient_first_name || "them");
-    for (const f of followUps) {
-      const row = rows.find((r) => r.key === f.key);
-      if (row) row.followUp = f.text;
-    }
+  // v1.109.2 — fourteen days of her own reports, strongest pattern first: a run of the same
+  // answer, then anything flagged last visit. Only rows this visit actually asks about.
+  const history = await recentReports(db, v);
+  const byKey = new Map(rows.map((r) => [followKey(r.topic, r.ref), r]));
+  const picked = trendsFrom(history)
+    .map((t) => ({ t, row: byKey.get(followKey(t.topic, t.ref)) }))
+    .filter((x) => x.row)
+    .slice(0, MAX_FOLLOW_UPS);
+  let followUps = picked.map(({ t, row }) => ({
+    key: row.key, text: templateTrend(v, t, row),
+    trend: t.streak ? { run: t.run, of: t.of, ofTotal: t.ofTotal, answer: t.answer } : null,
+  }));
+  if (phrase && followUps.length) followUps = await phraseFollowUps(followUps, v.recipient_first_name || "them");
+  for (const f of followUps) {
+    const row = rows.find((r) => r.key === f.key);
+    if (row) { row.followUp = f.text; row.trend = f.trend; }
   }
   return {
     sessionId: v.id,
@@ -514,5 +597,6 @@ async function reportForDisplay(db, sessionId) {
 module.exports = {
   CATALOG, GROUPS, NA,
   buildReportForm, checkAnswers, saveAnswers, applySideEffects, reportForDisplay,
-  _internal: { loadVisit, buildRows, previousFlags, optionOf, rowKey },
+  recentReports, trendsFrom, TREND_DAYS, TREND_RUN,
+  _internal: { loadVisit, buildRows, previousFlags, optionOf, rowKey, templateTrend },
 };
