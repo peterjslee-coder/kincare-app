@@ -123,6 +123,11 @@ io.use((socket, next) => {
   if (!token) return next(new Error("Authentication required"));
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
+    // v1.109.1 — a socket authenticated with an impersonation token would ring someone's
+    // phone, show "she is typing" to the person she is talking to, mark her threads open and
+    // suppress her own pushes, all because an admin opened her screen. Viewing as her is
+    // read-only, and a live socket is not a read.
+    if (decoded.impersonatedBy) return next(new Error("Impersonated sessions do not connect"));
     socket.user = decoded;
     next();
   } catch (err) {
@@ -822,7 +827,7 @@ app.use("/api/safety", require("./routes/safety"));
 
 // ─── App version check (lightweight, no auth) ───
 const { cancelPassedPrivateOffers, releaseExpiredExclusiveOffers } = require("./utils/exclusiveOffers");
-const APP_VERSION = "1.109.0";
+const APP_VERSION = "1.109.1";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION, minAppVersion: MIN_APP_VERSION });

@@ -98,4 +98,32 @@ function linkTargetFromToken(token, verify) {
   return { ok: true, userId: decoded.id };
 }
 
-module.exports = { blockWhileImpersonating, isImpersonating, linkTargetFromToken };
+// ─── v1.109.1 — viewing as someone changes nothing ───
+//
+// Pete, 9/18: "View as user should be read only ... It is intended to allow me to help
+// troubleshoot what other roles are seeing when they log in, not to change anything."
+//
+// Per-route guards covered 17 of 314 write routes, so the answer had to move to the one place
+// every request passes through (middleware/auth.js). This is the rule that lives there.
+//
+// Two things stay allowed, and neither writes anything of hers: ending the session, and the
+// cookie-only refresh that hands the admin their own token back when they stop.
+const IMPERSONATION_ALLOWED = [
+  { method: "POST", path: "/api/auth/logout" },
+  { method: "POST", path: "/api/auth/refresh" },
+];
+
+/**
+ * May this request proceed under an impersonation token? Reads always; writes never, apart
+ * from the two above.
+ * @returns {null | string} null to proceed, or a short description for the refusal.
+ */
+function readOnlyRefusal(method, url) {
+  const m = String(method || "").toUpperCase();
+  if (m === "GET" || m === "HEAD" || m === "OPTIONS") return null;
+  const path = String(url || "").split("?")[0].replace(/\/+$/, "") || "/";
+  if (IMPERSONATION_ALLOWED.some((a) => a.method === m && a.path === path)) return null;
+  return "change anything";
+}
+
+module.exports = { blockWhileImpersonating, isImpersonating, linkTargetFromToken, readOnlyRefusal, IMPERSONATION_ALLOWED };

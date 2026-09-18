@@ -73,7 +73,11 @@ async function writeAuditLog(entry) {
       entry.method,
       entry.ipAddress,
       entry.userAgent || null,
-      entry.details ? JSON.stringify(entry.details) : null,
+      // v1.109.1 — an action taken while viewing as someone was recorded as HERS, with nothing
+      // pointing at the admin. Whatever is still allowed through is attributable now.
+      (entry.details || entry.impersonatedBy)
+        ? JSON.stringify({ ...(entry.details || {}), ...(entry.impersonatedBy ? { impersonatedBy: entry.impersonatedBy } : {}) })
+        : null,
       entry.severity || "info"
     );
   } catch (err) {
@@ -139,6 +143,7 @@ function auditLogMiddleware(req, res, next) {
       userId: req.user?.id || null,
       userEmail: req.user?.email || null,
       userRole: req.user?.role || req.user?.activeRole || null,
+      impersonatedBy: req.user?.impersonatedBy || null,
       action: match.action,
       endpoint: endpoint.split("?")[0], // strip query params
       method,

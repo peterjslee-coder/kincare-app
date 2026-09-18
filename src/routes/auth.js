@@ -739,8 +739,14 @@ router.get("/me", authenticate, async (req, res) => {
   } catch (e) { /* legal docs table may not exist yet */ }
 
   // Include token for in-memory use (WebSocket auth) — cookie handles persistence
-  const token = generateToken(user);
-  // Don't overwrite admin's auth cookie when impersonating another user
+  //
+  // ─── v1.109.1 — but never while impersonating ───
+  // This handed out a plain 7-day token for the impersonated user, carrying no impersonatedBy,
+  // to anyone holding an impersonation token — so every guard, and the read-only rule in
+  // middleware/auth.js, was one GET away from being irrelevant. The client stored it and
+  // authenticated the socket with it. Now there is no token in that response at all; the
+  // client keeps using the impersonation token it already holds.
+  const token = req.user.impersonatedBy ? null : generateToken(user);
   if (!req.user.impersonatedBy) {
     setAuthCookie(res, token);
     setCsrfCookie(res);
@@ -756,8 +762,9 @@ router.get("/me", authenticate, async (req, res) => {
   } else if (userAgent.includes('InPlace-iOS')) {
     platform = 'ios';
   }
-  // Upsert into user_client_info (non-blocking)
-  db.prepare(
+  // Upsert into user_client_info (non-blocking). v1.109.1 — not while impersonating: that row
+  // is a record of HER device, and an admin looking at her screen is not her device.
+  if (!req.user.impersonatedBy) db.prepare(
     `INSERT INTO user_client_info (user_id, app_version, user_agent, platform, last_seen_at, updated_at)
      VALUES (?, ?, ?, ?, NOW(), NOW())
      ON CONFLICT (user_id) DO UPDATE SET

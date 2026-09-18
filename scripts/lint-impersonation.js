@@ -99,8 +99,35 @@ for (const [rel, pattern, label] of NAMED) {
   }
 }
 
+// ── Rule 3: the door itself (v1.109.1) ──
+//
+// Per-route guards covered 17 of 314 write routes. The rule that matters now lives in
+// authenticate: under an impersonation token, anything that is not a read is refused. These
+// three assertions are the ones that, if they break, silently make "view as user" writable
+// again — which is exactly how this class of bug came back the last two times.
+{
+  const authRel = "src/middleware/auth.js";
+  const auth = fs.existsSync(R(authRel)) ? fs.readFileSync(R(authRel), "utf8") : "";
+  if (!/readOnlyRefusal\s*\(\s*req\.method/.test(auth) || !/IMPERSONATION_BLOCKED/.test(auth)) {
+    findings.push({ file: authRel, line: 0, why: "authenticate no longer refuses writes under an impersonation token (readOnlyRefusal + IMPERSONATION_BLOCKED)" });
+  }
+
+  const meRel = "src/routes/auth.js";
+  const me = fs.existsSync(R(meRel)) ? fs.readFileSync(R(meRel), "utf8") : "";
+  if (!/const token = req\.user\.impersonatedBy \? null : generateToken\(user\)/.test(me)) {
+    findings.push({ file: meRel, line: 0, why: "GET /api/auth/me mints a token again — an impersonation window converts into an ordinary 7-day token for that account, and every guard above becomes decorative" });
+  }
+
+  const srvRel = "src/server.js";
+  const srv = fs.existsSync(R(srvRel)) ? fs.readFileSync(R(srvRel), "utf8") : "";
+  const handshake = srv.slice(srv.indexOf("io.use((socket, next)"), srv.indexOf("// Track connected users"));
+  if (!/decoded\.impersonatedBy/.test(handshake)) {
+    findings.push({ file: srvRel, line: 0, why: "the socket handshake accepts an impersonation token — it would ring phones and show typing/read receipts as her" });
+  }
+}
+
 if (findings.length === 0) {
-  console.log("  [lint:impersonation] ✓ every identity-write route refuses an impersonation token");
+  console.log("  [lint:impersonation] ✓ viewing as someone is read-only: the door refuses writes, /me mints no token, the socket refuses the handshake");
   process.exit(0);
 }
 

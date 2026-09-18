@@ -626,8 +626,9 @@ router.get("/conversations/:id", async (req, res) => {
       ORDER BY m.created_at ASC
     `).all(userId, partnerId, partnerId, userId);
 
-    // Mark as read
-    await db.prepare(`
+    // Mark as read. v1.109.1 — not while an admin is viewing as her: reading her screen must
+    // not mark her messages read, or tell the other person she has seen them.
+    if (!req.user.impersonatedBy) await db.prepare(`
       UPDATE messages SET is_read = 1
       WHERE sender_id = ? AND recipient_id = ? AND is_read = 0 AND conversation_id IS NULL
     `).run(partnerId, userId);
@@ -752,8 +753,8 @@ router.get("/conversations/:id", async (req, res) => {
     }
   }
 
-  // Update last_read_at
-  await db.prepare(
+  // Update last_read_at (v1.109.1 — not while impersonating; see above)
+  if (!req.user.impersonatedBy) await db.prepare(
     "UPDATE conversation_members SET last_read_at = NOW() WHERE conversation_id = ? AND user_id = ?"
   ).run(convId, userId);
 
@@ -1195,7 +1196,7 @@ router.get("/:partnerId", async (req, res) => {
       ORDER BY m.created_at ASC
     `).all(userId, partnerId, partnerId, userId);
 
-    await db.prepare(`
+    if (!req.user.impersonatedBy) await db.prepare(`
       UPDATE messages SET is_read = 1
       WHERE sender_id = ? AND recipient_id = ? AND is_read = 0 AND conversation_id IS NULL
     `).run(partnerId, userId);

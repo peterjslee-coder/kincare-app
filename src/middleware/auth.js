@@ -152,6 +152,38 @@ async function authenticate(req, res, next) {
 
     req.user = decoded;
 
+    // ─── v1.109.1 — view as user is READ-ONLY, here, for everything ───
+    //
+    // Pete: "It is intended to allow me to help troubleshoot what other roles are seeing when
+    // they log in, not to change anything." Seventeen routes carried blockWhileImpersonating;
+    // there are 314 write routes. Booking, cancelling, paying, messaging as her, accepting a
+    // legal agreement in her name — all of it was reachable. The rule belongs at the door.
+    //
+    // The per-route guards stay: they are the specific refusal messages, and they are what
+    // tests pin.
+    if (decoded.impersonatedBy) {
+      const { readOnlyRefusal } = require("./noImpersonation");
+      const refusal = readOnlyRefusal(req.method, req.originalUrl || req.path);
+      if (refusal) {
+        try {
+          const { writeAuditLog, getClientIp } = require("./auditLog");
+          writeAuditLog({
+            userId: decoded.id, userEmail: decoded.email,
+            userRole: Array.isArray(decoded.roles) ? decoded.roles.join(",") : decoded.role,
+            action: "impersonation_blocked_write", endpoint: req.originalUrl || req.path,
+            method: req.method, ipAddress: getClientIp(req),
+            userAgent: req.headers["user-agent"] || null,
+            details: { impersonatedBy: decoded.impersonatedBy, blocked: "read-only view" },
+            severity: "warning",
+          }).catch(() => { /* a refusal must not depend on the log */ });
+        } catch { /* same */ }
+        return res.status(403).json({
+          error: `You're viewing this account as an admin, so you can't ${refusal} here. Do it from the admin panel under your own name.`,
+          code: "IMPERSONATION_BLOCKED",
+        });
+      }
+    }
+
     // v1.105.44 — correct the app-icon badge AFTER this request has done its work.
     // On `finish`, not here: reading a conversation sets last_read_at inside the HANDLER,
     // so running now would push the very number the icon is already showing. Debounced
@@ -159,7 +191,9 @@ async function authenticate(req, res, next) {
     // Not under test: the debounce's trailing timer outlives an integration run and fires
     // after the harness has torn down its database, which surfaces as an unrelated suite
     // failing. A badge is not what those tests are testing; badgeSync has its own.
-    if (process.env.NODE_ENV !== "test") {
+    // v1.109.1 — and not while viewing as her: this pushes a badge to HER phone, which is a
+    // real notification caused by an admin reading her screen.
+    if (process.env.NODE_ENV !== "test" && !decoded.impersonatedBy) {
       try {
         const { touchBadge } = require("../utils/badgeSync");
         res.on("finish", () => touchBadge(decoded.id));
