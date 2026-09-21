@@ -577,7 +577,12 @@ router.post("/profile", requireRole("caregiver"), async (req, res) => {
           /* v1.104.2 — completing the onboarding wizard (the only caller that
              sends termsVersion) flips the caregiver to available. Ordinary
              profile edits never touch the flag. */
-          is_available = CASE WHEN ? IS NOT NULL THEN 1 ELSE is_available END,
+          /* v1.109.5 — CAST is load-bearing. A bare "? IS NOT NULL" gives Postgres no
+             way to type the parameter, so every save that sends termsVersion as NULL
+             (i.e. every ordinary profile edit, and every wizard step after the first)
+             died with "could not determine data type of parameter". Found while testing
+             the ID-document change; older than it. */
+          is_available = CASE WHEN CAST(? AS TEXT) IS NOT NULL THEN 1 ELSE is_available END,
           updated_at = NOW()
         WHERE user_id = ?
       `).run(
