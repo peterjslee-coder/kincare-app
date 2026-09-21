@@ -7,9 +7,9 @@ build red.
 
 Hand-written sections (§3 "Where is…") are preserved across regeneration; edit those freely.
 
-Structure at last generation: 536 HTTP routes across 56 mounts ·
-96 `CREATE TABLE` statements · 14 background jobs · 38 socket events
-(16 with no client listener) · 65 push event types · 59 `window.__*` globals.
+Structure at last generation: 537 HTTP routes across 56 mounts ·
+97 `CREATE TABLE` statements · 14 background jobs · 38 socket events
+(16 with no client listener) · 65 push event types · 60 `window.__*` globals.
 
 ---
 
@@ -83,7 +83,7 @@ JSX is *not* compiled in the browser; Babel-standalone is not loaded. Editing an
 | `/api/photos` | `src/routes/photos.js` | 6 |  |
 | `/api/platform-invites` | `src/routes/platformInvites.js` | 6 |  |
 | `/api/pricing` | `src/routes/pricing.js` | 1 |  |
-| `/api/push` | `src/routes/push.js` | 10 |  |
+| `/api/push` | `src/routes/push.js` | 11 |  |
 | `/api/reactions` | `src/routes/reactions.js` | 2 |  |
 | `/api/referrals` | `src/routes/referrals.js` | 8 |  |
 | `/api/reimbursements` | `src/routes/reimbursements.js` | 27 |  |
@@ -266,7 +266,7 @@ State travels through `window`, not props. This table is the registry.
 | `window.__loadStripeJs` | — | 1 |
 | `window.__nativePush` | utils.js | 2 |
 | `window.__navHistory` | app.js | 3 |
-| `window.__navigateTo` | app.js, Caregivers.js | 53 |
+| `window.__navigateTo` | app.js, Caregivers.js | 55 |
 | `window.__openConversationId` | Messages.js, utils.js | 5 |
 | `window.__openRequestCareModal` | app.js | 19 |
 | `window.__openTaskCreate` | — | 1 |
@@ -275,6 +275,7 @@ State travels through `window`, not props. This table is the registry.
 | `window.__pendingConversation` | app.js | 5 |
 | `window.__pendingFocus` | app.js, AttentionCard.js, CareProfile.js | 28 |
 | `window.__pendingLogVisit` | TeamNotes.js | 2 |
+| `window.__pendingNoteDraft` | CareProfile.js, Messages.js | 3 |
 | `window.__pendingNoteRecipientId` | app.js, TeamNotes.js | 4 |
 | `window.__pendingPage` | app.js | 10 |
 | `window.__pendingScheduleDate` | ActivityFeed.js | 7 |

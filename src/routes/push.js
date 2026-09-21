@@ -516,6 +516,33 @@ router.get("/attention/items", authenticate, async (req, res) => {
   }
 });
 
+// ─── POST /api/push/attention/snooze — v1.109.4 ───
+//
+// The "Not now" on a soft nudge. Pete (7e3ff970) asked for a nudge with "no gate or anything",
+// and a nudge you cannot put away IS a gate. One row per user per thing, replaced each time,
+// so re-snoozing extends rather than stacking.
+router.post("/attention/snooze", authenticate, async (req, res) => {
+  try {
+    const SNOOZABLE = ["emptyWeek"];
+    const kind = String(req.body?.kind || "");
+    if (!SNOOZABLE.includes(kind)) return res.status(400).json({ error: "Not a snoozable nudge" });
+    const ref = String(req.body?.ref || "").slice(0, 64);
+    const days = Math.min(Math.max(parseInt(req.body?.days, 10) || 7, 1), 90);
+    const db = await getDb();
+    const { v4: uuid } = require("uuid");
+    await db.prepare(`
+      INSERT INTO nudge_snoozes (id, user_id, kind, ref, snoozed_until)
+      VALUES (?, ?, ?, ?, NOW() + (? || ' days')::interval)
+      ON CONFLICT (user_id, kind, ref)
+      DO UPDATE SET snoozed_until = EXCLUDED.snoozed_until
+    `).run(uuid(), req.user.id, kind, ref, String(days));
+    return res.json({ success: true, snoozedDays: days });
+  } catch (err) {
+    console.error("Attention snooze error:", err.message);
+    return res.status(500).json({ error: "Could not put that away" });
+  }
+});
+
 // Optional eventType param — if provided, checks user's notification_prefs before sending
 async function sendPushToUser(userId, payload, eventType) {
   // NEVER send push notifications to demo users — prevents demo data from

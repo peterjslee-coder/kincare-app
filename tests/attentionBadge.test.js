@@ -78,8 +78,11 @@ describe("the count means: you are the blocker", () => {
       // v1.105.177 — `safetyFlags` joined it for the same reason: a suspected-abuse report
       // nobody has reviewed is the definition at the top of that file. Zero here for the same
       // reason approvals is: this stub's user is not an admin.
+      // v1.109.4 — `emptyWeeks` joined it as the first SOFT count. It is reported and
+      // deliberately NOT added to `total`: an empty calendar is a nudge, and the definition
+      // at the top of that file is "you, specifically, are the blocker".
       total: 6, reimbursements: 2, timeChanges: 1, timeChangeSessionId: "s1", careTasks: 3,
-      approvals: 0, safetyFlags: 0, messages: 4,
+      approvals: 0, safetyFlags: 0, messages: 4, emptyWeeks: 0,
     });
   });
 
@@ -106,7 +109,7 @@ describe("the count means: you are the blocker", () => {
     }) };
     const r = await attentionCountFor(brokenDb, "pete");
     expect(r.total).toBe(0);
-    expect(r).toEqual({ total: 0, reimbursements: 0, timeChanges: 0, timeChangeSessionId: null, careTasks: 0, approvals: 0, safetyFlags: 0, messages: 0 });
+    expect(r).toEqual({ total: 0, reimbursements: 0, timeChanges: 0, timeChangeSessionId: null, careTasks: 0, approvals: 0, safetyFlags: 0, messages: 0, emptyWeeks: 0 });
   });
 });
 
@@ -369,7 +372,12 @@ describe("the number says what it is made of", () => {
 
   test("nothing waiting draws nothing at all", () => {
     // The dashboard is crowded — his word — and "you're all caught up" is decoration.
-    expect(card).toMatch(/if \(!visible\.length && !doneIds\.length\) return null;/);
+    // v1.109.4 — soft nudges joined the card, so "nothing" now means none of the three.
+    expect(card).toMatch(/if \(!visible\.length && !nudges\.length && !doneIds\.length\) return null;/);
+    // And the number stays a count of blockers: a nudge in the total is the 78-on-the-icon
+    // problem coming back through the card.
+    expect(card).toMatch(/const visible = items\.filter\(\(i\) => !i\.soft\)/);
+    expect(card).toMatch(/Needs you \(\{visible\.length\}\)/);
   });
 
   test("it refreshes on return, like the badge does", () => {

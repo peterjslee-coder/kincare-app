@@ -9,6 +9,10 @@ const IPAiInsightsCard = window.IPAiInsightsCard = ({ recipientId, recipientName
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [expanded, setExpanded] = useState(!!existingSummary);
+  // v1.109.4 — Pete (22398cc8): "care intelligence. the first one (and longest) needs to be
+  // collapsible." It is the tallest card on Betty's page and the one he scrolls past most, and
+  // it was the only card left on that page without the sticky collapse every other one has.
+  const [sectionOpen, setSectionOpen] = useStickySection('lovedOne.careIntelligence', true);
   const [showGuidance, setShowGuidance] = useState(false);
   const [editingFamilyNote, setEditingFamilyNote] = useState(false);
   const [familyNoteText, setFamilyNoteText] = useState('');
@@ -56,10 +60,23 @@ const IPAiInsightsCard = window.IPAiInsightsCard = ({ recipientId, recipientName
       border: intelligence ? '2px solid #1b6b5a' : '1px solid #e0e0e0',
       background: intelligence ? '#f8fffe' : 'var(--bg-card)',
     }}>
-      <div className="card-header" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
-        {badge}
-        <span>Care Intelligence</span>
+      {/* v1.105.172's rule: the chevron is the LAST thing in the header, hard right, and the
+          title toggles with it. */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div className="card-header" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
+          role="button" tabIndex={0} aria-expanded={sectionOpen}
+          onClick={() => setSectionOpen(!sectionOpen)}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSectionOpen(!sectionOpen); } }}>
+          {badge}
+          <span>Care Intelligence</span>
+        </div>
+        <span role="button" tabIndex={0} aria-hidden="true"
+          onClick={() => setSectionOpen(!sectionOpen)}
+          style={{ fontSize: 16, color: 'var(--text-muted)', cursor: 'pointer', transition: 'transform 0.2s', transform: sectionOpen ? 'rotate(180deg)' : 'rotate(0)' }}>{'\u25BC'}</span>
       </div>
+      {/* display, not unmount: collapsing must not throw away a generated report or a
+          half-typed family note, and reopening must not re-run the model. */}
+      <div style={{ display: sectionOpen ? 'block' : 'none' }}>
 
       {!intelligence && !loading && (
         <div style={{ padding: '12px 0' }}>
@@ -243,6 +260,7 @@ const IPAiInsightsCard = window.IPAiInsightsCard = ({ recipientId, recipientName
           </div>
         );
       })()}
+      </div>
     </div>
   );
 };

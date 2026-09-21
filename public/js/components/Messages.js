@@ -204,6 +204,18 @@ const Messages = window.Messages = () => {
   const [swipeOffset, setSwipeOffset] = useState(0);
   const [replyTo, setReplyTo] = useState(null);
   const [showEmojiFor, setShowEmojiFor] = useState(null);
+  // ─── v1.109.4 — take a piece of the conversation into the notes ───
+  //
+  // Pete (529c8a16): "Sara has left a long message to the group about behavior that needs to be
+  // in the notes not in messages. So I'm attempting to paste it to the notes. I cannot select
+  // text." The cause was ours: long-press has opened the reaction pill since v1.105.170, and
+  // long-press is the gesture iOS uses to start a selection, so reactions ate copy.
+  //
+  // He asked for more than copy back: "we need to be able to select multiple parts of the
+  // conversation to export to notes, and it needs to take you to the note before saving it (to
+  // allow editing for clarity)." So nothing is ever written behind him — this builds a DRAFT
+  // and hands it to the notes composer on Betty's page, where he edits and saves.
+  const [msgSelectIds, setMsgSelectIds] = useState(null); // null = not selecting
   const msgSwipeRef = useRef({ startX: 0, startY: 0, id: null, locked: false });
   const [msgSwipingId, setMsgSwipingId] = useState(null);
   const [msgSwipeOffset, setMsgSwipeOffset] = useState(0);
@@ -804,6 +816,50 @@ const Messages = window.Messages = () => {
       setShowEmojiFor(msg.id);
       msgSwipeRef.current.pressTimer = null;
     }, 420);
+  };
+
+  const toggleMsgSelect = (id) => setMsgSelectIds((prev) => {
+    const list = prev || [];
+    return list.includes(id) ? list.filter((x) => x !== id) : [...list, id];
+  });
+
+  // The transcript. Chronological whatever order he tapped them in, because a conversation
+  // read out of order is worse than no quote at all.
+  const buildNoteDraft = (ids) => {
+    const picked = (messages || []).filter((m) => ids.includes(m.id));
+    const lines = picked.map((m) => {
+      const t = parseTimestamp(m.created_at);
+      const when = t ? t.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
+      const who = m.senderLabel || m.senderName || 'Someone';
+      return `${who}${when ? ` (${when})` : ''}: ${String(m.content || '').trim()}`;
+    });
+    return `From Messages:\n\n${lines.join('\n\n')}`;
+  };
+
+  const copyMessage = async (m) => {
+    const text = String(m.content || '').trim();
+    if (!text) return;
+    try {
+      if (navigator.clipboard?.writeText) { await navigator.clipboard.writeText(text); showToast('Copied', 'success'); return; }
+    } catch { /* fall through to the old way */ }
+    // Clipboard API needs a secure context and a user gesture, and the WKWebView withholds it
+    // often enough that a silent failure here would just look like the original bug.
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+      showToast('Copied', 'success');
+    } catch { showToast("Couldn't copy that", 'error'); }
+  };
+
+  const saveSelectionToNotes = () => {
+    const ids = msgSelectIds || [];
+    if (!ids.length) return;
+    // A draft, not a note. CareProfile opens its composer with this in it and waits.
+    window.__pendingNoteDraft = { text: buildNoteDraft(ids), source: 'messages' };
+    setMsgSelectIds(null);
+    if (window.__navigateTo) window.__navigateTo('care-profile');
+    else showToast('Open your loved one\u2019s page to finish the note', 'info');
   };
 
   const onMsgTouchMove = (e, msg) => {
@@ -2700,9 +2756,20 @@ const Messages = window.Messages = () => {
                     ) : null;
                   })()}
                   <div style={{ position: 'relative' }}
-                    onTouchStart={(e) => onMsgTouchStart(e, m)}
-                    onTouchMove={(e) => onMsgTouchMove(e, m)}
-                    onTouchEnd={() => onMsgTouchEnd(m)}>
+                    onTouchStart={(e) => { if (msgSelectIds) return; onMsgTouchStart(e, m); }}
+                    onTouchMove={(e) => { if (msgSelectIds) return; onMsgTouchMove(e, m); }}
+                    onTouchEnd={() => { if (msgSelectIds) return; onMsgTouchEnd(m); }}
+                    onClick={msgSelectIds ? () => toggleMsgSelect(m.id) : undefined}>
+                    {/* While selecting, the whole row is a checkbox: a tap target the size of
+                        the message beats a 20px box you have to aim at on a phone. */}
+                    {msgSelectIds && (
+                      <div style={{
+                        position: 'absolute', inset: -2, borderRadius: 12, zIndex: 3,
+                        border: msgSelectIds.includes(m.id) ? '2px solid var(--role-color)' : '2px solid transparent',
+                        background: msgSelectIds.includes(m.id) ? 'var(--role-color-light)' : 'transparent',
+                        pointerEvents: 'none',
+                      }} />
+                    )}
                     {/* Reply arrow indicator on swipe */}
                     {isMsgSwiping && (
                       <div style={{ position: 'absolute', left: 4, top: '50%', transform: 'translateY(-50%)', opacity: msgSwipeOffset > 20 ? Math.min((msgSwipeOffset - 20) / 30, 1) : 0, fontSize: 18, color: 'var(--role-color)', transition: 'opacity 0.1s' }}>
@@ -2929,6 +2996,24 @@ const Messages = window.Messages = () => {
                                   {emoji}
                                 </button>
                               ))}
+                              {/* v1.109.4 — what long-press used to give you before reactions
+                                  took the gesture. Copy is one tap; Notes starts a selection
+                                  with this message already in it. */}
+                              {String(m.content || '').trim() && (
+                                <React.Fragment>
+                                  <span style={{ width: 1, alignSelf: 'stretch', margin: '4px 4px', background: 'var(--border-light)' }} />
+                                  <button onClick={() => { setShowEmojiFor(null); copyMessage(m); }}
+                                    aria-label="Copy text"
+                                    style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, lineHeight: 1, padding: '5px 7px', borderRadius: 999, color: 'var(--text-secondary)' }}>
+                                    Copy
+                                  </button>
+                                  <button onClick={() => { setShowEmojiFor(null); setMsgSelectIds([m.id]); }}
+                                    aria-label="Save to notes"
+                                    style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, lineHeight: 1, padding: '5px 7px', borderRadius: 999, color: 'var(--role-color)' }}>
+                                    Notes
+                                  </button>
+                                </React.Fragment>
+                              )}
                             </div>
                           </React.Fragment>
                         )}
@@ -3008,6 +3093,35 @@ const Messages = window.Messages = () => {
                 {savingInstruction ? 'Adding...' : 'Yes, add'}
               </button>
             </div>
+          </div>
+        )}
+
+        {/* ─── Selecting for the notes (v1.109.4) ─── */}
+        {/* Sits where the reply bar sits, for the same reason: it is the state the composer is
+            in, and it has to be as easy to leave as to enter. */}
+        {msgSelectIds && (
+          <div data-testid="msg-select-bar" style={{
+            display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px',
+            background: 'var(--role-color-light)', borderTop: '1px solid var(--border-color)',
+          }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--role-color)' }}>
+                {msgSelectIds.length} selected
+              </div>
+              <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)' }}>
+                Tap messages to add them. You{'\u2019'}ll get to edit the note before it saves.
+              </div>
+            </div>
+            <button onClick={() => setMsgSelectIds(null)} style={{
+              minHeight: 40, padding: '0 12px', background: 'none', border: 'none',
+              color: 'var(--text-tertiary)', font: 'inherit', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+            }}>Cancel</button>
+            <button onClick={saveSelectionToNotes} disabled={msgSelectIds.length === 0} style={{
+              minHeight: 40, padding: '0 16px', borderRadius: 10, border: 'none',
+              background: msgSelectIds.length ? 'var(--role-color)' : 'var(--border-light)',
+              color: msgSelectIds.length ? 'var(--text-on-primary)' : 'var(--text-secondary)',
+              fontSize: 13, fontWeight: 700, cursor: msgSelectIds.length ? 'pointer' : 'not-allowed',
+            }}>Save to notes</button>
           </div>
         )}
 

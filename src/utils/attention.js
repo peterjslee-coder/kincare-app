@@ -35,6 +35,16 @@
 // in the payload is `rows.length`. The two cannot drift because there is nothing to drift
 // from.
 
+const { getTodayStringInZone, DEFAULT_TIMEZONE } = require("./timezone");
+
+// A naive 'YYYY-MM-DD' plus n days, done in UTC on purpose: scheduled_date is a wall-clock
+// date with no zone, so arithmetic in the server's zone would shift it across a boundary.
+function addDays(dateStr, n) {
+  const [y, m, d] = String(dateStr).split("-").map(Number);
+  const t = new Date(Date.UTC(y, m - 1, d) + n * 86400000);
+  return t.toISOString().slice(0, 10);
+}
+
 async function safe(label, fn) {
   try {
     const n = await fn();
@@ -66,7 +76,7 @@ const name = (first, last) => [first, last].filter(Boolean).join(" ").trim() || 
 
 const EMPTY = {
   total: 0, reimbursements: 0, timeChanges: 0, timeChangeSessionId: null,
-  careTasks: 0, approvals: 0, safetyFlags: 0, messages: 0, items: [],
+  careTasks: 0, approvals: 0, safetyFlags: 0, messages: 0, emptyWeeks: 0, items: [],
 };
 
 /**
@@ -222,6 +232,52 @@ async function attentionItemsFor(db, userId) {
   // sweeps occurrences of ACTIVE tasks (routes/careTasks.js). Delete or pause a task and
   // its pending occurrences are orphaned: still 'pending', still counted here, and no
   // longer reachable anywhere in the UI. Unclearable by construction.
+  // ── Nothing on the calendar next week (v1.109.4) ──
+  //
+  // Pete (7e3ff970): "There needs to be a reminder to set up appointments if there's nothing a
+  // week out. No gate or anything just a nudge like a needs you card for Betty has no
+  // appointments next week, make one now?"
+  //
+  // This is the first SOFT item in this file, and it breaks the rule at the top of it on
+  // purpose — nobody is blocked by an empty calendar, and the badge's definition is "you,
+  // specifically, are the blocker". So it rides in `items` and is deliberately left OUT of
+  // `total`: Pete sees the card, the app icon stays a number about decisions.
+  //
+  // One query per recipient rather than one clever one, because "next week" is seven days in
+  // HER zone and scheduled_date is naive text. A single range would be right for whichever
+  // recipient happened to share the server's day.
+  const emptyWeekRows = await safeRows("emptyWeek", async () => {
+    const mine = await db.prepare(`
+      SELECT DISTINCT cr.id, cr.first_name, cr.timezone AS tz
+        FROM care_recipients cr
+        LEFT JOIN care_teams ct ON ct.care_recipient_id = cr.id
+        LEFT JOIN care_team_members ctm
+          ON ctm.care_team_id = ct.id AND ctm.user_id = ? AND ctm.role = 'leader'
+       WHERE cr.family_user_id = ? OR ctm.user_id IS NOT NULL
+    `).all(userId, userId);
+    const out = [];
+    for (const r of mine) {
+      const snoozed = await db.prepare(`
+        SELECT 1 AS x FROM nudge_snoozes
+         WHERE user_id = ? AND kind = 'emptyWeek' AND ref = ? AND snoozed_until > NOW()
+      `).get(userId, r.id);
+      if (snoozed) continue;
+      const from = getTodayStringInZone(r.tz || DEFAULT_TIMEZONE);
+      const until = addDays(from, 7);
+      // An unfilled request still counts as an appointment made: he asked for it, and nudging
+      // him to ask again is the app not reading its own calendar.
+      const booked = await db.prepare(`
+        SELECT 1 AS x FROM care_sessions
+         WHERE care_recipient_id = ?
+           AND status NOT IN ('cancelled', 'cancelled_no_fee', 'cancelled_with_fee', 'declined', 'rejected', 'expired')
+           AND scheduled_date >= ? AND scheduled_date <= ?
+         LIMIT 1
+      `).get(r.id, from, until);
+      if (!booked) out.push({ id: r.id, first_name: r.first_name, tz: r.tz, from, until });
+    }
+    return out;
+  });
+
   const taskRows = await safeRows("careTasks", () => db.prepare(`
     SELECT occ.id, occ.due_at, occ.due_date, t.title, t.task_type, t.tz,
            t.care_recipient_id, cr.first_name AS recipient_first
@@ -410,6 +466,31 @@ async function attentionItemsFor(db, userId) {
       page: "dashboard",
       focus: `careTask:${t.id}`,
     })),
+    ...emptyWeekRows.map((r) => ({
+      kind: "emptyWeek",
+      // `soft` is the whole contract: the card draws it quietly and leaves it out of its own
+      // count, and nothing here reaches `total`. A nudge that shouts is a gate.
+      soft: true,
+      id: `emptyWeek:${r.id}`,
+      title: `${r.first_name} has nothing booked next week`,
+      detail: null,
+      forWhom: r.first_name || null,
+      when: null,
+      verb: "Request care",
+      action: null,
+      // "Request Care" in the nav lands on `schedule` (app.js, _request_care) — the same
+      // place this button has to go, or it is the dead-end pattern from v1.105.139 again.
+      // No focus: an id nobody claims is a promise the page does not keep.
+      page: "schedule",
+      focus: null,
+      note: "Nothing is wrong \u2014 just easier to fill now than on the day.",
+      dismiss: {
+        method: "POST",
+        path: "/api/push/attention/snooze",
+        body: { kind: "emptyWeek", ref: r.id, days: 7 },
+        label: "Not now",
+      },
+    })),
   ];
 
   const timeChanges = offerRows.length + changeRows.length;
@@ -424,8 +505,11 @@ async function attentionItemsFor(db, userId) {
     // The count is still returned — it is honest, and the caller may want it — but the card
     // and the app icon both read `total`, so they stay in agreement, which is the one thing
     // AttentionCard cannot afford to lose.
+    // v1.109.4 — emptyWeekRows is NOT in here. See the note against the query: an empty
+    // calendar is a nudge, not a blocker, and the app icon means blocker.
     total: reimbursementRows.length + timeChanges + taskRows.length + approvalRows.length
       + safetyRows.length,
+    emptyWeeks: emptyWeekRows.length,
     reimbursements: reimbursementRows.length,
     approvals: approvalRows.length,
     safetyFlags: safetyRows.length,

@@ -74,6 +74,9 @@ const ATTENTION_KINDS = {
   timeChange:    { icon: '🕑', chip: 'SCHEDULE' },
   careTask:      { icon: '✅', chip: 'CARE TASK' },
   approval:      { icon: '🔑', chip: 'ACCESS' },
+  // v1.109.4 — the first SOFT kind. Nobody is blocked by an empty calendar, so it says
+  // "a nudge" rather than "needs you" and it is not in the number above it.
+  emptyWeek:     { icon: '📅', chip: 'A NUDGE' },
 };
 
 // "14:30" → "2:30 PM". The server sends wall-clock times in the care recipient's zone; they
@@ -285,18 +288,24 @@ const AttentionCard = window.AttentionCard = ({ onNavigate }) => {
   // Nothing is hidden optimistically any more: a row leaves this list when the SERVER stops
   // returning it. The done rows below are things that really are done, lingering only long
   // enough to offer the undo the server actually supports.
-  const visible = items;
-  if (!visible.length && !doneIds.length) return null;
+  // v1.109.4 — two lists, one card. `total` on the server leaves soft items out of the app
+  // icon; this leaves them out of the number the person reads, for the same reason. A count
+  // that includes something nobody is waiting on is the 78-on-the-icon problem again.
+  const visible = items.filter((i) => !i.soft);
+  const nudges = items.filter((i) => i.soft);
+  if (!visible.length && !nudges.length && !doneIds.length) return null;
 
   return (
     <div style={{ marginBottom: 16 }}>
-      <div style={{
-        fontSize: 12, fontWeight: 700, color: 'var(--accent-color)',
-        textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10,
-        display: 'flex', alignItems: 'center', gap: 6,
-      }}>
-        <span aria-hidden="true">{'❗'}</span> Needs you ({visible.length})
-      </div>
+      {(visible.length > 0 || doneIds.length > 0) && (
+        <div style={{
+          fontSize: 12, fontWeight: 700, color: 'var(--accent-color)',
+          textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10,
+          display: 'flex', alignItems: 'center', gap: 6,
+        }}>
+          <span aria-hidden="true">{'❗'}</span> Needs you ({visible.length})
+        </div>
+      )}
 
       {doneIds.map((id) => {
         const { verbPast } = done[id];
@@ -404,9 +413,55 @@ const AttentionCard = window.AttentionCard = ({ onNavigate }) => {
         );
       })}
 
-      <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>
-        This is the number on the app icon. It clears as you deal with each one.
-      </div>
+      {visible.length > 0 && (
+        <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>
+          This is the number on the app icon. It clears as you deal with each one.
+        </div>
+      )}
+
+      {/* ─── Soft nudges (v1.109.4) ─── */}
+      {/* Deliberately quiet: no orange, no shadow, no count. Pete asked for "no gate or
+          anything just a nudge", and the visual weight is most of what makes something a
+          gate. Everything here can be put away with one tap. */}
+      {nudges.map((item) => {
+        const kind = ATTENTION_KINDS[item.kind] || { icon: '💡', chip: 'A NUDGE' };
+        return (
+          <div key={item.id} className="card" data-nudge={item.kind} style={{
+            marginTop: 10, padding: '14px 16px',
+            border: '1px solid var(--border-color)', borderRadius: 12,
+            background: 'var(--bg-card)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, flexWrap: 'wrap' }}>
+              <span style={{
+                background: 'var(--bg-surface)', color: 'var(--text-tertiary)',
+                border: '1px solid var(--border-color)',
+                padding: '2px 9px', borderRadius: 12, fontSize: 10.5, fontWeight: 700,
+              }}>{kind.icon} {kind.chip}</span>
+            </div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>{item.title}</div>
+            {item.note && (
+              <div style={{ fontSize: 12.5, color: 'var(--text-tertiary)', marginTop: 4 }}>{item.note}</div>
+            )}
+            {failed[item.id] && (
+              <div style={{ marginTop: 8, fontSize: 12.5, fontWeight: 600, color: 'var(--color-error)' }}>{failed[item.id]}</div>
+            )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+              <button onClick={() => open(item)} style={{
+                minHeight: 44, padding: '10px 18px', background: 'var(--bg-surface)',
+                color: 'var(--role-color)', border: '1.5px solid var(--role-color)',
+                borderRadius: 12, fontSize: 13.5, fontWeight: 700, cursor: 'pointer',
+              }}>{item.verb || 'Open'}{' '}{'\u203A'}</button>
+              {item.dismiss && (
+                <button onClick={() => dismiss(item)} disabled={!!busy[item.id]} style={{
+                  minHeight: 44, padding: '10px 14px', background: 'none',
+                  color: 'var(--text-tertiary)', border: 'none',
+                  font: 'inherit', fontSize: 13, fontWeight: 600, cursor: 'pointer', textDecoration: 'underline',
+                }}>{item.dismiss.label || 'Not now'}</button>
+              )}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 };

@@ -2637,6 +2637,26 @@ async function initializeDatabase() {
       ],
     },
     {
+      // ─── v1.109.4 — snoozing a nudge ───
+      //
+      // Pete (7e3ff970): "a nudge like a needs you card for Betty has no appointments next
+      // week... No gate or anything." A nudge that cannot be put away is a gate, so this is
+      // the table that remembers "not now". One row per user per thing, replaced on re-snooze.
+      id: "047_nudge_snoozes",
+      statements: [
+        `CREATE TABLE IF NOT EXISTS nudge_snoozes (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL REFERENCES users(id),
+          kind TEXT NOT NULL,
+          ref TEXT NOT NULL DEFAULT '',
+          snoozed_until TIMESTAMPTZ NOT NULL,
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          UNIQUE (user_id, kind, ref)
+        )`,
+        `CREATE INDEX IF NOT EXISTS idx_nudge_snoozes_user ON nudge_snoozes (user_id, snoozed_until)`,
+      ],
+    },
+    {
       // ─── v1.109.0 — the ledger ───
       //
       // Pete (9/18): "def need payment records with breakdown of all costs and adjustments."

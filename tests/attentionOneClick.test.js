@@ -451,7 +451,12 @@ describe("one tap is one request, and the row leaves when the server says so", (
   });
 
   test("the row stays put, busy, until the server answers", () => {
-    expect(cardSrc).toMatch(/const visible = items;/);
+    // v1.109.4 — `visible` now splits the server's soft nudges out of the blocker list. What
+    // this test is about is unchanged: the filter reads a flag the SERVER set, and nothing
+    // local hides a row. A row leaves when the server stops returning it, not when tapped.
+    expect(cardSrc).toMatch(/const visible = items\.filter\(\(i\) => !i\.soft\);/);
+    expect(cardSrc).not.toMatch(/items\.filter\([^)]*done\[/);
+    expect(cardSrc).not.toMatch(/items\.filter\([^)]*hidden/);
     expect(cardSrc).toMatch(/setBusy\(\(prev\) => \(\{ \.\.\.prev, \[item\.id\]: true \}\)\)/);
     expect(cardSrc).toMatch(/busy\[item\.id\] \? 'Working/);
   });

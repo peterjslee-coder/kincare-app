@@ -14,6 +14,9 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
   const [familyVisits, setFamilyVisits] = useState([]); // v1.105.38
   const [newNote, setNewNote] = useState('');
   const [addingNote, setAddingNote] = useState(false);
+  // v1.109.4 — a draft handed over from Messages (529c8a16). It is a DRAFT: nothing is saved
+  // until he presses Save, which is the whole point of routing it through here.
+  const [noteFromMessages, setNoteFromMessages] = useState(false);
   // v1.105.171 — these three remember. Pete: "if I leave the care notes open because I
   // return to that a lot, I want it to remain up." The second argument is each section's
   // previous default, so anyone who has never touched it sees exactly what they saw before.
@@ -544,6 +547,45 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
     input.click();
   };
 
+  const handlePhotoRemove = async () => {
+    if (!profile?.id || !window.confirm(`Remove ${profile.first_name}'s photo?`)) return;
+    try {
+      const res = await apiFetch(`/api/care-recipients/${profile.id}/photo`, { method: 'DELETE' });
+      if (res?.ok) { showToast('Photo removed', 'success'); setProfile((p) => ({ ...p, photo: null })); }
+      else showToast('Could not remove the photo', 'error');
+    } catch { showToast('Could not reach InPlace', 'error'); }
+  };
+
+  // ─── v1.109.4 — where you edit Betty's picture ───
+  //
+  // Pete (3cb40ebf): "I don't see where I can edit Betty's profile picture." And (c28b2e65):
+  // "I figured out where the picture lives... maybe we put the same link in her profile data
+  // cause that's the first place I want to look for it."
+  //
+  // It was always tappable. The affordance was a 9px camera emoji on a dark strip across the
+  // bottom of the circle, which on a phone reads as part of the picture. And the screen you go
+  // to when you want to change her details — Edit — replaced the hero card with a form that has
+  // no photo on it at all, so the one place you'd look was the one place it wasn't.
+  const renderPhotoPicker = (size) => (
+    <div onClick={handlePhotoUpload} role="button" tabIndex={0}
+      aria-label={profile.photo ? "Change photo" : "Add a photo"}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handlePhotoUpload(); } }}
+      style={{ cursor: 'pointer', position: 'relative', width: size, height: size, flexShrink: 0 }}>
+      <div style={{ width: '100%', height: '100%', borderRadius: '50%', overflow: 'hidden', background: 'var(--color-success-bg)' }}>
+        {profile.photo
+          ? <img src={profile.photo} alt={profile.first_name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          : <span style={{ fontSize: Math.round(size * 0.39), fontWeight: 700, color: 'var(--role-color)', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}>{profile.first_name?.[0]}{profile.last_name?.[0]}</span>}
+      </div>
+      {/* 28px, on the rim, in the accent colour: a control, not a caption. */}
+      <div style={{
+        position: 'absolute', right: -2, bottom: -2, width: 28, height: 28, borderRadius: '50%',
+        background: 'var(--role-color)', color: 'var(--text-on-primary)', fontSize: 13,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        border: '2px solid var(--bg-card)', boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+      }}>{photoUploading ? '\u22EF' : '\uD83D\uDCF7'}</div>
+    </div>
+  );
+
   // v1.105.38 — family visits are a SEPARATE record, merged at read time. Never duplicated
   // into recipient_notes: one event, two rows, and they drift the moment anyone edits.
   const fetchFamilyVisits = async (recipientId) => {
@@ -615,7 +657,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
         body: JSON.stringify(notePayload),
       });
       if (res?.ok) {
-        setNewNote(''); setNoteUrgent(false); setNotePhoto(null);
+        setNewNote(''); setNoteUrgent(false); setNotePhoto(null); setNoteFromMessages(false);
         showToast('Observation added', 'success');
         fetchNotes(profile.id); fetchFamilyVisits(profile.id);
       } else if (res?.status === 503 || !navigator.onLine) {
@@ -680,6 +722,24 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
       setLoading(false);
     };
     fetchProfile();
+  }, []);
+
+  // ─── v1.109.4 — the other half of "Save to notes" in Messages ───
+  //
+  // Pete: "it needs to take you to the note before saving it (to allow editing for clarity)."
+  // So the handoff carries text, not a saved note: the composer opens with the transcript in
+  // it, the section is expanded, and the page scrolls to it. Claimed once — a remount must not
+  // refill a composer he has since cleared.
+  useEffect(() => {
+    const draft = window.__pendingNoteDraft;
+    if (!draft || !draft.text) return;
+    window.__pendingNoteDraft = null;
+    setNewNote(draft.text);
+    setNoteFromMessages(draft.source === 'messages');
+    setNotesOpen(true);
+    setTimeout(() => {
+      try { notesCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch { /* an un-scrolled page is still a filled composer */ }
+    }, 120);
   }, []);
 
   const parseJsonField = (val) => {
@@ -956,19 +1016,17 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
       {!editing ? (
         <div className="card" style={{ padding: '16px 20px' }}>
           <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
-            <div onClick={handlePhotoUpload} style={{ cursor: 'pointer', position: 'relative', width: 72, height: 72, borderRadius: '50%', overflow: 'hidden', flexShrink: 0, background: 'var(--color-success-bg)' }} title="Click to change photo">
-              {profile.photo
-                ? <img src={profile.photo} alt={profile.first_name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                : <span style={{ fontSize: 28, fontWeight: 700, color: 'var(--role-color)', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}>{profile.first_name?.[0]}{profile.last_name?.[0]}</span>}
-              <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(0,0,0,0.45)', color: 'var(--text-on-primary)', fontSize: 9, textAlign: 'center', padding: '2px 0', fontWeight: 600 }}>
-                {photoUploading ? '...' : '\uD83D\uDCF7'}
-              </div>
-            </div>
+            {renderPhotoPicker(72)}
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.2 }}>
                 {profile.first_name} {profile.last_name}
                 <span style={{ fontSize: 14, fontWeight: 400, color: 'var(--text-tertiary)', marginLeft: 8 }}>{profile.age} years old</span>
               </div>
+              {!profile.photo && (
+                <button onClick={handlePhotoUpload} style={{ padding: 0, border: 'none', background: 'none', color: 'var(--role-color)', fontSize: 12, fontWeight: 600, cursor: 'pointer', marginTop: 2 }}>
+                  Add a photo of {profile.first_name}
+                </button>
+              )}
               <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
                 <span style={{ flexShrink: 0 }}>{'\uD83D\uDCCD'}</span>
                 <span>{fullAddress}</span>
@@ -991,6 +1049,23 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
       ) : (
         <div className="card">
           <div className="card-header" style={{ marginBottom: 12 }}><span className="card-icon">{'\uD83D\uDC64'}</span>Profile Details</div>
+          {/* The photo belongs on the screen where you change her details, not only on the one
+              you were looking at before you pressed Edit. */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
+            {renderPhotoPicker(64)}
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+              <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{profile.photo ? 'Photo' : 'No photo yet'}</div>
+              <button onClick={handlePhotoUpload} style={{ padding: 0, border: 'none', background: 'none', color: 'var(--role-color)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                {profile.photo ? 'Change photo' : 'Add a photo'}
+              </button>
+              {profile.photo && (
+                <>
+                  <span style={{ color: 'var(--text-muted)' }}> {'\u00B7'} </span>
+                  <button onClick={handlePhotoRemove} style={{ padding: 0, border: 'none', background: 'none', color: 'var(--text-tertiary)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Remove</button>
+                </>
+              )}
+            </div>
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div>
               <div style={fieldLabel}>First Name</div>
@@ -1356,6 +1431,20 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
         </div>
         {notesOpen && (
           <div style={{ marginTop: 14 }}>
+            {noteFromMessages && (
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, padding: '8px 10px',
+                borderRadius: 8, background: 'var(--role-color-light)', border: '1px solid var(--border-color)',
+              }}>
+                <span style={{ flex: 1, fontSize: 12, color: 'var(--text-secondary)' }}>
+                  Brought over from Messages {'\u2014'} edit it, then Save. Nothing has been saved yet.
+                </span>
+                <button onClick={() => { setNewNote(''); setNoteFromMessages(false); }} style={{
+                  border: 'none', background: 'none', color: 'var(--text-tertiary)', fontSize: 12,
+                  fontWeight: 600, cursor: 'pointer', padding: 0,
+                }}>Discard</button>
+              </div>
+            )}
             <div style={{ marginBottom: notes.length > 0 ? 12 : 0 }}>
               <textarea value={newNote} onChange={(e) => setNewNote(e.target.value)}
                 onClick={(e) => e.stopPropagation()}
