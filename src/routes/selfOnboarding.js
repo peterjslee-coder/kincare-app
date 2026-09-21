@@ -207,7 +207,7 @@ router.post("/verify-id", authenticate, async (req, res) => {
       ownerType,
       req.user.id,
       'identity',
-      classifyResult.classification || 'drivers_license',
+      classifyResult.classification || 'ID_Front',
       await storage.storeFileData("identity", idPhotoBase64), // v1.91.0
       mimetype,
       decision.status,                                         // always 'pending'

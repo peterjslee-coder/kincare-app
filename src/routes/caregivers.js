@@ -501,6 +501,9 @@ router.post("/profile", requireRole("caregiver"), async (req, res) => {
       // Checkr / onboarding fields
       legalFirstName, legalMiddleName, legalLastName, dateOfBirth, ssnLast4,
       addressLine1, addressLine2, zip, dlNumber, dlState,
+      // v1.109.5 — which photo ID she presented: drivers_license | state_id | passport |
+      // ead | permanent_resident_card. dlNumber/dlState only mean anything for the first.
+      idDocType,
       backgroundCheckConsent,
       // v1.5.0 — work location, stoplight, terms
       workLocationAddress, travelRadius, careStoplight,
@@ -558,6 +561,7 @@ router.post("/profile", requireRole("caregiver"), async (req, res) => {
           address_line1 = COALESCE(?, address_line1),
           address_line2 = COALESCE(?, address_line2),
           zip = COALESCE(?, zip),
+          id_doc_type = COALESCE(?, id_doc_type),
           dl_number = COALESCE(?, dl_number),
           dl_state = COALESCE(?, dl_state),
           background_check_consent = COALESCE(?, background_check_consent),
@@ -585,7 +589,7 @@ router.post("/profile", requireRole("caregiver"), async (req, res) => {
         legalFirstName || null, legalMiddleName !== undefined ? (legalMiddleName || null) : null, legalLastName || null,
         dateOfBirth || null, ssnLast4 || null,
         addressLine1 || null, addressLine2 || null, zip || null,
-        dlNumber || null, dlState || null,
+        idDocType || null, dlNumber || null, dlState || null,
         backgroundCheckConsent ? 1 : null, backgroundCheckConsent ? 1 : 0,
         workLocationAddress || null,
         careStoplight ? JSON.stringify(careStoplight) : null,
@@ -624,11 +628,11 @@ router.post("/profile", requireRole("caregiver"), async (req, res) => {
        specialties, certifications, max_travel_miles, location_city, location_state,
        latitude, longitude, legal_first_name, legal_middle_name, legal_last_name,
        date_of_birth, ssn_last4, address_line1, address_line2, zip,
-       dl_number, dl_state, background_check_consent, background_check_consent_at,
+       id_doc_type, dl_number, dl_state, background_check_consent, background_check_consent_at,
        work_location_address, care_stoplight, terms_accepted_at, terms_version,
        academic_program, academic_program_year, needs_hour_reports, open_to_interview,
        is_available /* v1.104.2 — wizard completion = available; column default is now 0 */)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${backgroundCheckConsent ? "NOW()" : "NULL"},
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${backgroundCheckConsent ? "NOW()" : "NULL"},
        ?, ?, ?, ?, ?, ?, ?, ?, 1)
     `).run(
       id, req.user.id, bio || null, yearsExperience || 0, hourlyRate,
@@ -640,7 +644,7 @@ router.post("/profile", requireRole("caregiver"), async (req, res) => {
       legalFirstName || null, legalMiddleName || null, legalLastName || null,
       dateOfBirth || null, ssnLast4 || null,
       addressLine1 || null, addressLine2 || null, zip || null,
-      dlNumber || null, dlState || null,
+      idDocType || null, dlNumber || null, dlState || null,
       backgroundCheckConsent ? 1 : 0,
       workLocationAddress || null,
       careStoplight ? JSON.stringify(careStoplight) : null,

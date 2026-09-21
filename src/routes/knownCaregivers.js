@@ -52,7 +52,7 @@ function inviteEmail({ inviterName, recipient, relationship, firstName, token, r
         `${rf}'s caregiver on InPlace.<br><br>` +
         `Set up your account so ${invFirst} can book you and pay you through the app. ` +
         `It takes about ten minutes: a few quick details about you, where your pay should land, ` +
-        `and a photo of your driver's licence.`,
+        `and a photo of your ID.`,
       ctaUrl: inviteUrl(token),
       ctaText: "Finish setting up",
       footnote:

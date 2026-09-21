@@ -226,7 +226,7 @@ describe("copy", () => {
 
   test("it says what she does, not what we record", () => {
     const labels = ONBOARDING_ROUTE.map((i) => i.label).join(" | ");
-    expect(labels).toMatch(/A photo of your licence/);
+    expect(labels).toMatch(/A photo of your ID/);
     expect(labels).not.toMatch(/[Vv]erify your identity/);
     expect(labels).not.toMatch(/Stripe/);
   });

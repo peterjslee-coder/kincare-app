@@ -136,14 +136,14 @@ describe("adding a caregiver you already know", () => {
     expect(inv.progress.account).toBe(true);
     expect(inv.progress.details).toBe(true);
     expect(inv.progress.pay).toBe(false);
-    expect(inv.progress.licence).toBe(false);
+    expect(inv.progress.idPhoto).toBe(false);
     expect(inv.progress.done).toBe(2);
     expect(inv.progress.ready).toBe(false);
   });
 
   test("when the fourth thing lands, the leader is told she is ready to book — once", async () => {
     const { notifyIfReadyToBook } = require("../../src/utils/knownCaregivers");
-    // Not yet: no Stripe, no licence photo.
+    // Not yet: no Stripe, no ID photo.
     expect(await notifyIfReadyToBook(h.db, carol.user.id)).toEqual([]);
     await h.db.prepare("UPDATE caregiver_profiles SET stripe_onboard_complete = 1 WHERE user_id = ?").run(carol.user.id);
     expect(await notifyIfReadyToBook(h.db, carol.user.id)).toEqual([]);

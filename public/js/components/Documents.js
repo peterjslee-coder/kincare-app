@@ -49,7 +49,7 @@ const Documents = window.Documents = ({ onNavigate }) => {
   // Document category types mapping
   const docTypesByCategory = {
     consent: ['POA', 'Healthcare_POA', 'Court_Order', 'Living_Will', 'Other_Legal'],
-    identity: ['DL_Front', 'DL_Back', 'Passport', 'State_ID'],
+    identity: ['ID_Front', 'ID_Back', 'Passport', 'State_ID', 'EAD', 'Permanent_Resident_Card', 'DL_Front', 'DL_Back'],
     certification: ['CNA', 'HHA', 'LPN', 'RN', 'CPR', 'BLS', 'ACLS', 'First_Aid', 'Other_Cert'],
     insurance: ['Liability_Insurance', 'Auto_Insurance', 'Health_Insurance'],
     legal: ['POA', 'Healthcare_POA', 'Court_Order', 'Living_Will', 'Other_Legal'],

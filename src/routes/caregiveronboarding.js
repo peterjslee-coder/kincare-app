@@ -33,7 +33,8 @@ const upload = multer({
 router.use(authenticate, uploadQuota());
 
 // ─── POST /api/caregiver-onboarding/documents ───
-// Upload identity/certification documents (DL front, DL back, cert images)
+// Upload identity/certification documents (photo ID front/back — licence, state ID,
+// passport, EAD or permanent resident card — plus cert images)
 router.post("/documents", upload.array("documents", 10), async (req, res) => {
   try {
     const db = await getDb();
@@ -77,8 +78,8 @@ router.post("/documents", upload.array("documents", 10), async (req, res) => {
             ?, ?, ?, ?, ?, ?, 'pending', NOW(), NOW())
         `).run(
           docId, req.user.id, req.user.id,
-          ["dl_front", "dl_back", "drivers_license"].includes(docType) ? "identity" : "certification",
-          ({ dl_front: "DL_Front", dl_back: "DL_Back", drivers_license: "DL_Front", certification: "Other_Cert" })[docType] || "Other",
+          ["dl_front", "dl_back", "drivers_license", "id_front", "id_back"].includes(docType) ? "identity" : "certification",
+          ({ id_front: "ID_Front", id_back: "ID_Back", dl_front: "DL_Front", dl_back: "DL_Back", drivers_license: "DL_Front", certification: "Other_Cert" })[docType] || "Other",
           storedFileData, file.originalname, file.size, file.mimetype
         );
       } catch (dualWriteErr) {
@@ -292,7 +293,7 @@ router.post("/verify-id", async (req, res) => {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       docId, profile.id, 'caregiver', req.user.id, 'identity',
-      classifyResult.classification || 'drivers_license',
+      classifyResult.classification || 'ID_Front',
       await storage.storeFileData("identity", idPhotoBase64), mimetype, // v1.91.0
 
       decision.status,                  // always 'pending' — only an admin writes 'approved'
@@ -330,7 +331,7 @@ router.post("/verify-id", async (req, res) => {
     );
 
 
-    // v1.105.188 — the licence photo may be the last of a family-brought caregiver's four.
+    // v1.105.188 — the ID photo may be the last of a family-brought caregiver's four.
     try { require("../utils/knownCaregivers").notifyIfReadyToBook(db, req.user.id).catch(() => {}); } catch (e) { /* non-blocking */ }
 
     // v1.105.68 — tell someone. Submitting a selfie + government ID used to notify NOBODY:

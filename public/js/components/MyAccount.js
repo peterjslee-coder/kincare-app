@@ -1415,7 +1415,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                       {/* Step 2: ID photo */}
                       <div style={{ marginTop: 16 }}>
                         <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6, color: 'var(--text-primary)' }}>Step 2: Upload a photo ID</div>
-                        <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>Driver's license, passport, or state ID. Make sure text is readable.</div>
+                        <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>Driver's license, state ID, passport, EAD (work permit) or permanent resident card. Make sure text is readable.</div>
                         {idVerIdPhoto ? (
                           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                             <img src={idVerIdPhoto} alt="ID" style={{ width: 80, height: 50, borderRadius: 6, objectFit: 'cover', border: '2px solid var(--color-success)' }} />
@@ -2359,7 +2359,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
           })()}
 
           {['drivers_license', 'certifications', 'background_check'].map(docType => {
-            const docLabel = { drivers_license: "Driver's License", certifications: 'Certifications', background_check: 'Background Check' }[docType] || docType;
+            const docLabel = { drivers_license: 'Photo ID', certifications: 'Certifications', background_check: 'Background Check' }[docType] || docType;
             const docIcon = { drivers_license: '🪪', certifications: '📜', background_check: '🔒' }[docType] || '📄';
             const uploaded = documents.filter(d => (d.document_type || d.type) === docType);
             const isUploaded = uploaded.length > 0;

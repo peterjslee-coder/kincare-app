@@ -84,6 +84,27 @@ const OnboardingPath = window.OnboardingPath = ({ step, idSubmitted, slot, famil
 // ─── Caregiver Onboarding Flow ───
 // Multi-step wizard shown when a user visits ?invite=TOKEN
 // Creates user account + caregiver profile + uploads documents in one flow.
+// ─── Which photo ID she may present (v1.109.5) ───
+//
+// The wizard used to require a driver's licence, front and back, with no alternative — so a
+// lawful permanent resident or a work-permit holder who does not drive could not finish
+// signing up. That was never a policy: the Terms ask only that she be 18 and live in the US,
+// and the Caregiver Agreement says in as many words that access is never denied on national
+// origin. It was a form field doing the work of an eligibility rule, and failing in the one
+// direction the agreement forbids.
+//
+// `back: null` means the document has no second side worth photographing — a passport's data
+// is all on the photo page, and asking for the back of one is how you teach someone that the
+// form was not written with them in mind.
+const ID_DOC_TYPES = window.ID_DOC_TYPES = [
+  { value: 'drivers_license', label: "Driver's license", front: "Driver's license \u2014 front", back: "Driver's license \u2014 back" },
+  { value: 'state_id', label: 'State ID card', front: 'State ID \u2014 front', back: 'State ID \u2014 back' },
+  { value: 'passport', label: 'Passport (US or foreign)', front: 'Passport \u2014 photo page', back: null },
+  { value: 'ead', label: 'Employment Authorization Document (EAD / work permit)', front: 'EAD card \u2014 front', back: 'EAD card \u2014 back' },
+  { value: 'permanent_resident_card', label: 'Permanent resident card (green card)', front: 'Permanent resident card \u2014 front', back: 'Permanent resident card \u2014 back' },
+];
+const idDocSpec = window.idDocSpec = (value) => ID_DOC_TYPES.find(t => t.value === value) || null;
+
 const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupToken, signupEmail, resumeMode, resumeUser, onComplete }) => {
   // resumeMode: true when user already has account but no caregiver profile
   // resumeUser: { firstName, lastName, email } from existing account
@@ -252,7 +273,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
     comfortableWithPets: null, petAllergies: '', foodAllergies: '', medicalConditions: '', openToInterview: null,
     // Step 4 — Legal / Checkr
     legalFirstName: '', legalMiddleName: '', noMiddleName: false, legalLastName: '', dateOfBirth: '', ssnLast4: '',
-    dlNumber: '', dlState: '', backgroundCheckConsent: false,
+    idDocType: '', dlNumber: '', dlState: '', backgroundCheckConsent: false,
     // Step 5 — Certifications
     certifications: [{ certType: '', certNumber: '', issuer: '', expiryDate: '' }],
     // Step 6 — Academic Program
@@ -477,8 +498,13 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
       if (!form.legalLastName.trim()) errs.legalLastName = 'Required';
       if (!form.dateOfBirth) errs.dateOfBirth = 'Required';
       if (!form.ssnLast4 || form.ssnLast4.length !== 4) errs.ssnLast4 = 'Enter last 4 digits';
-      if (!form.dlNumber.trim()) errs.dlNumber = 'Required';
-      if (!form.dlState) errs.dlState = 'Required';
+      if (!form.idDocType) errs.idDocType = 'Choose the ID you\u2019ll be sending us';
+      // The licence number is a fact about a licence. Asked of everyone, it is a driving test
+      // nobody sits — and it blocked people who had every right to be here.
+      if (form.idDocType === 'drivers_license') {
+        if (!form.dlNumber.trim()) errs.dlNumber = 'Required';
+        if (!form.dlState) errs.dlState = 'Required';
+      }
       if (!form.backgroundCheckConsent) errs.backgroundCheckConsent = 'You must consent to proceed';
     }
     if (stepNum === 6) {
@@ -491,10 +517,10 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
       }
     }
     if (stepNum === 7) { // Document upload validation (was step 8)
-      const hasDLFront = form.documents.some(d => d.type === 'dl_front');
-      const hasDLBack = form.documents.some(d => d.type === 'dl_back');
-      if (!hasDLFront) errs.dl_front = "Driver's license front is required";
-      if (!hasDLBack) errs.dl_back = "Driver's license back is required";
+      // Named after the document she told us she has. A passport has no back.
+      const spec = idDocSpec(form.idDocType) || idDocSpec('drivers_license');
+      if (!form.documents.some(d => d.type === 'id_front')) errs.id_front = `${spec.front} is required`;
+      if (spec.back && !form.documents.some(d => d.type === 'id_back')) errs.id_back = `${spec.back} is required`;
     }
     setErrors(errs);
     if (Object.keys(errs).length > 0) {
@@ -631,7 +657,11 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
           rateOvernight: parseFloat(form.rateOvernight) || null,
           legalFirstName: form.legalFirstName, legalMiddleName: form.noMiddleName ? '' : form.legalMiddleName, legalLastName: form.legalLastName,
           dateOfBirth: form.dateOfBirth, ssnLast4: form.ssnLast4,
-          dlNumber: form.dlNumber, dlState: form.dlState,
+          idDocType: form.idDocType,
+          // Only a licence carries these. Sending stale values for a passport holder would put
+          // a number in Checkr's MVR field that belongs to nobody.
+          dlNumber: form.idDocType === 'drivers_license' ? form.dlNumber : null,
+          dlState: form.idDocType === 'drivers_license' ? form.dlState : null,
           backgroundCheckConsent: form.backgroundCheckConsent,
         }),
       });
@@ -1017,7 +1047,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
     5: 'Certifications',
     6: 'Your training programme',
     7: 'Documents',
-    8: 'A photo of your licence',
+    8: 'A photo of your ID',
     9: 'One last look',
   };
 
@@ -1231,10 +1261,10 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
                 and the box is still required. ⚠️ Counsel-adjacent: flag any further rewording. */}
             {familyOnly ? disclosureCheck('acceptBackgroundCheck',
               'Background Check \u2014 for other families',
-              'You were added by a family you already know, and that family can book you without a background check. Before you take work from any other family on InPlace, a background check through Checkr is required. You are responsible for the one-time cost ($30). This includes criminal history, driving record, and identity verification.'
+              'You were added by a family you already know, and that family can book you without a background check. Before you take work from any other family on InPlace, a background check through Checkr is required. You are responsible for the one-time cost ($30). This includes criminal history and identity verification, plus your driving record if you gave us a driver\u2019s license.'
             ) : disclosureCheck('acceptBackgroundCheck',
               'Background Check Required',
-              'InPlace requires a background check through Checkr for all caregivers. You are responsible for the one-time cost ($30). This includes criminal history, driving record, and identity verification.'
+              'InPlace requires a background check through Checkr for all caregivers. You are responsible for the one-time cost ($30). This includes criminal history and identity verification, plus your driving record if you gave us a driver\u2019s license.'
             )}
 
             {disclosureCheck('acceptStripePayments',
@@ -1494,32 +1524,51 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
                 {errors.ssnLast4 && <div style={errorStyle}>{errors.ssnLast4}</div>}
               </div>
             </div>
-            <div style={rowStyle}>
-              <div style={fieldGroup}>
-                <label style={labelStyle}>Driver's License # *</label>
-                <input style={errors.dlNumber ? inputErrorStyle : inputStyle} value={form.dlNumber}
-                  onChange={(e) => updateForm('dlNumber', e.target.value)} placeholder="License number" />
-                {errors.dlNumber && <div style={errorStyle}>{errors.dlNumber}</div>}
-              </div>
-              <div style={fieldGroup}>
-                <label style={labelStyle}>Issuing State *</label>
-                <select style={errors.dlState ? inputErrorStyle : inputStyle} value={form.dlState}
-                  onChange={(e) => updateForm('dlState', e.target.value)}>
-                  <option value="">Select state</option>
-                  <option value="VA" style={{ fontWeight: 600 }}>VA — Virginia</option>
-                  <option disabled>──────────</option>
-                  {US_STATES.filter(s => s !== 'VA').map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
-                {errors.dlState && <div style={errorStyle}>{errors.dlState}</div>}
-              </div>
+            <div style={fieldGroup}>
+              <label style={labelStyle}>Photo ID you'll be sending us *</label>
+              <select style={errors.idDocType ? inputErrorStyle : inputStyle} value={form.idDocType}
+                onChange={(e) => {
+                  updateForm('idDocType', e.target.value);
+                  // Switching away from a licence clears its number — leaving it behind would
+                  // send Checkr a field the new document cannot back up.
+                  if (e.target.value !== 'drivers_license') { updateForm('dlNumber', ''); updateForm('dlState', ''); }
+                }}>
+                <option value="">Select the ID you have</option>
+                {ID_DOC_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
+              <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '6px 0 0' }}>
+                Any of these works. You don{'\u2019'}t need a driver's license to care for someone through InPlace.
+              </p>
+              {errors.idDocType && <div style={errorStyle}>{errors.idDocType}</div>}
             </div>
+            {form.idDocType === 'drivers_license' && (
+              <div style={rowStyle}>
+                <div style={fieldGroup}>
+                  <label style={labelStyle}>Driver's License # *</label>
+                  <input style={errors.dlNumber ? inputErrorStyle : inputStyle} value={form.dlNumber}
+                    onChange={(e) => updateForm('dlNumber', e.target.value)} placeholder="License number" />
+                  {errors.dlNumber && <div style={errorStyle}>{errors.dlNumber}</div>}
+                </div>
+                <div style={fieldGroup}>
+                  <label style={labelStyle}>Issuing State *</label>
+                  <select style={errors.dlState ? inputErrorStyle : inputStyle} value={form.dlState}
+                    onChange={(e) => updateForm('dlState', e.target.value)}>
+                    <option value="">Select state</option>
+                    <option value="VA" style={{ fontWeight: 600 }}>VA — Virginia</option>
+                    <option disabled>──────────</option>
+                    {US_STATES.filter(s => s !== 'VA').map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                  {errors.dlState && <div style={errorStyle}>{errors.dlState}</div>}
+                </div>
+              </div>
+            )}
             <div style={{ padding: '16px', background: 'var(--bg-primary)', borderRadius: '8px', marginBottom: '16px' }}>
               <label style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', cursor: 'pointer' }}>
                 <input type="checkbox" checked={form.backgroundCheckConsent}
                   onChange={(e) => updateForm('backgroundCheckConsent', e.target.checked)}
                   style={{ marginTop: '3px', width: '18px', height: '18px' }} />
                 <span style={{ fontSize: '13px', color: 'var(--text-primary)', lineHeight: '1.5' }}>
-                  I authorize InPlace to conduct a background check, including criminal history, driving record,
+                  I authorize InPlace to conduct a background check, including criminal history{form.idDocType === 'drivers_license' ? ', driving record,' : ''}
                   and identity verification through Checkr. I understand this is required
                   to provide care through InPlace and the $30 fee will be refunded after 10 completed sessions.
                 </span>
@@ -1731,7 +1780,8 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
           <div className="card" style={{ padding: '24px' }}>
             <h2 style={{ fontSize: '18px', color: 'var(--text-primary)', marginTop: 0, marginBottom: '4px' }}>📄 Upload Documents</h2>
             <p style={{ color: 'var(--text-tertiary)', fontSize: '13px', marginTop: 0, marginBottom: '12px' }}>
-              Upload photos of your driver's license (front and back). You can also upload certification documents.
+              Upload photos of the ID you chose — driver's license, state ID, passport, EAD or permanent resident card.
+              You can also upload certification documents.
             </p>
             <div style={{ padding: '10px 14px', background: 'var(--bg-highlight)', borderRadius: '8px', marginBottom: '20px', border: '1px solid #d0e8e2' }}>
               <p style={{ fontSize: '12px', color: 'var(--role-color)', margin: 0, lineHeight: '1.5' }}>
@@ -1739,78 +1789,51 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
               </p>
             </div>
             {errorSummary()}
-            {/* DL Front */}
-            <div style={fieldGroup}>
-              <label style={labelStyle}>Driver's License — Front *</label>
-              {form.documents.find(d => d.type === 'dl_front') ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px', background: 'var(--bg-primary)', borderRadius: '8px' }}>
-                  {form.documents.find(d => d.type === 'dl_front').isPDF
-                    ? <div style={{ width: '80px', height: '50px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--border-light)', borderRadius: '6px', fontSize: '22px' }}>&#128196;</div>
-                    : <img src={form.documents.find(d => d.type === 'dl_front').preview}
-                        style={{ width: '80px', height: '50px', objectFit: 'cover', borderRadius: '6px' }} />}
-                  <span style={{ fontSize: '13px', color: 'var(--text-secondary)', flex: 1 }}>{form.documents.find(d => d.type === 'dl_front').fileName}</span>
-                  <button onClick={() => removeDocument('dl_front')} style={{
-                    background: 'var(--bg-error-light)', border: '1px solid #fdd', borderRadius: '6px',
-                    padding: '4px 10px', fontSize: '12px', cursor: 'pointer', color: 'var(--color-red-strong)',
-                  }}>Remove</button>
-                </div>
-              ) : (
-                <div>
-                  <input type="file" accept="image/*" capture="environment" id="dl_front_camera" style={{ display: 'none' }}
-                    onChange={(e) => handleFileSelect('dl_front', e)} />
-                  <input type="file" accept="image/*,application/pdf" id="dl_front_gallery" style={{ display: 'none' }}
-                    onChange={(e) => handleFileSelect('dl_front', e)} />
-                  <div style={{ display: 'flex', gap: '10px' }}>
-                    <button type="button" onClick={() => document.getElementById('dl_front_camera').click()} style={{
-                      flex: 1, padding: '14px 12px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
-                      borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
-                    }}>&#128247; Take Photo</button>
-                    <button type="button" onClick={() => document.getElementById('dl_front_gallery').click()} style={{
-                      flex: 1, padding: '14px 12px', background: 'var(--bg-surface)', color: 'var(--role-color)', border: '2px solid #1b6b5a',
-                      borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
-                    }}>&#128196; Choose File</button>
+            {/* ─── Photo ID, named after the document she actually has (v1.109.5) ─── */}
+            {(() => {
+              const spec = idDocSpec(form.idDocType) || idDocSpec('drivers_license');
+              // A passport has one side worth photographing. Everything else has two.
+              const slots = [{ key: 'id_front', label: spec.front }];
+              if (spec.back) slots.push({ key: 'id_back', label: spec.back });
+              return slots.map(({ key, label }) => {
+                const doc = form.documents.find(d => d.type === key);
+                return (
+                  <div key={key} style={fieldGroup}>
+                    <label style={labelStyle}>{label} *</label>
+                    {doc ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px', background: 'var(--bg-primary)', borderRadius: '8px' }}>
+                        {doc.isPDF
+                          ? <div style={{ width: '80px', height: '50px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--border-light)', borderRadius: '6px', fontSize: '22px' }}>&#128196;</div>
+                          : <img src={doc.preview} style={{ width: '80px', height: '50px', objectFit: 'cover', borderRadius: '6px' }} />}
+                        <span style={{ fontSize: '13px', color: 'var(--text-secondary)', flex: 1 }}>{doc.fileName}</span>
+                        <button onClick={() => removeDocument(key)} style={{
+                          background: 'var(--bg-error-light)', border: '1px solid #fdd', borderRadius: '6px',
+                          padding: '4px 10px', fontSize: '12px', cursor: 'pointer', color: 'var(--color-red-strong)',
+                        }}>Remove</button>
+                      </div>
+                    ) : (
+                      <div>
+                        <input type="file" accept="image/*" capture="environment" id={`${key}_camera`} style={{ display: 'none' }}
+                          onChange={(e) => handleFileSelect(key, e)} />
+                        <input type="file" accept="image/*,application/pdf" id={`${key}_gallery`} style={{ display: 'none' }}
+                          onChange={(e) => handleFileSelect(key, e)} />
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                          <button type="button" onClick={() => document.getElementById(`${key}_camera`).click()} style={{
+                            flex: 1, padding: '14px 12px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
+                            borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
+                          }}>&#128247; Take Photo</button>
+                          <button type="button" onClick={() => document.getElementById(`${key}_gallery`).click()} style={{
+                            flex: 1, padding: '14px 12px', background: 'var(--bg-surface)', color: 'var(--role-color)', border: '2px solid #1b6b5a',
+                            borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
+                          }}>&#128196; Choose File</button>
+                        </div>
+                        {errors[key] && <div style={errorStyle}>{errors[key]}</div>}
+                      </div>
+                    )}
                   </div>
-                  {errors.dl_front && <div style={errorStyle}>{errors.dl_front}</div>}
-                </div>
-              )}
-            </div>
-
-            {/* DL Back */}
-            <div style={fieldGroup}>
-              <label style={labelStyle}>Driver's License — Back *</label>
-              {form.documents.find(d => d.type === 'dl_back') ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px', background: 'var(--bg-primary)', borderRadius: '8px' }}>
-                  {form.documents.find(d => d.type === 'dl_back').isPDF
-                    ? <div style={{ width: '80px', height: '50px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--border-light)', borderRadius: '6px', fontSize: '22px' }}>&#128196;</div>
-                    : <img src={form.documents.find(d => d.type === 'dl_back').preview}
-                        style={{ width: '80px', height: '50px', objectFit: 'cover', borderRadius: '6px' }} />}
-                  <span style={{ fontSize: '13px', color: 'var(--text-secondary)', flex: 1 }}>{form.documents.find(d => d.type === 'dl_back').fileName}</span>
-                  <button onClick={() => removeDocument('dl_back')} style={{
-                    background: 'var(--bg-error-light)', border: '1px solid #fdd', borderRadius: '6px',
-                    padding: '4px 10px', fontSize: '12px', cursor: 'pointer', color: 'var(--color-red-strong)',
-                  }}>Remove</button>
-                </div>
-              ) : (
-                <div>
-                  <input type="file" accept="image/*" capture="environment" id="dl_back_camera" style={{ display: 'none' }}
-                    onChange={(e) => handleFileSelect('dl_back', e)} />
-                  <input type="file" accept="image/*,application/pdf" id="dl_back_gallery" style={{ display: 'none' }}
-                    onChange={(e) => handleFileSelect('dl_back', e)} />
-                  <div style={{ display: 'flex', gap: '10px' }}>
-                    <button type="button" onClick={() => document.getElementById('dl_back_camera').click()} style={{
-                      flex: 1, padding: '14px 12px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
-                      borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
-                    }}>&#128247; Take Photo</button>
-                    <button type="button" onClick={() => document.getElementById('dl_back_gallery').click()} style={{
-                      flex: 1, padding: '14px 12px', background: 'var(--bg-surface)', color: 'var(--role-color)', border: '2px solid #1b6b5a',
-                      borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
-                    }}>&#128196; Choose File</button>
-                  </div>
-                  {errors.dl_back && <div style={errorStyle}>{errors.dl_back}</div>}
-                </div>
-              )}
-            </div>
-
+                );
+              });
+            })()}
             {/* Certification Documents */}
             <div style={fieldGroup}>
               <label style={labelStyle}>Certification Documents (Optional)</label>
@@ -1867,7 +1890,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
         {/* ─── Step 8: Identity Verification (Selfie + ID) ─── */}
         {step === 8 && (
           <div className="card" style={{ padding: '24px' }}>
-            <h2 style={{ fontSize: '18px', color: 'var(--text-primary)', marginTop: 0, marginBottom: '4px' }}>&#128247; A photo of your licence</h2>
+            <h2 style={{ fontSize: '18px', color: 'var(--text-primary)', marginTop: 0, marginBottom: '4px' }}>&#128247; A photo of your ID</h2>
             <p style={{ color: 'var(--text-tertiary)', fontSize: '13px', marginTop: 0, marginBottom: '12px' }}>
               A selfie and a photo of your government-issued ID. We{'\u2019'}ll review it and reach out if we have any questions.
             </p>
@@ -1925,7 +1948,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
             {!cameraStream && (
               <div style={{ marginBottom: 20 }}>
                 <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>Government ID Photo *</label>
-                <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 8px' }}>Driver's license, state ID, or passport — make sure the photo and text are clearly readable.</p>
+                <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 8px' }}>Driver's license, state ID, passport, EAD (work permit) or permanent resident card — make sure the photo and text are clearly readable.</p>
                 {idPhoto ? (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 10, background: 'var(--bg-primary)', borderRadius: 8 }}>
                     <img src={idPhoto} style={{ width: 100, height: 65, objectFit: 'cover', borderRadius: 6 }} />

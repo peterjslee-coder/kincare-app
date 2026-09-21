@@ -76,7 +76,7 @@ describe("the sentence that answers 'when does this ever end?'", () => {
 
 describe("the copy is softer and true", () => {
   test("no shouting", () => {
-    expect(hub).toMatch(/label: 'A photo of your licence'/);
+    expect(hub).toMatch(/label: 'A photo of your ID'/);
     expect(hub).not.toMatch(/label: 'Verify your identity'/);
   });
 

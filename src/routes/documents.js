@@ -30,8 +30,11 @@ const VALID_CATEGORIES = ["consent", "identity", "certification", "insurance", "
 const VALID_DOCUMENT_TYPES = [
   // Consent / Legal
   "POA", "Healthcare_POA", "Court_Order", "Living_Will", "Other_Legal",
-  // Identity
-  "DL_Front", "DL_Back", "Passport", "State_ID",
+  // Identity — any acceptable government photo ID, not only a driver's licence.
+  // ID_Front/ID_Back are the generic pair written by onboarding from v1.109.5;
+  // DL_Front/DL_Back stay valid for every row uploaded before that.
+  "ID_Front", "ID_Back",
+  "DL_Front", "DL_Back", "Passport", "State_ID", "EAD", "Permanent_Resident_Card",
   // Certification
   "CNA", "HHA", "LPN", "RN", "CPR", "BLS", "ACLS", "First_Aid", "Other_Cert",
   // Insurance

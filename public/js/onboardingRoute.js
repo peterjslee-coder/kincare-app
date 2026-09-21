@@ -78,7 +78,7 @@ const ONBOARDING_ROUTE = window.ONBOARDING_ROUTE = [
   { id: 'training', leg: 'bring', wizardStep: 6, label: 'Your training programme' },
   { id: 'documents', leg: 'bring', wizardStep: 7, label: 'Documents' },
   // Submitted at wizard step 8; resolves on the dashboard, possibly days later.
-  { id: 'identity', leg: 'bring', wizardStep: 8, label: 'A photo of your licence', canWait: true },
+  { id: 'identity', leg: 'bring', wizardStep: 8, label: 'A photo of your ID', canWait: true },
 
   { id: 'stripe', leg: 'work', wizardStep: null, label: 'Where your pay lands' },
   // Wizard step 4 collects the legal name / SSN-4 / DOB this needs. That screen belongs to

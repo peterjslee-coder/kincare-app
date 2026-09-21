@@ -1074,7 +1074,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       <h2 style={{ margin: '0 0 12px', color: 'var(--text-primary)', fontSize: '22px' }}>Welcome to InPlace!</h2>
       <p style={{ color: 'var(--text-secondary)', fontSize: '15px', lineHeight: '1.6', margin: '0 0 24px' }}>
         {noProfile
-          ? "Grab your driver's license and any copies of certifications or insurance info you may have — we'll walk you through everything step by step."
+          ? "Grab a photo ID — driver's license, state ID, passport, EAD or green card — and any copies of certifications or insurance info you may have. We'll walk you through everything step by step."
           : "We couldn't load your dashboard. Please try refreshing the page."}
       </p>
       {noProfile && onNeedsOnboarding && (
@@ -1548,7 +1548,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       // reviews it." The first shouted; the second was wrong in the common case, because the
       // AI approved most of these outright and nobody was asked (that is fixed in the same
       // release — a person really does review it now).
-      label: 'A photo of your licence',
+      label: 'A photo of your ID',
       desc: 'A selfie and a photo of your government-issued ID. Families are inviting you into their home — this is the step that lets them know who you are. We\u2019ll review it and reach out if we have any questions.',
       // v1.105.112 — THREE states, not two.
       //

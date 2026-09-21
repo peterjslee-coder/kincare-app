@@ -86,7 +86,7 @@ router.get("/users/:id/onboarding", async (req, res) => {
     const profile = await db.prepare(`
       SELECT id, is_background_checked, background_check_consent, background_check_paid,
              onboarding_complete, is_available, stripe_onboard_complete,
-             dl_number, dl_state,
+             id_doc_type, dl_number, dl_state,
              academic_program, academic_program_year, needs_hour_reports
       FROM caregiver_profiles WHERE user_id = ?
     `).get(req.params.id);
@@ -166,6 +166,9 @@ router.get("/users/:id/onboarding", async (req, res) => {
         isAvailable: !!profile.is_available,
         hasPhoto,
         hasDriversLicense: !!(profile.dl_number && profile.dl_state),
+        // v1.109.5 — which document she said she has. A passport or EAD holder legitimately
+        // has no licence number, so the absence of one is not a gap in her file.
+        idDocType: profile.id_doc_type || null,
         identityVerified,
         identityStatus,
         needsHourReports: !!profile.needs_hour_reports,

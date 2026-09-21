@@ -152,7 +152,7 @@ describe("the caregiver can finally see the gate they are stuck behind", () => {
     // licence". Pete: "way better than 'VERIFY YOUR IDENTITY!'". The id is the invariant;
     // the wording is meant to keep improving.
     expect(hub).toMatch(/id: 'identity',/);
-    expect(hub).toMatch(/label: 'A photo of your licence'/);
+    expect(hub).toMatch(/label: 'A photo of your ID'/);
   });
 
   test("the step is driven by the system that actually gates", () => {

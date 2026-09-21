@@ -248,6 +248,7 @@ async function repairDemo() {
           legal_last_name = 'Santos',
           date_of_birth = '1992-03-15',
           ssn_last4 = '4829',
+          id_doc_type = 'drivers_license',
           dl_number = 'S520-4829-0315',
           dl_state = 'VA'
         WHERE id = ?

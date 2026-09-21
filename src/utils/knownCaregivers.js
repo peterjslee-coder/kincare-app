@@ -127,7 +127,7 @@ async function claimPendingByEmail(db, caregiverUserId, email) {
       await db.prepare(
         "INSERT INTO activity_feed (id, family_user_id, care_recipient_id, event_type, title, message) VALUES (?, ?, ?, 'known_caregiver_joined', ?, ?)"
       ).run(uuid(), inv.invited_by, inv.care_recipient_id, `${name} is setting up`,
-        `${name} made an account with the email you invited, so they're set up as ${rf}'s caregiver. You can book them once they're set up to be paid and have sent a photo of their licence.`);
+        `${name} made an account with the email you invited, so they're set up as ${rf}'s caregiver. You can book them once they're set up to be paid and have sent a photo of their ID.`);
       const { sendPushToUser } = require("../routes/push");
       await sendPushToUser(inv.invited_by, {
         title: `${name} is setting up`,
@@ -162,19 +162,19 @@ async function fulfillPendingForUser(db, caregiverUserId) {
 
 /**
  * Progress on the short path for the leader's "2 of 4 done" line. Four jobs: account, quick
- * details (a profile exists), pay (Stripe), licence photo (SUBMITTED counts — approval is our
- * wait, not hers).
+ * details (a profile exists), pay (Stripe), ID photo (SUBMITTED counts — approval is our
+ * wait, not hers). Any accepted photo ID counts, not only a driver's licence (v1.109.5).
  */
 async function progressFor(db, email) {
   const { caregiverIdentityDoc } = require("./identity");
   const user = await db.prepare("SELECT id FROM users WHERE LOWER(email) = LOWER(?)").get(email);
-  if (!user) return { userId: null, account: false, details: false, pay: false, licence: false, done: 0, of: 4, ready: false };
+  if (!user) return { userId: null, account: false, details: false, pay: false, idPhoto: false, done: 0, of: 4, ready: false };
   const profile = await db.prepare(
     "SELECT id, stripe_onboard_complete FROM caregiver_profiles WHERE user_id = ?"
   ).get(user.id);
   const doc = await caregiverIdentityDoc(db, user.id, profile ? profile.id : null);
-  const p = { userId: user.id, account: true, details: !!profile, pay: !!(profile && profile.stripe_onboard_complete), licence: !!doc };
-  p.done = ["account", "details", "pay", "licence"].filter((k) => p[k]).length;
+  const p = { userId: user.id, account: true, details: !!profile, pay: !!(profile && profile.stripe_onboard_complete), idPhoto: !!doc };
+  p.done = ["account", "details", "pay", "idPhoto"].filter((k) => p[k]).length;
   p.of = 4;
   p.ready = p.done === 4;
   return p;
@@ -183,7 +183,7 @@ async function progressFor(db, email) {
 /**
  * v1.105.188 — "I want a notification when she's joined." The accept push says she is SETTING
  * UP; this one says she is READY TO BOOK, which is the moment the family actually wants. Called
- * after each thing that can be the last thing (Stripe completing, the licence photo landing).
+ * after each thing that can be the last thing (Stripe completing, the ID photo landing).
  * Marks the invite `ready` so it fires once. Fire-and-forget at every call site.
  */
 async function notifyIfReadyToBook(db, caregiverUserId) {
@@ -210,11 +210,11 @@ async function notifyIfReadyToBook(db, caregiverUserId) {
       await db.prepare(
         "INSERT INTO activity_feed (id, family_user_id, care_recipient_id, event_type, title, message) VALUES (?, ?, ?, 'known_caregiver_ready', ?, ?)"
       ).run(uuid(), inv.invited_by, inv.care_recipient_id, `${name} is ready to book`,
-        `${name} is set up to be paid and has sent a photo of their licence. Book them for ${rf} from the Caregivers tab.`);
+        `${name} is set up to be paid and has sent a photo of their ID. Book them for ${rf} from the Caregivers tab.`);
       const { sendPushToUser } = require("../routes/push");
       await sendPushToUser(inv.invited_by, {
         title: `${name} is ready to book`,
-        body: `Set up to be paid, licence photo in. Book them for ${rf} whenever you like.`,
+        body: `Set up to be paid, ID photo in. Book them for ${rf} whenever you like.`,
         data: { type: "known_caregiver_ready", careRecipientId: inv.care_recipient_id, page: "caregivers" },
       });
     } catch (e) {

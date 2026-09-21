@@ -105,7 +105,7 @@ router.post("/accept-invite", authenticate, async (req, res) => {
         await db.prepare(
           "INSERT INTO activity_feed (id, family_user_id, care_recipient_id, event_type, title, message) VALUES (?, ?, ?, 'known_caregiver_joined', ?, ?)"
         ).run(uuid(), invite.invited_by, invite.care_recipient_id, `${userName} is setting up`,
-          `${userName} accepted your invite and is finishing setup. You can book them for ${rf} once they're set up to be paid and have sent a photo of their licence.`);
+          `${userName} accepted your invite and is finishing setup. You can book them for ${rf} once they're set up to be paid and have sent a photo of their ID.`);
         const { sendPushToUser } = require("./push");
         sendPushToUser(invite.invited_by, {
           title: `${userName} is setting up`,

@@ -1215,7 +1215,7 @@ router.delete("/me", authenticate, blockWhileImpersonating("delete this account"
           UPDATE caregiver_profiles SET
             bio = NULL, legal_first_name = NULL, legal_last_name = NULL,
             date_of_birth = NULL, ssn_last4 = NULL, address_line1 = NULL,
-            address_line2 = NULL, zip = NULL, dl_number = NULL, dl_state = NULL,
+            address_line2 = NULL, zip = NULL, id_doc_type = NULL, dl_number = NULL, dl_state = NULL,
             location_city = NULL, location_state = NULL, latitude = NULL, longitude = NULL,
             work_location_address = NULL, work_latitude = NULL, work_longitude = NULL,
             stripe_account_id = NULL, is_available = 0,

@@ -58,7 +58,7 @@ describe("the path is all there, and quiet about it", () => {
     // quieter and would also reintroduce "there keeps being more steps".
     const t = ahead(1);
     expect(t).toContain("A few quick details");
-    expect(t).toContain("A photo of your licence");
+    expect(t).toContain("A photo of your ID");
     expect(t).toContain("Where your pay lands");
     expect(t).toContain("Lock down your account");
     expect(t).not.toMatch(/more$/);
@@ -112,7 +112,7 @@ describe("the path is all there, and quiet about it", () => {
     // outstanding work is the sentence this whole track exists to delete.
     const t = ahead(8, true);
     expect(t).toMatch(/1 with us/);
-    expect(t).not.toContain("A photo of your licence");
+    expect(t).not.toContain("A photo of your ID");
   });
 
   test("the animation is opt-out, and only the two path classes carry it", () => {

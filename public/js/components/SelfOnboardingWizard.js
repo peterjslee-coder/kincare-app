@@ -577,7 +577,7 @@ const SelfOnboardingWizard = window.SelfOnboardingWizard = ({ user, careRecipien
           <WizardProgressBar />
           <h2 style={{ marginTop: 0, marginBottom: '8px', color: 'var(--role-color)' }}>Verify Your ID</h2>
           <p style={{ color: 'var(--text-secondary)', fontSize: '14px', marginBottom: '24px' }}>
-            Upload a photo of your government ID (driver's license or passport).
+            Upload a photo of your government ID — driver's license, state ID, passport, EAD (work permit) or permanent resident card.
           </p>
 
           {idPhoto ? (

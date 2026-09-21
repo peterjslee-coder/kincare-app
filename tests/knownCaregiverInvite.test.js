@@ -45,7 +45,7 @@ describe("the short path is four things, and four is the number that goes down",
     expect(r.familyOnly).toBe(true);
     expect(r.items.map((i) => i.id)).toEqual(["account", "paperwork", "identity", "stripe"]);
     expect(r.items.map((i) => i.label)).toEqual([
-      "Create your account", "A few quick details", "A photo of your licence", "Where your pay lands",
+      "Create your account", "A few quick details", "A photo of your ID", "Where your pay lands",
     ]);
     expect(SHORT_PATH_ITEMS).toEqual(["account", "paperwork", "identity", "stripe"]);
   });

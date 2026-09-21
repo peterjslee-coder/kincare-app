@@ -764,6 +764,7 @@ async function caregiverDashboard(db, userId, res) {
       legalLastName: profile.legal_last_name,
       dateOfBirth: profile.date_of_birth,
       ssnLast4: profile.ssn_last4,
+      idDocType: profile.id_doc_type,
       dlNumber: profile.dl_number,
       dlState: profile.dl_state,
       care_stoplight: profile.care_stoplight,

@@ -1537,8 +1537,8 @@ async function initializeDatabase() {
     // caregiver_documents → verified_documents sync (same)
     `INSERT INTO verified_documents (id, owner_type, owner_id, uploaded_by, category, document_type, file_data, file_name, file_size, mime_type, status, created_at, updated_at)
      SELECT id, 'caregiver', (SELECT cp.id FROM caregiver_profiles cp WHERE cp.user_id = cd.user_id LIMIT 1), user_id,
-       CASE WHEN document_type IN ('dl_front', 'dl_back', 'drivers_license') THEN 'identity' ELSE 'certification' END,
-       CASE document_type WHEN 'dl_front' THEN 'DL_Front' WHEN 'dl_back' THEN 'DL_Back' WHEN 'drivers_license' THEN 'DL_Front' WHEN 'certification' THEN 'Other_Cert' ELSE 'Other' END,
+       CASE WHEN document_type IN ('dl_front', 'dl_back', 'drivers_license', 'id_front', 'id_back') THEN 'identity' ELSE 'certification' END,
+       CASE document_type WHEN 'dl_front' THEN 'DL_Front' WHEN 'dl_back' THEN 'DL_Back' WHEN 'drivers_license' THEN 'DL_Front' WHEN 'id_front' THEN 'ID_Front' WHEN 'id_back' THEN 'ID_Back' WHEN 'certification' THEN 'Other_Cert' ELSE 'Other' END,
        file_data, file_name, 0, 'image/jpeg', 'pending', created_at, created_at
      FROM caregiver_documents cd WHERE id NOT IN (SELECT id FROM verified_documents) AND id IS NOT NULL`,
     // auto-approve demo/admin (seed doesn't set it)
@@ -2692,6 +2692,20 @@ async function initializeDatabase() {
         `CREATE UNIQUE INDEX IF NOT EXISTS idx_ledger_pi_kind ON ledger_entries (stripe_payment_intent, kind) WHERE stripe_payment_intent IS NOT NULL`,
         `CREATE INDEX IF NOT EXISTS idx_ledger_session ON ledger_entries (session_id, created_at)`,
         `CREATE INDEX IF NOT EXISTS idx_ledger_family ON ledger_entries (family_user_id, created_at DESC)`,
+      ],
+    },
+    {
+      // v1.109.5 — a caregiver's identity document is not always a driver's licence.
+      // EAD (I-766), permanent resident card, passport and state ID are all acceptable;
+      // the wizard used to hard-require a DL front AND back, which turned a form field
+      // into an eligibility rule that tracked national origin. id_doc_type records which
+      // document she actually presented. NULL means "chosen before this column existed" —
+      // read it as drivers_license only where dl_number is also present.
+      id: "046_id_doc_type",
+      statements: [
+        `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS id_doc_type TEXT`,
+        `UPDATE caregiver_profiles SET id_doc_type = 'drivers_license'
+           WHERE id_doc_type IS NULL AND dl_number IS NOT NULL AND dl_number <> ''`,
       ],
     },
   ];

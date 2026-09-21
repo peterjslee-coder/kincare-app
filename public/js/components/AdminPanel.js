@@ -1329,6 +1329,14 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
   const humanizeDocLabel = (t) => {
     if (!t) return 'Document';
     const known = {
+      ID_Front: 'Photo ID (front)',
+      ID_Back: 'Photo ID (back)',
+      id_front: 'Photo ID (front)',
+      id_back: 'Photo ID (back)',
+      EAD: 'Employment Authorization Document',
+      Permanent_Resident_Card: 'Permanent resident card',
+      ead: 'Employment Authorization Document',
+      permanent_resident_card: 'Permanent resident card',
       DL_Front: "Driver's licence (front)",
       DL_Back: "Driver's licence (back)",
       dl_front: "Driver's licence (front)",
@@ -6125,9 +6133,15 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                         drivers license as well. Why does it show drivers license: no?" This flag
                         was `dl_number && dl_state` — the NUMBER typed on wizard screen 4 — and
                         the short path (v1.105.186) never visits screen 4. Say which thing it is. */}
+                    <span style={{ color: 'var(--text-tertiary)' }}>ID presented:</span>
+                    <span>{({ drivers_license: "Driver's license", state_id: 'State ID', passport: 'Passport',
+                      ead: 'EAD (work permit)', permanent_resident_card: 'Permanent resident card' })[onboardingModal.flags.idDocType]
+                      || (onboardingModal.flags.hasDriversLicense ? "Driver's license" : 'Not stated')}</span>
                     <span style={{ color: 'var(--text-tertiary)' }}>Licence number typed:</span>
                     <span>{onboardingModal.flags.hasDriversLicense ? 'Yes'
-                      : (onboardingModal.flags.identityStatus === 'approved' ? 'No \u2014 photo approved, number not entered (fine for a family-brought caregiver)' : 'No')}</span>
+                      : (onboardingModal.flags.idDocType && onboardingModal.flags.idDocType !== 'drivers_license'
+                        ? 'N/A \u2014 not a driver\u2019s license'
+                        : (onboardingModal.flags.identityStatus === 'approved' ? 'No \u2014 photo approved, number not entered (fine for a family-brought caregiver)' : 'No'))}</span>
                     <span style={{ color: 'var(--text-tertiary)' }}>Program Reports:</span>
                     <span>{onboardingModal.flags.needsHourReports ? 'Yes' : 'No'}</span>
                     {onboardingModal.flags.academicProgram && <>
@@ -7113,6 +7127,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                       {userDrawer.allDocuments.map(doc => {
                         const typeLabels = {
+                          ID_Front: 'ID (Front)', ID_Back: 'ID (Back)', EAD: 'EAD', Permanent_Resident_Card: 'Green card',
                           DL_Front: 'DL (Front)', DL_Back: 'DL (Back)', Passport: 'Passport', State_ID: 'State ID',
                           CNA: 'CNA Cert', HHA: 'HHA Cert', LPN: 'LPN Cert', RN: 'RN Cert',
                           CPR: 'CPR Cert', BLS: 'BLS Cert', ACLS: 'ACLS Cert', First_Aid: 'First Aid',
