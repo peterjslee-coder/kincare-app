@@ -102,6 +102,102 @@ router.get("/my-pending-invites", async (req, res) => {
   }
 });
 
+// ─── v1.109.7 — visit updates: the leader allows, the member turns them on ───
+// See utils/visitAudience.js. These three routes use `authenticate` only (the router already
+// applies it), NOT requireRole("family"): Julia is a caregiver, and the whole point is that she
+// can switch on — or never see — updates the leader has allowed her.
+
+// GET /api/care-teams/visit-updates/mine — the teams where I may receive visit updates
+router.get("/visit-updates/mine", async (req, res) => {
+  try {
+    const db = await getDb();
+    const rows = await db.prepare(`
+      SELECT ctm.care_team_id, ctm.user_id, ctm.role, ctm.visit_updates_allowed, ctm.visit_updates_opt_in,
+        cr.family_user_id AS owner_id, cr.first_name AS recipient_first_name
+      FROM care_team_members ctm
+      JOIN care_teams ct ON ct.id = ctm.care_team_id
+      JOIN care_recipients cr ON cr.id = ct.care_recipient_id
+      WHERE ctm.user_id = ?
+      ORDER BY cr.first_name
+    `).all(req.user.id);
+    const { isLeadRow } = require("../utils/visitAudience");
+    const u = await db.prepare("SELECT notification_prefs FROM users WHERE id = ?").get(req.user.id);
+    let masterOff = false;
+    try { masterOff = JSON.parse((u && u.notification_prefs) || "{}").push_session_status === false; } catch {}
+    const teams = rows
+      .filter((r) => isLeadRow(r) || Number(r.visit_updates_allowed) === 1)
+      .map((r) => {
+        const lead = isLeadRow(r);
+        const opt = r.visit_updates_opt_in;
+        return {
+          teamId: r.care_team_id,
+          recipientFirstName: r.recipient_first_name,
+          isLeader: lead,
+          on: opt === null || opt === undefined ? lead : Number(opt) === 1,
+        };
+      });
+    res.json({ teams, masterOff });
+  } catch (err) {
+    console.error("Visit updates (mine) error:", err);
+    res.status(500).json({ error: "Failed to load visit update settings" });
+  }
+});
+
+// PUT /api/care-teams/:id/visit-updates/me { on } — turn my own visit updates on or off
+router.put("/:id/visit-updates/me", async (req, res) => {
+  try {
+    const db = await getDb();
+    if (typeof req.body.on !== "boolean") return res.status(400).json({ error: "on must be true or false" });
+    const row = await db.prepare(`
+      SELECT ctm.role, ctm.user_id, ctm.visit_updates_allowed, cr.family_user_id AS owner_id
+      FROM care_team_members ctm
+      JOIN care_teams ct ON ct.id = ctm.care_team_id
+      JOIN care_recipients cr ON cr.id = ct.care_recipient_id
+      WHERE ctm.care_team_id = ? AND ctm.user_id = ?
+    `).get(req.params.id, req.user.id);
+    if (!row) return res.status(404).json({ error: "Care team not found" });
+    const { isLeadRow } = require("../utils/visitAudience");
+    if (!isLeadRow(row) && Number(row.visit_updates_allowed) !== 1) {
+      return res.status(403).json({ error: "The team leader has not turned on visit updates for you", code: "NOT_ALLOWED" });
+    }
+    await db.prepare("UPDATE care_team_members SET visit_updates_opt_in = ? WHERE care_team_id = ? AND user_id = ?")
+      .run(req.body.on ? 1 : 0, req.params.id, req.user.id);
+    res.json({ ok: true, on: req.body.on });
+  } catch (err) {
+    console.error("Visit updates (me) error:", err);
+    res.status(500).json({ error: "Failed to save" });
+  }
+});
+
+// PUT /api/care-teams/:id/members/:userId/visit-updates { allowed } — leader only
+router.put("/:id/members/:userId/visit-updates", async (req, res) => {
+  try {
+    const db = await getDb();
+    if (typeof req.body.allowed !== "boolean") return res.status(400).json({ error: "allowed must be true or false" });
+    const me = await db.prepare(
+      "SELECT role FROM care_team_members WHERE care_team_id = ? AND user_id = ?"
+    ).get(req.params.id, req.user.id);
+    if (!me) return res.status(404).json({ error: "Care team not found" });
+    if (me.role !== "leader") return res.status(403).json({ error: "Only the team leader can change who receives visit updates" });
+    const target = await db.prepare(
+      "SELECT role FROM care_team_members WHERE care_team_id = ? AND user_id = ?"
+    ).get(req.params.id, req.params.userId);
+    if (!target) return res.status(404).json({ error: "Member not found" });
+    if (target.role === "leader") return res.status(400).json({ error: "The team leader always may receive visit updates" });
+    // Taking permission away also clears their choice, so allowing them again asks them again
+    // rather than silently resuming a subscription they made under an earlier permission.
+    await db.prepare(`
+      UPDATE care_team_members SET visit_updates_allowed = ?,
+        visit_updates_opt_in = CASE WHEN ? = 1 THEN visit_updates_opt_in ELSE NULL END
+      WHERE care_team_id = ? AND user_id = ?
+    `).run(req.body.allowed ? 1 : 0, req.body.allowed ? 1 : 0, req.params.id, req.params.userId);
+    res.json({ ok: true, allowed: req.body.allowed });
+  } catch (err) {
+    console.error("Visit updates (allow) error:", err);
+    res.status(500).json({ error: "Failed to save" });
+  }
+});
+
 // ─── GET /api/care-teams ─── List care teams the current user belongs to
 router.get("/", requireRole("family"), async (req, res) => {
   try {
@@ -173,6 +269,7 @@ router.get("/:id", requireRole("family"), async (req, res) => {
       SELECT ct.*, cr.first_name AS recipient_first_name, cr.last_name AS recipient_last_name,
         cr.age AS recipient_age, cr.location_city AS recipient_city, cr.location_state AS recipient_state,
         cr.linked_user_id AS recipient_linked_user_id,
+        cr.family_user_id AS recipient_owner_id,
         lu.accessibility_prefs AS recipient_accessibility_prefs,
         cr.sms_phone AS recipient_sms_phone,
         cr.notification_channel AS recipient_notification_channel,
@@ -193,6 +290,7 @@ router.get("/:id", requireRole("family"), async (req, res) => {
     // mapping the server uses.
     const members = await db.prepare(`
       SELECT ctm.id AS membership_id, ctm.role, ctm.joined_at, ctm.relationship_label,
+        ctm.visit_updates_allowed, ctm.visit_updates_opt_in, u.notification_prefs,
         u.id AS user_id, u.first_name, u.last_name, u.email, u.avatar_url, u.profile_photo,
         crs.capabilities AS capabilities, crs.permission AS share_permission
       FROM care_team_members ctm
@@ -231,6 +329,11 @@ router.get("/:id", requireRole("family"), async (req, res) => {
           role: m.role,
           joinedAt: m.joined_at,
           relationshipLabel: m.relationship_label,
+          // v1.109.7 — the two keys (utils/visitAudience.js)
+          visitUpdatesAllowed: m.role === "leader" || Number(m.visit_updates_allowed) === 1,
+          visitUpdatesOn: require("../utils/visitAudience").receivesVisitUpdates({
+            ...m, owner_id: team && team.recipient_owner_id,
+          }),
         })),
         invites: invites.map(i => ({
           id: i.id,

@@ -260,6 +260,26 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
     setInviteResults([]); setShowCustomCaps(false); applyPreset('viewer');
   };
 
+  // v1.109.7 — the leader's half of visit updates (b3c808fd). Allowing someone does not turn
+  // anything on for them; they switch it on themselves in My Account → Notifications.
+  const [savingVisitAllow, setSavingVisitAllow] = useState(null);
+  const handleVisitUpdatesAllowed = async (m, allowed) => {
+    setSavingVisitAllow(m.userId);
+    try {
+      const res = await apiFetch(`/api/care-teams/${careTeamId}/members/${m.userId}/visit-updates`, {
+        method: 'PUT',
+        body: JSON.stringify({ allowed }),
+      });
+      if (res?.ok) {
+        showToast(allowed
+          ? `${m.firstName} can now turn on visit updates in My Account`
+          : `${m.firstName} will no longer get visit updates`, 'success');
+        fetchTeam();
+      } else { const d = await res?.json().catch(() => ({})); showToast(d?.error || 'Could not save', 'error'); }
+    } catch { showToast('Could not save', 'error'); }
+    setSavingVisitAllow(null);
+  };
+
   const handleSaveMemberCaps = async (userId) => {
     if (memberCaps.length === 0) { showToast('Choose what this person can do', 'error'); return; }
     setSavingCaps(true);
@@ -711,6 +731,24 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
                     </button>
                   </div>
                 </div>
+              )}
+              {isExpanded && canManage && editingCapsFor !== m.userId && (
+                <label data-testid="visit-updates-allow" onClick={(e) => e.stopPropagation()}
+                  style={{ margin: '0 -16px', padding: '4px 16px 12px', background: 'var(--bg-highlight)', display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer' }}>
+                  <input type="checkbox" checked={!!m.visitUpdatesAllowed} disabled={savingVisitAllow === m.userId}
+                    onChange={(e) => handleVisitUpdatesAllowed(m, e.target.checked)}
+                    style={{ marginTop: 2, width: 18, height: 18, flexShrink: 0, accentColor: 'var(--role-color)' }} />
+                  <span>
+                    <span style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>May receive visit updates</span>
+                    <span style={{ display: 'block', fontSize: 11.5, color: 'var(--text-tertiary)', lineHeight: 1.4 }}>
+                      {!m.visitUpdatesAllowed
+                        ? `When a caregiver is on the way, arrives, or leaves. ${m.firstName} won't be notified.`
+                        : m.visitUpdatesOn
+                          ? `${m.firstName} has turned them on.`
+                          : `${m.firstName} hasn't turned them on yet (My Account \u2192 Notifications).`}
+                    </span>
+                  </span>
+                </label>
               )}
               {isExpanded && canManage && editingCapsFor !== m.userId && (
                 <div style={{ margin: '0 -16px', padding: '0 16px 14px', background: 'var(--bg-highlight)', display: 'flex', gap: 8, flexWrap: 'wrap' }}>

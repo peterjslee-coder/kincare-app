@@ -30,6 +30,7 @@ const { blockWhileImpersonating } = require("../middleware/noImpersonation"); //
 const { SETTLED_MINUTES, conditionReadDue } = require("../utils/settledCheck"); // v1.106.48
 const { summarizeBreaks, breakMinutes, breakNotice } = require("../utils/visitBreaks"); // v1.106.41
 const { normalize: normalizeInstructions, sameInstructions } = require("../utils/instructionAck"); // v1.109.6
+const { visitUpdateAudience } = require("../utils/visitAudience"); // v1.109.7
 
 const router = express.Router();
 router.use(authenticate);
@@ -493,8 +494,12 @@ router.put("/:id/claim", async (req, res) => {
       JOIN care_recipients cr ON ct.care_recipient_id = cr.id
       WHERE cr.id = ? AND ctm.user_id != ?
     `).all(session.care_recipient_id, session.family_user_id || '');
+    // v1.109.7 — every member's screen refreshes (the socket), but only people allowed visit
+    // updates and opted in are PUSHED (b3c808fd). The person who booked it is told above.
+    const audience = new Set(await visitUpdateAudience(db, session.care_recipient_id));
     for (const member of teamMembers) {
       if (emitToUser) emitToUser(member.user_id, "session_update", { sessionId: req.params.id, status: "confirmed" });
+      if (!audience.has(member.user_id)) continue;
       sendPushToUser(member.user_id, { title: pushTitle, body: pushBody, data: pushData }, "care_request_accepted").catch(() => {});
     }
   } catch (teamErr) { console.error('Error notifying care team:', teamErr); }
@@ -671,12 +676,8 @@ async function claimBatch(db, req, res, { acceptIds, declineIds }) {
   const notify = new Set();
   if (first.family_user_id) notify.add(first.family_user_id);
   try {
-    const team = await db.prepare(`
-      SELECT DISTINCT ctm.user_id FROM care_team_members ctm
-      JOIN care_teams ct ON ctm.care_team_id = ct.id
-      WHERE ct.care_recipient_id = ?
-    `).all(first.care_recipient_id);
-    for (const m of team) notify.add(m.user_id);
+    // v1.109.7 — allowed + opted in, not the whole team (b3c808fd)
+    for (const uid of await visitUpdateAudience(db, first.care_recipient_id)) notify.add(uid);
   } catch (e) { captureException(e, { where: "claim batch: notify team" }); }
 
   for (const userId of notify) {
@@ -1883,15 +1884,8 @@ router.post("/:id/check-in", async (req, res) => {
 
       // To entire care team: session is now in progress (supersedes "arriving soon")
       try {
-        // Get all care team members (same pattern as sendSessionReminders)
-        const careTeamMembers = await db.prepare(`
-          SELECT DISTINCT ctm.user_id FROM care_team_members ctm
-          JOIN care_teams ct ON ctm.care_team_id = ct.id
-          WHERE ct.care_recipient_id = ?
-        `).all(session.care_recipient_id);
-        const teamUserIds = careTeamMembers.length > 0
-          ? careTeamMembers.map(m => m.user_id)
-          : (session.family_user_id ? [session.family_user_id] : []);
+        // v1.109.7 — allowed + opted in, not the whole team (b3c808fd)
+        const teamUserIds = await visitUpdateAudience(db, session.care_recipient_id, { exclude: [req.user.id] });
 
         for (const userId of teamUserIds) {
           if (userId === req.user.id) continue; // don't notify the caregiver themselves
@@ -2750,14 +2744,8 @@ router.post("/:id/check-out", blockWhileImpersonating("end a real visit and sett
         ? `${Math.floor(actualDurationHours)}h ${Math.round((actualDurationHours % 1) * 60)}m`
         : "";
       try {
-        const careTeamMembers = await db.prepare(`
-          SELECT DISTINCT ctm.user_id FROM care_team_members ctm
-          JOIN care_teams ct ON ctm.care_team_id = ct.id
-          WHERE ct.care_recipient_id = ?
-        `).all(session.care_recipient_id);
-        const teamUserIds = careTeamMembers.length > 0
-          ? careTeamMembers.map(m => m.user_id)
-          : (session.family_user_id ? [session.family_user_id] : []);
+        // v1.109.7 — allowed + opted in, not the whole team (b3c808fd)
+        const teamUserIds = await visitUpdateAudience(db, session.care_recipient_id, { exclude: [req.user.id] });
 
         for (const userId of teamUserIds) {
           if (userId === req.user.id) continue;
@@ -3491,15 +3479,8 @@ router.put("/:id/on-my-way", async (req, res) => {
     const famTag = `session-${req.params.id.slice(0,8)}-family`;
     const recipTag = `session-${req.params.id.slice(0,8)}-recip`;
 
-    // Notify care team
-    const careTeamMembers = await db.prepare(`
-      SELECT DISTINCT ctm.user_id FROM care_team_members ctm
-      JOIN care_teams ct ON ctm.care_team_id = ct.id
-      WHERE ct.care_recipient_id = ?
-    `).all(session.care_recipient_id);
-    const teamUserIds = careTeamMembers.length > 0
-      ? careTeamMembers.map(m => m.user_id)
-      : (session.family_user_id ? [session.family_user_id] : []);
+    // Notify care team — v1.109.7: allowed + opted in only (b3c808fd)
+    const teamUserIds = await visitUpdateAudience(db, session.care_recipient_id, { exclude: [session.caregiver_user_id] });
 
     for (const uid of teamUserIds) {
       if (uid === session.caregiver_user_id) continue;

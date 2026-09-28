@@ -795,16 +795,10 @@ async function sendSessionReminders(sessionId, reminderType) {
     const locationStr = locationParts.join(", ");
     const mapsUrl = locationStr ? `https://maps.google.com/?q=${encodeURIComponent(locationStr)}` : null;
 
-    // Get ALL care team members for this care recipient (not just the session creator)
-    const careTeamMembers = await db.prepare(`
-      SELECT DISTINCT ctm.user_id FROM care_team_members ctm
-      JOIN care_teams ct ON ctm.care_team_id = ct.id
-      WHERE ct.care_recipient_id = ?
-    `).all(session.care_recipient_id);
-    // Fallback to session creator if no care team exists
-    const teamUserIds = careTeamMembers.length > 0
-      ? careTeamMembers.map(m => m.user_id)
-      : (session.family_user_id ? [session.family_user_id] : []);
+    // v1.109.7 — the people who have been ALLOWED visit updates and turned them on, not the
+    // whole team (b3c808fd). See utils/visitAudience.js.
+    const { visitUpdateAudience } = require("../utils/visitAudience");
+    const teamUserIds = await visitUpdateAudience(db, session.care_recipient_id, { exclude: [session.caregiver_user_id] });
 
     // Notification tags — same tag replaces the previous notification instead of stacking
     // This creates a lifecycle: arriving → in progress → wrapping up → complete

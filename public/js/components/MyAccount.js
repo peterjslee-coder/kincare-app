@@ -736,6 +736,30 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
     setSaving(false);
   };
 
+  // v1.109.7 — visit updates are per person you care for, and only where the team leader has
+  // allowed them (b3c808fd). This list is exactly those teams; nothing else shows.
+  const [visitTeams, setVisitTeams] = useState([]);
+  useEffect(() => {
+    apiFetch('/api/care-teams/visit-updates/mine')
+      .then((r) => (r?.ok ? r.json() : null))
+      .then((d) => { if (d && Array.isArray(d.teams)) setVisitTeams(d.teams); })
+      .catch(() => {});
+  }, []);
+  const handleVisitTeamToggle = async (teamId, on) => {
+    setVisitTeams((ts) => ts.map((t) => (t.teamId === teamId ? { ...t, on } : t)));
+    try {
+      const res = await apiFetch(`/api/care-teams/${teamId}/visit-updates/me`, { method: 'PUT', body: JSON.stringify({ on }) });
+      if (res?.ok) showToast(on ? 'Visit updates on' : 'Visit updates off', 'success');
+      else {
+        setVisitTeams((ts) => ts.map((t) => (t.teamId === teamId ? { ...t, on: !on } : t)));
+        showToast('Could not save', 'error');
+      }
+    } catch {
+      setVisitTeams((ts) => ts.map((t) => (t.teamId === teamId ? { ...t, on: !on } : t)));
+      showToast('Could not save', 'error');
+    }
+  };
+
   const handleNotificationChange = async (key, value) => {
     const newNotifs = { ...notifications, [key]: value };
     setNotifications(newNotifs);
@@ -1811,13 +1835,30 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
               { key: 'push_observation_attention', label: 'Urgent "needs attention" notes' },
               { key: 'push_care_request', label: 'Care requests (for caregivers)' },
               { key: 'push_care_request_accepted', label: 'Care request accepted (for families)' },
-              { key: 'push_session_status', label: 'Session status changes' },
             ].map(({ key, label }) => (
               <label key={key} className="toggle-label">
                 <input type="checkbox" className="toggle-input" checked={notifications[key] !== false} onChange={(e) => handleNotificationChange(key, e.target.checked)} />
                 <span>{label}</span>
               </label>
             ))}
+            {/* v1.109.7 — "Session status changes" used to be tied to no notification at all.
+                It is now the master switch for visit updates, and each person you may follow
+                gets its own switch under it. */}
+            {visitTeams.length > 0 && (
+              <div data-testid="visit-updates-settings" style={{ borderTop: '1px solid var(--border-light)', marginTop: 8, paddingTop: 10 }}>
+                <label className="toggle-label">
+                  <input type="checkbox" className="toggle-input" checked={notifications.push_session_status !== false}
+                    onChange={(e) => handleNotificationChange('push_session_status', e.target.checked)} />
+                  <span>Visit updates <span style={{ color: 'var(--text-tertiary)', fontSize: 12 }}>— caregiver on the way, arrived, running late, finished</span></span>
+                </label>
+                {notifications.push_session_status !== false && visitTeams.map((t) => (
+                  <label key={t.teamId} className="toggle-label" style={{ paddingLeft: 24 }}>
+                    <input type="checkbox" className="toggle-input" checked={!!t.on} onChange={(e) => handleVisitTeamToggle(t.teamId, e.target.checked)} />
+                    <span>{t.recipientFirstName}'s visits</span>
+                  </label>
+                ))}
+              </div>
+            )}
           </div>
           {/* ─── v1.107.3 — quiet hours ───
               Pete: "Need a quiet hours option to prevent notifications selectable by

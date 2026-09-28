@@ -2721,6 +2721,19 @@ async function initializeDatabase() {
         `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS instructions_acknowledged_at TIMESTAMPTZ`,
       ],
     },
+    {
+      // ─── v1.109.7 — visit updates need two keys ───
+      //
+      // Pete (b3c808fd): Julia was told every time Tina arrived or left. The leader allows a
+      // member to receive visit updates; the member turns them on. See utils/visitAudience.js.
+      // Both start off for everyone (Pete, 9/28: "everyone off, you allow"). opt_in is NULL
+      // until the person chooses, which for the leader reads as ON.
+      id: "049_visit_update_consent",
+      statements: [
+        `ALTER TABLE care_team_members ADD COLUMN IF NOT EXISTS visit_updates_allowed INTEGER NOT NULL DEFAULT 0`,
+        `ALTER TABLE care_team_members ADD COLUMN IF NOT EXISTS visit_updates_opt_in INTEGER`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;
