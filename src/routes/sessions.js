@@ -29,6 +29,7 @@ const { captureForSession } = require("../utils/sessionCapture"); // v1.106.47
 const { blockWhileImpersonating } = require("../middleware/noImpersonation"); // v1.107.1 — no money movement in Test Mode
 const { SETTLED_MINUTES, conditionReadDue } = require("../utils/settledCheck"); // v1.106.48
 const { summarizeBreaks, breakMinutes, breakNotice } = require("../utils/visitBreaks"); // v1.106.41
+const { normalize: normalizeInstructions, sameInstructions } = require("../utils/instructionAck"); // v1.109.6
 
 const router = express.Router();
 router.use(authenticate);
@@ -1628,7 +1629,7 @@ SAFETY: this goes to the caregiver. Never mention financial or security vulnerab
 router.post("/:id/check-in", async (req, res) => {
   try {
     const db = await getDb();
-    const { arrivalMood, checkInLatitude, checkInLongitude, briefingAcknowledged, offlineTimestamp, offlineSync } = req.body;
+    const { arrivalMood, checkInLatitude, checkInLongitude, briefingAcknowledged, acknowledgedInstructions, offlineTimestamp, offlineSync } = req.body;
 
     const session = await db.prepare(`
       SELECT cs.*, cp.user_id AS caregiver_user_id, cp.early_check_in_allowed,
@@ -1785,6 +1786,17 @@ router.post("/:id/check-in", async (req, res) => {
       INSERT INTO visit_logs (id, session_id, caregiver_id, check_in_time, arrival_mood, check_in_latitude, check_in_longitude, check_in_distance_ft, check_in_geo_flag, briefing_acknowledged_at, offline_sync, is_test, created_at)
       VALUES (?, ?, ?, ${checkInTimeSQL}, ?, ?, ?, ?, ?, ${briefingAcknowledged ? 'NOW()' : 'NULL'}, ?, ?, NOW())
     `).run(visitId, req.params.id, session.caregiver_id, arrivalMood ? (Array.isArray(arrivalMood) ? JSON.stringify(arrivalMood) : arrivalMood) : null, coarsenCoordinate(checkInLatitude), coarsenCoordinate(checkInLongitude), ciGeo.distanceFt, ciGeo.flag, isOfflineSync ? 1 : 0, isTestMode ? 1 : 0);
+
+    // v1.109.6 — the family's instructions are acknowledged on their own, and only for the words
+    // she was shown. If the family edited them while this check-in sat in the offline queue, the
+    // text will not match, nothing is stamped, and her active-visit card asks again.
+    if (typeof acknowledgedInstructions === "string"
+        && normalizeInstructions(session.special_instructions)
+        && sameInstructions(acknowledgedInstructions, session.special_instructions)) {
+      await db.prepare(
+        `UPDATE care_sessions SET instructions_acknowledged_at = ${checkInTimeSQL} WHERE id = ?`
+      ).run(req.params.id);
+    }
 
     // Get special instructions and recent notes for the caregiver
     // v1.76.0 — caregivers get family observations via the AI-digested briefing,
@@ -3288,6 +3300,10 @@ router.put("/:id/instructions", async (req, res) => {
     const userId = req.user.id;
     const activeRole = req.user.activeRole || req.user.role;
     const { specialInstructions } = req.body;
+    // v1.109.6 — "replace" is what the Edit box means. It pre-fills the textarea with the current
+    // text and sends the whole thing back, so appending doubled the instructions on every edit.
+    // Append stays the default: the Messages "add to instructions" suggestion relies on it.
+    const mode = req.body.mode === "replace" ? "replace" : "append";
 
     if (typeof specialInstructions !== "string") {
       return res.status(400).json({ error: "specialInstructions must be a string" });
@@ -3298,9 +3314,11 @@ router.put("/:id/instructions", async (req, res) => {
     const cleaned = sanitize(specialInstructions).slice(0, 2000);
 
     const session = await db.prepare(`
-      SELECT cs.*, cr.family_user_id AS owner_id, cr.linked_user_id AS recipient_user_id
+      SELECT cs.*, cr.family_user_id AS owner_id, cr.linked_user_id AS recipient_user_id,
+        cp.user_id AS caregiver_user_id
       FROM care_sessions cs
       LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
       WHERE cs.id = ?
     `).get(req.params.id);
 
@@ -3327,21 +3345,95 @@ router.put("/:id/instructions", async (req, res) => {
       return res.status(400).json({ error: "Cannot edit instructions on a completed or cancelled session" });
     }
 
-    // Append to existing instructions instead of overwriting
     const existing = (session.special_instructions || "").trim();
-    const merged = existing
-      ? existing + "\n\n" + cleaned
-      : cleaned;
+    let merged;
+    if (mode === "replace") merged = cleaned;
+    else if (!cleaned) merged = existing; // appending nothing is not a change
+    else merged = existing ? existing + "\n\n" + cleaned : cleaned;
     const finalInstructions = merged.slice(0, 2000) || null;
 
+    // Saving the same words is not new instructions — do not ask her to re-read them.
+    if (sameInstructions(finalInstructions, existing)) {
+      return res.json({ ok: true, unchanged: true, special_instructions: session.special_instructions || null });
+    }
+
     await db.prepare(`
-      UPDATE care_sessions SET special_instructions = ?, updated_at = NOW()
+      UPDATE care_sessions SET special_instructions = ?, instructions_updated_at = NOW(), updated_at = NOW()
       WHERE id = ?
     `).run(finalInstructions, req.params.id);
 
-    res.json({ ok: true, special_instructions: finalInstructions });
+    // v1.109.6 — instructions that change DURING a visit have to reach her. Before this, nothing
+    // put them in front of a caregiver who had already checked in. The push says who and what
+    // kind, never what (v1.105.39 — no PHI on lock screens); the words are one tap away.
+    let caregiverNotified = false;
+    if (session.status === "in_progress" && session.caregiver_user_id && finalInstructions) {
+      try {
+        const author = await db.prepare("SELECT first_name FROM users WHERE id = ?").get(userId);
+        const who = (author && author.first_name) || "The family";
+        await sendPushToUser(session.caregiver_user_id, {
+          title: "New instructions for this visit",
+          body: `${who} updated today's instructions. Open InPlace to read them.`,
+          tag: `session-${req.params.id.slice(0, 8)}-instructions`,
+          data: { type: "instructions_updated", sessionId: req.params.id, page: "dashboard" },
+        }, "instructions_updated");
+        const emitToUser = req.app.get("emitToUser");
+        if (emitToUser) emitToUser(session.caregiver_user_id, "instructions_updated", { sessionId: req.params.id });
+        caregiverNotified = true;
+      } catch (e) {
+        captureException(e, { where: "sessions: mid-visit instructions notify failed", sessionId: req.params.id });
+      }
+    }
+
+    res.json({ ok: true, special_instructions: finalInstructions, caregiverNotified });
   } catch (err) {
     console.error("PUT /sessions/:id/instructions error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ─── POST /api/sessions/:id/instructions/acknowledge ───
+// v1.109.6 — the assigned caregiver confirms she has read the family's instructions. The body
+// carries the text on her screen; if the family has changed it since, nothing is stamped and the
+// current text comes back so she can read that instead.
+router.post("/:id/instructions/acknowledge", async (req, res) => {
+  try {
+    const db = await getDb();
+    const { text } = req.body || {};
+    if (typeof text !== "string") return res.status(400).json({ error: "text must be a string" });
+
+    const session = await db.prepare(`
+      SELECT cs.id, cs.status, cs.special_instructions, cp.user_id AS caregiver_user_id
+      FROM care_sessions cs
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      WHERE cs.id = ?
+    `).get(req.params.id);
+    if (!session || session.caregiver_user_id !== req.user.id) {
+      return res.status(404).json({ error: "Session not found" });
+    }
+    if (!["confirmed", "in_progress"].includes(session.status)) {
+      return res.status(400).json({ error: "This visit is not active" });
+    }
+    if (!normalizeInstructions(session.special_instructions)) {
+      return res.json({ ok: true, acknowledged: false, special_instructions: null });
+    }
+    if (!sameInstructions(text, session.special_instructions)) {
+      return res.status(409).json({
+        error: "The instructions changed while you were reading. Please read the new version.",
+        code: "INSTRUCTIONS_CHANGED",
+        special_instructions: session.special_instructions,
+      });
+    }
+    await db.prepare("UPDATE care_sessions SET instructions_acknowledged_at = NOW() WHERE id = ?").run(req.params.id);
+    const row = await db.prepare(
+      "SELECT family_user_id, instructions_acknowledged_at FROM care_sessions WHERE id = ?"
+    ).get(req.params.id);
+    const emitToUser = req.app.get("emitToUser");
+    if (emitToUser && row && row.family_user_id) {
+      emitToUser(row.family_user_id, "session_update", { sessionId: req.params.id, instructionsAcknowledged: true });
+    }
+    res.json({ ok: true, acknowledged: true, instructions_acknowledged_at: row && row.instructions_acknowledged_at });
+  } catch (err) {
+    console.error("POST /sessions/:id/instructions/acknowledge error:", err);
     res.status(500).json({ error: "Server error" });
   }
 });

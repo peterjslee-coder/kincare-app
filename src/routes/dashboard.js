@@ -16,6 +16,7 @@ const { phaseFor: checkrPhaseFor } = require("../constants/checkrStatus");
 const { noteAccess } = require("../utils/noteVisibility"); // v1.106.38, v1.107.2
 const { breakBudgetMinutes } = require("../utils/visitBreaks"); // v1.106.41
 const { conditionReadDue } = require("../utils/settledCheck"); // v1.106.48
+const { instructionsNeedAck } = require("../utils/instructionAck"); // v1.109.6
 
 const router = express.Router();
 router.use(authenticate);
@@ -828,6 +829,9 @@ async function caregiverDashboard(db, userId, res) {
         familyUserId: s.family_user_id,
         careRecipientId: s.care_recipient_id,
         specialInstructions: s.special_instructions,
+        // v1.109.6 — her active-visit card asks her to read instructions she has not confirmed
+        instructionsNeedAck: instructionsNeedAck(s),
+        instructionsAcknowledgedAt: s.instructions_acknowledged_at || null,
         recipientPreferences: s.recipient_preferences,
         estimatedCost: s.estimated_cost,
         caregiverPayout: caregiverPayout,

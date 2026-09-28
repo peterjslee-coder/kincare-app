@@ -2708,6 +2708,19 @@ async function initializeDatabase() {
            WHERE id_doc_type IS NULL AND dl_number IS NOT NULL AND dl_number <> ''`,
       ],
     },
+    {
+      // ─── v1.109.6 — instructions are acknowledged on their own ───
+      //
+      // Pete (9/28): Tina "blasting through the check in and missing notes". The briefing had one
+      // checkbox for everything, and instructions added mid-visit reached nobody. See
+      // utils/instructionAck.js. No backfill: a NULL acknowledgement on a finished visit is
+      // simply history from before the question was asked.
+      id: "048_instruction_acks",
+      statements: [
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS instructions_updated_at TIMESTAMPTZ`,
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS instructions_acknowledged_at TIMESTAMPTZ`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

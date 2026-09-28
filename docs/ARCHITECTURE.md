@@ -7,9 +7,9 @@ build red.
 
 Hand-written sections (§3 "Where is…") are preserved across regeneration; edit those freely.
 
-Structure at last generation: 537 HTTP routes across 56 mounts ·
-97 `CREATE TABLE` statements · 14 background jobs · 38 socket events
-(16 with no client listener) · 65 push event types · 60 `window.__*` globals.
+Structure at last generation: 538 HTTP routes across 56 mounts ·
+97 `CREATE TABLE` statements · 14 background jobs · 39 socket events
+(17 with no client listener) · 65 push event types · 60 `window.__*` globals.
 
 ---
 
@@ -91,7 +91,7 @@ JSX is *not* compiled in the browser; Babel-standalone is not loaded. Editing an
 | `/api/safety` | `src/routes/safety.js` | 6 |  |
 | `/api/scheduling` | `src/routes/nlScheduling.js` | 1 |  |
 | `/api/self-onboarding` | `src/routes/selfOnboarding.js` | 3 |  |
-| `/api/sessions` | `src/routes/sessions.js` **+** `src/routes/offers.js` | 43 | ⚠️ **multi-file mount — routes for this prefix live in more than one file** |
+| `/api/sessions` | `src/routes/sessions.js` **+** `src/routes/offers.js` | 44 | ⚠️ **multi-file mount — routes for this prefix live in more than one file** |
 | `/api/video` | `src/routes/videoCall.js` | 1 |  |
 | `/api/waitlist` | `src/routes/waitlist.js` | 3 |  |
 
@@ -163,6 +163,7 @@ why this app runs on exactly one Railway replica.
 | `checkin_nudge` | `routes/accountability.js` | 🔶 **none** |
 | `connect_error_reason` | `server.js` | yes |
 | `family_no_show` | `routes/accountability.js` | 🔶 **none** |
+| `instructions_updated` | `routes/sessions.js` | 🔶 **none** |
 | `interview_accepted` | `routes/interviews.js` | 🔶 **none** |
 | `interview_cancelled` | `routes/interviews.js` | 🔶 **none** |
 | `interview_completed` | `routes/interviews.js` | 🔶 **none** |
@@ -191,7 +192,7 @@ why this app runs on exactly one Railway replica.
 | `visit_photos` | `routes/photos.js` | yes |
 
 
-🔶 **16 event(s) are emitted with no client listener**: `call_accepted`, `care_event_update`, `checkin_nudge`, `family_no_show`, `interview_accepted`, `interview_cancelled`, `interview_completed`, `interview_declined`, `interview_request`, `ipai_coaching`, `ipai_session_summary`, `late_resolution`, `new_feedback`, `proposal_expired`, `reminder_delivered`, `time_proposal`. Either the feature is unfinished or the emit is dead code.
+🔶 **17 event(s) are emitted with no client listener**: `call_accepted`, `care_event_update`, `checkin_nudge`, `family_no_show`, `instructions_updated`, `interview_accepted`, `interview_cancelled`, `interview_completed`, `interview_declined`, `interview_request`, `ipai_coaching`, `ipai_session_summary`, `late_resolution`, `new_feedback`, `proposal_expired`, `reminder_delivered`, `time_proposal`. Either the feature is unfinished or the emit is dead code.
 
 ---
 
@@ -293,7 +294,7 @@ State travels through `window`, not props. This table is the registry.
 | `window.__setSessionActive` | app.js | 4 |
 | `window.__setUiPref` | uiPrefs.js | 5 |
 | `window.__setUiPrefs` | app.js, uiPrefs.js | 7 |
-| `window.__showToast` | VisitDetailModal.js, utils.js | 12 |
+| `window.__showToast` | VisitDetailModal.js, utils.js | 14 |
 | `window.__skipPopstate` | VisitDetailModal.js | 3 |
 | `window.__startCaregiverTour` | app.js | 11 |
 | `window.__startImpersonation` | app.js | 3 |

@@ -451,6 +451,8 @@ router.get("/sessions/:id/detail", authenticate, requireAdmin, async (req, res) 
         estimated_cost: session.estimated_cost,
         actual_cost: session.actual_cost,
         special_instructions: session.special_instructions,
+        instructions_updated_at: session.instructions_updated_at, // v1.109.6
+        instructions_acknowledged_at: session.instructions_acknowledged_at, // v1.109.6
         private_only: session.private_only,
         payment_status: session.payment_status,
         late_check_in: session.late_check_in,

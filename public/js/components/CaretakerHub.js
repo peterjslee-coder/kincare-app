@@ -311,6 +311,9 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const [briefingData, setBriefingData] = useState(null);
   const [briefingLoading, setBriefingLoading] = useState(false);
   const [briefingAcked, setBriefingAcked] = useState(false);
+  // v1.109.6 — the family's instructions get their own acknowledgement, apart from the briefing
+  const [instructionsAcked, setInstructionsAcked] = useState(false);
+  const [ackingInstructionsId, setAckingInstructionsId] = useState(null);
   const [checkInStep, setCheckInStep] = useState('briefing'); // 'briefing' | 'first-visit' | 'checkin'
   // First-visit confirmation state
   const [firstVisitNeeded, setFirstVisitNeeded] = useState(false);
@@ -740,6 +743,8 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       // A change nobody answered now expires on its own (poller 112). Without this the stale
       // "asked to move a visit" card stays on screen until the next manual refresh.
       'time_change_expired',
+      // v1.109.6 — the family changed the instructions mid-visit; her card must ask her to read them
+      'instructions_updated',
     ].map(ev => onSocketEvent(ev, reload));
     return () => { offs.forEach(off => { if (off) off(); }); };
   }, []);
@@ -1647,6 +1652,40 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   // waiting to book her. Expressed as "all first steps done" so the line below keeps the
   // shape two older tests pin.
   if (familyOnly && hubRoute.items.every((i) => i.state === 'done')) firstStepsDone = firstSteps.length;
+
+  // v1.109.6 — ONE value for the instructions the wizard shows and the text it acknowledges, so
+  // the acknowledgement is always for the words on her screen. The briefing fetch is fresher than
+  // the dashboard row, so it wins once it has loaded.
+  const wizardInstructions = !checkInSession ? '' :
+    ((briefingData && typeof briefingData.specialInstructions === 'string')
+      ? briefingData.specialInstructions
+      : (checkInSession.special_instructions || checkInSession.specialInstructions || ''));
+  const wizardHasInstructions = !!String(wizardInstructions).trim();
+  const briefingReady = briefingAcked && (!wizardHasInstructions || instructionsAcked);
+
+  // v1.109.6 — "I've read these" on the active-visit card (instructions changed after check-in)
+  const acknowledgeInstructions = async (sess) => {
+    setAckingInstructionsId(sess.id);
+    try {
+      const res = await apiFetch('/api/sessions/' + sess.id + '/instructions/acknowledge', {
+        method: 'POST',
+        body: JSON.stringify({ text: sess.specialInstructions || '' }),
+      });
+      if (res?.ok) {
+        showToast('Thanks — the family will see you read them.', 'success');
+      } else if (res?.status === 409) {
+        showToast('The instructions just changed — please read the new version.', 'error');
+      } else {
+        const err = await res?.json().catch(() => null);
+        showToast(err?.error || 'Could not save — please try again', 'error');
+      }
+      const dr = await apiFetch('/api/dashboard');
+      if (dr?.ok) setData(await dr.json());
+    } catch (e) {
+      showToast('Network error — please try again', 'error');
+    }
+    setAckingInstructionsId(null);
+  };
   const showFirstSteps = firstStepsResolved && firstStepsDone < firstSteps.length && !profile.isDemo;
   // Expose to parent (app.js) so bottom nav can grey out Find Work
   window.__caregiverFirstStepsRemain = showFirstSteps;
@@ -1821,7 +1860,23 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                       ) : noAddress ? (
                         <div style={{ fontSize: 12, color: 'var(--color-error)', marginTop: 2, fontWeight: 600 }}>{'\u26A0\uFE0F'} No care address on file</div>
                       ) : null}
-                      {s.specialInstructions && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4, fontStyle: 'italic' }}>{linkify(s.specialInstructions)}</div>}
+                      {isActive && s.instructionsNeedAck && s.specialInstructions ? (
+                        // v1.109.6 — the family changed the instructions after she checked in (or
+                        // she checked in on a version that has since changed). Loud, and it stays
+                        // until she says she has read them.
+                        <div data-testid="active-instructions-ack" onClick={(e) => e.stopPropagation()}
+                          style={{ marginTop: 10, padding: 12, borderRadius: 10, border: '2px solid var(--color-warning)', background: 'var(--bg-highlight)', cursor: 'default' }}>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-warning)', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 6 }}>{'\u{1F4CB}'} New instructions from the family</div>
+                          <div style={{ fontSize: 14, color: 'var(--text-primary)', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{linkify(s.specialInstructions)}</div>
+                          <button disabled={ackingInstructionsId === s.id}
+                            onClick={(e) => { e.stopPropagation(); acknowledgeInstructions(s); }}
+                            style={{ marginTop: 10, width: '100%', minHeight: 44, borderRadius: 10, border: 'none', background: 'var(--role-color)', color: 'var(--text-on-primary)', fontWeight: 700, fontSize: 14, cursor: 'pointer', opacity: ackingInstructionsId === s.id ? 0.6 : 1 }}>
+                            {ackingInstructionsId === s.id ? 'Saving…' : "I've read these"}
+                          </button>
+                        </div>
+                      ) : s.specialInstructions ? (
+                        <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4, fontStyle: 'italic' }}>{linkify(s.specialInstructions)}</div>
+                      ) : null}
                       {/* View Care Profile toggle */}
                       <button onClick={(e) => {
                         e.stopPropagation();
@@ -1918,6 +1973,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                           setLocationError(null);
                           setBriefingData(null);
                           setBriefingAcked(false);
+                          setInstructionsAcked(false);
                           setCheckInStep('briefing');
                           setBriefingLoading(true);
                           // Start geolocation early (skip in test mode)
@@ -4026,12 +4082,24 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                           ),
 
                       // ── Special instructions for this session ──
-                      (checkInSession.special_instructions || checkInSession.specialInstructions)
-                        ? React.createElement('div', { style: {
-                            padding: 12, background: 'var(--bg-highlight)', borderRadius: 8, border: '1px solid #d4edda', marginBottom: 14,
+                      // v1.109.6 — first, above the AI summary, with its own checkbox: these are the
+                      // family's words for today, and "reviewed the briefing" does not cover them.
+                      wizardHasInstructions
+                        ? React.createElement('div', { 'data-testid': 'wizard-instructions', style: {
+                            padding: 12, background: 'var(--bg-highlight)', borderRadius: 8,
+                            border: instructionsAcked ? '2px solid #4caf50' : '2px solid var(--color-warning)', marginBottom: 14,
                           }},
-                            React.createElement('div', { style: { fontSize: 12, fontWeight: 600, color: 'var(--role-color)', marginBottom: 4 } }, 'Today\'s instructions'),
-                            React.createElement('div', { style: { fontSize: 13, color: 'var(--text-primary)' } }, checkInSession.special_instructions || checkInSession.specialInstructions)
+                            React.createElement('div', { style: { fontSize: 12, fontWeight: 700, color: 'var(--role-color)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.4px' } }, '\u{1F4CB} Today\'s instructions from the family'),
+                            React.createElement('div', { style: { fontSize: 14, color: 'var(--text-primary)', whiteSpace: 'pre-wrap', lineHeight: 1.5 } }, wizardInstructions),
+                            React.createElement('label', { style: { display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, cursor: 'pointer' } },
+                              React.createElement('input', {
+                                type: 'checkbox', checked: instructionsAcked,
+                                onChange: (e) => setInstructionsAcked(e.target.checked),
+                                style: { width: 18, height: 18, accentColor: 'var(--role-color)' },
+                              }),
+                              React.createElement('span', { style: { fontSize: 13, fontWeight: 600, color: instructionsAcked ? 'var(--color-success)' : 'var(--text-primary)' } },
+                                'I\'ve read today\'s instructions')
+                            )
                           )
                         : null,
 
@@ -4206,7 +4274,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
             ),
             React.createElement('button', {
               onClick: async () => {
-                if (!briefingAcked) {
+                if (!briefingReady) {
                   setContinueShaking(true);
                   setContinueHintVisible(true);
                   setTimeout(() => setContinueShaking(false), 400);
@@ -4232,20 +4300,22 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               style: {
                 width: '100%', padding: '16px', borderRadius: 14,
                 fontSize: 16, fontWeight: 700, cursor: 'pointer',
-                background: briefingAcked
+                background: briefingReady
                   ? 'linear-gradient(135deg, var(--role-color), var(--color-success))'
                   : 'var(--bg-primary)',
-                color: briefingAcked ? 'var(--text-on-primary)' : 'var(--text-muted)',
+                color: briefingReady ? 'var(--text-on-primary)' : 'var(--text-muted)',
                 transition: 'all 0.2s',
                 animation: continueShaking ? 'checkInShake 0.4s ease-in-out' : 'none',
-                border: briefingAcked ? 'none' : '1px solid var(--border-light)',
+                border: briefingReady ? 'none' : '1px solid var(--border-light)',
               }
-            }, briefingAcked ? 'Continue to Check In →' : 'Continue to Check In →'),
-            continueHintVisible && !briefingAcked
+            }, 'Continue to Check In →'),
+            continueHintVisible && !briefingReady
               ? React.createElement('div', { style: {
                   textAlign: 'center', fontSize: 13, color: 'var(--color-warning)', marginTop: 8,
                   fontWeight: 500, animation: 'fadeIn 0.3s ease',
-                }}, '☝️ Please acknowledge the care briefing first')
+                }}, (wizardHasInstructions && !instructionsAcked)
+                  ? '☝️ Please read and check off today\'s instructions first'
+                  : '☝️ Please acknowledge the care briefing first')
               : null
           )}
 
@@ -4268,6 +4338,8 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                   checkInLatitude: checkInLocation?.lat || null,
                   checkInLongitude: checkInLocation?.lng || null,
                   briefingAcknowledged: true,
+                  // v1.109.6 — the exact words she checked off; the server stamps only on a match
+                  ...(wizardHasInstructions && instructionsAcked ? { acknowledgedInstructions: wizardInstructions } : {}),
                 };
                 try {
                   const res = await apiFetch('/api/sessions/' + checkInSession.id + '/check-in', {

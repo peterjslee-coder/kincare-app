@@ -323,11 +323,18 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, 
                     const res = await apiFetch(`/api/sessions/${s.id}/instructions`, {
                       method: 'PUT',
                       headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ specialInstructions: instructionsText })
+                      // v1.109.6 — the textarea holds the WHOLE text, so this is a replace. It used
+                      // to append, which doubled the instructions on every edit.
+                      body: JSON.stringify({ specialInstructions: instructionsText, mode: 'replace' })
                     });
                     if (res?.ok) {
                       const result = await res.json();
                       s.special_instructions = result.special_instructions;
+                      if (!result.unchanged) s.instructions_updated_at = new Date().toISOString();
+                      if (result.caregiverNotified && typeof window.__showToast === 'function') {
+                        const first = s.caregiver_name ? s.caregiver_name.split(' ')[0] : 'Your caregiver';
+                        window.__showToast(`Sent to ${first} — she'll be asked to confirm she's read them.`, 'success');
+                      }
                       setEditingInstructions(false);
                       if (onRefresh) onRefresh();
                     } else {
@@ -377,6 +384,20 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, 
                     ) : hasInstructions ? (
                       <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{linkify(s.special_instructions)}</div>
                     ) : null}
+                    {/* v1.109.6 — did she read them? Pete: "I get the sense Tina is just sort of
+                        blasting through the check in and missing notes." */}
+                    {!editingInstructions && hasInstructions && role !== 'caregiver' && s.caregiver_name && (() => {
+                      const first = s.caregiver_name.split(' ')[0];
+                      const ackAt = s.instructions_acknowledged_at;
+                      const updAt = s.instructions_updated_at;
+                      const needAck = !ackAt || (updAt && new Date(updAt) > new Date(ackAt));
+                      let text = null, color = 'var(--text-muted)';
+                      if (!needAck) { text = `\u2713 ${first} read these \u00B7 ${formatDateTime(ackAt)}`; color = 'var(--color-success)'; }
+                      else if (s.status === 'in_progress') { text = `Not yet confirmed by ${first}. They stay on her screen until she does.`; color = 'var(--color-warning)'; }
+                      else if (s.status === 'confirmed') { text = `${first} will be asked to confirm these when she checks in.`; }
+                      if (!text) return null;
+                      return <div data-testid="instructions-ack-status" style={{ fontSize: 12, fontWeight: 600, color, marginTop: 8 }}>{text}</div>;
+                    })()}
                   </div>
                 );
               })()}

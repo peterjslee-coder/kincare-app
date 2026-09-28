@@ -22,6 +22,15 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 
+// ─── v1.109.6 — read the file the error message points at ───
+//
+// The fix text below has always said "add ADMIN_API_KEY to kincare-repo/.env", and this file
+// never read .env. Pete added the key exactly where he was told and got the same error, because
+// the only way the key could arrive was an exported shell variable. Load the repo-root .env
+// here, anchored to this file rather than the working directory so it works from anywhere.
+// dotenv never overrides a variable that is already set, so an exported value still wins.
+require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
+
 const PROD_URL = "https://yourinplace.com";
 const LOCAL_URL = "http://localhost:3001";
 
@@ -176,7 +185,8 @@ async function getAuthHeaders() {
   // Try email/password login as fallback (requires ADMIN_PASSWORD env; 2FA usually blocks this)
   if (!ADMIN_PASSWORD) {
     console.error("❌ No ADMIN_API_KEY set (and no ADMIN_PASSWORD fallback).\n");
-    console.error("   Fix: add ADMIN_API_KEY to kincare-repo/.env (value in Railway → Variables).");
+    console.error(`   Looked in the environment and in ${path.join(__dirname, "..", ".env")}.`);
+    console.error("   Fix: add a line ADMIN_API_KEY=<value> to that file (value in Railway → Variables).");
     process.exit(1);
   }
   const loginRes = await request(`${BASE_URL}/api/auth/login`, {
