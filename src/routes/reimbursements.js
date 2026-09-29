@@ -617,6 +617,10 @@ router.post("/:id/approve", async (req, res) => {
     const db = await getDb();
     const ctx = await loadForApprover(db, req, res);
     if (!ctx) return;
+    // v1.109.8 — already approved (or paid) is 409, which the Needs-you card reads as done
+    if (["approved", "paid"].includes(ctx.row.status)) {
+      return res.status(409).json({ error: "Already approved", code: "ALREADY_APPROVED", status: ctx.row.status });
+    }
     if (ctx.row.status !== "pending") return res.status(400).json({ error: `Cannot approve a ${ctx.row.status} request` });
 
     // v1.97.0 — the approver confirms the "from" account (e.g. "Mom's checking")

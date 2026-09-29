@@ -4917,7 +4917,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                     const r = await apiFetch(`/api/sessions/${s.id}/time-change/${p.id}/respond`, {
                       method: 'PUT', body: JSON.stringify({ action: 'reject' }),
                     });
-                    if (r?.ok) { showToast('Time change declined — keeping original time', 'info'); setTimeChangeProposal(null); try { const dr = await apiFetch('/api/dashboard'); if (dr?.ok) setData(await dr.json()); } catch {} }
+                    if (r?.ok) { try { window.dispatchEvent(new Event('inplace:attention-stale')); } catch {}  showToast('Time change declined — keeping original time', 'info'); setTimeChangeProposal(null); try { const dr = await apiFetch('/api/dashboard'); if (dr?.ok) setData(await dr.json()); } catch {} }
                   } catch {}
                   setTcRespondLoading(false);
                 }}
@@ -4932,7 +4932,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                       const r = await apiFetch(`/api/sessions/${s.id}/time-change/${p.id}/respond`, {
                         method: 'PUT', body: JSON.stringify({ action: 'cancel_with_review' }),
                       });
-                      if (r?.ok) {
+                      if (r?.ok) { try { window.dispatchEvent(new Event('inplace:attention-stale')); } catch {} 
                         showToast("Session cancelled — you'll be paid in full for this visit", 'info');
                         setTimeChangeProposal(null);
                         try { const dr = await apiFetch('/api/dashboard'); if (dr?.ok) setData(await dr.json()); } catch {}
@@ -4951,7 +4951,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                     const r = await apiFetch(`/api/sessions/${s.id}/time-change/${p.id}/respond`, {
                       method: 'PUT', body: JSON.stringify({ action: 'accept' }),
                     });
-                    if (r?.ok) { showToast('New time accepted!', 'success'); setTimeChangeProposal(null); try { const dr = await apiFetch('/api/dashboard'); if (dr?.ok) setData(await dr.json()); } catch {} }
+                    if (r?.ok) { try { window.dispatchEvent(new Event('inplace:attention-stale')); } catch {}  showToast('New time accepted!', 'success'); setTimeChangeProposal(null); try { const dr = await apiFetch('/api/dashboard'); if (dr?.ok) setData(await dr.json()); } catch {} }
                   } catch {}
                   setTcRespondLoading(false);
                 }}

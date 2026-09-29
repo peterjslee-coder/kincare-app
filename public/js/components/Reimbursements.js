@@ -408,6 +408,10 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
         setRowResult(approveTarget.id, 'ok', `✓ Approved — ${approveTarget.payee_first_name} was notified. It now shows “Approved — awaiting payment.”`);
         showToast(`Approved — ${approveTarget.payee_first_name} was notified`, 'success');
         setApproveTarget(null); await fetchList();
+      } else if (res?.status === 409) {
+        // v1.109.8 — someone already approved it (maybe you, from the Needs-you card). Done, not an error.
+        showToast('Already approved', 'info');
+        setApproveTarget(null); await fetchList();
       } else { const d = await res.json().catch(() => ({})); setApproveError(d.error || 'Approval failed'); }
     } catch { setApproveError('Approval failed — check your connection and try again'); }
     setBusyId(null);

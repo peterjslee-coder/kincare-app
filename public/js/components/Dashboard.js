@@ -2697,7 +2697,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                     const r = await apiFetch(`/api/sessions/${s.id}/time-change/${p.id}/respond`, {
                       method: 'PUT', body: JSON.stringify({ action: 'reject' }),
                     });
-                    if (r?.ok) { showToast('Time change declined — keeping original time', 'info'); setTimeChangeProposal(null); fetchDashboard(); }
+                    if (r?.ok) { try { window.dispatchEvent(new Event('inplace:attention-stale')); } catch {}  showToast('Time change declined — keeping original time', 'info'); setTimeChangeProposal(null); fetchDashboard(); }
                   } catch {}
                   setTcRespondLoading(false);
                 }}
@@ -2712,7 +2712,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                       const r = await apiFetch(`/api/sessions/${s.id}/time-change/${p.id}/respond`, {
                         method: 'PUT', body: JSON.stringify({ action: 'cancel_with_review' }),
                       });
-                      if (r?.ok) {
+                      if (r?.ok) { try { window.dispatchEvent(new Event('inplace:attention-stale')); } catch {} 
                         const d = await r.json();
                         showToast('Session cancelled — no charge', 'info');
                         setTimeChangeProposal(null);
@@ -2742,7 +2742,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                     const r = await apiFetch(`/api/sessions/${s.id}/time-change/${p.id}/respond`, {
                       method: 'PUT', body: JSON.stringify({ action: 'accept' }),
                     });
-                    if (r?.ok) { showToast('New time accepted!', 'success'); setTimeChangeProposal(null); fetchDashboard(); }
+                    if (r?.ok) { try { window.dispatchEvent(new Event('inplace:attention-stale')); } catch {}  showToast('New time accepted!', 'success'); setTimeChangeProposal(null); fetchDashboard(); }
                   } catch {}
                   setTcRespondLoading(false);
                 }}

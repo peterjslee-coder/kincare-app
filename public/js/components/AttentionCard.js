@@ -170,6 +170,15 @@ const AttentionCard = window.AttentionCard = ({ onNavigate }) => {
     return CareTaskSync.onChange(() => load());
   }, [load]);
 
+  // v1.109.8 — Pete (50f59a7b): accepted a time change from the visit details (reached from a
+  // push), and this card kept the row, because nothing told it. Any surface that answers one of
+  // these things now fires `inplace:attention-stale`; the card re-reads.
+  React.useEffect(() => {
+    const onStale = () => load();
+    window.addEventListener('inplace:attention-stale', onStale);
+    return () => window.removeEventListener('inplace:attention-stale', onStale);
+  }, [load]);
+
   React.useEffect(() => {
     load();
     // Same trigger as the icon badge: whatever you just cleared, the card agrees when you
@@ -223,6 +232,9 @@ const AttentionCard = window.AttentionCard = ({ onNavigate }) => {
       }
     } else {
       setFailed((prev) => ({ ...prev, [item.id]: message || "That didn't go through. Try again." }));
+      // v1.109.8 — a failure can mean the row is stale (someone else answered it). Re-read so a
+      // row that is no longer waiting on anyone disappears instead of sitting there with an error.
+      load();
     }
   }, [load]);
 

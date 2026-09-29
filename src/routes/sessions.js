@@ -3025,7 +3025,16 @@ router.put("/:id/time-change/:proposalId/respond", async (req, res) => {
     const proposal = await db.prepare("SELECT * FROM time_change_proposals WHERE id = ? AND session_id = ?")
       .get(req.params.proposalId, req.params.id);
     if (!proposal) return res.status(404).json({ error: "Proposal not found" });
-    if (proposal.status !== "pending") return res.status(400).json({ error: "Proposal already responded to" });
+    // v1.109.8 — already answered is 409 when it is already in the state you asked for. The
+    // Needs-you card treats 409 as "done" (v1.105.142); a 400 here handed Pete an error for a
+    // change he had just accepted from the visit details (50f59a7b).
+    if (proposal.status !== "pending") {
+      const wanted = action === "accept" ? "accepted" : action === "reject" ? "rejected" : null;
+      if (wanted && proposal.status === wanted) {
+        return res.status(409).json({ error: "Already " + wanted, code: "ALREADY_RESPONDED", status: proposal.status });
+      }
+      return res.status(400).json({ error: `This change was already ${proposal.status}`, code: "ALREADY_RESPONDED", status: proposal.status });
+    }
 
     const session = await db.prepare(`
       SELECT cs.*, cp.user_id AS caregiver_user_id, cp.hourly_rate,
@@ -4713,6 +4722,10 @@ router.put("/:id/proposals/:proposalId/accept", async (req, res) => {
       return res.status(403).json({ error: "Only the requesting family can accept proposals" });
     }
     if (proposal.status !== "pending") {
+      // v1.109.8 — same rule as time-change respond: already accepted is 409 (done), not an error
+      if (proposal.status === "accepted") {
+        return res.status(409).json({ error: "Already accepted", code: "ALREADY_RESPONDED", status: proposal.status });
+      }
       return res.status(400).json({ error: `Proposal is already ${proposal.status}` });
     }
     // Check if proposal has expired
