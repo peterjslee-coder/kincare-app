@@ -2,6 +2,47 @@
 
 > **How this works:** Add bugs and features below as you find them. Don't worry about wording or order. When you're ready for a dev session, say "let's work the task list" and Claude will batch everything together into one efficient push. Nothing gets executed until you say go.
 
+## Oct 12 2026 — triage (Pete: feedback + Documents Center + legal insight)
+
+**v1.110.0 on staging** (`68237166`). Prod waits for Pete.
+
+Shipped in v1.110.0:
+- [x] **9d286a8a** — the cancellation-fee push opened Home. The fee pushes had no `page` and no router branch. They now open `CancelFeeSheet` (family: dispute; caregiver: waive). There are Needs-you rows for both, and a repeat answers 409. Fixed in the same sweep: every dispute answered 500 *after* saving (`notifyAdmins` had no promise); session pushes with no branch now open the visit; a caregiver can see a fee after declining a late time change.
+- [x] **e4cd314a** — one-time to-dos (`care_todos`, migration 052) for whoever is at the house next. Not in the recurrence engine, not swept to missed, never a Needs-you item.
+- [x] **Documents Center Ph1** (migration 050):
+  - Medical records are stored, not verified. They never reach the admin queue or documentAI, and admins have no read access.
+  - Opening or downloading a record takes a passkey step-up.
+  - The iPAi key is held by the member, or by the leader if the member has no account. Granting or revoking it takes a passkey every time.
+  - Leader-granted sharing; caregivers never.
+  - Audit trail.
+  - iPAi review quotes the document verbatim, after a not-medical-care acknowledgment, and produces suggestions a human accepts.
+- [x] **Legal & money readiness Ph1** (migration 051):
+  - POA and healthcare-directive checklist.
+  - "Get help nearby" directory: verified public sources only, no paid listings (Pete 10/12), plus an admin "Local Help" tab for adding local firms by hand.
+  - Family scam report.
+  - An admin can share money-safety resources from an exploitation safety flag. Nothing reaches the family until the admin shares.
+- [x] `apiFieldContract.itest.js`: fixture date `2026-10-01` was a time bomb: it has failed since 10/2 and would have turned CI red on the next push. It now uses a relative date.
+
+### P1 — found while building, not yet fixed
+- [ ] **Caregivers on the care team can open POA, Healthcare POA, consent and legal docs.** `documents.js` `canAccessOwner` allows any team member and any share. Decide who should see legal docs, then use one helper, like `medicalAccess.js`.
+- [ ] `documents.js`: `/upload` and `/audit/:id` skip `checkDocAdmin`, so `req.isAdmin` is undefined there. Generic DELETE checks only the uploader.
+- [ ] The admin doc review calls `logConsentAudit({ recipientId })`, but the column is `careRecipientId`. Approve/reject audit rows are silently lost.
+- [ ] There is no admin screen for fee disputes, so the `cancel_fee_disputed` push has nowhere to open.
+- [ ] The time-change late-fee path sends no fee pushes. The Needs-you row covers it for now.
+
+### P2 — next phases
+- [ ] Docs Center Ph2: accepting a medication suggestion should offer to create a care task. Today it is only marked reviewed.
+- [ ] Docs Center Ph2: decide whether consented records can inform iPAi chat. The cardinal rule applies: raw document only, never the AI summary.
+- [ ] Readiness Ph2: let the member see her own checklist. Care recipients have no county column; locality comes from city or zip.
+- [ ] Readiness: the share button shows only on open safety flags.
+- [ ] 8 more itests hardcode Oct–Dec 2026 dates (instructionAcks, moneyLifecycle, holdPricing, alreadyAnswered…). Make them relative before they go off.
+
+### NEEDS COUNSEL (add to the lawyer agenda)
+- [ ] **Medical records storage**: this makes us look more like a personal-health-record vendor under the FTC Health Breach Notification Rule. Confirm breach-notice readiness, and update the Privacy Policy (medical records, R2) **before broad use on prod**.
+- [ ] Readiness checklist wording: POA, capacity, guardianship, the Va. Code § 54.1-2986 decision-maker order.
+- [ ] Referral partners: Va. RPC 7.2(c) (nothing of value for recommending a lawyer); SEC promoter rules for advisers. Phase 1 is directory-only.
+- [ ] The "share money-safety resources" card: any duty-to-report or defamation exposure? Do hand-added local firms need vetting?
+
 ## Bugs
 
 > Open bugs ranked P0–P4. P0 = blocks users or creates liability. P1 = significant UX issue. P2 = moderate improvement. P3 = nice-to-have. P4 = aspirational.
