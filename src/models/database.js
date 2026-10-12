@@ -2734,6 +2734,80 @@ async function initializeDatabase() {
         `ALTER TABLE care_team_members ADD COLUMN IF NOT EXISTS visit_updates_opt_in INTEGER`,
       ],
     },
+    {
+      // ─── Documents Center Phase 1 — medical records ───
+      //
+      // Pete (10/12): medical records are STORED, not verified. They live in verified_documents
+      // with category='medical' and owner_type='care_recipient', never enter the admin review
+      // queue, never go to documentAI, and admins get no blanket read. Who may see them is
+      // decided in ONE place — src/utils/medicalAccess.js. Caregivers never.
+      //
+      //   medical_record_access   the leader allows family members one by one
+      //   medical_ai_consent      "iPAi may read these records" — the key; default OFF
+      //   medical_step_ups        a fresh passkey assertion, ~10 min, per user + session
+      //   medical_record_audit    every upload / open / download / delete / grant / AI read
+      //   medical_ai_acks         "iPAi is not medical care…" ticked at the point of generation
+      //   medical_doc_suggestions items quoted from the document; a human accepts or dismisses
+      id: "050_documents_center",
+      statements: [
+        `CREATE TABLE IF NOT EXISTS medical_record_access (
+          care_recipient_id TEXT NOT NULL,
+          user_id TEXT NOT NULL,
+          granted_by TEXT NOT NULL,
+          granted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          PRIMARY KEY (care_recipient_id, user_id)
+        )`,
+        `CREATE TABLE IF NOT EXISTS medical_ai_consent (
+          care_recipient_id TEXT PRIMARY KEY,
+          granted INTEGER NOT NULL DEFAULT 0,
+          decided_by TEXT,
+          decided_at TIMESTAMPTZ,
+          method TEXT
+        )`,
+        `CREATE TABLE IF NOT EXISTS medical_step_ups (
+          user_id TEXT NOT NULL,
+          session_key TEXT NOT NULL,
+          verified_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          expires_at TIMESTAMPTZ NOT NULL,
+          PRIMARY KEY (user_id, session_key)
+        )`,
+        `CREATE TABLE IF NOT EXISTS medical_record_audit (
+          id TEXT PRIMARY KEY,
+          care_recipient_id TEXT NOT NULL,
+          document_id TEXT,
+          actor_id TEXT,
+          event_type TEXT NOT NULL,
+          detail TEXT,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )`,
+        `CREATE INDEX IF NOT EXISTS idx_medical_audit_recipient ON medical_record_audit (care_recipient_id, created_at DESC)`,
+        `CREATE TABLE IF NOT EXISTS medical_ai_acks (
+          id TEXT PRIMARY KEY,
+          care_recipient_id TEXT NOT NULL,
+          document_id TEXT NOT NULL,
+          user_id TEXT NOT NULL,
+          ack_text TEXT NOT NULL,
+          acknowledged_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )`,
+        `CREATE TABLE IF NOT EXISTS medical_doc_suggestions (
+          id TEXT PRIMARY KEY,
+          document_id TEXT NOT NULL,
+          care_recipient_id TEXT NOT NULL,
+          kind TEXT NOT NULL,
+          title TEXT NOT NULL,
+          detail TEXT,
+          source_quote TEXT NOT NULL,
+          suggested_date TEXT,
+          status TEXT NOT NULL DEFAULT 'pending',
+          created_by TEXT,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          decided_by TEXT,
+          decided_at TIMESTAMPTZ,
+          result_ref TEXT
+        )`,
+        `CREATE INDEX IF NOT EXISTS idx_medical_suggestions_recipient ON medical_doc_suggestions (care_recipient_id, status)`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;
