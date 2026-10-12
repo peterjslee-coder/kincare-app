@@ -170,7 +170,7 @@ const DocumentsCenter = window.DocumentsCenter = ({ onNavigate }) => {
       const res = await withStepUp(() => apiFetch(`/api/medical-records/${selectedId}/docs/${doc.id}/open`));
       if (!res?.ok) { showToast(await dcErrorText(res, "Couldn't open this record."), 'error'); return; }
       const blob = await res.blob();
-      setViewer({ url: URL.createObjectURL(blob), mime: doc.mimeType, name: doc.fileName, doc, kind: 'medical' });
+      setViewer({ url: URL.createObjectURL(blob), blob, mime: doc.mimeType || blob.type, name: doc.fileName, doc, kind: 'medical' });
     } catch { showToast("Couldn't open this record. Check your connection and try again.", 'error'); }
   };
 
@@ -219,7 +219,7 @@ const DocumentsCenter = window.DocumentsCenter = ({ onNavigate }) => {
       const res = await apiFetch(`/api/documents/${doc.id}/download`);
       if (!res?.ok) { showToast(await dcErrorText(res, "Couldn't open this document."), 'error'); return; }
       const blob = await res.blob();
-      setViewer({ url: URL.createObjectURL(blob), mime: doc.mime_type, name: doc.file_name, doc, kind: 'legal' });
+      setViewer({ url: URL.createObjectURL(blob), blob, mime: doc.mime_type || blob.type, name: doc.file_name, doc, kind: 'legal' });
     } catch { showToast("Couldn't open this document.", 'error'); }
   };
 
@@ -574,7 +574,11 @@ const DocumentsCenter = window.DocumentsCenter = ({ onNavigate }) => {
             <div className="modal-header" style={{ fontSize: 16 }}>{viewer.name}</div>
             {String(viewer.mime || '').startsWith('image/')
               ? <img src={viewer.url} alt={viewer.name} style={{ maxWidth: '100%', display: 'block', margin: '8px auto' }} />
-              : <iframe src={viewer.url} title={viewer.name} style={{ width: '100%', height: '70vh', border: 'none' }} />}
+              // v1.110.4 — Pete: "i uploaded a medical file and can't view" — Chrome showed
+              // "This content is blocked". A bare <iframe src=blob:> broke twice over: the CSP's
+              // frame-src never allowed blob: (fixed in server.js), and WebKit/iPhone won't paint
+              // a PDF in a subframe at all. PdfPreview is the app's one way to show a PDF.
+              : <PdfPreview blobUrl={viewer.url} blob={viewer.blob} name={viewer.name} height="70vh" />}
             {viewer.kind === 'medical' && (
               <button style={{ ...dcBtn(), marginTop: 8 }} onClick={() => downloadMedical(viewer.doc)}>Download</button>
             )}
