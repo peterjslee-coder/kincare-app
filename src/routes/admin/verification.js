@@ -97,6 +97,7 @@ router.get("/documents/:docId", requireAdmin, async (req, res) => {
           admin_reviewed_by, admin_reviewed_at,
           'verified_documents' AS source_table
         FROM verified_documents WHERE id = ?
+          AND category <> 'medical' -- Documents Center: medical records are never shown to admins
       `).get(docId).catch(() => null);
     }
 

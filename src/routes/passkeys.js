@@ -382,3 +382,8 @@ router.put("/:id", authenticate, blockWhileImpersonating("rename a passkey"), as
 });
 
 module.exports = router;
+// Documents Center (migration 050) — the medical-record step-up verifies against the SAME
+// relying party and origin list as sign-in, so it reads them from here rather than keeping a
+// second copy that could drift.
+module.exports.RP_ID = RP_ID;
+module.exports.EXPECTED_ORIGINS = EXPECTED_ORIGINS;

@@ -52,6 +52,8 @@ async function seed({ force = false, demoOnly = false } = {}) {
       // Tables that reference user IDs directly or transitively
       await db.prepare(`DELETE FROM trusted_devices WHERE user_id IN (${placeholders})`).run(...demoIds);
       await db.prepare(`DELETE FROM user_2fa WHERE user_id IN (${placeholders})`).run(...demoIds);
+      await trySavepoint(() => db.prepare(`DELETE FROM medical_step_ups WHERE user_id IN (${placeholders})`).run(...demoIds));
+      await trySavepoint(() => db.prepare(`DELETE FROM medical_record_access WHERE user_id IN (${placeholders})`).run(...demoIds));
       await db.prepare(`DELETE FROM oauth_accounts WHERE user_id IN (${placeholders})`).run(...demoIds);
       await db.prepare(`DELETE FROM push_subscriptions WHERE user_id IN (${placeholders})`).run(...demoIds);
       await db.prepare(`DELETE FROM password_reset_tokens WHERE user_id IN (${placeholders})`).run(...demoIds);
@@ -162,6 +164,12 @@ async function seed({ force = false, demoOnly = false } = {}) {
         // table pointing at care_recipients or users needs a line here, or the parent
         // DELETE FK-fails and rolls back the whole single-transaction reseed.
         await trySavepoint(() => db.prepare(`DELETE FROM family_visits WHERE care_recipient_id IN (${crp})`).run(...demoCrIds));
+        // Documents Center (migration 050) — medical records tables keyed by care_recipient_id.
+        // No FKs on these, but a demo reseed must not leave a demo recipient's medical audit,
+        // sharing list, AI key or suggestions behind for an id that no longer exists.
+        for (const t of ["medical_doc_suggestions", "medical_ai_acks", "medical_record_audit", "medical_ai_consent", "medical_record_access"]) {
+          await trySavepoint(() => db.prepare(`DELETE FROM ${t} WHERE care_recipient_id IN (${crp})`).run(...demoCrIds));
+        }
       }
 
       // Care recipients owned by demo family users

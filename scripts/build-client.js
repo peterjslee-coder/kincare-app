@@ -71,6 +71,7 @@ const scripts = [
   "js/components/ConsentVerification.js",
   "js/components/ConsentResponsePage.js",
   "js/components/Documents.js",
+  "js/components/DocumentsCenter.js", // Documents Center Phase 1 — medical + legal records per loved one
   "js/components/VideoCallOverlay.js",
   "js/components/Messages.js",
   "js/components/RequestCareModal.js",

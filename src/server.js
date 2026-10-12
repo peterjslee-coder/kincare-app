@@ -810,6 +810,7 @@ app.use("/api/reports", require("./routes/reports"));
 app.use("/api/video", require("./routes/videoCall"));
 app.use("/api/consent", require("./routes/consent"));
 app.use("/api/documents", require("./routes/documents"));
+app.use("/api/medical-records", require("./routes/medicalRecords")); // Documents Center — medical records (migration 050)
 app.use("/api/checkr", require("./routes/checkr"));
 app.use("/api/accountability", require("./routes/accountability"));
 app.use("/api/interviews", require("./routes/interviews"));

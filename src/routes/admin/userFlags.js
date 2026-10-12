@@ -106,8 +106,9 @@ router.get("/users/:id/onboarding", async (req, res) => {
     const verifiedDocs = profile ? await db.prepare(`
       SELECT id, document_type, category, status, created_at, 'verified_documents' AS source
       FROM verified_documents
-      WHERE (owner_type = 'caregiver' AND owner_id = ?)
-         OR (owner_type = 'user' AND owner_id = ? AND uploaded_by = ?)
+      WHERE ((owner_type = 'caregiver' AND owner_id = ?)
+         OR (owner_type = 'user' AND owner_id = ? AND uploaded_by = ?))
+        AND category <> 'medical'
       ORDER BY created_at DESC
     `).all(profile.id, user.id, user.id).catch(() => []) : [];
     const docs = [...verifiedDocs, ...legacyDocs];

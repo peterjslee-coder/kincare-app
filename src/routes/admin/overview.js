@@ -510,7 +510,8 @@ router.get("/users/:id/detail", async (req, res) => {
       const vDocs = await db.prepare(`
         SELECT id, 'verified_documents' AS source_table, document_type, file_name,
           status, category, ai_classification, admin_notes, expires_at, created_at
-        FROM verified_documents WHERE uploaded_by = ? OR owner_id = ?
+        FROM verified_documents WHERE (uploaded_by = ? OR owner_id = ?)
+          AND category <> 'medical' -- Documents Center: admins get no read of medical records
         ORDER BY created_at DESC
       `).all(userId, userId).catch(() => []);
 

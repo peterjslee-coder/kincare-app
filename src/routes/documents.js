@@ -6,6 +6,9 @@ const { authenticate, requireAdmin } = require("../middleware/auth");
 const { classifyDocument } = require("../utils/documentAI");
 const { validateMagicBytes } = require("../utils/fileValidation");
 const storage = require("../utils/storage"); // v1.91.0 — env-gated R2 offload for document blobs
+// Documents Center (migration 050) — medical records are decided by ONE helper, never by
+// canAccessOwner below (whose team-member and admin shortcuts would leak them).
+const { medicalRole, logMedicalAudit } = require("../utils/medicalAccess");
 
 const router = express.Router();
 
@@ -26,7 +29,13 @@ async function checkDocAdmin(req, res, next) {
 
 // ─── Constants ───
 const VALID_OWNER_TYPES = ["care_recipient", "caregiver", "user"];
-const VALID_CATEGORIES = ["consent", "identity", "certification", "insurance", "legal"];
+const VALID_CATEGORIES = ["consent", "identity", "certification", "insurance", "legal", "medical"];
+// Medical records (Documents Center Phase 1): stored, not verified. Owner is always a
+// care_recipient; no admin queue, no documentAI, no admin read. See utils/medicalAccess.js.
+const MEDICAL_DOCUMENT_TYPES = [
+  "Visit_Summary", "Medication_List", "Discharge_Summary", "Lab_Result",
+  "Imaging_Report", "Care_Plan", "Insurance_Card", "Other_Medical",
+];
 const VALID_DOCUMENT_TYPES = [
   // Consent / Legal
   "POA", "Healthcare_POA", "Court_Order", "Living_Will", "Other_Legal",
@@ -41,6 +50,8 @@ const VALID_DOCUMENT_TYPES = [
   "Liability_Insurance", "Auto_Insurance", "Health_Insurance",
   // Other
   "Other",
+  // Medical (category 'medical' only)
+  ...MEDICAL_DOCUMENT_TYPES,
 ];
 
 // ─── Multer config (PDF + images, 10MB) ───
@@ -130,6 +141,47 @@ router.post("/upload", authenticate, uploadDoc.single("document"), async (req, r
     }
 
     const db = await getDb();
+
+    // ── Medical records: their own rules, and nothing below this block applies to them ──
+    const isMedical = category === "medical";
+    if (isMedical !== MEDICAL_DOCUMENT_TYPES.includes(document_type)) {
+      return res.status(400).json({ error: "Medical record types go with the medical category only" });
+    }
+    if (isMedical) {
+      if (owner_type !== "care_recipient") {
+        return res.status(400).json({ error: "Medical records belong to a care recipient" });
+      }
+      const role = await medicalRole(db, owner_id, req.user.id);
+      if (!role.canView) {
+        return res.status(403).json({ error: "You don't have access to this person's medical records." });
+      }
+      const magic = validateMagicBytes(req.file.buffer, req.file.mimetype);
+      if (!magic.valid) {
+        return res.status(400).json({
+          error: `File content doesn't match its type. Expected ${req.file.mimetype}${magic.detected ? `, detected ${magic.detected}` : ""}`,
+        });
+      }
+      const medId = uuid();
+      const medData = await storage.storeFileData("documents", `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`);
+      // status 'stored': never 'ai_review'/'pending'/'ai_flagged', so never in the admin queue,
+      // and classifyDocument is deliberately NOT called.
+      await db.prepare(`
+        INSERT INTO verified_documents (id, owner_type, owner_id, uploaded_by, category, document_type,
+          file_data, file_name, file_size, mime_type, status, created_at, updated_at)
+        VALUES (?, 'care_recipient', ?, ?, 'medical', ?, ?, ?, ?, ?, 'stored', NOW(), NOW())
+      `).run(medId, owner_id, req.user.id, document_type, medData, req.file.originalname, req.file.size, req.file.mimetype);
+      await logMedicalAudit(db, {
+        careRecipientId: owner_id, documentId: medId, actorId: req.user.id, eventType: "uploaded",
+        detail: { documentType: document_type, fileName: req.file.originalname },
+      });
+      return res.status(201).json({
+        document: {
+          id: medId, owner_type: "care_recipient", owner_id, category: "medical", document_type,
+          file_name: req.file.originalname, file_size: req.file.size, mime_type: req.file.mimetype,
+          status: "stored", created_at: new Date().toISOString(),
+        },
+      });
+    }
 
     // Verify ownership: user must have access to the entity they're uploading for
     if (!(await canAccessOwner(db, req.user.id, req.user.role, owner_type, owner_id, req.isAdmin))) {
@@ -283,6 +335,7 @@ router.get("/owner/:ownerType/:ownerId", authenticate, checkDocAdmin, async (req
              expires_at, replaced_by, metadata, created_at, updated_at
       FROM verified_documents
       WHERE owner_type = ? AND owner_id = ?
+        AND category <> 'medical' -- medical records list only through /api/medical-records
     `;
     const params = [ownerType, ownerId];
 
@@ -338,6 +391,7 @@ router.get("/admin/pending", authenticate, checkDocAdmin, requireAdmin, async (r
       LEFT JOIN users u ON u.id = vd.uploaded_by
       LEFT JOIN care_recipients cr ON cr.id = vd.owner_id AND vd.owner_type = 'care_recipient'
       WHERE vd.status IN ('ai_review', 'pending', 'ai_flagged')
+        AND vd.category <> 'medical' -- medical records are stored, not verified: never queued
       ORDER BY
         CASE vd.status WHEN 'ai_flagged' THEN 1 WHEN 'pending' THEN 2 WHEN 'ai_review' THEN 3 END,
         vd.created_at DESC
@@ -388,7 +442,8 @@ router.post("/admin/:docId/review", authenticate, checkDocAdmin, requireAdmin, a
     }
 
     const doc = await db.prepare("SELECT * FROM verified_documents WHERE id = ?").get(req.params.docId);
-    if (!doc) return res.status(404).json({ error: "Document not found" });
+    // Medical records are never reviewed by an admin — answered as not found.
+    if (!doc || doc.category === "medical") return res.status(404).json({ error: "Document not found" });
 
     const newStatus = action === 'approve' ? 'approved' : 'rejected';
 
@@ -425,6 +480,7 @@ router.get("/admin/count", authenticate, checkDocAdmin, requireAdmin, async (req
     const db = await getDb();
     const row = await db.prepare(`
       SELECT COUNT(*) AS cnt FROM verified_documents WHERE status IN ('ai_review', 'pending', 'ai_flagged')
+        AND category <> 'medical'
     `).get();
     res.json({ count: parseInt(row.cnt) || 0 });
   } catch (err) {
@@ -448,8 +504,11 @@ router.get("/:docId", authenticate, checkDocAdmin, async (req, res) => {
 
     if (!doc) return res.status(404).json({ error: "Document not found" });
 
-    // Authorization check
-    if (!(await canAccessOwner(db, req.user.id, req.user.role, doc.owner_type, doc.owner_id, req.isAdmin))) {
+    // Authorization check — medical records answer to medicalAccess, never canAccessOwner
+    if (doc.category === "medical") {
+      const role = await medicalRole(db, doc.owner_id, req.user.id);
+      if (!role.canView) return res.status(403).json({ error: "You do not have access to this document" });
+    } else if (!(await canAccessOwner(db, req.user.id, req.user.role, doc.owner_type, doc.owner_id, req.isAdmin))) {
       return res.status(403).json({ error: "You do not have access to this document" });
     }
 
@@ -472,8 +531,12 @@ router.get("/:docId", authenticate, checkDocAdmin, async (req, res) => {
 router.get("/:docId/download", authenticate, checkDocAdmin, async (req, res) => {
   try {
     const db = await getDb();
-    const doc = await db.prepare("SELECT file_data, file_name, mime_type, owner_type, owner_id FROM verified_documents WHERE id = ?").get(req.params.docId);
+    const doc = await db.prepare("SELECT file_data, file_name, mime_type, owner_type, owner_id, category FROM verified_documents WHERE id = ?").get(req.params.docId);
     if (!doc) return res.status(404).json({ error: "Document not found" });
+    // Medical records open only through the passkey-gated, audited Documents Center route.
+    if (doc.category === "medical") {
+      return res.status(403).json({ error: "Open medical records from the Documents Center.", code: "MEDICAL_RECORD" });
+    }
 
     // Authorization check
     if (!(await canAccessOwner(db, req.user.id, req.user.role, doc.owner_type, doc.owner_id, req.isAdmin))) {
@@ -504,6 +567,21 @@ router.delete("/:docId", authenticate, async (req, res) => {
     const db = await getDb();
     const doc = await db.prepare("SELECT * FROM verified_documents WHERE id = ?").get(req.params.docId);
     if (!doc) return res.status(404).json({ error: "Document not found" });
+
+    // Medical records: anyone who can see them and uploaded it, or the leader/owner/member.
+    if (doc.category === "medical") {
+      const role = await medicalRole(db, doc.owner_id, req.user.id);
+      if (!role.canView || !(doc.uploaded_by === req.user.id || role.isLeader || role.isMember)) {
+        return res.status(403).json({ error: "You can't delete this record." });
+      }
+      await db.prepare("DELETE FROM verified_documents WHERE id = ?").run(doc.id);
+      await db.prepare("DELETE FROM medical_doc_suggestions WHERE document_id = ? AND status = 'pending'").run(doc.id);
+      await logMedicalAudit(db, {
+        careRecipientId: doc.owner_id, documentId: doc.id, actorId: req.user.id, eventType: "deleted",
+        detail: { documentType: doc.document_type, fileName: doc.file_name },
+      });
+      return res.json({ success: true });
+    }
 
     if (doc.status === "approved") {
       return res.status(403).json({ error: "Cannot delete an approved document. Contact admin to revoke." });
@@ -546,7 +624,8 @@ router.post("/:docId/re-verify", authenticate, checkDocAdmin, requireAdmin, asyn
   try {
     const db = await getDb();
     const doc = await db.prepare("SELECT * FROM verified_documents WHERE id = ?").get(req.params.docId);
-    if (!doc) return res.status(404).json({ error: "Document not found" });
+    // Medical records never go to documentAI.
+    if (!doc || doc.category === "medical") return res.status(404).json({ error: "Document not found" });
 
     const aiResult = await classifyDocument(await storage.resolveFileData(doc.file_data), doc.mime_type, doc.document_type);
 

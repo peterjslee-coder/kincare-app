@@ -2005,6 +2005,8 @@ const App = () => {
         { id: 'dashboard', icon: '🏠', label: 'My Home' },
         { id: 'messages', icon: '💬', label: 'Messages' },
         { id: 'kindred', icon: '💜', label: 'Kindred', isKindred: true },
+        // Documents Center — her own medical records and the iPAi key she holds.
+        { id: 'documents-center', icon: '📁', label: 'Documents' },
       ];
     }
     // family (default)
@@ -2014,6 +2016,9 @@ const App = () => {
       { id: 'care-profile', icon: '🌷', label: 'My Loved One', children: [
         { id: 'care-team', icon: '👪', label: 'Care Team' },
         { id: 'caregivers', icon: '🤝', label: 'Caregivers' },
+        // Documents Center Phase 1. On the phone the family bar is full (5), so the same page
+        // is reached from the Loved One screen (CareProfile.js) — see getBottomNavItems.
+        { id: 'documents-center', icon: '📁', label: 'Documents' },
       ]},
       { id: 'activity', icon: '📢', label: 'Activity Feed' },
       { id: 'messages', icon: '💬', label: 'Messages' },
@@ -2088,6 +2093,12 @@ const App = () => {
         ? <CaregiverProfilePage key={pageKey} caregiverId={window.__viewCaregiverId} onNavigate={setCurrentPage} />
         : <Caregivers key={pageKey} />;
     }
+    // Documents Center Phase 1 — guarded like every other optional component.
+    if (currentPage === 'documents-center') {
+      return typeof DocumentsCenter !== 'undefined'
+        ? <DocumentsCenter key={pageKey} onNavigate={setCurrentPage} />
+        : <Dashboard onNavigate={setCurrentPage} />;
+    }
     if (currentPage === 'documents') { window.__accountTab = 'documents'; return <MyAccount key={pageKey} setCurrentUser={setCurrentUser} onNavigate={setCurrentPage} />; }
     if (currentPage === 'analytics') return <Analytics key={pageKey} />;
     if (currentPage === 'activity') return <ActivityFeed key={pageKey} />;
@@ -2140,6 +2151,7 @@ const App = () => {
         { id: 'dashboard', icon: '🏠', label: 'Home' },
         { id: 'messages', icon: '💬', label: 'Messages' },
         { id: 'kindred', icon: '💜', label: 'Kindred', isKindred: true },
+        { id: 'documents-center', icon: '📁', label: 'Documents' },
         { id: 'account', icon: '👤', label: 'Account' },
       ];
     }
@@ -2150,6 +2162,9 @@ const App = () => {
       { id: 'messages', icon: '💬', label: 'Messages' },
     ];
     familyBottom.push({ id: 'account', icon: '👤', label: 'Account' });
+    // Documents Center: the family bar already carries five, so it is NOT a tab here. It is
+    // the "Documents Center" button on the Loved One screen (CareProfile.js), which this bar
+    // reaches as 'care-profile'. Desktop carries it under My Loved One in getNavItems.
     // v1.80.0 — Admin left the bottom bar (Pete was the only one seeing 6 tabs);
     // it now lives in the feedback floater's fan-out. Desktop sidebar unchanged.
     return familyBottom;
