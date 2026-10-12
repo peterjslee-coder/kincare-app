@@ -757,6 +757,15 @@ const App = () => {
         // nothing. Pete: "just dead ends. found it when i went looking in admin."
         if (d.flagId && !d.focus) window.__pendingFocus = `safetyFlag:${d.flagId}`;
         target = 'admin';
+      } else if (t === 'cancel_fee_notice' || t === 'cancel_fee_pending' || t === 'cancel_fee_waived') {
+        // v1.109.9 — Pete (9d286a8a): "I tapped on the push notification and it just brought me
+        // to the homepage. No explanation or no indication that there's a place for me to
+        // indicate something is wrong." No branch, no `page` in the payload: target stayed null
+        // and the tap did nothing. The fee sheet is mounted at the root and claims this token
+        // on mount (cold start) and on inplace:focus (warm).
+        if (d.sessionId) window.__pendingFocus = `cancelFee:${d.sessionId}`;
+        setTimeout(() => window.dispatchEvent(new Event('inplace:focus')), 0);
+        target = 'dashboard';
       } else if (t === 'review_received') {
         // v1.107.8 — her own profile, where the review is.
         if (d.caregiverId) window.__viewCaregiverId = d.caregiverId;
@@ -769,6 +778,13 @@ const App = () => {
         // Generic deep-link (e.g. team_note / observation_attention → care-profile)
         target = d.page;
       }
+      // v1.109.9 — the other half of v1.105.126. That change set a `session:` focus for every
+      // session-bearing push "rather than adding another type to the list" — but left `target`
+      // null for any type with no branch and no `page`, and a null target returns right here.
+      // So session_cancelled, no_show_cancelled, caregiver_no_show, the cancellation-fee pushes
+      // (9d286a8a) and the rest wrote a focus nobody would ever read and opened nothing. Both
+      // homes (Dashboard, CaretakerHub) claim `session:` and open the visit.
+      if (!target && d.sessionId) target = 'dashboard';
       if (!target) return;
       // v1.98.14 — stash + self-re-assert. On a native/cold push tap the router
       // fires while the async /auth/me restore is still landing on 'dashboard';
@@ -2431,6 +2447,8 @@ const App = () => {
         ))}
       </nav>
       {showRequestCareModal && <RequestCareModal onClose={() => setShowRequestCareModal(false)} />}
+      {/* v1.109.9 — one fee sheet for every page; a push tap or Needs-you row opens it */}
+      {typeof CancelFeeSheet !== 'undefined' && <CancelFeeSheet />}
       {(currentUser?.is_tester || currentUser?.isAdmin) && <FeedbackButton currentPage={currentPage} userRole={currentUser?.role} currentUser={currentUser} onNavigate={setCurrentPage} />}
       {/* v1.105.194 — the caregiver's first-visit tour, above everything, across pages */}
       {tourOpen && role === 'caregiver' && typeof CaregiverTour !== 'undefined' && (

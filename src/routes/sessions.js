@@ -21,7 +21,7 @@ const { generateRecurringDates } = require("../utils/recurrence");
 const { getPlatformFeePercent } = require("../utils/platformFee");
 const { geofenceEvidence, coarsenCoordinate } = require("../utils/geocode");
 const { hasActiveVouch } = require("../utils/vouches");
-const { decideCancellationCharge, CANCEL_FEE_WINDOW_HOURS } = require("../utils/cancellationFee");
+const { decideCancellationCharge, CANCEL_FEE_WINDOW_HOURS, FEE_CAREGIVER_PROFILE_SQL } = require("../utils/cancellationFee"); // v1.109.9 — who is owed a fee
 const { MODEL_HAIKU, getAnthropic } = require("../utils/aiModels");
 const { clampLimit, clampOffset } = require("../utils/queryLimits");
 const { storedImageUrl } = require("../utils/serveMedia"); // v1.106.46
@@ -3676,9 +3676,14 @@ router.get("/:id/cancel-fee", async (req, res) => {
     const db = await getDb();
     const row = await db.prepare(`
       SELECT cs.id, cs.cancel_fee_status, cs.cancel_fee_cents, cs.cancel_fee_deadline,
-             cs.cancel_fee_note, cs.family_user_id, cp.user_id AS caregiver_user_id
+             cs.cancel_fee_note, cs.cancel_fee_decided_at, cs.family_user_id,
+             cs.scheduled_date, cs.scheduled_time, cs.service_type,
+             cp.user_id AS caregiver_user_id, cu.first_name AS caregiver_first,
+             cr.first_name AS recipient_first, cr.timezone AS tz
       FROM care_sessions cs
-      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      LEFT JOIN caregiver_profiles cp ON cp.id = ${FEE_CAREGIVER_PROFILE_SQL}
+      LEFT JOIN users cu ON cu.id = cp.user_id
+      LEFT JOIN care_recipients cr ON cr.id = cs.care_recipient_id
       WHERE cs.id = ?
     `).get(req.params.id);
     if (!row) return res.status(404).json({ error: "Session not found" });
@@ -3690,6 +3695,15 @@ router.get("/:id/cancel-fee", async (req, res) => {
       amountCents: row.cancel_fee_cents || 0,
       deadline: row.cancel_fee_deadline,
       note: row.cancel_fee_note,
+      decidedAt: row.cancel_fee_decided_at || null,
+      // v1.109.9 — the sheet a push now opens has to say WHICH visit this is about.
+      viewer: isCaregiver ? "caregiver" : "family",
+      scheduledDate: row.scheduled_date || null,
+      scheduledTime: row.scheduled_time || null,
+      serviceType: row.service_type || null,
+      recipientFirstName: row.recipient_first || null,
+      caregiverFirstName: row.caregiver_first || null,
+      timezone: row.tz || null,
       canWaive: isCaregiver && row.cancel_fee_status === "pending",
       canDispute: isFamily && row.cancel_fee_status === "pending",
     });
@@ -3706,7 +3720,7 @@ router.post("/:id/cancel-fee/waive", async (req, res) => {
     const row = await db.prepare(`
       SELECT cs.id, cs.cancel_fee_status, cs.cancel_fee_cents, cs.family_user_id,
              cp.user_id AS caregiver_user_id
-      FROM care_sessions cs LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      FROM care_sessions cs LEFT JOIN caregiver_profiles cp ON cp.id = ${FEE_CAREGIVER_PROFILE_SQL}
       WHERE cs.id = ?
     `).get(req.params.id);
     if (!row) return res.status(404).json({ error: "Session not found" });
@@ -3714,6 +3728,11 @@ router.post("/:id/cancel-fee/waive", async (req, res) => {
     // someone else's wage, which is precisely the discretion the contract does not grant.
     if (req.user.id !== row.caregiver_user_id) {
       return res.status(403).json({ error: "Only the caregiver can waive their own cancellation fee." });
+    }
+    // v1.109.9 — already in the state you asked for is 409, the "already answered" contract
+    // every Needs-you endpoint keeps (a second tap, or the other device, is not an error).
+    if (row.cancel_fee_status === "waived") {
+      return res.status(409).json({ error: "You've already waived this fee.", status: "waived" });
     }
     if (row.cancel_fee_status !== "pending") {
       return res.status(400).json({ error: `This fee is already ${row.cancel_fee_status || "settled"}.` });
@@ -3736,7 +3755,7 @@ router.post("/:id/cancel-fee/waive", async (req, res) => {
     sendPushToUser(row.family_user_id, {
       title: "Cancellation fee waived",
       body: "Your caregiver waived the late cancellation fee. You haven't been charged.",
-      data: { type: "cancel_fee_waived", sessionId: req.params.id },
+      data: { type: "cancel_fee_waived", sessionId: req.params.id, page: "dashboard", focus: `cancelFee:${req.params.id}` },
     }, "cancel_fee_waived").catch(() => {});
     res.json({ status: "waived" });
   } catch (err) {
@@ -3754,6 +3773,9 @@ router.post("/:id/cancel-fee/dispute", async (req, res) => {
     ).get(req.params.id);
     if (!row) return res.status(404).json({ error: "Session not found" });
     if (req.user.id !== row.family_user_id) return res.status(403).json({ error: "Not your session" });
+    if (row.cancel_fee_status === "disputed") {
+      return res.status(409).json({ error: "You've already told us about this — a person is looking at it.", status: "disputed" });
+    }
     if (row.cancel_fee_status !== "pending") {
       return res.status(400).json({ error: `This fee is already ${row.cancel_fee_status || "settled"}.` });
     }
@@ -3960,13 +3982,15 @@ router.put("/:id/cancel", async (req, res) => {
           sendPushToUser(session.caregiver_user_id, {
             title: "Late cancellation — you're owed " + amt,
             body: `The family cancelled inside 24 hours. You'll be paid ${amt} automatically tomorrow. Tap if you'd rather waive it.`,
-            data: { type: "cancel_fee_pending", sessionId: req.params.id, amountCents: charge.amountCents },
+            // v1.109.9 — page + focus so a tap (and the service worker's cold-start URL)
+            // opens the fee sheet. Without them the tap landed nowhere (9d286a8a).
+            data: { type: "cancel_fee_pending", sessionId: req.params.id, amountCents: charge.amountCents, page: "dashboard", focus: `cancelFee:${req.params.id}` },
           }, "cancel_fee_pending").catch(() => {});
         }
         sendPushToUser(session.family_user_id, {
           title: "Cancellation fee — " + amt,
           body: `Cancelling inside 24 hours means the caregiver still gets paid. ${amt} will be charged tomorrow unless something's wrong — tap to tell us.`,
-          data: { type: "cancel_fee_notice", sessionId: req.params.id, amountCents: charge.amountCents },
+          data: { type: "cancel_fee_notice", sessionId: req.params.id, amountCents: charge.amountCents, page: "dashboard", focus: `cancelFee:${req.params.id}` },
         }, "cancel_fee_notice").catch(() => {});
       } catch (e) {
         console.error("[sessions] could not record the cancellation fee:", e.message);

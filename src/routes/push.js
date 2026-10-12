@@ -327,9 +327,17 @@ async function sendEmailToAdmins(eventType, { subject, body }) {
 
 // ─── Utility: Notify admins (push + email) ───
 // Sends both push and email based on per-event preferences
+//
+// v1.109.9 — returns a promise that never rejects. It returned undefined, and two callers
+// (cancel-fee dispute, content report) wrote `notifyAdmins(...).catch(() => {})` — a
+// TypeError thrown AFTER their row was written. Every fee dispute ever raised was saved and
+// then answered 500 "Failed to raise the dispute"; every content report the same. Fixed here,
+// once, so a caller can treat it like every other fire-and-forget send.
 function notifyAdmins(eventType, { title, body, data }) {
-  sendPushToAdmins(eventType, { title, body, data }).catch(() => {});
-  sendEmailToAdmins(eventType, { subject: title, body }).catch(() => {});
+  return Promise.allSettled([
+    sendPushToAdmins(eventType, { title, body, data }),
+    sendEmailToAdmins(eventType, { subject: title, body }),
+  ]).then(() => undefined);
 }
 
 // ─── Firebase Admin SDK (for native push via FCM) ───
@@ -523,7 +531,9 @@ router.get("/attention/items", authenticate, async (req, res) => {
 // so re-snoozing extends rather than stacking.
 router.post("/attention/snooze", authenticate, async (req, res) => {
   try {
-    const SNOOZABLE = ["emptyWeek"];
+    // v1.109.9 — cancelFee: "Looks right" on a pending cancellation fee. The fee itself is
+    // untouched; this only puts the row away until the charge has gone through.
+    const SNOOZABLE = ["emptyWeek", "cancelFee"];
     const kind = String(req.body?.kind || "");
     if (!SNOOZABLE.includes(kind)) return res.status(400).json({ error: "Not a snoozable nudge" });
     const ref = String(req.body?.ref || "").slice(0, 64);

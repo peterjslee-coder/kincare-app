@@ -2307,6 +2307,13 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         <CaregiverTodayAtVisit recipientIds={visitRecipientIdsToday} />
       )}
 
+      {/* ── v1.109.9 — a late cancellation she is owed for. Only that kind: the rest of the
+          Needs-you card is the family's home, and this screen has its own. Opening it opens
+          the root fee sheet, where she can waive it. ── */}
+      {typeof AttentionCard !== 'undefined' && (
+        <AttentionCard only={['cancelFee']} onNavigate={(p) => { if (window.__navigateTo) window.__navigateTo(p); }} />
+      )}
+
       {/* ─── Needs your attention: a care-team invite (v1.105.82) ─── */}
       {/*
           Top of the feed, above everything including First Steps, and it does not go away

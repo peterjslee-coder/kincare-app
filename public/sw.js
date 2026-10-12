@@ -303,10 +303,17 @@ self.addEventListener('notificationclick', (event) => {
     targetUrl = `/?conversation=${data.conversationId}`;
   } else if (type === 'new_job') {
     targetUrl = '/?page=find-work';
+  } else if ((type === 'cancel_fee_notice' || type === 'cancel_fee_pending' || type === 'cancel_fee_waived') && data.sessionId) {
+    // v1.109.9 — cold start: open the fee sheet, not a bare dashboard (9d286a8a)
+    targetUrl = `/?page=dashboard&focus=${encodeURIComponent(data.focus || ('cancelFee:' + data.sessionId))}`;
   } else if (type === 'kindred_relay') {
     targetUrl = '/?page=messages';
   } else if (type === 'admin_setting_change') {
     targetUrl = '/?page=dashboard';
+  } else if (!data.page && data.sessionId) {
+    // v1.109.9 — any session-bearing push with no page of its own opens that visit, the same
+    // fallback __handlePushNavigate now takes when a window is already open.
+    targetUrl = `/?page=dashboard&focus=${encodeURIComponent(data.focus || ('session:' + data.sessionId))}`;
   } else if (data.page) {
     // Generic deep-link — carry the item focus and team through cold start
     targetUrl = `/?page=${encodeURIComponent(data.page)}${data.careTeamId ? `&careTeamId=${encodeURIComponent(data.careTeamId)}` : ''}${data.focus ? `&focus=${encodeURIComponent(data.focus)}` : ''}`;

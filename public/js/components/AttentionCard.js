@@ -77,6 +77,7 @@ const ATTENTION_KINDS = {
   // v1.109.4 — the first SOFT kind. Nobody is blocked by an empty calendar, so it says
   // "a nudge" rather than "needs you" and it is not in the number above it.
   emptyWeek:     { icon: '📅', chip: 'A NUDGE' },
+  cancelFee:     { icon: '💵', chip: 'CANCELLATION FEE' },
 };
 
 // "14:30" → "2:30 PM". The server sends wall-clock times in the care recipient's zone; they
@@ -127,6 +128,20 @@ const attentionDetail = (item) => {
   if (item.kind === 'careTask') {
     return item.dueAt ? `Due ${attentionDay(item.dueAt, item.tz)}` : 'Due now';
   }
+  // v1.109.9 — which visit, and when the clock runs out, in her own zone.
+  if (item.kind === 'cancelFee') {
+    const day = item.date ? attentionDay(item.date, item.tz) : '';
+    let by = '';
+    try {
+      if (item.deadline) {
+        by = new Date(item.deadline).toLocaleString('en-US', {
+          weekday: 'short', hour: 'numeric', minute: '2-digit',
+          timeZone: item.tz || (typeof TimezoneHelper !== 'undefined' ? TimezoneHelper.DEFAULT_TZ : undefined),
+        });
+      }
+    } catch { by = ''; }
+    return [day ? `Visit ${day}` : null, by ? `charges ${by}` : null].filter(Boolean).join(' \u00B7 ');
+  }
   if (item.kind === 'approval') {
     const since = item.when ? attentionDay(item.when, null) : null;
     return [item.detail, since ? `signed up ${since}` : null].filter(Boolean).join(' · ');
@@ -134,7 +149,10 @@ const attentionDetail = (item) => {
   return item.detail || '';
 };
 
-const AttentionCard = window.AttentionCard = ({ onNavigate }) => {
+// v1.109.9 — `only` narrows the card to some kinds. The caregiver's home has never drawn this
+// card; it now draws it for her owed cancellation fees and nothing else, so the rest of her
+// screen does not change.
+const AttentionCard = window.AttentionCard = ({ onNavigate, only }) => {
   const [payload, setPayload] = React.useState(null);
   // v1.105.51 — a failed load used to render exactly nothing, which on this card means
   // "you're all caught up". That is the one lie this component cannot afford: the app icon
@@ -295,7 +313,8 @@ const AttentionCard = window.AttentionCard = ({ onNavigate }) => {
     );
   }
 
-  const items = (payload && Array.isArray(payload.items)) ? payload.items : [];
+  const allItems = (payload && Array.isArray(payload.items)) ? payload.items : [];
+  const items = Array.isArray(only) ? allItems.filter((i) => only.includes(i.kind)) : allItems;
   const doneIds = Object.keys(done);
   // Nothing is hidden optimistically any more: a row leaves this list when the SERVER stops
   // returning it. The done rows below are things that really are done, lingering only long

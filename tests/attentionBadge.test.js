@@ -81,8 +81,10 @@ describe("the count means: you are the blocker", () => {
       // v1.109.4 — `emptyWeeks` joined it as the first SOFT count. It is reported and
       // deliberately NOT added to `total`: an empty calendar is a nudge, and the definition
       // at the top of that file is "you, specifically, are the blocker".
+      // v1.109.9 — `cancelFees`: a late-cancellation fee the family has 24 hours to question.
+      // Counted (it charges their card if nobody answers); zero here, this stub has none.
       total: 6, reimbursements: 2, timeChanges: 1, timeChangeSessionId: "s1", careTasks: 3,
-      approvals: 0, safetyFlags: 0, messages: 4, emptyWeeks: 0,
+      approvals: 0, safetyFlags: 0, messages: 4, emptyWeeks: 0, cancelFees: 0,
     });
   });
 
@@ -109,7 +111,7 @@ describe("the count means: you are the blocker", () => {
     }) };
     const r = await attentionCountFor(brokenDb, "pete");
     expect(r.total).toBe(0);
-    expect(r).toEqual({ total: 0, reimbursements: 0, timeChanges: 0, timeChangeSessionId: null, careTasks: 0, approvals: 0, safetyFlags: 0, messages: 0, emptyWeeks: 0 });
+    expect(r).toEqual({ total: 0, reimbursements: 0, timeChanges: 0, timeChangeSessionId: null, careTasks: 0, approvals: 0, safetyFlags: 0, messages: 0, emptyWeeks: 0, cancelFees: 0 });
   });
 });
 

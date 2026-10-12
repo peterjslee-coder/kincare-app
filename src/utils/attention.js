@@ -36,6 +36,7 @@
 // from.
 
 const { getTodayStringInZone, DEFAULT_TIMEZONE } = require("./timezone");
+const { FEE_CAREGIVER_PROFILE_SQL } = require("./cancellationFee");
 
 // A naive 'YYYY-MM-DD' plus n days, done in UTC on purpose: scheduled_date is a wall-clock
 // date with no zone, so arithmetic in the server's zone would shift it across a boundary.
@@ -76,7 +77,7 @@ const name = (first, last) => [first, last].filter(Boolean).join(" ").trim() || 
 
 const EMPTY = {
   total: 0, reimbursements: 0, timeChanges: 0, timeChangeSessionId: null,
-  careTasks: 0, approvals: 0, safetyFlags: 0, messages: 0, emptyWeeks: 0, items: [],
+  careTasks: 0, approvals: 0, safetyFlags: 0, messages: 0, emptyWeeks: 0, cancelFees: 0, items: [],
 };
 
 /**
@@ -222,6 +223,55 @@ async function attentionItemsFor(db, userId) {
       ORDER BY sf.created_at
     `).all();
   });
+
+  // ── A late-cancellation fee with a 24-hour clock on it (v1.109.9) ──
+  //
+  // Pete (9d286a8a): "I got a notice that the session that I canceled would be charged unless
+  // there was a reason why. And it said tell us. So I tapped on the push notification and it
+  // just brought me to the homepage." The push was the ONLY place the fee was ever mentioned,
+  // and it went nowhere. A push is gone the moment it is missed; this is the persistent half.
+  //
+  // FAMILY: counted in `total`. It is a decision only they can make, it is on a deadline, and
+  // silence charges their card — the badge's definition exactly. It is clearable without
+  // disputing: "Looks right" snoozes it until the charge has gone through.
+  //
+  // CAREGIVER: `soft`. Silence pays her, so nothing is blocked on her; waiving is a kindness
+  // she may offer, not a task. It rides in `items` so her home screen can show it, and stays
+  // out of the number on her icon.
+  //
+  // Bounded by the deadline: after it the poller captures, and a row past it would be a
+  // decision that has already been made for you.
+  const cancelFeeRows = await safeRows("cancelFees", () => db.prepare(`
+    SELECT cs.id, cs.cancel_fee_cents, cs.cancel_fee_deadline, cs.scheduled_date,
+           cs.service_type, cr.first_name AS recipient_first, cr.timezone AS tz
+    FROM care_sessions cs
+    LEFT JOIN care_recipients cr ON cr.id = cs.care_recipient_id
+    WHERE cs.family_user_id = ?
+      AND cs.cancel_fee_status = 'pending'
+      AND cs.cancel_fee_deadline > NOW()
+      AND NOT EXISTS (
+        SELECT 1 FROM nudge_snoozes ns
+         WHERE ns.user_id = ? AND ns.kind = 'cancelFee' AND ns.ref = cs.id AND ns.snoozed_until > NOW()
+      )
+    ORDER BY cs.cancel_fee_deadline
+  `).all(userId, userId));
+
+  const owedFeeRows = await safeRows("owedCancelFees", () => db.prepare(`
+    SELECT cs.id, cs.cancel_fee_cents, cs.cancel_fee_deadline, cs.scheduled_date,
+           cs.service_type, cr.first_name AS recipient_first, cr.timezone AS tz
+    FROM care_sessions cs
+    JOIN caregiver_profiles cp ON cp.id = ${FEE_CAREGIVER_PROFILE_SQL}
+    LEFT JOIN care_recipients cr ON cr.id = cs.care_recipient_id
+    WHERE cp.user_id = ?
+      AND cs.family_user_id IS DISTINCT FROM ?
+      AND cs.cancel_fee_status = 'pending'
+      AND cs.cancel_fee_deadline > NOW()
+      AND NOT EXISTS (
+        SELECT 1 FROM nudge_snoozes ns
+         WHERE ns.user_id = ? AND ns.kind = 'cancelFee' AND ns.ref = cs.id AND ns.snoozed_until > NOW()
+      )
+    ORDER BY cs.cancel_fee_deadline
+  `).all(userId, userId, userId));
 
   // ── A care task assigned to me that is already due ──
   // Assigned to me specifically: an unassigned task is the team's, not mine, and badging
@@ -430,6 +480,54 @@ async function attentionItemsFor(db, userId) {
       focus: `safetyFlag:${f.id}`,
       note: f.status === "escalated" ? "Escalated and still open." : "Nobody else is reviewing this.",
     })),
+    ...cancelFeeRows.map((f) => ({
+      kind: "cancelFee",
+      id: `cancelFee:${f.id}`,
+      sessionId: f.id,
+      title: `Cancellation fee — ${money((f.cancel_fee_cents || 0) / 100)} will be charged tomorrow`,
+      // Not `detail`: the card quotes `detail` as if someone had written it.
+      detail: null,
+      forWhom: f.recipient_first || null,
+      tz: f.tz || null,
+      date: f.scheduled_date || null,
+      deadline: f.cancel_fee_deadline || null,
+      // No one-tap action. The answer is either "fine" (Looks right) or a sentence about what
+      // went wrong, and a sentence needs the sheet.
+      verb: "Review",
+      action: null,
+      page: "dashboard",
+      focus: `cancelFee:${f.id}`,
+      note: "Cancelling inside 24 hours means the caregiver still gets paid. If something's wrong, tell us before then.",
+      dismiss: {
+        method: "POST",
+        path: "/api/push/attention/snooze",
+        body: { kind: "cancelFee", ref: f.id, days: 2 },
+        label: "Looks right",
+      },
+    })),
+    ...owedFeeRows.map((f) => ({
+      kind: "cancelFee",
+      soft: true,
+      id: `cancelFeeOwed:${f.id}`,
+      sessionId: f.id,
+      title: `Late cancellation — you're owed ${money((f.cancel_fee_cents || 0) / 100)}`,
+      detail: null,
+      forWhom: f.recipient_first || null,
+      tz: f.tz || null,
+      date: f.scheduled_date || null,
+      deadline: f.cancel_fee_deadline || null,
+      verb: "Review",
+      action: null,
+      page: "dashboard",
+      focus: `cancelFee:${f.id}`,
+      note: "You'll be paid automatically. You can waive it if you'd rather.",
+      dismiss: {
+        method: "POST",
+        path: "/api/push/attention/snooze",
+        body: { kind: "cancelFee", ref: f.id, days: 2 },
+        label: "Not now",
+      },
+    })),
     ...taskRows.map((t) => ({
       kind: "careTask",
       id: t.id,
@@ -507,8 +605,11 @@ async function attentionItemsFor(db, userId) {
     // AttentionCard cannot afford to lose.
     // v1.109.4 — emptyWeekRows is NOT in here. See the note against the query: an empty
     // calendar is a nudge, not a blocker, and the app icon means blocker.
+    // v1.109.9 — the FAMILY's pending cancellation fees count; the caregiver's do not (see
+    // the note against the query).
     total: reimbursementRows.length + timeChanges + taskRows.length + approvalRows.length
-      + safetyRows.length,
+      + cancelFeeRows.length + safetyRows.length,
+    cancelFees: cancelFeeRows.length,
     emptyWeeks: emptyWeekRows.length,
     reimbursements: reimbursementRows.length,
     approvals: approvalRows.length,

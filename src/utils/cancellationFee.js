@@ -139,7 +139,21 @@ async function decideCancellationCharge(db, {
 const CANCEL_FEE_WINDOW_HOURS = 24;
 const DISPUTE_BACKSTOP_HOURS = 24 * 5;
 
+// ─── Who is OWED a cancellation fee (v1.109.9) ───
+//
+// Not always `caregiver_id`. When a family moves a visit inside 24 hours and the caregiver
+// declines (the time-change branch in routes/sessions.js), the session goes back to 'open'
+// with caregiver_id = NULL and the caregiver parked in cancelled_caregiver_id — and the fee
+// is still pending in her name. Joining on caregiver_id alone meant she could never see or
+// waive it, and if someone else later claimed the open job, THEY could. A family
+// cancellation leaves the session 'cancelled' with caregiver_id intact, and
+// cancelled_caregiver_id may be stale from an earlier drop, so that case keeps caregiver_id.
+// Expects the care_sessions alias `cs`.
+const FEE_CAREGIVER_PROFILE_SQL =
+  "CASE WHEN cs.status = 'cancelled' THEN cs.caregiver_id ELSE COALESCE(cs.cancelled_caregiver_id, cs.caregiver_id) END";
+
 module.exports = {
+  FEE_CAREGIVER_PROFILE_SQL,
   DEFAULT_FEE_PERCENT,
   CANCEL_FEE_WINDOW_HOURS,
   DISPUTE_BACKSTOP_HOURS,
