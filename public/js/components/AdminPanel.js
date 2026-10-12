@@ -2941,7 +2941,36 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                               pending_review: ['Blocked \u2014 ID in review', 'var(--color-warning-bg)', 'var(--color-warning)'],
                               needs_id: ['Blocked \u2014 no ID', 'var(--color-warning-bg)', 'var(--color-warning)'],
                             }[ca.status] || [ca.status, 'var(--bg-primary)', 'var(--text-muted)'];
-                            return <span style={{ padding: '3px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap', background: look[1], color: look[2] }}>{look[0]}</span>;
+                            // v1.112.1 — Pete: "add the 'verified in person' switch." For family who
+                            // will never upload an ID: you saw it face to face, with a note.
+                            const setInPerson = async (verified) => {
+                              let note = '';
+                              if (verified) {
+                                note = window.prompt(`How and when did you check ${u.first_name || 'their'}'s ID in person?`, `Saw their ID in person, ${new Date().toLocaleDateString()}`) || '';
+                                if (!note.trim()) return;
+                              } else if (!window.confirm(`Remove in-person verification for ${u.first_name || 'this person'}? Their care access goes back to the ID rules.`)) return;
+                              try {
+                                const res = await apiFetch(`/api/admin/users/${u.id}/verified-in-person`, { method: 'PUT', body: JSON.stringify({ verified, note }) });
+                                const data = res ? await res.json().catch(() => ({})) : {};
+                                if (res?.ok || res?.status === 409) {
+                                  if (data.careAccess) setUsers(prev => prev.map(usr => usr.id === u.id ? { ...usr, careAccess: data.careAccess } : usr));
+                                  showToast(verified ? 'Verified in person' : 'In-person verification removed', 'success');
+                                } else {
+                                  showToast(data.error || "Couldn't update in-person verification", 'error');
+                                }
+                              } catch { showToast("Couldn't update in-person verification", 'error'); }
+                            };
+                            return (
+                              <span style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 4 }} onClick={e => e.stopPropagation()}>
+                                <span style={{ padding: '3px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap', background: look[1], color: look[2] }}>{look[0]}{ca.inPerson ? ' (in person)' : ''}</span>
+                                {ca.status !== 'exempt' && !ca.inPerson && ca.status !== 'verified' && (
+                                  <button onClick={() => setInPerson(true)} style={{ fontSize: 11, padding: '2px 8px', borderRadius: 10, border: '1px solid var(--border-color)', background: 'var(--bg-surface)', cursor: 'pointer' }}>Verified in person</button>
+                                )}
+                                {ca.inPerson && (
+                                  <button onClick={() => setInPerson(false)} style={{ fontSize: 11, padding: '2px 8px', borderRadius: 10, border: '1px solid var(--border-color)', background: 'var(--bg-surface)', cursor: 'pointer' }}>Undo</button>
+                                )}
+                              </span>
+                            );
                           })()}
                         </td>
                         <td onClick={e => e.stopPropagation()} style={{ padding: '10px 12px', textAlign: 'center' }}>

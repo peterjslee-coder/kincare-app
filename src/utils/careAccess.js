@@ -54,10 +54,14 @@ const ALLOWED = new Set(["exempt", "verified", "grace"]);
 async function careAccessFor(db, userId) {
   if (!userId) return { status: "needs_id", allowed: false, graceUntil: null, identityStatus: null };
   const u = await db.prepare(
-    "SELECT is_admin, is_demo, id_gate_grace_until FROM users WHERE id = ?"
+    "SELECT is_admin, is_demo, id_gate_grace_until, id_verified_in_person_at FROM users WHERE id = ?"
   ).get(userId);
   if (!u) return { status: "needs_id", allowed: false, graceUntil: null, identityStatus: null };
   if (u.is_admin || u.is_demo) return { status: "exempt", allowed: true, graceUntil: null, identityStatus: null };
+  // v1.112.1 — an admin saw this person's ID in person (Admin → People → "Verified in person").
+  if (u.id_verified_in_person_at) {
+    return { status: "verified", allowed: true, graceUntil: null, identityStatus: "verified", inPerson: true };
+  }
 
   const { identityStatus } = await personIdentityStatus(db, userId);
   if (identityStatus === "verified") {

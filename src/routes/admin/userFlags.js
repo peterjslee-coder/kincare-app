@@ -7,7 +7,7 @@ const { validateImageDataUrl } = require("../../utils/serveMedia");
 const { authenticate, requireAdmin } = require("../../middleware/auth");
 const { captureException } = require("../../utils/sentry");
 const { activeVouchesFor } = require("../../utils/vouches");
-const { onIdentityApproved } = require("../../utils/careAccess"); // v1.112.0
+const { onIdentityApproved, careAccessFor } = require("../../utils/careAccess"); // v1.112.0
 const { sendVerificationEmail } = require("../auth");
 const {
   generateAuthenticationOptions,
@@ -338,6 +338,49 @@ router.put("/users/:id/companion-access", async (req, res) => {
   } catch (err) {
     console.error("Admin companion-access toggle error:", err);
     res.status(500).json({ error: "Failed to toggle companion access" });
+  }
+});
+
+// ─── PUT /api/admin/users/:id/verified-in-person — identity gate (v1.112.1) ───
+//
+// Pete, 10/12: "yes, add the 'verified in person' switch." For family who will never upload an
+// ID: an admin who has seen the ID face to face opens care access. Body { verified: true, note }
+// (the note — how and when — is required) or { verified: false }. 409 when already in that
+// state. Care access only (utils/careAccess.js); caregiver vetting is untouched.
+router.put("/users/:id/verified-in-person", async (req, res) => {
+  try {
+    const db = await getDb();
+    if (typeof req.body?.verified !== "boolean") return res.status(400).json({ error: "verified must be true or false" });
+    const on = req.body.verified;
+    const note = typeof req.body?.note === "string" ? req.body.note.trim().slice(0, 500) : "";
+    const user = await db.prepare(
+      "SELECT id, email, first_name, last_name, id_verified_in_person_at FROM users WHERE id = ?"
+    ).get(req.params.id);
+    if (!user) return res.status(404).json({ error: "User not found" });
+    if (on && user.id_verified_in_person_at) return res.status(409).json({ error: "Already verified in person.", verified: true });
+    if (!on && !user.id_verified_in_person_at) return res.status(409).json({ error: "Not verified in person.", verified: false });
+    if (on && note.length < 3) return res.status(400).json({ error: "Add a short note — how and when you checked their ID." });
+    if (on) {
+      await db.prepare(`
+        UPDATE users SET id_verified_in_person_at = NOW(), id_verified_in_person_by = ?, id_verified_in_person_note = ?
+        WHERE id = ?
+      `).run(req.user.id, note, user.id);
+    } else {
+      await db.prepare(`
+        UPDATE users SET id_verified_in_person_at = NULL, id_verified_in_person_by = NULL, id_verified_in_person_note = NULL
+        WHERE id = ?
+      `).run(user.id);
+    }
+    await logAdminAction(req, on ? "id_verified_in_person" : "id_verified_in_person_removed", "user", user.id, {
+      email: user.email, note: on ? note : null,
+    });
+    // Same consequences as an approved ID document (a pending self-signup profile is created).
+    if (on) await onIdentityApproved(db, user.id);
+    res.json({ verified: on, careAccess: await careAccessFor(db, user.id) });
+  } catch (err) {
+    captureException(err, { where: "PUT /api/admin/users/:id/verified-in-person" });
+    console.error("Admin verified-in-person error:", err);
+    res.status(500).json({ error: "Failed to update in-person verification" });
   }
 });
 

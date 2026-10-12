@@ -3068,6 +3068,17 @@ async function initializeDatabase() {
             )`, // identity-read-ok: one-time grace backfill; the resolver decides at read time
       ],
     },
+    {
+      // v1.112.1 — Pete, 10/12: "yes, add the 'verified in person' switch." An admin who has
+      // seen the person's ID face to face can open care access without an uploaded document.
+      // Care access only: caregiver vetting (Checkr, payment identity) is unchanged.
+      id: "057_id_verified_in_person",
+      statements: [
+        `ALTER TABLE users ADD COLUMN IF NOT EXISTS id_verified_in_person_at TIMESTAMPTZ`,
+        `ALTER TABLE users ADD COLUMN IF NOT EXISTS id_verified_in_person_by TEXT`,
+        `ALTER TABLE users ADD COLUMN IF NOT EXISTS id_verified_in_person_note TEXT`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;
