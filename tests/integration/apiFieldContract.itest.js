@@ -84,12 +84,16 @@ beforeAll(async () => {
   // A fully-populated session — every field the client reads with a fallback should be
   // reachable from it, so an absent key means the serializer dropped it, not that the row was thin.
   sessionId = uuid();
+  // v1.110.0 — this was the literal '2026-10-01', and on Oct 2 the session fell off the
+  // dashboard's upcoming list, so every key below read as "dropped by the serializer". A
+  // fixture date must move with the clock.
+  const upcoming = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
   await db.prepare(`
     INSERT INTO care_sessions
       (id, care_recipient_id, family_user_id, caregiver_id, service_type, status,
        scheduled_date, scheduled_time, duration_hours, estimated_cost, special_instructions, created_at)
-    VALUES (?, ?, ?, ?, 'companionship', 'confirmed', '2026-10-01', '10:00', 3, 90, 'Front door code 1234', NOW())
-  `).run(sessionId, recipientId, family.user.id, profileId);
+    VALUES (?, ?, ?, ?, 'companionship', 'confirmed', ?, '10:00', 3, 90, 'Front door code 1234', NOW())
+  `).run(sessionId, recipientId, family.user.id, profileId, upcoming);
 });
 
 afterAll(async () => { await stopHarness(h); });
