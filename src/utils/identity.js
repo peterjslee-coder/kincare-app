@@ -128,4 +128,75 @@ async function identityStatusFor(db, userId, profileId, extraOwnerIds = []) {
   return { identityVerified: false, identityStatus: "pending" };
 }
 
-module.exports = { caregiverIdentityDoc, caregiverIdentityVerified, identityStatusFor };
+/**
+ * v1.112.0 — the same question asked about a PERSON, not about a caregiver profile.
+ *
+ * Pete, 10/12: "We should absolutely require someone to verify their ID before they are able
+ * to sign up for care." So identity stopped being a caregiver-onboarding question and became
+ * the gate in front of every care record (src/utils/careAccess.js). That needs one answer for
+ * anyone — a family member, a helper, a care recipient who signed herself up — and it is this.
+ *
+ * The person's own shapes, in one query:
+ *   • owner_type='user'      owner_id = them
+ *   • owner_type='caregiver' owner_id = their caregiver_profiles row, if they have one
+ *   • owner_type='care_recipient' for a profile they are linked to as "own account" — but ONLY
+ *     a document THEY submitted (uploaded_by = them).
+ *
+ * That last restriction is the Kit Conn lesson. A care_recipient's identity document is about
+ * the RECIPIENT; it is this user's only if the link is genuinely her. A stranger linked to
+ * Betty's profile by a self-signup, plus a family member filing Betty's licence in her
+ * documents, must never add up to the stranger being identity-verified. Requiring that the
+ * linked user submitted the document herself (and a human then approved it) closes that: the
+ * face on the ID was checked against the face that submitted it.
+ *
+ * Same ordering rule as caregiverIdentityDoc: approved-first, then newest.
+ */
+async function personIdentityDoc(db, userId) {
+  if (!userId) return null;
+  const rows = await db.prepare(
+    `SELECT id, status, is_verified, owner_type, created_at, extracted_data
+       FROM verified_documents
+      WHERE category = 'identity'
+        AND document_type != 'selfie'
+        AND (
+              (owner_type = 'user' AND owner_id = ?)
+           OR (owner_type = 'caregiver' AND owner_id IN (SELECT id FROM caregiver_profiles WHERE user_id = ?))
+           OR (owner_type = 'care_recipient' AND uploaded_by = ?
+               AND owner_id IN (SELECT id FROM care_recipients WHERE linked_user_id = ?))
+        )
+      ORDER BY (status = 'approved' OR is_verified = 1) DESC, created_at DESC
+      LIMIT 1`
+  ).all(userId, userId, userId, userId);
+  return rows && rows.length > 0 ? rows[0] : null;
+}
+
+/** 'not_started' | 'pending' | 'verified' | 'rejected' for a person — same shape as identityStatusFor. */
+async function personIdentityStatus(db, userId) {
+  const doc = await personIdentityDoc(db, userId);
+  if (!doc) return { identityVerified: false, identityStatus: "not_started", doc: null };
+  if (doc.status === "approved" || doc.is_verified) {
+    return { identityVerified: true, identityStatus: "verified", doc };
+  }
+  if (doc.status === "rejected") return { identityVerified: false, identityStatus: "rejected", doc };
+  return { identityVerified: false, identityStatus: "pending", doc };
+}
+
+/**
+ * The name printed on a person's APPROVED ID, as the AI read it at submission — or null.
+ * Used to name a self-signup's care profile once a human has approved the document, so the
+ * profile is called what the ID says rather than whatever was typed into the signup form.
+ */
+async function approvedIdName(db, userId) {
+  const { identityVerified, doc } = await personIdentityStatus(db, userId);
+  if (!identityVerified || !doc || !doc.extracted_data) return null;
+  try {
+    const d = typeof doc.extracted_data === "string" ? JSON.parse(doc.extracted_data) : doc.extracted_data;
+    const n = String((d && d.extractedName) || "").replace(/\s+/g, " ").trim();
+    return n || null;
+  } catch { return null; }
+}
+
+module.exports = {
+  caregiverIdentityDoc, caregiverIdentityVerified, identityStatusFor,
+  personIdentityDoc, personIdentityStatus, approvedIdName,
+};

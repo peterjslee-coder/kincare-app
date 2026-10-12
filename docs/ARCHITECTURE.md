@@ -9,7 +9,7 @@ Hand-written sections (§3 "Where is…") are preserved across regeneration; edi
 
 Structure at last generation: 569 HTTP routes across 59 mounts ·
 109 `CREATE TABLE` statements · 14 background jobs · 39 socket events
-(17 with no client listener) · 69 push event types · 60 `window.__*` globals.
+(17 with no client listener) · 70 push event types · 60 `window.__*` globals.
 
 ---
 
@@ -113,7 +113,9 @@ greps finding something.
 | Sending a push | `src/routes/push.js` → `sendPushToUser(userId, payload, eventType)`. **This file is a library, required by ~23 others.** `src/utils/push.js` is a legacy adapter with a different signature — do not use it for new code |
 | Authorization ("can this user touch this row?") | `src/utils/access.js` → `sessionAccess()`, `recipientAccess()`. Failed checks answer **404, not 403** |
 | Pay calculation | server-side only, `src/utils/rateCalculator.js`; check-in→check-out in 15-minute blocks |
-| The identity gate | `src/utils/identityDecision.js`. **The AI never writes `approved`; only an admin does** |
+| Who approves an ID | `src/utils/identityDecision.js`. **The AI never writes `approved`; only an admin does** |
+| "Has this person verified their ID?" | `src/utils/identity.js` → `personIdentityStatus()` (any person) / `identityStatusFor()` (caregiver profile). `lint:identity-reads` refuses a second copy |
+| The care-access (ID) gate | `src/utils/careAccess.js` → `careAccessFor()`. See "The identity gate" below |
 | Session status machine | `validTransitions` in `src/routes/sessions.js` |
 | Reimbursement approve | `src/routes/reimbursements.js` `/:id/approve` — writes the row, then `audit()`, `feedEntry()`, `notifyParties()` |
 | "Am I production?" | `src/utils/env.js` — the only place that decides. Never gate on `NODE_ENV`; Railway does not set it |
@@ -157,6 +159,34 @@ Data rules:
   document; no outside knowledge, no inference, no dosing. Suggestions are never fed to another AI
   prompt and nothing is created without a human tap.
 | Legal & money readiness (family checklist, "Get help nearby", money-safety concerns) | `src/routes/legalReadiness.js`, migration `051_legal_readiness` (tables `legal_readiness_answers`, `local_resources`, `financial_concerns`). Family routes at `/api/legal-readiness` (`GET /:careRecipientId`, `PUT /:careRecipientId/answers/:item`, `GET /:careRecipientId/resources`, `POST /:careRecipientId/concerns`, `POST /concerns/:id/acknowledge` → 409 if already seen). Admin routes are a second router, `adminRouter`, mounted at `/api/admin/legal-readiness` **after** `/api/admin` so the admin network gate runs first (the generator above does not count them): `GET/POST /resources`, `PUT/DELETE /resources/:id` (DELETE = hide, 409 if hidden), `GET /concerns`, `PUT /concerns/:id`, `GET /safety-flags/:flagId/recipients`, `POST /safety-flags/:flagId/share` (exploitation_signal only; 409 on a second share). **Family-only**: `familyAccess()` refuses caregivers (any `caregiver_profiles` row, unless they own the record), helpers without `read_profile`, and the care recipient's linked account. Readiness is computed from `verified_documents` (category `legal`: `POA`; `Healthcare_POA`/`Living_Will`) and an unanswered item is `unknown`, never `missing`. Client: `LegalReadinessCard.js` (Care Profile + Documents Center), `AdminLegalReadiness.js` (Admin → Local Help, and the share button on SafetyFlagsTab). Needs-you kind `financialConcern` in `src/utils/attention.js` |
+
+### The identity gate (v1.112.0, migration `056_identity_gate`)
+
+Pete: "We should absolutely require someone to verify their ID before they are able to sign up
+for care." Everyone — family, helpers, care recipients who sign themselves up, caregivers.
+
+`careAccessFor(db, userId)` → `{ status, allowed, graceUntil, identityStatus }`:
+`exempt` (users.is_admin / is_demo) · `verified` (approved ID per `personIdentityStatus`) ·
+`grace` (`users.id_gate_grace_until` in the future — migration 056 gave every existing account
+14 days; new accounts get NULL) · `pending_review` · `needs_id`. Allowed = exempt | verified | grace.
+
+Where it is enforced — **one choke point, plus the paths that do not pass through it**:
+
+| Layer | What it does |
+|---|---|
+| `authenticate()` (`src/middleware/auth.js`) → `careGateRefusal()` | Every authenticated request to a path in `CARE_PREFIXES` answers **403 `{ code: 'ID_REQUIRED', status, message }` before the handler runs** — so accept-invite never consumes the invite. Fails closed (503). A new care-data router must be added to `CARE_PREFIXES` |
+| `recipientAccess()` / `recipientCapabilities()` (`src/utils/access.js`) | No access for a blocked user, so `usersWithCapability()` drops them from every capability-scoped fan-out |
+| `mayBeNotified()` (`src/utils/pushPermission.js`) | Push floor: a blocked user gets only account pushes (`ACCOUNT_PUSH_TYPES`) |
+| Socket handshake (`src/server.js`) | Blocked users get no live socket |
+| Register / OAuth signup (`care_for`) | No care recipient is created; the intent waits in `users.pending_self_care` and `materializeSelfCare()` creates recipient + team + conversation on approval (named from the approved ID) — from the admin review (`POST /api/documents/admin/:docId/review`, `PUT /api/admin/users/:id/onboarding`) and, as a backstop, `/api/auth/me` |
+
+Account paths stay open: `/api/auth`, 2FA, passkeys, `/api/self-onboarding` (answers from the
+person's own saved data, never a linked profile, while blocked), `/api/caregiver-onboarding`,
+Stripe Connect/identity, Checkr, push subscribe, legal, help, feedback. Client: `IdGateScreen.js`
+replaces every non-account page; `apiFetch` dispatches `inplace:id-required` on the 403; Needs-you
+kind `identity` ("Verify your ID by <date>") in `src/utils/attention.js`; Admin → People shows
+each person's care access. Tests: `tests/integration/idGate.itest.js`; the harness makes
+`createUser()` verified by default (`idVerified: false` to opt out).
 <!-- HAND:END -->
 
 ---
@@ -168,20 +198,20 @@ Every job runs through `guardedPoller` → `withPollerLock` (`src/models/databas
 
 | Lock | Job | Interval | Declared |
 |---:|---|---|---|
-| 101 | Daily demo data refresh | 24 h | `src/server.js:1052` |
-| 102 | Session notification poller (every 60s) | 1 min | `src/server.js:1146` |
-| 103 | Session Accountability Poller | 1 min | `src/server.js:1421` |
-| 104 | Reimbursement push digest sweeper (v1.98.15) | 30 s | `src/server.js:1438` |
-| 105 | Auto-pay cron: charge overdue sessions | 5 min | `src/server.js:1530` |
-| 106 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1636` |
-| 107 | Care Tasks poller (v1.99.0) | 1 min | `src/server.js:1646` |
-| 108 | Care Events poller (v1.100.0) | 1 min | `src/server.js:1662` |
-| 109 | Kindred Reminder Delivery Poller | 1 min | `src/server.js:1452` |
-| 110 | Retention (v1.106.9, poller 110) | 24 h | `src/server.js:1699` |
-| 111 | (see src/server.js:1612) | 1 h | `src/server.js:1612` |
-| 112 | v1.106.13 — poller 112: proposals that nobody answered | 10 min | `src/server.js:1728` |
-| 113 | (see src/server.js:1771) | 1 min | `src/server.js:1771` |
-| 114 | Quiet hours summary (v1.107.3, poller 114) | 5 min | `src/server.js:1790` |
+| 101 | Daily demo data refresh | 24 h | `src/server.js:1064` |
+| 102 | Session notification poller (every 60s) | 1 min | `src/server.js:1158` |
+| 103 | Session Accountability Poller | 1 min | `src/server.js:1433` |
+| 104 | Reimbursement push digest sweeper (v1.98.15) | 30 s | `src/server.js:1450` |
+| 105 | Auto-pay cron: charge overdue sessions | 5 min | `src/server.js:1542` |
+| 106 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1648` |
+| 107 | Care Tasks poller (v1.99.0) | 1 min | `src/server.js:1658` |
+| 108 | Care Events poller (v1.100.0) | 1 min | `src/server.js:1674` |
+| 109 | Kindred Reminder Delivery Poller | 1 min | `src/server.js:1464` |
+| 110 | Retention (v1.106.9, poller 110) | 24 h | `src/server.js:1711` |
+| 111 | (see src/server.js:1624) | 1 h | `src/server.js:1624` |
+| 112 | v1.106.13 — poller 112: proposals that nobody answered | 10 min | `src/server.js:1740` |
+| 113 | (see src/server.js:1783) | 1 min | `src/server.js:1783` |
+| 114 | Quiet hours summary (v1.107.3, poller 114) | 5 min | `src/server.js:1802` |
 
 ---
 
@@ -256,27 +286,27 @@ Opt-out key is `notification_prefs["push_" + eventType]`. Capability gating live
 
 `dispute_filed` · `document_classified` · `document_deleted` · `document_uploaded`
 
-`financial_concern_reported` · `identity_submitted` · `interview_accepted` · `interview_cancelled`
+`financial_concern_reported` · `identity_approved` · `identity_submitted` · `interview_accepted`
 
-`interview_declined` · `interview_request` · `invite_accepted` · `kindred_relay`
+`interview_cancelled` · `interview_declined` · `interview_request` · `invite_accepted`
 
-`managed_mode_activated` · `missing_address` · `new_job` · `new_registration`
+`kindred_relay` · `managed_mode_activated` · `missing_address` · `new_job`
 
-`new_signup_intent` · `no_show_cancelled` · `on_my_way` · `on_my_way_recipient`
+`new_registration` · `new_signup_intent` · `no_show_cancelled` · `on_my_way`
 
-`outreach_response` · `outreach_sent` · `overdue_check_in` · `overdue_check_in_family`
+`on_my_way_recipient` · `outreach_response` · `outreach_sent` · `overdue_check_in`
 
-`overdue_check_out` · `overdue_check_out_family` · `payment_authorization_failed` · `payment_hold`
+`overdue_check_in_family` · `overdue_check_out` · `overdue_check_out_family` · `payment_authorization_failed`
 
-`payment_method_needed` · `phone_verified` · `proposal_accepted` · `proposal_declined`
+`payment_hold` · `payment_method_needed` · `phone_verified` · `proposal_accepted`
 
-`request_declined` · `review` · `safety_flag` · `session_cancelled`
+`proposal_declined` · `request_declined` · `review` · `safety_flag`
 
-`session_complete` · `session_in_progress` · `team_join` · `time_change`
+`session_cancelled` · `session_complete` · `session_in_progress` · `team_join`
 
-`time_proposal` · `unblocked` · `upload_authority_confirmed` · `uploaded`
+`time_change` · `time_proposal` · `unblocked` · `upload_authority_confirmed`
 
-`waitlist_signup`
+`uploaded` · `waitlist_signup`
 
 ---
 
@@ -317,7 +347,7 @@ State travels through `window`, not props. This table is the registry.
 | `window.__originalSearch` | app.js | 4 |
 | `window.__pendingCall` | app.js, Messages.js | 5 |
 | `window.__pendingConversation` | app.js | 5 |
-| `window.__pendingFocus` | app.js, AttentionCard.js, CancelFeeSheet.js | 33 |
+| `window.__pendingFocus` | app.js, AttentionCard.js, CancelFeeSheet.js | 36 |
 | `window.__pendingLogVisit` | TeamNotes.js | 2 |
 | `window.__pendingNoteDraft` | CareProfile.js, Messages.js | 3 |
 | `window.__pendingNoteRecipientId` | app.js, TeamNotes.js | 4 |

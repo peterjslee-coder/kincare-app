@@ -37,7 +37,12 @@ function fakeDb(rows) {
   };
 }
 
-const NOBODY = [["FROM users WHERE id", () => ({ is_admin: 0 })]];
+// v1.112.0 — everyone in these tests has an approved ID, so the identity gate
+// (src/utils/careAccess.js) is not what they measure. The gate has its own tests below.
+const NOBODY = [
+  ["FROM users WHERE id", () => ({ is_admin: 0 })],
+  ["FROM verified_documents", () => ({ status: "approved", is_verified: 1 })],
+];
 
 describe("recipientAccess", () => {
   test("a stranger gets nothing", async () => {
@@ -50,9 +55,26 @@ describe("recipientAccess", () => {
     expect(await recipientAccess(db, "rec-1", "admin-1")).toBe("admin");
   });
 
+  test("v1.112.0 — an owner with no approved ID (and no grace) gets nothing", async () => {
+    const db = fakeDb([
+      ["FROM users WHERE id", () => ({ is_admin: 0, is_demo: 0, id_gate_grace_until: null })],
+      ["FROM care_recipients WHERE id = ? AND family_user_id", () => ({ id: "rec-1" })],
+    ]);
+    expect(await recipientAccess(db, "rec-1", "kit")).toBe(null);
+  });
+
+  test("v1.112.0 — ...unless still inside the grace period", async () => {
+    const db = fakeDb([
+      ["FROM users WHERE id", () => ({ is_admin: 0, is_demo: 0, id_gate_grace_until: new Date(Date.now() + 86400000).toISOString() })],
+      ["FROM care_recipients WHERE id = ? AND family_user_id", () => ({ id: "rec-1" })],
+    ]);
+    expect(await recipientAccess(db, "rec-1", "paul")).toBe("owner");
+  });
+
   test("the owning family member gets owner", async () => {
     const db = fakeDb([
       ["FROM users WHERE id", () => ({ is_admin: 0 })],
+      ["FROM verified_documents", () => ({ status: "approved", is_verified: 1 })],
       ["FROM care_recipients WHERE id = ? AND family_user_id", () => ({ id: "rec-1" })],
     ]);
     expect(await recipientAccess(db, "rec-1", "paul")).toBe("owner");
@@ -117,6 +139,7 @@ describe("sessionAccess", () => {
       ["FROM users WHERE id", () => ({ is_admin: 0 })],
       ["FROM caregiver_profiles WHERE id = ? AND user_id", () => undefined],
       ["FROM care_team_members", () => ({ role: "member" })],
+      ["FROM verified_documents", () => ({ status: "approved", is_verified: 1 })], // v1.112.0
     ]);
     const a = await sessionAccess(db, "s-1", "sibling");
     expect(a.canView).toBe(true);

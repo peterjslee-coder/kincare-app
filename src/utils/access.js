@@ -12,8 +12,14 @@
 // sites to prove a point is how you break something on a Tuesday. This module is where NEW
 // checks come from, and where the ones added in this pass live.
 //
+// v1.112.0 — every answer here is also subject to the identity gate (utils/careAccess.js): a
+// person without a verified ID (past their grace period) has no access to any care recipient,
+// whatever their share or team role says. The row stays; the access returns on approval.
+//
 // Convention: callers answer a failed check with 404, not 403. "You may not see this" and
 // "this does not exist" should be indistinguishable to someone probing ids.
+
+const { careAccessAllowed } = require("./careAccess");
 
 /**
  * What access, if any, does `userId` have to `recipientId`?
@@ -21,6 +27,14 @@
  * helpers already return, so it reads the same at the call sites.
  */
 async function recipientAccess(db, recipientId, userId) {
+  const level = await recipientAccessRaw(db, recipientId, userId);
+  // v1.112.0 — the identity gate (utils/careAccess.js). Asked only once there IS access, so a
+  // stranger costs nothing extra. Admins return "admin" above the gate and are exempt anyway.
+  if (level && level !== "admin" && !(await careAccessAllowed(db, userId))) return null;
+  return level;
+}
+
+async function recipientAccessRaw(db, recipientId, userId) {
   if (!recipientId || !userId) return null;
 
   const user = await db.prepare("SELECT is_admin FROM users WHERE id = ?").get(userId);
@@ -69,6 +83,14 @@ async function recipientAccess(db, recipientId, userId) {
  * @returns {Promise<string[]>} empty array when the user has no access at all
  */
 async function recipientCapabilities(db, recipientId, userId) {
+  const caps = await recipientCapabilitiesRaw(db, recipientId, userId);
+  // v1.112.0 — same gate as recipientAccess. usersWithCapability() reads this, so every
+  // capability-scoped fan-out (notes, visits, tasks) drops a person without a verified ID.
+  if (caps.length > 0 && !(await careAccessAllowed(db, userId))) return [];
+  return caps;
+}
+
+async function recipientCapabilitiesRaw(db, recipientId, userId) {
   const { capabilitiesFor, LEGACY } = require("./capabilities");
   if (!recipientId || !userId) return [];
 

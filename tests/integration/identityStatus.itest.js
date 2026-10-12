@@ -32,7 +32,7 @@ describe("an approval is not undone by a later resubmission", () => {
   test("approved first, then a newer pending — still verified", async () => {
     // EXACTLY Julia's shape: the app told her she was unverified and offered to redo it.
     // If she took that offer, the newest row is 'pending'.
-    const { user, token } = await h.createUser({ roles: ["caregiver"] });
+    const { user, token } = await h.createUser({ idVerified: false, roles: ["caregiver"] });
     await addIdentityDoc(user.id, { status: "approved", createdAt: "2026-08-01T10:00:00Z" });
     await addIdentityDoc(user.id, { status: "pending", createdAt: "2026-08-15T10:00:00Z" });
 
@@ -47,7 +47,7 @@ describe("an approval is not undone by a later resubmission", () => {
     // uploads a renewed licence in August and the AI rejects the photo, they have not
     // become unverified — they have one approved document and one bad upload. Telling
     // them otherwise is the same whiplash the v1.105.6x saga was made of.
-    const { user, token } = await h.createUser({ roles: ["caregiver"] });
+    const { user, token } = await h.createUser({ idVerified: false, roles: ["caregiver"] });
     await addIdentityDoc(user.id, { status: "approved", createdAt: "2026-08-01T10:00:00Z" });
     await addIdentityDoc(user.id, { status: "rejected", createdAt: "2026-08-15T10:00:00Z" });
     expect((await me(token)).body.user.identityStatus).toBe("verified");
@@ -57,7 +57,7 @@ describe("an approval is not undone by a later resubmission", () => {
     // The escape hatch that makes the rule above safe. Without this, an approval would be
     // permanent and unrevokable, which would be a much worse bug than the one being fixed.
     const db = await getDb();
-    const { user, token } = await h.createUser({ roles: ["caregiver"] });
+    const { user, token } = await h.createUser({ idVerified: false, roles: ["caregiver"] });
     await addIdentityDoc(user.id, { status: "approved", createdAt: "2026-08-01T10:00:00Z" });
     expect((await me(token)).body.user.identityStatus).toBe("verified");
 
@@ -68,13 +68,13 @@ describe("an approval is not undone by a later resubmission", () => {
   });
 
   test("only pending documents read as pending", async () => {
-    const { user, token } = await h.createUser({ roles: ["caregiver"] });
+    const { user, token } = await h.createUser({ idVerified: false, roles: ["caregiver"] });
     await addIdentityDoc(user.id, { status: "pending", createdAt: "2026-08-15T10:00:00Z" });
     expect((await me(token)).body.user.identityStatus).toBe("pending");
   });
 
   test("nothing submitted is not_started", async () => {
-    const { token } = await h.createUser({ roles: ["caregiver"] });
+    const { token } = await h.createUser({ idVerified: false, roles: ["caregiver"] });
     expect((await me(token)).body.user.identityStatus).toBe("not_started");
   });
 });
@@ -82,13 +82,13 @@ describe("an approval is not undone by a later resubmission", () => {
 describe("both storage shapes count, as utils/identity.js has said since v1.105.64", () => {
   test("a doc filed against the caregiver PROFILE is found", async () => {
     const db = await getDb();
-    const { user, token } = await h.createUser({ roles: ["caregiver"] });
+    const { user, token } = await h.createUser({ idVerified: false, roles: ["caregiver"] });
     const profileId = uuid();
     await db.prepare(
       "INSERT INTO caregiver_profiles (id, user_id, hourly_rate) VALUES (?, ?, 25)"
     ).run(profileId, user.id);
     // uploaded_by someone else entirely — the shape the old uploaded_by-only query missed.
-    const other = await h.createUser({ roles: ["family"] });
+    const other = await h.createUser({ idVerified: false, roles: ["family"] });
     await addIdentityDoc(user.id, {
       status: "approved", ownerType: "caregiver", ownerId: profileId,
       uploadedBy: other.user.id, createdAt: "2026-08-01T10:00:00Z",
@@ -100,7 +100,7 @@ describe("both storage shapes count, as utils/identity.js has said since v1.105.
 
 describe("a selfie is never mistaken for the ID", () => {
   test("an approved selfie alone does not make you verified", async () => {
-    const { user, token } = await h.createUser({ roles: ["caregiver"] });
+    const { user, token } = await h.createUser({ idVerified: false, roles: ["caregiver"] });
     await addIdentityDoc(user.id, { status: "approved", docType: "selfie", createdAt: "2026-08-01T10:00:00Z" });
     expect((await me(token)).body.user.identityStatus).toBe("not_started");
   });

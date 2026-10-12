@@ -25,6 +25,7 @@ const rateLimit = require("express-rate-limit");
 const { Server } = require("socket.io");
 const jwt = require("jsonwebtoken");
 const { initializeDatabase, getDb } = require("./models/database");
+const { careAccessAllowed } = require("./utils/careAccess"); // v1.112.0 — identity gate
 const { createViewRegistry } = require("./utils/presence");
 const { limitBodySize } = require("./middleware/validate");
 const { withPollerLock } = require("./models/database");
@@ -129,10 +130,21 @@ io.use((socket, next) => {
     // read-only, and a live socket is not a read.
     if (decoded.impersonatedBy) return next(new Error("Impersonated sessions do not connect"));
     socket.user = decoded;
-    next();
   } catch (err) {
-    next(new Error("Invalid token"));
+    return next(new Error("Invalid token"));
   }
+  // v1.112.0 — a live socket carries care events (messages, visit updates, activity). A person
+  // the identity gate holds (utils/careAccess.js) gets none: they reconnect once approved.
+  (async () => {
+    try {
+      const db = await getDb();
+      if (!(await careAccessAllowed(db, socket.user.id))) return next(new Error("ID_REQUIRED"));
+      next();
+    } catch (e) {
+      captureException(e, { where: "socket: care gate" });
+      next(new Error("Could not confirm access"));
+    }
+  })();
 });
 
 // Track connected users: userId -> Set of socket ids

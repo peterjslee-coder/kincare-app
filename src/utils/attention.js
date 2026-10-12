@@ -37,6 +37,7 @@
 
 const { getTodayStringInZone, DEFAULT_TIMEZONE } = require("./timezone");
 const { FEE_CAREGIVER_PROFILE_SQL } = require("./cancellationFee");
+const { careAccessFor } = require("./careAccess"); // v1.112.0
 
 // A naive 'YYYY-MM-DD' plus n days, done in UTC on purpose: scheduled_date is a wall-clock
 // date with no zone, so arithmetic in the server's zone would shift it across a boundary.
@@ -77,7 +78,7 @@ const name = (first, last) => [first, last].filter(Boolean).join(" ").trim() || 
 
 const EMPTY = {
   total: 0, reimbursements: 0, timeChanges: 0, timeChangeSessionId: null,
-  careTasks: 0, approvals: 0, safetyFlags: 0, messages: 0, emptyWeeks: 0, cancelFees: 0, financialConcerns: 0, items: [],
+  careTasks: 0, approvals: 0, safetyFlags: 0, messages: 0, emptyWeeks: 0, cancelFees: 0, financialConcerns: 0, identity: 0, items: [],
 };
 
 /**
@@ -87,8 +88,55 @@ const EMPTY = {
  *             timeChangeSessionId:string|null, careTasks:number, messages:number,
  *             items:Array<object> }}
  */
+// ─── v1.112.0 — "Verify your ID by <date>" ───
+//
+// The identity gate (utils/careAccess.js) gave every existing account 14 days. The deadline is
+// something only this person can clear, so it is a real item, not a nudge — but once they have
+// submitted, the wait is ours, and it turns soft ("with us for review", nothing to do).
+// A person the gate is already holding gets ONLY this item: every other row below is about a
+// care record they may not see.
+function identityItem(access) {
+  const submitted = access.identityStatus === "pending";
+  const rejected = access.identityStatus === "rejected";
+  const blocked = !access.allowed;
+  const date = access.graceUntil || null;
+  let title;
+  if (submitted) title = "Your ID is with the InPlace team for review";
+  else if (blocked) title = "Verify your ID to see care";
+  else title = "Verify your ID";
+  return {
+    kind: "identity",
+    soft: submitted,
+    id: "identity:me",
+    title,
+    detail: null,
+    forWhom: null,
+    deadline: blocked ? null : date,
+    verb: submitted ? "Open" : "Verify",
+    action: null,
+    page: "account",
+    focus: "identity",
+    note: submitted
+      ? "Nothing more to do \u2014 we'll let you know when it's approved."
+      : rejected
+        ? "Your last photo couldn't be approved. A clear photo of your ID and a selfie is all it takes."
+        : blocked
+          ? "A person on the InPlace team checks every ID. Until then you can use your account, but not see care."
+          : "Every account on InPlace now verifies their ID. After this date, care pages wait until yours is approved.",
+  };
+}
+
 async function attentionItemsFor(db, userId) {
   if (!userId) return { ...EMPTY };
+
+  let access = null;
+  try { access = await careAccessFor(db, userId); }
+  catch (e) { console.log("[attention] care access failed (non-blocking):", e.message); }
+  if (access && !access.allowed) {
+    const item = identityItem(access);
+    return { ...EMPTY, identity: item.soft ? 0 : 1, total: item.soft ? 0 : 1, items: [item] };
+  }
+  const idItems = access && access.status === "grace" ? [identityItem(access)] : [];
 
   // ── Reimbursements awaiting MY approval ──
   // Approver = the team's billing contact, or the leader when no billing contact is set.
@@ -402,6 +450,7 @@ async function attentionItemsFor(db, userId) {
   // the card gives every action a hold-then-send window, but only these can be taken back
   // after it closes.
   const items = [
+    ...idItems,
     ...reimbursementRows.map((r) => ({
       kind: "reimbursement",
       id: r.id,
@@ -621,7 +670,10 @@ async function attentionItemsFor(db, userId) {
 
   const timeChanges = offerRows.length + changeRows.length;
 
-  return {
+  // v1.112.0 — the ID deadline counts (only they can clear it); "with us for review" does not.
+  const idCount = idItems.filter((i) => !i.soft).length;
+
+  const payload = {
     // v1.105.105 — unread messages are NOT in the total any more. Pete: five of them showed
     // in "Needs you" and "I wanted to show up as the notifications over the message pill" —
     // which it already does, in the nav (app.js `unreadMsgCount`). Counting them twice made
@@ -653,6 +705,9 @@ async function attentionItemsFor(db, userId) {
     messages,
     items,
   };
+  payload.total += idCount;
+  payload.identity = idCount;
+  return payload;
 }
 
 /**

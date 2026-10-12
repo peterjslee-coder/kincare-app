@@ -347,6 +347,8 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
         setIdVerOpen(false);
         // Refresh user data to get updated identityVerified flag
         fetchUser();
+        // v1.112.0 — and the app's copy, so the identity gate screen says "waiting for review".
+        window.dispatchEvent(new Event('inplace:care-access-changed'));
       } else {
         const err = await res?.json().catch(() => ({}));
         setIdVerError(err.error || 'Verification failed. Please try again.');
@@ -548,6 +550,27 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
       };
     }
   }, [activeTab]);
+
+  // v1.112.0 — "Verify your ID" from the gate screen or the Needs-you item lands here with
+  // __pendingFocus = 'identity': open the identity card on the profile tab, ready to start.
+  useEffect(() => {
+    const take = () => {
+      if (window.__pendingFocus !== 'identity') return;
+      window.__pendingFocus = null;
+      setActiveTab('profile');
+      const status = user?.identityStatus || familyIdentityStatus;
+      if (status !== 'verified' && status !== 'pending') {
+        setIdVerOpen(true); setIdVerStep(1); setIdVerSelfie(null); setIdVerIdPhoto(null); setIdVerError(null);
+      }
+      setTimeout(() => {
+        const el = document.querySelector('[data-id-verify-card]');
+        if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 150);
+    };
+    take();
+    window.addEventListener('inplace:focus', take);
+    return () => window.removeEventListener('inplace:focus', take);
+  }, [user?.identityStatus, familyIdentityStatus]);
 
   // Listen for external tab switch requests (e.g., from First Steps click)
   useEffect(() => {
@@ -1372,7 +1395,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
           </div>
 
           {/* Identity Verification Card */}
-          <div className="card">
+          <div className="card" data-id-verify-card>
             <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 Identity Verification

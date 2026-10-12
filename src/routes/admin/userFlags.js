@@ -7,6 +7,7 @@ const { validateImageDataUrl } = require("../../utils/serveMedia");
 const { authenticate, requireAdmin } = require("../../middleware/auth");
 const { captureException } = require("../../utils/sentry");
 const { activeVouchesFor } = require("../../utils/vouches");
+const { onIdentityApproved } = require("../../utils/careAccess"); // v1.112.0
 const { sendVerificationEmail } = require("../auth");
 const {
   generateAuthenticationOptions,
@@ -215,6 +216,8 @@ router.put("/users/:id/onboarding", async (req, res) => {
            VALUES (?, ?, 'caregiver', ?, 'identity', 'admin_override', '', 'approved', 1, ?, NOW(), NOW())`
         ).run(uuid(), profile.id, req.user.id, req.user.id);
       }
+      // v1.112.0 — approval is when this person may see care (utils/careAccess.js).
+      if (identityVerified) await onIdentityApproved(db, req.params.id);
       // If this is the only flag being toggled and no caregiver_profiles columns to update, return early
       if (Object.keys(req.body).length === 1) return res.json({ updated: true, identityVerified });
     }

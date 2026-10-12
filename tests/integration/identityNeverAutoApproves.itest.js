@@ -30,7 +30,7 @@ const insertIdentityDoc = async (decision) => {
 beforeAll(async () => {
   h = await startHarness({ routers: {} });
   db = h.db;
-  user = await h.createUser({ firstName: "Julia", lastName: "Huth", roles: ["caregiver"] });
+  user = await h.createUser({ idVerified: false, firstName: "Julia", lastName: "Huth", roles: ["caregiver"] });
   profileId = uuid();
   await db.prepare(
     "INSERT INTO caregiver_profiles (id, user_id, hourly_rate, created_at) VALUES (?, ?, 25, NOW())"
@@ -65,7 +65,7 @@ describe("a flawless submission still waits for a person", () => {
 
 describe("a low-confidence submission carries no opinion at all", () => {
   test("abstain is stored, not a guess", async () => {
-    const other = await h.createUser({ firstName: "Sam", lastName: "Unclear", roles: ["caregiver"] });
+    const other = await h.createUser({ idVerified: false, firstName: "Sam", lastName: "Unclear", roles: ["caregiver"] });
     const otherProfile = uuid();
     await db.prepare(
       "INSERT INTO caregiver_profiles (id, user_id, hourly_rate, created_at) VALUES (?, ?, 25, NOW())"

@@ -522,6 +522,9 @@ const toClientUser = window.toClientUser = (u, overrides = {}) => {
     // here, not in one caller.
     identityVerified: !!u.identityVerified,
     identityStatus: u.identityStatus,
+    // v1.112.0 — the identity gate: { status, allowed, graceUntil, identityStatus } or null
+    // when the server could not say (null is never drawn as blocked — the server enforces).
+    careAccess: u.careAccess || null,
     ...overrides,
   };
 };
@@ -607,6 +610,41 @@ const App = () => {
     return 'dashboard';
   });
   const [pageNavCount, setPageNavCount] = useState(0);
+
+  // ─── v1.112.0 — the identity gate ───
+  // apiFetch announces a 403 ID_REQUIRED (utils.js). Re-read who we are so the page becomes the
+  // "Verify your ID" screen — e.g. a grace period that ran out while the app was open. Only the
+  // gate fields are taken from the answer; everything else about the user object stays as the
+  // login path built it (demo/impersonation overrides included).
+  const refreshCareAccess = useCallback(async () => {
+    const data = await fetchMe({ force: true });
+    if (!data?.user) return false;
+    setCurrentUser((prev) => prev ? {
+      ...prev,
+      careAccess: data.user.careAccess || null,
+      identityStatus: data.user.identityStatus,
+      identityVerified: !!data.user.identityVerified,
+      selfOnboardingComplete: data.user.selfOnboardingComplete,
+      careRecipientId: data.user.careRecipientId,
+    } : prev);
+    return true;
+  }, []);
+  useEffect(() => {
+    let last = 0;
+    const onGate = () => {
+      const now = Date.now();
+      if (now - last < 5000) return; // a page firing ten requests at once is one event
+      last = now;
+      refreshCareAccess().catch(() => {});
+    };
+    const onChanged = () => { refreshCareAccess().catch(() => {}); };
+    window.addEventListener('inplace:id-required', onGate);
+    window.addEventListener('inplace:care-access-changed', onChanged);
+    return () => {
+      window.removeEventListener('inplace:id-required', onGate);
+      window.removeEventListener('inplace:care-access-changed', onChanged);
+    };
+  }, [refreshCareAccess]);
   // v1.104.4 — expose the current page to the ErrorBoundary crash reporter
   useEffect(() => { try { window.__currentPage = currentPage; } catch {} }, [currentPage]);
   // v1.105.187 — a screen change is a safe moment to apply a waiting app update (index.html
@@ -1297,12 +1335,16 @@ const App = () => {
                   setVerifyMessage({ type: 'success', text: d.message || "You've joined the care team!" });
                   if (d.careTeamId) { setSelectedCareTeamId(d.careTeamId); setCurrentPage('care-team'); }
                 } else {
-                  try {
-                    const errData = await r.json();
-                    setVerifyMessage({ type: 'error', text: errData.error || 'Could not accept this invite. It may have expired.' });
-                  } catch {
-                    setVerifyMessage({ type: 'error', text: 'Could not accept this invite. It may have expired.' });
+                  let errData = null;
+                  try { errData = await r?.json(); } catch { errData = null; }
+                  // v1.112.0 — the identity gate refused it WITHOUT using the invite. Keep the
+                  // token so it is accepted on a later visit, once the ID is approved.
+                  if (errData?.code === 'ID_REQUIRED') {
+                    localStorage.setItem('pendingInviteToken', inviteParam);
+                    setVerifyMessage({ type: 'info', text: "You'll join the care team as soon as your ID is approved." });
+                    return;
                   }
+                  setVerifyMessage({ type: 'error', text: errData?.error || 'Could not accept this invite. It may have expired.' });
                 }
                 // Clear on any response (success or permanent error)
                 localStorage.removeItem('pendingInviteToken');
@@ -1632,12 +1674,15 @@ const App = () => {
           localStorage.removeItem('pendingInviteToken');
         } else {
           // Show error to user — expired token, wrong email, etc.
-          try {
-            const errData = await r.json();
-            setVerifyMessage({ type: 'error', text: errData.error || 'Could not accept this invite. It may have expired.' });
-          } catch {
-            setVerifyMessage({ type: 'error', text: 'Could not accept this invite. It may have expired.' });
+          let errData = null;
+          try { errData = await r?.json(); } catch { errData = null; }
+          // v1.112.0 — refused by the identity gate, invite untouched: keep it for after approval.
+          if (errData?.code === 'ID_REQUIRED') {
+            localStorage.setItem('pendingInviteToken', inviteTokenNow);
+            setVerifyMessage({ type: 'info', text: "You'll join the care team as soon as your ID is approved." });
+            return;
           }
+          setVerifyMessage({ type: 'error', text: errData?.error || 'Could not accept this invite. It may have expired.' });
           // Clear on permanent failure (don't retry bad tokens forever)
           localStorage.removeItem('pendingInviteToken');
         }
@@ -1854,6 +1899,8 @@ const App = () => {
   }
 
   const role = activeRole || currentUser?.role || 'family';
+  // v1.112.0 — held by the identity gate: account pages only (src/utils/careAccess.js).
+  const careBlocked = !!(currentUser?.careAccess && currentUser.careAccess.allowed === false);
   window.__currentRole = role; // v1.97.0 — read by __handlePushNavigate (defined pre-auth, so no closure over role)
 
   window.__currentUserId = currentUser?.id; // v1.99.0 — read by CareTaskCheckSheet's who-did-it picker
@@ -1982,7 +2029,13 @@ const App = () => {
   };
 
   // Role-based navigation items — main nav (top) and bottom nav (pinned to sidebar bottom)
+  // v1.112.0 — while the identity gate holds someone, every care page is the "Verify your ID"
+  // screen, so the nav offers Home (that screen) and nothing that would only lead back to it.
+  // Help and My Account stay, pinned below. Mirrored in getBottomNavItems.
+  const ID_GATE_NAV = [{ id: 'dashboard', icon: '🏠', label: 'Home' }];
+
   const getNavItems = () => {
+    if (careBlocked) return ID_GATE_NAV;
     if (role === 'caregiver') {
       const cgOnboarded = currentUser?.onboardingComplete !== false;
       const cgNav = [
@@ -2050,6 +2103,23 @@ const App = () => {
         return <div key={pageKey} style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh', color: 'var(--text-secondary)' }}>Returning to setup...</div>;
       }
     } catch {}
+
+    // ─── v1.112.0 — the identity gate ───
+    // Account pages stay open (My Account is where the ID is uploaded). A care_for self-signup
+    // still gets her wizard — it is where SHE verifies, and it saves her answers until approval.
+    // Everything else is the one calm screen, rather than a page of 403s.
+    if (careBlocked) {
+      const ACCOUNT_PAGES = ['account', 'help', 'documents', 'payments', 'financials'];
+      const selfOnboardingDone = currentUser?.selfOnboardingComplete || currentUser?.self_onboarding_complete;
+      const wizardOpen = role === 'care_for' && currentPage === 'dashboard' && !selfOnboardingDone;
+      if (!ACCOUNT_PAGES.includes(currentPage) && !wizardOpen) {
+        return typeof IdGateScreen !== 'undefined'
+          ? <IdGateScreen key={pageKey} user={currentUser} onNavigate={setCurrentPage}
+              onRefresh={refreshCareAccess}
+              onCaregiverSetup={role === 'caregiver' ? () => setAppState('resume-onboarding') : null} />
+          : <div key={pageKey} style={{ padding: 24, textAlign: 'center', color: 'var(--text-secondary)' }}>Verify your ID from My Account to see care.</div>;
+      }
+    }
 
     if (currentPage === 'dashboard') {
       if (role === 'caregiver') return <CaretakerHub key={pageKey} onNeedsOnboarding={() => setAppState('resume-onboarding')} />;
@@ -2126,6 +2196,7 @@ const App = () => {
 
   // Bottom nav items (max 5 for mobile)
   const getBottomNavItems = () => {
+    if (careBlocked) return [...ID_GATE_NAV, { id: 'account', icon: '👤', label: 'Account' }];
     if (role === 'caregiver') {
       const cgOnboarded = currentUser?.onboardingComplete !== false;
       const firstStepsRemain = !!window.__caregiverFirstStepsRemain;

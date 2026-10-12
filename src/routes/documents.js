@@ -12,6 +12,7 @@ const { medicalRole, logMedicalAudit } = require("../utils/medicalAccess");
 const { recipientDocRole, canViewRecipientDoc, shareableCaregivers } = require("../utils/recipientDocAccess");
 const { blockWhileImpersonating } = require("../middleware/noImpersonation");
 const { isTrustedLinkedUser } = require("../utils/linkedAccount"); // stale-link sweep
+const { onIdentityApproved, personForIdentityDoc } = require("../utils/careAccess"); // v1.112.0
 
 const router = express.Router();
 
@@ -509,6 +510,14 @@ router.post("/admin/:docId/review", authenticate, checkDocAdmin, requireAdmin, a
         description: `Admin ${action}d ${doc.document_type.replace(/_/g, ' ')} document${notes ? ': ' + notes : ''}`,
         metadata: { documentId: doc.id, previousStatus: doc.status, newStatus, notes },
       });
+    }
+
+    // v1.112.0 — approving someone's ID is the moment they may see care (utils/careAccess.js).
+    // Nothing else for the admin to do: the gate reads this row. What happens here is the
+    // follow-through — a care_for self-signup's profile is created, and they are told.
+    if (action === 'approve' && doc.category === 'identity' && doc.document_type !== 'selfie') {
+      const personId = await personForIdentityDoc(db, doc);
+      await onIdentityApproved(db, personId);
     }
 
     res.json({ document: { id: doc.id, status: newStatus, admin_reviewed_at: new Date().toISOString() } });

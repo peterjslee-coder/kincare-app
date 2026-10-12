@@ -27,10 +27,13 @@ function fakeDb(counts) {
       const norm = sql.replace(/\s+/g, " ");
       return {
         async get() {
+          // v1.112.0 — a verified person: the identity gate is not what these tests measure.
+          if (norm.includes("id_gate_grace_until")) return { is_admin: 0, is_demo: 0, id_gate_grace_until: null };
           if (norm.includes("FROM messages")) return { count: counts.messages ?? 0 };
           return { count: 0 };
         },
         async all() {
+          if (norm.includes("FROM verified_documents")) return [{ status: "approved", is_verified: 1 }];
           if (norm.includes("FROM reimbursements")) {
             return rows(counts.reimbursements ?? 0, { id: "r", amount: 12.5, description: "Groceries" });
           }
@@ -85,6 +88,9 @@ describe("the count means: you are the blocker", () => {
       // Counted (it charges their card if nobody answers); zero here, this stub has none.
       total: 6, reimbursements: 2, timeChanges: 1, timeChangeSessionId: "s1", careTasks: 3,
       approvals: 0, safetyFlags: 0, financialConcerns: 0, messages: 4, emptyWeeks: 0, cancelFees: 0,
+      // v1.112.0 — "Verify your ID by <date>" for someone in the identity gate's grace period.
+      // Zero here: this stub's user is verified.
+      identity: 0,
     });
   });
 
@@ -111,7 +117,7 @@ describe("the count means: you are the blocker", () => {
     }) };
     const r = await attentionCountFor(brokenDb, "pete");
     expect(r.total).toBe(0);
-    expect(r).toEqual({ total: 0, reimbursements: 0, timeChanges: 0, timeChangeSessionId: null, careTasks: 0, approvals: 0, safetyFlags: 0, financialConcerns: 0, messages: 0, emptyWeeks: 0, cancelFees: 0 });
+    expect(r).toEqual({ total: 0, reimbursements: 0, timeChanges: 0, timeChangeSessionId: null, careTasks: 0, approvals: 0, safetyFlags: 0, financialConcerns: 0, messages: 0, emptyWeeks: 0, cancelFees: 0, identity: 0 });
   });
 });
 

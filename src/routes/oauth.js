@@ -663,24 +663,15 @@ router.post("/complete-signup", async (req, res) => {
         ).get(data.email);
       } catch (e) { pendingClaimInvite = null; }
     }
+    // v1.112.0 — same as auth.js register: no care profile until a person approves the ID.
+    // The intent waits in users.pending_self_care (utils/careAccess.materializeSelfCare).
     if (role === "care_for" && !pendingClaimInvite) {
       try {
-        const crId = uuid();
-        await db.prepare(`
-          INSERT INTO care_recipients
-          (id, family_user_id, first_name, last_name, linked_user_id,
-           authorization_tier, consent_status, consent_method, consent_verified_at)
-          VALUES (?, ?, ?, ?, ?, 'tier1', 'verified', 'self_signup', NOW())
-        `).run(crId, userId, finalFirst, finalLast, userId);
-        const teamId = uuid();
-        await db.prepare(
-          "INSERT INTO care_teams (id, name, care_recipient_id, created_by) VALUES (?, ?, ?, ?)"
-        ).run(teamId, `${finalFirst} ${finalLast}'s Care Team`, crId, userId);
-        await db.prepare(
-          "INSERT INTO care_team_members (id, care_team_id, user_id, role, invited_by) VALUES (?, ?, ?, 'leader', ?)"
-        ).run(uuid(), teamId, userId, userId);
+        await db.prepare("UPDATE users SET pending_self_care = ? WHERE id = ?")
+          .run(JSON.stringify({ requestedAt: new Date().toISOString() }), userId);
       } catch (e) {
-        console.error("OAuth care_for auto-setup error:", e);
+        console.error("OAuth care_for intent error:", e);
+        captureException(e, { where: "oauth: care_for pending_self_care", userId });
       }
     }
 
