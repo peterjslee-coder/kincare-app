@@ -3007,10 +3007,13 @@ async function initializeDatabase() {
       // link stayed, and that account (ccf867e0…) is a real, unrelated person, Kit Conn, who
       // is not on the care team. Remove that one link, only if it is still exactly that one,
       // and write the prior id into the consent audit trail so it can be reversed.
+      // v1.111.4 — actor is Pete (the leader who asked for it). The first version wrote NULL into
+      // consent_audit_log.actor_id, which is NOT NULL: on prod (the only DB where the row
+      // exists) the migration rolled back, boot failed, and Railway kept v1.110.3 running.
       id: "055_unlink_kit_from_betty_and_authorities",
       statements: [
         `INSERT INTO consent_audit_log (id, care_recipient_id, actor_id, actor_role, event_type, description, metadata)
-         SELECT 'unlink-055-betty', id, NULL, 'admin', 'linked_account_removed',
+         SELECT 'unlink-055-betty', id, '6f3d7018-ceb4-4d7a-a252-1e431fa92405', 'family', 'linked_account_removed',
            'Removed a linked "own account" that was not this person (created by a 2026-03-03 self-signup; account not on the care team). Requested by the care team leader 2026-10-12.',
            '{"previous_linked_user_id":"ccf867e0-aeaf-4f06-8c40-1a4824d1aa2a","migration":"055"}'
          FROM care_recipients
