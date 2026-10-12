@@ -120,7 +120,7 @@ describe("applying an update", () => {
 describe("the three cases are wired", () => {
   test("waiting at open → apply now; lands while open → pill; foreground return → apply if safe", () => {
     const boot = html.slice(html.indexOf("window.addEventListener('load', async function() {"));
-    expect(boot).toContain("if (reg.waiting) { swApplyUpdate(reg); } else { swShowUpdatePill(reg); }");
+    expect(boot).toContain("if (reg.waiting && !swRecentlyTried()) { swApplyUpdate(reg); } else if (!reg.waiting) { swShowUpdatePill(reg); }");
     expect(boot).toContain("if (reg.waiting && swIsSafeMoment()) { swApplyUpdate(reg); return; }");
     // While open: the installed worker shows the pill; it does NOT apply on arrival.
     const installed = boot.slice(boot.indexOf("nw.state === 'installed'"), boot.indexOf("visibilitychange"));
@@ -136,5 +136,23 @@ describe("the three cases are wired", () => {
     const installBlock = sw.slice(sw.indexOf("addEventListener('install'"), sw.indexOf("addEventListener('activate'"));
     expect(installBlock).not.toMatch(/^\s*self\.skipWaiting\(\)/m);
     expect(sw).toContain("if (event.data?.type === 'SKIP_WAITING')");
+  });
+});
+
+
+// v1.110.2 — a waiting worker that never activates (seen on staging 10/12) must not trap the
+// app in "App updated → reload → App updated" forever.
+describe("a stuck waiting worker cannot loop the update screen", () => {
+  afterEach(() => { delete global.sessionStorage; });
+  test("the second attempt inside two minutes does not take the screen", () => {
+    const store = {};
+    global.sessionStorage = { getItem: (k) => store[k] || null, setItem: (k, v) => { store[k] = v; } };
+    const first = load(makeDom());
+    expect(first.api.swApplyUpdate(waitingReg())).toBe(true);
+    // the page reloads; a fresh copy of the script finds the same zombie worker
+    const dom = makeDom();
+    const second = load(dom);
+    expect(second.api.swApplyUpdate(waitingReg())).toBe(false);
+    expect(dom.appended.find((n) => n.id === "sw-update-screen")).toBeUndefined();
   });
 });

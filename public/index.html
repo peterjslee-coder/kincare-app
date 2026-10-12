@@ -112,7 +112,7 @@
 
   <!-- Pre-compiled app bundle (built by scripts/build-client.js) -->
   <script>
-    window.APP_VERSION = "1.110.2";
+    window.APP_VERSION = "1.110.3";
     // v1.85: admin components live in a separate lazy bundle (infra #5)
     window.__ADMIN_BUNDLE_URL = '/js-compiled/bundle-admin.js?v=build-f4fdd250';
   </script>
@@ -252,8 +252,21 @@
         document.body.appendChild(el);
       }
 
+      // v1.110.2 — a waiting worker that never activates must not trap the app. Seen on
+      // staging 10/12: reg.waiting stuck at "installed", answering no messages, while the
+      // ACTIVE worker was already the new build. Every open showed "App updated", waited 8s,
+      // reloaded — and found the same zombie, forever. Remember the last attempt; if it was
+      // under two minutes ago, don't take the screen again — leave the pill.
+      var SW_ATTEMPT_KEY = 'inplace_sw_apply_attempt';
+      function swRecentlyTried() {
+        try { var t = Number(sessionStorage.getItem(SW_ATTEMPT_KEY) || 0); return t && (Date.now() - t) < 120000; }
+        catch (e) { return false; }
+      }
+
       function swApplyUpdate(reg) {
         if (swApplying || !reg || !reg.waiting) return false;
+        if (swRecentlyTried()) { swPendingReg = null; return false; }
+        try { sessionStorage.setItem(SW_ATTEMPT_KEY, String(Date.now())); } catch (e) { /* private mode */ }
         swApplying = true;
         swShowUpdateScreen();
         reg.waiting.postMessage({ type: 'SKIP_WAITING' });
@@ -297,7 +310,7 @@
 
           // Already-waiting worker (deploy happened while app was closed). The app has JUST
           // opened, so nothing is in flight: apply it now, behind the "App updated" card.
-          if (reg.waiting) { swApplyUpdate(reg); } else { swShowUpdatePill(reg); }
+          if (reg.waiting && !swRecentlyTried()) { swApplyUpdate(reg); } else if (!reg.waiting) { swShowUpdatePill(reg); }
           // Worker that finishes installing while the app is open
           reg.addEventListener('updatefound', function() {
             var nw = reg.installing;
