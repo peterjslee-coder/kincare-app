@@ -867,6 +867,20 @@ const apiFetch = window.apiFetch = async (url, options = {}) => {
     } catch (e) { /* not JSON, fall through */ }
   }
 
+  // ─── v1.112.0 — the identity gate ───
+  // Any care-data route answers 403 ID_REQUIRED for a person whose ID is not yet approved (past
+  // their grace period). Tell the app once, so it can swap the page for the "Verify your ID"
+  // screen instead of every card on it showing its own error. The response still goes back to
+  // the caller, which handles a non-OK answer as it always has.
+  if (response.status === 403 && !url.startsWith('/api/admin')) {
+    try {
+      const errBody = await response.clone().json();
+      if (errBody && errBody.code === 'ID_REQUIRED') {
+        window.dispatchEvent(new CustomEvent('inplace:id-required', { detail: { status: errBody.status || null } }));
+      }
+    } catch (e) { /* not JSON — not the gate */ }
+  }
+
   if (response.status === 401 && url !== '/api/auth/refresh') {
     // If impersonation token expired, end impersonation instead of refreshing
     if (IMPERSONATION_TOKEN) {

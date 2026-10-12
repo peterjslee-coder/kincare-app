@@ -13,7 +13,8 @@ const { getClientIp } = require("../middleware/auditLog");
 const { captureException } = require("../utils/sentry");
 const storage = require("../utils/storage");
 const { userPhotoUrl, HAS_PHOTO_SQL } = require("./media");
-const { identityStatusFor } = require("../utils/identity"); // v1.106.39
+const { personIdentityStatus } = require("../utils/identity"); // v1.106.39, person-level since v1.112.0
+const { careAccessFor, materializeSelfCare } = require("../utils/careAccess"); // v1.112.0
 const { blockWhileImpersonating } = require("../middleware/noImpersonation"); // v1.106.40
 
 const router = express.Router();
@@ -253,36 +254,21 @@ router.post("/register", validateRegister, async (req, res) => {
       } catch (e) { pendingClaimInvite = null; }
       if (pendingClaimInvite) console.log("  [auth] care_for signup has a pending care_recipient invite — skipping auto-create; profile links at invite acceptance");
     }
+    // ─── v1.112.0 — no care profile until a person has approved this ID ───
+    //
+    // This used to create a care recipient, a care team led by this brand-new account and a
+    // team conversation, right here — no ID, no review. That is the door the account linked to
+    // Betty's profile came through (migration 055). Now the intent waits in
+    // users.pending_self_care; the self-onboarding wizard adds the profile to it; and
+    // utils/careAccess.materializeSelfCare creates the records once the ID is approved, named
+    // from the approved ID where it can read one.
     if (role === "care_for" && !pendingClaimInvite) {
       try {
-        const crId = uuid();
-        await db.prepare(`
-          INSERT INTO care_recipients
-          (id, family_user_id, first_name, last_name, linked_user_id,
-           authorization_tier, consent_status, consent_method, consent_verified_at)
-          VALUES (?, ?, ?, ?, ?, 'tier1', 'verified', 'self_signup', NOW())
-        `).run(crId, id, firstName, lastName, id);
-
-        // Auto-create care team
-        const teamId = uuid();
-        await db.prepare(
-          "INSERT INTO care_teams (id, name, care_recipient_id, created_by) VALUES (?, ?, ?, ?)"
-        ).run(teamId, `${firstName} ${lastName}'s Care Team`, crId, id);
-        await db.prepare(
-          "INSERT INTO care_team_members (id, care_team_id, user_id, role, invited_by) VALUES (?, ?, ?, 'leader', ?)"
-        ).run(uuid(), teamId, id, id);
-
-        // Auto-create care team conversation
-        const convId = uuid();
-        await db.prepare(
-          "INSERT INTO conversations (id, type, name, care_team_id, created_by) VALUES (?, 'care_team', ?, ?, ?)"
-        ).run(convId, `${firstName} ${lastName}'s Care Team`, teamId, id);
-        await db.prepare(
-          "INSERT INTO conversation_members (id, conversation_id, user_id, role) VALUES (?, ?, ?, 'admin')"
-        ).run(uuid(), convId, id);
+        await db.prepare("UPDATE users SET pending_self_care = ? WHERE id = ?")
+          .run(JSON.stringify({ requestedAt: new Date().toISOString() }), id);
       } catch (crErr) {
-        console.error("  [auth] Failed to auto-create care recipient for care_for user:", crErr.message);
-        // Non-fatal — user account is already created, they can add recipient manually
+        console.error("  [auth] Failed to record care_for self-signup intent:", crErr.message);
+        captureException(crErr, { where: "auth: care_for pending_self_care", userId: id });
       }
     }
 
@@ -663,6 +649,13 @@ router.get("/me", authenticate, async (req, res) => {
     onboardingComplete = cgProfile ? !!cgProfile.onboarding_complete : false;
   }
 
+  // v1.112.0 — a care_for self-signup whose ID was approved since we last looked gets its care
+  // profile now (normally it is made at the moment of approval; this is the backstop).
+  // Idempotent and claimed atomically — see utils/careAccess.materializeSelfCare.
+  // Not while an admin is viewing as her: that view is read-only (v1.109.1).
+  if (!req.user.impersonatedBy) try { await materializeSelfCare(db, req.user.id); }
+  catch (e) { captureException(e, { where: 'auth: me materializeSelfCare', userId: req.user.id }); }
+
   // Check care_for (self-onboarding) status
   let selfOnboardingComplete = null;
   let careRecipientId = null;
@@ -671,6 +664,14 @@ router.get("/me", authenticate, async (req, res) => {
     if (cr) {
       selfOnboardingComplete = !!cr.self_onboarding_complete;
       careRecipientId = cr.id;
+    } else {
+      // v1.112.0 — no profile yet because the ID is still waiting on a person. The wizard is
+      // "done" once its answers are saved against the pending intent; the profile follows.
+      try {
+        const p = await db.prepare("SELECT pending_self_care FROM users WHERE id = ?").get(req.user.id);
+        const intent = p && p.pending_self_care ? JSON.parse(p.pending_self_care) : null;
+        if (intent) selfOnboardingComplete = !!intent.completed;
+      } catch { /* a malformed intent reads as not-yet-done, which re-offers the wizard */ }
     }
   }
 
@@ -686,18 +687,21 @@ router.get("/me", authenticate, async (req, res) => {
   // and must never be the silent result of a failed query.
   let identityVerified = false;
   let identityStatus = 'not_started'; // 'not_started' | 'pending' | 'verified' | 'rejected'
+  // v1.112.0 — personIdentityStatus, the same answer the care gate reads. It counts a
+  // document filed against a linked care profile only if this user submitted it herself.
   try {
-    const cgProfile = await db.prepare(
-      "SELECT id FROM caregiver_profiles WHERE user_id = ?"
-    ).get(req.user.id);
-    ({ identityVerified, identityStatus } = await identityStatusFor(
-      db, req.user.id, cgProfile ? cgProfile.id : null,
-      careRecipientId ? [careRecipientId] : []
-    ));
+    ({ identityVerified, identityStatus } = await personIdentityStatus(db, req.user.id));
   } catch (e) {
     console.error('identity status lookup failed for user', req.user.id, e.message);
     captureException(e, { where: 'auth: identity status', userId: req.user.id });
   }
+
+  // v1.112.0 — may this person see care right now? The client draws the "Verify your ID"
+  // screen and the Needs-you deadline from this. A failed lookup is reported as unknown
+  // (null), never as blocked or allowed — the server enforces either way.
+  let careAccess = null;
+  try { careAccess = await careAccessFor(db, req.user.id); }
+  catch (e) { captureException(e, { where: 'auth: careAccess', userId: req.user.id }); }
 
   // Check for pending legal documents that need acceptance
   let pendingLegalDocs = [];
@@ -798,6 +802,7 @@ router.get("/me", authenticate, async (req, res) => {
       careRecipientId,
       identityVerified,
       identityStatus,
+      careAccess,
       pendingLegalDocs,
     },
     token,

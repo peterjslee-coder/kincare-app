@@ -89,7 +89,7 @@ describe("adding a caregiver you already know", () => {
 
   let carol;
   test("she accepts: the family's gate row exists, keyed on the OWNER, and her phone is kept", async () => {
-    carol = await h.createUser({ roles: ["caregiver"], firstName: "Carol", lastName: "Whitaker", email: carolEmail });
+    carol = await h.createUser({ idVerified: false, roles: ["caregiver"], firstName: "Carol", lastName: "Whitaker", email: carolEmail });
     const res = await h.request.post("/api/platform-invites/accept-invite").set(h.auth(carol.token)).send({ token });
     expect(res.status).toBe(200);
     expect(res.body.kind).toBe("known-caregiver");

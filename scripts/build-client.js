@@ -109,6 +109,7 @@ const scripts = [
   "js/components/HelpPage.js",
   "js/components/IPAiBadge.js",
   "js/components/IPAiInsightsCard.js",
+  "js/components/IdGateScreen.js", // v1.112.0 — the identity gate's full-page screen; app.js renders it
   "js/app.js",
 ];
 

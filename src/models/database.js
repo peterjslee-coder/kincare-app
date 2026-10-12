@@ -3035,6 +3035,39 @@ async function initializeDatabase() {
         )`,
       ],
     },
+    {
+      // v1.112.0 — the identity gate (src/utils/careAccess.js). Pete, 10/12: "We should
+      // absolutely require someone to verify their ID before they are able to sign up for care."
+      //
+      // id_gate_grace_until: every account that exists today and is not admin/demo and has no
+      // APPROVED identity document of its own gets 14 days, then loses care access until a
+      // person approves their ID. New accounts get NULL — gated from the first request.
+      // The NOT EXISTS mirrors identity.js personIdentityDoc; it only decides who gets a
+      // deadline, and the resolver decides everything at read time, so a verified person who
+      // slipped through here is still "verified", never "grace".
+      //
+      // pending_self_care: a care_for self-signup no longer creates a care recipient in the
+      // register request. The intent (and the wizard's profile) waits here until the ID is
+      // approved — see careAccess.materializeSelfCare.
+      id: "056_identity_gate",
+      statements: [
+        `ALTER TABLE users ADD COLUMN IF NOT EXISTS id_gate_grace_until TIMESTAMPTZ`,
+        `ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_self_care TEXT`,
+        `UPDATE users u SET id_gate_grace_until = NOW() + INTERVAL '14 days'
+          WHERE u.id_gate_grace_until IS NULL
+            AND COALESCE(u.is_admin, 0) = 0
+            AND COALESCE(u.is_demo, 0) = 0
+            AND NOT EXISTS (
+              SELECT 1 FROM verified_documents vd
+               WHERE vd.category = 'identity' AND vd.document_type != 'selfie'
+                 AND (vd.status = 'approved' OR vd.is_verified = 1)
+                 AND (   (vd.owner_type = 'user' AND vd.owner_id = u.id)
+                      OR (vd.owner_type = 'caregiver' AND vd.owner_id IN (SELECT cp.id FROM caregiver_profiles cp WHERE cp.user_id = u.id))
+                      OR (vd.owner_type = 'care_recipient' AND vd.uploaded_by = u.id
+                          AND vd.owner_id IN (SELECT cr.id FROM care_recipients cr WHERE cr.linked_user_id = u.id)))
+            )`, // identity-read-ok: one-time grace backfill; the resolver decides at read time
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

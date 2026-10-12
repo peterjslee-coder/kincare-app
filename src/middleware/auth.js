@@ -2,6 +2,8 @@ const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 // v1.105.3 — deployment shape derived from APP_URL, NOT NODE_ENV (unset on Railway).
 const { cookiesSecure } = require("../utils/env");
+// v1.112.0 — the identity gate in front of every care record. See utils/careAccess.js.
+const { careGateRefusal } = require("../utils/careAccess");
 
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) throw new Error("JWT_SECRET environment variable is required");
@@ -181,6 +183,27 @@ async function authenticate(req, res, next) {
           error: `You're viewing this account as an admin, so you can't ${refusal} here. Do it from the admin panel under your own name.`,
           code: "IMPERSONATION_BLOCKED",
         });
+      }
+    }
+
+    // ─── v1.112.0 — no verified ID, no care data. Here, once, for every route ───
+    //
+    // Pete: "We should absolutely require someone to verify their ID before they are able to
+    // sign up for care." A person without an approved ID (and past their grace period) keeps
+    // their ACCOUNT — sign-in, My Account, uploading the ID — and every care-data path answers
+    // 403 ID_REQUIRED before its handler runs. Before the handler is the point: accept-invite
+    // refused here never touches the invite, so it still works after approval.
+    // The list of care paths and the states live in utils/careAccess.js. Fails CLOSED: if we
+    // cannot tell whether someone may see a care record, they do not see it this time.
+    if (decoded.id && decoded.id !== "api-key-admin") {
+      try {
+        const { getDb } = require("../models/database");
+        const db = await getDb();
+        const refusal = await careGateRefusal(db, req);
+        if (refusal) return res.status(403).json(refusal);
+      } catch (gateErr) {
+        console.error("[care gate] lookup failed:", gateErr.message);
+        return res.status(503).json({ error: "Could not confirm access right now. Please try again." });
       }
     }
 

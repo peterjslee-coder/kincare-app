@@ -5,6 +5,7 @@ const { v4: uuid } = require("uuid");
 const { getDb } = require("../../models/database");
 const { authenticate, requireAdmin } = require("../../middleware/auth");
 const { captureException } = require("../../utils/sentry");
+const { careAccessFor } = require("../../utils/careAccess"); // v1.112.0
 
 // ─── v1.106.10 — a stat that failed is not a stat that is zero ───
 //
@@ -371,6 +372,14 @@ router.get("/users", async (req, res) => {
     sql += ` LIMIT ? OFFSET ?`;
 
     const users = await db.prepare(sql).all(...params);
+
+    // v1.112.0 — each person's care access under the identity gate (utils/careAccess.js):
+    // exempt / verified / grace (until) / pending_review / needs_id. One resolver, so this column
+    // and what the person is actually allowed cannot disagree. Per-row failure reads as unknown.
+    for (const u of users) {
+      try { u.careAccess = await careAccessFor(db, u.id); }
+      catch (e) { u.careAccess = null; statFailed("users careAccess", e); }
+    }
 
     // Total count for pagination
     let countSql = "SELECT COUNT(*) as count FROM users WHERE COALESCE(is_active, 1) = 1";

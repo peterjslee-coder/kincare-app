@@ -2806,6 +2806,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                       <th style={{ padding: '10px 12px', textAlign: 'left', color: 'var(--text-secondary)', fontWeight: 600 }}>Email</th>
                       <th style={{ padding: '10px 12px', textAlign: 'left', color: 'var(--text-secondary)', fontWeight: 600 }}>Role</th>
                       <th style={{ padding: '10px 12px', textAlign: 'center', color: 'var(--text-secondary)', fontWeight: 600 }}>Status</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'center', color: 'var(--text-secondary)', fontWeight: 600 }} title="Identity gate (v1.112.0): may this person see care right now?">Care access</th>
                       <th style={{ padding: '10px 12px', textAlign: 'center', color: 'var(--text-secondary)', fontWeight: 600 }}>Tester</th>
                       <th style={{ padding: '10px 12px', textAlign: 'center', color: 'var(--text-secondary)', fontWeight: 600 }}>Kindred</th>
                       <th style={{ padding: '10px 12px', textAlign: 'left', color: 'var(--text-secondary)', fontWeight: 600 }}>Joined</th>
@@ -2853,6 +2854,23 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                               {u.email_verified ? '\u2705 Verified' : '\u26A0 Unverified'}
                             </button>
                           )}
+                        </td>
+                        <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                          {(() => {
+                            // v1.112.0 — the identity gate, as the server resolves it. Approving the
+                            // person's ID document (Documents review) is the only action needed.
+                            const ca = u.careAccess;
+                            if (!ca) return <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{'\u2014'}</span>;
+                            const until = ca.graceUntil ? new Date(ca.graceUntil).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : null;
+                            const look = {
+                              exempt: ['Exempt', 'var(--bg-primary)', 'var(--text-muted)'],
+                              verified: ['Verified', 'var(--color-success-bg)', 'var(--role-color)'],
+                              grace: [`Grace until ${until || '?'}`, 'var(--color-info-bg)', 'var(--color-info)'],
+                              pending_review: ['Blocked \u2014 ID in review', 'var(--color-warning-bg)', 'var(--color-warning)'],
+                              needs_id: ['Blocked \u2014 no ID', 'var(--color-warning-bg)', 'var(--color-warning)'],
+                            }[ca.status] || [ca.status, 'var(--bg-primary)', 'var(--text-muted)'];
+                            return <span style={{ padding: '3px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap', background: look[1], color: look[2] }}>{look[0]}</span>;
+                          })()}
                         </td>
                         <td onClick={e => e.stopPropagation()} style={{ padding: '10px 12px', textAlign: 'center' }}>
                           <button onClick={async () => {

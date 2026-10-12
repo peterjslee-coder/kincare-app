@@ -13,6 +13,8 @@ const { identityDecision, verdictLabel, VERDICT } = require("../utils/identityDe
 const { MODEL_SONNET, getAnthropic } = require("../utils/aiModels");
 const storage = require("../utils/storage"); // v1.91.0 — env-gated R2 offload for document blobs
 const { geocodeAddress, buildAddressString } = require("../utils/geocode");
+const { careAccessAllowed, materializeSelfCare } = require("../utils/careAccess"); // v1.112.0 — identity gate
+const { personIdentityStatus } = require("../utils/identity");
 const router = express.Router();
 
 /**
@@ -91,9 +93,15 @@ router.post("/verify-id", authenticate, async (req, res) => {
     }
 
     // Get the care_recipient record (if one exists for this user)
-    const careRecipient = await db.prepare(
-      "SELECT id FROM care_recipients WHERE linked_user_id = ?"
-    ).get(req.user.id);
+    //
+    // v1.112.0 — only for someone the identity gate already lets see care. A person still
+    // waiting on their ID files it under THEMSELVES: a "linked" profile is exactly the thing
+    // that is not yet trusted to be them (the Kit Conn link to Betty's profile), and filing a
+    // stranger's licence on Betty's record — or reading her date of birth to compare — is the
+    // bleedover the gate exists to stop.
+    const careRecipient = (await careAccessAllowed(db, req.user.id))
+      ? await db.prepare("SELECT id FROM care_recipients WHERE linked_user_id = ?").get(req.user.id)
+      : null;
 
     // Determine document owner — care_recipient if linked, otherwise the user directly
     const ownerId = careRecipient ? careRecipient.id : req.user.id;
@@ -298,6 +306,105 @@ router.post("/verify-id", authenticate, async (req, res) => {
   }
 });
 
+/**
+ * v1.112.0 — the wizard's answers written onto a care profile. Pulled out of /complete so the
+ * same write runs when a self-signup's profile is created on ID approval
+ * (utils/careAccess.materializeSelfCare) with the answers saved while it waited.
+ */
+async function applySelfCareProfile(db, careRecipientId, profile) {
+  const {
+    dateOfBirth, preferredName, careAddress = {}, medicalConditions, medications,
+    foodAllergies, petAllergies, otherAllergies, pets, emergencyContact = {},
+    nonMedicalAcknowledged,
+  } = profile || {};
+
+  // Format date_of_birth
+  const dobFormatted = dateOfBirth ? new Date(dateOfBirth).toISOString().split('T')[0] : null;
+
+  // ─── v1.105.122: this address was never turned into a point ───
+  //
+  // Step 4 of the wizard REQUIRES a care address, and this endpoint has been storing it as
+  // four strings and nothing else since it was written. So every care recipient who signed
+  // themselves up ended with latitude and longitude NULL — not sometimes, always.
+  //
+  // The family path geocodes (careRecipients.js), and everything downstream assumes somebody
+  // did: the caregiver browse map centres on `recipients[0].latitude`, /caregivers/nearby
+  // measures from it, and openJobs computes the distance a caregiver sees from it. A recipient
+  // with no point is the same cold start v1.105.121 just closed for caregivers, arriving from
+  // the other side of the marketplace.
+  let lat = null;
+  let lng = null;
+  try {
+    const addrStr = buildAddressString({
+      address: careAddress.line1, city: careAddress.city,
+      state: careAddress.state, zip: careAddress.zip,
+    });
+    if (addrStr) {
+      const geo = await geocodeAddress(addrStr);
+      if (geo) { lat = geo.lat; lng = geo.lng; }
+      else console.log(`  [self-onboarding] Geocoding failed for: "${addrStr}"`);
+    }
+  } catch (e) {
+    // Never block finishing onboarding on a free geocoder. The startup backfill retries.
+    console.log("  [self-onboarding] Geocoding errored:", e.message);
+  }
+
+  // Update care_recipients table with health & safety info
+  await db.prepare(
+    `UPDATE care_recipients
+     SET
+       self_onboarding_complete = 1,
+       date_of_birth = ?,
+       preferred_name = ?,
+       location_address = ?,
+       location_city = ?,
+       location_state = ?,
+       location_zip = ?,
+       latitude = COALESCE(?, latitude),
+       longitude = COALESCE(?, longitude),
+       medical_conditions = ?,
+       medications = ?,
+       food_allergies = ?,
+       pet_allergies = ?,
+       pets = ?,
+       emergency_contact_name = ?,
+       emergency_contact_phone = ?,
+       emergency_contact_relationship = ?,
+       care_preferences = ?,
+       terms_accepted_at = ?,
+       terms_version = ?,
+       non_medical_acknowledged = ?,
+       updated_at = NOW()
+     WHERE id = ?`
+  ).run(
+    dobFormatted,
+    preferredName || null,
+    careAddress.line1,
+    careAddress.city,
+    careAddress.state,
+    careAddress.zip,
+    lat,
+    lng,
+    medicalConditions || null,
+    medications || null,
+    foodAllergies || null,
+    petAllergies || null,
+    pets || null,
+    emergencyContact.name,
+    emergencyContact.phone,
+    emergencyContact.relationship,
+    JSON.stringify({
+      otherAllergies: otherAllergies || null,
+      careAddressLine2: careAddress.line2 || null,
+    }),
+    new Date().toISOString(),
+    process.env.TERMS_VERSION || '1.0',
+    nonMedicalAcknowledged ? 1 : 0,
+    careRecipientId
+  );
+
+}
+
 // ─── POST /api/self-onboarding/complete ───
 // Complete onboarding and save all collected data
 router.post("/complete", authenticate, async (req, res) => {
@@ -331,99 +438,43 @@ router.post("/complete", authenticate, async (req, res) => {
       return res.status(400).json({ error: "Emergency contact information is required" });
     }
 
-    // Get care_recipient record
-    const careRecipient = await db.prepare(
-      "SELECT id FROM care_recipients WHERE linked_user_id = ?"
-    ).get(req.user.id);
+    // v1.112.0 — the profile this wizard fills does not exist until a person has approved the
+    // ID (utils/careAccess.js). Until then the answers wait on the signup intent and are
+    // applied the moment the profile is created. A blocked person's "linked" profile is never
+    // written to: it is not yet trusted to be theirs.
+    const allowed = await careAccessAllowed(db, req.user.id);
+    const careRecipient = allowed
+      ? await db.prepare("SELECT id FROM care_recipients WHERE linked_user_id = ?").get(req.user.id)
+      : null;
 
-    if (!careRecipient) {
-      return res.status(404).json({ error: "Care recipient record not found" });
-    }
+    const profile = {
+      dateOfBirth, preferredName, careAddress, medicalConditions, medications,
+      foodAllergies, petAllergies, otherAllergies, pets, emergencyContact,
+      nonMedicalAcknowledged: !!nonMedicalAcknowledged,
+    };
 
-    // Format date_of_birth
-    const dobFormatted = dateOfBirth ? new Date(dateOfBirth).toISOString().split('T')[0] : null;
-
-    // ─── v1.105.122: this address was never turned into a point ───
-    //
-    // Step 4 of the wizard REQUIRES a care address, and this endpoint has been storing it as
-    // four strings and nothing else since it was written. So every care recipient who signed
-    // themselves up ended with latitude and longitude NULL — not sometimes, always.
-    //
-    // The family path geocodes (careRecipients.js), and everything downstream assumes somebody
-    // did: the caregiver browse map centres on `recipients[0].latitude`, /caregivers/nearby
-    // measures from it, and openJobs computes the distance a caregiver sees from it. A recipient
-    // with no point is the same cold start v1.105.121 just closed for caregivers, arriving from
-    // the other side of the marketplace.
-    let lat = null;
-    let lng = null;
-    try {
-      const addrStr = buildAddressString({
-        address: careAddress.line1, city: careAddress.city,
-        state: careAddress.state, zip: careAddress.zip,
-      });
-      if (addrStr) {
-        const geo = await geocodeAddress(addrStr);
-        if (geo) { lat = geo.lat; lng = geo.lng; }
-        else console.log(`  [self-onboarding] Geocoding failed for: "${addrStr}"`);
+    let pendingApproval = false;
+    if (careRecipient) {
+      await applySelfCareProfile(db, careRecipient.id, profile);
+    } else {
+      const row = await db.prepare("SELECT pending_self_care FROM users WHERE id = ?").get(req.user.id);
+      if (!row || row.pending_self_care == null) {
+        return res.status(404).json({ error: "Care recipient record not found" });
       }
-    } catch (e) {
-      // Never block finishing onboarding on a free geocoder. The startup backfill retries.
-      console.log("  [self-onboarding] Geocoding errored:", e.message);
+      let intent = {};
+      try { intent = JSON.parse(row.pending_self_care) || {}; } catch { intent = {}; }
+      intent.profile = profile;
+      intent.completed = true;
+      intent.completedAt = new Date().toISOString();
+      await db.prepare("UPDATE users SET pending_self_care = ? WHERE id = ? AND pending_self_care IS NOT NULL")
+        .run(JSON.stringify(intent), req.user.id);
+      pendingApproval = true;
+      // Approved while they were filling it in? Make the profile now rather than next visit.
+      if (allowed) {
+        await materializeSelfCare(db, req.user.id);
+        pendingApproval = false;
+      }
     }
-
-    // Update care_recipients table with health & safety info
-    await db.prepare(
-      `UPDATE care_recipients
-       SET
-         self_onboarding_complete = 1,
-         date_of_birth = ?,
-         preferred_name = ?,
-         location_address = ?,
-         location_city = ?,
-         location_state = ?,
-         location_zip = ?,
-         latitude = COALESCE(?, latitude),
-         longitude = COALESCE(?, longitude),
-         medical_conditions = ?,
-         medications = ?,
-         food_allergies = ?,
-         pet_allergies = ?,
-         pets = ?,
-         emergency_contact_name = ?,
-         emergency_contact_phone = ?,
-         emergency_contact_relationship = ?,
-         care_preferences = ?,
-         terms_accepted_at = ?,
-         terms_version = ?,
-         non_medical_acknowledged = ?,
-         updated_at = NOW()
-       WHERE id = ?`
-    ).run(
-      dobFormatted,
-      preferredName || null,
-      careAddress.line1,
-      careAddress.city,
-      careAddress.state,
-      careAddress.zip,
-      lat,
-      lng,
-      medicalConditions || null,
-      medications || null,
-      foodAllergies || null,
-      petAllergies || null,
-      pets || null,
-      emergencyContact.name,
-      emergencyContact.phone,
-      emergencyContact.relationship,
-      JSON.stringify({
-        otherAllergies: otherAllergies || null,
-        careAddressLine2: careAddress.line2 || null,
-      }),
-      new Date().toISOString(),
-      process.env.TERMS_VERSION || '1.0',
-      nonMedicalAcknowledged ? 1 : 0,
-      careRecipient.id
-    );
 
     // Update users table with address and terms
     const termsDate = new Date().toISOString();
@@ -452,7 +503,7 @@ router.post("/complete", authenticate, async (req, res) => {
       req.user.id
     );
 
-    res.json({ success: true });
+    res.json({ success: true, pendingApproval });
   } catch (err) {
     console.error('Complete onboarding error:', err);
     res.status(500).json({ error: 'Error completing setup. Please try again.' });
@@ -465,8 +516,11 @@ router.get("/status", authenticate, async (req, res) => {
   try {
     const db = await getDb();
 
-    // Get care_recipient record
-    const careRecipient = await db.prepare(
+    // v1.112.0 — a person the identity gate holds is answered from their OWN saved answers,
+    // never from a linked care profile: until a human has approved the ID, a link is not proof
+    // the profile is theirs, and this route returns medical conditions and medications.
+    const allowed = await careAccessAllowed(db, req.user.id);
+    const careRecipient = allowed ? await db.prepare(
       `SELECT
          id, self_onboarding_complete, date_of_birth, preferred_name,
          location_address, location_city, location_state, location_zip,
@@ -474,10 +528,32 @@ router.get("/status", authenticate, async (req, res) => {
          emergency_contact_name
        FROM care_recipients
        WHERE linked_user_id = ?`
-    ).get(req.user.id);
+    ).get(req.user.id) : null;
 
     if (!careRecipient) {
-      return res.status(404).json({ error: "Care recipient record not found" });
+      const row = await db.prepare("SELECT pending_self_care FROM users WHERE id = ?").get(req.user.id);
+      if (!row || row.pending_self_care == null) {
+        return res.status(404).json({ error: "Care recipient record not found" });
+      }
+      let intent = {};
+      try { intent = JSON.parse(row.pending_self_care) || {}; } catch { intent = {}; }
+      const pr = intent.profile || {};
+      const { identityVerified } = await personIdentityStatus(db, req.user.id);
+      return res.json({
+        complete: !!intent.completed,
+        pendingApproval: true,
+        data: {
+          dateOfBirth: pr.dateOfBirth || null,
+          preferredName: pr.preferredName || null,
+          address: pr.careAddress || {},
+          medicalConditions: pr.medicalConditions || null,
+          medications: pr.medications || null,
+          foodAllergies: pr.foodAllergies || null,
+          petAllergies: pr.petAllergies || null,
+          emergencyContactName: (pr.emergencyContact && pr.emergencyContact.name) || null,
+          identityVerified,
+        },
+      });
     }
 
     // v1.106.39 — a FIFTH answer to "is this identity verified?", and the loosest of them:
@@ -514,3 +590,4 @@ router.get("/status", authenticate, async (req, res) => {
 });
 
 module.exports = router;
+module.exports.applySelfCareProfile = applySelfCareProfile;

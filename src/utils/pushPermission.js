@@ -18,6 +18,7 @@
 // silently swallowing pushes we do not understand would be a much worse failure than the one
 // being fixed.
 const { CAP } = require("./capabilities");
+const { careAccessAllowed, isAccountPush } = require("./careAccess");
 
 const REQUIRED_CAPABILITY = Object.freeze({
   team_note: CAP.READ_NOTES,
@@ -37,6 +38,21 @@ const REQUIRED_CAPABILITY = Object.freeze({
  * the cost of a wrong "deny" is silence about their mother.
  */
 async function mayBeNotified(db, userId, data) {
+  // ─── v1.112.0 — and never about care, to someone without a verified ID ───
+  //
+  // Pete's worry was exactly this: "some random dude signs up and ends up ... getting
+  // notifications." A person the identity gate holds (utils/careAccess.js) is told about their
+  // own account — approval, their ID, their background check — and nothing else.
+  // Like everything in this file it fails OPEN on a broken lookup (the rule pinned by
+  // noPushYouCannotOpen.itest.js): a database that cannot answer this cannot store or send the
+  // push either, and the request-level gate (middleware/auth.js) fails closed, so nothing the
+  // push points at can be opened by them anyway.
+  try {
+    if (!isAccountPush(data) && !(await careAccessAllowed(db, userId))) {
+      return { allowed: false, reason: "id_required" };
+    }
+  } catch { /* fall through to the capability check, which fails open */ }
+
   try {
     const type = data && data.type;
     const recipientId = data && data.careRecipientId;

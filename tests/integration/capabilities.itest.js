@@ -35,6 +35,9 @@ async function makeRecipientWithShare(capabilities, permission = "view") {
   await db.prepare(
     "INSERT INTO care_recipient_shares (id, care_recipient_id, shared_with_user_id, permission, capabilities, shared_by_user_id) VALUES (?, ?, ?, ?, ?, ?)"
   ).run(uuid(), cr, friend, permission, capabilities ? JSON.stringify(capabilities) : null, owner);
+  // v1.112.0 — both are verified people; the identity gate has its own suite (idGate.itest.js).
+  await h.verifyIdentity(owner);
+  await h.verifyIdentity(friend);
   return { db, owner, friend, cr };
 }
 
@@ -143,6 +146,7 @@ describe("nobody joins a care team without the privacy statement", () => {
     const owner = uuid(), joiner = uuid(), cr = uuid(), team = uuid(), tok = uuid();
     await db.prepare("INSERT INTO users (id, email, password_hash, first_name, last_name, role) VALUES (?, ?, 'x', 'Own', 'Er', 'family')").run(owner, `o2-${owner}@t.test`);
     await db.prepare("INSERT INTO users (id, email, password_hash, first_name, last_name, role) VALUES (?, ?, 'x', 'Peg', 'Gy', 'family')").run(joiner, `p2-${joiner}@t.test`);
+    await h.verifyIdentity(owner); await h.verifyIdentity(joiner); // v1.112.0 — verified people
     await db.prepare("INSERT INTO care_recipients (id, family_user_id, first_name, last_name) VALUES (?, ?, 'Betty', 'T')").run(cr, owner);
     await db.prepare("INSERT INTO care_teams (id, care_recipient_id, name, created_by) VALUES (?, ?, 'Betty', ?)").run(team, cr, owner).catch(() => {});
     await db.prepare(

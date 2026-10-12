@@ -63,10 +63,13 @@ function fakeDb({ reimbursements = [], offers = [], changes = [], tasks = [], ap
       const norm = sql.replace(/\s+/g, " ");
       return {
         async get() {
+          // v1.112.0 — a verified person: the identity gate is not what these tests measure.
+          if (norm.includes("id_gate_grace_until")) return { is_admin: 0, is_demo: 0, id_gate_grace_until: null };
           if (norm.includes("SELECT is_admin FROM users")) return { is_admin: isAdmin ? 1 : 0 };
           return { count: norm.includes("FROM messages") ? messages : 0 };
         },
         async all() {
+          if (norm.includes("FROM verified_documents")) return [{ status: "approved", is_verified: 1 }];
           if (norm.includes("FROM reimbursements")) return reimbursements;
           if (norm.includes("FROM time_proposals")) return offers;
           if (norm.includes("FROM time_change_proposals")) return changes;
@@ -296,6 +299,7 @@ describe("the count is the list, not a second opinion of it", () => {
         return {
           async get() { return { count: 0 }; },
           async all() {
+            if (norm.includes("FROM verified_documents")) return [{ status: "approved", is_verified: 1 }]; // v1.112.0
             if (norm.includes("FROM reimbursements")) throw new Error("db down");
             if (norm.includes("FROM care_task_occurrences")) return [TASK];
             return [];

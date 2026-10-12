@@ -77,23 +77,47 @@ async function startHarness({ routers = ROUTERS } = {}) {
 
   const { generateToken } = require("../../src/middleware/auth");
 
-  /** Insert a user and mint a real JWT for them. */
+  /**
+   * Insert a user and mint a real JWT for them.
+   *
+   * v1.112.0 — the identity gate (src/utils/careAccess.js) refuses care data to anyone without
+   * an approved ID. Almost every suite is testing something else, so a harness user is a
+   * VERIFIED person by default: an approved identity document filed under their own account,
+   * the shape My Account writes and a human approves. Gate tests opt out:
+   *   idVerified: false    → no document (gated unless graceUntil / admin / demo)
+   *   graceUntil: Date|str → users.id_gate_grace_until
+   *   isDemo: true         → users.is_demo
+   */
   async function createUser(overrides = {}) {
     const id = overrides.id || uuid();
     const roles = overrides.roles || ["family"];
     const email = overrides.email || `${id.slice(0, 8)}@itest.local`;
     await db.prepare(`
       INSERT INTO users (id, email, password_hash, first_name, last_name, role, roles,
-                         is_active, is_admin, account_approved, email_verified, created_at)
-      VALUES (?, ?, 'x', ?, ?, ?, ?, 1, ?, 1, 1, NOW())
+                         is_active, is_admin, is_demo, account_approved, email_verified,
+                         id_gate_grace_until, created_at)
+      VALUES (?, ?, 'x', ?, ?, ?, ?, 1, ?, ?, 1, 1, ?, NOW())
     `).run(
       id, email,
       overrides.firstName || "Test", overrides.lastName || "User",
       roles[0], JSON.stringify(roles),
-      overrides.isAdmin ? 1 : 0
+      overrides.isAdmin ? 1 : 0,
+      overrides.isDemo ? 1 : 0,
+      overrides.graceUntil ? new Date(overrides.graceUntil).toISOString() : null
     );
+    if (overrides.idVerified !== false) await verifyIdentity(id);
     const user = { id, email, roles, role: roles[0] };
+    if (overrides.isDemo) user.is_demo = true;
     return { user, token: generateToken(user) };
+  }
+
+  /** An approved identity document under the user's own account — what an admin approval leaves. */
+  async function verifyIdentity(userId) {
+    await db.prepare(`
+      INSERT INTO verified_documents (id, owner_id, owner_type, uploaded_by, category, document_type,
+                                      file_data, status, is_verified, created_at)
+      VALUES (?, ?, 'user', ?, 'identity', 'ID_Front', '', 'approved', 1, NOW())
+    `).run(uuid(), userId, userId);
   }
 
   /** Create recipient + care team (+ optional billing contact), return ids. */
@@ -125,7 +149,7 @@ async function startHarness({ routers = ROUTERS } = {}) {
   return {
     pg, dataDir, db, app,
     request: supertest(app),
-    createUser, createCareTeam, addTeamMember,
+    createUser, createCareTeam, addTeamMember, verifyIdentity,
     auth: (token) => ({ Authorization: `Bearer ${token}` }),
   };
 }

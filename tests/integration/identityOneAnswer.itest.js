@@ -33,7 +33,7 @@ let h, admin;
 
 beforeAll(async () => {
   h = await startHarness({ routers: ROUTERS });
-  admin = await h.createUser({ roles: ["family"], firstName: "Admin" });
+  admin = await h.createUser({ idVerified: false, roles: ["family"], firstName: "Admin" });
   await h.db.prepare("UPDATE users SET is_admin = 1 WHERE id = ?").run(admin.user.id);
 });
 
@@ -41,7 +41,7 @@ afterAll(async () => { await stopHarness(h); });
 
 // A caregiver with a profile, fresh for each scenario so no two share documents.
 const makeCaregiver = async (firstName) => {
-  const u = await h.createUser({ roles: ["caregiver"], firstName });
+  const u = await h.createUser({ idVerified: false, roles: ["caregiver"], firstName });
   const profileId = uuid();
   await h.db.prepare(
     "INSERT INTO caregiver_profiles (id, user_id, hourly_rate, created_at) VALUES (?, ?, 25, NOW())"
@@ -130,7 +130,7 @@ describe("what must NOT count", () => {
 
   beforeAll(async () => {
     maria = await makeCaregiver("Maria");
-    const fam = await h.createUser({ roles: ["family"], firstName: "Fam" });
+    const fam = await h.createUser({ idVerified: false, roles: ["family"], firstName: "Fam" });
     const t = await h.createCareTeam({ familyUserId: fam.user.id });
     recipientId = t.recipientId;
   });
