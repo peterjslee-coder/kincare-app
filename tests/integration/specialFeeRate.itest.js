@@ -193,6 +193,56 @@ describe("what the card is charged", () => {
   });
 });
 
+describe("nothing else moves — Pete: the tech adds must not mess up the rest of the cost and pay", () => {
+  test("the friend's caregiver is paid exactly the same $176 — the discount comes out of InPlace's side only", async () => {
+    const f = await familyWithCaregiver("CgPay");
+    await setSpecialFee(f.family.user.id, { percent: 7 });
+    const sid = await visit({ recipientId: f.recipientId, bookedBy: f.family.user.id, profileId: f.profileId });
+    await acct.authorizeSessionPayment(sid);
+    const a = mockCreated[0].args;
+    expect(a.amount - a.application_fee_amount).toBe(17600);
+  });
+
+  test("an untagged family sees and pays 20% on every surface, all agreeing", async () => {
+    // Another family being tagged must not leak into this one.
+    const friend = await familyWithCaregiver("Leak");
+    await setSpecialFee(friend.family.user.id, { percent: 7 });
+    const f = await familyWithCaregiver("Plain");
+    const sid = await visit({ recipientId: f.recipientId, bookedBy: f.family.user.id, profileId: f.profileId });
+
+    const prev = await h.request
+      .get(`/api/sessions/cost-preview?scheduledDate=2026-11-10&scheduledTime=10:00&durationHours=8&proposedRate=22&careRecipientId=${f.recipientId}`)
+      .set(h.auth(f.family.token));
+    expect(prev.body.platformFeePercent).toBe(20);
+    expect(prev.body.platformFee).toBeCloseTo(35.2, 2);
+    expect(prev.body.familyTotal).toBeCloseTo(211.2, 2);
+
+    const list = await h.request.get("/api/sessions").set(h.auth(f.family.token));
+    const row = (list.body.sessions || []).find((x) => x.id === sid);
+    expect(row.platform_fee_percent).toBe(20);
+    expect(Number(row.family_total)).toBeCloseTo(211.2, 2);
+    expect(Number(row.caregiver_payout)).toBe(176);
+
+    const detail = await h.request.get(`/api/sessions/${sid}`).set(h.auth(f.family.token));
+    expect(detail.status).toBe(200);
+    expect(detail.body.costBreakdown.platformFeePercent).toBe(20);
+
+    await acct.authorizeSessionPayment(sid);
+    expect(mockCreated[0].args.amount).toBe(21120);
+    expect(mockCreated[0].args.application_fee_amount).toBe(3520);
+    await acct.captureSessionPay(sid, 17600);
+    expect(mockCaptured[0].args.amount_to_capture).toBe(21120);
+    expect(mockCaptured[0].args.application_fee_amount).toBe(3520);
+  });
+
+  test("the public pricing endpoint and the default read are untouched by special rates", async () => {
+    const f = await familyWithCaregiver("Pub");
+    await setSpecialFee(f.family.user.id, { percent: 7 });
+    const { getPlatformFeePercent } = require("../../src/utils/platformFee");
+    expect(await getPlatformFeePercent(db)).toBe(20);
+  });
+});
+
 describe("the Financials report prices each visit at its own percent", () => {
   test("summary, breakdown and special-rates", async () => {
     // A clean slate for the totals: only this test's completed visits count.

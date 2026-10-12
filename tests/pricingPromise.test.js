@@ -55,11 +55,10 @@ describe("...and the code still backs it", () => {
   //
   // The promise on the splash page was "a flat 20% for everyone". Two things had to hold for
   // that sentence to be true, and they are different things:
-  // v1.111.0 — Pete, 10/12: friends who bring their own caregivers can be given a LOWER
-  // service fee, set by hand in admin People (floor 5%). So "one number for everyone" is no
-  // longer the code, and the copy stopped saying it: it now promises the fee "never goes up
-  // for anyone" and that "no algorithm sets anyone's price". These are the two halves that
-  // keep that sentence true.
+  // v1.111.0 — Pete, 10/12: a beta discount for friends who bring their own caregiver, set by
+  // hand in admin People (floor 5%). "Not changing the business model ... trying to get beta
+  // users on at low cost." The posted fee is still the one number on the page; these pin that
+  // a special rate can only ever be LOWER, and that only a person in admin can set one.
   test("the posted fee is a ceiling — a special rate can only be lower, never higher", () => {
     const feeSrc = readStripped("src/utils/platformFee.js");
     // With no context it is still the one posted number.
@@ -95,8 +94,7 @@ describe("...and the code still backs it", () => {
   // wreak havoc." So the copy reads the fee instead of restating it, and this is the gate.
   test("the public copy renders the fee rather than restating it", () => {
     const splash = readStripped("public/js/components/SplashPage.js");
-    expect(splash).toMatch(/a flat \{feePercent\}%, and it never goes up for anyone/);
-    expect(splash).toMatch(/no algorithm sets anyone's price/);
+    expect(splash).toMatch(/a flat \{feePercent\}% for everyone/);
     // v1.107.x — Pete's fee rule: the caregiver keeps her full rate and the fee goes ON TOP.
     // "Caregivers keep 80%" was never true under that rule (she gets 100/120 of what is paid),
     // so the copy now says what actually happens, still reading the fee.
