@@ -7,9 +7,9 @@ build red.
 
 Hand-written sections (§3 "Where is…") are preserved across regeneration; edit those freely.
 
-Structure at last generation: 541 HTTP routes across 56 mounts ·
-97 `CREATE TABLE` statements · 14 background jobs · 39 socket events
-(17 with no client listener) · 65 push event types · 60 `window.__*` globals.
+Structure at last generation: 552 HTTP routes across 57 mounts ·
+103 `CREATE TABLE` statements · 14 background jobs · 39 socket events
+(17 with no client listener) · 68 push event types · 60 `window.__*` globals.
 
 ---
 
@@ -73,6 +73,7 @@ JSX is *not* compiled in the browser; Babel-standalone is not loaded. Editing an
 | `/api/legal` | `src/routes/legal.js` | 5 |  |
 | `/api/matching` | `src/routes/matching.js` | 2 |  |
 | `/api/media` | `src/routes/media.js` | 2 |  |
+| `/api/medical-records` | `src/routes/medicalRecords.js` | 11 |  |
 | `/api/messages` | `src/routes/messages.js` | 14 |  |
 | `/api/notes` | `src/routes/notes.js` | 6 |  |
 | `/api/oauth` | `src/routes/oauth.js` | 8 |  |
@@ -116,6 +117,42 @@ greps finding something.
 | "Am I production?" | `src/utils/env.js` — the only place that decides. Never gate on `NODE_ENV`; Railway does not set it |
 | Timezone conversion | `src/utils/timezone.js` server, `TimezoneHelper.js` client. All times are **care-location** times |
 | Blob storage | `src/utils/storage.js` → `storeFileData()`, `resolveFileData()`. R2-backed, `r2:<key>` markers, legacy base64 rows still readable |
+| Who may see a medical record / who holds the iPAi key | `src/utils/medicalAccess.js` → `medicalRole()`, `canViewMedical()`, `canManageMedicalAccess()`, `aiKeyHolder()`. Never `canAccessOwner` in documents.js |
+| Passkey step-up for medical records | `src/utils/medicalStepUp.js` (challenge/verify, 10-min window in `medical_step_ups`) |
+
+### Medical records (Documents Center, migration `050_documents_center`)
+
+Route map — `/api/medical-records` (`src/routes/medicalRecords.js`); upload reuses the multipart
+`POST /api/documents/upload` with `category=medical`.
+
+| Route | Gate |
+|---|---|
+| `GET /recipients` | sign-in; returns per-recipient flags |
+| `GET /:crId` | `canView` — titles/metadata, key state, sharing list (leader/member only) |
+| `POST /step-up/challenge` · `POST /step-up/verify` | passkey; no passkey → 403 `needsPasskey` ("Account → Security"), no bypass |
+| `GET /:crId/docs/:docId/open[?download=1]` | `canView` + fresh step-up; refused under impersonation; audited `viewed`/`downloaded` |
+| `PUT /:crId/access/:userId` | leader or member + step-up; caregivers refused |
+| `PUT /:crId/ai-consent` | key holder + passkey assertion **every time**; revoke deletes pending suggestions |
+| `GET /:crId/audit` | key holder, leader, member |
+| `GET /:crId/suggestions` | `canView` + step-up; refused under impersonation |
+| `POST /:crId/docs/:docId/review` | `canView` + key ON + `acknowledged:true` (recorded in `medical_ai_acks`) + step-up |
+| `POST /:crId/suggestions/:id/decide` | `canView`; appointment accept → `care_events` row (needs schedule permission or member); medication/review item accept → marked reviewed only |
+
+Data rules:
+
+- Medical records are `verified_documents` rows with `category='medical'`, `owner_type='care_recipient'`,
+  `status='stored'`. **Stored, not verified**: never in `/api/documents/admin/pending`/`count`, never
+  sent to `documentAI`, excluded from admin drawers/previews (`admin/overview.js`, `verification.js`,
+  `userFlags.js`) and from the generic owner list. `/api/documents/:id/download` refuses them (403
+  `MEDICAL_RECORD`) — they open only through the audited, step-up route.
+- Who sees them: the member (`linked_user_id`), the leader/owner, family members in
+  `medical_record_access`. **Caregivers never** (caregiver profile or role). **No admin shortcut.**
+- The iPAi key (`medical_ai_consent`, default OFF) is held by the member if she has an account,
+  otherwise the leader.
+- Every upload/open/download/delete/grant/revoke/key change/AI read → `medical_record_audit`.
+- iPAi review (`src/utils/medicalDocAI.js`) returns only items it can quote verbatim from the one
+  document; no outside knowledge, no inference, no dosing. Suggestions are never fed to another AI
+  prompt and nothing is created without a human tap.
 <!-- HAND:END -->
 
 ---
@@ -127,20 +164,20 @@ Every job runs through `guardedPoller` → `withPollerLock` (`src/models/databas
 
 | Lock | Job | Interval | Declared |
 |---:|---|---|---|
-| 101 | Daily demo data refresh | 24 h | `src/server.js:1043` |
-| 102 | Session notification poller (every 60s) | 1 min | `src/server.js:1137` |
-| 103 | Session Accountability Poller | 1 min | `src/server.js:1412` |
-| 104 | Reimbursement push digest sweeper (v1.98.15) | 30 s | `src/server.js:1429` |
-| 105 | Auto-pay cron: charge overdue sessions | 5 min | `src/server.js:1521` |
-| 106 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1627` |
-| 107 | Care Tasks poller (v1.99.0) | 1 min | `src/server.js:1637` |
-| 108 | Care Events poller (v1.100.0) | 1 min | `src/server.js:1653` |
-| 109 | Kindred Reminder Delivery Poller | 1 min | `src/server.js:1443` |
-| 110 | Retention (v1.106.9, poller 110) | 24 h | `src/server.js:1690` |
-| 111 | (see src/server.js:1603) | 1 h | `src/server.js:1603` |
-| 112 | v1.106.13 — poller 112: proposals that nobody answered | 10 min | `src/server.js:1719` |
-| 113 | (see src/server.js:1762) | 1 min | `src/server.js:1762` |
-| 114 | Quiet hours summary (v1.107.3, poller 114) | 5 min | `src/server.js:1781` |
+| 101 | Daily demo data refresh | 24 h | `src/server.js:1044` |
+| 102 | Session notification poller (every 60s) | 1 min | `src/server.js:1138` |
+| 103 | Session Accountability Poller | 1 min | `src/server.js:1413` |
+| 104 | Reimbursement push digest sweeper (v1.98.15) | 30 s | `src/server.js:1430` |
+| 105 | Auto-pay cron: charge overdue sessions | 5 min | `src/server.js:1522` |
+| 106 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1628` |
+| 107 | Care Tasks poller (v1.99.0) | 1 min | `src/server.js:1638` |
+| 108 | Care Events poller (v1.100.0) | 1 min | `src/server.js:1654` |
+| 109 | Kindred Reminder Delivery Poller | 1 min | `src/server.js:1444` |
+| 110 | Retention (v1.106.9, poller 110) | 24 h | `src/server.js:1691` |
+| 111 | (see src/server.js:1604) | 1 h | `src/server.js:1604` |
+| 112 | v1.106.13 — poller 112: proposals that nobody answered | 10 min | `src/server.js:1720` |
+| 113 | (see src/server.js:1763) | 1 min | `src/server.js:1763` |
+| 114 | Quiet hours summary (v1.107.3, poller 114) | 5 min | `src/server.js:1782` |
 
 ---
 
@@ -201,39 +238,39 @@ why this app runs on exactly one Railway replica.
 Opt-out key is `notification_prefs["push_" + eventType]`. Capability gating lives in
 `src/utils/pushPermission.js`; tap routing in `window.__handlePushNavigate` (`public/js/app.js`).
 
-`admin_update` · `attestation_submitted` · `block_request` · `blocked`
+`admin_update` · `ai_read` · `attestation_submitted` · `block_request`
 
-`cancel_fee_disputed` · `cancel_fee_notice` · `cancel_fee_pending` · `cancel_fee_waived`
+`blocked` · `cancel_fee_disputed` · `cancel_fee_notice` · `cancel_fee_pending`
 
-`care_event` · `care_event_tagged` · `care_request` · `care_request_accepted`
+`cancel_fee_waived` · `care_event` · `care_event_tagged` · `care_request`
 
-`care_request_created` · `care_task` · `care_team_invite` · `caregiver_arriving`
+`care_request_accepted` · `care_request_created` · `care_task` · `care_team_invite`
 
-`caregiver_arriving_recipient` · `caregiver_leaving_recipient` · `caregiver_no_show` · `check_out_imminent`
+`caregiver_arriving` · `caregiver_arriving_recipient` · `caregiver_leaving_recipient` · `caregiver_no_show`
 
-`check_out_reminder` · `checkin_nudge` · `content_report` · `dispute_filed`
+`check_out_imminent` · `check_out_reminder` · `checkin_nudge` · `content_report`
 
-`document_classified` · `document_deleted` · `document_uploaded` · `identity_submitted`
+`deleted` · `dispute_filed` · `document_classified` · `document_deleted`
 
-`interview_accepted` · `interview_cancelled` · `interview_declined` · `interview_request`
+`document_uploaded` · `identity_submitted` · `interview_accepted` · `interview_cancelled`
 
-`invite_accepted` · `kindred_relay` · `managed_mode_activated` · `missing_address`
+`interview_declined` · `interview_request` · `invite_accepted` · `kindred_relay`
 
-`new_job` · `new_registration` · `new_signup_intent` · `no_show_cancelled`
+`managed_mode_activated` · `missing_address` · `new_job` · `new_registration`
 
-`on_my_way` · `on_my_way_recipient` · `outreach_response` · `outreach_sent`
+`new_signup_intent` · `no_show_cancelled` · `on_my_way` · `on_my_way_recipient`
 
-`overdue_check_in` · `overdue_check_in_family` · `overdue_check_out` · `overdue_check_out_family`
+`outreach_response` · `outreach_sent` · `overdue_check_in` · `overdue_check_in_family`
 
-`payment_authorization_failed` · `payment_hold` · `payment_method_needed` · `phone_verified`
+`overdue_check_out` · `overdue_check_out_family` · `payment_authorization_failed` · `payment_hold`
 
-`proposal_accepted` · `proposal_declined` · `request_declined` · `review`
+`payment_method_needed` · `phone_verified` · `proposal_accepted` · `proposal_declined`
 
-`safety_flag` · `session_cancelled` · `session_complete` · `session_in_progress`
+`request_declined` · `review` · `safety_flag` · `session_cancelled`
 
-`team_join` · `time_change` · `time_proposal` · `unblocked`
+`session_complete` · `session_in_progress` · `team_join` · `time_change`
 
-`waitlist_signup`
+`time_proposal` · `unblocked` · `uploaded` · `waitlist_signup`
 
 ---
 

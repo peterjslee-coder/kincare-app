@@ -168,7 +168,6 @@ async function seed({ force = false, demoOnly = false } = {}) {
         for (const t of ["medical_doc_suggestions", "medical_ai_acks", "medical_record_audit", "medical_ai_consent", "medical_record_access"]) {
           await trySavepoint(() => db.prepare(`DELETE FROM ${t} WHERE care_recipient_id IN (${crp})`).run(...demoCrIds));
         }
-        await trySavepoint(() => db.prepare(`DELETE FROM verified_documents WHERE category = 'medical' AND owner_type = 'care_recipient' AND owner_id IN (${crp})`).run(...demoCrIds));
       }
 
       // Care recipients owned by demo family users

@@ -975,6 +975,13 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
         <h1 className="page-title">My Loved One</h1>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {/* Documents Center Phase 1 — the phone's way in (the family bottom bar is full). */}
+          {!editing && onNavigate && (
+            <button onClick={() => onNavigate('documents-center')} data-testid="open-documents-center"
+              style={{ minHeight: 44, padding: '8px 14px', background: 'var(--bg-surface)', color: 'var(--role-color)', border: '1.5px solid var(--role-color)', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+              📁 Documents Center
+            </button>
+          )}
           {!editing && onNavigate && (
             <button onClick={() => onNavigate('recipients')} style={{ padding: '8px 14px', background: 'var(--bg-surface)', color: 'var(--role-color)', border: '1.5px solid #1b6b5a', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
               + Add Another Person
