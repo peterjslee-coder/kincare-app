@@ -4038,6 +4038,15 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                   })()
                 ),
 
+                // v1.109.9 — the to-dos the family left for whoever came next (e4cd314a). Read here,
+                // before she starts, so the stove gets locked on THIS visit, not the next one.
+                (typeof CareTodoList !== 'undefined' && checkInSession.careRecipientId)
+                  ? React.createElement(CareTodoList, {
+                      recipientIds: [checkInSession.careRecipientId],
+                      heading: 'To-dos for this visit', hideWhenNothingOpen: true, framed: true,
+                    })
+                  : null,
+
                 briefingLoading
                   ? React.createElement('div', { style: { textAlign: 'center', padding: '30px 0', color: 'var(--text-tertiary)' } },
                       React.createElement('div', { style: { fontSize: 14 } }, 'Loading care briefing...'))

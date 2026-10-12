@@ -1840,6 +1840,12 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
         </div>
       )}
 
+      {/* v1.109.9 — one-time to-dos (e4cd314a): no time, so they are not in the chronological
+          Next Up list; they sit just above it, and only when one is waiting. */}
+      {typeof CareTodoList !== 'undefined' && (
+        <CareTodoList heading="To-dos for the next visit" hideWhenNothingOpen framed />
+      )}
+
       {/* Next Up — up to 10 sessions within 2 weeks, collapsed to 2 cards with fade */}
       {(() => {
         const tz = upcoming[0]?.timezone || TimezoneHelper.DEFAULT_TZ;

@@ -821,6 +821,7 @@ app.use("/api/referrals", require("./routes/referrals"));
 app.use("/api/kindred", require("./routes/kindred"));
 app.use("/api/care-tasks", careTasksRouter);
 app.use("/api/care-events", careEventsRouter);
+app.use("/api/care-todos", require("./routes/careTodos")); // v1.109.9 — one-time to-dos for the next visit
 app.use("/api/legal", require("./routes/legal"));
 app.use("/api/media", require("./routes/media"));
 app.use("/api/safety", require("./routes/safety"));

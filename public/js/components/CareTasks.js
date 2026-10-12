@@ -285,6 +285,9 @@ const CareTaskFormModal = ({ recipientId, recipientFirstName, teamMembers, exist
   const [assignee, setAssignee] = useState(ex.assigned_user_id || '');
   const [grace, setGrace] = useState(ex.grace_minutes ?? 45);
   const [saving, setSaving] = useState(false);
+  // v1.109.9 — Pete (e4cd314a): "It's set up like everything is recurring. There needs to be a
+  // to-do option." A new task starts by asking which kind; an existing one is always recurring.
+  const [kind, setKind] = useState('recurring');
   const DOW = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 
   const save = async () => {
@@ -317,12 +320,23 @@ const CareTaskFormModal = ({ recipientId, recipientFirstName, teamMembers, exist
   const label = { fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', margin: '14px 0 6px' };
   const input = { width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border-color)', fontSize: 14, background: 'var(--bg-surface)', color: 'var(--text-primary)', boxSizing: 'border-box' };
 
+  // A to-do asks only what and, optionally, details — none of the schedule below applies.
+  if (!existing && kind === 'todo' && typeof CareTodoForm !== 'undefined') {
+    return (
+      <CareTodoForm recipientId={recipientId} recipientFirstName={recipientFirstName}
+        onClose={onClose} onSaved={onSaved} onSwitchToRecurring={() => setKind('recurring')} />
+    );
+  }
+
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
       <div onClick={(e) => e.stopPropagation()} style={{ background: 'var(--bg-card)', borderRadius: 16, width: '100%', maxWidth: 480, padding: 20, maxHeight: '90vh', overflowY: 'auto' }}>
         <div style={{ fontWeight: 700, fontSize: 17, color: 'var(--text-primary)', marginBottom: 4 }}>
           {existing ? 'Edit task' : `New task for ${recipientFirstName}`}
         </div>
+        {!existing && typeof CareTaskKindChoice !== 'undefined' && (
+          <div style={{ marginBottom: 8 }}><CareTaskKindChoice kind={kind} onChange={setKind} /></div>
+        )}
         <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 4 }}>
           The team gets reminded, checks it off, and it's on the record.
         </div>
@@ -717,6 +731,13 @@ const CareTasksSection = window.CareTasksSection = ({ recipientId, recipientFirs
         </div>
       ))}
 
+      {/* v1.109.9 — one-time to-dos sit with the tasks: same people look at both (e4cd314a). */}
+      {typeof CareTodoList !== 'undefined' && (
+        <div style={{ marginTop: 12, borderTop: '1px solid var(--border-light)', paddingTop: 10 }}>
+          <CareTodoList recipientIds={[recipientId]} heading="To-dos for the next visit" showAdd />
+        </div>
+      )}
+
       {/* v1.109.3 — archived tasks. Out of the way, never gone: this is how long it ran and
           who did it. Restore brings it back paused. */}
       {archived.length > 0 && (
@@ -822,7 +843,12 @@ const CaregiverTodayAtVisit = window.CaregiverTodayAtVisit = ({ recipientIds }) 
   for (const g of groups) {
     for (const occ of g.occurrences) rows.push({ key: `t-${occ.id}`, sort: `0${occ.occ_time || occ.due_time || ''}`, occ, group: g });
   }
-  if (rows.length === 0) return null;
+  // v1.109.9 — "reminds the next person that shows up at her house" (e4cd314a). She is that
+  // person, so the to-dos go first, above the clock-bound things.
+  const todos = typeof CareTodoList !== 'undefined'
+    ? <CareTodoList recipientIds={recipientIds} heading="To-dos for this visit" hideWhenNothingOpen />
+    : null;
+  if (rows.length === 0) return todos ? <div style={{ marginBottom: 16 }}>{todos}</div> : null;
   rows.sort((a, b) => a.sort.localeCompare(b.sort));
 
   const names = [...new Set([...groups.map((g) => g.recipientFirstName), ...events.map((e) => e.recipientFirstName)].filter(Boolean))];
@@ -831,6 +857,7 @@ const CaregiverTodayAtVisit = window.CaregiverTodayAtVisit = ({ recipientIds }) 
 
   return (
     <div data-testid="caregiver-today-at-visit" style={{ marginBottom: 16 }}>
+      {todos}
       <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', margin: '4px 2px 8px' }}>{title}</div>
       {hasMeds && (
         <div style={{ fontSize: 12, color: 'var(--text-tertiary)', margin: '-4px 2px 8px' }}>

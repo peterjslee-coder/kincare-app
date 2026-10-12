@@ -144,6 +144,8 @@ async function seed({ force = false, demoOnly = false } = {}) {
         await trySavepoint(() => db.prepare(`DELETE FROM care_task_occurrences WHERE task_id IN (SELECT id FROM care_tasks WHERE care_recipient_id IN (${crp}))`).run(...demoCrIds));
         await trySavepoint(() => db.prepare(`DELETE FROM care_tasks WHERE care_recipient_id IN (${crp})`).run(...demoCrIds));
         await trySavepoint(() => db.prepare(`DELETE FROM care_task_helpers WHERE care_recipient_id IN (${crp})`).run(...demoCrIds));
+        // v1.109.9 — one-time to-dos reference care_recipients AND users (created_by, completed_by, removed_by)
+        await trySavepoint(() => db.prepare(`DELETE FROM care_todos WHERE care_recipient_id IN (${crp})`).run(...demoCrIds));
         // v1.100.0 — Care Events references care_recipients + users (created_by)
         await trySavepoint(() => db.prepare(`DELETE FROM care_events WHERE care_recipient_id IN (${crp})`).run(...demoCrIds));
         // v1.105.35 — reimbursements reference care_recipients AND care_teams with no

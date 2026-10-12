@@ -49,6 +49,7 @@ const scripts = [
   "js/careTaskSync.js",
   "js/components/AttentionCard.js",
   "js/components/CancelFeeSheet.js", // v1.109.9 — mounted once in app.js; push taps and Needs-you open it
+  "js/components/CareTodos.js", // v1.109.9 — one-time to-dos; CareTasks, Dashboard and CaretakerHub draw it
   "js/components/CareTasks.js",
   // v1.106.31 — before CareEvents, which renders it. The `typeof` guard would hold
   // either way (render runs after the whole bundle), but ordering it correctly means

@@ -2734,6 +2734,35 @@ async function initializeDatabase() {
         `ALTER TABLE care_team_members ADD COLUMN IF NOT EXISTS visit_updates_opt_in INTEGER`,
       ],
     },
+    {
+      // v1.109.9 — one-time to-dos (feedback e4cd314a). Pete: "something that reminds the next
+      // person that shows up at her house to accomplish a task. Like, I need to lock her stove
+      // against the wall. It doesn't have a time, it doesn't have to be me."
+      //
+      // Its OWN table, not a `kind` on care_tasks: care_tasks requires due_time and start_date,
+      // and every reader of it — the 107 poller, the nightly roll to 'missed', materialization,
+      // the Needs-you overdue query, adherence strips, the visit report — assumes a schedule.
+      // A kind column would have to be excluded from each of them, forever; a to-do here is
+      // invisible to all of them by construction. No due time, no owner, no missed state.
+      id: "052_care_todos",
+      statements: [
+        `CREATE TABLE IF NOT EXISTS care_todos (
+          id TEXT PRIMARY KEY,
+          care_recipient_id TEXT NOT NULL REFERENCES care_recipients(id),
+          created_by TEXT NOT NULL REFERENCES users(id),
+          title TEXT NOT NULL,
+          details TEXT /* may be PHI — never in a push */,
+          completed_at TIMESTAMPTZ,
+          completed_by_user_id TEXT REFERENCES users(id),
+          completion_note TEXT,
+          removed_at TIMESTAMPTZ,
+          removed_by TEXT REFERENCES users(id),
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          updated_at TIMESTAMPTZ DEFAULT NOW()
+        )`,
+        `CREATE INDEX IF NOT EXISTS idx_care_todos_recipient ON care_todos (care_recipient_id, completed_at)`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

@@ -934,4 +934,6 @@ module.exports = router;
 module.exports.pollCareTasks = pollCareTasks;
 // Shared access/team helpers — reused by careEvents.js (v1.100.0) so the
 // access model stays defined in exactly one place.
-module.exports._shared = { visitCaregiversOn, hasAccess, canManage, canScheduleEvents, accessibleRecipients, teamUserIds, isFamilyNotifiable };
+// v1.109.9 — canCheckOff/canSeeTasks too, for one-time to-dos (routes/careTodos.js): same
+// audience as care tasks, so the same two guards.
+module.exports._shared = { visitCaregiversOn, hasAccess, canManage, canScheduleEvents, canCheckOff, canSeeTasks, accessibleRecipients, teamUserIds, isFamilyNotifiable };
