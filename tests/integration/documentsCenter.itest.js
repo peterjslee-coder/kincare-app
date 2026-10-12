@@ -58,7 +58,7 @@ describe("upload", () => {
   test("the leader uploads a medical record: stored, never queued", async () => {
     const res = await h.request.post("/api/documents/upload").set(h.auth(pete.token))
       .field("category", "medical").field("document_type", "Discharge_Summary")
-      .field("owner_type", "care_recipient").field("owner_id", recipientId)
+      .field("owner_type", "care_recipient").field("authority_confirmed", "1").field("owner_id", recipientId)
       .attach("document", PNG, { filename: "discharge.png", contentType: "image/png" });
     expect(res.status).toBe(201);
     expect(res.body.document.status).toBe("stored");
@@ -69,7 +69,7 @@ describe("upload", () => {
   test("a caregiver on the team cannot upload one", async () => {
     const res = await h.request.post("/api/documents/upload").set(h.auth(julia.token))
       .field("category", "medical").field("document_type", "Lab_Result")
-      .field("owner_type", "care_recipient").field("owner_id", recipientId)
+      .field("owner_type", "care_recipient").field("authority_confirmed", "1").field("owner_id", recipientId)
       .attach("document", PNG, { filename: "lab.png", contentType: "image/png" });
     expect(res.status).toBe(403);
   });

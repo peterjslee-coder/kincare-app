@@ -15,7 +15,7 @@ const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a
 async function upload(who, type, category = "legal") {
   return h.request.post("/api/documents/upload").set(h.auth(who.token))
     .field("category", category).field("document_type", type)
-    .field("owner_type", "care_recipient").field("owner_id", recipientId)
+    .field("owner_type", "care_recipient").field("authority_confirmed", "1").field("owner_id", recipientId)
     .attach("document", PNG, { filename: `${type}.png`, contentType: "image/png" });
 }
 
@@ -112,5 +112,22 @@ describe("admin", () => {
     expect(r.status).toBe(200);
     const row = await db.prepare("SELECT 1 FROM consent_audit_log WHERE care_recipient_id = ? AND event_type = 'document_approved'").get(recipientId);
     expect(row).toBeTruthy();
+  });
+});
+
+describe("v1.110.2 — the uploader confirms authority", () => {
+  test("an upload for a care recipient without the confirmation is refused", async () => {
+    const r = await h.request.post("/api/documents/upload").set(h.auth(pete.token))
+      .field("category", "legal").field("document_type", "Living_Will")
+      .field("owner_type", "care_recipient").field("owner_id", recipientId)
+      .attach("document", PNG, { filename: "lw.png", contentType: "image/png" });
+    expect(r.status).toBe(400);
+    expect(r.body.code).toBe("AUTHORITY_REQUIRED");
+  });
+  test("a confirmed upload records who confirmed it", async () => {
+    const r = await upload(pete, "Living_Will");
+    expect(r.status).toBe(201);
+    const row = await db.prepare("SELECT actor_id FROM consent_audit_log WHERE care_recipient_id = ? AND event_type = 'upload_authority_confirmed' AND metadata LIKE ?").get(recipientId, `%${r.body.document.id}%`);
+    expect(row.actor_id).toBe(pete.user.id);
   });
 });

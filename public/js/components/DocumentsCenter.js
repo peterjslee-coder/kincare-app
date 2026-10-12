@@ -235,6 +235,7 @@ const DocumentsCenter = window.DocumentsCenter = ({ onNavigate }) => {
 
   const submitUpload = async () => {
     if (!upload?.file) { showToast('Choose a file first.', 'error'); return; }
+    if (!upload.authority) { showToast(`Please confirm you're allowed to share this for ${selected?.name || 'them'}.`, 'error'); return; }
     setBusy(true);
     try {
       const fd = new FormData();
@@ -243,6 +244,7 @@ const DocumentsCenter = window.DocumentsCenter = ({ onNavigate }) => {
       fd.append('document_type', upload.type);
       fd.append('owner_type', 'care_recipient');
       fd.append('owner_id', selectedId);
+      fd.append('authority_confirmed', '1'); // v1.110.2 — Privacy Policy 2026-10-12 §7
       const res = await apiFetch('/api/documents/upload', { method: 'POST', body: fd });
       if (!res?.ok) { showToast(await dcErrorText(res, 'Upload failed.'), 'error'); return; }
       showToast('Uploaded.', 'success');
@@ -531,8 +533,14 @@ const DocumentsCenter = window.DocumentsCenter = ({ onNavigate }) => {
             <input type="file" accept="application/pdf,image/jpeg,image/png,image/webp"
               onChange={(e) => setUpload({ ...upload, file: e.target.files?.[0] || null })} style={{ minHeight: 44 }} />
             {upload.section === 'medical' && <p style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>Medical records are stored privately. Only {selected?.name}, the care team leader and family members they choose can see them — never caregivers, and not InPlace staff.</p>}
+            {/* v1.110.2 — the uploader is usually acting FOR the person. Privacy Policy and Terms
+                2026-10-12 say we store these only after this is confirmed. */}
+            <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginTop: 12, fontSize: 13.5, lineHeight: 1.45, cursor: 'pointer' }}>
+              <input type="checkbox" checked={!!upload.authority} onChange={(e) => setUpload({ ...upload, authority: e.target.checked })} style={{ width: 20, height: 20, marginTop: 1, flex: '0 0 auto' }} />
+              <span>I'm allowed to share this for {selected?.name || 'them'}: they agreed, or I have legal authority to act for them (for example a power of attorney, healthcare agent or guardian).</span>
+            </label>
             <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-              <button style={dcBtn('primary')} disabled={busy || !upload.file} onClick={submitUpload}>{busy ? 'Uploading…' : 'Upload'}</button>
+              <button style={dcBtn('primary')} disabled={busy || !upload.file || !upload.authority} onClick={submitUpload}>{busy ? 'Uploading…' : 'Upload'}</button>
               <button style={dcBtn()} onClick={() => setUpload(null)}>Cancel</button>
             </div>
           </div>

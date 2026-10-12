@@ -1,5 +1,34 @@
 const { Pool, types } = require("pg");
 const pg = require("pg");
+const fs = require("fs");
+const path = require("path");
+
+// ─── v1.110.2 — publishing a legal document version from git ───
+// Raw SQL (exec takes no placeholders), so the text is dollar-quoted. Idempotent: inserts only
+// if this doc_type+version is absent, and deactivates older versions only in the same case.
+function legalPublishStatements(version, docs) {
+  const q = (txt) => {
+    if (String(txt).includes("$ipc$")) throw new Error("legal text may not contain $ipc$");
+    return "$ipc$" + txt + "$ipc$";
+  };
+  const stmts = [];
+  for (const d of docs) {
+    const content = fs.readFileSync(path.join(__dirname, "..", "legal", d.file), "utf8");
+    const id = `legal-${d.docType}-${version}`;
+    const absent = `NOT EXISTS (SELECT 1 FROM legal_documents WHERE doc_type = '${d.docType}' AND version = '${version}')`;
+    stmts.push(`INSERT INTO legal_documents (id, doc_type, version, title, content, change_summary, previous_version, published_by, is_active)
+      SELECT '${id}', '${d.docType}', '${version}',
+        COALESCE((SELECT title FROM legal_documents WHERE doc_type = '${d.docType}' ORDER BY published_at DESC LIMIT 1), ${q(d.fallbackTitle)}),
+        ${q(content)}, ${q(d.summary)},
+        (SELECT version FROM legal_documents WHERE doc_type = '${d.docType}' ORDER BY published_at DESC LIMIT 1),
+        NULL, 0
+      WHERE ${absent}`);
+    stmts.push(`UPDATE legal_documents SET is_active = CASE WHEN id = '${id}' THEN 1 ELSE 0 END
+      WHERE doc_type = '${d.docType}' AND (is_active = 1 OR id = '${id}')`);
+  }
+  return stmts;
+}
+
 
 // Return timestamps as strings (not Date objects) for frontend compatibility
 pg.types.setTypeParser(1114, (str) => str); // timestamp without tz
@@ -2924,6 +2953,23 @@ async function initializeDatabase() {
         )`,
         `CREATE INDEX IF NOT EXISTS idx_recipient_doc_shares_recipient ON recipient_doc_shares (care_recipient_id)`,
       ],
+    },
+    {
+      // v1.110.2 — Privacy Policy + Terms of Use, version 2026-10-12. Pete, 10/12: "change the
+      // legal front matter to reflect the reality of users sharing and consenting FOR someone
+      // whose care they're managing." Adds "Information You Provide About Someone Else" /
+      // "Acting for Someone Else", §7/§7A documents and medical records (who sees them, the
+      // iPAi key, passkeys, no care decisions, no selling), Cloudflare R2, HBNR breach notice,
+      // and replaces the "non-confidential" User Contributions clause with Private Care
+      // Content. Published as a migration so staging and prod get the same words from git;
+      // the text lives in src/legal/*.txt. Every user re-accepts through /api/legal/pending.
+      id: "054_legal_docs_2026_10_12",
+      statements: legalPublishStatements("2026-10-12", [
+        { docType: "privacy", fallbackTitle: "Privacy Policy", file: "privacy_2026-10-12.txt",
+          summary: "Explains that family members usually enter information and upload documents for the person whose care they manage, and what they confirm when they do. Adds how uploaded legal documents and medical records are stored, who can see them (caregivers only when the family shares a legal document; never medical records), passkey protection, the iPAi setting for reading medical records, that InPlace does not use medical records to make care decisions or sell them, Cloudflare R2 storage, and breach notice." },
+        { docType: "terms", fallbackTitle: "Terms of Use", file: "terms_2026-10-12.txt",
+          summary: "Adds \"Acting for Someone Else\": what you confirm when you manage care, share information or make choices for a care recipient. Care profiles, notes, messages, documents and medical records are now Private Care Content — confidential, used only to run the service, never sold. Clarifies that InPlace does not review medical records or use them for care decisions, and that iPAi suggestions are not medical advice." },
+      ]),
     },
   ];
   for (const m of MIGRATIONS_V2) {

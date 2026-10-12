@@ -28,6 +28,8 @@ const Documents = window.Documents = ({ onNavigate }) => {
   const [uploadCategory, setUploadCategory] = useState('consent');
   const [uploadDocType, setUploadDocType] = useState('POA');
   const [uploadFile, setUploadFile] = useState(null);
+  // v1.110.2 — confirm authority before an upload (Privacy Policy / Terms 2026-10-12)
+  const [uploadAuthority, setUploadAuthority] = useState(false);
   const [uploadLoading, setUploadLoading] = useState(false);
   const [uploadError, setUploadError] = useState('');
   const [uploadResult, setUploadResult] = useState(null);
@@ -323,6 +325,10 @@ const Documents = window.Documents = ({ onNavigate }) => {
       setUploadError('Please select a care recipient and file');
       return;
     }
+    if (!uploadAuthority) {
+      setUploadError("Please confirm you're allowed to share this document for them.");
+      return;
+    }
 
     setUploadLoading(true);
     setUploadError('');
@@ -334,6 +340,7 @@ const Documents = window.Documents = ({ onNavigate }) => {
       formData.append('document_type', uploadDocType);
       formData.append('owner_type', 'care_recipient');
       formData.append('owner_id', uploadRecipientId);
+      formData.append('authority_confirmed', '1');
 
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 30000);
@@ -1407,6 +1414,11 @@ const Documents = window.Documents = ({ onNavigate }) => {
                     Max 5MB. PDF or JPEG/PNG image.
                   </p>
                 </div>
+
+                <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: '16px', fontSize: '13px', lineHeight: 1.45, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={uploadAuthority} onChange={(e) => setUploadAuthority(e.target.checked)} style={{ width: 20, height: 20, marginTop: 1, flex: '0 0 auto' }} />
+                  <span>I'm allowed to share this for the person it belongs to: they agreed, or I have legal authority to act for them (for example a power of attorney, healthcare agent or guardian).</span>
+                </label>
 
                 {uploadError && (
                   <div style={{

@@ -149,7 +149,10 @@ describe("nobody joins a care team without the privacy statement", () => {
       "INSERT INTO care_team_invites (id, care_team_id, invited_email, invited_by, role, token, status, expires_at) VALUES (?, ?, ?, ?, 'viewer', ?, 'pending', NOW() + INTERVAL '7 days')"
     ).run(uuid(), team, `p2-${joiner}@t.test`, owner, tok);
 
-    // An active privacy statement this person has never accepted.
+    // An active privacy statement this person has never accepted. v1.110.2 — migration 054
+    // now publishes real documents on every fresh DB, so retire them first the way
+    // /api/legal/admin/publish does: one active version per doc_type.
+    await db.prepare("UPDATE legal_documents SET is_active = 0 WHERE doc_type = 'privacy'").run();
     await db.prepare(
       "INSERT INTO legal_documents (id, doc_type, version, title, content, is_active, published_at) VALUES (?, 'privacy', '9.9', 'Privacy Statement', 'x', 1, NOW())"
     ).run(uuid()).catch(() => {});

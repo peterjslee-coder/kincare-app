@@ -144,6 +144,30 @@ router.post("/upload", authenticate, checkDocAdmin, uploadDoc.single("document")
 
     const db = await getDb();
 
+    // ── v1.110.2 — the uploader confirms they may share this for the person ──
+    // Privacy Policy / Terms 2026-10-12: most care-recipient documents are uploaded by a family
+    // member FOR the person whose care they manage. The policy now says we collect them only
+    // after the uploader confirms the person agreed or that they have authority to act for
+    // them — so the app has to actually ask. Admins (verification) are exempt.
+    const authorityConfirmed = String(req.body.authority_confirmed || "") === "1";
+    if (owner_type === "care_recipient" && !req.isAdmin && !authorityConfirmed) {
+      return res.status(400).json({
+        error: "Please confirm you're allowed to share this document for them.",
+        code: "AUTHORITY_REQUIRED",
+      });
+    }
+    const recordAuthority = async (documentId) => {
+      if (owner_type !== "care_recipient" || req.isAdmin) return;
+      await logConsentAudit(db, {
+        careRecipientId: owner_id,
+        actorId: req.user.id,
+        actorRole: "family",
+        eventType: "upload_authority_confirmed",
+        description: `Confirmed they may share this ${String(document_type).replace(/_/g, " ")} for the care recipient (they agreed, or the uploader has authority to act for them)`,
+        metadata: { documentId, category, wording: "2026-10-12" },
+      });
+    };
+
     // ── Medical records: their own rules, and nothing below this block applies to them ──
     const isMedical = category === "medical";
     if (isMedical !== MEDICAL_DOCUMENT_TYPES.includes(document_type)) {
@@ -174,8 +198,9 @@ router.post("/upload", authenticate, checkDocAdmin, uploadDoc.single("document")
       `).run(medId, owner_id, req.user.id, document_type, medData, req.file.originalname, req.file.size, req.file.mimetype);
       await logMedicalAudit(db, {
         careRecipientId: owner_id, documentId: medId, actorId: req.user.id, eventType: "uploaded",
-        detail: { documentType: document_type, fileName: req.file.originalname },
+        detail: { documentType: document_type, fileName: req.file.originalname, authorityConfirmed: true },
       });
+      await recordAuthority(medId);
       return res.status(201).json({
         document: {
           id: medId, owner_type: "care_recipient", owner_id, category: "medical", document_type,
@@ -235,6 +260,8 @@ router.post("/upload", authenticate, checkDocAdmin, uploadDoc.single("document")
         metadata: { documentId: docId, documentType: document_type },
       });
     }
+
+    await recordAuthority(docId);
 
     // Return immediately — document saved, AI runs in background
     res.status(201).json({

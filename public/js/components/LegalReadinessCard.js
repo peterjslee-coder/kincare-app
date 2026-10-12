@@ -82,6 +82,8 @@ const LegalReadinessCard = window.LegalReadinessCard = ({ careRecipientId }) => 
   const [openItem, setOpenItem] = React.useState(null);
   const [saving, setSaving] = React.useState(null);
   const [uploadingKey, setUploadingKey] = React.useState(null);
+  // v1.110.2 — confirm authority before an upload (Privacy Policy / Terms 2026-10-12)
+  const [authority, setAuthority] = React.useState(false);
   const [healthType, setHealthType] = React.useState('Healthcare_POA');
   const [directory, setDirectory] = React.useState(null);
   const [dirLoading, setDirLoading] = React.useState(false);
@@ -171,6 +173,7 @@ const LegalReadinessCard = window.LegalReadinessCard = ({ careRecipientId }) => 
       fd.append('document_type', item.key === 'healthcare_directive' ? healthType : item.uploadType);
       fd.append('owner_type', 'care_recipient');
       fd.append('owner_id', careRecipientId);
+      fd.append('authority_confirmed', '1');
       const res = await apiFetch('/api/documents/upload', { method: 'POST', body: fd });
       if (res?.ok) {
         showToast("Uploaded — we'll check it shortly.", 'success');
@@ -300,7 +303,11 @@ const LegalReadinessCard = window.LegalReadinessCard = ({ careRecipientId }) => 
                           {LR_HEALTH_UPLOAD_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
                         </select>
                       )}
-                      <button style={primaryBtn} disabled={uploadingKey === item.key}
+                      <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', flexBasis: '100%', fontSize: 13, lineHeight: 1.45, cursor: 'pointer' }}>
+                        <input type="checkbox" checked={authority} onChange={(e) => setAuthority(e.target.checked)} style={{ width: 20, height: 20, marginTop: 1, flex: '0 0 auto' }} />
+                        <span>I'm allowed to share this for {name}: they agreed, or I have legal authority to act for them (for example a power of attorney, healthcare agent or guardian).</span>
+                      </label>
+                      <button style={primaryBtn} disabled={uploadingKey === item.key || !authority}
                         onClick={() => fileRefs.current[item.key] && fileRefs.current[item.key].click()}>
                         {uploadingKey === item.key ? 'Uploading…' : 'Upload it'}
                       </button>
