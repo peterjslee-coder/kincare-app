@@ -170,6 +170,9 @@ async function seed({ force = false, demoOnly = false } = {}) {
         for (const t of ["medical_doc_suggestions", "medical_ai_acks", "medical_record_audit", "medical_ai_consent", "medical_record_access"]) {
           await trySavepoint(() => db.prepare(`DELETE FROM ${t} WHERE care_recipient_id IN (${crp})`).run(...demoCrIds));
         }
+        // v1.110 — legal readiness (051_legal_readiness): both reference care_recipients.
+        await trySavepoint(() => db.prepare(`DELETE FROM legal_readiness_answers WHERE care_recipient_id IN (${crp})`).run(...demoCrIds));
+        await trySavepoint(() => db.prepare(`DELETE FROM financial_concerns WHERE care_recipient_id IN (${crp})`).run(...demoCrIds));
       }
 
       // Care recipients owned by demo family users

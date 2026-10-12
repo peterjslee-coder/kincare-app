@@ -794,6 +794,7 @@ app.use("/api/pricing", require("./routes/pricing"));
 app.use("/api/admin/financials", require("./routes/financials"));
 app.use("/api/admin/treasury", require("./routes/treasury"));
 app.use("/api/admin/tickets", require("./routes/tickets"));
+app.use("/api/admin/legal-readiness", require("./routes/legalReadiness").adminRouter); // v1.110 — after /api/admin, so its network gate runs first
 app.use("/api/costs", require("./routes/costs"));
 app.use("/api/platform-invites", require("./routes/platformInvites"));
 app.use("/api/known-caregivers", require("./routes/knownCaregivers")); // v1.105.186 — a family adds a caregiver it already knows
@@ -824,6 +825,7 @@ app.use("/api/care-tasks", careTasksRouter);
 app.use("/api/care-events", careEventsRouter);
 app.use("/api/care-todos", require("./routes/careTodos")); // v1.109.9 — one-time to-dos for the next visit
 app.use("/api/legal", require("./routes/legal"));
+app.use("/api/legal-readiness", require("./routes/legalReadiness")); // v1.110 — family readiness checklist, local help, money-safety concerns
 app.use("/api/media", require("./routes/media"));
 app.use("/api/safety", require("./routes/safety"));
 

@@ -1870,6 +1870,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
       { id: 'financials', label: 'Financials', icon: '💰' },
       { id: 'costs', label: 'Costs', icon: '💵' },
       { id: 'legal', label: 'Legal Docs', icon: '📜' },
+      { id: 'local-help', label: 'Local Help', icon: '\u{1F9ED}' },
       { id: 'activity', label: 'Activity', icon: '⚡' },
       { id: 'onboarding', label: 'Events', icon: '🚦' },
       { id: 'settings', label: 'Settings', icon: '⚙️' },
@@ -6500,6 +6501,13 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
       {activeTab === 'safety' && (
         typeof ContentReportsTab === 'function'
           ? React.createElement(ContentReportsTab, { apiFetch, showToast })
+          : null
+      )}
+
+      {/* v1.110 — Local Help: the family directory and money-safety concerns */}
+      {activeTab === 'local-help' && (
+        typeof LegalReadinessAdminTab === 'function'
+          ? React.createElement(LegalReadinessAdminTab, { apiFetch, showToast })
           : null
       )}
 

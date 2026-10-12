@@ -58,6 +58,7 @@ const scripts = [
   "js/components/CareEvents.js",
   "js/components/CancelSessionModal.js",
   "js/components/Dashboard.js",
+  "js/components/LegalReadinessCard.js", // v1.110 — family legal & money readiness; CareProfile and the Documents Center render it
   "js/components/CareProfile.js",
   "js/components/TeamNotes.js",
   "js/components/CollapsibleCard.js", // v1.105.171 — used by CareProfile and CareTeamManage
@@ -115,6 +116,7 @@ const scripts = [
 const ADMIN_SCRIPTS = [
   "js/components/VouchPicker.js",
   "js/components/AdminFinancials.js",
+  "js/components/AdminLegalReadiness.js", // v1.110 — Local Help tab + the share button SafetyFlagsTab renders
   "js/components/SafetyFlagsTab.js",
   "js/components/ContentReportsTab.js",
   "js/components/AdminPanel.js",

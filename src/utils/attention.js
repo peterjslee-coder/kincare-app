@@ -77,7 +77,7 @@ const name = (first, last) => [first, last].filter(Boolean).join(" ").trim() || 
 
 const EMPTY = {
   total: 0, reimbursements: 0, timeChanges: 0, timeChangeSessionId: null,
-  careTasks: 0, approvals: 0, safetyFlags: 0, messages: 0, emptyWeeks: 0, cancelFees: 0, items: [],
+  careTasks: 0, approvals: 0, safetyFlags: 0, messages: 0, emptyWeeks: 0, cancelFees: 0, financialConcerns: 0, items: [],
 };
 
 /**
@@ -378,6 +378,19 @@ async function attentionItemsFor(db, userId) {
     return parseInt(row?.count || 0, 10);
   });
 
+  // ── v1.110 — money-safety resources an admin chose to share with me ──
+  //
+  // Created only by an admin, from a financial-exploitation flag, addressed to the care team
+  // leader (routes/legalReadiness.js). Never shown to caregivers: it is addressed to one
+  // person by id. Cleared by POST /api/legal-readiness/concerns/:id/acknowledge.
+  const financialConcernRows = await safeRows("financialConcerns", () => db.prepare(`
+    SELECT fc.id, fc.care_recipient_id, fc.shared_at, cr.first_name AS recipient_first
+    FROM financial_concerns fc
+    JOIN care_recipients cr ON cr.id = fc.care_recipient_id
+    WHERE fc.shared_with_user_id = ? AND fc.shared_at IS NOT NULL AND fc.acknowledged_at IS NULL
+    ORDER BY fc.shared_at
+  `).all(userId));
+
   // ── The list the card draws ──
   //
   // Each item carries the sentence to show and the ONE request that clears it. The endpoint
@@ -528,6 +541,21 @@ async function attentionItemsFor(db, userId) {
         label: "Not now",
       },
     })),
+    ...financialConcernRows.map((c) => ({
+      kind: "financialConcern",
+      id: c.id,
+      // Calm on purpose, and nothing about WHAT prompted it — that stays with the admin.
+      title: "The InPlace team shared some money-safety resources",
+      detail: null,
+      forWhom: c.recipient_first || null,
+      when: c.shared_at || null,
+      // Reading is the point, so no one-tap action: Open goes to the card, which has "Got it".
+      verb: "Open",
+      action: null,
+      page: "care-profile",
+      focus: `legalReadiness:${c.care_recipient_id}`,
+      note: "General information, not legal or financial advice.",
+    })),
     ...taskRows.map((t) => ({
       kind: "careTask",
       id: t.id,
@@ -608,8 +636,9 @@ async function attentionItemsFor(db, userId) {
     // v1.109.9 — the FAMILY's pending cancellation fees count; the caregiver's do not (see
     // the note against the query).
     total: reimbursementRows.length + timeChanges + taskRows.length + approvalRows.length
-      + cancelFeeRows.length + safetyRows.length,
+      + cancelFeeRows.length + financialConcernRows.length + safetyRows.length,
     cancelFees: cancelFeeRows.length,
+    financialConcerns: financialConcernRows.length,
     emptyWeeks: emptyWeekRows.length,
     reimbursements: reimbursementRows.length,
     approvals: approvalRows.length,
