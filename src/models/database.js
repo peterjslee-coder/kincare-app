@@ -2999,6 +2999,39 @@ async function initializeDatabase() {
                  OR EXISTS (SELECT 1 FROM payments p WHERE p.session_id = care_sessions.id))`,
       ],
     },
+    {
+      // v1.111.2 — Pete, 10/12: "why is Kit Conn showing as betty lee's own account? … kit is
+      // in no way related to betty." Betty's profile was created 2026-03-03 by a care_for
+      // SELF-SIGNUP that typed the name "Betty Lee" (consent_method 'self_signup'); auth.js
+      // links the new profile to the signer. Pete took the profile over the next day but the
+      // link stayed, and that account (ccf867e0…) is a real, unrelated person, Kit Conn, who
+      // is not on the care team. Remove that one link, only if it is still exactly that one,
+      // and write the prior id into the consent audit trail so it can be reversed.
+      id: "055_unlink_kit_from_betty_and_authorities",
+      statements: [
+        `INSERT INTO consent_audit_log (id, care_recipient_id, actor_id, actor_role, event_type, description, metadata)
+         SELECT 'unlink-055-betty', id, NULL, 'admin', 'linked_account_removed',
+           'Removed a linked "own account" that was not this person (created by a 2026-03-03 self-signup; account not on the care team). Requested by the care team leader 2026-10-12.',
+           '{"previous_linked_user_id":"ccf867e0-aeaf-4f06-8c40-1a4824d1aa2a","migration":"055"}'
+         FROM care_recipients
+         WHERE id = '024c3cb9-425e-4c9c-a066-87fd90402f61' AND linked_user_id = 'ccf867e0-aeaf-4f06-8c40-1a4824d1aa2a'
+           AND NOT EXISTS (SELECT 1 FROM consent_audit_log WHERE id = 'unlink-055-betty')`,
+        `UPDATE care_recipients SET linked_user_id = NULL
+         WHERE id = '024c3cb9-425e-4c9c-a066-87fd90402f61' AND linked_user_id = 'ccf867e0-aeaf-4f06-8c40-1a4824d1aa2a'`,
+        // Pete, 10/12: "IP should know that Sara Huber is the Durable POA." Who the document
+        // names, recorded by the leader. Record + show only — grants nothing (Pete's call).
+        `CREATE TABLE IF NOT EXISTS recipient_authorities (
+          care_recipient_id TEXT NOT NULL,
+          kind TEXT NOT NULL,
+          user_id TEXT,
+          agent_name TEXT NOT NULL,
+          document_id TEXT,
+          set_by TEXT NOT NULL,
+          set_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          PRIMARY KEY (care_recipient_id, kind)
+        )`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

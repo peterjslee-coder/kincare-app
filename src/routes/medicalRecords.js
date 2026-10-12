@@ -22,6 +22,7 @@ const { blockWhileImpersonating, isImpersonating } = require("../middleware/noIm
 const storage = require("../utils/storage");
 const {
   medicalRole, aiConsentOn, grantableReason, logMedicalAudit, recipientRow,
+  trustedLinkedUserId,
 } = require("../utils/medicalAccess");
 const stepUp = require("../utils/medicalStepUp");
 const { extractSuggestions } = require("../utils/medicalDocAI");
@@ -168,8 +169,9 @@ router.get("/:crId", async (req, res) => {
       }
     }
 
+    const linkedId = await trustedLinkedUserId(db, cr); // v1.111.2 — a stale link is not her
     res.json({
-      recipient: { id: crId, name: recipientName(cr), hasOwnAccount: !!cr.linked_user_id },
+      recipient: { id: crId, name: recipientName(cr), hasOwnAccount: !!linkedId },
       me: {
         canManageAccess: role.canManageAccess, isLeader: role.isLeader, isMember: role.isMember,
         isKeyHolder: role.isKeyHolder, canSeeAudit: role.isKeyHolder || role.isLeader || role.isMember,
@@ -179,7 +181,7 @@ router.get("/:crId", async (req, res) => {
         on: !!(consentRow && Number(consentRow.granted) === 1),
         holderId: role.keyHolderId,
         holderName: await userName(db, role.keyHolderId),
-        holderIsMember: !!cr.linked_user_id && cr.linked_user_id === role.keyHolderId,
+        holderIsMember: !!linkedId && linkedId === role.keyHolderId,
         decidedBy: consentRow ? await userName(db, consentRow.decided_by) : null,
         decidedAt: consentRow ? consentRow.decided_at : null,
       },

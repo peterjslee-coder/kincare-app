@@ -18,7 +18,7 @@
 // "Caregiver" is decided the same way as for medical records: a caregiver profile or the
 // caregiver role. Holding the role only ever REMOVES access here.
 
-const { isCaregiverUser } = require("./medicalAccess");
+const { isCaregiverUser, trustedLinkedUserId } = require("./medicalAccess");
 
 async function recipientRow(db, careRecipientId) {
   if (!careRecipientId) return null;
@@ -46,7 +46,9 @@ async function recipientDocRole(db, careRecipientId, userId) {
   if (!cr || !userId) return none;
   const role = await teamRole(db, careRecipientId, userId);
   const isOwner = cr.family_user_id === userId;
-  const isMember = !!cr.linked_user_id && cr.linked_user_id === userId;
+  // v1.111.2 — a linked account that is on no team is not the person (see medicalAccess).
+  const linked = await trustedLinkedUserId(db, cr);
+  const isMember = !!linked && linked === userId;
   const isLeader = role === "leader";
   const canManage = isOwner || isMember || isLeader;
   const isCaregiver = await isCaregiverUser(db, userId);

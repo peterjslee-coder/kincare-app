@@ -162,6 +162,25 @@ const LegalReadinessCard = window.LegalReadinessCard = ({ careRecipientId }) => 
     setSaving(null);
   };
 
+  // v1.111.2 — Pete: "IP should know that Sara Huber is the Durable POA." The leader records
+  // who the document names. Shown to the family; it grants nothing.
+  const setAgent = async (item, body) => {
+    setSaving(item.key);
+    try {
+      const res = await apiFetch(`/api/legal-readiness/${careRecipientId}/agents/${item.key}`, { method: 'PUT', body: JSON.stringify(body) });
+      if (res?.ok) {
+        const d = await res.json();
+        setData((prev) => prev ? { ...prev, items: d.items, complete: d.items.every((i) => i.done) } : prev);
+        showToast('Saved', 'success');
+      } else {
+        showToast(await lrErr(res, "Couldn't save that."), 'error');
+      }
+    } catch {
+      showToast("Couldn't save that.", 'error');
+    }
+    setSaving(null);
+  };
+
   const upload = async (item, file) => {
     if (!file) return;
     if (file.size > 10 * 1024 * 1024) { showToast('That file is over 10 MB.', 'error'); return; }
@@ -270,6 +289,31 @@ const LegalReadinessCard = window.LegalReadinessCard = ({ careRecipientId }) => 
                 <div style={{ fontWeight: 600, fontSize: 14 }}>{item.title}</div>
                 <span style={{ ...LR_TONE[st.tone], fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 10, whiteSpace: 'nowrap' }}>{st.label}</span>
               </div>
+              {item.agentKind && (item.agent || data.canSetAgent) && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginTop: 6, fontSize: 13 }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>{item.agentKind === 'financial_poa' ? 'Agent named in it:' : 'Healthcare agent:'}</span>
+                  {data.canSetAgent ? (
+                    <select aria-label={item.agentKind === 'financial_poa' ? 'Agent named in the power of attorney' : 'Healthcare agent'}
+                      value={item.agent?.userId || (item.agent ? '__typed' : '')} disabled={saving === item.key}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (v === '') setAgent(item, {});
+                        else if (v === '__other') {
+                          const typed = window.prompt('Their name, as written in the document');
+                          if (typed && typed.trim()) setAgent(item, { name: typed.trim() });
+                        } else if (v !== '__typed') setAgent(item, { userId: v });
+                      }}
+                      style={{ minHeight: 36, font: 'inherit', borderRadius: 6 }}>
+                      <option value="">{item.agent ? 'Clear' : 'Not recorded'}</option>
+                      {item.agent && !item.agent.userId && <option value="__typed">{item.agent.name}</option>}
+                      {(data.agentCandidates || []).map((c) => <option key={c.userId} value={c.userId}>{c.name}</option>)}
+                      <option value="__other">Someone not on the care team…</option>
+                    </select>
+                  ) : (
+                    <strong>{item.agent.name}</strong>
+                  )}
+                </div>
+              )}
               {item.lastUploadRejected && (
                 <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>The last upload couldn't be verified. You can upload it again.</div>
               )}

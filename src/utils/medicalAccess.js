@@ -77,12 +77,26 @@ async function isLeaderOrOwner(db, cr, userId) {
  *   isMember: boolean, isLeader: boolean, isGranted: boolean, isKeyHolder: boolean,
  *   keyHolderId: string|null}>}
  */
+/**
+ * v1.111.2 — the linked account counts as the person herself only if it is ALSO on her care
+ * team (or owns the record). A genuine one always is: self-signup makes her the leader, and
+ * accepting a care_recipient invite adds her as a member. Betty's profile carried a stale
+ * self-signup link to an unrelated account that was on no team; that account was being
+ * treated as Betty — key holder, medical records, legal documents.
+ */
+async function trustedLinkedUserId(db, cr) {
+  if (!cr || !cr.linked_user_id) return null;
+  if (cr.family_user_id === cr.linked_user_id) return cr.linked_user_id;
+  return (await isTeamMember(db, cr.id, cr.linked_user_id)) ? cr.linked_user_id : null;
+}
+
 async function medicalRole(db, careRecipientId, userId) {
   const none = { exists: false, canView: false, canManageAccess: false, isMember: false, isLeader: false, isGranted: false, isKeyHolder: false, keyHolderId: null };
   const cr = await recipientRow(db, careRecipientId);
   if (!cr || !userId) return none;
   const keyHolderId = await aiKeyHolder(db, careRecipientId, cr);
-  const isMember = !!cr.linked_user_id && cr.linked_user_id === userId;
+  const linked = await trustedLinkedUserId(db, cr);
+  const isMember = !!linked && linked === userId;
   const isLeader = await isLeaderOrOwner(db, cr, userId);
   let isGranted = false;
   if (!isMember && !isLeader) {
@@ -117,7 +131,8 @@ async function canManageMedicalAccess(db, careRecipientId, userId) {
 async function aiKeyHolder(db, careRecipientId, crRow) {
   const cr = crRow || (await recipientRow(db, careRecipientId));
   if (!cr) return null;
-  if (cr.linked_user_id) return cr.linked_user_id;
+  const linked = await trustedLinkedUserId(db, cr);
+  if (linked) return linked;
   return (await leaderIdFor(db, careRecipientId)) || cr.family_user_id || null;
 }
 
@@ -132,8 +147,9 @@ async function grantableReason(db, careRecipientId, targetUserId) {
   const cr = await recipientRow(db, careRecipientId);
   if (!cr) return "not_found";
   if (!(await isTeamMember(db, careRecipientId, targetUserId))) return "not_on_team";
+  // "already" first: a leader who also holds the caregiver role (Pete) is the leader here.
+  if ((await trustedLinkedUserId(db, cr)) === targetUserId || (await isLeaderOrOwner(db, cr, targetUserId))) return "already";
   if (await isCaregiverUser(db, targetUserId)) return "caregiver";
-  if (cr.linked_user_id === targetUserId || (await isLeaderOrOwner(db, cr, targetUserId))) return "already";
   return null;
 }
 
@@ -151,5 +167,5 @@ async function logMedicalAudit(db, { careRecipientId, documentId = null, actorId
 
 module.exports = {
   medicalRole, canViewMedical, canManageMedicalAccess, aiKeyHolder, aiConsentOn,
-  isCaregiverUser, grantableReason, logMedicalAudit, recipientRow,
+  isCaregiverUser, grantableReason, logMedicalAudit, recipientRow, trustedLinkedUserId,
 };

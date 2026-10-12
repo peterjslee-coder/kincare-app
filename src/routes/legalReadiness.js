@@ -20,6 +20,7 @@
 // bad actor in the home would want (same rule as the iPAi intelligence report).
 const express = require("express");
 const { v4: uuid } = require("uuid");
+const { isCaregiverUser } = require("../utils/medicalAccess");
 const { getDb } = require("../models/database");
 const { authenticate, requireAdmin } = require("../middleware/auth");
 const { blockWhileImpersonating } = require("../middleware/noImpersonation");
@@ -109,6 +110,43 @@ async function leaderFor(db, recipientId) {
   return cr?.family_user_id || null;
 }
 
+// Checklist item → the authority it names. Recorded and shown only; it grants nothing.
+const AGENT_KIND = { financial_poa: "financial_poa", healthcare_directive: "healthcare_agent" };
+
+// May this person record who the document names? The record's owner or the care team leader.
+async function canSetAgent(db, cr, userId) {
+  if (cr.family_user_id === userId) return true;
+  const row = await db.prepare(`
+    SELECT 1 FROM care_team_members ctm JOIN care_teams ct ON ct.id = ctm.care_team_id
+    WHERE ct.care_recipient_id = ? AND ctm.user_id = ? AND ctm.role = 'leader' LIMIT 1
+  `).get(cr.id, userId);
+  return !!row;
+}
+
+async function agentCandidates(db, careRecipientId) {
+  const rows = await db.prepare(`
+    SELECT DISTINCT u.id, u.first_name, u.last_name FROM care_team_members ctm
+    JOIN care_teams ct ON ct.id = ctm.care_team_id JOIN users u ON u.id = ctm.user_id
+    WHERE ct.care_recipient_id = ?
+    ORDER BY u.first_name
+  `).all(careRecipientId);
+  // Family only: a hired caregiver is never offered as the agent, and her id never reaches
+  // this family-only response. The leader or owner stays in the list even if they also hold
+  // the caregiver role (Pete does). Anyone else can be typed by name.
+  const cr = await db.prepare("SELECT family_user_id FROM care_recipients WHERE id = ?").get(careRecipientId);
+  const leaders = new Set((await db.prepare(`
+    SELECT ctm.user_id FROM care_team_members ctm JOIN care_teams ct ON ct.id = ctm.care_team_id
+    WHERE ct.care_recipient_id = ? AND ctm.role = 'leader'
+  `).all(careRecipientId)).map((r) => r.user_id));
+  if (cr?.family_user_id) leaders.add(cr.family_user_id);
+  const out = [];
+  for (const r of rows) {
+    if (!leaders.has(r.id) && (await isCaregiverUser(db, r.id))) continue;
+    out.push({ userId: r.id, name: [r.first_name, r.last_name].filter(Boolean).join(" ") });
+  }
+  return out;
+}
+
 async function readinessFor(db, cr) {
   // Any category: the Documents page files a POA under 'consent' by default, this card under
   // 'legal'. The document type is what decides.
@@ -129,6 +167,11 @@ async function readinessFor(db, cr) {
     "SELECT item, answer, answered_at FROM legal_readiness_answers WHERE care_recipient_id = ?"
   ).all(cr.id);
   const byItem = Object.fromEntries(answers.map((a) => [a.item, a]));
+  // v1.111.2 — who the document names (Pete: "IP should know that Sara Huber is the Durable POA")
+  const agents = await db.prepare(
+    "SELECT kind, user_id, agent_name, set_at FROM recipient_authorities WHERE care_recipient_id = ?"
+  ).all(cr.id);
+  const agentBy = Object.fromEntries(agents.map((a) => [a.kind, a]));
   const name = cr.first_name || "Your loved one";
   return ITEMS.map((it) => {
     const mine = docs.filter((d) => it.docTypes.includes(d.document_type));
@@ -155,6 +198,10 @@ async function readinessFor(db, cr) {
       answeredAt: ans?.answered_at || null,
       documentId: (approved || inReview)?.id || null,
       lastUploadRejected: !approved && !inReview && !!rejected,
+      agentKind: AGENT_KIND[it.key] || null,
+      agent: AGENT_KIND[it.key] && agentBy[AGENT_KIND[it.key]]
+        ? { userId: agentBy[AGENT_KIND[it.key]].user_id || null, name: agentBy[AGENT_KIND[it.key]].agent_name, setAt: agentBy[AGENT_KIND[it.key]].set_at }
+        : null,
       uploadType: it.uploadType,
       what: it.what(name),
       when: it.when(name),
@@ -285,9 +332,12 @@ router.get("/:careRecipientId", authenticate, async (req, res) => {
       WHERE care_recipient_id = ? AND source = 'family_report' AND reported_by = ?
       ORDER BY created_at DESC LIMIT 5
     `).all(acc.cr.id, req.user.id);
+    const mayName = await canSetAgent(db, acc.cr, req.user.id);
     res.json({
       recipient: { id: acc.cr.id, firstName: acc.cr.first_name },
       items,
+      canSetAgent: mayName,
+      agentCandidates: mayName ? await agentCandidates(db, acc.cr.id) : [],
       complete: items.every((i) => i.done),
       sharedConcerns: shared.map((s) => ({ id: s.id, sharedAt: s.shared_at, steps: CONCERN_STEPS })),
       myReports: myReports.map((r) => ({ id: r.id, status: r.status, createdAt: r.created_at })),
@@ -322,6 +372,53 @@ router.put("/:careRecipientId/answers/:item", authenticate, blockWhileImpersonat
   } catch (err) {
     captureException(err, { where: "legalReadiness: answer" });
     res.status(500).json({ error: "Couldn't save your answer." });
+  }
+});
+
+// PUT /:careRecipientId/agents/:item — { userId } (a care team member) or { name }, or {} to clear.
+// v1.111.2 — Pete, 10/12: "IP should know that Sara Huber is the Durable POA." Owner or leader.
+router.put("/:careRecipientId/agents/:item", authenticate, blockWhileImpersonating("record who a legal document names"), async (req, res) => {
+  try {
+    const kind = AGENT_KIND[req.params.item];
+    if (!kind) return res.status(400).json({ error: "This item doesn't name an agent." });
+    const db = await getDb();
+    const acc = await familyAccess(db, req.params.careRecipientId, req.user.id);
+    if (acc.status !== 200) return refuse(res, acc.status);
+    if (!(await canSetAgent(db, acc.cr, req.user.id))) {
+      return res.status(403).json({ error: "Only the care team leader can record who the document names." });
+    }
+    const userId = req.body?.userId || null;
+    const typed = String(req.body?.name || "").trim().slice(0, 120);
+    let agentName = typed;
+    if (userId) {
+      const c = (await agentCandidates(db, acc.cr.id)).find((x) => x.userId === userId);
+      if (!c) return res.status(400).json({ error: "Choose someone on the care team, or type the name." });
+      agentName = c.name;
+    }
+    if (!userId && !agentName) {
+      await db.prepare("DELETE FROM recipient_authorities WHERE care_recipient_id = ? AND kind = ?").run(acc.cr.id, kind);
+    } else {
+      const items0 = await readinessFor(db, acc.cr);
+      const docId = items0.find((i) => i.key === req.params.item)?.documentId || null;
+      await db.prepare(`
+        INSERT INTO recipient_authorities (care_recipient_id, kind, user_id, agent_name, document_id, set_by, set_at)
+        VALUES (?, ?, ?, ?, ?, ?, NOW())
+        ON CONFLICT (care_recipient_id, kind) DO UPDATE SET user_id = EXCLUDED.user_id, agent_name = EXCLUDED.agent_name,
+          document_id = EXCLUDED.document_id, set_by = EXCLUDED.set_by, set_at = NOW()
+      `).run(acc.cr.id, kind, userId, agentName, docId, req.user.id);
+    }
+    try {
+      await db.prepare(`
+        INSERT INTO consent_audit_log (id, care_recipient_id, actor_id, actor_role, event_type, description, metadata)
+        VALUES (?, ?, ?, 'family', 'authority_recorded', ?, ?)
+      `).run(uuid(), acc.cr.id, req.user.id,
+        agentName ? `Recorded ${agentName} as ${kind === "financial_poa" ? "agent under the durable power of attorney" : "healthcare agent"}` : `Cleared the ${kind.replace(/_/g, " ")}`,
+        JSON.stringify({ kind, userId }));
+    } catch (e) { captureException(e, { where: "legalReadiness: authority audit" }); }
+    res.json({ items: await readinessFor(db, acc.cr) });
+  } catch (err) {
+    captureException(err, { where: "legalReadiness: agent" });
+    res.status(500).json({ error: "Couldn't save that." });
   }
 });
 

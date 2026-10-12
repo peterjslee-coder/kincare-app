@@ -238,6 +238,9 @@ describe("the iPAi key", () => {
   test("when the member has her own account, she holds the key", async () => {
     const betty = await h.createUser({ roles: ["care_for"], firstName: "Betty" });
     await db.prepare("UPDATE care_recipients SET linked_user_id = ? WHERE id = ?").run(betty.user.id, recipientId);
+    // v1.111.2 — a genuine linked account is always on the team (invite accept adds her);
+    // one on no team is a stale link and is not treated as her (staleLinkAndAgents.itest.js).
+    await h.addTeamMember(teamId, betty.user.id);
     const mine = await h.request.get(base()).set(h.auth(betty.token));
     expect(mine.status).toBe(200);
     expect(mine.body.me.isKeyHolder).toBe(true);
