@@ -7,9 +7,9 @@ build red.
 
 Hand-written sections (§3 "Where is…") are preserved across regeneration; edit those freely.
 
-Structure at last generation: 541 HTTP routes across 56 mounts ·
-97 `CREATE TABLE` statements · 14 background jobs · 39 socket events
-(17 with no client listener) · 65 push event types · 60 `window.__*` globals.
+Structure at last generation: 546 HTTP routes across 57 mounts ·
+100 `CREATE TABLE` statements · 14 background jobs · 39 socket events
+(17 with no client listener) · 66 push event types · 60 `window.__*` globals.
 
 ---
 
@@ -71,6 +71,7 @@ JSX is *not* compiled in the browser; Babel-standalone is not loaded. Editing an
 | `/api/kindred` | `src/routes/kindred.js` | 23 |  |
 | `/api/known-caregivers` | `src/routes/knownCaregivers.js` | 4 |  |
 | `/api/legal` | `src/routes/legal.js` | 5 |  |
+| `/api/legal-readiness` | `src/routes/legalReadiness.js` | 5 |  |
 | `/api/matching` | `src/routes/matching.js` | 2 |  |
 | `/api/media` | `src/routes/media.js` | 2 |  |
 | `/api/messages` | `src/routes/messages.js` | 14 |  |
@@ -116,6 +117,7 @@ greps finding something.
 | "Am I production?" | `src/utils/env.js` — the only place that decides. Never gate on `NODE_ENV`; Railway does not set it |
 | Timezone conversion | `src/utils/timezone.js` server, `TimezoneHelper.js` client. All times are **care-location** times |
 | Blob storage | `src/utils/storage.js` → `storeFileData()`, `resolveFileData()`. R2-backed, `r2:<key>` markers, legacy base64 rows still readable |
+| Legal & money readiness (family checklist, "Get help nearby", money-safety concerns) | `src/routes/legalReadiness.js`, migration `051_legal_readiness` (tables `legal_readiness_answers`, `local_resources`, `financial_concerns`). Family routes at `/api/legal-readiness` (`GET /:careRecipientId`, `PUT /:careRecipientId/answers/:item`, `GET /:careRecipientId/resources`, `POST /:careRecipientId/concerns`, `POST /concerns/:id/acknowledge` → 409 if already seen). Admin routes are a second router, `adminRouter`, mounted at `/api/admin/legal-readiness` **after** `/api/admin` so the admin network gate runs first (the generator above does not count them): `GET/POST /resources`, `PUT/DELETE /resources/:id` (DELETE = hide, 409 if hidden), `GET /concerns`, `PUT /concerns/:id`, `GET /safety-flags/:flagId/recipients`, `POST /safety-flags/:flagId/share` (exploitation_signal only; 409 on a second share). **Family-only**: `familyAccess()` refuses caregivers (any `caregiver_profiles` row, unless they own the record), helpers without `read_profile`, and the care recipient's linked account. Readiness is computed from `verified_documents` (category `legal`: `POA`; `Healthcare_POA`/`Living_Will`) and an unanswered item is `unknown`, never `missing`. Client: `LegalReadinessCard.js` (Care Profile + Documents Center), `AdminLegalReadiness.js` (Admin → Local Help, and the share button on SafetyFlagsTab). Needs-you kind `financialConcern` in `src/utils/attention.js` |
 <!-- HAND:END -->
 
 ---
@@ -127,20 +129,20 @@ Every job runs through `guardedPoller` → `withPollerLock` (`src/models/databas
 
 | Lock | Job | Interval | Declared |
 |---:|---|---|---|
-| 101 | Daily demo data refresh | 24 h | `src/server.js:1043` |
-| 102 | Session notification poller (every 60s) | 1 min | `src/server.js:1137` |
-| 103 | Session Accountability Poller | 1 min | `src/server.js:1412` |
-| 104 | Reimbursement push digest sweeper (v1.98.15) | 30 s | `src/server.js:1429` |
-| 105 | Auto-pay cron: charge overdue sessions | 5 min | `src/server.js:1521` |
-| 106 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1627` |
-| 107 | Care Tasks poller (v1.99.0) | 1 min | `src/server.js:1637` |
-| 108 | Care Events poller (v1.100.0) | 1 min | `src/server.js:1653` |
-| 109 | Kindred Reminder Delivery Poller | 1 min | `src/server.js:1443` |
-| 110 | Retention (v1.106.9, poller 110) | 24 h | `src/server.js:1690` |
-| 111 | (see src/server.js:1603) | 1 h | `src/server.js:1603` |
-| 112 | v1.106.13 — poller 112: proposals that nobody answered | 10 min | `src/server.js:1719` |
-| 113 | (see src/server.js:1762) | 1 min | `src/server.js:1762` |
-| 114 | Quiet hours summary (v1.107.3, poller 114) | 5 min | `src/server.js:1781` |
+| 101 | Daily demo data refresh | 24 h | `src/server.js:1045` |
+| 102 | Session notification poller (every 60s) | 1 min | `src/server.js:1139` |
+| 103 | Session Accountability Poller | 1 min | `src/server.js:1414` |
+| 104 | Reimbursement push digest sweeper (v1.98.15) | 30 s | `src/server.js:1431` |
+| 105 | Auto-pay cron: charge overdue sessions | 5 min | `src/server.js:1523` |
+| 106 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1629` |
+| 107 | Care Tasks poller (v1.99.0) | 1 min | `src/server.js:1639` |
+| 108 | Care Events poller (v1.100.0) | 1 min | `src/server.js:1655` |
+| 109 | Kindred Reminder Delivery Poller | 1 min | `src/server.js:1445` |
+| 110 | Retention (v1.106.9, poller 110) | 24 h | `src/server.js:1692` |
+| 111 | (see src/server.js:1605) | 1 h | `src/server.js:1605` |
+| 112 | v1.106.13 — poller 112: proposals that nobody answered | 10 min | `src/server.js:1721` |
+| 113 | (see src/server.js:1764) | 1 min | `src/server.js:1764` |
+| 114 | Quiet hours summary (v1.107.3, poller 114) | 5 min | `src/server.js:1783` |
 
 ---
 
@@ -213,27 +215,27 @@ Opt-out key is `notification_prefs["push_" + eventType]`. Capability gating live
 
 `check_out_reminder` · `checkin_nudge` · `content_report` · `dispute_filed`
 
-`document_classified` · `document_deleted` · `document_uploaded` · `identity_submitted`
+`document_classified` · `document_deleted` · `document_uploaded` · `financial_concern_reported`
 
-`interview_accepted` · `interview_cancelled` · `interview_declined` · `interview_request`
+`identity_submitted` · `interview_accepted` · `interview_cancelled` · `interview_declined`
 
-`invite_accepted` · `kindred_relay` · `managed_mode_activated` · `missing_address`
+`interview_request` · `invite_accepted` · `kindred_relay` · `managed_mode_activated`
 
-`new_job` · `new_registration` · `new_signup_intent` · `no_show_cancelled`
+`missing_address` · `new_job` · `new_registration` · `new_signup_intent`
 
-`on_my_way` · `on_my_way_recipient` · `outreach_response` · `outreach_sent`
+`no_show_cancelled` · `on_my_way` · `on_my_way_recipient` · `outreach_response`
 
-`overdue_check_in` · `overdue_check_in_family` · `overdue_check_out` · `overdue_check_out_family`
+`outreach_sent` · `overdue_check_in` · `overdue_check_in_family` · `overdue_check_out`
 
-`payment_authorization_failed` · `payment_hold` · `payment_method_needed` · `phone_verified`
+`overdue_check_out_family` · `payment_authorization_failed` · `payment_hold` · `payment_method_needed`
 
-`proposal_accepted` · `proposal_declined` · `request_declined` · `review`
+`phone_verified` · `proposal_accepted` · `proposal_declined` · `request_declined`
 
-`safety_flag` · `session_cancelled` · `session_complete` · `session_in_progress`
+`review` · `safety_flag` · `session_cancelled` · `session_complete`
 
-`team_join` · `time_change` · `time_proposal` · `unblocked`
+`session_in_progress` · `team_join` · `time_change` · `time_proposal`
 
-`waitlist_signup`
+`unblocked` · `waitlist_signup`
 
 ---
 
@@ -255,7 +257,7 @@ State travels through `window`, not props. This table is the registry.
 | `window.__caregiverFirstStepsRemain` | CaretakerHub.js | 2 |
 | `window.__clearSessionActive` | app.js | 4 |
 | `window.__currentPage` | app.js | 2 |
-| `window.__currentRole` | app.js, HelpPage.js, MyAccount.js | 7 |
+| `window.__currentRole` | app.js, HelpPage.js, MyAccount.js | 8 |
 | `window.__currentUserId` | app.js | 7 |
 | `window.__documentsTab` | Dashboard.js | 6 |
 | `window.__findWorkTab` | CaretakerHub.js | 4 |
@@ -274,7 +276,7 @@ State travels through `window`, not props. This table is the registry.
 | `window.__originalSearch` | app.js | 4 |
 | `window.__pendingCall` | app.js, Messages.js | 5 |
 | `window.__pendingConversation` | app.js | 5 |
-| `window.__pendingFocus` | app.js, AttentionCard.js, CareProfile.js | 28 |
+| `window.__pendingFocus` | app.js, AttentionCard.js, CareProfile.js | 30 |
 | `window.__pendingLogVisit` | TeamNotes.js | 2 |
 | `window.__pendingNoteDraft` | CareProfile.js, Messages.js | 3 |
 | `window.__pendingNoteRecipientId` | app.js, TeamNotes.js | 4 |

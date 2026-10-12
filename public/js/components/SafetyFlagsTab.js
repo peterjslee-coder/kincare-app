@@ -227,6 +227,10 @@ const SafetyFlagsTab = window.SafetyFlagsTab = ({ safetyFlags, safetyLoading, ha
         }, (flagPasskeyConfirm?.flagId === f.id && flagPasskeyConfirm?.status === 'dismissed')
           ? (flagPasskeyLoading ? '\u{1F510} Verifying...' : '\u{1F510} Tap passkey to dismiss')
           : 'Dismiss'),
+        // v1.110 — the only way a financial-exploitation flag reaches a family: an admin shares
+        // resources. The family never sees the message or its author. AdminLegalReadiness.js.
+        f.flag_type === 'exploitation_signal' && typeof ShareFinancialResourcesButton === 'function'
+          && React.createElement(ShareFinancialResourcesButton, { flag: f, apiFetch, showToast }),
         // Passkey error display
         flagPasskeyError && flagPasskeyConfirm?.flagId === f.id && React.createElement('div', {
           style: { fontSize: 11, color: 'var(--color-error)', width: '100%' },

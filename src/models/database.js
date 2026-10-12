@@ -2734,6 +2734,77 @@ async function initializeDatabase() {
         `ALTER TABLE care_team_members ADD COLUMN IF NOT EXISTS visit_updates_opt_in INTEGER`,
       ],
     },
+    {
+      // ─── v1.110 — Legal & Financial Readiness, phase 1 ───
+      //
+      // Three small tables. Readiness itself is COMPUTED from verified_documents; the answers
+      // table only holds what the family tells us when there is no upload ("we have one but
+      // haven't uploaded it", "not sure", "we don't have one"). local_resources is a hand-kept
+      // directory — no money changes hands, nobody pays to be listed. financial_concerns holds
+      // a family's own report, or an admin's decision to share resources after a screener flag.
+      // Nothing reaches a family from a flag until an admin chooses to share it.
+      // See src/routes/legalReadiness.js.
+      id: "051_legal_readiness",
+      statements: [
+        `CREATE TABLE IF NOT EXISTS legal_readiness_answers (
+          id TEXT PRIMARY KEY,
+          care_recipient_id TEXT NOT NULL REFERENCES care_recipients(id),
+          item TEXT NOT NULL,
+          answer TEXT NOT NULL,
+          answered_by TEXT REFERENCES users(id),
+          answered_at TIMESTAMPTZ DEFAULT NOW(),
+          UNIQUE (care_recipient_id, item)
+        )`,
+        `CREATE TABLE IF NOT EXISTS local_resources (
+          id TEXT PRIMARY KEY,
+          kind TEXT NOT NULL,
+          name TEXT NOT NULL,
+          phone TEXT,
+          url TEXT,
+          region_key TEXT NOT NULL DEFAULT 'VA',
+          notes TEXT,
+          source_url TEXT,
+          is_active INTEGER NOT NULL DEFAULT 1,
+          created_by TEXT REFERENCES users(id),
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          updated_at TIMESTAMPTZ DEFAULT NOW()
+        )`,
+        `CREATE INDEX IF NOT EXISTS idx_local_resources_kind ON local_resources(kind, is_active)`,
+        `CREATE TABLE IF NOT EXISTS financial_concerns (
+          id TEXT PRIMARY KEY,
+          care_recipient_id TEXT NOT NULL REFERENCES care_recipients(id),
+          reported_by TEXT REFERENCES users(id),
+          source TEXT NOT NULL,
+          safety_flag_id TEXT REFERENCES safety_flags(id),
+          description TEXT,
+          status TEXT NOT NULL DEFAULT 'open',
+          admin_notes TEXT,
+          shared_with_user_id TEXT REFERENCES users(id),
+          shared_at TIMESTAMPTZ,
+          acknowledged_at TIMESTAMPTZ,
+          acknowledged_by TEXT REFERENCES users(id),
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          reviewed_by TEXT REFERENCES users(id),
+          reviewed_at TIMESTAMPTZ
+        )`,
+        `CREATE INDEX IF NOT EXISTS idx_financial_concerns_recipient ON financial_concerns(care_recipient_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_financial_concerns_shared ON financial_concerns(shared_with_user_id) WHERE acknowledged_at IS NULL`,
+        // One share per flag per care recipient — a second click is a 409, not a second card.
+        `CREATE UNIQUE INDEX IF NOT EXISTS uq_financial_concerns_flag ON financial_concerns(safety_flag_id, care_recipient_id) WHERE safety_flag_id IS NOT NULL`,
+        // Seed: public, institutional entries only, each verified against source_url on
+        // 2026-10-12. Private firms and advisors are added by hand in Admin → Local Help.
+        `INSERT INTO local_resources (id, kind, name, phone, url, region_key, notes, source_url) VALUES
+          ('lr_va_aps', 'aps', 'Virginia Adult Protective Services hotline', '(888) 832-3858', 'https://dss.virginia.gov/about/abuse.cgi', 'VA', 'Virginia Department of Social Services. Toll-free, 24 hours. For suspected abuse, neglect or financial exploitation of an adult.', 'https://dss.virginia.gov/about/abuse.cgi'),
+          ('lr_va_vlrs', 'elder_law', 'Virginia Lawyer Referral Service (Virginia State Bar)', '(800) 552-7977', 'https://vsb.org/Site/legal-help/vlrs.aspx', 'VA', 'Refers you to a Virginia lawyer for a first consultation of up to 30 minutes for a $35 referral fee. Weekdays 9am-5pm.', 'https://vsb.org/Site/legal-help/vlrs.aspx'),
+          ('lr_us_naela', 'elder_law', 'NAELA — find an elder law attorney', NULL, 'https://www.naela.org/findlawyer', 'US', 'National Academy of Elder Law Attorneys member directory. Search by state or city.', 'https://www.naela.org/findlawyer'),
+          ('lr_us_napfa', 'financial_advisor', 'NAPFA — find a fee-only financial advisor', NULL, 'https://www.napfa.org/find-an-advisor', 'US', 'Directory of fee-only advisors (paid by you, not by commissions on products they sell).', 'https://www.napfa.org/find-an-advisor'),
+          ('lr_us_cfp', 'financial_advisor', 'CFP Board — Let''s Make a Plan', NULL, 'https://www.letsmakeaplan.org/', 'US', 'CFP Board search for CERTIFIED FINANCIAL PLANNER professionals near you.', 'https://www.letsmakeaplan.org/'),
+          ('lr_va_legalaid', 'legal_aid', 'Virginia Legal Aid (Virginia Law Help)', '(866) 534-5243', 'https://www.virginialawhelp.org/', 'VA', 'Free civil legal help for people with low income and for seniors. 866-LEGLAID connects you to your local legal aid office.', 'https://www.virginialawhelp.org/'),
+          ('lr_nrv_aaa', 'aaa', 'New River Valley Agency on Aging', '(540) 980-7720', 'https://www.nrvaoa.org/', 'Floyd County; Giles County; Montgomery County; Pulaski County; Radford city', 'Area Agency on Aging for Floyd, Giles, Montgomery and Pulaski counties and the City of Radford. Toll-free (866) 260-4417.', 'https://virginianavigator.org/node/21002'),
+          ('lr_us_elderfraud', 'other', 'National Elder Fraud Hotline (U.S. Dept. of Justice)', '(833) 372-8311', 'https://ovc.ojp.gov/program/stop-elder-fraud/providing-help-restoring-hope', 'US', '833-FRAUD-11. Weekdays 10am-6pm Eastern. Helps report fraud and find next steps. The real hotline never asks you to send money.', 'https://ovc.ojp.gov/program/stop-elder-fraud/providing-help-restoring-hope')
+          ON CONFLICT (id) DO NOTHING`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

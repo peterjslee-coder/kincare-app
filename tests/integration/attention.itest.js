@@ -348,7 +348,8 @@ describe("the shape the badge relies on", () => {
     // and an approval is not their decision to make.
     // v1.109.4 — `emptyWeeks` joined it. Zero for this user: they have no care recipient, so
     // there is no calendar to be empty.
-    expect(r).toEqual({ total: 0, reimbursements: 0, timeChanges: 0, timeChangeSessionId: null, careTasks: 0, approvals: 0, safetyFlags: 0, messages: 0, emptyWeeks: 0 });
+    // v1.110 — `financialConcerns` joined it: resources an admin shared with this leader.
+    expect(r).toEqual({ total: 0, reimbursements: 0, timeChanges: 0, timeChangeSessionId: null, careTasks: 0, approvals: 0, safetyFlags: 0, financialConcerns: 0, messages: 0, emptyWeeks: 0 });
     expect(Number.isFinite(r.total)).toBe(true);
   });
 });

@@ -1414,6 +1414,8 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
            for setting them up: what, when, how often, whose job. ─── */}
       {profile?.id && <CareTasksSection recipientId={profile.id} recipientFirstName={profile.first_name} />}
       {profile?.id && <CareEventsSection recipientId={profile.id} recipientFirstName={profile.first_name} />}
+      {/* v1.110 — legal & money readiness. Family only; the server refuses everyone else. */}
+      {profile?.id && (window.__currentRole || 'family') === 'family' && typeof LegalReadinessCard !== 'undefined' && <LegalReadinessCard careRecipientId={profile.id} />}
 
       {/* ─── 5. Care Notes (collapsible) ─── */}
       <div className="card" ref={notesCardRef}>

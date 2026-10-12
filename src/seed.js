@@ -160,6 +160,9 @@ async function seed({ force = false, demoOnly = false } = {}) {
         // table pointing at care_recipients or users needs a line here, or the parent
         // DELETE FK-fails and rolls back the whole single-transaction reseed.
         await trySavepoint(() => db.prepare(`DELETE FROM family_visits WHERE care_recipient_id IN (${crp})`).run(...demoCrIds));
+        // v1.110 — legal readiness (051_legal_readiness): both reference care_recipients.
+        await trySavepoint(() => db.prepare(`DELETE FROM legal_readiness_answers WHERE care_recipient_id IN (${crp})`).run(...demoCrIds));
+        await trySavepoint(() => db.prepare(`DELETE FROM financial_concerns WHERE care_recipient_id IN (${crp})`).run(...demoCrIds));
       }
 
       // Care recipients owned by demo family users
