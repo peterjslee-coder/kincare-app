@@ -9,6 +9,8 @@ const storage = require("../utils/storage"); // v1.91.0 — env-gated R2 offload
 // Documents Center (migration 050) — medical records are decided by ONE helper, never by
 // canAccessOwner below (whose team-member and admin shortcuts would leak them).
 const { medicalRole, logMedicalAudit } = require("../utils/medicalAccess");
+const { recipientDocRole, canViewRecipientDoc, shareableCaregivers } = require("../utils/recipientDocAccess");
+const { blockWhileImpersonating } = require("../middleware/noImpersonation");
 
 const router = express.Router();
 
@@ -123,7 +125,7 @@ async function logConsentAudit(db, { careRecipientId, actorId, actorRole, eventT
 // ═══════════════════════════════════════════════════════════
 // POST /api/documents/upload — Upload a document with AI classification
 // ═══════════════════════════════════════════════════════════
-router.post("/upload", authenticate, uploadDoc.single("document"), async (req, res) => {
+router.post("/upload", authenticate, checkDocAdmin, uploadDoc.single("document"), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: "No file uploaded" });
 
@@ -186,6 +188,11 @@ router.post("/upload", authenticate, uploadDoc.single("document"), async (req, r
     // Verify ownership: user must have access to the entity they're uploading for
     if (!(await canAccessOwner(db, req.user.id, req.user.role, owner_type, owner_id, req.isAdmin))) {
       return res.status(403).json({ error: "You do not have access to upload documents for this entity" });
+    }
+    // v1.110.1 — a care recipient's documents are the family's. A caregiver on the team can
+    // be shown a document; she cannot file one into the record.
+    if (owner_type === "care_recipient" && !req.isAdmin && !(await recipientDocRole(db, owner_id, req.user.id)).family) {
+      return res.status(403).json({ error: "Only the family's care team can add documents for this person." });
     }
 
     // Validate magic bytes match claimed MIME type (prevent disguised uploads)
@@ -339,6 +346,15 @@ router.get("/owner/:ownerType/:ownerId", authenticate, checkDocAdmin, async (req
     `;
     const params = [ownerType, ownerId];
 
+    // v1.110.1 — caregivers see only the documents the family shared with them by name.
+    if (ownerType === "care_recipient" && !req.isAdmin) {
+      const r = await recipientDocRole(db, ownerId, req.user.id);
+      if (!r.family) {
+        sql += ` AND id IN (SELECT document_id FROM recipient_doc_shares WHERE user_id = ?)`;
+        params.push(req.user.id);
+      }
+    }
+
     if (category) { sql += ` AND category = ?`; params.push(category); }
     if (status) { sql += ` AND status = ?`; params.push(status); }
 
@@ -456,7 +472,9 @@ router.post("/admin/:docId/review", authenticate, checkDocAdmin, requireAdmin, a
     // Audit log for consent/legal documents
     if ((doc.category === 'consent' || doc.category === 'legal') && doc.owner_type === 'care_recipient') {
       await logConsentAudit(db, {
-        recipientId: doc.owner_id,
+        // v1.110.1 — was `recipientId`, which the helper does not read: the NOT NULL insert
+        // failed inside its catch and every admin approve/reject audit row was lost.
+        careRecipientId: doc.owner_id,
         actorId: req.user.id,
         actorRole: 'admin',
         eventType: action === 'approve' ? 'document_approved' : 'document_rejected',
@@ -508,6 +526,10 @@ router.get("/:docId", authenticate, checkDocAdmin, async (req, res) => {
     if (doc.category === "medical") {
       const role = await medicalRole(db, doc.owner_id, req.user.id);
       if (!role.canView) return res.status(403).json({ error: "You do not have access to this document" });
+    } else if (doc.owner_type === "care_recipient") {
+      if (!(await canViewRecipientDoc(db, doc, req.user.id, req.isAdmin))) {
+        return res.status(403).json({ error: "You do not have access to this document" });
+      }
     } else if (!(await canAccessOwner(db, req.user.id, req.user.role, doc.owner_type, doc.owner_id, req.isAdmin))) {
       return res.status(403).json({ error: "You do not have access to this document" });
     }
@@ -531,15 +553,19 @@ router.get("/:docId", authenticate, checkDocAdmin, async (req, res) => {
 router.get("/:docId/download", authenticate, checkDocAdmin, async (req, res) => {
   try {
     const db = await getDb();
-    const doc = await db.prepare("SELECT file_data, file_name, mime_type, owner_type, owner_id, category FROM verified_documents WHERE id = ?").get(req.params.docId);
+    const doc = await db.prepare("SELECT id, file_data, file_name, mime_type, owner_type, owner_id, category FROM verified_documents WHERE id = ?").get(req.params.docId);
     if (!doc) return res.status(404).json({ error: "Document not found" });
     // Medical records open only through the passkey-gated, audited Documents Center route.
     if (doc.category === "medical") {
       return res.status(403).json({ error: "Open medical records from the Documents Center.", code: "MEDICAL_RECORD" });
     }
 
-    // Authorization check
-    if (!(await canAccessOwner(db, req.user.id, req.user.role, doc.owner_type, doc.owner_id, req.isAdmin))) {
+    // Authorization check — a care recipient's documents answer to recipientDocAccess (v1.110.1)
+    if (doc.owner_type === "care_recipient") {
+      if (!(await canViewRecipientDoc(db, doc, req.user.id, req.isAdmin))) {
+        return res.status(403).json({ error: "You do not have access to this document" });
+      }
+    } else if (!(await canAccessOwner(db, req.user.id, req.user.role, doc.owner_type, doc.owner_id, req.isAdmin))) {
       return res.status(403).json({ error: "You do not have access to this document" });
     }
 
@@ -562,7 +588,7 @@ router.get("/:docId/download", authenticate, checkDocAdmin, async (req, res) => 
 // ═══════════════════════════════════════════════════════════
 // DELETE /api/documents/:docId — Delete document (only if not approved)
 // ═══════════════════════════════════════════════════════════
-router.delete("/:docId", authenticate, async (req, res) => {
+router.delete("/:docId", authenticate, checkDocAdmin, async (req, res) => {
   try {
     const db = await getDb();
     const doc = await db.prepare("SELECT * FROM verified_documents WHERE id = ?").get(req.params.docId);
@@ -587,12 +613,20 @@ router.delete("/:docId", authenticate, async (req, res) => {
       return res.status(403).json({ error: "Cannot delete an approved document. Contact admin to revoke." });
     }
 
-    // Verify ownership
-    if (doc.uploaded_by !== req.user.id && req.user.role !== "admin") {
+    // Verify ownership. v1.110.1 — and for a care recipient's documents, the person must still
+    // be on the family side of the team: uploading something once is not a standing key.
+    // The owner, leader and member may remove any of them.
+    if (doc.owner_type === "care_recipient" && !req.isAdmin) {
+      const r = await recipientDocRole(db, doc.owner_id, req.user.id);
+      if (!r.family || !(doc.uploaded_by === req.user.id || r.canManage)) {
+        return res.status(403).json({ error: "You can't delete this document." });
+      }
+    } else if (doc.uploaded_by !== req.user.id && !req.isAdmin) {
       return res.status(403).json({ error: "You can only delete your own documents" });
     }
 
     await db.prepare("DELETE FROM verified_documents WHERE id = ?").run(req.params.docId);
+    await db.prepare("DELETE FROM recipient_doc_shares WHERE document_id = ?").run(req.params.docId);
     // v1.91.0 — deliberately NOT deleting the R2 object here: consent uploads
     // dual-write the same blob marker into authorization_documents under the
     // same id, so the object may still be referenced. Orphaned objects are
@@ -657,14 +691,14 @@ router.post("/:docId/re-verify", authenticate, checkDocAdmin, requireAdmin, asyn
 // ═══════════════════════════════════════════════════════════
 // GET /api/documents/audit/:recipientId — Get consent audit trail
 // ═══════════════════════════════════════════════════════════
-router.get("/audit/:recipientId", authenticate, async (req, res) => {
+router.get("/audit/:recipientId", authenticate, checkDocAdmin, async (req, res) => {
   try {
     const db = await getDb();
     const { event_type } = req.query;
     const recipientId = req.params.recipientId;
 
     // Authorization check — must have access to this care recipient
-    if (!(await canAccessOwner(db, req.user.id, req.user.role, "care_recipient", recipientId, req.isAdmin))) {
+    if (!req.isAdmin && !(await recipientDocRole(db, recipientId, req.user.id)).family) {
       return res.status(403).json({ error: "You do not have access to this care recipient's audit trail" });
     }
 
@@ -740,5 +774,85 @@ router.get("/audit/:recipientId", authenticate, async (req, res) => {
 
 // Export audit logger for use in other routes
 router.logConsentAudit = logConsentAudit;
+
+// ═══════════════════════════════════════════════════════════
+// v1.110.1 — sharing ONE document with ONE caregiver
+// Pete, 10/12: "Caregivers should not be able to open any legal documents unless the careteam
+// explicitly allows it." The owner, the leader or the member decides, document by document.
+// ═══════════════════════════════════════════════════════════
+async function loadShareableDoc(db, docId) {
+  const doc = await db.prepare(
+    "SELECT id, owner_type, owner_id, category, document_type FROM verified_documents WHERE id = ?"
+  ).get(docId);
+  if (!doc || doc.owner_type !== "care_recipient" || doc.category === "medical") return null;
+  return doc;
+}
+
+router.get("/:docId/shares", authenticate, async (req, res) => {
+  try {
+    const db = await getDb();
+    const doc = await loadShareableDoc(db, req.params.docId);
+    if (!doc) return res.status(404).json({ error: "Document not found" });
+    const r = await recipientDocRole(db, doc.owner_id, req.user.id);
+    if (!r.canManage) return res.status(403).json({ error: "Only the care team leader can share documents with a caregiver." });
+    const caregivers = await shareableCaregivers(db, doc.owner_id);
+    const shared = await db.prepare("SELECT user_id, granted_at FROM recipient_doc_shares WHERE document_id = ?").all(doc.id);
+    const byId = new Map(shared.map((s) => [s.user_id, s.granted_at]));
+    res.json({
+      caregivers: caregivers.map((c) => ({
+        userId: c.id,
+        name: [c.first_name, c.last_name].filter(Boolean).join(" ") || "Caregiver",
+        allowed: byId.has(c.id),
+        allowedAt: byId.get(c.id) || null,
+      })),
+    });
+  } catch (err) {
+    console.error("Document shares read error:", err);
+    res.status(500).json({ error: "Failed to load who can see this document" });
+  }
+});
+
+router.put("/:docId/shares/:userId", authenticate, blockWhileImpersonating("share a document"), async (req, res) => {
+  try {
+    const db = await getDb();
+    const allow = req.body?.allow === true;
+    if (typeof req.body?.allow !== "boolean") return res.status(400).json({ error: "allow must be true or false" });
+    const doc = await loadShareableDoc(db, req.params.docId);
+    if (!doc) return res.status(404).json({ error: "Document not found" });
+    const r = await recipientDocRole(db, doc.owner_id, req.user.id);
+    if (!r.canManage) return res.status(403).json({ error: "Only the care team leader can share documents with a caregiver." });
+    const target = req.params.userId;
+    const eligible = (await shareableCaregivers(db, doc.owner_id)).some((c) => c.id === target);
+    if (!eligible) return res.status(400).json({ error: "You can share with caregivers on this care team, or who have visited." });
+
+    const existing = await db.prepare(
+      "SELECT 1 FROM recipient_doc_shares WHERE document_id = ? AND user_id = ?"
+    ).get(doc.id, target);
+    if (allow && existing) return res.status(409).json({ error: "Already shared with this caregiver.", allowed: true });
+    if (!allow && !existing) return res.status(409).json({ error: "Not shared with this caregiver.", allowed: false });
+
+    if (allow) {
+      await db.prepare(`
+        INSERT INTO recipient_doc_shares (document_id, user_id, care_recipient_id, granted_by)
+        VALUES (?, ?, ?, ?) ON CONFLICT (document_id, user_id) DO NOTHING
+      `).run(doc.id, target, doc.owner_id, req.user.id);
+    } else {
+      await db.prepare("DELETE FROM recipient_doc_shares WHERE document_id = ? AND user_id = ?").run(doc.id, target);
+    }
+    const who = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(target);
+    await logConsentAudit(db, {
+      careRecipientId: doc.owner_id,
+      actorId: req.user.id,
+      actorRole: "family",
+      eventType: allow ? "document_shared_caregiver" : "document_unshared_caregiver",
+      description: `${String(doc.document_type).replace(/_/g, " ")} ${allow ? "shared with" : "no longer shared with"} ${[who?.first_name, who?.last_name].filter(Boolean).join(" ") || "a caregiver"}`,
+      metadata: { documentId: doc.id, caregiverUserId: target },
+    });
+    res.json({ allowed: allow });
+  } catch (err) {
+    console.error("Document share error:", err);
+    res.status(500).json({ error: "Failed to change who can see this document" });
+  }
+});
 
 module.exports = router;

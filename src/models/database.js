@@ -2908,6 +2908,23 @@ async function initializeDatabase() {
           ON CONFLICT (id) DO NOTHING`,
       ],
     },
+    {
+      // v1.110.1 — Pete, 10/12: "Caregivers should not be able to open any legal documents
+      // unless the careteam explicitly allows it." One row = one document shared with one
+      // caregiver, by the owner, the leader or the member. See src/utils/recipientDocAccess.js.
+      id: "053_recipient_doc_shares",
+      statements: [
+        `CREATE TABLE IF NOT EXISTS recipient_doc_shares (
+          document_id TEXT NOT NULL,
+          user_id TEXT NOT NULL,
+          care_recipient_id TEXT NOT NULL,
+          granted_by TEXT NOT NULL,
+          granted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          PRIMARY KEY (document_id, user_id)
+        )`,
+        `CREATE INDEX IF NOT EXISTS idx_recipient_doc_shares_recipient ON recipient_doc_shares (care_recipient_id)`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

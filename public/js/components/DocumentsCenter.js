@@ -71,6 +71,8 @@ const DocumentsCenter = window.DocumentsCenter = ({ onNavigate }) => {
   const [audit, setAudit] = React.useState(null);
   const [busy, setBusy] = React.useState(false);
   const [viewer, setViewer] = React.useState(null);     // { url, mime, name, doc, kind }
+  // v1.110.1 — which caregivers may open ONE legal document. { doc, list, busy }
+  const [shareSheet, setShareSheet] = React.useState(null);
   const [reviewDoc, setReviewDoc] = React.useState(null);
   const [ackTicked, setAckTicked] = React.useState(false);
   const [upload, setUpload] = React.useState(null);     // { section: 'medical'|'legal', type, file }
@@ -179,6 +181,37 @@ const DocumentsCenter = window.DocumentsCenter = ({ onNavigate }) => {
       const saved = await saveBlob(await res.blob(), doc.fileName || 'medical-record');
       if (!saved) showToast("Couldn't save the file on this device.", 'error');
     } catch { showToast("Couldn't download this record.", 'error'); }
+  };
+
+  // v1.110.1 — Pete: "Caregivers should not be able to open any legal documents unless the
+  // careteam explicitly allows it." The leader shares a document with a caregiver one by one.
+  const openShares = async (doc) => {
+    setShareSheet({ doc, list: null, busy: false });
+    try {
+      const res = await apiFetch(`/api/documents/${doc.id}/shares`);
+      if (!res?.ok) { setShareSheet(null); showToast(await dcErrorText(res, "Couldn't load caregiver access."), 'error'); return; }
+      const data = await res.json();
+      setShareSheet({ doc, list: data.caregivers || [], busy: false });
+    } catch { setShareSheet(null); showToast("Couldn't load caregiver access. Check your connection and try again.", 'error'); }
+  };
+  const toggleShare = async (cg) => {
+    if (!shareSheet) return;
+    const allow = !cg.allowed;
+    setShareSheet((s) => s && { ...s, busy: true });
+    try {
+      const res = await apiFetch(`/api/documents/${shareSheet.doc.id}/shares/${cg.userId}`, { method: 'PUT', body: JSON.stringify({ allow }) });
+      // 409 = it is already in the state we asked for; take the answer and move on.
+      if (res?.ok || res?.status === 409) {
+        setShareSheet((s) => s && { ...s, busy: false, list: s.list.map((x) => x.userId === cg.userId ? { ...x, allowed: allow } : x) });
+        showToast(allow ? `${cg.name} can now open this document.` : `${cg.name} can no longer open this document.`, 'success');
+      } else {
+        setShareSheet((s) => s && { ...s, busy: false });
+        showToast(await dcErrorText(res, "Couldn't change caregiver access."), 'error');
+      }
+    } catch {
+      setShareSheet((s) => s && { ...s, busy: false });
+      showToast("Couldn't change caregiver access. Check your connection and try again.", 'error');
+    }
   };
 
   const openLegal = async (doc) => {
@@ -435,6 +468,7 @@ const DocumentsCenter = window.DocumentsCenter = ({ onNavigate }) => {
                 <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{d.file_name} · {dcWhen(d.created_at)} · {String(d.status || '').replace(/_/g, ' ')}</div>
                 <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
                   <button style={dcBtn()} onClick={() => openLegal(d)}>Open</button>
+                  {med && med.me && med.me.canManageAccess && <button style={dcBtn()} onClick={() => openShares(d)}>Caregiver access</button>}
                   {d.status !== 'approved' && <button style={dcBtn()} onClick={() => deleteDoc(d.id, 'legal')}>Delete</button>}
                 </div>
               </div>
@@ -458,6 +492,28 @@ const DocumentsCenter = window.DocumentsCenter = ({ onNavigate }) => {
               <div style={{ color: 'var(--text-tertiary)', fontSize: 12 }}>{dcWhen(e.createdAt)}</div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* ── Caregiver access for one legal document (v1.110.1) ── */}
+      {shareSheet && (
+        <div className="modal-overlay" onClick={() => !shareSheet.busy && setShareSheet(null)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>
+            <button className="modal-close" onClick={() => setShareSheet(null)} aria-label="Close">✕</button>
+            <div className="modal-header" style={{ fontSize: 17 }}>Caregiver access — {dcTypeLabel(shareSheet.doc.document_type)}</div>
+            <p style={muted}>Legal documents are for the family's care team. A caregiver can open this one only if you allow it here.</p>
+            {!shareSheet.list && <p style={muted}>Loading…</p>}
+            {shareSheet.list && shareSheet.list.length === 0 && <p style={muted}>No caregivers on this care team yet.</p>}
+            {shareSheet.list && shareSheet.list.map((cg) => (
+              <div key={cg.userId} style={{ ...row, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                <div>
+                  <div style={{ fontWeight: 700 }}>{cg.name}</div>
+                  <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{cg.allowed ? 'Can open this document' : 'Cannot open this document'}</div>
+                </div>
+                <button style={dcBtn(cg.allowed ? 'secondary' : 'primary')} disabled={shareSheet.busy} onClick={() => toggleShare(cg)}>{cg.allowed ? 'Remove' : 'Allow'}</button>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

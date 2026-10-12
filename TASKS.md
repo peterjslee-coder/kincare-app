@@ -4,7 +4,7 @@
 
 ## Oct 12 2026 — triage (Pete: feedback + Documents Center + legal insight)
 
-**v1.110.0 on staging** (`68237166`). Prod waits for Pete.
+**v1.110.1 on staging.** Prod waits for Pete.
 
 Shipped in v1.110.0:
 - [x] **9d286a8a** — the cancellation-fee push opened Home. The fee pushes had no `page` and no router branch. They now open `CancelFeeSheet` (family: dispute; caregiver: waive). There are Needs-you rows for both, and a repeat answers 409. Fixed in the same sweep: every dispute answered 500 *after* saving (`notifyAdmins` had no promise); session pushes with no branch now open the visit; a caregiver can see a fee after declining a late time change.
@@ -24,9 +24,13 @@ Shipped in v1.110.0:
 - [x] `apiFieldContract.itest.js`: fixture date `2026-10-01` was a time bomb: it has failed since 10/2 and would have turned CI red on the next push. It now uses a relative date.
 
 ### P1 — found while building, not yet fixed
-- [ ] **Caregivers on the care team can open POA, Healthcare POA, consent and legal docs.** `documents.js` `canAccessOwner` allows any team member and any share. Decide who should see legal docs, then use one helper, like `medicalAccess.js`.
-- [ ] `documents.js`: `/upload` and `/audit/:id` skip `checkDocAdmin`, so `req.isAdmin` is undefined there. Generic DELETE checks only the uploader.
-- [ ] The admin doc review calls `logConsentAudit({ recipientId })`, but the column is `careRecipientId`. Approve/reject audit rows are silently lost.
+- [x] **Caregivers on the care team could open POA, Healthcare POA, consent and legal docs.** FIXED v1.110.1. Pete 10/12: "Caregivers should not be able to open any legal documents unless the careteam explicitly allows it." Every non-medical document a care recipient owns now answers to `src/utils/recipientDocAccess.js`:
+  - The family side of the team can see them.
+  - A caregiver sees only documents the owner, leader or member has shared with her one by one, via `recipient_doc_shares` (migration 053) and "Caregiver access" in the Documents Center.
+  - Admin access stays, for verification.
+  - Caregivers can no longer upload into the record or read the consent audit trail.
+  - Also fixed in the same change: `/upload`, `/audit` and DELETE now run `checkDocAdmin`; DELETE requires current family access; the admin review audit key bug. Test: `legalDocAccess.itest.js` (11).
+  - ⚠️ A family member who is ALSO a registered caregiver is treated as a caregiver, same as for medical records. The leader can share documents with her individually.
 - [ ] There is no admin screen for fee disputes, so the `cancel_fee_disputed` push has nowhere to open.
 - [ ] The time-change late-fee path sends no fee pushes. The Needs-you row covers it for now.
 
