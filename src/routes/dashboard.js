@@ -11,7 +11,7 @@ const { computeJobConflicts, computeMatchScore } = require("../utils/jobMatching
 const { calculateSessionCost, SURCHARGE_CAREGIVER_SHARE, SURCHARGE_PLATFORM_SHARE } = require("../utils/rateCalculator");
 const { scoreMatch } = require("../utils/aiMatching");
 const { expireStaleProposals } = require("../utils/proposals");
-const { getPlatformFeePercent } = require("../utils/platformFee");
+const { getPlatformFeePercent, loadFeeTable } = require("../utils/platformFee");
 const { phaseFor: checkrPhaseFor } = require("../constants/checkrStatus");
 const { noteAccess } = require("../utils/noteVisibility"); // v1.106.38, v1.107.2
 const { breakBudgetMinutes } = require("../utils/visitBreaks"); // v1.106.41
@@ -55,8 +55,8 @@ async function familyDashboard(db, userId, res) {
     expireStaleProposals(db, null, null).catch(() => {});
 
     // Parallel batch 1: fee + all three recipient sources at once
-    const [feePercent, ownedRecipients, sharedRecipients, teamRecipients] = await Promise.all([
-      getPlatformFeePercent(db),
+    const [feeTable, ownedRecipients, sharedRecipients, teamRecipients] = await Promise.all([
+      loadFeeTable(db), // v1.111.0 — per-family special rate
       db.prepare("SELECT * FROM care_recipients WHERE family_user_id = ?").all(userId),
       db.prepare(`
         SELECT cr.* FROM care_recipient_shares crs
@@ -319,8 +319,9 @@ async function familyDashboard(db, userId, res) {
         unreadNotifications: (unreadCount && unreadCount.count) || 0,
         assignedCaregivers: (assignedCount && assignedCount.count) || 0,
       },
-      platformFeePercent: feePercent,
+      platformFeePercent: feeTable.pctFor({ care_recipient_id: (recipients[0] || {}).id, family_user_id: userId }),
       upcomingSessions: upcoming.map((s) => {
+        const feePercent = feeTable.pctFor(s);
         const familyPrice = parseFloat(s.estimated_cost) || 0;
         const fee = Math.round(familyPrice * (feePercent / 100) * 100) / 100;
         return {

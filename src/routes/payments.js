@@ -56,7 +56,7 @@ function getStripe() {
 // would have failed; the numbers would simply have stopped matching.
 //
 // Latent while the setting says 20, which is the default. Not a reason to leave it.
-const { getPlatformFeePercent } = require("../utils/platformFee");
+const { getPlatformFeePercent, lockSessionFeePercent } = require("../utils/platformFee");
 const STRIPE_PUBLISHABLE_KEY = process.env.STRIPE_PUBLISHABLE_KEY || process.env.stripe_publishable_key || "";
 const BASE_URL = process.env.BASE_URL || process.env.base_url || "https://yourinplace.com";
 const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || process.env.stripe_webhook_secret || "";
@@ -1158,7 +1158,7 @@ router.post("/checkout", requireRole("family"), requirePaymentsEnabled, async (r
   // Platform fee: 20% of all caregiver compensation (pay + tip) + 25% of short-notice surcharge
   // Tips are compensation — without this, families could game the system with low rates + big tips.
   // Caregiver still gets exact amounts; the 20% on tips is added ON TOP for the family.
-  const feePercent = await getPlatformFeePercent(db);
+  const feePercent = await getPlatformFeePercent(db, { session }); // v1.111.0 — per family
   let platformFeeCents = Math.round((caregiverPayCents + tipCents) * feePercent / 100);
   if (surchargeCents > 0) {
     platformFeeCents += Math.round(surchargeCents * SURCHARGE_PLATFORM_SHARE);
@@ -1260,6 +1260,7 @@ router.post("/checkout", requireRole("family"), requirePaymentsEnabled, async (r
       grandTotalCents / 100, platformFeeCents / 100, caregiverTotalCents / 100,
       checkoutSession.id, tipCents, tipReason || null
     );
+    await lockSessionFeePercent(db, sessionId, feePercent); // v1.111.0
 
     console.log(`💳 Checkout created: session=${sessionId} caregiver=$${(caregiverTotalCents/100).toFixed(2)} platform=$${(platformFeeCents/100).toFixed(2)} total=$${(grandTotalCents/100).toFixed(2)}`);
 
@@ -1847,7 +1848,7 @@ async function processOverduePayments(pushFn) {
         const caregiverTotalCents = caregiverPayCents + tipCents;
 
         // Platform fee: 20% of caregiver pay + tip (tips are compensation)
-        const feePercent = await getPlatformFeePercent(db);
+        const feePercent = await getPlatformFeePercent(db, { session: s }); // v1.111.0 — per family
         const platformFeeCents = Math.round((caregiverPayCents + tipCents) * feePercent / 100);
 
         // Family pays caregiver + platform fee. Stripe's cut comes out of InPlace's 20%.
@@ -1920,6 +1921,7 @@ async function processOverduePayments(pushFn) {
         // chosenPM.card / chosenPM.us_bank_account directly, so a Link payment would have
         // written a blank brand and last4 onto the family's receipt.
         charged = intent;
+        await lockSessionFeePercent(db, s.id, feePercent); // v1.111.0
         const pmBrand = chosenPM.brand;
         const pmLast4 = chosenPM.last4;
         const paymentId = uuid();
@@ -2233,7 +2235,8 @@ router.post("/manual", requireRole("family"), requirePaymentsEnabled, async (req
 
     // Same fee structure as session payments:
     // 20% platform fee on caregiver amount, Stripe's 2.9%+30¢ comes out of InPlace's cut
-    const feePercent = await getPlatformFeePercent(db);
+    // v1.111.0 — the payer's special rate, if Pete set one, else the default.
+    const feePercent = await getPlatformFeePercent(db, { familyUserId: req.user.id });
     const platformFeeCents = Math.round(caregiverAmountCents * feePercent / 100);
     const grandTotalCents = caregiverAmountCents + platformFeeCents;
 

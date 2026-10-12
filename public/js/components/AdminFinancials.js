@@ -25,6 +25,8 @@ const AdminFinancials = window.AdminFinancials = () => {
   const [feeInput, setFeeInput] = useState('20');
   const [feeSaving, setFeeSaving] = useState(false);
   const [feeMsg, setFeeMsg] = useState('');
+  // v1.111.0 — families on a special service fee (set per family in People)
+  const [specialRates, setSpecialRates] = useState([]);
   // Payment kill switch
   const [paymentsEnabled, setPaymentsEnabled] = useState(false);
   const [paymentToggleLoading, setPaymentToggleLoading] = useState(false);
@@ -50,6 +52,11 @@ const AdminFinancials = window.AdminFinancials = () => {
         apiFetch('/api/admin/financials/time-audit'),
         apiFetch('/api/admin/financials/daily-snapshot'),
       ]);
+      // v1.111.0 — separate so an older server without the route can't fail the whole tab.
+      apiFetch('/api/admin/financials/special-rates')
+        .then(r => (r && r.ok ? r.json() : null))
+        .then(d => { if (d) setSpecialRates(d.families || []); })
+        .catch(() => {});
       if (sumRes?.ok) setSummary(await sumRes.json());
       if (brkRes?.ok) setBreakdown(await brkRes.json());
       if (insRes?.ok) { const d = await insRes.json(); setInsights(d.insights || []); }
@@ -750,9 +757,27 @@ const AdminFinancials = window.AdminFinancials = () => {
         <div className="card-header"><span className="card-icon">⚙️</span>Platform Fee Rate</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <div style={{ fontSize: 13, color: 'var(--text-secondary)', flex: '1 1 200px' }}>
-            The platform takes <strong>{feePercent}%</strong> of every session. Families pay the full rate, caregivers receive <strong>{100 - feePercent}%</strong>.
+            The default service fee is <strong>{feePercent}%</strong>, added on top of the caregiver's pay. The caregiver keeps her full rate; card processing comes out of the fee.
             <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>
-              Example: $100 session → Caregiver gets ${100 - feePercent}, Platform gets ${feePercent}
+              Example: $100 of care → caregiver gets $100, family pays ${100 + feePercent}, InPlace gets ${feePercent} before card fees
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 10 }}>
+              <strong>Special rates</strong> {specialRates.length === 0 ? (
+                <span style={{ color: 'var(--text-tertiary)' }}>— none. Set one on a family in People → open the person → Service Fee.</span>
+              ) : (
+                <span style={{ color: 'var(--text-tertiary)' }}>— these families pay their own rate instead of {feePercent}%:</span>
+              )}
+              {specialRates.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 6 }}>
+                  {specialRates.map(f => (
+                    <div key={f.id} style={{ display: 'flex', gap: 8, alignItems: 'baseline', flexWrap: 'wrap' }}>
+                      <span style={{ padding: '1px 8px', borderRadius: 10, background: 'rgba(78,205,196,.15)', color: 'var(--role-color)', fontWeight: 700, fontSize: 12 }}>{f.feePercent}%</span>
+                      <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{f.name || f.email}</span>
+                      <span style={{ color: 'var(--text-tertiary)' }}>{f.completedVisits} completed visit{f.completedVisits === 1 ? '' : 's'}{f.note ? ` · ${f.note}` : ''}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

@@ -2962,7 +2962,7 @@ async function initializeDatabase() {
       // iPAi key, passkeys, no care decisions, no selling), Cloudflare R2, HBNR breach notice,
       // and replaces the "non-confidential" User Contributions clause with Private Care
       // Content. Published as a migration so staging and prod get the same words from git;
-      // the text lives in src/legal/*.txt. Every user re-accepts through /api/legal/pending.
+      // the text lives in src/legal/<doc>_<version>.txt. Every user re-accepts through /api/legal/pending.
       id: "054_legal_docs_2026_10_12",
       statements: legalPublishStatements("2026-10-12", [
         { docType: "privacy", fallbackTitle: "Privacy Policy", file: "privacy_2026-10-12.txt",
@@ -2970,6 +2970,34 @@ async function initializeDatabase() {
         { docType: "terms", fallbackTitle: "Terms of Use", file: "terms_2026-10-12.txt",
           summary: "Adds \"Acting for Someone Else\": what you confirm when you manage care, share information or make choices for a care recipient. Care profiles, notes, messages, documents and medical records are now Private Care Content — confidential, used only to run the service, never sold. Clarifies that InPlace does not review medical records or use them for care decisions, and that iPAi suggestions are not medical advice." },
       ]),
+    },
+    {
+      // v1.111.0 — per-family special service fee. Pete, 10/12: friends who bring their own
+      // caregivers pay a reduced fee; "20% as a default unless I go in and change their rate to
+      // lower. Set the floor at 5%." See src/utils/platformFee.js for the resolution order.
+      //
+      // care_sessions.platform_fee_percent is the percent LOCKED onto a visit when money first
+      // moves for it. Every visit that has already moved money is backfilled with today's
+      // global percent, so tagging a family later can never re-price their history.
+      id: "055_special_fee_rate",
+      statements: [
+        `ALTER TABLE users ADD COLUMN IF NOT EXISTS special_fee_percent REAL`,
+        `ALTER TABLE users ADD COLUMN IF NOT EXISTS special_fee_set_at TIMESTAMPTZ`,
+        `ALTER TABLE users ADD COLUMN IF NOT EXISTS special_fee_set_by TEXT`,
+        `ALTER TABLE users ADD COLUMN IF NOT EXISTS special_fee_note TEXT`,
+        `ALTER TABLE users DROP CONSTRAINT IF EXISTS users_special_fee_floor`,
+        `ALTER TABLE users ADD CONSTRAINT users_special_fee_floor CHECK (special_fee_percent IS NULL OR (special_fee_percent >= 5 AND special_fee_percent <= 50))`,
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS platform_fee_percent REAL`,
+        `UPDATE care_sessions SET platform_fee_percent = COALESCE(
+            (SELECT CASE WHEN value ~ '^[0-9]+(\\.[0-9]+)?$' THEN value::real END
+               FROM platform_settings WHERE key = 'platform_fee_percent'),
+            20)
+          WHERE platform_fee_percent IS NULL
+            AND (status = 'completed'
+                 OR payment_status IN ('paid', 'authorized', 'pending', 'waived')
+                 OR stripe_payment_intent_id IS NOT NULL
+                 OR EXISTS (SELECT 1 FROM payments p WHERE p.session_id = care_sessions.id))`,
+      ],
     },
   ];
   for (const m of MIGRATIONS_V2) {

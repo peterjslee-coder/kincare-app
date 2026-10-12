@@ -338,6 +338,64 @@ router.put("/users/:id/companion-access", async (req, res) => {
   }
 });
 
+// ─── PUT /api/admin/users/:id/special-fee — per-family service fee (v1.111.0) ───
+//
+// Pete, 10/12: friends who bring their own caregivers pay a reduced service fee. "It's 20% as
+// a default unless I go in and change their rate to lower. Set the floor at 5%."
+//
+// Body: { percent: number | null, note?: string }. null (or "") clears it back to the default.
+// The rate applies to visits for every care recipient this account owns, from the next time
+// money moves on each visit; a visit already held or paid keeps the percent it was priced at
+// (care_sessions.platform_fee_percent). See src/utils/platformFee.js.
+router.put("/users/:id/special-fee", async (req, res) => {
+  try {
+    const db = await getDb();
+    const { getGlobalPlatformFeePercent, SPECIAL_FEE_FLOOR_PERCENT } = require("../../utils/platformFee");
+    const user = await db.prepare(
+      "SELECT id, email, role, first_name, last_name, is_demo, special_fee_percent FROM users WHERE id = ?"
+    ).get(req.params.id);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    const raw = req.body ? req.body.percent : undefined;
+    const note = typeof (req.body && req.body.note) === "string" ? req.body.note.trim().slice(0, 500) : null;
+    const clearing = raw === null || raw === "" || raw === undefined;
+    const globalPct = await getGlobalPlatformFeePercent(db);
+
+    let pct = null;
+    if (!clearing) {
+      pct = Math.round(Number(raw) * 100) / 100;
+      if (!Number.isFinite(pct)) return res.status(400).json({ error: "Enter a percentage, e.g. 7." });
+      if (pct < SPECIAL_FEE_FLOOR_PERCENT) {
+        return res.status(400).json({ error: `The floor is ${SPECIAL_FEE_FLOOR_PERCENT}%. Below that, card processing costs more than the fee brings in.` });
+      }
+      if (pct >= globalPct) {
+        return res.status(400).json({ error: `A special rate must be lower than the default ${globalPct}%. Clear it to go back to the default.` });
+      }
+    }
+
+    await db.prepare(`
+      UPDATE users SET special_fee_percent = ?, special_fee_set_at = NOW(), special_fee_set_by = ?, special_fee_note = ?
+      WHERE id = ?
+    `).run(pct, req.user.id, clearing ? null : note, user.id);
+
+    await logAdminAction(req, clearing ? "special_fee_cleared" : "special_fee_set", "user", user.id, {
+      email: user.email, from: user.special_fee_percent == null ? null : Number(user.special_fee_percent),
+      to: pct, defaultPercent: globalPct, note,
+    });
+
+    res.json({
+      success: true,
+      special_fee_percent: pct,
+      default_fee_percent: globalPct,
+      effective_fee_percent: pct == null ? globalPct : pct,
+    });
+  } catch (err) {
+    captureException(err, { where: "PUT /api/admin/users/:id/special-fee" });
+    console.error("Admin special-fee error:", err);
+    res.status(500).json({ error: "Failed to update the service fee" });
+  }
+});
+
 // ─── PUT /api/admin/users/:id/verify-email — Admin override: toggle email verification ───
 router.put("/users/:id/verify-email", async (req, res) => {
   try {

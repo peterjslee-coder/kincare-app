@@ -53,14 +53,35 @@ describe("...and the code still backs it", () => {
   // dial and the family is quoted one fee and charged another. This test would have passed
   // throughout, because it was checking the literal rather than the promise.
   //
-  // The promise on the splash page is "a flat 20% for everyone". Two things have to hold for
+  // The promise on the splash page was "a flat 20% for everyone". Two things had to hold for
   // that sentence to be true, and they are different things:
-  test("the fee is FLAT — one number for everyone, not a per-user or per-tier lookup", () => {
-    // The word "flat" is about who, not about where the number is stored. getPlatformFeePercent
-    // takes only a db handle: there is no user, no tier, nothing to vary it by.
+  // v1.111.0 — Pete, 10/12: friends who bring their own caregivers can be given a LOWER
+  // service fee, set by hand in admin People (floor 5%). So "one number for everyone" is no
+  // longer the code, and the copy stopped saying it: it now promises the fee "never goes up
+  // for anyone" and that "no algorithm sets anyone's price". These are the two halves that
+  // keep that sentence true.
+  test("the posted fee is a ceiling — a special rate can only be lower, never higher", () => {
     const feeSrc = readStripped("src/utils/platformFee.js");
-    expect(feeSrc).toMatch(/async function getPlatformFeePercent\(db\)/);
-    expect(feeSrc).not.toMatch(/userId|user_id|tier|caregiverId/);
+    // With no context it is still the one posted number.
+    expect(feeSrc).toMatch(/async function getPlatformFeePercent\(db, ctx\) \{\s*if \(!ctx\) return getGlobalPlatformFeePercent\(db\);/);
+    const route = readStripped("src/routes/admin/userFlags.js");
+    expect(route).toMatch(/if \(pct >= globalPct\)/);
+    expect(route).toMatch(/pct < SPECIAL_FEE_FLOOR_PERCENT/);
+    // ...and the database refuses anything outside 5–50 even if a route forgets.
+    expect(read("src/models/database.js")).toMatch(/CHECK \(special_fee_percent IS NULL OR \(special_fee_percent >= 5/);
+  });
+
+  test("no code sets a special rate except a person in admin — nothing computes one", () => {
+    const writers = [];
+    const walk = (dir) => {
+      for (const ent of fs.readdirSync(path.join(__dirname, "..", dir), { withFileTypes: true })) {
+        const rel = `${dir}/${ent.name}`;
+        if (ent.isDirectory()) walk(rel);
+        else if (ent.name.endsWith(".js") && /SET[^;`]*special_fee_percent\s*=/.test(readStripped(rel))) writers.push(rel);
+      }
+    };
+    walk("src");
+    expect(writers).toEqual(["src/routes/admin/userFlags.js"]);
   });
 
   test("...and it is ONE number — no module keeps its own copy any more", () => {
@@ -74,7 +95,8 @@ describe("...and the code still backs it", () => {
   // wreak havoc." So the copy reads the fee instead of restating it, and this is the gate.
   test("the public copy renders the fee rather than restating it", () => {
     const splash = readStripped("public/js/components/SplashPage.js");
-    expect(splash).toMatch(/a flat \{feePercent\}% for everyone/);
+    expect(splash).toMatch(/a flat \{feePercent\}%, and it never goes up for anyone/);
+    expect(splash).toMatch(/no algorithm sets anyone's price/);
     // v1.107.x — Pete's fee rule: the caregiver keeps her full rate and the fee goes ON TOP.
     // "Caregivers keep 80%" was never true under that rule (she gets 100/120 of what is paid),
     // so the copy now says what actually happens, still reading the fee.

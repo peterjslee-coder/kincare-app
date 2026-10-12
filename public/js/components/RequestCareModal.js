@@ -413,13 +413,16 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
           const params = new URLSearchParams({ scheduledDate: date, scheduledTime: time, durationHours: duration });
           if (cgId) params.set('caregiverId', cgId);
           if (proposedRate && parseFloat(proposedRate) > 0) params.set('proposedRate', proposedRate);
+          // v1.111.0 — the service fee can be special to the family that owns this recipient.
+          const crForFee = selectedRecipientId || (careRecipients.length > 0 ? careRecipients[0].id : '');
+          if (crForFee) params.set('careRecipientId', crForFee);
           const res = await apiFetch(`/api/sessions/cost-preview?${params}`);
           if (res?.ok) setCostPreview(await res.json());
         } catch (err) { console.error('Cost preview error:', err); }
       };
       fetchCost();
     }
-  }, [step, selectedCaregiver, proposedRate]);
+  }, [step, selectedCaregiver, proposedRate, selectedRecipientId]);
 
   // ─── Date helpers ───
   const tz = typeof TimezoneHelper !== 'undefined' ? (TimezoneHelper.DEFAULT_TZ || 'America/New_York') : 'America/New_York';

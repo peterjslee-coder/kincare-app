@@ -518,9 +518,9 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
             </div>
             <p style={{ fontSize: '14.5px', color: 'var(--text-secondary)', lineHeight: 1.7, marginBottom: '12px' }}>
               Caregivers name their own rate, and that is the rate they are paid. Our commission is
-              a flat {feePercent}% for everyone. It does not go up because you booked at 6pm on a Sunday,
-              because you have booked before, or because something decided you would probably pay
-              more. There is no surge pricing and no personalized pricing.
+              a flat {feePercent}%, and it never goes up for anyone: not because you booked at 6pm on a Sunday,
+              not because you have booked before, and not because something decided you would probably pay
+              more. There is no surge pricing, and no algorithm sets anyone's price.
             </p>
             <p style={{ fontSize: '14.5px', color: 'var(--text-secondary)', lineHeight: 1.7, marginBottom: '12px' }}>
               One exception, stated plainly: visits booked inside 24 hours carry a short-notice

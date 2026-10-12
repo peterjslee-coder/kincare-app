@@ -40,6 +40,78 @@ const DocThumbnail = ({ docId, label }) => {
 
 // ─── Admin / Superuser Dashboard ───
 // Only visible to users with is_admin = 1. Layered on top of normal family account.
+// ─── v1.111.0 — SpecialFeeEditor: a family's own service fee ───
+// Pete, 10/12: "20% as a default unless I go in and change their rate to lower. Set the floor
+// at 5%." The server enforces both; this only collects the number. Applies to visits for every
+// care recipient the account owns, from the next time money moves on each visit.
+const SPECIAL_FEE_FLOOR = 5;
+const SpecialFeeEditor = ({ user, onSaved }) => {
+  const { showToast } = useToast();
+  const current = user && user.special_fee_percent != null ? Number(user.special_fee_percent) : null;
+  const [input, setInput] = React.useState(current != null ? String(current) : '');
+  const [note, setNote] = React.useState((user && user.special_fee_note) || '');
+  const [saving, setSaving] = React.useState(false);
+  const [err, setErr] = React.useState('');
+
+  const save = async (clear) => {
+    setErr('');
+    let percent = null;
+    if (!clear) {
+      percent = parseFloat(input);
+      if (isNaN(percent)) { setErr('Enter a percentage, e.g. 7'); return; }
+      if (percent < SPECIAL_FEE_FLOOR) { setErr(`The floor is ${SPECIAL_FEE_FLOOR}%`); return; }
+    }
+    setSaving(true);
+    try {
+      const res = await apiFetch(`/api/admin/users/${user.id}/special-fee`, {
+        method: 'PUT',
+        body: JSON.stringify({ percent, note: clear ? null : note }),
+      });
+      const d = res ? await res.json().catch(() => ({})) : {};
+      if (res && res.ok) {
+        if (clear) setInput('');
+        showToast(clear ? 'Back to the default fee' : `Service fee set to ${d.special_fee_percent}%`, 'success');
+        if (onSaved) onSaved(d.special_fee_percent, clear ? null : note);
+      } else {
+        setErr(d.error || 'Could not save');
+      }
+    } catch { setErr('Network error'); }
+    setSaving(false);
+  };
+
+  return (
+    <div>
+      <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>
+        {current != null
+          ? <span><strong style={{ color: 'var(--role-color)' }}>Special rate: {current}%</strong> on visits for every loved one this account owns.</span>
+          : <span>Default fee. Set a lower rate ({SPECIAL_FEE_FLOOR}% minimum) for a family that brings its own caregiver.</span>}
+      </div>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <input type="number" step="0.5" min={SPECIAL_FEE_FLOOR} max="50" value={input}
+          onChange={e => setInput(e.target.value)} placeholder="e.g. 7"
+          style={{ width: 72, padding: '6px 8px', borderRadius: 6, border: '1px solid var(--border-color)', fontSize: 14, textAlign: 'center' }} />
+        <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>%</span>
+        <input type="text" value={note} onChange={e => setNote(e.target.value)} placeholder="Why (optional), e.g. friend — own caregiver"
+          style={{ flex: '1 1 160px', minWidth: 0, padding: '6px 8px', borderRadius: 6, border: '1px solid var(--border-color)', fontSize: 12 }} />
+        <button onClick={() => save(false)} disabled={saving} style={{
+          padding: '6px 14px', borderRadius: 6, border: 'none', background: 'var(--role-color)',
+          color: 'var(--text-on-primary)', fontSize: 12, fontWeight: 600, cursor: saving ? 'wait' : 'pointer',
+        }}>{saving ? 'Saving…' : 'Save'}</button>
+        {current != null && (
+          <button onClick={() => save(true)} disabled={saving} style={{
+            padding: '6px 12px', borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--bg-surface)',
+            color: 'var(--text-secondary)', fontSize: 12, cursor: saving ? 'wait' : 'pointer',
+          }}>Back to default</button>
+        )}
+      </div>
+      {err && <div style={{ fontSize: 12, color: 'var(--color-error)', marginTop: 6, fontWeight: 600 }}>{err}</div>}
+      <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 6 }}>
+        A visit already held or paid keeps the fee it was priced at.
+      </div>
+    </div>
+  );
+};
+
 const AdminPanel = window.AdminPanel = ({ currentUser }) => {
   const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState('overview');
@@ -2748,6 +2820,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                         <td style={{ padding: '10px 12px', fontWeight: 500 }}>
                           {u.first_name} {u.last_name}
                           {u.is_admin ? <span style={{ marginLeft: '6px', fontSize: '10px', background: 'var(--role-color)', color: 'var(--text-on-primary)', padding: '2px 6px', borderRadius: '4px' }}>ADMIN</span> : ''}
+                          {u.special_fee_percent != null ? <span title="Special service fee" style={{ marginLeft: '6px', fontSize: '10px', fontWeight: 700, background: 'rgba(78,205,196,.15)', color: 'var(--role-color)', padding: '2px 6px', borderRadius: '4px' }}>{Number(u.special_fee_percent)}% FEE</span> : ''}
                         </td>
                         <td style={{ padding: '10px 12px', color: 'var(--text-secondary)' }}>{u.email}</td>
                         <td style={{ padding: '10px 12px' }}>
@@ -7078,6 +7151,17 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                     <div><div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Last Active</div><div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{userDrawer.lastActive ? new Date(userDrawer.lastActive).toLocaleDateString() : '—'}</div></div>
                   </div>
                 </div>
+
+                {/* v1.111.0 — Service fee (special rate) — families only */}
+                {userDrawer.user && (userDrawer.user.role === 'family' || userDrawer.user.special_fee_percent != null) && (
+                  <div style={{ marginBottom: 22 }}>
+                    <h4 style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--text-secondary)', marginBottom: 8, paddingBottom: 6, borderBottom: '1px solid var(--border-color)' }}>Service Fee</h4>
+                    <SpecialFeeEditor key={userDrawer.user.id} user={userDrawer.user} onSaved={(pct, note) => {
+                      setUserDrawer(prev => prev ? ({ ...prev, user: { ...prev.user, special_fee_percent: pct, special_fee_note: note } }) : prev);
+                      setUsers(prev => prev.map(usr => usr.id === userDrawer.user.id ? { ...usr, special_fee_percent: pct } : usr));
+                    }} />
+                  </div>
+                )}
 
                 {/* Admin notes */}
                 <div style={{ marginBottom: 22 }}>

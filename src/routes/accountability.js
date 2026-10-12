@@ -34,7 +34,7 @@ router.use(authenticate);
 // would have failed; the numbers would simply have stopped matching.
 //
 // Latent while the setting says 20, which is the default. Not a reason to leave it.
-const { getPlatformFeePercent } = require("../utils/platformFee");
+const { getPlatformFeePercent, lockSessionFeePercent } = require("../utils/platformFee");
 const { familyChargeFor, planCapture } = require("../utils/pricing"); // v1.107.0
 const LATE_GRACE_MINUTES = 10;
 const FAMILY_NO_SHOW_WAIT_MINUTES = 30;
@@ -175,10 +175,12 @@ async function authorizeSessionPayment(sessionId) {
       Math.max(0, Math.round((parseFloat(session.short_notice_surcharge) || 0) * 100)),
       caregiverCents,
     );
+    // v1.111.0 — the family's percent (special rate or default), locked once the hold lands.
+    const holdFeePercent = await getPlatformFeePercent(db, { sessionId });
     const price = priceVisit({
       baseCents: caregiverCents - surchargeCents,
       surchargeCents,
-      feePercent: await getPlatformFeePercent(db),
+      feePercent: holdFeePercent,
     });
     const platformFeeCents = price.platformFeeCents;
     totalCents = price.familyTotalCents;
@@ -245,6 +247,8 @@ async function authorizeSessionPayment(sessionId) {
         payment_status = 'authorized'
       WHERE id = ?
     `).run(paymentIntent.id, totalCents, sessionId);
+    // v1.111.0 — the capture at check-out must use the percent this hold was priced at.
+    await lockSessionFeePercent(db, sessionId, holdFeePercent);
 
     await require("../utils/ledger").record(db, {
       sessionId, careRecipientId: session.care_recipient_id, kind: "authorization", status: "held",
@@ -321,7 +325,8 @@ async function captureSessionPay(sessionId, billedCents, settlement = {}) {
     const price = priceVisit({
       baseCents: Math.round(billedCents) - surchargeCents,
       surchargeCents,
-      feePercent: await getPlatformFeePercent(db),
+      // v1.111.0 — the percent locked when the hold was placed (special rate or default).
+      feePercent: await getPlatformFeePercent(db, { sessionId }),
     });
     const plan = planCapture({
       caregiverCents: price.caregiverCents,

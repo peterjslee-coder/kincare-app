@@ -1,7 +1,8 @@
 const express = require("express");
 const { getDb } = require("../models/database");
 const { authenticate, requireAdmin } = require("../middleware/auth");
-const { getPlatformFeePercent } = require("../utils/platformFee");
+const { getGlobalPlatformFeePercent, feePercentSql } = require("../utils/platformFee");
+const { SURCHARGE_TO_CAREGIVER } = require("../utils/pricing");
 
 const router = express.Router();
 
@@ -29,11 +30,36 @@ function estimateStripeFees(amount) {
 // ─── Helper: SQL fragment to exclude sessions where the caregiver is a demo user ───
 const NO_DEMO_CAREGIVER = `AND NOT EXISTS (SELECT 1 FROM caregiver_profiles _cp JOIN users _cu ON _cp.user_id = _cu.id WHERE _cp.id = cs.caregiver_id AND _cu.is_demo = 1)`;
 
+// ─── v1.111.0 — what each visit actually came to, at ITS percent ───
+//
+// Every figure below used to be `estimated_cost * 0.2` for the platform and `* 0.8` for the
+// caregiver. That was wrong twice: the fee is ADDED ON TOP (the caregiver keeps all of
+// estimated_cost, the family pays it plus the fee), and the percent is no longer one number —
+// a family with a special rate (Pete's friends, 10/12) is priced at their own percent. This
+// join prices each completed visit exactly the way pricing.priceVisit does:
+//   platform  = pct of base + the platform's share of any rush surcharge
+//   caregiver = base + the caregiver's share of the surcharge
+//   family    = caregiver + platform  (what the card is charged; Stripe's fee is on this)
+// Requires a care_sessions row aliased `cs`. Use the `m.` columns.
+const SURCHARGE_TO_PLATFORM = Math.round((1 - SURCHARGE_TO_CAREGIVER) * 1000) / 1000;
+function visitMoneyJoin(globalPct) {
+  return `CROSS JOIN LATERAL (
+      SELECT fp.pct,
+             (fp.cost - fp.sur) * fp.pct / 100.0 + fp.sur * ${SURCHARGE_TO_PLATFORM} AS platform,
+             fp.cost - fp.sur * ${SURCHARGE_TO_PLATFORM} AS caregiver,
+             (fp.cost - fp.sur) * (1 + fp.pct / 100.0) + fp.sur AS family
+        FROM (SELECT ${feePercentSql(globalPct)} AS pct,
+                     COALESCE(cs.estimated_cost, 0)::float8 AS cost,
+                     LEAST(GREATEST(COALESCE(cs.short_notice_surcharge, 0), 0), COALESCE(cs.estimated_cost, 0))::float8 AS sur) fp
+    ) m`;
+}
+
 // ─── GET /api/admin/financials/summary ───
 // KPI snapshot + 12-month time series
 router.get("/summary", async (req, res) => {
   try {
     const db = await getDb();
+    const money = visitMoneyJoin(await getGlobalPlatformFeePercent(db));
 
     // Current month boundaries
     const now = new Date();
@@ -45,11 +71,12 @@ router.get("/summary", async (req, res) => {
     // (payments table only has rows when Stripe checkout completes, which may not cover all sessions)
     // Exclude demo users to avoid inflated numbers
     const currentMonth = await db.prepare(`
-      SELECT COALESCE(SUM(cs.estimated_cost), 0) AS gross_revenue,
-             COALESCE(SUM(cs.estimated_cost * 0.2), 0) AS platform_revenue,
+      SELECT COALESCE(SUM(m.family), 0) AS gross_revenue,
+             COALESCE(SUM(m.platform), 0) AS platform_revenue,
              COUNT(*) AS payment_count
       FROM care_sessions cs
       JOIN users u ON cs.family_user_id = u.id
+      ${money}
       WHERE cs.status = 'completed' AND cs.estimated_cost > 0
         AND COALESCE(u.is_demo, 0) = 0 ${NO_DEMO_CAREGIVER}
         AND COALESCE(cs.completed_at, cs.updated_at, cs.created_at) >= ?
@@ -57,11 +84,12 @@ router.get("/summary", async (req, res) => {
 
     // KPI: previous month
     const prevMonth = await db.prepare(`
-      SELECT COALESCE(SUM(cs.estimated_cost), 0) AS gross_revenue,
-             COALESCE(SUM(cs.estimated_cost * 0.2), 0) AS platform_revenue,
+      SELECT COALESCE(SUM(m.family), 0) AS gross_revenue,
+             COALESCE(SUM(m.platform), 0) AS platform_revenue,
              COUNT(*) AS payment_count
       FROM care_sessions cs
       JOIN users u ON cs.family_user_id = u.id
+      ${money}
       WHERE cs.status = 'completed' AND cs.estimated_cost > 0
         AND COALESCE(u.is_demo, 0) = 0 ${NO_DEMO_CAREGIVER}
         AND COALESCE(cs.completed_at, cs.updated_at, cs.created_at) >= ?
@@ -111,12 +139,13 @@ router.get("/summary", async (req, res) => {
     // 12-month time series — from completed sessions, exclude demo
     const monthlyData = await db.prepare(`
       SELECT TO_CHAR(DATE_TRUNC('month', COALESCE(cs.completed_at, cs.updated_at, cs.created_at)), 'YYYY-MM') AS month,
-             COALESCE(SUM(cs.estimated_cost), 0) AS gross_revenue,
-             COALESCE(SUM(cs.estimated_cost * 0.2), 0) AS platform_fee,
-             COALESCE(SUM(cs.estimated_cost * 0.8), 0) AS caregiver_payout,
+             COALESCE(SUM(m.family), 0) AS gross_revenue,
+             COALESCE(SUM(m.platform), 0) AS platform_fee,
+             COALESCE(SUM(m.caregiver), 0) AS caregiver_payout,
              COUNT(*) AS payment_count
       FROM care_sessions cs
       JOIN users u ON cs.family_user_id = u.id
+      ${money}
       WHERE cs.status = 'completed' AND cs.estimated_cost > 0
         AND COALESCE(u.is_demo, 0) = 0 ${NO_DEMO_CAREGIVER}
         AND COALESCE(cs.completed_at, cs.updated_at, cs.created_at) >= DATE_TRUNC('month', NOW()) - INTERVAL '11 months'
@@ -173,11 +202,12 @@ router.get("/summary", async (req, res) => {
 
     // All-time totals — from completed sessions, exclude demo
     const allTime = await db.prepare(`
-      SELECT COALESCE(SUM(cs.estimated_cost), 0) AS gross_revenue,
-             COALESCE(SUM(cs.estimated_cost * 0.2), 0) AS platform_revenue,
+      SELECT COALESCE(SUM(m.family), 0) AS gross_revenue,
+             COALESCE(SUM(m.platform), 0) AS platform_revenue,
              COUNT(*) AS payment_count
       FROM care_sessions cs
       JOIN users u ON cs.family_user_id = u.id
+      ${money}
       WHERE cs.status = 'completed' AND cs.estimated_cost > 0
         AND COALESCE(u.is_demo, 0) = 0 ${NO_DEMO_CAREGIVER}
     `).get();
@@ -209,16 +239,18 @@ router.get("/summary", async (req, res) => {
 router.get("/daily-snapshot", async (req, res) => {
   try {
     const db = await getDb();
+    const money = visitMoneyJoin(await getGlobalPlatformFeePercent(db));
 
     // Daily data for last 56 days (current 4 weeks + prior 4 weeks for comparison)
     const dailyData = await db.prepare(`
       SELECT DATE(COALESCE(cs.completed_at, cs.updated_at, cs.created_at)) AS day,
-             COALESCE(SUM(cs.estimated_cost), 0) AS gross,
-             COALESCE(SUM(cs.estimated_cost * 0.2), 0) AS fees,
-             COALESCE(SUM(cs.estimated_cost * 0.8), 0) AS net,
+             COALESCE(SUM(m.family), 0) AS gross,
+             COALESCE(SUM(m.platform), 0) AS fees,
+             COALESCE(SUM(m.caregiver), 0) AS net,
              COUNT(*) AS payment_count
       FROM care_sessions cs
       JOIN users u ON cs.family_user_id = u.id
+      ${money}
       WHERE cs.status = 'completed' AND cs.estimated_cost > 0
         AND COALESCE(u.is_demo, 0) = 0 ${NO_DEMO_CAREGIVER}
         AND COALESCE(cs.completed_at, cs.updated_at, cs.created_at) >= CURRENT_DATE - INTERVAL '55 days'
@@ -300,15 +332,17 @@ router.get("/daily-snapshot", async (req, res) => {
 router.get("/breakdown", async (req, res) => {
   try {
     const db = await getDb();
+    const money = visitMoneyJoin(await getGlobalPlatformFeePercent(db));
 
     // By service type — from completed sessions, exclude demo
     const byServiceType = await db.prepare(`
       SELECT cs.service_type,
              COUNT(*) AS session_count,
-             COALESCE(SUM(cs.estimated_cost), 0) AS revenue,
-             COALESCE(SUM(cs.estimated_cost * 0.2), 0) AS platform_fee
+             COALESCE(SUM(m.family), 0) AS revenue,
+             COALESCE(SUM(m.platform), 0) AS platform_fee
       FROM care_sessions cs
       JOIN users u ON cs.family_user_id = u.id
+      ${money}
       WHERE cs.status = 'completed' AND cs.estimated_cost > 0
         AND COALESCE(u.is_demo, 0) = 0 ${NO_DEMO_CAREGIVER}
       GROUP BY cs.service_type
@@ -329,10 +363,11 @@ router.get("/breakdown", async (req, res) => {
     const topFamilies = await db.prepare(`
       SELECT u.id, u.first_name, u.last_name, u.email,
              COUNT(*) AS session_count,
-             COALESCE(SUM(cs.estimated_cost), 0) AS total_spent,
-             ROUND(COALESCE(AVG(cs.estimated_cost), 0)::numeric, 2) AS avg_session
+             COALESCE(SUM(m.family), 0) AS total_spent,
+             ROUND(COALESCE(AVG(m.family), 0)::numeric, 2) AS avg_session
       FROM care_sessions cs
       JOIN users u ON cs.family_user_id = u.id
+      ${money}
       WHERE cs.status = 'completed' AND cs.estimated_cost > 0
         AND COALESCE(u.is_demo, 0) = 0 ${NO_DEMO_CAREGIVER}
       GROUP BY u.id, u.first_name, u.last_name, u.email
@@ -345,12 +380,13 @@ router.get("/breakdown", async (req, res) => {
       SELECT u.id, u.first_name, u.last_name, u.email,
              cp.rating_avg,
              COUNT(*) AS session_count,
-             COALESCE(SUM(cs.estimated_cost * 0.8), 0) AS total_earned,
-             ROUND(COALESCE(AVG(cs.estimated_cost * 0.8), 0)::numeric, 2) AS avg_payout
+             COALESCE(SUM(m.caregiver), 0) AS total_earned,
+             ROUND(COALESCE(AVG(m.caregiver), 0)::numeric, 2) AS avg_payout
       FROM care_sessions cs
       JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
       JOIN users u ON cp.user_id = u.id
       JOIN users fu ON cs.family_user_id = fu.id
+      ${money}
       WHERE cs.status = 'completed' AND cs.estimated_cost > 0
         AND COALESCE(u.is_demo, 0) = 0
         AND COALESCE(fu.is_demo, 0) = 0
@@ -796,23 +832,31 @@ router.get("/insights", async (req, res) => {
     }
 
     // 10. Platform fee health check
+    // v1.111.0 — measured against what each payment SHOULD have carried at its own visit's
+    // percent. Against one global target, every friend on a special rate would read as a
+    // checkout bug. Payments with no visit (manual payments) are left out of both sides.
     if (totalAllRevenue.total > 0) {
-      const allPlatformFee = await db.prepare(
-        "SELECT COALESCE(SUM(platform_fee), 0) AS total FROM payments WHERE status = 'completed'"
-      ).get();
-      const effectiveRate = Math.round((allPlatformFee.total / totalAllRevenue.total) * 1000) / 10;
-      // v1.106.19 — the target IS the configured fee, and the threshold is relative to it.
-      // Hardcoded, this insight would have fired constantly the moment the fee was set below
-      // 18% and never fired at all if it were raised — telling an admin their own setting was
-      // a problem.
-      const targetRate = await getPlatformFeePercent(db);
-      if (effectiveRate < targetRate * 0.9) {
+      const globalPct = await getGlobalPlatformFeePercent(db);
+      const feeCheck = await db.prepare(`
+        SELECT COALESCE(SUM(p.platform_fee), 0) AS actual,
+               COALESCE(SUM(p.caregiver_payout * ${feePercentSql(globalPct)} / 100.0), 0) AS expected,
+               COALESCE(SUM(p.caregiver_payout), 0) AS base
+          FROM payments p
+          JOIN care_sessions cs ON cs.id = p.session_id
+         WHERE p.status = 'completed'
+      `).get();
+      const actual = Number(feeCheck.actual) || 0;
+      const expected = Number(feeCheck.expected) || 0;
+      const base = Number(feeCheck.base) || 0;
+      if (expected > 0 && actual < expected * 0.9) {
+        const effectiveRate = base > 0 ? Math.round((actual / base) * 1000) / 10 : 0;
+        const targetRate = Math.round((expected / base) * 1000) / 10;
         insights.push({
           id: 'fee_rate_low', type: 'revenue', severity: 'warning',
           title: 'Effective Platform Rate Below Target',
-          description: `Your effective platform fee rate is ${effectiveRate}%, below the ${targetRate}% target.`,
+          description: `Payments carried ${effectiveRate}% in fees where their visits were priced at ${targetRate}% (special rates included).`,
           metric: `${effectiveRate}%`,
-          recommendation: `Check if any discount codes or fee waivers are active. Ensure all checkout sessions correctly apply the ${targetRate}% platform fee.`,
+          recommendation: `Check that checkout and auto-pay apply each visit's fee percent. Special rates are set per family in People.`,
         });
       }
     }
@@ -851,6 +895,39 @@ router.put("/platform-fee", async (req, res) => {
     res.json({ platformFeePercent });
   } catch (err) {
     res.status(500).json({ error: "Failed to update platform fee" });
+  }
+});
+
+// ─── GET /api/admin/financials/special-rates ─── (v1.111.0)
+// Every family on a special service fee, so the Financials tab shows who is not at the default.
+router.get("/special-rates", async (req, res) => {
+  try {
+    const db = await getDb();
+    const globalPct = await getGlobalPlatformFeePercent(db);
+    const rows = await db.prepare(`
+      SELECT u.id, u.first_name, u.last_name, u.email, u.special_fee_percent, u.special_fee_set_at,
+             u.special_fee_note,
+             (SELECT COUNT(*) FROM care_sessions cs JOIN care_recipients cr ON cr.id = cs.care_recipient_id
+               WHERE cr.family_user_id = u.id AND cs.status = 'completed') AS completed_visits
+        FROM users u
+       WHERE u.special_fee_percent IS NOT NULL
+       ORDER BY u.special_fee_set_at DESC NULLS LAST
+    `).all();
+    res.json({
+      defaultFeePercent: globalPct,
+      families: rows.map((r) => ({
+        id: r.id,
+        name: `${r.first_name || ""} ${r.last_name || ""}`.trim(),
+        email: r.email,
+        feePercent: Number(r.special_fee_percent),
+        setAt: r.special_fee_set_at,
+        note: r.special_fee_note || null,
+        completedVisits: Number(r.completed_visits) || 0,
+      })),
+    });
+  } catch (err) {
+    console.error("Special rates error:", err);
+    res.status(500).json({ error: "Failed to fetch special rates" });
   }
 });
 

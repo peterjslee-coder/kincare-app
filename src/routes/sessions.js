@@ -18,7 +18,7 @@ const { caregiverGate, sessionGate, CLAIMABLE } = require("../utils/claimGates")
 const { applySeriesClaim } = require("../utils/seriesClaim");
 const { checkPaymentStanding } = require("../utils/paymentStanding");
 const { generateRecurringDates } = require("../utils/recurrence");
-const { getPlatformFeePercent } = require("../utils/platformFee");
+const { getPlatformFeePercent, loadFeeTable } = require("../utils/platformFee");
 const { geofenceEvidence, coarsenCoordinate } = require("../utils/geocode");
 const { hasActiveVouch } = require("../utils/vouches");
 const { decideCancellationCharge, CANCEL_FEE_WINDOW_HOURS, FEE_CAREGIVER_PROFILE_SQL } = require("../utils/cancellationFee"); // v1.109.9 — who is owed a fee
@@ -159,8 +159,10 @@ router.get("/", async (req, res) => {
   // Open care requests are shown in Find Work view, not in the calendar sessions list
 
   // Add platform fee info: caregiver gets full rate, platform fee added on top for family
-  const feePercent = await getPlatformFeePercent(db);
+  // v1.111.0 — per visit: a family with a special rate sees its own fee.
+  const feeTable = await loadFeeTable(db);
   sessions = sessions.map(s => {
+    const feePercent = feeTable.pctFor(s);
     const estimatedCost = parseFloat(s.estimated_cost) || 0;
     // estimated_cost = subtotal + surcharge (total from rateCalculator)
     // Platform fee is on the base subtotal, charged on top to family
@@ -1375,7 +1377,11 @@ router.get("/cost-preview", async (req, res) => {
   // Rush surcharge split: 75% to caregiver (incentive for short-notice), 25% to platform.
   // Platform fee = base percentage + platform's share of rush surcharge.
   // Family pays: caregiver payout + platform fee.
-  const feePercent = await getPlatformFeePercent(db);
+  // v1.111.0 — the fee of the family that owns the recipient (special rate), else the default.
+  const feePercent = await getPlatformFeePercent(db, {
+    careRecipientId: typeof req.query.careRecipientId === "string" ? req.query.careRecipientId : null,
+    familyUserId: req.user.id,
+  });
   const surchargeToCaregiver = costResult.surchargeBreakdown?.caregiver || 0;
   const surchargeToPlatform = costResult.surchargeBreakdown?.platform || 0;
   const caregiverPayout = Math.round((costResult.subtotal + surchargeToCaregiver) * 100) / 100;
@@ -4379,7 +4385,7 @@ router.get("/:id", async (req, res) => {
     costBreakdown.shortNotice = shortNotice;
 
     // 75/25 split: caregiver gets subtotal + 75% of surcharge
-    const feePercent = await getPlatformFeePercent(db);
+    const feePercent = await getPlatformFeePercent(db, { session }); // v1.111.0 — per visit
     const surchargeToCaregiver = Math.round((costBreakdown.surcharge || 0) * SURCHARGE_CAREGIVER_SHARE * 100) / 100;
     costBreakdown.caregiverPayout = Math.round((costBreakdown.subtotal + surchargeToCaregiver) * 100) / 100;
     costBreakdown.caregiverSurchargeShare = surchargeToCaregiver;
