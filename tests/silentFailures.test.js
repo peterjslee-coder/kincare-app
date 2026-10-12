@@ -201,8 +201,10 @@ describe("a block request is either visible to a leader or not filed", () => {
     // The real behavioural check: the catch path returns { allowed: false, reason: "unknown" }
     // with no recipientId by design, and that is exactly the case that used to file an orphan.
     const { findApproverForRequester } = require("../src/utils/blocks");
+    // Stale-link sweep: the fallback only follows a TRUSTED link (utils/linkedAccount).
+    const { TRUSTED_LINK_SQL } = require("../src/utils/linkedAccount");
     const rows = {
-      "SELECT id FROM care_recipients WHERE linked_user_id = ?": { id: "rec-1" },
+      [`SELECT cr.id FROM care_recipients cr WHERE cr.linked_user_id = ? AND ${TRUSTED_LINK_SQL}`]: { id: "rec-1" },
       "SELECT id, billing_user_id FROM care_teams WHERE care_recipient_id = ?": { id: "team-1", billing_user_id: "billing-1" },
     };
     const db = { prepare: (sql) => ({ get: async () => rows[sql.trim()] ?? undefined }) };

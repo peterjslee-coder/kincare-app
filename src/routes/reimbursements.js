@@ -15,6 +15,7 @@ const { validateMagicBytes } = require("../utils/fileValidation");
 const { sendStoredFile, IMAGE_MIMES, DOCUMENT_MIMES } = require("../utils/serveMedia");
 const { writeAuditLog, getClientIp } = require("../middleware/auditLog");
 const storage = require("../utils/storage"); // v1.91.0 — env-gated R2 offload for receipt blobs
+const { isTrustedLinkedUser } = require("../utils/linkedAccount"); // stale-link sweep
 
 const router = express.Router();
 // v1.106.5 — a per-account daily byte ceiling. Rate limits count requests; the Sept 2
@@ -117,7 +118,9 @@ async function teamAccess(db, teamId, userId) {
   const membership = await db.prepare(
     "SELECT role FROM care_team_members WHERE care_team_id = ? AND user_id = ?"
   ).get(teamId, userId);
-  const isRecipient = team.linked_user_id === userId;
+  // Stale-link sweep: only a TRUSTED linked account is the recipient (utils/linkedAccount).
+  const isRecipient = await isTrustedLinkedUser(db,
+    { id: team.care_recipient_id, family_user_id: team.family_user_id, linked_user_id: team.linked_user_id }, userId);
   const role = membership ? membership.role : null;
   const isApprover = team.billing_user_id
     ? team.billing_user_id === userId

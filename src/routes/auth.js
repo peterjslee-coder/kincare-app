@@ -15,6 +15,7 @@ const storage = require("../utils/storage");
 const { userPhotoUrl, HAS_PHOTO_SQL } = require("./media");
 const { identityStatusFor } = require("../utils/identity"); // v1.106.39
 const { blockWhileImpersonating } = require("../middleware/noImpersonation"); // v1.106.40
+const { recipientForLinkedUser } = require("../utils/linkedAccount"); // stale-link sweep
 
 const router = express.Router();
 
@@ -667,7 +668,7 @@ router.get("/me", authenticate, async (req, res) => {
   let selfOnboardingComplete = null;
   let careRecipientId = null;
   if (userRoles.includes('care_for')) {
-    const cr = await db.prepare("SELECT id, self_onboarding_complete FROM care_recipients WHERE linked_user_id = ?").get(req.user.id);
+    const cr = await recipientForLinkedUser(db, req.user.id, "cr.id, cr.self_onboarding_complete");
     if (cr) {
       selfOnboardingComplete = !!cr.self_onboarding_complete;
       careRecipientId = cr.id;

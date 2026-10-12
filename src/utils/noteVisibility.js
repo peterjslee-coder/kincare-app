@@ -20,6 +20,8 @@
 //     through the AI-digested briefing, never raw.
 //   • everyone else — the owner, team members, admins — sees everything.
 
+const { isTrustedLinkedUser } = require("./linkedAccount"); // stale-link sweep
+
 /**
  * @param {object} cr    the care_recipients row (needs linked_user_id, family_user_id)
  * @param {boolean} teamOrOwner  reader owns the record or is on the care team
@@ -100,7 +102,8 @@ async function noteAccess(db, recipientId, userId) {
   ).get(recipientId);
   if (!cr) return none;
 
-  const isLinked = !!cr.linked_user_id && cr.linked_user_id === userId && cr.family_user_id !== userId;
+  // Stale-link sweep: only a TRUSTED linked account is the person (utils/linkedAccount).
+  const isLinked = cr.family_user_id !== userId && (await isTrustedLinkedUser(db, cr, userId));
   if (isLinked) {
     const tier = cr.permission_tier || "full";
     let vis = null;
@@ -121,7 +124,8 @@ async function noteAccess(db, recipientId, userId) {
     manage: can(caps, CAP.MANAGE),
     isLinked: false,
     cr,
-    filter: noteVisibility({ cr, teamOrOwner, access: user?.is_admin ? "admin" : null, userId }),
+    // Not her trusted linked account (checked above), so never filter as if it were.
+    filter: noteVisibility({ cr: { ...cr, linked_user_id: null }, teamOrOwner, access: user?.is_admin ? "admin" : null, userId }),
   };
 }
 

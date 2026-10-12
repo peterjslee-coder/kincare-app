@@ -17,6 +17,7 @@
 // asks these functions. Do not re-derive any of this inline.
 
 const { v4: uuid } = require("uuid");
+const { trustedLinkedUserId, TRUSTED_LINK_SQL } = require("./linkedAccount");
 
 /** The leader row for the recipient's care team, if any. */
 async function leaderIdFor(db, careRecipientId) {
@@ -77,18 +78,8 @@ async function isLeaderOrOwner(db, cr, userId) {
  *   isMember: boolean, isLeader: boolean, isGranted: boolean, isKeyHolder: boolean,
  *   keyHolderId: string|null}>}
  */
-/**
- * v1.111.2 — the linked account counts as the person herself only if it is ALSO on her care
- * team (or owns the record). A genuine one always is: self-signup makes her the leader, and
- * accepting a care_recipient invite adds her as a member. Betty's profile carried a stale
- * self-signup link to an unrelated account that was on no team; that account was being
- * treated as Betty — key holder, medical records, legal documents.
- */
-async function trustedLinkedUserId(db, cr) {
-  if (!cr || !cr.linked_user_id) return null;
-  if (cr.family_user_id === cr.linked_user_id) return cr.linked_user_id;
-  return (await isTeamMember(db, cr.id, cr.linked_user_id)) ? cr.linked_user_id : null;
-}
+// v1.111.2 — the linked account counts as the person herself only if it is ALSO on her care
+// team (or owns the record). The rule and its SQL form live in ./linkedAccount (re-exported here).
 
 async function medicalRole(db, careRecipientId, userId) {
   const none = { exists: false, canView: false, canManageAccess: false, isMember: false, isLeader: false, isGranted: false, isKeyHolder: false, keyHolderId: null };
@@ -167,5 +158,5 @@ async function logMedicalAudit(db, { careRecipientId, documentId = null, actorId
 
 module.exports = {
   medicalRole, canViewMedical, canManageMedicalAccess, aiKeyHolder, aiConsentOn,
-  isCaregiverUser, grantableReason, logMedicalAudit, recipientRow, trustedLinkedUserId,
+  isCaregiverUser, grantableReason, logMedicalAudit, recipientRow, trustedLinkedUserId, TRUSTED_LINK_SQL,
 };

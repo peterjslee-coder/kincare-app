@@ -31,6 +31,7 @@ const { SETTLED_MINUTES, conditionReadDue } = require("../utils/settledCheck"); 
 const { summarizeBreaks, breakMinutes, breakNotice } = require("../utils/visitBreaks"); // v1.106.41
 const { normalize: normalizeInstructions, sameInstructions } = require("../utils/instructionAck"); // v1.109.6
 const { visitUpdateAudience } = require("../utils/visitAudience"); // v1.109.7
+const { TRUSTED_LINK_SQL, trustedLinkedIdSql, isTrustedLinkedUser } = require("../utils/linkedAccount"); // stale-link sweep
 
 const router = express.Router();
 router.use(authenticate);
@@ -89,7 +90,7 @@ router.get("/", async (req, res) => {
     // Care recipient view — find their care_recipient record via linked_user_id (falls back to name match)
     const recipient = await db.prepare(`
       SELECT cr.id FROM care_recipients cr
-      WHERE cr.linked_user_id = ?
+      WHERE cr.linked_user_id = ? AND ${TRUSTED_LINK_SQL}
       LIMIT 1
     `).get(req.user.id);
     if (!recipient) return res.status(404).json({ error: "Care recipient record not found" });
@@ -203,7 +204,7 @@ router.post("/request", async (req, res) => {
   // Find the care_recipient record linked to this user
   const recipient = await db.prepare(`
     SELECT cr.id, cr.family_user_id FROM care_recipients cr
-    WHERE cr.linked_user_id = ?
+    WHERE cr.linked_user_id = ? AND ${TRUSTED_LINK_SQL}
     LIMIT 1
   `).get(req.user.id);
 
@@ -534,7 +535,7 @@ router.put("/:id/claim", async (req, res) => {
   // Find care_for user to notify (via linked_user_id)
   const careForUser = await db.prepare(`
     SELECT cr.linked_user_id AS id FROM care_recipients cr
-    WHERE cr.id = ? AND cr.linked_user_id IS NOT NULL
+    WHERE cr.id = ? AND cr.linked_user_id IS NOT NULL AND ${TRUSTED_LINK_SQL}
     LIMIT 1
   `).get(session.care_recipient_id);
   if (careForUser) {
@@ -784,7 +785,7 @@ router.post("/", requireRole("family", "care_for"), validateSession, async (req,
   // care_for users: check linked_user_id instead of family_user_id
   if (!recipient && activeRole === 'care_for') {
     recipient = await db.prepare(
-      "SELECT * FROM care_recipients WHERE id = ? AND linked_user_id = ?"
+      `SELECT cr.* FROM care_recipients cr WHERE cr.id = ? AND cr.linked_user_id = ? AND ${TRUSTED_LINK_SQL}`
     ).get(careRecipientId, req.user.id);
   }
 
@@ -827,7 +828,7 @@ router.post("/", requireRole("family", "care_for"), validateSession, async (req,
   // card it is.
   {
     const isOwner = recipient.family_user_id === req.user.id;
-    const isSelf = activeRole === "care_for" && recipient.linked_user_id === req.user.id;
+    const isSelf = activeRole === "care_for" && (await isTrustedLinkedUser(db, recipient, req.user.id));
     if (!isOwner && !isSelf) {
       const { recipientCapabilities } = require("../utils/access");
       const { can, CAP } = require("../utils/capabilities");
@@ -3317,7 +3318,7 @@ router.put("/:id/instructions", async (req, res) => {
     const cleaned = sanitize(specialInstructions).slice(0, 2000);
 
     const session = await db.prepare(`
-      SELECT cs.*, cr.family_user_id AS owner_id, cr.linked_user_id AS recipient_user_id,
+      SELECT cs.*, cr.family_user_id AS owner_id, ${trustedLinkedIdSql("cr")} AS recipient_user_id,
         cp.user_id AS caregiver_user_id
       FROM care_sessions cs
       LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
@@ -3453,7 +3454,7 @@ router.put("/:id/on-my-way", async (req, res) => {
     const session = await db.prepare(`
       SELECT cs.*, cp.user_id AS caregiver_user_id,
         cr.first_name AS recipient_first_name, cr.last_name AS recipient_last_name,
-        cr.linked_user_id AS care_for_user_id,
+        ${trustedLinkedIdSql("cr")} AS care_for_user_id,
         cr.notification_channel, cr.sms_phone,
         cr.location_address, cr.location_city, cr.location_state,
         cr.latitude AS recipient_lat, cr.longitude AS recipient_lng

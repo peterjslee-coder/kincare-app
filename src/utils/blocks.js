@@ -21,6 +21,7 @@
 // telling an abuser "you have been blocked" can escalate. Keep the two apart.
 
 const { v4: uuid } = require("uuid");
+const { TRUSTED_LINK_SQL } = require("./linkedAccount"); // stale-link sweep
 
 /**
  * Every user id this user cannot see, in either direction.
@@ -121,7 +122,7 @@ async function canBlockDirectly(db, userId, activeRole) {
 
   try {
     const rec = await db.prepare(
-      "SELECT id, family_user_id, linked_user_id, permission_tier FROM care_recipients WHERE linked_user_id = ?"
+      `SELECT cr.id, cr.family_user_id, cr.linked_user_id, cr.permission_tier FROM care_recipients cr WHERE cr.linked_user_id = ? AND ${TRUSTED_LINK_SQL}`
     ).get(userId);
 
     // No recipient profile: nothing is managing them, so they are self-directed.
@@ -185,7 +186,7 @@ async function findApproverForRequester(db, userId, recipientId) {
   }
   try {
     const rec = await db.prepare(
-      "SELECT id FROM care_recipients WHERE linked_user_id = ?"
+      `SELECT cr.id FROM care_recipients cr WHERE cr.linked_user_id = ? AND ${TRUSTED_LINK_SQL}`
     ).get(userId);
     return rec ? await findApprover(db, rec.id) : null;
   } catch (e) {

@@ -436,6 +436,12 @@ ${cg.md}
 - Any endpoint taking base64 needs **both** a route-scoped \`express.json\` limit in \`server.js\`
   **and** a \`limitBodySize\` exemption in \`validate.js\`.
 - Blobs go through \`src/utils/storage.js\`, never straight into a Postgres column.
+- **\`care_recipients.linked_user_id\` is not proof of identity.** A link counts as the person only if
+  that account owns the record (\`family_user_id = linked_user_id\`, self-signup) or is on her care team.
+  Betty's profile carried a leftover self-signup link to an unrelated account (Kit Conn) that the app
+  treated as Betty. Every read that treats the linked user as the care recipient — care_for views,
+  dashboard, messages contacts, visit/reminder push audiences, documents, notes, blocks, reimbursements —
+  goes through \`src/utils/linkedAccount.js\`. Writes that only CLEAR a link (account deletion) do not.
 
 ## 9. Tests and gates
 

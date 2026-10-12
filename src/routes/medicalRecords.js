@@ -28,6 +28,7 @@ const stepUp = require("../utils/medicalStepUp");
 const { extractSuggestions } = require("../utils/medicalDocAI");
 const { eventStartInstant } = require("../utils/careEventUtils");
 const { hasAccess, canScheduleEvents } = require("./careTasks")._shared;
+const { TRUSTED_LINK_SQL } = require("../utils/medicalAccess"); // stale-link sweep
 
 const router = express.Router();
 router.use(authenticate);
@@ -75,7 +76,7 @@ router.get("/recipients", async (req, res) => {
       FROM care_recipients cr
       LEFT JOIN care_teams ct ON ct.care_recipient_id = cr.id
       LEFT JOIN care_team_members ctm ON ctm.care_team_id = ct.id AND ctm.user_id = ?
-      WHERE cr.family_user_id = ? OR cr.linked_user_id = ? OR ctm.user_id IS NOT NULL
+      WHERE cr.family_user_id = ? OR (cr.linked_user_id = ? AND ${TRUSTED_LINK_SQL}) OR ctm.user_id IS NOT NULL
     `).all(req.user.id, req.user.id, req.user.id);
     const out = [];
     for (const r of rows) {

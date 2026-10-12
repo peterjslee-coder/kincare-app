@@ -17,6 +17,7 @@ const { noteAccess } = require("../utils/noteVisibility"); // v1.106.38, v1.107.
 const { breakBudgetMinutes } = require("../utils/visitBreaks"); // v1.106.41
 const { conditionReadDue } = require("../utils/settledCheck"); // v1.106.48
 const { instructionsNeedAck } = require("../utils/instructionAck"); // v1.109.6
+const { TRUSTED_LINK_SQL } = require("../utils/linkedAccount"); // stale-link sweep
 
 const router = express.Router();
 router.use(authenticate);
@@ -1084,7 +1085,7 @@ async function careForDashboard(db, userId, res) {
   // Find care recipient linked to this user account
   const recipient = await db.prepare(`
     SELECT cr.* FROM care_recipients cr
-    WHERE cr.linked_user_id = ?
+    WHERE cr.linked_user_id = ? AND ${TRUSTED_LINK_SQL}
     LIMIT 1
   `).get(userId);
 

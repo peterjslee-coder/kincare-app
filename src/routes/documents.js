@@ -11,6 +11,7 @@ const storage = require("../utils/storage"); // v1.91.0 — env-gated R2 offload
 const { medicalRole, logMedicalAudit } = require("../utils/medicalAccess");
 const { recipientDocRole, canViewRecipientDoc, shareableCaregivers } = require("../utils/recipientDocAccess");
 const { blockWhileImpersonating } = require("../middleware/noImpersonation");
+const { isTrustedLinkedUser } = require("../utils/linkedAccount"); // stale-link sweep
 
 const router = express.Router();
 
@@ -83,7 +84,7 @@ async function canAccessOwner(db, userId, userRole, ownerType, ownerId, isAdmin)
     const cr = await db.prepare("SELECT family_user_id, linked_user_id FROM care_recipients WHERE id = ?").get(ownerId);
     if (!cr) return false;
     if (cr.family_user_id === userId) return true;
-    if (cr.linked_user_id === userId) return true;
+    if (await isTrustedLinkedUser(db, { id: ownerId, ...cr }, userId)) return true;
     // Shared via care_recipient_shares?
     const share = await db.prepare("SELECT id FROM care_recipient_shares WHERE care_recipient_id = ? AND shared_with_user_id = ?").get(ownerId, userId);
     if (share) return true;

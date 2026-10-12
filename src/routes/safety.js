@@ -29,6 +29,7 @@ const { authenticate } = require("../middleware/auth");
 const { canBlockDirectly, findApproverForRequester, getOutgoingBlocks, isBlockedBetween } = require("../utils/blocks");
 const { decideCancellationCharge } = require("../utils/cancellationFee");
 const { sendPushToUser, notifyAdmins } = require("./push");
+const { TRUSTED_LINK_SQL } = require("../utils/linkedAccount"); // stale-link sweep
 
 const router = express.Router();
 router.use(authenticate);
@@ -350,7 +351,7 @@ router.get("/block-requests", async (req, res) => {
       -- review it, and no leader can see it. Resolve the team from the requester for those.
       -- New rows always carry a team (the POST now refuses rather than filing an orphan), so
       -- this fallback is for the backlog and costs nothing once it is empty.
-      LEFT JOIN care_recipients cr ON cr.linked_user_id = br.requester_user_id
+      LEFT JOIN care_recipients cr ON cr.linked_user_id = br.requester_user_id AND ${TRUSTED_LINK_SQL}
       LEFT JOIN care_teams ct ON ct.care_recipient_id = cr.id
       JOIN care_team_members ctm ON ctm.care_team_id = COALESCE(br.care_team_id, ct.id)
       WHERE br.status = 'pending' AND ctm.user_id = ? AND ctm.role = 'leader'

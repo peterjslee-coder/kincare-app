@@ -7,6 +7,7 @@ const { authenticate, requireRole } = require("../middleware/auth");
 const { captureException } = require("../utils/sentry");
 const { sendEmail, brandedHtml } = require("../utils/email");
 const { userPhotoUrl } = require("./media");
+const { TRUSTED_LINK_SQL, trustedLinkedIdSql } = require("../utils/linkedAccount"); // stale-link sweep
 
 const router = express.Router();
 
@@ -268,7 +269,7 @@ router.get("/:id", requireRole("family"), async (req, res) => {
     const team = await db.prepare(`
       SELECT ct.*, cr.first_name AS recipient_first_name, cr.last_name AS recipient_last_name,
         cr.age AS recipient_age, cr.location_city AS recipient_city, cr.location_state AS recipient_state,
-        cr.linked_user_id AS recipient_linked_user_id,
+        ${trustedLinkedIdSql("cr")} AS recipient_linked_user_id,
         cr.family_user_id AS recipient_owner_id,
         lu.accessibility_prefs AS recipient_accessibility_prefs,
         cr.sms_phone AS recipient_sms_phone,
@@ -278,7 +279,7 @@ router.get("/:id", requireRole("family"), async (req, res) => {
         bu.email AS billing_contact_email
       FROM care_teams ct
       JOIN care_recipients cr ON ct.care_recipient_id = cr.id
-      LEFT JOIN users lu ON cr.linked_user_id = lu.id
+      LEFT JOIN users lu ON lu.id = ${trustedLinkedIdSql("cr")}
       LEFT JOIN users bu ON ct.billing_user_id = bu.id
       WHERE ct.id = ?
     `).get(req.params.id);
@@ -1071,7 +1072,7 @@ router.put("/:teamId/member-prefs/:userId", authenticate, async (req, res) => {
     // Verify target user is a care recipient linked to this team
     // Betty isn't in care_team_members — she's the care_recipient linked via care_teams.care_recipient_id → care_recipients.linked_user_id
     const linkedRecipient = await db.prepare(
-      "SELECT cr.linked_user_id FROM care_teams ct JOIN care_recipients cr ON ct.care_recipient_id = cr.id WHERE ct.id = ? AND cr.linked_user_id = ?"
+      `SELECT cr.linked_user_id FROM care_teams ct JOIN care_recipients cr ON ct.care_recipient_id = cr.id WHERE ct.id = ? AND cr.linked_user_id = ? AND ${TRUSTED_LINK_SQL}`
     ).get(teamId, targetUserId);
 
     // Also check if they're a care_for role member of the team (fallback)

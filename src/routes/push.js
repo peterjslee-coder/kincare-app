@@ -4,6 +4,7 @@ const { getDb } = require("../models/database");
 const { authenticate } = require("../middleware/auth");
 const { clampLimit, clampOffset } = require("../utils/queryLimits");
 const { formatTimeForDisplay } = require("../utils/timezone");
+const { trustedLinkedIdSql } = require("../utils/linkedAccount"); // stale-link sweep
 
 const router = express.Router();
 
@@ -787,7 +788,7 @@ async function sendSessionReminders(sessionId, reminderType) {
     const session = await db.prepare(`
       SELECT cs.*, cp.user_id AS caregiver_user_id,
         cr.first_name AS recipient_first_name, cr.last_name AS recipient_last_name,
-        cr.linked_user_id AS care_for_user_id,
+        ${trustedLinkedIdSql("cr")} AS care_for_user_id,
         cr.notification_channel, cr.sms_phone,
         cr.location_address, cr.location_city, cr.location_state
       FROM care_sessions cs

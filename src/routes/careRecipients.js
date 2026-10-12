@@ -11,6 +11,7 @@ const { geocodeAddress, buildAddressString } = require("../utils/geocode");
 const { MODEL_SONNET, MODEL_HAIKU, getAnthropic } = require("../utils/aiModels");
 const { captureException } = require("../utils/sentry");
 const storage = require("../utils/storage");
+const { TRUSTED_LINK_SQL, trustedLinkedUserId } = require("../utils/linkedAccount"); // stale-link sweep
 // ─── v1.105.122: a point the client already had beats no point at all ───
 //
 // Both handlers below geocode the typed address, which is the right primary source: it is
@@ -46,7 +47,7 @@ router.get("/", requireRole("family", "admin", "care_for"), async (req, res) => 
   // care_for users: return their own linked care_recipient
   if (activeRole === "care_for") {
     const self = await db.prepare(
-      "SELECT *, 'self' AS access_level FROM care_recipients WHERE linked_user_id = ?"
+      `SELECT cr.*, 'self' AS access_level FROM care_recipients cr WHERE cr.linked_user_id = ? AND ${TRUSTED_LINK_SQL}`
     ).get(req.user.id);
     const parsed = self ? [{
       ...self,
@@ -238,9 +239,15 @@ router.get("/:id", requireRole("family", "admin"), async (req, res) => {
     `).all(req.params.id);
   }
 
+  // Stale-link sweep: report the "own account" link only if it is trusted, so the profile does
+  // not show an unrelated account as the person (CareProfile's App Permissions card keys on it).
+  let trustedLink = null;
+  try { trustedLink = await trustedLinkedUserId(db, recipient); } catch (e) { console.error("[care-recipients] trusted link check failed:", e.message); }
+
   res.json({
     careRecipient: {
       ...recipient,
+      linked_user_id: trustedLink,
       photo: recipientPhotoUrl(recipient),
       healthConditions: JSON.parse(recipient.health_conditions || "[]"),
       observedConcerns: JSON.parse(recipient.observed_concerns || "[]"),
@@ -507,8 +514,9 @@ router.put("/:id/permissions", requireRole("family"), async (req, res) => {
         });
       } catch (auditErr) { console.error("Permission change audit error:", auditErr.message); }
 
-      // Notify care recipient if they have a linked account
-      if (recipient.linked_user_id) {
+      // Notify care recipient if they have a linked account — a TRUSTED one (stale-link sweep)
+      const notifyLinkedId = await trustedLinkedUserId(db, recipient).catch(() => null);
+      if (notifyLinkedId) {
         try {
           const emitToUser = req.app.get("emitToUser");
           const uName2 = (await db.prepare("SELECT first_name FROM users WHERE id = ?").get(req.user.id))?.first_name || "Your care team";
@@ -520,8 +528,8 @@ router.put("/:id/permissions", requireRole("family"), async (req, res) => {
             : `${uName2} has changed your participation level to '${permissionTier}'.${permissionTier === 'managed' ? ' Your care team is now managing your sessions.' : ' Some actions may require care team approval.'}`;
           await db.prepare(
             "INSERT INTO activity_feed (id, family_user_id, care_recipient_id, event_type, title, message) VALUES (?, ?, ?, 'participation_changed', ?, ?)"
-          ).run(require("uuid").v4(), recipient.linked_user_id, req.params.id, title, message);
-          if (emitToUser) emitToUser(recipient.linked_user_id, "activity_update", { title, message });
+          ).run(require("uuid").v4(), notifyLinkedId, req.params.id, title, message);
+          if (emitToUser) emitToUser(notifyLinkedId, "activity_update", { title, message });
         } catch (notifErr) { console.error("Participation notification error:", notifErr.message); }
       }
     }

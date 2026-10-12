@@ -7,7 +7,7 @@ build red.
 
 Hand-written sections (§3 "Where is…") are preserved across regeneration; edit those freely.
 
-Structure at last generation: 567 HTTP routes across 59 mounts ·
+Structure at last generation: 569 HTTP routes across 59 mounts ·
 109 `CREATE TABLE` statements · 14 background jobs · 39 socket events
 (17 with no client listener) · 69 push event types · 60 `window.__*` globals.
 
@@ -40,7 +40,7 @@ JSX is *not* compiled in the browser; Babel-standalone is not loaded. Editing an
 |---|---|---:|---|
 | `/api/accountability` | `src/routes/accountability.js` | 12 |  |
 | `/api/activity` | `src/routes/activity.js` | 4 |  |
-| `/api/admin` | `src/routes/admin/` | 97 |  |
+| `/api/admin` | `src/routes/admin/` | 99 |  |
 | `/api/admin/financials` | `src/routes/financials.js` | 13 |  |
 | `/api/admin/tickets` | `src/routes/tickets.js` | 7 |  |
 | `/api/admin/treasury` | `src/routes/treasury.js` | 1 |  |
@@ -121,6 +121,7 @@ greps finding something.
 | Blob storage | `src/utils/storage.js` → `storeFileData()`, `resolveFileData()`. R2-backed, `r2:<key>` markers, legacy base64 rows still readable |
 | Who may see a medical record / who holds the iPAi key | `src/utils/medicalAccess.js` → `medicalRole()`, `canViewMedical()`, `canManageMedicalAccess()`, `aiKeyHolder()`. Never `canAccessOwner` in documents.js |
 | Passkey step-up for medical records | `src/utils/medicalStepUp.js` (challenge/verify, 10-min window in `medical_step_ups`) |
+| Is a care recipient's linked "own account" really her? | `src/utils/linkedAccount.js` → `trustedLinkedUserId()`, `isTrustedLinkedUser()`, `recipientForLinkedUser()`, SQL `TRUSTED_LINK_SQL` / `trustedLinkSql(alias)` / `trustedLinkedIdSql(alias)`. Stale links are listed at Admin → Integrity (`GET /api/admin/integrity/linked-accounts`, unlink via `POST …/:recipientId/unlink`) |
 
 ### Medical records (Documents Center, migration `050_documents_center`)
 
@@ -358,6 +359,12 @@ State travels through `window`, not props. This table is the registry.
 - Any endpoint taking base64 needs **both** a route-scoped `express.json` limit in `server.js`
   **and** a `limitBodySize` exemption in `validate.js`.
 - Blobs go through `src/utils/storage.js`, never straight into a Postgres column.
+- **`care_recipients.linked_user_id` is not proof of identity.** A link counts as the person only if
+  that account owns the record (`family_user_id = linked_user_id`, self-signup) or is on her care team.
+  Betty's profile carried a leftover self-signup link to an unrelated account (Kit Conn) that the app
+  treated as Betty. Every read that treats the linked user as the care recipient — care_for views,
+  dashboard, messages contacts, visit/reminder push audiences, documents, notes, blocks, reimbursements —
+  goes through `src/utils/linkedAccount.js`. Writes that only CLEAR a link (account deletion) do not.
 
 ## 9. Tests and gates
 

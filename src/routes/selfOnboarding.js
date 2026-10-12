@@ -13,6 +13,7 @@ const { identityDecision, verdictLabel, VERDICT } = require("../utils/identityDe
 const { MODEL_SONNET, getAnthropic } = require("../utils/aiModels");
 const storage = require("../utils/storage"); // v1.91.0 — env-gated R2 offload for document blobs
 const { geocodeAddress, buildAddressString } = require("../utils/geocode");
+const { TRUSTED_LINK_SQL } = require("../utils/linkedAccount"); // stale-link sweep
 const router = express.Router();
 
 /**
@@ -92,7 +93,7 @@ router.post("/verify-id", authenticate, async (req, res) => {
 
     // Get the care_recipient record (if one exists for this user)
     const careRecipient = await db.prepare(
-      "SELECT id FROM care_recipients WHERE linked_user_id = ?"
+      `SELECT cr.id FROM care_recipients cr WHERE cr.linked_user_id = ? AND ${TRUSTED_LINK_SQL}`
     ).get(req.user.id);
 
     // Determine document owner — care_recipient if linked, otherwise the user directly
@@ -333,7 +334,7 @@ router.post("/complete", authenticate, async (req, res) => {
 
     // Get care_recipient record
     const careRecipient = await db.prepare(
-      "SELECT id FROM care_recipients WHERE linked_user_id = ?"
+      `SELECT cr.id FROM care_recipients cr WHERE cr.linked_user_id = ? AND ${TRUSTED_LINK_SQL}`
     ).get(req.user.id);
 
     if (!careRecipient) {
@@ -472,8 +473,8 @@ router.get("/status", authenticate, async (req, res) => {
          location_address, location_city, location_state, location_zip,
          medical_conditions, medications, food_allergies, pet_allergies,
          emergency_contact_name
-       FROM care_recipients
-       WHERE linked_user_id = ?`
+       FROM care_recipients cr
+       WHERE cr.linked_user_id = ? AND ${TRUSTED_LINK_SQL}`
     ).get(req.user.id);
 
     if (!careRecipient) {

@@ -28,6 +28,7 @@ const { recipientCapabilities } = require("../utils/access");
 const { captureException } = require("../utils/sentry");
 const { checkAdmin } = require("./admin/shared");
 const push = require("./push"); // property access at call time, so tests can stub it
+const { TRUSTED_LINK_SQL } = require("../utils/linkedAccount"); // stale-link sweep
 
 const router = express.Router();
 const adminRouter = express.Router();
@@ -625,7 +626,7 @@ adminRouter.get("/safety-flags/:flagId/recipients", async (req, res) => {
     const ph = ids.map(() => "?").join(",");
     const rows = await db.prepare(`
       SELECT DISTINCT cr.id, cr.first_name, cr.last_name FROM care_recipients cr
-      WHERE cr.family_user_id IN (${ph}) OR cr.linked_user_id IN (${ph})
+      WHERE cr.family_user_id IN (${ph}) OR (cr.linked_user_id IN (${ph}) AND ${TRUSTED_LINK_SQL})
          OR cr.id IN (SELECT ct.care_recipient_id FROM care_teams ct JOIN care_team_members ctm ON ctm.care_team_id = ct.id WHERE ctm.user_id IN (${ph}))
          OR cr.id IN (SELECT cs.care_recipient_id FROM care_sessions cs JOIN caregiver_profiles cp ON cp.id = cs.caregiver_id WHERE cp.user_id IN (${ph}))
       ORDER BY cr.first_name

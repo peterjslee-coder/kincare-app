@@ -56,6 +56,8 @@ beforeAll(async () => {
 
   betty = await h.createUser({ roles: ["care_for"], firstName: "Betty" });
   await db.prepare("UPDATE care_recipients SET linked_user_id = ? WHERE id = ?").run(betty.user.id, recipientId);
+  // A genuine link is always on her team (accepting the invite adds her) — stale-link sweep.
+  await h.addTeamMember(teamId, betty.user.id);
 
   eventId = uuid();
   await db.prepare(`

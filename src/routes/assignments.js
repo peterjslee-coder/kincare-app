@@ -3,6 +3,7 @@ const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { authenticate, requireRole } = require("../middleware/auth");
 const { coarsenCoordinate } = require("../utils/geocode");
+const { recipientForLinkedUser } = require("../utils/linkedAccount"); // stale-link sweep
 
 const router = express.Router();
 router.use(authenticate);
@@ -39,9 +40,7 @@ router.get("/", async (req, res) => {
     }
   } else if (activeRole === "care_for") {
     // care_for users see assignments for their own linked care_recipient
-    const recipient = await db.prepare(
-      "SELECT id FROM care_recipients WHERE linked_user_id = ? LIMIT 1"
-    ).get(req.user.id);
+    const recipient = await recipientForLinkedUser(db, req.user.id);
     if (!recipient) return res.json({ assignments: [] });
     query = `
       SELECT ca.*, cp.user_id AS caregiver_user_id,
@@ -144,7 +143,7 @@ router.get("/suggestions", async (req, res) => {
     // Resolve care recipient: explicit param, or auto from role
     let recipientId = careRecipientId;
     if (!recipientId && activeRole === 'care_for') {
-      const r = await db.prepare("SELECT id FROM care_recipients WHERE linked_user_id = ? LIMIT 1").get(userId);
+      const r = await recipientForLinkedUser(db, userId);
       if (r) recipientId = r.id;
     }
 

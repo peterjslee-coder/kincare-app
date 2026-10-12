@@ -25,6 +25,7 @@ router.use(authenticate, uploadQuota());
 // too loose for spam via send endpoints. 30 sends/min per IP is far above any
 // human typing rate. GETs (polling, list) are untouched.
 const rateLimit = require("express-rate-limit");
+const { TRUSTED_LINK_SQL } = require("../utils/linkedAccount"); // stale-link sweep
 const sendLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 30,
@@ -538,11 +539,11 @@ router.get("/contacts", async (req, res) => {
       FROM care_recipients cr
       JOIN caregiver_assignments ca ON ca.care_recipient_id = cr.id AND ca.is_active = 1
       JOIN caregiver_profiles cp ON ca.caregiver_profile_id = cp.id
-      WHERE cr.linked_user_id = ?
+      WHERE cr.linked_user_id = ? AND ${TRUSTED_LINK_SQL}
       UNION
       SELECT cr.family_user_id AS user_id
       FROM care_recipients cr
-      WHERE cr.linked_user_id = ? AND cr.family_user_id IS NOT NULL AND cr.family_user_id != ?
+      WHERE cr.linked_user_id = ? AND ${TRUSTED_LINK_SQL} AND cr.family_user_id IS NOT NULL AND cr.family_user_id != ?
     `).all(userId, userId, userId).catch(() => []);
   }
 

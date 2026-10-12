@@ -112,6 +112,77 @@ const SpecialFeeEditor = ({ user, onSaved }) => {
   );
 };
 
+// ─── Stale-link sweep — Integrity tab: "own account" links that are not the person ───
+// A care recipient's linked_user_id is trusted only if that account owns the record or is on
+// her care team (src/utils/linkedAccount.js). This lists the ones that are neither — the shape
+// of Betty's link to Kit Conn — and lets an admin remove one. The server re-checks that the
+// link is still the same and still untrusted (409 otherwise) and writes the consent audit log.
+const AdminIntegrity = () => {
+  const { showToast } = useToast();
+  const [rows, setRows] = React.useState(null);
+  const [err, setErr] = React.useState('');
+  const [busy, setBusy] = React.useState(null);
+
+  const load = async () => {
+    setErr('');
+    try {
+      const res = await apiFetch('/api/admin/integrity/linked-accounts');
+      const d = res ? await res.json().catch(() => ({})) : {};
+      if (res && res.ok) setRows(d.staleLinks || []);
+      else { setRows([]); setErr(d.error || 'Could not run the check'); }
+    } catch { setRows([]); setErr('Network error'); }
+  };
+  React.useEffect(() => { load(); }, []);
+
+  const unlink = async (row) => {
+    const who = row.linkedUserName || row.linkedUserEmail || row.linkedUserId;
+    if (!window.confirm(`Remove ${who} as ${row.recipientName || 'this person'}'s own account? Their own account is not deleted.`)) return;
+    setBusy(row.recipientId);
+    try {
+      const res = await apiFetch(`/api/admin/integrity/linked-accounts/${row.recipientId}/unlink`, {
+        method: 'POST',
+        body: JSON.stringify({ linkedUserId: row.linkedUserId }),
+      });
+      const d = res ? await res.json().catch(() => ({})) : {};
+      if (res && res.ok) showToast('Link removed', 'success');
+      else showToast(d.error || 'Could not remove the link', 'error');
+    } catch { showToast('Network error', 'error'); }
+    setBusy(null);
+    load();
+  };
+
+  const fmt = (d) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
+
+  return (
+    <div className="card" style={{ padding: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
+        <h3 style={{ margin: 0, fontSize: 16 }}>Linked accounts that are not the person</h3>
+        <button onClick={load} style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--bg-surface)', color: 'var(--text-secondary)', fontSize: 12, cursor: 'pointer' }}>Re-check</button>
+      </div>
+      <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 0 }}>
+        A care recipient's "own account" counts only if it owns the profile or is on the care team. These links are neither, so the app already ignores them. Removing one clears it for good and is recorded in the consent audit log.
+      </p>
+      {err && <div style={{ fontSize: 13, color: 'var(--color-error)', fontWeight: 600, marginBottom: 8 }}>{err}</div>}
+      {rows === null && <div style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>Checking…</div>}
+      {rows && rows.length === 0 && !err && <div style={{ fontSize: 13, color: 'var(--color-success)', fontWeight: 600 }}>No stale links found.</div>}
+      {rows && rows.map((r) => (
+        <div key={r.recipientId} style={{ borderTop: '1px solid var(--border-color)', padding: '10px 0', display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'flex-start', justifyContent: 'space-between' }}>
+          <div style={{ fontSize: 13, minWidth: 0, flex: '1 1 260px' }}>
+            <div style={{ fontWeight: 700 }}>{r.recipientName || r.recipientId}</div>
+            <div>Linked to: {r.linkedUserName || '(no such user)'}{r.linkedUserEmail ? ` · ${r.linkedUserEmail}` : ''}</div>
+            <div style={{ color: 'var(--text-tertiary)', fontSize: 12 }}>
+              Created {fmt(r.recipientCreatedAt)} via {r.consentMethod || 'unknown'} · Owner: {r.ownerName || '—'} · Team leader: {r.leaderName || '—'}
+            </div>
+          </div>
+          <button onClick={() => unlink(r)} disabled={busy === r.recipientId} style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid var(--color-error)', background: 'transparent', color: 'var(--color-error)', fontSize: 12, fontWeight: 600, cursor: busy === r.recipientId ? 'wait' : 'pointer' }}>
+            {busy === r.recipientId ? 'Removing…' : 'Unlink'}
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+};
+
 const AdminPanel = window.AdminPanel = ({ currentUser }) => {
   const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState('overview');
@@ -1936,6 +2007,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
       { id: 'safety', label: 'Safety Flags', icon: '🚨', badge: safetyFlagCount || null },
       { id: 'security', label: 'Security', icon: '🛡️' },
       { id: 'blocked', label: 'Blocked', icon: '🚫' },
+      { id: 'integrity', label: 'Integrity', icon: '\u{1F517}' },
     ]},
     { label: 'Content & Config', tabs: [
       { id: 'help', label: 'Help/FAQ', icon: '❓' },
@@ -4421,6 +4493,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
 
       {/* ─── Financials Tab ─── */}
       {activeTab === 'financials' && <AdminFinancials />}
+      {activeTab === 'integrity' && <AdminIntegrity />}
 
       {/* ─── Help/FAQ Management Tab ─── */}
       {activeTab === 'help' && (

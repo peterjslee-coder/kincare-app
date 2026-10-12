@@ -14,6 +14,7 @@ const {
 const { isTrustedIp, registerTrustedIp, getTrustedIps, removeTrustedIp } = require("../../utils/trustedIps");
 const { getClientIp, writeAuditLog } = require("../../middleware/auditLog");
 const { blockPendingAdminReview } = require("../../utils/caregiverBlock");
+const { trustedLinkedUserId } = require("../../utils/linkedAccount"); // stale-link sweep
 const {
   RP_ID, ORIGIN,
   setPasskeyChallenge, getPasskeyChallenge, setNukeChallenge, getNukeChallenge,
@@ -233,7 +234,9 @@ router.put("/authorizations/:id", requireAdmin, async (req, res) => {
       }
 
       // POA override: if approving tier2 for a recipient with self-consent (linked_user_id), activate managed mode
-      if (action === 'approve' && recipient.linked_user_id) {
+      // Stale-link sweep: only a TRUSTED linked account is the person (utils/linkedAccount).
+      const poaLinkedId = action === 'approve' ? await trustedLinkedUserId(db, recipient) : null;
+      if (action === 'approve' && poaLinkedId) {
         const previousPerm = recipient.permission_tier || 'full';
         if (previousPerm === 'full') {
           await db.prepare(`
@@ -260,8 +263,8 @@ router.put("/authorizations/:id", requireAdmin, async (req, res) => {
             const message = `A Power of Attorney document has been verified for your care. Your care team now helps manage your care sessions. You can still view your schedule and information.`;
             await db.prepare(
               "INSERT INTO activity_feed (id, family_user_id, care_recipient_id, event_type, title, message) VALUES (?, ?, ?, 'managed_mode_activated', ?, ?)"
-            ).run(uuid(), recipient.linked_user_id, id, title, message);
-            if (emitToUser) emitToUser(recipient.linked_user_id, "activity_update", { title, message });
+            ).run(uuid(), poaLinkedId, id, title, message);
+            if (emitToUser) emitToUser(poaLinkedId, "activity_update", { title, message });
           } catch (notifErr) { console.error("Managed mode notification error:", notifErr.message); }
         }
       }

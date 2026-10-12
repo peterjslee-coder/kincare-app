@@ -101,5 +101,6 @@ require("./verification")(router);
 require("./sessionOps")(router);
 require("./safety")(router);
 require("./maintenance")(router);
+require("./integrity")(router); // stale-link sweep — linked-account integrity check
 
 module.exports = router;

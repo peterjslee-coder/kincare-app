@@ -49,6 +49,8 @@ beforeAll(async () => {
   recipientId = t.recipientId;
   await h.db.prepare("UPDATE care_recipients SET linked_user_id = ? WHERE id = ?")
     .run(betty.user.id, recipientId);
+  // A genuine link is always on her team (accepting the invite adds her) — stale-link sweep.
+  await h.addTeamMember(t.teamId, betty.user.id);
 });
 
 afterAll(async () => { await stopHarness(h); });
