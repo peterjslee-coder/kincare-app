@@ -34,7 +34,6 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
     "@aws-sdk/client-s3": "^3.1085.0",
-    "@babel/cli": "^7.28.6",
     "@babel/core": "^7.29.0",
     "@babel/plugin-transform-optional-chaining": "^7.28.6",
     "@babel/preset-env": "^7.29.0",
@@ -86,6 +85,7 @@
     "@noble/hashes": "1.8.0"
   },
   "devDependencies": {
+    "@babel/cli": "^7.28.6",
     "embedded-postgres": "^18.4.0-beta.17",
     "eslint": "^8.57.0",
     "jest": "^30.2.0",
