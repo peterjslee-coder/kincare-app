@@ -29,6 +29,7 @@ const router = express.Router();
 router.use(authenticate);
 
 const { blockWhileImpersonating } = require("../middleware/noImpersonation"); // v1.107.5
+const { settleOccurrenceNotices, dueTimeLabel } = require("../utils/careTaskNotices"); // v1.112.2
 const DEFAULT_TZ = "America/New_York";
 
 // ─── Access control (same pattern as notes.js / careRecipients.js) ───
@@ -672,6 +673,9 @@ router.post("/occurrences/:id/check", blockWhileImpersonating("check off a care 
         JSON.stringify({ occurrenceId: occ.id, taskId: occ.task_id, status }));
     } catch (feedErr) { /* non-critical */ }
 
+    // v1.112.2 — the "not checked off" question (and the due nudge) about this one is answered.
+    await settleOccurrenceNotices(db, occ.id);
+
     const updated = await db.prepare("SELECT * FROM care_task_occurrences WHERE id = ?").get(occ.id);
     return res.json({ occurrence: updated });
   } catch (err) {
@@ -916,7 +920,8 @@ async function pollCareTasks(sendPushToUser) {
           // v1.105.39 — same: the title named the medication.
           sendPushToUser(m.id, {
             title: "Care task not checked off",
-            body: `${t.recipient_first_name}'s ${occ.due_date} task hasn't been checked off. Can anyone confirm it happened?`,
+            // v1.112.2 — "Betty's 5:00 PM task", not "Betty's 2026-10-12 task".
+            body: `${t.recipient_first_name}'s ${dueTimeLabel(occ.due_at, taskTz(t, t.recipient_tz)) || "scheduled"} task hasn't been checked off yet. Can anyone confirm it happened?`,
             data: pushData,
           }, "care_task").catch(() => {});
         }

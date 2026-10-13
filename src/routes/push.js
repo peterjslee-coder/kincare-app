@@ -5,6 +5,7 @@ const { authenticate } = require("../middleware/auth");
 const { clampLimit, clampOffset } = require("../utils/queryLimits");
 const { formatTimeForDisplay } = require("../utils/timezone");
 const { trustedLinkedIdSql } = require("../utils/linkedAccount"); // stale-link sweep
+const { resolveCareTaskNotices } = require("../utils/careTaskNotices"); // v1.112.2
 
 const router = express.Router();
 
@@ -1058,11 +1059,19 @@ router.get("/notifications", authenticate, async (req, res) => {
     const rows = await db.prepare(
       "SELECT id, title, body, type, data, read, created_at FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT ?"
     ).all(req.user.id, scan);
+    // v1.112.1 → .2 — a care-task question that has been answered says so, and is read.
+    const resolved = await resolveCareTaskNotices(db, rows);
+    const settledIds = resolved.filter((r, i) => r.read && !rows[i].read).map((r) => r.id);
+    if (settledIds.length) {
+      await db.prepare(
+        `UPDATE notifications SET read = 1 WHERE user_id = ? AND id IN (${settledIds.map(() => "?").join(",")})`
+      ).run(req.user.id, ...settledIds).catch(() => {});
+    }
     const unreadCount = await db.prepare(
       "SELECT COUNT(*) as count FROM notifications WHERE user_id = ? AND read = 0"
     ).get(req.user.id);
     res.json({
-      notifications: groupNotifications(rows, limit),
+      notifications: groupNotifications(resolved, limit),
       unreadCount: parseInt(unreadCount?.count || 0),
     });
   } catch (err) {
