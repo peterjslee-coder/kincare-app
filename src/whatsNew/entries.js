@@ -31,6 +31,20 @@ const WINDOW_DAYS = 45;
 
 const ENTRIES = [
   {
+    id: "todos-folded-bar",
+    version: "1.113.1",
+    date: "2026-10-13",
+    audience: ["family", "caregiver"],
+    title: "A folded to-do list still gets noticed",
+    body: "Fold the to-do list away and, while something's waiting, it shows as a light-blue bar with the count — so “Water the kitchen plant” doesn't get forgotten.",
+    howTo: [
+      "Tap the to-do heading to fold or unfold it",
+      "Look for “To-do list · 3 items” — tap it to open",
+    ],
+    examples: ["Water the kitchen plant", "Change the litter next time"],
+    preview: "foldedBar",
+  },
+  {
     id: "todos-on-arrival",
     version: "1.112.4",
     date: "2026-10-13",

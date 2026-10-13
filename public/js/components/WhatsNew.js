@@ -45,6 +45,22 @@ const WN_PREVIEWS = {
       </div>
     </div>
   ),
+  foldedBar: () => (
+    <div>
+      <div className="care-todo-folded" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, minHeight: 40,
+        padding: '0 12px', borderRadius: 10, background: 'var(--color-info-bg)', borderLeft: '4px solid var(--color-info)', marginBottom: 8 }}>
+        <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text-primary)' }}>{'📌'} To-do list {'·'} 3 items</span>
+        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)' }}>Show {'▾'}</span>
+      </div>
+      <div style={{ textAlign: 'center', fontSize: 14, color: 'var(--text-tertiary)', margin: '-2px 0 4px' }}>{'↓'} tap</div>
+      {['Water the kitchen plant', 'Change the litter next time'].map((t) => (
+        <div key={t} style={{ ...wnCard, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{t}</span>
+          <span style={wnPill('var(--accent-color-dark)', 'var(--text-on-primary)')}>{'✓'} I did this</span>
+        </div>
+      ))}
+    </div>
+  ),
   arrival: () => (
     <div style={{ padding: '12px 12px 10px', borderRadius: 12, border: '1.5px solid var(--role-color)', background: 'var(--color-success-bg)' }}>
       <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>Looks like you{'’'}re with Mom</div>

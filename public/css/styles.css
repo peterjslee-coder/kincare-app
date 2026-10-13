@@ -3441,7 +3441,7 @@ body.text-size-xlarge h2, body.text-size-xlarge h3 { font-size: 28px !important;
   .ip-path-step, .ip-path-done { animation: none; }
 }
 
-/* v1.113.1 — a folded to-do list with something waiting: one slow sheen across the amber bar
+/* v1.113.1 — a folded to-do list with something waiting: one slow sheen across the light-blue bar
    every few seconds, so it reads as "there's something here" without nagging. */
 .care-todo-folded { position: relative; overflow: hidden; }
 .care-todo-folded::after {

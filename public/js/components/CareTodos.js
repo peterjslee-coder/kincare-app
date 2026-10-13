@@ -194,7 +194,8 @@ const CareTodoList = window.CareTodoList = ({ recipientIds, heading, hideWhenNot
       {/* v1.113.1 — Pete: "i'd like for the to-dos that are collapsed to be just a little more
           noticeable … something like 'To-do list - 3 items' … even just a splash of color or a
           shimmer treatment so it stands against the green/white/black." Folded with something
-          waiting, the heading becomes a warm amber bar with a slow sheen (styles.css,
+          waiting, the heading becomes a light-blue bar (Pete picked the info blue over amber, which read
+          brown) with a slow sheen (styles.css,
           .care-todo-folded; still under reduced motion). Folded with nothing waiting, or open,
           it stays the quiet heading it was. */}
       {!expanded && open.length > 0 ? (
@@ -205,7 +206,7 @@ const CareTodoList = window.CareTodoList = ({ recipientIds, heading, hideWhenNot
           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpanded(true); } }}
           style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, minHeight: 44,
             margin: '4px 0 8px', padding: '0 14px', borderRadius: 12, cursor: 'pointer',
-            background: 'var(--color-warning-bg)', borderLeft: '4px solid var(--color-warning)' }}>
+            background: 'var(--color-info-bg)', borderLeft: '4px solid var(--color-info)' }}>
           <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {'📌'} To-do list {'·'} {open.length} {open.length === 1 ? 'item' : 'items'}
           </span>

@@ -4,10 +4,10 @@ const { raw, code } = require("./helpers/source");
 const ui = code("public/js/components/CareTodos.js");
 const css = raw("public/css/styles.css");
 
-test("folded with something waiting: an amber bar that says how many", () => {
+test("folded with something waiting: a light-blue bar that says how many", () => {
   expect(ui).toMatch(/\{!expanded && open\.length > 0 \? \(/);
   expect(ui).toContain('className="care-todo-folded"');
-  expect(ui).toContain("background: 'var(--color-warning-bg)', borderLeft: '4px solid var(--color-warning)'");
+  expect(ui).toContain("background: 'var(--color-info-bg)', borderLeft: '4px solid var(--color-info)'");
   expect(ui).toMatch(/To-do list \{'·'\} \{open\.length\} \{open\.length === 1 \? 'item' : 'items'\}/);
 });
 
