@@ -19,6 +19,7 @@
  * Each returns null when it passes, or { status, error } to be handed straight to res.
  */
 const { hasActiveVouch } = require("./vouches");
+const { parseTimeToMinutes, formatTimeForDisplay } = require("./timezone");
 
 const CLAIMABLE = ["requested", "open", "pending"];
 
@@ -82,4 +83,75 @@ async function sessionGate(db, req, session, profile) {
   return null;
 }
 
-module.exports = { caregiverGate, sessionGate, CLAIMABLE };
+// ─── v1.114.3: one caregiver, one place at a time ───
+//
+// Pete sent Tina two requests for the same morning and she accepted both — nothing anywhere
+// asked whether she was already booked. The family's Request Care form has an overlap
+// warning, but it was reading an oldest-first list capped at 100 visits, so for an account
+// with history it could not see November at all. A warning on one side is not a rule; this
+// is the rule, and it sits in the gate so the single claim, the batch claim and the series
+// claim all enforce the same one.
+//
+// Strict overlap, no travel buffer: back-to-back visits (9–11 then 11–1) are legitimate and
+// common for the same recipient. Visits are placed on an absolute minute line so an
+// overnight visit that runs past midnight still collides with the next morning.
+const BUSY_STATUSES = ["confirmed", "in_progress"];
+
+function dayNumber(dateStr) {
+  const [y, m, d] = String(dateStr || "").slice(0, 10).split("-").map(Number);
+  return Math.round(Date.UTC(y, (m || 1) - 1, d || 1) / 86400000);
+}
+
+function dayString(n) {
+  return new Date(n * 86400000).toISOString().slice(0, 10);
+}
+
+function visitSpan(s) {
+  const start = dayNumber(s.scheduled_date) * 1440 + parseTimeToMinutes(s.scheduled_time);
+  const hours = parseFloat(s.duration_hours);
+  return [start, start + (Number.isFinite(hours) && hours > 0 ? hours : 2) * 60];
+}
+
+function visitsOverlap(a, b) {
+  const [as, ae] = visitSpan(a);
+  const [bs, be] = visitSpan(b);
+  return as < be && bs < ae;
+}
+
+function describeVisit(s) {
+  const [y, m, d] = String(s.scheduled_date).slice(0, 10).split("-").map(Number);
+  const day = new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-US", {
+    weekday: "short", month: "short", day: "numeric", timeZone: "UTC",
+  });
+  const who = s.recipient_first ? ` with ${s.recipient_first}` : "";
+  return `a visit${who} on ${day} at ${formatTimeForDisplay(s.scheduled_time)}`;
+}
+
+/**
+ * Refuses a claim that would put the caregiver in two visits at once — against what she has
+ * already accepted, and against `alsoAccepting` (earlier picks in the same batch).
+ */
+async function scheduleConflictGate(db, session, profile, alsoAccepting = []) {
+  if (!session || !session.scheduled_date || !session.scheduled_time) return null;
+  const day = dayNumber(session.scheduled_date);
+  const booked = await db.prepare(`
+    SELECT cs.id, cs.scheduled_date, cs.scheduled_time, cs.duration_hours,
+           cr.first_name AS recipient_first
+    FROM care_sessions cs
+    LEFT JOIN care_recipients cr ON cr.id = cs.care_recipient_id
+    WHERE cs.caregiver_id = ?
+      AND cs.status IN (${BUSY_STATUSES.map(() => "?").join(",")})
+      AND cs.id <> ?
+      AND cs.scheduled_date >= ? AND cs.scheduled_date <= ?
+  `).all(profile.id, ...BUSY_STATUSES, session.id, dayString(day - 1), dayString(day + 1));
+
+  const clash = [...booked, ...alsoAccepting.filter((x) => x && x.id !== session.id)]
+    .find((other) => visitsOverlap(session, other));
+  if (!clash) return null;
+  return {
+    status: 409,
+    error: `You already have ${describeVisit(clash)} that overlaps this one. Ask the family to move one of them before you accept.`,
+  };
+}
+
+module.exports = { caregiverGate, sessionGate, scheduleConflictGate, visitsOverlap, CLAIMABLE };

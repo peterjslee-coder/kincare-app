@@ -14,7 +14,7 @@ const { getNowInZone, getTodayStringInZone, buildDateTimeInZone, zonedDateTimeTo
 // server.js. A 4,056-line router is not a library. See each module for what was wrong.
 const { expireStaleProposals } = require("../utils/proposals");
 const { ensureAssignment } = require("../utils/assignments");
-const { caregiverGate, sessionGate, CLAIMABLE } = require("../utils/claimGates");
+const { caregiverGate, sessionGate, scheduleConflictGate, CLAIMABLE } = require("../utils/claimGates");
 const { applySeriesClaim } = require("../utils/seriesClaim");
 const { checkPaymentStanding } = require("../utils/paymentStanding");
 const { generateRecurringDates } = require("../utils/recurrence");
@@ -389,6 +389,9 @@ router.put("/:id/claim", async (req, res) => {
   const sGate = await sessionGate(db, req, session, profile);
   if (sGate) return res.status(sGate.status).json({ error: sGate.error });
 
+  const cGate = await scheduleConflictGate(db, session, profile);
+  if (cGate) return res.status(cGate.status).json({ error: cGate.error });
+
   // If interview is required by the family, claim the job but mark as pending interview
   const newStatus = session.interview_required ? 'confirmed' : 'confirmed';
   const interviewStatus = session.interview_required ? 'pending' : null;
@@ -638,6 +641,15 @@ async function claimBatch(db, req, res, { acceptIds, declineIds }) {
   for (const id of accept) {
     const sGate = await sessionGate(db, req, mine.get(id), profile);
     if (sGate) return res.status(sGate.status).json({ error: sGate.error });
+  }
+
+  // v1.114.3 — and none of them may double-book her, against what she already has or
+  // against each other.
+  const picked = [];
+  for (const id of accept) {
+    const cGate = await scheduleConflictGate(db, mine.get(id), profile, picked);
+    if (cGate) return res.status(cGate.status).json({ error: cGate.error });
+    picked.push(mine.get(id));
   }
 
   try {
@@ -4810,6 +4822,22 @@ router.put("/:id/proposals/:proposalId/accept", async (req, res) => {
     }
     if (!["open", "requested", "pending"].includes(proposal.session_status)) {
       return res.status(400).json({ error: "This session is no longer available" });
+    }
+
+    // v1.114.3 — accepting her proposed time books her; it must not book her twice.
+    {
+      const sess = await db.prepare("SELECT id, duration_hours FROM care_sessions WHERE id = ?").get(req.params.id);
+      const cGate = await scheduleConflictGate(db, {
+        id: req.params.id,
+        scheduled_date: proposal.proposed_date,
+        scheduled_time: proposal.proposed_time,
+        duration_hours: sess && sess.duration_hours,
+      }, { id: proposal.caregiver_profile_id });
+      if (cGate) {
+        return res.status(409).json({
+          error: "This caregiver is already booked at that time — " + cGate.error.replace(/^You already have /, "").replace(/ Ask the family.*$/, "") + " Pick another caregiver or time.",
+        });
+      }
     }
 
     // v1.106.13 — three writes that have to be one.

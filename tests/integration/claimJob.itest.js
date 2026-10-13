@@ -33,10 +33,11 @@ async function makeSession(overrides = {}) {
       (id, care_recipient_id, family_user_id, service_type, status,
        scheduled_date, scheduled_time, duration_hours, estimated_cost,
        offered_to_caregiver_id, recurrence_group_id, exclusive_until, created_at)
-    VALUES (?, ?, ?, 'companion', ?, ?, '10:00', 2, 100, ?, ?, ?, NOW())
+    VALUES (?, ?, ?, 'companion', ?, ?, ?, ?, 100, ?, ?, ?, NOW())
   `).run(
     id, overrides.recipientId || recipientId, overrides.familyUserId || family.user.id,
     overrides.status || "open", overrides.date || soon(),
+    overrides.time || "10:00", overrides.hours || 2,
     overrides.offeredTo === undefined ? profileId : overrides.offeredTo,
     overrides.groupId || null,
     overrides.exclusiveUntil || null
@@ -73,7 +74,14 @@ beforeAll(async () => {
   ({ recipientId } = await h.createCareTeam({ familyUserId: family.user.id }));
 });
 
-afterEach(resetProfile);
+// v1.114.3 — claims now refuse to double-book her, and the fixtures put every visit at 10:00
+// on a handful of dates. Each test starts with her calendar clear so a visit an earlier test
+// confirmed is not what this one collides with.
+const clearHerCalendar = () => db.prepare(
+  "UPDATE care_sessions SET status = 'cancelled' WHERE caregiver_id = ? AND status IN ('confirmed', 'in_progress')"
+).run(profileId);
+
+afterEach(async () => { await resetProfile(); await clearHerCalendar(); });
 afterAll(async () => { await stopHarness(h); });
 
 describe("claiming a job", () => {
@@ -439,5 +447,77 @@ describe("applySeriesClaim — what happens when a write loses", () => {
       expect(byId[id].status).toBe("open");
       expect(byId[id].offered_to_caregiver_id).toBeNull();
     }
+  });
+});
+
+// v1.114.3 — Pete sent Tina two requests for the same Nov 7 morning and she accepted both.
+describe("one caregiver, one place at a time", () => {
+  // Far enough out that no other test's visits share the day.
+  const day = soon(40);
+  const clearDay = () => db.prepare(
+    "UPDATE care_sessions SET status = 'cancelled' WHERE scheduled_date >= ? AND scheduled_date <= ?"
+  ).run(soon(39), soon(41));
+  beforeEach(clearDay);
+
+  test("a second visit at the same time is refused with the reason, and stays unclaimed", async () => {
+    const first = await makeSession({ date: day, time: "09:00", hours: 3 });
+    const second = await makeSession({ date: day, time: "09:00", hours: 3 });
+    expect((await claim(first)).status).toBe(200);
+    const res = await claim(second);
+    expect(res.status).toBe(409);
+    expect(res.body.error).toMatch(/already have a visit/);
+    expect(res.body.error).toMatch(/9:00 AM/);
+    expect((await statusOf(second)).status).toBe("open");
+  });
+
+  test("a partial overlap is refused too", async () => {
+    const first = await makeSession({ date: day, time: "09:00", hours: 3 });
+    const second = await makeSession({ date: day, time: "11:00", hours: 2 });
+    expect((await claim(first)).status).toBe(200);
+    expect((await claim(second)).status).toBe(409);
+  });
+
+  test("back-to-back is fine — 9 to 12 then 12 to 2", async () => {
+    const first = await makeSession({ date: day, time: "09:00", hours: 3 });
+    const second = await makeSession({ date: day, time: "12:00", hours: 2 });
+    expect((await claim(first)).status).toBe(200);
+    expect((await claim(second)).status).toBe(200);
+  });
+
+  test("an overnight visit collides with the next morning", async () => {
+    const night = await makeSession({ date: soon(39), time: "22:00", hours: 10 });
+    const morning = await makeSession({ date: day, time: "07:00", hours: 2 });
+    expect((await claim(night)).status).toBe(200);
+    expect((await claim(morning)).status).toBe(409);
+  });
+
+  test("a cancelled visit does not block the slot", async () => {
+    const first = await makeSession({ date: day, time: "09:00", hours: 3 });
+    expect((await claim(first)).status).toBe(200);
+    await db.prepare("UPDATE care_sessions SET status = 'cancelled' WHERE id = ?").run(first);
+    const second = await makeSession({ date: day, time: "09:00", hours: 3 });
+    expect((await claim(second)).status).toBe(200);
+  });
+
+  test("a series pick that overlaps itself is refused and nothing moves", async () => {
+    const groupId = uuid();
+    const a = await makeSession({ date: day, time: "09:00", groupId });
+    const b = await makeSession({ date: day, time: "09:30", groupId });
+    const res = await h.request.put(`/api/sessions/recurring/${groupId}/claim`)
+      .set(h.auth(caregiver.token)).send({ sessionIds: [a, b] });
+    expect(res.status).toBe(409);
+    expect((await statusOf(a)).status).toBe("open");
+    expect((await statusOf(b)).status).toBe("open");
+  });
+
+  test("a series date that overlaps a visit she already has is refused", async () => {
+    const booked = await makeSession({ date: day, time: "09:00", hours: 3 });
+    expect((await claim(booked)).status).toBe(200);
+    const groupId = uuid();
+    const a = await makeSession({ date: day, time: "10:00", groupId });
+    const res = await h.request.put(`/api/sessions/recurring/${groupId}/claim`)
+      .set(h.auth(caregiver.token)).send({ sessionIds: [a] });
+    expect(res.status).toBe(409);
+    expect((await statusOf(a)).status).toBe("open");
   });
 });

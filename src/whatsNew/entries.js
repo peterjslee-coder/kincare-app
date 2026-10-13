@@ -31,6 +31,21 @@ const WINDOW_DAYS = 45;
 
 const ENTRIES = [
   {
+    id: "calendar-whole-month",
+    version: "1.114.3",
+    date: "2026-10-13",
+    audience: ["family", "caregiver"],
+    title: "The calendar shows every visit again",
+    body: "For families with a lot of visit history, Schedule had been stopping partway through the month — later visits and repeating visits were booked but didn't show. Every month now shows all of its visits, and a caregiver can no longer accept two visits at the same time by mistake.",
+    howTo: [
+      "Open Schedule and tap Next → to look ahead",
+      "Tap a day to see who's coming and when",
+      "Caregivers: if two requests overlap, the app tells you which visit is in the way",
+    ],
+    examples: ["Mom's Tuesday visits through December", "Two requests sent for the same Saturday morning"],
+    preview: "calendarWhole",
+  },
+  {
     id: "todos-folded-bar",
     version: "1.113.1",
     date: "2026-10-13",

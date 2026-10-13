@@ -45,6 +45,27 @@ const WN_PREVIEWS = {
       </div>
     </div>
   ),
+  calendarWhole: () => (
+    <div>
+      <div style={{ ...wnHead, margin: '0 0 6px' }}><span>{'📅'} November</span></div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 3, marginBottom: 8 }}>
+        {Array.from({ length: 21 }, (_, i) => i + 1).map((d) => (
+          <div key={d} style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 6, padding: '3px 0 4px', textAlign: 'center' }}>
+            <div style={{ fontSize: 10.5, color: 'var(--text-secondary)' }}>{d}</div>
+            <div style={{ height: 6, display: 'flex', justifyContent: 'center' }}>
+              {[2, 3, 4, 7, 9, 10, 11, 14, 16, 17, 18, 21].includes(d) && (
+                <span style={{ width: 6, height: 6, borderRadius: 3, background: 'var(--role-color)' }} />
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div style={{ ...wnCard, borderLeft: '4px solid var(--color-warning)' }}>
+        <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)' }}>Already booked</div>
+        <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>You already have a visit with Ruth on Sat, Nov 7 at 9:00 AM that overlaps this one.</div>
+      </div>
+    </div>
+  ),
   foldedBar: () => (
     <div>
       <div className="care-todo-folded" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, minHeight: 40,

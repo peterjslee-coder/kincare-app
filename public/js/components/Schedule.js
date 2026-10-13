@@ -28,18 +28,55 @@ const Schedule = window.Schedule = () => {
     }
   }, []);
 
+  // v1.114.3 — the calendar asks for the MONTH it is showing.
+  //
+  // It used to ask for "?limit=100" with no date range. The server sorts oldest-first, so an
+  // account with more than 100 visits of history got its first 100 visits ever — and the
+  // calendar simply stopped partway through the next month (Pete's ended Nov 4; two visits
+  // Tina had accepted for Nov 7 and every recurring visit after were invisible). Cancelled
+  // visits were filtered out here, after the cap, so they used up slots too.
+  const [hasAnySessions, setHasAnySessions] = useState(null);
+  const monthRange = (y, m) => {
+    const pad = (n) => String(n).padStart(2, '0');
+    const last = new Date(y, m + 1, 0).getDate();
+    return { from: `${y}-${pad(m + 1)}-01`, to: `${y}-${pad(m + 1)}-${pad(last)}` };
+  };
+  const monthRef = useRef(currentMonth);
+  monthRef.current = currentMonth;
+
   const fetchSessions = async () => {
+    const { year: y, month: m } = monthRef.current;
+    const { from, to } = monthRange(y, m);
     try {
-      const response = await apiFetch('/api/sessions?limit=100');
+      const response = await apiFetch(`/api/sessions?from=${from}&to=${to}&limit=200`);
       if (response?.ok) {
         const data = await response.json();
-        setSessions((data.sessions || []).filter(s => s.status !== 'cancelled'));
+        // A slower answer for a month the user has already paged away from is dropped.
+        const now = monthRef.current;
+        if (now.year !== y || now.month !== m) return;
+        const list = (data.sessions || []).filter(s => s.status !== 'cancelled');
+        setSessions(list);
+        if (list.length > 0) setHasAnySessions(true);
       }
     } catch (error) {
       console.error('Error fetching sessions:', error);
     }
     setLoading(false);
   };
+
+  // Whether this account has ANY visits — decides the first-run empty state, which used to
+  // read sessions.length and would now fire on every quiet month.
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await apiFetch('/api/sessions?limit=1');
+        if (res?.ok) {
+          const data = await res.json();
+          setHasAnySessions((data.sessions || []).length > 0);
+        }
+      } catch { /* the calendar still works without it */ }
+    })();
+  }, []);
 
   // Check if user has at least one verified care recipient — gate scheduling behind authorization
   useEffect(() => {
@@ -59,12 +96,13 @@ const Schedule = window.Schedule = () => {
   }, []);
 
   useEffect(() => {
-    fetchSessions();
     // Re-fetch when a new session is created (e.g. from RequestCareModal)
     const onSessionsUpdated = () => fetchSessions();
     window.addEventListener('sessions-updated', onSessionsUpdated);
     return () => window.removeEventListener('sessions-updated', onSessionsUpdated);
   }, []);
+
+  useEffect(() => { fetchSessions(); }, [currentMonth.year, currentMonth.month]);
 
   // ─── Calendar helpers ───
   const getDaysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
@@ -148,7 +186,7 @@ const Schedule = window.Schedule = () => {
     <>
       <div className="page-header">
         <h1 className="page-title">Schedule</h1>
-        <p className="page-subtitle">{sessions.length > 0 ? 'Care calendar — click any day to see details' : 'Your care calendar'}</p>
+        <p className="page-subtitle">{hasAnySessions ? 'Care calendar — click any day to see details' : 'Your care calendar'}</p>
       </div>
 
       {authGate && (
@@ -168,7 +206,7 @@ const Schedule = window.Schedule = () => {
       )}
 
       {/* Empty state for new users with no sessions */}
-      {sessions.length === 0 && (
+      {hasAnySessions === false && (
         <div className="card" style={{ textAlign: 'center', padding: '48px 24px', marginBottom: 20 }}>
           <div style={{ fontSize: 48, marginBottom: 16 }}>📅</div>
           <h3 style={{ margin: '0 0 8px', color: 'var(--text-primary)', fontSize: 18 }}>No care sessions scheduled yet</h3>

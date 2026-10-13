@@ -85,7 +85,10 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
         const [assignRes, recipRes, sessRes] = await Promise.all([
           apiFetch('/api/assignments'),
           apiFetch('/api/care-recipients'),
-          apiFetch('/api/sessions?limit=100'),
+          // v1.114.3 — upcoming visits, not the account's oldest 100. The overlap warning below
+          // reads this list; capped oldest-first it could not see next month at all, which is
+          // how two requests for the same Nov 7 slot went out without a word.
+          apiFetch(`/api/sessions?from=${TimezoneHelper.getToday()}&limit=200`),
         ]);
         if (assignRes?.ok) {
           const data = await assignRes.json();

@@ -42,7 +42,7 @@ describe("who sees what", () => {
     expect(got).not.toContain("todos-caregiver");
   });
   test("a caregiver sees the caregiver one", () => {
-    expect(ids({ roles: ["caregiver"], createdAt: "2026-01-01" }).sort()).toEqual(["todos-caregiver", "todos-folded-bar"]);
+    expect(ids({ roles: ["caregiver"], createdAt: "2026-01-01" }).sort()).toEqual(["calendar-whole-month", "todos-caregiver", "todos-folded-bar"]);
   });
   test("seen entries do not come back, and a second entry on the same day still does", () => {
     const got = ids({ roles: ["family"], createdAt: "2026-01-01", seenIds: ["todos-next-visit"] });
