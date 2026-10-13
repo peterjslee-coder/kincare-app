@@ -110,6 +110,11 @@ const CareTaskKindChoice = window.CareTaskKindChoice = ({ kind, onChange }) => {
 // Dashboard and the caregiver's home do not need a card about nothing. showAdd: offer "+ Add" to
 // people allowed to add (one profile).
 const CareTodoList = window.CareTodoList = ({ recipientIds, heading, hideWhenNothingOpen, showAdd, framed }) => {
+  // v1.112.3 — Pete: "i like the to do list, but make it collapsable." Folds like every other
+  // section and remembers it on the account (useStickySection), per placement.
+  // (Falls back to plain state where the sticky hook isn't loaded, e.g. the render tests.)
+  const useFold = typeof useStickySection === 'function' ? useStickySection : (_k, d) => [d, () => {}];
+  const [expanded, setExpanded] = useFold(`careTodos:${heading || 'next-visit'}`, true);
   const { showToast } = useToast();
   const [groups, setGroups] = useState(null);
   const [doneOpen, setDoneOpen] = useState(false);
@@ -187,13 +192,20 @@ const CareTodoList = window.CareTodoList = ({ recipientIds, heading, hideWhenNot
   const body = (
     <div data-testid="care-todos">
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, margin: '4px 2px 8px' }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-          {'📌'} {heading || 'To-dos for the next visit'}{open.length ? ` (${open.length})` : ''}
+        <div role="button" tabIndex={0} aria-expanded={expanded}
+          onClick={() => setExpanded(!expanded)}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpanded(!expanded); } }}
+          style={{ display: 'flex', alignItems: 'center', gap: 6, minHeight: 36, cursor: 'pointer', flex: 1, minWidth: 0,
+            fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{'📌'} {heading || 'To-dos for the next visit'}{open.length ? ` (${open.length})` : ''}</span>
+          <span aria-hidden="true" style={{ fontSize: 14, transition: 'transform 0.2s', transform: expanded ? 'rotate(180deg)' : 'rotate(0)' }}>{'▼'}</span>
         </div>
-        {addable.length === 1 && (
+        {expanded && addable.length === 1 && (
           <button onClick={() => setAdding(addable[0])} style={{ ...small, minHeight: 36, border: 'none', background: 'var(--bg-teal-light)', color: 'var(--role-color)' }}>+ Add to-do</button>
         )}
       </div>
+
+      {expanded && (<>
 
       {open.length === 0 && (
         <div style={{ fontSize: 13, color: 'var(--text-tertiary)', padding: '2px 2px 8px' }}>
@@ -275,6 +287,7 @@ const CareTodoList = window.CareTodoList = ({ recipientIds, heading, hideWhenNot
         <CareTodoForm recipientId={adding.careRecipientId} recipientFirstName={adding.recipientFirstName}
           onClose={() => setAdding(null)} onSaved={load} />
       )}
+      </>)}
     </div>
   );
 
