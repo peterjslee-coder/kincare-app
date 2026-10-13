@@ -34,14 +34,14 @@ const WN_PREVIEWS = {
       {['Water the kitchen plant', 'Change the litter next time'].map((t, i) => (
         <div key={t} style={wnCard}>
           <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text-primary)' }}>{t}</div>
-          <div style={{ fontSize: 10.5, color: 'var(--text-tertiary)', marginTop: 2 }}>Added by Pete {'·'} {i ? 'Oct 12' : 'today'}</div>
+          <div style={{ fontSize: 10.5, color: 'var(--text-tertiary)', marginTop: 2 }}>Added by Sam {'·'} {i ? 'Oct 12' : 'today'}</div>
           <div style={{ ...wnPill('var(--accent-color-dark)', 'var(--text-on-primary)'), marginTop: 6, textAlign: 'center' }}>{'✓'} I did this</div>
         </div>
       ))}
       <div style={{ display: 'flex', gap: 6, alignItems: 'baseline', padding: '4px 2px', fontSize: 12 }}>
         <span style={{ color: 'var(--role-color)', fontWeight: 700 }}>{'✓'}</span>
         <span style={{ color: 'var(--text-secondary)', textDecoration: 'line-through' }}>Lock the stove against the wall</span>
-        <span style={{ color: 'var(--text-tertiary)', fontSize: 10.5 }}>{'·'} Sara</span>
+        <span style={{ color: 'var(--text-tertiary)', fontSize: 10.5 }}>{'·'} Jane</span>
       </div>
     </div>
   ),
