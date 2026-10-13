@@ -118,7 +118,10 @@ green run that silently skipped the test it was checking. Use `npx jest tests/<f
    in the same commit (Pete, 10/13: "this should be part of the future rollouts too"). Title, a
    two-sentence body, 2–4 how-to steps, examples in the family's own words ("Water the kitchen
    plant"), and a drawn `preview` added to `PREVIEWS` in `public/js/components/WhatsNew.js` —
-   made-up content, never a real person's data. Pure fixes nobody would notice don't get one.
+   made-up names only (Jane, Sam, Mom), never a real person's data. **Err toward adding one**
+   (Pete, 10/13): new features AND major bug fixes people would have noticed both qualify.
+   Suggest the card to Pete when you scope the work, rather than waiting to be asked. Only
+   invisible fixes skip it.
 
 ## Timezone Design Principle
 
