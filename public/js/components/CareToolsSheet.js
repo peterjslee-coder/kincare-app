@@ -42,7 +42,8 @@ const CareToolsSheet = window.CareToolsSheet = () => {
 
   return (
     <div onClick={close} data-testid="care-tools-sheet" style={{
-      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1100,
+      // 1300: above the install banner and the demo bar (1200), which otherwise cover the buttons.
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1300,
       display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
     }}>
       <div onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Care tools" style={{
