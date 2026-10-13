@@ -28,6 +28,13 @@ const OUTREACH_STATUSES = [
 // long code; we record it too so the app never even tries, and so admin can see it.
 const OPT_OUT_WORDS = ["stop", "stopall", "unsubscribe", "cancel", "end", "quit", "optout", "revoke"];
 const OPT_IN_WORDS = ["start", "unstop", "yes start"];
+// Keyword opt-in for someone first reached person-to-person (Pete's own phone): "Text JOIN to …".
+const JOIN_WORDS = ["join", "join inplace", "inplace", "info"];
+
+const JOIN_REPLY =
+  "Thanks for texting InPlace! We connect local families with caregivers for companionship, help " +
+  "around the house, errands and rides. You set your rate and keep all of it. Reply with your email " +
+  "address and we'll send details and a link to sign up. Msg & data rates may apply. Reply STOP to opt out.";
 
 const DEFAULT_INTRO =
   "Hi {first}, this is Pete Lee with InPlace (yourinplace.com). I got your number from the NRV " +
@@ -131,6 +138,7 @@ function classifyInbound(body) {
   const norm = text.toLowerCase().replace(/[^a-z ]/g, "").trim();
   if (OPT_OUT_WORDS.includes(norm)) return { kind: "opt_out" };
   if (OPT_IN_WORDS.includes(norm)) return { kind: "opt_in" };
+  if (JOIN_WORDS.includes(norm)) return { kind: "join" };
   const m = text.match(EMAIL_RE);
   if (m) return { kind: "email", email: m[0].replace(/[.,;:]+$/, "").toLowerCase() };
   return { kind: "message" };
@@ -159,7 +167,7 @@ function segmentCount(text) {
 }
 
 module.exports = {
-  OUTREACH_STATUSES, OPT_OUT_WORDS, OPT_IN_WORDS, DEFAULT_INTRO,
+  OUTREACH_STATUSES, OPT_OUT_WORDS, OPT_IN_WORDS, JOIN_WORDS, JOIN_REPLY, DEFAULT_INTRO,
   phoneKey, toE164, prettyPhone, parseList, greetingName, renderTemplate,
   classifyInbound, introWindow, segmentCount,
 };

@@ -168,6 +168,15 @@ test("STOP is final: nothing can text her, and admin can't clear it", async () =
   expect((await byPhone("+15405550103")).status).toBe("replied");
 });
 
+test("JOIN from a number we never texted is an opt-in: InPlace answers and asks for an email", async () => {
+  const before = sent.length;
+  await inbound("+15405550177", "Join");
+  for (let i = 0; i < 40 && sent.length === before; i++) await new Promise((r) => setTimeout(r, 100));
+  const c = await byPhone("+15405550177");
+  expect(c).toMatchObject({ source: "inbound", status: "replied", unread: 0 });
+  expect(sent.at(-1)).toMatchObject({ to: "+15405550177", body: O.JOIN_REPLY });
+});
+
 test("a text from a number we never imported still gets a thread", async () => {
   await inbound("+15405550199", "My friend said you're hiring?");
   const c = await byPhone("+15405550199");

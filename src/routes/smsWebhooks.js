@@ -79,6 +79,24 @@ router.post("/outreach-inbound", async (req, res) => {
       return twiml(res);
     }
 
+    if (what.kind === "join") {
+      // She texted the keyword — that text IS her opt-in. Answer with what InPlace is and ask
+      // for the email. Not unread: the next thing that needs a person is her reply.
+      await db.prepare(`
+        UPDATE outreach_contacts SET status = CASE WHEN status IN ('new','texted') THEN 'replied' ELSE status END,
+               opted_out_at = NULL, last_inbound_at = NOW(), last_message_at = NOW(), updated_at = NOW()
+         WHERE id = ? AND status != 'opted_out'
+      `).run(contact.id);
+      twiml(res);
+      await sendToContact(db, contact, O.JOIN_REPLY, { automated: true });
+      push.sendPushToAdmins("outreach_reply", {
+        title: "Outreach: someone texted JOIN",
+        body: `${who} asked to hear more. InPlace answered and asked for her email.`,
+        data: { type: "outreach_reply", url: "/?adminTab=outreach" },
+      });
+      return;
+    }
+
     if (what.kind === "email") {
       await db.prepare(`
         UPDATE outreach_contacts SET email = ?, status = CASE WHEN status IN ('joined','invited') THEN status ELSE 'interested' END,
