@@ -174,10 +174,12 @@ const WhatsNewModal = window.WhatsNewModal = ({ entries, onClose, onNavigate }) 
           </button>
         </div>
         {entries.length > 1 && (
-          <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginTop: 12 }}>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: 2, marginTop: 8 }}>
             {entries.map((x, k) => (
               <button key={x.id} onClick={() => setI(k)} aria-label={`Show ${x.title}`}
-                style={{ width: 8, height: 8, padding: 0, borderRadius: '50%', border: 'none', cursor: 'pointer', background: k === i ? 'var(--role-color)' : 'var(--border-color)' }} />
+                style={{ width: 28, height: 28, minWidth: 28, minHeight: 28, padding: 0, border: 'none', background: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <span style={{ display: 'block', width: 8, height: 8, borderRadius: '50%', background: k === i ? 'var(--role-color)' : 'var(--border-color)' }} />
+              </button>
             ))}
           </div>
         )}
