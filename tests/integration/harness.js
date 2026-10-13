@@ -87,6 +87,7 @@ async function startHarness({ routers = ROUTERS } = {}) {
    *   idVerified: false    → no document (gated unless graceUntil / admin / demo)
    *   graceUntil: Date|str → users.id_gate_grace_until
    *   isDemo: true         → users.is_demo
+   *   careToolsOpen: false → care tools follow the real rule (v1.114.0)
    */
   async function createUser(overrides = {}) {
     const id = overrides.id || uuid();
@@ -106,6 +107,12 @@ async function startHarness({ routers = ROUTERS } = {}) {
       overrides.graceUntil ? new Date(overrides.graceUntil).toISOString() : null
     );
     if (overrides.idVerified !== false) await verifyIdentity(id);
+    // v1.114.0 — care tools come with booked care (utils/careTools.js). Most suites test
+    // something else, so a harness user's tools are open by default — the admin switch.
+    // Gate tests opt out with careToolsOpen: false.
+    if (overrides.careToolsOpen !== false) {
+      await db.prepare("UPDATE users SET care_tools_open_at = NOW() WHERE id = ?").run(id);
+    }
     const user = { id, email, roles, role: roles[0] };
     if (overrides.isDemo) user.is_demo = true;
     return { user, token: generateToken(user) };

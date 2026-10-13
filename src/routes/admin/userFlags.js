@@ -442,6 +442,27 @@ router.put("/users/:id/special-fee", async (req, res) => {
   }
 });
 
+// ─── PUT /api/admin/users/:id/care-tools-open — turn care tools on by hand (v1.114.0) ───
+// Care tools normally come with care booked through InPlace (utils/careTools.js). This is the
+// override for a family Pete chooses to open anyway. Body: { open: boolean }. Audited.
+router.put("/users/:id/care-tools-open", async (req, res) => {
+  try {
+    const db = await getDb();
+    const user = await db.prepare("SELECT id, email, care_tools_open_at FROM users WHERE id = ?").get(req.params.id);
+    if (!user) return res.status(404).json({ error: "User not found" });
+    const open = !!(req.body && req.body.open);
+    await db.prepare(
+      `UPDATE users SET care_tools_open_at = ${open ? "COALESCE(care_tools_open_at, NOW())" : "NULL"}, care_tools_open_by = ? WHERE id = ?`
+    ).run(open ? req.user.id : null, user.id);
+    await logAdminAction(req, open ? "care_tools_opened" : "care_tools_closed", "user", user.id, { email: user.email });
+    const s = await require("../../utils/careTools").careToolsFor(db, user.id);
+    res.json({ success: true, open, status: s.status, reason: s.reason });
+  } catch (err) {
+    captureException(err, { where: "PUT /api/admin/users/:id/care-tools-open" });
+    res.status(500).json({ error: "Failed to update care tools" });
+  }
+});
+
 // ─── PUT /api/admin/users/:id/verify-email — Admin override: toggle email verification ───
 router.put("/users/:id/verify-email", async (req, res) => {
   try {

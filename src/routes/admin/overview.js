@@ -336,7 +336,7 @@ router.get("/users", async (req, res) => {
 
     // Build query dynamically
     let sql = `
-      SELECT id, email, role, first_name, last_name, phone, email_verified, is_demo, is_admin, admin_role, admin_notes, is_tester, is_active, companion_access, special_fee_percent, special_fee_set_at, special_fee_note, created_at, updated_at
+      SELECT id, email, role, first_name, last_name, phone, email_verified, is_demo, is_admin, admin_role, admin_notes, is_tester, is_active, companion_access, special_fee_percent, special_fee_set_at, special_fee_note, care_tools_open_at, created_at, updated_at
       FROM users WHERE COALESCE(is_active, 1) = 1
     `;
     const params = [];
@@ -415,7 +415,7 @@ router.get("/users/:id/detail", async (req, res) => {
     // Core user data
     const user = await db.prepare(`
       SELECT id, email, role, first_name, last_name, phone, avatar_url, email_verified, is_demo,
-        is_admin, admin_role, admin_notes, is_tester, is_active, companion_access, special_fee_percent, special_fee_set_at, special_fee_note, created_at, updated_at
+        is_admin, admin_role, admin_notes, is_tester, is_active, companion_access, special_fee_percent, special_fee_set_at, special_fee_note, care_tools_open_at, created_at, updated_at
       FROM users WHERE id = ?
     `).get(userId);
     if (!user) return res.status(404).json({ error: "User not found" });
@@ -599,6 +599,14 @@ router.get("/users/:id/detail", async (req, res) => {
       caregiverProfile,
       sessionStats,
       lifetimeRevenue: parseFloat(lifetimeRevenue?.total || 0),
+      careTools: await (async () => {
+        // v1.114.0 — care tools come with booked care; admin sees why and can open them.
+        try {
+          const s = await require("../../utils/careTools").careToolsFor(db, userId);
+          return { status: s.status, reason: s.reason, commission30d: Math.round(s.commissionCents) / 100,
+                   thresholdDollars: s.thresholdCents / 100, openedAt: user.care_tools_open_at || null };
+        } catch { return null; }
+      })(),
       reviewStats,
       careTeams,
       tickets,

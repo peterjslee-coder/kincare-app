@@ -878,6 +878,11 @@ const apiFetch = window.apiFetch = async (url, options = {}) => {
       if (errBody && errBody.code === 'ID_REQUIRED') {
         window.dispatchEvent(new CustomEvent('inplace:id-required', { detail: { status: errBody.status || null } }));
       }
+      // v1.114.0 — care tools come with care booked through InPlace (utils/careTools.js). One
+      // friendly sheet (CareToolsSheet) instead of each screen's own error toast.
+      if (errBody && errBody.code === 'CARE_TOOLS_LOCKED') {
+        window.dispatchEvent(new CustomEvent('inplace:care-tools-locked', { detail: errBody }));
+      }
     } catch (e) { /* not JSON — not the gate */ }
   }
 

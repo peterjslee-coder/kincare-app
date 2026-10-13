@@ -3130,6 +3130,16 @@ async function initializeDatabase() {
         `CREATE INDEX IF NOT EXISTS idx_outreach_messages_sid ON outreach_messages (twilio_sid) WHERE twilio_sid IS NOT NULL`,
       ],
     },
+    {
+      // v1.114.0 — care tools come with care booked through InPlace (utils/careTools.js).
+      // care_tools_open_at: an admin turned this person's care tools on regardless of bookings
+      // (Admin → People → Care tools). NULL = the normal rule.
+      id: "060_care_tools_open",
+      statements: [
+        `ALTER TABLE users ADD COLUMN IF NOT EXISTS care_tools_open_at TIMESTAMPTZ`,
+        `ALTER TABLE users ADD COLUMN IF NOT EXISTS care_tools_open_by TEXT`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

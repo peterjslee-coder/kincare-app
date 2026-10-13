@@ -201,6 +201,25 @@ async function authenticate(req, res, next) {
         const db = await getDb();
         const refusal = await careGateRefusal(db, req);
         if (refusal) return res.status(403).json(refusal);
+        // v1.114.0 — care tools come with care booked through InPlace. See utils/careTools.js.
+        // Reads are never refused (locked = read-only), so this only costs a lookup on writes
+        // and on the handful of tool paths.
+        // Fails OPEN, unlike the identity gate: a lookup error must never stop a medication
+        // check-off. The worst case is a family using a tool for free once.
+        let tools = { feature: null, refusal: null };
+        try {
+          tools = await require("../utils/careTools").careToolsCheck(db, req);
+        } catch (toolsErr) {
+          try { require("../utils/sentry").captureException(toolsErr, { where: "care tools gate" }); } catch { /* ignore */ }
+        }
+        if (tools.refusal) return res.status(403).json(tools.refusal);
+        // Count successful uses of a tool for the admin usage report. Not while viewing as
+        // someone, and not under test (the write would outlive an integration harness).
+        if (tools.feature && !decoded.impersonatedBy && process.env.NODE_ENV !== "test") {
+          res.on("finish", () => {
+            if (res.statusCode < 400) require("../utils/careTools").recordToolUse(db, decoded.id, tools.feature);
+          });
+        }
       } catch (gateErr) {
         console.error("[care gate] lookup failed:", gateErr.message);
         return res.status(503).json({ error: "Could not confirm access right now. Please try again." });

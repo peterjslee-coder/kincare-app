@@ -27,6 +27,8 @@ const AdminFinancials = window.AdminFinancials = () => {
   const [feeMsg, setFeeMsg] = useState('');
   // v1.111.0 — families on a special service fee (set per family in People)
   const [specialRates, setSpecialRates] = useState([]);
+  // v1.114.0 — who uses InPlace as software while paying the caregiver outside it
+  const [toolsReport, setToolsReport] = useState(null);
   // Payment kill switch
   const [paymentsEnabled, setPaymentsEnabled] = useState(false);
   const [paymentToggleLoading, setPaymentToggleLoading] = useState(false);
@@ -56,6 +58,10 @@ const AdminFinancials = window.AdminFinancials = () => {
       apiFetch('/api/admin/financials/special-rates')
         .then(r => (r && r.ok ? r.json() : null))
         .then(d => { if (d) setSpecialRates(d.families || []); })
+        .catch(() => {});
+      apiFetch('/api/admin/financials/care-tools-report')
+        .then(r => (r && r.ok ? r.json() : null))
+        .then(d => { if (d) setToolsReport(d); })
         .catch(() => {});
       if (sumRes?.ok) setSummary(await sumRes.json());
       if (brkRes?.ok) setBreakdown(await brkRes.json());
@@ -803,6 +809,62 @@ const AdminFinancials = window.AdminFinancials = () => {
           </div>
         </div>
       </div>
+
+      {/* v1.114.0 — Care tools & off-app caregivers */}
+      {toolsReport && (
+        <div className="card" style={{ marginBottom: 16, overflowX: 'auto' }}>
+          <div className="card-header"><span className="card-icon">🧭</span>Care tools &amp; off-app caregivers</div>
+          <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 10 }}>
+            Care tools open once a family's visits earn InPlace ${toolsReport.thresholdDollars} in the last {toolsReport.windowDays} days.
+            <strong> Flagged</strong> = a caregiver on the team, no paid visits in {toolsReport.windowDays} days, and that caregiver is active in the app.
+            Tool uses are counted from v1.114.0 on.
+          </div>
+          {toolsReport.rows.length === 0 ? (
+            <div style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>No families yet.</div>
+          ) : (
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid var(--border-color)', textAlign: 'left', color: 'var(--text-secondary)' }}>
+                  <th style={{ padding: '6px 4px' }}>Loved one / family</th>
+                  <th style={{ padding: '6px 4px' }}>Caregivers on team</th>
+                  <th style={{ padding: '6px 4px', textAlign: 'right' }}>InPlace 30d</th>
+                  <th style={{ padding: '6px 4px' }}>Caregiver activity 30d</th>
+                  <th style={{ padding: '6px 4px' }}>Tool uses 30d</th>
+                  <th style={{ padding: '6px 4px' }}>Tools</th>
+                </tr>
+              </thead>
+              <tbody>
+                {toolsReport.rows.map(r => (
+                  <tr key={r.recipientId} style={{ borderBottom: '1px solid var(--border-color)', background: r.flagOffApp ? 'var(--color-warning-bg)' : 'transparent' }}>
+                    <td style={{ padding: '6px 4px' }}>
+                      <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{r.recipient || '—'}{r.flagOffApp ? ' ⚑' : ''}</div>
+                      <div style={{ color: 'var(--text-tertiary)' }}>{r.owner}{r.ownerEmail ? ` · ${r.ownerEmail}` : ''}</div>
+                    </td>
+                    <td style={{ padding: '6px 4px', color: 'var(--text-secondary)' }}>{r.caregivers.length ? r.caregivers.join(', ') : '—'}</td>
+                    <td style={{ padding: '6px 4px', textAlign: 'right', color: 'var(--text-primary)' }}>
+                      {fmt(r.commission30d)}
+                      <div style={{ color: 'var(--text-tertiary)' }}>{r.lastPaidVisit ? `last paid ${new Date(r.lastPaidVisit).toLocaleDateString()}` : 'never paid'}</div>
+                    </td>
+                    <td style={{ padding: '6px 4px', color: 'var(--text-secondary)' }}>
+                      {r.caregiverActivity30d.notes} notes · {r.caregiverActivity30d.messages} msgs · {r.caregiverActivity30d.checkoffs} check-offs
+                    </td>
+                    <td style={{ padding: '6px 4px', color: 'var(--text-secondary)' }}>
+                      {r.toolUseTotal30d === 0 ? '—' : Object.entries(r.toolUse30d).map(([k, n]) => `${(toolsReport.features[k] || k)} ${n}`).join(' · ')}
+                    </td>
+                    <td style={{ padding: '6px 4px' }}>
+                      <span style={{ padding: '1px 8px', borderRadius: 10, fontSize: 11, fontWeight: 700,
+                        background: r.toolsState === 'locked' ? 'var(--bg-primary)' : 'rgba(78,205,196,.15)',
+                        color: r.toolsState === 'locked' ? 'var(--text-secondary)' : 'var(--role-color)' }}>
+                        {r.toolsState === 'exempt' ? 'exempt' : r.toolsState === 'unlocked' ? 'open' : 'locked'}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
 
       {/* All-time summary */}
       <div style={{ display: 'flex', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>

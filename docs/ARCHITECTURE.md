@@ -7,7 +7,7 @@ build red.
 
 Hand-written sections (§3 "Where is…") are preserved across regeneration; edit those freely.
 
-Structure at last generation: 574 HTTP routes across 62 mounts ·
+Structure at last generation: 577 HTTP routes across 63 mounts ·
 111 `CREATE TABLE` statements · 14 background jobs · 39 socket events
 (17 with no client listener) · 71 push event types · 60 `window.__*` globals.
 
@@ -40,8 +40,8 @@ JSX is *not* compiled in the browser; Babel-standalone is not loaded. Editing an
 |---|---|---:|---|
 | `/api/accountability` | `src/routes/accountability.js` | 12 |  |
 | `/api/activity` | `src/routes/activity.js` | 4 |  |
-| `/api/admin` | `src/routes/admin/` | 100 |  |
-| `/api/admin/financials` | `src/routes/financials.js` | 13 |  |
+| `/api/admin` | `src/routes/admin/` | 101 |  |
+| `/api/admin/financials` | `src/routes/financials.js` | 14 |  |
 | `/api/admin/outreach` | `src/routes/outreach.js` | 0 |  |
 | `/api/admin/tickets` | `src/routes/tickets.js` | 7 |  |
 | `/api/admin/treasury` | `src/routes/treasury.js` | 1 |  |
@@ -56,6 +56,7 @@ JSX is *not* compiled in the browser; Babel-standalone is not loaded. Editing an
 | `/api/care-tasks` | `src/routes/careTasks.js` | 10 |  |
 | `/api/care-teams` | `src/routes/careTeams.js` | 20 |  |
 | `/api/care-todos` | `src/routes/careTodos.js` | 5 |  |
+| `/api/care-tools` | `src/routes/careTools.js` | 1 |  |
 | `/api/caregiver-onboarding` | `src/routes/caregiveronboarding.js` | 6 |  |
 | `/api/caregivers` | `src/routes/caregivers.js` | 11 |  |
 | `/api/checkr` | `src/routes/checkr.js` | 11 |  |
@@ -201,20 +202,20 @@ Every job runs through `guardedPoller` → `withPollerLock` (`src/models/databas
 
 | Lock | Job | Interval | Declared |
 |---:|---|---|---|
-| 101 | Daily demo data refresh | 24 h | `src/server.js:1067` |
-| 102 | Session notification poller (every 60s) | 1 min | `src/server.js:1161` |
-| 103 | Session Accountability Poller | 1 min | `src/server.js:1436` |
-| 104 | Reimbursement push digest sweeper (v1.98.15) | 30 s | `src/server.js:1453` |
-| 105 | Auto-pay cron: charge overdue sessions | 5 min | `src/server.js:1545` |
-| 106 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1651` |
-| 107 | Care Tasks poller (v1.99.0) | 1 min | `src/server.js:1661` |
-| 108 | Care Events poller (v1.100.0) | 1 min | `src/server.js:1677` |
-| 109 | Kindred Reminder Delivery Poller | 1 min | `src/server.js:1467` |
-| 110 | Retention (v1.106.9, poller 110) | 24 h | `src/server.js:1714` |
-| 111 | (see src/server.js:1627) | 1 h | `src/server.js:1627` |
-| 112 | v1.106.13 — poller 112: proposals that nobody answered | 10 min | `src/server.js:1743` |
-| 113 | (see src/server.js:1786) | 1 min | `src/server.js:1786` |
-| 114 | Quiet hours summary (v1.107.3, poller 114) | 5 min | `src/server.js:1805` |
+| 101 | Daily demo data refresh | 24 h | `src/server.js:1068` |
+| 102 | Session notification poller (every 60s) | 1 min | `src/server.js:1162` |
+| 103 | Session Accountability Poller | 1 min | `src/server.js:1437` |
+| 104 | Reimbursement push digest sweeper (v1.98.15) | 30 s | `src/server.js:1454` |
+| 105 | Auto-pay cron: charge overdue sessions | 5 min | `src/server.js:1546` |
+| 106 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1652` |
+| 107 | Care Tasks poller (v1.99.0) | 1 min | `src/server.js:1662` |
+| 108 | Care Events poller (v1.100.0) | 1 min | `src/server.js:1678` |
+| 109 | Kindred Reminder Delivery Poller | 1 min | `src/server.js:1468` |
+| 110 | Retention (v1.106.9, poller 110) | 24 h | `src/server.js:1715` |
+| 111 | (see src/server.js:1628) | 1 h | `src/server.js:1628` |
+| 112 | v1.106.13 — poller 112: proposals that nobody answered | 10 min | `src/server.js:1744` |
+| 113 | (see src/server.js:1787) | 1 min | `src/server.js:1787` |
+| 114 | Quiet hours summary (v1.107.3, poller 114) | 5 min | `src/server.js:1806` |
 
 ---
 
@@ -345,7 +346,7 @@ State travels through `window`, not props. This table is the registry.
 | `window.__navHistory` | app.js | 3 |
 | `window.__navigateTo` | app.js, Caregivers.js | 57 |
 | `window.__openConversationId` | Messages.js, utils.js | 5 |
-| `window.__openRequestCareModal` | app.js | 19 |
+| `window.__openRequestCareModal` | app.js, CareToolsSheet.js | 21 |
 | `window.__openTaskCreate` | — | 1 |
 | `window.__originalSearch` | app.js | 4 |
 | `window.__pendingCall` | app.js, Messages.js | 5 |
@@ -363,7 +364,7 @@ State travels through `window`, not props. This table is the registry.
 | `window.__refetchAdminAlerts` | app.js | 3 |
 | `window.__requestCareCaregiver` | app.js | 4 |
 | `window.__requestCareDate` | app.js | 4 |
-| `window.__safeAreaBottom` | app.js | 9 |
+| `window.__safeAreaBottom` | app.js | 10 |
 | `window.__safeAreaTop` | app.js | 8 |
 | `window.__sandboxMode` | app.js | 2 |
 | `window.__sessionIsPersistent` | app.js | 2 |

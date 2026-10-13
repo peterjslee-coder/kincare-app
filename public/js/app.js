@@ -2543,6 +2543,7 @@ const App = () => {
       {showRequestCareModal && <RequestCareModal onClose={() => setShowRequestCareModal(false)} />}
       {/* v1.109.9 — one fee sheet for every page; a push tap or Needs-you row opens it */}
       {typeof CancelFeeSheet !== 'undefined' && <CancelFeeSheet />}
+      {typeof CareToolsSheet !== 'undefined' && <CareToolsSheet />}
       {(currentUser?.is_tester || currentUser?.isAdmin) && <FeedbackButton currentPage={currentPage} userRole={currentUser?.role} currentUser={currentUser} onNavigate={setCurrentPage} />}
       {/* v1.105.194 — the caregiver's first-visit tour, above everything, across pages */}
       {tourOpen && role === 'caregiver' && typeof CaregiverTour !== 'undefined' && (

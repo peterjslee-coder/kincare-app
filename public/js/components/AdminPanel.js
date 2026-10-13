@@ -7302,6 +7302,34 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                   </div>
                 )}
 
+                {/* v1.114.0 — Care tools: come with booked care; admin can open them by hand */}
+                {userDrawer.user && userDrawer.careTools && userDrawer.careTools.reason !== 'caregiver' && (
+                  <div style={{ marginBottom: 22 }}>
+                    <h4 style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--text-secondary)', marginBottom: 8, paddingBottom: 6, borderBottom: '1px solid var(--border-color)' }}>Care Tools</h4>
+                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>
+                      {userDrawer.careTools.status === 'locked' && <span><strong>Locked</strong> — InPlace earned ${(userDrawer.careTools.commission30d || 0).toFixed(2)} from this family in 30 days (opens at ${userDrawer.careTools.thresholdDollars}). Messages, visit log, meds, records and legal docs still work.</span>}
+                      {userDrawer.careTools.status === 'unlocked' && <span><strong>Open</strong> — ${(userDrawer.careTools.commission30d || 0).toFixed(2)} earned in 30 days.</span>}
+                      {userDrawer.careTools.status === 'exempt' && <span><strong>Open</strong> — {({ admin: 'admin', demo: 'demo account', founder_family: "your family's team", admin_opened: 'you turned them on' })[userDrawer.careTools.reason] || 'exempt'}.</span>}
+                    </div>
+                    {userDrawer.careTools.reason !== 'admin' && userDrawer.careTools.reason !== 'demo' && userDrawer.careTools.reason !== 'founder_family' && (
+                      <button onClick={async () => {
+                        const open = !userDrawer.careTools.openedAt;
+                        try {
+                          const res = await apiFetch(`/api/admin/users/${userDrawer.user.id}/care-tools-open`, { method: 'PUT', body: JSON.stringify({ open }) });
+                          if (res?.ok) {
+                            const d = await res.json();
+                            setUserDrawer(prev => prev ? ({ ...prev, careTools: { ...prev.careTools, status: d.status, reason: d.reason, openedAt: open ? new Date().toISOString() : null } }) : prev);
+                            showToast(open ? 'Care tools turned on for this person' : 'Care tools back to the normal rule', 'success');
+                          } else { showToast('Could not change care tools', 'error'); }
+                        } catch { showToast('Network error', 'error'); }
+                      }} style={{
+                        padding: '6px 14px', borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--bg-surface)',
+                        color: 'var(--text-primary)', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                      }}>{userDrawer.careTools.openedAt ? 'Back to the normal rule' : 'Turn care tools on anyway'}</button>
+                    )}
+                  </div>
+                )}
+
                 {/* Admin notes */}
                 <div style={{ marginBottom: 22 }}>
                   <h4 style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--text-secondary)', marginBottom: 8, paddingBottom: 6, borderBottom: '1px solid var(--border-color)' }}>Admin Notes</h4>

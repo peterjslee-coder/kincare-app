@@ -898,6 +898,115 @@ router.put("/platform-fee", async (req, res) => {
   }
 });
 
+// ─── GET /api/admin/financials/care-tools-report ─── (v1.114.0)
+// Pete, 10/13: who is using InPlace as software while paying their caregiver outside it, and
+// who uses the costly tools. One row per real (non-demo) care recipient:
+//   - caregivers on the care team (anyone on the team with a caregiver profile)
+//   - InPlace commission on visits in the last 30 days, and the last paid visit
+//   - what those caregivers did in the app in 30 days (notes, messages, task check-offs)
+//   - the family's tool uses in 30 days (usage_counters "tool:<feature>", counted since v1.114.0)
+//   - the owner's care-tools state (locked / unlocked / exempt)
+// flagOffApp = a caregiver on the team, no commission in 30 days, and caregiver activity.
+router.get("/care-tools-report", async (req, res) => {
+  try {
+    const db = await getDb();
+    const tools = require("../utils/careTools");
+    const recipients = await db.prepare(`
+      SELECT cr.id, cr.first_name, cr.last_name, cr.family_user_id,
+             u.first_name AS owner_first, u.last_name AS owner_last, u.email AS owner_email
+        FROM care_recipients cr
+        JOIN users u ON u.id = cr.family_user_id
+       WHERE COALESCE(u.is_demo, 0) = 0
+       ORDER BY cr.created_at DESC
+    `).all();
+
+    const rows = [];
+    for (const r of recipients) {
+      const caregivers = await db.prepare(`
+        SELECT DISTINCT cu.id, cu.first_name, cu.last_name
+          FROM care_teams ct
+          JOIN care_team_members ctm ON ctm.care_team_id = ct.id
+          JOIN users cu ON cu.id = ctm.user_id
+          JOIN caregiver_profiles cp ON cp.user_id = cu.id
+         WHERE ct.care_recipient_id = ? AND COALESCE(cu.is_demo, 0) = 0
+      `).all(r.id);
+      const cgIds = caregivers.map((c) => c.id);
+
+      const commission = await tools.commissionCents(db, [r.id]);
+      const lastPaid = await db.prepare(`
+        SELECT MAX(le.created_at) AS at FROM ledger_entries le
+          LEFT JOIN care_sessions cs ON cs.id = le.session_id
+         WHERE COALESCE(le.care_recipient_id, cs.care_recipient_id) = ?
+           AND le.kind IN ('capture', 'remainder', 'autopay', 'checkout') AND le.status = 'succeeded'
+      `).get(r.id);
+
+      let notes = 0, messages = 0, checkoffs = 0;
+      if (cgIds.length) {
+        const ph = cgIds.map(() => "?").join(",");
+        notes = Number((await db.prepare(`
+          SELECT COUNT(*) AS n FROM recipient_notes
+           WHERE care_recipient_id = ? AND author_id IN (${ph}) AND created_at >= NOW() - INTERVAL '30 days'
+        `).get(r.id, ...cgIds)).n) || 0;
+        messages = Number((await db.prepare(`
+          SELECT COUNT(*) AS n FROM messages m
+           WHERE m.sender_id IN (${ph}) AND m.created_at >= NOW() - INTERVAL '30 days'
+             AND m.conversation_id IN (
+               SELECT c.id FROM conversations c JOIN care_teams ct ON ct.id = c.care_team_id WHERE ct.care_recipient_id = ?
+               UNION
+               SELECT cm.conversation_id FROM conversation_members cm WHERE cm.user_id = ?)
+        `).get(...cgIds, r.id, r.family_user_id)).n) || 0;
+        checkoffs = Number((await db.prepare(`
+          SELECT COUNT(*) AS n FROM care_task_occurrences o JOIN care_tasks t ON t.id = o.task_id
+           WHERE t.care_recipient_id = ? AND o.completed_by_user_id IN (${ph})
+             AND o.completed_at >= NOW() - INTERVAL '30 days'
+        `).get(r.id, ...cgIds)).n) || 0;
+      }
+
+      const family = await db.prepare(`
+        SELECT ? AS id
+        UNION SELECT ctm.user_id FROM care_teams ct JOIN care_team_members ctm ON ctm.care_team_id = ct.id
+                LEFT JOIN caregiver_profiles cp ON cp.user_id = ctm.user_id
+               WHERE ct.care_recipient_id = ? AND cp.user_id IS NULL
+        UNION SELECT s.shared_with_user_id FROM care_recipient_shares s WHERE s.care_recipient_id = ?
+      `).all(r.family_user_id, r.id, r.id);
+      const famIds = family.map((f) => f.id).filter(Boolean);
+      const usage = {};
+      if (famIds.length) {
+        const ph = famIds.map(() => "?").join(",");
+        const u = await db.prepare(`
+          SELECT kind, SUM(count) AS n FROM usage_counters
+           WHERE user_id IN (${ph}) AND kind LIKE 'tool:%' AND day >= CURRENT_DATE - 30
+           GROUP BY kind
+        `).all(...famIds);
+        for (const row of u) usage[String(row.kind).slice(5)] = Number(row.n) || 0;
+      }
+
+      const state = await tools.careToolsFor(db, r.family_user_id);
+      const caregiverActivity = notes + messages + checkoffs;
+      rows.push({
+        recipientId: r.id,
+        recipient: `${r.first_name || ""} ${r.last_name || ""}`.trim(),
+        owner: `${r.owner_first || ""} ${r.owner_last || ""}`.trim(),
+        ownerEmail: r.owner_email,
+        caregivers: caregivers.map((c) => `${c.first_name || ""} ${c.last_name || ""}`.trim()),
+        commission30d: Math.round(commission) / 100,
+        lastPaidVisit: lastPaid && lastPaid.at ? lastPaid.at : null,
+        caregiverActivity30d: { notes, messages, checkoffs },
+        toolUse30d: usage,
+        toolUseTotal30d: Object.values(usage).reduce((a, b) => a + b, 0),
+        toolsState: state.status,
+        toolsReason: state.reason,
+        flagOffApp: cgIds.length > 0 && commission === 0 && caregiverActivity > 0,
+      });
+    }
+    rows.sort((a, b) => (b.flagOffApp - a.flagOffApp) || (b.toolUseTotal30d - a.toolUseTotal30d));
+    res.json({ thresholdDollars: tools.THRESHOLD_CENTS / 100, windowDays: tools.WINDOW_DAYS, features: tools.FEATURES, rows });
+  } catch (err) {
+    console.error("Care tools report error:", err);
+    res.status(500).json({ error: "Failed to build the care tools report" });
+  }
+});
+
 // ─── GET /api/admin/financials/special-rates ─── (v1.111.0)
 // Every family on a special service fee, so the Financials tab shows who is not at the default.
 router.get("/special-rates", async (req, res) => {
