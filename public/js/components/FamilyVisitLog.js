@@ -663,17 +663,60 @@ const VisitGeoStatus = ({ recipients }) => {
 //     the next open, about a visit already in the record. It is now a list of recipient ids
 //     from /api/dashboard, per person: logging a visit to Betty must not silence the nudge
 //     about someone else.
+//
+// ─── v1.112.4 — the to-dos ride along ───
+//
+// Pete, 10/13: "on the to-dos it would be great if it prompted you when you got to the care
+// location, i.e. Betty's house" — and then: "does the 'to do' also combine with 'wanna leave a
+// note' nudge?" It does now. One card, one location check, the same privacy line: the
+// decision is made on the phone and no position is sent anywhere for it. When you are at the
+// house, the card lists what is waiting ("Water the kitchen plant") with "I did this" right
+// there, above "Log this visit". If the visit is already logged but a to-do is still open, the
+// card stays for the to-dos alone; when both are answered, it goes.
 const VisitNudgeCard = window.VisitNudgeCard = ({ recipients, loggedTodayIds, onLog }) => {
   const [match, setMatch] = useState(null); // { recipient, position }
   const [dismissed, setDismissed] = useState(false);
   const [allowed, setAllowed] = useState(null); // null = still deciding
-  const [retry, setRetry] = useState(0);        // bumped when the opt-in is accepted
+  const [retry, setRetry] = useState(0);        // bumped when the opt-in is accepted, or the app comes back
+  const [todoIds, setTodoIds] = useState(null); // recipient ids with an open to-do; null = not loaded
 
   // A Set so the checks below read as a question about ONE person. Recomputed rather than
   // memoised: the list is at most a handful of ids.
   const logged = new Set(loggedTodayIds || []);
   const loggedFor = (r) => !!r && logged.has(r.id);
-  const everyoneLogged = (recipients || []).length > 0 && (recipients || []).every(loggedFor);
+  const todosFor = (r) => !!r && !!todoIds && todoIds.includes(r.id);
+  // Nothing to say about a person whose visit is logged AND who has nothing waiting.
+  const settled = (r) => loggedFor(r) && !todosFor(r);
+  const everyoneLogged = (recipients || []).length > 0 && (recipients || []).every(settled);
+
+  // Who has something waiting — refreshed whenever a to-do is added, done or undone anywhere.
+  useEffect(() => {
+    let gone = false;
+    const load = async () => {
+      try {
+        const res = await apiFetch('/api/care-todos');
+        if (!res?.ok || gone) return;
+        const d = await res.json();
+        if (!gone) setTodoIds((d.groups || []).filter((g) => !g.viaVisit && (g.open || []).length).map((g) => g.careRecipientId));
+      } catch { if (!gone) setTodoIds([]); }
+    };
+    load();
+    window.addEventListener('inplace:care-todos-changed', load);
+    return () => { gone = true; window.removeEventListener('inplace:care-todos-changed', load); };
+  }, []);
+
+  // Arriving usually means taking the phone out of a pocket, not cold-starting the app: check
+  // again when InPlace comes back to the front, at most every few minutes.
+  useEffect(() => {
+    let last = Date.now();
+    const onVis = () => {
+      if (document.visibilityState !== 'visible' || Date.now() - last < 5 * 60000) return;
+      last = Date.now();
+      setRetry((n) => n + 1);
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -718,7 +761,7 @@ const VisitNudgeCard = window.VisitNudgeCard = ({ recipients, loggedTodayIds, on
     };
     run();
     return () => { cancelled = true; };
-  }, [recipients, (loggedTodayIds || []).join(','), retry]);
+  }, [recipients, (loggedTodayIds || []).join(','), (todoIds || []).join(','), retry]);
 
   // No usable permission yet → offer the opt-in instead of silently doing nothing. This is
   // the branch iOS has always landed in; before v1.105.45 it rendered nothing, and there was
@@ -737,8 +780,10 @@ const VisitNudgeCard = window.VisitNudgeCard = ({ recipients, loggedTodayIds, on
   // This is the line that was missing. Every other branch asked whether the visit was
   // already logged; the one that draws the card did not, so tapping "Log this visit" and
   // saving left it sitting there — the exact thing Pete reported.
-  if (!match || dismissed || loggedFor(match.recipient)) return null;
+  if (!match || dismissed || settled(match.recipient)) return null;
   const first = match.recipient.first_name || match.recipient.firstName || 'them';
+  const needsLog = !loggedFor(match.recipient);
+  const hasTodos = todosFor(match.recipient);
 
   return (
     <div className="card" style={{ border: '1.5px solid var(--role-color)', background: 'var(--color-success-bg)', marginBottom: 12, position: 'relative' }}>
@@ -748,19 +793,24 @@ const VisitNudgeCard = window.VisitNudgeCard = ({ recipients, loggedTodayIds, on
         try { localStorage.setItem(VISIT_NUDGE_DISMISS_KEY, String(Date.now() + 6 * 3600 * 1000)); } catch {}
       }} aria-label="Dismiss" style={{ position: 'absolute', top: 8, right: 10, background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: 16, cursor: 'pointer', lineHeight: 1 }}>✕</button>
       <div style={{ fontWeight: 700, fontSize: 14.5, marginBottom: 2, paddingRight: 22 }}>Looks like you're with {first}</div>
-      <div style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>Want to note how they're doing? Takes a few seconds.</div>
+      {hasTodos && typeof CareTodoList !== 'undefined' && (
+        <div style={{ marginTop: 8 }}>
+          <CareTodoList recipientIds={[match.recipient.id]} heading={`Waiting at ${first}'s`} hideWhenNothingOpen />
+        </div>
+      )}
+      {needsLog && <div style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>Want to note how they're doing? Takes a few seconds.</div>}
       <div style={{ display: 'flex', gap: 8, marginTop: 11, flexWrap: 'wrap' }}>
-        <button onClick={() => onLog(match.recipient.id, match.position)} style={{
+        {needsLog && <button onClick={() => onLog(match.recipient.id, match.position)} style={{
           padding: '9px 15px', background: 'var(--role-color)', color: 'var(--text-on-primary)',
           border: 'none', borderRadius: 9, fontSize: 13, fontWeight: 650, cursor: 'pointer',
-        }}>Log this visit</button>
+        }}>Log this visit</button>}
         <button onClick={() => {
           setDismissed(true);
           try { localStorage.setItem(VISIT_NUDGE_DISMISS_KEY, String(Date.now() + 6 * 3600 * 1000)); } catch {}
         }} style={{
           padding: '9px 15px', background: 'var(--bg-card)', color: 'var(--text-secondary)',
           border: '1px solid var(--border-light)', borderRadius: 9, fontSize: 13, cursor: 'pointer',
-        }}>Not now</button>
+        }}>{needsLog ? 'Not now' : 'Hide for now'}</button>
       </div>
     </div>
   );

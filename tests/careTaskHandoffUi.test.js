@@ -3,8 +3,12 @@ const { code } = require("./helpers/source");
 const ui = code("public/js/components/CareTasks.js");
 const routes = code("src/routes/careTasks.js");
 
-test("picking a team member offers to hand the task to them, without checking it off", () => {
-  expect(ui).toContain("const pickedMember = who.kind === 'user' ? (group.teamMembers || []).find((m) => m.id === who.id) : null;");
+test("handing off is its own row — no detour through 'who did it'", () => {
+  // v1.112.4 — Pete: "there's no 'not accomplished, hand to ____'". It hid behind "Who did it?".
+  expect(ui).toContain("const handCandidates = (group.teamMembers || []).filter((m) => m.id !== myId && m.id !== occ.assigned_user_id);");
+  expect(ui).toContain("const pickedMember = handTo ? handCandidates.find((m) => m.id === handTo) : null;");
+  expect(ui).toMatch(/Not done yet\? Hand it to/);
+  expect(ui).not.toContain("who.kind === 'user' ? (group.teamMembers || []).find((m) => m.id === who.id)");
   expect(ui).toContain("`/api/care-tasks/occurrences/${occ.id}/assign`");
   expect(ui).toMatch(/Hand this task to \$\{pickedMember\.first_name\}/); // v1.105.192 — was "tonight"; an 8 AM task is not tonight
   // Done and Skip are untouched — the handoff is a third thing, not a replacement.

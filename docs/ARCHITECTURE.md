@@ -7,7 +7,7 @@ build red.
 
 Hand-written sections (§3 "Where is…") are preserved across regeneration; edit those freely.
 
-Structure at last generation: 573 HTTP routes across 60 mounts ·
+Structure at last generation: 572 HTTP routes across 60 mounts ·
 109 `CREATE TABLE` statements · 14 background jobs · 39 socket events
 (17 with no client listener) · 70 push event types · 60 `window.__*` globals.
 
@@ -54,7 +54,7 @@ JSX is *not* compiled in the browser; Babel-standalone is not loaded. Editing an
 | `/api/care-recipients` | `src/routes/careRecipients.js` | 14 |  |
 | `/api/care-tasks` | `src/routes/careTasks.js` | 10 |  |
 | `/api/care-teams` | `src/routes/careTeams.js` | 20 |  |
-| `/api/care-todos` | `src/routes/careTodos.js` | 6 |  |
+| `/api/care-todos` | `src/routes/careTodos.js` | 5 |  |
 | `/api/caregiver-onboarding` | `src/routes/caregiveronboarding.js` | 6 |  |
 | `/api/caregivers` | `src/routes/caregivers.js` | 11 |  |
 | `/api/checkr` | `src/routes/checkr.js` | 11 |  |
@@ -324,7 +324,7 @@ State travels through `window`, not props. This table is the registry.
 | `window.__applyUserTheme` | app.js | 4 |
 | `window.__attachmentBlobCache` | AttachmentViewer.js | 1 |
 | `window.__calDayBlocks` | CaregiverCalendar.js | 2 |
-| `window.__capPlugin` | CareTodos.js, utils.js | 3 |
+| `window.__capPlugin` | utils.js | 1 |
 | `window.__caregiverFirstStepsLeft` | CaretakerHub.js | 2 |
 | `window.__caregiverFirstStepsRemain` | CaretakerHub.js | 2 |
 | `window.__clearSessionActive` | app.js | 4 |

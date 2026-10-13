@@ -164,8 +164,16 @@ const CareTaskCheckSheet = window.CareTaskCheckSheet = ({ occ, group, onClose, o
   // Pete: "it defaults to me and if I open it and select dan, my only option in the 'needs
   // you' pane is to complete the task or skip". Picking a team member now also offers to hand
   // TONIGHT to them. The task's default person is unchanged; tomorrow it is his again.
+  //
+  // v1.112.4 — Pete, 10/13: "i can mark only 'taken' or 'Skip today' there's no 'not
+  // accomplished, hand to ____'". It was there, but only after picking someone under "Who did
+  // it?" — the question for a task that WAS done. Handing off is the answer for one that
+  // wasn't, so it is its own row now, under Done / Skip, and needs no detour through "who did
+  // it". Same endpoint, same rule: tonight only, and the person is told.
   const [handing, setHanding] = useState(false);
-  const pickedMember = who.kind === 'user' ? (group.teamMembers || []).find((m) => m.id === who.id) : null;
+  const [handTo, setHandTo] = useState(null); // team member id
+  const handCandidates = (group.teamMembers || []).filter((m) => m.id !== myId && m.id !== occ.assigned_user_id);
+  const pickedMember = handTo ? handCandidates.find((m) => m.id === handTo) : null;
   const handOff = async () => {
     if (!pickedMember || handing) return;
     setHanding(true);
@@ -225,15 +233,7 @@ const CareTaskCheckSheet = window.CareTaskCheckSheet = ({ occ, group, onClose, o
           placeholder="e.g. Took it with dinner. Seemed calm tonight."
           style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border-color)', fontSize: 14, resize: 'vertical', background: 'var(--bg-surface)', color: 'var(--text-primary)', boxSizing: 'border-box' }} />
 
-        {pickedMember && (
-          <button disabled={handing || saving} onClick={handOff} style={{
-            width: '100%', marginTop: 14, padding: '12px 0', borderRadius: 12,
-            border: '1.5px solid var(--role-color)', background: 'var(--role-color-light)',
-            color: 'var(--role-color)', fontSize: 14, fontWeight: 700, cursor: 'pointer', opacity: handing ? 0.6 : 1,
-          }}>{handing ? 'Handing off\u2026' : `Hand this task to ${pickedMember.first_name} \u2014 not completed`}</button>
-        )}
-
-        <div style={{ display: 'flex', gap: 10, marginTop: pickedMember ? 10 : 16 }}>
+        <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
           <button disabled={saving} onClick={() => submit('done')} style={{
             flex: 1, padding: '13px 0', borderRadius: 12, border: 'none', background: 'var(--color-success)',
             color: 'var(--text-on-primary)', fontSize: 15, fontWeight: 700, cursor: 'pointer', opacity: saving ? 0.6 : 1,
@@ -243,6 +243,31 @@ const CareTaskCheckSheet = window.CareTaskCheckSheet = ({ occ, group, onClose, o
             color: 'var(--text-secondary)', fontSize: 14, fontWeight: 600, cursor: 'pointer',
           }}>Skip today</button>
         </div>
+
+        {handCandidates.length > 0 && (
+          <div data-testid="care-task-hand-off" style={{ marginTop: 18, paddingTop: 14, borderTop: '1px solid var(--border-light)' }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 }}>
+              Not done yet? Hand it to{'\u2026'}
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {handCandidates.map((m) => (
+                <button key={m.id} style={chip(handTo === m.id)} onClick={() => setHandTo(handTo === m.id ? null : m.id)}>
+                  {m.first_name} {m.last_name ? m.last_name[0] + '.' : ''}
+                </button>
+              ))}
+            </div>
+            {pickedMember && (
+              <button disabled={handing || saving} onClick={handOff} style={{
+                width: '100%', marginTop: 10, padding: '12px 0', borderRadius: 12,
+                border: '1.5px solid var(--role-color)', background: 'var(--role-color-light)',
+                color: 'var(--role-color)', fontSize: 14, fontWeight: 700, cursor: 'pointer', opacity: handing ? 0.6 : 1,
+              }}>{handing ? 'Handing off\u2026' : `Hand this task to ${pickedMember.first_name} \u2014 not completed`}</button>
+            )}
+            <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)', marginTop: 6 }}>
+              Just this one. They{'\u2019'}re told, and it{'\u2019'}s back to the usual person tomorrow.
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

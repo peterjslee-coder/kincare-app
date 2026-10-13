@@ -222,7 +222,9 @@ describe("the nudge nudges, it does not nag", () => {
     // screen. And the flag was one boolean the server never set, so it also came back on the
     // next load. Both halves are pinned here now, per recipient.
     expect(client).toMatch(/if \(everyoneLogged\) return;/);
-    expect(client).toMatch(/if \(!match \|\| dismissed \|\| loggedFor\(match\.recipient\)\) return null;/);
+    expect(client).toMatch(/if \(!match \|\| dismissed \|\| settled\(match\.recipient\)\) return null;/);
+    // v1.112.4 — "settled" = visit logged AND no to-do waiting; once logged, the Log button goes.
+    expect(client).toMatch(/const settled = \(r\) => loggedFor\(r\) && !todosFor\(r\)/);
   });
 
   test("every storage touch is guarded", () => {

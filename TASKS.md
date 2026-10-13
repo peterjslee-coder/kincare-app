@@ -5,7 +5,7 @@
 ## Oct 13 2026 — What's New + to-dos on arrival (v1.112.4)
 
 - [x] What's New splash — registry `src/whatsNew/entries.js`, seen per entry (migration 058), drawn previews, Help → "What's new" re-opens. CLAUDE.md Dev Rule 10: every visible release ships an entry.
-- [x] To-dos on arrival — family: app opened at the house (location already allowed, point not kept) → "You're at Betty's" sheet. Caregiver: sheet on check-in.
+- [x] To-dos on arrival — folded into the existing "Looks like you're with Betty" visit nudge (Pete: "does the 'to do' also combine with 'wanna leave a note' nudge?"). Decided on the phone; no position leaves it. Re-checks when the app returns to the front. Caregivers already see to-dos on the check-in screen.
 - [ ] [AAB NEEDED] Phone-in-pocket arrival buzz — background geofence; needs "Always" location, a native plugin, App Review copy and a privacy-label update. Pete chose "open now, buzz later" (10/13). Batch with the next native build.
 
 ## Oct 12 2026 — triage (Pete: feedback + Documents Center + legal insight)

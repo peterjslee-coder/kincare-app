@@ -78,7 +78,9 @@ describe("the tour stops offering itself once she has answered", () => {
 
 describe("the visit nudge takes yes for an answer", () => {
   test("the branch that DRAWS the card checks it — the line that was missing", () => {
-    expect(nudge).toMatch(/if \(!match \|\| dismissed \|\| loggedFor\(match\.recipient\)\) return null;/);
+    expect(nudge).toMatch(/if \(!match \|\| dismissed \|\| settled\(match\.recipient\)\) return null;/);
+    // v1.112.4 — "settled" = visit logged AND no to-do waiting; once logged, the Log button goes.
+    expect(nudge).toMatch(/const settled = \(r\) => loggedFor\(r\) && !todosFor\(r\)/);
   });
 
   test("it is per recipient, not one boolean for everybody", () => {

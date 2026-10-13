@@ -46,15 +46,35 @@ const WN_PREVIEWS = {
     </div>
   ),
   arrival: () => (
-    <div>
-      <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>{'🏡'} You{'’'}re at Mom{'’'}s</div>
-      <div style={{ fontSize: 11.5, color: 'var(--text-secondary)', margin: '2px 0 8px' }}>2 to-dos are waiting for whoever{'’'}s there.</div>
+    <div style={{ padding: '12px 12px 10px', borderRadius: 12, border: '1.5px solid var(--role-color)', background: 'var(--color-success-bg)' }}>
+      <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>Looks like you{'’'}re with Mom</div>
+      <div style={{ ...wnHead, margin: '0 0 6px' }}><span>{'📌'} Waiting at Mom{'’'}s (2)</span></div>
       {['Water the kitchen plant', 'Change the litter next time'].map((t) => (
         <div key={t} style={{ ...wnCard, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
           <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{t}</span>
           <span style={wnPill('var(--accent-color-dark)', 'var(--text-on-primary)')}>{'✓'} I did this</span>
         </div>
       ))}
+      <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+        <span style={wnPill('var(--role-color)', 'var(--text-on-primary)')}>Log this visit</span>
+        <span style={wnPill('var(--bg-card)', 'var(--text-secondary)')}>Not now</span>
+      </div>
+    </div>
+  ),
+  handoff: () => (
+    <div>
+      <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{'💊'} Evening meds</div>
+      <div style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: '2px 0 8px' }}>Today at 5:00 PM {'·'} for Mom</div>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+        <span style={{ ...wnPill('var(--color-success)', 'var(--text-on-primary)'), flex: 1, textAlign: 'center' }}>{'✓'} Taken</span>
+        <span style={wnPill('var(--bg-card)', 'var(--text-secondary)')}>Skip today</span>
+      </div>
+      <div style={{ ...wnHead, margin: '0 0 6px' }}><span>Not done yet? Hand it to{'…'}</span></div>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+        <span style={wnPill('var(--role-color-light)', 'var(--role-color)')}>Jane D.</span>
+        <span style={wnPill('var(--bg-card)', 'var(--text-secondary)')}>Sam R.</span>
+      </div>
+      <div style={{ ...wnPill('var(--role-color-light)', 'var(--role-color)'), textAlign: 'center', border: '1.5px solid var(--role-color)' }}>Hand this task to Jane {'—'} not completed</div>
     </div>
   ),
   documents: () => (

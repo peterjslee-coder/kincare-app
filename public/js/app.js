@@ -2252,12 +2252,6 @@ const App = () => {
         try { sessionStorage.setItem('inplace_demo_oriented', '1'); } catch {}
         setShowDemoOrientation(false);
       }} />}
-      {/* v1.112.4 — "You're at Betty's": to-dos waiting at the house you just arrived at. */}
-      {typeof ArrivalTodosHost !== 'undefined' && <ArrivalTodosHost
-        userId={currentUser?.id}
-        role={activeRole}
-        ready={appState === 'app' && !!currentUser && !isDemo && !impersonating && !careBlocked && !showDisclaimer && !showDemoOrientation}
-      />}
       {/* v1.112.4 — What's New: once per entry, only when nothing else owns the screen. */}
       {typeof WhatsNewHost !== 'undefined' && <WhatsNewHost
         userId={currentUser?.id}

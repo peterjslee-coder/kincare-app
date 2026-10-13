@@ -1,7 +1,7 @@
 /**
  * v1.112.4 — the What's New splash (seen once, never under impersonation or on a demo account)
- * and the arrival prompt for to-dos (POST /api/care-todos/nearby: the team only, the house only,
- * only when something is waiting, and the point is not kept).
+ * The to-dos-on-arrival half lives in the visit nudge on the device (FamilyVisitLog.js) and sends
+ * no position anywhere; tests/visitNudgeTodos.test.js covers it.
  */
 const jwt = require("jsonwebtoken");
 const { startHarness, stopHarness } = require("./harness");
@@ -63,33 +63,5 @@ describe("What's New", () => {
     expect((await get(asAdmin)).body.entries).toEqual([]);
     const r = await h.request.post("/api/whats-new/seen").set(h.auth(asAdmin)).send({ ids: ["documents-center"] });
     expect(r.status).toBe(403);
-  });
-});
-
-describe("the arrival prompt", () => {
-  const nearby = (token, lat, lng) => h.request.post("/api/care-todos/nearby").set(h.auth(token)).send({ latitude: lat, longitude: lng });
-
-  test("nothing waiting → nothing to prompt, even at the house", async () => {
-    const r = await nearby(family.token, HOME.lat, HOME.lng);
-    expect(r.status).toBe(200);
-    expect(r.body.here).toEqual([]);
-  });
-
-  test("at the house with a to-do waiting → the prompt, with the count", async () => {
-    await h.request.post("/api/care-todos").set(h.auth(family.token)).send({ care_recipient_id: recipientId, title: "Water the kitchen plant" });
-    const r = await nearby(family.token, HOME.lat + 0.0005, HOME.lng); // ~180 ft away
-    expect(r.body.here).toEqual([expect.objectContaining({ careRecipientId: recipientId, openCount: 1 })]);
-  });
-
-  test("across town → nothing", async () => {
-    expect((await nearby(family.token, HOME.lat + 0.05, HOME.lng)).body.here).toEqual([]);
-  });
-
-  test("someone not on the team, standing at the house → nothing", async () => {
-    expect((await nearby(outsider.token, HOME.lat, HOME.lng)).body.here).toEqual([]);
-  });
-
-  test("a bad point is refused", async () => {
-    expect((await nearby(family.token, "x", 5)).status).toBe(400);
   });
 });
