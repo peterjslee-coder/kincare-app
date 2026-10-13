@@ -841,6 +841,7 @@ app.use("/api/kindred", require("./routes/kindred"));
 app.use("/api/care-tasks", careTasksRouter);
 app.use("/api/care-events", careEventsRouter);
 app.use("/api/care-todos", require("./routes/careTodos")); // v1.109.9 — one-time to-dos for the next visit
+app.use("/api/whats-new", require("./routes/whatsNew")); // v1.112.4 — the What's New splash
 app.use("/api/legal", require("./routes/legal"));
 app.use("/api/legal-readiness", require("./routes/legalReadiness")); // v1.110 — family readiness checklist, local help, money-safety concerns
 app.use("/api/media", require("./routes/media"));
@@ -848,7 +849,7 @@ app.use("/api/safety", require("./routes/safety"));
 
 // ─── App version check (lightweight, no auth) ───
 const { cancelPassedPrivateOffers, releaseExpiredExclusiveOffers } = require("./utils/exclusiveOffers");
-const APP_VERSION = "1.112.3";
+const APP_VERSION = "1.112.4";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION, minAppVersion: MIN_APP_VERSION });

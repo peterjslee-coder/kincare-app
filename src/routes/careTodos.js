@@ -28,6 +28,7 @@ const { authenticate } = require("../middleware/auth");
 const { blockWhileImpersonating } = require("../middleware/noImpersonation");
 const { captureException } = require("../utils/sentry");
 const { _shared } = require("./careTasks");
+const { geofenceEvidence } = require("../utils/geocode"); // v1.112.4 — the arrival prompt
 
 const { hasAccess, canManage, canCheckOff, canSeeTasks, accessibleRecipients } = _shared;
 
@@ -109,6 +110,49 @@ router.get("/", async (req, res) => {
     captureException(err);
     console.error("Care to-dos list error:", err.message);
     return res.status(500).json({ error: "Failed to load to-dos" });
+  }
+});
+
+// ─── POST /api/care-todos/nearby ─── { latitude, longitude }  (v1.112.4)
+//
+// Pete, 10/13: "on the to-dos it would be great if it prompted you when you got to the care
+// location, i.e. Betty's house."
+//
+// The app asks this when it opens (or comes back to the front) on a phone that has ALREADY
+// allowed location — it never asks for permission just for this. The answer is the people
+// whose home this point is within ARRIVAL_FT of AND who have something waiting; nothing else.
+//
+// The point is used and dropped: not stored, not logged, not coarsened-and-kept. A family
+// member's whereabouts are not care data, and keeping them would make a location history of
+// everyone who visits Mom. Same audience as the list (todoAccess) — a caregiver gets the prompt
+// at check-in instead, which already proves she is at the house.
+const ARRIVAL_FT = 1000;
+router.post("/nearby", async (req, res) => {
+  try {
+    const lat = Number(req.body?.latitude);
+    const lng = Number(req.body?.longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+      return res.status(400).json({ error: "latitude and longitude required" });
+    }
+    const db = await getDb();
+    const access = await todoAccess(db, req.user.id);
+    const here = [];
+    for (const [rid, a] of access) {
+      if (a.viaVisit) continue;
+      const home = await db.prepare("SELECT latitude, longitude FROM care_recipients WHERE id = ?").get(rid);
+      if (!home || home.latitude == null || home.longitude == null) continue;
+      const geo = geofenceEvidence(lat, lng, home.latitude, home.longitude, ARRIVAL_FT);
+      if (geo.flag !== "ok") continue;
+      const open = await db.prepare(
+        `${ROW_SQL} WHERE td.care_recipient_id = ? AND td.removed_at IS NULL AND td.completed_at IS NULL ORDER BY td.created_at ASC`
+      ).all(rid);
+      if (!open.length) continue;
+      here.push({ careRecipientId: rid, recipientFirstName: a.recipient.first_name || null, openCount: open.length });
+    }
+    return res.json({ here });
+  } catch (err) {
+    captureException(err);
+    return res.status(500).json({ error: "Failed to check" });
   }
 });
 

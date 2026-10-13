@@ -3079,6 +3079,14 @@ async function initializeDatabase() {
         `ALTER TABLE users ADD COLUMN IF NOT EXISTS id_verified_in_person_note TEXT`,
       ],
     },
+    {
+      // v1.112.4 — What's New (src/whatsNew/entries.js). The ids of the entries this person has
+      // closed. Per id, not a timestamp: two entries can ship hours apart on one day.
+      id: "058_whats_new_seen",
+      statements: [
+        `ALTER TABLE users ADD COLUMN IF NOT EXISTS whats_new_seen JSONB NOT NULL DEFAULT '[]'::jsonb`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

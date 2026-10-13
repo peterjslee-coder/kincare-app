@@ -114,6 +114,11 @@ green run that silently skipped the test it was checking. Use `npx jest tests/<f
 9. **Fixes to a recurring bug class end in a lint or a test.** Two of this codebase's worst
    shapes — "authenticated but not authorized" and "base64 blobs into Postgres" — were each
    fixed once and grew back somewhere else. A fix without a guardrail has an expiry date.
+10. **Every release a user can see ships with a What's New entry** — `src/whatsNew/entries.js`,
+   in the same commit (Pete, 10/13: "this should be part of the future rollouts too"). Title, a
+   two-sentence body, 2–4 how-to steps, examples in the family's own words ("Water the kitchen
+   plant"), and a drawn `preview` added to `PREVIEWS` in `public/js/components/WhatsNew.js` —
+   made-up content, never a real person's data. Pure fixes nobody would notice don't get one.
 
 ## Timezone Design Principle
 

@@ -110,6 +110,7 @@ const scripts = [
   "js/components/IPAiBadge.js",
   "js/components/IPAiInsightsCard.js",
   "js/components/IdGateScreen.js", // v1.112.0 — the identity gate's full-page screen; app.js renders it
+  "js/components/WhatsNew.js", // v1.112.4 — the What's New splash; app.js mounts WhatsNewHost, HelpPage re-opens it
   "js/app.js",
 ];
 

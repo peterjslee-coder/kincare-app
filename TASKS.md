@@ -2,6 +2,12 @@
 
 > **How this works:** Add bugs and features below as you find them. Don't worry about wording or order. When you're ready for a dev session, say "let's work the task list" and Claude will batch everything together into one efficient push. Nothing gets executed until you say go.
 
+## Oct 13 2026 — What's New + to-dos on arrival (v1.112.4)
+
+- [x] What's New splash — registry `src/whatsNew/entries.js`, seen per entry (migration 058), drawn previews, Help → "What's new" re-opens. CLAUDE.md Dev Rule 10: every visible release ships an entry.
+- [x] To-dos on arrival — family: app opened at the house (location already allowed, point not kept) → "You're at Betty's" sheet. Caregiver: sheet on check-in.
+- [ ] [AAB NEEDED] Phone-in-pocket arrival buzz — background geofence; needs "Always" location, a native plugin, App Review copy and a privacy-label update. Pete chose "open now, buzz later" (10/13). Batch with the next native build.
+
 ## Oct 12 2026 — triage (Pete: feedback + Documents Center + legal insight)
 
 **v1.110.1 on staging.** Prod waits for Pete.

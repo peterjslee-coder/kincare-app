@@ -4365,6 +4365,8 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                   if (res?.ok) {
                     await res.json();
                     showToast('Checked in! Session started.', 'success');
+                    // v1.112.4 — the arrival prompt: anything the family left for this visit.
+                    try { if (checkInSession.careRecipientId) window.dispatchEvent(new CustomEvent('inplace:arrivalTodos', { detail: { careRecipientId: checkInSession.careRecipientId } })); } catch {}
                     setCheckInSession(null);
                     setIncompleteCheckIn(null);
                     if (incompleteTimerRef.current) { clearTimeout(incompleteTimerRef.current); incompleteTimerRef.current = null; }

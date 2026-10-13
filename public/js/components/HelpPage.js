@@ -478,6 +478,18 @@ const HelpPage = window.HelpPage = ({ currentUser, onNavigate }) => {
       )
     ),
 
+    // v1.112.4 — re-open the What's New splash (WhatsNew.js listens for the event).
+    !loading && React.createElement('button', {
+      onClick: () => { try { window.dispatchEvent(new CustomEvent('inplace:whatsNew')); } catch {} },
+      'data-testid': 'help-whats-new',
+      style: {
+        marginTop: '24px', width: '100%', minHeight: '48px', padding: '12px 16px', borderRadius: '12px',
+        border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-primary)',
+        fontSize: '15px', fontWeight: 600, cursor: 'pointer', textAlign: 'left',
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+      }
+    }, '\u2728 What\u2019s new in InPlace', React.createElement('span', { style: { color: 'var(--role-color)' } }, '\u2192')),
+
     // Contact Us section
     !loading && React.createElement('div', {
       style: {
