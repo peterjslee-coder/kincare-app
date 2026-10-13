@@ -191,6 +191,27 @@ const CareTodoList = window.CareTodoList = ({ recipientIds, heading, hideWhenNot
 
   const body = (
     <div data-testid="care-todos">
+      {/* v1.113.1 — Pete: "i'd like for the to-dos that are collapsed to be just a little more
+          noticeable … something like 'To-do list - 3 items' … even just a splash of color or a
+          shimmer treatment so it stands against the green/white/black." Folded with something
+          waiting, the heading becomes a warm amber bar with a slow sheen (styles.css,
+          .care-todo-folded; still under reduced motion). Folded with nothing waiting, or open,
+          it stays the quiet heading it was. */}
+      {!expanded && open.length > 0 ? (
+        <div role="button" tabIndex={0} aria-expanded={false} data-testid="care-todos-folded"
+          className="care-todo-folded"
+          aria-label={`To-do list, ${open.length} waiting. Show.`}
+          onClick={() => setExpanded(true)}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpanded(true); } }}
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, minHeight: 44,
+            margin: '4px 0 8px', padding: '0 14px', borderRadius: 12, cursor: 'pointer',
+            background: 'var(--color-warning-bg)', borderLeft: '4px solid var(--color-warning)' }}>
+          <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {'📌'} To-do list {'·'} {open.length} {open.length === 1 ? 'item' : 'items'}
+          </span>
+          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>Show {'▾'}</span>
+        </div>
+      ) : (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, margin: '4px 2px 8px' }}>
         <div role="button" tabIndex={0} aria-expanded={expanded}
           onClick={() => setExpanded(!expanded)}
@@ -204,6 +225,7 @@ const CareTodoList = window.CareTodoList = ({ recipientIds, heading, hideWhenNot
           <button onClick={() => setAdding(addable[0])} style={{ ...small, minHeight: 36, border: 'none', background: 'var(--bg-teal-light)', color: 'var(--role-color)' }}>+ Add to-do</button>
         )}
       </div>
+      )}
 
       {expanded && (<>
 

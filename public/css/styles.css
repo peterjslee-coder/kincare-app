@@ -3440,3 +3440,20 @@ body.text-size-xlarge h2, body.text-size-xlarge h3 { font-size: 28px !important;
 @media (prefers-reduced-motion: reduce) {
   .ip-path-step, .ip-path-done { animation: none; }
 }
+
+/* v1.113.1 — a folded to-do list with something waiting: one slow sheen across the amber bar
+   every few seconds, so it reads as "there's something here" without nagging. */
+.care-todo-folded { position: relative; overflow: hidden; }
+.care-todo-folded::after {
+  content: ''; position: absolute; top: 0; bottom: 0; left: -40%; width: 40%; pointer-events: none;
+  background: linear-gradient(100deg, transparent 0%, rgba(255, 255, 255, 0.45) 50%, transparent 100%);
+  animation: careTodoSheen 7s ease-in-out 1.2s infinite;
+}
+@keyframes careTodoSheen {
+  0% { left: -40%; }
+  22% { left: 110%; }
+  100% { left: 110%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .care-todo-folded::after { animation: none; display: none; }
+}
