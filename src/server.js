@@ -668,7 +668,7 @@ function isOlder(a, b) {
   return false;
 }
 
-const VERSION_GATE_EXEMPT = ["/api/version", "/api/pricing", "/api/health", "/api/auth/", "/api/payments/webhook", "/api/checkr/webhook"];
+const VERSION_GATE_EXEMPT = ["/api/version", "/api/pricing", "/api/health", "/api/auth/", "/api/payments/webhook", "/api/checkr/webhook", "/api/sms/"];
 
 app.use("/api/", (req, res, next) => {
   const full = req.originalUrl || req.path;
@@ -812,6 +812,8 @@ app.use("/api/admin/financials", require("./routes/financials"));
 app.use("/api/admin/treasury", require("./routes/treasury"));
 app.use("/api/admin/tickets", require("./routes/tickets"));
 app.use("/api/admin/legal-readiness", require("./routes/legalReadiness").adminRouter); // v1.110 — after /api/admin, so its network gate runs first
+app.use("/api/admin/outreach", require("./routes/outreach")); // v1.113.0 — caregiver outreach; after /api/admin for the same reason
+app.use("/api/sms", require("./routes/smsWebhooks")); // v1.113.0 — Twilio webhooks (signature-checked in the router)
 app.use("/api/costs", require("./routes/costs"));
 app.use("/api/platform-invites", require("./routes/platformInvites"));
 app.use("/api/known-caregivers", require("./routes/knownCaregivers")); // v1.105.186 — a family adds a caregiver it already knows
@@ -849,7 +851,7 @@ app.use("/api/safety", require("./routes/safety"));
 
 // ─── App version check (lightweight, no auth) ───
 const { cancelPassedPrivateOffers, releaseExpiredExclusiveOffers } = require("./utils/exclusiveOffers");
-const APP_VERSION = "1.112.4";
+const APP_VERSION = "1.113.0";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION, minAppVersion: MIN_APP_VERSION });

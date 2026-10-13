@@ -58,7 +58,7 @@ function formatPhoneE164(phone) {
  * Returns { success: true, sid } or { success: false, error: string }
  * Never throws — SMS failure should not crash the caller.
  */
-async function sendSms(to, body) {
+async function sendSms(to, body, opts = {}) {
   const client = getTwilio();
 
   if (!client) {
@@ -73,13 +73,17 @@ async function sendSms(to, body) {
   }
 
   try {
+    // v1.113.0 — opts.from lets caregiver outreach use its own number (TWILIO_OUTREACH_NUMBER),
+    // so cold texts can never get the arrival-reminder number filtered. opts.statusCallback asks
+    // Twilio to report delivery, because carriers drop filtered traffic without an error.
     const msg = await client.messages.create({
       body,
-      from: process.env.TWILIO_FROM_NUMBER,
+      from: opts.from || process.env.TWILIO_FROM_NUMBER,
       to: formattedTo,
+      ...(opts.statusCallback ? { statusCallback: opts.statusCallback } : {}),
     });
     console.log(`  [sms] ✅ Sent to ${formattedTo} (sid: ${msg.sid})`);
-    return { success: true, sid: msg.sid };
+    return { success: true, sid: msg.sid, status: msg.status };
   } catch (err) {
     console.error(`  [sms] ❌ Failed to send to ${formattedTo}: ${err.message}`);
     return { success: false, error: err.message };
@@ -93,4 +97,14 @@ function isSmsConfigured() {
   return !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_FROM_NUMBER);
 }
 
-module.exports = { sendSms, formatPhoneE164, isSmsConfigured };
+/**
+ * v1.113.0 — caregiver outreach has its own number. Configured only when the Twilio account is
+ * AND TWILIO_OUTREACH_NUMBER is set. It never falls back to TWILIO_FROM_NUMBER: that number
+ * carries arrival reminders and must not absorb cold-text filtering.
+ */
+function outreachNumber() {
+  const n = formatPhoneE164(process.env.TWILIO_OUTREACH_NUMBER || "");
+  return n && process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN ? n : null;
+}
+
+module.exports = { sendSms, formatPhoneE164, isSmsConfigured, outreachNumber };

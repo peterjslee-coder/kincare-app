@@ -7,9 +7,9 @@ build red.
 
 Hand-written sections (§3 "Where is…") are preserved across regeneration; edit those freely.
 
-Structure at last generation: 572 HTTP routes across 60 mounts ·
-109 `CREATE TABLE` statements · 14 background jobs · 39 socket events
-(17 with no client listener) · 70 push event types · 60 `window.__*` globals.
+Structure at last generation: 574 HTTP routes across 62 mounts ·
+111 `CREATE TABLE` statements · 14 background jobs · 39 socket events
+(17 with no client listener) · 71 push event types · 60 `window.__*` globals.
 
 ---
 
@@ -42,6 +42,7 @@ JSX is *not* compiled in the browser; Babel-standalone is not loaded. Editing an
 | `/api/activity` | `src/routes/activity.js` | 4 |  |
 | `/api/admin` | `src/routes/admin/` | 100 |  |
 | `/api/admin/financials` | `src/routes/financials.js` | 13 |  |
+| `/api/admin/outreach` | `src/routes/outreach.js` | 0 |  |
 | `/api/admin/tickets` | `src/routes/tickets.js` | 7 |  |
 | `/api/admin/treasury` | `src/routes/treasury.js` | 1 |  |
 | `/api/analytics` | `src/routes/analytics.js` | 1 |  |
@@ -95,6 +96,7 @@ JSX is *not* compiled in the browser; Babel-standalone is not loaded. Editing an
 | `/api/scheduling` | `src/routes/nlScheduling.js` | 1 |  |
 | `/api/self-onboarding` | `src/routes/selfOnboarding.js` | 3 |  |
 | `/api/sessions` | `src/routes/sessions.js` **+** `src/routes/offers.js` | 44 | ⚠️ **multi-file mount — routes for this prefix live in more than one file** |
+| `/api/sms` | `src/routes/smsWebhooks.js` | 2 |  |
 | `/api/video` | `src/routes/videoCall.js` | 1 |  |
 | `/api/waitlist` | `src/routes/waitlist.js` | 3 |  |
 | `/api/whats-new` | `src/routes/whatsNew.js` | 2 |  |
@@ -199,20 +201,20 @@ Every job runs through `guardedPoller` → `withPollerLock` (`src/models/databas
 
 | Lock | Job | Interval | Declared |
 |---:|---|---|---|
-| 101 | Daily demo data refresh | 24 h | `src/server.js:1065` |
-| 102 | Session notification poller (every 60s) | 1 min | `src/server.js:1159` |
-| 103 | Session Accountability Poller | 1 min | `src/server.js:1434` |
-| 104 | Reimbursement push digest sweeper (v1.98.15) | 30 s | `src/server.js:1451` |
-| 105 | Auto-pay cron: charge overdue sessions | 5 min | `src/server.js:1543` |
-| 106 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1649` |
-| 107 | Care Tasks poller (v1.99.0) | 1 min | `src/server.js:1659` |
-| 108 | Care Events poller (v1.100.0) | 1 min | `src/server.js:1675` |
-| 109 | Kindred Reminder Delivery Poller | 1 min | `src/server.js:1465` |
-| 110 | Retention (v1.106.9, poller 110) | 24 h | `src/server.js:1712` |
-| 111 | (see src/server.js:1625) | 1 h | `src/server.js:1625` |
-| 112 | v1.106.13 — poller 112: proposals that nobody answered | 10 min | `src/server.js:1741` |
-| 113 | (see src/server.js:1784) | 1 min | `src/server.js:1784` |
-| 114 | Quiet hours summary (v1.107.3, poller 114) | 5 min | `src/server.js:1803` |
+| 101 | Daily demo data refresh | 24 h | `src/server.js:1067` |
+| 102 | Session notification poller (every 60s) | 1 min | `src/server.js:1161` |
+| 103 | Session Accountability Poller | 1 min | `src/server.js:1436` |
+| 104 | Reimbursement push digest sweeper (v1.98.15) | 30 s | `src/server.js:1453` |
+| 105 | Auto-pay cron: charge overdue sessions | 5 min | `src/server.js:1545` |
+| 106 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1651` |
+| 107 | Care Tasks poller (v1.99.0) | 1 min | `src/server.js:1661` |
+| 108 | Care Events poller (v1.100.0) | 1 min | `src/server.js:1677` |
+| 109 | Kindred Reminder Delivery Poller | 1 min | `src/server.js:1467` |
+| 110 | Retention (v1.106.9, poller 110) | 24 h | `src/server.js:1714` |
+| 111 | (see src/server.js:1627) | 1 h | `src/server.js:1627` |
+| 112 | v1.106.13 — poller 112: proposals that nobody answered | 10 min | `src/server.js:1743` |
+| 113 | (see src/server.js:1786) | 1 min | `src/server.js:1786` |
+| 114 | Quiet hours summary (v1.107.3, poller 114) | 5 min | `src/server.js:1805` |
 
 ---
 
@@ -295,19 +297,19 @@ Opt-out key is `notification_prefs["push_" + eventType]`. Capability gating live
 
 `new_registration` · `new_signup_intent` · `no_show_cancelled` · `on_my_way`
 
-`on_my_way_recipient` · `outreach_response` · `outreach_sent` · `overdue_check_in`
+`on_my_way_recipient` · `outreach_reply` · `outreach_response` · `outreach_sent`
 
-`overdue_check_in_family` · `overdue_check_out` · `overdue_check_out_family` · `payment_authorization_failed`
+`overdue_check_in` · `overdue_check_in_family` · `overdue_check_out` · `overdue_check_out_family`
 
-`payment_hold` · `payment_method_needed` · `phone_verified` · `proposal_accepted`
+`payment_authorization_failed` · `payment_hold` · `payment_method_needed` · `phone_verified`
 
-`proposal_declined` · `request_declined` · `review` · `safety_flag`
+`proposal_accepted` · `proposal_declined` · `request_declined` · `review`
 
-`session_cancelled` · `session_complete` · `session_in_progress` · `team_join`
+`safety_flag` · `session_cancelled` · `session_complete` · `session_in_progress`
 
-`time_change` · `time_proposal` · `unblocked` · `upload_authority_confirmed`
+`team_join` · `time_change` · `time_proposal` · `unblocked`
 
-`uploaded` · `waitlist_signup`
+`upload_authority_confirmed` · `uploaded` · `waitlist_signup`
 
 ---
 

@@ -185,7 +185,17 @@ const AdminIntegrity = () => {
 
 const AdminPanel = window.AdminPanel = ({ currentUser }) => {
   const { showToast } = useToast();
-  const [activeTab, setActiveTab] = useState('overview');
+  // v1.113.0 — ?adminTab=outreach opens a tab directly (the outreach-reply push links here).
+  const [activeTab, setActiveTab] = useState(() => {
+    try { return new URLSearchParams(window.location.search).get('adminTab') || 'overview'; } catch { return 'overview'; }
+  });
+  const [outreachUnread, setOutreachUnread] = useState(0);
+  useEffect(() => {
+    // The badge only; the tab itself loads everything. Quiet on failure — a missing badge is not an error.
+    apiFetch('/api/admin/outreach').then(async (r) => {
+      if (r?.ok) { const d = await r.json(); setOutreachUnread(d.contacts.filter((c) => c.unread).length); }
+    }).catch(() => {});
+  }, []);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userDrawer, setUserDrawer] = useState(null);
   const [userDrawerLoading, setUserDrawerLoading] = useState(false);
@@ -1994,6 +2004,9 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
       { id: 'people', label: 'People', icon: '👥', badge: pendingApprovals.length || null },
       { id: 'sessions', label: 'Sessions', icon: '📅', badge: pausedCaregivers.length || null },
       { id: 'client-versions', label: 'Versions', icon: '📱' },
+    ]},
+    { label: 'Growth', tabs: [
+      { id: 'outreach', label: 'Outreach', icon: '\u{1F4AC}', badge: outreachUnread || null }, // v1.113.0
     ]},
     { label: 'Customer Service', tabs: [
       { id: 'tickets', label: 'Tickets', icon: '🎫', badge: ticketCount || null },
@@ -6698,6 +6711,12 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
       )}
 
       {/* v1.110 — Local Help: the family directory and money-safety concerns */}
+      {activeTab === 'outreach' && (
+        typeof AdminOutreachTab === 'function'
+          ? React.createElement(AdminOutreachTab, { apiFetch, showToast, onUnreadChange: setOutreachUnread })
+          : <div className="card">Outreach didn't load. Refresh the page.</div>
+      )}
+
       {activeTab === 'local-help' && (
         typeof LegalReadinessAdminTab === 'function'
           ? React.createElement(LegalReadinessAdminTab, { apiFetch, showToast })

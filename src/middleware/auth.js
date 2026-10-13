@@ -383,7 +383,7 @@ function verifyCsrf(req, res, next) {
     "/api/passkeys/register/options", "/api/passkeys/register/verify"];
   if (publicAuthPaths.some(p => fullPath === p || fullPath.startsWith(p + "?"))) return next();
   // Skip for webhook endpoints (server-to-server, no cookie/CSRF)
-  if (fullPath.startsWith("/api/checkr/webhook") || fullPath.startsWith("/api/payments/webhook")) return next();
+  if (fullPath.startsWith("/api/checkr/webhook") || fullPath.startsWith("/api/payments/webhook") || fullPath.startsWith("/api/sms/")) return next();
   // Skip for the client-crash beacon (v1.104.5): a fire-and-forget telemetry
   // sink with no state change and no CSRF token available at crash time. Without
   // this, a logged-in user's ErrorBoundary report is rejected 403 — exactly the

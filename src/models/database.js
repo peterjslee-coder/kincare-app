@@ -3087,6 +3087,49 @@ async function initializeDatabase() {
         `ALTER TABLE users ADD COLUMN IF NOT EXISTS whats_new_seen JSONB NOT NULL DEFAULT '[]'::jsonb`,
       ],
     },
+    {
+      // v1.113.0 — Admin → Outreach. Pete, 10/13: a list of ~70 private-pay sitters from the NRV
+      // Agency on Aging, reached by text, with every reply coming back into the app instead of
+      // onto his phone. One row per PHONE NUMBER (one number = one thread); two names that share
+      // a number are merged at import. No FK to users: created_by is always an admin, and a
+      // contact is not a user until she signs up (matched at read time by email or phone).
+      id: "059_caregiver_outreach",
+      statements: [
+        `CREATE TABLE IF NOT EXISTS outreach_contacts (
+           id TEXT PRIMARY KEY,
+           first_name TEXT,
+           last_name TEXT,
+           phone TEXT NOT NULL UNIQUE,
+           email TEXT,
+           notes TEXT,
+           source TEXT,
+           status TEXT NOT NULL DEFAULT 'new',
+           invite_id TEXT,
+           unread INTEGER NOT NULL DEFAULT 0,
+           opted_out_at TIMESTAMPTZ,
+           intro_sent_at TIMESTAMPTZ,
+           last_message_at TIMESTAMPTZ,
+           last_inbound_at TIMESTAMPTZ,
+           created_by TEXT,
+           created_at TIMESTAMPTZ DEFAULT NOW(),
+           updated_at TIMESTAMPTZ DEFAULT NOW()
+         )`,
+        `CREATE TABLE IF NOT EXISTS outreach_messages (
+           id TEXT PRIMARY KEY,
+           contact_id TEXT NOT NULL REFERENCES outreach_contacts(id) ON DELETE CASCADE,
+           direction TEXT NOT NULL,
+           body TEXT NOT NULL,
+           twilio_sid TEXT,
+           status TEXT,
+           error TEXT,
+           automated INTEGER NOT NULL DEFAULT 0,
+           sent_by TEXT,
+           created_at TIMESTAMPTZ DEFAULT NOW()
+         )`,
+        `CREATE INDEX IF NOT EXISTS idx_outreach_messages_contact ON outreach_messages (contact_id, created_at)`,
+        `CREATE INDEX IF NOT EXISTS idx_outreach_messages_sid ON outreach_messages (twilio_sid) WHERE twilio_sid IS NOT NULL`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

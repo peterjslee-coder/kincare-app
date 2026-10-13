@@ -119,6 +119,7 @@ const ADMIN_SCRIPTS = [
   "js/components/VouchPicker.js",
   "js/components/AdminFinancials.js",
   "js/components/AdminLegalReadiness.js", // v1.110 — Local Help tab + the share button SafetyFlagsTab renders
+  "js/components/AdminOutreach.js", // v1.113.0 — caregiver outreach by text; AdminPanel renders it
   "js/components/SafetyFlagsTab.js",
   "js/components/ContentReportsTab.js",
   "js/components/AdminPanel.js",
