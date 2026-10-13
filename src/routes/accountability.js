@@ -1624,6 +1624,7 @@ module.exports.captureSessionPayment = captureSessionPayment;
 module.exports.captureSessionPay = captureSessionPay; // v1.107.0
 module.exports.chargeTip = chargeTip; // v1.108.1
 module.exports.voidSessionPayment = voidSessionPayment;
+module.exports.isDemoSession = isDemoSession; // v1.114.2 — the check-in hold gate
 module.exports.pollPaymentAuthorizations = pollPaymentAuthorizations;
 
 // ─── v1.105.19 — settle cancellation fees whose window has closed ───

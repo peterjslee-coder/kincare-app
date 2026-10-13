@@ -1700,6 +1700,50 @@ router.post("/:id/check-in", async (req, res) => {
       }
     }
 
+    // ─── v1.114.2 — no card hold, no check-in ───
+    //
+    // Pete, 10/13: "check in requires a valid hold. 24 hours prior, there should be a hold."
+    // Only visits booked AND paid through InPlace get check-in, the visit log and the caregiver's
+    // tools (utils/careTools.js). The pre-shift poller places the hold ~24h ahead; a visit booked
+    // inside that window gets it on the next tick. If it still isn't there when she arrives, try
+    // once more now — then refuse, and tell the family, rather than start an unpaid visit.
+    // Demo visits never touch Stripe (Dev Rule 7) and are let through.
+    if (!req.user.impersonatedBy) {
+      const holdOk = async (id) => {
+        const s = await db.prepare(`
+          SELECT cs.payment_status, cs.payment_captured_at, cs.stripe_payment_intent_id, cs.estimated_cost,
+                 EXISTS (SELECT 1 FROM payments p WHERE p.session_id = cs.id AND p.status = 'completed') AS prepaid
+            FROM care_sessions cs WHERE cs.id = ?
+        `).get(id);
+        if (!s) return false;
+        if (!(parseFloat(s.estimated_cost) > 0)) return true; // nothing to pay
+        if (s.payment_captured_at || s.prepaid) return true;
+        return ["authorized", "paid", "waived"].includes(s.payment_status) && (s.payment_status !== "authorized" || !!s.stripe_payment_intent_id);
+      };
+      const acct = require("./accountability");
+      if (!(await holdOk(session.id)) && !(await acct.isDemoSession(db, session.id))) {
+        let reason = null;
+        try {
+          const r = await acct.authorizeSessionPayment(session.id);
+          reason = r && r.error ? r.error : null;
+        } catch (e) { reason = e.message; captureException(e, { where: "check-in: hold retry" }); }
+        if (!(await holdOk(session.id))) {
+          try {
+            sendPushToUser(session.family_user_id, {
+              title: 'Visit on hold — card needed',
+              body: 'Your caregiver is ready to start, but we couldn’t place the hold for this visit. Open InPlace to check your card.',
+              data: { type: 'payment_hold', page: 'home', sessionId: session.id },
+            }, 'payment_hold').catch(() => {});
+          } catch (e) { captureException(e, { where: "check-in: notify family of missing hold" }); }
+          console.warn(`[check-in] Refused — no card hold for session ${req.params.id.slice(0, 8)} (${reason || 'unknown'})`);
+          return res.status(402).json({
+            error: "This visit can’t start yet — the family’s card hold for it isn’t in place. They’ve been notified. Try again once they’ve updated their card.",
+            code: 'HOLD_REQUIRED',
+          });
+        }
+      }
+    }
+
     // ─── Timing gate: 15 min before session start ───
     // Allow check-in after start time (late is fine), but block too-early check-ins
     // All times are care-location times — use care recipient's timezone
