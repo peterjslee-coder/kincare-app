@@ -287,6 +287,49 @@ adminRouter.post("/:id/messages", async (req, res) => {
   }
 });
 
+// ─── Voice (v1.116.0) ───
+
+// A short-lived token for the browser's Call button (Twilio Voice SDK). Outgoing only; the
+// TwiML App it names (/api/sms/outreach-dial) dials the contact's number from our table.
+adminRouter.get("/voice-token", async (req, res) => {
+  try {
+    const sid = process.env.TWILIO_ACCOUNT_SID, keySid = process.env.TWILIO_API_KEY_SID,
+      keySecret = process.env.TWILIO_API_KEY_SECRET, appSid = process.env.TWILIO_TWIML_APP_SID;
+    if (!sid || !keySid || !keySecret || !appSid) {
+      return res.status(400).json({ error: "Calling isn't set up yet (TWILIO_TWIML_APP_SID)." });
+    }
+    const twilio = require("twilio");
+    const AccessToken = twilio.jwt.AccessToken;
+    const token = new AccessToken(sid, keySid, keySecret, { identity: `admin-${req.user.id}`, ttl: 3600 });
+    token.addGrant(new AccessToken.VoiceGrant({ outgoingApplicationSid: appSid, incomingAllow: false }));
+    res.json({ token: token.toJwt() });
+  } catch (err) {
+    captureException(err, { where: "outreach: voice token" });
+    res.status(500).json({ error: "Couldn't start calling" });
+  }
+});
+
+// Voicemail audio, fetched from Twilio with the account credentials and passed through — the
+// recording URL itself needs Twilio auth, so the browser can never fetch it directly.
+adminRouter.get("/recording/:messageId", async (req, res) => {
+  try {
+    const db = await getDb();
+    const m = await db.prepare("SELECT media_url FROM outreach_messages WHERE id = ? AND kind = 'voicemail'").get(req.params.messageId);
+    if (!m || !m.media_url || !/^https:\/\/api\.twilio\.com\//.test(m.media_url)) return res.status(404).json({ error: "No recording" });
+    const auth = Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString("base64");
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 15000);
+    const r = await fetch(`${m.media_url}.mp3`, { headers: { Authorization: `Basic ${auth}` }, signal: ctrl.signal });
+    clearTimeout(timer);
+    if (!r.ok) return res.status(502).json({ error: "Couldn't fetch the recording" });
+    const buf = Buffer.from(await r.arrayBuffer());
+    res.set("Content-Type", "audio/mpeg").set("Cache-Control", "private, max-age=3600").send(buf);
+  } catch (err) {
+    captureException(err, { where: "outreach: recording" });
+    if (!res.headersSent) res.status(500).json({ error: "Couldn't play the recording" });
+  }
+});
+
 adminRouter.post("/:id/invite", async (req, res) => {
   try {
     const db = await getDb();

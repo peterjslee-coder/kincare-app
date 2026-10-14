@@ -110,3 +110,10 @@ describe("outreach number never borrows the reminder number", () => {
     expect(require("../src/utils/sms").outreachNumber()).toBe("+15405550198");
   });
 });
+
+describe("dialableUsNumber — the browser can never call 911", () => {
+  test.each(["911", "1-911", "+1911", "933", "112", "988", "411", "+1 911 555 0101", "0005550101", "1115550101", "540-911-0000"])("%s is refused", (n) => {
+    expect(O.dialableUsNumber(n)).toBeNull();
+  });
+  test("a normal local number is dialable", () => expect(O.dialableUsNumber("(540) 555-0101")).toBe("+15405550101"));
+});

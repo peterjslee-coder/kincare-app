@@ -526,7 +526,7 @@ app.use(helmet({
       ],
       styleSrc: ["'self'", "'unsafe-inline'", "https://unpkg.com", "https://fonts.googleapis.com"],
       imgSrc: ["'self'", "data:", "blob:", "https:"],
-      connectSrc: ["'self'", "https://plausible.io", "https://api.stripe.com", "https://js.stripe.com", "https://connect-js.stripe.com", "https://static.cloudflareinsights.com", "https://*.tile.openstreetmap.org", "wss:", "ws:"],
+      connectSrc: ["'self'", "https://*.twilio.com", "https://plausible.io", "https://api.stripe.com", "https://js.stripe.com", "https://connect-js.stripe.com", "https://static.cloudflareinsights.com", "https://*.tile.openstreetmap.org", "wss:", "ws:"],
       // v1.110.4 — blob: so an in-app PDF preview can render. Every PDF preview in the app
       // (Documents Center, receipts, care documents, admin review) is a same-origin blob URL
       // in an iframe on non-WebKit browsers, and Chrome blocked all of them: "This content is
@@ -853,7 +853,7 @@ app.use("/api/safety", require("./routes/safety"));
 
 // ─── App version check (lightweight, no auth) ───
 const { cancelPassedPrivateOffers, releaseExpiredExclusiveOffers } = require("./utils/exclusiveOffers");
-const APP_VERSION = "1.115.0";
+const APP_VERSION = "1.116.0";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION, minAppVersion: MIN_APP_VERSION });

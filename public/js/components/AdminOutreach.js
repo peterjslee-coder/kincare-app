@@ -58,6 +58,45 @@ const outWhen = (iso) => {
   return sameDay ? d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : d.toLocaleDateString([], { month: 'short', day: 'numeric' });
 };
 
+// v1.116.0 — browser calling. The SDK is self-hosted and loaded only when a call starts.
+let outVoiceSdk = null;
+const outLoadVoiceSdk = () => {
+  if (window.Twilio && window.Twilio.Device) return Promise.resolve(window.Twilio);
+  if (outVoiceSdk) return outVoiceSdk;
+  outVoiceSdk = new Promise((resolve, reject) => {
+    const sc = document.createElement('script');
+    sc.src = '/vendor/twilio-voice-2.18.5.min.js';
+    sc.onload = () => (window.Twilio && window.Twilio.Device ? resolve(window.Twilio) : reject(new Error('Voice SDK missing')));
+    sc.onerror = () => { outVoiceSdk = null; reject(new Error('Voice SDK failed to load')); };
+    document.head.appendChild(sc);
+  });
+  return outVoiceSdk;
+};
+const outClock = (secs) => `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
+
+const OutVoicemailPlayer = ({ messageId, apiFetch, showToast }) => {
+  const [src, setSrc] = React.useState(null);
+  const [loading, setLoading] = React.useState(false);
+  React.useEffect(() => () => { if (src) URL.revokeObjectURL(src); }, [src]);
+  const load = async () => {
+    setLoading(true);
+    try {
+      const res = await apiFetch(`/api/admin/outreach/recording/${messageId}`);
+      if (res?.ok) setSrc(URL.createObjectURL(await res.blob()));
+      else showToast(await outErr(res, "Couldn't load the voicemail"), 'error');
+    } catch {
+      showToast("Couldn't load the voicemail", 'error');
+    }
+    setLoading(false);
+  };
+  if (src) return <audio controls autoPlay src={src} style={{ width: '100%', marginTop: 6, height: 36 }} />;
+  return (
+    <button onClick={load} disabled={loading} style={{ marginTop: 6, padding: '4px 10px', borderRadius: 8, border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: 12, cursor: 'pointer' }}>
+      {loading ? 'Loading…' : '▶ Play voicemail'}
+    </button>
+  );
+};
+
 const OutStatusPill = ({ status }) => {
   const s = OUT_STATUS[status] || { label: status, tone: 'muted' };
   return (
@@ -72,6 +111,54 @@ const OutreachThread = ({ contactId, apiFetch, showToast, onClose, onChanged }) 
   const [notes, setNotes] = React.useState('');
   const [busy, setBusy] = React.useState(false);
   const endRef = React.useRef(null);
+  // v1.116.0 — { state: 'connecting'|'ringing'|'live', muted, secs } while a browser call is up.
+  const [call, setCall] = React.useState(null);
+  const callRef = React.useRef(null);
+  const deviceRef = React.useRef(null);
+  React.useEffect(() => {
+    if (!call || call.state !== 'live') return undefined;
+    const t = setInterval(() => setCall((c) => (c ? { ...c, secs: c.secs + 1 } : c)), 1000);
+    return () => clearInterval(t);
+  }, [call && call.state]);
+  const endCall = () => {
+    try { callRef.current && callRef.current.disconnect(); } catch { /* already gone */ }
+    try { deviceRef.current && deviceRef.current.destroy(); } catch { /* already gone */ }
+    callRef.current = null; deviceRef.current = null;
+    setCall(null);
+    setTimeout(() => { load(false); onChanged(); }, 1500);
+  };
+  React.useEffect(() => () => {
+    try { callRef.current && callRef.current.disconnect(); } catch { /* closing */ }
+    try { deviceRef.current && deviceRef.current.destroy(); } catch { /* closing */ }
+  }, []);
+  const startCall = async () => {
+    setCall({ state: 'connecting', muted: false, secs: 0 });
+    try {
+      const res = await apiFetch('/api/admin/outreach/voice-token');
+      if (!res?.ok) { showToast(await outErr(res, "Couldn't start the call"), 'error'); setCall(null); return; }
+      const { token } = await res.json();
+      const Twilio = await outLoadVoiceSdk();
+      const device = new Twilio.Device(token, { codecPreferences: ['opus', 'pcmu'], closeProtection: 'A call is in progress.' });
+      deviceRef.current = device;
+      const c = await device.connect({ params: { contactId } });
+      callRef.current = c;
+      setCall({ state: 'ringing', muted: false, secs: 0 });
+      c.on('accept', () => setCall((x) => (x ? { ...x, state: 'live' } : x)));
+      c.on('disconnect', endCall);
+      c.on('cancel', endCall);
+      c.on('reject', endCall);
+      c.on('error', (e) => { showToast(`Call error: ${e?.message || 'unknown'}`, 'error'); endCall(); });
+    } catch (e) {
+      showToast(e && /permission|NotAllowed/i.test(String(e.message || e.name)) ? 'Allow microphone access to call from here' : "Couldn't start the call", 'error');
+      endCall();
+    }
+  };
+  const toggleMute = () => {
+    if (!callRef.current) return;
+    const next = !call.muted;
+    try { callRef.current.mute(next); } catch { /* not connected yet */ }
+    setCall((x) => (x ? { ...x, muted: next } : x));
+  };
 
   const load = async (first) => {
     try {
@@ -155,8 +242,22 @@ const OutreachThread = ({ contactId, apiFetch, showToast, onClose, onChanged }) 
             )}
           </div>
           {c && <OutStatusPill status={c.joined_user_id && c.status !== 'opted_out' ? 'joined' : c.status} />}
+          {c && !call && (
+            <button onClick={startCall} title="Call from InPlace's number" style={{ ...btn, padding: '4px 10px', fontSize: 13 }}>📞 Call</button>
+          )}
           <button onClick={onClose} aria-label="Close" style={{ background: 'none', border: 'none', fontSize: 24, lineHeight: 1, cursor: 'pointer', color: 'var(--text-secondary)' }}>×</button>
         </div>
+
+        {call && (
+          <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', gap: 10, ...OUT_TONE.info }}>
+            <span style={{ flex: 1, fontSize: 14, fontWeight: 600 }}>
+              {call.state === 'live' ? `On the call · ${outClock(call.secs)}` : call.state === 'ringing' ? 'Ringing…' : 'Connecting…'}
+              <span style={{ fontWeight: 400, fontSize: 12 }}> · from InPlace's number</span>
+            </span>
+            {call.state === 'live' && <button onClick={toggleMute} style={{ ...btn, padding: '4px 10px', fontSize: 12 }}>{call.muted ? 'Unmute' : 'Mute'}</button>}
+            <button onClick={endCall} style={{ ...btn, padding: '4px 12px', fontSize: 12, background: 'var(--color-error)', color: 'var(--text-on-primary)', border: 'none' }}>Hang up</button>
+          </div>
+        )}
 
         {c && (
           <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border-color)', display: 'grid', gap: 8 }}>
@@ -193,11 +294,15 @@ const OutreachThread = ({ contactId, apiFetch, showToast, onClose, onChanged }) 
                   background: mine ? 'var(--bubble-sent-bg)' : 'var(--bubble-received-bg)',
                   color: mine ? 'var(--bubble-sent-text)' : 'var(--bubble-received-text)',
                   border: bad ? '2px solid var(--color-error)' : 'none',
-                }}>{m.body}</div>
+                }}>
+                  {m.kind === 'voicemail' ? '📞 ' : m.kind === 'call' ? '📞 ' : ''}{m.body}
+                  {m.kind === 'voicemail' && m.media_url && <OutVoicemailPlayer messageId={m.id} apiFetch={apiFetch} showToast={showToast} />}
+                </div>
                 <div style={{ fontSize: 11, color: bad ? 'var(--color-error)' : 'var(--text-muted)', marginTop: 2, textAlign: mine ? 'right' : 'left' }}>
                   {outWhen(m.created_at)}
+                  {m.kind === 'voicemail' && m.duration ? ` · ${outClock(m.duration)}` : ''}
                   {mine && (m.automated ? ' · sent automatically' : m.sender_first_name ? ` · ${m.sender_first_name}` : '')}
-                  {mine && m.status && !bad && m.status !== 'sending' ? ` · ${m.status}` : ''}
+                  {mine && m.kind !== 'call' && m.status && !bad && m.status !== 'sending' ? ` · ${m.status}` : ''}
                   {bad ? ` · not delivered${m.error ? ` (${m.error})` : ''}` : ''}
                 </div>
               </div>

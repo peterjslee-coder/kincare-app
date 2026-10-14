@@ -160,6 +160,18 @@ function introWindow(now = new Date(), tz = "America/New_York") {
   return { open, reason: open ? null : (sunday ? "Intro texts don't go out on Sundays." : "Intro texts go out between 9am and 8pm Eastern.") };
 }
 
+/**
+ * The only numbers the browser Call button may dial: a full ten-digit US number, area code and
+ * exchange not starting with 0/1 (NANP), returned as +1XXXXXXXXXX. Emergency and short codes
+ * (911, 933, 112, 988, N11) can never pass. Returns null otherwise.
+ */
+function dialableUsNumber(raw) {
+  const k = phoneKey(raw);
+  if (!k || !/^[2-9]\d{2}[2-9]\d{6}$/.test(k)) return null;
+  if (/^[2-9]11/.test(k) || /^[2-9]11/.test(k.slice(3))) return null; // no N11 area code or exchange (911, 411, 988-adjacent service codes)
+  return `+1${k}`;
+}
+
 /** SMS segments: GSM-7 = 160 (153 per part), anything else = 70 (67 per part). */
 function segmentCount(text) {
   const s = String(text || "");
@@ -171,5 +183,5 @@ function segmentCount(text) {
 module.exports = {
   OUTREACH_STATUSES, OPT_OUT_WORDS, OPT_IN_WORDS, JOIN_WORDS, JOIN_REPLY, DEFAULT_INTRO,
   phoneKey, toE164, prettyPhone, parseList, greetingName, renderTemplate,
-  classifyInbound, introWindow, segmentCount,
+  classifyInbound, introWindow, segmentCount, dialableUsNumber,
 };

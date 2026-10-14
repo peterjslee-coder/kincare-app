@@ -3160,6 +3160,15 @@ async function initializeDatabase() {
       ],
     },
     {
+      // v1.116.0 — voicemail and browser calls in the Outreach thread (routes/smsWebhooks.js).
+      id: "063_outreach_voice",
+      statements: [
+        `ALTER TABLE outreach_messages ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'sms'`,
+        `ALTER TABLE outreach_messages ADD COLUMN IF NOT EXISTS media_url TEXT`,
+        `ALTER TABLE outreach_messages ADD COLUMN IF NOT EXISTS duration INTEGER`,
+      ],
+    },
+    {
       // v1.114.0 — care tools come with care booked through InPlace (utils/careTools.js).
       // care_tools_open_at: an admin turned this person's care tools on regardless of bookings
       // (Admin → People → Care tools). NULL = the normal rule.

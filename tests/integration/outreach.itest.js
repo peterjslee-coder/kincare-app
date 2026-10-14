@@ -198,3 +198,54 @@ test("someone who already has an account shows as on InPlace", async () => {
   await db.prepare("UPDATE users SET phone = ? WHERE id = ?").run("(540) 555-0102", u.user.id);
   expect((await byPhone("+15405550102")).status).toBe("joined");
 });
+
+// ─── v1.116.0 — voicemail and browser calls ───
+const signedPost = (path, params) => {
+  const url = `${APP_URL}${path}`;
+  const sig = twilio.getExpectedTwilioSignature(process.env.TWILIO_AUTH_TOKEN, url, params);
+  return h.request.post(path).set("X-Twilio-Signature", sig).type("form").send(params);
+};
+
+test("an inbound call gets Pete's greeting and becomes a voicemail in the caller's thread", async () => {
+  const r = await signedPost("/api/sms/outreach-voice", { From: "+15405550102", CallSid: "CAvm1" });
+  expect(r.status).toBe(200);
+  expect(r.text).toContain("You&apos;ve reached InPlace. Please leave a message and a number, and we will get back to you as soon as possible.");
+  expect(r.text).toContain("<Record");
+  const c = await byPhone("+15405550102");
+  let m = await db.prepare("SELECT * FROM outreach_messages WHERE twilio_sid = 'CAvm1'").get();
+  expect(m).toMatchObject({ contact_id: c.id, kind: "voicemail", direction: "in", body: "Missed call (no message)" });
+  await signedPost("/api/sms/outreach-recording", { CallSid: "CAvm1", RecordingUrl: "https://api.twilio.com/2010-04-01/Accounts/AC1/Recordings/RE1", RecordingDuration: "42", RecordingStatus: "completed" });
+  await signedPost("/api/sms/outreach-transcription", { CallSid: "CAvm1", TranscriptionText: "Hi, this is Mary, call me back", TranscriptionStatus: "completed" });
+  m = await db.prepare("SELECT * FROM outreach_messages WHERE twilio_sid = 'CAvm1'").get();
+  expect(m.duration).toBe(42);
+  expect(m.media_url).toMatch(/Recordings\/RE1$/);
+  expect(m.body).toContain("Hi, this is Mary, call me back");
+});
+
+test("an unsigned call is refused", async () => {
+  expect((await h.request.post("/api/sms/outreach-voice").type("form").send({ From: "+15405550102" })).status).toBe(403);
+});
+
+test("only an admin's browser can dial, only a contact's number, from the outreach number", async () => {
+  const c = await byPhone("+15405550102");
+  const ok = await signedPost("/api/sms/outreach-dial", { From: `client:admin-${admin.user.id}`, contactId: c.id, CallSid: "CAout1" });
+  expect(ok.text).toContain('<Dial callerId="+15405550100"');
+  expect(ok.text).toContain("<Number>+15405550102</Number>");
+  const notAdmin = await signedPost("/api/sms/outreach-dial", { From: `client:admin-${stranger.user.id}`, contactId: c.id, CallSid: "CAout2" });
+  expect(notAdmin.text).not.toContain("<Dial");
+  await signedPost("/api/sms/outreach-dial-done", { CallSid: "CAout1", DialCallStatus: "completed", DialCallDuration: "95" });
+  const m = await db.prepare("SELECT body, duration FROM outreach_messages WHERE twilio_sid = 'CAout1'").get();
+  expect(m).toEqual({ body: "Call · 1:35", duration: 95 });
+});
+
+test("911 can never be dialed, even if it ends up in a row", async () => {
+  await db.prepare("INSERT INTO outreach_contacts (id, phone, status, last_inbound_at) VALUES ('c911', '911', 'replied', NOW())").run();
+  const r = await signedPost("/api/sms/outreach-dial", { From: `client:admin-${admin.user.id}`, contactId: "c911", CallSid: "CA911" });
+  expect(r.text).not.toContain("<Dial");
+  expect(r.text).not.toContain("911");
+});
+
+test("voice token needs the TwiML app configured", async () => {
+  const r = await h.request.get("/api/admin/outreach/voice-token").set(A());
+  expect([200, 400]).toContain(r.status);
+});
