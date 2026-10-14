@@ -7305,8 +7305,30 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                     <div><div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Completed Visits</div><div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{userDrawer.sessionStats?.completed || 0}</div></div>
                     <div><div style={{ fontSize: 11, color: 'var(--text-muted)' }}>No-shows</div><div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{userDrawer.sessionStats?.no_shows || 0}</div></div>
-                    <div><div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Lifetime Revenue</div><div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>${userDrawer.lifetimeRevenue || '0.00'}</div></div>
-                    <div><div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Avg Rating</div><div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{userDrawer.reviewStats?.avg_rating ? Number(userDrawer.reviewStats.avg_rating).toFixed(1) : '—'} ({userDrawer.reviewStats?.total_reviews || 0})</div></div>
+                    {/* v1.116.3 — money from the ledger, and the fields the server actually sends. */}
+                    {(() => {
+                      const m = userDrawer.money || null;
+                      const usd = (c) => '$' + ((c || 0) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                      const isCg = !!userDrawer.caregiverProfile;
+                      const main = m ? (isCg ? m.earnedCents : m.chargedCents) : Math.round((userDrawer.lifetimeRevenue || 0) * 100);
+                      const sub = m ? [
+                        m.paidVisits ? `${m.paidVisits} paid visit${m.paidVisits === 1 ? '' : 's'}` : null,
+                        isCg && m.chargedCents ? `${usd(m.chargedCents)} charged` : null,
+                        m.platformCents ? `${usd(m.platformCents)} to InPlace` : null,
+                        m.unitemizedPaidVisits ? `+${m.unitemizedPaidVisits} paid before itemized records` : null,
+                      ].filter(Boolean).join(' · ') : '';
+                      return (
+                        <div><div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{isCg ? 'Earned (to her)' : 'Spent on care'}</div><div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{usd(main)}</div>{sub && <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>{sub}</div>}</div>
+                      );
+                    })()}
+                    {(() => {
+                      const r = userDrawer.reviewStats || {};
+                      const isCg = !!userDrawer.caregiverProfile;
+                      const n = isCg ? (r.received || 0) : (r.given || 0);
+                      return (
+                        <div><div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{isCg ? 'Avg Rating' : 'Reviews Given'}</div><div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{isCg ? `${r.received && r.avgReceived ? Number(r.avgReceived).toFixed(1) + ' ⭐' : '—'} (${n})` : n}</div></div>
+                      );
+                    })()}
                     <div><div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Care Teams</div><div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{userDrawer.careTeams?.length || 0}</div></div>
                     <div><div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Last Active</div><div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{userDrawer.lastActive ? new Date(userDrawer.lastActive).toLocaleDateString() : '—'}</div></div>
                   </div>

@@ -543,13 +543,33 @@ async function captureSessionPayment(sessionId, captureAmountCents = null) {
     `).run(sessionId);
 
     // v1.109.0 — the cancel fee is money that moved and had no record of its own.
+    //
+    // v1.116.3 — and it was recorded as 100% InPlace's. It never was: the hold carries the
+    // caregiver as its destination and InPlace's fee as application_fee_amount (set at
+    // authorization), so Stripe paid the caregiver her share and InPlace kept only its fee —
+    // which is what the agreements promise ("Caregiver receives the same share they would have
+    // had the visit happened, net of the Platform Fee"). The row said caregiver $0 / InPlace
+    // all of it, so Tina's three Oct 12–14 cancellations showed $0 to her and put $528 of her
+    // pay into InPlace's income. Record what Stripe actually did.
     const ledger = require("../utils/ledger");
     const cents = Math.round(captureAmountCents || session.authorized_amount || 0);
+    let feeCents = Number.isFinite(Number(captured && captured.application_fee_amount)) && captured.application_fee_amount != null
+      ? Math.round(Number(captured.application_fee_amount)) : null;
+    if (feeCents == null) {
+      try {
+        const pi = await stripe.paymentIntents.retrieve(session.stripe_payment_intent_id);
+        if (pi && pi.application_fee_amount != null) feeCents = Math.round(Number(pi.application_fee_amount));
+      } catch (e) { captureException(e, { where: "accountability: cancel-fee split lookup", sessionId }); }
+    }
+    const splitKnown = feeCents != null;
+    const platformCents = splitKnown ? Math.min(feeCents, cents) : cents;
     await ledger.record(db, {
       sessionId, ...(await ledger.partiesFor(db, sessionId)), kind: "cancel_fee",
-      familyCents: cents, caregiverCents: 0, platformCents: cents,
+      familyCents: cents, caregiverCents: cents - platformCents, platformCents,
       stripePaymentIntent: session.stripe_payment_intent_id,
-      breakdown: { cancelFeeCents: cents, authorizedCents: Math.round(session.authorized_amount || 0) },
+      breakdown: { cancelFeeCents: cents, authorizedCents: Math.round(session.authorized_amount || 0),
+        platformFeeCents: platformCents, caregiverCents: cents - platformCents,
+        ...(splitKnown ? {} : { split: "unknown — Stripe did not report the application fee" }) },
     });
 
     console.log(`[accountability] Captured $${((captureAmountCents || session.authorized_amount) / 100).toFixed(2)} for session ${sessionId.slice(0, 8)}`);

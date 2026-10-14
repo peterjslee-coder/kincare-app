@@ -448,15 +448,78 @@ router.get("/users/:id/detail", async (req, res) => {
       WHERE family_user_id = ? OR caregiver_id = (SELECT id FROM caregiver_profiles WHERE user_id = ?)
     `).get(userId, userId);
 
-    // Lifetime revenue (payments involving this user)
-    let lifetimeRevenue = { total: 0 };
+    // ─── Money (v1.116.3) ───
+    //
+    // Pete, 10/14, on Tina's drawer: "it doesn't have her ratings, her revenue, care teams".
+    // This summed the `payments` table — but since v1.109.0 the ledger is where money is
+    // recorded, and a visit settled by capturing its card hold (every visit Tina has worked)
+    // never writes a `payments` row. 16 paid visits read as $0.00. Same three sources as
+    // careTools.js: the ledger, legacy `payments` rows with no ledger twin, and — so a paid
+    // visit is never silently missing — paid visits from before the ledger existed, counted.
+    const money = { earnedCents: 0, chargedCents: 0, platformCents: 0, paidVisits: 0, unitemizedPaidVisits: 0 };
     try {
-      lifetimeRevenue = await db.prepare(`
-        SELECT COALESCE(SUM(amount), 0) as total FROM payments
-        WHERE (family_user_id = ? OR caregiver_id = (SELECT id FROM caregiver_profiles WHERE user_id = ?))
-        AND status = 'completed'
-      `).get(userId, userId) || { total: 0 };
-    } catch (e) { statFailed("care_sessions", e); }
+      const cpId = caregiverProfile?.id || null;
+      const MONEY_KINDS = ["capture", "remainder", "autopay", "checkout", "cancel_fee", "tip"];
+      const kph = MONEY_KINDS.map(() => "?").join(", ");
+      if (cpId) {
+        const cg = await db.prepare(`
+          SELECT COALESCE(SUM(caregiver_cents), 0) AS cg, COALESCE(SUM(family_cents), 0) AS fam,
+                 COALESCE(SUM(platform_cents), 0) AS plat,
+                 COUNT(DISTINCT CASE WHEN kind IN ('capture', 'autopay', 'checkout') THEN session_id END) AS visits
+            FROM ledger_entries
+           WHERE caregiver_id = ? AND status = 'succeeded' AND kind IN (${kph})
+        `).get(cpId, ...MONEY_KINDS);
+        const legacy = await db.prepare(`
+          SELECT COALESCE(SUM(p.caregiver_payout), 0) AS cg, COALESCE(SUM(p.amount), 0) AS fam,
+                 COALESCE(SUM(p.platform_fee), 0) AS plat, COUNT(*) AS visits
+            FROM payments p
+           WHERE p.caregiver_id = ? AND p.status = 'completed'
+             AND NOT EXISTS (SELECT 1 FROM ledger_entries le WHERE le.session_id = p.session_id
+                               AND le.kind IN ('checkout', 'autopay', 'capture'))
+        `).get(cpId);
+        const unitemized = await db.prepare(`
+          SELECT COUNT(*) AS n FROM care_sessions cs
+           WHERE cs.caregiver_id = ? AND cs.payment_status = 'paid'
+             AND NOT EXISTS (SELECT 1 FROM ledger_entries le WHERE le.session_id = cs.id
+                               AND le.kind IN ('checkout', 'autopay', 'capture', 'cancel_fee'))
+             AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.session_id = cs.id AND p.status = 'completed')
+        `).get(cpId);
+        money.earnedCents = Number(cg.cg) + Math.round(Number(legacy.cg) * 100);
+        money.chargedCents = Number(cg.fam) + Math.round(Number(legacy.fam) * 100);
+        money.platformCents = Number(cg.plat) + Math.round(Number(legacy.plat) * 100);
+        money.paidVisits = Number(cg.visits) + Number(legacy.visits);
+        money.unitemizedPaidVisits = Number(unitemized.n);
+      } else {
+        const fam = await db.prepare(`
+          SELECT COALESCE(SUM(family_cents), 0) AS fam, COALESCE(SUM(platform_cents), 0) AS plat,
+                 COUNT(DISTINCT CASE WHEN kind IN ('capture', 'autopay', 'checkout') THEN session_id END) AS visits
+            FROM ledger_entries
+           WHERE family_user_id = ? AND status = 'succeeded' AND kind IN (${kph})
+        `).get(userId, ...MONEY_KINDS);
+        const legacy = await db.prepare(`
+          SELECT COALESCE(SUM(p.amount), 0) AS fam, COALESCE(SUM(p.platform_fee), 0) AS plat, COUNT(*) AS visits
+            FROM payments p
+           WHERE p.family_user_id = ? AND p.status = 'completed'
+             AND NOT EXISTS (SELECT 1 FROM ledger_entries le WHERE le.session_id = p.session_id
+                               AND le.kind IN ('checkout', 'autopay', 'capture'))
+        `).get(userId);
+        money.chargedCents = Number(fam.fam) + Math.round(Number(legacy.fam) * 100);
+        money.platformCents = Number(fam.plat) + Math.round(Number(legacy.plat) * 100);
+        money.paidVisits = Number(fam.visits) + Number(legacy.visits);
+      }
+    } catch (e) { statFailed("ledger_entries", e); }
+
+    // No-shows (v1.116.3) — the drawer always rendered sessionStats.no_shows; nothing sent it.
+    let noShows = 0;
+    try {
+      const ns = await db.prepare(`
+        SELECT COUNT(*) AS n FROM care_sessions
+         WHERE (caregiver_id = ? AND COALESCE(caregiver_no_show, 0) = 1)
+            OR (family_user_id = ? AND COALESCE(family_no_show, 0) = 1)
+      `).get(caregiverProfile?.id || null, userId);
+      noShows = Number(ns?.n || 0);
+    } catch (e) { statFailed("care_sessions no-shows", e); }
+    if (sessionStats) sessionStats.no_shows = noShows;
 
     // Reviews (given and received)
     let reviewStats = { given: 0, received: 0, avgReceived: 0 };
@@ -481,6 +544,24 @@ router.get("/users/:id/detail", async (req, res) => {
         WHERE ctm.user_id = ?
       `).all(userId);
     } catch (e) { statFailed("care_team_members", e); }
+    // v1.116.3 — a caregiver is on a loved one's team through caregiver_assignments, not
+    // care_team_members, so every caregiver's drawer said "Care Teams 0" — Tina, assigned to
+    // Betty and 21 visits in, included. One row per loved one she is actively assigned to.
+    if (caregiverProfile?.id) {
+      try {
+        const assigned = await db.prepare(`
+          SELECT DISTINCT ON (cr.id) ct.id, COALESCE(ct.name, cr.first_name || ' ' || cr.last_name) AS name,
+                 'caregiver' AS team_role, cr.first_name || ' ' || cr.last_name AS recipient_name
+            FROM caregiver_assignments ca
+            JOIN care_recipients cr ON cr.id = ca.care_recipient_id
+            LEFT JOIN care_teams ct ON ct.care_recipient_id = cr.id
+           WHERE ca.caregiver_profile_id = ? AND COALESCE(ca.is_active, 1) = 1
+           ORDER BY cr.id, ct.created_at
+        `).all(caregiverProfile.id);
+        const seen = new Set(careTeams.map((t) => t.recipient_name));
+        for (const a of assigned) if (!seen.has(a.recipient_name)) careTeams.push(a);
+      } catch (e) { statFailed("caregiver_assignments", e); }
+    }
 
     // Related tickets
     let tickets = [];
@@ -607,7 +688,10 @@ router.get("/users/:id/detail", async (req, res) => {
       user,
       caregiverProfile,
       sessionStats,
-      lifetimeRevenue: parseFloat(lifetimeRevenue?.total || 0),
+      // Kept for any older admin bundle still open: dollars this person moved (charged for a
+      // family, earned for a caregiver). The drawer reads `money`.
+      lifetimeRevenue: (caregiverProfile ? money.earnedCents : money.chargedCents) / 100,
+      money,
       careTools: await (async () => {
         // v1.114.0 — care tools come with booked care; admin sees why and can open them.
         try {
