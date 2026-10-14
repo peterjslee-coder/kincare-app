@@ -192,7 +192,8 @@ for (const slug of Object.keys(SLUGS)) {
 // processor but has none of the carrier-mandated SMS language, and rejections for exactly that
 // gap are the most common reason campaigns are refused. Rather than re-issue a reviewed legal
 // document (which re-prompts every user to accept it), this standalone page carries the
-// carrier language and points at the Privacy Policy. Fold it into the next policy version.
+// carrier language and points at the Privacy Policy. v1.114.6 folded the same language into
+// Privacy Policy 7B (2026-10-14); this page stays as the program terms carriers link to.
 const SMS_TERMS = `
 <h2>Who is texting you</h2>
 <p>InPlace Care is operated by Cedar Rock Holdings, LLC, doing business as InPlace Care, in Fairlawn, Virginia. We send two kinds of text messages, from two numbers.</p>

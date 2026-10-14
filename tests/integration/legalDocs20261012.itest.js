@@ -13,17 +13,26 @@ beforeAll(async () => {
 });
 afterAll(async () => { await stopHarness(h); });
 
-test("exactly one active privacy and terms, both 2026-10-12, with the new sections", async () => {
+// v1.114.6 — migration 061 supersedes the privacy policy with 2026-10-14 (7B Text Messages).
+const EXPECTED = { privacy: "2026-10-14", terms: "2026-10-12" };
+
+test("exactly one active privacy and terms, at their current versions, with the new sections", async () => {
   for (const t of ["privacy", "terms"]) {
     const rows = await db.prepare("SELECT version, content, change_summary FROM legal_documents WHERE doc_type = ? AND is_active = 1").all(t);
     expect(rows).toHaveLength(1);
-    expect(rows[0].version).toBe("2026-10-12");
+    expect(rows[0].version).toBe(EXPECTED[t]);
     expect(rows[0].change_summary).toBeTruthy();
   }
   const pp = await db.prepare("SELECT content FROM legal_documents WHERE doc_type = 'privacy' AND is_active = 1").get();
   expect(pp.content).toContain("Information You Provide About Someone Else");
   expect(pp.content).toContain("7A. Documents and Medical Records");
   expect(pp.content).toContain("Cloudflare R2");
+  // v1.114.6 — the carrier-required SMS language, and the stale duplicate of 6/7 is gone.
+  expect(pp.content).toContain("7B. Text Messages");
+  expect(pp.content).toContain("Text messaging originator opt-in data and consent will not be shared with any third parties");
+  expect(pp.content.match(/^6\. How We Share Your Information$/gm)).toHaveLength(1);
+  expect(pp.content.match(/^7\. Health Information$/gm)).toHaveLength(1);
+  expect(pp.content.match(/^Artificial Intelligence Services$/gm)).toHaveLength(1);
   const tou = await db.prepare("SELECT content FROM legal_documents WHERE doc_type = 'terms' AND is_active = 1").get();
   expect(tou.content).toContain("Acting for Someone Else");
   expect(tou.content).toContain("Private Care Content");
@@ -35,6 +44,6 @@ test("a signed-in user is asked to accept both", async () => {
   expect(res.status).toBe(200);
   const docs = res.body.pending || res.body.documents || [];
   const byType = Object.fromEntries(docs.map((d) => [d.doc_type || d.docType, d.version]));
-  expect(byType.privacy).toBe("2026-10-12");
-  expect(byType.terms).toBe("2026-10-12");
+  expect(byType.privacy).toBe(EXPECTED.privacy);
+  expect(byType.terms).toBe(EXPECTED.terms);
 });

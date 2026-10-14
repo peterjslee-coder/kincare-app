@@ -3141,6 +3141,17 @@ async function initializeDatabase() {
       ],
     },
     {
+      // v1.114.6 — Pete, 10/14: "change the privacy policy language and publish it on the site ...
+      // I'll have the lawyer approve what we publish." Adds 7B Text Messages (the carrier-required
+      // SMS language, matching /sms and the A2P registration) and removes a stale duplicate of
+      // sections 6 and 7 that the 2026-10-12 text carried by mistake. ON THE LAWYER AGENDA.
+      id: "061_privacy_2026_10_14",
+      statements: legalPublishStatements("2026-10-14", [
+        { docType: "privacy", fallbackTitle: "Privacy Policy", file: "privacy_2026-10-14.txt",
+          summary: "Adds a Text Messages section: the two kinds of texts InPlace sends (care notifications and caregiver opportunities), how you agree to them, that STOP always works, and that your mobile number and consent are never shared or sold. Also removes a section that was accidentally repeated." },
+      ]),
+    },
+    {
       // v1.114.0 — care tools come with care booked through InPlace (utils/careTools.js).
       // care_tools_open_at: an admin turned this person's care tools on regardless of bookings
       // (Admin → People → Care tools). NULL = the normal rule.
