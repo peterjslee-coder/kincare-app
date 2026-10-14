@@ -19,6 +19,7 @@ const { captureException } = require("../utils/sentry");
 const { sendSms, outreachNumber } = require("../utils/sms");
 const { sendEmail, brandedHtml } = require("../utils/email");
 const O = require("../utils/outreach");
+const T = require("../utils/tracking");
 
 const APP_URL = (process.env.APP_URL || "https://yourinplace.com").replace(/\/+$/, "");
 const REPLY_TO = process.env.OUTREACH_REPLY_TO || "peter@yourinplace.com";
@@ -112,7 +113,10 @@ async function inviteContact(db, contact, invitedBy) {
   }
 
   const first = O.greetingName(contact);
-  const inviteUrl = `${APP_URL}?platformInvite=${invite.token}`;
+  // v1.117.0 — her personal code rides along, so opening the email counts as her visit.
+  let code = null;
+  try { code = await T.linkForContact(db, contact, { createdBy: invitedBy || contact.created_by || null }); } catch { /* the invite still goes */ }
+  const inviteUrl = `${APP_URL}?platformInvite=${invite.token}${code ? `&l=${code}` : ""}`;
   const sent = await sendEmail({
     to: email,
     replyTo: REPLY_TO,
@@ -154,7 +158,9 @@ adminRouter.get("/", async (req, res) => {
       SELECT c.*, ${JOINED_SQL} AS joined_user_id,
              (SELECT m.body FROM outreach_messages m WHERE m.contact_id = c.id ORDER BY m.created_at DESC LIMIT 1) AS last_body,
              (SELECT m.direction FROM outreach_messages m WHERE m.contact_id = c.id ORDER BY m.created_at DESC LIMIT 1) AS last_direction,
-             (SELECT COUNT(*) FROM outreach_messages m WHERE m.contact_id = c.id AND m.direction = 'out' AND m.status IN ('failed','undelivered')) AS failed_count
+             (SELECT COUNT(*) FROM outreach_messages m WHERE m.contact_id = c.id AND m.direction = 'out' AND m.status IN ('failed','undelivered')) AS failed_count,
+             (SELECT MIN(e.created_at) FROM visit_events e JOIN track_links l ON l.code = e.link_code
+               WHERE l.outreach_contact_id = c.id AND e.kind = 'start') AS link_opened_at
         FROM outreach_contacts c
        ORDER BY c.unread DESC, c.last_inbound_at DESC NULLS LAST, c.last_name ASC NULLS LAST, c.first_name ASC
     `).all();
@@ -228,7 +234,8 @@ adminRouter.post("/send-intro", async (req, res) => {
     (async () => {
       try {
         for (const c of targets) {
-          const r = await sendToContact(db, c, O.renderTemplate(template, c), { sentBy: by, intro: true });
+          const link = O.hasLinkToken(template) ? T.smsLink(await T.linkForContact(db, c, { createdBy: by })) : null;
+          const r = await sendToContact(db, c, O.renderTemplate(template, c, link), { sentBy: by, intro: true });
           if (r.ok) introRun.sent++; else introRun.failed++;
           await new Promise((ok) => setTimeout(ok, SEND_GAP_MS));
         }
@@ -256,7 +263,10 @@ adminRouter.get("/:id/messages", async (req, res) => {
        WHERE m.contact_id = ? ORDER BY m.created_at ASC
     `).all(contact.id);
     if (contact.unread) await db.prepare("UPDATE outreach_contacts SET unread = 0 WHERE id = ?").run(contact.id);
-    res.json({ contact: { ...contact, unread: 0 }, messages });
+    let journey = null;
+    try { journey = await T.journeyForContact(db, contact.id, contact.joined_user_id || null); }
+    catch (e) { captureException(e, { where: "outreach: journey" }); }
+    res.json({ contact: { ...contact, unread: 0 }, messages, journey });
   } catch (err) {
     captureException(err, { where: "outreach: thread" });
     res.status(500).json({ error: "Failed to load the conversation" });
@@ -278,7 +288,8 @@ adminRouter.post("/:id/messages", async (req, res) => {
       const win = O.introWindow();
       if (!win.open) return res.status(400).json({ error: win.reason });
     }
-    const r = await sendToContact(db, contact, body, { sentBy: req.user.id, intro: !contact.intro_sent_at });
+    const link = O.hasLinkToken(body) ? T.smsLink(await T.linkForContact(db, contact, { createdBy: req.user.id })) : null;
+    const r = await sendToContact(db, contact, (link ? body.replace(/\{link\}/gi, link) : body), { sentBy: req.user.id, intro: !contact.intro_sent_at });
     if (!r.ok) return res.status(502).json({ error: `Text didn't send: ${r.error}` });
     res.json({ ok: true });
   } catch (err) {

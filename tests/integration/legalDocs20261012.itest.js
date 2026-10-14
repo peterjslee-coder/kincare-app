@@ -14,7 +14,8 @@ beforeAll(async () => {
 afterAll(async () => { await stopHarness(h); });
 
 // v1.114.6 — migration 061 supersedes the privacy policy with 2026-10-14 (7B Text Messages).
-const EXPECTED = { privacy: "2026-10-14", terms: "2026-10-12" };
+// v1.118.0 — migration 067 supersedes it again with 2026-10-14b (first-party analytics, no Plausible).
+const EXPECTED = { privacy: "2026-10-14b", terms: "2026-10-12" };
 
 test("exactly one active privacy and terms, at their current versions, with the new sections", async () => {
   for (const t of ["privacy", "terms"]) {

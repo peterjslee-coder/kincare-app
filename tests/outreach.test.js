@@ -88,6 +88,13 @@ describe("the default intro", () => {
     expect(text).toMatch(/Reply STOP to opt out/);
     expect(O.segmentCount(text)).toBeLessThanOrEqual(3);
   });
+
+  test("carries her own link (v1.118.0), and still fits in three texts with it", () => {
+    expect(O.hasLinkToken(O.DEFAULT_INTRO)).toBe(true);
+    const text = O.renderTemplate(O.DEFAULT_INTRO, { first_name: "Jane" }, "yourinplace.com/i/Ab3xYz");
+    expect(text).toContain("(yourinplace.com/i/Ab3xYz)");
+    expect(O.segmentCount(text)).toBeLessThanOrEqual(3);
+  });
 });
 
 describe("phone helpers", () => {

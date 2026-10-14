@@ -14,6 +14,10 @@
  *   activity_feed         60 days   user-visible history, and 60 days is what he asked for.
  *   onboarding_events     30 days   telemetry, and the one table an UNAUTHENTICATED caller
  *                                   can write to, so it is the one that most needs a ceiling.
+ *   visit_events         365 days   journey tracking (v1.117.0). Also written unauthenticated.
+ *                                   A year, so a season's outreach can be compared with the next.
+ *   visitors             365 days   ANONYMOUS ones only (no account), by last visit. A visitor
+ *                                   linked to an account lives as long as the account does.
  *
  * Deliberately NOT here: messages, care_sessions, visit_logs, notes, photos. Those are the
  * care record. Deleting a family's history of their mother's care because it is old is not a
@@ -28,6 +32,8 @@ const RETENTION = [
   { table: "notifications",     column: "created_at", days: 60 },
   { table: "activity_feed",     column: "created_at", days: 60 },
   { table: "onboarding_events", column: "created_at", days: 30 },
+  { table: "visit_events",      column: "created_at", days: 365 },
+  { table: "visitors",          column: "last_seen_at", days: 365, where: "user_id IS NULL" },
 ];
 
 const BATCH = 1000;          // rows per DELETE
@@ -46,7 +52,7 @@ async function applyRetention(db, opts = {}) {
     try {
       if (opts.dryRun) {
         const c = await db.prepare(
-          `SELECT COUNT(*) AS n FROM ${rule.table} WHERE ${rule.column} < NOW() - INTERVAL '${rule.days} days'`
+          `SELECT COUNT(*) AS n FROM ${rule.table} WHERE ${rule.column} < NOW() - INTERVAL '${rule.days} days'${rule.where ? ` AND ${rule.where}` : ""}`
         ).get();
         row.wouldDelete = Number(c?.n || 0);
         results.push(row);
@@ -60,7 +66,7 @@ async function applyRetention(db, opts = {}) {
           DELETE FROM ${rule.table}
            WHERE ctid IN (
              SELECT ctid FROM ${rule.table}
-              WHERE ${rule.column} < NOW() - INTERVAL '${rule.days} days'
+              WHERE ${rule.column} < NOW() - INTERVAL '${rule.days} days'${rule.where ? ` AND ${rule.where}` : ""}
               LIMIT ${BATCH}
            )
         `).run();

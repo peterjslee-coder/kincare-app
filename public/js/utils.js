@@ -1893,3 +1893,4 @@ const downscaleImageFile = window.downscaleImageFile = async (file, opts = {}) =
     return new File([blob], name, { type: 'image/jpeg' });
   } catch (e) { return file; }
 };
+

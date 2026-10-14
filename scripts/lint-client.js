@@ -72,7 +72,7 @@ const EXTERNAL_GLOBALS = {
   Stripe: "readonly", StripeConnect: "readonly", // Stripe.js + Connect.js
   Twilio: "readonly",        // Twilio Video SDK
   Capacitor: "readonly",     // native shell
-  plausible: "readonly", Plausible: "readonly",
+
   module: "writable",        // components use `const X = window.X =` + occasional module.exports guards
   PublicKeyCredential: "readonly", // WebAuthn browser global (eslint's browser env omits it)
   // showToast is a ToastProvider context value; components access it either via

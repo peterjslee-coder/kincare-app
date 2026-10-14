@@ -45,7 +45,96 @@ const outGreeting = (c) => {
   const nick = f.match(/["“]([^"”]+)["”]/);
   return nick ? nick[1] : f.split(/\s+/)[0];
 };
-const outRender = (tpl, c) => String(tpl || '').replace(/\{first\}/gi, outGreeting(c)).replace(/\{last\}/gi, c?.last_name || '').trim();
+const outRender = (tpl, c) => String(tpl || '').replace(/\{first\}/gi, outGreeting(c)).replace(/\{last\}/gi, c?.last_name || '').replace(/\{link\}/gi, 'yourinplace.com/i/Ab3xYz').trim();
+// v1.117.0 — journey tracking. Screen names come from the app's router; these read better.
+const OUT_PAGE_LABEL = {
+  splash: 'Welcome page', register: 'Sign-up', login: 'Sign-in', invite: 'Invite page',
+  'platform-onboarding': 'Caregiver sign-up', 'signup-onboarding': 'Sign-up steps', 'resume-onboarding': 'Finishing sign-up',
+  demo: 'Demo', dashboard: 'Home', 'find-work': 'Find Work', messages: 'Messages', account: 'Account',
+};
+const outPage = (p) => OUT_PAGE_LABEL[p] || String(p || '').replace(/-/g, ' ');
+const outMins = (ms) => {
+  const m = Math.round((Number(ms) || 0) / 60000);
+  return m < 1 ? 'under a minute' : m === 1 ? '1 minute' : m < 90 ? `${m} minutes` : `${Math.round(m / 6) / 10} hours`;
+};
+const OutJourney = ({ j }) => {
+  if (!j) return null;
+  const opened = j.opens > 0;
+  return (
+    <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border-color)', fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+      <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>Her link</div>
+      {!j.link && !opened && !j.siteMs && <div>No personal link sent yet. Put <code>{'{link}'}</code> in a text to send one.</div>}
+      {j.link && !opened && <div>Not opened yet · <span style={{ color: 'var(--text-muted)' }}>{j.link.split('//').pop()}</span></div>}
+      {opened && <div>Opened {outWhen(j.firstOpenedAt)}{j.opens > 1 ? ` · ${j.opens} times, last ${outWhen(j.lastOpenedAt)}` : ''}</div>}
+      {j.siteMs > 0 && (
+        <div>{outMins(j.siteMs)} in the app over {j.sessions} {j.sessions === 1 ? 'visit' : 'visits'}{j.daysActive > 1 ? ` on ${j.daysActive} days` : ''} · last seen {outWhen(j.lastSeenAt)}</div>
+      )}
+      {j.signedUpAt && <div>Signed up {outWhen(j.signedUpAt)}</div>}
+      {j.pages && j.pages.length > 0 && (
+        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+          {j.pages.map((p) => `${outPage(p.page)} ${outMins(p.ms).replace('under a minute', '<1 min').replace(/ minutes?/, ' min')}`).join(' · ')}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Campaign links — one per flyer, post or ad, so Admin can see which one brought people in.
+const OutCampaignLinks = ({ apiFetch, showToast }) => {
+  const [links, setLinks] = React.useState(null);
+  const [label, setLabel] = React.useState('');
+  const [audience, setAudience] = React.useState('');
+  const [busy, setBusy] = React.useState(false);
+  const load = async () => {
+    try { const r = await apiFetch('/api/admin/links'); if (r?.ok) setLinks((await r.json()).links); } catch { /* shown as empty */ }
+  };
+  React.useEffect(() => { load(); }, []);
+  const make = async () => {
+    setBusy(true);
+    try {
+      const r = await apiFetch('/api/admin/links', { method: 'POST', body: JSON.stringify({ label: label.trim(), audience: audience || null }) });
+      if (r?.ok) { setLabel(''); showToast('Link made', 'success'); load(); }
+      else showToast(await outErr(r, 'Couldn\'t make the link'), 'error');
+    } catch { showToast('Couldn\'t make the link', 'error'); }
+    setBusy(false);
+  };
+  const copy = async (url) => {
+    try { await navigator.clipboard.writeText(url); showToast('Copied', 'success'); } catch { window.prompt('Copy this link', url); }
+  };
+  const field = { padding: 8, border: '1px solid var(--input-border)', background: 'var(--input-bg)', color: 'var(--text-primary)', borderRadius: 8, fontSize: 14, boxSizing: 'border-box' };
+  const btn = { padding: '8px 14px', borderRadius: 8, border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: 13, cursor: 'pointer' };
+  return (
+    <div className="card">
+      <div className="card-header">Tracked links</div>
+      <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8, lineHeight: 1.5 }}>
+        Make one link per place you post: a flyer, a Facebook post, a church bulletin, an ad. Everyone who comes in through it is counted, and so is everyone who signs up.
+      </div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
+        <input style={{ ...field, flex: '1 1 200px' }} placeholder="Where it goes, e.g. Facebook — NRV caregivers group" value={label} onChange={(e) => setLabel(e.target.value)} />
+        <select style={field} value={audience} onChange={(e) => setAudience(e.target.value)}>
+          <option value="">Anyone</option>
+          <option value="caregiver">Caregivers</option>
+          <option value="family">Families</option>
+          <option value="care_for">Older adults</option>
+        </select>
+        <button style={{ ...btn, background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', fontWeight: 600 }} disabled={busy || !label.trim()} onClick={make}>Make link</button>
+      </div>
+      {links && links.length === 0 && <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>No links yet.</div>}
+      {links && links.map((l) => (
+        <div key={l.code} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderTop: '1px solid var(--border-light)' }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>{l.label}</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{l.url.split('//').pop()}{l.audience ? ` · ${{ caregiver: 'caregivers', family: 'families', care_for: 'older adults' }[l.audience]}` : ''}</div>
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-secondary)', textAlign: 'right', whiteSpace: 'nowrap' }}>
+            {l.visitors} {l.visitors === 1 ? 'visitor' : 'visitors'} · {l.signups} signed up
+          </div>
+          <button style={{ ...btn, padding: '4px 10px', fontSize: 12 }} onClick={() => copy(l.url)}>Copy</button>
+        </div>
+      ))}
+    </div>
+  );
+};
 const outSegments = (s) => {
   const gsm = /^[A-Za-z0-9 \r\n@£$¥èéùìòÇØøÅå_ÆæßÉ!"#%&'()*+,\-./:;<=>?¡ÄÖÑÜ§¿äöñüà^{}\\[~\]|€]*$/.test(s || '');
   const len = (s || '').length;
@@ -280,6 +369,8 @@ const OutreachThread = ({ contactId, apiFetch, showToast, onClose, onChanged }) 
           </div>
         )}
 
+        {data && <OutJourney j={data.journey} />}
+
         <div style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
           {data && data.messages.length === 0 && (
             <div style={{ fontSize: 13, color: 'var(--text-secondary)', textAlign: 'center', marginTop: 24 }}>No texts yet.</div>
@@ -473,9 +564,16 @@ const AdminOutreachTab = window.AdminOutreachTab = ({ apiFetch, showToast, onUnr
         <div className="card">
           <div className="card-header">Intro text to {selectedList.length} {selectedList.length === 1 ? 'person' : 'people'}</div>
           <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>
-            <code>{'{first}'}</code> becomes each person's first name. Keep "Reply STOP to opt out" — it's required, and the server won't send without it.
+            <code>{'{first}'}</code> becomes each person's first name, and <code>{'{link}'}</code> becomes her own link to InPlace, so you can see who opened it. Keep "Reply STOP to opt out" — it's required, and the server won't send without it.
           </div>
           <textarea style={{ ...field, minHeight: 120 }} value={template} onChange={(e) => setTemplate(e.target.value)} />
+          {!/\{link\}/i.test(template) && (
+            <div style={{ fontSize: 12, margin: '6px 0 0', padding: '6px 10px', borderRadius: 8, ...OUT_TONE.warning }}>
+              No <code>{'{link}'}</code> in this text, so you won't see who opens it.{' '}
+              <button style={{ background: 'none', border: 'none', color: 'inherit', textDecoration: 'underline', cursor: 'pointer', fontSize: 12, padding: 0 }}
+                onClick={() => setTemplate(/yourinplace\.com/i.test(template) ? template.replace(/\(?yourinplace\.com\)?/i, (m) => m.replace(/yourinplace\.com/i, '{link}')) : `${template.trim()} {link}`)}>Add it</button>
+            </div>
+          )}
           <div style={{ fontSize: 12, color: 'var(--text-muted)', margin: '4px 0 10px' }}>
             {previewText.length} characters · {outSegments(previewText)} text{outSegments(previewText) === 1 ? '' : 's'} each
             {' · '}<button style={{ background: 'none', border: 'none', color: 'var(--role-color)', cursor: 'pointer', fontSize: 12, padding: 0 }}
@@ -530,11 +628,13 @@ const AdminOutreachTab = window.AdminOutreachTab = ({ apiFetch, showToast, onUnr
               <OutStatusPill status={x.status} />
               {Number(x.failed_count) > 0
                 ? <span style={{ fontSize: 11, color: 'var(--color-error)' }}>not delivered</span>
-                : <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{outWhen(x.last_message_at)}</span>}
+                : <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{x.link_opened_at ? '🔗 opened · ' : ''}{outWhen(x.last_message_at)}</span>}
             </div>
           </div>
         ))}
       </div>
+
+      <OutCampaignLinks apiFetch={apiFetch} showToast={showToast} />
 
       {openId && (
         <OutreachThread contactId={openId} apiFetch={apiFetch} showToast={showToast}

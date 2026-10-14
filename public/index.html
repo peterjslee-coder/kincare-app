@@ -49,13 +49,13 @@
   <!-- PWA Manifest -->
   <link rel="manifest" href="/manifest.json">
 
-  <link rel="stylesheet" href="/css/styles.css?v=build-05afce51">
+  <link rel="stylesheet" href="/css/styles.css?v=build-61136519">
 
   <!-- Leaflet CSS for maps (self-hosted — no CDN dependency) -->
   <link rel="stylesheet" href="/vendor/leaflet.css">
 
-  <!-- Plausible Analytics — privacy-friendly, no cookies, GDPR compliant -->
-  <script defer data-domain="yourinplace.com" src="https://plausible.io/js/script.js"></script>
+  <!-- v1.117.0 — no third-party analytics. Plausible was here with no account behind it (it
+       recorded nothing); journey tracking is first-party now: InPlaceJourney in js/utils.js. -->
 </head>
 <body>
   <div id="root"></div>
@@ -112,9 +112,9 @@
 
   <!-- Pre-compiled app bundle (built by scripts/build-client.js) -->
   <script>
-    window.APP_VERSION = "1.117.0";
+    window.APP_VERSION = "1.118.0";
     // v1.85: admin components live in a separate lazy bundle (infra #5)
-    window.__ADMIN_BUNDLE_URL = '/js-compiled/bundle-admin.js?v=build-05afce51';
+    window.__ADMIN_BUNDLE_URL = '/js-compiled/bundle-admin.js?v=build-61136519';
   </script>
   <script>
     // ─── Theme initialization ───
@@ -166,7 +166,7 @@
       });
     })();
   </script>
-  <script src="/js-compiled/bundle.js?v=build-05afce51"></script>
+  <script src="/js-compiled/bundle.js?v=build-61136519"></script>
 
   <script>
     // Service worker: register/update and auto-reload on new version

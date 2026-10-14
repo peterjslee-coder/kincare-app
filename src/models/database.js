@@ -3217,6 +3217,78 @@ async function initializeDatabase() {
         `ALTER TABLE users ADD COLUMN IF NOT EXISTS care_tools_open_by TEXT`,
       ],
     },
+    {
+      // v1.117.0 — journey tracking (utils/tracking.js). Pete, 10/14: "we need to know where
+      // it's succeeding, underperforming, effective, a waste of time." Personal and campaign
+      // links, an anonymous visitor per phone, and screen-level visits — first-party only.
+      id: "066_journey_tracking",
+      statements: [
+        `CREATE TABLE IF NOT EXISTS track_links (
+           code TEXT PRIMARY KEY,
+           kind TEXT NOT NULL,
+           audience TEXT,
+           outreach_contact_id TEXT REFERENCES outreach_contacts(id) ON DELETE SET NULL,
+           owner_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+           label TEXT,
+           created_by TEXT,
+           created_at TIMESTAMPTZ DEFAULT NOW()
+         )`,
+        `CREATE INDEX IF NOT EXISTS idx_track_links_contact ON track_links (outreach_contact_id) WHERE outreach_contact_id IS NOT NULL`,
+        `CREATE TABLE IF NOT EXISTS visitors (
+           id TEXT PRIMARY KEY,
+           user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+           first_seen_at TIMESTAMPTZ DEFAULT NOW(),
+           last_seen_at TIMESTAMPTZ DEFAULT NOW(),
+           linked_at TIMESTAMPTZ,
+           first_link_code TEXT,
+           first_ref_host TEXT,
+           first_utm_source TEXT,
+           first_utm_medium TEXT,
+           first_utm_campaign TEXT,
+           first_click_id TEXT,
+           first_page TEXT,
+           platform TEXT
+         )`,
+        `CREATE INDEX IF NOT EXISTS idx_visitors_user ON visitors (user_id) WHERE user_id IS NOT NULL`,
+        `CREATE INDEX IF NOT EXISTS idx_visitors_link ON visitors (first_link_code) WHERE first_link_code IS NOT NULL`,
+        `CREATE INDEX IF NOT EXISTS idx_visitors_last_seen ON visitors (last_seen_at)`,
+        `CREATE TABLE IF NOT EXISTS visit_events (
+           id BIGSERIAL PRIMARY KEY,
+           visitor_id TEXT NOT NULL,
+           session_id TEXT,
+           user_id TEXT,
+           kind TEXT NOT NULL,
+           page TEXT,
+           ms INTEGER,
+           link_code TEXT,
+           ref_host TEXT,
+           utm_source TEXT,
+           utm_medium TEXT,
+           utm_campaign TEXT,
+           utm_content TEXT,
+           click_id TEXT,
+           demo BOOLEAN NOT NULL DEFAULT FALSE,
+           created_at TIMESTAMPTZ DEFAULT NOW()
+         )`,
+        `CREATE INDEX IF NOT EXISTS idx_visit_events_visitor ON visit_events (visitor_id, created_at)`,
+        `CREATE INDEX IF NOT EXISTS idx_visit_events_user ON visit_events (user_id, created_at) WHERE user_id IS NOT NULL`,
+        `CREATE INDEX IF NOT EXISTS idx_visit_events_link ON visit_events (link_code) WHERE link_code IS NOT NULL`,
+        `CREATE INDEX IF NOT EXISTS idx_visit_events_created ON visit_events (created_at)`,
+      ],
+    },
+    {
+      // v1.117.0 — Privacy Policy 2026-10-14b. Pete, 10/14: "change the plausible wording then ...
+      // if we don't use it, it's not in our terms. scan for others too and ask where needed."
+      // §4 Analytics now describes the first-party journey tracking above; §12 lists the visit
+      // identifier; §6 names ElevenLabs (voice-note transcription) and Twilio voice/voicemail
+      // (Pete chose both, 10/14); §7B says outreach texts may carry a personal link. ON THE
+      // LAWYER AGENDA with the 2026-10-14 text.
+      id: "067_privacy_2026_10_14b",
+      statements: legalPublishStatements("2026-10-14b", [
+        { docType: "privacy", fallbackTitle: "Privacy Policy", file: "privacy_2026-10-14b.txt",
+          summary: "Explains how InPlace measures visits on its own systems: which screens are used, how people found us, and whether a personal link we sent was opened. Removes a third-party analytics service we no longer use, and names our voice-note transcription and voicemail providers." },
+      ]),
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

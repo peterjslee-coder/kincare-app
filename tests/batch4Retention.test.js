@@ -112,6 +112,9 @@ describe("R3 — retention deletes what nobody reads, and nothing else", () => {
       notifications: 60,
       activity_feed: 60,
       onboarding_events: 30,
+      // v1.117.0 — journey tracking. One year, proposed to Pete with the release.
+      visit_events: 365,
+      visitors: 365,
     });
   });
 

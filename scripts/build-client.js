@@ -26,6 +26,9 @@ const MAP_DIR = path.join(__dirname, "..", "build", "maps"); // outside public/ 
 const scripts = [
   "js/offlineQueue.js",
   "js/utils.js",
+  // v1.117.0 — journey tracking (window.InPlaceJourney). Own file: it runs at load and listens
+  // to the document, and utils.js is sliced into Node-side tests that have no document.
+  "js/journey.js",
   // v1.105.171 — reads window.__uiPrefs and useStickySection; every collapsible section
   // depends on it, so it loads before any component.
   "js/uiPrefs.js",

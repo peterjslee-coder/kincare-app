@@ -521,12 +521,13 @@ app.use(helmet({
         "'self'", "'unsafe-eval'", "'unsafe-inline'",  // Required for Babel client-side compilation
         "https://cdnjs.cloudflare.com", "https://unpkg.com", "https://cdn.socket.io",
         "https://js.stripe.com", "https://connect-js.stripe.com",
-        "https://sdk.twilio.com", "https://plausible.io",
-        "https://static.cloudflareinsights.com",
+        "https://sdk.twilio.com",
+        // v1.117.0 — plausible.io and static.cloudflareinsights.com removed: no third-party
+        // analytics (Pete, 10/14). tests/journeyTracking.test.js keeps them out.
       ],
       styleSrc: ["'self'", "'unsafe-inline'", "https://unpkg.com", "https://fonts.googleapis.com"],
       imgSrc: ["'self'", "data:", "blob:", "https:"],
-      connectSrc: ["'self'", "https://*.twilio.com", "https://plausible.io", "https://api.stripe.com", "https://js.stripe.com", "https://connect-js.stripe.com", "https://static.cloudflareinsights.com", "https://*.tile.openstreetmap.org", "wss:", "ws:"],
+      connectSrc: ["'self'", "https://*.twilio.com", "https://api.stripe.com", "https://js.stripe.com", "https://connect-js.stripe.com", "https://*.tile.openstreetmap.org", "wss:", "ws:"],
       // v1.110.4 — blob: so an in-app PDF preview can render. Every PDF preview in the app
       // (Documents Center, receipts, care documents, admin review) is a same-origin blob URL
       // in an iframe on non-WebKit browsers, and Chrome blocked all of them: "This content is
@@ -814,6 +815,8 @@ app.use("/api/admin/treasury", require("./routes/treasury"));
 app.use("/api/admin/tickets", require("./routes/tickets"));
 app.use("/api/admin/legal-readiness", require("./routes/legalReadiness").adminRouter); // v1.110 — after /api/admin, so its network gate runs first
 app.use("/api/admin/outreach", require("./routes/outreach")); // v1.113.0 — caregiver outreach; after /api/admin for the same reason
+app.use("/api/admin/links", require("./routes/track").adminRouter); // v1.117.0 — campaign links; after /api/admin for the same reason
+app.use("/api/t", require("./routes/track").beaconRouter); // v1.117.0 — journey beacon (utils/tracking.js)
 app.use("/api/sms", require("./routes/smsWebhooks")); // v1.113.0 — Twilio webhooks (signature-checked in the router)
 app.use("/api/costs", require("./routes/costs"));
 app.use("/api/platform-invites", require("./routes/platformInvites"));
@@ -853,7 +856,7 @@ app.use("/api/safety", require("./routes/safety"));
 
 // ─── App version check (lightweight, no auth) ───
 const { cancelPassedPrivateOffers, releaseExpiredExclusiveOffers } = require("./utils/exclusiveOffers");
-const APP_VERSION = "1.117.0";
+const APP_VERSION = "1.118.0";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION, minAppVersion: MIN_APP_VERSION });
@@ -981,6 +984,9 @@ app.get("/business", (req, res) => {
   res.set("Cache-Control", "public, max-age=300");
   res.sendFile(path.join(__dirname, "../public/business.html"));
 });
+
+// ─── /i/:code — personal and campaign short links (v1.117.0, routes/track.js) ───
+app.use(require("./routes/track").publicRouter);
 
 // ─── Catch-all: serve frontend for any non-API route ───
 app.get("*", (req, res) => {

@@ -408,6 +408,10 @@ function verifyCsrf(req, res, next) {
   // this, a logged-in user's ErrorBoundary report is rejected 403 — exactly the
   // white-screens we're trying to capture would be the ones we never see.
   if (fullPath.startsWith("/api/client-error")) return next();
+  // v1.117.0 — the journey beacon (routes/track.js). navigator.sendBeacon cannot set a header,
+  // and the route refuses to attach an account to a cross-site request on its own. EXACT match:
+  // a prefix would also exempt /api/tasks, /api/team and every other /api/t... route.
+  if (fullPath === "/api/t") return next();
   // Skip for Kindred (separate PWA, uses JWT + companion_access gate instead)
   if (fullPath.startsWith("/api/kindred")) return next();
   // Skip if no auth cookie present

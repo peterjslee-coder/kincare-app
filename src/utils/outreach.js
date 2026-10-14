@@ -38,8 +38,10 @@ const JOIN_REPLY =
   "and keep all of it. Reply with your email for details and a signup link. Msg & data rates may " +
   "apply. Reply HELP for help, STOP to opt out.";
 
+// v1.118.0 — {link} is her own yourinplace.com/i/… link (utils/tracking.js), so a tap is credited to
+// her. Same domain as the registered sample; the outreach A2P campaign is filed "embedded links: Yes".
 const DEFAULT_INTRO =
-  "Hi {first}, this is Pete Lee with InPlace (yourinplace.com). I got your number from the NRV " +
+  "Hi {first}, this is Pete Lee with InPlace ({link}). I got your number from the NRV " +
   "Agency on Aging's private-pay sitter list. We have paid caregiving work with local families. " +
   "If you'd like to learn more, reply with your email address and we'll send details and set up " +
   "a time to talk. Reply STOP to opt out.";
@@ -122,12 +124,20 @@ function greetingName(contact) {
   return f.split(/\s+/)[0];
 }
 
-function renderTemplate(tpl, contact) {
+/**
+ * {first} {last} and, since v1.117.0, {link} — her own short link (yourinplace.com/i/xxxxxx), so a
+ * tap is credited to her (utils/tracking.js). With no link to give, {link} falls back to the bare
+ * site rather than leaving a hole in the sentence.
+ */
+function renderTemplate(tpl, contact, link = null) {
   return String(tpl || "")
     .replace(/\{first\}/gi, greetingName(contact))
     .replace(/\{last\}/gi, String(contact?.last_name || "").trim())
+    .replace(/\{link\}/gi, link || "yourinplace.com")
     .trim();
 }
+
+const hasLinkToken = (s) => /\{link\}/i.test(String(s || ""));
 
 const EMAIL_RE = /[A-Z0-9._%+'-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
 
@@ -182,6 +192,6 @@ function segmentCount(text) {
 
 module.exports = {
   OUTREACH_STATUSES, OPT_OUT_WORDS, OPT_IN_WORDS, JOIN_WORDS, JOIN_REPLY, DEFAULT_INTRO,
-  phoneKey, toE164, prettyPhone, parseList, greetingName, renderTemplate,
+  phoneKey, toE164, prettyPhone, parseList, greetingName, renderTemplate, hasLinkToken,
   classifyInbound, introWindow, segmentCount, dialableUsNumber,
 };

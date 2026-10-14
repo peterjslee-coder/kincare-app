@@ -696,6 +696,18 @@ const App = () => {
     try { return JSON.parse(sessionStorage.getItem('inplace_impersonation_user')); } catch { return null; }
   });
 
+  // ─── v1.117.0 — journey tracking (utils.js InPlaceJourney; server: utils/tracking.js) ───
+  // Before sign-in the "screen" is the app state (splash, register, login, invite...); after,
+  // it is the page. An admin viewing as someone records nothing — that visit isn't theirs.
+  useEffect(() => {
+    if (impersonating || appState === 'restoring') return;
+    try { window.InPlaceJourney?.page(appState === 'app' ? currentPage : appState); } catch {}
+  }, [appState, currentPage, impersonating]);
+  useEffect(() => {
+    if (impersonating || appState !== 'app' || !currentUser?.id || currentUser.isDemo) return;
+    try { window.InPlaceJourney?.identify(currentUser.id); } catch {}
+  }, [appState, currentUser?.id, impersonating]);
+
   // ─── In-app navigation history (prevents PWA back-swipe from closing app) ───
   const navHistoryRef = useRef(['dashboard']);
   const popstateNavRef = useRef(false);
