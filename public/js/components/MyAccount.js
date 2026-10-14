@@ -1952,6 +1952,35 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
             </div>
           )}
 
+          {/* ─── v1.115.0 — Text alerts: OFF by default, opt-in with consent. Push carries every
+               one of these alerts already; this only adds a text on top. ─── */}
+          <div className="card" style={{ marginTop: 16 }}>
+            <div className="card-header">📱 Text Message Alerts</div>
+            <label className="toggle-label" style={{ alignItems: 'flex-start' }}>
+              <input type="checkbox" className="toggle-input" checked={!!user?.sms_alerts_on}
+                onChange={async (e) => {
+                  const enabled = e.target.checked;
+                  try {
+                    const res = await apiFetch('/api/auth/me/sms-alerts', { method: 'PUT', body: JSON.stringify({ enabled, consent: enabled }) });
+                    if (res?.ok) {
+                      const d = await res.json();
+                      setUser(prev => prev ? { ...prev, sms_alerts_on: d.smsAlertsOn } : prev);
+                      showToast(d.smsAlertsOn ? 'Text alerts on' : 'Text alerts off');
+                    } else {
+                      const d = await res?.json().catch(() => ({}));
+                      showToast(d?.error || 'Could not save that setting', 'error');
+                    }
+                  } catch { showToast('Could not save that setting', 'error'); }
+                }} />
+              <span style={{ fontSize: 13, lineHeight: 1.5 }}>
+                Text me visit alerts from InPlace Care (check-in reminders, a caregiver running late). Msg &amp; data rates may apply. Msg frequency varies. Reply STOP to opt out, HELP for help. <a href="/sms" target="_blank" rel="noopener" style={{ color: 'var(--role-color)' }}>Terms</a>
+              </span>
+            </label>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 6 }}>
+              Off by default. These alerts always come as app notifications; turning this on adds a text to {user?.phone || 'the mobile number on your profile'}.
+            </div>
+          </div>
+
           <div className="card" style={{ marginTop: 16 }}>
             <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span>✉️ Email Notifications</span>

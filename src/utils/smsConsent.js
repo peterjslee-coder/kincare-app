@@ -27,4 +27,26 @@ function samePhone(a, b) {
   return k(a).length === 10 && k(a) === k(b);
 }
 
-module.exports = { CONSENT_TEXT, consentedSql, samePhone };
+/**
+ * v1.115.0 — account holders (caregivers, family) get visit texts only if they turned them on
+ * in Account → Notifications. Pete, 10/14: "the default should be off ... require push
+ * notifications." Push carries every one of these alerts already; text is an opt-in extra.
+ * Consent, like the care recipient's, is tied to the number it was given for.
+ */
+const ACCOUNT_CONSENT_TEXT =
+  "Text me visit alerts from InPlace Care (check-in reminders, a caregiver running late). " +
+  "Msg & data rates may apply. Msg frequency varies. Reply STOP to opt out, HELP for help. " +
+  "Terms: yourinplace.com/sms";
+
+function accountConsentedSql(u) {
+  return `(${u}.sms_alerts_consent_at IS NOT NULL AND ${digits10(`${u}.sms_alerts_phone`)} = ${digits10(`${u}.phone`)} AND ${digits10(`${u}.phone`)} <> '')`;
+}
+
+/** The number to text this account holder at, or null if they haven't turned text alerts on. */
+async function accountSmsPhone(db, userId) {
+  if (!userId) return null;
+  const row = await db.prepare(`SELECT u.phone, ${accountConsentedSql("u")} AS ok FROM users u WHERE u.id = ?`).get(userId);
+  return row && row.ok ? row.phone : null;
+}
+
+module.exports = { CONSENT_TEXT, consentedSql, samePhone, ACCOUNT_CONSENT_TEXT, accountConsentedSql, accountSmsPhone };

@@ -17,6 +17,7 @@ const { personIdentityStatus } = require("../utils/identity"); // v1.106.39, per
 const { careAccessFor, materializeSelfCare } = require("../utils/careAccess"); // v1.112.0
 const { blockWhileImpersonating } = require("../middleware/noImpersonation"); // v1.106.40
 const { recipientForLinkedUser } = require("../utils/linkedAccount"); // stale-link sweep
+const { accountConsentedSql } = require("../utils/smsConsent"); // v1.115.0
 
 const router = express.Router();
 
@@ -627,7 +628,7 @@ router.get("/me", authenticate, async (req, res) => {
     // /api/auth/me shipped the user's avatar TWICE, in base64, in JSON. The app calls this
     // endpoint nine times on boot. Ask whether they have one; serve the bytes from
     // /api/media/user/:id/photo, where a browser will cache them.
-    `SELECT u.id, u.email, u.role, u.roles, u.first_name, u.last_name, u.phone, ${HAS_PHOTO_SQL}, u.notification_prefs, u.accessibility_prefs, u.ui_prefs, u.email_verified, u.is_demo, u.is_admin, u.is_tester, u.account_approved, u.companion_access, u.password_changed_at, u.disclaimer_accepted_at, u.disclaimer_version, u.pets, u.pet_allergies, u.food_allergies, u.medical_conditions, u.address_line1, u.address_line2, u.city, u.state, u.zip, u.created_at FROM users u WHERE u.id = ?`
+    `SELECT u.id, u.email, u.role, u.roles, u.first_name, u.last_name, u.phone, ${HAS_PHOTO_SQL}, u.notification_prefs, ${accountConsentedSql("u")} AS sms_alerts_on, u.accessibility_prefs, u.ui_prefs, u.email_verified, u.is_demo, u.is_admin, u.is_tester, u.account_approved, u.companion_access, u.password_changed_at, u.disclaimer_accepted_at, u.disclaimer_version, u.pets, u.pet_allergies, u.food_allergies, u.medical_conditions, u.address_line1, u.address_line2, u.city, u.state, u.zip, u.created_at FROM users u WHERE u.id = ?`
   ).get(req.user.id);
 
   if (!user) return res.status(404).json({ error: "User not found" });
@@ -821,6 +822,31 @@ router.get("/me", authenticate, async (req, res) => {
 // nobody touched. Merging one key at a time makes two devices additive instead.
 //
 // `null` deletes a key, so the blob does not grow forever as sections are renamed.
+// ─── PUT /api/auth/me/sms-alerts ─── (v1.115.0)
+// Visit texts to account holders are OFF by default; push carries every one of those alerts.
+// Turning texts on requires the consent wording (utils/smsConsent.ACCOUNT_CONSENT_TEXT) and a
+// phone on the account; consent is recorded for that number, so changing the number turns texts
+// off until they're turned on again.
+router.put("/me/sms-alerts", authenticate, async (req, res) => {
+  try {
+    const db = await getDb();
+    if (req.body && req.body.enabled === true) {
+      if (req.body.consent !== true) return res.status(400).json({ error: "Please agree to receive text alerts first." });
+      const me = await db.prepare("SELECT phone FROM users WHERE id = ?").get(req.user.id);
+      const digits = String((me && me.phone) || "").replace(/\D/g, "");
+      if (digits.length < 10) return res.status(400).json({ error: "Add your mobile number to your profile first." });
+      await db.prepare("UPDATE users SET sms_alerts_consent_at = NOW(), sms_alerts_phone = phone WHERE id = ?").run(req.user.id);
+    } else {
+      await db.prepare("UPDATE users SET sms_alerts_consent_at = NULL, sms_alerts_phone = NULL WHERE id = ?").run(req.user.id);
+    }
+    const row = await db.prepare(`SELECT ${accountConsentedSql("u")} AS enabled FROM users u WHERE u.id = ?`).get(req.user.id);
+    res.json({ smsAlertsOn: !!(row && row.enabled) });
+  } catch (err) {
+    captureException(err, { where: "PUT /api/auth/me/sms-alerts" });
+    res.status(500).json({ error: "Could not save that setting" });
+  }
+});
+
 router.patch("/me/ui-prefs", authenticate, async (req, res) => {
   try {
     const patch = req.body && req.body.patch;
@@ -905,7 +931,7 @@ router.put("/me", authenticate, validateProfileUpdate, async (req, res) => {
     const user = await db.prepare(
       /* v1.74.5: profile_photo was missing — saving an address blanked the avatar in the UI.
          v1.106.8: it is a URL now, not the bytes; same field, same effect, ~1 MB less. */
-      `SELECT u.id, u.email, u.role, u.roles, u.first_name, u.last_name, u.phone, ${HAS_PHOTO_SQL}, u.notification_prefs, u.accessibility_prefs, u.ui_prefs, u.pets, u.pet_allergies, u.food_allergies, u.medical_conditions, u.address_line1, u.address_line2, u.city, u.state, u.zip, u.created_at FROM users u WHERE u.id = ?`
+      `SELECT u.id, u.email, u.role, u.roles, u.first_name, u.last_name, u.phone, ${HAS_PHOTO_SQL}, u.notification_prefs, ${accountConsentedSql("u")} AS sms_alerts_on, u.accessibility_prefs, u.ui_prefs, u.pets, u.pet_allergies, u.food_allergies, u.medical_conditions, u.address_line1, u.address_line2, u.city, u.state, u.zip, u.created_at FROM users u WHERE u.id = ?`
     ).get(req.user.id);
 
     // Parse roles

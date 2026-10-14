@@ -1,5 +1,5 @@
 const express = require("express");
-const { consentedSql: smsConsentedSql, samePhone: smsSamePhone } = require("../utils/smsConsent"); // v1.114.5
+const { consentedSql: smsConsentedSql, samePhone: smsSamePhone, accountSmsPhone } = require("../utils/smsConsent"); // v1.114.5 / v1.115.0
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { authenticate } = require("../middleware/auth");
@@ -832,8 +832,8 @@ async function sendSessionReminders(sessionId, reminderType) {
         }, "check_in_reminder");
 
         // Also SMS the caregiver (push may not be enabled)
-        const cgUser = await db.prepare("SELECT phone FROM users WHERE id = ?").get(session.caregiver_user_id);
-        if (cgUser?.phone) {
+        const cgUser = { phone: await accountSmsPhone(db, session.caregiver_user_id) }; // v1.115.0 — opt-in only
+        if (cgUser.phone) {
           const { sendSms } = require("../utils/sms");
           const timeStr = session.scheduled_time ? session.scheduled_time.replace(/^0/, "") : "soon";
           const smsAddr = mapsUrl ? `\nDirections: ${mapsUrl}` : "";
@@ -885,7 +885,7 @@ async function sendSessionReminders(sessionId, reminderType) {
         }, "check_out_reminder");
 
         // Also SMS the caregiver
-        const cgUserCo = await db.prepare("SELECT phone FROM users WHERE id = ?").get(session.caregiver_user_id);
+        const cgUserCo = { phone: await accountSmsPhone(db, session.caregiver_user_id) }; // v1.115.0 — opt-in only
         if (cgUserCo?.phone) {
           const { sendSms } = require("../utils/sms");
           await sendSms(cgUserCo.phone, `InPlace: Time to wrap up your session with ${recipientName}. Don't forget to check out!`);
@@ -950,8 +950,8 @@ async function sendSessionReminders(sessionId, reminderType) {
         }, "overdue_check_in");
 
         // SMS the caregiver too (push may not be enabled)
-        const cgUser = await db.prepare("SELECT phone FROM users WHERE id = ?").get(session.caregiver_user_id);
-        if (cgUser?.phone) {
+        const cgUser = { phone: await accountSmsPhone(db, session.caregiver_user_id) }; // v1.115.0 — opt-in only
+        if (cgUser.phone) {
           const { sendSms } = require("../utils/sms");
           await sendSms(cgUser.phone, `InPlace: Your session with ${recipientName} has started. Please check in now!`);
         }
@@ -970,8 +970,8 @@ async function sendSessionReminders(sessionId, reminderType) {
 
       // 3. SMS the family/session creator if they have a phone
       if (session.family_user_id) {
-        const familyUser = await db.prepare("SELECT phone FROM users WHERE id = ?").get(session.family_user_id);
-        if (familyUser?.phone) {
+        const familyUser = { phone: await accountSmsPhone(db, session.family_user_id) }; // v1.115.0 — opt-in only
+        if (familyUser.phone) {
           const { sendSms } = require("../utils/sms");
           await sendSms(familyUser.phone, `InPlace: ${caregiverName} hasn't checked in yet for ${recipientName}'s session. You may want to follow up.`);
         }
@@ -991,8 +991,8 @@ async function sendSessionReminders(sessionId, reminderType) {
         }, "overdue_check_out");
 
         // SMS the caregiver too
-        const cgUser = await db.prepare("SELECT phone FROM users WHERE id = ?").get(session.caregiver_user_id);
-        if (cgUser?.phone) {
+        const cgUser = { phone: await accountSmsPhone(db, session.caregiver_user_id) }; // v1.115.0 — opt-in only
+        if (cgUser.phone) {
           const { sendSms } = require("../utils/sms");
           await sendSms(cgUser.phone, `InPlace: Don't forget to check out from your session with ${recipientName}. Open the app to complete checkout.`);
         }

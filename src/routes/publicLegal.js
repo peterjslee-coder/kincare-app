@@ -199,7 +199,7 @@ const SMS_TERMS = `
 <p>InPlace Care is operated by Cedar Rock Holdings, LLC, doing business as InPlace Care, in Fairlawn, Virginia. We send two kinds of text messages, from two numbers.</p>
 <h2>1. Care notifications — from (540) 274-1412</h2>
 <p>Visit reminders, a caregiver's arrival and departure, schedule changes, and one-time verification codes.</p>
-<p><strong>How you opt in:</strong> you (or a member of your care team, with your permission) enter your mobile number in the InPlace app and turn on text reminders. You can turn them off in the app at any time.</p>
+<p><strong>How you opt in:</strong> texts are off unless you turn them on. Caregivers and family members turn on text alerts in Account &rarr; Notifications. For the person receiving care, they (or a member of their care team, with their permission) enter the mobile number on the Care Team &rarr; Notifications screen and check the box agreeing to text reminders. You can turn texts off in the app at any time; app notifications carry the same alerts.</p>
 <p><strong>How often:</strong> varies with the visits on your schedule — typically one to four messages per visit.</p>
 <h2>2. Caregiver opportunities — from (540) 835-5987</h2>
 <p>One-to-one conversations with independent caregivers about paid caregiving work through InPlace, including follow-up to caregivers who have asked a local agency about private-pay work. You can also start a conversation yourself by texting <strong>JOIN</strong> to (540) 835-5987.</p>

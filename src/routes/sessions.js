@@ -3625,7 +3625,7 @@ router.put("/:id/on-my-way", async (req, res) => {
           }
           if (["sms", "both"].includes(ch) && session.sms_phone && session.sms_consented) {
             const { sendSms } = require("../utils/sms");
-            await sendSms(session.sms_phone, `Hi ${rName}, ${cgName} will be at your door in about 5 minutes!`);
+            await sendSms(session.sms_phone, `InPlace: Hi ${rName}, ${cgName} will be at your door in about 5 minutes!`);
           }
           console.log(`  5-min-away notification sent for session ${sessionId}`);
         } catch (err) {

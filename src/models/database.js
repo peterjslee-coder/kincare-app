@@ -3152,6 +3152,14 @@ async function initializeDatabase() {
       ]),
     },
     {
+      // v1.115.0 — account-holder visit texts are opt-in (utils/smsConsent.js). Default OFF.
+      id: "062_account_sms_alerts",
+      statements: [
+        `ALTER TABLE users ADD COLUMN IF NOT EXISTS sms_alerts_consent_at TIMESTAMPTZ`,
+        `ALTER TABLE users ADD COLUMN IF NOT EXISTS sms_alerts_phone TEXT`,
+      ],
+    },
+    {
       // v1.114.0 — care tools come with care booked through InPlace (utils/careTools.js).
       // care_tools_open_at: an admin turned this person's care tools on regardless of bookings
       // (Admin → People → Care tools). NULL = the normal rule.
