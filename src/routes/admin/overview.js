@@ -45,7 +45,11 @@ const {
 //
 // Keep this list short. A badge that never goes quiet gets ignored, and then it protects
 // nothing — the same failure arrived at from the other side.
-const WORK_ALERTS = ["pendingUsers", "pendingConsent", "safetyFlags", "pendingIdentity", "aiApprovedIdentity"];
+// v1.116.1 — outreachUnread: a caregiver who texted or left a voicemail on the outreach number
+// is waiting on a call back. Pete: "give me a notification that sits in the admin button to
+// remind me since there's no other indication." It clears when the thread is opened, not when
+// the Admin page is.
+const WORK_ALERTS = ["pendingUsers", "pendingConsent", "safetyFlags", "pendingIdentity", "aiApprovedIdentity", "outreachUnread"];
 
 module.exports = function register(router) {
 
@@ -54,7 +58,7 @@ module.exports = function register(router) {
 router.get("/alerts", async (req, res) => {
   try {
     const db = await getDb();
-    const [pendingUsers, pausedCaregivers, pendingConsent, newFeedback, safetyFlags, pendingIdentity, aiApprovedIdentity, checkrAlerts, recentReferrals, recentMilestones, userRow] = await Promise.all([
+    const [pendingUsers, pausedCaregivers, pendingConsent, newFeedback, safetyFlags, pendingIdentity, aiApprovedIdentity, checkrAlerts, recentReferrals, recentMilestones, userRow, outreachUnread] = await Promise.all([
       db.prepare(`SELECT COUNT(*) as count FROM users WHERE COALESCE(is_demo, 0) = 0 AND COALESCE(account_approved, 0) = 0 AND COALESCE(is_active, 1) = 1 AND created_at > '2026-02-20'`).get(),
       db.prepare(`SELECT COUNT(*) as count FROM caregiver_profiles WHERE account_paused = 1 AND COALESCE(checkr_status, 'pending') != 'rejected'`).get(),
       db.prepare(`SELECT COUNT(*) as count FROM care_recipients WHERE consent_status = 'pending' OR consent_status = 'attestation_pending'`).get(),
@@ -90,6 +94,9 @@ router.get("/alerts", async (req, res) => {
       db.prepare(`SELECT COUNT(*) as count FROM milestones WHERE created_at > NOW() - INTERVAL '7 days'`).get().catch(() => ({ count: 0 })),
       // Fetch admin's last-seen snapshot
       db.prepare(`SELECT admin_alerts_snapshot FROM users WHERE id = ?`).get(req.user.id).catch(() => null),
+      // v1.116.1 — outreach threads with an unread text or voicemail (people, not messages).
+      db.prepare(`SELECT COUNT(*) as count FROM outreach_contacts WHERE unread > 0`).get()
+        .catch((e) => { statFailed("outreachUnread", e); return { count: 0 }; }),
     ]);
 
     const counts = {
@@ -103,6 +110,7 @@ router.get("/alerts", async (req, res) => {
       checkrAlerts: parseInt(checkrAlerts.count) || 0,
       recentReferrals: parseInt(recentReferrals.count) || 0,
       recentMilestones: parseInt(recentMilestones.count) || 0,
+      outreachUnread: parseInt(outreachUnread.count) || 0,
     };
 
     // ─── News vs work (v1.105.113) ───
@@ -140,7 +148,8 @@ router.get("/alerts", async (req, res) => {
     }
 
     const total = delta.pendingUsers + delta.pausedCaregivers + delta.pendingConsent +
-      delta.newFeedback + delta.safetyFlags + delta.pendingIdentity + delta.aiApprovedIdentity + delta.checkrAlerts;
+      delta.newFeedback + delta.safetyFlags + delta.pendingIdentity + delta.aiApprovedIdentity + delta.checkrAlerts +
+      delta.outreachUnread;
 
     // Fetch caregivers with BG check results needing admin action
     const bgCheckActionItems = await db.prepare(`

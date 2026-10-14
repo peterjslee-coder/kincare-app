@@ -39,6 +39,7 @@ beforeAll(async () => {
   h = await startHarness({ routers: {
     "/api/admin/outreach": "../../src/routes/outreach",
     "/api/sms": "../../src/routes/smsWebhooks",
+    "/api/admin": "../../src/routes/admin",
   } });
   db = h.db;
   admin = await h.createUser({ firstName: "Ad", lastName: "Min", isAdmin: true });
@@ -118,7 +119,16 @@ test("an unsigned webhook is refused", async () => {
 });
 
 test("a plain reply lands in her thread as unread", async () => {
+  const alerts = async () => (await h.request.get("/api/admin/alerts").set(A())).body;
+  const before = await alerts();
   const r = await inbound("+15405550102", "Who is this?");
+  // v1.116.1 — the Admin nav badge counts her, and opening Admin (the dismiss-all snapshot)
+  // does not silence it; only opening her thread does.
+  const after = await alerts();
+  expect(after.outreachUnread).toBe(before.outreachUnread + 1);
+  expect(after.total).toBe(before.total + 1);
+  await h.request.post("/api/admin/alerts/dismiss-all").set(A()).send({ snapshot: after._raw });
+  expect((await alerts()).outreachUnread).toBe(after.outreachUnread);
   expect(r.status).toBe(200);
   expect(r.text).toBe("<Response></Response>");
   const c = await byPhone("+15405550102");
@@ -127,6 +137,7 @@ test("a plain reply lands in her thread as unread", async () => {
   const t = await h.request.get(`/api/admin/outreach/${c.id}/messages`).set(A());
   expect(t.body.messages.map((m) => [m.direction, m.body])).toEqual([["out", expect.stringMatching(/^Hi Mary/)], ["in", "Who is this?"]]);
   expect((await byPhone("+15405550102")).unread).toBe(0); // opening it marks it read
+  expect((await alerts()).outreachUnread).toBe(before.outreachUnread);
 });
 
 test("an email reply mints a caregiver invite, emails it, and texts a thank-you", async () => {

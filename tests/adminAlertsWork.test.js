@@ -24,7 +24,7 @@ const panel = read("public/js/components/AdminPanel.js");
 
 describe("news and work are different things", () => {
   test("the classes are declared once, in one place", () => {
-    expect(overview).toMatch(/const WORK_ALERTS = \["pendingUsers", "pendingConsent", "safetyFlags", "pendingIdentity", "aiApprovedIdentity"\]/);
+    expect(overview).toMatch(/const WORK_ALERTS = \["pendingUsers", "pendingConsent", "safetyFlags", "pendingIdentity", "aiApprovedIdentity", "outreachUnread"\]/);
   });
 
   test("work is reported raw; news is reported as a delta", () => {

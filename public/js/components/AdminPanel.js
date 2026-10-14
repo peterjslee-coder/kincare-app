@@ -2605,6 +2605,13 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
           sub: `${checkrAlertCount - bgCheckActionItems.length} new notification${(checkrAlertCount - bgCheckActionItems.length) !== 1 ? 's' : ''}`,
           action: () => { setActiveTab('bgchecks'); },
         });
+        // v1.116.1 — someone on the outreach number texted or left a voicemail and is waiting.
+        if (outreachUnread > 0) attentionItems.push({
+          icon: '\u{1F4DE}', color: 'var(--color-error)', pill: `${outreachUnread} waiting`, pillBg: '#ffebee', pillColor: '#c62828',
+          title: `${outreachUnread} outreach ${outreachUnread === 1 ? 'person' : 'people'} waiting on you`,
+          sub: 'A new text or voicemail on the InPlace number · open the thread to clear',
+          action: () => { setActiveTab('outreach'); },
+        });
         // Open tickets
         if (ticketCount > 0) attentionItems.push({
           icon: '🎫', color: '#e8724a', pill: `${ticketCount} open`, pillBg: '#fff3e0', pillColor: '#e65100',
@@ -6713,7 +6720,13 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
       {/* v1.110 — Local Help: the family directory and money-safety concerns */}
       {activeTab === 'outreach' && (
         typeof AdminOutreachTab === 'function'
-          ? React.createElement(AdminOutreachTab, { apiFetch, showToast, onUnreadChange: setOutreachUnread })
+          ? React.createElement(AdminOutreachTab, { apiFetch, showToast, onUnreadChange: (n) => {
+              // v1.116.1 — reading a thread clears the Admin nav badge now, not on the next 60s poll.
+              setOutreachUnread((prev) => {
+                if (prev !== n && typeof window.__refetchAdminAlerts === 'function') window.__refetchAdminAlerts();
+                return n;
+              });
+            } })
           : <div className="card">Outreach didn't load. Refresh the page.</div>
       )}
 

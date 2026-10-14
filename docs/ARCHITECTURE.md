@@ -361,7 +361,7 @@ State travels through `window`, not props. This table is the registry.
 | `window.__postOnboarding` | app.js | 4 |
 | `window.__probeSocket` | utils.js | 1 |
 | `window.__pwaInstallPrompt` | app.js | 3 |
-| `window.__refetchAdminAlerts` | app.js | 3 |
+| `window.__refetchAdminAlerts` | app.js, AdminPanel.js | 5 |
 | `window.__requestCareCaregiver` | app.js | 4 |
 | `window.__requestCareDate` | app.js | 4 |
 | `window.__safeAreaBottom` | app.js | 10 |
