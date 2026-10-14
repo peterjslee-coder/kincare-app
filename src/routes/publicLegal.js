@@ -184,5 +184,46 @@ for (const slug of Object.keys(SLUGS)) {
   });
 }
 
+// ─── /sms — the text-messaging terms (v1.114.4) ───
+//
+// Carrier registration (A2P 10DLC, via Twilio) requires a public page that names the program,
+// says how people opt in, how often we text, "Msg & data rates may apply", STOP/HELP, and that
+// mobile opt-in data is never shared. The lawyer-reviewed Privacy Policy names Twilio as a
+// processor but has none of the carrier-mandated SMS language, and rejections for exactly that
+// gap are the most common reason campaigns are refused. Rather than re-issue a reviewed legal
+// document (which re-prompts every user to accept it), this standalone page carries the
+// carrier language and points at the Privacy Policy. Fold it into the next policy version.
+const SMS_TERMS = `
+<h2>Who is texting you</h2>
+<p>InPlace Care is operated by Cedar Rock Holdings, LLC, doing business as InPlace Care, in Fairlawn, Virginia. We send two kinds of text messages, from two numbers.</p>
+<h2>1. Care notifications — from (540) 274-1412</h2>
+<p>Visit reminders, a caregiver's arrival and departure, schedule changes, and one-time verification codes.</p>
+<p><strong>How you opt in:</strong> you (or a member of your care team, with your permission) enter your mobile number in the InPlace app and turn on text reminders. You can turn them off in the app at any time.</p>
+<p><strong>How often:</strong> varies with the visits on your schedule — typically one to four messages per visit.</p>
+<h2>2. Caregiver opportunities — from (540) 835-5987</h2>
+<p>One-to-one conversations with independent caregivers about paid caregiving work through InPlace, including follow-up to caregivers who have asked a local agency about private-pay work. You can also start a conversation yourself by texting <strong>JOIN</strong> to (540) 835-5987.</p>
+<p><strong>How often:</strong> a few messages per conversation. If you don't reply, we don't keep texting.</p>
+<h2>For both</h2>
+<p>Message and data rates may apply.</p>
+<p>Reply <strong>STOP</strong> at any time to stop receiving messages from that number. You'll get one message confirming you've opted out, and nothing after that. Reply <strong>START</strong> to opt back in.</p>
+<p>Reply <strong>HELP</strong> for help, or email <a href="mailto:peter@yourinplace.com">peter@yourinplace.com</a>.</p>
+<p>Carriers are not liable for delayed or undelivered messages.</p>
+<h2>Privacy</h2>
+<p>No mobile information will be shared with third parties or affiliates for marketing or promotional purposes. Text messaging originator opt-in data and consent will not be shared with any third parties. Information is used only to provide the messages described above. See our <a href="/privacy">Privacy Policy</a> for everything else.</p>
+<p>See also our <a href="/terms">Terms of Use</a>.</p>
+`;
+
+router.get("/sms", (req, res) => {
+  res.set("Cache-Control", "public, max-age=300");
+  res.send(
+    page({
+      title: "Text Messaging Terms",
+      meta: "Effective October 14, 2026",
+      body: SMS_TERMS,
+      nav: '<a href="/">← InPlace</a><a href="/terms">Terms of Use</a><a href="/privacy">Privacy Policy</a>',
+    })
+  );
+});
+
 module.exports = router;
-module.exports._internals = { renderBody, escapeHtml, SLUGS };
+module.exports._internals = { renderBody, escapeHtml, SLUGS, SMS_TERMS };

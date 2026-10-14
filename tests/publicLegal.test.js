@@ -145,3 +145,22 @@ describe("public legal routes", () => {
     expect(res.headers["cache-control"]).toMatch(/max-age=300/);
   });
 });
+
+// v1.114.4 — carriers reject A2P campaigns whose public terms lack these. Each line here is a
+// registration requirement, so a later edit can't quietly drop one.
+describe("/sms text messaging terms", () => {
+  const { SMS_TERMS } = _internals;
+  test.each([
+    [/Cedar Rock Holdings, LLC/],
+    [/InPlace Care/],
+    [/\(540\) 274-1412/],
+    [/\(540\) 835-5987/],
+    [/How you opt in/],
+    [/Message and data rates may apply/],
+    [/Reply <strong>STOP<\/strong>/],
+    [/Reply <strong>HELP<\/strong>/],
+    [/No mobile information will be shared with third parties or affiliates for marketing or promotional purposes/],
+    [/opt-in data and consent will not be shared with any third parties/],
+    [/href="\/privacy"/],
+  ])("says %s", (re) => expect(SMS_TERMS).toMatch(re));
+});
