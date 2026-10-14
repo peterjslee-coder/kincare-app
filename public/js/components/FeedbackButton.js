@@ -39,6 +39,9 @@ const clampFabPos = (p) => {
 // Persistent FAB on every screen, opens feedback submission modal.
 // Draggable so it never blocks UI. Always on top of modals/popups.
 // Captures rich context: page, role, open modal, device, recent errors.
+// 'care-team' → 'Care Team'
+const PAGE_LABEL = (p) => (p ? String(p).replace(/[-_]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : 'Unknown');
+
 const FeedbackButton = window.FeedbackButton = ({ currentPage, userRole, currentUser, onNavigate }) => {
   const isAdminUser = !!(currentUser && (currentUser.isAdmin || currentUser.is_admin));
   const [fanned, setFanned] = React.useState(false);
@@ -205,6 +208,28 @@ const FeedbackButton = window.FeedbackButton = ({ currentPage, userRole, current
     return modals.length > 0 ? modals : null;
   };
 
+  // v1.116.2 — WHERE the person is, finer than the app-level page. Pete: "it's not capturing
+  // the page i'm on ... it always identifies me as being on 'admin page - family'." currentPage
+  // is one word for a whole area (every Admin tab is 'admin'), so add the sub-page a screen
+  // publishes (window.__inplaceSubPage, e.g. the Admin tab) and the section heading in view.
+  const describeWhere = () => {
+    const parts = [PAGE_LABEL(currentPage)];
+    const sub = window.__inplaceSubPage;
+    if (sub && sub.page === currentPage && sub.label) parts.push(sub.label);
+    try {
+      const vh = window.innerHeight || 800;
+      const hs = Array.from(document.querySelectorAll('main h1, main h2, main h3'));
+      const h = hs.find((el) => {
+        if (el.closest('nav, aside, [role="dialog"], .modal-overlay')) return false;
+        const r = el.getBoundingClientRect();
+        return r.height > 0 && r.bottom > 0 && r.top < vh * 0.6;
+      });
+      const text = h && (h.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+      if (text && !parts.some((p) => p.toLowerCase() === text.toLowerCase())) parts.push(text);
+    } catch { /* a heading is a nicety; the page name still goes */ }
+    return parts.join(' › ');
+  };
+
   // Build rich pageContext with device/browser info
   const buildPageContext = () => {
     const ua = navigator.userAgent;
@@ -215,6 +240,7 @@ const FeedbackButton = window.FeedbackButton = ({ currentPage, userRole, current
 
     const pageContext = {
       page: currentPage || 'unknown',
+      where: snapshot.where || PAGE_LABEL(currentPage),
       role: userRole || 'unknown',
       version: window.APP_VERSION || 'unknown',
       device: window.innerWidth <= 768 ? 'mobile' : 'desktop',
@@ -288,6 +314,7 @@ const FeedbackButton = window.FeedbackButton = ({ currentPage, userRole, current
   const handleOpen = () => {
     // Snapshot the current UI state BEFORE opening feedback modal
     contextSnapshotRef.current = {
+      where: describeWhere(),
       openModals: detectOpenModals(),
       activeElement: document.activeElement?.tagName?.toLowerCase() + (document.activeElement?.id ? '#' + document.activeElement.id : ''),
       scrollY: Math.round(window.scrollY),
@@ -584,7 +611,7 @@ const FeedbackButton = window.FeedbackButton = ({ currentPage, userRole, current
 
               // Context hint — show user what screen is being captured
               React.createElement('div', { style: { fontSize: 11, color: 'var(--text-muted)', marginBottom: 12, padding: '6px 10px', background: '#f8f8f8', borderRadius: 6 } },
-                '\u{1F4CD} Captured: ', currentPage || 'unknown', ' page',
+                '\u{1F4CD} Captured: ', contextSnapshotRef.current?.where || PAGE_LABEL(currentPage),
                 contextSnapshotRef.current?.openModals ? ' \u2022 popup: ' + contextSnapshotRef.current.openModals[0] : '',
                 ' \u2022 ', userRole || ''
               ),

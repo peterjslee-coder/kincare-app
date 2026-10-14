@@ -1996,6 +1996,10 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
            dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
   };
 
+  // v1.116.2 — tell the feedback button which Admin tab this is. Pete: "it always identifies
+  // me as being on 'admin page - family'" — the app-level page is just 'admin' for every tab.
+  useEffect(() => () => { if (window.__inplaceSubPage && window.__inplaceSubPage.page === 'admin') delete window.__inplaceSubPage; }, []);
+
   if (loading) return <LoadingSpinner text="Loading admin dashboard..." />;
 
   const tabGroups = [
@@ -2033,6 +2037,10 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
       { id: 'settings', label: 'Settings', icon: '⚙️' },
     ]},
   ];
+  {
+    const t = tabGroups.flatMap((g) => g.tabs).find((x) => x.id === activeTab);
+    window.__inplaceSubPage = { page: 'admin', label: t ? t.label : activeTab };
+  }
 
   const activeTabLabel = tabGroups.flatMap(g => g.tabs).find(t => t.id === activeTab)?.label || 'Dashboard';
 
@@ -3610,7 +3618,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 12 }}>
                           <span>From: <strong>{fb.userName}</strong> ({fb.userEmail || '—'})</span>
                           <span>Role: {fb.userRole || '—'}</span>
-                          {fb.pageContext && <span>Page: {fb.pageContext.page}</span>}
+                          {fb.pageContext && <span>Page: {fb.pageContext.where || fb.pageContext.page}</span>}
                           {fb.pageContext?.device && <span>Device: {fb.pageContext.device}</span>}
                           <span>{(parseTimestamp(fb.createdAt) || new Date(0)).toLocaleString()}</span>
                         </div>
