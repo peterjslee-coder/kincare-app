@@ -107,7 +107,7 @@ const OutCampaignLinks = ({ apiFetch, showToast }) => {
     <div className="card">
       <div className="card-header">Tracked links</div>
       <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8, lineHeight: 1.5 }}>
-        Make one link per place you post: a flyer, a Facebook post, a church bulletin, an ad. Everyone who comes in through it is counted, and so is everyone who signs up.
+        Make one link per place you post: a flyer, a Facebook post, a church bulletin, an ad. Everyone who comes in through it is counted, and so is everyone who signs up. A link for caregivers, families or older adults opens that group's own page; “Anyone” opens the home page.
       </div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
         <input style={{ ...field, flex: '1 1 200px' }} placeholder="Where it goes, e.g. Facebook — NRV caregivers group" value={label} onChange={(e) => setLabel(e.target.value)} />

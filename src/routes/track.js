@@ -36,6 +36,19 @@ publicRouter.get("/i/:code", async (req, res) => {
   }
 });
 
+// ─── /work, /help, /home — the link landing pages (v1.119.0) ───
+// Static, no-JS-required pages for people arriving cold from a text or a flyer. Hidden on purpose:
+// nothing links here and search engines are told not to list them. Unknown paths never reach
+// this handler (the router only matches these three).
+const path = require("path");
+for (const [route, file] of Object.entries(T.LANDING_FILES)) {
+  publicRouter.get(route, (req, res) => {
+    res.set("Cache-Control", "no-cache");
+    res.set("X-Robots-Tag", "noindex, nofollow");
+    res.sendFile(path.join(__dirname, "../../public/landing", file));
+  });
+}
+
 // ─── POST /api/t ───
 //
 // Who is asking, if anyone. Read-only and forgiving: no token, a bad token, an expired token all

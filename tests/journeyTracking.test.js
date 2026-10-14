@@ -118,3 +118,29 @@ describe("the beacon's guard rails", () => {
     expect(block).toMatch(/if \(impersonating/);
   });
 });
+
+describe("the link landing pages stay hidden (Pete, 10/14: not up front for the main page)", () => {
+  const files = ["caregiver.html", "family.html", "care-for.html"];
+  const read = (f) => fs.readFileSync(path.join(__dirname, "../public/landing", f), "utf8");
+
+  test("each is noindex, loads no third-party anything, and reports its own screen name", () => {
+    for (const f of files) {
+      const html = read(f).replace(/<!--[\s\S]*?-->/g, "");
+      expect(html).toContain('<meta name="robots" content="noindex, nofollow">');
+      expect(html).not.toMatch(/https?:\/\/(?!yourinplace)/); // no outside fonts, scripts, images
+      expect(html).toMatch(/InPlaceJourney\.page\('land-[a-z-]+'\)/);
+    }
+  });
+
+  test("nothing on the site links to them", () => {
+    const sources = [raw("public/index.html"), raw("public/business.html"), raw("public/js/components/SplashPage.js"), raw("public/js/app.js")];
+    for (const src of sources) expect(src).not.toMatch(/["'(]\/(work|help|home)(\?|["')])/);
+  });
+
+  test("an audience maps to its page, and a link for anyone goes home", () => {
+    expect(T.destinationFor({ code: "Ab3xYz", audience: "caregiver" })).toBe("/work?l=Ab3xYz");
+    expect(T.destinationFor({ code: "Ab3xYz", audience: "family" })).toBe("/help?l=Ab3xYz");
+    expect(T.destinationFor({ code: "Ab3xYz", audience: "care_for" })).toBe("/home?l=Ab3xYz");
+    expect(T.destinationFor({ code: "Ab3xYz", audience: null })).toBe("/?l=Ab3xYz");
+  });
+});

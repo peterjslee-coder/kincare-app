@@ -74,7 +74,7 @@ test("an intro with {link} gives each person her own link, and the same one ever
 test("/i/:code redirects into the app with the code, and records nothing on its own", async () => {
   const r = await h.request.get(`/i/${code}`);
   expect(r.status).toBe(302);
-  expect(r.headers.location).toBe(`/?l=${code}`);
+  expect(r.headers.location).toBe(`/work?l=${code}`); // outreach links are for caregivers → their landing page
   expect(r.headers["x-robots-tag"]).toMatch(/noindex/);
   const n = await db.prepare("SELECT COUNT(*) AS n FROM visit_events").get();
   expect(Number(n.n)).toBe(0); // a link-preview fetch is not a click
@@ -169,6 +169,22 @@ test("garbage never errors: bad JSON, bad ids, too many events", async () => {
   await settle(); await settle();
   const n = await db.prepare("SELECT COUNT(*) AS n FROM visit_events WHERE visitor_id = ?").get(v5);
   expect(Number(n.n)).toBe(25);
+});
+
+test("the landing pages: each audience's link opens its own hidden page", async () => {
+  for (const [audience, path] of [["caregiver", "/work"], ["family", "/help"], ["care_for", "/home"], [null, "/"]]) {
+    const made = await h.request.post("/api/admin/links").set(A()).send({ label: `test ${audience}`, audience });
+    const r = await h.request.get(`/i/${made.body.code}`);
+    expect(r.headers.location).toBe(`${path}?l=${made.body.code}`);
+  }
+  for (const [path, words] of [["/work", "in-home work at fair wages"], ["/help", "help for your loved one"], ["/home", "stay at home"]]) {
+    const r = await h.request.get(path);
+    expect(r.status).toBe(200);
+    expect(r.headers["x-robots-tag"]).toMatch(/noindex/);
+    expect(r.text).toContain(words);
+    expect(r.text).toContain('<meta name="robots" content="noindex, nofollow">');
+    expect(r.text).toContain('src="/js/journey.js"');
+  }
 });
 
 test("campaign links: admin makes one, visitors and signups are counted", async () => {

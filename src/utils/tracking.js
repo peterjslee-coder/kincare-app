@@ -119,18 +119,26 @@ async function linkForContact(db, contact, { audience = "caregiver", createdBy =
 }
 
 /**
- * Where a code sends someone. Today every audience lands on the home page; the audience
- * landing pages (Pete, 10/14 — "not up front for the main page ... hidden") are added here when
- * they exist. The code always rides along as ?l= so the app can count the visit.
+ * The link landing pages (v1.119.0) — one per audience. Pete, 10/14: "not intended to be up front
+ * for the main page...hidden": nothing on the site links to them and they are noindex; a link's
+ * audience decides which one it opens. public/landing/*.html, served by routes/track.js.
+ */
+const LANDING_PATHS = { caregiver: "/work", family: "/help", care_for: "/home" };
+const LANDING_FILES = { "/work": "caregiver.html", "/help": "family.html", "/home": "care-for.html" };
+
+/**
+ * Where a code sends someone: its audience's landing page, or the home page for a link made for
+ * "anyone". The code always rides along as ?l= so the page can count the visit.
  */
 function destinationFor(link) {
-  return `/?l=${encodeURIComponent(link.code)}`;
+  const base = LANDING_PATHS[link.audience] || "/";
+  return `${base}?l=${encodeURIComponent(link.code)}`;
 }
 
 module.exports = {
   CODE_RE, PAGE_RE, LINK_KINDS, AUDIENCES, CLICK_ID_PARAMS, MAX_PAGE_MS, MAX_EVENTS_PER_POST,
   makeCode, isCode, isUuid, cleanPage, refHost, cleanTag, cleanUtm, cleanClickId, cleanPlatform,
-  linkUrl, smsLink, createLink, linkForContact, destinationFor,
+  linkUrl, smsLink, createLink, linkForContact, destinationFor, LANDING_PATHS, LANDING_FILES,
 };
 
 /**
