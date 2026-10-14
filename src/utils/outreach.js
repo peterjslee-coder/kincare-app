@@ -29,12 +29,14 @@ const OUTREACH_STATUSES = [
 const OPT_OUT_WORDS = ["stop", "stopall", "unsubscribe", "cancel", "end", "quit", "optout", "revoke"];
 const OPT_IN_WORDS = ["start", "unstop", "yes start"];
 // Keyword opt-in for someone first reached person-to-person (Pete's own phone): "Text JOIN to …".
-const JOIN_WORDS = ["join", "join inplace", "inplace", "info"];
+// Not "info" — Twilio treats INFO as a HELP keyword on a registered messaging service.
+const JOIN_WORDS = ["join", "join inplace", "inplace"];
 
+// Must match the opt-in message registered for the outreach A2P campaign (Twilio, 10/14).
 const JOIN_REPLY =
-  "Thanks for texting InPlace! We connect local families with caregivers for companionship, help " +
-  "around the house, errands and rides. You set your rate and keep all of it. Reply with your email " +
-  "address and we'll send details and a link to sign up. Msg & data rates may apply. Reply STOP to opt out.";
+  "InPlace Care: Thanks for texting! We connect local families with caregivers. You set your rate " +
+  "and keep all of it. Reply with your email for details and a signup link. Msg & data rates may " +
+  "apply. Reply HELP for help, STOP to opt out.";
 
 const DEFAULT_INTRO =
   "Hi {first}, this is Pete Lee with InPlace (yourinplace.com). I got your number from the NRV " +

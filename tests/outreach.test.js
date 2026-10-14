@@ -53,12 +53,15 @@ describe("classifyInbound", () => {
     expect(O.classifyInbound(b).kind).toBe("opt_out");
   });
   test("START opts back in", () => expect(O.classifyInbound("Start").kind).toBe("opt_in"));
+  test("INFO is NOT a join word — Twilio answers it as HELP", () => expect(O.classifyInbound("info").kind).toBe("message"));
   test.each(["JOIN", "join", "Join.", "Join InPlace"])("%s is the keyword opt-in", (b) => expect(O.classifyInbound(b).kind).toBe("join"));
   test("the JOIN answer names InPlace, asks for email, and carries the carrier disclosures", () => {
     expect(O.JOIN_REPLY).toMatch(/InPlace/);
     expect(O.JOIN_REPLY).toMatch(/email/);
     expect(O.JOIN_REPLY).toMatch(/Msg & data rates may apply/);
-    expect(O.JOIN_REPLY).toMatch(/Reply STOP to opt out/);
+    expect(O.JOIN_REPLY).toMatch(/STOP to opt out/);
+    expect(O.JOIN_REPLY).toMatch(/HELP for help/);
+    expect(O.JOIN_REPLY.length).toBeLessThanOrEqual(320); // the registered opt-in message limit
   });
   test("an email anywhere is interest, lowercased, trailing punctuation dropped", () => {
     expect(O.classifyInbound("Sure! it's Jane.Doe@Example.com.")).toEqual({ kind: "email", email: "jane.doe@example.com" });
