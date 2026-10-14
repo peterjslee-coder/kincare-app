@@ -1,4 +1,5 @@
 const express = require("express");
+const { consentedSql: smsConsentedSql, samePhone: smsSamePhone } = require("../utils/smsConsent"); // v1.114.5
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { authenticate } = require("../middleware/auth");
@@ -758,7 +759,7 @@ async function sendArrivalSms(session, minutesBefore) {
     else timeLabel = "30 minutes";
 
     const recipName = session.recipient_first_name || "there";
-    const message = `Hi ${recipName}, ${caregiverFirstName} is arriving in ${timeLabel}! 😊`;
+    const message = `InPlace: Hi ${recipName}, ${caregiverFirstName} is arriving in ${timeLabel}! Reply STOP to opt out.`;
 
     const { sendSms } = require("../utils/sms");
     const result = await sendSms(session.sms_phone, message);
@@ -791,6 +792,7 @@ async function sendSessionReminders(sessionId, reminderType) {
         cr.first_name AS recipient_first_name, cr.last_name AS recipient_last_name,
         ${trustedLinkedIdSql("cr")} AS care_for_user_id,
         cr.notification_channel, cr.sms_phone,
+        ${smsConsentedSql("cr")} AS sms_consented,
         cr.location_address, cr.location_city, cr.location_state
       FROM care_sessions cs
       LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
@@ -865,10 +867,10 @@ async function sendSessionReminders(sessionId, reminderType) {
       }
 
       // SMS (if channel allows and phone exists)
-      if (["sms", "both"].includes(channel) && session.sms_phone) {
+      if (["sms", "both"].includes(channel) && session.sms_phone && session.sms_consented) {
         const { sendSms } = require("../utils/sms");
         const timeStr = session.scheduled_time ? session.scheduled_time.replace(/^0/, "") : "soon";
-        await sendSms(session.sms_phone, `Hi ${recipFirstName}, ${caregiverName} will be arriving at ${timeStr} today.`);
+        await sendSms(session.sms_phone, `InPlace: Hi ${recipFirstName}, ${caregiverName} will be arriving at ${timeStr} today.`);
       }
 
       console.log(`  Session reminders (pre_check_in) sent for session ${sessionId} → ${teamUserIds.length} team members, channel: ${channel}`);
@@ -914,7 +916,7 @@ async function sendSessionReminders(sessionId, reminderType) {
         }, "caregiver_leaving_recipient");
       }
 
-      if (["sms", "both"].includes(coChannel) && session.sms_phone) {
+      if (["sms", "both"].includes(coChannel) && session.sms_phone && session.sms_consented) {
         const { sendSms } = require("../utils/sms");
         const endTime = session.scheduled_time && session.duration_hours
           ? (() => {
@@ -931,7 +933,7 @@ async function sendSessionReminders(sessionId, reminderType) {
               return formatTimeForDisplay(`${finalH % 24}:${finalM}`);
             })()
           : "soon";
-        await sendSms(session.sms_phone, `Hi ${coRecipName}, ${caregiverName} will be heading out around ${endTime}.`);
+        await sendSms(session.sms_phone, `InPlace: Hi ${coRecipName}, ${caregiverName} will be heading out around ${endTime}.`);
       }
 
       console.log(`  Session reminders (pre_check_out) sent for session ${sessionId} → ${teamUserIds.length} team members, channel: ${coChannel}`);

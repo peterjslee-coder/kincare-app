@@ -1,6 +1,7 @@
 require("dotenv").config();
 
 const { initSentry, setupSentryErrorHandler, captureException, tagRequestUser } = require("./utils/sentry");
+const { consentedSql: smsConsentedSql, samePhone: smsSamePhone } = require("./utils/smsConsent"); // v1.114.5
 initSentry();
 
 require("./utils/crashHandlers").installCrashHandlers();
@@ -852,7 +853,7 @@ app.use("/api/safety", require("./routes/safety"));
 
 // ─── App version check (lightweight, no auth) ───
 const { cancelPassedPrivateOffers, releaseExpiredExclusiveOffers } = require("./utils/exclusiveOffers");
-const APP_VERSION = "1.114.4";
+const APP_VERSION = "1.114.5";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION, minAppVersion: MIN_APP_VERSION });
@@ -1229,6 +1230,7 @@ async function start() {
       const arrivalCandidates = await pollDb.prepare(`
         SELECT cs.id, cs.scheduled_date, cs.scheduled_time, cs.notifications_sent,
           cr.timezone AS care_timezone, cr.notification_channel, cr.sms_phone,
+          ${smsConsentedSql("cr")} AS sms_consented,
           cr.sms_reminder_intervals, cr.first_name AS recipient_first_name,
           cp.user_id AS caregiver_user_id
         FROM care_sessions cs
@@ -1243,7 +1245,7 @@ async function start() {
       `).all(dateRangeStart, dateRangeEnd);
 
       for (const s of arrivalCandidates) {
-        if (!s.scheduled_time || !s.sms_phone) continue;
+        if (!s.scheduled_time || !s.sms_phone || !s.sms_consented) continue; // v1.114.5 — no texts without recorded consent
         // Only send if channel includes SMS
         const channel = s.notification_channel || "push";
         if (!["sms", "both"].includes(channel)) continue;

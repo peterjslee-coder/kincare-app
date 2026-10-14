@@ -1,4 +1,5 @@
 const express = require("express");
+const { consentedSql: smsConsentedSql, samePhone: smsSamePhone } = require("../utils/smsConsent"); // v1.114.5
 const { PERSONAL_DIRECT_WHERE } = require("../utils/conversations");
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
@@ -3512,6 +3513,7 @@ router.put("/:id/on-my-way", async (req, res) => {
         cr.first_name AS recipient_first_name, cr.last_name AS recipient_last_name,
         ${trustedLinkedIdSql("cr")} AS care_for_user_id,
         cr.notification_channel, cr.sms_phone,
+        ${smsConsentedSql("cr")} AS sms_consented,
         cr.location_address, cr.location_city, cr.location_state,
         cr.latitude AS recipient_lat, cr.longitude AS recipient_lng
       FROM care_sessions cs
@@ -3577,9 +3579,9 @@ router.put("/:id/on-my-way", async (req, res) => {
       }, "on_my_way_recipient");
     }
 
-    if (["sms", "both"].includes(channel) && session.sms_phone) {
+    if (["sms", "both"].includes(channel) && session.sms_phone && session.sms_consented) {
       const { sendSms } = require("../utils/sms");
-      await sendSms(session.sms_phone, `Hi ${recipFirstName}, ${cgName} is on the way to you now${etaStr}!`);
+      await sendSms(session.sms_phone, `InPlace: Hi ${recipFirstName}, ${cgName} is on the way to you now${etaStr}!`);
     }
 
     // ─── Schedule "5 minutes away" notification if we can estimate ETA ───
@@ -3616,12 +3618,12 @@ router.put("/:id/on-my-way", async (req, res) => {
           if (["push", "both"].includes(ch) && session.care_for_user_id && !teamUserIds.includes(session.care_for_user_id)) {
             await pushToUser(session.care_for_user_id, {
               title: `${cgName} is Almost Here!`,
-              body: `Hi ${rName}, ${cgName} will be at your door in about 5 minutes!`,
+              body: `InPlace: Hi ${rName}, ${cgName} will be at your door in about 5 minutes!`,
               tag: recipTag,
               data: { type: "five_min_away_recipient", sessionId },
             }, "five_min_away_recipient");
           }
-          if (["sms", "both"].includes(ch) && session.sms_phone) {
+          if (["sms", "both"].includes(ch) && session.sms_phone && session.sms_consented) {
             const { sendSms } = require("../utils/sms");
             await sendSms(session.sms_phone, `Hi ${rName}, ${cgName} will be at your door in about 5 minutes!`);
           }

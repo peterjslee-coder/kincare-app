@@ -1,4 +1,5 @@
 const express = require("express");
+const { consentedSql: smsConsentedSql, samePhone: smsSamePhone } = require("../utils/smsConsent"); // v1.114.5
 const { ALL: ALL_CAPS, PRESETS } = require("../utils/capabilities");
 const crypto = require("crypto");
 const { v4: uuid } = require("uuid");
@@ -273,6 +274,7 @@ router.get("/:id", requireRole("family"), async (req, res) => {
         cr.family_user_id AS recipient_owner_id,
         lu.accessibility_prefs AS recipient_accessibility_prefs,
         cr.sms_phone AS recipient_sms_phone,
+        ${smsConsentedSql("cr")} AS recipient_sms_consented,
         cr.notification_channel AS recipient_notification_channel,
         cr.sms_reminder_intervals AS recipient_sms_reminder_intervals,
         bu.first_name || ' ' || bu.last_name AS billing_contact_name,
@@ -1104,7 +1106,7 @@ router.put("/:teamId/recipient-notifications", authenticate, async (req, res) =>
   try {
     const db = await getDb();
     const { teamId } = req.params;
-    const { smsPhone, notificationChannel, smsReminderIntervals } = req.body;
+    const { smsPhone, notificationChannel, smsReminderIntervals, smsConsent } = req.body;
 
     // Verify caller is team leader
     const membership = await db.prepare(
@@ -1136,6 +1138,18 @@ router.put("/:teamId/recipient-notifications", authenticate, async (req, res) =>
     // Get care recipient ID from team
     const team = await db.prepare("SELECT care_recipient_id FROM care_teams WHERE id = ?").get(teamId);
     if (!team) return res.status(404).json({ error: "Care team not found" });
+
+    // v1.114.5 — texts need recorded consent for THIS number (utils/smsConsent.js).
+    if (["sms", "both"].includes(notificationChannel)) {
+      const cur = await db.prepare("SELECT sms_consent_at, sms_consent_phone FROM care_recipients WHERE id = ?").get(team.care_recipient_id);
+      const already = cur && cur.sms_consent_at && smsSamePhone(cur.sms_consent_phone, smsPhone);
+      if (smsConsent === true) {
+        await db.prepare("UPDATE care_recipients SET sms_consent_at = NOW(), sms_consent_by = ?, sms_consent_phone = ? WHERE id = ?")
+          .run(req.user.id, smsPhone, team.care_recipient_id);
+      } else if (!already) {
+        return res.status(400).json({ error: "Please check the box agreeing to text reminders before turning them on." });
+      }
+    }
 
     // Update care recipient
     if (intervalsJson !== null) {

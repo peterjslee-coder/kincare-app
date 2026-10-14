@@ -94,6 +94,7 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
   const [recentVisits, setRecentVisits] = useState([]);
   const [visitDetailSessionId, setVisitDetailSessionId] = useState(null);
   const [smsPhone, setSmsPhone] = useState('');
+  const [smsConsent, setSmsConsent] = useState(false); // v1.114.5 — carrier-required opt-in
   const [intlPhone, setIntlPhone] = useState(false);
   const [notifChannel, setNotifChannel] = useState('push');
   const [savingNotif, setSavingNotif] = useState(false);
@@ -396,14 +397,21 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
       showToast('Phone number required for text message reminders', 'error');
       return;
     }
+    const digits10 = (v) => String(v || '').replace(/\D/g, '').slice(-10);
+    const consentOnFile = !!team?.recipient_sms_consented && digits10(team?.recipient_sms_phone) === digits10(smsPhone);
+    if (['sms', 'both'].includes(notifChannel) && !consentOnFile && !smsConsent) {
+      showToast('Please check the box agreeing to text reminders', 'error');
+      return;
+    }
     setSavingNotif(true);
     try {
       const res = await apiFetch(`/api/care-teams/${careTeamId}/recipient-notifications`, {
         method: 'PUT',
-        body: JSON.stringify({ smsPhone: smsPhone.trim(), notificationChannel: notifChannel, smsReminderIntervals: reminderIntervals }),
+        body: JSON.stringify({ smsPhone: smsPhone.trim(), notificationChannel: notifChannel, smsReminderIntervals: reminderIntervals, smsConsent: smsConsent === true }),
       });
       if (res?.ok) {
         showToast('Notification settings saved', 'success');
+        setSmsConsent(false);
         fetchTeam();
       } else {
         const data = await res?.json();
@@ -1119,6 +1127,23 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
                   </div>
                 )}
 
+                {['sms', 'both'].includes(notifChannel) && (() => {
+                  // v1.114.5 — carriers require a recorded opt-in before any reminder text. The
+                  // wording matches utils/smsConsent.js CONSENT_TEXT and the A2P registration.
+                  const d10 = (v) => String(v || '').replace(/\D/g, '').slice(-10);
+                  const onFile = !!team.recipient_sms_consented && d10(team.recipient_sms_phone) === d10(smsPhone);
+                  return (
+                    <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, fontSize: 12, lineHeight: 1.5, color: 'var(--text-primary)', marginBottom: 14, cursor: onFile ? 'default' : 'pointer' }}>
+                      <input type="checkbox" checked={onFile || smsConsent} disabled={onFile}
+                        onChange={(e) => setSmsConsent(e.target.checked)}
+                        style={{ accentColor: 'var(--accent-color)', width: 16, height: 16, marginTop: 2, flexShrink: 0 }} />
+                      <span>
+                        {team.recipient_first_name} agrees to receive visit reminders and care notifications by text from InPlace Care. Msg &amp; data rates may apply. Msg frequency varies. Reply STOP to opt out, HELP for help. <a href="/sms" target="_blank" rel="noopener" style={{ color: 'var(--role-color)' }}>Terms</a>
+                        {onFile && <span style={{ color: 'var(--text-secondary)' }}> · Agreed</span>}
+                      </span>
+                    </label>
+                  );
+                })()}
                 <div style={{ background: '#f0f8f5', padding: '10px 14px', borderRadius: 8, fontSize: 13, color: 'var(--role-color)', marginBottom: 14 }}>
                   {notifChannel === 'none'
                     ? `${team.recipient_first_name} won't receive any session reminders.`

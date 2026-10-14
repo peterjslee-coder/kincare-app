@@ -3131,6 +3131,16 @@ async function initializeDatabase() {
       ],
     },
     {
+      // v1.114.5 — text-reminder consent for care recipients (utils/smsConsent.js). Carriers
+      // require a recorded opt-in; consent is tied to the number it was given for.
+      id: "060_sms_consent",
+      statements: [
+        `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS sms_consent_at TIMESTAMPTZ`,
+        `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS sms_consent_by TEXT`,
+        `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS sms_consent_phone TEXT`,
+      ],
+    },
+    {
       // v1.114.0 — care tools come with care booked through InPlace (utils/careTools.js).
       // care_tools_open_at: an admin turned this person's care tools on regardless of bookings
       // (Admin → People → Care tools). NULL = the normal rule.
