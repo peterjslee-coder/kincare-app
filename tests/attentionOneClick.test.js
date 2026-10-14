@@ -476,7 +476,10 @@ describe("one tap is one request, and the row leaves when the server says so", (
   });
 
   test("Undo only where the server really has one, and it calls it", () => {
-    expect(cardSrc).toMatch(/if \(item\.undoable && item\.undo\)/);
+    expect(cardSrc).toMatch(/\(item\.undoable && item\.undo\)/);
+    // v1.117.0 — a "done" line can now appear without an undo (a declined card that went
+    // through); the Undo button is drawn only when the item really carries one.
+    expect(cardSrc).toMatch(/done\[id\]\.item && done\[id\]\.item\.undo && \(/);
     expect(cardSrc).toMatch(/apiFetch\(entry\.item\.undo\.path/);
   });
 

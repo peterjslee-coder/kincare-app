@@ -159,7 +159,8 @@ describe("the notification actually reaches him", () => {
     // This is the whole answer to "I haven't gotten a doc review notice on anything yet":
     // admin email defaulted to OFF, so unless he had visited a prefs screen he had no reason
     // to visit, the only signal was a push — fire-and-forget, gone the moment it is missed.
-    expect(push).toMatch(/const EMAIL_ON_BY_DEFAULT = new Set\(\["identity_submitted"\]\)/);
+    // v1.117.0 — payment_authorization_failed joined it (a declined card hold).
+    expect(push).toMatch(/const EMAIL_ON_BY_DEFAULT = new Set\(\["identity_submitted"[^\]]*\]\)/);
     expect(push).toMatch(/EMAIL_ON_BY_DEFAULT\.has\(eventType\) \? pref !== false : pref === true/);
   });
 

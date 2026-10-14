@@ -31,6 +31,21 @@ const WINDOW_DAYS = 45;
 
 const ENTRIES = [
   {
+    id: "card-declined-try-again",
+    version: "1.117.0",
+    date: "2026-10-14",
+    audience: ["family"],
+    title: "A declined card now tells you — and can be tried again",
+    body: "About a day before each visit, InPlace places a hold on the card. If the bank declines it, the person who pays and the person who booked now get a notice right away, and one tap tries the same card again once the money's there — or you can use a different card.",
+    howTo: [
+      "Watch for “Card declined” in your notifications or under Needs you on Home",
+      "Move money onto the card or call the bank, if that's the problem",
+      "Tap “Try the card again” — or “Use a different card”",
+    ],
+    examples: ["Moved money into checking — try the debit card again", "The card expired — add the new one"],
+    preview: "cardDeclined",
+  },
+  {
     id: "calendar-whole-month",
     version: "1.114.3",
     date: "2026-10-13",

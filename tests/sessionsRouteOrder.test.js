@@ -72,6 +72,8 @@ const EXPECTED = [
   "POST /:id/instructions/acknowledge",
   "PUT /:id/on-my-way",
   "GET /:id/cancel-preview",
+  "GET /:id/hold", // v1.117.0 — a declined card hold
+  "POST /:id/retry-hold", // v1.117.0 — "Try the card again"
   "GET /:id/cancel-fee",
   "POST /:id/cancel-fee/waive",
   "POST /:id/cancel-fee/dispute",

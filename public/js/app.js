@@ -804,6 +804,11 @@ const App = () => {
         if (d.sessionId) window.__pendingFocus = `cancelFee:${d.sessionId}`;
         setTimeout(() => window.dispatchEvent(new Event('inplace:focus')), 0);
         target = 'dashboard';
+      } else if (t === 'hold_declined' || t === 'payment_hold') {
+        // v1.117.0 — a declined card hold opens the sheet with "Try the card again".
+        if (d.sessionId) window.__pendingFocus = d.focus || `holdDeclined:${d.sessionId}`;
+        setTimeout(() => window.dispatchEvent(new Event('inplace:focus')), 0);
+        target = 'dashboard';
       } else if (t === 'review_received') {
         // v1.107.8 — her own profile, where the review is.
         if (d.caregiverId) window.__viewCaregiverId = d.caregiverId;
@@ -2544,6 +2549,8 @@ const App = () => {
       {/* v1.109.9 — one fee sheet for every page; a push tap or Needs-you row opens it */}
       {typeof CancelFeeSheet !== 'undefined' && <CancelFeeSheet />}
       {typeof CareToolsSheet !== 'undefined' && <CareToolsSheet />}
+      {/* v1.117.0 — a declined card hold: try the same card again, or use another */}
+      {typeof HoldDeclinedSheet !== 'undefined' && <HoldDeclinedSheet onNavigate={setCurrentPage} />}
       {(currentUser?.is_tester || currentUser?.isAdmin) && <FeedbackButton currentPage={currentPage} userRole={activeRole || currentUser?.role} currentUser={currentUser} onNavigate={setCurrentPage} />}
       {/* v1.105.194 — the caregiver's first-visit tour, above everything, across pages */}
       {tourOpen && role === 'caregiver' && typeof CaregiverTour !== 'undefined' && (

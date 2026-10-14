@@ -302,7 +302,9 @@ async function sendPushToAdmins(eventType, payload) {
 // finish onboarding until Pete reviews their ID, so a missed notification is not noise — it
 // is somebody sitting still. These few events are opt-OUT instead: he can still turn them
 // off, but he has to mean it.
-const EMAIL_ON_BY_DEFAULT = new Set(["identity_submitted"]);
+// v1.117.0 — payment_authorization_failed: a shift with no card hold is money and a caregiver at
+// the door. On Oct 5 a declined hold reached Pete as one push he never saw; the email was off.
+const EMAIL_ON_BY_DEFAULT = new Set(["identity_submitted", "payment_authorization_failed"]);
 
 async function sendEmailToAdmins(eventType, { subject, body }) {
   try {

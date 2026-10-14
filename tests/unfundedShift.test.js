@@ -18,7 +18,8 @@ describe("the actual bug: a PaymentIntent with no payment method", () => {
     // With confirm:true + off_session:true it answers "You cannot confirm this PaymentIntent
     // because it's missing a payment method", which is exactly what Pete's phone showed.
     expect(a).not.toMatch(/payment_method: undefined/);
-    expect(a).toMatch(/const pm = await resolvePaymentMethod\(stripe, payerCustomerId\)/);
+    // v1.117.0 — `pm` is declared outside the try so a decline can name the card it was.
+    expect(a).toMatch(/pm = await resolvePaymentMethod\(stripe, payerCustomerId\)/);
     expect(a).toMatch(/payment_method: pm\.id/);
     expect(a).toMatch(/payment_method_types: \[pm\.type\]/);
   });
@@ -104,7 +105,8 @@ describe("an idempotency key must change when the request changes", () => {
     // attempts had burned `inplace_authhold_<session>_<amount>`, Stripe remembers keys for 24
     // hours, and every corrected retry came back "Keys for idempotent requests can only be
     // used with the same parameters they were first used with."
-    expect(a).toMatch(/idempotencyKey: `inplace_authhold_\$\{sessionId\}_\$\{totalCents\}_\$\{pm\.id\}`/);
+    // v1.117.0 — and the attempt number, which only a decline advances (utils/holdDecline.js).
+    expect(a).toMatch(/idempotencyKey: `inplace_authhold_\$\{sessionId\}_\$\{totalCents\}_\$\{pm\.id\}_a\$\{holdAttempt\}`/);
   });
 
   test("it still keys on session AND amount, so a duplicate hold is still impossible", () => {

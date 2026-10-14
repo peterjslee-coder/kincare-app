@@ -161,6 +161,17 @@ const WN_PREVIEWS = {
       </div>
     </div>
   ),
+  cardDeclined: () => (
+    <div style={{ padding: '12px 12px 10px', borderRadius: 12, border: '2px solid var(--accent-color)', background: 'var(--bg-attention-card)' }}>
+      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.4, color: 'var(--text-tertiary)', marginBottom: 4 }}>{'💳'} CARD DECLINED {'·'} FOR MOM</div>
+      <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text-primary)' }}>Card declined {'—'} Jane{'’'}s visit isn{'’'}t paid for yet</div>
+      <div style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: '4px 0 10px' }}>Visa ending 4242 was declined {'—'} there wasn{'’'}t enough money on it. The visit can{'’'}t start until it goes through.</div>
+      <div style={{ display: 'flex', gap: 6 }}>
+        <span style={{ ...wnPill('var(--accent-color-dark)', 'var(--text-on-primary)'), flex: 1, textAlign: 'center', padding: '8px 10px' }}>Try the card again</span>
+        <span style={{ ...wnPill('var(--bg-card)', 'var(--accent-color)'), border: '1.5px solid var(--accent-color)', padding: '8px 10px' }}>Open {'›'}</span>
+      </div>
+    </div>
+  ),
   id: () => (
     <div style={{ textAlign: 'center', padding: '6px 4px' }}>
       <div style={{ fontSize: 30 }}>{'🪪'}</div>

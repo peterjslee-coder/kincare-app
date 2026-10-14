@@ -78,7 +78,7 @@ const name = (first, last) => [first, last].filter(Boolean).join(" ").trim() || 
 
 const EMPTY = {
   total: 0, reimbursements: 0, timeChanges: 0, timeChangeSessionId: null,
-  careTasks: 0, approvals: 0, safetyFlags: 0, messages: 0, emptyWeeks: 0, cancelFees: 0, financialConcerns: 0, identity: 0, items: [],
+  careTasks: 0, approvals: 0, safetyFlags: 0, messages: 0, emptyWeeks: 0, cancelFees: 0, financialConcerns: 0, identity: 0, holdDeclined: 0, items: [],
 };
 
 /**
@@ -303,6 +303,31 @@ async function attentionItemsFor(db, userId) {
       )
     ORDER BY cs.cancel_fee_deadline
   `).all(userId, userId));
+
+  // ── A visit whose card hold the bank declined (v1.117.0) ──
+  // A blocker in the plainest sense: the visit cannot start until the card goes through
+  // (v1.114.2), and the caregiver is not paid for it until then. The payer, the person who
+  // booked and the loved one's care team leader all see it; any of them can tap "Try the card
+  // again" — Pete, 10/14, on Sara: she "transfers money in, and then we try again". Bounded by the
+  // visit itself: once it is over or cancelled, it is not waiting on a card.
+  const holdDeclinedRows = await safeRows("holdDeclined", () => db.prepare(`
+    SELECT cs.id, cs.scheduled_date, cs.scheduled_time, cs.service_type, cs.hold_failure_card,
+           cs.hold_failure_code, cr.first_name AS recipient_first, cr.timezone AS tz,
+           cu.first_name AS caregiver_first
+      FROM care_sessions cs
+      LEFT JOIN care_recipients cr ON cr.id = cs.care_recipient_id
+      LEFT JOIN caregiver_profiles cp ON cp.id = cs.caregiver_id
+      LEFT JOIN users cu ON cu.id = cp.user_id
+     WHERE cs.status IN ('confirmed', 'in_progress')
+       AND cs.hold_failed_at IS NOT NULL
+       AND cs.stripe_payment_intent_id IS NULL
+       AND cs.scheduled_date >= TO_CHAR((NOW() - INTERVAL '1 day') AT TIME ZONE 'America/New_York', 'YYYY-MM-DD')
+       AND (cs.family_user_id = ?
+            OR EXISTS (SELECT 1 FROM care_teams ct WHERE ct.care_recipient_id = cs.care_recipient_id AND ct.billing_user_id = ?)
+            OR EXISTS (SELECT 1 FROM care_team_members ctm JOIN care_teams ct ON ct.id = ctm.care_team_id
+                        WHERE ct.care_recipient_id = cs.care_recipient_id AND ctm.user_id = ? AND ctm.role = 'leader'))
+     ORDER BY cs.scheduled_date, cs.scheduled_time
+  `).all(userId, userId, userId));
 
   const owedFeeRows = await safeRows("owedCancelFees", () => db.prepare(`
     SELECT cs.id, cs.cancel_fee_cents, cs.cancel_fee_deadline, cs.scheduled_date,
@@ -567,6 +592,28 @@ async function attentionItemsFor(db, userId) {
         label: "Looks right",
       },
     })),
+    ...holdDeclinedRows.map((h) => {
+      const { declineReason, retryCanHelp } = require("./holdDecline");
+      const sameCardMayWork = retryCanHelp(h.hold_failure_code);
+      const card = h.hold_failure_card || "the card";
+      return {
+        kind: "holdDeclined",
+        id: `holdDeclined:${h.id}`,
+        sessionId: h.id,
+        title: `Card declined — ${h.caregiver_first || "the caregiver"}'s visit isn't paid for yet`,
+        detail: null,
+        forWhom: h.recipient_first || null,
+        serviceType: h.service_type || null,
+        tz: h.tz || null,
+        date: h.scheduled_date || null,
+        verb: sameCardMayWork ? "Try the card again" : "Use a different card",
+        // One tap retries the same card. Open is the sheet, which also offers another card.
+        action: sameCardMayWork ? { method: "POST", path: `/api/sessions/${h.id}/retry-hold` } : null,
+        page: "dashboard",
+        focus: `holdDeclined:${h.id}`,
+        note: `${card.charAt(0).toUpperCase() + card.slice(1)} was declined — ${declineReason(h.hold_failure_code)}. The visit can't start until it goes through.`,
+      };
+    }),
     ...owedFeeRows.map((f) => ({
       kind: "cancelFee",
       soft: true,
@@ -688,8 +735,9 @@ async function attentionItemsFor(db, userId) {
     // v1.109.9 — the FAMILY's pending cancellation fees count; the caregiver's do not (see
     // the note against the query).
     total: reimbursementRows.length + timeChanges + taskRows.length + approvalRows.length
-      + cancelFeeRows.length + financialConcernRows.length + safetyRows.length,
+      + cancelFeeRows.length + financialConcernRows.length + safetyRows.length + holdDeclinedRows.length,
     cancelFees: cancelFeeRows.length,
+    holdDeclined: holdDeclinedRows.length, // v1.117.0
     financialConcerns: financialConcernRows.length,
     emptyWeeks: emptyWeekRows.length,
     reimbursements: reimbursementRows.length,

@@ -117,6 +117,85 @@ router.post("/backfill-assignments", async (req, res) => {
   }
 });
 
+// ─── POST /api/admin/ledger/backfill-captures (v1.117.0) ───
+//
+// The ledger began at v1.109.0 (Sep 18). Visits settled by capturing their hold before that —
+// Tina's Sep 14–18, five of them — were paid in Stripe but have no ledger row and no `payments`
+// row, so Financials, Books and the person drawer cannot see them. Pete, 10/14: "correct the
+// records".
+//
+// The numbers come from STRIPE, never from estimated_cost: amount_received is what the family
+// paid, application_fee_amount is what InPlace kept, and the rest went to the caregiver's
+// Connect account. A row is dated when the money moved (payment_captured_at), not today, so
+// 30-day windows (care tools, Financials) are not distorted. `{ dryRun: true }` returns the plan
+// and writes nothing. Idempotent: the (stripe_payment_intent, kind) unique index refuses a
+// second row, and a session that has one is not selected again.
+router.post("/ledger/backfill-captures", async (req, res) => {
+  try {
+    const db = await getDb();
+    const dryRun = !!(req.body && req.body.dryRun);
+    const missing = await db.prepare(`
+      SELECT cs.id, cs.status, cs.stripe_payment_intent_id, cs.caregiver_id, cs.care_recipient_id,
+             cs.family_user_id, cs.scheduled_date,
+             COALESCE(cs.payment_captured_at, cs.completed_at, cs.updated_at) AS paid_at,
+             (SELECT ct.billing_user_id FROM care_teams ct WHERE ct.care_recipient_id = cs.care_recipient_id
+                AND ct.billing_user_id IS NOT NULL LIMIT 1) AS billing_user_id
+        FROM care_sessions cs
+        JOIN users fu ON fu.id = cs.family_user_id
+       WHERE cs.payment_status = 'paid'
+         AND cs.stripe_payment_intent_id IS NOT NULL
+         AND COALESCE(fu.is_demo, 0) = 0
+         AND NOT EXISTS (SELECT 1 FROM ledger_entries le WHERE le.session_id = cs.id
+                           AND le.kind IN ('capture', 'autopay', 'checkout', 'cancel_fee'))
+         AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.session_id = cs.id AND p.status = 'completed')
+       ORDER BY cs.scheduled_date
+    `).all();
+
+    const { getStripe } = require("../accountability");
+    const stripe = getStripe();
+    const plan = [];
+    for (const s of missing) {
+      let pi;
+      try { pi = await stripe.paymentIntents.retrieve(s.stripe_payment_intent_id); }
+      catch (e) { plan.push({ sessionId: s.id, date: s.scheduled_date, skipped: `Stripe: ${e.message}` }); continue; }
+      if (!pi || pi.status !== "succeeded" || !(Number(pi.amount_received) > 0)) {
+        plan.push({ sessionId: s.id, date: s.scheduled_date, skipped: `payment intent is ${pi && pi.status}` });
+        continue;
+      }
+      const familyCents = Math.round(Number(pi.amount_received));
+      const platformCents = pi.application_fee_amount != null
+        ? Math.min(Math.round(Number(pi.application_fee_amount)), familyCents) : familyCents;
+      const toCaregiver = !!(pi.transfer_data && pi.transfer_data.destination);
+      const caregiverCents = toCaregiver ? familyCents - platformCents : 0;
+      const kind = s.status === "cancelled" ? "cancel_fee" : "capture";
+      plan.push({ sessionId: s.id, date: s.scheduled_date, kind, familyCents, caregiverCents, platformCents,
+        paidAt: s.paid_at, paymentIntent: pi.id });
+      if (dryRun) continue;
+      await db.prepare(`
+        INSERT INTO ledger_entries
+          (id, session_id, care_recipient_id, kind, status, family_user_id, caregiver_id,
+           family_cents, caregiver_cents, platform_cents, card_fee_cents, stripe_payment_intent, breakdown, created_at)
+        VALUES (?, ?, ?, ?, 'succeeded', ?, ?, ?, ?, ?, 0, ?, ?, ?)
+        ON CONFLICT DO NOTHING
+      `).run(uuid(), s.id, s.care_recipient_id, kind, s.billing_user_id || s.family_user_id, s.caregiver_id,
+        familyCents, caregiverCents, platformCents, pi.id,
+        JSON.stringify({
+          backfilled: "v1.117.0 — paid before the ledger existed; amounts read from Stripe",
+          familyTotalCents: familyCents, caregiverCents, platformFeeCents: platformCents, capturedCents: familyCents,
+        }),
+        s.paid_at);
+    }
+    if (!dryRun) {
+      await logAdminAction(req, "ledger_backfill_captures", "ledger_entries", null,
+        { rows: plan.filter((p) => !p.skipped).length, sessions: plan.map((p) => p.sessionId) });
+    }
+    res.json({ dryRun, found: missing.length, plan });
+  } catch (err) {
+    captureException(err, { where: "admin: ledger backfill" });
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── GET /api/admin/users/:id/reachability ───
 //
 // v1.105.144. "Did it actually ring?" has been unanswerable all week, and every attempt to

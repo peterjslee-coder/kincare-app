@@ -59,7 +59,7 @@ describe("unread messages are not in this tile", () => {
     // v1.105.177 — safety flags joined the sum. What this assertion is really about is that
     // MESSAGES are not in it, so it names the terms rather than pinning the line verbatim.
     expect(attention).toMatch(/total: reimbursementRows\.length \+ timeChanges \+ taskRows\.length \+ approvalRows\.length/);
-    expect(attention).toMatch(/\+ safetyRows\.length,/);
+    expect(attention).toMatch(/\+ safetyRows\.length( \+ holdDeclinedRows\.length)?,/); // v1.117.0 — declined card holds
   });
 
   test("the count is still reported, just not counted", () => {

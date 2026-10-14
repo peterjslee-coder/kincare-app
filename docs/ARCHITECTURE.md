@@ -7,7 +7,7 @@ build red.
 
 Hand-written sections (§3 "Where is…") are preserved across regeneration; edit those freely.
 
-Structure at last generation: 584 HTTP routes across 63 mounts ·
+Structure at last generation: 587 HTTP routes across 63 mounts ·
 111 `CREATE TABLE` statements · 14 background jobs · 39 socket events
 (17 with no client listener) · 71 push event types · 61 `window.__*` globals.
 
@@ -40,7 +40,7 @@ JSX is *not* compiled in the browser; Babel-standalone is not loaded. Editing an
 |---|---|---:|---|
 | `/api/accountability` | `src/routes/accountability.js` | 12 |  |
 | `/api/activity` | `src/routes/activity.js` | 4 |  |
-| `/api/admin` | `src/routes/admin/` | 101 |  |
+| `/api/admin` | `src/routes/admin/` | 102 |  |
 | `/api/admin/financials` | `src/routes/financials.js` | 14 |  |
 | `/api/admin/outreach` | `src/routes/outreach.js` | 0 |  |
 | `/api/admin/tickets` | `src/routes/tickets.js` | 7 |  |
@@ -96,7 +96,7 @@ JSX is *not* compiled in the browser; Babel-standalone is not loaded. Editing an
 | `/api/safety` | `src/routes/safety.js` | 6 |  |
 | `/api/scheduling` | `src/routes/nlScheduling.js` | 1 |  |
 | `/api/self-onboarding` | `src/routes/selfOnboarding.js` | 3 |  |
-| `/api/sessions` | `src/routes/sessions.js` **+** `src/routes/offers.js` | 44 | ⚠️ **multi-file mount — routes for this prefix live in more than one file** |
+| `/api/sessions` | `src/routes/sessions.js` **+** `src/routes/offers.js` | 46 | ⚠️ **multi-file mount — routes for this prefix live in more than one file** |
 | `/api/sms` | `src/routes/smsWebhooks.js` | 8 |  |
 | `/api/video` | `src/routes/videoCall.js` | 1 |  |
 | `/api/waitlist` | `src/routes/waitlist.js` | 3 |  |
@@ -352,7 +352,7 @@ State travels through `window`, not props. This table is the registry.
 | `window.__originalSearch` | app.js | 4 |
 | `window.__pendingCall` | app.js, Messages.js | 5 |
 | `window.__pendingConversation` | app.js | 5 |
-| `window.__pendingFocus` | app.js, AttentionCard.js, CancelFeeSheet.js | 36 |
+| `window.__pendingFocus` | app.js, AttentionCard.js, CancelFeeSheet.js | 39 |
 | `window.__pendingLogVisit` | TeamNotes.js | 2 |
 | `window.__pendingNoteDraft` | CareProfile.js, Messages.js | 3 |
 | `window.__pendingNoteRecipientId` | app.js, TeamNotes.js | 4 |
@@ -365,7 +365,7 @@ State travels through `window`, not props. This table is the registry.
 | `window.__refetchAdminAlerts` | app.js, AdminPanel.js | 5 |
 | `window.__requestCareCaregiver` | app.js | 4 |
 | `window.__requestCareDate` | app.js | 4 |
-| `window.__safeAreaBottom` | app.js | 10 |
+| `window.__safeAreaBottom` | app.js | 11 |
 | `window.__safeAreaTop` | app.js | 8 |
 | `window.__sandboxMode` | app.js | 2 |
 | `window.__sessionIsPersistent` | app.js | 2 |

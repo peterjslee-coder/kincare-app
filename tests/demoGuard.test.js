@@ -34,7 +34,7 @@ const fnBody = (decl) => {
 
 describe("every function that talks to Stripe refuses demo data", () => {
   for (const decl of [
-    "async function authorizeSessionPayment(sessionId) {",
+    "async function authorizeSessionPayment(sessionId, opts = {}) {", // v1.117.0 — opts.manual
     "async function captureSessionPayment(sessionId, captureAmountCents = null) {",
     "async function voidSessionPayment(sessionId) {",
   ]) {

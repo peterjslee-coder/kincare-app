@@ -3169,6 +3169,45 @@ async function initializeDatabase() {
       ],
     },
     {
+      // v1.117.0 — a declined card hold, recorded on the visit (utils/holdDecline.js): how many
+      // declines (it is also the idempotency attempt number), the last one's card and reason,
+      // and when it was last tried, so retries are spaced instead of replayed every minute.
+      id: "064_hold_retry",
+      statements: [
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS hold_attempts INTEGER NOT NULL DEFAULT 0`,
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS hold_failed_at TIMESTAMPTZ`,
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS hold_failure_code TEXT`,
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS hold_failure_card TEXT`,
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS hold_failed_pm TEXT`,
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS hold_last_attempt_at TIMESTAMPTZ`,
+      ],
+    },
+    {
+      // v1.117.0 — late-cancel fees were ledgered as caregiver $0 / InPlace 100% (fixed going
+      // forward in v1.116.3). Stripe paid the caregiver her share: the hold names her account as
+      // destination and InPlace's fee as application_fee_amount, and the hold's own ledger row
+      // (kind 'authorization', same PaymentIntent) recorded that fee. Pete approved correcting
+      // the existing rows, 10/14. Verified in Stripe for Tina's Oct 12–14 fees: $211.20 charged,
+      // $176.00 transferred to her, $35.20 application fee. Only full captures (the only kind the
+      // cancel fee makes) whose split was recorded as all-InPlace are touched.
+      id: "065_cancel_fee_split_fix",
+      statements: [
+        `UPDATE ledger_entries cf
+            SET platform_cents = a.platform_cents,
+                caregiver_cents = cf.family_cents - a.platform_cents,
+                breakdown = (COALESCE(NULLIF(cf.breakdown, ''), '{}')::jsonb || jsonb_build_object(
+                  'platformFeeCents', a.platform_cents,
+                  'caregiverCents', cf.family_cents - a.platform_cents,
+                  'corrected', 'v1.117.0 — first recorded as caregiver $0; Stripe paid her share (hold destination + application fee)'))::text
+           FROM ledger_entries a
+          WHERE cf.kind = 'cancel_fee' AND a.kind = 'authorization'
+            AND a.stripe_payment_intent = cf.stripe_payment_intent
+            AND cf.caregiver_cents = 0 AND cf.platform_cents = cf.family_cents
+            AND a.family_cents = cf.family_cents
+            AND a.platform_cents > 0 AND a.platform_cents < cf.family_cents`,
+      ],
+    },
+    {
       // v1.114.0 — care tools come with care booked through InPlace (utils/careTools.js).
       // care_tools_open_at: an admin turned this person's care tools on regardless of bookings
       // (Admin → People → Care tools). NULL = the normal rule.

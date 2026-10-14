@@ -1,6 +1,6 @@
 // InPlace Service Worker — v1.57.14
-const CACHE_NAME = 'inplace-build-366d8ee9';
-const SW_VERSION = 'build-366d8ee9';
+const CACHE_NAME = 'inplace-build-05afce51';
+const SW_VERSION = 'build-05afce51';
 const STATIC_ASSETS = [
   '/',
   '/css/styles.css',
@@ -306,6 +306,9 @@ self.addEventListener('notificationclick', (event) => {
   } else if ((type === 'cancel_fee_notice' || type === 'cancel_fee_pending' || type === 'cancel_fee_waived') && data.sessionId) {
     // v1.109.9 — cold start: open the fee sheet, not a bare dashboard (9d286a8a)
     targetUrl = `/?page=dashboard&focus=${encodeURIComponent(data.focus || ('cancelFee:' + data.sessionId))}`;
+  } else if ((type === 'hold_declined' || type === 'payment_hold') && data.sessionId) {
+    // v1.117.0 — cold start: open the declined-card sheet
+    targetUrl = `/?page=dashboard&focus=${encodeURIComponent(data.focus || ('holdDeclined:' + data.sessionId))}`;
   } else if (type === 'kindred_relay') {
     targetUrl = '/?page=messages';
   } else if (type === 'admin_setting_change') {

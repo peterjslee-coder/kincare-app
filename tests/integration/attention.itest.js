@@ -350,7 +350,8 @@ describe("the shape the badge relies on", () => {
     // there is no calendar to be empty.
     // v1.109.9 — `cancelFees` joined it. Zero: this user cancelled nothing.
     // v1.112.0 — `identity` ("Verify your ID by <date>"). Zero: this user is verified.
-    expect(r).toEqual({ total: 0, reimbursements: 0, timeChanges: 0, timeChangeSessionId: null, careTasks: 0, approvals: 0, safetyFlags: 0, financialConcerns: 0, messages: 0, emptyWeeks: 0, cancelFees: 0, identity: 0 });
+    // v1.117.0 — `holdDeclined` (a declined card hold). Zero: this user booked nothing.
+    expect(r).toEqual({ total: 0, reimbursements: 0, timeChanges: 0, timeChangeSessionId: null, careTasks: 0, approvals: 0, safetyFlags: 0, financialConcerns: 0, messages: 0, emptyWeeks: 0, cancelFees: 0, identity: 0, holdDeclined: 0 });
     expect(Number.isFinite(r.total)).toBe(true);
   });
 });

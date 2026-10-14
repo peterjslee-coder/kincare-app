@@ -66,6 +66,7 @@ const ATTENTION_PAST = {
   Accept: 'Accepted.',
   'Mark done': 'Marked done.',
   Skip: 'Skipped for today.',
+  'Try the card again': 'The card went through.',
 };
 
 const ATTENTION_KINDS = {
@@ -78,6 +79,8 @@ const ATTENTION_KINDS = {
   // "a nudge" rather than "needs you" and it is not in the number above it.
   emptyWeek:     { icon: '📅', chip: 'A NUDGE' },
   cancelFee:     { icon: '💵', chip: 'CANCELLATION FEE' },
+  // v1.117.0 — the bank declined the card hold; the visit can't start until it goes through.
+  holdDeclined:  { icon: '💳', chip: 'CARD DECLINED' },
 };
 
 // "14:30" → "2:30 PM". The server sends wall-clock times in the care recipient's zone; they
@@ -242,7 +245,9 @@ const AttentionCard = window.AttentionCard = ({ onNavigate, only }) => {
           CareTaskSync.announce(item.id);
         }
       } catch { /* a missed announcement costs a stale card until the next visit */ }
-      if (item.undoable && item.undo) {
+      // v1.117.0 — a card that went through is said out loud (no undo: a hold is not taken back
+      // from here). Otherwise the row just vanishing reads as "did anything happen?".
+      if ((item.undoable && item.undo) || item.kind === 'holdDeclined') {
         setDone((prev) => ({ ...prev, [item.id]: { item, verbPast: ATTENTION_PAST[item.verb] || 'Done.' } }));
         setTimeout(() => {
           setDone((prev) => { const next = { ...prev }; delete next[item.id]; return next; });
@@ -350,11 +355,13 @@ const AttentionCard = window.AttentionCard = ({ onNavigate, only }) => {
             <span style={{ flex: 1, fontSize: 13.5, color: 'var(--text-secondary)' }}>
               {verbPast}
             </span>
+            {done[id].item && done[id].item.undo && (
             <button onClick={() => undo(id)} style={{
               minHeight: 44, padding: '0 14px', background: 'none', border: 'none',
               color: 'var(--accent-color)', font: 'inherit', fontSize: 14, fontWeight: 700,
               cursor: 'pointer',
             }}>Undo</button>
+            )}
           </div>
         );
       })}

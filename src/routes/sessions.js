@@ -1737,16 +1737,25 @@ router.post("/:id/check-in", async (req, res) => {
       if (!(await holdOk(session.id)) && !(await acct.isDemoSession(db, session.id))) {
         let reason = null;
         try {
-          const r = await acct.authorizeSessionPayment(session.id);
+          // v1.117.0 — manual: she is at the door, so this is a real attempt, not a replay.
+          const r = await acct.authorizeSessionPayment(session.id, { manual: true });
           reason = r && r.error ? r.error : null;
         } catch (e) { reason = e.message; captureException(e, { where: "check-in: hold retry" }); }
         if (!(await holdOk(session.id))) {
           try {
-            sendPushToUser(session.family_user_id, {
-              title: 'Visit on hold — card needed',
-              body: 'Your caregiver is ready to start, but we couldn’t place the hold for this visit. Open InPlace to check your card.',
-              data: { type: 'payment_hold', page: 'home', sessionId: session.id },
-            }, 'payment_hold').catch(() => {});
+            // v1.117.0 — the PAYER too (it went to whoever booked, and Sara pays for Betty), and
+            // the tap opens the card sheet with "Try the card again", not the home page.
+            const billing = await db.prepare(
+              "SELECT billing_user_id FROM care_teams WHERE care_recipient_id = ? AND billing_user_id IS NOT NULL LIMIT 1"
+            ).get(session.care_recipient_id).catch(() => null);
+            const told = [...new Set([billing && billing.billing_user_id, session.family_user_id].filter(Boolean))];
+            for (const uid of told) {
+              sendPushToUser(uid, {
+                title: 'Visit on hold — card needed',
+                body: 'Your caregiver is ready to start, but the card for this visit hasn’t gone through. Tap to try it again or use another card.',
+                data: { type: 'hold_declined', page: 'dashboard', sessionId: session.id, focus: `holdDeclined:${session.id}` },
+              }, 'payment_hold').catch(() => {});
+            }
           } catch (e) { captureException(e, { where: "check-in: notify family of missing hold" }); }
           console.warn(`[check-in] Refused — no card hold for session ${req.params.id.slice(0, 8)} (${reason || 'unknown'})`);
           return res.status(402).json({
@@ -3734,6 +3743,117 @@ router.get("/:id/cancel-preview", async (req, res) => {
 // front of a person. "I shouldn't have to pay this" and "that was a software problem" are
 // exactly the cases Pete wanted to leave room for, and they need a human, not a button
 // that silently zeroes the caregiver's money.
+
+// ─── The card hold, when the bank said no (v1.117.0) ───
+//
+// Pete, 10/14: "the most likely course of action will be sara checks her debit card, transfers
+// money in, and then we try again. so the fix can't just be 'add another card' there needs to
+// be a 'try that card again' option." See utils/holdDecline.js for the whole story.
+//
+// Who may see and retry it: the person who pays (the team's billing contact), the person who
+// booked the visit, and the loved one's care team leader. Never the caregiver — it is the
+// family's card — and never under impersonation, because a retry moves money.
+async function holdViewer(db, sessionId, userId) {
+  const row = await db.prepare(`
+    SELECT cs.id, cs.status, cs.family_user_id, cs.care_recipient_id, cs.scheduled_date, cs.scheduled_time,
+           cs.service_type, cs.estimated_cost, cs.payment_status, cs.stripe_payment_intent_id,
+           cs.hold_attempts, cs.hold_failed_at, cs.hold_failure_code, cs.hold_failure_card,
+           cs.hold_last_attempt_at,
+           cr.first_name AS recipient_first, cr.timezone AS tz,
+           cu.first_name AS caregiver_first,
+           (SELECT ct.billing_user_id FROM care_teams ct WHERE ct.care_recipient_id = cs.care_recipient_id
+              AND ct.billing_user_id IS NOT NULL LIMIT 1) AS billing_user_id,
+           EXISTS (SELECT 1 FROM care_team_members ctm JOIN care_teams ct ON ct.id = ctm.care_team_id
+                    WHERE ct.care_recipient_id = cs.care_recipient_id AND ctm.user_id = ? AND ctm.role = 'leader') AS is_leader
+      FROM care_sessions cs
+      LEFT JOIN care_recipients cr ON cr.id = cs.care_recipient_id
+      LEFT JOIN caregiver_profiles cp ON cp.id = cs.caregiver_id
+      LEFT JOIN users cu ON cu.id = cp.user_id
+     WHERE cs.id = ?
+  `).get(userId, sessionId);
+  if (!row) return { status: 404 };
+  const payerId = row.billing_user_id || row.family_user_id;
+  const allowed = userId === payerId || userId === row.family_user_id || !!row.is_leader;
+  if (!allowed) return { status: 403 };
+  return { row, isPayer: userId === payerId };
+}
+
+function holdState(row) {
+  const { declineReason, retryCanHelp } = require("../utils/holdDecline");
+  const held = !!row.stripe_payment_intent_id && ["authorized", "paid"].includes(row.payment_status);
+  const declined = !held && !!row.hold_failed_at;
+  return {
+    status: held ? "held" : declined ? "declined" : row.payment_status === "paid" ? "paid" : "pending",
+    card: row.hold_failure_card || null,
+    reason: declined ? declineReason(row.hold_failure_code) : null,
+    canRetrySameCard: declined ? retryCanHelp(row.hold_failure_code) : false,
+    failedAt: row.hold_failed_at || null,
+    attempts: Number(row.hold_attempts) || 0,
+    scheduledDate: row.scheduled_date || null,
+    scheduledTime: row.scheduled_time || null,
+    serviceType: row.service_type || null,
+    recipientFirstName: row.recipient_first || null,
+    caregiverFirstName: row.caregiver_first || null,
+    timezone: row.tz || null,
+    visitStatus: row.status,
+  };
+}
+
+// ─── GET /api/sessions/:id/hold ───
+router.get("/:id/hold", async (req, res) => {
+  try {
+    const db = await getDb();
+    const v = await holdViewer(db, req.params.id, req.user.id);
+    if (v.status === 404) return res.status(404).json({ error: "Visit not found" });
+    if (v.status === 403) return res.status(403).json({ error: "Not your visit" });
+    res.json({ ...holdState(v.row), isPayer: v.isPayer });
+  } catch (err) {
+    captureException(err, { where: "sessions: GET hold" });
+    res.status(500).json({ error: "Couldn't load this visit's payment" });
+  }
+});
+
+// ─── POST /api/sessions/:id/retry-hold — "Try the card again" ───
+router.post("/:id/retry-hold", blockWhileImpersonating("retry a family's card"), async (req, res) => {
+  try {
+    const db = await getDb();
+    const v = await holdViewer(db, req.params.id, req.user.id);
+    if (v.status === 404) return res.status(404).json({ error: "Visit not found" });
+    if (v.status === 403) return res.status(403).json({ error: "Not your visit" });
+    const row = v.row;
+    const state = holdState(row);
+    if (state.status === "held" || state.status === "paid") {
+      // Already in the state they asked for — the Needs-you card treats 409 as done.
+      return res.status(409).json({ ok: true, ...state, message: "The hold for this visit is already in place." });
+    }
+    if (!["confirmed", "in_progress"].includes(row.status)) {
+      return res.status(400).json({ error: "This visit isn't waiting on a card any more." });
+    }
+    const acct = require("./accountability");
+    const r = await acct.authorizeSessionPayment(row.id, { manual: true });
+    if (r && r.success) {
+      const after = await holdViewer(db, row.id, req.user.id);
+      return res.json({
+        ok: true, ...holdState(after.row),
+        message: `${r.card ? r.card.charAt(0).toUpperCase() + r.card.slice(1) : "The card"} went through. ${row.caregiver_first || "Your caregiver"}'s visit is paid for and ready to go.`,
+      });
+    }
+    if (r && r.tooSoon) return res.status(429).json({ error: r.error, code: "HOLD_RETRY_TOO_SOON" });
+    if (r && r.declined) {
+      const after = await holdViewer(db, row.id, req.user.id);
+      return res.status(402).json({ error: r.error, code: "HOLD_DECLINED", ...holdState(after.row) });
+    }
+    if (r && r.error === "no_payment_method") {
+      return res.status(402).json({ error: "There's no card or bank account saved to pay for this visit. Add one, then try again.", code: "NO_PAYMENT_METHOD" });
+    }
+    if (r && r.error === "demo_session_blocked") return res.status(400).json({ error: "Demo visits don't use real cards." });
+    captureException(new Error(`retry-hold failed: ${r && r.error}`), { where: "sessions: retry-hold", sessionId: row.id });
+    return res.status(502).json({ error: "We couldn't reach the bank just now. Try again in a minute." });
+  } catch (err) {
+    captureException(err, { where: "sessions: retry-hold" });
+    res.status(500).json({ error: "We couldn't retry the card just now." });
+  }
+});
 
 // ─── GET /api/sessions/:id/cancel-fee ───
 router.get("/:id/cancel-fee", async (req, res) => {

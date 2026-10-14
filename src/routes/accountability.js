@@ -59,7 +59,7 @@ function getStripe() {
  * Creates a Stripe PaymentIntent with capture_method: 'manual' (hold, don't charge).
  * Returns { success, paymentIntentId } or { error }.
  */
-async function authorizeSessionPayment(sessionId) {
+async function authorizeSessionPayment(sessionId, opts = {}) {
   {
     const dbGuard = await getDb();
     if (await isDemoSession(dbGuard, sessionId)) {
@@ -67,6 +67,9 @@ async function authorizeSessionPayment(sessionId) {
       return { error: "demo_session_blocked" };
     }
   }
+  // v1.117.0 — outside the try, so a decline can name the card it was.
+  let pm = null;
+  const holdDecline = require("../utils/holdDecline");
   try {
     const db = await getDb();
     const stripe = getStripe();
@@ -194,8 +197,20 @@ async function authorizeSessionPayment(sessionId) {
     //
     // Same resolver auto-pay uses, so the hold and the charge can no longer disagree about
     // which card is being used.
-    const pm = await resolvePaymentMethod(stripe, payerCustomerId);
+    pm = await resolvePaymentMethod(stripe, payerCustomerId);
     if (!pm) return { error: "no_payment_method", payerUserId: session.billing_user_id || session.family_user_id };
+
+    // ─── v1.117.0 — a declined card is retried on purpose, not every minute ───
+    // See utils/holdDecline.js. The same card that was declined waits AUTO_RETRY_MS between
+    // automatic tries; a person tapping "Try the card again" goes now (once a minute); a
+    // different card always goes.
+    const blocked = holdDecline.retryBlock(session, pm.id, { manual: !!opts.manual });
+    if (blocked === "wait") return { error: "hold_retry_waiting", waiting: true };
+    if (blocked === "too_soon") {
+      return { error: "We just tried that card. Give it a minute, then try again.", tooSoon: true };
+    }
+    const holdAttempt = Number(session.hold_attempts) || 0;
+    await db.prepare("UPDATE care_sessions SET hold_last_attempt_at = NOW() WHERE id = ?").run(sessionId);
 
     // Create PaymentIntent with manual capture (authorize only, don't charge yet)
     const paymentIntent = await stripe.paymentIntents.create({
@@ -235,7 +250,12 @@ async function authorizeSessionPayment(sessionId) {
       // the cached failure. Including pm.id keeps the guarantee that matters (one hold per
       // session, amount and card) while letting a genuinely different request through, and
       // makes a stuck session heal itself on the next tick instead of needing 24 hours.
-      idempotencyKey: `inplace_authhold_${sessionId}_${totalCents}_${pm.id}`,
+      //
+      // v1.117.0 — and on the attempt number, which only a DECLINE advances (see the catch
+      // below). Stripe replays a cached decline for 24 hours, so without it no retry — not the
+      // poller's, not a person's after moving money in — could reach the bank until the next
+      // day. A timeout leaves the number alone, so an attempt that did land is replayed.
+      idempotencyKey: `inplace_authhold_${sessionId}_${totalCents}_${pm.id}_a${holdAttempt}`,
     });
 
     // Store authorization on session
@@ -244,7 +264,8 @@ async function authorizeSessionPayment(sessionId) {
         stripe_payment_intent_id = ?,
         payment_authorized_at = NOW(),
         authorized_amount = ?,
-        payment_status = 'authorized'
+        payment_status = 'authorized',
+        hold_failed_at = NULL, hold_failure_code = NULL, hold_failure_card = NULL, hold_failed_pm = NULL
       WHERE id = ?
     `).run(paymentIntent.id, totalCents, sessionId);
     // v1.111.0 — the capture at check-out must use the percent this hold was priced at.
@@ -266,10 +287,26 @@ async function authorizeSessionPayment(sessionId) {
     });
 
     console.log(`[accountability] Authorized $${(totalCents / 100).toFixed(2)} for session ${sessionId.slice(0, 8)} on ${describePaymentMethod(pm)} (PI: ${paymentIntent.id})`);
-    return { success: true, paymentIntentId: paymentIntent.id, amount: totalCents };
+    return { success: true, paymentIntentId: paymentIntent.id, amount: totalCents, card: holdDecline.cardLabel(pm) };
 
   } catch (err) {
     console.error(`[accountability] Auth failed for session ${sessionId.slice(0, 8)}:`, err.message);
+    // v1.117.0 — the bank said no. Record which card and why, and advance the attempt number so
+    // the next try is a real one. Anything else (timeout, Stripe 5xx) keeps the old key.
+    if (holdDecline.isDecline(err)) {
+      const code = holdDecline.declineCode(err);
+      const card = holdDecline.cardLabel(pm);
+      try {
+        const db = await getDb();
+        await db.prepare(`
+          UPDATE care_sessions SET
+            hold_attempts = COALESCE(hold_attempts, 0) + 1,
+            hold_failed_at = NOW(), hold_failure_code = ?, hold_failure_card = ?, hold_failed_pm = ?
+          WHERE id = ?
+        `).run(code, card, pm ? pm.id : null, sessionId);
+      } catch (e) { captureException(e, { where: "accountability: record hold decline", sessionId }); }
+      return { error: holdDecline.declineSentence({ card, code }), declined: true, code, card };
+    }
     return { error: err.message };
   }
 }
@@ -1070,6 +1107,7 @@ async function pollPaymentAuthorizations() {
         cr.timezone AS care_timezone,
         cr.first_name AS recipient_first_name,
         u2.first_name || ' ' || u2.last_name AS caregiver_name,
+        u2.first_name AS caregiver_first,
         ct.billing_user_id,
         COALESCE(bill.first_name, u.first_name) AS payer_first_name
       FROM care_sessions cs
@@ -1105,8 +1143,23 @@ async function pollPaymentAuthorizations() {
         if (hoursUntil > 0 && hoursUntil <= 25) {
           console.log(`[accountability] Authorizing payment for session ${s.id.slice(0, 8)} (${hoursUntil.toFixed(1)}h away)`);
           const result = await authorizeSessionPayment(s.id);
-          if (result.error) {
+          // v1.117.0 — a declined card waiting for its next retry is not news; say nothing.
+          if (result.error && !result.waiting) {
             console.warn(`[accountability] Auth skipped for ${s.id.slice(0, 8)}: ${result.error}`);
+
+            // v1.117.0 — the bank declined the card. Tell the payer (and whoever booked it),
+            // once per visit, with "Try the card again" one tap away. See utils/holdDecline.js.
+            if (result.declined && !(s.notifications_sent || "").includes("hold_declined_told")) {
+              try {
+                await require("../utils/holdDecline").notifyHoldDeclined(db, {
+                  id: s.id, billing_user_id: s.billing_user_id, family_user_id: s.family_user_id,
+                  caregiver_first: s.caregiver_first, recipient_first_name: s.recipient_first_name,
+                }, { card: result.card, code: result.code, hoursUntil });
+                await db.prepare(
+                  "UPDATE care_sessions SET notifications_sent = COALESCE(notifications_sent, '') || ',hold_declined_told' WHERE id = ?"
+                ).run(s.id);
+              } catch (e) { captureException(e, { where: "accountability: notify hold declined", sessionId: s.id }); }
+            }
             // v1.105.124 — a skipped authorization used to end here, at a console.warn
             // nobody reads. On Aug 22 this ran ~24h ahead of Julia's visit, skipped
             // silently, and the first signal anyone got was the capture failing AFTER
@@ -1164,9 +1217,12 @@ async function pollPaymentAuthorizations() {
                 } else {
                   // A real failure. Say what we know without pasting a stack trace at a human;
                   // the full reason is in Sentry, tagged with the session.
+                  // v1.117.0 — a decline says which card and why, and that the payer was told.
                   notifyAdmins("payment_authorization_failed", {
                     title: "A shift is not funded",
-                    body: `${who} works ${when}${forWhom} and the card couldn't be pre-authorized. Check Sentry for session ${s.id.slice(0, 8)}.`,
+                    body: result.declined
+                      ? `${who} works ${when}${forWhom}. ${result.error} ${s.payer_first_name || "The payer"} has been told and can retry from the app; InPlace also retries every few hours.`
+                      : `${who} works ${when}${forWhom} and the card couldn't be pre-authorized. Check Sentry for session ${s.id.slice(0, 8)}.`,
                     data: { type: "payment_authorization_failed", sessionId: s.id, reason: result.error, page: "sessions" },
                   });
                 }
@@ -1644,7 +1700,8 @@ module.exports.captureSessionPayment = captureSessionPayment;
 module.exports.captureSessionPay = captureSessionPay; // v1.107.0
 module.exports.chargeTip = chargeTip; // v1.108.1
 module.exports.voidSessionPayment = voidSessionPayment;
-module.exports.isDemoSession = isDemoSession; // v1.114.2 — the check-in hold gate
+module.exports.isDemoSession = isDemoSession;
+module.exports.getStripe = getStripe; // v1.117.0 — admin ledger backfill reads Stripe // v1.114.2 — the check-in hold gate
 module.exports.pollPaymentAuthorizations = pollPaymentAuthorizations;
 
 // ─── v1.105.19 — settle cancellation fees whose window has closed ───

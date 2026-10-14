@@ -69,7 +69,7 @@ test("no hold and the family's card can't be held: refused, and the family is to
   const res = await checkIn(v);
   expect(res.status).toBe(402);
   expect(res.body.code).toBe("HOLD_REQUIRED");
-  expect(pushes.some((p) => p.userId === v.fam.user.id && p.type === "payment_hold")).toBe(true);
+  expect(pushes.some((p) => p.userId === v.fam.user.id && p.type === "hold_declined")).toBe(true); // v1.117.0 — opens the card sheet
   const s = await db.prepare("SELECT status FROM care_sessions WHERE id = ?").get(v.sid);
   expect(s.status).toBe("confirmed");
 });
