@@ -108,6 +108,15 @@ router.post("/outreach-inbound", async (req, res) => {
     const what = O.classifyInbound(body);
     const who = [contact.first_name, contact.last_name].filter(Boolean).join(" ") || O.prettyPhone(contact.phone);
 
+    // v1.122.0 — a text FROM them (anything but STOP) is their OK to text back. Recorded with
+    // their own words as the evidence. It never overwrites an earlier OK.
+    if (what.kind !== "opt_out") {
+      await db.prepare(`
+        UPDATE outreach_contacts SET texts_ok_at = NOW(), texts_ok_source = 'texted_in', texts_ok_evidence = ?
+         WHERE id = ? AND texts_ok_at IS NULL
+      `).run(`They texted first: “${body.slice(0, 300)}”`, contact.id);
+    }
+
     if (what.kind === "opt_out") {
       // Twilio sends the carrier-standard confirmation itself. We never text her again.
       await db.prepare(`
@@ -348,7 +357,11 @@ router.post("/outreach-dial", async (req, res) => {
       VALUES (?, ?, 'out', 'Call', ?, 'calling', 'call', ?, NOW())
     `).run(uuid(), contact.id, req.body.CallSid || null, admin.id);
     await db.prepare("UPDATE outreach_contacts SET last_message_at = NOW(), updated_at = NOW() WHERE id = ?").run(contact.id);
-    voiceXml(res, `<Dial callerId="${from}" answerOnBridge="true" timeout="30" action="${APP_URL}/api/sms/outreach-dial-done"><Number>${xmlEscape(O.dialableUsNumber(contact.phone))}</Number></Dial>`);
+    // v1.122.0 — recorded (both sides, from answer), and the person called hears that it is
+    // before anyone speaks (the <Number url> whisper plays to them only).
+    voiceXml(res, `<Dial callerId="${from}" answerOnBridge="true" timeout="30" action="${APP_URL}/api/sms/outreach-dial-done"`
+      + ` record="record-from-answer-dual" recordingStatusCallback="${APP_URL}/api/sms/outreach-call-recording" recordingStatusCallbackEvent="completed">`
+      + `<Number url="${APP_URL}/api/sms/outreach-whisper">${xmlEscape(O.dialableUsNumber(contact.phone))}</Number></Dial>`);
   } catch (err) {
     captureException(err, { where: "outreach: dial" });
     voiceXml(res, sayXml("Sorry, something went wrong.") + "<Hangup/>");
@@ -374,7 +387,82 @@ router.post("/outreach-dial-done", async (req, res) => {
   voiceXml(res, "<Hangup/>");
 });
 
+// ═══════════════════════════════════════════════════════════
+// v1.122.0 — recorded outreach calls (utils/outreachCallNotes.js for the why).
+// ═══════════════════════════════════════════════════════════
+const CN = require("../utils/outreachCallNotes");
+
+// Played to the person called, when they answer, before the call connects.
+router.post("/outreach-whisper", (req, res) => {
+  if (!verifyTwilio(req)) return res.status(403).send("Forbidden");
+  voiceXml(res, sayXml(CN.CALL_ANNOUNCEMENT));
+});
+
+router.post("/outreach-call-recording", async (req, res) => {
+  if (!verifyTwilio(req)) return res.status(403).send("Forbidden");
+  res.status(204).end();
+  try {
+    const { CallSid, RecordingUrl, RecordingDuration, RecordingStatus } = req.body;
+    if (!CallSid || !RecordingUrl || RecordingStatus === "failed") return;
+    const db = await getDb();
+    const m = await db.prepare("SELECT id FROM outreach_messages WHERE twilio_sid = ? AND kind = 'call'").get(CallSid);
+    if (!m) return;
+    await db.prepare("UPDATE outreach_messages SET media_url = ?, duration = GREATEST(COALESCE(duration, 0), ?) WHERE id = ?")
+      .run(String(RecordingUrl).slice(0, 500), Math.max(0, parseInt(RecordingDuration, 10) || 0), m.id);
+    await processCallRecording(db, m.id);
+  } catch (err) {
+    captureException(err, { where: "outreach: call recording" });
+  }
+});
+
+/** Recording → transcript → iPAi notes → contact notes, status and (only with a quoted yes) texts OK. */
+async function processCallRecording(db, messageId) {
+  const m = await db.prepare(`
+    SELECT m.*, c.first_name, c.last_name, c.phone, c.status AS contact_status, c.notes AS contact_notes,
+           c.email AS contact_email, c.texts_ok_at
+      FROM outreach_messages m JOIN outreach_contacts c ON c.id = m.contact_id WHERE m.id = ?
+  `).get(messageId);
+  if (!m || !m.media_url || !/^https:\/\/api\.twilio\.com\//.test(m.media_url)) return null;
+  const auth = Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString("base64");
+  const r = await fetch(`${m.media_url}.mp3`, { headers: { Authorization: `Basic ${auth}` }, signal: AbortSignal.timeout(30000) });
+  if (!r.ok) throw new Error(`recording fetch ${r.status}`);
+  const { transcribeAudio } = require("../utils/transcription");
+  let transcript;
+  try {
+    transcript = (await transcribeAudio(Buffer.from(await r.arrayBuffer()), "audio/mpeg", "call.mp3")).text;
+  } catch (e) {
+    await db.prepare("UPDATE outreach_messages SET ai_notes = ? WHERE id = ?").run(JSON.stringify({ error: `Couldn't transcribe: ${e.message}` }), messageId);
+    return null;
+  }
+  await db.prepare("UPDATE outreach_messages SET transcript = ? WHERE id = ?").run(transcript.slice(0, 60000), messageId);
+  const notes = await CN.analyzeCall(transcript, { first: m.first_name || "the caregiver" });
+  if (!notes) return { transcript };
+  await db.prepare("UPDATE outreach_messages SET ai_notes = ? WHERE id = ?").run(JSON.stringify(notes), messageId);
+
+  const when = new Date().toLocaleDateString("en-US", { month: "numeric", day: "numeric", timeZone: "America/New_York" });
+  const bits = [notes.summary, notes.availability && `Availability: ${notes.availability}`, notes.area && `Area: ${notes.area}`,
+    notes.experience && `Experience: ${notes.experience}`, notes.nextStep && `Next: ${notes.nextStep}`].filter(Boolean);
+  const line = `📞 ${when} (iPAi): ${bits.join(" · ")}`;
+  const newNotes = [m.contact_notes, line].filter(Boolean).join("\n").slice(-2000);
+  await db.prepare(`
+    UPDATE outreach_contacts SET notes = ?, status = ?, email = COALESCE(email, ?), unread = unread + 1, updated_at = NOW() WHERE id = ?
+  `).run(newNotes, CN.statusFor(notes.outcome, m.contact_status), notes.email, m.contact_id);
+  if (notes.textsOk && !m.texts_ok_at) {
+    await db.prepare(`
+      UPDATE outreach_contacts SET texts_ok_at = NOW(), texts_ok_source = 'call', texts_ok_evidence = ?, texts_ok_message_id = ?
+       WHERE id = ? AND texts_ok_at IS NULL AND opted_out_at IS NULL
+    `).run(`Said yes on a recorded call: “${notes.consentQuote}”`, messageId, m.contact_id);
+  }
+  const who = [m.first_name, m.last_name].filter(Boolean).join(" ") || O.prettyPhone(m.phone);
+  push.sendPushToAdmins("outreach_reply", {
+    title: "Call notes ready",
+    body: `${who}: ${notes.textsOk ? "OK'd texts. " : ""}${notes.outcome.replace(/_/g, " ")}.`,
+    data: { type: "outreach_reply", url: "/?adminTab=outreach" },
+  });
+  return { transcript, notes };
+}
 
 module.exports = router;
+module.exports.processCallRecording = processCallRecording;
 module.exports.verifyTwilio = verifyTwilio;
 module.exports.VOICEMAIL_GREETING = VOICEMAIL_GREETING;

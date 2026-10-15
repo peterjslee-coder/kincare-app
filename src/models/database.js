@@ -3331,6 +3331,23 @@ async function initializeDatabase() {
         `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS sms_confirm_sent_at TIMESTAMPTZ`,
       ],
     },
+    {
+      // v1.122.0 — outreach texts need a recorded OK (a call with a yes, or they texted in).
+      id: "072_outreach_texts_ok",
+      statements: [
+        `ALTER TABLE outreach_contacts ADD COLUMN IF NOT EXISTS texts_ok_at TIMESTAMPTZ`,
+        `ALTER TABLE outreach_contacts ADD COLUMN IF NOT EXISTS texts_ok_source TEXT`,
+        `ALTER TABLE outreach_contacts ADD COLUMN IF NOT EXISTS texts_ok_by TEXT`,
+        `ALTER TABLE outreach_contacts ADD COLUMN IF NOT EXISTS texts_ok_evidence TEXT`,
+        `ALTER TABLE outreach_contacts ADD COLUMN IF NOT EXISTS texts_ok_message_id TEXT`,
+        `ALTER TABLE outreach_messages ADD COLUMN IF NOT EXISTS transcript TEXT`,
+        `ALTER TABLE outreach_messages ADD COLUMN IF NOT EXISTS ai_notes TEXT`,
+        // Anyone who already texted the outreach number opted in by doing so.
+        `UPDATE outreach_contacts c SET texts_ok_at = COALESCE(c.last_inbound_at, NOW()), texts_ok_source = 'texted_in',
+                texts_ok_evidence = 'They texted the outreach number first.'
+          WHERE c.texts_ok_at IS NULL AND EXISTS (SELECT 1 FROM outreach_messages m WHERE m.contact_id = c.id AND m.direction = 'in' AND COALESCE(m.kind, 'sms') = 'sms')`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

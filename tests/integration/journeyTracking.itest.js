@@ -55,6 +55,8 @@ test("an intro with {link} gives each person her own link, and the same one ever
   await h.request.post("/api/admin/outreach/import").set(A()).send({ text: "Doe, Jane .... 540-555-0141", source: "test" });
   const c = (await h.request.get("/api/admin/outreach").set(A())).body.contacts.find((x) => x.phone.endsWith("5550141"));
   contactId = c.id;
+  // v1.122.0 — texts need an OK first (as if she said yes on a recorded call).
+  await h.db.prepare("UPDATE outreach_contacts SET texts_ok_at = NOW(), texts_ok_source = 'call' WHERE id = ?").run(c.id);
   const r = await h.request.post("/api/admin/outreach/send-intro").set(A())
     .send({ ids: [c.id], template: "Hi {first}, see {link} . Reply STOP to opt out." });
   expect(r.status).toBe(200);

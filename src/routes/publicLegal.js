@@ -202,7 +202,8 @@ const SMS_TERMS = `
 <p><strong>How you opt in:</strong> texts are off unless you turn them on. Caregivers and family members turn on text alerts in Account &rarr; Notifications. For the person receiving care, a member of their care team enters that person's mobile number on the Care Team &rarr; Notifications screen and checks the box agreeing to text reminders; InPlace then sends one text to that number asking the person to reply <strong>YES</strong>, and no reminders are sent unless they do. You can turn texts off in the app at any time; app notifications carry the same alerts. <a href="/sms/opt-in">See the opt-in screens.</a></p>
 <p><strong>How often:</strong> varies with the visits on your schedule — typically one to four messages per visit.</p>
 <h2>2. Caregiver opportunities — from (540) 835-5987</h2>
-<p>One-to-one conversations with independent caregivers about paid caregiving work through InPlace, including follow-up to caregivers who have asked a local agency about private-pay work. You can also start a conversation yourself by texting <strong>JOIN</strong> to (540) 835-5987.</p>
+<p>One-to-one conversations with independent caregivers about paid caregiving work through InPlace.</p>
+<p><strong>How you opt in:</strong> either you text <strong>JOIN</strong> (or anything else) to (540) 835-5987, or, on a phone call with InPlace, you say yes when we ask: &ldquo;Is it OK if InPlace Care texts you at this number about caregiving work? Message and data rates may apply, and you can reply STOP any time to stop.&rdquo; We don't text anyone who hasn't done one of those. Calls from InPlace are recorded, and you're told so when you answer. <a href="/sms/opt-in">See how.</a></p>
 <p><strong>How often:</strong> a few messages per conversation. If you don't reply, we don't keep texting.</p>
 <h2>For both</h2>
 <p>Message and data rates may apply.</p>
@@ -221,6 +222,7 @@ const SMS_TERMS = `
 // real screenshots from production (sample name and number) — with the exact consent wording,
 // which is what utils/smsConsent.js sends and stores. Change one, change the other.
 const SC = require("../utils/smsConsent");
+const CN = require("../utils/outreachCallNotes"); // v1.122.0 — the call script is published from the code
 const SMS_OPTIN = `
 <p>InPlace Care sends text messages only to people who opt in. Two of the ways to opt in are inside the InPlace app, behind a sign-in, so this page shows those screens. Texts are always off by default. Full terms: <a href="/sms">yourinplace.com/sms</a>.</p>
 
@@ -239,8 +241,16 @@ const SMS_OPTIN = `
 <blockquote>${escapeHtml(SC.RECIPIENT_CONFIRMED_TEXT)}</blockquote>
 <p>If the number changes, both steps start again. STOP from that number turns reminders off in the app as well as with the carrier.</p>
 
-<h2>3. Caregivers looking for work: text JOIN to (540) 835-5987</h2>
-<p>Caregivers start the conversation by texting <strong>JOIN</strong> to (540) 835-5987. The number and keyword are published at <a href="/work">yourinplace.com/work</a> with the disclosure &ldquo;By texting JOIN you agree to receive texts from InPlace Care about caregiving work. Msg &amp; data rates may apply. Msg frequency varies. Reply STOP to opt out, HELP for help.&rdquo; InPlace replies:</p>
+<h2>3. Caregivers looking for work: (540) 835-5987</h2>
+<p>Nobody is texted from this number until they have opted in in one of two ways. The app enforces this: texting a person is blocked until one of them is on record.</p>
+<h3>3a. They say yes on a recorded phone call</h3>
+<p>InPlace calls caregivers who have publicly listed themselves as seeking private-pay work (for example, with the New River Valley Agency on Aging). Calls are placed from the InPlace app, from (540) 835-5987. When the person answers, they first hear: <em>&ldquo;${escapeHtml(CN.CALL_ANNOUNCEMENT)}&rdquo;</em> The caller follows this script:</p>
+<ol>${CN.CALL_SCRIPT.map((l) => `<li>${l.consent ? "<strong>" : ""}${escapeHtml(String(l.say || l.note).replace(/\{first\}/g, "[name]"))}${l.consent ? "</strong>" : ""}</li>`).join("")}</ol>
+<p>Texts become possible for that person only if they answer the bold question with a clear yes. The recording is transcribed; the yes is recorded with the person's own words, the time, and the recording it came from. If they say no, they are not texted.</p>
+<p>The first text after a yes:</p>
+<blockquote>${escapeHtml(require("../utils/outreach").DEFAULT_INTRO.replace("{first}", "Jane").replace("{link}", "yourinplace.com/i/AbC123"))}</blockquote>
+<h3>3b. They text JOIN</h3>
+<p>Caregivers can also start the conversation by texting <strong>JOIN</strong> to (540) 835-5987. The number and keyword are published at <a href="/work">yourinplace.com/work</a> with the disclosure &ldquo;By texting JOIN you agree to receive texts from InPlace Care about caregiving work. Msg &amp; data rates may apply. Msg frequency varies. Reply STOP to opt out, HELP for help.&rdquo; InPlace replies:</p>
 <blockquote>${escapeHtml(require("../utils/outreach").JOIN_REPLY)}</blockquote>
 
 <h2>Every program</h2>

@@ -19,6 +19,7 @@ const { captureException } = require("../utils/sentry");
 const { sendSms, outreachNumber } = require("../utils/sms");
 const { sendEmail, brandedHtml } = require("../utils/email");
 const O = require("../utils/outreach");
+const CN = require("../utils/outreachCallNotes"); // v1.122.0
 const T = require("../utils/tracking");
 
 const APP_URL = (process.env.APP_URL || "https://yourinplace.com").replace(/\/+$/, "");
@@ -51,8 +52,11 @@ function statusCallbackUrl() {
 async function sendToContact(db, contact, body, { sentBy = null, automated = false, intro = false } = {}) {
   // STOP is final from our side. Checked here, at the one place a text leaves, so no path —
   // batch, reply, or an automated thank-you — can talk past it.
-  const fresh = await db.prepare("SELECT opted_out_at, status FROM outreach_contacts WHERE id = ?").get(contact.id);
+  const fresh = await db.prepare("SELECT opted_out_at, status, texts_ok_at FROM outreach_contacts WHERE id = ?").get(contact.id);
   if (!fresh || fresh.opted_out_at || fresh.status === "opted_out") return { ok: false, error: "Opted out" };
+  // v1.122.0 — and nobody is texted without a recorded OK: a yes on a recorded call, or a text
+  // from them first. A public listing of people seeking work is not consent (carriers, 10/15).
+  if (!fresh.texts_ok_at) return { ok: false, error: "No OK to text yet — call first, or wait for them to text in." };
   const from = outreachNumber();
   const id = uuid();
   await db.prepare(`
@@ -171,6 +175,7 @@ adminRouter.get("/", async (req, res) => {
       contacts,
       statuses: O.OUTREACH_STATUSES,
       defaultIntro: O.DEFAULT_INTRO,
+      callScript: CN.CALL_SCRIPT, // v1.122.0
       number: outreachNumber(),
       introWindow: win,
       sending: introRun,
@@ -222,10 +227,10 @@ adminRouter.post("/send-intro", async (req, res) => {
     const targets = [];
     for (const id of ids) {
       const c = await loadContact(db, id);
-      // Only people never texted, never opted out, not already on InPlace.
-      if (c && c.status === "new" && !c.opted_out_at && !c.intro_sent_at && !c.joined_user_id) targets.push(c);
+      // Only people with an OK to text, never sent this follow-up, never opted out, not already on InPlace.
+      if (c && c.texts_ok_at && !c.opted_out_at && c.status !== "opted_out" && !c.intro_sent_at && !c.joined_user_id) targets.push(c);
     }
-    if (!targets.length) return res.status(400).json({ error: "None of those people can get an intro (already texted, opted out, or already on InPlace)." });
+    if (!targets.length) return res.status(400).json({ error: "None of those people can get it — texts need an OK first (a yes on a recorded call, or they texted you). Already-sent, opted-out and already-joined people are skipped too." });
 
     introRun = { total: targets.length, sent: 0, failed: 0, startedAt: new Date().toISOString() };
     res.json({ queued: targets.length, skipped: ids.length - targets.length });
@@ -283,6 +288,8 @@ adminRouter.post("/:id/messages", async (req, res) => {
     const contact = await loadContact(db, req.params.id);
     if (!contact) return res.status(404).json({ error: "Not found" });
     if (contact.opted_out_at || contact.status === "opted_out") return res.status(400).json({ error: "This person replied STOP. InPlace can't text them again unless they text START." });
+    // v1.122.0 — no OK, no text. Said here plainly rather than as a failed send.
+    if (!contact.texts_ok_at) return res.status(400).json({ error: "No OK to text yet. Call them from here and ask; if they say yes, iPAi marks it from the recording. Or wait for them to text you." });
     // A first text to someone who has never written back is a cold text: same hours as the intro.
     if (!contact.last_inbound_at) {
       const win = O.introWindow();
@@ -325,7 +332,7 @@ adminRouter.get("/voice-token", async (req, res) => {
 adminRouter.get("/recording/:messageId", async (req, res) => {
   try {
     const db = await getDb();
-    const m = await db.prepare("SELECT media_url FROM outreach_messages WHERE id = ? AND kind = 'voicemail'").get(req.params.messageId);
+    const m = await db.prepare("SELECT media_url FROM outreach_messages WHERE id = ? AND kind IN ('voicemail', 'call')").get(req.params.messageId);
     if (!m || !m.media_url || !/^https:\/\/api\.twilio\.com\//.test(m.media_url)) return res.status(404).json({ error: "No recording" });
     const auth = Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString("base64");
     const ctrl = new AbortController();
@@ -374,6 +381,22 @@ adminRouter.patch("/:id", async (req, res) => {
       email: b.email !== undefined ? String(b.email).trim().toLowerCase().slice(0, 200) || null : contact.email,
       status: contact.status,
     };
+    // v1.122.0 — Pete can record an OK himself, but only after a real call in the last 7 days
+    // (the recording is the evidence); and he can withdraw one any time.
+    if (b.textsOk === false) {
+      await db.prepare("UPDATE outreach_contacts SET texts_ok_at = NULL, texts_ok_source = NULL, texts_ok_by = NULL, texts_ok_evidence = NULL, texts_ok_message_id = NULL WHERE id = ?").run(contact.id);
+    } else if (b.textsOk === true && !contact.texts_ok_at) {
+      const call = await db.prepare(`
+        SELECT id, created_at, duration FROM outreach_messages
+         WHERE contact_id = ? AND kind = 'call' AND COALESCE(duration, 0) > 0 AND created_at > NOW() - INTERVAL '7 days'
+         ORDER BY created_at DESC LIMIT 1
+      `).get(contact.id);
+      if (!call) return res.status(400).json({ error: "Record an OK only after you've talked on a call from here — that call is the evidence." });
+      await db.prepare(`
+        UPDATE outreach_contacts SET texts_ok_at = NOW(), texts_ok_source = 'call_marked', texts_ok_by = ?,
+               texts_ok_evidence = ?, texts_ok_message_id = ? WHERE id = ?
+      `).run(req.user.id, `Marked by an admin after a recorded call (${call.duration}s).`, call.id, contact.id);
+    }
     if (b.status !== undefined) {
       if (!O.OUTREACH_STATUSES.includes(b.status)) return res.status(400).json({ error: "Unknown status" });
       // Opt-out belongs to her. Admin can record one (she said "don't text me" on a call), but

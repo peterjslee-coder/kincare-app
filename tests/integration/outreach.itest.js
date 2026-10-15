@@ -96,8 +96,21 @@ test("an intro without an opt-out line is refused", async () => {
   expect(sent).toHaveLength(0);
 });
 
+test("v1.122.0 — nobody on an imported list can be texted before they OK it", async () => {
+  const ids = (await list()).contacts.map((c) => c.id);
+  const r = await h.request.post("/api/admin/outreach/send-intro").set(A()).send({ ids, template: O.DEFAULT_INTRO });
+  expect(r.status).toBe(400);
+  const one = await h.request.post(`/api/admin/outreach/${ids[0]}/messages`).set(A()).send({ body: "Hi! Reply STOP to opt out." });
+  expect(one.status).toBe(400);
+  expect(sent).toHaveLength(0);
+  // Recording an OK by hand needs a real call first.
+  expect((await h.request.patch(`/api/admin/outreach/${ids[0]}`).set(A()).send({ textsOk: true })).status).toBe(400);
+});
+
 test("the intro goes out from the outreach number, personalised, once", async () => {
   const ids = (await list()).contacts.map((c) => c.id);
+  // As if each had said yes on a recorded call (that path is tested below).
+  await db.prepare("UPDATE outreach_contacts SET texts_ok_at = NOW(), texts_ok_source = 'call'").run();
   const r = await h.request.post("/api/admin/outreach/send-intro").set(A()).send({ ids, template: O.DEFAULT_INTRO });
   expect(r.status).toBe(200);
   expect(r.body.queued).toBe(3);
@@ -241,7 +254,10 @@ test("only an admin's browser can dial, only a contact's number, from the outrea
   const c = await byPhone("+15405550102");
   const ok = await signedPost("/api/sms/outreach-dial", { From: `client:admin-${admin.user.id}`, contactId: c.id, CallSid: "CAout1" });
   expect(ok.text).toContain('<Dial callerId="+15405550100"');
-  expect(ok.text).toContain("<Number>+15405550102</Number>");
+  expect(ok.text).toMatch(/<Number url="[^"]*\/api\/sms\/outreach-whisper">\+15405550102<\/Number>/);
+  // v1.122.0 — recorded, both sides.
+  expect(ok.text).toContain('record="record-from-answer-dual"');
+  expect(ok.text).toContain("/api/sms/outreach-call-recording");
   const notAdmin = await signedPost("/api/sms/outreach-dial", { From: `client:admin-${stranger.user.id}`, contactId: c.id, CallSid: "CAout2" });
   expect(notAdmin.text).not.toContain("<Dial");
   await signedPost("/api/sms/outreach-dial-done", { CallSid: "CAout1", DialCallStatus: "completed", DialCallDuration: "95" });
@@ -259,4 +275,78 @@ test("911 can never be dialed, even if it ends up in a row", async () => {
 test("voice token needs the TwiML app configured", async () => {
   const r = await h.request.get("/api/admin/outreach/voice-token").set(A());
   expect([200, 400]).toContain(r.status);
+});
+
+// ─── v1.122.0 — recorded call → transcript → iPAi notes → OK to text only with a quoted yes ───
+describe("recorded outreach calls", () => {
+  const T = require("../../src/utils/transcription");
+  const AI = require("../../src/utils/aiModels");
+  const hooks = require("../../src/routes/smsWebhooks");
+  let transcript, aiReply, realFetch;
+  beforeAll(() => {
+    realFetch = global.fetch;
+    global.fetch = async (url, opts) => /^https:\/\/api\.twilio\.com\//.test(String(url))
+      ? { ok: true, arrayBuffer: async () => new ArrayBuffer(8) }
+      : realFetch(url, opts);
+    jest.spyOn(T, "transcribeAudio").mockImplementation(async () => ({ text: transcript }));
+    jest.spyOn(AI, "getAnthropic").mockImplementation(() => ({ messages: { create: async () => ({ content: [{ text: JSON.stringify(aiReply) }] }) } }));
+  });
+  afterAll(() => { global.fetch = realFetch; });
+
+  const callFor = async (phone, sid) => {
+    const c = await byPhone(phone);
+    await signedPost("/api/sms/outreach-dial", { From: `client:admin-${admin.user.id}`, contactId: c.id, CallSid: sid });
+    await signedPost("/api/sms/outreach-dial-done", { CallSid: sid, DialCallStatus: "completed", DialCallDuration: "120" });
+    return c;
+  };
+
+  test("the person called hears that it's recorded", async () => {
+    const r = await signedPost("/api/sms/outreach-whisper", { CallSid: "CAw" });
+    expect(r.text).toContain("This call from InPlace Care is recorded.");
+    expect((await h.request.post("/api/sms/outreach-whisper").type("form").send({})).status).toBe(403);
+  });
+
+  test("a yes in the transcript, quoted, marks texts OK with the evidence; notes and status are filled", async () => {
+    await db.prepare("INSERT INTO outreach_contacts (id, phone, first_name, status) VALUES ('cRec1', '+15405550161', 'Dana', 'new')").run();
+    const c = await callFor("+15405550161", "CArec1");
+    transcript = "Pete: Is it OK if InPlace Care texts you at this number about caregiving work? Dana: Yes, that's fine, text me. I'm free weekdays.";
+    aiReply = { summary: "Dana wants weekday work.", outcome: "interested", texts_ok: true, consent_quote: "Yes, that's fine, text me", email: "Dana@Example.com", availability: "weekdays", area: null, experience: null, next_step: "Send link" };
+    const m = await db.prepare("SELECT id FROM outreach_messages WHERE twilio_sid = 'CArec1'").get();
+    await db.prepare("UPDATE outreach_messages SET media_url = 'https://api.twilio.com/2010-04-01/Accounts/AC1/Recordings/RErec1' WHERE id = ?").run(m.id);
+    await hooks.processCallRecording(db, m.id);
+    const after = await db.prepare("SELECT * FROM outreach_contacts WHERE id = ?").get(c.id);
+    expect(after.texts_ok_source).toBe("call");
+    expect(after.texts_ok_evidence).toContain("Yes, that's fine, text me");
+    expect(after.texts_ok_message_id).toBe(m.id);
+    expect(after.status).toBe("interested");
+    expect(after.email).toBe("dana@example.com");
+    expect(after.notes).toMatch(/📞 .*iPAi.*Dana wants weekday work.*Availability: weekdays/);
+    const msg = await db.prepare("SELECT transcript, ai_notes FROM outreach_messages WHERE id = ?").get(m.id);
+    expect(msg.transcript).toBe(transcript);
+    expect(JSON.parse(msg.ai_notes).textsOk).toBe(true);
+  });
+
+  test("the AI saying yes without a quote that's really in the transcript changes nothing", async () => {
+    await db.prepare("INSERT INTO outreach_contacts (id, phone, first_name, status) VALUES ('cRec2', '+15405550162', 'Lee', 'new')").run();
+    await callFor("+15405550162", "CArec2");
+    transcript = "Pete: Can I tell you about InPlace? Lee: Maybe later, I'm driving.";
+    aiReply = { summary: "Call back later.", outcome: "call_back", texts_ok: true, consent_quote: "Sure, text me", email: null };
+    const m = await db.prepare("SELECT id FROM outreach_messages WHERE twilio_sid = 'CArec2'").get();
+    await db.prepare("UPDATE outreach_messages SET media_url = 'https://api.twilio.com/2010-04-01/Accounts/AC1/Recordings/RErec2' WHERE id = ?").run(m.id);
+    await hooks.processCallRecording(db, m.id);
+    const after = await db.prepare("SELECT texts_ok_at, status FROM outreach_contacts WHERE id = 'cRec2'").get();
+    expect(after.texts_ok_at).toBeNull();
+    expect(after.status).toBe("new");
+    // After a real call, Pete can still record the OK by hand — and withdraw it.
+    expect((await h.request.patch("/api/admin/outreach/cRec2").set(A()).send({ textsOk: true })).status).toBe(200);
+    expect((await db.prepare("SELECT texts_ok_source FROM outreach_contacts WHERE id = 'cRec2'").get()).texts_ok_source).toBe("call_marked");
+    await h.request.patch("/api/admin/outreach/cRec2").set(A()).send({ textsOk: false });
+    expect((await db.prepare("SELECT texts_ok_at FROM outreach_contacts WHERE id = 'cRec2'").get()).texts_ok_at).toBeNull();
+  });
+
+  test("the call recording plays from the thread", async () => {
+    const m = await db.prepare("SELECT id FROM outreach_messages WHERE twilio_sid = 'CArec1'").get();
+    const r = await h.request.get(`/api/admin/outreach/recording/${m.id}`).set(A());
+    expect(r.status).toBe(200);
+  });
 });

@@ -27,7 +27,8 @@ const OUT_TONE = {
   success: { background: 'var(--color-success-bg)', color: 'var(--color-success)' },
   error: { background: 'var(--color-error-bg)', color: 'var(--color-error)' },
 };
-const OUT_TEMPLATE_KEY = 'inplace.outreach.introTemplate';
+// v1.122.0 — new key: the saved cold-intro wording must not come back as the post-call follow-up.
+const OUT_TEMPLATE_KEY = 'inplace.outreach.followupTemplate';
 
 const outErr = async (res, fallback) => {
   const d = res ? await res.json().catch(() => ({})) : {};
@@ -163,7 +164,7 @@ const outLoadVoiceSdk = () => {
 };
 const outClock = (secs) => `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
 
-const OutVoicemailPlayer = ({ messageId, apiFetch, showToast }) => {
+const OutVoicemailPlayer = ({ messageId, apiFetch, showToast, label = '▶ Play voicemail' }) => {
   const [src, setSrc] = React.useState(null);
   const [loading, setLoading] = React.useState(false);
   React.useEffect(() => () => { if (src) URL.revokeObjectURL(src); }, [src]);
@@ -181,8 +182,37 @@ const OutVoicemailPlayer = ({ messageId, apiFetch, showToast }) => {
   if (src) return <audio controls autoPlay src={src} style={{ width: '100%', marginTop: 6, height: 36 }} />;
   return (
     <button onClick={load} disabled={loading} style={{ marginTop: 6, padding: '4px 10px', borderRadius: 8, border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: 12, cursor: 'pointer' }}>
-      {loading ? 'Loading…' : '▶ Play voicemail'}
+      {loading ? 'Loading…' : label}
     </button>
+  );
+};
+
+// v1.122.0 — a recorded call: play it, read the transcript, see what iPAi took from it.
+const OutCallDetail = ({ m, apiFetch, showToast }) => {
+  const [open, setOpen] = React.useState(false);
+  let notes = null;
+  try { notes = m.ai_notes ? JSON.parse(m.ai_notes) : null; } catch { notes = null; }
+  if (!m.media_url && !m.transcript && !notes) return null;
+  return (
+    <div style={{ marginTop: 6, fontSize: 12, lineHeight: 1.45 }}>
+      {notes && notes.summary && (
+        <div style={{ marginBottom: 4 }}>
+          <b>iPAi:</b> {notes.summary}
+          {notes.textsOk ? <span> · <b>OK'd texts</b> (“{notes.consentQuote}”)</span> : null}
+        </div>
+      )}
+      {notes && notes.error && <div style={{ marginBottom: 4 }}>{notes.error}</div>}
+      {m.media_url && !notes && !m.transcript && <div style={{ marginBottom: 4 }}>Transcribing…</div>}
+      {m.media_url && <OutVoicemailPlayer messageId={m.id} apiFetch={apiFetch} showToast={showToast} label="▶ Play recording" />}
+      {m.transcript && (
+        <div>
+          <a href="#" onClick={(e) => { e.preventDefault(); setOpen((v) => !v); }} style={{ color: 'inherit', textDecoration: 'underline' }}>
+            {open ? 'Hide transcript' : 'Transcript'}
+          </a>
+          {open && <div style={{ marginTop: 4, whiteSpace: 'pre-wrap', maxHeight: 220, overflowY: 'auto' }}>{m.transcript}</div>}
+        </div>
+      )}
+    </div>
   );
 };
 
@@ -193,7 +223,7 @@ const OutStatusPill = ({ status }) => {
   );
 };
 
-const OutreachThread = ({ contactId, apiFetch, showToast, onClose, onChanged }) => {
+const OutreachThread = ({ contactId, apiFetch, showToast, onClose, onChanged, callScript }) => {
   const [data, setData] = React.useState(null);
   const [draft, setDraft] = React.useState('');
   const [email, setEmail] = React.useState('');
@@ -347,9 +377,33 @@ const OutreachThread = ({ contactId, apiFetch, showToast, onClose, onChanged }) 
             <button onClick={endCall} style={{ ...btn, padding: '4px 12px', fontSize: 12, background: 'var(--color-error)', color: 'var(--text-on-primary)', border: 'none' }}>Hang up</button>
           </div>
         )}
+        {call && Array.isArray(callScript) && (
+          // v1.122.0 — Pete's script, on screen for the whole call. The consent line is the one
+          // iPAi listens for in the recording; say it as written.
+          <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border-color)', fontSize: 13, lineHeight: 1.5, maxHeight: 240, overflowY: 'auto' }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: 4 }}>Script · this call is recorded</div>
+            {callScript.map((l, i) => (
+              <div key={i} style={l.consent
+                ? { margin: '6px 0', padding: '6px 10px', borderRadius: 8, fontWeight: 600, ...OUT_TONE.warning }
+                : { margin: '3px 0', color: l.note ? 'var(--text-secondary)' : 'var(--text-primary)', fontStyle: l.note ? 'italic' : 'normal' }}>
+                {l.consent ? '❓ Ask exactly: ' : ''}{String(l.say || l.note).replace(/\{first\}/g, (c && c.first_name) || 'there')}
+              </div>
+            ))}
+          </div>
+        )}
 
         {c && (
           <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border-color)', display: 'grid', gap: 8 }}>
+            {!optedOut && (
+              // v1.122.0 — texts need a recorded OK.
+              <div style={{ fontSize: 12, lineHeight: 1.5, padding: '6px 10px', borderRadius: 8, ...(c.texts_ok_at ? OUT_TONE.success : OUT_TONE.muted) }}>
+                {c.texts_ok_at
+                  ? <>✓ OK to text · {c.texts_ok_evidence || 'recorded'}{' '}
+                      <a href="#" onClick={(e) => { e.preventDefault(); if (window.confirm('Withdraw the OK to text? Texting this person will be blocked.')) patch({ textsOk: false }, 'OK withdrawn'); }} style={{ color: 'inherit', textDecoration: 'underline' }}>Withdraw</a></>
+                  : <>No OK to text yet. Call and ask the script's question; iPAi marks it from the recording if they say yes.{' '}
+                      <a href="#" onClick={(e) => { e.preventDefault(); patch({ textsOk: true }, 'Marked OK to text'); }} style={{ color: 'inherit', textDecoration: 'underline' }}>They said yes on the call</a></>}
+              </div>
+            )}
             <div style={{ display: 'flex', gap: 8 }}>
               <input style={field} type="email" placeholder="Email address" value={email} onChange={(e) => setEmail(e.target.value)} />
               <button style={{ ...primary, whiteSpace: 'nowrap' }} disabled={busy || !email.trim()} onClick={invite}>{c.invite_id ? 'Resend invite' : 'Send invite'}</button>
@@ -388,10 +442,11 @@ const OutreachThread = ({ contactId, apiFetch, showToast, onClose, onChanged }) 
                 }}>
                   {m.kind === 'voicemail' ? '📞 ' : m.kind === 'call' ? '📞 ' : ''}{m.body}
                   {m.kind === 'voicemail' && m.media_url && <OutVoicemailPlayer messageId={m.id} apiFetch={apiFetch} showToast={showToast} />}
+                  {m.kind === 'call' && <OutCallDetail m={m} apiFetch={apiFetch} showToast={showToast} />}
                 </div>
                 <div style={{ fontSize: 11, color: bad ? 'var(--color-error)' : 'var(--text-muted)', marginTop: 2, textAlign: mine ? 'right' : 'left' }}>
                   {outWhen(m.created_at)}
-                  {m.kind === 'voicemail' && m.duration ? ` · ${outClock(m.duration)}` : ''}
+                  {(m.kind === 'voicemail' || m.kind === 'call') && m.duration ? ` · ${outClock(m.duration)}` : ''}
                   {mine && (m.automated ? ' · sent automatically' : m.sender_first_name ? ` · ${m.sender_first_name}` : '')}
                   {mine && m.kind !== 'call' && m.status && !bad && m.status !== 'sending' ? ` · ${m.status}` : ''}
                   {bad ? ` · not delivered${m.error ? ` (${m.error})` : ''}` : ''}
@@ -402,7 +457,12 @@ const OutreachThread = ({ contactId, apiFetch, showToast, onClose, onChanged }) 
           <div ref={endRef} />
         </div>
 
-        {c && !optedOut && (
+        {c && !optedOut && !c.texts_ok_at && (
+          <div style={{ padding: 12, borderTop: '1px solid var(--border-color)', fontSize: 13, color: 'var(--text-secondary)', paddingBottom: 'calc(12px + var(--sab, 0px))' }}>
+            Texting opens once they OK it — on a call, or by texting you first.
+          </div>
+        )}
+        {c && !optedOut && c.texts_ok_at && (
           <div style={{ padding: 12, borderTop: '1px solid var(--border-color)', display: 'flex', gap: 8, paddingBottom: 'calc(12px + var(--sab, 0px))' }}>
             <textarea style={{ ...field, minHeight: 44, resize: 'vertical' }} placeholder="Text from InPlace…" value={draft}
               onChange={(e) => setDraft(e.target.value)}
@@ -456,7 +516,8 @@ const AdminOutreachTab = window.AdminOutreachTab = ({ apiFetch, showToast, onUnr
   const counts = contacts.reduce((a, x) => { a[x.status] = (a[x.status] || 0) + 1; return a; }, {});
   const unreadCount = contacts.filter((x) => x.unread).length;
   const shown = filter === 'all' ? contacts : filter === 'unread' ? contacts.filter((x) => x.unread) : contacts.filter((x) => x.status === filter);
-  const textable = (x) => x.status === 'new' && !x.opted_out_at && !x.intro_sent_at;
+  // v1.122.0 — the follow-up text goes only to people who OK'd texts (a yes on a call, or they texted in).
+  const textable = (x) => !!x.texts_ok_at && x.status !== 'opted_out' && !x.opted_out_at && !x.intro_sent_at && x.status !== 'joined';
   const shownTextable = shown.filter(textable);
   const selectedList = contacts.filter((x) => selected.has(x.id) && textable(x));
 
@@ -529,13 +590,13 @@ const AdminOutreachTab = window.AdminOutreachTab = ({ apiFetch, showToast, onUnr
             <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>Caregiver outreach</div>
             <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2, lineHeight: 1.5 }}>
               {data.number
-                ? <>Texts go out from InPlace's outreach number, <b>{outPhone(data.number)}</b>. Replies land here. A reply with an email address gets a signup invite automatically.</>
+                ? <>Call first (📞 in each thread — recorded, with the script on screen). Texts go out from <b>{outPhone(data.number)}</b> only to people who OK'd texts on a call or texted you. Replies land here; a reply with an email address gets a signup invite automatically.</>
                 : <span style={{ color: 'var(--color-error)' }}>The outreach number isn't set up yet, so texting is off. You can still import and organize the list.</span>}
             </div>
           </div>
           <button style={btn} onClick={() => setShowImport((v) => !v)}>{showImport ? 'Close import' : 'Import list'}</button>
           <button style={primary} disabled={!selectedList.length || !data.number || sending} onClick={() => setComposer(true)}>
-            Text intro{selectedList.length ? ` to ${selectedList.length}` : ''}
+            Text follow-up{selectedList.length ? ` to ${selectedList.length}` : ''}
           </button>
         </div>
         {data.sending && (
@@ -562,7 +623,7 @@ const AdminOutreachTab = window.AdminOutreachTab = ({ apiFetch, showToast, onUnr
 
       {composer && (
         <div className="card">
-          <div className="card-header">Intro text to {selectedList.length} {selectedList.length === 1 ? 'person' : 'people'}</div>
+          <div className="card-header">Follow-up text to {selectedList.length} {selectedList.length === 1 ? 'person' : 'people'}</div>
           <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>
             <code>{'{first}'}</code> becomes each person's first name, and <code>{'{link}'}</code> becomes their own link to InPlace, so you can see who opened it. Keep "Reply STOP to opt out" — it's required, and the server won't send without it.
           </div>
@@ -637,7 +698,7 @@ const AdminOutreachTab = window.AdminOutreachTab = ({ apiFetch, showToast, onUnr
       <OutCampaignLinks apiFetch={apiFetch} showToast={showToast} />
 
       {openId && (
-        <OutreachThread contactId={openId} apiFetch={apiFetch} showToast={showToast}
+        <OutreachThread contactId={openId} apiFetch={apiFetch} showToast={showToast} callScript={data && data.callScript}
           onClose={() => { setOpenId(null); load(); }} onChanged={load} />
       )}
     </div>

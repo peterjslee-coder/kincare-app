@@ -40,11 +40,12 @@ const JOIN_REPLY =
 
 // v1.118.0 — {link} is her own yourinplace.com/i/… link (utils/tracking.js), so a tap is credited to
 // her. Same domain as the registered sample; the outreach A2P campaign is filed "embedded links: Yes".
+// v1.122.0 — the follow-up after a call where they said yes to texts. Texts go only to people
+// with a recorded OK (routes/outreach.js sendToContact), so this is never a cold first contact.
 const DEFAULT_INTRO =
-  "Hi {first}, this is Pete Lee with InPlace ({link}). I got your number from the NRV " +
-  "Agency on Aging's private-pay sitter list. We have paid caregiving work with local families. " +
-  "If you'd like to learn more, reply with your email address and we'll send details and set up " +
-  "a time to talk. Reply STOP to opt out.";
+  "Hi {first}, it's Pete Lee with InPlace Care. Thanks for talking with me! As promised, here's " +
+  "the info on caregiving work ({link}). Reply with your email and I'll send your signup link. " +
+  "Reply STOP to opt out.";
 
 /** Last 10 digits of a US number, or null. */
 function phoneKey(raw) {
