@@ -94,3 +94,37 @@ describe("reimbursement links land on the loved one's page", () => {
     expect(code("public/js/components/Reimbursements.js")).toContain("if (!sectionOpen) setSectionOpen(true, { remember: false });");
   });
 });
+
+// ─── step 5 (lives with the other LovedOneGuide.js checks) ───
+describe("lovedOneVisitBuckets — Calendar on the loved one's page", () => {
+  const src = fs.readFileSync(path.join(ROOT, "public/js/components/LovedOneGuide.js"), "utf8");
+  const compiled = babel.transformSync(src, { presets: [["@babel/preset-react"]], configFile: false }).code;
+  const win = {};
+  new Function("window", "React", "apiFetch", compiled)(win, require("react"), async () => ({ ok: false }));
+  const NOW = Date.parse("2026-10-15T16:00:00Z");
+  const H = 3600e3;
+  const v = (id, hoursFromNow, status = "confirmed", extra = {}) => ({ id, care_recipient_id: "r1", status, duration_hours: 3, __start: NOW + hoursFromNow * H, ...extra });
+  const startOf = (s) => s.__start;
+  const ids = (xs) => xs.map((x) => x.s.id);
+
+  test("next 24h, this week, recent; other people's and cancelled visits are left out", () => {
+    const b = win.lovedOneVisitBuckets([
+      v("tonight", 5), v("tomorrowLate", 30), v("nextWeek", 24 * 9), v("now", -1, "in_progress"),
+      v("done", -48, "completed"), v("old", -24 * 10, "completed"), v("cxl", 3, "cancelled"),
+      v("other", 2, "confirmed", { care_recipient_id: "r2" }), v("asked", 20, "requested"),
+    ], "r1", NOW, startOf);
+    expect(ids(b.next24)).toEqual(["now", "tonight", "asked"]);
+    expect(ids(b.week)).toEqual(["tomorrowLate"]);
+    expect(ids(b.recent)).toEqual(["done"]);
+  });
+
+  test("recent is newest first and capped at three", () => {
+    const b = win.lovedOneVisitBuckets([1, 2, 3, 4].map((d) => v(`d${d}`, -24 * d, "completed")), "r1", NOW, startOf);
+    expect(ids(b.recent)).toEqual(["d1", "d2", "d3"]);
+  });
+
+  test("a request whose time passed more than a day ago drops off; one just missed stays on top", () => {
+    const b = win.lovedOneVisitBuckets([v("stale", -30, "requested"), v("missed", -4, "confirmed")], "r1", NOW, startOf);
+    expect(ids(b.next24)).toEqual(["missed"]);
+  });
+});

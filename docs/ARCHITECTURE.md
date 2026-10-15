@@ -333,7 +333,7 @@ State travels through `window`, not props. This table is the registry.
 | `window.__caregiverFirstStepsRemain` | CaretakerHub.js | 2 |
 | `window.__clearSessionActive` | app.js | 4 |
 | `window.__currentPage` | app.js | 2 |
-| `window.__currentRole` | app.js, HelpPage.js, MyAccount.js | 13 |
+| `window.__currentRole` | app.js, HelpPage.js, MyAccount.js | 14 |
 | `window.__currentUserId` | app.js | 10 |
 | `window.__documentsTab` | Dashboard.js | 6 |
 | `window.__findWorkTab` | CaretakerHub.js | 4 |

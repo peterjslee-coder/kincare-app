@@ -28,6 +28,7 @@ test("every old section is still on the page, inside the right stop", () => {
   inside("<IPAiInsightsCard", "person", "todo");
   inside("<LovedOneToDo", "todo", "notes");
   inside("ref={notesCardRef}", "notes", "calendar");
+  inside("<LovedOneVisits", "calendar", "money");
   inside("<CareEventsSection", "calendar", "money");
   inside('data-testid="loved-one-request-care"', "calendar", "money");
   inside("<LovedOneReimbursements", "money", "about");
@@ -84,4 +85,10 @@ describe("notes summary (v1.121.0 step 2)", () => {
     expect(src).toContain("newestNoteAtRef.current = noteTimeline.length ? noteTimeline[0].at : null;");
     expect(src).toContain("window.addEventListener('pagehide', stamp)");
   });
+});
+
+// ─── step 5: Calendar order — visits by when, then Request care, then appointments ───
+test("Calendar: visits first, then Request care, then appointments", () => {
+  expect(at("<LovedOneVisits")).toBeLessThan(at('data-testid="loved-one-request-care"'));
+  expect(at('data-testid="loved-one-request-care"')).toBeLessThan(at("<CareEventsSection"));
 });

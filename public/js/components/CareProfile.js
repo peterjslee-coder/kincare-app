@@ -1741,7 +1741,12 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
       </LovedOneSection>
 
       <LovedOneSection id="calendar" label="Calendar">
-      {profile?.id && <CareEventsSection recipientId={profile.id} recipientFirstName={profile.first_name} />}
+      {/* v1.121.0 step 5 — visits first, by when (next 24 hours · this week · recent), then
+          Request care, then appointments with their own add/edit. */}
+      {profile?.id && (window.__currentRole || 'family') === 'family' && typeof LovedOneVisits !== 'undefined' && (
+        <LovedOneVisits key={profile.id} recipientId={profile.id} recipientFirstName={profile.first_name}
+          timezone={profile.timezone} onNavigate={onNavigate} />
+      )}
       {/* v1.121.0 — Pete: calendar "with the +orange request care button". `schedule` is where
           Request Care lands everywhere else (app.js, _request_care). */}
       {!editing && onNavigate && (window.__currentRole || 'family') === 'family' && (
@@ -1751,6 +1756,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
           + Request care
         </button>
       )}
+      {profile?.id && <CareEventsSection recipientId={profile.id} recipientFirstName={profile.first_name} />}
       </LovedOneSection>
 
       {lovedOneHasMoney && (
