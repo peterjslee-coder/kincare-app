@@ -155,7 +155,6 @@ describe("every section Pete named, plus the rest of both pages", () => {
     "lovedOne.kindred": profile,
     "lovedOne.health": profile,
     "lovedOne.permissions": profile,
-    "lovedOne.careTasks": tasks,
     "lovedOne.careEvents": events,
     "careTeam.members": team,
     "careTeam.billing": team,
@@ -170,6 +169,13 @@ describe("every section Pete named, plus the rest of both pages", () => {
       expect(src).toContain(`useStickySection('${key}'`);
     });
   }
+
+  // v1.121.0 — the task card takes its key from the caller: Betty's page folds it as
+  // "Recurring tasks" under its own key, anywhere else it is still lovedOne.careTasks.
+  test("care tasks fold is remembered (default key, and the setup key Betty's page passes)", () => {
+    expect(tasks).toContain("useStickySection(foldKey || 'lovedOne.careTasks'");
+    expect(tasks).toContain('foldKey="lovedOne.careTasksSetup"');
+  });
 
   test("no SECTION on these pages still uses a plain useState for its fold", () => {
     // The point of converting them all at once: one that remembers and one that does not,

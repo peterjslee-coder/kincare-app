@@ -26,7 +26,7 @@ test("every old section is still on the page, inside the right stop", () => {
     if (next) expect(i).toBeLessThan(stop(next));
   };
   inside("<IPAiInsightsCard", "person", "todo");
-  inside("<CareTasksSection", "todo", "notes");
+  inside("<LovedOneToDo", "todo", "notes");
   inside("ref={notesCardRef}", "notes", "calendar");
   inside("<CareEventsSection", "calendar", "money");
   inside('data-testid="loved-one-request-care"', "calendar", "money");

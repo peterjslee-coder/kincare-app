@@ -333,8 +333,8 @@ State travels through `window`, not props. This table is the registry.
 | `window.__caregiverFirstStepsRemain` | CaretakerHub.js | 2 |
 | `window.__clearSessionActive` | app.js | 4 |
 | `window.__currentPage` | app.js | 2 |
-| `window.__currentRole` | app.js, HelpPage.js, MyAccount.js | 8 |
-| `window.__currentUserId` | app.js | 8 |
+| `window.__currentRole` | app.js, HelpPage.js, MyAccount.js | 10 |
+| `window.__currentUserId` | app.js | 10 |
 | `window.__documentsTab` | Dashboard.js | 6 |
 | `window.__findWorkTab` | CaretakerHub.js | 4 |
 | `window.__flushUiPrefs` | uiPrefs.js | 1 |
@@ -371,14 +371,14 @@ State travels through `window`, not props. This table is the registry.
 | `window.__sandboxMode` | app.js | 2 |
 | `window.__sessionIsPersistent` | app.js | 2 |
 | `window.__setSessionActive` | app.js | 4 |
-| `window.__setUiPref` | uiPrefs.js | 5 |
+| `window.__setUiPref` | uiPrefs.js | 7 |
 | `window.__setUiPrefs` | app.js, uiPrefs.js | 7 |
 | `window.__showToast` | VisitDetailModal.js, WhatsNew.js, utils.js | 16 |
 | `window.__skipPopstate` | VisitDetailModal.js | 3 |
 | `window.__startCaregiverTour` | app.js | 11 |
 | `window.__startImpersonation` | app.js | 3 |
 | `window.__swApplyPendingUpdate` | — | 2 |
-| `window.__uiPrefs` | uiPrefs.js | 9 |
+| `window.__uiPrefs` | uiPrefs.js | 11 |
 | `window.__viewCaregiverId` | app.js, Caregivers.js | 3 |
 | `window.__visitGeoAllowed` | FamilyVisitLog.js | 1 |
 | `window.__visitHaversineFeet` | FamilyVisitLog.js | 1 |

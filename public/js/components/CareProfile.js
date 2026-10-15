@@ -1007,7 +1007,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
   const lovedOneHasMoney = !editing && ((window.__currentRole || 'family') === 'family' || !!onNavigate);
   const lovedOneSections = [
     { id: 'person', label: profile?.first_name || 'Profile', openKeys: ['lovedOne.careIntelligence', 'lovedOne.health'] },
-    { id: 'todo', label: 'To do', openKeys: ['lovedOne.careTasks'] },
+    { id: 'todo', label: 'To do', openKeys: ['careTodos:Next visit'] },
     { id: 'notes', label: 'Notes', openKeys: ['lovedOne.notes'] },
     { id: 'calendar', label: 'Calendar', openKeys: ['lovedOne.careEvents'] },
     ...(lovedOneHasMoney ? [{ id: 'money', label: 'Money & legal', openKeys: [] }] : []),
@@ -1367,10 +1367,12 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
       </LovedOneSection>
 
       <LovedOneSection id="todo" label="To do">
-      {/* ─── Care Tasks (v1.99.0): recurring med/care tracking definitions.
-           Completing tasks happens on the dashboard's Next Up — this card is
-           for setting them up: what, when, how often, whose job. ─── */}
-      {profile?.id && <CareTasksSection recipientId={profile.id} recipientFirstName={profile.first_name} />}
+      {/* ─── v1.121.0 step 3 — one list grouped by when (Now · Later today · Next visit ·
+           Done today), checked off right here, with the recurring-task setup folded under it
+           (LovedOneToDo, CareTasks.js). ─── */}
+      {profile?.id && (typeof LovedOneToDo !== 'undefined'
+        ? <LovedOneToDo recipientId={profile.id} recipientFirstName={profile.first_name} />
+        : <CareTasksSection recipientId={profile.id} recipientFirstName={profile.first_name} />)}
       </LovedOneSection>
 
       <LovedOneSection id="notes" label="Notes">

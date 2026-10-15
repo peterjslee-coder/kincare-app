@@ -627,10 +627,13 @@ const CareTaskQuickCreate = window.CareTaskQuickCreate = ({ recipients, onClose,
 };
 
 // ─── Recipient-profile card: manage task definitions ───
-const CareTasksSection = window.CareTasksSection = ({ recipientId, recipientFirstName }) => {
+const CareTasksSection = window.CareTasksSection = ({ recipientId, recipientFirstName, hideTodos, foldKey, defaultOpen, title }) => {
   // v1.105.171 — remembered on the account. Pete: "make all the menus collapsible on the
   // care team and betty pages. it should stick, too."
-  const [sectionOpen, setSectionOpen] = useStickySection('lovedOne.careTasks', true);
+  // v1.121.0 — on Betty's page this is the SETUP fold under the combined To do list
+  // (LovedOneToDo), so it takes its own key, starts folded, and leaves the to-dos to the list
+  // above it (`hideTodos`) instead of showing them twice.
+  const [sectionOpen, setSectionOpen] = useStickySection(foldKey || 'lovedOne.careTasks', defaultOpen === undefined ? true : defaultOpen);
   const { showToast } = useToast();
   const [data, setData] = useState(null);
   const [showForm, setShowForm] = useState(false);
@@ -702,7 +705,7 @@ const CareTasksSection = window.CareTasksSection = ({ recipientId, recipientFirs
           role="button" tabIndex={0} aria-expanded={sectionOpen}
           onClick={() => setSectionOpen(!sectionOpen)}
           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSectionOpen(!sectionOpen); } }}>
-          <span className="card-icon">{'✅'}</span>Care Tasks
+          <span className="card-icon">{'✅'}</span>{title || 'Care Tasks'}{title && tasks.length > 0 ? ` (${tasks.length})` : ''}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
           {sectionOpen && canManage && (
@@ -757,7 +760,7 @@ const CareTasksSection = window.CareTasksSection = ({ recipientId, recipientFirs
       ))}
 
       {/* v1.109.9 — one-time to-dos sit with the tasks: same people look at both (e4cd314a). */}
-      {typeof CareTodoList !== 'undefined' && (
+      {!hideTodos && typeof CareTodoList !== 'undefined' && (
         <div style={{ marginTop: 12, borderTop: '1px solid var(--border-light)', paddingTop: 10 }}>
           <CareTodoList recipientIds={[recipientId]} heading="To-dos for the next visit" showAdd />
         </div>
@@ -897,6 +900,170 @@ const CaregiverTodayAtVisit = window.CaregiverTodayAtVisit = ({ recipientIds }) 
           onOpenSheet={() => setTaskSheet({ occ: r.occ, group: r.group })}
           onUndo={() => undo(r.occ)} />
       ))}
+      {taskSheet && (
+        <CareTaskCheckSheet occ={taskSheet.occ} group={taskSheet.group}
+          onClose={() => setTaskSheet(null)} onDone={() => load()} />
+      )}
+      {eventSheet && (
+        <CareEventSheet ev={eventSheet} canManage={false}
+          onClose={() => setEventSheet(null)} onChanged={() => load()} onEdit={() => setEventSheet(null)} />
+      )}
+    </div>
+  );
+};
+
+// ─── v1.121.0 (Batch 2 step 3) — "To do" on Betty's page ───
+//
+// Pete, 10/15 (a747e1cb): "then tasks, events, and to-dos (maybe we combine into something
+// useful?)" — and the page should "convey the same sense of priority" as Home: the next thing
+// first, later things below.
+//
+// Before, this stop was the task SETUP card — definitions with Edit / Pause / Remove — with
+// the to-dos tucked under it. What a family member opens Betty's page to find out is what's
+// left today, so that leads, grouped by when:
+//
+//   Now          — due within the next two hours, or overdue (a late dose is never "later")
+//   Later today  — the rest of today's tasks and appointments
+//   Next visit   — the one-time to-dos (CareTodoList, with + Add)
+//   Done today   — folded; what was checked off and by whom
+//
+// Setting tasks up is still one tap away, folded underneath ("Recurring tasks"). Checking off
+// is the same write as Home's Next Up (CareTaskSync), so the two never disagree.
+const LOVED_ONE_NOW_MS = 2 * 60 * 60 * 1000;
+
+const lovedOneToDoBuckets = window.lovedOneToDoBuckets = (occurrences, events, nowMs) => {
+  const now = [], later = [], done = [];
+  for (const occ of occurrences || []) {
+    if (occ.status === 'done' || occ.status === 'skipped') { done.push({ key: `t-${occ.id}`, occ }); continue; }
+    const due = new Date(occ.due_at).getTime();
+    const row = { key: `t-${occ.id}`, sort: `${occ.occ_time || occ.due_time || ''}`, occ };
+    if (!Number.isFinite(due) || due - nowMs <= LOVED_ONE_NOW_MS) now.push(row); else later.push(row);
+  }
+  for (const ev of events || []) {
+    const row = { key: `e-${ev.id}`, sort: ev.event_time || '00:00', ev };
+    // An appointment with no time is an all-day thing: it belongs to "now".
+    if (!ev.event_time || !(ev.__untilMs > LOVED_ONE_NOW_MS)) now.push(row); else later.push(row);
+  }
+  const bySort = (a, b) => String(a.sort).localeCompare(String(b.sort));
+  return { now: now.sort(bySort), later: later.sort(bySort), done };
+};
+
+const LovedOneToDo = window.LovedOneToDo = ({ recipientId, recipientFirstName }) => {
+  const { showToast } = useToast();
+  const [group, setGroup] = useState(null);
+  const [events, setEvents] = useState([]);
+  const [loaded, setLoaded] = useState(false);
+  const [doneOpen, setDoneOpen] = useState(false);
+  const [taskSheet, setTaskSheet] = useState(null);
+  const [eventSheet, setEventSheet] = useState(null);
+  const [, tick] = useState(0);
+  const saving = useRef(new Set());
+
+  const load = async () => {
+    if (!recipientId) return;
+    try {
+      const [t, e] = await Promise.all([
+        apiFetch('/api/care-tasks/today').then((r) => (r && r.ok ? r.json() : { groups: [] })),
+        apiFetch('/api/care-events/upcoming').then((r) => (r && r.ok ? r.json() : { events: [] })),
+      ]);
+      setGroup((t.groups || []).find((g) => g.careRecipientId === recipientId) || null);
+      setEvents((e.events || []).filter((ev) => ev.care_recipient_id === recipientId
+        && ev.event_date === TimezoneHelper.getToday(ev.timezone || TimezoneHelper.DEFAULT_TZ)));
+    } catch { /* keeps the last good list; the setup fold below still works */ }
+    setLoaded(true);
+  };
+  useEffect(() => { load(); }, [recipientId]);
+  useEffect(() => CareTaskSync.onChange(() => load()), [recipientId]);
+  // "Now" is a moving line: re-sort every few minutes while the page is open.
+  useEffect(() => { const id = setInterval(() => tick((n) => n + 1), 5 * 60 * 1000); return () => clearInterval(id); }, []);
+
+  const patch = (occId, fields) => setGroup((g) => (g ? { ...g, occurrences: g.occurrences.map((o) => (o.id === occId ? { ...o, ...fields } : o)) } : g));
+  const quickCheck = async (occ) => {
+    if (saving.current.has(occ.id)) return;
+    saving.current.add(occ.id);
+    patch(occ.id, { status: 'done', completed_by_user_id: window.__currentUserId || null, __saving: true });
+    const r = await CareTaskSync.write(occ.id, { status: 'done' });
+    saving.current.delete(occ.id);
+    if (!r.ok) { patch(occ.id, { status: occ.status, __saving: false }); showToast(r.error, 'error'); }
+    else if (occ.task_type === 'medication') showToast('Marked taken', 'success');
+    load();
+  };
+  const undo = async (occ) => {
+    const r = await CareTaskSync.undo(occ.id);
+    if (!r.ok) showToast(r.error, 'error');
+    load();
+  };
+
+  // How far off each appointment is. The client's TimezoneHelper.buildDateTime returns the TRUE
+  // instant of "h:m on that day where the care happens" (unlike the server's shifted-frame
+  // helper), so it compares against the real clock.
+  const evs = events.map((ev) => {
+    let untilMs = -Infinity; // no time, or unreadable → treat as now
+    try {
+      const tz = ev.timezone || TimezoneHelper.DEFAULT_TZ;
+      if (ev.event_time) {
+        const d = TimezoneHelper.buildDateTime(ev.event_date, ev.event_time, tz).getTime() - TimezoneHelper.realNowMs();
+        if (Number.isFinite(d)) untilMs = d;
+      }
+    } catch { /* stays "now" */ }
+    return { ...ev, __untilMs: untilMs };
+  });
+  const occs = (group && group.occurrences) || [];
+  const { now, later, done } = lovedOneToDoBuckets(occs, evs, Date.now());
+  const hasMeds = occs.some((o) => o.task_type === 'medication');
+  const name = recipientFirstName || 'them';
+
+  const heading = (text, count, testid) => (
+    <div data-testid={testid} style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', margin: '14px 2px 8px' }}>
+      {text}{count ? ` · ${count}` : ''}
+    </div>
+  );
+  const renderRow = (r) => (r.ev ? (
+    <CareEventNextUpRow key={r.key} ev={r.ev} onOpenSheet={() => setEventSheet(r.ev)} />
+  ) : (
+    <CareTaskNextUpRow key={r.key} occ={r.occ} group={group}
+      onQuickCheck={() => quickCheck(r.occ)}
+      onOpenSheet={() => setTaskSheet({ occ: r.occ, group })}
+      onUndo={() => undo(r.occ)} />
+  ));
+
+  return (
+    <div data-testid="loved-one-todo">
+      <div className="card" style={{ paddingTop: 4 }}>
+        {heading('Now', now.length, 'todo-now')}
+        {now.length > 0 ? now.map(renderRow) : (
+          <div style={{ fontSize: 13, color: 'var(--text-tertiary)', padding: '0 2px 6px' }}>
+            {loaded ? (later.length ? `Nothing due in the next two hours for ${name}.` : `Nothing left on ${name}’s list today.`) : 'Loading…'}
+          </div>
+        )}
+        {hasMeds && now.length > 0 && (
+          <div style={{ fontSize: 12, color: 'var(--text-tertiary)', margin: '-2px 2px 6px' }}>
+            Checking off a medication records that it was taken. It doesn{'’'}t mean you gave it.
+          </div>
+        )}
+        {later.length > 0 && (
+          <>
+            {heading('Later today', later.length, 'todo-later')}
+            {later.map(renderRow)}
+          </>
+        )}
+        {typeof CareTodoList !== 'undefined' && (
+          <div data-testid="todo-next-visit" style={{ marginTop: 12, borderTop: '1px solid var(--border-light)', paddingTop: 10 }}>
+            <CareTodoList recipientIds={[recipientId]} heading="Next visit" showAdd />
+          </div>
+        )}
+        {done.length > 0 && (
+          <div style={{ marginTop: 10, borderTop: '1px solid var(--border-light)', paddingTop: 10 }}>
+            <button type="button" data-testid="todo-done-today" onClick={() => setDoneOpen(!doneOpen)} aria-expanded={doneOpen}
+              style={{ border: 'none', background: 'none', padding: '6px 0', minHeight: 36, cursor: 'pointer', fontSize: 12, fontWeight: 700, color: 'var(--text-muted)' }}>
+              Done today ({done.length}) {doneOpen ? '▲' : '▼'}
+            </button>
+            {doneOpen && done.map(renderRow)}
+          </div>
+        )}
+      </div>
+      <CareTasksSection recipientId={recipientId} recipientFirstName={recipientFirstName}
+        hideTodos foldKey="lovedOne.careTasksSetup" defaultOpen={false} title="Recurring tasks" />
       {taskSheet && (
         <CareTaskCheckSheet occ={taskSheet.occ} group={taskSheet.group}
           onClose={() => setTaskSheet(null)} onDone={() => load()} />
