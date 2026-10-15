@@ -68,7 +68,6 @@ const ATTENTION_PAST = {
   Skip: 'Skipped for today.',
   'Try the card again': 'The card went through.',
   'Got it': 'Marked paid.',
-  'Yes, mark paid': 'Marked paid.',
 };
 
 const ATTENTION_KINDS = {
@@ -86,7 +85,8 @@ const ATTENTION_KINDS = {
   // v1.119.1 — a check or cash reimbursement nobody has marked paid (bfbb79bd). Soft: asked,
   // never counted.
   paymentArrived: { icon: '💵', chip: 'DID IT ARRIVE?' },
-  paymentSent:    { icon: '💵', chip: 'DID YOU SEND IT?' },
+  // v1.120.1 — an approved reimbursement the payer hasn't paid. Hard: it counts, no "Not now".
+  reimbursementUnpaid: { icon: '💵', chip: 'TO PAY' },
 };
 
 // "14:30" → "2:30 PM". The server sends wall-clock times in the care recipient's zone; they

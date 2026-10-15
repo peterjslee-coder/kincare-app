@@ -31,6 +31,22 @@ const WINDOW_DAYS = 45;
 
 const ENTRIES = [
   {
+    id: "reimbursement-pay-reminders",
+    version: "1.120.1",
+    date: "2026-10-15",
+    audience: ["family"],
+    title: "Reimbursements remind you until they're paid",
+    body: "Approving a reimbursement doesn't move the money — paying it does. If you're the one who pays, an approved request now stays under Needs you until it's paid, and InPlace reminds you every couple of days, including the monthly ones.",
+    howTo: [
+      "Look for “Pay $… to …” under Needs you on Home",
+      "Tap Pay — it opens the request with its Pay button",
+      "Paying by check or cash? Mark it paid there once it's sent",
+    ],
+    examples: ["The monthly internet bill for Mom's house", "Sam's pharmacy run, approved last week"],
+    preview: "toPay",
+    action: { label: "Show me", page: "care-team" },
+  },
+  {
     id: "reimbursement-check-arrived",
     version: "1.120.0",
     date: "2026-10-15",

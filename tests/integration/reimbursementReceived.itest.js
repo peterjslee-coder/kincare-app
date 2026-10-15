@@ -107,7 +107,7 @@ describe("the nudges", () => {
   const kindsFor = async (u, id) => (await attentionItemsFor(db, u.user.id)).items
     .filter((i) => i.id.endsWith(id)).map((i) => i.kind);
 
-  test("payee is asked at 3 days, approver at 10, and both are soft (not in the badge)", async () => {
+  test("check: payee is asked (soft) at 3 days; the payer's Pay item (hard) appears at day 10", async () => {
     const id = await request(55, "Hardware store");
     await h.request.post(`/api/reimbursements/${id}/approve`).set(h.auth(sara.token)).send({ payMethod: "check" });
 
@@ -118,15 +118,16 @@ describe("the nudges", () => {
     expect(peteItems[0].soft).toBe(true);
     expect(peteItems[0].title).toBe("Did Sara's check for $55.00 arrive?");
     expect(peteItems[0].action.path).toBe(`/api/reimbursements/${id}/mark-received`);
-    expect(await kindsFor(sara, id)).toEqual([]);           // 4 days: not the approver yet
+    expect(await kindsFor(sara, id)).toEqual([]);           // 4 days: the check may be in the mail
 
     const saraTotalBefore = (await attentionItemsFor(db, sara.user.id)).total;
-    const peteTotal = (await attentionItemsFor(db, pete.user.id)).total;
     await ageApproval(id, 11);
-    expect(await kindsFor(sara, id)).toEqual(["paymentSent"]);
-    // Soft: the app-icon number does not move when a nudge appears.
-    expect((await attentionItemsFor(db, sara.user.id)).total).toBe(saraTotalBefore);
-    expect((await attentionItemsFor(db, pete.user.id)).total).toBe(peteTotal);
+    const saraItems = (await attentionItemsFor(db, sara.user.id)).items.filter((i) => i.id.endsWith(id));
+    expect(saraItems.map((i) => i.kind)).toEqual(["reimbursementUnpaid"]);
+    expect(saraItems[0].title).toBe("Pay $55.00 to Pete Payee");
+    expect(saraItems[0].dismiss).toBeUndefined();          // no "Not now" on money owed
+    // v1.120.1 — hard: the payer IS the blocker, so it counts.
+    expect((await attentionItemsFor(db, sara.user.id)).total).toBe(saraTotalBefore + 1);
   });
 
   test("an old request approved with no method still asks (Pete's driveway case)", async () => {
@@ -157,14 +158,93 @@ describe("the nudges", () => {
       VALUES (gen_random_uuid()::text, ?, 'paymentArrived', ?, NOW() + interval '3 days')
     `).run(pete.user.id, id);
     expect(await kindsFor(pete, id)).toEqual([]);
-    expect(await kindsFor(sara, id)).toEqual(["paymentSent"]);
+    expect(await kindsFor(sara, id)).toEqual(["reimbursementUnpaid"]);
   });
 
-  test("planned in-app transfers are never nudged", async () => {
+  test("planned in-app: the payee is never asked; the payer has a Pay item from the start", async () => {
     const id = await request(15, "Stamps");
     await h.request.post(`/api/reimbursements/${id}/approve`).set(h.auth(sara.token)).send({ payMethod: "inplace" });
+    expect(await kindsFor(sara, id)).toEqual(["reimbursementUnpaid"]);
     await ageApproval(id, 12);
     expect(await kindsFor(pete, id)).toEqual([]);
-    expect(await kindsFor(sara, id)).toEqual([]);
+  });
+
+  // v1.120.1 — the October Starlink case: a recurring occurrence (no planned method) for a payee
+  // who can be paid in the app. The payee's one-tap "Got it" would close it with no money moved.
+  test("payee who can be paid in the app, no method given: no 'Got it' nudge; the payer is asked to Pay", async () => {
+    await db.prepare("UPDATE users SET stripe_onboard_complete = 1 WHERE id = ?").run(pete.user.id);
+    try {
+      const id = await request(95, "Starlink Gatehouse (recurring — October 2026)");
+      await h.request.post(`/api/reimbursements/${id}/approve`).set(h.auth(sara.token)).send({});
+      await ageApproval(id, 4);
+      expect(await kindsFor(pete, id)).toEqual([]);
+      const it = (await attentionItemsFor(db, sara.user.id)).items.find((i) => i.id === `reimbursementUnpaid:${id}`);
+      expect(it.verb).toBe("Pay");
+      expect(it.action).toBeNull();                         // opens the row; Pay has its own confirm
+      expect(it.focus).toBe(`reimbursement:${id}`);
+      expect(it.note).toMatch(/no money has moved/);
+    } finally {
+      await db.prepare("UPDATE users SET stripe_onboard_complete = 0 WHERE id = ?").run(pete.user.id);
+    }
+  });
+});
+
+describe("reminders until it's paid (poller 115)", () => {
+  const { sendUnpaidReimbursementReminders } = require("../../src/utils/reimbursementReminders");
+  // 2 PM Eastern on a fixed day: inside the 9 AM–7 PM window whatever day the suite runs.
+  const at = (iso) => new Date(iso);
+  const run = async (now) => {
+    const calls = [];
+    await sendUnpaidReimbursementReminders(db, async (uid, payload, type) => calls.push({ uid, payload, type }), now);
+    return calls;
+  };
+  const setApproved = (id, iso) => db.prepare("UPDATE reimbursements SET approved_at = ? WHERE id = ?").run(iso, id);
+
+  test("in-app: day 2, then every 2 days, to the payer, naming amount and payee only", async () => {
+    const id = await request(95, "Starlink Gatehouse secret-description");
+    await h.request.post(`/api/reimbursements/${id}/approve`).set(h.auth(sara.token)).send({});
+    await setApproved(id, "2026-10-11T00:22:45Z");
+
+    expect((await run(at("2026-10-12T18:00:00Z"))).filter((c) => c.payload.data.reimbursementId === id)).toHaveLength(0); // day 1
+    const first = (await run(at("2026-10-13T18:00:00Z"))).filter((c) => c.payload.data.reimbursementId === id);
+    expect(first).toHaveLength(1);
+    expect(first[0].uid).toBe(sara.user.id);
+    expect(first[0].type).toBe("reimbursement_unpaid");
+    expect(first[0].payload.body).toContain("$95.00 to Pete");
+    expect(first[0].payload.body).not.toContain("secret");
+    expect(first[0].payload.data.focus).toBe(`reimbursement:${id}`);
+
+    // Same hour again: claimed, not resent.
+    expect((await run(at("2026-10-13T18:30:00Z"))).filter((c) => c.payload.data.reimbursementId === id)).toHaveLength(0);
+    // The real clock stamped pay_reminder_last_at = NOW(); step it to the fake timeline.
+    await db.prepare("UPDATE reimbursements SET pay_reminder_last_at = ? WHERE id = ?").run("2026-10-13T18:00:00Z", id);
+    expect((await run(at("2026-10-14T18:00:00Z"))).filter((c) => c.payload.data.reimbursementId === id)).toHaveLength(0);
+    expect((await run(at("2026-10-15T18:00:00Z"))).filter((c) => c.payload.data.reimbursementId === id)).toHaveLength(1);
+  });
+
+  test("never outside 9 AM–7 PM where the care happens", async () => {
+    const id = await request(12, "Late night");
+    await h.request.post(`/api/reimbursements/${id}/approve`).set(h.auth(sara.token)).send({});
+    await setApproved(id, "2026-10-01T12:00:00Z");
+    // 03:00 UTC = 11 PM Eastern
+    expect((await run(at("2026-10-10T03:00:00Z"))).filter((c) => c.payload.data.reimbursementId === id)).toHaveLength(0);
+  });
+
+  test("check/cash: nothing before day 10", async () => {
+    const id = await request(40, "By check");
+    await h.request.post(`/api/reimbursements/${id}/approve`).set(h.auth(sara.token)).send({ payMethod: "check" });
+    await setApproved(id, "2026-10-01T12:00:00Z");
+    expect((await run(at("2026-10-08T18:00:00Z"))).filter((c) => c.payload.data.reimbursementId === id)).toHaveLength(0);
+    const due = (await run(at("2026-10-11T18:00:00Z"))).filter((c) => c.payload.data.reimbursementId === id);
+    expect(due).toHaveLength(1);
+    expect(due[0].payload.body).toContain("isn't marked paid");
+  });
+
+  test("paid means silent", async () => {
+    const id = await request(18, "Paid already");
+    await h.request.post(`/api/reimbursements/${id}/approve`).set(h.auth(sara.token)).send({});
+    await setApproved(id, "2026-10-01T12:00:00Z");
+    await h.request.post(`/api/reimbursements/${id}/mark-paid`).set(h.auth(sara.token)).send({ method: "zelle" });
+    expect((await run(at("2026-10-10T18:00:00Z"))).filter((c) => c.payload.data.reimbursementId === id)).toHaveLength(0);
   });
 });

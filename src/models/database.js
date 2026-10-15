@@ -3313,6 +3313,15 @@ async function initializeDatabase() {
         `ALTER TABLE reimbursements ADD COLUMN IF NOT EXISTS received_confirmed_at TIMESTAMPTZ`,
       ],
     },
+    {
+      // v1.120.1 — the payer is reminded until a reimbursement is paid (Pete, 10/15: "we need
+      // to keep pinging members until they pay"). See utils/reimbursementReminders.js.
+      id: "070_reimbursement_pay_reminders",
+      statements: [
+        `ALTER TABLE reimbursements ADD COLUMN IF NOT EXISTS pay_reminder_last_at TIMESTAMPTZ`,
+        `ALTER TABLE reimbursements ADD COLUMN IF NOT EXISTS pay_reminder_count INTEGER DEFAULT 0`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

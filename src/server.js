@@ -856,7 +856,7 @@ app.use("/api/safety", require("./routes/safety"));
 
 // ─── App version check (lightweight, no auth) ───
 const { cancelPassedPrivateOffers, releaseExpiredExclusiveOffers } = require("./utils/exclusiveOffers");
-const APP_VERSION = "1.120.0";
+const APP_VERSION = "1.120.1";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION, minAppVersion: MIN_APP_VERSION });
@@ -1658,6 +1658,21 @@ async function start() {
   // optimistic lock on next_run_date, so restarts/overlaps can't double-generate.
   setTimeout(guardedPoller(106, () => reimbursementsRouter.generateRecurringReimbursements()), 90 * 1000);
   setInterval(guardedPoller(106, () => reimbursementsRouter.generateRecurringReimbursements()), 60 * 60 * 1000);
+  // v1.120.1 — poller 115: remind the payer until an approved reimbursement is paid. Hourly; the
+  // cadence and the 9 AM–7 PM window live in utils/reimbursementReminders.js. Offset from 106 so
+  // the two never ask the pool for connections in the same second.
+  {
+    const runPayReminders = guardedPoller(115, async () => {
+      const { sendUnpaidReimbursementReminders } = require("./utils/reimbursementReminders");
+      const { sendPushToUser: pushFn } = require("./routes/push");
+      const n = await sendUnpaidReimbursementReminders(await getDb(), pushFn);
+      if (n > 0) console.log(`  [reimbursement reminders] sent ${n}`);
+    });
+    // Starts 7 minutes after boot and stays 7 minutes off the hour-from-boot ticks the other
+    // hourly pollers share (Sentry INPLACE-13/14/15: they queue for the pool in one second).
+    setTimeout(() => { runPayReminders(); setInterval(runPayReminders, 60 * 60 * 1000); }, 7 * 60 * 1000);
+    console.log("  Unpaid reimbursement reminder poller started (hourly)");
+  }
 
   // ─── Care Tasks poller (v1.99.0) ───
   // Every 60s: materialize today's occurrences, push the assignee at due

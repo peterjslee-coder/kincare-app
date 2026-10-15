@@ -172,6 +172,15 @@ const WN_PREVIEWS = {
       </div>
     </div>
   ),
+  // v1.120.1 — the payer is reminded until a reimbursement is paid
+  toPay: () => (
+    <div style={{ padding: '12px 12px 10px', borderRadius: 12, border: '2px solid var(--accent-color)', background: 'var(--bg-attention-card)' }}>
+      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.4, color: 'var(--text-tertiary)', marginBottom: 4 }}>{'💵'} TO PAY {'·'} FOR MOM</div>
+      <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text-primary)' }}>Pay $95.00 to Sam</div>
+      <div style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: '4px 0 10px' }}>Internet {'·'} approved, but no money has moved yet.</div>
+      <span style={{ ...wnPill('var(--accent-color-dark)', 'var(--text-on-primary)'), display: 'block', textAlign: 'center', padding: '8px 10px' }}>Pay {'›'}</span>
+    </div>
+  ),
   // v1.120.0 — "Did the check arrive?" (feedback bfbb79bd)
   checkArrived: () => (
     <div style={{ padding: '12px 12px 10px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>

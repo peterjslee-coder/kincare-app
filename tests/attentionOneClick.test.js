@@ -72,7 +72,7 @@ function fakeDb({ reimbursements = [], offers = [], changes = [], tasks = [], ap
           if (norm.includes("FROM verified_documents")) return [{ status: "approved", is_verified: 1 }];
           // v1.119.1 — the "did it arrive / did you send it" nudges read approved rows; these
           // stubs model pending ones only. tests/integration/reimbursementReceived covers them.
-          if (norm.includes("FROM reimbursements") && norm.includes("approved_at < NOW()")) return [];
+          if (norm.includes("FROM reimbursements") && norm.includes("r.status = 'approved'")) return [];
           if (norm.includes("FROM reimbursements")) return reimbursements;
           if (norm.includes("FROM time_proposals")) return offers;
           if (norm.includes("FROM time_change_proposals")) return changes;

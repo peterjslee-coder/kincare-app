@@ -416,12 +416,18 @@ async function attentionItemsFor(db, userId) {
            au.first_name AS approver_first, cr.first_name AS recipient_first
       FROM reimbursements r
       LEFT JOIN users au ON au.id = r.approved_by
+      LEFT JOIN users pu ON pu.id = r.payee_user_id
       LEFT JOIN care_recipients cr ON cr.id = r.care_recipient_id
      WHERE r.status = 'approved'
        AND r.payee_user_id = ?
        AND r.approved_at < NOW() - INTERVAL '3 days'
        AND COALESCE(r.payout_status, '') NOT IN ('processing', 'succeeded')
        AND COALESCE(r.planned_method, '') <> 'inplace'
+       -- v1.120.1 — a request the payee can be paid for IN THE APP, with nothing saying check
+       -- or cash (every recurring occurrence), is waiting on the PAYER to tap Pay. Asking the
+       -- payee "have you been paid?" with a one-tap "Got it" would close it with no money
+       -- moved. The payer's reminders (reimbursementUnpaid below) cover it instead.
+       AND NOT (r.planned_method IS NULL AND COALESCE(pu.stripe_onboard_complete, 0) = 1)
        AND NOT EXISTS (
          SELECT 1 FROM nudge_snoozes ns
           WHERE ns.user_id = ? AND ns.kind = 'paymentArrived' AND ns.ref = r.id AND ns.snoozed_until > NOW()
@@ -429,9 +435,19 @@ async function attentionItemsFor(db, userId) {
      ORDER BY r.approved_at
   `).all(userId, userId));
 
-  const paymentSentRows = await safeRows("paymentSent", () => db.prepare(`
-    SELECT r.id, r.amount, r.description, r.planned_method,
-           pu.first_name AS payee_first, cr.first_name AS recipient_first
+  // ── v1.120.1 — an approved reimbursement I still have to PAY ──
+  //
+  // Pete, 10/15: "we need to keep pinging members until they pay." Approval is not payment,
+  // and the payer used to be told once. This is a decision waiting on exactly one person, so
+  // it is a hard item: it counts toward the badge and has no "Not now". Paying, or the payee
+  // confirming a check/cash payment, is what clears it.
+  // A check or cash the payer said they'd send shows from day 10 (it may be in the mail);
+  // everything else from the moment it's approved. Pushes: utils/reimbursementReminders.js.
+  const unpaidRows = await safeRows("reimbursementUnpaid", () => db.prepare(`
+    SELECT r.id, r.amount, r.description, r.planned_method, r.approved_at,
+           pu.first_name AS payee_first, pu.last_name AS payee_last,
+           COALESCE(pu.stripe_onboard_complete, 0) AS payee_payout_ready,
+           cr.first_name AS recipient_first
       FROM reimbursements r
       JOIN care_teams ct ON ct.id = r.care_team_id
       LEFT JOIN care_team_members ctm
@@ -439,17 +455,14 @@ async function attentionItemsFor(db, userId) {
       LEFT JOIN users pu ON pu.id = r.payee_user_id
       LEFT JOIN care_recipients cr ON cr.id = r.care_recipient_id
      WHERE r.status = 'approved'
+       AND r.approved_at IS NOT NULL
        AND r.payee_user_id IS DISTINCT FROM ?
        AND (ct.billing_user_id = ? OR (ct.billing_user_id IS NULL AND ctm.user_id IS NOT NULL))
-       AND r.approved_at < NOW() - INTERVAL '10 days'
        AND COALESCE(r.payout_status, '') NOT IN ('processing', 'succeeded')
-       AND COALESCE(r.planned_method, '') <> 'inplace'
-       AND NOT EXISTS (
-         SELECT 1 FROM nudge_snoozes ns
-          WHERE ns.user_id = ? AND ns.kind = 'paymentSent' AND ns.ref = r.id AND ns.snoozed_until > NOW()
-       )
+       AND (COALESCE(r.planned_method, '') NOT IN ('check', 'cash')
+            OR r.approved_at < NOW() - INTERVAL '10 days')
      ORDER BY r.approved_at
-  `).all(userId, userId, userId, userId));
+  `).all(userId, userId, userId));
 
   const taskRows = await safeRows("careTasks", () => db.prepare(`
     SELECT occ.id, occ.due_at, occ.due_date, t.title, t.task_type, t.tz,
@@ -765,26 +778,28 @@ async function attentionItemsFor(db, userId) {
         },
       };
     }),
-    ...paymentSentRows.map((r) => ({
-      kind: "paymentSent",
-      soft: true,
-      id: `paymentSent:${r.id}`,
-      title: `Did you pay ${r.payee_first || "them"} the ${money(r.amount)}?`,
-      detail: r.description || null,
-      forWhom: r.recipient_first || null,
-      when: null,
-      verb: "Yes, mark paid",
-      action: { method: "POST", path: `/api/reimbursements/${r.id}/mark-paid`, body: { method: r.planned_method && r.planned_method !== "inplace" ? r.planned_method : "other" } },
-      page: "care-team",
-      focus: `reimbursement:${r.id}`,
-      note: "You approved this over a week ago and it still shows as awaiting payment.",
-      dismiss: {
-        method: "POST",
-        path: "/api/push/attention/snooze",
-        body: { kind: "paymentSent", ref: r.id, days: 7 },
-        label: "Not yet",
-      },
-    })),
+    ...unpaidRows.map((r) => {
+      const byHand = r.planned_method === "check" || r.planned_method === "cash";
+      return {
+        kind: "reimbursementUnpaid",
+        id: `reimbursementUnpaid:${r.id}`,
+        title: `Pay ${money(r.amount)} to ${name(r.payee_first, r.payee_last) || "a team member"}`,
+        detail: r.description || null,
+        forWhom: r.recipient_first || null,
+        when: r.approved_at || null,
+        // No one-tap action: paying is a money movement with its own confirmation on the row,
+        // and a check/cash "mark paid" should be a deliberate act on the request itself.
+        verb: "Pay",
+        action: null,
+        page: "care-team",
+        focus: `reimbursement:${r.id}`,
+        note: byHand
+          ? `You said you'd pay by ${r.planned_method}. If you already have, open it and mark it paid.`
+          : Number(r.payee_payout_ready) === 1
+            ? "Approved, but no money has moved yet. Open it and tap Pay."
+            : "Approved, but not marked paid yet. Pay them, then mark it paid.",
+      };
+    }),
     ...emptyWeekRows.map((r) => ({
       kind: "emptyWeek",
       // `soft` is the whole contract: the card draws it quietly and leaves it out of its own
@@ -832,12 +847,14 @@ async function attentionItemsFor(db, userId) {
     // v1.109.9 — the FAMILY's pending cancellation fees count; the caregiver's do not (see
     // the note against the query).
     total: reimbursementRows.length + timeChanges + taskRows.length + approvalRows.length
-      + cancelFeeRows.length + financialConcernRows.length + safetyRows.length + holdDeclinedRows.length,
+      // v1.120.1 — unpaidRows: an approved reimbursement still to pay; the payer is the blocker.
+      + unpaidRows.length + cancelFeeRows.length + financialConcernRows.length + safetyRows.length + holdDeclinedRows.length,
     cancelFees: cancelFeeRows.length,
     holdDeclined: holdDeclinedRows.length, // v1.117.0
     financialConcerns: financialConcernRows.length,
     emptyWeeks: emptyWeekRows.length,
-    paymentChecks: paymentArrivedRows.length + paymentSentRows.length, // v1.119.1, soft
+    paymentChecks: paymentArrivedRows.length, // v1.120.0, soft
+    unpaidReimbursements: unpaidRows.length, // v1.120.1, counts
     reimbursements: reimbursementRows.length,
     approvals: approvalRows.length,
     safetyFlags: safetyRows.length,

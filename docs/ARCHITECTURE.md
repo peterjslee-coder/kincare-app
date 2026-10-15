@@ -8,7 +8,7 @@ build red.
 Hand-written sections (§3 "Where is…") are preserved across regeneration; edit those freely.
 
 Structure at last generation: 588 HTTP routes across 63 mounts ·
-114 `CREATE TABLE` statements · 14 background jobs · 39 socket events
+114 `CREATE TABLE` statements · 15 background jobs · 39 socket events
 (17 with no client listener) · 71 push event types · 61 `window.__*` globals.
 
 ---
@@ -208,14 +208,15 @@ Every job runs through `guardedPoller` → `withPollerLock` (`src/models/databas
 | 104 | Reimbursement push digest sweeper (v1.98.15) | 30 s | `src/server.js:1462` |
 | 105 | Auto-pay cron: charge overdue sessions | 5 min | `src/server.js:1554` |
 | 106 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1660` |
-| 107 | Care Tasks poller (v1.99.0) | 1 min | `src/server.js:1670` |
-| 108 | Care Events poller (v1.100.0) | 1 min | `src/server.js:1686` |
+| 107 | Care Tasks poller (v1.99.0) | 1 min | `src/server.js:1685` |
+| 108 | Care Events poller (v1.100.0) | 1 min | `src/server.js:1701` |
 | 109 | Kindred Reminder Delivery Poller | 1 min | `src/server.js:1476` |
-| 110 | Retention (v1.106.9, poller 110) | 24 h | `src/server.js:1723` |
+| 110 | Retention (v1.106.9, poller 110) | 24 h | `src/server.js:1738` |
 | 111 | (see src/server.js:1636) | 1 h | `src/server.js:1636` |
-| 112 | v1.106.13 — poller 112: proposals that nobody answered | 10 min | `src/server.js:1752` |
-| 113 | (see src/server.js:1795) | 1 min | `src/server.js:1795` |
-| 114 | Quiet hours summary (v1.107.3, poller 114) | 5 min | `src/server.js:1814` |
+| 112 | v1.106.13 — poller 112: proposals that nobody answered | 10 min | `src/server.js:1767` |
+| 113 | (see src/server.js:1810) | 1 min | `src/server.js:1810` |
+| 114 | Quiet hours summary (v1.107.3, poller 114) | 5 min | `src/server.js:1829` |
+| 115 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1673` |
 
 ---
 
