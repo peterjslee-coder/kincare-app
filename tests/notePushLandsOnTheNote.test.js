@@ -43,7 +43,9 @@ describe("and the family's own screen now uses it", () => {
     // the section, not him choosing to keep it unfolded.
     expect(profile).toMatch(/setNotesOpen\(true, \{ remember: false \}\);/);
     // v1.105.189 — visits and notes are one list now, so a visit past the fold expands it too.
-    expect(profile).toMatch(/if \(idx >= NOTES_PREVIEW\) setShowAllNotes\(true\);/);
+    // v1.121.0 — the summary shows a chosen few, so the full list always opens, and the note
+    // itself opens in place rather than as a collapsed card.
+    expect(profile).toMatch(/\n\s*setShowAllNotes\(true\);\n\s*setExpandedNoteKeys/);
     expect(profile).toMatch(/el\.scrollIntoView\(\{ behavior: 'smooth', block: 'center' \}\)/);
   });
 

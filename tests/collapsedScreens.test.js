@@ -59,20 +59,22 @@ describe("a reimbursement is one line until you ask", () => {
   });
 });
 
-describe("care notes show the newest few", () => {
+describe("care notes show what's new, then ask (v1.121.0 — was 'the newest few')", () => {
+  // Pete, 10/15: "new since you last looked (with a 'no new notes since your last look' and an
+  // obvious way to expand that section to review old notes/reactions/pictures)." The preview
+  // is still a preview — just chosen by what the reader hasn't seen, not by position.
   test("a preview, not the whole history", () => {
-    expect(profile).toMatch(/const NOTES_PREVIEW = 5;/);
-    // v1.105.189 — the preview is over the merged visits+notes timeline, not the notes alone.
-    expect(profile).toMatch(/const shown = showAllNotes \? noteTimeline : noteTimeline\.slice\(0, NOTES_PREVIEW\);/);
+    expect(profile).toMatch(/const NEW_SHOWN = 5;/);
+    expect(profile).toContain("fresh.slice(0, NEW_SHOWN).forEach((t) => out.push(item(t)));");
   });
 
-  test("with a way to see all of them", () => {
-    expect(profile).toMatch(/Show all \$\{noteTimeline\.length\}/);
-    expect(profile).toMatch(/Show fewer/);
+  test("with a way to see all of them, and back", () => {
+    expect(profile).toMatch(/Review all \$\{noteTimeline\.length\} notes, photos & reactions/);
+    expect(profile).toContain("Back to what\\u2019s new");
   });
 
-  test("the button only exists when there is more to show", () => {
-    expect(profile).toMatch(/noteTimeline\.length > NOTES_PREVIEW \? \[\(/);
+  test("the review-all is always there, so old notes are one tap away", () => {
+    expect(profile).toContain("out.push(reviewAll);");
   });
 
   test("the count in the header still tells the truth", () => {
@@ -81,7 +83,7 @@ describe("care notes show the newest few", () => {
   });
 
   test("it is a 44px target", () => {
-    const btn = profile.slice(profile.indexOf('key="__more"'), profile.indexOf('key="__more"') + 500);
+    const btn = profile.slice(profile.indexOf('key="__review"'), profile.indexOf('key="__review"') + 500);
     expect(btn).toMatch(/minHeight: 44/);
   });
 });

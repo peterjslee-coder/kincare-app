@@ -1,6 +1,5 @@
 // v1.105.149 — how many observations the card shows before it asks. Five is about a screen
 // on a phone, and the newest five are what anyone opening a care record came to read.
-const NOTES_PREVIEW = 5;
 
 const CareProfile = window.CareProfile = ({ onNavigate }) => {
   const [profile, setProfile] = useState(null);
@@ -22,6 +21,12 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
   // previous default, so anyone who has never touched it sees exactly what they saw before.
   const [notesOpen, setNotesOpen] = useStickySection('lovedOne.notes', true); // v1.76.0 — observations are a first-class feature, not buried
   const [showAllNotes, setShowAllNotes] = useState(false); // v1.105.149 — newest few, then ask
+  // v1.121.0 (Batch 2 step 2) — notes open in place, one at a time or many; a Set of note/visit keys.
+  const [expandedNoteKeys, setExpandedNoteKeys] = useState(() => new Set());
+  // What "new" means: the moment this person last looked at THIS person's notes. Read once when
+  // the page (or the switcher) opens a profile, written when they leave it. On the account, so
+  // a look on the phone counts on the laptop.
+  const [notesSeenSnapshot, setNotesSeenSnapshot] = useState({ id: null, at: null });
   const [highlightNoteId, setHighlightNoteId] = useState(null); // v1.105.163
   const notesCardRef = React.useRef(null);
   const [noteUrgent, setNoteUrgent] = useState(false);
@@ -916,7 +921,10 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
     // v1.105.171 — open it, but do NOT remember it. He followed a push to a note; that is
     // the app deciding to unfold this, not him choosing to keep it unfolded.
     setNotesOpen(true, { remember: false });
-    if (idx >= NOTES_PREVIEW) setShowAllNotes(true);
+    // v1.121.0 — the summary shows a chosen few, not the newest N, so a linked note may not be
+    // in it at any index: open the full list, and open the note itself.
+    setShowAllNotes(true);
+    setExpandedNoteKeys((prev) => { const next = new Set(prev); next.add(`${isVisit ? 'visit' : 'note'}:${id}`); return next; });
     setHighlightNoteId(id);
     // After the expand has painted, or we scroll to where the row is about to be.
     setTimeout(() => {
@@ -926,6 +934,21 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
     }, 80);
     setTimeout(() => setHighlightNoteId(null), 5000);
   }, [notes, familyVisits]);
+
+  // v1.121.0 — "new since your last look". Snapshot the stored time when a profile opens; stamp
+  // "now" when it closes (switching people, leaving the page, or the app going away), so what
+  // counts as new does not change under the reader's thumb while they are reading it.
+  useEffect(() => {
+    const id = profile?.id;
+    if (!id) return undefined;
+    const key = `notesSeen.${id}`;
+    const stored = window.__uiPrefs ? window.__uiPrefs[key] : null;
+    setNotesSeenSnapshot({ id, at: typeof stored === 'string' ? stored : null });
+    setExpandedNoteKeys(new Set());
+    const stamp = () => { if (typeof window.__setUiPref === 'function') window.__setUiPref(key, new Date().toISOString()); };
+    window.addEventListener('pagehide', stamp);
+    return () => { window.removeEventListener('pagehide', stamp); stamp(); };
+  }, [profile?.id]);
 
   if (loading) return <LoadingSpinner text="Loading care profile..." />;
   // ─── v1.105.152 — the same empty state was telling two different people two different lies ───
@@ -1547,23 +1570,156 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                 )}
               </div>
             );
-            // Newest few of EVERYTHING, then ask (v1.105.149's rule, now over the merged list).
-            const shown = showAllNotes ? noteTimeline : noteTimeline.slice(0, NOTES_PREVIEW);
-            return noteTimeline.length > 0 ? shown.map((t) => (t.kind === 'visit' ? renderVisit(t.row) : renderNote(t.row))).concat(noteTimeline.length > NOTES_PREVIEW ? [(
-              <button key="__more" onClick={() => setShowAllNotes(!showAllNotes)}
-                style={{
-                  width: '100%', minHeight: 44, marginTop: 10, background: 'none',
-                  border: '1px dashed var(--border-color)', borderRadius: 10,
-                  color: 'var(--role-color)', font: 'inherit', fontSize: 13.5, fontWeight: 700,
-                  cursor: 'pointer',
-                }}>
-                {showAllNotes
-                  ? 'Show fewer'
-                  : `Show all ${noteTimeline.length}`}
-              </button>
-            )] : []) : (
-              <p style={{ color: 'var(--text-muted)', fontSize: 13, margin: '8px 0 0' }}>No notes yet. Add one to share care observations with your team.</p>
+            // ─── v1.121.0 (Batch 2 step 2) — the summary ───
+            //
+            // Pete, 10/15: notes carry "really good information — iPAi insights, reactions,
+            // recommendations, photos", so a summary cannot drop them; it folds them. And which
+            // ones show: "new since you last looked (with a 'no new notes since your last look'
+            // and an obvious way to expand that section to review old notes/reactions/pictures)."
+            //
+            // Order: flagged in the last 14 days (there is no "resolved" for a flag, so recency
+            // stands in for it), then what is new to THIS reader (not their own), then the
+            // review-all. A first-ever look, with nothing stored, shows the latest three.
+            const me = window.__currentUserId;
+            const keyOf = (t) => `${t.kind}:${t.id}`;
+            const authorOf = (t) => (t.kind === 'visit' ? t.row.userId : t.row.author_id);
+            const seenAt = notesSeenSnapshot.id === profile?.id ? notesSeenSnapshot.at : null;
+            const FLAG_DAYS = 14;
+            const flagCutoff = Date.now() - FLAG_DAYS * 24 * 60 * 60 * 1000;
+            // Postgres sends "2026-10-15 13:22:11.12+00"; Safari will not parse the space or the
+            // short offset, and a string compare against an ISO "…T…Z" is wrong within a day.
+            const toMs = (v) => {
+              if (!v) return NaN;
+              const x = String(v).trim().replace(' ', 'T').replace(/(\.\d{3})\d+/, '$1').replace(/([+-]\d{2})$/, '$1:00');
+              return Date.parse(x);
+            };
+            const seenMs = toMs(seenAt);
+            const isNewToMe = (t) => Number.isFinite(seenMs) && toMs(t.at) > seenMs && authorOf(t) !== me;
+            const pinned = noteTimeline.filter((t) => t.kind === 'note' && !!t.row.needs_attention
+              && toMs(t.at) >= flagCutoff).slice(0, 3);
+            const pinnedKeys = new Set(pinned.map(keyOf));
+            const fresh = noteTimeline.filter((t) => isNewToMe(t) && !pinnedKeys.has(keyOf(t)));
+            const NEW_SHOWN = 5;
+            const firstLook = !Number.isFinite(seenMs);
+            const latest = firstLook ? noteTimeline.filter((t) => !pinnedKeys.has(keyOf(t))).slice(0, 3) : [];
+
+            const toggle = (t) => setExpandedNoteKeys((prev) => {
+              const next = new Set(prev);
+              const k = keyOf(t);
+              if (next.has(k)) next.delete(k); else next.add(k);
+              return next;
+            });
+
+            // Collapsed: who, when, two lines, and the signs of what is inside.
+            const compact = (t) => {
+              const r = t.row;
+              const isVisit = t.kind === 'visit';
+              const text = isVisit ? (r.summary || 'Family visit') : (r.content || '');
+              const who = isVisit ? (r.authorFirstName || r.authorName) : `${r.author_first_name || ''}`;
+              const when = TimezoneHelper.formatTimestamp(t.at, profile?.timezone, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) || '';
+              const cats = !isVisit && Array.isArray(r.categories) ? r.categories : [];
+              const nSugg = !isVisit && r.ai_highlights && Array.isArray(r.ai_highlights.actionables) ? r.ai_highlights.actionables.length : 0;
+              const reacts = Array.isArray(r.reactions) ? r.reactions : [];
+              const emojis = [...new Set(reacts.map((x) => x.emoji))].slice(0, 3).join('');
+              const photoPath = isVisit
+                ? ((r.photoCount > 0 || r.hasPhoto) ? `/api/family-visits/${r.id}/photo` : null)
+                : (r.has_photo ? `/api/notes/${r.id}/photo` : null);
+              const nPhotos = isVisit ? (r.photoCount || (r.hasPhoto ? 1 : 0)) : (r.has_photo ? 1 : 0);
+              const chip = { fontSize: 10.5, fontWeight: 600, padding: '2px 8px', borderRadius: 10, whiteSpace: 'nowrap' };
+              return (
+                <div key={keyOf(t)} data-note-id={isVisit ? undefined : r.id} data-visit-id={isVisit ? r.id : undefined}
+                  role="button" tabIndex={0} aria-expanded="false"
+                  onClick={() => toggle(t)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(t); } }}
+                  style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '10px 0', borderBottom: '1px solid var(--border-light)', cursor: 'pointer',
+                    background: highlightNoteId === r.id ? 'rgba(74, 144, 217, 0.16)' : 'transparent', transition: 'background 1.2s ease' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 2 }}>
+                      <span style={{ fontSize: 13, fontWeight: 650, color: 'var(--text-primary)' }}>{who}</span>
+                      {isVisit && <span style={{ ...chip, fontWeight: 750, color: 'var(--role-color)', background: 'var(--role-color-light)' }}>FAMILY VISIT</span>}
+                      {!isVisit && !!r.needs_attention && <span style={{ ...chip, fontWeight: 700, color: '#e65100', background: '#fff3e0' }}>{'\u26A0'} Needs attention</span>}
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{when}</span>
+                    </div>
+                    <div style={{ fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.45, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', wordBreak: 'break-word' }}>{text}</div>
+                    {(cats.length > 0 || nSugg > 0 || reacts.length > 0 || nPhotos > 1) && (
+                      <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center', marginTop: 5 }}>
+                        {cats.slice(0, 2).map((c) => <span key={c} style={{ ...chip, color: 'var(--role-color)', background: 'var(--role-color-light)', textTransform: 'capitalize' }}>{c}</span>)}
+                        {nSugg > 0 && <span style={{ ...chip, color: 'var(--text-secondary)', background: 'var(--bg-elevated)' }}>{'\u2728'} {nSugg} suggestion{nSugg === 1 ? '' : 's'}</span>}
+                        {reacts.length > 0 && <span style={{ ...chip, color: 'var(--text-secondary)', background: 'var(--bg-elevated)' }}>{emojis} {reacts.length}</span>}
+                        {nPhotos > 1 && <span style={{ ...chip, color: 'var(--text-secondary)', background: 'var(--bg-elevated)' }}>{'\uD83D\uDCF7'} {nPhotos}</span>}
+                        <span style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--role-color)' }}>more {'\u25BE'}</span>
+                      </div>
+                    )}
+                  </div>
+                  {photoPath && typeof AttachmentThumb !== 'undefined' && (
+                    <div onClick={(e) => e.stopPropagation()} style={{ flexShrink: 0 }}>
+                      <AttachmentThumb size={48} attachment={{ path: photoPath, name: isVisit ? 'Visit photo' : 'Care note photo', mime: '' }}
+                        onOpen={() => setViewingAttachments({ list: [{ path: photoPath, name: isVisit ? 'Visit photo' : 'Care note photo', mime: '' }], index: 0 })} />
+                    </div>
+                  )}
+                </div>
+              );
+            };
+
+            // Expanded: exactly what the full feed has always shown, with a way to fold it back.
+            const full = (t) => (
+              <div key={keyOf(t)} style={{ position: 'relative' }}>
+                {t.kind === 'visit' ? renderVisit(t.row) : renderNote(t.row)}
+                <button type="button" onClick={() => toggle(t)} aria-expanded="true"
+                  style={{ display: 'block', margin: '-4px 0 6px auto', background: 'none', border: 'none', padding: '4px 0',
+                    color: 'var(--text-tertiary)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                  Show less {'\u25B4'}
+                </button>
+              </div>
             );
+            const item = (t) => (expandedNoteKeys.has(keyOf(t)) ? full(t) : compact(t));
+            const groupLabel = (txt) => (
+              <div key={`lbl-${txt}`} style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.6, textTransform: 'uppercase', color: 'var(--text-tertiary)', margin: '12px 0 2px' }}>{txt}</div>
+            );
+            const seenLabel = seenAt
+              ? (TimezoneHelper.formatTimestamp(seenAt, profile?.timezone, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) || '')
+              : '';
+
+            if (noteTimeline.length === 0) {
+              return <p style={{ color: 'var(--text-muted)', fontSize: 13, margin: '8px 0 0' }}>No notes yet. Add one to share care observations with your team.</p>;
+            }
+
+            const reviewAll = (
+              <button key="__review" type="button" data-testid="notes-review-all" onClick={() => setShowAllNotes(!showAllNotes)}
+                style={{ width: '100%', minHeight: 44, marginTop: 12, background: 'none', border: '1px dashed var(--border-color)', borderRadius: 10,
+                  color: 'var(--role-color)', font: 'inherit', fontSize: 13.5, fontWeight: 700, cursor: 'pointer' }}>
+                {showAllNotes ? 'Back to what\u2019s new' : `Review all ${noteTimeline.length} notes, photos & reactions`}
+              </button>
+            );
+
+            if (showAllNotes) {
+              return [groupLabel(`All ${noteTimeline.length}, newest first`), ...noteTimeline.map(item), reviewAll];
+            }
+
+            const out = [];
+            if (pinned.length) { out.push(groupLabel('Needs attention')); pinned.forEach((t) => out.push(item(t))); }
+            if (firstLook) {
+              if (latest.length) { out.push(groupLabel('Latest')); latest.forEach((t) => out.push(item(t))); }
+            } else if (fresh.length) {
+              out.push(groupLabel(`New since your last look${seenLabel ? ` \u00B7 ${seenLabel}` : ''}`));
+              fresh.slice(0, NEW_SHOWN).forEach((t) => out.push(item(t)));
+              if (fresh.length > NEW_SHOWN) {
+                out.push(
+                  <button key="__morenew" type="button" onClick={() => setShowAllNotes(true)}
+                    style={{ background: 'none', border: 'none', padding: '8px 0', color: 'var(--role-color)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                    + {fresh.length - NEW_SHOWN} more new
+                  </button>
+                );
+              }
+            } else {
+              out.push(
+                <div key="__nonew" data-testid="notes-nothing-new" style={{ padding: '12px 0 2px', fontSize: 13.5, color: 'var(--text-secondary)' }}>
+                  No new notes since your last look{seenLabel ? ` (${seenLabel})` : ''}.
+                </div>
+              );
+            }
+            out.push(reviewAll);
+            return out;
             })()}
           </div>
         )}

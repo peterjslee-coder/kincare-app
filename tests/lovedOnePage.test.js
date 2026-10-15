@@ -47,3 +47,37 @@ test("a jump unfolds without rewriting the remembered fold", () => {
   expect(prefs).toMatch(/keys\.includes\(key\)\) setOpen\(true, \{ remember: false \}\)/);
   expect(prefs).toContain("window.addEventListener('inplace:open-section', onOpen)");
 });
+
+// ─── step 2: the notes summary ───
+describe("notes summary (v1.121.0 step 2)", () => {
+  test("flagged first, then new to this reader, then review-all; a no-new message", () => {
+    const i = (n) => at(n);
+    expect(i("groupLabel('Needs attention')")).toBeLessThan(i("New since your last look"));
+    expect(src).toContain('data-testid="notes-nothing-new"');
+    expect(src).toContain("No new notes since your last look");
+    expect(src).toContain('data-testid="notes-review-all"');
+    expect(src).toContain("Review all ${noteTimeline.length} notes, photos & reactions");
+  });
+
+  test("a reader's own notes are never 'new' to them", () => {
+    expect(src).toMatch(/isNewToMe = \(t\) => [^\n]*authorOf\(t\) !== me/);
+  });
+
+  test("collapsed cards still show photos, suggestions, reactions and the flag", () => {
+    expect(src).toMatch(/AttachmentThumb size=\{48\}/);
+    expect(src).toMatch(/suggestion\{nSugg === 1 \? '' : 's'\}/);
+    expect(src).toContain("reacts.length > 0");
+    expect(src).toContain("Needs attention</span>}");
+  });
+
+  test("expanded is the full note as before, and a deep link opens its note", () => {
+    expect(src).toContain("t.kind === 'visit' ? renderVisit(t.row) : renderNote(t.row)");
+    expect(src).toMatch(/setExpandedNoteKeys\(\(prev\) => \{ const next = new Set\(prev\); next\.add\(`\$\{isVisit \? 'visit' : 'note'\}:\$\{id\}`\)/);
+  });
+
+  test("'last look' is per person, on the account, stamped on leave", () => {
+    expect(src).toContain("const key = `notesSeen.${id}`;");
+    expect(src).toMatch(/window\.__setUiPref\(key, new Date\(\)\.toISOString\(\)\)/);
+    expect(src).toContain("window.addEventListener('pagehide', stamp)");
+  });
+});

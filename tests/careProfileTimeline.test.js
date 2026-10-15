@@ -25,7 +25,10 @@ describe("one timeline", () => {
     // The old shape: every visit, then the notes.
     expect(src).not.toMatch(/\{familyVisits\.map\(\(v\) =>/);
     expect(src).not.toMatch(/\(showAllNotes \? notes : notes\.slice\(0, NOTES_PREVIEW\)\)\.map/);
-    expect(src).toContain("shown.map((t) => (t.kind === 'visit' ? renderVisit(t.row) : renderNote(t.row)))");
+    // v1.121.0 — every list (flagged, new, all) draws through item(), which opens to the same
+    // renderVisit/renderNote pair; the full review is the whole merged timeline.
+    expect(src).toContain("t.kind === 'visit' ? renderVisit(t.row) : renderNote(t.row)");
+    expect(src).toContain("...noteTimeline.map(item)");
   });
 
   test("the sort key is a real instant, and the two kinds share a format", () => {
@@ -38,12 +41,10 @@ describe("one timeline", () => {
     expect(fv).toContain("visitedAt: r.visited_at");
   });
 
-  test("'newest few, then ask' counts the merged list; the deep-link expander uses the same index", () => {
-    expect(src).toContain("const shown = showAllNotes ? noteTimeline : noteTimeline.slice(0, NOTES_PREVIEW);");
-    expect(src).toContain("noteTimeline.length > NOTES_PREVIEW");
-    expect(src).toContain("`Show all ${noteTimeline.length}`");
+  test("the review counts the merged list; a deep link finds its row in it and opens it", () => {
+    expect(src).toContain("Review all ${noteTimeline.length} notes, photos & reactions");
     expect(src).toContain("const idx = noteTimeline.findIndex((t) => t.id === id && t.kind === (isVisit ? 'visit' : 'note'));");
-    expect(src).toContain("if (idx >= NOTES_PREVIEW) setShowAllNotes(true);");
+    expect(src).toMatch(/\n\s*setShowAllNotes\(true\);\n\s*setExpandedNoteKeys/);
   });
 
   test("a visit keeps its label — interleaved, never blended", () => {
