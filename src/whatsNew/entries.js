@@ -31,6 +31,23 @@ const WINDOW_DAYS = 45;
 
 const ENTRIES = [
   {
+    id: "loved-one-page",
+    version: "1.121.0",
+    date: "2026-10-15",
+    audience: ["family"],
+    title: "Your loved one's page, in one scroll",
+    body: "Everything about the person you care for is on one page now, in the order you'd look for it: who they are, what's left to do today, notes, visits, then money and legal. The bar at the top follows you down the page — tap a word to jump there.",
+    howTo: [
+      "Open My Loved One and tap To do, Notes, Calendar or Money & legal in the bar",
+      "Check off today's tasks right there — Now, Later today, Next visit",
+      "Notes show what's new since you last looked; tap Review all for the rest",
+      "Reimbursements live under Money & legal now",
+    ],
+    examples: ["Did Mom take the morning pills?", "Water the kitchen plant at the next visit", "Who's with Mom tomorrow?"],
+    preview: "lovedOnePage",
+    action: { label: "Show me", page: "care-profile" },
+  },
+  {
     id: "reimbursement-pay-reminders",
     version: "1.120.1",
     date: "2026-10-15",
@@ -44,7 +61,7 @@ const ENTRIES = [
     ],
     examples: ["The monthly internet bill for Mom's house", "Sam's pharmacy run, approved last week"],
     preview: "toPay",
-    action: { label: "Show me", page: "care-team" },
+    action: { label: "Show me", page: "care-profile", focus: "lovedOne:money" },
   },
   {
     id: "reimbursement-check-arrived",
@@ -55,12 +72,12 @@ const ENTRIES = [
     body: "A check or cash payment never marks itself paid, so approved reimbursements could sit at “awaiting payment” long after the money was deposited. Now the approver says how they'll pay, the person being paid can tap “I got it”, and InPlace asks both of you if it's still open after a few days.",
     howTo: [
       "Approving? Pick how you'll pay — check, cash, Venmo, or in the app",
-      "Being paid? Open the request on the Care Team page and tap “I got it”",
+      "Being paid? Open the request under Money & legal on your loved one's page and tap “I got it”",
       "Or answer “Did the check arrive?” under Needs you on Home",
     ],
     examples: ["Sam wrote me a check for the groceries", "Paid Jane back in cash for the pharmacy run"],
     preview: "checkArrived",
-    action: { label: "Show me", page: "care-team" },
+    action: { label: "Show me", page: "care-profile", focus: "lovedOne:money" },
   },
   {
     id: "quiet-hours-what-happened",

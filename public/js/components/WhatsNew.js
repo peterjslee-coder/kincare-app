@@ -173,6 +173,27 @@ const WN_PREVIEWS = {
     </div>
   ),
   // v1.120.1 — the payer is reminded until a reimbursement is paid
+  // v1.121.0 — the loved one's page: the guide bar, and To do grouped by when (a747e1cb)
+  lovedOnePage: () => (
+    <div style={{ padding: '10px 10px 8px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>
+      <div style={{ display: 'flex', gap: 5, overflow: 'hidden', marginBottom: 10 }}>
+        {['Mom', 'To do', 'Notes', 'Calendar', 'Money'].map((c, i) => (
+          <span key={c} style={{ ...wnPill(i === 1 ? 'var(--role-color)' : 'var(--bg-elevated)', i === 1 ? 'var(--text-on-primary)' : 'var(--text-secondary)'), borderRadius: 999, whiteSpace: 'nowrap' }}>{c}</span>
+        ))}
+      </div>
+      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.4, color: 'var(--text-tertiary)', marginBottom: 4 }}>NOW</div>
+      {[['💊', 'Morning pills', '9:00 AM', true], ['🍽️', 'Lunch', '12:30 PM', false]].map(([ic, t, at, due]) => (
+        <div key={t} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', marginBottom: 4, borderRadius: 8,
+          border: `1.5px solid ${due ? 'var(--color-warning)' : 'var(--border-color)'}`, fontSize: 12 }}>
+          <span style={{ width: 16, height: 16, borderRadius: '50%', border: '2px solid var(--border-color)', flexShrink: 0 }} />
+          <span style={{ flex: 1, color: 'var(--text-primary)', fontWeight: 600 }}>{ic} {t}</span>
+          <span style={{ color: 'var(--text-muted)' }}>{at}</span>
+        </div>
+      ))}
+      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.4, color: 'var(--text-tertiary)', margin: '8px 0 2px' }}>NEXT VISIT</div>
+      <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{'☐'} Water the kitchen plant</div>
+    </div>
+  ),
   toPay: () => (
     <div style={{ padding: '12px 12px 10px', borderRadius: 12, border: '2px solid var(--accent-color)', background: 'var(--bg-attention-card)' }}>
       <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.4, color: 'var(--text-tertiary)', marginBottom: 4 }}>{'💵'} TO PAY {'·'} FOR MOM</div>
@@ -265,7 +286,7 @@ const WhatsNewModal = window.WhatsNewModal = ({ entries, onClose, onNavigate }) 
 
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {e.action && onNavigate && (
-            <button onClick={() => { onClose(); onNavigate(e.action.page); }}
+            <button onClick={() => { onClose(); if (e.action.focus) window.__pendingFocus = e.action.focus; onNavigate(e.action.page); }}
               style={{ ...btn, border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--role-color)' }}>
               {e.action.label}
             </button>
