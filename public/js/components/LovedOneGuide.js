@@ -218,6 +218,7 @@ const lovedOneSectionFocus = () => {
 // compared with the real clock.
 const LOVED_ONE_UPCOMING = new Set(['requested', 'open', 'pending', 'confirmed', 'in_progress']);
 const LOVED_ONE_DAY_MS = 24 * 60 * 60 * 1000;
+const LOVED_ONE_WEEK_SHOWN = 4; // the page is a summary; Schedule has the rest
 
 const lovedOneShiftDate = (dateStr, days) => {
   const [y, m, d] = String(dateStr).split('-').map(Number);
@@ -237,10 +238,11 @@ const lovedOneVisitBuckets = window.lovedOneVisitBuckets = (sessions, recipientI
       continue;
     }
     if (!LOVED_ONE_UPCOMING.has(s.status)) continue; // cancelled, declined, expired, no-show
-    // Under way now, or starts within a day → the top. A visit whose time has fully passed
-    // without being checked out stays on top too: it is the thing someone should look at.
+    // Under way now, or starts within a day → the top. One whose time has fully passed is not
+    // "next" — staging showed yesterday's visit under "Next 24 hours". A visit nobody checked
+    // out of is Home's Needs-you job, not the calendar's.
     if (s.status === 'in_progress' || !Number.isFinite(start) || start - nowMs <= LOVED_ONE_DAY_MS) {
-      if (s.status !== 'in_progress' && Number.isFinite(end) && end < nowMs - LOVED_ONE_DAY_MS) continue; // stale request
+      if (s.status !== 'in_progress' && Number.isFinite(end) && end <= nowMs) continue;
       next24.push({ s, start });
     } else if (start - nowMs <= 7 * LOVED_ONE_DAY_MS) week.push({ s, start });
   }
@@ -310,7 +312,12 @@ const LovedOneVisits = window.LovedOneVisits = ({ recipientId, recipientFirstNam
       {next24.length ? next24.map(row) : (
         <div style={{ fontSize: 13, color: 'var(--text-tertiary)', padding: '2px 2px 6px' }}>No visits for {name} in the next 24 hours.</div>
       )}
-      {week.length > 0 && (<>{heading('This week', 'visits-week')}{week.map(row)}</>)}
+      {week.length > 0 && (<>{heading('This week', 'visits-week')}{week.slice(0, LOVED_ONE_WEEK_SHOWN).map(row)}
+        {week.length > LOVED_ONE_WEEK_SHOWN && (
+          <div style={{ fontSize: 12, color: 'var(--text-tertiary)', padding: '6px 2px 0' }}>
+            +{week.length - LOVED_ONE_WEEK_SHOWN} more this week on the full schedule
+          </div>
+        )}</>)}
       {recent.length > 0 && (<>{heading('Recent', 'visits-recent')}{recent.map(row)}</>)}
       {onNavigate && (
         <button type="button" onClick={() => onNavigate('schedule')}

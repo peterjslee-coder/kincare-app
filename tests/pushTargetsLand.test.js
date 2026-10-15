@@ -123,8 +123,12 @@ describe("lovedOneVisitBuckets — Calendar on the loved one's page", () => {
     expect(ids(b.recent)).toEqual(["d1", "d2", "d3"]);
   });
 
-  test("a request whose time passed more than a day ago drops off; one just missed stays on top", () => {
-    const b = win.lovedOneVisitBuckets([v("stale", -30, "requested"), v("missed", -4, "confirmed")], "r1", NOW, startOf);
-    expect(ids(b.next24)).toEqual(["missed"]);
+  test("a visit that's over isn't 'next'; one that started and hasn't ended still is", () => {
+    // Staging, 10/15: yesterday's 8-hour visit (never checked out) sat under "Next 24 hours".
+    const b = win.lovedOneVisitBuckets([
+      v("yesterday", -23.5, "confirmed", { duration_hours: 8 }), v("stale", -30, "requested"),
+      v("midway", -2, "confirmed", { duration_hours: 4 }),
+    ], "r1", NOW, startOf);
+    expect(ids(b.next24)).toEqual(["midway"]);
   });
 });
