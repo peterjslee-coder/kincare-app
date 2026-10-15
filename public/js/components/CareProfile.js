@@ -27,6 +27,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
   // the page (or the switcher) opens a profile, written when they leave it. On the account, so
   // a look on the phone counts on the laptop.
   const [notesSeenSnapshot, setNotesSeenSnapshot] = useState({ id: null, at: null });
+  const newestNoteAtRef = React.useRef(null); // the newest note/visit the page has loaded
   const [highlightNoteId, setHighlightNoteId] = useState(null); // v1.105.163
   const notesCardRef = React.useRef(null);
   const [noteUrgent, setNoteUrgent] = useState(false);
@@ -641,6 +642,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
     ...familyVisits.map((v) => ({ kind: 'visit', id: v.id, at: v.visitedAt || v.createdAt, row: v })),
     ...notes.map((n) => ({ kind: 'note', id: n.id, at: n.created_at, row: n })),
   ].sort((a, b) => String(b.at || '').localeCompare(String(a.at || '')));
+  newestNoteAtRef.current = noteTimeline.length ? noteTimeline[0].at : null;
 
   // A tap and an Enter arriving together used to save the same note twice (Daniel, Sep 11,
   // 14:27:14 and 14:27:15). React state is too slow to be the lock; a ref is not.
@@ -945,7 +947,15 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
     const stored = window.__uiPrefs ? window.__uiPrefs[key] : null;
     setNotesSeenSnapshot({ id, at: typeof stored === 'string' ? stored : null });
     setExpandedNoteKeys(new Set());
-    const stamp = () => { if (typeof window.__setUiPref === 'function') window.__setUiPref(key, new Date().toISOString()); };
+    // Stored as "<when you looked>|<newest item you were shown>". The second half is what "new"
+    // is measured against: a note that arrived while the page sat open was never on screen,
+    // and stamping the moment of leaving would have marked it seen (found on staging).
+    const stamp = () => {
+      if (typeof window.__setUiPref !== 'function') return;
+      const newest = newestNoteAtRef.current;
+      const nowIso = new Date().toISOString();
+      window.__setUiPref(key, `${nowIso}|${newest || nowIso}`);
+    };
     window.addEventListener('pagehide', stamp);
     return () => { window.removeEventListener('pagehide', stamp); stamp(); };
   }, [profile?.id]);
@@ -1583,7 +1593,8 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
             const me = window.__currentUserId;
             const keyOf = (t) => `${t.kind}:${t.id}`;
             const authorOf = (t) => (t.kind === 'visit' ? t.row.userId : t.row.author_id);
-            const seenAt = notesSeenSnapshot.id === profile?.id ? notesSeenSnapshot.at : null;
+            const seenRaw = notesSeenSnapshot.id === profile?.id ? notesSeenSnapshot.at : null;
+            const [lookedAt, seenAt] = seenRaw ? (seenRaw.includes('|') ? seenRaw.split('|') : [seenRaw, seenRaw]) : [null, null];
             const FLAG_DAYS = 14;
             const flagCutoff = Date.now() - FLAG_DAYS * 24 * 60 * 60 * 1000;
             // Postgres sends "2026-10-15 13:22:11.12+00"; Safari will not parse the space or the
@@ -1676,8 +1687,8 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
             const groupLabel = (txt) => (
               <div key={`lbl-${txt}`} style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.6, textTransform: 'uppercase', color: 'var(--text-tertiary)', margin: '12px 0 2px' }}>{txt}</div>
             );
-            const seenLabel = seenAt
-              ? (TimezoneHelper.formatTimestamp(seenAt, profile?.timezone, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) || '')
+            const seenLabel = lookedAt
+              ? (TimezoneHelper.formatTimestamp(lookedAt, profile?.timezone, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) || '')
               : '';
 
             if (noteTimeline.length === 0) {

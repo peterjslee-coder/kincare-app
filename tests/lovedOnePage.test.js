@@ -77,7 +77,10 @@ describe("notes summary (v1.121.0 step 2)", () => {
 
   test("'last look' is per person, on the account, stamped on leave", () => {
     expect(src).toContain("const key = `notesSeen.${id}`;");
-    expect(src).toMatch(/window\.__setUiPref\(key, new Date\(\)\.toISOString\(\)\)/);
+    // Measured against the newest item actually loaded, not the moment of leaving: a note that
+    // arrives while the page sits open was never seen (staging, 10/15).
+    expect(src).toContain("window.__setUiPref(key, `${nowIso}|${newest || nowIso}`);");
+    expect(src).toContain("newestNoteAtRef.current = noteTimeline.length ? noteTimeline[0].at : null;");
     expect(src).toContain("window.addEventListener('pagehide', stamp)");
   });
 });
