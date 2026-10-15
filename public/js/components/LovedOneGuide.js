@@ -19,13 +19,16 @@
 const LOVED_ONE_GUIDE_TOP = 0;
 
 /** One labeled stop on the page. The id is what the bar and deep links aim at. */
-const LovedOneSection = window.LovedOneSection = ({ id, label, children }) => (
+const LovedOneSection = window.LovedOneSection = ({ id, label, hideLabel, children }) => (
   <section id={`lo-${id}`} data-lo-section={id} aria-label={label}
     style={{ scrollMarginTop: 60, display: 'flex', flexDirection: 'column' }}>
-    <div style={{
-      fontSize: 11, fontWeight: 700, letterSpacing: 0.6, textTransform: 'uppercase',
-      color: 'var(--text-tertiary)', margin: '18px 2px 8px',
-    }}>{label}</div>
+    {/* `hideLabel` for the first stop: the person's card right under the bar already says who. */}
+    {!hideLabel && (
+      <div style={{
+        fontSize: 11, fontWeight: 700, letterSpacing: 0.6, textTransform: 'uppercase',
+        color: 'var(--text-tertiary)', margin: '18px 2px 8px',
+      }}>{label}</div>
+    )}
     {children}
   </section>
 );
@@ -78,7 +81,9 @@ const LovedOneGuideBar = window.LovedOneGuideBar = ({ sections }) => {
     // After the unfold has rendered, so the target's position is final.
     setTimeout(() => {
       const el = document.getElementById(`lo-${s.id}`);
-      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      // Instant, not smooth: on staging a smooth scroll was cancelled by the unfold re-render
+      // and the page never moved while the chip lit up. A jump that lands beats a pretty one.
+      if (el) el.scrollIntoView({ block: 'start' });
       setTimeout(() => { jumpingRef.current = false; }, 700);
     }, 30);
   };

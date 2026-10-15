@@ -1031,7 +1031,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
         <LovedOneGuideBar sections={lovedOneSections} />
       )}
 
-      <LovedOneSection id="person" label={profile?.first_name || 'Profile'}>
+      <LovedOneSection id="person" label={profile?.first_name || 'Profile'} hideLabel>
       {/* ─── 1. Compact Hero Card — Photo, Name, Age, Address, Emergency Contact ─── */}
       {!editing ? (
         <div className="card" style={{ padding: '16px 20px' }}>
