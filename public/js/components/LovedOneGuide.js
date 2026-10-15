@@ -88,6 +88,13 @@ const LovedOneGuideBar = window.LovedOneGuideBar = ({ sections }) => {
     }, 30);
   };
 
+  // Arriving with a section to open (from the Care Team page's link) — jump once it's drawn.
+  React.useEffect(() => {
+    const want = lovedOneSectionFocus();
+    const s = want && sections.find((x) => x.id === want);
+    if (s) setTimeout(() => jump(s), 400);
+  }, [ids]);
+
   return (
     <nav ref={barRef} aria-label="Sections of this page" data-testid="loved-one-guide"
       style={{
@@ -120,4 +127,82 @@ const LovedOneGuideBar = window.LovedOneGuideBar = ({ sections }) => {
       })}
     </nav>
   );
+};
+
+// ─── v1.121.0 (Batch 2 step 4) — reimbursements live on the loved one's page ───
+//
+// Pete's grouping puts money with the person it was spent on: "money, legal, and readiness".
+// The ledger moved from the Care Team page into Money & legal. Every push, Needs-you card and
+// in-app notification already sent says page "care-team" + focus "reimbursement:<id>", and
+// phones hold those for days — so instead of trusting every sender to be updated, every
+// place that turns a tap into a page asks this first. Families only: the Care Team page and
+// Betty's page are both family pages, and anyone else keeps whatever they had.
+const lovedOneRoute = window.lovedOneRoute = (page, focus, careTeamId) => {
+  if (page !== 'care-team') return page;
+  // reimbursement:<id> for one request; schedule:<id> for a monthly series.
+  if (typeof focus !== 'string' || !(focus.startsWith('reimbursement:') || focus.startsWith('schedule:'))) return page;
+  if ((window.__currentRole || 'family') !== 'family') return page;
+  if (careTeamId) window.__pendingLovedOneTeamId = careTeamId;
+  return 'care-profile';
+};
+
+/**
+ * Which loved one should Betty's page open on? Normally the first. After a reimbursement
+ * deep link, the one whose team that reimbursement belongs to — by team id when the tap
+ * carried one, else by finding the reimbursement in the user's teams (one or two, usually).
+ */
+const pickLovedOne = window.pickLovedOne = async (recipients) => {
+  const list = recipients || [];
+  if (list.length < 2) { window.__pendingLovedOneTeamId = null; return list[0] || null; }
+  const focus = typeof window.__pendingFocus === 'string' ? window.__pendingFocus : '';
+  const wantTeam = window.__pendingLovedOneTeamId;
+  window.__pendingLovedOneTeamId = null;
+  if (!wantTeam && !focus.startsWith('reimbursement:')) return list[0];
+  try {
+    const r = await apiFetch('/api/care-teams');
+    const teams = r && r.ok ? ((await r.json()).careTeams || []) : [];
+    let team = wantTeam ? teams.find((t) => t.id === wantTeam) : null;
+    if (!team && focus.startsWith('reimbursement:')) {
+      const rid = focus.slice('reimbursement:'.length);
+      for (const t of teams) {
+        const rr = await apiFetch(`/api/reimbursements/team/${t.id}`);
+        const d = rr && rr.ok ? await rr.json() : null;
+        if (d && (d.reimbursements || []).some((x) => x.id === rid)) { team = t; break; }
+      }
+    }
+    return (team && list.find((x) => x.id === team.care_recipient_id)) || list[0];
+  } catch { return list[0]; }
+};
+
+/** The ledger for this loved one's care team, inside Money & legal. */
+const LovedOneReimbursements = window.LovedOneReimbursements = ({ recipientId }) => {
+  const [team, setTeam] = React.useState(null);
+  React.useEffect(() => {
+    let live = true;
+    setTeam(null);
+    (async () => {
+      try {
+        const r = await apiFetch('/api/care-teams');
+        if (!r || !r.ok) return;
+        const t = ((await r.json()).careTeams || []).find((x) => x.care_recipient_id === recipientId);
+        if (!t) return;
+        const r2 = await apiFetch(`/api/care-teams/${t.id}`);
+        if (!r2 || !r2.ok) return;
+        const d = await r2.json();
+        if (live) setTeam(d.careTeam);
+      } catch { /* the rest of the page stands without it */ }
+    })();
+    return () => { live = false; };
+  }, [recipientId]);
+  if (!team || typeof Reimbursements === 'undefined') return null;
+  return <Reimbursements careTeamId={team.id} members={team.members || []} myUserId={team.myUserId} />;
+};
+
+// A jump that arrives from another page (the Care Team page's "Reimbursements →" link):
+// window.__pendingFocus = 'lovedOne:money'. Consumed by the bar once its sections exist.
+const lovedOneSectionFocus = () => {
+  const f = window.__pendingFocus;
+  if (typeof f !== 'string' || !f.startsWith('lovedOne:')) return null;
+  window.__pendingFocus = null;
+  return f.slice('lovedOne:'.length);
 };

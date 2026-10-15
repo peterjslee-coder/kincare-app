@@ -841,6 +841,8 @@ const App = () => {
       // homes (Dashboard, CaretakerHub) claim `session:` and open the visit.
       if (!target && d.sessionId) target = 'dashboard';
       if (!target) return;
+      // v1.121.0 — reimbursements moved to the loved one's page; old and new taps both land there.
+      if (typeof lovedOneRoute === 'function') target = lovedOneRoute(target, window.__pendingFocus, d.careTeamId);
       // v1.98.14 — stash + self-re-assert. On a native/cold push tap the router
       // fires while the async /auth/me restore is still landing on 'dashboard';
       // a one-shot setCurrentPage loses that race and the tap "falls to Home"
@@ -1529,7 +1531,9 @@ const App = () => {
     if (deepFocus) window.__pendingFocus = deepFocus;
     const deepTeam = params.get('careTeamId');
     if (deepTeam) { window.__pendingTeam = deepTeam; setSelectedCareTeamId(deepTeam); }
-    const deepPage = params.get('page');
+    let deepPage = params.get('page');
+    // v1.121.0 — same rule as a push tap: a reimbursement opens on the loved one's page.
+    if (deepPage && typeof lovedOneRoute === 'function') deepPage = lovedOneRoute(deepPage, deepFocus, deepTeam);
     if (deepPage) {
       window.__pendingPage = deepPage;
       setCurrentPage(deepPage);

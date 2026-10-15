@@ -211,6 +211,9 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
     const it = items.find((x) => x.id === id);
     if (!it) return;
     window.__pendingFocus = null;
+    // v1.121.0 — a folded ledger hid the very row the tap was about. Open it for this visit
+    // only (remember: false), the same rule as every other deep link.
+    if (!sectionOpen) setSectionOpen(true, { remember: false });
     setHighlightId(id);
     // v1.98.10 — the Care Team page keeps laying out async sections (team,
     // billing, receipts) AFTER this effect first runs, which pushes the target
@@ -231,6 +234,28 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
     setTimeout(() => setHighlightId(null), 5000);
     if (meta.isApprover && it.status === 'pending') openApprove(it);
   }, [loading, items, meta.isApprover]);
+
+  // v1.121.0 — "schedule:<id>": a monthly series was requested, approved or declined. The
+  // server has sent this focus since v1.98 and nothing read it — the tap opened the page and
+  // left you to find the row. Found by the push-targets release check (pushTargetsLand.test).
+  useEffect(() => {
+    if (loading) return;
+    const f = window.__pendingFocus;
+    if (!f || typeof f !== 'string' || !f.startsWith('schedule:')) return;
+    const id = f.slice('schedule:'.length);
+    if (!schedules.some((x) => x.id === id)) return;
+    window.__pendingFocus = null;
+    if (!sectionOpen) setSectionOpen(true, { remember: false });
+    setHighlightId(f);
+    let tries = 0;
+    const settle = setInterval(() => {
+      tries += 1;
+      const node = document.querySelector(`[data-schedule-id="${id}"]`);
+      if (node) node.scrollIntoView({ behavior: 'auto', block: 'center' });
+      if (tries >= 12) clearInterval(settle);
+    }, 250);
+    setTimeout(() => setHighlightId(null), 5000);
+  }, [loading, schedules]);
 
   // Client-side image resize (max 1600px, JPEG q0.85) — receipts shouldn't be 5MB photos
   const processFile = (file) => new Promise((resolve, reject) => {
@@ -1120,7 +1145,7 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
             }[sc.status] || { t: sc.status, bg: 'var(--bg-primary)', fg: 'var(--text-muted)' };
             const mine = sc.payee_user_id === myUserId;
             return (
-              <div key={sc.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '8px 4px', borderTop: '1px solid var(--border-light)' }}>
+              <div key={sc.id} data-schedule-id={sc.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '8px 4px', borderTop: '1px solid var(--border-light)', borderRadius: 8, transition: 'background 1.2s ease', background: highlightId === `schedule:${sc.id}` ? 'rgba(74, 144, 217, 0.16)' : 'transparent' }}>
                 <div style={{ flex: '1 1 220px' }}>
                   <span style={{ fontWeight: 600, fontSize: 14 }}>${Number(sc.amount).toFixed(2)}/mo</span>
                   <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}> — {sc.description} · day {sc.day_of_month} · to {sc.payee_first_name} {sc.payee_last_name}</span>

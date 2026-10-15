@@ -9,7 +9,7 @@ Hand-written sections (§3 "Where is…") are preserved across regeneration; edi
 
 Structure at last generation: 588 HTTP routes across 63 mounts ·
 114 `CREATE TABLE` statements · 15 background jobs · 39 socket events
-(17 with no client listener) · 71 push event types · 61 `window.__*` globals.
+(17 with no client listener) · 71 push event types · 62 `window.__*` globals.
 
 ---
 
@@ -333,7 +333,7 @@ State travels through `window`, not props. This table is the registry.
 | `window.__caregiverFirstStepsRemain` | CaretakerHub.js | 2 |
 | `window.__clearSessionActive` | app.js | 4 |
 | `window.__currentPage` | app.js | 2 |
-| `window.__currentRole` | app.js, HelpPage.js, MyAccount.js | 10 |
+| `window.__currentRole` | app.js, HelpPage.js, MyAccount.js | 13 |
 | `window.__currentUserId` | app.js | 10 |
 | `window.__documentsTab` | Dashboard.js | 6 |
 | `window.__findWorkTab` | CaretakerHub.js | 4 |
@@ -353,8 +353,9 @@ State travels through `window`, not props. This table is the registry.
 | `window.__originalSearch` | app.js | 4 |
 | `window.__pendingCall` | app.js, Messages.js | 5 |
 | `window.__pendingConversation` | app.js | 5 |
-| `window.__pendingFocus` | app.js, AttentionCard.js, CancelFeeSheet.js | 39 |
+| `window.__pendingFocus` | app.js, AttentionCard.js, CancelFeeSheet.js | 49 |
 | `window.__pendingLogVisit` | TeamNotes.js | 2 |
+| `window.__pendingLovedOneTeamId` | CareTeamManage.js, LovedOneGuide.js | 6 |
 | `window.__pendingNoteDraft` | CareProfile.js, Messages.js | 3 |
 | `window.__pendingNoteRecipientId` | app.js, TeamNotes.js | 4 |
 | `window.__pendingPage` | app.js | 10 |

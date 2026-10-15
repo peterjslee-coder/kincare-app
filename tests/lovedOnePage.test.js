@@ -30,6 +30,7 @@ test("every old section is still on the page, inside the right stop", () => {
   inside("ref={notesCardRef}", "notes", "calendar");
   inside("<CareEventsSection", "calendar", "money");
   inside('data-testid="loved-one-request-care"', "calendar", "money");
+  inside("<LovedOneReimbursements", "money", "about");
   inside("<LegalReadinessCard", "money", "about");
   inside('data-testid="open-documents-center"', "money", "about");
   inside("setPrefsExpanded(!prefsExpanded)", "about");

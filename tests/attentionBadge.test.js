@@ -379,7 +379,8 @@ describe("the number says what it is made of", () => {
     for (const kind of ["reimbursement", "timeChange", "careTask"]) {
       expect(util).toMatch(new RegExp(`kind: "${kind}"`));
     }
-    expect(card).toMatch(/if \(onNavigate\) onNavigate\(item\.page\)/);
+    // v1.121.0 — through lovedOneRoute, so a reimbursement opens on the loved one's page.
+    expect(card).toMatch(/if \(onNavigate\) onNavigate\(typeof lovedOneRoute === 'function' \? lovedOneRoute\(item\.page, item\.focus\) : item\.page\)/);
   });
 
   test("nothing waiting draws nothing at all", () => {

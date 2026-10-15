@@ -298,7 +298,7 @@ const AttentionCard = window.AttentionCard = ({ onNavigate, only }) => {
     // Open the exact item, not just the page it lives on. Consumed by Dashboard /
     // CaretakerHub, which open the visit detail for `session:<id>`.
     if (item.focus) window.__pendingFocus = item.focus;
-    if (onNavigate) onNavigate(item.page);
+    if (onNavigate) onNavigate(typeof lovedOneRoute === 'function' ? lovedOneRoute(item.page, item.focus) : item.page);
     // This card lives inside Dashboard, and onNavigate is setCurrentPage, which does
     // not remount it — so a mount-time read of __pendingFocus would never fire when
     // the target page is the one we are already on. Announce it instead.

@@ -27,7 +27,7 @@ const CareTeamPage = window.CareTeamPage = ({ selectedTeamId, onNavigate }) => {
 
   // If a team is selected, show its management page
   if (activeTeamId) {
-    return <CareTeamManage careTeamId={activeTeamId} onBack={teams.length > 1 ? () => setActiveTeamId(null) : null} />;
+    return <CareTeamManage careTeamId={activeTeamId} onNavigate={onNavigate} onBack={teams.length > 1 ? () => setActiveTeamId(null) : null} />;
   }
 
   // No teams — empty state

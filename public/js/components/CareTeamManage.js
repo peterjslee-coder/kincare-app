@@ -66,7 +66,7 @@ const capsLabel = (caps, role) => {
 };
 
 
-const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
+const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack, onNavigate }) => {
   const [team, setTeam] = useState(null);
   const [loading, setLoading] = useState(true);
   const [inviteEmail, setInviteEmail] = useState('');
@@ -1165,8 +1165,25 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack }) => {
         </div>
       )}
 
-      {/* Reimbursements ledger (v1.72.0) */}
-      <Reimbursements careTeamId={careTeamId} members={team.members || []} myUserId={myUserId} />
+      {/* Reimbursements ledger (v1.72.0). v1.121.0 — moved to the loved one's page, under
+          Money & legal (Pete, a747e1cb: "where is reimbursements versus where are care tasks").
+          This card is the signpost, so a hand that reaches here from habit gets there in one tap. */}
+      {onNavigate && (window.__currentRole || 'family') === 'family' ? (
+        <div className="card" data-testid="reimbursements-moved" role="button" tabIndex={0}
+          onClick={() => { window.__pendingLovedOneTeamId = careTeamId; window.__pendingFocus = 'lovedOne:money'; onNavigate('care-profile'); }}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); window.__pendingLovedOneTeamId = careTeamId; window.__pendingFocus = 'lovedOne:money'; onNavigate('care-profile'); } }}
+          style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', cursor: 'pointer' }}>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--role-color)' }}>💵 Reimbursements</div>
+            <div style={{ fontSize: 13, color: 'var(--text-tertiary)', marginTop: 2 }}>
+              Now on {team.recipient_first_name ? `${team.recipient_first_name}’s` : 'the loved one’s'} page, under Money &amp; legal
+            </div>
+          </div>
+          <span style={{ fontSize: 20, color: 'var(--text-muted)' }}>›</span>
+        </div>
+      ) : (
+        <Reimbursements careTeamId={careTeamId} members={team.members || []} myUserId={myUserId} />
+      )}
 
       {/* Visit Detail Modal */}
       {visitDetailSessionId && (

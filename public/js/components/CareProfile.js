@@ -703,7 +703,8 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
           const data = await response.json();
           if (data.careRecipients && data.careRecipients.length > 0) {
             setAllRecipients(data.careRecipients);
-            const first = data.careRecipients[0];
+            // v1.121.0 — a reimbursement deep link opens on the loved one it belongs to.
+            const first = (typeof pickLovedOne === 'function' ? await pickLovedOne(data.careRecipients) : null) || data.careRecipients[0];
             setProfile(first);
             setPermTier(first.permission_tier || 'full');
             try { setVisSettings(first.visibility_settings ? JSON.parse(first.visibility_settings) : null); } catch { setVisSettings(null); }
@@ -1010,7 +1011,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
     { id: 'todo', label: 'To do', openKeys: ['careTodos:Next visit'] },
     { id: 'notes', label: 'Notes', openKeys: ['lovedOne.notes'] },
     { id: 'calendar', label: 'Calendar', openKeys: ['lovedOne.careEvents'] },
-    ...(lovedOneHasMoney ? [{ id: 'money', label: 'Money & legal', openKeys: [] }] : []),
+    ...(lovedOneHasMoney ? [{ id: 'money', label: 'Money & legal', openKeys: ['careTeam.reimbursements'] }] : []),
     { id: 'about', label: 'About', openKeys: ['lovedOne.preferences', 'lovedOne.permissions'] },
   ];
 
@@ -1754,6 +1755,11 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
 
       {lovedOneHasMoney && (
       <LovedOneSection id="money" label="Money & legal">
+      {/* v1.121.0 step 4 — the team's reimbursements, moved here from the Care Team page:
+          money sits with the person it was spent on. Family only, like the rest of this stop. */}
+      {profile?.id && (window.__currentRole || 'family') === 'family' && typeof LovedOneReimbursements !== 'undefined' && (
+        <LovedOneReimbursements key={profile.id} recipientId={profile.id} />
+      )}
       {/* v1.110 — legal & money readiness. Family only; the server refuses everyone else. */}
       {profile?.id && (window.__currentRole || 'family') === 'family' && typeof LegalReadinessCard !== 'undefined' && <LegalReadinessCard careRecipientId={profile.id} />}
       {/* v1.121.0 — Documents moved here from the page header: it is the legal half of
