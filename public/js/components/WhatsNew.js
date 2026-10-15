@@ -172,6 +172,31 @@ const WN_PREVIEWS = {
       </div>
     </div>
   ),
+  // v1.120.0 — "Did the check arrive?" (feedback bfbb79bd)
+  checkArrived: () => (
+    <div style={{ padding: '12px 12px 10px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>
+      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.4, color: 'var(--text-tertiary)', marginBottom: 4 }}>{'💵'} DID IT ARRIVE?</div>
+      <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text-primary)' }}>Did Sam{'’'}s check for $42.00 arrive?</div>
+      <div style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: '4px 0 10px' }}>Groceries for Mom {'·'} approved, but nothing has marked it paid.</div>
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+        <span style={{ ...wnPill('var(--bg-card)', 'var(--role-color)'), border: '1.5px solid var(--role-color)', padding: '8px 14px' }}>Got it</span>
+        <span style={{ fontSize: 12, color: 'var(--text-tertiary)', textDecoration: 'underline' }}>Not yet</span>
+      </div>
+    </div>
+  ),
+  // v1.120.0 — quiet hours says what it held (feedback 0783ec12)
+  whileAway: () => (
+    <div style={{ padding: '12px 12px 10px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>
+      <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>{'🌙'} While you were away</div>
+      {[['6:41 AM', 'Jane checked in'], ['6:55 AM', 'New note about Mom']].map(([t, x]) => (
+        <div key={t} style={{ display: 'flex', gap: 8, padding: '5px 8px', marginBottom: 3, borderRadius: 8, background: 'var(--bg-elevated)', fontSize: 12 }}>
+          <span style={{ color: 'var(--text-muted)', minWidth: 52 }}>{t}</span>
+          <span style={{ flex: 1, color: 'var(--text-primary)' }}>{x}</span>
+          <span style={{ color: 'var(--role-color)', fontWeight: 600 }}>Open</span>
+        </div>
+      ))}
+    </div>
+  ),
   id: () => (
     <div style={{ textAlign: 'center', padding: '6px 4px' }}>
       <div style={{ fontSize: 30 }}>{'🪪'}</div>

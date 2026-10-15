@@ -99,7 +99,7 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
             Vetted local caregivers. Fair wages. Real-time peace of mind for families.
           </div>
           <p className="splash-hero-body" style={{ fontSize: '16px', color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: '16px', maxWidth: '480px' }}>
-            inPlace matches families with vetted caregivers in hours — by the visit, no contracts, no agency markup. Your caregiver keeps her full rate; inPlace adds {feePercent}% on top. Families see everything in real time.
+            inPlace matches families with vetted caregivers in hours — by the visit, no contracts, no agency markup. Your caregiver keeps their full rate; inPlace adds {feePercent}% on top. Families see everything in real time.
           </p>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: 'var(--bg-highlight)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '8px 14px', fontSize: '13px', color: 'var(--role-color)', fontWeight: 500, marginBottom: '20px' }}>
             <span style={{ fontSize: '15px' }}>{'\u{1F4CD}'}</span> Now serving the New River Valley — expanding across Virginia soon. Limited early signups.
@@ -550,7 +550,7 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
             <div style={{ padding: '36px', background: 'var(--bg-highlight)', borderRadius: '12px', border: '1px solid #d0e8e3', flex: '1 1 280px', maxWidth: '420px' }}>
               <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--role-color)', marginBottom: '12px' }}>Caregivers Keep Their Full Rate</div>
               <p style={{ fontSize: '15px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-                Your caregiver keeps her full rate. inPlace adds {feePercent}% on top, and that's it {'\u2014'} no agency markup. Fair pay for important work, and more hours of care for your budget. Caregivers are paid within 48 hours.
+                Your caregiver keeps their full rate. inPlace adds {feePercent}% on top, and that's it {'\u2014'} no agency markup. Fair pay for important work, and more hours of care for your budget. Caregivers are paid within 48 hours.
               </p>
             </div>
           </div>

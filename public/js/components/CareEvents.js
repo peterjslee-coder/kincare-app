@@ -489,7 +489,7 @@ const CareEventSheet = window.CareEventSheet = ({ ev, canManage, onClose, onEdit
           )}
 
           <textarea value={newNote} onChange={(e) => setNewNote(e.target.value)}
-            placeholder={`e.g. "Dr. Lambert started her on a new blood-pressure tablet, mornings. Back in six weeks."`}
+            placeholder={`e.g. "Dr. Lambert started a new blood-pressure tablet, mornings. Back in six weeks."`}
             rows={3}
             style={{
               width: '100%', padding: '10px 12px', border: '1px solid var(--border-color)', borderRadius: 8,

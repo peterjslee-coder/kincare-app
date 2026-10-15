@@ -375,7 +375,7 @@ const CareTaskFormModal = ({ recipientId, recipientFirstName, teamMembers, exist
 
         <div style={label}>Task</div>
         <input style={input} value={title} onChange={(e) => setTitle(e.target.value)}
-          placeholder={type === 'medication' ? `Give ${recipientFirstName} her evening medication` : type === 'hygiene' ? 'Help with a bath' : type === 'meal' ? 'Make sure dinner happened' : type === 'checkin' ? 'Stop by and check in' : 'What needs doing?'} />
+          placeholder={type === 'medication' ? `Give ${recipientFirstName} the evening medication` : type === 'hygiene' ? 'Help with a bath' : type === 'meal' ? 'Make sure dinner happened' : type === 'checkin' ? 'Stop by and check in' : 'What needs doing?'} />
         {type === 'medication' && (
           <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
             <input style={{ ...input, flex: 2 }} value={medName} onChange={(e) => setMedName(e.target.value)} placeholder="Medication name (optional)" />

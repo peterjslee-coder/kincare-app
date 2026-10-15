@@ -92,7 +92,7 @@ router.post("/outreach-inbound", async (req, res) => {
       await sendToContact(db, contact, O.JOIN_REPLY, { automated: true });
       push.sendPushToAdmins("outreach_reply", {
         title: "Outreach: someone texted JOIN",
-        body: `${who} asked to hear more. InPlace answered and asked for her email.`,
+        body: `${who} asked to hear more. InPlace answered and asked for their email.`,
         data: { type: "outreach_reply", url: "/?adminTab=outreach" },
       });
       return;

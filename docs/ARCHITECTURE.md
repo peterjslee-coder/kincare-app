@@ -7,7 +7,7 @@ build red.
 
 Hand-written sections (§3 "Where is…") are preserved across regeneration; edit those freely.
 
-Structure at last generation: 587 HTTP routes across 63 mounts ·
+Structure at last generation: 588 HTTP routes across 63 mounts ·
 114 `CREATE TABLE` statements · 14 background jobs · 39 socket events
 (17 with no client listener) · 71 push event types · 61 `window.__*` globals.
 
@@ -91,7 +91,7 @@ JSX is *not* compiled in the browser; Babel-standalone is not loaded. Editing an
 | `/api/push` | `src/routes/push.js` | 11 |  |
 | `/api/reactions` | `src/routes/reactions.js` | 2 |  |
 | `/api/referrals` | `src/routes/referrals.js` | 8 |  |
-| `/api/reimbursements` | `src/routes/reimbursements.js` | 27 |  |
+| `/api/reimbursements` | `src/routes/reimbursements.js` | 28 |  |
 | `/api/reports` | `src/routes/reports.js` | 2 |  |
 | `/api/safety` | `src/routes/safety.js` | 6 |  |
 | `/api/scheduling` | `src/routes/nlScheduling.js` | 1 |  |
@@ -337,7 +337,7 @@ State travels through `window`, not props. This table is the registry.
 | `window.__documentsTab` | Dashboard.js | 6 |
 | `window.__findWorkTab` | CaretakerHub.js | 4 |
 | `window.__flushUiPrefs` | uiPrefs.js | 1 |
-| `window.__handlePushNavigate` | app.js | 10 |
+| `window.__handlePushNavigate` | app.js | 12 |
 | `window.__hasActiveSession` | app.js | 6 |
 | `window.__inplaceSubPage` | AdminPanel.js | 6 |
 | `window.__isAdmin` | app.js | 2 |

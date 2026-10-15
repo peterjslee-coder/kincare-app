@@ -26,7 +26,8 @@
     "lint:blobs": "node scripts/lint-blobs.js",
     "check:r2": "node scripts/check-r2.js",
     "backfill:r2": "node scripts/backfill-blobs-to-r2.js",
-    "lint:server-undef": "node scripts/lint-server-undef.js"
+    "lint:server-undef": "node scripts/lint-server-undef.js",
+    "lint:pronouns": "node scripts/lint-pronouns.js"
   },
   "engines": {
     "node": ">=18.0.0"

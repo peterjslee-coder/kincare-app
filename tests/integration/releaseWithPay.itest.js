@@ -224,7 +224,7 @@ describe("who cannot do it", () => {
     const id = await activeVisit({ agoMinutes: 60 });
     const res = await release(id, tina);
     expect(res.status).toBe(403);
-    expect(res.body.error).toMatch(/can't release herself/i);
+    expect(res.body.error).toMatch(/can't release themselves/i);
     expect(res.body.error).not.toMatch(/booking access/i);
     expect((await row(id)).status).toBe("in_progress");
     expect(mockCaptured).toHaveLength(0);
@@ -268,7 +268,7 @@ describe("who cannot do it", () => {
 
     const res = await release(id, julia);
     expect(res.status).toBe(403);
-    expect(res.body.error).toMatch(/can't release herself/i);
+    expect(res.body.error).toMatch(/can't release themselves/i);
     expect((await row(id)).status).toBe("in_progress");
     expect(mockCaptured).toHaveLength(0);
   });

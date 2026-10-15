@@ -74,13 +74,75 @@ function shouldHold(prefsRaw, eventType, payload, now = new Date()) {
   return !isExempt(eventType, payload);
 }
 
-async function recordHeld(db, userId) {
+async function recordHeld(db, userId, notificationId = null) {
   await db.prepare(`
     INSERT INTO quiet_hours_held (user_id, held_count, first_held_at, last_held_at)
     VALUES (?, 1, NOW(), NOW())
     ON CONFLICT (user_id) DO UPDATE
       SET held_count = quiet_hours_held.held_count + 1, last_held_at = NOW()
   `).run(userId);
+  // v1.119.1 — remember WHICH notification was held, not only that one was. Pete (0783ec12):
+  // "I got a push notification that there was one update while I was away. I clicked on it…
+  // I have no idea what it was." The count alone could say "1 update" and nothing more.
+  if (notificationId) {
+    await db.prepare(
+      "UPDATE notifications SET quiet_held_at = NOW() WHERE id = ? AND user_id = ?"
+    ).run(notificationId, userId);
+  }
+}
+
+const SUMMARY_ITEMS_MAX = 20;  // listed in Activity
+const SUMMARY_TITLES_SHOWN = 2; // named in the push body before "and N more"
+
+function parseData(raw) {
+  if (!raw) return null;
+  if (typeof raw === "object") return raw;
+  try { return JSON.parse(raw); } catch { return null; }
+}
+
+/**
+ * The summary push for one person, from the notifications that were held for them.
+ *
+ * Only TITLES are repeated. Every push title already passes the no-PHI-on-lock-screens gate
+ * (v1.105.39) because each of these was about to be shown on that same lock screen; bodies
+ * are not, so they stay out. One held item: the push opens that item, as the original would
+ * have. Several: it opens Home, where Activity lists them (`inAppData.items`).
+ *
+ * @param {Array<{id,title,type,data,created_at}>} items held notifications, oldest first
+ * @param {number} heldCount how many were held, which can exceed items.length if an in-app
+ *   row failed to write
+ */
+function buildQuietSummary(items, heldCount) {
+  const list = (items || []).filter((i) => i && i.title);
+  const n = Math.max(Number(heldCount) || 0, list.length);
+  const tag = "quiet-hours-summary";
+  const title = "While you were away";
+  if (list.length === 0) {
+    return {
+      title, tag,
+      body: n === 1 ? "1 update came in during quiet hours." : `${n} updates came in during quiet hours.`,
+      data: { type: "quiet_hours_summary", page: "dashboard" },
+      inAppData: { type: "quiet_hours_summary", page: "dashboard", items: [] },
+    };
+  }
+  const titles = list.map((i) => String(i.title).trim());
+  let body;
+  if (n === 1) body = titles[0];
+  else if (titles.length <= 3 && titles.length === n) body = `${n} updates: ${titles.join(" · ")}`;
+  else {
+    const named = titles.slice(0, SUMMARY_TITLES_SHOWN);
+    body = `${n} updates: ${named.join(" · ")} · and ${n - named.length} more`;
+  }
+
+  const shown = list.slice(-SUMMARY_ITEMS_MAX).map((i) => ({
+    id: i.id, title: i.title, type: i.type || "general",
+    data: parseData(i.data), at: i.created_at || null,
+  }));
+  const single = n === 1 ? shown[0] : null;
+  const data = single
+    ? { ...(single.data || {}), type: (single.data && single.data.type) || single.type }
+    : { type: "quiet_hours_summary", page: "dashboard" };
+  return { title, tag, body, data, inAppData: { type: "quiet_hours_summary", page: "dashboard", items: shown } };
 }
 
 /**
@@ -104,15 +166,25 @@ async function sendQuietHourSummaries(db, pushFn, now = new Date()) {
       "DELETE FROM quiet_hours_held WHERE user_id = ? AND held_count = ?"
     ).run(r.user_id, n);
     if (!gone || gone.changes !== 1) continue;
+    // Claim the held rows for this summary. A push held in the instant between the delete and
+    // this claim is listed here AND counted toward the next summary; the next one then falls
+    // back to the count-only wording for it. Listing a thing once too often beats losing it.
+    let items = [];
+    try {
+      items = await db.prepare(`
+        UPDATE notifications SET quiet_summarized_at = NOW()
+         WHERE user_id = ? AND quiet_held_at IS NOT NULL AND quiet_summarized_at IS NULL
+        RETURNING id, title, type, data, created_at
+      `).all(r.user_id);
+      items.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+    } catch { items = []; } // the count-only summary is still better than none
+    const s = buildQuietSummary(items, n);
     await pushFn(r.user_id, {
-      title: "While you were away",
-      body: n === 1 ? "1 update came in during quiet hours." : `${n} updates came in during quiet hours.`,
-      tag: "quiet-hours-summary",
-      data: { type: "quiet_hours_summary", page: "dashboard" },
+      title: s.title, body: s.body, tag: s.tag, data: s.data, inAppData: s.inAppData,
     }, "quiet_hours_summary");
     sent++;
   }
   return sent;
 }
 
-module.exports = { EXEMPT, parseQuietHours, isQuietNow, isExempt, shouldHold, recordHeld, sendQuietHourSummaries };
+module.exports = { EXEMPT, parseQuietHours, isQuietNow, isExempt, shouldHold, recordHeld, buildQuietSummary, sendQuietHourSummaries };

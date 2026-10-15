@@ -2160,7 +2160,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                       border: '1.5px solid var(--role-color)', background: 'var(--bg-teal-light)',
                     }}>
                       <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
-                        How did you find {recipName ? recipName.split(' ')[0] : 'her'}?
+                        How did you find {recipName ? recipName.split(' ')[0] : 'them'}?
                       </div>
                       <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', marginTop: 2 }}>
                         Now that you{'\u2019'}ve been there a bit. Pick as many as fit.
@@ -3444,7 +3444,22 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                   one where you most want it gone — the only way to clear it vanished. */}
               {unread.length > 0 && <button onClick={() => markRead(unread.map(n => n.id))} style={{ padding: '4px 10px', background: 'transparent', color: 'var(--text-muted)', border: '1px solid var(--border-color)', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>Mark all read</button>}
             </div>
-            {unread.slice(0, 5).map(n => (
+            {unread.slice(0, 5).map(n => quietSummaryItems(n) && quietSummaryItems(n).length > 0 ? (
+              // v1.119.1 — "While you were away" lists what it held; see QuietSummary.js.
+              <div key={n.id} style={{ padding: '10px 12px', marginBottom: 6, borderRadius: 8, border: '1.5px solid #4a90d9', background: 'rgba(74, 144, 217, 0.04)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                  <div style={{ fontWeight: 600, fontSize: 14 }}>{'\u{1F319}'} {n.title}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>{timeAgo(n.created_at)}</div>
+                </div>
+                <QuietSummaryItems items={quietSummaryItems(n)}
+                  onOpenItem={(item) => {
+                    markRead([n.id, item.id]);
+                    const d = item.data || { type: item.type };
+                    if (window.__handlePushNavigate) window.__handlePushNavigate(d);
+                  }}
+                  onDone={() => markRead([n.id])} />
+              </div>
+            ) : (
               <div key={n.id} className="activity-new-shimmer" onClick={() => {
                 markRead([n.id]);
                 // v1.97.0 — tap goes to the item itself via the central deep-link router
@@ -4239,7 +4254,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               React.createElement('div', { style: { textAlign: 'center', marginBottom: 20 } },
                 React.createElement('h3', { style: { marginTop: 0, marginBottom: 4, fontSize: 22 } }, 'Almost there!'),
                 React.createElement('p', { style: { fontSize: 13, color: 'var(--text-secondary)', margin: 0 } },
-                  'We\u2019ll ask how ' + ((checkInSession.recipientName || checkInSession.recipient_name || '').split(' ')[0] || 'she') + ' is doing in a little while, once you\u2019ve settled in.'
+                  ((first) => first ? `We\u2019ll ask how ${first} is doing in a little while, once you\u2019ve settled in.` : 'We\u2019ll ask how the visit is going in a little while, once you\u2019ve settled in.')((checkInSession.recipientName || checkInSession.recipient_name || '').split(' ')[0])
                 )
               ),
 

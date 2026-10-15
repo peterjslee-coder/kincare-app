@@ -3289,6 +3289,30 @@ async function initializeDatabase() {
           summary: "Explains how InPlace measures visits on its own systems: which screens are used, how people found us, and whether a personal link we sent was opened. Removes a third-party analytics service we no longer use, and names our voice-note transcription and voicemail providers." },
       ]),
     },
+    {
+      // v1.119.1 — quiet hours remembers WHAT it held (feedback 0783ec12). Pete: "I got a push
+      // notification that there was one update while I was away. I clicked on it… I have no
+      // idea what it was." Held notifications are marked as they are held, and claimed by the
+      // summary that lists them. See utils/quietHours.js.
+      id: "068_quiet_hours_items",
+      statements: [
+        `ALTER TABLE notifications ADD COLUMN IF NOT EXISTS quiet_held_at TIMESTAMPTZ`,
+        `ALTER TABLE notifications ADD COLUMN IF NOT EXISTS quiet_summarized_at TIMESTAMPTZ`,
+        `CREATE INDEX IF NOT EXISTS idx_notifications_quiet_unclaimed ON notifications (user_id)
+           WHERE quiet_held_at IS NOT NULL AND quiet_summarized_at IS NULL`,
+      ],
+    },
+    {
+      // v1.119.1 — a check or cash reimbursement can be closed by the person it paid
+      // (feedback bfbb79bd). planned_method is what the approver said they'd use; the
+      // received_* pair records that the PAYEE, not the approver, said it arrived.
+      id: "069_reimbursement_received",
+      statements: [
+        `ALTER TABLE reimbursements ADD COLUMN IF NOT EXISTS planned_method TEXT`,
+        `ALTER TABLE reimbursements ADD COLUMN IF NOT EXISTS received_confirmed_by TEXT REFERENCES users(id)`,
+        `ALTER TABLE reimbursements ADD COLUMN IF NOT EXISTS received_confirmed_at TIMESTAMPTZ`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

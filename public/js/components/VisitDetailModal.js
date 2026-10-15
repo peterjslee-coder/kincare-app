@@ -30,7 +30,7 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, 
         setReleaseStep(null);
         setReleaseReason('');
         if (typeof showToast === 'function') {
-          showToast(`Visit ended \u2014 she'll be paid $${Number(d.paid || 0).toFixed(2)} for the full booking`, 'success');
+          showToast(`Visit ended \u2014 the caregiver will be paid $${Number(d.paid || 0).toFixed(2)} for the full booking`, 'success');
         }
         if (onRefresh) onRefresh();
         handleClose();
@@ -282,7 +282,7 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, 
                 <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 10, padding: 14, marginBottom: 14 }}>
                   <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>Taking over from here?</div>
                   <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', marginTop: 3, lineHeight: 1.45 }}>
-                    End the visit now and pay {s.caregiver_name ? s.caregiver_name.split(' ')[0] : 'the caregiver'} for the whole booking. She{'\u2019'}ll be told she can leave.
+                    End the visit now and pay {s.caregiver_name ? s.caregiver_name.split(' ')[0] : 'the caregiver'} for the whole booking. They{'\u2019'}ll be told they can leave.
                   </div>
                   {releaseStep === 'confirm' ? (
                     <div style={{ marginTop: 10 }}>
@@ -305,7 +305,7 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, 
                       width: '100%', minHeight: 44, marginTop: 10, borderRadius: 9,
                       border: '1px solid var(--border-color)', background: 'var(--bg-card)',
                       color: 'var(--text-primary)', font: 'inherit', fontWeight: 600, fontSize: 13.5, cursor: 'pointer',
-                    }}>Let her go, with pay</button>
+                    }}>Release with pay</button>
                   )}
                   {releaseError && (
                     <div style={{ fontSize: 12, color: 'var(--color-error)', marginTop: 8, lineHeight: 1.4 }}>{releaseError}</div>
@@ -333,7 +333,7 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, 
                       if (!result.unchanged) s.instructions_updated_at = new Date().toISOString();
                       if (result.caregiverNotified && typeof window.__showToast === 'function') {
                         const first = s.caregiver_name ? s.caregiver_name.split(' ')[0] : 'Your caregiver';
-                        window.__showToast(`Sent to ${first} — she'll be asked to confirm she's read them.`, 'success');
+                        window.__showToast(`Sent to ${first} — they'll be asked to confirm they've read them.`, 'success');
                       }
                       setEditingInstructions(false);
                       if (onRefresh) onRefresh();
@@ -393,8 +393,8 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, 
                       const needAck = !ackAt || (updAt && new Date(updAt) > new Date(ackAt));
                       let text = null, color = 'var(--text-muted)';
                       if (!needAck) { text = `\u2713 ${first} read these \u00B7 ${formatDateTime(ackAt)}`; color = 'var(--color-success)'; }
-                      else if (s.status === 'in_progress') { text = `Not yet confirmed by ${first}. They stay on her screen until she does.`; color = 'var(--color-warning)'; }
-                      else if (s.status === 'confirmed') { text = `${first} will be asked to confirm these when she checks in.`; }
+                      else if (s.status === 'in_progress') { text = `Not yet confirmed by ${first}. They stay on screen until ${first} does.`; color = 'var(--color-warning)'; }
+                      else if (s.status === 'confirmed') { text = `${first} will be asked to confirm these at check-in.`; }
                       if (!text) return null;
                       return <div data-testid="instructions-ack-status" style={{ fontSize: 12, fontWeight: 600, color, marginTop: 8 }}>{text}</div>;
                     })()}

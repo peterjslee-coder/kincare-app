@@ -2026,7 +2026,7 @@ router.post("/:id/arrival-condition", async (req, res) => {
     `).get(req.params.id);
     if (!session) return res.status(404).json({ error: "Session not found" });
     if (session.caregiver_user_id !== req.user.id) {
-      return res.status(403).json({ error: "Only the caregiver on this visit can record how she's doing" });
+      return res.status(403).json({ error: "Only the caregiver on this visit can record how the visit is going" });
     }
     if (session.status !== "in_progress") {
       return res.status(400).json({ error: "That visit isn't in progress" });
@@ -2134,7 +2134,7 @@ router.post("/:id/release", blockWhileImpersonating("release a caregiver with pa
     // refused for lacking booking access and advised to ask for some — advice that would never
     // help her, because no amount of booking access lets her release herself.
     if (session.caregiver_user_id === req.user.id) {
-      return res.status(403).json({ error: "A caregiver can't release herself. Check out as normal, or ask the family to release you." });
+      return res.status(403).json({ error: "A caregiver can't release themselves. Check out as normal, or ask the family to release you." });
     }
 
     // Asked of the row, never of a role string (lint:authz).
@@ -2143,7 +2143,7 @@ router.post("/:id/release", blockWhileImpersonating("release a caregiver with pa
     const caps = await recipientCapabilities(db, session.care_recipient_id, req.user.id);
     if (!can(caps, CAP.BOOK_CARE)) {
       return res.status(403).json({
-        error: "Letting a caregiver go early with full pay is a booking decision, so it needs booking access. Ask the care team leader to release her, or to give you booking access.",
+        error: "Letting a caregiver go early with full pay is a booking decision, so it needs booking access. Ask the care team leader to release the caregiver, or to give you booking access.",
       });
     }
 

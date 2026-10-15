@@ -282,7 +282,7 @@ adminRouter.post("/:id/messages", async (req, res) => {
     const db = await getDb();
     const contact = await loadContact(db, req.params.id);
     if (!contact) return res.status(404).json({ error: "Not found" });
-    if (contact.opted_out_at || contact.status === "opted_out") return res.status(400).json({ error: "She replied STOP. InPlace can't text her again unless she texts START." });
+    if (contact.opted_out_at || contact.status === "opted_out") return res.status(400).json({ error: "This person replied STOP. InPlace can't text them again unless they text START." });
     // A first text to someone who has never written back is a cold text: same hours as the intro.
     if (!contact.last_inbound_at) {
       const win = O.introWindow();
@@ -378,7 +378,7 @@ adminRouter.patch("/:id", async (req, res) => {
       if (!O.OUTREACH_STATUSES.includes(b.status)) return res.status(400).json({ error: "Unknown status" });
       // Opt-out belongs to her. Admin can record one (she said "don't text me" on a call), but
       // can never clear one — only her START does that.
-      if (contact.status === "opted_out" && b.status !== "opted_out") return res.status(400).json({ error: "She opted out. Only she can opt back in, by texting START." });
+      if (contact.status === "opted_out" && b.status !== "opted_out") return res.status(400).json({ error: "This person opted out. Only they can opt back in, by texting START." });
       next.status = b.status;
     }
     await db.prepare(`
@@ -400,7 +400,7 @@ adminRouter.delete("/:id", async (req, res) => {
     const contact = await db.prepare("SELECT id, intro_sent_at FROM outreach_contacts WHERE id = ?").get(req.params.id);
     if (!contact) return res.status(404).json({ error: "Not found" });
     // Once she's been texted the thread is a record (including any STOP); keep it.
-    if (contact.intro_sent_at) return res.status(400).json({ error: "She's already been texted — mark her Declined or Wrong number instead, so the record stays." });
+    if (contact.intro_sent_at) return res.status(400).json({ error: "They've already been texted — mark them Declined or Wrong number instead, so the record stays." });
     await db.prepare("DELETE FROM outreach_contacts WHERE id = ?").run(contact.id);
     res.json({ ok: true });
   } catch (err) {

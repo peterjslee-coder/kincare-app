@@ -27,6 +27,9 @@ const MAX_RECEIPTS = 5;
 const MAX_RECEIPT_BYTES = 5 * 1024 * 1024; // 5MB decoded
 const ALLOWED_MIMES = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
 const PAID_METHODS = ["venmo", "zelle", "check", "cash", "bank", "other"];
+// v1.119.1 — what the approver says they will use, at approval. "inplace" is the in-app ACH
+// rail, which marks itself paid; everything else needs a person to say the money arrived.
+const PLANNED_METHODS = ["inplace", ...PAID_METHODS];
 // v1.97.0 — how the requester wants to be paid back (the "to" address).
 // "ach" = bank transfer the family runs from their own banking app; the app
 // stores a LABEL only (bank nickname + last 4), never account/routing numbers.
@@ -373,7 +376,8 @@ router.get("/team/:teamId", async (req, res) => {
     const rows = await db.prepare(`
       SELECT r.id, r.amount, r.description, r.category, r.purpose, r.expense_date, r.status,
              r.self_recorded, r.created_at, r.approved_at, r.declined_reason,
-             r.paid_at, r.paid_method, r.paid_reference,
+             r.paid_at, r.paid_method, r.paid_reference, r.planned_method,
+             r.received_confirmed_by, r.received_confirmed_at,
              r.payout_method, r.payout_details, r.paid_from_label, r.payout_verified, r.payout_status,
              r.requested_by, ru.first_name AS requester_first_name, ru.last_name AS requester_last_name,
              r.payee_user_id, pu.first_name AS payee_first_name, pu.last_name AS payee_last_name,
@@ -639,13 +643,18 @@ router.post("/:id/approve", async (req, res) => {
       assertLabelOnly(fromLabel, "The from-account label");
     }
 
+    // v1.119.1 — how the approver means to pay (feedback bfbb79bd). A check or cash never
+    // marks itself paid, so the app has to know to ask later. Optional: an old client, or an
+    // approver who has not decided, sends nothing and the nudge words itself generically.
+    const plannedMethod = PLANNED_METHODS.includes(req.body.payMethod) ? req.body.payMethod : null;
+
     await db.prepare(`
       UPDATE reimbursements SET status = 'approved', approved_by = ?, approved_at = NOW(),
-        paid_from_account_id = ?, paid_from_label = ?, updated_at = NOW()
+        paid_from_account_id = ?, paid_from_label = ?, planned_method = ?, updated_at = NOW()
       WHERE id = ? AND status = 'pending'
-    `).run(req.user.id, fromAccountId, fromLabel, req.params.id);
+    `).run(req.user.id, fromAccountId, fromLabel, plannedMethod, req.params.id);
 
-    audit(req, "reimbursement_approved", { id: req.params.id, amount: ctx.row.amount, fromLabel });
+    audit(req, "reimbursement_approved", { id: req.params.id, amount: ctx.row.amount, fromLabel, plannedMethod });
     await feedEntry(db, ctx.access.team, "Reimbursement approved",
       `$${Number(ctx.row.amount).toFixed(2)} — ${ctx.row.description}${fromLabel ? ` (from ${fromLabel})` : ""}`);
     const toLabel = payoutLabel(ctx.row);
@@ -725,6 +734,64 @@ router.post("/:id/mark-paid", async (req, res) => {
 });
 
 // ── POST /:id/cancel — requester withdraws a pending request ──
+// ── POST /:id/mark-received — the person being paid says it arrived (v1.119.1) ──
+//
+// Pete (bfbb79bd): "Some of these deposits are via check. And it needs to prompt me to go
+// back and ask if I ever received payment. So for the driveway repairs, Sara wrote me a check
+// for that and I have deposited it. But it still shows as awaiting payment."
+//
+// Only the approver could mark a request paid, and nothing ever asked her to; the person
+// holding the deposited check had no button at all. Pete's call (10/15): the payee may close
+// it on their own — it is their money arriving — with the approver notified and an audit row
+// naming who confirmed it.
+//
+// Approved requests only. Confirming a PENDING one would be approving your own request.
+// Not while an in-app transfer is moving or done: that rail marks itself paid, and a manual
+// "got it" on top of it would record the same money twice.
+router.post("/:id/mark-received", async (req, res) => {
+  try {
+    const db = await getDb();
+    const row = await db.prepare("SELECT * FROM reimbursements WHERE id = ?").get(req.params.id);
+    if (!row) return res.status(404).json({ error: "Reimbursement not found" });
+    const access = await teamAccess(db, row.care_team_id, req.user.id);
+    if (!access || !access.canView) return res.status(404).json({ error: "Reimbursement not found" });
+    if (row.payee_user_id !== req.user.id) {
+      return res.status(403).json({ error: "Only the person being paid can confirm it arrived" });
+    }
+    if (row.status === "paid") return res.status(409).json({ error: "Already marked paid", code: "ALREADY_PAID" });
+    if (row.status === "pending") {
+      return res.status(400).json({ error: "This hasn't been approved yet. Ask the approver to approve it first." });
+    }
+    if (row.status !== "approved") return res.status(400).json({ error: `Cannot confirm a ${row.status} request` });
+    if (["processing", "succeeded"].includes(row.payout_status)) {
+      return res.status(409).json({ error: "This is being paid through InPlace and will mark itself paid." });
+    }
+    const asked = req.body.method;
+    const method = PAID_METHODS.includes(asked) ? asked
+      : PAID_METHODS.includes(row.planned_method) ? row.planned_method : "other";
+    const reference = (typeof req.body.reference === "string" ? req.body.reference.trim() : "").slice(0, 200) || null;
+
+    const r = await db.prepare(`
+      UPDATE reimbursements SET status = 'paid', paid_at = NOW(), paid_method = ?, paid_reference = ?,
+        paid_by = ?, received_confirmed_by = ?, received_confirmed_at = NOW(), updated_at = NOW()
+      WHERE id = ? AND status = 'approved'
+    `).run(method, reference, req.user.id, req.user.id, req.params.id);
+    if (!r || r.changes !== 1) return res.status(409).json({ error: "Already marked paid", code: "ALREADY_PAID" });
+
+    const methodLabel = method === "bank" ? "bank transfer (ACH)" : method;
+    audit(req, "reimbursement_received", { id: req.params.id, amount: row.amount, method, reference });
+    await feedEntry(db, access.team, "Reimbursement received",
+      `$${Number(row.amount).toFixed(2)} — ${row.description} (${methodLabel}, confirmed by the person paid)`);
+    await notifyParties(db, req, { row, access }, "Reimbursement received",
+      `$${Number(row.amount).toFixed(2)} received via ${methodLabel}`, "reimbursement_paid");
+    res.json({ message: "Marked received", method });
+  } catch (err) {
+    console.error("Mark-received reimbursement error:", err);
+    captureException(err, { where: "reimbursements: mark-received" });
+    res.status(500).json({ error: "Failed to mark received" });
+  }
+});
+
 router.post("/:id/cancel", async (req, res) => {
   try {
     const db = await getDb();
@@ -1472,7 +1539,8 @@ router.get("/money/:teamId", async (req, res) => {
     const reimbursements = await db.prepare(`
       SELECT r.id, r.amount, r.description, r.category, r.purpose, r.expense_date, r.status,
              r.self_recorded, r.created_at, r.approved_at, r.declined_reason,
-             r.paid_at, r.paid_method, r.paid_reference,
+             r.paid_at, r.paid_method, r.paid_reference, r.planned_method,
+             r.received_confirmed_by, r.received_confirmed_at,
              r.payout_method, r.payout_details, r.paid_from_label,
              r.requested_by, ru.first_name AS requester_first_name, ru.last_name AS requester_last_name,
              r.payee_user_id, pu.first_name AS payee_first_name, pu.last_name AS payee_last_name,

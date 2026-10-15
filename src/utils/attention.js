@@ -401,6 +401,56 @@ async function attentionItemsFor(db, userId) {
     return out;
   });
 
+  // ── v1.119.1 — "Did the check arrive?" (feedback bfbb79bd) ──
+  //
+  // Pete: "Some of these deposits are via check. And it needs to prompt me to go back and ask
+  // if I ever received payment." A check or cash payment never marks itself paid, so an
+  // approved request sits "awaiting payment" after the money has long since been deposited.
+  //
+  // Two soft nudges, neither in `total` (nobody is blocked; the money already moved or it
+  // didn't): the PAYEE is asked 3 days after approval, "Not yet" asks again in 3; the APPROVER
+  // is asked 10 days after approval whether they sent it. In-app transfers are excluded —
+  // that rail marks itself paid.
+  const paymentArrivedRows = await safeRows("paymentArrived", () => db.prepare(`
+    SELECT r.id, r.amount, r.description, r.planned_method,
+           au.first_name AS approver_first, cr.first_name AS recipient_first
+      FROM reimbursements r
+      LEFT JOIN users au ON au.id = r.approved_by
+      LEFT JOIN care_recipients cr ON cr.id = r.care_recipient_id
+     WHERE r.status = 'approved'
+       AND r.payee_user_id = ?
+       AND r.approved_at < NOW() - INTERVAL '3 days'
+       AND COALESCE(r.payout_status, '') NOT IN ('processing', 'succeeded')
+       AND COALESCE(r.planned_method, '') <> 'inplace'
+       AND NOT EXISTS (
+         SELECT 1 FROM nudge_snoozes ns
+          WHERE ns.user_id = ? AND ns.kind = 'paymentArrived' AND ns.ref = r.id AND ns.snoozed_until > NOW()
+       )
+     ORDER BY r.approved_at
+  `).all(userId, userId));
+
+  const paymentSentRows = await safeRows("paymentSent", () => db.prepare(`
+    SELECT r.id, r.amount, r.description, r.planned_method,
+           pu.first_name AS payee_first, cr.first_name AS recipient_first
+      FROM reimbursements r
+      JOIN care_teams ct ON ct.id = r.care_team_id
+      LEFT JOIN care_team_members ctm
+        ON ctm.care_team_id = ct.id AND ctm.user_id = ? AND ctm.role = 'leader'
+      LEFT JOIN users pu ON pu.id = r.payee_user_id
+      LEFT JOIN care_recipients cr ON cr.id = r.care_recipient_id
+     WHERE r.status = 'approved'
+       AND r.payee_user_id IS DISTINCT FROM ?
+       AND (ct.billing_user_id = ? OR (ct.billing_user_id IS NULL AND ctm.user_id IS NOT NULL))
+       AND r.approved_at < NOW() - INTERVAL '10 days'
+       AND COALESCE(r.payout_status, '') NOT IN ('processing', 'succeeded')
+       AND COALESCE(r.planned_method, '') <> 'inplace'
+       AND NOT EXISTS (
+         SELECT 1 FROM nudge_snoozes ns
+          WHERE ns.user_id = ? AND ns.kind = 'paymentSent' AND ns.ref = r.id AND ns.snoozed_until > NOW()
+       )
+     ORDER BY r.approved_at
+  `).all(userId, userId, userId, userId));
+
   const taskRows = await safeRows("careTasks", () => db.prepare(`
     SELECT occ.id, occ.due_at, occ.due_date, t.title, t.task_type, t.tz,
            t.care_recipient_id, cr.first_name AS recipient_first
@@ -688,6 +738,53 @@ async function attentionItemsFor(db, userId) {
       page: "dashboard",
       focus: `careTask:${t.id}`,
     })),
+    ...paymentArrivedRows.map((r) => {
+      const payer = r.approver_first || "the approver";
+      const title = r.planned_method === "check" ? `Did ${payer}'s check for ${money(r.amount)} arrive?`
+        : r.planned_method === "cash" ? `Did ${payer} pay you the ${money(r.amount)} in cash?`
+        : `Have you been paid the ${money(r.amount)}?`;
+      return {
+        kind: "paymentArrived",
+        soft: true,
+        id: `paymentArrived:${r.id}`,
+        title,
+        detail: r.description || null,
+        forWhom: r.recipient_first || null,
+        when: null,
+        verb: "Got it",
+        // One tap closes it, with the method the approver said they'd use.
+        action: { method: "POST", path: `/api/reimbursements/${r.id}/mark-received`, body: { method: r.planned_method || undefined } },
+        page: "care-team",
+        focus: `reimbursement:${r.id}`,
+        note: `Approved, but nothing has marked it paid. ${payer === "the approver" ? "They'll" : payer + " will"} see that you got it.`,
+        dismiss: {
+          method: "POST",
+          path: "/api/push/attention/snooze",
+          body: { kind: "paymentArrived", ref: r.id, days: 3 },
+          label: "Not yet",
+        },
+      };
+    }),
+    ...paymentSentRows.map((r) => ({
+      kind: "paymentSent",
+      soft: true,
+      id: `paymentSent:${r.id}`,
+      title: `Did you pay ${r.payee_first || "them"} the ${money(r.amount)}?`,
+      detail: r.description || null,
+      forWhom: r.recipient_first || null,
+      when: null,
+      verb: "Yes, mark paid",
+      action: { method: "POST", path: `/api/reimbursements/${r.id}/mark-paid`, body: { method: r.planned_method && r.planned_method !== "inplace" ? r.planned_method : "other" } },
+      page: "care-team",
+      focus: `reimbursement:${r.id}`,
+      note: "You approved this over a week ago and it still shows as awaiting payment.",
+      dismiss: {
+        method: "POST",
+        path: "/api/push/attention/snooze",
+        body: { kind: "paymentSent", ref: r.id, days: 7 },
+        label: "Not yet",
+      },
+    })),
     ...emptyWeekRows.map((r) => ({
       kind: "emptyWeek",
       // `soft` is the whole contract: the card draws it quietly and leaves it out of its own
@@ -740,6 +837,7 @@ async function attentionItemsFor(db, userId) {
     holdDeclined: holdDeclinedRows.length, // v1.117.0
     financialConcerns: financialConcernRows.length,
     emptyWeeks: emptyWeekRows.length,
+    paymentChecks: paymentArrivedRows.length + paymentSentRows.length, // v1.119.1, soft
     reimbursements: reimbursementRows.length,
     approvals: approvalRows.length,
     safetyFlags: safetyRows.length,

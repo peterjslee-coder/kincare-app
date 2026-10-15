@@ -763,7 +763,7 @@ const AdminFinancials = window.AdminFinancials = () => {
         <div className="card-header"><span className="card-icon">⚙️</span>Platform Fee Rate</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <div style={{ fontSize: 13, color: 'var(--text-secondary)', flex: '1 1 200px' }}>
-            The default service fee is <strong>{feePercent}%</strong>, added on top of the caregiver's pay. The caregiver keeps her full rate; card processing comes out of the fee.
+            The default service fee is <strong>{feePercent}%</strong>, added on top of the caregiver's pay. The caregiver keeps their full rate; card processing comes out of the fee.
             <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>
               Example: $100 of care → caregiver gets $100, family pays ${100 + feePercent}, InPlace gets ${feePercent} before card fees
             </div>

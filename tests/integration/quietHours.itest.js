@@ -80,7 +80,9 @@ describe("outside quiet hours", () => {
 describe("the summary", () => {
   test("is sent once, with the count, only after the window ends", async () => {
     const u = await userWith(around());
-    for (let i = 0; i < 3; i++) await push.sendPushToUser(u.user.id, { title: "n", body: "x" }, "team_note");
+    for (const t of ["New note — Jane", "Sam checked in", "Visit update"]) {
+      await push.sendPushToUser(u.user.id, { title: t, body: "x", data: { type: "team_note" } }, "team_note");
+    }
     expect(await held(u.user.id)).toBe(3);
 
     const calls = [];
@@ -97,7 +99,11 @@ describe("the summary", () => {
     await qh.sendQuietHourSummaries(db, fake);
     const mine = calls.filter((c) => c.uid === u.user.id);
     expect(mine).toHaveLength(1);
-    expect(mine[0].payload.body).toBe("3 updates came in during quiet hours.");
+    // v1.119.1 — it says WHAT came in, not only how much.
+    expect(mine[0].payload.body).toBe("3 updates: New note — Jane · Sam checked in · Visit update");
+    expect(mine[0].payload.inAppData.items.map((i) => i.title))
+      .toEqual(["New note — Jane", "Sam checked in", "Visit update"]);
+    expect(mine[0].payload.data).toEqual({ type: "quiet_hours_summary", page: "dashboard" });
     expect(mine[0].type).toBe("quiet_hours_summary");
     expect(await held(u.user.id)).toBe(0);
 
@@ -114,7 +120,48 @@ describe("the summary", () => {
     const calls = [];
     await qh.sendQuietHourSummaries(db, async (uid, p) => calls.push({ uid, p }));
     expect(calls.filter((c) => c.uid === u.user.id)).toHaveLength(1);
-    expect(calls.find((c) => c.uid === u.user.id).p.body).toBe("1 update came in during quiet hours.");
+    expect(calls.find((c) => c.uid === u.user.id).p.body).toBe("n");
+  });
+});
+
+describe("the summary names what was held (v1.119.1, feedback 0783ec12)", () => {
+  test("one held message: the push opens that conversation, and Activity lists it", async () => {
+    const u = await userWith(around());
+    await push.sendPushToUser(u.user.id,
+      { title: "New message from Sam", body: "secret words", data: { type: "message", conversationId: "c-1" } }, "message");
+    await db.prepare("UPDATE users SET notification_prefs = ? WHERE id = ?")
+      .run(JSON.stringify({ quiet_hours: later() }), u.user.id);
+
+    // The real push path, so the summary's own in-app row is written with inAppData.
+    await qh.sendQuietHourSummaries(db, push.sendPushToUser);
+    const rows = await db.prepare(
+      "SELECT title, body, type, data FROM notifications WHERE user_id = ? AND type = 'quiet_hours_summary'"
+    ).all(u.user.id);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].body).toBe("New message from Sam");
+    expect(rows[0].body).not.toContain("secret");
+    const d = JSON.parse(rows[0].data);
+    expect(d.items).toHaveLength(1);
+    expect(d.items[0]).toMatchObject({ title: "New message from Sam", type: "message" });
+    expect(d.items[0].data.conversationId).toBe("c-1");
+  });
+
+  test("a summary does not list the same held item twice", async () => {
+    const u = await userWith(around());
+    await push.sendPushToUser(u.user.id, { title: "First", body: "x" }, "team_note");
+    await db.prepare("UPDATE users SET notification_prefs = ? WHERE id = ?")
+      .run(JSON.stringify({ quiet_hours: later() }), u.user.id);
+    const calls = [];
+    await qh.sendQuietHourSummaries(db, async (uid, p) => calls.push({ uid, p }));
+    // A second window, a second held push.
+    await db.prepare("UPDATE users SET notification_prefs = ? WHERE id = ?")
+      .run(JSON.stringify({ quiet_hours: around() }), u.user.id);
+    await push.sendPushToUser(u.user.id, { title: "Second", body: "x" }, "team_note");
+    await db.prepare("UPDATE users SET notification_prefs = ? WHERE id = ?")
+      .run(JSON.stringify({ quiet_hours: later() }), u.user.id);
+    await qh.sendQuietHourSummaries(db, async (uid, p) => calls.push({ uid, p }));
+    const mine = calls.filter((c) => c.uid === u.user.id).map((c) => c.p.body);
+    expect(mine).toEqual(["First", "Second"]);
   });
 });
 

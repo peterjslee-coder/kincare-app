@@ -125,7 +125,7 @@ const HelperHub = window.HelperHub = () => {
               A note about {noteFor.first_name}
             </h3>
             <textarea value={noteText} onChange={(e) => setNoteText(e.target.value)} autoFocus
-              placeholder="How did she seem? Anything you noticed?"
+              placeholder={`How did ${noteFor.first_name} seem? Anything you noticed?`}
               style={{ width: '100%', minHeight: 110, padding: 12, border: '1px solid var(--border-light)', borderRadius: 10, fontSize: 15, resize: 'vertical', background: 'var(--bg-surface)', color: 'var(--text-primary)' }} />
             <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
               <button onClick={() => setNoteFor(null)} disabled={saving}

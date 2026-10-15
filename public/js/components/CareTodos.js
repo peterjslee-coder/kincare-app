@@ -67,7 +67,7 @@ const CareTodoForm = window.CareTodoForm = ({ recipientId, recipientFirstName, o
         </div>
         <div style={label}>What needs doing?</div>
         <input style={input} value={title} maxLength={200} onChange={(e) => setTitle(e.target.value)}
-          placeholder="Lock her stove against the wall" autoFocus />
+          placeholder="Lock the stove against the wall" autoFocus />
         <div style={label}>Details (optional)</div>
         <textarea style={{ ...input, resize: 'vertical' }} rows={3} maxLength={2000} value={details}
           onChange={(e) => setDetails(e.target.value)} placeholder="The bracket is in the kitchen drawer." />

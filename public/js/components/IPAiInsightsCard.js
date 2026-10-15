@@ -206,7 +206,7 @@ const IPAiInsightsCard = window.IPAiInsightsCard = ({ recipientId, recipientName
               {editingFamilyNote ? (
                 <div>
                   <textarea value={familyNoteText} onChange={e => setFamilyNoteText(e.target.value)}
-                    placeholder={`Share anything that helps ${recipientName}'s caregivers...\n\nThings like:\n• "She takes her pills better with applesauce"\n• "She gets upset if you mention her late husband"\n• "Frank Sinatra during meal prep always makes her smile"\n• "She's a morning person — best before noon"\n\nThe more you share, the better iPAi can guide ${recipientName}'s care team.`}
+                    placeholder={`Share anything that helps ${recipientName}'s caregivers...\n\nThings like:\n• "Takes pills better with applesauce"\n• "Gets upset if anyone mentions their late spouse"\n• "Frank Sinatra during meal prep always brings a smile"\n• "A morning person — best before noon"\n\nThe more you share, the better iPAi can guide ${recipientName}'s care team.`}
                     style={{ width: '100%', minHeight: 80, padding: 10, border: '1px solid #c5cae9', borderRadius: 8, fontSize: 13, fontFamily: 'inherit', color: 'var(--color-info)', resize: 'vertical', boxSizing: 'border-box' }}
                     autoFocus />
                   <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>

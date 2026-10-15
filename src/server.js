@@ -856,7 +856,7 @@ app.use("/api/safety", require("./routes/safety"));
 
 // ─── App version check (lightweight, no auth) ───
 const { cancelPassedPrivateOffers, releaseExpiredExclusiveOffers } = require("./utils/exclusiveOffers");
-const APP_VERSION = "1.119.0";
+const APP_VERSION = "1.120.0";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION, minAppVersion: MIN_APP_VERSION });
@@ -1780,9 +1780,9 @@ async function start() {
         if (!v.caregiver_user_id) continue;
         try {
           await pushFn(v.caregiver_user_id, {
-            title: `How is ${v.recipient_first_name || "she"} today?`,
+            title: v.recipient_first_name ? `How is ${v.recipient_first_name} today?` : "How are they today?",
             // No condition in the body — it is a question, and the answer is the PHI.
-            body: `You've been there ${SETTLED_MINUTES} minutes. Tap to record how you found her.`,
+            body: `You've been there ${SETTLED_MINUTES} minutes. Tap to record how you found ${v.recipient_first_name || "them"}.`,
             data: { type: "condition_read", sessionId: v.session_id, page: "dashboard" },
           }, "condition_read");
         } catch (e) {

@@ -1878,7 +1878,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                       value={kindredInstructionsDraft}
                       onChange={(e) => setKindredInstructionsDraft(e.target.value)}
                       onClick={(e) => e.stopPropagation()}
-                      placeholder={`e.g., "${profile?.first_name || 'Betty'}'s best friend went to the hospital last night and she's emotionally fragile today. Check in with her more often, but leave her alone if she doesn't want to talk."`}
+                      placeholder={`e.g., "${profile?.first_name || 'Betty'}'s best friend went to the hospital last night, so today may be a fragile day. Check in more often, but give space if ${profile?.first_name || 'Betty'} doesn't want to talk."`}
                       maxLength={2000}
                       style={{
                         width: '100%', minHeight: 80, padding: '10px 12px', border: '1px solid #FFE082', borderRadius: 8,

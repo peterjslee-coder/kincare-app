@@ -160,6 +160,13 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
   };
   // v1.97.0 — approve modal: confirm the "from" account before approving
   const [approveTarget, setApproveTarget] = useState(null); // the item being approved
+  // v1.119.1 (bfbb79bd) — how the approver means to pay, and whether it's already done
+  const [payMethod, setPayMethod] = useState('');
+  const [alreadyPaid, setAlreadyPaid] = useState(false);
+  // v1.119.1 — the payee's "I got it": row id showing the picker, its method and check number
+  const [receivingId, setReceivingId] = useState(null);
+  const [receiveMethod, setReceiveMethod] = useState('check');
+  const [receiveRef, setReceiveRef] = useState('');
   const [fundingAccounts, setFundingAccounts] = useState([]);
   const [fromAccountId, setFromAccountId] = useState('');
   const [newAccountLabel, setNewAccountLabel] = useState('');
@@ -367,8 +374,17 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
   };
 
   // ── v1.97.0 — approve modal: confirm the "from" account ──
+  // v1.119.1 — the requester's "pay me by…" choice is the best first guess at how the
+  // approver will pay. "ach" on the request means a transfer from the approver's own bank.
+  const plannedFromPayout = (it) => {
+    if (it.payout_method === 'inplace') return it.payee_payout_ready ? 'inplace' : '';
+    if (it.payout_method === 'ach') return 'bank';
+    return ['venmo', 'zelle', 'check', 'cash', 'other'].includes(it.payout_method) ? it.payout_method : '';
+  };
+
   const openApprove = async (it) => {
     setApproveTarget(it); setApproveError(''); setNewAccountLabel('');
+    setPayMethod(plannedFromPayout(it)); setAlreadyPaid(false);
     try {
       const r = await apiFetch(`/api/reimbursements/accounts/${careTeamId}`);
       if (r?.ok) {
@@ -401,11 +417,21 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
     if (!approveTarget) return;
     setBusyId(approveTarget.id); setApproveError('');
     try {
-      const res = await apiFetch(`/api/reimbursements/${approveTarget.id}/approve`, {
-        method: 'POST', body: JSON.stringify(fromAccountId ? { fromAccountId } : {}),
-      });
+      // v1.119.1 — "I've already paid this" records it paid in one step (mark-paid accepts a
+      // pending request and stamps the approval too). Otherwise approve, saying how you'll pay.
+      const paidNow = alreadyPaid && payMethod && payMethod !== 'inplace';
+      const res = paidNow
+        ? await apiFetch(`/api/reimbursements/${approveTarget.id}/mark-paid`, {
+            method: 'POST', body: JSON.stringify({ method: payMethod, ...(fromAccountId ? { fromAccountId } : {}) }),
+          })
+        : await apiFetch(`/api/reimbursements/${approveTarget.id}/approve`, {
+            method: 'POST', body: JSON.stringify({ ...(fromAccountId ? { fromAccountId } : {}), ...(payMethod ? { payMethod } : {}) }),
+          });
       if (res?.ok) {
-        setRowResult(approveTarget.id, 'ok', `✓ Approved — ${approveTarget.payee_first_name} was notified. It now shows “Approved — awaiting payment.”`);
+        const waiting = payMethod === 'check' ? 'check on the way' : payMethod === 'cash' ? 'cash on the way' : 'awaiting payment';
+        setRowResult(approveTarget.id, 'ok', paidNow
+          ? `✓ Approved and marked paid — ${approveTarget.payee_first_name} was notified.`
+          : `✓ Approved — ${approveTarget.payee_first_name} was notified. It now shows “Approved — ${waiting}.”`);
         showToast(`Approved — ${approveTarget.payee_first_name} was notified`, 'success');
         setApproveTarget(null); await fetchList();
       } else if (res?.status === 409) {
@@ -491,6 +517,7 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
       if (res?.ok) {
         if (path === 'decline') setRowResult(id, 'ok', '✓ Declined — the requester was notified.');
         else if (path === 'mark-paid') setRowResult(id, 'ok', '✓ Marked as paid — the requester was notified.');
+        else if (path === 'mark-received') setRowResult(id, 'ok', '✓ Marked as received — the approver was notified.');
         await fetchList();
       } else {
         const d = await res.json().catch(() => ({}));
@@ -501,7 +528,7 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
       setRowResult(id, 'err', 'That didn’t go through — check your connection and try again.');
       showToast('Action failed', 'error');
     }
-    setBusyId(null); setPayingId(null);
+    setBusyId(null); setPayingId(null); setReceivingId(null);
   };
 
   const venmoLink = (it) => {
@@ -545,8 +572,9 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
       // "Awaiting approval" and reasonably assumed they were different states. They are the
       // same state — the app just had three names for it across three surfaces. One name.
       pending:   { label: 'Awaiting approval', bg: '#fff3e0', fg: '#e65100' },
-      approved:  { label: `Approved — awaiting payment${it.paid_from_label ? ` from ${it.paid_from_label}` : ''}`, bg: '#e3f2fd', fg: '#1565c0' },
-      paid:      { label: it.paid_method ? `Paid via ${paidLabel}${it.paid_method !== 'ach_inplace' && it.paid_from_label ? ` from ${it.paid_from_label}` : ''}` : 'Paid', bg: '#e8f5e9', fg: '#2e7d32' },
+      // v1.119.1 — say what the money is waiting ON when the approver told us (bfbb79bd).
+      approved:  { label: `Approved — ${it.planned_method === 'check' ? 'check on the way' : it.planned_method === 'cash' ? 'cash on the way' : 'awaiting payment'}${it.paid_from_label ? ` from ${it.paid_from_label}` : ''}`, bg: '#e3f2fd', fg: '#1565c0' },
+      paid:      { label: (it.paid_method ? `Paid via ${paidLabel}${it.paid_method !== 'ach_inplace' && it.paid_from_label ? ` from ${it.paid_from_label}` : ''}` : 'Paid') + (it.received_confirmed_by ? ` · received by ${it.payee_first_name}` : ''), bg: '#e8f5e9', fg: '#2e7d32' },
       declined:  { label: it.declined_reason ? `Declined — ${it.declined_reason}` : 'Declined', bg: '#ffebee', fg: '#c62828' },
       cancelled: { label: 'Cancelled', bg: 'var(--bg-primary)', fg: 'var(--text-muted)' },
     };
@@ -1294,6 +1322,43 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
               </div>
             )}
 
+            {/* v1.119.1 — Payee: "I got it" (bfbb79bd). A check or cash never marks itself
+                paid; the person holding the deposited check can now close it. Not while an
+                in-app transfer is moving — that one marks itself paid. */}
+            {it.payee_user_id === myUserId && it.status === 'approved' && !['processing', 'succeeded'].includes(it.payout_status) && (
+              <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                {receivingId === it.id ? (
+                  <>
+                    <select aria-label="How you were paid" value={receiveMethod} onChange={(e) => setReceiveMethod(e.target.value)} style={{ ...inputStyle, padding: '6px 8px', fontSize: 13 }}>
+                      <option value="check">Check</option>
+                      <option value="cash">Cash</option>
+                      <option value="venmo">Venmo</option>
+                      <option value="zelle">Zelle</option>
+                      <option value="bank">Bank transfer</option>
+                      <option value="other">Other</option>
+                    </select>
+                    {receiveMethod === 'check' && (
+                      <input type="text" aria-label="Check number (optional)" value={receiveRef} onChange={(e) => setReceiveRef(e.target.value)}
+                        placeholder="Check # (optional)" style={{ ...inputStyle, padding: '6px 8px', fontSize: 13, width: 140 }} />
+                    )}
+                    <button disabled={busyId === it.id} onClick={() => act(it.id, 'mark-received', { method: receiveMethod, reference: receiveRef || undefined })}
+                      style={{ padding: '6px 14px', background: '#2e7d32', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                      Confirm received
+                    </button>
+                    <button onClick={() => setReceivingId(null)}
+                      style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: 12, cursor: 'pointer', textDecoration: 'underline' }}>
+                      Cancel
+                    </button>
+                  </>
+                ) : (
+                  <button onClick={() => { setReceivingId(it.id); setReceiveRef(''); setReceiveMethod(['check', 'cash', 'venmo', 'zelle', 'bank', 'other'].includes(it.planned_method) ? it.planned_method : (plannedFromPayout(it) && plannedFromPayout(it) !== 'inplace' ? plannedFromPayout(it) : 'check')); }}
+                    style={{ padding: '6px 14px', background: 'none', border: '1px solid #2e7d32', color: 'var(--color-success)', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                    I got it
+                  </button>
+                )}
+              </div>
+            )}
+
             {/* Approver actions */}
             {meta.isApprover && it.status === 'pending' && (
               <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
@@ -1447,11 +1512,40 @@ const Reimbursements = window.Reimbursements = ({ careTeamId, members, myUserId 
                 This is a note for the family's records — which account the money comes from. No money moves through InPlace and account numbers are never stored; you make the actual payment from your bank, then mark it paid here. Everyone on the request is notified when you approve and when you pay.
               </div>
             </div>
+            {/* v1.119.1 — how you'll pay (bfbb79bd). A check or cash never marks itself paid,
+                so knowing it lets the app ask the right person later whether it arrived. */}
+            <div style={{ marginBottom: 12 }}>
+              <label htmlFor="reimb-pay-method" style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
+                How will you pay {approveTarget.payee_first_name}?
+              </label>
+              <select id="reimb-pay-method" value={payMethod} onChange={(e) => { setPayMethod(e.target.value); if (e.target.value === 'inplace') setAlreadyPaid(false); }}
+                style={{ ...inputStyle, padding: '8px 10px', fontSize: 14, width: '100%' }}>
+                <option value="">Not sure yet</option>
+                {!!approveTarget.payee_payout_ready && <option value="inplace">In the app (bank transfer, 1–3 days)</option>}
+                <option value="check">Check</option>
+                <option value="cash">Cash</option>
+                <option value="venmo">Venmo</option>
+                <option value="zelle">Zelle</option>
+                <option value="bank">From my bank (transfer)</option>
+                <option value="other">Other</option>
+              </select>
+              {payMethod && payMethod !== 'inplace' && (
+                <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8, fontSize: 13 }}>
+                  <input type="checkbox" checked={alreadyPaid} onChange={(e) => setAlreadyPaid(e.target.checked)} />
+                  I've already paid this
+                </label>
+              )}
+              {payMethod && payMethod !== 'inplace' && !alreadyPaid && (
+                <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 6 }}>
+                  We'll ask {approveTarget.payee_first_name} to confirm when it arrives.
+                </div>
+              )}
+            </div>
             {approveError && <div style={{ color: 'var(--color-error)', fontSize: 13, marginBottom: 10 }}>{approveError}</div>}
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={confirmApprove} disabled={busyId === approveTarget.id}
                 style={{ flex: 1, padding: '10px 16px', background: busyId === approveTarget.id ? 'var(--text-muted)' : 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
-                {busyId === approveTarget.id ? 'Approving…' : `Approve $${Number(approveTarget.amount).toFixed(2)}`}
+                {busyId === approveTarget.id ? 'Approving…' : (alreadyPaid && payMethod && payMethod !== 'inplace' ? `Approve and mark paid` : `Approve $${Number(approveTarget.amount).toFixed(2)}`)}
               </button>
               <button onClick={() => setApproveTarget(null)}
                 style={{ padding: '10px 14px', background: 'none', border: '1px solid var(--border-light)', borderRadius: 8, fontSize: 14, cursor: 'pointer', color: 'var(--text-secondary)' }}>

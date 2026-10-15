@@ -31,6 +31,37 @@ const WINDOW_DAYS = 45;
 
 const ENTRIES = [
   {
+    id: "reimbursement-check-arrived",
+    version: "1.120.0",
+    date: "2026-10-15",
+    audience: ["family"],
+    title: "Paid by check or cash? Say when it arrives",
+    body: "A check or cash payment never marks itself paid, so approved reimbursements could sit at “awaiting payment” long after the money was deposited. Now the approver says how they'll pay, the person being paid can tap “I got it”, and InPlace asks both of you if it's still open after a few days.",
+    howTo: [
+      "Approving? Pick how you'll pay — check, cash, Venmo, or in the app",
+      "Being paid? Open the request on the Care Team page and tap “I got it”",
+      "Or answer “Did the check arrive?” under Needs you on Home",
+    ],
+    examples: ["Sam wrote me a check for the groceries", "Paid Jane back in cash for the pharmacy run"],
+    preview: "checkArrived",
+    action: { label: "Show me", page: "care-team" },
+  },
+  {
+    id: "quiet-hours-what-happened",
+    version: "1.120.0",
+    date: "2026-10-15",
+    audience: ["family", "caregiver"],
+    title: "“While you were away” now says what happened",
+    body: "If you use quiet hours, the morning summary used to say only how many updates came in. Now it names them, and Activity lists each one so you can open it — the summary no longer disappears when you tap it.",
+    howTo: [
+      "After quiet hours end, read the summary notification — it names what came in",
+      "Tap it: one update opens straight to that item",
+      "More than one? Find them listed under “While you were away” in Activity on Home",
+    ],
+    examples: ["Jane checked in at 6:41", "A message from Sam overnight"],
+    preview: "whileAway",
+  },
+  {
     id: "card-declined-try-again",
     version: "1.117.0",
     date: "2026-10-14",

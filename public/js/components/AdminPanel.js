@@ -7318,7 +7318,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                         m.unitemizedPaidVisits ? `+${m.unitemizedPaidVisits} paid before itemized records` : null,
                       ].filter(Boolean).join(' · ') : '';
                       return (
-                        <div><div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{isCg ? 'Earned (to her)' : 'Spent on care'}</div><div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{usd(main)}</div>{sub && <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>{sub}</div>}</div>
+                        <div><div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{isCg ? 'Earned (to them)' : 'Spent on care'}</div><div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{usd(main)}</div>{sub && <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>{sub}</div>}</div>
                       );
                     })()}
                     {(() => {

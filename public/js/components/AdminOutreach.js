@@ -62,7 +62,7 @@ const OutJourney = ({ j }) => {
   const opened = j.opens > 0;
   return (
     <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border-color)', fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-      <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>Her link</div>
+      <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>Their link</div>
       {!j.link && !opened && !j.siteMs && <div>No personal link sent yet. Put <code>{'{link}'}</code> in a text to send one.</div>}
       {j.link && !opened && <div>Not opened yet · <span style={{ color: 'var(--text-muted)' }}>{j.link.split('//').pop()}</span></div>}
       {opened && <div>Opened {outWhen(j.firstOpenedAt)}{j.opens > 1 ? ` · ${j.opens} times, last ${outWhen(j.lastOpenedAt)}` : ''}</div>}
@@ -302,7 +302,7 @@ const OutreachThread = ({ contactId, apiFetch, showToast, onClose, onChanged }) 
       const res = await apiFetch(`/api/admin/outreach/${contactId}/invite`, { method: 'POST', body: JSON.stringify({ email: email.trim() }) });
       if (res?.ok) {
         const d = await res.json();
-        showToast(d.status === 'joined' ? 'She already has an account with that email' : 'Signup invite emailed', 'success');
+        showToast(d.status === 'joined' ? `${(c && c.first_name) || 'This person'} already has an account with that email` : 'Signup invite emailed', 'success');
         load(false); onChanged();
       } else {
         showToast(await outErr(res, 'Invite didn\'t send'), 'error');
@@ -358,7 +358,7 @@ const OutreachThread = ({ contactId, apiFetch, showToast, onClose, onChanged }) 
               onChange={(e) => setNotes(e.target.value)} onBlur={() => notes !== (c.notes || '') && patch({ notes })} />
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
               {optedOut
-                ? <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>She replied STOP. InPlace won't text her again unless she texts START.</span>
+                ? <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Replied STOP. InPlace won't text this number again unless it texts START.</span>
                 : ['interested', 'declined', 'wrong_number', 'opted_out'].filter((s) => s !== c.status).map((s) => (
                   <button key={s} style={{ ...btn, padding: '4px 10px', fontSize: 12 }}
                     onClick={() => (s !== 'opted_out' || window.confirm('Mark as do-not-text? This can\'t be undone from here.')) && patch({ status: s }, 'Saved')}>
@@ -404,7 +404,7 @@ const OutreachThread = ({ contactId, apiFetch, showToast, onClose, onChanged }) 
 
         {c && !optedOut && (
           <div style={{ padding: 12, borderTop: '1px solid var(--border-color)', display: 'flex', gap: 8, paddingBottom: 'calc(12px + var(--sab, 0px))' }}>
-            <textarea style={{ ...field, minHeight: 44, resize: 'vertical' }} placeholder="Text her from InPlace…" value={draft}
+            <textarea style={{ ...field, minHeight: 44, resize: 'vertical' }} placeholder="Text from InPlace…" value={draft}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) send(); }} />
             <button style={primary} disabled={busy || !draft.trim()} onClick={send}>Send</button>
@@ -564,7 +564,7 @@ const AdminOutreachTab = window.AdminOutreachTab = ({ apiFetch, showToast, onUnr
         <div className="card">
           <div className="card-header">Intro text to {selectedList.length} {selectedList.length === 1 ? 'person' : 'people'}</div>
           <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>
-            <code>{'{first}'}</code> becomes each person's first name, and <code>{'{link}'}</code> becomes her own link to InPlace, so you can see who opened it. Keep "Reply STOP to opt out" — it's required, and the server won't send without it.
+            <code>{'{first}'}</code> becomes each person's first name, and <code>{'{link}'}</code> becomes their own link to InPlace, so you can see who opened it. Keep "Reply STOP to opt out" — it's required, and the server won't send without it.
           </div>
           <textarea style={{ ...field, minHeight: 120 }} value={template} onChange={(e) => setTemplate(e.target.value)} />
           {!/\{link\}/i.test(template) && (

@@ -2281,7 +2281,25 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                 <span onClick={() => onNavigate && onNavigate('activity')} style={{ fontSize: 12, color: 'var(--role-color)', cursor: 'pointer', fontWeight: 600 }}>View all →</span>
               </span>
             </div>
-            {visibleItems.map(({ kind, it, key }) => kind === 'unread' ? (
+            {visibleItems.map(({ kind, it, key }) => kind === 'unread' && quietSummaryItems(it) && quietSummaryItems(it).length > 0 ? (
+              // v1.119.1 — a quiet-hours summary lists what it held, and tapping it does not
+              // make it disappear (0783ec12). Each item opens itself; Done clears the summary.
+              <div key={key} style={{ padding: '9px 0', borderBottom: '1px solid var(--border-light)' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 9 }}>
+                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--accent-color)', flexShrink: 0, marginTop: 6 }} />
+                  <span style={{ fontSize: 16, flexShrink: 0 }}>{'\u{1F319}'}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                      <div style={{ fontWeight: 650, fontSize: 13.5, color: 'var(--text-primary)' }}>{it.title}</div>
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0, marginTop: 2 }}>{timeAgo(it.created_at)}</span>
+                    </div>
+                    <QuietSummaryItems items={quietSummaryItems(it)}
+                      onOpenItem={(item) => { markNotificationsRead(it.ids || [it.id]); openNotif({ id: item.id, data: item.data || { type: item.type } }); }}
+                      onDone={() => markNotificationsRead(it.ids || [it.id])} />
+                  </div>
+                </div>
+              </div>
+            ) : kind === 'unread' ? (
               <div key={key} onClick={() => openNotif(it)} style={{ padding: '9px 0', borderBottom: '1px solid var(--border-light)', cursor: 'pointer' }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 9 }}>
                   <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--accent-color)', flexShrink: 0, marginTop: 6 }} />

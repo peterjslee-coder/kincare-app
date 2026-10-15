@@ -172,7 +172,7 @@ const CaregiverProfilePage = window.CaregiverProfilePage = ({ caregiverId, onNav
         </div>
         {reviews.length === 0 ? (
           <div style={{ fontSize: 13.5, color: 'var(--text-secondary)' }}>
-            No reviews yet {'—'} {cg.firstName || 'she'} is new here, not poorly rated.
+            No reviews yet {'—'} {cg.firstName || 'this caregiver'} is new here, not poorly rated.
           </div>
         ) : (
           <React.Fragment>

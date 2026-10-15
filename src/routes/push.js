@@ -538,7 +538,8 @@ router.post("/attention/snooze", authenticate, async (req, res) => {
   try {
     // v1.109.9 — cancelFee: "Looks right" on a pending cancellation fee. The fee itself is
     // untouched; this only puts the row away until the charge has gone through.
-    const SNOOZABLE = ["emptyWeek", "cancelFee"];
+    // v1.119.1 — paymentArrived / paymentSent: "Not yet" on a check or cash reimbursement.
+    const SNOOZABLE = ["emptyWeek", "cancelFee", "paymentArrived", "paymentSent"];
     const kind = String(req.body?.kind || "");
     if (!SNOOZABLE.includes(kind)) return res.status(400).json({ error: "Not a snoozable nudge" });
     const ref = String(req.body?.ref || "").slice(0, 64);
@@ -592,17 +593,25 @@ async function sendPushToUser(userId, payload, eventType) {
     } catch { /* see mayBeNotified: this path fails open on purpose */ }
 
     // ─── v1.56.0 — Also create an in-app notification record ───
+    // v1.119.1 — the row's id is kept so quiet hours can say WHICH notification it held.
+    // `payload.inAppData`, when given, is what the in-app row stores instead of `payload.data`:
+    // the quiet-hours summary carries its list of held items in Activity, but a push payload
+    // has a ~4 KB ceiling on iOS, so the list never goes to the device.
+    let inAppId = null;
     try {
+      const rowId = uuid();
+      const rowData = payload.inAppData !== undefined ? payload.inAppData : payload.data;
       await db.prepare(
         "INSERT INTO notifications (id, user_id, title, body, type, data) VALUES (?, ?, ?, ?, ?, ?)"
       ).run(
-        uuid(),
+        rowId,
         userId,
         payload.title || "InPlace",
         payload.body || "",
         eventType || payload.data?.type || "general",
-        payload.data ? JSON.stringify(payload.data) : null
+        rowData ? JSON.stringify(rowData) : null
       );
+      inAppId = rowId;
     } catch (inAppErr) {
       // Non-blocking — in-app notification is a bonus, never block push delivery
       console.log("In-app notification insert failed (non-blocking):", inAppErr.message);
@@ -614,7 +623,7 @@ async function sendPushToUser(userId, payload, eventType) {
     try {
       const { shouldHold, recordHeld } = require("../utils/quietHours");
       if (shouldHold(targetUser?.notification_prefs, eventType, payload)) {
-        await recordHeld(db, userId);
+        await recordHeld(db, userId, inAppId);
         return { sent: 0, failed: 0, removed: 0, reason: "quiet_hours" };
       }
     } catch (qhErr) {

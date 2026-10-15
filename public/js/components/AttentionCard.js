@@ -67,6 +67,8 @@ const ATTENTION_PAST = {
   'Mark done': 'Marked done.',
   Skip: 'Skipped for today.',
   'Try the card again': 'The card went through.',
+  'Got it': 'Marked paid.',
+  'Yes, mark paid': 'Marked paid.',
 };
 
 const ATTENTION_KINDS = {
@@ -81,6 +83,10 @@ const ATTENTION_KINDS = {
   cancelFee:     { icon: '💵', chip: 'CANCELLATION FEE' },
   // v1.117.0 — the bank declined the card hold; the visit can't start until it goes through.
   holdDeclined:  { icon: '💳', chip: 'CARD DECLINED' },
+  // v1.119.1 — a check or cash reimbursement nobody has marked paid (bfbb79bd). Soft: asked,
+  // never counted.
+  paymentArrived: { icon: '💵', chip: 'DID IT ARRIVE?' },
+  paymentSent:    { icon: '💵', chip: 'DID YOU SEND IT?' },
 };
 
 // "14:30" → "2:30 PM". The server sends wall-clock times in the care recipient's zone; they
@@ -484,11 +490,19 @@ const AttentionCard = window.AttentionCard = ({ onNavigate, only }) => {
               <div style={{ marginTop: 8, fontSize: 12.5, fontWeight: 600, color: 'var(--color-error)' }}>{failed[item.id]}</div>
             )}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
-              <button onClick={() => open(item)} style={{
+              {/* v1.119.1 — a nudge with an action answers in one tap ("Got it"); one
+                  without (emptyWeek) still opens where you'd act. */}
+              <button onClick={() => (item.action ? act(item) : open(item))} disabled={!!busy[item.id]} style={{
                 minHeight: 44, padding: '10px 18px', background: 'var(--bg-surface)',
                 color: 'var(--role-color)', border: '1.5px solid var(--role-color)',
                 borderRadius: 12, fontSize: 13.5, fontWeight: 700, cursor: 'pointer',
-              }}>{item.verb || 'Open'}{' '}{'\u203A'}</button>
+              }}>{busy[item.id] ? 'Saving…' : (item.verb || 'Open')}{item.action ? '' : ' \u203A'}</button>
+              {item.action && (
+                <button onClick={() => open(item)} style={{
+                  minHeight: 44, padding: '10px 10px', background: 'none', color: 'var(--role-color)',
+                  border: 'none', font: 'inherit', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                }}>Open {'\u203A'}</button>
+              )}
               {item.dismiss && (
                 <button onClick={() => dismiss(item)} disabled={!!busy[item.id]} style={{
                   minHeight: 44, padding: '10px 14px', background: 'none',

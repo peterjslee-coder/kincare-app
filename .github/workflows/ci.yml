@@ -66,6 +66,9 @@ jobs:
       - name: Impersonation cannot write credentials
         run: npm run lint:impersonation
 
+      - name: Copy doesn't guess anyone's pronouns
+        run: npm run lint:pronouns
+
       - name: The committed bundle matches its source
         run: npm run lint:bundle-fresh
 
