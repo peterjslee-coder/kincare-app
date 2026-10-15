@@ -37,6 +37,50 @@ function verifyTwilio(req) {
 
 const twiml = (res) => res.type("text/xml").send("<Response></Response>");
 
+// ═══════════════════════════════════════════════════════════
+// v1.120.2 — replies to the REMINDER number (540-274-1412; its "A message comes in" webhook).
+//
+// YES from a care recipient's phone completes their opt-in (utils/smsConsent.js): the family
+// leader's box only asks; this phone's own YES is what lets reminders go. STOP from any number
+// clears every text consent we hold for it — a recipient's and an account holder's alike — so
+// the app's own records agree with the carrier's opt-out instead of relying on it alone.
+// ═══════════════════════════════════════════════════════════
+const SC = require("../utils/smsConsent");
+router.post("/reminders-inbound", async (req, res) => {
+  if (!verifyTwilio(req)) return res.status(403).send("Forbidden");
+  try {
+    const key = O.phoneKey(req.body.From);
+    if (!key) return twiml(res);
+    const db = await getDb();
+    const body = String(req.body.Body || "");
+    if (O.classifyInbound(body).kind === "opt_out") {
+      await db.prepare(`
+        UPDATE care_recipients SET sms_consent_at = NULL, sms_confirmed_at = NULL, sms_confirm_sent_at = NULL
+         WHERE ${SC.digits10("sms_phone")} = ? OR ${SC.digits10("sms_consent_phone")} = ?
+      `).run(key, key);
+      await db.prepare(`
+        UPDATE users SET sms_alerts_consent_at = NULL WHERE ${SC.digits10("sms_alerts_phone")} = ?
+      `).run(key);
+      return twiml(res); // Twilio sends the carrier opt-out confirmation itself
+    }
+    if (SC.isYes(body)) {
+      const rows = await db.prepare(`
+        UPDATE care_recipients cr SET sms_confirmed_at = NOW(), sms_confirmed_phone = cr.sms_phone
+         WHERE ${SC.requestedSql("cr")} AND NOT ${SC.consentedSql("cr")} AND ${SC.digits10("cr.sms_phone")} = ?
+         RETURNING cr.id
+      `).all(key);
+      if (rows.length) {
+        return res.type("text/xml").send(
+          `<?xml version="1.0" encoding="UTF-8"?><Response><Message>${SC.RECIPIENT_CONFIRMED_TEXT.replace(/&/g, "&amp;")}</Message></Response>`
+        );
+      }
+    }
+  } catch (err) {
+    captureException(err, { where: "sms: reminders inbound" });
+  }
+  twiml(res);
+});
+
 router.post("/outreach-inbound", async (req, res) => {
   if (!verifyTwilio(req)) return res.status(403).send("Forbidden");
   try {

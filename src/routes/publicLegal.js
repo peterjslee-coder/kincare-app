@@ -199,7 +199,7 @@ const SMS_TERMS = `
 <p>InPlace Care is operated by Cedar Rock Holdings, LLC, doing business as InPlace Care, in Fairlawn, Virginia. We send two kinds of text messages, from two numbers.</p>
 <h2>1. Care notifications — from (540) 274-1412</h2>
 <p>Visit reminders, a caregiver's arrival and departure, schedule changes, and one-time verification codes.</p>
-<p><strong>How you opt in:</strong> texts are off unless you turn them on. Caregivers and family members turn on text alerts in Account &rarr; Notifications. For the person receiving care, they (or a member of their care team, with their permission) enter the mobile number on the Care Team &rarr; Notifications screen and check the box agreeing to text reminders. You can turn texts off in the app at any time; app notifications carry the same alerts.</p>
+<p><strong>How you opt in:</strong> texts are off unless you turn them on. Caregivers and family members turn on text alerts in Account &rarr; Notifications. For the person receiving care, a member of their care team enters that person's mobile number on the Care Team &rarr; Notifications screen and checks the box agreeing to text reminders; InPlace then sends one text to that number asking the person to reply <strong>YES</strong>, and no reminders are sent unless they do. You can turn texts off in the app at any time; app notifications carry the same alerts. <a href="/sms/opt-in">See the opt-in screens.</a></p>
 <p><strong>How often:</strong> varies with the visits on your schedule — typically one to four messages per visit.</p>
 <h2>2. Caregiver opportunities — from (540) 835-5987</h2>
 <p>One-to-one conversations with independent caregivers about paid caregiving work through InPlace, including follow-up to caregivers who have asked a local agency about private-pay work. You can also start a conversation yourself by texting <strong>JOIN</strong> to (540) 835-5987.</p>
@@ -214,6 +214,51 @@ const SMS_TERMS = `
 <p>See also our <a href="/terms">Terms of Use</a>.</p>
 `;
 
+// ─── v1.120.2 — /sms/opt-in: public proof of the in-app (behind-login) opt-ins ───
+//
+// Carriers rejected both A2P campaigns on 10/15 (error 30909): "There is no proof provided for
+// behind the login opt in." Reviewers can't sign in, so this page shows the screens themselves —
+// real screenshots from production (sample name and number) — with the exact consent wording,
+// which is what utils/smsConsent.js sends and stores. Change one, change the other.
+const SC = require("../utils/smsConsent");
+const SMS_OPTIN = `
+<p>InPlace Care sends text messages only to people who opt in. Two of the ways to opt in are inside the InPlace app, behind a sign-in, so this page shows those screens. Texts are always off by default. Full terms: <a href="/sms">yourinplace.com/sms</a>.</p>
+
+<h2>1. Account holders: Account &rarr; Notifications &rarr; Text Message Alerts</h2>
+<p>A signed-in caregiver or family member turns on text alerts for their own mobile number. The switch is off until they turn it on, and the consent wording sits right next to it:</p>
+<figure><img src="/img/sms-optin/account-text-alerts.png" alt="Text Message Alerts switch, off, with the consent wording beside it" style="width:100%;border:1px solid #ddd;border-radius:8px"><figcaption>Text Message Alerts in Account &rarr; Notifications (shown off, the default).</figcaption></figure>
+<p>Exact wording: <em>&ldquo;${escapeHtml(SC.ACCOUNT_CONSENT_TEXT)}&rdquo;</em></p>
+<p>Turning it on records the time and the number it applies to. If the number on the account changes, texts stop until they turn it on again.</p>
+
+<h2>2. The person receiving care: Care Team &rarr; Notifications, then a YES by text</h2>
+<p>A family member who leads the care team chooses &ldquo;Text only&rdquo; or &ldquo;App + Text&rdquo;, enters the mobile number of the person receiving care, and checks the consent box. The screen won't save text reminders without the box checked:</p>
+<figure><img src="/img/sms-optin/care-team-text-reminders.png" alt="Care Team Notifications screen with reminder method, phone number, reminder times and an unchecked consent box" style="width:100%;border:1px solid #ddd;border-radius:8px"><figcaption>Care Team &rarr; Notifications (sample name and number).</figcaption></figure>
+<p>Checking the box only <strong>requests</strong> texts. InPlace then sends one message to that number, and sends nothing else unless the person replies YES:</p>
+<blockquote>${escapeHtml(SC.RECIPIENT_CONFIRM_TEXT("Jane", "Sam"))}</blockquote>
+<p>When they reply YES:</p>
+<blockquote>${escapeHtml(SC.RECIPIENT_CONFIRMED_TEXT)}</blockquote>
+<p>If the number changes, both steps start again. STOP from that number turns reminders off in the app as well as with the carrier.</p>
+
+<h2>3. Caregivers looking for work: text JOIN to (540) 835-5987</h2>
+<p>Caregivers start the conversation by texting <strong>JOIN</strong> to (540) 835-5987. The number and keyword are published at <a href="/work">yourinplace.com/work</a> with the disclosure &ldquo;By texting JOIN you agree to receive texts from InPlace Care about caregiving work. Msg &amp; data rates may apply. Msg frequency varies. Reply STOP to opt out, HELP for help.&rdquo; InPlace replies:</p>
+<blockquote>${escapeHtml(require("../utils/outreach").JOIN_REPLY)}</blockquote>
+
+<h2>Every program</h2>
+<p>Reply STOP to opt out and HELP for help. Msg &amp; data rates may apply. No mobile information is shared with third parties or affiliates for marketing or promotional purposes.</p>
+`;
+
+router.get("/sms/opt-in", (req, res) => {
+  res.set("Cache-Control", "public, max-age=300");
+  res.send(
+    page({
+      title: "How people opt in to InPlace texts",
+      meta: "Updated October 15, 2026",
+      body: SMS_OPTIN,
+      nav: '<a href="/">← InPlace</a><a href="/sms">Text Messaging Terms</a><a href="/privacy">Privacy Policy</a>',
+    })
+  );
+});
+
 router.get("/sms", (req, res) => {
   res.set("Cache-Control", "public, max-age=300");
   res.send(
@@ -227,4 +272,4 @@ router.get("/sms", (req, res) => {
 });
 
 module.exports = router;
-module.exports._internals = { renderBody, escapeHtml, SLUGS, SMS_TERMS };
+module.exports._internals = { renderBody, escapeHtml, SLUGS, SMS_TERMS, SMS_OPTIN };

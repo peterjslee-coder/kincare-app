@@ -3322,6 +3322,15 @@ async function initializeDatabase() {
         `ALTER TABLE reimbursements ADD COLUMN IF NOT EXISTS pay_reminder_count INTEGER DEFAULT 0`,
       ],
     },
+    {
+      // v1.120.2 — care-recipient texts need the recipient's own YES (utils/smsConsent.js).
+      id: "071_sms_recipient_confirm",
+      statements: [
+        `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS sms_confirmed_at TIMESTAMPTZ`,
+        `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS sms_confirmed_phone TEXT`,
+        `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS sms_confirm_sent_at TIMESTAMPTZ`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

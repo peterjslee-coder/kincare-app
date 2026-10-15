@@ -1,5 +1,9 @@
 const express = require("express");
-const { consentedSql: smsConsentedSql, samePhone: smsSamePhone } = require("../utils/smsConsent"); // v1.114.5
+const {
+  consentedSql: smsConsentedSql, requestedSql: smsRequestedSql, samePhone: smsSamePhone,
+  RECIPIENT_CONFIRM_TEXT,
+} = require("../utils/smsConsent"); // v1.114.5, v1.120.2
+const smsUtil = require("../utils/sms"); // property access at call time, so tests can stub sendSms
 const { ALL: ALL_CAPS, PRESETS } = require("../utils/capabilities");
 const crypto = require("crypto");
 const { v4: uuid } = require("uuid");
@@ -275,6 +279,8 @@ router.get("/:id", requireRole("family"), async (req, res) => {
         lu.accessibility_prefs AS recipient_accessibility_prefs,
         cr.sms_phone AS recipient_sms_phone,
         ${smsConsentedSql("cr")} AS recipient_sms_consented,
+        (${smsRequestedSql("cr")} AND NOT ${smsConsentedSql("cr")}) AS recipient_sms_awaiting_yes,
+        cr.sms_confirm_sent_at AS recipient_sms_confirm_sent_at,
         cr.notification_channel AS recipient_notification_channel,
         cr.sms_reminder_intervals AS recipient_sms_reminder_intervals,
         bu.first_name || ' ' || bu.last_name AS billing_contact_name,
@@ -1100,6 +1106,54 @@ router.put("/:teamId/member-prefs/:userId", authenticate, async (req, res) => {
   }
 });
 
+// ─── v1.120.2 — the one confirmation text to a care recipient's phone ───
+//
+// Carriers rejected the reminder campaign (10/15, error 30909): the opt-in was a family member
+// ticking a box for someone else. Now the box asks, and the recipient's phone answers. Sends at
+// most once per number unless `onlyIfNew` is false (the Resend link), and then not more than
+// once every 10 minutes. Returns { awaitingYes, sent }.
+async function sendRecipientConfirm(db, recipientId, requesterId, { onlyIfNew }) {
+  const cr = await db.prepare(`
+    SELECT cr.id, cr.first_name, cr.sms_phone, cr.sms_confirm_sent_at,
+           ${smsRequestedSql("cr")} AS requested, ${smsConsentedSql("cr")} AS confirmed,
+           (cr.sms_confirm_sent_at IS NOT NULL AND cr.sms_confirm_sent_at > NOW() - INTERVAL '10 minutes') AS recently_sent
+      FROM care_recipients cr WHERE cr.id = ?
+  `).get(recipientId);
+  if (!cr || !cr.requested || cr.confirmed) return { awaitingYes: false, sent: false };
+  // "New" = never asked, or last asked for a different number (the sent-at is cleared when the number changes).
+  if (onlyIfNew && cr.sms_confirm_sent_at) return { awaitingYes: true, sent: false };
+  if (cr.recently_sent) return { awaitingYes: true, sent: false };
+  const who = await db.prepare("SELECT first_name FROM users WHERE id = ?").get(requesterId);
+  const r = await smsUtil.sendSms(cr.sms_phone, RECIPIENT_CONFIRM_TEXT(cr.first_name, who && who.first_name));
+  if (r && r.success) {
+    await db.prepare("UPDATE care_recipients SET sms_confirm_sent_at = NOW() WHERE id = ?").run(recipientId);
+  } else {
+    captureException(new Error(`recipient confirm text failed: ${(r && r.error) || "unknown"}`), { where: "careTeams: sms confirm" });
+  }
+  return { awaitingYes: true, sent: !!(r && r.success) };
+}
+
+// ─── POST /api/care-teams/:teamId/recipient-notifications/resend-confirm ───
+router.post("/:teamId/recipient-notifications/resend-confirm", authenticate, async (req, res) => {
+  try {
+    const db = await getDb();
+    const membership = await db.prepare(
+      "SELECT role FROM care_team_members WHERE care_team_id = ? AND user_id = ?"
+    ).get(req.params.teamId, req.user.id);
+    if (!membership) return res.status(404).json({ error: "Care team not found" });
+    if (membership.role !== "leader") return res.status(403).json({ error: "Only team leaders can update notification settings" });
+    const team = await db.prepare("SELECT care_recipient_id FROM care_teams WHERE id = ?").get(req.params.teamId);
+    if (!team) return res.status(404).json({ error: "Care team not found" });
+    const r = await sendRecipientConfirm(db, team.care_recipient_id, req.user.id, { onlyIfNew: false });
+    if (!r.awaitingYes) return res.status(400).json({ error: "There's no text request waiting on a reply." });
+    if (!r.sent) return res.status(429).json({ error: "We just sent one. Give it a few minutes before resending." });
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Resend recipient confirm error:", err);
+    res.status(500).json({ error: "Failed to resend" });
+  }
+});
+
 // ─── PUT /api/care-teams/:teamId/recipient-notifications ───
 // Update SMS notification settings for the care recipient (leader only)
 router.put("/:teamId/recipient-notifications", authenticate, async (req, res) => {
@@ -1146,6 +1200,8 @@ router.put("/:teamId/recipient-notifications", authenticate, async (req, res) =>
       if (smsConsent === true) {
         await db.prepare("UPDATE care_recipients SET sms_consent_at = NOW(), sms_consent_by = ?, sms_consent_phone = ? WHERE id = ?")
           .run(req.user.id, smsPhone, team.care_recipient_id);
+        // v1.120.2 — a new number gets its own confirmation text.
+        if (!already) await db.prepare("UPDATE care_recipients SET sms_confirm_sent_at = NULL WHERE id = ?").run(team.care_recipient_id);
       } else if (!already) {
         return res.status(400).json({ error: "Please check the box agreeing to text reminders before turning them on." });
       }
@@ -1162,11 +1218,19 @@ router.put("/:teamId/recipient-notifications", authenticate, async (req, res) =>
       ).run(smsPhone || null, notificationChannel || "push", team.care_recipient_id);
     }
 
+    // v1.120.2 — step 2: the recipient's own phone confirms with YES before any reminder goes.
+    let awaitingYes = false;
+    if (["sms", "both"].includes(notificationChannel)) {
+      const r = await sendRecipientConfirm(db, team.care_recipient_id, req.user.id, { onlyIfNew: true });
+      awaitingYes = r.awaitingYes;
+    }
+
     res.json({
       success: true,
       smsPhone: smsPhone || null,
       notificationChannel: notificationChannel || "push",
       smsReminderIntervals: intervalsJson || "[120, 60, 30]",
+      awaitingYes,
     });
   } catch (err) {
     console.error("Update recipient notifications error:", err);

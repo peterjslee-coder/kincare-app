@@ -398,7 +398,8 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack, onNavigate
       return;
     }
     const digits10 = (v) => String(v || '').replace(/\D/g, '').slice(-10);
-    const consentOnFile = !!team?.recipient_sms_consented && digits10(team?.recipient_sms_phone) === digits10(smsPhone);
+    // v1.120.2 — the box counts once ticked, even while the recipient's YES is still awaited.
+    const consentOnFile = !!(team?.recipient_sms_consented || team?.recipient_sms_awaiting_yes) && digits10(team?.recipient_sms_phone) === digits10(smsPhone);
     if (['sms', 'both'].includes(notifChannel) && !consentOnFile && !smsConsent) {
       showToast('Please check the box agreeing to text reminders', 'error');
       return;
@@ -410,7 +411,10 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack, onNavigate
         body: JSON.stringify({ smsPhone: smsPhone.trim(), notificationChannel: notifChannel, smsReminderIntervals: reminderIntervals, smsConsent: smsConsent === true }),
       });
       if (res?.ok) {
-        showToast('Notification settings saved', 'success');
+        const saved = await res.json().catch(() => ({}));
+        showToast(saved.awaitingYes
+          ? `Saved. We texted ${team.recipient_first_name} — reminders start once they reply YES.`
+          : 'Notification settings saved', 'success');
         setSmsConsent(false);
         fetchTeam();
       } else {
@@ -1131,15 +1135,38 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack, onNavigate
                   // v1.114.5 — carriers require a recorded opt-in before any reminder text. The
                   // wording matches utils/smsConsent.js CONSENT_TEXT and the A2P registration.
                   const d10 = (v) => String(v || '').replace(/\D/g, '').slice(-10);
-                  const onFile = !!team.recipient_sms_consented && d10(team.recipient_sms_phone) === d10(smsPhone);
+                  const samePhoneNow = d10(team.recipient_sms_phone) === d10(smsPhone);
+                  const onFile = !!team.recipient_sms_consented && samePhoneNow;
+                  // v1.120.2 — box ticked, recipient's own YES not in yet.
+                  const awaiting = !onFile && !!team.recipient_sms_awaiting_yes && samePhoneNow;
+                  const resend = async (e) => {
+                    e.preventDefault();
+                    try {
+                      const r = await apiFetch(`/api/care-teams/${careTeamId}/recipient-notifications/resend-confirm`, { method: 'POST' });
+                      const d = await r?.json().catch(() => ({}));
+                      showToast(r?.ok ? `Sent again to ${team.recipient_first_name}` : (d?.error || "Couldn't resend"), r?.ok ? 'success' : 'error');
+                      if (r?.ok) fetchTeam();
+                    } catch { showToast("Couldn't resend", 'error'); }
+                  };
                   return (
-                    <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, fontSize: 12, lineHeight: 1.5, color: 'var(--text-primary)', marginBottom: 14, cursor: onFile ? 'default' : 'pointer' }}>
-                      <input type="checkbox" checked={onFile || smsConsent} disabled={onFile}
+                    <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, fontSize: 12, lineHeight: 1.5, color: 'var(--text-primary)', marginBottom: 14, cursor: onFile || awaiting ? 'default' : 'pointer' }}>
+                      <input type="checkbox" checked={onFile || awaiting || smsConsent} disabled={onFile || awaiting}
                         onChange={(e) => setSmsConsent(e.target.checked)}
                         style={{ accentColor: 'var(--accent-color)', width: 16, height: 16, marginTop: 2, flexShrink: 0 }} />
                       <span>
                         {team.recipient_first_name} agrees to receive visit reminders and care notifications by text from InPlace Care. Msg &amp; data rates may apply. Msg frequency varies. Reply STOP to opt out, HELP for help. <a href="/sms" target="_blank" rel="noopener" style={{ color: 'var(--role-color)' }}>Terms</a>
-                        {onFile && <span style={{ color: 'var(--text-secondary)' }}> · Agreed</span>}
+                        {onFile && <span style={{ color: 'var(--text-secondary)' }}> · {team.recipient_first_name} replied YES</span>}
+                        {awaiting && (
+                          <span style={{ display: 'block', marginTop: 4, color: 'var(--color-warning)' }}>
+                            Waiting for {team.recipient_first_name} to reply YES to our text. No reminders until then.{' '}
+                            <a href="#" onClick={resend} style={{ color: 'var(--role-color)', fontWeight: 600 }}>Resend</a>
+                          </span>
+                        )}
+                        {!onFile && !awaiting && (
+                          <span style={{ display: 'block', marginTop: 4, color: 'var(--text-secondary)' }}>
+                            We'll text {team.recipient_first_name} once to confirm. Reminders start when they reply YES.
+                          </span>
+                        )}
                       </span>
                     </label>
                   );

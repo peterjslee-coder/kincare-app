@@ -164,3 +164,29 @@ describe("/sms text messaging terms", () => {
     [/href="\/privacy"/],
   ])("says %s", (re) => expect(SMS_TERMS).toMatch(re));
 });
+
+// v1.120.2 — carriers rejected both campaigns: "no proof provided for behind the login opt in".
+describe("/sms/opt-in shows the behind-login opt-ins publicly", () => {
+  const fs = require("fs");
+  const path = require("path");
+  const { SMS_OPTIN } = _internals;
+  const SC = require("../src/utils/smsConsent");
+  test("both screenshots are on the page and exist on disk", () => {
+    for (const f of ["account-text-alerts.png", "care-team-text-reminders.png"]) {
+      expect(SMS_OPTIN).toContain(`/img/sms-optin/${f}`);
+      expect(fs.existsSync(path.join(__dirname, "..", "public", "img", "sms-optin", f))).toBe(true);
+    }
+  });
+  test("the wording shown is the wording the app uses", () => {
+    expect(SMS_OPTIN).toContain(_internals.escapeHtml(SC.ACCOUNT_CONSENT_TEXT));
+    expect(SMS_OPTIN).toContain(_internals.escapeHtml(SC.RECIPIENT_CONFIRMED_TEXT));
+    expect(SMS_OPTIN).toMatch(/reply YES/);
+    expect(SMS_OPTIN).toMatch(/text <strong>JOIN<\/strong> to \(540\) 835-5987|texting <strong>JOIN<\/strong> to \(540\) 835-5987/);
+  });
+  test("/sms links to it", () => expect(_internals.SMS_TERMS).toContain('href="/sms/opt-in"'));
+  test("/work carries the JOIN keyword with its disclosure", () => {
+    const html = fs.readFileSync(path.join(__dirname, "..", "public", "landing", "caregiver.html"), "utf8");
+    expect(html).toMatch(/text <strong>JOIN<\/strong>/);
+    expect(html).toMatch(/By texting JOIN you agree to receive texts from InPlace Care.*Msg &amp; data rates may apply.*STOP.*HELP/s);
+  });
+});

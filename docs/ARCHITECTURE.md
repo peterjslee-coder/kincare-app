@@ -7,7 +7,7 @@ build red.
 
 Hand-written sections (§3 "Where is…") are preserved across regeneration; edit those freely.
 
-Structure at last generation: 588 HTTP routes across 63 mounts ·
+Structure at last generation: 590 HTTP routes across 63 mounts ·
 114 `CREATE TABLE` statements · 15 background jobs · 39 socket events
 (17 with no client listener) · 71 push event types · 62 `window.__*` globals.
 
@@ -54,7 +54,7 @@ JSX is *not* compiled in the browser; Babel-standalone is not loaded. Editing an
 | `/api/care-intelligence` | `src/routes/careIntelligence.js` | 8 |  |
 | `/api/care-recipients` | `src/routes/careRecipients.js` | 14 |  |
 | `/api/care-tasks` | `src/routes/careTasks.js` | 10 |  |
-| `/api/care-teams` | `src/routes/careTeams.js` | 20 |  |
+| `/api/care-teams` | `src/routes/careTeams.js` | 21 |  |
 | `/api/care-todos` | `src/routes/careTodos.js` | 5 |  |
 | `/api/care-tools` | `src/routes/careTools.js` | 1 |  |
 | `/api/caregiver-onboarding` | `src/routes/caregiveronboarding.js` | 6 |  |
@@ -97,7 +97,7 @@ JSX is *not* compiled in the browser; Babel-standalone is not loaded. Editing an
 | `/api/scheduling` | `src/routes/nlScheduling.js` | 1 |  |
 | `/api/self-onboarding` | `src/routes/selfOnboarding.js` | 3 |  |
 | `/api/sessions` | `src/routes/sessions.js` **+** `src/routes/offers.js` | 46 | ⚠️ **multi-file mount — routes for this prefix live in more than one file** |
-| `/api/sms` | `src/routes/smsWebhooks.js` | 8 |  |
+| `/api/sms` | `src/routes/smsWebhooks.js` | 9 |  |
 | `/api/video` | `src/routes/videoCall.js` | 1 |  |
 | `/api/waitlist` | `src/routes/waitlist.js` | 3 |  |
 | `/api/whats-new` | `src/routes/whatsNew.js` | 2 |  |
