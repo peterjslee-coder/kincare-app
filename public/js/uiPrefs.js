@@ -94,6 +94,17 @@ const useStickySection = window.useStickySection = (key, fallback = true) => {
     });
   }, [key]);
 
+  // v1.121.0 — the Loved One guide bar asks a section to open when you jump to it. App-acting,
+  // so it does not rewrite what the account remembers (the same rule as a push's unfold).
+  React.useEffect(() => {
+    const onOpen = (e) => {
+      const keys = e && e.detail && e.detail.keys;
+      if (Array.isArray(keys) && keys.includes(key)) setOpen(true, { remember: false });
+    };
+    window.addEventListener('inplace:open-section', onOpen);
+    return () => window.removeEventListener('inplace:open-section', onOpen);
+  }, [key, setOpen]);
+
   return [open, setOpen];
 };
 

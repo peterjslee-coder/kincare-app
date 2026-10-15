@@ -970,18 +970,23 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
       (profile.location_zip ? ' ' + profile.location_zip : '')
     : 'No address on file';
 
+  // v1.121.0 — the guide bar's stops. openKeys are the useStickySection keys a jump unfolds.
+  const lovedOneHasMoney = !editing && ((window.__currentRole || 'family') === 'family' || !!onNavigate);
+  const lovedOneSections = [
+    { id: 'person', label: profile?.first_name || 'Profile', openKeys: ['lovedOne.careIntelligence', 'lovedOne.health'] },
+    { id: 'todo', label: 'To do', openKeys: ['lovedOne.careTasks'] },
+    { id: 'notes', label: 'Notes', openKeys: ['lovedOne.notes'] },
+    { id: 'calendar', label: 'Calendar', openKeys: ['lovedOne.careEvents'] },
+    ...(lovedOneHasMoney ? [{ id: 'money', label: 'Money & legal', openKeys: [] }] : []),
+    { id: 'about', label: 'About', openKeys: ['lovedOne.preferences', 'lovedOne.permissions'] },
+  ];
+
   return (
     <>
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
         <h1 className="page-title">My Loved One</h1>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          {/* Documents Center Phase 1 — the phone's way in (the family bottom bar is full). */}
-          {!editing && onNavigate && (
-            <button onClick={() => onNavigate('documents-center')} data-testid="open-documents-center"
-              style={{ minHeight: 44, padding: '8px 14px', background: 'var(--bg-surface)', color: 'var(--role-color)', border: '1.5px solid var(--role-color)', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
-              📁 Documents Center
-            </button>
-          )}
+          {/* v1.121.0 — the Documents button moved into "Money & legal" below. */}
           {!editing && onNavigate && (
             <button onClick={() => onNavigate('recipients')} style={{ padding: '8px 14px', background: 'var(--bg-surface)', color: 'var(--role-color)', border: '1.5px solid #1b6b5a', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
               + Add Another Person
@@ -1019,6 +1024,14 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
         </div>
       )}
 
+      {/* ─── v1.121.0 — one page, six stops, in Pete's order (LovedOneGuide.js) ───
+          Betty · To do · Notes · Calendar · Money & legal · About. Nothing was removed; the
+          sections were regrouped and the bar follows the scroll. */}
+      {profile && !editing && typeof LovedOneGuideBar !== 'undefined' && (
+        <LovedOneGuideBar sections={lovedOneSections} />
+      )}
+
+      <LovedOneSection id="person" label={profile?.first_name || 'Profile'}>
       {/* ─── 1. Compact Hero Card — Photo, Name, Age, Address, Emergency Contact ─── */}
       {!editing ? (
         <div className="card" style={{ padding: '16px 20px' }}>
@@ -1318,112 +1331,16 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
         )}
         </div>
       </div>
+      </LovedOneSection>
 
-      {/* ─── 4. Care Preferences (collapsible) ─── */}
-      <div className="card" style={{ overflow: 'hidden' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
-          onClick={() => setPrefsExpanded(!prefsExpanded)}>
-          <div className="card-header" style={{ margin: 0 }}>
-            <span className="card-icon">{'\u2728'}</span>Care Preferences
-            {Object.keys(carePrefs).length > 0 && (
-              <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 600, color: 'var(--role-color)', background: 'var(--color-success-bg)', padding: '2px 8px', borderRadius: 10 }}>
-                {Object.keys(carePrefs).length}/{CARE_PREFS_LIST.length} rated
-              </span>
-            )}
-          </div>
-          <span style={{ fontSize: 18, color: 'var(--text-muted)', transition: 'transform 0.2s', transform: prefsExpanded ? 'rotate(180deg)' : 'rotate(0)' }}>{'\u25BC'}</span>
-        </div>
-
-        {prefsExpanded && (
-          <div style={{ marginTop: 16 }}>
-            <div style={{ background: 'var(--color-warning-bg)', border: '2px solid #e8724a', borderRadius: 10, padding: '12px 16px', marginBottom: 16, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-              <span style={{ fontSize: 20, flexShrink: 0 }}>{'\u2695\uFE0F'}</span>
-              <div>
-                <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--color-warning)', marginBottom: 2 }}>InPlace is not a medical service</div>
-                <div style={{ fontSize: 12, color: 'var(--text-brown)', lineHeight: 1.5 }}>Our caregivers provide companion care and daily living assistance. They do not diagnose, treat, administer medication, or perform medical procedures.</div>
-              </div>
-            </div>
-
-            <p style={{ fontSize: 13, color: 'var(--text-tertiary)', margin: '0 0 12px' }}>
-              Rate what matters for {profile.first_name}'s care. For important items, add details to help match the right caregiver. You can update these anytime.
-            </p>
-
-            <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
-              {RATING_OPTIONS.map(r => (
-                <div key={r.value} style={{ padding: '3px 8px', borderRadius: 5, fontSize: 11, fontWeight: 600, background: r.color, color: r.textColor, border: '1px solid #ddd' }}>{r.label}</div>
-              ))}
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {(showAllPrefs ? CARE_PREFS_LIST : CARE_PREFS_LIST.slice(0, 10)).map(pref => {
-                const val = carePrefs[pref.id] || 0;
-                const hasFollowUp = PREF_FOLLOW_UPS[pref.id];
-                const showDetail = hasFollowUp && val >= 2;
-                return (
-                  <div key={pref.id} style={{ borderRadius: 8, background: val > 0 ? RATING_OPTIONS[val].color + '40' : 'var(--bg-primary)', border: '1px solid ' + (val > 0 ? RATING_OPTIONS[val].color : 'var(--border-light)'), transition: 'all 0.2s', overflow: 'hidden' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', flexWrap: 'wrap' }}>
-                      <span style={{ fontSize: 18, width: 24, textAlign: 'center', flexShrink: 0 }}>{pref.icon}</span>
-                      <div style={{ flex: '1 1 140px', minWidth: 0, fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', lineHeight: 1.3 }}>{pref.label}</div>
-                      <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
-                        {RATING_OPTIONS.map(r => (
-                          <button key={r.value} onClick={() => handlePrefRate(pref.id, r.value)} style={{
-                            padding: '3px 8px', borderRadius: 5, fontSize: 10, fontWeight: 600, whiteSpace: 'nowrap',
-                            border: val === r.value ? '2px solid #1b6b5a' : '1px solid #ddd',
-                            background: val === r.value ? r.color : 'var(--bg-card)',
-                            color: val === r.value ? r.textColor : 'var(--text-muted)',
-                            cursor: 'pointer', transition: 'all 0.15s',
-                          }}>{r.label}</button>
-                        ))}
-                      </div>
-                    </div>
-                    {showDetail && (
-                      <div style={{ padding: '0 12px 10px 46px' }}>
-                        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--role-color)', marginBottom: 3 }}>
-                          {hasFollowUp} <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>(optional)</span>
-                        </div>
-                        <input type="text" value={careDetails[pref.id] || ''} onChange={(e) => handlePrefDetail(pref.id, e.target.value)}
-                          placeholder="Add details..."
-                          style={{ width: '100%', padding: '7px 10px', borderRadius: 6, border: '1px solid #ccc', fontSize: 12, color: 'var(--text-primary)', boxSizing: 'border-box', fontFamily: 'inherit' }} />
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-
-            {!showAllPrefs && (
-              <button onClick={() => setShowAllPrefs(true)} style={{
-                width: '100%', padding: '10px', marginTop: 8, borderRadius: 8,
-                border: '1px dashed #ccc', background: 'var(--bg-primary)', color: 'var(--text-secondary)',
-                fontWeight: 600, fontSize: 13, cursor: 'pointer',
-              }}>Show {CARE_PREFS_LIST.length - 10} more preferences</button>
-            )}
-
-            <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
-              <button onClick={savePreferences} disabled={savingPrefs} style={{
-                padding: '10px 20px', borderRadius: 8, border: '1px solid #1b6b5a',
-                background: 'var(--bg-surface)', color: 'var(--role-color)', fontWeight: 600, fontSize: 13,
-                cursor: savingPrefs ? 'wait' : 'pointer',
-              }}>{savingPrefs ? 'Saving...' : 'Save Preferences'}</button>
-              <button onClick={generateAISummary} disabled={generatingAI || Object.values(carePrefs).filter(v => v > 0).length < 3} style={{
-                padding: '10px 20px', borderRadius: 8, border: 'none',
-                background: Object.values(carePrefs).filter(v => v > 0).length >= 3 ? 'var(--role-color)' : 'var(--border-light)',
-                color: 'var(--text-on-primary)', fontWeight: 600, fontSize: 13,
-                cursor: (generatingAI || Object.values(carePrefs).filter(v => v > 0).length < 3) ? 'default' : 'pointer',
-              }}>{generatingAI ? 'Generating...' : '\u2728 Generate Care Summary with inPlace\'s AI tool'}</button>
-            </div>
-          </div>
-        )}
-      </div>
-
+      <LovedOneSection id="todo" label="To do">
       {/* ─── Care Tasks (v1.99.0): recurring med/care tracking definitions.
            Completing tasks happens on the dashboard's Next Up — this card is
            for setting them up: what, when, how often, whose job. ─── */}
       {profile?.id && <CareTasksSection recipientId={profile.id} recipientFirstName={profile.first_name} />}
-      {profile?.id && <CareEventsSection recipientId={profile.id} recipientFirstName={profile.first_name} />}
-      {/* v1.110 — legal & money readiness. Family only; the server refuses everyone else. */}
-      {profile?.id && (window.__currentRole || 'family') === 'family' && typeof LegalReadinessCard !== 'undefined' && <LegalReadinessCard careRecipientId={profile.id} />}
+      </LovedOneSection>
 
+      <LovedOneSection id="notes" label="Notes">
       {/* ─── 5. Care Notes (collapsible) ─── */}
       <div className="card" ref={notesCardRef}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
@@ -1648,6 +1565,139 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
               <p style={{ color: 'var(--text-muted)', fontSize: 13, margin: '8px 0 0' }}>No notes yet. Add one to share care observations with your team.</p>
             );
             })()}
+          </div>
+        )}
+      </div>
+      </LovedOneSection>
+
+      <LovedOneSection id="calendar" label="Calendar">
+      {profile?.id && <CareEventsSection recipientId={profile.id} recipientFirstName={profile.first_name} />}
+      {/* v1.121.0 — Pete: calendar "with the +orange request care button". `schedule` is where
+          Request Care lands everywhere else (app.js, _request_care). */}
+      {!editing && onNavigate && (window.__currentRole || 'family') === 'family' && (
+        <button type="button" data-testid="loved-one-request-care" onClick={() => onNavigate('schedule')}
+          style={{ minHeight: 48, margin: '4px 0 8px', padding: '12px 16px', borderRadius: 12, border: 'none',
+            background: 'var(--accent-color-dark)', color: 'var(--text-on-primary)', fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>
+          + Request care
+        </button>
+      )}
+      </LovedOneSection>
+
+      {lovedOneHasMoney && (
+      <LovedOneSection id="money" label="Money & legal">
+      {/* v1.110 — legal & money readiness. Family only; the server refuses everyone else. */}
+      {profile?.id && (window.__currentRole || 'family') === 'family' && typeof LegalReadinessCard !== 'undefined' && <LegalReadinessCard careRecipientId={profile.id} />}
+      {/* v1.121.0 — Documents moved here from the page header: it is the legal half of
+          "Money & legal". Same condition as the header button it replaces. */}
+      {!editing && onNavigate && (
+        <div className="card" data-testid="open-documents-center" onClick={() => onNavigate('documents-center')}
+          role="button" tabIndex={0}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onNavigate('documents-center'); } }}
+          style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', cursor: 'pointer' }}>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--role-color)' }}>📁 Documents</div>
+            <div style={{ fontSize: 13, color: 'var(--text-tertiary)', marginTop: 2 }}>Medical records and legal documents</div>
+          </div>
+          <span style={{ fontSize: 20, color: 'var(--text-muted)' }}>›</span>
+        </div>
+      )}
+      </LovedOneSection>
+      )}
+
+      <LovedOneSection id="about" label={`About ${profile?.first_name || ''}`.trim()}>
+      {/* ─── 4. Care Preferences (collapsible) ─── */}
+      <div className="card" style={{ overflow: 'hidden' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
+          onClick={() => setPrefsExpanded(!prefsExpanded)}>
+          <div className="card-header" style={{ margin: 0 }}>
+            <span className="card-icon">{'\u2728'}</span>Care Preferences
+            {Object.keys(carePrefs).length > 0 && (
+              <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 600, color: 'var(--role-color)', background: 'var(--color-success-bg)', padding: '2px 8px', borderRadius: 10 }}>
+                {Object.keys(carePrefs).length}/{CARE_PREFS_LIST.length} rated
+              </span>
+            )}
+          </div>
+          <span style={{ fontSize: 18, color: 'var(--text-muted)', transition: 'transform 0.2s', transform: prefsExpanded ? 'rotate(180deg)' : 'rotate(0)' }}>{'\u25BC'}</span>
+        </div>
+
+        {prefsExpanded && (
+          <div style={{ marginTop: 16 }}>
+            <div style={{ background: 'var(--color-warning-bg)', border: '2px solid #e8724a', borderRadius: 10, padding: '12px 16px', marginBottom: 16, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+              <span style={{ fontSize: 20, flexShrink: 0 }}>{'\u2695\uFE0F'}</span>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--color-warning)', marginBottom: 2 }}>InPlace is not a medical service</div>
+                <div style={{ fontSize: 12, color: 'var(--text-brown)', lineHeight: 1.5 }}>Our caregivers provide companion care and daily living assistance. They do not diagnose, treat, administer medication, or perform medical procedures.</div>
+              </div>
+            </div>
+
+            <p style={{ fontSize: 13, color: 'var(--text-tertiary)', margin: '0 0 12px' }}>
+              Rate what matters for {profile.first_name}'s care. For important items, add details to help match the right caregiver. You can update these anytime.
+            </p>
+
+            <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
+              {RATING_OPTIONS.map(r => (
+                <div key={r.value} style={{ padding: '3px 8px', borderRadius: 5, fontSize: 11, fontWeight: 600, background: r.color, color: r.textColor, border: '1px solid #ddd' }}>{r.label}</div>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {(showAllPrefs ? CARE_PREFS_LIST : CARE_PREFS_LIST.slice(0, 10)).map(pref => {
+                const val = carePrefs[pref.id] || 0;
+                const hasFollowUp = PREF_FOLLOW_UPS[pref.id];
+                const showDetail = hasFollowUp && val >= 2;
+                return (
+                  <div key={pref.id} style={{ borderRadius: 8, background: val > 0 ? RATING_OPTIONS[val].color + '40' : 'var(--bg-primary)', border: '1px solid ' + (val > 0 ? RATING_OPTIONS[val].color : 'var(--border-light)'), transition: 'all 0.2s', overflow: 'hidden' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 18, width: 24, textAlign: 'center', flexShrink: 0 }}>{pref.icon}</span>
+                      <div style={{ flex: '1 1 140px', minWidth: 0, fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', lineHeight: 1.3 }}>{pref.label}</div>
+                      <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+                        {RATING_OPTIONS.map(r => (
+                          <button key={r.value} onClick={() => handlePrefRate(pref.id, r.value)} style={{
+                            padding: '3px 8px', borderRadius: 5, fontSize: 10, fontWeight: 600, whiteSpace: 'nowrap',
+                            border: val === r.value ? '2px solid #1b6b5a' : '1px solid #ddd',
+                            background: val === r.value ? r.color : 'var(--bg-card)',
+                            color: val === r.value ? r.textColor : 'var(--text-muted)',
+                            cursor: 'pointer', transition: 'all 0.15s',
+                          }}>{r.label}</button>
+                        ))}
+                      </div>
+                    </div>
+                    {showDetail && (
+                      <div style={{ padding: '0 12px 10px 46px' }}>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--role-color)', marginBottom: 3 }}>
+                          {hasFollowUp} <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>(optional)</span>
+                        </div>
+                        <input type="text" value={careDetails[pref.id] || ''} onChange={(e) => handlePrefDetail(pref.id, e.target.value)}
+                          placeholder="Add details..."
+                          style={{ width: '100%', padding: '7px 10px', borderRadius: 6, border: '1px solid #ccc', fontSize: 12, color: 'var(--text-primary)', boxSizing: 'border-box', fontFamily: 'inherit' }} />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {!showAllPrefs && (
+              <button onClick={() => setShowAllPrefs(true)} style={{
+                width: '100%', padding: '10px', marginTop: 8, borderRadius: 8,
+                border: '1px dashed #ccc', background: 'var(--bg-primary)', color: 'var(--text-secondary)',
+                fontWeight: 600, fontSize: 13, cursor: 'pointer',
+              }}>Show {CARE_PREFS_LIST.length - 10} more preferences</button>
+            )}
+
+            <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
+              <button onClick={savePreferences} disabled={savingPrefs} style={{
+                padding: '10px 20px', borderRadius: 8, border: '1px solid #1b6b5a',
+                background: 'var(--bg-surface)', color: 'var(--role-color)', fontWeight: 600, fontSize: 13,
+                cursor: savingPrefs ? 'wait' : 'pointer',
+              }}>{savingPrefs ? 'Saving...' : 'Save Preferences'}</button>
+              <button onClick={generateAISummary} disabled={generatingAI || Object.values(carePrefs).filter(v => v > 0).length < 3} style={{
+                padding: '10px 20px', borderRadius: 8, border: 'none',
+                background: Object.values(carePrefs).filter(v => v > 0).length >= 3 ? 'var(--role-color)' : 'var(--border-light)',
+                color: 'var(--text-on-primary)', fontWeight: 600, fontSize: 13,
+                cursor: (generatingAI || Object.values(carePrefs).filter(v => v > 0).length < 3) ? 'default' : 'pointer',
+              }}>{generatingAI ? 'Generating...' : '\u2728 Generate Care Summary with inPlace\'s AI tool'}</button>
+            </div>
           </div>
         )}
       </div>
@@ -2536,6 +2586,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
           <span style={{ fontSize: 20, color: 'var(--text-muted)' }}>›</span>
         </div>
       )}
+      </LovedOneSection>
 
       {viewingAttachments && typeof AttachmentViewer !== 'undefined' && (
         <AttachmentViewer attachments={viewingAttachments.list} startIndex={viewingAttachments.index}
