@@ -31,3 +31,9 @@ test("no AI key: no notes, nothing marked", async () => {
   expect(await CN.analyzeCall("Dana: yes text me")).toBeNull();
   if (saved) process.env.ANTHROPIC_API_KEY = saved;
 });
+
+test("the voicemail asks them to text JOIN to the outreach number, and comes first in the script", () => {
+  expect(CN.VOICEMAIL_SCRIPT).toMatch(/text JOIN to this number, 540-835-5987/);
+  expect(CN.VOICEMAIL_SCRIPT).toMatch(/InPlace Care/);
+  expect(CN.CALL_SCRIPT[1].say).toBe(CN.VOICEMAIL_SCRIPT);
+});

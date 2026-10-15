@@ -385,7 +385,9 @@ const OutreachThread = ({ contactId, apiFetch, showToast, onClose, onChanged, ca
             {callScript.map((l, i) => (
               <div key={i} style={l.consent
                 ? { margin: '6px 0', padding: '6px 10px', borderRadius: 8, fontWeight: 600, ...OUT_TONE.warning }
-                : { margin: '3px 0', color: l.note ? 'var(--text-secondary)' : 'var(--text-primary)', fontStyle: l.note ? 'italic' : 'normal' }}>
+                : l.branch === 'voicemail' && l.say
+                  ? { margin: '3px 0 10px', padding: '6px 10px', borderRadius: 8, ...OUT_TONE.info }
+                  : { margin: '3px 0', color: l.note ? 'var(--text-secondary)' : 'var(--text-primary)', fontStyle: l.note ? 'italic' : 'normal' }}>
                 {l.consent ? '❓ Ask exactly: ' : ''}{String(l.say || l.note).replace(/\{first\}/g, (c && c.first_name) || 'there')}
               </div>
             ))}

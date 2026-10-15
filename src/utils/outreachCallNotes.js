@@ -22,15 +22,27 @@ const CONSENT_QUESTION =
   "Is it OK if InPlace Care texts you at this number about caregiving work? " +
   "Message and data rates may apply, and you can reply STOP any time to stop.";
 
+/**
+ * The voicemail, in Pete's own live voice (never a pre-recorded drop — automated voice to a cell
+ * phone needs prior consent under the TCPA). It asks them to text first: their text is their
+ * opt-in, and most people never pick up. Pete, 10/15: "They may actually respond to a text if I
+ * said, I'm calling about your interest in caregiving work."
+ */
+const VOICEMAIL_SCRIPT =
+  "Hi {first}, this is Pete with InPlace Care. I'm calling about your interest in caregiving work — " +
+  "the Agency on Aging has you listed as looking for private-pay clients. If you're still looking, just text " +
+  "JOIN to this number, 540-835-5987, and I'll send you the details. Thanks!";
+
 /** Pete's call script — shown in the thread during a call, and published as proof. */
 const CALL_SCRIPT = [
-  { say: "Hi, is this {first}? This is Pete Lee with InPlace Care, here in the New River Valley." },
-  { say: "You're listed with the New River Valley Agency on Aging as a caregiver looking for private-pay work. Is that still something you're looking for?" },
-  { note: "If no: thank them and end the call." },
+  { note: "Voicemail? Leave this, in your own voice:", branch: "voicemail" },
+  { say: VOICEMAIL_SCRIPT, branch: "voicemail" },
+  { say: "Hi {first}, this is Pete with InPlace Care. I'm calling about your interest in caregiving work — the Agency on Aging has you listed as looking for private-pay clients. Is that still something you're looking for?" },
+  { note: "“No thank you”: “No problem, thanks for your time.” End the call. (iPAi marks them Declined; they're never texted.)" },
   { say: "InPlace connects local families with independent caregivers. You set your own rate and keep all of it; the family pays through the app and you're paid after each visit." },
   { say: CONSENT_QUESTION, consent: true },
-  { note: "If yes: “Great — I'll text you the details and a signup link right after we hang up.”" },
-  { note: "If no: “No problem. Can I email you instead?” Don't text them." },
+  { note: "Yes: “Great — I'll text you the details and a signup link right after we hang up.”" },
+  { note: "No: “No problem. Can I email you instead?” Don't text them." },
   { say: "Thanks for your time, {first}." },
 ];
 
@@ -54,7 +66,7 @@ async function analyzeCall(transcript, { first = "the caregiver" } = {}) {
   if (!client) return null;
   const prompt = `You are reading the transcript of a recruiting phone call. Pete Lee of InPlace Care called ${first}, a caregiver listed as looking for private-pay work. Two voices are on the call.
 
-Write Pete's notes. Report only what was SAID; never guess.
+Write Pete's notes. Report only what was SAID; never guess. If Pete only left a voicemail, the outcome is "voicemail". If the other person hung up or no real conversation happened, it is "no_conversation". "No thank you" or similar is "not_interested".
 
 "texts_ok" decides whether InPlace may text this person. Set it true ONLY if, in the transcript, Pete asked whether InPlace may text them (in words like "${CONSENT_QUESTION}") AND the other person clearly agreed. If the question was not asked, the answer was unclear, conditional, or no, set it false. When true, "consent_quote" must be the other person's exact words of agreement copied from the transcript (a few words, verbatim); otherwise null.
 
@@ -105,4 +117,4 @@ function statusFor(outcome, current) {
   return current;
 }
 
-module.exports = { CALL_ANNOUNCEMENT, CONSENT_QUESTION, CALL_SCRIPT, OUTCOMES, analyzeCall, quoteInTranscript, statusFor };
+module.exports = { CALL_ANNOUNCEMENT, CONSENT_QUESTION, CALL_SCRIPT, VOICEMAIL_SCRIPT, OUTCOMES, analyzeCall, quoteInTranscript, statusFor };
