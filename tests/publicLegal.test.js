@@ -172,7 +172,7 @@ describe("/sms/opt-in shows the behind-login opt-ins publicly", () => {
   const { SMS_OPTIN } = _internals;
   const SC = require("../src/utils/smsConsent");
   test("both screenshots are on the page and exist on disk", () => {
-    for (const f of ["account-text-alerts.png", "care-team-text-reminders.png"]) {
+    for (const f of ["account-text-alerts.png", "care-team-reminders-v2.png"]) {
       expect(SMS_OPTIN).toContain(`/img/sms-optin/${f}`);
       expect(fs.existsSync(path.join(__dirname, "..", "public", "img", "sms-optin", f))).toBe(true);
     }

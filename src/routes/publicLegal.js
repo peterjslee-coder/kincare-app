@@ -234,7 +234,7 @@ const SMS_OPTIN = `
 
 <h2>2. The person receiving care: Care Team &rarr; Notifications, then a YES by text</h2>
 <p>A family member who leads the care team chooses &ldquo;Text only&rdquo; or &ldquo;App + Text&rdquo;, enters the mobile number of the person receiving care, and checks the consent box. The screen won't save text reminders without the box checked:</p>
-<figure><img src="/img/sms-optin/care-team-text-reminders.png" alt="Care Team Notifications screen with reminder method, phone number, reminder times and an unchecked consent box" style="width:100%;border:1px solid #ddd;border-radius:8px"><figcaption>Care Team &rarr; Notifications (sample name and number).</figcaption></figure>
+<figure><img src="/img/sms-optin/care-team-reminders-v2.png" alt="Care Team Notifications screen with reminder method, phone number, reminder times and an unchecked consent box" style="width:100%;border:1px solid #ddd;border-radius:8px"><figcaption>Care Team &rarr; Notifications (sample name and number).</figcaption></figure>
 <p>Checking the box only <strong>requests</strong> texts. InPlace then sends one message to that number, and sends nothing else unless the person replies YES:</p>
 <blockquote>${escapeHtml(SC.RECIPIENT_CONFIRM_TEXT("Jane", "Sam"))}</blockquote>
 <p>When they reply YES:</p>
