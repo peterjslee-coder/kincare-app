@@ -202,6 +202,12 @@ describe("v1.122.0 — the call opt-in is published from the same code that runs
   test("/sms describes both ways in for the outreach number", () => {
     expect(SMS_TERMS).toMatch(/text <strong>JOIN<\/strong>/);
     expect(SMS_TERMS).toMatch(/Is it OK if InPlace Care texts you/);
-    expect(SMS_TERMS).toMatch(/Calls from InPlace are recorded/);
+    expect(SMS_TERMS).toMatch(/never robocalls or prerecorded messages; they are recorded/);
   });
+});
+
+test("v1.122.4 — the call opt-in is described as a live call by a person, never a robocall", () => {
+  expect(_internals.SMS_OPTIN).toMatch(/live, person-to-person conversations, never robocalls or prerecorded messages/);
+  expect(_internals.SMS_OPTIN).toMatch(/one at a time/);
+  expect(_internals.SMS_OPTIN).not.toMatch(/recorded phone call<\/h3>/);
 });
