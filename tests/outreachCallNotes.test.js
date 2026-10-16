@@ -14,7 +14,6 @@ test("the script asks the consent question word for word, with rates and STOP", 
   expect(CN.CONSENT_QUESTION).toMatch(/InPlace Care texts you/);
   expect(CN.CONSENT_QUESTION).toMatch(/rates may apply/);
   expect(CN.CONSENT_QUESTION).toMatch(/STOP/);
-  expect(CN.CALL_ANNOUNCEMENT).toMatch(/recorded/);
 });
 
 test("outcomes only move a contact forward from early states", () => {

@@ -254,7 +254,7 @@ test("only an admin's browser can dial, only a contact's number, from the outrea
   const c = await byPhone("+15405550102");
   const ok = await signedPost("/api/sms/outreach-dial", { From: `client:admin-${admin.user.id}`, contactId: c.id, CallSid: "CAout1" });
   expect(ok.text).toContain('<Dial callerId="+15405550100"');
-  expect(ok.text).toMatch(/<Number url="[^"]*\/api\/sms\/outreach-whisper">\+15405550102<\/Number>/);
+  expect(ok.text).toContain("<Number>+15405550102</Number>"); // v1.122.5 — no announcement
   // v1.122.0 — recorded, both sides.
   expect(ok.text).toContain('record="record-from-answer-dual"');
   expect(ok.text).toContain("/api/sms/outreach-call-recording");
@@ -300,10 +300,10 @@ describe("recorded outreach calls", () => {
     return c;
   };
 
-  test("the person called hears that it's recorded", async () => {
-    const r = await signedPost("/api/sms/outreach-whisper", { CallSid: "CAw" });
-    expect(r.text).toContain("This call from InPlace Care is recorded.");
-    expect((await h.request.post("/api/sms/outreach-whisper").type("form").send({})).status).toBe(403);
+  test("v1.122.5 — no announcement is played to the person called", async () => {
+    const c = await byPhone("+15405550102");
+    const r = await signedPost("/api/sms/outreach-dial", { From: `client:admin-${admin.user.id}`, contactId: c.id, CallSid: "CAnoann" });
+    expect(r.text).not.toMatch(/<Say|url=/);
   });
 
   test("a yes in the transcript, quoted, marks texts OK with the evidence; notes and status are filled", async () => {

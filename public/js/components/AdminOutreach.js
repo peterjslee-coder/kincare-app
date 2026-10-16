@@ -381,7 +381,7 @@ const OutreachThread = ({ contactId, apiFetch, showToast, onClose, onChanged, ca
           // v1.122.0 — Pete's script, on screen for the whole call. The consent line is the one
           // iPAi listens for in the recording; say it as written.
           <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border-color)', fontSize: 13, lineHeight: 1.5, maxHeight: 240, overflowY: 'auto' }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: 4 }}>Script · this call is recorded</div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: 4 }}>Script</div>
             {callScript.map((l, i) => (
               <div key={i} style={l.consent
                 ? { margin: '6px 0', padding: '6px 10px', borderRadius: 8, fontWeight: 600, ...OUT_TONE.warning }

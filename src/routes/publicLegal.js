@@ -203,7 +203,7 @@ const SMS_TERMS = `
 <p><strong>How often:</strong> varies with the visits on your schedule — typically one to four messages per visit.</p>
 <h2>2. Caregiver opportunities — from (540) 835-5987</h2>
 <p>One-to-one conversations with independent caregivers about paid caregiving work through InPlace.</p>
-<p><strong>How you opt in:</strong> either you text <strong>JOIN</strong> (or anything else) to (540) 835-5987, or, on a live phone call with InPlace's founder, you say yes when we ask: &ldquo;Is it OK if InPlace Care texts you at this number about caregiving work? Message and data rates may apply, and you can reply STOP any time to stop.&rdquo; We don't text anyone who hasn't done one of those. These are live calls placed one at a time by a person, never robocalls or prerecorded messages; they are recorded for our records, and you're told so when you answer. <a href="/sms/opt-in">See how.</a></p>
+<p><strong>How you opt in:</strong> either you text <strong>JOIN</strong> (or anything else) to (540) 835-5987, or, on a live phone call with InPlace's founder, you say yes when we ask: &ldquo;Is it OK if InPlace Care texts you at this number about caregiving work? Message and data rates may apply, and you can reply STOP any time to stop.&rdquo; We don't text anyone who hasn't done one of those. These are live calls placed one at a time by a person, never robocalls or prerecorded messages. <a href="/sms/opt-in">See how.</a></p>
 <p><strong>How often:</strong> a few messages per conversation. If you don't reply, we don't keep texting.</p>
 <h2>For both</h2>
 <p>Message and data rates may apply.</p>
@@ -244,7 +244,7 @@ const SMS_OPTIN = `
 <h2>3. Caregivers looking for work: (540) 835-5987</h2>
 <p>Nobody is texted from this number until they have opted in in one of two ways. The app enforces this: texting a person is blocked until one of them is on record.</p>
 <h3>3a. They say yes on a live call with InPlace's founder</h3>
-<p>InPlace's founder personally calls caregivers who have publicly listed themselves as seeking private-pay work (for example, with the New River Valley Agency on Aging). He dials each person individually, one at a time, from the InPlace app on (540) 835-5987. These are live, person-to-person conversations, never robocalls or prerecorded messages. Calls are recorded for our records. When the person answers, they first hear: <em>&ldquo;${escapeHtml(CN.CALL_ANNOUNCEMENT)}&rdquo;</em> The caller follows this script:</p>
+<p>InPlace's founder personally calls caregivers who have publicly listed themselves as seeking private-pay work (for example, with the New River Valley Agency on Aging). He dials each person individually, one at a time, from the InPlace app on (540) 835-5987. These are live, person-to-person conversations, never robocalls or prerecorded messages. Calls are recorded for our records. The caller follows this script:</p>
 <ol>${CN.CALL_SCRIPT.map((l) => `<li>${l.consent ? "<strong>" : ""}${escapeHtml(String(l.say || l.note).replace(/\{first\}/g, "[name]"))}${l.consent ? "</strong>" : ""}</li>`).join("")}</ol>
 <p>Texts become possible for that person only if they answer the bold question with a clear yes. The recording is transcribed; the yes is recorded with the person's own words, the time, and the recording it came from. If they say no, they are not texted.</p>
 <p>The first text after a yes:</p>

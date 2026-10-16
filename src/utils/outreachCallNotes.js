@@ -6,7 +6,7 @@
  * can use as part of the proof ... I want something to record the transcript as evidence as well.
  * And I want iPAi to fill out the notes per call and mark them appropriately."
  *
- * So every call from Admin → Outreach is recorded (the callee hears CALL_ANNOUNCEMENT on answer),
+ * So every call from Admin → Outreach is recorded (no announcement since v1.122.5 — one-party consent),
  * transcribed (ElevenLabs, the existing vendor — utils/transcription.js), and read by iPAi, which
  * writes the notes and the outcome. iPAi may mark texts OK ONLY when the transcript shows the
  * consent question and a clear yes, and it must quote the yes; the server checks the quote really
@@ -15,7 +15,6 @@
  */
 const AI = require("./aiModels"); // property access at call time, so tests can stub it
 
-const CALL_ANNOUNCEMENT = "This call from InPlace Care is recorded.";
 
 /** The question that makes texting OK. Shown in the in-call script and on /sms/opt-in. */
 const CONSENT_QUESTION =
@@ -117,4 +116,4 @@ function statusFor(outcome, current) {
   return current;
 }
 
-module.exports = { CALL_ANNOUNCEMENT, CONSENT_QUESTION, CALL_SCRIPT, VOICEMAIL_SCRIPT, OUTCOMES, analyzeCall, quoteInTranscript, statusFor };
+module.exports = { CONSENT_QUESTION, CALL_SCRIPT, VOICEMAIL_SCRIPT, OUTCOMES, analyzeCall, quoteInTranscript, statusFor };

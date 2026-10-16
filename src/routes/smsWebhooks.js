@@ -357,11 +357,12 @@ router.post("/outreach-dial", async (req, res) => {
       VALUES (?, ?, 'out', 'Call', ?, 'calling', 'call', ?, NOW())
     `).run(uuid(), contact.id, req.body.CallSid || null, admin.id);
     await db.prepare("UPDATE outreach_contacts SET last_message_at = NOW(), updated_at = NOW() WHERE id = ?").run(contact.id);
-    // v1.122.0 — recorded (both sides, from answer), and the person called hears that it is
-    // before anyone speaks (the <Number url> whisper plays to them only).
+    // v1.122.0 — recorded (both sides, from answer) for Pete's notes. v1.122.5 — no announcement:
+    // Pete, 10/16: "remove any announcement" (Virginia and federal law are one-party consent; he is
+    // a party to every call). Lawyer L13 covers callers who turn out to be in all-party states.
     voiceXml(res, `<Dial callerId="${from}" answerOnBridge="true" timeout="30" action="${APP_URL}/api/sms/outreach-dial-done"`
       + ` record="record-from-answer-dual" recordingStatusCallback="${APP_URL}/api/sms/outreach-call-recording" recordingStatusCallbackEvent="completed">`
-      + `<Number url="${APP_URL}/api/sms/outreach-whisper">${xmlEscape(O.dialableUsNumber(contact.phone))}</Number></Dial>`);
+      + `<Number>${xmlEscape(O.dialableUsNumber(contact.phone))}</Number></Dial>`);
   } catch (err) {
     captureException(err, { where: "outreach: dial" });
     voiceXml(res, sayXml("Sorry, something went wrong.") + "<Hangup/>");
@@ -391,12 +392,6 @@ router.post("/outreach-dial-done", async (req, res) => {
 // v1.122.0 — recorded outreach calls (utils/outreachCallNotes.js for the why).
 // ═══════════════════════════════════════════════════════════
 const CN = require("../utils/outreachCallNotes");
-
-// Played to the person called, when they answer, before the call connects.
-router.post("/outreach-whisper", (req, res) => {
-  if (!verifyTwilio(req)) return res.status(403).send("Forbidden");
-  voiceXml(res, sayXml(CN.CALL_ANNOUNCEMENT));
-});
 
 router.post("/outreach-call-recording", async (req, res) => {
   if (!verifyTwilio(req)) return res.status(403).send("Forbidden");
