@@ -14,7 +14,9 @@ jest.setTimeout(180000);
 
 let h, db, admin;
 
-const todayStr = () => new Date().toISOString().slice(0, 10);
+// The recipient's local date (America/New_York), not UTC's: after 8pm Eastern the UTC date is
+// already tomorrow, the task would start then, and today's occurrence would never exist (CI #654).
+const todayStr = () => new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
 
 async function caregiverWithProfile(name) {
   const cg = await h.createUser({ roles: ["caregiver"], firstName: name, lastName: "Cg", careToolsOpen: false });
