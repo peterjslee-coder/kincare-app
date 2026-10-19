@@ -195,10 +195,6 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
   // Time change proposal state
   const [timeChangeModal, setTimeChangeModal] = useState(null); // { sessionId, session } for proposing
   const [timeChangeProposal, setTimeChangeProposal] = useState(null); // fetched pending proposal for acknowledge
-  const [tcNewTime, setTcNewTime] = useState('');
-  const [tcNewDuration, setTcNewDuration] = useState('');
-  const [tcReason, setTcReason] = useState('');
-  const [tcLoading, setTcLoading] = useState(false);
   const [tcRespondLoading, setTcRespondLoading] = useState(false);
 
   // In-app notifications (v1.56.0)
@@ -2101,7 +2097,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                               when only the length changed. Now the change in words, from the shared describer. */}
                           <div style={{ fontSize: 13, color: 'var(--color-purple)', fontWeight: 700, marginTop: 2 }}>
                             {(() => {
-                              const c = TimeChange.describe({ fromTime: s.time, fromHours: s.durationHours, toTime: s.tcProposedTime, toHours: s.tcProposedDuration || s.durationHours });
+                              const c = TimeChange.describe({ fromTime: s.time, fromHours: s.durationHours, toTime: s.tcProposedTime, toHours: s.tcProposedDuration || s.durationHours, fromDate: s.date, toDate: s.tcProposedDate || s.date });
                               return `Asked to ${c.phrase || 'change the time'}`;
                             })()}
                           </div>
@@ -2132,9 +2128,9 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                         textTransform: 'capitalize', whiteSpace: 'nowrap',
                       }}>{s.status === 'payment_hold' ? 'On Hold' : isActive ? 'In Progress' : s.status}</span>
                       {s.status === 'confirmed' && s.caregiverName && !hasPendingTimeChange && (
-                        <button onClick={(e) => { e.stopPropagation(); setTimeChangeModal({ sessionId: s.id, session: s }); setTcNewTime(s.time || ''); setTcNewDuration(String(s.durationHours || 2)); setTcReason(''); }}
+                        <button onClick={(e) => { e.stopPropagation(); setTimeChangeModal({ sessionId: s.id, session: s }); }}
                           style={{ padding: '3px 8px', borderRadius: 6, border: '1px solid var(--color-purple)', background: 'var(--color-purple-bg)', color: 'var(--color-purple)', fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>
-                          Change Time
+                          Change visit
                         </button>
                       )}
                       {hasPendingTimeChange && (
@@ -2610,87 +2606,11 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
         );
       })()}
 
-      {/* ─── Propose Time Change Modal (family proposing) ─── */}
-      {timeChangeModal && (() => {
-        const s = timeChangeModal.session;
-        const sTime = s.time || '';
-        const dur = parseFloat(s.durationHours) || 2;
-        const formatT = (t) => { if (!t) return ''; const [h,m] = t.split(':').map(Number); return `${h === 0 ? 12 : h > 12 ? h-12 : h}:${String(m||0).padStart(2,'0')} ${h >= 12 ? 'PM' : 'AM'}`; };
-        return (
-          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-            <div style={{ background: 'var(--bg-surface)', borderRadius: 14, padding: 24, width: 420, maxWidth: '90vw' }}>
-              <h3 style={{ margin: '0 0 4px', fontSize: 17, color: 'var(--color-purple)' }}>⏰ Propose Time Change</h3>
-              <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '0 0 16px' }}>
-                {s.recipientName} with {s.caregiverName} — currently {formatT(s.time)} for {s.durationHours}hr
-              </p>
-              <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
-                <div style={{ flex: 1 }}>
-                  <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>New Start Time</label>
-                  <input type="time" value={tcNewTime} onChange={e => setTcNewTime(e.target.value)}
-                    style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border-color)', fontSize: 14, boxSizing: 'border-box' }} />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Duration (hours)</label>
-                  <select value={String(parseFloat(tcNewDuration) || '')} onChange={e => setTcNewDuration(e.target.value)}
-                    style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border-color)', fontSize: 14, boxSizing: 'border-box' }}>
-                    {/* v1.123.0 — every half hour to 12, each with the end time it means. Tina needed to
-                        leave at 3:30 and the list jumped from 6 to 8, so she picked 6 and explained
-                        in the note; the request then disagreed with its own reason. */}
-                    {Array.from({ length: 23 }, (_, i) => 1 + i / 2).map(h => {
-                      const st = TimeChange.toMin(tcNewTime);
-                      return <option key={h} value={String(h)}>{TimeChange.hours(h).replace(/ hr$/, h > 1 ? ' hrs' : ' hr')}{st != null ? ` \u00B7 ends ${TimeChange.clock(st + h * 60)}` : ''}</option>;
-                    })}
-                  </select>
-                </div>
-              </div>
-              {tcNewTime && (() => {
-                const c = TimeChange.describe({ fromTime: sTime, fromHours: dur, toTime: tcNewTime, toHours: parseFloat(tcNewDuration) || dur });
-                return (
-                  <div style={{ marginBottom: 12, padding: '8px 10px', borderRadius: 8, background: 'var(--bg-neutral)', fontSize: 13 }}>
-                    <div style={{ fontWeight: 700, color: c.kind === 'same' ? 'var(--text-secondary)' : 'var(--color-purple)' }}>{c.kind === 'same' ? 'Same as now' : c.headline}</div>
-                    <div style={{ color: 'var(--text-secondary)', marginTop: 2 }}>New visit: {c.to} ({c.toHours})</div>
-                  </div>
-                );
-              })()}
-              <div style={{ marginBottom: 12 }}>
-                <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Reason (optional)</label>
-                <textarea value={tcReason} onChange={e => setTcReason(e.target.value)} placeholder="Why the time change?"
-                  style={{ width: '100%', minHeight: 50, padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border-color)', fontSize: 13, resize: 'vertical', boxSizing: 'border-box' }} />
-              </div>
-              {/* Disclosure */}
-              <div style={{ padding: '8px 10px', background: 'var(--color-purple-bg)', borderRadius: 8, marginBottom: 14, fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                <strong style={{ color: 'var(--color-purple)' }}>Time change policy:</strong> The caregiver will be notified and must acknowledge the new time. If this change is within 24 hours of the session, the caregiver may decline and cancel, and may be entitled to partial compensation for time outside the original window.
-              </div>
-              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                <button onClick={() => setTimeChangeModal(null)}
-                  style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid var(--border-color)', background: 'var(--bg-surface)', color: 'var(--text-secondary)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-                  Cancel
-                </button>
-                <button disabled={tcLoading || !tcNewTime || (tcNewTime === s.time && parseFloat(tcNewDuration) === s.durationHours)} onClick={async () => {
-                  setTcLoading(true);
-                  try {
-                    const r = await apiFetch(`/api/sessions/${s.id}/propose-time-change`, {
-                      method: 'POST', body: JSON.stringify({ proposedTime: tcNewTime, proposedDuration: parseFloat(tcNewDuration), reason: tcReason || null }),
-                    });
-                    if (r?.ok) {
-                      showToast('Time change proposed — caregiver notified', 'success');
-                      setTimeChangeModal(null);
-                      fetchDashboard();
-                    } else {
-                      const d = await r?.json().catch(() => ({}));
-                      showToast(d.error || 'Failed to propose time change', 'error');
-                    }
-                  } catch { showToast('Network error', 'error'); }
-                  setTcLoading(false);
-                }}
-                  style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: tcLoading ? 'var(--text-muted)' : 'var(--color-purple)', color: 'var(--text-on-primary)', fontSize: 13, fontWeight: 600, cursor: tcLoading ? 'wait' : 'pointer' }}>
-                  {tcLoading ? 'Sending...' : 'Propose Change'}
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
+      {/* ─── Change a visit (family asking) — v1.124.0: the shared sheet, with a Day field ─── */}
+      {timeChangeModal && (
+        <ChangeVisitSheet session={timeChangeModal.session} role="family"
+          onClose={() => setTimeChangeModal(null)} onDone={() => fetchDashboard()} />
+      )}
 
       {/* ─── Acknowledge Time Change Modal (reviewing caregiver's proposal) ─── */}
       {timeChangeProposal && (() => {
@@ -2820,9 +2740,6 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
           } else {
             const s = { id: session.id, recipientName: session.recipient_name, caregiverName: session.caregiver_name, durationHours: session.duration_hours, time: session.scheduled_time, date: session.scheduled_date, status: session.status };
             setTimeChangeModal({ sessionId: session.id, session: s });
-            setTcNewTime(session.scheduled_time || '');
-            setTcNewDuration(String(session.duration_hours || 2));
-            setTcReason('');
           }
         }} />
       )}

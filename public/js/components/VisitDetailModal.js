@@ -3,6 +3,9 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [cancelling, setCancelling] = useState(false);
+  // v1.124.0 — hosts without their own change sheet (Betty's page, Schedule, Care Team) get
+  // this one. Before, the button only appeared where the host passed onTimeChange: Home.
+  const [changing, setChanging] = useState(false);
   const [showPhotos, setShowPhotos] = useState(true);
   const [lightboxIdx, setLightboxIdx] = useState(null);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
@@ -710,10 +713,10 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, 
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, flexWrap: 'wrap', gap: 6 }}>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {data && data.session && data.session.status === 'confirmed' && data.session.caregiver_id && !data.session.pending_time_change_id && onTimeChange && (
-            <button onClick={() => { onTimeChange(data.session); handleClose(); }}
+          {data && data.session && data.session.status === 'confirmed' && data.session.caregiver_id && !data.session.pending_time_change_id && (role === 'family' || role === 'caregiver') && (
+            <button onClick={() => { if (onTimeChange) { onTimeChange(data.session); handleClose(); } else { setChanging(true); } }}
               style={{ padding: '8px 16px', background: 'var(--color-purple-bg)', color: 'var(--color-purple)', border: '1px solid var(--color-purple)', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-              Change Time
+              Change visit
             </button>
           )}
           {data && data.session && data.session.pending_time_change_id && onTimeChange && (
@@ -774,6 +777,16 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, 
           <button className="btn btn-outline" onClick={handleClose}>Close</button>
         </div>
       </div>
+      {changing && data && data.session && (
+        <ChangeVisitSheet role={role}
+          session={{
+            id: data.session.id, date: data.session.scheduled_date, time: data.session.scheduled_time,
+            durationHours: data.session.duration_hours, recipientName: data.session.recipient_name,
+            caregiverName: data.session.caregiver_name, timezone: data.session.care_timezone,
+          }}
+          onClose={() => setChanging(false)}
+          onDone={() => { if (onRefresh) onRefresh(); handleClose(); }} />
+      )}
     </div>
   );
 };

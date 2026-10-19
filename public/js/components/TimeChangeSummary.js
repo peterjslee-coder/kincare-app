@@ -13,23 +13,24 @@
 const TimeChangeSummary = window.TimeChangeSummary = ({ proposal, session, proposerName }) => {
   const p = proposal || {};
   const s = session || {};
+  const sDate = String(p.original_date || s.date || s.scheduled_date || '').split(/[T ]/)[0];
   const c = TimeChange.describe({
     fromTime: p.original_time, fromHours: p.original_duration,
     toTime: p.proposed_time, toHours: p.proposed_duration,
+    fromDate: sDate, toDate: p.proposed_date || sDate, // v1.124.0
   });
   const fromStart = TimeChange.toMin(p.original_time);
   const toStart = TimeChange.toMin(p.proposed_time);
   const fromEnd = fromStart == null ? null : fromStart + Math.round((Number(p.original_duration) || 0) * 60);
   const toEnd = toStart == null ? null : toStart + Math.round((Number(p.proposed_duration) || 0) * 60);
 
-  const sDate = String(s.date || s.scheduled_date || '').split(/[T ]/)[0];
   const tz = s.timezone || s.tz || TimezoneHelper.DEFAULT_TZ;
   let day = '';
   try { day = sDate ? TimezoneHelper.getDateLabel(sDate, tz) : ''; } catch { day = ''; }
 
   const strong = { color: 'var(--color-purple)', fontWeight: 800 };
   const quiet = { color: 'var(--text-secondary)', fontWeight: 600 };
-  const row = (label, start, end, hrs, isNew) => (
+  const row = (label, start, end, hrs, isNew, dayText) => (
     <div style={{
       display: 'flex', alignItems: 'baseline', gap: 10, padding: '9px 12px', borderRadius: 10,
       background: isNew ? 'var(--color-purple-bg)' : 'var(--bg-neutral)',
@@ -37,6 +38,8 @@ const TimeChangeSummary = window.TimeChangeSummary = ({ proposal, session, propo
     }}>
       <div style={{ width: 34, flexShrink: 0, fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', color: isNew ? 'var(--color-purple)' : 'var(--text-muted)' }}>{label}</div>
       <div style={{ flex: 1, fontSize: 15, ...(isNew ? {} : { color: 'var(--text-secondary)' }) }}>
+        {/* v1.124.0 — the day leads when it is the thing that moved */}
+        {dayText ? <div style={{ fontSize: 13, marginBottom: 1, ...(isNew ? strong : {}) }}>{dayText}</div> : null}
         <span style={isNew && c.startChanged ? strong : (isNew ? quiet : {})}>{TimeChange.clock(start)}</span>
         <span style={{ color: 'var(--text-muted)' }}> – </span>
         <span style={isNew && c.endChanged ? strong : (isNew ? quiet : {})}>{TimeChange.clock(end)}</span>
@@ -49,12 +52,12 @@ const TimeChangeSummary = window.TimeChangeSummary = ({ proposal, session, propo
     <div style={{ marginBottom: 14 }}>
       <div style={{ fontSize: 17, fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1.3 }}>{c.headline}</div>
       <div style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '4px 0 12px' }}>
-        {[proposerName ? `${proposerName} asked` : null, day ? `${s.recipientName ? `${String(s.recipientName).split(' ')[0]}'s visit ` : 'Visit '}${TimeChange.onDay(day)}` : null, c.sub].filter(Boolean).join(' · ')}
+        {[proposerName ? `${proposerName} asked` : null, day && !c.dateChanged ? `${s.recipientName ? `${String(s.recipientName).split(' ')[0]}'s visit ` : 'Visit '}${TimeChange.onDay(day)}` : null, c.sub].filter(Boolean).join(' · ')}
       </div>
       {fromStart != null && toStart != null ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {row('Was', fromStart, fromEnd, c.fromHours, false)}
-          {row('New', toStart, toEnd, c.toHours, true)}
+          {row('Was', fromStart, fromEnd, c.fromHours, false, c.dateChanged ? c.fromDate : null)}
+          {row('New', toStart, toEnd, c.toHours, true, c.dateChanged ? c.toDate : null)}
         </div>
       ) : null}
     </div>

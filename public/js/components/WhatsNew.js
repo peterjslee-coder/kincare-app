@@ -202,6 +202,22 @@ const WN_PREVIEWS = {
       <span style={{ ...wnPill('var(--accent-color-dark)', 'var(--text-on-primary)'), display: 'block', textAlign: 'center', padding: '8px 10px' }}>Pay {'›'}</span>
     </div>
   ),
+  // v1.124.0 — move a visit to another day (Pete, 10/19)
+  changeVisitDay: () => (
+    <div style={{ padding: '12px 12px 10px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>
+      <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--color-purple)', marginBottom: 8 }}>{'⏰'} Change this visit</div>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+        {[['Day', 'Sat, Nov 14'], ['Start', '9:00 AM'], ['How long', '8 hrs']].map(([l, v]) => (
+          <div key={l} style={{ flex: 1 }}>
+            <div style={{ fontSize: 9.5, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 2 }}>{l}</div>
+            <div style={{ fontSize: 11.5, padding: '5px 6px', borderRadius: 6, border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}>{v}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{ padding: '6px 8px', borderRadius: 8, background: 'var(--color-purple-bg)', fontSize: 12, fontWeight: 700, color: 'var(--color-purple)', marginBottom: 8 }}>Move to Sat, Nov 14 instead of Sat, Nov 7</div>
+      <span style={{ ...wnPill('var(--color-purple)', 'var(--text-on-primary)'), display: 'block', textAlign: 'center', padding: '8px 10px' }}>Send to Jane</span>
+    </div>
+  ),
   // v1.123.0 — a time change says what moves (Pete, 10/19: "9am to 9am makes no sense")
   timeChangeWords: () => (
     <div style={{ padding: '12px 12px 10px', borderRadius: 12, border: '2px solid var(--accent-color)', background: 'var(--bg-attention-card)' }}>

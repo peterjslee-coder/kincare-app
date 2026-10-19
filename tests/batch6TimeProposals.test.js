@@ -67,11 +67,15 @@ describe("D2 — a time change now has an end", () => {
   });
 
   test("propose sets a deadline that cannot outlive the visit", () => {
-    const i = sess.indexOf("const expiresAtMs = Math.min(");
+    // v1.124.0 — rewritten to compare like with like (sessionDateTime is a shifted-frame Date,
+    // measured against getNowInZone, not Date.now()) and to take the EARLIER of the old and new
+    // starts now that a change can move the visit to another day.
+    const i = sess.indexOf("const expiresAtMs = Date.now() + Math.max(0, Math.min(");
     expect(i).toBeGreaterThan(-1);
     const line = sess.slice(i, i + 200);
     expect(line).toMatch(/24 \* 60 \* 60 \* 1000/);          // 24h ceiling
-    expect(line).toMatch(/sessionDateTime\.getTime\(\)/);     // …or the visit's start, whichever first
+    expect(line).toMatch(/msToEarliestStart/);                // …or the visit's start, whichever first
+    expect(sess).toMatch(/const msToEarliestStart = Math\.min\(sessionDateTime - nowZ, newStart - nowZ\);/);
   });
 
   test("the sweeper expires them AND clears the pointer, in one transaction", () => {

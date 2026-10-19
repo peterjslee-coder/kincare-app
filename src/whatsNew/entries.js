@@ -31,6 +31,21 @@ const WINDOW_DAYS = 45;
 
 const ENTRIES = [
   {
+    id: "change-visit-day",
+    version: "1.124.0",
+    date: "2026-10-19",
+    audience: ["family", "caregiver"],
+    title: "Move a booked visit to another day",
+    body: "Either side can now ask to move a confirmed visit to a different day, not just a different time — and the other person accepts or declines it in the app. Change visit is on every visit's details now, including your loved one's page and the Schedule.",
+    howTo: [
+      "Open the visit and tap Change visit",
+      "Pick the new day, start time and length — the sheet shows what will change",
+      "Tap Send — nothing moves until the other person accepts",
+    ],
+    examples: ["Can we do next Saturday instead?", "Move Thursday's visit to Friday at 10"],
+    preview: "changeVisitDay",
+  },
+  {
     id: "time-change-in-words",
     version: "1.123.0",
     date: "2026-10-19",

@@ -200,6 +200,7 @@ async function attentionItemsFor(db, userId) {
   const changeRows = await safeRows("timeChanges", () => db.prepare(`
     SELECT tcp.id, tcp.session_id, tcp.proposed_by, tcp.original_time, tcp.proposed_time,
            tcp.original_duration, tcp.proposed_duration, tcp.reason, tcp.is_within_24h,
+           tcp.proposed_date,
            cs.scheduled_date, cs.scheduled_time, cs.service_type,
            cr.timezone AS tz, cr.first_name AS recipient_first,
            cu.first_name AS caregiver_first, cu.last_name AS caregiver_last,
@@ -586,6 +587,7 @@ async function attentionItemsFor(db, userId) {
         : (name(c.family_first, c.family_last) || "The family")} asked to ${TimeChange.describe({
           fromTime: c.original_time, fromHours: c.original_duration,
           toTime: c.proposed_time, toHours: c.proposed_duration,
+          fromDate: c.scheduled_date, toDate: c.proposed_date || c.scheduled_date,
         }).verb}`,
       detail: c.reason || null,
       forWhom: c.recipient_first || null,
@@ -594,6 +596,8 @@ async function attentionItemsFor(db, userId) {
       date: c.scheduled_date || null,
       fromTime: c.original_time || null,
       toTime: c.proposed_time || null,
+      // v1.124.0 — the day it would move to; null = same day.
+      toDate: c.proposed_date || null,
       fromDuration: c.original_duration || null,
       toDuration: c.proposed_duration || null,
       isWithin24h: !!c.is_within_24h,

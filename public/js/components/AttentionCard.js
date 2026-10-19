@@ -131,8 +131,9 @@ const attentionDetail = (item) => {
       const c = TimeChange.describe({
         fromTime: item.fromTime, fromHours: item.fromDuration,
         toTime: item.toTime, toHours: item.toDuration,
+        fromDate: item.date, toDate: item.toDate || item.date, // v1.124.0
       });
-      return [day, c.headline, c.sub].filter(Boolean).join(' · ');
+      return [c.dateChanged ? null : day, c.headline, c.sub].filter(Boolean).join(' · ');
     }
     const from = attentionClock(item.fromTime);
     const to = attentionClock(item.toTime);

@@ -122,7 +122,7 @@ async function familyDashboard(db, userId, res) {
             fu.first_name || ' ' || fu.last_name AS booked_by_name,
             vl.check_in_time,
             ofu.first_name AS offered_caregiver_name,
-            tcp.proposed_time AS tc_proposed_time,
+            tcp.proposed_time AS tc_proposed_time, tcp.proposed_date AS tc_proposed_date,
             tcp.proposed_duration AS tc_proposed_duration,
             tcp.proposed_by AS tc_proposed_by
           FROM care_sessions cs
@@ -349,6 +349,7 @@ async function familyDashboard(db, userId, res) {
           offeredCaregiverName: s.offered_caregiver_name || null,
           pendingTimeChangeId: s.pending_time_change_id || null,
           tcProposedTime: s.tc_proposed_time || null,
+          tcProposedDate: s.tc_proposed_date || null, // v1.124.0
           tcProposedDuration: s.tc_proposed_duration || null,
           tcProposedBy: s.tc_proposed_by || null,
           // v1.105.192 — so the dashboard can fold a series into one card
@@ -533,7 +534,7 @@ async function caregiverDashboard(db, userId, res) {
       (SELECT COALESCE(SUM(EXTRACT(EPOCH FROM (COALESCE(vb.ended_at, NOW()) - vb.started_at)) / 60), 0)
          FROM visit_breaks vb WHERE vb.session_id = cs.id) AS break_minutes_total,
       (SELECT MAX(vb.started_at) FROM visit_breaks vb WHERE vb.session_id = cs.id AND vb.ended_at IS NULL) AS break_started_at,
-      tcp.proposed_time AS tc_proposed_time,
+      tcp.proposed_time AS tc_proposed_time, tcp.proposed_date AS tc_proposed_date,
       tcp.proposed_duration AS tc_proposed_duration,
       tcp.proposed_by AS tc_proposed_by
     FROM care_sessions cs
@@ -869,6 +870,7 @@ async function caregiverDashboard(db, userId, res) {
         breakMinutesUsed: Math.round(Number(s.break_minutes_total || 0)),
         pendingTimeChangeId: s.pending_time_change_id || null,
         tcProposedTime: s.tc_proposed_time || null,
+          tcProposedDate: s.tc_proposed_date || null, // v1.124.0
         tcProposedDuration: s.tc_proposed_duration || null,
         tcProposedBy: s.tc_proposed_by || null,
         on_my_way_at: s.on_my_way_at || null,

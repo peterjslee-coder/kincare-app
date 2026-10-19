@@ -337,10 +337,6 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   // Time change proposal state
   const [timeChangeModal, setTimeChangeModal] = useState(null); // { sessionId, session }
   const [timeChangeProposal, setTimeChangeProposal] = useState(null); // fetched pending proposal for acknowledge
-  const [tcNewTime, setTcNewTime] = useState('');
-  const [tcNewDuration, setTcNewDuration] = useState('');
-  const [tcReason, setTcReason] = useState('');
-  const [tcLoading, setTcLoading] = useState(false);
   const [tcRespondLoading, setTcRespondLoading] = useState(false);
   const [highlightTab, setHighlightTab] = useState(false);
   const [jobSort, setJobSort] = useState('best_match');
@@ -1844,7 +1840,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                               when only the length changed. Now the change in words, from the shared describer. */}
                           <div style={{ fontSize: 13, color: 'var(--color-purple)', fontWeight: 700, marginTop: 2 }}>
                             {(() => {
-                              const c = TimeChange.describe({ fromTime: s.time || s.scheduled_time, fromHours: duration, toTime: s.tcProposedTime, toHours: s.tcProposedDuration || duration });
+                              const c = TimeChange.describe({ fromTime: s.time || s.scheduled_time, fromHours: duration, toTime: s.tcProposedTime, toHours: s.tcProposedDuration || duration, fromDate: sDate, toDate: s.tcProposedDate || sDate });
                               return `Asked to ${c.phrase || 'change the time'}`;
                             })()}
                           </div>
@@ -2070,9 +2066,9 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                         }}>Check in {Math.ceil(minsUntilCheckIn)} min</button>
                       )}
                       {s.status === 'confirmed' && !hasPendingTimeChange && !isReady && !isActive && (
-                        <button onClick={(e) => { e.stopPropagation(); setTimeChangeModal({ sessionId: s.id, session: s }); setTcNewTime(s.scheduled_time || ''); setTcNewDuration(String(duration || 2)); setTcReason(''); }}
+                        <button onClick={(e) => { e.stopPropagation(); setTimeChangeModal({ sessionId: s.id, session: { id: s.id, date: sDate, time: s.scheduled_time, durationHours: duration, recipientName: recipName, timezone: tz } }); }}
                           style={{ padding: '3px 8px', borderRadius: 6, border: '1px solid var(--color-purple)', background: 'var(--color-purple-bg)', color: 'var(--color-purple)', fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>
-                          Change Time
+                          Change visit
                         </button>
                       )}
                       {hasPendingTimeChange && (
@@ -4831,88 +4827,12 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         </div>
       )}
 
-      {/* ─── Propose Time Change Modal (caregiver proposing) ─── */}
-      {timeChangeModal && (() => {
-        const s = timeChangeModal.session;
-        const formatT = (t) => { if (!t) return ''; const [h,m] = t.split(':').map(Number); return `${h === 0 ? 12 : h > 12 ? h-12 : h}:${String(m||0).padStart(2,'0')} ${h >= 12 ? 'PM' : 'AM'}`; };
-        const recipName = s.recipientName || s.recipient_name || 'Session';
-        const dur = s.durationHours || s.duration_hours || 2;
-        const sTime = s.time || s.scheduled_time || '';
-        return (
-          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-            <div style={{ background: 'var(--bg-surface)', borderRadius: 14, padding: 24, width: 420, maxWidth: '90vw' }}>
-              <h3 style={{ margin: '0 0 4px', fontSize: 17, color: 'var(--color-purple)' }}>⏰ Propose Time Change</h3>
-              <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '0 0 16px' }}>
-                {recipName} — currently {formatT(sTime)} for {dur}hr
-              </p>
-              <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
-                <div style={{ flex: 1 }}>
-                  <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>New Start Time</label>
-                  <input type="time" value={tcNewTime} onChange={e => setTcNewTime(e.target.value)}
-                    style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border-color)', fontSize: 14, boxSizing: 'border-box' }} />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Duration (hours)</label>
-                  <select value={String(parseFloat(tcNewDuration) || '')} onChange={e => setTcNewDuration(e.target.value)}
-                    style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border-color)', fontSize: 14, boxSizing: 'border-box' }}>
-                    {/* v1.123.0 — every half hour to 12, each with the end time it means. Tina needed to
-                        leave at 3:30 and the list jumped from 6 to 8, so she picked 6 and explained
-                        in the note; the request then disagreed with its own reason. */}
-                    {Array.from({ length: 23 }, (_, i) => 1 + i / 2).map(h => {
-                      const st = TimeChange.toMin(tcNewTime);
-                      return <option key={h} value={String(h)}>{TimeChange.hours(h).replace(/ hr$/, h > 1 ? ' hrs' : ' hr')}{st != null ? ` \u00B7 ends ${TimeChange.clock(st + h * 60)}` : ''}</option>;
-                    })}
-                  </select>
-                </div>
-              </div>
-              {tcNewTime && (() => {
-                const c = TimeChange.describe({ fromTime: sTime, fromHours: dur, toTime: tcNewTime, toHours: parseFloat(tcNewDuration) || dur });
-                return (
-                  <div style={{ marginBottom: 12, padding: '8px 10px', borderRadius: 8, background: 'var(--bg-neutral)', fontSize: 13 }}>
-                    <div style={{ fontWeight: 700, color: c.kind === 'same' ? 'var(--text-secondary)' : 'var(--color-purple)' }}>{c.kind === 'same' ? 'Same as now' : c.headline}</div>
-                    <div style={{ color: 'var(--text-secondary)', marginTop: 2 }}>New visit: {c.to} ({c.toHours})</div>
-                  </div>
-                );
-              })()}
-              <div style={{ marginBottom: 12 }}>
-                <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Reason (optional)</label>
-                <textarea value={tcReason} onChange={e => setTcReason(e.target.value)} placeholder="Why the time change?"
-                  style={{ width: '100%', minHeight: 50, padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border-color)', fontSize: 13, resize: 'vertical', boxSizing: 'border-box' }} />
-              </div>
-              {/* Disclosure */}
-              <div style={{ padding: '8px 10px', background: 'var(--color-purple-bg)', borderRadius: 8, marginBottom: 14, fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                <strong style={{ color: 'var(--color-purple)' }}>Time change policy:</strong> The family will be notified and must acknowledge the new time. If this change is within 24 hours of the session, the family may cancel at no charge and leave a review.
-              </div>
-              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                <button onClick={() => setTimeChangeModal(null)}
-                  style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid var(--border-color)', background: 'var(--bg-surface)', color: 'var(--text-secondary)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-                  Cancel
-                </button>
-                <button disabled={tcLoading || !tcNewTime || (tcNewTime === sTime && parseFloat(tcNewDuration) === dur)} onClick={async () => {
-                  setTcLoading(true);
-                  try {
-                    const r = await apiFetch(`/api/sessions/${s.id}/propose-time-change`, {
-                      method: 'POST', body: JSON.stringify({ proposedTime: tcNewTime, proposedDuration: parseFloat(tcNewDuration), reason: tcReason || null }),
-                    });
-                    if (r?.ok) {
-                      showToast('Time change proposed — family notified', 'success');
-                      setTimeChangeModal(null);
-                      try { const dr = await apiFetch('/api/dashboard'); if (dr?.ok) setData(await dr.json()); } catch {}
-                    } else {
-                      const d = await r?.json().catch(() => ({}));
-                      showToast(d.error || 'Failed to propose time change', 'error');
-                    }
-                  } catch { showToast('Network error', 'error'); }
-                  setTcLoading(false);
-                }}
-                  style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: tcLoading ? 'var(--text-muted)' : 'var(--color-purple)', color: 'var(--text-on-primary)', fontSize: 13, fontWeight: 600, cursor: tcLoading ? 'wait' : 'pointer' }}>
-                  {tcLoading ? 'Sending...' : 'Propose Change'}
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
+      {/* ─── Change a visit (caregiver asking) — v1.124.0: the shared sheet, with a Day field ─── */}
+      {timeChangeModal && (
+        <ChangeVisitSheet session={timeChangeModal.session} role="caregiver"
+          onClose={() => setTimeChangeModal(null)}
+          onDone={async () => { try { const dr = await apiFetch('/api/dashboard'); if (dr?.ok) setData(await dr.json()); } catch { /* the next poll will catch up */ } }} />
+      )}
 
       {/* ─── Acknowledge Time Change Modal (reviewing family's proposal) ─── */}
       {timeChangeProposal && (() => {
@@ -5011,9 +4931,6 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
           } else {
             const s = { id: session.id, recipientName: session.recipient_name, recipientname: session.recipient_name, durationHours: session.duration_hours, time: session.scheduled_time, scheduled_time: session.scheduled_time, date: session.scheduled_date, status: session.status };
             setTimeChangeModal({ sessionId: session.id, session: s });
-            setTcNewTime(session.scheduled_time || '');
-            setTcNewDuration(String(session.duration_hours || 2));
-            setTcReason('');
           }
         }} />
       )}

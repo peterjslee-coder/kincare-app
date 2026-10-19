@@ -3348,6 +3348,16 @@ async function initializeDatabase() {
           WHERE c.texts_ok_at IS NULL AND EXISTS (SELECT 1 FROM outreach_messages m WHERE m.contact_id = c.id AND m.direction = 'in' AND COALESCE(m.kind, 'sms') = 'sms')`,
       ],
     },
+    {
+      // v1.124.0 — a time change can move a visit to another DAY (Pete, 10/19: Tina asked to
+      // move Nov 7 to Nov 14 and neither side could ask in the app). NULL proposed_date on old
+      // rows = same day, which is what every proposal before this was.
+      id: "073_time_change_date",
+      statements: [
+        `ALTER TABLE time_change_proposals ADD COLUMN IF NOT EXISTS original_date TEXT`,
+        `ALTER TABLE time_change_proposals ADD COLUMN IF NOT EXISTS proposed_date TEXT`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

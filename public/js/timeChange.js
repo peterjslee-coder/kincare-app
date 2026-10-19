@@ -52,7 +52,8 @@ const TimeChange = (function () {
   const windowOf = (startMin, endMin) => (startMin == null ? '' : `${clock(startMin)} – ${clock(endMin)}`);
 
   /**
-   * @param {{fromTime:string, fromHours:number|string, toTime:string, toHours:number|string}} c
+   * @param {{fromTime:string, fromHours:number|string, toTime:string, toHours:number|string,
+   *          fromDate?:string, toDate?:string}} c   — dates optional (v1.124.0)
    * @returns {{ kind:string, headline:string, sub:string|null, verb:string,
    *            from:string, to:string, fromHours:string, toHours:string,
    *            startChanged:boolean, endChanged:boolean, hoursChanged:boolean }}
@@ -62,6 +63,7 @@ const TimeChange = (function () {
    *              whole visit slides ("Same 8 hr, now ends 7:00 PM"); null when nothing to add
    *   verb     — completes "Tina asked to …" ("end a visit early")
    *   from/to  — the full windows, "9:00 AM – 5:00 PM"
+   *   dateChanged / fromDate / toDate — v1.124.0, "Sat, Nov 7" → "Sat, Nov 14"
    */
   function describe(c) {
     const out = describeRaw(c);
@@ -89,6 +91,23 @@ const TimeChange = (function () {
       fromHours: hours(fromH), toHours: hours(toH),
       startChanged, endChanged, hoursChanged,
     };
+
+    // v1.124.0 — a different DAY. Pete, 10/19: Tina wanted Nov 7 moved to Nov 14 and neither
+    // side could say so in the app. The day leads; the time follows only if it changed too.
+    const fromDay = dayOnly(c && c.fromDate);
+    const toDay = dayOnly(c && c.toDate);
+    out.fromDate = fromDay ? dateLabel(fromDay) : '';
+    out.toDate = toDay ? dateLabel(toDay) : '';
+    out.dateChanged = !!(fromDay && toDay && fromDay !== toDay);
+    if (out.dateChanged) {
+      out.kind = 'moveDay';
+      out.verb = 'move a visit to another day';
+      out.phrase = `move to ${out.toDate} instead of ${out.fromDate}`;
+      out.sub = (fromStart != null && toStart != null && (startChanged || endChanged))
+        ? `${out.to} instead of ${out.from}`
+        : (out.to ? `same time, ${out.to}` : null);
+      return out;
+    }
 
     if (fromStart == null || toStart == null) {
       // Not enough to compare. Say what we have rather than a half-sentence.
@@ -136,6 +155,21 @@ const TimeChange = (function () {
     return out;
   }
 
+  // "2026-11-14" (or a timestamp) → "2026-11-14"; anything else → ''.
+  const dayOnly = (d) => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(d || ''));
+    return m ? m[0] : '';
+  };
+  // "2026-11-14" → "Sat, Nov 14". Built in UTC from the date's own numbers, so no zone can
+  // shift it a day — it is a calendar date where the care happens, not an instant.
+  const dateLabel = (ymd) => {
+    const [y, mo, d] = ymd.split('-').map(Number);
+    const dt = new Date(Date.UTC(y, mo - 1, d, 12));
+    const wd = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][dt.getUTCDay()];
+    const mon = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][mo - 1];
+    return `${wd}, ${mon} ${d}`;
+  };
+
   const cap = (str) => (str ? str.charAt(0).toUpperCase() + str.slice(1) : str);
 
   // "Today" → "today", "Tomorrow" → "tomorrow", "Thu, Oct 22" → "on Thu, Oct 22": the tail of
@@ -146,7 +180,7 @@ const TimeChange = (function () {
     return `on ${label}`;
   };
 
-  return { describe, clock, hours, toMin, onDay };
+  return { describe, clock, hours, toMin, onDay, dateLabel, dayOnly };
 })();
 if (typeof window !== 'undefined') window.TimeChange = TimeChange;
 if (typeof module !== 'undefined' && module.exports) module.exports = TimeChange;

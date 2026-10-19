@@ -59,7 +59,7 @@ function scan() {
 // To remove a pair: make the endpoint emit the name the client already reads everywhere else,
 // delete the fallback, then lower the number here (or delete the line).
 const BASELINE = {
-  duration_hours: 18, first_name: 16, recipient_name: 16, estimated_cost: 10, last_name: 10,
+  duration_hours: 17, first_name: 16, recipient_name: 15, estimated_cost: 10, last_name: 10,
   service_type: 10, special_instructions: 7, emergency_contact_name: 4, health_conditions: 4,
   caregiver_name: 3, emergency_contact_phone: 3, care_recipient_id: 2, caregiver_payout: 2,
   exclusive_until: 2, recipient_city: 2, authorization_tier: 1, budget_max: 1,

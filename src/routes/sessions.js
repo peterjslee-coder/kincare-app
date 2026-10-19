@@ -2939,12 +2939,23 @@ router.post("/:id/pending-tip", requireRole("family"), async (req, res) => {
 router.post("/:id/propose-time-change", async (req, res) => {
   try {
     const db = await getDb();
-    const { proposedTime, proposedDuration, reason } = req.body;
+    const { proposedTime, proposedDuration, reason, proposedDate } = req.body;
     const userId = req.user.id;
     const activeRole = req.user.activeRole || req.user.role;
 
     if (!proposedTime || !proposedDuration) {
       return res.status(400).json({ error: "proposedTime and proposedDuration are required" });
+    }
+    // v1.124.0 — optional new DAY. A calendar date where the care happens, "YYYY-MM-DD".
+    if (proposedDate != null && proposedDate !== "" && !/^\d{4}-\d{2}-\d{2}$/.test(String(proposedDate))) {
+      return res.status(400).json({ error: "proposedDate must be YYYY-MM-DD" });
+    }
+    if (!/^\d{1,2}:\d{2}$/.test(String(proposedTime))) {
+      return res.status(400).json({ error: "proposedTime must be HH:MM" });
+    }
+    const hrs = parseFloat(proposedDuration);
+    if (!Number.isFinite(hrs) || hrs <= 0 || hrs > 24) {
+      return res.status(400).json({ error: "proposedDuration must be between 0 and 24 hours" });
     }
 
     const session = await db.prepare(`
@@ -3002,6 +3013,19 @@ router.post("/:id/propose-time-change", async (req, res) => {
     const hoursUntil = (sessionDateTime - getNowInZone(careTz)) / (1000 * 60 * 60);
     const isWithin24h = hoursUntil < 24;
 
+    // v1.124.0 — the day. Same day unless a different one was asked for.
+    const originalDate = String(session.scheduled_date).split("T")[0];
+    const newDate = proposedDate ? String(proposedDate) : originalDate;
+    const dateChanged = newDate !== originalDate;
+    const newStart = buildDateTimeInZone(newDate, proposedTime, careTz);
+    if (dateChanged && newStart <= getNowInZone(careTz)) {
+      return res.status(400).json({ error: "The new day and time have already passed — pick a time in the future." });
+    }
+    if (!dateChanged && String(proposedTime) === String(session.scheduled_time)
+        && Math.round(hrs * 60) === Math.round((parseFloat(session.duration_hours) || 0) * 60)) {
+      return res.status(400).json({ error: "That's the same day, time and length as now — nothing to change." });
+    }
+
     // Calculate overlap for cancellation fee reference
     const origStartMin = parseTimeToMinutes(session.scheduled_time);
     const origEndMin = origStartMin + session.duration_hours * 60;
@@ -3009,7 +3033,8 @@ router.post("/:id/propose-time-change", async (req, res) => {
     const propEndMin = propStartMin + proposedDuration * 60;
     const overlapStart = Math.max(origStartMin, propStartMin);
     const overlapEnd = Math.min(origEndMin, propEndMin);
-    const overlapMinutes = Math.max(0, overlapEnd - overlapStart);
+    // A different day overlaps the original window by nothing.
+    const overlapMinutes = dateChanged ? 0 : Math.max(0, overlapEnd - overlapStart);
     const feeHours = session.duration_hours - (overlapMinutes / 60);
 
     const proposalId = uuid();
@@ -3018,7 +3043,15 @@ router.post("/:id/propose-time-change", async (req, res) => {
     // the visit. 24 hours to answer, or the moment the visit starts, whichever comes first:
     // there is no answering "can we move it to 3pm" at 3:30pm. expireStaleProposals sweeps
     // it and clears pending_time_change_id, which is what unblocks the session.
-    const expiresAtMs = Math.min(Date.now() + 24 * 60 * 60 * 1000, sessionDateTime.getTime());
+    //
+    // v1.124.0 — compare like with like. sessionDateTime is a shifted-frame Date, so the "time
+    // until it starts" is measured against getNowInZone and only then added to Date.now();
+    // the old Math.min(Date.now()+24h, sessionDateTime.getTime()) mixed the two frames and was
+    // off by the server's UTC offset. And a move to an EARLIER day ends the window at the
+    // earlier of the two starts.
+    const nowZ = getNowInZone(careTz);
+    const msToEarliestStart = Math.min(sessionDateTime - nowZ, newStart - nowZ);
+    const expiresAtMs = Date.now() + Math.max(0, Math.min(24 * 60 * 60 * 1000, msToEarliestStart));
     const expiresAt = new Date(expiresAtMs).toISOString();
 
     // v1.106.13 — one transaction. The INSERT and the pointer that makes it findable are one
@@ -3029,13 +3062,15 @@ router.post("/:id/propose-time-change", async (req, res) => {
       await tx.prepare(`
         INSERT INTO time_change_proposals (id, session_id, proposed_by, proposed_by_user_id,
           original_time, original_duration, proposed_time, proposed_duration,
-          status, is_within_24h, cancel_fee_hours, reason, created_at, expires_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, NOW(), ?)
+          status, is_within_24h, cancel_fee_hours, reason, created_at, expires_at,
+          original_date, proposed_date)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, NOW(), ?, ?, ?)
       `).run(
         proposalId, req.params.id, proposedBy, userId,
         session.scheduled_time, session.duration_hours,
-        proposedTime, proposedDuration,
-        isWithin24h ? 1 : 0, feeHours > 0 ? feeHours : 0, reason || null, expiresAt
+        proposedTime, hrs,
+        isWithin24h ? 1 : 0, feeHours > 0 ? feeHours : 0, reason || null, expiresAt,
+        originalDate, newDate
       );
 
       await tx.prepare(
@@ -3054,7 +3089,8 @@ router.post("/:id/propose-time-change", async (req, res) => {
     // of 8 hr)". Names, a day and clock times — no health information (pushPhi rule).
     const change = TimeChange.describe({
       fromTime: session.scheduled_time, fromHours: session.duration_hours,
-      toTime: proposedTime, toHours: proposedDuration,
+      toTime: proposedTime, toHours: hrs,
+      fromDate: originalDate, toDate: newDate,
     });
     const visitDay = session.scheduled_date
       ? formatDateRelative(String(session.scheduled_date).split("T")[0], careTz)
@@ -3067,7 +3103,9 @@ router.post("/:id/propose-time-change", async (req, res) => {
         proposedBy,
         proposerName,
         proposedTime,
-        proposedDuration,
+        proposedDuration: hrs,
+        proposedDate: newDate,
+        originalDate,
         originalTime: session.scheduled_time,
         originalDuration: session.duration_hours,
         isWithin24h,
@@ -3080,13 +3118,20 @@ router.post("/:id/propose-time-change", async (req, res) => {
     if (sendPushToUser) {
       await sendPushToUser(notifyUserId, {
         title: "⏰ Time Change Request",
-        body: `${proposerName} wants ${session.recipient_name}'s visit${visitDay ? ` ${TimeChange.onDay(visitDay)}` : ""} to ${change.phrase || "change"}${change.sub ? ` (${change.sub.charAt(0).toLowerCase() + change.sub.slice(1)})` : ""}. Tap to review.`,
+        body: (() => {
+          const tail = change.sub ? ` (${change.sub.charAt(0).toLowerCase() + change.sub.slice(1)})` : "";
+          // v1.124.0 — a different day reads "move … visit on Sat, Nov 7 to Sat, Nov 14".
+          if (change.dateChanged) {
+            return `${proposerName} wants to move ${session.recipient_name}'s visit ${TimeChange.onDay(visitDay || change.fromDate)} to ${change.toDate}${tail}. Tap to review.`;
+          }
+          return `${proposerName} wants ${session.recipient_name}'s visit${visitDay ? ` ${TimeChange.onDay(visitDay)}` : ""} to ${change.phrase || "change"}${tail}. Tap to review.`;
+        })(),
         data: { type: "time_change", sessionId: req.params.id, proposalId },
       }, "time_change");
     }
 
     res.json({
-      proposal: { id: proposalId, proposedBy, proposedTime, proposedDuration, isWithin24h, feeHours, status: "pending" },
+      proposal: { id: proposalId, proposedBy, proposedTime, proposedDuration: hrs, proposedDate: newDate, originalDate, isWithin24h, feeHours, status: "pending" },
     });
   } catch (err) {
     console.error("Time change proposal error:", err);
@@ -3158,6 +3203,12 @@ router.put("/:id/time-change/:proposalId/respond", async (req, res) => {
     const responderName = isResponderCaregiver ? session.caregiver_name : session.family_name;
 
     if (action === "accept") {
+      // v1.124.0 — a move to another day. NULL proposed_date (every proposal before 073) is
+      // the same day.
+      const fromDay = String(proposal.original_date || session.scheduled_date || "").split("T")[0];
+      const toDay = String(proposal.proposed_date || fromDay).split("T")[0];
+      const dayMoved = !!toDay && toDay !== String(session.scheduled_date || "").split("T")[0];
+
       // v1.106.13 — one transaction, and this is the branch where splitting it hurt most.
       //
       // The proposal was marked 'accepted' first and the session moved second. If the second
@@ -3186,13 +3237,43 @@ router.put("/:id/time-change/:proposalId/respond", async (req, res) => {
             pending_time_change_id = NULL, updated_at = NOW()
           WHERE id = ?
         `).run(proposal.proposed_time, proposal.proposed_duration, parseFloat(proposal.proposed_duration) || 0, req.params.id);
+
+        // v1.124.0 — the day, and the reminders that belong to it. notifications_sent holds
+        // only pre-visit flags (the 24-h/1-h reminders, check-in nudge, unfunded warning,
+        // hold-declined notice); on a new day every one of them is owed again.
+        if (dayMoved) {
+          await tx.prepare(
+            "UPDATE care_sessions SET scheduled_date = ?, notifications_sent = NULL WHERE id = ?"
+          ).run(toDay, req.params.id);
+        }
       });
+
+      // v1.124.0 — a card hold placed for the OLD day. Holds go on 23–25 h before the visit
+      // and Stripe lets an uncaptured one lapse after ~7 days, so a hold for Nov 7 cannot
+      // carry a Nov 14 visit. Release it and clear the fields the hold poller keys on
+      // (stripe_payment_intent_id IS NULL AND payment_status IS NULL) so it places a fresh
+      // one the day before the new date. Outside the transaction: Stripe is not rollback-able.
+      if (dayMoved && session.stripe_payment_intent_id && session.payment_status === "authorized" && !session.payment_captured_at) {
+        const { voidSessionPayment } = require("./accountability"); // lazy: circular, same as the cancel path
+        const v = await voidSessionPayment(req.params.id);
+        if (v && v.success) {
+          await db.prepare(`
+            UPDATE care_sessions SET stripe_payment_intent_id = NULL, payment_status = NULL,
+              payment_voided_at = NULL, authorized_amount = NULL
+            WHERE id = ? AND payment_status = 'voided'
+          `).run(req.params.id);
+        } else {
+          captureException(new Error("time-change day move: hold void failed"), {
+            where: "sessions: accept time change (day moved)", sessionId: req.params.id, error: v && v.error,
+          });
+        }
+      }
 
       // Notify proposer
       if (emitToUser) {
         emitToUser(proposal.proposed_by_user_id === session.caregiver_user_id ? session.caregiver_user_id : session.family_user_id, "time_change_accepted", {
           sessionId: req.params.id, proposalId: proposal.id, acceptedBy: responderName,
-          newTime: proposal.proposed_time, newDuration: proposal.proposed_duration,
+          newTime: proposal.proposed_time, newDuration: proposal.proposed_duration, newDate: toDay,
         });
       }
       if (sendPushToUser) {
@@ -3201,9 +3282,8 @@ router.put("/:id/time-change/:proposalId/respond", async (req, res) => {
           title: "✅ Time Change Accepted",
           // v1.123.0 — the whole window, not "9:00 AM for 6hr".
           body: (() => {
-            const day = session.scheduled_date
-              ? formatDateRelative(String(session.scheduled_date).split("T")[0], session.care_timezone || "America/New_York")
-              : "";
+            // v1.124.0 — the NEW day when it moved.
+            const day = toDay ? formatDateRelative(toDay, session.care_timezone || "America/New_York") : "";
             const c = TimeChange.describe({
               fromTime: proposal.original_time, fromHours: proposal.original_duration,
               toTime: proposal.proposed_time, toHours: proposal.proposed_duration,
@@ -3214,7 +3294,7 @@ router.put("/:id/time-change/:proposalId/respond", async (req, res) => {
         }, "time_change");
       }
 
-      res.json({ ok: true, action: "accepted", newTime: proposal.proposed_time, newDuration: proposal.proposed_duration });
+      res.json({ ok: true, action: "accepted", newTime: proposal.proposed_time, newDuration: proposal.proposed_duration, newDate: toDay });
 
     } else if (action === "reject") {
       // Reject — keep the original time. Both writes together: a rejected proposal whose
