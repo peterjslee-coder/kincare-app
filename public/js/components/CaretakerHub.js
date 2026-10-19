@@ -1841,7 +1841,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                           <div style={{ fontSize: 13, color: 'var(--color-purple)', fontWeight: 700, marginTop: 2 }}>
                             {(() => {
                               const c = TimeChange.describe({ fromTime: s.time || s.scheduled_time, fromHours: duration, toTime: s.tcProposedTime, toHours: s.tcProposedDuration || duration, fromDate: sDate, toDate: s.tcProposedDate || sDate });
-                              return `Asked to ${c.phrase || 'change the time'}`;
+                              return `${s.tcProposedBy === 'caregiver' ? 'You asked to' : 'The family asked to'} ${c.phrase || 'change the time'}`;
                             })()}
                           </div>
                         </>
@@ -2066,7 +2066,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                         }}>Check in {Math.ceil(minsUntilCheckIn)} min</button>
                       )}
                       {s.status === 'confirmed' && !hasPendingTimeChange && !isReady && !isActive && (
-                        <button onClick={(e) => { e.stopPropagation(); setTimeChangeModal({ sessionId: s.id, session: { id: s.id, date: sDate, time: s.scheduled_time, durationHours: duration, recipientName: recipName, timezone: tz } }); }}
+                        <button onClick={(e) => { e.stopPropagation(); setTimeChangeModal({ sessionId: s.id, session: { id: s.id, date: sDate, time: s.time, durationHours: duration, recipientName: recipName, timezone: tz } }); }}
                           style={{ padding: '3px 8px', borderRadius: 6, border: '1px solid var(--color-purple)', background: 'var(--color-purple-bg)', color: 'var(--color-purple)', fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>
                           Change visit
                         </button>
@@ -2310,7 +2310,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
           Needs-you card is the family's home, and this screen has its own. Opening it opens
           the root fee sheet, where she can waive it. ── */}
       {typeof AttentionCard !== 'undefined' && (
-        <AttentionCard only={['cancelFee']} onNavigate={(p) => { if (window.__navigateTo) window.__navigateTo(p); }} />
+        <AttentionCard only={['cancelFee', 'timeChange', 'timeChangeSent']} onNavigate={(p) => { if (window.__navigateTo) window.__navigateTo(p); }} />
       )}
 
       {/* ─── Needs your attention: a care-team invite (v1.105.82) ─── */}
@@ -3300,6 +3300,17 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                         {dayLabel}{timeLabel ? ` at ${timeLabel}` : ''}{duration ? ` \u2022 ${duration}hr` : ''}
                         {svcType ? ` \u2022 ${formatServiceType(svcType)}` : ''}
                       </div>
+                      {/* v1.124.1 — a pending change on a visit more than a day out. Tina's Nov 7 sat
+                          here with Pete's request on it and nothing said so. */}
+                      {s.pendingTimeChangeId && (
+                        <button onClick={(e) => { e.stopPropagation(); setVisitDetailSessionId(s.id); }}
+                          style={{ display: 'block', marginTop: 6, padding: '6px 10px', borderRadius: 8, border: '1.5px solid var(--color-purple)', background: 'var(--color-purple-bg)', color: 'var(--color-purple)', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', textAlign: 'left' }}>
+                          {'\u23F0'} {s.tcProposedTime ? (() => {
+                            const c = TimeChange.describe({ fromTime: s.time, fromHours: duration, toTime: s.tcProposedTime, toHours: s.tcProposedDuration || duration, fromDate: sDate, toDate: s.tcProposedDate || sDate });
+                            return `${s.tcProposedBy === 'caregiver' ? 'You asked to' : 'The family asked to'} ${c.phrase || 'change the time'}`;
+                          })() : 'Change requested'} {'\u203A'}
+                        </button>
+                      )}
                       {loc ? (
                         <a href={`https://maps.google.com/?q=${encodeURIComponent(loc)}`} target="_blank" rel="noopener noreferrer"
                           onClick={(e) => e.stopPropagation()}

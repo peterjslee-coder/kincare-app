@@ -144,7 +144,10 @@ describe("the sheet is reachable from anywhere", () => {
     expect(sheet).toMatch(/res\?\.status === 409/);
   });
 
-  test("the caregiver's home draws her fee row, and only that", () => {
-    expect(read("public/js/components/CaretakerHub.js")).toMatch(/<AttentionCard only=\{\['cancelFee'\]\}/);
+  // v1.124.1 — widened on purpose: her Home now also draws time changes waiting on her (and
+  // ones waiting on the family). Pete's Nov 7 → Nov 14 request sat invisible to Tina because
+  // this list said cancellation fees and nothing else. The fee row must still be in it.
+  test("the caregiver's home draws her fee row, plus time changes", () => {
+    expect(read("public/js/components/CaretakerHub.js")).toMatch(/<AttentionCard only=\{\['cancelFee', 'timeChange', 'timeChangeSent'\]\}/);
   });
 });

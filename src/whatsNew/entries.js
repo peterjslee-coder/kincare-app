@@ -41,6 +41,7 @@ const ENTRIES = [
       "Open the visit and tap Change visit",
       "Pick the new day, start time and length — the sheet shows what will change",
       "Tap Send — nothing moves until the other person accepts",
+      "They'll see it under Needs you on Home; you'll see “Waiting on …” until they answer",
     ],
     examples: ["Can we do next Saturday instead?", "Move Thursday's visit to Friday at 10"],
     preview: "changeVisitDay",

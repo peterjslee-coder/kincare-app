@@ -771,7 +771,14 @@ const App = () => {
         target = 'messages';
       } else if (t.startsWith('reimbursement')) {
         target = 'care-team';
-      } else if (t === 'care_request' || t === 'care_request_accepted' || t === 'time_change' || t === 'time_change_accepted' || t === 'time_proposal' || t === 'proposal_accepted' || t === 'proposal_declined' || t === 'proposal_expired') {
+      } else if (t === 'time_change' || t === 'time_change_accepted' || t === 'time_change_expired') {
+        // v1.124.1 — a change to a BOOKED visit opens that visit on Home, where both hubs claim
+        // `session:` focus and draw the review. It went to Find Work (caregiver) / Schedule
+        // (family), where nothing claims it: Tina tapped Pete's Nov 7 → Nov 14 request and
+        // landed on a job board.
+        if (d.sessionId && !d.focus) window.__pendingFocus = `session:${d.sessionId}`;
+        target = 'dashboard';
+      } else if (t === 'care_request' || t === 'care_request_accepted' || t === 'time_proposal' || t === 'proposal_accepted' || t === 'proposal_declined' || t === 'proposal_expired') {
         if (d.sessionId && !d.focus) window.__pendingFocus = `session:${d.sessionId}`;
         target = (window.__currentRole || 'family') === 'caregiver' ? 'find-work' : 'schedule';
       } else if (t === 'new_job') {

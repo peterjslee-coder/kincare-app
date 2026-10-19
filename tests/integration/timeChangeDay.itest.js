@@ -151,3 +151,29 @@ test("an old proposal (no proposed_date) keeps the day when accepted", async () 
   expect(String(after.scheduled_date).slice(0, 10)).toBe(OLD_DAY);
   expect(after.scheduled_time).toBe("10:00");
 });
+
+// v1.124.1 — Pete, 10/19: the request above existed and neither side could see it.
+describe("both sides can see a pending day move", () => {
+  test("Tina's Needs-you has it (counted); Pete's has a soft 'waiting on' line (not counted)", async () => {
+    const { attentionItemsFor } = require("../../src/utils/attention");
+    const id = await visit();
+    const res = await propose(id, { proposedDate: NEW_DAY, proposedTime: "09:00", proposedDuration: 8 });
+    expect(res.status).toBe(200);
+
+    const hers = await attentionItemsFor(db, cg.user.id);
+    const ask = hers.items.find((i) => i.kind === "timeChange" && i.sessionId === id);
+    expect(ask).toBeTruthy();
+    expect(ask.title).toBe("Pete Lee asked to move a visit to another day");
+    expect(ask.toDate).toBe(NEW_DAY);
+    expect(hers.total).toBeGreaterThanOrEqual(1);
+
+    const his = await attentionItemsFor(db, family.user.id);
+    const wait = his.items.find((i) => i.kind === "timeChangeSent" && i.sessionId === id);
+    expect(wait).toBeTruthy();
+    expect(wait.soft).toBe(true);
+    expect(wait.title).toMatch(/^Waiting on Tina: .*move to Fri, Jan 15 instead of Fri, Jan 8$/);
+    expect(wait.focus).toBe(`session:${id}`);
+    expect(his.items.some((i) => i.kind === "timeChange" && i.sessionId === id)).toBe(false);
+  });
+});
+

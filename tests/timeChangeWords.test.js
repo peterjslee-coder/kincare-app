@@ -116,3 +116,22 @@ describe("v1.124.0 — changing a visit is reachable from every visit details sc
     expect(read("public", "js", "components", "ChangeVisitSheet.js")).toMatch(/proposedDate:/);
   });
 });
+
+describe("v1.124.1 — a pending change is visible to both people", () => {
+  test("the caregiver's Home draws time changes in Needs you, not only cancellation fees", () => {
+    expect(read("public", "js", "components", "CaretakerHub.js")).toMatch(/<AttentionCard only=\{\[[^\]]*'timeChange'[^\]]*'timeChangeSent'/);
+  });
+  test("a time-change push opens the visit on Home, not Find Work / Schedule", () => {
+    expect(read("public", "js", "app.js")).toMatch(/t === 'time_change' \|\| t === 'time_change_accepted'[\s\S]{0,600}target = 'dashboard';/);
+  });
+  test("visit details shows the pending change wherever it is opened, with answer buttons for the other person", () => {
+    const vdm = read("public", "js", "components", "VisitDetailModal.js");
+    expect(vdm).toMatch(/data-pending-change/);
+    expect(vdm).toMatch(/\/time-change\/\$\{pendingChange\.id\}\/respond/);
+    expect(vdm).toMatch(/changeIsMine = !!\(pendingChange && pendingChange\.proposed_by === role\)/);
+  });
+  test("the caregiver's Scheduled rows flag a pending change", () => {
+    expect(read("public", "js", "components", "CaretakerHub.js")).toMatch(/\{s\.pendingTimeChangeId && \(/);
+  });
+});
+

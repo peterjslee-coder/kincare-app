@@ -74,6 +74,8 @@ const ATTENTION_KINDS = {
   reimbursement: { icon: '💵', chip: 'MONEY' },
   timeOffer:     { icon: '🕑', chip: 'SCHEDULE' },
   timeChange:    { icon: '🕑', chip: 'SCHEDULE' },
+  // v1.124.1 — a change you asked for, waiting on the other person. Soft: never counted.
+  timeChangeSent: { icon: '🕑', chip: 'WAITING ON THEM' },
   careTask:      { icon: '✅', chip: 'CARE TASK' },
   approval:      { icon: '🔑', chip: 'ACCESS' },
   // v1.109.4 — the first SOFT kind. Nobody is blocked by an empty calendar, so it says

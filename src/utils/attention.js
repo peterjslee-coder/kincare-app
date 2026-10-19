@@ -221,6 +221,29 @@ async function attentionItemsFor(db, userId) {
     ORDER BY cs.scheduled_date, cs.scheduled_time
   `).all(userId, userId));
 
+  // ── v1.124.1 — a change *I* asked for, still waiting on the other person ──
+  //
+  // Pete, 10/19: asked Tina to move Nov 7 to Nov 14 and then "I can't see there was any change
+  // from my end either." The request existed; nothing on his screens said so. Soft: he is not
+  // the blocker, so it never counts toward the badge — it only says what he is waiting on.
+  const sentChangeRows = await safeRows("timeChangesSent", () => db.prepare(`
+    SELECT tcp.id, tcp.session_id, tcp.proposed_by, tcp.original_time, tcp.proposed_time,
+           tcp.original_duration, tcp.proposed_duration, tcp.proposed_date,
+           cs.scheduled_date, cr.first_name AS recipient_first,
+           cu.first_name AS caregiver_first, fu.first_name AS family_first
+    FROM time_change_proposals tcp
+    JOIN care_sessions cs
+      ON cs.id = tcp.session_id AND cs.pending_time_change_id = tcp.id
+    LEFT JOIN caregiver_profiles cp ON cp.id = cs.caregiver_id
+    LEFT JOIN users cu ON cu.id = cp.user_id
+    LEFT JOIN users fu ON fu.id = cs.family_user_id
+    LEFT JOIN care_recipients cr ON cr.id = cs.care_recipient_id
+    WHERE tcp.status = 'pending'
+      AND tcp.proposed_by_user_id = ?
+      AND cs.status NOT IN ('cancelled', 'completed', 'disputed')
+    ORDER BY cs.scheduled_date, cs.scheduled_time
+  `).all(userId));
+
   // ── Someone waiting on ME to let them into InPlace ──
   //
   // v1.105.145. Pete, after Rebecca signed up: "I never got a push notification that something
@@ -610,6 +633,30 @@ async function attentionItemsFor(db, userId) {
       page: "dashboard",
       focus: `session:${c.session_id}`,
     })),
+    ...sentChangeRows.map((c) => {
+      const other = c.proposed_by === "caregiver" ? (c.family_first || "the family") : (c.caregiver_first || "your caregiver");
+      const ch = TimeChange.describe({
+        fromTime: c.original_time, fromHours: c.original_duration,
+        toTime: c.proposed_time, toHours: c.proposed_duration,
+        fromDate: c.scheduled_date, toDate: c.proposed_date || c.scheduled_date,
+      });
+      const whose = c.recipient_first ? `${c.recipient_first}'s visit` : "the visit";
+      const day = TimeChange.dayOnly(c.scheduled_date) ? TimeChange.dateLabel(TimeChange.dayOnly(c.scheduled_date)) : "";
+      return {
+        kind: "timeChangeSent",
+        soft: true,
+        id: `timeChangeSent:${c.id}`,
+        sessionId: c.session_id,
+        title: `Waiting on ${other}: ${whose}${day && !ch.dateChanged ? ` on ${day}` : ""} — ${ch.phrase || "a new time"}`,
+        detail: null,
+        forWhom: c.recipient_first || null,
+        verb: "Open",
+        action: null,
+        page: "dashboard",
+        focus: `session:${c.session_id}`,
+        note: `Nothing changes until ${other} accepts.`,
+      };
+    }),
     ...approvalRows.map((u) => ({
       kind: "approval",
       id: u.id,

@@ -138,6 +138,52 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, 
     fetchDetail();
   }, [sessionId]);
 
+  // ─── v1.124.1 — a pending change is visible wherever the visit is opened ───
+  //
+  // Pete, 10/19: asked Tina to move Nov 7 to Nov 14. The request was saved and pushed, and
+  // then neither of them could see it — this modal said nothing about a pending change unless
+  // its host (Home) passed onTimeChange, and even then only as a button, and even to the
+  // person who asked (who cannot accept their own request). Now: the change itself, every
+  // time, and the answer buttons for whoever has to answer.
+  const [pendingChange, setPendingChange] = useState(null);
+  const [answering, setAnswering] = useState(false);
+  const pendingId = data && data.session ? data.session.pending_time_change_id : null;
+  useEffect(() => {
+    if (!sessionId || !pendingId) { setPendingChange(null); return; }
+    let live = true;
+    (async () => {
+      try {
+        const r = await apiFetch(`/api/sessions/${sessionId}/time-change`);
+        if (r && r.ok) { const d = await r.json(); if (live) setPendingChange(d.proposal || null); }
+      } catch { /* the visit still shows; the change box just stays away */ }
+    })();
+    return () => { live = false; };
+  }, [sessionId, pendingId]);
+  const changeIsMine = !!(pendingChange && pendingChange.proposed_by === role);
+  const answerChange = async (action) => {
+    if (!pendingChange) return;
+    setAnswering(true);
+    try {
+      const r = await apiFetch(`/api/sessions/${sessionId}/time-change/${pendingChange.id}/respond`, {
+        method: 'PUT', body: JSON.stringify({ action }),
+      });
+      if (r && (r.ok || r.status === 409)) {
+        try { window.dispatchEvent(new Event('inplace:attention-stale')); } catch { /* nothing listening */ }
+        if (typeof showToast === 'function') showToast(action === 'accept' ? 'Accepted — the visit is updated' : 'Declined — the visit stays as it was', 'success');
+        setPendingChange(null);
+        const rr = await apiFetch(`/api/sessions/${sessionId}`);
+        if (rr && rr.ok) setData(await rr.json());
+        if (onRefresh) onRefresh();
+      } else {
+        const d = r ? await r.json().catch(() => ({})) : {};
+        if (typeof showToast === 'function') showToast((d && d.error) || 'That did not go through — nothing changed', 'error');
+      }
+    } catch {
+      if (typeof showToast === 'function') showToast('That did not go through — nothing changed', 'error');
+    }
+    setAnswering(false);
+  };
+
   const formatTime12 = (t) => {
     if (!t) return '';
     const [h, m] = t.split(':').map(Number);
@@ -711,6 +757,42 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, 
           );
         })()}
 
+        {pendingChange && data && data.session && (
+          <div data-pending-change style={{ marginTop: 14, padding: '12px 14px', borderRadius: 12, border: '2px solid var(--color-purple)', background: 'var(--bg-surface)' }}>
+            <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.5, textTransform: 'uppercase', color: 'var(--color-purple)', marginBottom: 8 }}>
+              {'⏰'} {changeIsMine ? 'Change you asked for' : 'Change requested'}
+            </div>
+            <TimeChangeSummary proposal={pendingChange}
+              session={{ date: data.session.scheduled_date, recipientName: data.session.recipient_name, timezone: data.session.care_timezone }}
+              proposerName={changeIsMine ? 'You' : pendingChange.proposer_name} />
+            {pendingChange.reason && (
+              <div style={{ fontSize: 12.5, fontStyle: 'italic', color: 'var(--text-primary)', margin: '-4px 0 10px' }}>“{pendingChange.reason}”</div>
+            )}
+            {changeIsMine ? (
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                Waiting for {role === 'family' ? (data.session.caregiver_name || 'the caregiver').split(' ')[0] : 'the family'} to accept. The visit stays as it is until then.
+              </div>
+            ) : (
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                {onTimeChange && (
+                  <button onClick={() => { onTimeChange(data.session, true); onClose(); }}
+                    style={{ padding: '9px 14px', borderRadius: 8, border: '1px solid var(--border-color)', background: 'var(--bg-surface)', color: 'var(--text-secondary)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                    More options
+                  </button>
+                )}
+                <button disabled={answering} onClick={() => answerChange('reject')}
+                  style={{ padding: '9px 14px', borderRadius: 8, border: '1px solid var(--color-error)', background: 'var(--bg-surface)', color: 'var(--color-error)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                  Decline
+                </button>
+                <button disabled={answering} onClick={() => answerChange('accept')}
+                  style={{ padding: '9px 16px', borderRadius: 8, border: 'none', background: 'var(--color-purple)', color: 'var(--text-on-primary)', fontSize: 13, fontWeight: 700, cursor: answering ? 'wait' : 'pointer' }}>
+                  {answering ? 'Saving…' : 'Accept'}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, flexWrap: 'wrap', gap: 6 }}>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           {data && data.session && data.session.status === 'confirmed' && data.session.caregiver_id && !data.session.pending_time_change_id && (role === 'family' || role === 'caregiver') && (
@@ -719,12 +801,7 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, 
               Change visit
             </button>
           )}
-          {data && data.session && data.session.pending_time_change_id && onTimeChange && (
-            <button onClick={() => { onTimeChange(data.session, true); onClose(); }}
-              style={{ padding: '8px 16px', background: 'var(--color-purple)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', animation: 'pulse 2s infinite' }}>
-              ⏰ Review Change
-            </button>
-          )}
+          {/* v1.124.1 — "Review Change" moved into the change box above, with the answer buttons. */}
           {data && data.session && ['confirmed', 'pending', 'open', 'requested'].includes(data.session.status) && (
             <button disabled={cancelling} onClick={async () => {
               const ss = data.session;

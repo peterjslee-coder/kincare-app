@@ -2098,7 +2098,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                           <div style={{ fontSize: 13, color: 'var(--color-purple)', fontWeight: 700, marginTop: 2 }}>
                             {(() => {
                               const c = TimeChange.describe({ fromTime: s.time, fromHours: s.durationHours, toTime: s.tcProposedTime, toHours: s.tcProposedDuration || s.durationHours, fromDate: s.date, toDate: s.tcProposedDate || s.date });
-                              return `Asked to ${c.phrase || 'change the time'}`;
+                              return `${s.tcProposedBy === 'family' ? 'You asked to' : `${(s.caregiverName || 'The caregiver').split(' ')[0]} asked to`} ${c.phrase || 'change the time'}`;
                             })()}
                           </div>
                         </>

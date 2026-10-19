@@ -75,6 +75,9 @@ function fakeDb({ reimbursements = [], offers = [], changes = [], tasks = [], ap
           if (norm.includes("FROM reimbursements") && norm.includes("r.status = 'approved'")) return [];
           if (norm.includes("FROM reimbursements")) return reimbursements;
           if (norm.includes("FROM time_proposals")) return offers;
+          // v1.124.1 — the "waiting on them" query (proposed_by_user_id) is the proposer's view;
+          // these fixtures are all asks of Pete, so it finds none.
+          if (norm.includes("FROM time_change_proposals") && norm.includes("tcp.proposed_by_user_id = ?")) return [];
           if (norm.includes("FROM time_change_proposals")) return changes;
           if (norm.includes("FROM care_task_occurrences")) return tasks;
           if (norm.includes("FROM users") && norm.includes("account_approved")) return approvals;
