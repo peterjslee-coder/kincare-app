@@ -61,6 +61,9 @@ describe("classifyInbound", () => {
     expect(O.JOIN_REPLY).toMatch(/Msg & data rates may apply/);
     expect(O.JOIN_REPLY).toMatch(/STOP to opt out/);
     expect(O.JOIN_REPLY).toMatch(/HELP for help/);
+    expect(O.JOIN_REPLY).toMatch(/^InPlace Care: /); // v1.124.3 — brand first
+    expect(O.JOIN_REPLY).toMatch(/You're signed up/); // confirmation of enrollment
+    expect(O.JOIN_REPLY).toMatch(/Msg frequency varies/);
     expect(O.JOIN_REPLY.length).toBeLessThanOrEqual(320); // the registered opt-in message limit
   });
   test("an email anywhere is interest, lowercased, trailing punctuation dropped", () => {

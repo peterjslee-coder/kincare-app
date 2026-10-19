@@ -15,7 +15,8 @@ afterAll(async () => { await stopHarness(h); });
 
 // v1.114.6 — migration 061 supersedes the privacy policy with 2026-10-14 (7B Text Messages).
 // v1.118.0 — migration 067 supersedes it again with 2026-10-14b (first-party analytics, no Plausible).
-const EXPECTED = { privacy: "2026-10-14b", terms: "2026-10-12" };
+// v1.124.3 — migration 074 supersedes it with 2026-10-19 (7B matches the A2P registrations).
+const EXPECTED = { privacy: "2026-10-19", terms: "2026-10-12" };
 
 test("exactly one active privacy and terms, at their current versions, with the new sections", async () => {
   for (const t of ["privacy", "terms"]) {
@@ -31,6 +32,10 @@ test("exactly one active privacy and terms, at their current versions, with the 
   // v1.114.6 — the carrier-required SMS language, and the stale duplicate of 6/7 is gone.
   expect(pp.content).toContain("7B. Text Messages");
   expect(pp.content).toContain("Text messaging originator opt-in data and consent will not be shared with any third parties");
+  // v1.124.3 — 7B matches the A2P registrations: no texting from lists, the recipient's own YES.
+  expect(pp.content).toContain("sent only to people who have texted that number first");
+  expect(pp.content).toContain("replies YES to our one confirmation text");
+  expect(pp.content).not.toContain("referral list");
   expect(pp.content.match(/^6\. How We Share Your Information$/gm)).toHaveLength(1);
   expect(pp.content.match(/^7\. Health Information$/gm)).toHaveLength(1);
   expect(pp.content.match(/^Artificial Intelligence Services$/gm)).toHaveLength(1);

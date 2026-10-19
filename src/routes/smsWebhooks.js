@@ -163,8 +163,8 @@ router.post("/outreach-inbound", async (req, res) => {
       if (inv.ok) {
         const first = O.greetingName(contact);
         const reply = inv.status === "joined"
-          ? `Thanks${first !== "there" ? `, ${first}` : ""}! Looks like you already have an InPlace account with ${what.email} - you can sign in at yourinplace.com. Pete will be in touch.`
-          : `Thanks${first !== "there" ? `, ${first}` : ""}! We just emailed ${what.email} from InPlace with the details and a link to sign up. Pete will be in touch to set up a time to talk.`;
+          ? `Thanks${first !== "there" ? `, ${first}` : ""}! Looks like you already have an InPlace account with ${what.email} - you can sign in at yourinplace.com. Pete will be in touch. Reply STOP to opt out.`
+          : `Thanks${first !== "there" ? `, ${first}` : ""}! We just emailed ${what.email} from InPlace Care with the details and a link to sign up. Pete will be in touch to set up a time to talk. Reply STOP to opt out.`;
         await sendToContact(db, contact, reply, { automated: true });
       } else {
         await db.prepare("UPDATE outreach_contacts SET unread = unread + 1 WHERE id = ?").run(contact.id);

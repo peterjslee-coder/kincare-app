@@ -3358,6 +3358,18 @@ async function initializeDatabase() {
         `ALTER TABLE time_change_proposals ADD COLUMN IF NOT EXISTS proposed_date TEXT`,
       ],
     },
+    {
+      // v1.124.3 — Privacy Policy 7B matches the A2P registrations (carriers rejected the outreach
+      // campaign twice on CTA; 7B still said outreach texts went to "caregivers ... through a local
+      // agency's referral list"). Texts now go only to people who texted first (JOIN); a care
+      // recipient's texts need their own YES; outreach calls may be recorded. Pete: publish first,
+      // the lawyer approves what we publish (agenda L12/L13).
+      id: "074_privacy_2026_10_19",
+      statements: legalPublishStatements("2026-10-19", [
+        { docType: "privacy", fallbackTitle: "Privacy Policy", file: "privacy_2026-10-19.txt",
+          summary: "Clarifies our text messages: we text about caregiving work only to people who text us first (for example by texting JOIN), a person receiving care confirms reminder texts by replying YES, and calls on our caregiver line may be recorded and transcribed for our notes." },
+      ]),
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;
