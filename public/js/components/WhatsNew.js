@@ -202,6 +202,22 @@ const WN_PREVIEWS = {
       <span style={{ ...wnPill('var(--accent-color-dark)', 'var(--text-on-primary)'), display: 'block', textAlign: 'center', padding: '8px 10px' }}>Pay {'›'}</span>
     </div>
   ),
+  // v1.123.0 — a time change says what moves (Pete, 10/19: "9am to 9am makes no sense")
+  timeChangeWords: () => (
+    <div style={{ padding: '12px 12px 10px', borderRadius: 12, border: '2px solid var(--accent-color)', background: 'var(--bg-attention-card)' }}>
+      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.4, color: 'var(--text-tertiary)', marginBottom: 4 }}>{'🕑'} SCHEDULE {'·'} FOR MOM</div>
+      <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text-primary)' }}>Jane asked to end a visit early</div>
+      <div style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: '4px 0 8px' }}>Thu, Nov 5 {'·'} End at 3:30 PM instead of 5:00 PM {'·'} 6½ hr instead of 8 hr</div>
+      {[['Was', '9:00 AM', '5:00 PM', '8 hr', false], ['New', '9:00 AM', '3:30 PM', '6½ hr', true]].map(([l, a, b, h, isNew]) => (
+        <div key={l} style={{ display: 'flex', gap: 8, alignItems: 'baseline', padding: '5px 8px', marginBottom: 3, borderRadius: 8, fontSize: 12,
+          background: isNew ? 'var(--color-purple-bg)' : 'var(--bg-neutral)', border: isNew ? '1.5px solid var(--color-purple)' : '1.5px solid transparent' }}>
+          <span style={{ width: 28, fontSize: 9.5, fontWeight: 800, color: isNew ? 'var(--color-purple)' : 'var(--text-muted)', textTransform: 'uppercase' }}>{l}</span>
+          <span style={{ flex: 1, color: 'var(--text-secondary)' }}>{a} {'–'} <span style={isNew ? { color: 'var(--color-purple)', fontWeight: 800 } : {}}>{b}</span></span>
+          <span style={{ color: isNew ? 'var(--color-purple)' : 'var(--text-muted)', fontWeight: isNew ? 800 : 400 }}>{h}</span>
+        </div>
+      ))}
+    </div>
+  ),
   // v1.120.0 — "Did the check arrive?" (feedback bfbb79bd)
   checkArrived: () => (
     <div style={{ padding: '12px 12px 10px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>

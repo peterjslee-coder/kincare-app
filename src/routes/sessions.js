@@ -10,7 +10,9 @@ const { captureException } = require("../utils/sentry");
 const availabilityRouter = require("./availability");
 const { sendPushToUser, notifyAdmins, sendSessionReminders } = require("./push");
 const { calculateSessionCost, isShortNotice, SURCHARGE_CAREGIVER_SHARE } = require("../utils/rateCalculator");
-const { getNowInZone, getTodayStringInZone, buildDateTimeInZone, zonedDateTimeToInstant, formatTimeForDisplay, parseTimeToMinutes } = require("../utils/timezone");
+const { getNowInZone, getTodayStringInZone, buildDateTimeInZone, zonedDateTimeToInstant, formatTimeForDisplay, parseTimeToMinutes, formatDateRelative } = require("../utils/timezone");
+// v1.123.0 — the one describer for "what does this time change change" (shared with the client).
+const TimeChange = require("../../public/js/timeChange");
 // v1.106.16 — these were defined in this file and required OUT of it by dashboard.js and
 // server.js. A 4,056-line router is not a library. See each module for what was wrong.
 const { expireStaleProposals } = require("../utils/proposals");
@@ -3045,8 +3047,18 @@ router.post("/:id/propose-time-change", async (req, res) => {
     const emitToUser = req.app.get("emitToUser");
     const notifyUserId = proposedBy === "caregiver" ? session.family_user_id : session.caregiver_user_id;
     const proposerName = proposedBy === "caregiver" ? session.caregiver_name : session.family_name;
-    const friendlyTime = formatTime12h(proposedTime);
-    const origFriendlyTime = formatTime12h(session.scheduled_time);
+    // v1.123.0 — Pete (10/19): "a change for '9am to 9am' makes no sense." This body printed
+    // the start time before and after; Tina had kept the start and shortened the visit. It now
+    // says which day (today's visit was running when the push landed — it read as today's) and
+    // the part that moves: "Thu, Oct 22 visit: end at 3:00 PM instead of 5:00 PM (6 hr instead
+    // of 8 hr)". Names, a day and clock times — no health information (pushPhi rule).
+    const change = TimeChange.describe({
+      fromTime: session.scheduled_time, fromHours: session.duration_hours,
+      toTime: proposedTime, toHours: proposedDuration,
+    });
+    const visitDay = session.scheduled_date
+      ? formatDateRelative(String(session.scheduled_date).split("T")[0], careTz)
+      : "";
 
     if (emitToUser) {
       emitToUser(notifyUserId, "time_change_proposed", {
@@ -3068,7 +3080,7 @@ router.post("/:id/propose-time-change", async (req, res) => {
     if (sendPushToUser) {
       await sendPushToUser(notifyUserId, {
         title: "⏰ Time Change Request",
-        body: `${proposerName} wants to change ${session.recipient_name}'s session from ${origFriendlyTime} to ${friendlyTime}. Tap to review.`,
+        body: `${proposerName} wants ${session.recipient_name}'s visit${visitDay ? ` ${TimeChange.onDay(visitDay)}` : ""} to ${change.phrase || "change"}${change.sub ? ` (${change.sub.charAt(0).toLowerCase() + change.sub.slice(1)})` : ""}. Tap to review.`,
         data: { type: "time_change", sessionId: req.params.id, proposalId },
       }, "time_change");
     }
@@ -3187,7 +3199,17 @@ router.put("/:id/time-change/:proposalId/respond", async (req, res) => {
         const pushTarget = proposal.proposed_by === "caregiver" ? session.caregiver_user_id : session.family_user_id;
         await sendPushToUser(pushTarget, {
           title: "✅ Time Change Accepted",
-          body: `${responderName} accepted the new time: ${formatTime12h(proposal.proposed_time)} for ${proposal.proposed_duration}hr.`,
+          // v1.123.0 — the whole window, not "9:00 AM for 6hr".
+          body: (() => {
+            const day = session.scheduled_date
+              ? formatDateRelative(String(session.scheduled_date).split("T")[0], session.care_timezone || "America/New_York")
+              : "";
+            const c = TimeChange.describe({
+              fromTime: proposal.original_time, fromHours: proposal.original_duration,
+              toTime: proposal.proposed_time, toHours: proposal.proposed_duration,
+            });
+            return `${responderName} accepted. ${day ? `${day}'s` : "The"} visit is now ${c.to} (${c.toHours}).`;
+          })(),
           data: { type: "time_change_accepted", sessionId: req.params.id },
         }, "time_change");
       }

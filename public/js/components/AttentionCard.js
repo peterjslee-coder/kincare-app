@@ -123,7 +123,17 @@ const attentionDetail = (item) => {
     return bits.join(' · ');
   }
   if (item.kind === 'timeChange') {
+    // v1.123.0 — Pete (10/19): this read "Thu, Oct 22 · 9:00 AM → 9:00 AM" when Tina kept the
+    // start and shortened the visit. Say the part that moves: "Thu, Oct 22 · End at 3:00 PM
+    // instead of 5:00 PM · 6 hr instead of 8 hr".
     const day = attentionDay(item.date, item.tz);
+    if (typeof TimeChange !== 'undefined') {
+      const c = TimeChange.describe({
+        fromTime: item.fromTime, fromHours: item.fromDuration,
+        toTime: item.toTime, toHours: item.toDuration,
+      });
+      return [day, c.headline, c.sub].filter(Boolean).join(' · ');
+    }
     const from = attentionClock(item.fromTime);
     const to = attentionClock(item.toTime);
     if (from && to) return `${day}${day ? ' · ' : ''}${from} → ${to}`;

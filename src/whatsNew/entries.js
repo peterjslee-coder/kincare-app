@@ -31,6 +31,21 @@ const WINDOW_DAYS = 45;
 
 const ENTRIES = [
   {
+    id: "time-change-in-words",
+    version: "1.123.0",
+    date: "2026-10-19",
+    audience: ["family", "caregiver"],
+    title: "Time changes say what's actually changing",
+    body: "When someone asks to change a visit, the notice, the Needs you card and the review now say what moves — “End at 3:30 PM instead of 5:00 PM” — and which day, instead of just the start time. Asking for a change? Every half hour is on the list now, with the end time beside it.",
+    howTo: [
+      "Look under Needs you on Home — the card names the day and what moves",
+      "Tap Open to see the old and new visit side by side, the changed part in purple",
+      "Proposing a change? Pick the length and check the “ends at” time next to it",
+    ],
+    examples: ["Jane needs to leave at 3:30 on Thursday", "Can we start an hour later tomorrow?"],
+    preview: "timeChangeWords",
+  },
+  {
     id: "loved-one-page",
     version: "1.121.0",
     date: "2026-10-15",

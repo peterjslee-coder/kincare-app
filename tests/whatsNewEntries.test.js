@@ -42,7 +42,7 @@ describe("who sees what", () => {
     expect(got).not.toContain("todos-caregiver");
   });
   test("a caregiver sees the caregiver one", () => {
-    expect(ids({ roles: ["caregiver"], createdAt: "2026-01-01" }).sort()).toEqual(["calendar-whole-month", "quiet-hours-what-happened", "todos-caregiver", "todos-folded-bar"]);
+    expect(ids({ roles: ["caregiver"], createdAt: "2026-01-01" }).sort()).toEqual(["calendar-whole-month", "quiet-hours-what-happened", "time-change-in-words", "todos-caregiver", "todos-folded-bar"]);
   });
   test("seen entries do not come back, and a second entry on the same day still does", () => {
     const got = ids({ roles: ["family"], createdAt: "2026-01-01", seenIds: ["todos-next-visit"] });
@@ -54,7 +54,10 @@ describe("who sees what", () => {
     expect(ids({ roles: ["family"], createdAt: "2026-10-13T08:00:00Z" })).toContain("todos-on-arrival");
   });
   test(`nothing older than ${WINDOW_DAYS} days`, () => {
-    const later = new Date(now.getTime() + (WINDOW_DAYS + 2) * 86400000);
+    // From the NEWEST entry, not the fixed `now`: an entry dated after `now` is still inside
+    // the window measured from `now` (v1.123.0's entry, dated 10/19, broke the fixed version).
+    const newest = Math.max(now.getTime(), ...ENTRIES.map((e) => Date.parse(e.date + "T12:00:00Z")));
+    const later = new Date(newest + (WINDOW_DAYS + 2) * 86400000);
     expect(entriesFor({ roles: ["family"], createdAt: "2026-01-01", now: later })).toEqual([]);
   });
   test("the ID entry only for someone still in their grace period", () => {

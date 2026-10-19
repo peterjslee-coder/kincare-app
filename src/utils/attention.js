@@ -36,6 +36,7 @@
 // from.
 
 const { getTodayStringInZone, DEFAULT_TIMEZONE } = require("./timezone");
+const TimeChange = require("../../public/js/timeChange"); // v1.123.0
 const { FEE_CAREGIVER_PROFILE_SQL } = require("./cancellationFee");
 const { careAccessFor } = require("./careAccess"); // v1.112.0
 
@@ -578,9 +579,14 @@ async function attentionItemsFor(db, userId) {
       kind: "timeChange",
       id: c.id,
       sessionId: c.session_id,
+      // v1.123.0 — "asked to end a visit early", not "asked to move a visit": the visit had
+      // not moved, it had got shorter, and the detail line under this read "9:00 → 9:00".
       title: `${c.proposed_by === "caregiver"
         ? (name(c.caregiver_first, c.caregiver_last) || "Your caregiver")
-        : (name(c.family_first, c.family_last) || "The family")} asked to move a visit`,
+        : (name(c.family_first, c.family_last) || "The family")} asked to ${TimeChange.describe({
+          fromTime: c.original_time, fromHours: c.original_duration,
+          toTime: c.proposed_time, toHours: c.proposed_duration,
+        }).verb}`,
       detail: c.reason || null,
       forWhom: c.recipient_first || null,
       serviceType: c.service_type || null,

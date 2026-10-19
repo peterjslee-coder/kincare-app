@@ -107,7 +107,8 @@ describe("each item says what it is", () => {
 
   test("a time change carries both times, not just the new one", async () => {
     const item = await only("timeChange", { changes: [CHANGE] });
-    expect(item.title).toBe("Julia Huth asked to move a visit");
+    // v1.123.0 — the verb names which way it moves (same length, two hours later).
+    expect(item.title).toBe("Julia Huth asked to move a visit later");
     expect(item.fromTime).toBe("09:00");
     expect(item.toTime).toBe("11:00");
     expect(item.isWithin24h).toBe(true);
@@ -340,10 +341,10 @@ function build(seeds) {
   const doc = { addEventListener: () => {}, removeEventListener: () => {}, visibilityState: "visible" };
   const TimezoneHelper = { DEFAULT_TZ: "America/New_York", getDateLabel: (d) => `on ${d}` };
   const fn = new Function(
-    "window", "document", "React", "apiFetch", "TimezoneHelper",
+    "window", "document", "React", "apiFetch", "TimezoneHelper", "TimeChange",
     compiled + "\nreturn window.AttentionCard;"
   );
-  return fn(win, doc, shim, async () => ({ ok: true, json: async () => ({}) }), TimezoneHelper);
+  return fn(win, doc, shim, async () => ({ ok: true, json: async () => ({}) }), TimezoneHelper, require("../public/js/timeChange"));
 }
 
 // seeds are useState calls in declaration order: payload, loadFailed, busy, done, failed
@@ -371,8 +372,11 @@ describe("the card draws the thing, not the count of the thing", () => {
 
   test("a time change draws both times so you can answer without opening it", async () => {
     const { text } = draw(await payloadOf({ changes: [CHANGE] }));
-    expect(text).toContain("Julia Huth asked to move a visit");
-    expect(text).toContain("9:00 AM → 11:00 AM");
+    expect(text).toContain("Julia Huth asked to move a visit later");
+    // v1.123.0 — what moves, in words; never the bare start-time arrow (Pete, 10/19: "9am to 9am").
+    expect(text).toContain("Start at 11:00 AM instead of 9:00 AM");
+    expect(text).toContain("Same 2 hr, now ends 1:00 PM");
+    expect(text).not.toContain("→");
     expect(text).toContain("Within 24 hours");
   });
 

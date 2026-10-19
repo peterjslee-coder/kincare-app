@@ -26,6 +26,9 @@ const MAP_DIR = path.join(__dirname, "..", "build", "maps"); // outside public/ 
 const scripts = [
   "js/offlineQueue.js",
   "js/utils.js",
+  // v1.123.0 — window.TimeChange: what a time change changes, in words. Isomorphic — the
+  // server requires the same file for the push and the Needs-you title.
+  "js/timeChange.js",
   // v1.117.0 — journey tracking (window.InPlaceJourney). Own file: it runs at load and listens
   // to the document, and utils.js is sliced into Node-side tests that have no document.
   "js/journey.js",
@@ -64,6 +67,7 @@ const scripts = [
   "js/components/AddressAutocomplete.js",
   "js/components/CareEvents.js",
   "js/components/CancelSessionModal.js",
+  "js/components/TimeChangeSummary.js", // v1.123.0 — the time-change review sheet's top half; Dashboard and CaretakerHub use it
   "js/components/Dashboard.js",
   "js/components/LegalReadinessCard.js", // v1.110 — family legal & money readiness; CareProfile and the Documents Center render it
   "js/components/CareProfile.js",

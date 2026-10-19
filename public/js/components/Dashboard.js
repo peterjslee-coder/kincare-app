@@ -2093,16 +2093,19 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                         {s.caregiverName ? ` with ${s.caregiverName}` : ''}
                       </div>
                       {hasPendingTimeChange && s.tcProposedTime ? (
-                        <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>
-                          {dayLabel} at{' '}
-                          <span style={{ textDecoration: 'line-through', opacity: 0.5 }}>{timeLabel}</span>
-                          {' '}
-                          <span style={{ color: 'var(--color-purple)', fontWeight: 700 }}>{TimezoneHelper.formatTime(s.tcProposedTime)}</span>
-                          {s.tcProposedDuration && parseFloat(s.tcProposedDuration) !== parseFloat(s.durationHours) ? (
-                            <>{' \u2022 '}<span style={{ textDecoration: 'line-through', opacity: 0.5 }}>{s.durationHours}hr</span>{' '}<span style={{ color: 'var(--color-purple)', fontWeight: 700 }}>{s.tcProposedDuration}hr</span></>
-                          ) : s.durationHours ? ` \u2022 ${s.durationHours}hr` : ''}
-                          {s.serviceType ? ` \u2022 ${formatServiceType(s.serviceType)}` : ''}
-                        </div>
+                        <>
+                          <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>
+                            {dayLabel}{timeLabel ? ` at ${timeLabel}` : ''}{s.durationHours ? ` \u2022 ${s.durationHours}hr` : ''}{s.serviceType ? ` \u2022 ${formatServiceType(s.serviceType)}` : ''}
+                          </div>
+                          {/* v1.123.0 — was "at ~~9:00 AM~~ 9:00 AM": the start struck through and printed again
+                              when only the length changed. Now the change in words, from the shared describer. */}
+                          <div style={{ fontSize: 13, color: 'var(--color-purple)', fontWeight: 700, marginTop: 2 }}>
+                            {(() => {
+                              const c = TimeChange.describe({ fromTime: s.time, fromHours: s.durationHours, toTime: s.tcProposedTime, toHours: s.tcProposedDuration || s.durationHours });
+                              return `Asked to ${c.phrase || 'change the time'}`;
+                            })()}
+                          </div>
+                        </>
                       ) : (
                         <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>
                           {dayLabel}{timeLabel ? ` at ${timeLabel}` : ''}
@@ -2610,6 +2613,8 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
       {/* ─── Propose Time Change Modal (family proposing) ─── */}
       {timeChangeModal && (() => {
         const s = timeChangeModal.session;
+        const sTime = s.time || '';
+        const dur = parseFloat(s.durationHours) || 2;
         const formatT = (t) => { if (!t) return ''; const [h,m] = t.split(':').map(Number); return `${h === 0 ? 12 : h > 12 ? h-12 : h}:${String(m||0).padStart(2,'0')} ${h >= 12 ? 'PM' : 'AM'}`; };
         return (
           <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
@@ -2626,12 +2631,27 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                 </div>
                 <div style={{ flex: 1 }}>
                   <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Duration (hours)</label>
-                  <select value={tcNewDuration} onChange={e => setTcNewDuration(e.target.value)}
+                  <select value={String(parseFloat(tcNewDuration) || '')} onChange={e => setTcNewDuration(e.target.value)}
                     style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border-color)', fontSize: 14, boxSizing: 'border-box' }}>
-                    {[1, 1.5, 2, 2.5, 3, 3.5, 4, 5, 6, 8].map(h => <option key={h} value={h}>{h} hr{h !== 1 ? 's' : ''}</option>)}
+                    {/* v1.123.0 — every half hour to 12, each with the end time it means. Tina needed to
+                        leave at 3:30 and the list jumped from 6 to 8, so she picked 6 and explained
+                        in the note; the request then disagreed with its own reason. */}
+                    {Array.from({ length: 23 }, (_, i) => 1 + i / 2).map(h => {
+                      const st = TimeChange.toMin(tcNewTime);
+                      return <option key={h} value={String(h)}>{TimeChange.hours(h).replace(/ hr$/, h > 1 ? ' hrs' : ' hr')}{st != null ? ` \u00B7 ends ${TimeChange.clock(st + h * 60)}` : ''}</option>;
+                    })}
                   </select>
                 </div>
               </div>
+              {tcNewTime && (() => {
+                const c = TimeChange.describe({ fromTime: sTime, fromHours: dur, toTime: tcNewTime, toHours: parseFloat(tcNewDuration) || dur });
+                return (
+                  <div style={{ marginBottom: 12, padding: '8px 10px', borderRadius: 8, background: 'var(--bg-neutral)', fontSize: 13 }}>
+                    <div style={{ fontWeight: 700, color: c.kind === 'same' ? 'var(--text-secondary)' : 'var(--color-purple)' }}>{c.kind === 'same' ? 'Same as now' : c.headline}</div>
+                    <div style={{ color: 'var(--text-secondary)', marginTop: 2 }}>New visit: {c.to} ({c.toHours})</div>
+                  </div>
+                );
+              })()}
               <div style={{ marginBottom: 12 }}>
                 <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Reason (optional)</label>
                 <textarea value={tcReason} onChange={e => setTcReason(e.target.value)} placeholder="Why the time change?"
@@ -2676,28 +2696,13 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
       {timeChangeProposal && (() => {
         const p = timeChangeProposal;
         const s = p.session;
-        const formatT = (t) => { if (!t) return ''; const [h,m] = t.split(':').map(Number); return `${h === 0 ? 12 : h > 12 ? h-12 : h}:${String(m||0).padStart(2,'0')} ${h >= 12 ? 'PM' : 'AM'}`; };
         const proposedByCaregiver = p.proposed_by === 'caregiver';
         return (
           <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
             <div style={{ background: 'var(--bg-surface)', borderRadius: 14, padding: 24, width: 420, maxWidth: '90vw' }}>
               <h3 style={{ margin: '0 0 8px', fontSize: 17, color: 'var(--color-purple)' }}>⏰ Time Change Request</h3>
-              <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '0 0 14px' }}>
-                {p.proposer_name} wants to change the session time:
-              </p>
-              <div style={{ display: 'flex', gap: 12, marginBottom: 14 }}>
-                <div style={{ flex: 1, padding: '10px 14px', background: 'var(--bg-neutral)', borderRadius: 10, textAlign: 'center' }}>
-                  <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>Current</div>
-                  <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>{formatT(p.original_time)}</div>
-                  <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{p.original_duration}hr</div>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', fontSize: 18, color: 'var(--color-purple)' }}>→</div>
-                <div style={{ flex: 1, padding: '10px 14px', background: 'var(--color-purple-bg)', borderRadius: 10, textAlign: 'center', border: '2px solid var(--color-purple)' }}>
-                  <div style={{ fontSize: 10, color: 'var(--color-purple)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>Proposed</div>
-                  <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--color-purple)' }}>{formatT(p.proposed_time)}</div>
-                  <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{p.proposed_duration}hr</div>
-                </div>
-              </div>
+              {/* v1.123.0 — the change in words first, then Was/New windows (TimeChangeSummary). */}
+              <TimeChangeSummary proposal={p} session={s} proposerName={p.proposer_name} />
               {p.reason && (
                 <div style={{ padding: '8px 10px', background: 'var(--bg-neutral)', borderRadius: 8, marginBottom: 12, fontSize: 12, color: 'var(--text-primary)', fontStyle: 'italic' }}>
                   "{p.reason}"
