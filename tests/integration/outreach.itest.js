@@ -306,7 +306,7 @@ describe("recorded outreach calls", () => {
     expect(r.text).not.toMatch(/<Say|url=/);
   });
 
-  test("a yes in the transcript, quoted, marks texts OK with the evidence; notes and status are filled", async () => {
+  test("v1.124.1 — iPAi fills notes, status and email from the call, but a call never opens texting", async () => {
     await db.prepare("INSERT INTO outreach_contacts (id, phone, first_name, status) VALUES ('cRec1', '+15405550161', 'Dana', 'new')").run();
     const c = await callFor("+15405550161", "CArec1");
     transcript = "Pete: Is it OK if InPlace Care texts you at this number about caregiving work? Dana: Yes, that's fine, text me. I'm free weekdays.";
@@ -315,9 +315,7 @@ describe("recorded outreach calls", () => {
     await db.prepare("UPDATE outreach_messages SET media_url = 'https://api.twilio.com/2010-04-01/Accounts/AC1/Recordings/RErec1' WHERE id = ?").run(m.id);
     await hooks.processCallRecording(db, m.id);
     const after = await db.prepare("SELECT * FROM outreach_contacts WHERE id = ?").get(c.id);
-    expect(after.texts_ok_source).toBe("call");
-    expect(after.texts_ok_evidence).toContain("Yes, that's fine, text me");
-    expect(after.texts_ok_message_id).toBe(m.id);
+    expect(after.texts_ok_at).toBeNull(); // only their own text opens texting
     expect(after.status).toBe("interested");
     expect(after.email).toBe("dana@example.com");
     expect(after.notes).toMatch(/📞 .*iPAi.*Dana wants weekday work.*Availability: weekdays/);
@@ -337,11 +335,12 @@ describe("recorded outreach calls", () => {
     const after = await db.prepare("SELECT texts_ok_at, status FROM outreach_contacts WHERE id = 'cRec2'").get();
     expect(after.texts_ok_at).toBeNull();
     expect(after.status).toBe("new");
-    // After a real call, Pete can still record the OK by hand — and withdraw it.
-    expect((await h.request.patch("/api/admin/outreach/cRec2").set(A()).send({ textsOk: true })).status).toBe(200);
-    expect((await db.prepare("SELECT texts_ok_source FROM outreach_contacts WHERE id = 'cRec2'").get()).texts_ok_source).toBe("call_marked");
-    await h.request.patch("/api/admin/outreach/cRec2").set(A()).send({ textsOk: false });
+    // v1.124.1 — nobody can mark an OK by hand, even after a real call; their JOIN text does it.
+    expect((await h.request.patch("/api/admin/outreach/cRec2").set(A()).send({ textsOk: true })).status).toBe(400);
     expect((await db.prepare("SELECT texts_ok_at FROM outreach_contacts WHERE id = 'cRec2'").get()).texts_ok_at).toBeNull();
+    const r = await inbound("+15405550162", "JOIN");
+    expect(r.status).toBe(200);
+    expect((await db.prepare("SELECT texts_ok_source FROM outreach_contacts WHERE id = 'cRec2'").get()).texts_ok_source).toBe("texted_in");
   });
 
   test("the call recording plays from the thread", async () => {

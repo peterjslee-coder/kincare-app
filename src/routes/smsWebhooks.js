@@ -442,16 +442,12 @@ async function processCallRecording(db, messageId) {
   await db.prepare(`
     UPDATE outreach_contacts SET notes = ?, status = ?, email = COALESCE(email, ?), unread = unread + 1, updated_at = NOW() WHERE id = ?
   `).run(newNotes, CN.statusFor(notes.outcome, m.contact_status), notes.email, m.contact_id);
-  if (notes.textsOk && !m.texts_ok_at) {
-    await db.prepare(`
-      UPDATE outreach_contacts SET texts_ok_at = NOW(), texts_ok_source = 'call', texts_ok_evidence = ?, texts_ok_message_id = ?
-       WHERE id = ? AND texts_ok_at IS NULL AND opted_out_at IS NULL
-    `).run(`Said yes on a recorded call: “${notes.consentQuote}”`, messageId, m.contact_id);
-  }
+  // v1.124.1 — a call never opens texting. Only their own text to the number does (JOIN or anything
+  // else, outreach-inbound): the one opt-in a carrier reviewer can verify.
   const who = [m.first_name, m.last_name].filter(Boolean).join(" ") || O.prettyPhone(m.phone);
   push.sendPushToAdmins("outreach_reply", {
     title: "Call notes ready",
-    body: `${who}: ${notes.textsOk ? "OK'd texts. " : ""}${notes.outcome.replace(/_/g, " ")}.`,
+    body: `${who}: ${notes.outcome.replace(/_/g, " ")}.`,
     data: { type: "outreach_reply", url: "/?adminTab=outreach" },
   });
   return { transcript, notes };

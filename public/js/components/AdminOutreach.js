@@ -402,8 +402,7 @@ const OutreachThread = ({ contactId, apiFetch, showToast, onClose, onChanged, ca
                 {c.texts_ok_at
                   ? <>✓ OK to text · {c.texts_ok_evidence || 'recorded'}{' '}
                       <a href="#" onClick={(e) => { e.preventDefault(); if (window.confirm('Withdraw the OK to text? Texting this person will be blocked.')) patch({ textsOk: false }, 'OK withdrawn'); }} style={{ color: 'inherit', textDecoration: 'underline' }}>Withdraw</a></>
-                  : <>No OK to text yet. Call and ask the script's question; iPAi marks it from the recording if they say yes.{' '}
-                      <a href="#" onClick={(e) => { e.preventDefault(); patch({ textsOk: true }, 'Marked OK to text'); }} style={{ color: 'inherit', textDecoration: 'underline' }}>They said yes on the call</a></>}
+                  : <>No OK to text yet. On the call, ask them to text JOIN to this number — their text opens texting.</>}
               </div>
             )}
             <div style={{ display: 'flex', gap: 8 }}>
@@ -461,7 +460,7 @@ const OutreachThread = ({ contactId, apiFetch, showToast, onClose, onChanged, ca
 
         {c && !optedOut && !c.texts_ok_at && (
           <div style={{ padding: 12, borderTop: '1px solid var(--border-color)', fontSize: 13, color: 'var(--text-secondary)', paddingBottom: 'calc(12px + var(--sab, 0px))' }}>
-            Texting opens once they OK it — on a call, or by texting you first.
+            Texting opens when they text this number (JOIN or anything else).
           </div>
         )}
         {c && !optedOut && c.texts_ok_at && (
@@ -592,7 +591,7 @@ const AdminOutreachTab = window.AdminOutreachTab = ({ apiFetch, showToast, onUnr
             <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>Caregiver outreach</div>
             <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2, lineHeight: 1.5 }}>
               {data.number
-                ? <>Call first (📞 in each thread — recorded, with the script on screen). Texts go out from <b>{outPhone(data.number)}</b> only to people who OK'd texts on a call or texted you. Replies land here; a reply with an email address gets a signup invite automatically.</>
+                ? <>Call first (📞 in each thread — recorded, with the script on screen) and ask them to text JOIN. Texts go out from <b>{outPhone(data.number)}</b> only to people who have texted that number. Replies land here; a reply with an email address gets a signup invite automatically.</>
                 : <span style={{ color: 'var(--color-error)' }}>The outreach number isn't set up yet, so texting is off. You can still import and organize the list.</span>}
             </div>
           </div>

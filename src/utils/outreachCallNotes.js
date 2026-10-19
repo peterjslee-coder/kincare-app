@@ -16,10 +16,15 @@
 const AI = require("./aiModels"); // property access at call time, so tests can stub it
 
 
-/** The question that makes texting OK. Shown in the in-call script and on /sms/opt-in. */
-const CONSENT_QUESTION =
-  "Is it OK if InPlace Care texts you at this number about caregiving work? " +
-  "Message and data rates may apply, and you can reply STOP any time to stop.";
+/**
+ * v1.124.1 — the call ends by inviting them to text JOIN. Carriers rejected the outreach campaign
+ * twice on the CTA; a yes on a phone call is something a reviewer cannot verify, a keyword text is.
+ * So texting opens ONLY when they text the number themselves (JOIN or anything else) — never from
+ * the call. Pete, 10/19: "go ahead with that."
+ */
+const JOIN_ASK =
+  "If you'd like the details, just text JOIN to this number, 540-835-5987, and I'll send you everything. " +
+  "Message and data rates may apply, and you can reply STOP any time.";
 
 /**
  * The voicemail, in Pete's own live voice (never a pre-recorded drop — automated voice to a cell
@@ -39,9 +44,8 @@ const CALL_SCRIPT = [
   { say: "Hi {first}, this is Pete with InPlace Care. I'm calling about your interest in caregiving work — the Agency on Aging has you listed as looking for private-pay clients. Is that still something you're looking for?" },
   { note: "“No thank you”: “No problem, thanks for your time.” End the call. (iPAi marks them Declined; they're never texted.)" },
   { say: "InPlace connects local families with independent caregivers. You set your own rate and keep all of it; the family pays through the app and you're paid after each visit." },
-  { say: CONSENT_QUESTION, consent: true },
-  { note: "Yes: “Great — I'll text you the details and a signup link right after we hang up.”" },
-  { note: "No: “No problem. Can I email you instead?” Don't text them." },
+  { say: JOIN_ASK, consent: true },
+  { note: "Texting opens only when their JOIN text arrives. Don't want texts? “No problem — can I email you instead?”" },
   { say: "Thanks for your time, {first}." },
 ];
 
@@ -67,7 +71,7 @@ async function analyzeCall(transcript, { first = "the caregiver" } = {}) {
 
 Write Pete's notes. Report only what was SAID; never guess. If Pete only left a voicemail, the outcome is "voicemail". If the other person hung up or no real conversation happened, it is "no_conversation". "No thank you" or similar is "not_interested".
 
-"texts_ok" decides whether InPlace may text this person. Set it true ONLY if, in the transcript, Pete asked whether InPlace may text them (in words like "${CONSENT_QUESTION}") AND the other person clearly agreed. If the question was not asked, the answer was unclear, conditional, or no, set it false. When true, "consent_quote" must be the other person's exact words of agreement copied from the transcript (a few words, verbatim); otherwise null.
+"texts_ok" decides whether InPlace may text this person. Set it true ONLY if, in the transcript, Pete asked whether InPlace may text them ((for example, whether InPlace may text them)) AND the other person clearly agreed. If the question was not asked, the answer was unclear, conditional, or no, set it false. When true, "consent_quote" must be the other person's exact words of agreement copied from the transcript (a few words, verbatim); otherwise null.
 
 Return ONLY valid JSON:
 {
@@ -116,4 +120,4 @@ function statusFor(outcome, current) {
   return current;
 }
 
-module.exports = { CONSENT_QUESTION, CALL_SCRIPT, VOICEMAIL_SCRIPT, OUTCOMES, analyzeCall, quoteInTranscript, statusFor };
+module.exports = { JOIN_ASK, CALL_SCRIPT, VOICEMAIL_SCRIPT, OUTCOMES, analyzeCall, quoteInTranscript, statusFor };

@@ -655,6 +655,13 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
 
       {/* ── Footer ── */}
       <footer className="splash-footer">
+        {/* v1.124.1 — the caregiver text opt-in, on the home page where carrier reviewers look. */}
+        <p style={{ marginBottom: '10px', fontSize: '14px' }}>
+          Looking for caregiving work? Text <strong>JOIN</strong> to <a href="sms:+15408355987?&body=JOIN" style={{ color: 'var(--role-color)', textDecoration: 'none' }}>(540) 835-5987</a>
+        </p>
+        <p style={{ marginBottom: '12px', fontSize: '11px', opacity: 0.7, maxWidth: 560, marginLeft: 'auto', marginRight: 'auto' }}>
+          By texting JOIN you agree to receive texts from InPlace Care about caregiving work. Msg &amp; data rates may apply. Msg frequency varies. Reply STOP to opt out, HELP for help. <a href="/sms" style={{ color: 'var(--role-color)' }}>Text terms</a>
+        </p>
         <p>&copy; 2026 inPlace. All rights reserved. | <a href="/legal/privacy.html" style={{ color: 'var(--role-color)', textDecoration: 'none' }}>Privacy Policy</a> | <a href="/legal/terms.html" style={{ color: 'var(--role-color)', textDecoration: 'none' }}>Terms of Service</a></p>
         <p style={{ marginTop: '8px', fontSize: '14px', opacity: 0.8 }}>
           <a href="mailto:peter@yourinplace.com" style={{ color: 'var(--role-color)', textDecoration: 'none' }}>peter@yourinplace.com</a>

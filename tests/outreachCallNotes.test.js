@@ -8,12 +8,12 @@ test("a quote only counts if it is really in the transcript", () => {
   expect(CN.quoteInTranscript("", t)).toBe(false);
 });
 
-test("the script asks the consent question word for word, with rates and STOP", () => {
+test("v1.124.1 — the call ends by inviting them to text JOIN, with rates and STOP", () => {
   const q = CN.CALL_SCRIPT.find((s) => s.consent);
-  expect(q.say).toBe(CN.CONSENT_QUESTION);
-  expect(CN.CONSENT_QUESTION).toMatch(/InPlace Care texts you/);
-  expect(CN.CONSENT_QUESTION).toMatch(/rates may apply/);
-  expect(CN.CONSENT_QUESTION).toMatch(/STOP/);
+  expect(q.say).toBe(CN.JOIN_ASK);
+  expect(CN.JOIN_ASK).toMatch(/text JOIN to this number, 540-835-5987/);
+  expect(CN.JOIN_ASK).toMatch(/rates may apply/);
+  expect(CN.JOIN_ASK).toMatch(/STOP/);
 });
 
 test("outcomes only move a contact forward from early states", () => {

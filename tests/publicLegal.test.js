@@ -195,19 +195,27 @@ describe("v1.122.0 — the call opt-in is published from the same code that runs
   const { SMS_OPTIN, SMS_TERMS, escapeHtml } = _internals;
   const CN = require("../src/utils/outreachCallNotes");
   test("the consent question, the recording announcement and the script are on /sms/opt-in", () => {
-    expect(SMS_OPTIN).toContain(`<strong>${escapeHtml(CN.CONSENT_QUESTION)}</strong>`);
+    expect(SMS_OPTIN).toContain(`<strong>${escapeHtml(CN.JOIN_ASK)}</strong>`);
     expect(SMS_OPTIN).not.toMatch(/they first hear/);
-    expect(SMS_OPTIN).toMatch(/Nobody is texted from this number until they have opted in/);
+    expect(SMS_OPTIN).toMatch(/Nobody is texted from this number until they text it first/);
+    expect(SMS_OPTIN).toMatch(/the call itself never opens texting/);
   });
   test("/sms describes both ways in for the outreach number", () => {
     expect(SMS_TERMS).toMatch(/text <strong>JOIN<\/strong>/);
-    expect(SMS_TERMS).toMatch(/Is it OK if InPlace Care texts you/);
-    expect(SMS_TERMS).toMatch(/live calls placed one at a time by a person, never robocalls or prerecorded messages/);
+    expect(SMS_TERMS).toMatch(/We don't text anyone who hasn't texted us first/);
+    expect(SMS_TERMS).toMatch(/one person at a time, never a robocall or prerecorded message/);
   });
 });
 
 test("v1.122.4 — the call opt-in is described as a live call by a person, never a robocall", () => {
-  expect(_internals.SMS_OPTIN).toMatch(/live, person-to-person conversations, never robocalls or prerecorded messages/);
-  expect(_internals.SMS_OPTIN).toMatch(/one at a time/);
+  expect(_internals.SMS_OPTIN).toMatch(/live conversations, never robocalls or prerecorded messages/);
+  expect(_internals.SMS_OPTIN).toMatch(/one person at a time/);
   expect(_internals.SMS_OPTIN).not.toMatch(/recorded phone call<\/h3>/);
+});
+
+test("v1.124.1 — the home page footer carries the JOIN keyword with its disclosure", () => {
+  const fs = require("fs"), path = require("path");
+  const splash = fs.readFileSync(path.join(__dirname, "..", "public", "js", "components", "SplashPage.js"), "utf8");
+  expect(splash).toMatch(/Looking for caregiving work\? Text <strong>JOIN<\/strong>/);
+  expect(splash).toMatch(/By texting JOIN you agree to receive texts from InPlace Care about caregiving work\. Msg &amp; data rates may apply\. Msg frequency varies\. Reply STOP to opt out, HELP for help\./);
 });

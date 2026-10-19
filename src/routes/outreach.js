@@ -386,16 +386,8 @@ adminRouter.patch("/:id", async (req, res) => {
     if (b.textsOk === false) {
       await db.prepare("UPDATE outreach_contacts SET texts_ok_at = NULL, texts_ok_source = NULL, texts_ok_by = NULL, texts_ok_evidence = NULL, texts_ok_message_id = NULL WHERE id = ?").run(contact.id);
     } else if (b.textsOk === true && !contact.texts_ok_at) {
-      const call = await db.prepare(`
-        SELECT id, created_at, duration FROM outreach_messages
-         WHERE contact_id = ? AND kind = 'call' AND COALESCE(duration, 0) > 0 AND created_at > NOW() - INTERVAL '7 days'
-         ORDER BY created_at DESC LIMIT 1
-      `).get(contact.id);
-      if (!call) return res.status(400).json({ error: "Record an OK only after you've talked on a call from here — that call is the evidence." });
-      await db.prepare(`
-        UPDATE outreach_contacts SET texts_ok_at = NOW(), texts_ok_source = 'call_marked', texts_ok_by = ?,
-               texts_ok_evidence = ?, texts_ok_message_id = ? WHERE id = ?
-      `).run(req.user.id, `Marked by an admin after a recorded call (${call.duration}s).`, call.id, contact.id);
+      // v1.124.1 — texting opens only when they text the number themselves (see smsWebhooks).
+      return res.status(400).json({ error: "Texting opens when they text JOIN (or anything) to the outreach number. Ask them to on the call." });
     }
     if (b.status !== undefined) {
       if (!O.OUTREACH_STATUSES.includes(b.status)) return res.status(400).json({ error: "Unknown status" });
