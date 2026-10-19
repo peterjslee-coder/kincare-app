@@ -28,7 +28,7 @@ const OUT_TONE = {
   error: { background: 'var(--color-error-bg)', color: 'var(--color-error)' },
 };
 // v1.122.0 — new key: the saved cold-intro wording must not come back as the post-call follow-up.
-const OUT_TEMPLATE_KEY = 'inplace.outreach.followupTemplate';
+const OUT_TEMPLATE_KEY = 'inplace.outreach.joinFollowupTemplate'; // v1.124.2 — new key, new default
 
 const outErr = async (res, fallback) => {
   const d = res ? await res.json().catch(() => ({})) : {};
