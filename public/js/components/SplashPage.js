@@ -662,6 +662,8 @@ const SplashPage = window.SplashPage = ({ onNavigate, inviteInfo }) => {
         <p style={{ marginBottom: '12px', fontSize: '11px', opacity: 0.7, maxWidth: 560, marginLeft: 'auto', marginRight: 'auto' }}>
           By texting JOIN you agree to receive texts from InPlace Care about caregiving work. Msg &amp; data rates may apply. Msg frequency varies. Reply STOP to opt out, HELP for help. <a href="/sms" style={{ color: 'var(--role-color)' }}>Text terms</a>
         </p>
+        {/* v1.124.5 — who operates the site, for carrier reviewers ("unverifiable website"). */}
+        <p style={{ marginBottom: '8px', fontSize: '13px' }}>InPlace Care is operated by Cedar Rock Holdings, LLC, Fairlawn, Virginia &middot; <a href="tel:+15408355987" style={{ color: 'var(--role-color)', textDecoration: 'none' }}>(540) 835-5987</a> &middot; <a href="/sms" style={{ color: 'var(--role-color)', textDecoration: 'none' }}>Text Messaging Terms</a></p>
         <p>&copy; 2026 inPlace. All rights reserved. | <a href="/legal/privacy.html" style={{ color: 'var(--role-color)', textDecoration: 'none' }}>Privacy Policy</a> | <a href="/legal/terms.html" style={{ color: 'var(--role-color)', textDecoration: 'none' }}>Terms of Service</a></p>
         <p style={{ marginTop: '8px', fontSize: '14px', opacity: 0.8 }}>
           <a href="mailto:peter@yourinplace.com" style={{ color: 'var(--role-color)', textDecoration: 'none' }}>peter@yourinplace.com</a>

@@ -49,7 +49,7 @@
   <!-- PWA Manifest -->
   <link rel="manifest" href="/manifest.json">
 
-  <link rel="stylesheet" href="/css/styles.css?v=build-3a40d740">
+  <link rel="stylesheet" href="/css/styles.css?v=build-a56bff99">
 
   <!-- Leaflet CSS for maps (self-hosted — no CDN dependency) -->
   <link rel="stylesheet" href="/vendor/leaflet.css">
@@ -58,7 +58,29 @@
        recorded nothing); journey tracking is first-party now: InPlaceJourney in js/utils.js. -->
 </head>
 <body>
-  <div id="root"></div>
+  <!-- v1.124.5 — a plain-HTML home page INSIDE #root, for anything that does not run JavaScript.
+       Carriers rejected the outreach text campaign on 10/21: "rejected because of unverifiable
+       website" — to a non-JS fetch, yourinplace.com was a title and an empty div. ReactDOM.render
+       replaces #root's children on start, so real visitors still get the app; the <script> just
+       below hides this block from them until then, so there is no flash. Keep it short and true. -->
+  <script>document.documentElement.className += ' js';</script>
+  <style>.js #static-home{display:none}#static-home{max-width:760px;margin:0 auto;padding:32px 20px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#24242c;line-height:1.6}#static-home a{color:#1b6b5a}</style>
+  <div id="root">
+    <main id="static-home">
+      <h1>InPlace Care</h1>
+      <p><strong>Vetted local caregivers for older adults, by the visit.</strong> InPlace Care is an app that connects families in Virginia's New River Valley with independent, non-medical caregivers for companionship, errands, rides and help around the house. Families book and pay through the app and see each visit in real time; caregivers set their own rate and keep all of it.</p>
+      <h2>For families</h2>
+      <p>Find a caregiver, book a visit, and keep the whole family up to date on care, notes and appointments. <a href="/register?role=family">Sign up</a></p>
+      <h2>For caregivers</h2>
+      <p>Set your own rate, choose your visits, and get paid through the app after each one. <a href="/register?role=caregiver">Sign up as a caregiver</a></p>
+      <p><strong>Looking for caregiving work? Text JOIN to (540) 835-5987.</strong><br>
+      <small>By texting JOIN you agree to receive texts from InPlace Care about caregiving work. Msg &amp; data rates may apply. Msg frequency varies. Reply STOP to opt out, HELP for help. <a href="/sms">Text messaging terms</a> &middot; <a href="/sms/opt-in">How opt-in works</a></small></p>
+      <h2>Contact</h2>
+      <p>InPlace Care is operated by Cedar Rock Holdings, LLC, Fairlawn, Virginia.<br>
+      Email <a href="mailto:peter@yourinplace.com">peter@yourinplace.com</a> &middot; Phone <a href="tel:+15408355987">(540) 835-5987</a></p>
+      <p><a href="/privacy">Privacy Policy</a> &middot; <a href="/terms">Terms of Use</a> &middot; <a href="/sms">Text Messaging Terms</a></p>
+    </main>
+  </div>
 
   <!-- React (self-hosted — no CDN dependency) -->
   <script src="/vendor/react.production.min.js"></script>
@@ -112,9 +134,9 @@
 
   <!-- Pre-compiled app bundle (built by scripts/build-client.js) -->
   <script>
-    window.APP_VERSION = "1.124.4";
+    window.APP_VERSION = "1.124.5";
     // v1.85: admin components live in a separate lazy bundle (infra #5)
-    window.__ADMIN_BUNDLE_URL = '/js-compiled/bundle-admin.js?v=build-3a40d740';
+    window.__ADMIN_BUNDLE_URL = '/js-compiled/bundle-admin.js?v=build-a56bff99';
   </script>
   <script>
     // ─── Theme initialization ───
@@ -166,7 +188,7 @@
       });
     })();
   </script>
-  <script src="/js-compiled/bundle.js?v=build-3a40d740"></script>
+  <script src="/js-compiled/bundle.js?v=build-a56bff99"></script>
 
   <script>
     // Service worker: register/update and auto-reload on new version
