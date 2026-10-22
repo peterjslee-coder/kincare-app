@@ -28,3 +28,7 @@ test("it carries the JOIN call to action with the carrier disclosure", () => {
   expect(root).toMatch(/Text JOIN to \(540\) 835-5987/);
   expect(root).toMatch(/By texting JOIN you agree to receive texts from InPlace Care about caregiving work\. Msg &amp; data rates may apply\. Msg frequency varies\. Reply STOP to opt out, HELP for help\./);
 });
+
+test("the contact email is readable without JavaScript (Cloudflare email obfuscation skipped)", () => {
+  expect(root).toMatch(/<!--email_off--><a href="mailto:peter@yourinplace\.com">peter@yourinplace\.com<\/a><!--\/email_off-->/);
+});
