@@ -21,7 +21,9 @@ router.use(express.urlencoded({ extended: false, limit: "50kb" }));
 
 /** Twilio signs every webhook with the account's auth token. Unsigned or mis-signed = 403. */
 function verifyTwilio(req) {
-  const token = process.env.TWILIO_AUTH_TOKEN;
+  // v1.124.8 — trimmed: a pasted token with a stray space/newline looks identical in Railway's
+  // UI and fails every signature (10/22 key rotation).
+  const token = (process.env.TWILIO_AUTH_TOKEN || "").trim();
   const sig = req.headers["x-twilio-signature"];
   if (!token || !sig) return false;
   let twilio;
@@ -30,9 +32,16 @@ function verifyTwilio(req) {
   // see it directly, so accept either the canonical APP_URL form or the forwarded host form.
   const host = req.headers["x-forwarded-host"] || req.headers.host;
   const candidates = [`${APP_URL}${req.originalUrl}`, `https://${host}${req.originalUrl}`];
-  return candidates.some((url) => {
+  const ok = candidates.some((url) => {
     try { return twilio.validateRequest(token, sig, url, req.body || {}); } catch { return false; }
   });
+  if (!ok) {
+    // Never the token itself: its length and an 8-char sha256 prefix, enough to compare against
+    // `printf %s "$TOKEN" | shasum -a 256` on a laptop without the secret ever leaving it.
+    const fp = require("crypto").createHash("sha256").update(token).digest("hex").slice(0, 8);
+    console.warn(`[twilio] signature mismatch on ${req.originalUrl}: token len=${token.length} sha256=${fp} raw-len=${(process.env.TWILIO_AUTH_TOKEN || "").length} urls=${candidates.join(" , ")}`);
+  }
+  return ok;
 }
 
 const twiml = (res) => res.type("text/xml").send("<Response></Response>");
