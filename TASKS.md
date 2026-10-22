@@ -2,6 +2,33 @@
 
 > **How this works:** Add bugs and features below as you find them. Don't worry about wording or order. When you're ready for a dev session, say "let's work the task list" and Claude will batch everything together into one efficient push. Nothing gets executed until you say go.
 
+## Oct 21 2026 — Incident kill switch + leak blast radius (Pete: "I'd like options in the future")
+
+Context: Railway's env-variable store was breached on 10/21 (see project doc `InPlace_Railway_Key_Rotation_2026-10-21.md`). Deploys were paused all day, so a leaked `JWT_SECRET` (which can forge any login, admin included) could not be rotated. An in-app button alone is not a kill switch, because the same leak can switch it back off. The real switch has to sit outside every secret that could leak.
+
+Recommended order: 1 → 3b → 3a → 2 → 3c → 3d.
+
+- [ ] **1. Edge kill switch (Cloudflare).**
+  - Proxy yourinplace.com through Cloudflare.
+  - Keep a pre-built rule, OFF by default, that blocks all traffic and serves a static "down for maintenance" page.
+  - Pete toggles it from the Cloudflare phone app, behind his Cloudflare passkey.
+  - Doesn't depend on Railway or any app secret.
+  - Must decide what stays reachable: Stripe/Twilio/Checkr webhooks? The `/api/health` uptime monitor?
+  - Write a one-line test so the rule still works when it's needed.
+- [ ] **2. In-app freeze (softer, for app-layer problems).**
+  - One admin control, confirmed by a passkey step-up, that pauses payments and payouts, outbound texts and calls, new signups and document/file downloads, and leaves read-only browsing up.
+  - Each area gets its own toggle plus "freeze all".
+  - Banner for users. Audit trail.
+  - Unfreeze also takes a passkey.
+  - Limitation (say so in the UI): it won't stop someone holding root secrets; that's item 1's job.
+- [ ] **3. Shrink the blast radius of a leak.**
+  - [ ] a. Postgres reachable only on Railway's private network. Turn off the public TCP proxy; confirm `DATABASE_URL` uses `*.railway.internal`. The nightly backup workflow currently connects from GitHub, so check how it would keep working.
+  - [ ] b. "Sign everyone out now" without a deploy:
+    - a token/session version stored in the DB and checked on every request, bumped by an admin action behind a passkey;
+    - plan how this survives a forged JWT (e.g. per-session server-side check, so a forged token fails without a live session row).
+  - [ ] c. Stripe restricted key with only what the app calls. No payout or transfer write unless needed.
+  - [ ] d. Panic runbook, one page: every provider's revoke/roll URL, the order to do them in, which ones break what, and the Twilio "promote secondary token at deploy time" catch. Start from the 10/21 rotation doc.
+
 ## Oct 13 2026 — What's New + to-dos on arrival (v1.112.4)
 
 - [x] What's New splash — registry `src/whatsNew/entries.js`, seen per entry (migration 058), drawn previews, Help → "What's new" re-opens. CLAUDE.md Dev Rule 10: every visible release ships an entry.
