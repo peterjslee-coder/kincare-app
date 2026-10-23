@@ -8,14 +8,17 @@ FROM node:22.23.4-bookworm-slim
 ENV NODE_ENV=production
 WORKDIR /app
 
+# Never run as root: a code-execution bug then can't write outside /app. Files are owned by
+# node as they are copied; a `chown -R` afterwards re-copied all of node_modules (2+ min/build).
+RUN chown node:node /app
+USER node
+
 # Dependencies first so they cache between deploys. --omit=dev: the build needs only
 # @babel/* and terser, which are runtime dependencies.
-COPY package.json package-lock.json ./
+COPY --chown=node:node package.json package-lock.json ./
 RUN npm ci --omit=dev --no-audit --no-fund
 
-COPY . .
-RUN node scripts/build-client.js && chown -R node:node /app
+COPY --chown=node:node . .
+RUN node scripts/build-client.js
 
-# Never run as root: a code-execution bug then can't write outside /app.
-USER node
 CMD ["npm", "start"]
