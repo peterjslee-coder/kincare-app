@@ -856,7 +856,7 @@ app.use("/api/safety", require("./routes/safety"));
 
 // ─── App version check (lightweight, no auth) ───
 const { cancelPassedPrivateOffers, releaseExpiredExclusiveOffers } = require("./utils/exclusiveOffers");
-const APP_VERSION = "1.124.8";
+const APP_VERSION = "1.124.9";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION, minAppVersion: MIN_APP_VERSION });
@@ -1843,6 +1843,9 @@ async function start() {
 
   server.listen(PORT, "0.0.0.0", () => {
     console.log(`\n  InPlace v${APP_VERSION} running on port ${PORT}\n`);
+    // v1.124.9 — the runtime version goes in the deploy log, not /api/health: knowing whether a
+    // server is unpatched is exactly what an attacker wants, and Railway's logs are enough for us.
+    console.log(`  Node ${process.version}`);
     console.log(`  WebSocket server ready`);
     const { isSmsConfigured } = require("./utils/sms");
     console.log(`  SMS notifications: ${isSmsConfigured() ? "Twilio configured ✓" : "Twilio not configured (SMS reminders will be skipped)"}`);
