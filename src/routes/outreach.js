@@ -21,6 +21,7 @@ const { sendEmail, brandedHtml } = require("../utils/email");
 const O = require("../utils/outreach");
 const CN = require("../utils/outreachCallNotes"); // v1.122.0
 const T = require("../utils/tracking");
+const P = require("../utils/outreachProgress"); // v1.125.0
 
 const APP_URL = (process.env.APP_URL || "https://yourinplace.com").replace(/\/+$/, "");
 const REPLY_TO = process.env.OUTREACH_REPLY_TO || "peter@yourinplace.com";
@@ -170,9 +171,18 @@ adminRouter.get("/", async (req, res) => {
     `).all();
     // "joined" is a fact about the users table, so it wins over whatever status was stored.
     const contacts = rows.map((r) => ({ ...r, status: r.joined_user_id && r.status !== "opted_out" ? "joined" : r.status }));
+    // v1.125.0 — how far each person got, and the funnel across everyone. A failure here must
+    // not take the inbox down with it: the list still loads, just without the ladder.
+    let funnel = null;
+    try {
+      const prog = await P.progressFor(db, contacts);
+      for (const c of contacts) c.progress = prog.get(c.id) || null;
+      funnel = P.funnel(prog);
+    } catch (e) { captureException(e, { where: "outreach: progress (list)" }); }
     const win = O.introWindow();
     res.json({
       contacts,
+      funnel,
       statuses: O.OUTREACH_STATUSES,
       defaultIntro: O.DEFAULT_INTRO,
       callScript: CN.CALL_SCRIPT, // v1.122.0
@@ -271,7 +281,10 @@ adminRouter.get("/:id/messages", async (req, res) => {
     let journey = null;
     try { journey = await T.journeyForContact(db, contact.id, contact.joined_user_id || null); }
     catch (e) { captureException(e, { where: "outreach: journey" }); }
-    res.json({ contact: { ...contact, unread: 0 }, messages, journey });
+    let progress = null;
+    try { progress = (await P.progressFor(db, [contact])).get(contact.id) || null; }
+    catch (e) { captureException(e, { where: "outreach: progress (thread)" }); }
+    res.json({ contact: { ...contact, unread: 0 }, messages, journey, progress });
   } catch (err) {
     captureException(err, { where: "outreach: thread" });
     res.status(500).json({ error: "Failed to load the conversation" });
@@ -289,7 +302,7 @@ adminRouter.post("/:id/messages", async (req, res) => {
     if (!contact) return res.status(404).json({ error: "Not found" });
     if (contact.opted_out_at || contact.status === "opted_out") return res.status(400).json({ error: "This person replied STOP. InPlace can't text them again unless they text START." });
     // v1.122.0 — no OK, no text. Said here plainly rather than as a failed send.
-    if (!contact.texts_ok_at) return res.status(400).json({ error: "No OK to text yet. Call them from here and ask; if they say yes, iPAi marks it from the recording. Or wait for them to text you." });
+    if (!contact.texts_ok_at) return res.status(400).json({ error: "No OK to text yet. They have to text first: on the call, ask them to text JOIN to the outreach number. Their text opens the thread, and the link goes back automatically." });
     // A first text to someone who has never written back is a cold text: same hours as the intro.
     if (!contact.last_inbound_at) {
       const win = O.introWindow();

@@ -154,7 +154,7 @@ async function identityStatusFor(db, userId, profileId, extraOwnerIds = []) {
 async function personIdentityDoc(db, userId) {
   if (!userId) return null;
   const rows = await db.prepare(
-    `SELECT id, status, is_verified, owner_type, created_at, extracted_data
+    `SELECT id, status, is_verified, owner_type, created_at, verified_at, extracted_data
        FROM verified_documents
       WHERE category = 'identity'
         AND document_type != 'selfie'

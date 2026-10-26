@@ -80,6 +80,102 @@ const OutJourney = ({ j }) => {
   );
 };
 
+// v1.125.0 — the progress ladder. Pete, 10/26: "see steps along the way and how far they made it
+// ... all the way to signup". Every step is something the app already records (server:
+// utils/outreachProgress.js). A step with no date is done but undated (payouts, a Checkr clear).
+const OUT_FLAG = {
+  bg_needs_review: { label: 'Background check needs your review', tone: 'error' },
+  bg_under_review: { label: 'Background check under review', tone: 'warning' },
+  id_rejected: { label: 'ID rejected — needs a new one', tone: 'warning' },
+};
+const outStall = (p) => (p && p.stalledDays != null && p.stalledDays >= 2 ? `${p.stalledDays} days` : null);
+const outStepNote = (s) => {
+  const bits = [];
+  if (s.key === 'read_page' && s.ms) bits.push(outMins(s.ms));
+  if (s.key === 'link_opened' && s.count > 1) bits.push(`${s.count} times`);
+  if (s.inPerson) bits.push('seen in person');
+  return bits.join(' · ');
+};
+const OutProgress = ({ p }) => {
+  const [all, setAll] = React.useState(false);
+  if (!p || !p.steps) return null;
+  const fi = p.steps.findIndex((s) => s.key === p.furthest);
+  const nextIdx = p.next ? fi + 1 : -1;
+  const shownSteps = all ? p.steps : p.steps.slice(0, Math.max(fi + 2, 4));
+  const stall = outStall(p);
+  const flag = OUT_FLAG[p.flag];
+  return (
+    <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border-color)', fontSize: 13 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
+        <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>Progress</span>
+        <span style={{ color: 'var(--text-secondary)' }}>{p.furthestLabel}</span>
+        {stall && <span style={{ fontSize: 11, padding: '1px 8px', borderRadius: 10, ...OUT_TONE.warning }}>stopped here {stall}</span>}
+      </div>
+      {flag && <div style={{ fontSize: 12, padding: '4px 10px', borderRadius: 8, marginBottom: 6, ...OUT_TONE[flag.tone] }}>{flag.label}</div>}
+      <ol style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+        {shownSteps.map((s, i) => {
+          const isNext = i === nextIdx;
+          const note = outStepNote(s);
+          return (
+            <li key={s.key} aria-label={`${s.label}: ${s.done ? 'done' : 'not yet'}`} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0', color: s.done ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+              <span aria-hidden="true" style={{
+                width: 16, height: 16, borderRadius: 8, flexShrink: 0, fontSize: 10, lineHeight: '16px', textAlign: 'center',
+                background: s.done ? 'var(--role-color)' : 'transparent', color: 'var(--text-on-primary)',
+                border: s.done ? 'none' : `1.5px ${isNext ? 'solid' : 'dashed'} ${isNext ? 'var(--role-color)' : 'var(--border-color)'}`,
+              }}>{s.done ? '✓' : ''}</span>
+              <span style={{ flex: 1, fontWeight: i === fi ? 600 : 400 }}>
+                {s.label}{isNext ? <span style={{ color: 'var(--role-color)', fontSize: 11 }}> · next</span> : null}
+                {note ? <span style={{ color: 'var(--text-muted)', fontSize: 12 }}> · {note}</span> : null}
+              </span>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                {s.done ? (s.at ? outWhen(s.at) : 'done') : ''}
+              </span>
+            </li>
+          );
+        })}
+      </ol>
+      {shownSteps.length < p.steps.length && (
+        <button onClick={() => setAll(true)} style={{ background: 'none', border: 'none', padding: '4px 0 0', color: 'var(--role-color)', fontSize: 12, cursor: 'pointer' }}>
+          Show all {p.steps.length} steps
+        </button>
+      )}
+    </div>
+  );
+};
+
+// v1.125.0 — the funnel across everyone: how many reached each step. Tap a step to list the
+// people who stopped there.
+const OutFunnel = ({ funnel, filter, setFilter, contacts }) => {
+  if (!funnel || !funnel.length) return null;
+  const stoppedAt = (key) => contacts.filter((x) => x.progress && x.progress.furthest === key).length;
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6 }}>How far people got — tap a step to see who stopped there</div>
+      <div style={{ display: 'flex', gap: 4, overflowX: 'auto', paddingBottom: 4, WebkitOverflowScrolling: 'touch' }}>
+        {funnel.map((f, i) => {
+          const id = `step:${f.key}`;
+          const on = filter === id;
+          const stopped = stoppedAt(f.key);
+          return (
+            <React.Fragment key={f.key}>
+              {i > 0 && <span aria-hidden="true" style={{ alignSelf: 'center', color: 'var(--text-muted)', fontSize: 12 }}>›</span>}
+              <button onClick={() => setFilter(on ? 'all' : id)} title={`${stopped} stopped at ${f.label}`} style={{
+                flexShrink: 0, minWidth: 74, padding: '6px 8px', borderRadius: 10, cursor: 'pointer', textAlign: 'left',
+                border: on ? '1.5px solid var(--role-color)' : '1px solid var(--border-color)',
+                background: on ? 'var(--color-info-bg)' : 'var(--bg-primary)', opacity: f.count ? 1 : 0.55,
+              }}>
+                <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.1 }}>{f.count}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.25 }}>{f.label}</div>
+                {stopped > 0 && <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{stopped} stopped here</div>}
+              </button>
+            </React.Fragment>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 // Campaign links — one per flyer, post or ad, so Admin can see which one brought people in.
 const OutCampaignLinks = ({ apiFetch, showToast }) => {
   const [links, setLinks] = React.useState(null);
@@ -424,6 +520,7 @@ const OutreachThread = ({ contactId, apiFetch, showToast, onClose, onChanged, ca
           </div>
         )}
 
+        {data && <OutProgress p={data.progress} />}
         {data && <OutJourney j={data.journey} />}
 
         <div style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -516,8 +613,11 @@ const AdminOutreachTab = window.AdminOutreachTab = ({ apiFetch, showToast, onUnr
   const contacts = data?.contacts || [];
   const counts = contacts.reduce((a, x) => { a[x.status] = (a[x.status] || 0) + 1; return a; }, {});
   const unreadCount = contacts.filter((x) => x.unread).length;
-  const shown = filter === 'all' ? contacts : filter === 'unread' ? contacts.filter((x) => x.unread) : contacts.filter((x) => x.status === filter);
-  // v1.122.0 — the follow-up text goes only to people who OK'd texts (a yes on a call, or they texted in).
+  const shown = filter === 'all' ? contacts
+    : filter === 'unread' ? contacts.filter((x) => x.unread)
+    : filter.startsWith('step:') ? contacts.filter((x) => x.progress && x.progress.furthest === filter.slice(5)) // v1.125.0
+    : contacts.filter((x) => x.status === filter);
+  // v1.122.0 — the follow-up text goes only to people who OK'd texts. Since v1.124.1 that means they texted in (JOIN).
   const textable = (x) => !!x.texts_ok_at && x.status !== 'opted_out' && !x.opted_out_at && !x.intro_sent_at && x.status !== 'joined';
   const shownTextable = shown.filter(textable);
   const selectedList = contacts.filter((x) => selected.has(x.id) && textable(x));
@@ -655,6 +755,7 @@ const AdminOutreachTab = window.AdminOutreachTab = ({ apiFetch, showToast, onUnr
       )}
 
       <div className="card">
+        <OutFunnel funnel={data.funnel} filter={filter} setFilter={setFilter} contacts={contacts} />
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
           {chip('all', 'All', contacts.length)}
           {unreadCount > 0 && chip('unread', 'Unread', unreadCount)}
@@ -691,6 +792,14 @@ const AdminOutreachTab = window.AdminOutreachTab = ({ apiFetch, showToast, onUnr
               {Number(x.failed_count) > 0
                 ? <span style={{ fontSize: 11, color: 'var(--color-error)' }}>not delivered</span>
                 : <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{x.link_opened_at ? '🔗 opened · ' : ''}{outWhen(x.last_message_at)}</span>}
+              {x.progress && x.progress.furthest && (
+                <span style={{ fontSize: 11, color: outStall(x.progress) ? 'var(--color-warning)' : 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                  {x.progress.furthestLabel}{outStall(x.progress) ? ` · ${outStall(x.progress)}` : ''}
+                </span>
+              )}
+              {x.progress && OUT_FLAG[x.progress.flag] && (
+                <span style={{ fontSize: 10, padding: '1px 7px', borderRadius: 10, ...OUT_TONE[OUT_FLAG[x.progress.flag].tone] }}>{OUT_FLAG[x.progress.flag].label}</span>
+              )}
             </div>
           </div>
         ))}
