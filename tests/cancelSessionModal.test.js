@@ -107,7 +107,7 @@ describe("the cancel dialog says what will actually happen", () => {
 
   test("both ways out are offered, and the safe one is not the destructive one", () => {
     const t = text({ preview: null, caregiverName: "Maria Santos" });
-    expect(t).toContain("Keep Session");
-    expect(t).toContain("Cancel Session");
+    expect(t).toContain("Keep it");
+    expect(t).toContain("Cancel visit");
   });
 });

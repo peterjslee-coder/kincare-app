@@ -291,10 +291,10 @@ describe("the client tells the user before charging them", () => {
   });
 
   test("the session detail modal previews before confirming", () => {
-    // NOTE: VisitDetailModal is still a separate, role-aware cancel path built on
-    // window.confirm rather than this modal. It is not a duplicate by accident —
-    // unifying it would change the CAREGIVER cancel experience, which nobody has
-    // asked for. It must keep previewing on its own until it is folded in.
-    expect(rd("public/js/components/VisitDetailModal.js")).toMatch(/cancel-preview/);
+    // v1.125.2 — folded in. Pete asked for the caregiver cancel to change (d42baa59: be asked
+    // "this day, or the series"), so VisitDetailModal now opens this shared modal, which is the
+    // one that previews.
+    expect(rd("public/js/components/VisitDetailModal.js")).toMatch(/<CancelSessionModal/);
+    expect(rd("public/js/components/CancelSessionModal.js")).toMatch(/cancel-preview/);
   });
 });

@@ -803,57 +803,32 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, 
           )}
           {/* v1.124.1 — "Review Change" moved into the change box above, with the answer buttons. */}
           {data && data.session && ['confirmed', 'pending', 'open', 'requested'].includes(data.session.status) && (
-            <button disabled={cancelling} onClick={async () => {
-              const ss = data.session;
-              const otherParty = role === 'caregiver' ? (ss.recipient_name || 'this client') : (ss.caregiver_name || 'the caregiver');
-              // v1.105.15 — ask the server what this cancellation costs BEFORE confirming.
-              // The Client Services Agreement charges the fee "posted at the time of
-              // cancellation"; a charge nobody was shown isn't posted to them at all.
-              // Failing to reach the preview must not block the cancel — the visit still
-              // needs cancelling — but then we say so honestly instead of implying it's free.
-              let costLine = '';
-              try {
-                const pv = await apiFetch(`/api/sessions/${sessionId}/cancel-preview`);
-                if (pv?.ok) {
-                  const p = await pv.json();
-                  costLine = `\n\n${p.message}`;
-                } else {
-                  costLine = '\n\nWe could not check whether a cancellation fee applies.';
-                }
-              } catch {
-                costLine = '\n\nWe could not check whether a cancellation fee applies.';
-              }
-              const confirmMsg = role === 'caregiver'
-                ? `Cancel your session with ${otherParty}? The job will go back to the open pool.${costLine}`
-                : `Cancel this session with ${otherParty}?${costLine}`;
-              if (!confirm(confirmMsg)) return;
-              setCancelling(true);
-              try {
-                const res = await apiFetch(`/api/sessions/${sessionId}/cancel`, {
-                  method: 'PUT',
-                  body: JSON.stringify({ reason: `${role === 'caregiver' ? 'Caregiver' : 'Family'} cancelled from session detail` }),
-                });
-                if (res?.ok) {
-                  if (onRefresh) onRefresh();
-                  handleClose();
-                } else {
-                  const err = await res.json().catch(() => ({}));
-                  alert(err.error || 'Failed to cancel');
-                }
-              } catch (err) {
-                alert('Network error');
-              }
-              setCancelling(false);
-            }} style={{
+            // v1.125.2 — the shared cancel screen, so a visit in a series asks "just this one, or
+            // the rest too" here as well (it was a bare confirm() that could only ever cancel one,
+            // and never said so).
+            <button disabled={cancelling} onClick={() => setCancelling(true)} style={{
               padding: '8px 16px', background: 'transparent', color: 'var(--color-error)', border: '1px solid #fca5a5',
               borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: cancelling ? 'not-allowed' : 'pointer',
-            }}>{cancelling ? 'Cancelling...' : 'Cancel Session'}</button>
+            }}>Cancel visit</button>
           )}
           </div>
           {!(data && data.session && ['confirmed', 'pending', 'open', 'requested'].includes(data.session.status)) && !onTimeChange && <div />}
           <button className="btn btn-outline" onClick={handleClose}>Close</button>
         </div>
       </div>
+      {cancelling && data && data.session && (
+        <CancelSessionModal
+          role={role === 'caregiver' ? 'caregiver' : 'family'}
+          sessionId={data.session.id}
+          dateISO={(data.session.scheduled_date || '').split('T')[0]}
+          time={data.session.scheduled_time}
+          timezone={data.session.care_timezone}
+          caregiverName={data.session.caregiver_name}
+          recipientName={data.session.recipient_name || 'Care recipient'}
+          onClose={() => setCancelling(false)}
+          onCancelled={() => { setCancelling(false); if (onRefresh) onRefresh(); handleClose(); }}
+        />
+      )}
       {changing && data && data.session && (
         <ChangeVisitSheet role={role}
           session={{

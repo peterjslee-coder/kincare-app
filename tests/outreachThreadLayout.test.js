@@ -76,3 +76,10 @@ describe("+ Add person", () => {
     expect(src).toMatch(/\{canPickContact && \(/);
   });
 });
+
+describe("nothing in the app can paint over the conversation (v1.125.2)", () => {
+  test("the thread renders to document.body, out of Admin's stacking context", () => {
+    expect(src).toMatch(/ReactDOM\.createPortal\(node, document\.body\)/);
+    expect(thread).toMatch(/return outToBody\(\n\s*<div onClick=\{closeByButton\}/);
+  });
+});

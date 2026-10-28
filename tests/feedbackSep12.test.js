@@ -39,11 +39,14 @@ test("a caregiver who signs up on her own with the invited email is linked anywa
   expect(cg).toContain("claimPendingByEmail(db, userId, me.email)");
 });
 
-test("an unfilled recurring request is one card, and its Cancel cancels the series", () => {
+test("an unfilled recurring request is one card, and its Cancel can cancel the series", () => {
   expect(dashRoute).toContain("recurrenceGroupId: s.recurrence_group_id || null,");
   expect(dash).toContain("const seenSeries = new Map();");
   expect(dash).toContain("head.__seriesMore += 1");
   expect(dash).toContain("Whoever accepts takes the whole series");
-  expect(dash).toContain("`/api/sessions/recurring/${s.recurrenceGroupId}`");
-  expect(dash).toContain("{s.recurrenceGroupId ? 'Cancel series' : 'Cancel'}");
+  // v1.125.2 (d42baa59) — the card's Cancel opens the shared screen, which asks "just this visit,
+  // or this and the later ones" (tests/cancelScopeClient.test.js, cancelSeriesScope.itest.js).
+  // The old DELETE /recurring/:groupId skipped open visits — the very ones on this card.
+  expect(dash).toContain("onClick={(e) => { e.stopPropagation(); setCancellingId(s.id); }}");
+  expect(dash).not.toContain("`/api/sessions/recurring/${s.recurrenceGroupId}`");
 });

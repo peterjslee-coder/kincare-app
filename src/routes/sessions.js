@@ -3807,9 +3807,25 @@ router.get("/:id/cancel-preview", async (req, res) => {
       authorizedAmountCents: session.authorized_amount,
     });
 
+    // v1.125.2 — part of a series? Then the cancel screen asks: just this visit, or this one
+    // and the later ones. Counted with the same rule /cancel will apply.
+    let series = null;
+    if (session.recurrence_group_id) {
+      const later = await laterInSeries(db, session, cancelledBy);
+      if (later.length) {
+        series = {
+          thisDay: cancelDayLabel(session.scheduled_date),
+          laterCount: later.length,
+          lastDay: cancelDayLabel(later[later.length - 1].scheduled_date),
+          rule: session.recurrence_rule || null,
+        };
+      }
+    }
+
     res.json({
       cancelledBy,
       isLateCancel,
+      series,
       hoursUntilSession: Math.round(hoursUntil * 10) / 10,
       willCharge: charge.action === "capture",
       chargeCents: charge.action === "capture" ? charge.amountCents : 0,
@@ -4092,6 +4108,184 @@ router.post("/:id/cancel-fee/dispute", async (req, res) => {
   }
 });
 
+// ─── v1.125.2 — one visit's cancellation, factored out so a series can repeat it ───
+//
+// Pete, 10/28 (d42baa59): "I cannot tell if this session is canceled on November 3 or if she's
+// canceled the entire series. … we need a feature by which she is prompted whether she's
+// canceling a day in the series or the entire series."
+//
+// Everything that happens to ONE visit when it is cancelled — the status change, the late-cancel
+// flag, the fee decision, the fee record and its notices, the hold void — lives here unchanged
+// from the handler it came out of, so cancelling five visits of a series is five of exactly the
+// same thing. What is said to PEOPLE (the activity row, the "visit cancelled" push) stays in the
+// handler, once per request, so a series cancel is one notice that names the range, not five.
+async function cancelOneSession(db, session, sessionId, cancelledBy, reason) {
+  // Check if this is a late cancellation (<24 hours before session)
+  // No caregiver assigned = always free cancel (no one to compensate)
+  // Use care recipient's timezone for timing
+  const cancelTz = session.care_timezone || 'America/New_York';
+  const sessionDateTime = buildDateTimeInZone(session.scheduled_date.split("T")[0], session.scheduled_time || "00:00", cancelTz);
+  const hoursUntilSession = (sessionDateTime - getNowInZone(cancelTz)) / (1000 * 60 * 60);
+  const hasCaregiver = !!session.caregiver_id;
+  const isLateCancel = hasCaregiver && hoursUntilSession < 24;
+
+  if (cancelledBy === "caregiver") {
+    // Caregiver drops the job — revert to open so other caregivers can claim it
+    // Store cancelled_caregiver_id so family can still review them for late cancel
+    await db.prepare(`
+      UPDATE care_sessions
+      SET status = 'open',
+          cancelled_caregiver_id = caregiver_id,
+          caregiver_id = NULL,
+          cancellation_reason = ?,
+          cancelled_by = ?,
+          cancelled_at = NOW(),
+          late_cancel = ?,
+          updated_at = NOW()
+      WHERE id = ?
+    `).run(reason || null, cancelledBy, isLateCancel ? 1 : 0, sessionId);
+  } else {
+    // Family cancels — session is fully cancelled
+    await db.prepare(`
+      UPDATE care_sessions
+      SET status = 'cancelled',
+          cancellation_reason = ?,
+          cancelled_by = ?,
+          cancelled_at = NOW(),
+          late_cancel = ?,
+          updated_at = NOW()
+      WHERE id = ?
+    `).run(reason || null, cancelledBy, isLateCancel ? 1 : 0, sessionId);
+  }
+
+  // ─── v1.105.19 — settle the payment hold ───
+  //
+  // Nobody pre-pays. authorizeSessionPayment uses capture_method:'manual' and a poller
+  // places the hold 23-25 hours before the visit; capture happens at check-out. So a
+  // session cancelled more than a day out has no money attached at all, and one cancelled
+  // inside that window has an uncaptured authorization on the family's card.
+  //
+  // Before v1.105.14 nothing released it: voidSessionPayment existed but was called from
+  // exactly one place, the caregiver-no-show poller. A family cancelling the evening
+  // before was left with a pending charge for ~7 days until Stripe expired it.
+  //
+  // What happens to that hold is decided by the published agreements, not by this handler.
+  // See src/utils/cancellationFee.js for the clauses, for why only a CLIENT cancelling
+  // late is ever charged, and for the 24-hour reconcile window that a capture now waits
+  // out before it fires.
+  let charge = { action: "none", feePercent: 0, reason: "not_evaluated" };
+  try {
+    charge = await decideCancellationCharge(db, {
+      cancelledBy,
+      isLateCancel,
+      paymentIntentId: session.stripe_payment_intent_id,
+      paymentStatus: session.payment_status,
+      authorizedAmountCents: session.authorized_amount,
+    });
+  } catch (e) {
+    console.error("[sessions] cancellation charge decision failed:", e.message);
+    captureException(e, { where: "sessions: cancellation charge decision", sessionId: sessionId });
+    // Fall through with action 'none': leave the hold alone rather than guess. An
+    // untouched hold expires on its own in about a week. A guessed capture takes money.
+  }
+
+  // ─── v1.105.19 — a fee is RECORDED, not charged on the spot ───
+  //
+  // "24 hours to reconcile or escalate, otherwise handled by the rules. Silence is
+  // consent." The caregiver may waive (it is their lost wage), the family may dispute,
+  // and if neither acts the poller captures. Capturing here instead would take the money
+  // before the only person entitled to forgive it had been asked.
+  //
+  // Voids are NOT deferred. Releasing a hold has no downside to anybody and no one needs
+  // a window to think about it — deferring it would leave a pending charge sitting on a
+  // family's card for a day for no reason at all.
+  if (charge.action === "capture") {
+    try {
+      await db.prepare(`
+        UPDATE care_sessions SET
+          cancel_fee_status = 'pending',
+          cancel_fee_cents = ?,
+          cancel_fee_deadline = NOW() + INTERVAL '${CANCEL_FEE_WINDOW_HOURS} hours'
+        WHERE id = ?
+      `).run(charge.amountCents, sessionId);
+
+      const amt = `$${(charge.amountCents / 100).toFixed(2)}`;
+      if (session.caregiver_user_id) {
+        sendPushToUser(session.caregiver_user_id, {
+          title: "Late cancellation — you're owed " + amt,
+          body: `The family cancelled inside 24 hours. You'll be paid ${amt} automatically tomorrow. Tap if you'd rather waive it.`,
+          // v1.109.9 — page + focus so a tap (and the service worker's cold-start URL)
+          // opens the fee sheet. Without them the tap landed nowhere (9d286a8a).
+          data: { type: "cancel_fee_pending", sessionId: sessionId, amountCents: charge.amountCents, page: "dashboard", focus: `cancelFee:${sessionId}` },
+        }, "cancel_fee_pending").catch(() => {});
+      }
+      sendPushToUser(session.family_user_id, {
+        title: "Cancellation fee — " + amt,
+        body: `Cancelling inside 24 hours means the caregiver still gets paid. ${amt} will be charged tomorrow unless something's wrong — tap to tell us.`,
+        data: { type: "cancel_fee_notice", sessionId: sessionId, amountCents: charge.amountCents, page: "dashboard", focus: `cancelFee:${sessionId}` },
+      }, "cancel_fee_notice").catch(() => {});
+    } catch (e) {
+      console.error("[sessions] could not record the cancellation fee:", e.message);
+      captureException(e, { where: "sessions: record cancel fee", sessionId: sessionId });
+    }
+  } else if (charge.action !== "none") {
+    try {
+      // Lazy require: accountability.js pulls in this router's siblings, and a top-level
+      // require here creates a cycle. Same pattern as the capture call at check-out.
+      const { voidSessionPayment } = require("./accountability");
+      const result = await voidSessionPayment(sessionId);
+      if (result?.error) {
+        // Don't fail the cancellation over this. The session IS cancelled; an untouched
+        // hold expires by itself. Losing the cancel because Stripe hiccuped would be
+        // worse — the caregiver would still be expected at the door.
+        console.warn(`[sessions] ${charge.action} failed for ${sessionId.slice(0, 8)}: ${result.error}`);
+        captureException(new Error(`cancel-${charge.action} failed: ${result.error}`), { sessionId: sessionId });
+      }
+    } catch (e) {
+      console.error(`[sessions] ${charge.action} threw on cancel:`, e.message);
+      captureException(e, { where: "sessions: hold settlement on cancel", sessionId: sessionId });
+    }
+  }
+
+  const updated = await db.prepare("SELECT * FROM care_sessions WHERE id = ?").get(sessionId);
+  return { updated, isLateCancel, hasCaregiver, charge };
+}
+
+/**
+ * The later visits of the same series that this canceller could also cancel: a caregiver's are
+ * the ones still assigned to that caregiver; a family's are the ones for the same person. Only
+ * statuses /cancel accepts, never one already under way.
+ */
+async function laterInSeries(db, session, cancelledBy) {
+  if (!session || !session.recurrence_group_id) return [];
+  const after = String(session.scheduled_date || "").split("T")[0];
+  const sideSql = cancelledBy === "caregiver" ? "cs.caregiver_id = ?" : "cs.care_recipient_id = ?";
+  const sideVal = cancelledBy === "caregiver" ? session.caregiver_id : session.care_recipient_id;
+  if (!sideVal) return [];
+  return db.prepare(`
+    SELECT cs.*, cp.user_id AS caregiver_user_id, cr.timezone AS care_timezone
+      FROM care_sessions cs
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+     WHERE cs.recurrence_group_id = ?
+       AND cs.id <> ?
+       AND LEFT(cs.scheduled_date, 10) > ?
+       AND cs.status IN ('confirmed', 'pending', 'open', 'requested')
+       AND ${sideSql}
+     ORDER BY cs.scheduled_date ASC, cs.scheduled_time ASC
+     LIMIT 60
+  `).all(session.recurrence_group_id, session.id, after, sideVal);
+}
+
+const CANCEL_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const CANCEL_DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+/** "Mon Nov 3" from a stored date. Calendar arithmetic only. */
+function cancelDayLabel(dateStr) {
+  const [y, m, d] = String(dateStr || "").split("T")[0].split("-").map(Number);
+  if (!y || !m || !d) return String(dateStr || "");
+  return `${CANCEL_DAYS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()]} ${CANCEL_MONTHS[m - 1]} ${d}`;
+}
+
 router.put("/:id/cancel", async (req, res) => {
   try {
     const db = await getDb();
@@ -4140,61 +4334,60 @@ router.put("/:id/cancel", async (req, res) => {
       return res.status(404).json({ error: "Session not found" });
     }
 
-    // Check if this is a late cancellation (<24 hours before session)
-    // No caregiver assigned = always free cancel (no one to compensate)
-    // Use care recipient's timezone for timing
-    const cancelTz = session.care_timezone || 'America/New_York';
-    const sessionDateTime = buildDateTimeInZone(session.scheduled_date.split("T")[0], session.scheduled_time || "00:00", cancelTz);
-    const hoursUntilSession = (sessionDateTime - getNowInZone(cancelTz)) / (1000 * 60 * 60);
-    const hasCaregiver = !!session.caregiver_id;
-    const isLateCancel = hasCaregiver && hoursUntilSession < 24;
+    // v1.125.2 — "one" (default, what every old client sends) or "series": this visit and
+    // every later one in the same recurring series that this person could cancel.
+    const scope = req.body && req.body.scope === "series" ? "series" : "one";
+    const { updated, isLateCancel, hasCaregiver, charge } = await cancelOneSession(db, session, req.params.id, cancelledBy, reason);
 
-    if (cancelledBy === "caregiver") {
-      // Caregiver drops the job — revert to open so other caregivers can claim it
-      // Store cancelled_caregiver_id so family can still review them for late cancel
-      await db.prepare(`
-        UPDATE care_sessions
-        SET status = 'open',
-            cancelled_caregiver_id = caregiver_id,
-            caregiver_id = NULL,
-            cancellation_reason = ?,
-            cancelled_by = ?,
-            cancelled_at = NOW(),
-            late_cancel = ?,
-            updated_at = NOW()
-        WHERE id = ?
-      `).run(reason || null, cancelledBy, isLateCancel ? 1 : 0, req.params.id);
-    } else {
-      // Family cancels — session is fully cancelled
-      await db.prepare(`
-        UPDATE care_sessions
-        SET status = 'cancelled',
-            cancellation_reason = ?,
-            cancelled_by = ?,
-            cancelled_at = NOW(),
-            late_cancel = ?,
-            updated_at = NOW()
-        WHERE id = ?
-      `).run(reason || null, cancelledBy, isLateCancel ? 1 : 0, req.params.id);
+    const more = [];
+    if (scope === "series" && session.recurrence_group_id) {
+      for (const s of await laterInSeries(db, session, cancelledBy)) {
+        // Each visit is re-authorized on its own; being allowed on the first is not a pass
+        // for the rest.
+        const acc = await sessionAccess(db, s.id, userId);
+        const allowed = acc && (cancelledBy === "caregiver" ? acc.isCaregiver : (acc.isFamily || acc.isAdmin));
+        if (!allowed) continue;
+        try {
+          await cancelOneSession(db, s, s.id, cancelledBy, reason);
+          more.push(s);
+        } catch (e) {
+          console.error("[sessions] series cancel step failed:", e.message);
+          captureException(e, { where: "sessions: series cancel", sessionId: s.id });
+        }
+      }
     }
-
-    const updated = await db.prepare("SELECT * FROM care_sessions WHERE id = ?").get(req.params.id);
+    // When ONE visit of a series is cancelled, say so — and say the rest still stand. This is
+    // the sentence Pete could not find: "is this Nov 3, or the entire series?"
+    const stillBooked = scope === "one" && session.recurrence_group_id
+      ? (await laterInSeries(db, session, cancelledBy)).length
+      : 0;
+    const lastMore = more.length ? more[more.length - 1] : null;
+    const headDay = cancelDayLabel(session.scheduled_date);
+    const rangeWords = lastMore
+      ? `the ${headDay} visit and the ${more.length} after it, through ${cancelDayLabel(lastMore.scheduled_date)}`
+      : `the ${headDay} visit`;
 
     // Activity feed entry — use the actual person's name
     const canceller = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(req.user.id);
     const cancellerName = canceller ? `${canceller.first_name} ${canceller.last_name}` : (cancelledBy === "caregiver" ? "Caregiver" : "Family member");
+    const cancellerFirst = canceller ? canceller.first_name : (cancelledBy === "caregiver" ? "The caregiver" : "The family");
     await db.prepare(
       "INSERT INTO activity_feed (id, family_user_id, event_type, title, message) VALUES (?, ?, 'session_cancelled', ?, ?)"
     ).run(
       uuid(),
       session.family_user_id,
-      `Session Cancelled by ${cancellerName}`,
+      more.length ? `Series Cancelled by ${cancellerName}` : `Session Cancelled by ${cancellerName}`,
       (() => {
-        const d = new Date(session.scheduled_date + 'T12:00:00');
-        const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-        const friendlyDate = `${months[d.getMonth()]} ${d.getDate()}`;
         const svcLabel = (session.service_type || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-        return `${svcLabel} session on ${friendlyDate} was cancelled by ${cancellerName}${isLateCancel ? " (late cancellation)" : ""}`;
+        if (more.length) {
+          return `${cancellerName} cancelled ${rangeWords} (${more.length + 1} ${svcLabel.toLowerCase() || 'care'} visits)${isLateCancel ? " — the first is a late cancellation" : ""}`;
+        }
+        const tail = stillBooked
+          ? (cancelledBy === "caregiver"
+            ? ` Only this visit — the other ${stillBooked} in the series are still with ${cancellerFirst}.`
+            : ` Only this visit — the other ${stillBooked} in the series still stand.`)
+          : "";
+        return `${svcLabel} session on ${headDay} was cancelled by ${cancellerName}${isLateCancel ? " (late cancellation)" : ""}.${tail}`;
       })()
     );
 
@@ -4209,96 +4402,8 @@ router.put("/:id/cancel", async (req, res) => {
           cancelledBy,
           isLateCancel,
           canReview: cancelledBy === "caregiver" && isLateCancel,
+          seriesCancelled: more.length,
         });
-      }
-    }
-
-    // ─── v1.105.19 — settle the payment hold ───
-    //
-    // Nobody pre-pays. authorizeSessionPayment uses capture_method:'manual' and a poller
-    // places the hold 23-25 hours before the visit; capture happens at check-out. So a
-    // session cancelled more than a day out has no money attached at all, and one cancelled
-    // inside that window has an uncaptured authorization on the family's card.
-    //
-    // Before v1.105.14 nothing released it: voidSessionPayment existed but was called from
-    // exactly one place, the caregiver-no-show poller. A family cancelling the evening
-    // before was left with a pending charge for ~7 days until Stripe expired it.
-    //
-    // What happens to that hold is decided by the published agreements, not by this handler.
-    // See src/utils/cancellationFee.js for the clauses, for why only a CLIENT cancelling
-    // late is ever charged, and for the 24-hour reconcile window that a capture now waits
-    // out before it fires.
-    let charge = { action: "none", feePercent: 0, reason: "not_evaluated" };
-    try {
-      charge = await decideCancellationCharge(db, {
-        cancelledBy,
-        isLateCancel,
-        paymentIntentId: session.stripe_payment_intent_id,
-        paymentStatus: session.payment_status,
-        authorizedAmountCents: session.authorized_amount,
-      });
-    } catch (e) {
-      console.error("[sessions] cancellation charge decision failed:", e.message);
-      captureException(e, { where: "sessions: cancellation charge decision", sessionId: req.params.id });
-      // Fall through with action 'none': leave the hold alone rather than guess. An
-      // untouched hold expires on its own in about a week. A guessed capture takes money.
-    }
-
-    // ─── v1.105.19 — a fee is RECORDED, not charged on the spot ───
-    //
-    // "24 hours to reconcile or escalate, otherwise handled by the rules. Silence is
-    // consent." The caregiver may waive (it is their lost wage), the family may dispute,
-    // and if neither acts the poller captures. Capturing here instead would take the money
-    // before the only person entitled to forgive it had been asked.
-    //
-    // Voids are NOT deferred. Releasing a hold has no downside to anybody and no one needs
-    // a window to think about it — deferring it would leave a pending charge sitting on a
-    // family's card for a day for no reason at all.
-    if (charge.action === "capture") {
-      try {
-        await db.prepare(`
-          UPDATE care_sessions SET
-            cancel_fee_status = 'pending',
-            cancel_fee_cents = ?,
-            cancel_fee_deadline = NOW() + INTERVAL '${CANCEL_FEE_WINDOW_HOURS} hours'
-          WHERE id = ?
-        `).run(charge.amountCents, req.params.id);
-
-        const amt = `$${(charge.amountCents / 100).toFixed(2)}`;
-        if (session.caregiver_user_id) {
-          sendPushToUser(session.caregiver_user_id, {
-            title: "Late cancellation — you're owed " + amt,
-            body: `The family cancelled inside 24 hours. You'll be paid ${amt} automatically tomorrow. Tap if you'd rather waive it.`,
-            // v1.109.9 — page + focus so a tap (and the service worker's cold-start URL)
-            // opens the fee sheet. Without them the tap landed nowhere (9d286a8a).
-            data: { type: "cancel_fee_pending", sessionId: req.params.id, amountCents: charge.amountCents, page: "dashboard", focus: `cancelFee:${req.params.id}` },
-          }, "cancel_fee_pending").catch(() => {});
-        }
-        sendPushToUser(session.family_user_id, {
-          title: "Cancellation fee — " + amt,
-          body: `Cancelling inside 24 hours means the caregiver still gets paid. ${amt} will be charged tomorrow unless something's wrong — tap to tell us.`,
-          data: { type: "cancel_fee_notice", sessionId: req.params.id, amountCents: charge.amountCents, page: "dashboard", focus: `cancelFee:${req.params.id}` },
-        }, "cancel_fee_notice").catch(() => {});
-      } catch (e) {
-        console.error("[sessions] could not record the cancellation fee:", e.message);
-        captureException(e, { where: "sessions: record cancel fee", sessionId: req.params.id });
-      }
-    } else if (charge.action !== "none") {
-      try {
-        // Lazy require: accountability.js pulls in this router's siblings, and a top-level
-        // require here creates a cycle. Same pattern as the capture call at check-out.
-        const { voidSessionPayment } = require("./accountability");
-        const result = await voidSessionPayment(req.params.id);
-        if (result?.error) {
-          // Don't fail the cancellation over this. The session IS cancelled; an untouched
-          // hold expires by itself. Losing the cancel because Stripe hiccuped would be
-          // worse — the caregiver would still be expected at the door.
-          console.warn(`[sessions] ${charge.action} failed for ${req.params.id.slice(0, 8)}: ${result.error}`);
-          captureException(new Error(`cancel-${charge.action} failed: ${result.error}`), { sessionId: req.params.id });
-        }
-      } catch (e) {
-        console.error(`[sessions] ${charge.action} threw on cancel:`, e.message);
-        captureException(e, { where: "sessions: hold settlement on cancel", sessionId: req.params.id });
       }
     }
 
@@ -4327,13 +4432,36 @@ router.put("/:id/cancel", async (req, res) => {
       // that only states a fact leaves the reader to work out the action; when the action
       // is "turn the car around", say it.
       const isForCaregiver = cancelledBy !== "caregiver";
+      // v1.125.2 — name the range for a series, and say "only this visit" when the rest stand.
+      const whatWord = more.length
+        ? `the ${when} visit and the ${more.length} after it (through ${cancelDayLabel(lastMore.scheduled_date)})`
+        : `the ${when} visit`;
+      const onlyThis = !more.length && stillBooked ? " Only that one — the rest of the series is unchanged." : "";
       sendPushToUser(pushUserId, {
-        title: isForCaregiver ? "Visit cancelled" : "Caregiver cancelled",
+        title: isForCaregiver ? (more.length ? "Visits cancelled" : "Visit cancelled") : "Caregiver cancelled",
         body: isForCaregiver
-          ? `The family cancelled the ${when} visit. Please do not travel to the home.`
-          : `Your caregiver cancelled the ${when} visit.${isLateCancel ? " We're finding a replacement." : ""}`,
-        data: { type: "session_cancelled", sessionId: req.params.id, cancelledBy },
+          ? `The family cancelled ${whatWord}.${onlyThis} Please do not travel to the home.`
+          : `Your caregiver cancelled ${whatWord}.${onlyThis}${isLateCancel ? " We're finding a replacement." : ""}`,
+        data: { type: "session_cancelled", sessionId: req.params.id, cancelledBy, seriesCancelled: more.length },
       }, "session_cancelled").catch(() => {});
+    }
+    // A family cancelling a series whose later visits are with a DIFFERENT caregiver: each of
+    // those caregivers hears about their own visits, once.
+    if (cancelledBy !== "caregiver" && more.length) {
+      const byCaregiver = new Map();
+      for (const m of more) {
+        if (!m.caregiver_user_id || m.caregiver_user_id === pushUserId) continue;
+        if (!byCaregiver.has(m.caregiver_user_id)) byCaregiver.set(m.caregiver_user_id, []);
+        byCaregiver.get(m.caregiver_user_id).push(m);
+      }
+      for (const [uid, list] of byCaregiver) {
+        const days = list.map((m) => cancelDayLabel(m.scheduled_date)).join(", ");
+        sendPushToUser(uid, {
+          title: list.length > 1 ? "Visits cancelled" : "Visit cancelled",
+          body: `The family cancelled your ${list.length > 1 ? "visits" : "visit"} on ${days}. Please do not travel to the home.`,
+          data: { type: "session_cancelled", sessionId: list[0].id, cancelledBy },
+        }, "session_cancelled").catch(() => {});
+      }
     }
 
     res.json({
@@ -4341,6 +4469,10 @@ router.put("/:id/cancel", async (req, res) => {
       cancelledBy,
       isLateCancel,
       hasCaregiver,
+      // v1.125.2 — how many visits this request cancelled, and how many of the series remain.
+      cancelledCount: 1 + more.length,
+      seriesCancelled: more.length,
+      seriesRemaining: stillBooked,
       // Family can review caregiver if caregiver late-cancelled
       canReview: cancelledBy === "caregiver" && isLateCancel,
       cancelledCaregiverId: cancelledBy === "caregiver" ? session.caregiver_id : null,

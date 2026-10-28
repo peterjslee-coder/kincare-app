@@ -325,6 +325,15 @@ const OutStatusPill = ({ status }) => {
   );
 };
 
+// v1.125.2 — Pete, 10/28, screenshot of Monique's thread on his iPhone: "I still can't see how to
+// text Monique." The composer was there — under the app's bottom nav. On a phone, Admin renders
+// inside a container that is its own stacking context, so this panel's zIndex 1000 was resolved
+// INSIDE it and the nav (900, at the root) painted over the bottom of the screen. Same trap, same
+// fix as Messages (v1.105.x): render to document.body, out of that box entirely.
+const outToBody = (node) => (node && typeof ReactDOM !== 'undefined' && ReactDOM.createPortal
+  ? ReactDOM.createPortal(node, document.body)
+  : node);
+
 const OutreachThread = ({ contactId, apiFetch, showToast, onClose, onChanged, callScript }) => {
   const [data, setData] = React.useState(null);
   const [draft, setDraft] = React.useState('');
@@ -537,7 +546,7 @@ const OutreachThread = ({ contactId, apiFetch, showToast, onClose, onChanged, ca
   ].filter(Boolean).join(' · ') : '';
   const panelBox = vvBox ? { top: vvBox.top, height: vvBox.height } : { top: 0, height: '100%' };
 
-  return (
+  return outToBody(
     <div onClick={closeByButton} style={{ position: 'fixed', inset: 0, background: 'var(--overlay-bg)', zIndex: 1000 }}>
       <div className="outreach-thread-panel" onClick={(e) => e.stopPropagation()} style={{
         position: 'absolute', right: 0, ...panelBox, width: '100%', maxWidth: 480,

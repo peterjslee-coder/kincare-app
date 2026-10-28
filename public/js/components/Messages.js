@@ -1368,7 +1368,8 @@ const Messages = window.Messages = () => {
           if (sentText.length >= 15) {
             apiFetch('/api/ipai/detect-instructions', {
               method: 'POST',
-              body: JSON.stringify({ message: sentText }),
+              // v1.125.2 — which conversation, so a text to Tina is matched to Tina's visits.
+              body: JSON.stringify({ message: sentText, conversationId: data.conversationId || activeConvId }),
             }).then(async (dr) => {
               if (dr?.ok) {
                 const dd = await dr.json();
@@ -3058,6 +3059,22 @@ const Messages = window.Messages = () => {
             <div style={{ color: 'var(--text-secondary)', marginBottom: 4, fontSize: 12 }}>
               For: <strong>{instructionSuggestion.sessionLabel}</strong>
             </div>
+            {/* v1.125.2 — Pete: "it's showing up as an instruction for today, not yesterday… that
+                feature needs to be smarter on what day specifically the instructions need to pin
+                on." iPAi's pick is a suggestion; the visit is the family's to choose. */}
+            {Array.isArray(instructionSuggestion.alternatives) && instructionSuggestion.alternatives.length > 1 && (
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-secondary)', marginBottom: 6, fontSize: 12 }}>
+                Different visit?
+                <select value={instructionSuggestion.sessionId}
+                  onChange={(e) => {
+                    const alt = instructionSuggestion.alternatives.find(a => a.sessionId === e.target.value);
+                    if (alt) setInstructionSuggestion({ ...instructionSuggestion, sessionId: alt.sessionId, sessionLabel: alt.label });
+                  }}
+                  style={{ flex: 1, minWidth: 0, padding: '4px 6px', borderRadius: 6, border: '1px solid var(--border-color)', fontSize: 16, background: 'var(--bg-surface)', color: 'var(--text-primary)' }}>
+                  {instructionSuggestion.alternatives.map(a => <option key={a.sessionId} value={a.sessionId}>{a.label}</option>)}
+                </select>
+              </label>
+            )}
             <div style={{
               background: '#fff', border: '1px solid #e0e0e0', borderRadius: 8,
               padding: '10px 12px', marginBottom: 10, lineHeight: 1.5, whiteSpace: 'pre-wrap',

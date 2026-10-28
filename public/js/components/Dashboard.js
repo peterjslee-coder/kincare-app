@@ -1709,9 +1709,28 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                           {s.serviceType ? ` \u2022 ${formatServiceType(s.serviceType)}` : ''}
                         </div>
                         <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginTop: 4 }}>
-                          {s.recurrenceGroupId
-                            ? `${s.recurrenceRule ? s.recurrenceRule.charAt(0).toUpperCase() + s.recurrenceRule.slice(1) : 'Recurring'} series \u2014 no caregiver yet. Whoever accepts takes the whole series${s.__seriesMore ? ` (${s.__seriesMore} more upcoming)` : ''}.`
-                            : 'No caregiver yet \u2014 waiting for someone to accept'}
+                          {(() => {
+                            // v1.125.2 — Pete, 10/28: "I cannot tell if this session is canceled on
+                            // November 3 or if she's canceled the entire series." When a caregiver
+                            // drops ONE visit of a series, that visit reopens and landed here under
+                            // "series — no caregiver yet, whoever accepts takes the whole series":
+                            // the opposite of what happened. Say which it is.
+                            const keeper = s.recurrenceGroupId
+                              ? upcoming.find(x => x.recurrenceGroupId === s.recurrenceGroupId && x.id !== s.id && x.caregiverName)
+                              : null;
+                            const keeperFirst = keeper ? String(keeper.caregiverName).split(' ')[0] : null;
+                            if (keeper) {
+                              return s.droppedByName
+                                ? `${s.droppedByName} cancelled this day only \u2014 the rest of the series is still with ${keeperFirst}. Waiting for someone to cover ${dayLabel}.`
+                                : `Just this visit needs a caregiver \u2014 the rest of the series is still with ${keeperFirst}.`;
+                            }
+                            if (s.recurrenceGroupId) {
+                              return `${s.droppedByName ? `${s.droppedByName} cancelled. ` : ''}${s.recurrenceRule ? s.recurrenceRule.charAt(0).toUpperCase() + s.recurrenceRule.slice(1) : 'Recurring'} series \u2014 no caregiver yet. Whoever accepts takes the whole series${s.__seriesMore ? ` (${s.__seriesMore} more upcoming)` : ''}.`;
+                            }
+                            return s.droppedByName
+                              ? `${s.droppedByName} cancelled \u2014 waiting for another caregiver to accept`
+                              : 'No caregiver yet \u2014 waiting for someone to accept';
+                          })()}
                         </div>
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
@@ -1719,20 +1738,13 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                           padding: '4px 10px', borderRadius: 10, fontSize: 11, fontWeight: 600,
                           background: 'var(--color-warning-bg)', color: 'var(--color-warning)', textTransform: 'capitalize', whiteSpace: 'nowrap',
                         }}>Open</span>
-                        <button onClick={async (e) => {
-                          e.stopPropagation();
-                          // One card stands for the series, so its Cancel must too — cancelling
-                          // only the head would surface the next one as a fresh reminder.
-                          if (!s.recurrenceGroupId) { setCancellingId(s.id); return; }
-                          if (!window.confirm(`Cancel this whole series? ${s.__seriesMore ? s.__seriesMore + ' more upcoming visit' + (s.__seriesMore === 1 ? '' : 's') + ' will be cancelled too.' : ''}`.trim())) return;
-                          try {
-                            const res = await apiFetch(`/api/sessions/recurring/${s.recurrenceGroupId}`, { method: 'DELETE' });
-                            if (res?.ok) { showToast('Series cancelled', 'success'); fetchDashboard && fetchDashboard(); }
-                            else showToast('Couldn\u2019t cancel the series', 'error');
-                          } catch { showToast('Couldn\u2019t reach InPlace', 'error'); }
-                        }}
+                        {/* v1.125.2 — one Cancel, through the shared screen, which asks "just this
+                            visit, or this and the later ones" for a series. The old "Cancel series"
+                            called DELETE /recurring/:groupId, which skipped open visits (the very
+                            ones on this card) and gave no choice. */}
+                        <button onClick={(e) => { e.stopPropagation(); setCancellingId(s.id); }}
                           style={{ padding: '3px 8px', borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--bg-surface)', color: 'var(--color-error)', fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>
-                          {s.recurrenceGroupId ? 'Cancel series' : 'Cancel'}
+                          Cancel
                         </button>
                       </div>
                     </div>

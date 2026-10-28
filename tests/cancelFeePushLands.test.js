@@ -118,7 +118,8 @@ describe("the server payloads say where to go", () => {
   test.each(["cancel_fee_notice", "cancel_fee_pending", "cancel_fee_waived"])("%s", (type) => {
     const line = sessions.split("\n").find((l) => l.includes(`type: "${type}"`));
     expect(line).toMatch(/page: "dashboard"/);
-    expect(line).toMatch(/focus: `cancelFee:\$\{req\.params\.id\}`/);
+    // v1.125.2 — inside cancelOneSession the visit's id is `sessionId`; the waive route still says req.params.id
+    expect(line).toMatch(/focus: `cancelFee:\$\{(req\.params\.id|sessionId)\}`/);
   });
 });
 

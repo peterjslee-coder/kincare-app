@@ -124,7 +124,8 @@ async function familyDashboard(db, userId, res) {
             ofu.first_name AS offered_caregiver_name,
             tcp.proposed_time AS tc_proposed_time, tcp.proposed_date AS tc_proposed_date,
             tcp.proposed_duration AS tc_proposed_duration,
-            tcp.proposed_by AS tc_proposed_by
+            tcp.proposed_by AS tc_proposed_by,
+            dcu.first_name AS dropped_by_first_name
           FROM care_sessions cs
           LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
           LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
@@ -134,6 +135,9 @@ async function familyDashboard(db, userId, res) {
           LEFT JOIN caregiver_profiles ocp ON cs.offered_to_caregiver_id = ocp.id
           LEFT JOIN users ofu ON ocp.user_id = ofu.id
           LEFT JOIN time_change_proposals tcp ON cs.pending_time_change_id = tcp.id
+          -- v1.125.2 — who dropped an open visit, so its card can say "Tina cancelled this one"
+          LEFT JOIN caregiver_profiles dcp ON cs.cancelled_caregiver_id = dcp.id
+          LEFT JOIN users dcu ON dcp.user_id = dcu.id
           WHERE (cs.family_user_id = ? OR cs.care_recipient_id IN (${recipientPlaceholders}))
             AND cs.scheduled_date >= ?
             AND cs.scheduled_date <= ?
@@ -355,6 +359,10 @@ async function familyDashboard(db, userId, res) {
           // v1.105.192 — so the dashboard can fold a series into one card
           recurrenceGroupId: s.recurrence_group_id || null,
           recurrenceRule: s.recurrence_rule || null,
+          // v1.125.2 — an open visit the caregiver dropped: who, so the card can say it was
+          // that one day and not the series. Only while it is still open and unfilled.
+          droppedByName: s.cancelled_by === "caregiver" && !s.caregiver_id && ['open', 'requested'].includes(s.status)
+            ? (s.dropped_by_first_name || null) : null,
         };
       }),
       recentActivity: recentActivity.map((a) => {

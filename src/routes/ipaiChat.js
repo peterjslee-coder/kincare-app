@@ -14,6 +14,7 @@ const { authenticate, denyDemo } = require("../middleware/auth");
 const { handleIPAiMessage } = require("../utils/ipaiChat");
 const { captureException } = require("../utils/sentry");
 const { getAnthropic } = require("../utils/aiModels");
+const IT = require("../utils/instructionTarget"); // v1.125.2
 
 const router = express.Router();
 // v1.106.4 — demo sessions are free and passwordless; every call here bills Anthropic.
@@ -238,7 +239,8 @@ router.post("/chat", async (req, res) => {
 // ─── POST /api/ipai/detect-instructions ───
 // Lightweight: checks if a regular chat message contains caregiver task instructions.
 // Does NOT store messages, does NOT count against rate limit.
-// Returns { suggestion: { sessionId, sessionLabel, summary } | null }
+// Returns { suggestion: { sessionId, sessionLabel, summary, alternatives: [{ sessionId, label }] } | null }
+// v1.125.2 — optional body.conversationId narrows the visits to the caregiver being texted.
 router.post("/detect-instructions", async (req, res) => {
   const db = await getDb();
   const userId = req.user.id;
@@ -261,33 +263,20 @@ router.post("/detect-instructions", async (req, res) => {
       "project with", "activity with", "task for", "request for", "need her to", "need him to",
       "want her to", "want him to", "could you", "can you", "would you", "should ",
       "next session", "next visit", "on tues", "on wed", "on thurs", "on fri", "on sat",
-      "on sun", "on mon", "tomorrow", "this week"];
+      "on sun", "on mon", "tomorrow", "this week",
+      // v1.125.2 — the same-day words. "Tonight please have her…" never reached the model.
+      "today", "tonight", "this morning", "this afternoon", "this evening", "while you"];
     const matchedSignal = coordSignals.find(s => msgLC.includes(s));
     if (!matchedSignal) return res.json({ suggestion: null });
 
-    // Get user's upcoming sessions for context
-    const upcomingSessions = await db.prepare(`
-      SELECT cs.id, cs.scheduled_date, cs.scheduled_time, cs.duration_hours, cs.status,
-        cs.special_instructions, cs.caregiver_id,
-        u_cg.first_name AS cg_first, u_cg.last_name AS cg_last,
-        cr.first_name AS cr_first, cr.last_name AS cr_last
-      FROM care_sessions cs
-      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
-      LEFT JOIN users u_cg ON cp.user_id = u_cg.id
-      LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
-      WHERE cs.family_user_id = ?
-        AND cs.status IN ('confirmed', 'pending', 'open', 'requested')
-        AND cs.scheduled_date >= to_char(CURRENT_DATE, 'YYYY-MM-DD')
-      ORDER BY cs.scheduled_date ASC, cs.scheduled_time ASC
-      LIMIT 10
-    `).all(userId);
-
-    if (upcomingSessions.length === 0) return res.json({ suggestion: null });
-
-    const sessionContext = upcomingSessions.map(s => {
-      const cg = s.cg_first ? `${s.cg_first} ${s.cg_last}` : 'Unassigned';
-      return `- Session ${s.id}: ${cg} with ${s.cr_first} ${s.cr_last} on ${s.scheduled_date} at ${s.scheduled_time || 'TBD'} (${s.status})`;
-    }).join('\n');
+    // v1.125.2 — the candidate visits, today's date and the label all come from
+    // utils/instructionTarget.js now; see the note there for why the old list made the wrong
+    // day the likely answer.
+    const visits = await IT.candidateVisits(db, userId, {
+      conversationId: typeof req.body.conversationId === "string" ? req.body.conversationId : null,
+    });
+    if (visits.length === 0) return res.json({ suggestion: null });
+    const ctx = IT.describeForModel(visits);
 
     const client = getAnthropic(apiKey);
     const result = await client.messages.create({
@@ -295,18 +284,26 @@ router.post("/detect-instructions", async (req, res) => {
       max_tokens: 400,
       system: `You analyze chat messages to detect caregiver task instructions.
 
-UPCOMING SESSIONS:
-${sessionContext}
+${ctx.header}
+
+UPCOMING VISITS (care-location time):
+${ctx.list}
 
 Determine if this message contains instructions or tasks for a caregiver to do during an upcoming session. This includes things like: asking a caregiver to do an activity, bring something, take photos, assemble something, remind the care recipient of something, etc.
 
 If YES — extract a clean instruction summary written TO the caregiver in a warm, friendly tone. Use "please" and "thank you", and add a relevant emoji or two. Write it as a kind note from the family, not a command. Use the care recipient's first name only.
 Example: "Please assemble the solar fountain as a project with Betty and place it where she can enjoy watching birds from the kitchen window. A photo when it's all set up would be wonderful — thank you! 🌻"
 
+Choosing the visit:
+- Words like "today", "tonight", "now", "tomorrow" or a weekday are relative to TODAY above.
+- A visit marked IN PROGRESS NOW or TODAY is the one meant by "today", "tonight", "now", "while you're there" or "before you leave".
+- If no day is named, choose the soonest visit — the one in progress, else the next one.
+- matchedSessionId must be one of the session ids listed above, or null.
+
 If NO — return null.
 
 Return ONLY valid JSON (no markdown):
-{ "hasInstructions": true/false, "instructionSummary": "Warm, friendly instructions for the caregiver" or null, "matchedSessionId": "uuid" or null, "matchedSessionLabel": "Caregiver — Day Mon Date" or null }`,
+{ "hasInstructions": true/false, "instructionSummary": "Warm, friendly instructions for the caregiver" or null, "matchedSessionId": "uuid" or null }`,
       messages: [{ role: "user", content: message }],
     });
 
@@ -314,16 +311,10 @@ Return ONLY valid JSON (no markdown):
     const cleaned = raw.replace(/^```json?\n?/, "").replace(/\n?```$/, "").trim();
     const parsed = JSON.parse(cleaned);
 
-    // Detection passed — check Claude's response
-    if (parsed.hasInstructions && parsed.matchedSessionId && parsed.instructionSummary) {
-      return res.json({
-        suggestion: {
-          sessionId: parsed.matchedSessionId,
-          sessionLabel: parsed.matchedSessionLabel || "Upcoming session",
-          summary: parsed.instructionSummary,
-        },
-      });
-    }
+    // Only an id we offered survives, and the label is built from that visit — never the
+    // model's own wording, which made a wrong pick look exactly as sure as a right one.
+    const suggestion = IT.buildSuggestion(visits, parsed);
+    if (suggestion) return res.json({ suggestion });
 
     return res.json({ suggestion: null });
   } catch (err) {

@@ -17,9 +17,11 @@ const sessions = fs.readFileSync(path.join(__dirname, "..", "src/routes/sessions
 // Isolate the cancel handler so a matching call elsewhere in this 2700-line file (the
 // check-out capture, for instance) cannot satisfy these assertions by accident.
 const cancelHandler = (() => {
-  const start = sessions.indexOf('router.put("/:id/cancel"');
+  // v1.125.2 — the per-visit work (status, fee, hold) moved into cancelOneSession(), which the
+  // handler calls once per visit; the "handler" under test is that function plus the route.
+  const start = sessions.indexOf("async function cancelOneSession(");
   expect(start).toBeGreaterThan(-1);
-  const end = sessions.indexOf("router.", start + 50);
+  const end = sessions.indexOf("router.", sessions.indexOf('router.put("/:id/cancel"') + 50);
   return sessions.slice(start, end === -1 ? sessions.length : end);
 })();
 
@@ -33,11 +35,12 @@ const cancelHandler = (() => {
 // literal gets read as a comment opener.
 const cancelCode = (() => {
   const stripped = require("./helpers/source").code("src/routes/sessions.js");
-  const start = stripped.indexOf('router.put("/:id/cancel"');
+  const start = stripped.indexOf("async function cancelOneSession(");
+  const route = stripped.indexOf('router.put("/:id/cancel"');
   if (start === -1) throw new Error("cancel handler not found in stripped source");
-  const rest = stripped.slice(start + 1);
+  const rest = stripped.slice(route + 1);
   const end = rest.indexOf("\nrouter.");
-  return stripped.slice(start, end === -1 ? undefined : start + 1 + end);
+  return stripped.slice(start, end === -1 ? undefined : route + 1 + end);
 })();
 
 describe("cancelling a session releases the payment hold", () => {
@@ -105,7 +108,9 @@ describe("cancelling a session notifies the other party by push", () => {
     // If it sits inside `if (emitToUser)` it inherits the exact limitation it exists to
     // work around. Assert the push call is not within the emitToUser block.
     const emitIdx = cancelHandler.indexOf("const emitToUser");
-    const pushIdx = cancelHandler.indexOf("sendPushToUser");
+    // v1.125.2 — cancelOneSession (which comes first in the slice) has its own fee pushes; the
+    // "visit cancelled" push is the first one AFTER the websocket block.
+    const pushIdx = cancelHandler.indexOf("sendPushToUser", emitIdx);
     expect(pushIdx).toBeGreaterThan(-1);
     const between = cancelHandler.slice(emitIdx, pushIdx);
     // The emitToUser block must have closed before the push call.

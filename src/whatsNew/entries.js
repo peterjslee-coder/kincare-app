@@ -31,6 +31,21 @@ const WINDOW_DAYS = 45;
 
 const ENTRIES = [
   {
+    id: "cancel-one-or-series",
+    version: "1.125.2",
+    date: "2026-10-28",
+    audience: ["family", "caregiver"],
+    title: "Cancel one visit, or the rest of the series",
+    body: "When a visit is part of a repeating series, cancelling it now asks whether you mean just that day or that day and every visit after it. And when a caregiver cancels one day, Home says so — “Jane cancelled this day only — the rest of the series is still with Jane.”",
+    howTo: [
+      "Open the visit and tap Cancel visit",
+      "Pick “Just Mon Nov 3” or “Mon Nov 3 and the 5 after it”",
+      "Tap Cancel — the other person is told exactly which days",
+    ],
+    examples: ["We're away the week of Thanksgiving", "Mom is moving in with us — stop the Tuesday visits"],
+    preview: "cancelOneOrSeries",
+  },
+  {
     id: "change-visit-day",
     version: "1.124.0",
     date: "2026-10-19",

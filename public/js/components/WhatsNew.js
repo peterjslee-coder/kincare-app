@@ -203,6 +203,26 @@ const WN_PREVIEWS = {
     </div>
   ),
   // v1.124.0 — move a visit to another day (Pete, 10/19)
+  // v1.125.2 — cancelling a visit in a series asks which (Pete, 10/28: "is this Nov 3 or the entire series?")
+  cancelOneOrSeries: () => (
+    <div style={{ padding: '12px 12px 10px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>
+      <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>Cancel visit</div>
+      <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>This visit is part of a series. Cancel:</div>
+      {[['Just Mon Nov 3', 'The other 5 visits stay as booked.', true], ['Mon Nov 3 and the 5 after it', 'Every visit through Mon Dec 8.', false]].map(([l, sub, on]) => (
+        <div key={l} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '7px 9px', marginBottom: 5, borderRadius: 8,
+          border: on ? '2px solid var(--role-color)' : '1px solid var(--border-color)' }}>
+          <span style={{ width: 12, height: 12, marginTop: 2, borderRadius: 6, flexShrink: 0, border: '2px solid var(--role-color)', background: on ? 'var(--role-color)' : 'transparent' }} />
+          <span>
+            <span style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>{l}</span>
+            <span style={{ display: 'block', fontSize: 10.5, color: 'var(--text-secondary)' }}>{sub}</span>
+          </span>
+        </div>
+      ))}
+      <div style={{ marginTop: 6, padding: '6px 8px', borderRadius: 8, border: '2px dashed var(--accent-color)', fontSize: 10.5, fontWeight: 600, color: 'var(--text-secondary)' }}>
+        Jane cancelled this day only {'—'} the rest of the series is still with Jane.
+      </div>
+    </div>
+  ),
   changeVisitDay: () => (
     <div style={{ padding: '12px 12px 10px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>
       <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--color-purple)', marginBottom: 8 }}>{'⏰'} Change this visit</div>
