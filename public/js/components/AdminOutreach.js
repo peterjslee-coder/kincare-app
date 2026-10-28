@@ -342,7 +342,7 @@ const outToBody = (node) => (node && typeof ReactDOM !== 'undefined' && ReactDOM
   ? ReactDOM.createPortal(node, document.body)
   : node);
 
-const OutreachThread = ({ contactId, apiFetch, showToast, onClose, onChanged, callScript }) => {
+const OutreachThread = ({ contactId, apiFetch, showToast, onClose, onChanged, callScript, firstTexts }) => {
   const [data, setData] = React.useState(null);
   const [draft, setDraft] = React.useState('');
   const [email, setEmail] = React.useState('');
@@ -725,8 +725,22 @@ const OutreachThread = ({ contactId, apiFetch, showToast, onClose, onChanged, ca
             )}
           </div>
         )}
+        {c && !optedOut && c.texts_ok_at && !draft && Array.isArray(firstTexts) && firstTexts.length > 0 && (
+          // v1.125.4 — Pete, 10/28: "I need a few options to choose from/modify on the first text."
+          // A tap fills the box with their name in; edit, then Send. {link} becomes their own link.
+          <div style={{ flexShrink: 0, padding: '8px 10px 0', borderTop: '1px solid var(--border-color)', display: 'flex', gap: 6, alignItems: 'center', overflowX: 'auto' }}>
+            <span style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>Start from:</span>
+            {firstTexts.map((t) => (
+              <button key={t.id} onClick={() => setDraft(String(t.body).replace(/\{first\}/gi, outGreeting(c)).replace(/\{last\}/gi, c.last_name || ''))}
+                style={{ ...btn, padding: '5px 10px', fontSize: 12, borderRadius: 16, whiteSpace: 'nowrap', flexShrink: 0 }}>{t.label}</button>
+            ))}
+          </div>
+        )}
+        {c && !optedOut && c.texts_ok_at && /\{link\}/i.test(draft) && (
+          <div style={{ flexShrink: 0, padding: '6px 12px 0', fontSize: 11, color: 'var(--text-muted)' }}>{'{link}'} becomes their own InPlace link when it sends, so you can see if they open it.</div>
+        )}
         {c && !optedOut && c.texts_ok_at && (
-          <div style={{ flexShrink: 0, padding: 10, borderTop: '1px solid var(--border-color)', display: 'flex', gap: 8, alignItems: 'flex-end', paddingBottom: `calc(10px + ${vvBox && vvBox.height < window.innerHeight - 120 ? '0px' : 'var(--sab, 0px)'})` }}>
+          <div style={{ flexShrink: 0, padding: 10, borderTop: draft ? '1px solid var(--border-color)' : 'none', display: 'flex', gap: 8, alignItems: 'flex-end', paddingBottom: `calc(10px + ${vvBox && vvBox.height < window.innerHeight - 120 ? '0px' : 'var(--sab, 0px)'})` }}>
             <textarea ref={draftRef} rows={1} style={{ ...field, minHeight: 40, maxHeight: 160, resize: 'none', overflowY: 'auto', fontSize: 16, lineHeight: 1.35 }} placeholder={`Text ${outGreeting(c)} from InPlace…`} value={draft}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) send(); }} />
@@ -1035,6 +1049,7 @@ const AdminOutreachTab = window.AdminOutreachTab = ({ apiFetch, showToast, onUnr
 
       {openId && (
         <OutreachThread contactId={openId} apiFetch={apiFetch} showToast={showToast} callScript={data && data.callScript}
+          firstTexts={data && data.firstTexts}
           onClose={() => { setOpenId(null); load(); }} onChanged={load} />
       )}
     </div>

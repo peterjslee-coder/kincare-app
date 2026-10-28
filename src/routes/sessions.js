@@ -1242,24 +1242,10 @@ router.post("/", requireRole("family", "care_for"), validateSession, async (req,
   }
 });
 
-// ─── DELETE /api/sessions/recurring/:groupId ───
-// Cancel all future sessions in a recurring group
-router.delete("/recurring/:groupId", requireRole("family"), async (req, res) => {
-  const db = await getDb();
-  const today = getTodayStringInZone();
-
-  // Only cancel future pending/confirmed sessions in this group belonging to this user
-  const result = await db.prepare(`
-    UPDATE care_sessions
-    SET status = 'cancelled', cancellation_reason = 'Recurring series cancelled', updated_at = NOW()
-    WHERE recurrence_group_id = ?
-      AND family_user_id = ?
-      AND scheduled_date >= ?
-      AND status IN ('pending', 'confirmed')
-  `).run(req.params.groupId, req.user.id, today);
-
-  res.json({ cancelled: result.changes, recurrenceGroupId: req.params.groupId });
-});
+// v1.125.4 — DELETE /api/sessions/recurring/:groupId is gone (Pete, 10/28: "Remove the 'cancel
+// whole series' route"). It cancelled confirmed visits with no notice to the caregiver, no fee
+// decision and no hold release, and skipped open ones. Cancelling a series is
+// PUT /:id/cancel { scope: "series" } — see cancelOneSession() below.
 
 // ─── POST /api/sessions/:id/match ───
 // Match a caregiver to a pending session

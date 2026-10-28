@@ -81,4 +81,6 @@ test("shows up in the list like an imported person", async () => {
   const jane = d.contacts.find((c) => c.phone === "+15405550111");
   expect(jane).toBeTruthy();
   expect(jane.status).toBe("new");
+  // v1.125.4 — the first-text starting points ride along with the list
+  expect(d.firstTexts.map((t) => t.id)).toEqual(["after_call", "after_call_link", "checking_in"]);
 });

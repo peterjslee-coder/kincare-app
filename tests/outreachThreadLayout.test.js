@@ -94,3 +94,12 @@ describe("recording a verbal OK from a call (v1.125.3)", () => {
     expect(thread).toMatch(/disabled=\{consentDraft\.trim\(\)\.length < 3\}/);
   });
 });
+
+describe("first-text starting points (v1.125.4)", () => {
+  test("the server sends them and the thread offers them when the box is empty", () => {
+    expect(raw("src/routes/outreach.js")).toMatch(/firstTexts: O\.FIRST_TEXTS/);
+    expect(src).toMatch(/firstTexts=\{data && data\.firstTexts\}/);
+    expect(thread).toMatch(/c\.texts_ok_at && !draft && Array\.isArray\(firstTexts\)/);
+    expect(thread).toMatch(/setDraft\(String\(t\.body\)\.replace\(\/\\\{first\\\}\/gi, outGreeting\(c\)\)/);
+  });
+});

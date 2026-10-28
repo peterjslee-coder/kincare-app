@@ -47,6 +47,33 @@ const JOIN_REPLY =
 // her. Same domain as the registered sample; the outreach A2P campaign is filed "embedded links: Yes".
 // v1.124.2 — the follow-up after someone texts JOIN. Texts go only to people who texted first
 // with a recorded OK (routes/outreach.js sendToContact), so this is never a cold first contact.
+// v1.125.4 — starting points for the first text after someone OKs texting on a call. Pete, 10/28:
+// "if I record an OK to text … I need a few options to choose from/modify on the first text."
+// The first one is his wording. {first} is filled in on the screen; {link} becomes their own
+// tracked link when the text is sent. Each carries the HELP/STOP lines.
+const FIRST_TEXTS = [
+  {
+    id: "after_call",
+    label: "After a call",
+    body: "Hi {first}, thanks for your time on the phone earlier and your interest in private care through InPlace! " +
+      "Reply with your email address and we'll get you set up in no time! You can call or text Pete anytime at " +
+      "this number if you have any questions. Msg frequency varies. Msg & data rates may apply. Reply HELP for help, STOP to opt out.",
+  },
+  {
+    id: "after_call_link",
+    label: "After a call + link",
+    body: "Hi {first}, it's Pete with InPlace. Thanks for your time on the phone today! Here's more about private care " +
+      "work with us: {link} Reply with your email address and we'll get you set up in no time. Call or text this " +
+      "number anytime with questions. Reply HELP for help, STOP to opt out.",
+  },
+  {
+    id: "checking_in",
+    label: "Checking in",
+    body: "Hi {first}, it's Pete with InPlace checking in. Any questions I can answer? Reply with your email address " +
+      "and I'll send your signup link, or call this number anytime. Reply STOP to opt out.",
+  },
+];
+
 const DEFAULT_INTRO =
   "Hi {first}, it's Pete Lee with InPlace Care. Thanks for texting JOIN! Here's " +
   "the info on caregiving work ({link}). Reply with your email and I'll send your signup link. " +
@@ -197,7 +224,7 @@ function segmentCount(text) {
 }
 
 module.exports = {
-  OUTREACH_STATUSES, OPT_OUT_WORDS, OPT_IN_WORDS, JOIN_WORDS, JOIN_REPLY, DEFAULT_INTRO,
+  OUTREACH_STATUSES, OPT_OUT_WORDS, OPT_IN_WORDS, JOIN_WORDS, JOIN_REPLY, DEFAULT_INTRO, FIRST_TEXTS,
   phoneKey, toE164, prettyPhone, parseList, greetingName, renderTemplate, hasLinkToken,
   classifyInbound, introWindow, segmentCount, dialableUsNumber,
 };

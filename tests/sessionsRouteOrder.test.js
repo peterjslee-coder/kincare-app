@@ -46,7 +46,6 @@ const EXPECTED = [
   // v1.106.24 — accepting a recurring series in one act, with the dates she picks.
   "PUT /recurring/:groupId/claim",
   "POST /",
-  "DELETE /recurring/:groupId",
   "POST /:id/match",
   "GET /cost-preview",
   "PUT /:id/status",
@@ -112,7 +111,7 @@ describe("the sessions router", () => {
     // cannot match it, but "/:id" is one pattern away from a reorder that would. Both
     // recurring routes are asserted, not just the new one.
     const claimIdx = actual.indexOf("PUT /:id/claim");
-    for (const literal of ["PUT /recurring/:groupId/claim", "DELETE /recurring/:groupId", "PUT /claim-batch"]) {
+    for (const literal of ["PUT /recurring/:groupId/claim", "PUT /claim-batch"]) { // v1.125.4 — DELETE /recurring/:groupId removed
       expect(actual.indexOf(literal)).toBeGreaterThan(-1);
     }
     expect(actual.indexOf("PUT /recurring/:groupId/claim")).toBeGreaterThan(claimIdx);

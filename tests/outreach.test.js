@@ -127,3 +127,17 @@ describe("dialableUsNumber — the browser can never call 911", () => {
   });
   test("a normal local number is dialable", () => expect(O.dialableUsNumber("(540) 555-0101")).toBe("+15405550101"));
 });
+
+describe("v1.125.4 — first-text starting points (Pete, 10/28)", () => {
+  test("Pete's own wording is first, and every one tells them how to stop", () => {
+    expect(O.FIRST_TEXTS[0].body).toMatch(/thanks for your time on the phone earlier and your interest in private care through InPlace!/);
+    for (const t of O.FIRST_TEXTS) {
+      expect(t.id).toMatch(/^[a-z_]+$/);
+      expect(t.label.length).toBeGreaterThan(2);
+      expect(t.body).toMatch(/STOP to opt out/);
+      expect(t.body).toMatch(/\{first\}/);
+      expect(t.body.length).toBeLessThanOrEqual(480); // at most three texts
+    }
+    expect(new Set(O.FIRST_TEXTS.map((t) => t.id)).size).toBe(O.FIRST_TEXTS.length);
+  });
+});

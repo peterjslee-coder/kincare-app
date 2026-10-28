@@ -186,6 +186,7 @@ adminRouter.get("/", async (req, res) => {
       statuses: O.OUTREACH_STATUSES,
       defaultIntro: O.DEFAULT_INTRO,
       callScript: CN.CALL_SCRIPT, // v1.122.0
+      firstTexts: O.FIRST_TEXTS, // v1.125.4
       number: outreachNumber(),
       introWindow: win,
       sending: introRun,

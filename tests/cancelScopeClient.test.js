@@ -36,3 +36,7 @@ test("the instruction card sends the conversation and lets the family pick a dif
   expect(m).toMatch(/JSON\.stringify\(\{ message: sentText, conversationId: data\.conversationId \|\| activeConvId \}\)/);
   expect(m).toMatch(/instructionSuggestion\.alternatives\.map/);
 });
+
+test("the old series DELETE route is gone from the server (v1.125.4)", () => {
+  expect(code("src/routes/sessions.js")).not.toMatch(/router\.delete\("\/recurring\/:groupId"/);
+});
