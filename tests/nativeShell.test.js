@@ -179,8 +179,11 @@ describe("the plugins the build actually installs", () => {
     const proj = require("fs").readFileSync(
       require("path").join(__dirname, "..", "ios", "App", "App.xcodeproj", "project.pbxproj"), "utf8"
     );
-    expect(proj).not.toMatch(/CURRENT_PROJECT_VERSION = [78];/);
-    expect(proj).toMatch(/CURRENT_PROJECT_VERSION = 9;/);
+    // v1.125.6 — Build 10 / 1.2, the store release candidate (Build 9 was the last TestFlight).
+    expect(proj).not.toMatch(/CURRENT_PROJECT_VERSION = [789];/);
+    expect(proj).toMatch(/CURRENT_PROJECT_VERSION = 10;/);
+    const gradle = require("fs").readFileSync(require("path").join(__dirname, "..", "android", "app", "build.gradle"), "utf8");
+    expect(gradle).toMatch(/versionCode 22\b/);
   });
 });
 
