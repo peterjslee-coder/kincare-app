@@ -103,3 +103,15 @@ describe("first-text starting points (v1.125.4)", () => {
     expect(thread).toMatch(/setDraft\(String\(t\.body\)\.replace\(\/\\\{first\\\}\/gi, outGreeting\(c\)\)/);
   });
 });
+
+describe("calling through your own cell (v1.125.5)", () => {
+  test("the Call button rings your cell; the browser call is the fallback under Details", () => {
+    expect(thread).toMatch(/<button onClick=\{startCellCall\}/);
+    expect(thread).toMatch(/\/call-via-cell`, \{ method: 'POST'/);
+    expect(thread).toMatch(/onClick=\{startCall\}[\s\S]{0,200}Call from this browser instead/);
+  });
+  test("the script stays on screen for a cell call", () => {
+    // the script panel keys on `call` alone, so a cell call shows it too
+    expect(thread).toMatch(/\{call && Array\.isArray\(callScript\) && \(/);
+  });
+});

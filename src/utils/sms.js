@@ -107,4 +107,4 @@ function outreachNumber() {
   return n && process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN ? n : null;
 }
 
-module.exports = { sendSms, formatPhoneE164, isSmsConfigured, outreachNumber };
+module.exports = { sendSms, formatPhoneE164, isSmsConfigured, outreachNumber, getTwilio }; // getTwilio: v1.125.5 call-via-cell

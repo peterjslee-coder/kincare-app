@@ -378,6 +378,76 @@ router.post("/outreach-dial", async (req, res) => {
   }
 });
 
+// ─── v1.125.5 — call through the admin's own cell (routes/outreach.js /:id/call-via-cell) ───
+//
+// Leg 1 rang the admin's cell. It answers here. A voicemail box answers calls too, so nothing is
+// dialed until a person presses 1 — otherwise an unanswered phone would connect a caregiver to
+// Pete's voicemail greeting.
+const bridgeCall = (db, messageId) => db.prepare(`
+  SELECT m.id, m.status, m.sent_by, c.id AS contact_id, c.phone, c.first_name, c.last_inbound_at
+    FROM outreach_messages m JOIN outreach_contacts c ON c.id = m.contact_id
+   WHERE m.id = ? AND m.kind = 'call'
+`).get(messageId);
+
+router.post("/outreach-bridge/:messageId", async (req, res) => {
+  if (!verifyTwilio(req)) return res.status(403).send("Forbidden");
+  try {
+    const db = await getDb();
+    const m = await bridgeCall(db, req.params.messageId);
+    if (!m || m.status !== "calling_you") return voiceXml(res, sayXml("This call has already ended.") + "<Hangup/>");
+    const who = String(m.first_name || "").split(/\s+/)[0] || O.prettyPhone(m.phone);
+    voiceXml(res, `<Gather numDigits="1" timeout="10" action="${APP_URL}/api/sms/outreach-bridge/${m.id}/go">`
+      + sayXml(`In Place call to ${who}. Press 1 to connect.`) + `</Gather>`
+      + sayXml("Not connecting. Goodbye.") + "<Hangup/>");
+  } catch (err) {
+    captureException(err, { where: "outreach: bridge answer" });
+    voiceXml(res, sayXml("Sorry, something went wrong.") + "<Hangup/>");
+  }
+});
+
+router.post("/outreach-bridge/:messageId/go", async (req, res) => {
+  if (!verifyTwilio(req)) return res.status(403).send("Forbidden");
+  try {
+    if (String(req.body.Digits || "") !== "1") return voiceXml(res, sayXml("Not connecting. Goodbye.") + "<Hangup/>");
+    const db = await getDb();
+    const m = await bridgeCall(db, req.params.messageId);
+    if (!m || m.status !== "calling_you") return voiceXml(res, sayXml("This call has already ended.") + "<Hangup/>");
+    // Same guards as the browser call: a full US number from our own table, never a short code.
+    const to = O.dialableUsNumber(m.phone);
+    if (!to) return voiceXml(res, sayXml("Sorry, that number can't be called from here.") + "<Hangup/>");
+    const from = outreachNumber();
+    if (!from) return voiceXml(res, sayXml("The outreach number isn't set up.") + "<Hangup/>");
+    await db.prepare("UPDATE outreach_messages SET status = 'calling', body = 'Call', twilio_sid = COALESCE(twilio_sid, ?) WHERE id = ?")
+      .run(req.body.CallSid || null, m.id);
+    // The same <Dial> as /outreach-dial: recorded from answer, and dial-done / call-recording
+    // find the row by the parent CallSid — the leg that rang the admin.
+    voiceXml(res, sayXml("Connecting.")
+      + `<Dial callerId="${from}" answerOnBridge="true" timeout="30" action="${APP_URL}/api/sms/outreach-dial-done"`
+      + ` record="record-from-answer-dual" recordingStatusCallback="${APP_URL}/api/sms/outreach-call-recording" recordingStatusCallbackEvent="completed">`
+      + `<Number>${xmlEscape(to)}</Number></Dial>`);
+  } catch (err) {
+    captureException(err, { where: "outreach: bridge go" });
+    voiceXml(res, sayXml("Sorry, something went wrong.") + "<Hangup/>");
+  }
+});
+
+// The admin's leg ended. If it never got to the caregiver, say why in the thread.
+router.post("/outreach-bridge-status/:messageId", async (req, res) => {
+  if (!verifyTwilio(req)) return res.status(403).send("Forbidden");
+  try {
+    const db = await getDb();
+    const st = String(req.body.CallStatus || "");
+    const body = st === "no-answer" || st === "busy" ? "Call · you didn't pick up"
+      : st === "failed" || st === "canceled" ? "Call · couldn't ring your phone"
+      : "Call · not connected";
+    await db.prepare("UPDATE outreach_messages SET body = ?, status = ? WHERE id = ? AND kind = 'call' AND status = 'calling_you'")
+      .run(body, st.slice(0, 30) || "ended", req.params.messageId);
+  } catch (err) {
+    captureException(err, { where: "outreach: bridge status" });
+  }
+  res.status(204).end();
+});
+
 router.post("/outreach-dial-done", async (req, res) => {
   if (!verifyTwilio(req)) return res.status(403).send("Forbidden");
   try {

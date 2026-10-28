@@ -16,7 +16,7 @@ const { getDb } = require("../models/database");
 const { authenticate, requireAdmin } = require("../middleware/auth");
 const { checkAdmin } = require("./admin/shared");
 const { captureException } = require("../utils/sentry");
-const { sendSms, outreachNumber } = require("../utils/sms");
+const { sendSms, outreachNumber, getTwilio } = require("../utils/sms");
 const { sendEmail, brandedHtml } = require("../utils/email");
 const O = require("../utils/outreach");
 const CN = require("../utils/outreachCallNotes"); // v1.122.0
@@ -358,6 +358,65 @@ adminRouter.post("/:id/messages", async (req, res) => {
 
 // A short-lived token for the browser's Call button (Twilio Voice SDK). Outgoing only; the
 // TwiML App it names (/api/sms/outreach-dial) dials the contact's number from our table.
+// ─── v1.125.5 — call through Pete's own cell ───
+//
+// Pete, 10/28: "The calls have to be able to continue while the phone screen is locked. … If I'm
+// on a call with somebody and the screen locks, it cuts the audio." A call placed from the web view
+// dies with the screen. Rather than native calling (Swift, CallKit, a new build, App Review), Twilio
+// rings the admin's own cell from the outreach number; he answers and presses 1, and Twilio dials
+// the caregiver from the outreach number and bridges them. It is an ordinary phone call on his
+// phone, so the screen can lock. Recording, transcript and iPAi notes are the same pipeline as the
+// browser call (smsWebhooks.js /outreach-bridge → the same <Dial> as /outreach-dial). The
+// caregiver only ever sees the outreach number; the admin's cell is never sent to them.
+adminRouter.post("/:id/call-via-cell", async (req, res) => {
+  try {
+    const from = outreachNumber();
+    if (!from) return res.status(400).json({ error: "The outreach number isn't set up yet (TWILIO_OUTREACH_NUMBER)." });
+    const client = getTwilio();
+    if (!client) return res.status(400).json({ error: "Twilio isn't configured." });
+    const db = await getDb();
+    const contact = await loadContact(db, req.params.id);
+    if (!contact) return res.status(404).json({ error: "Not found" });
+    if (!O.dialableUsNumber(contact.phone)) return res.status(400).json({ error: "That number can't be called from here." });
+    if (!contact.last_inbound_at && !O.introWindow().open) {
+      return res.status(400).json({ error: "First calls to someone new go out between 9am and 8pm Eastern, Monday through Saturday." });
+    }
+    const me = await db.prepare("SELECT phone FROM users WHERE id = ?").get(req.user.id);
+    const myCell = O.dialableUsNumber(me && me.phone);
+    if (!myCell) return res.status(400).json({ error: "Add your cell number to your account (Account → Phone) so the call can ring you." });
+    if (myCell === O.dialableUsNumber(contact.phone)) return res.status(400).json({ error: "That's your own number." });
+
+    const messageId = uuid();
+    await db.prepare(`
+      INSERT INTO outreach_messages (id, contact_id, direction, body, status, kind, sent_by, created_at)
+      VALUES (?, ?, 'out', 'Call · ringing your phone', 'calling_you', 'call', ?, NOW())
+    `).run(messageId, contact.id, req.user.id);
+    let call;
+    try {
+      call = await client.calls.create({
+        to: myCell,
+        from,
+        url: `${APP_URL}/api/sms/outreach-bridge/${messageId}`,
+        method: "POST",
+        timeout: 25,
+        statusCallback: `${APP_URL}/api/sms/outreach-bridge-status/${messageId}`,
+        statusCallbackMethod: "POST",
+        statusCallbackEvent: ["completed"],
+      });
+    } catch (e) {
+      await db.prepare("UPDATE outreach_messages SET body = 'Call · could not ring your phone', status = 'failed', error = ? WHERE id = ?")
+        .run(String(e.message || e).slice(0, 300), messageId);
+      return res.status(502).json({ error: "Couldn't ring your phone. Try again, or use the browser call." });
+    }
+    await db.prepare("UPDATE outreach_messages SET twilio_sid = ? WHERE id = ?").run(call.sid, messageId);
+    await db.prepare("UPDATE outreach_contacts SET last_message_at = NOW(), updated_at = NOW() WHERE id = ?").run(contact.id);
+    res.json({ ok: true, messageId, ringing: `…${myCell.slice(-4)}` });
+  } catch (err) {
+    captureException(err, { where: "outreach: call via cell" });
+    res.status(500).json({ error: "Couldn't start the call" });
+  }
+});
+
 adminRouter.get("/voice-token", async (req, res) => {
   try {
     const sid = process.env.TWILIO_ACCOUNT_SID, keySid = process.env.TWILIO_API_KEY_SID,

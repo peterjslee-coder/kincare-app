@@ -462,6 +462,21 @@ const OutreachThread = ({ contactId, apiFetch, showToast, onClose, onChanged, ca
       endCall();
     }
   };
+  // v1.125.5 — Pete, 10/28: calls must survive a locked screen. Twilio rings his own cell from the
+  // outreach number; he answers, presses 1, and is connected. It's a normal phone call, so the
+  // screen can lock. The script stays here while he talks.
+  const startCellCall = async () => {
+    setCall({ state: 'cell', muted: false, secs: 0, ringing: '' });
+    try {
+      const res = await apiFetch(`/api/admin/outreach/${contactId}/call-via-cell`, { method: 'POST', body: '{}' });
+      if (!res?.ok) { showToast(await outErr(res, "Couldn't start the call"), 'error'); setCall(null); return; }
+      const d = await res.json();
+      setCall((x) => (x ? { ...x, ringing: d.ringing || '' } : x));
+      load(false); onChanged();
+    } catch {
+      showToast("Couldn't start the call", 'error'); setCall(null);
+    }
+  };
   const toggleMute = () => {
     if (!callRef.current) return;
     const next = !call.muted;
@@ -589,11 +604,19 @@ const OutreachThread = ({ contactId, apiFetch, showToast, onClose, onChanged, ca
           </div>
           {c && <OutStatusPill status={c.joined_user_id && c.status !== 'opted_out' ? 'joined' : c.status} />}
           {c && !call && (
-            <button onClick={startCall} title="Call from InPlace's number" style={{ ...btn, padding: '4px 10px', fontSize: 13, flexShrink: 0 }}>📞 Call</button>
+            <button onClick={startCellCall} title="Rings your cell from InPlace's number, then connects you" style={{ ...btn, padding: '4px 10px', fontSize: 13, flexShrink: 0 }}>📞 Call</button>
           )}
         </div>
 
-        {call && (
+        {call && call.state === 'cell' && (
+          <div style={{ flexShrink: 0, padding: '10px 16px', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', gap: 10, ...OUT_TONE.info }}>
+            <span style={{ flex: 1, fontSize: 13, lineHeight: 1.45 }}>
+              <b>Ringing your phone{call.ringing ? ` (${call.ringing})` : ''}.</b> Answer and press 1 — then it calls {c ? outGreeting(c) : 'them'} from InPlace's number. You can lock the screen; hang up on your phone when you're done.
+            </span>
+            <button onClick={() => { setCall(null); load(false); onChanged(); }} style={{ ...btn, padding: '4px 12px', fontSize: 12 }}>Done</button>
+          </div>
+        )}
+        {call && call.state !== 'cell' && (
           <div style={{ flexShrink: 0, padding: '10px 16px', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', gap: 10, ...OUT_TONE.info }}>
             <span style={{ flex: 1, fontSize: 14, fontWeight: 600 }}>
               {call.state === 'live' ? `On the call · ${outClock(call.secs)}` : call.state === 'ringing' ? 'Ringing…' : 'Connecting…'}
@@ -666,6 +689,12 @@ const OutreachThread = ({ contactId, apiFetch, showToast, onClose, onChanged, ca
               </div>
               <textarea style={{ ...field, minHeight: 44 }} placeholder="Notes (only admins see these)" value={notes}
                 onChange={(e) => setNotes(e.target.value)} onBlur={() => notes !== (c.notes || '') && patch({ notes })} />
+              {!call && (
+                <button style={{ ...btn, justifySelf: 'start', fontSize: 12, padding: '4px 10px' }} onClick={startCall}
+                  title="Uses this device's microphone. The call ends if the screen locks or the app closes.">
+                  Call from this browser instead (screen must stay on)
+                </button>
+              )}
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 {optedOut
                   ? <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Replied STOP. InPlace won't text this number again unless it texts START.</span>
@@ -908,7 +937,7 @@ const AdminOutreachTab = window.AdminOutreachTab = ({ apiFetch, showToast, onUnr
             <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>Caregiver outreach</div>
             <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2, lineHeight: 1.5 }}>
               {data.number
-                ? <>Call first (📞 in each thread — recorded, with the script on screen) and ask if you can text them. Texts go out from <b>{outPhone(data.number)}</b> only to people who OK'd them — by texting that number, or by saying yes on a recorded call (Details → Record OK from the call). Replies land here; a reply with an email address gets a signup invite automatically.</>
+                ? <>Call first (📞 in each thread rings your cell, then connects you from this number — recorded, with the script on screen) and ask if you can text them. Texts go out from <b>{outPhone(data.number)}</b> only to people who OK'd them — by texting that number, or by saying yes on a recorded call (Details → Record OK from the call). Replies land here; a reply with an email address gets a signup invite automatically.</>
                 : <span style={{ color: 'var(--color-error)' }}>The outreach number isn't set up yet, so texting is off. You can still import and organize the list.</span>}
             </div>
           </div>
