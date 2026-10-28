@@ -83,3 +83,14 @@ describe("nothing in the app can paint over the conversation (v1.125.2)", () => 
     expect(thread).toMatch(/return outToBody\(\n\s*<div onClick=\{closeByButton\}/);
   });
 });
+
+describe("recording a verbal OK from a call (v1.125.3)", () => {
+  test("the thread can record one — from the footer, from Details, and one tap from a call iPAi read", () => {
+    expect(thread).toMatch(/Record OK from the call/);
+    expect(thread).toMatch(/patch\(\{ textsOk: true, evidence, callMessageId: callMessageId \|\| undefined \}/);
+    expect(src).toMatch(/onUseConsent\(m\.id, notes\.consentQuote\)/);
+  });
+  test("nothing is saved without their words", () => {
+    expect(thread).toMatch(/disabled=\{consentDraft\.trim\(\)\.length < 3\}/);
+  });
+});

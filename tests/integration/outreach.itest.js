@@ -103,7 +103,7 @@ test("v1.122.0 — nobody on an imported list can be texted before they OK it", 
   const one = await h.request.post(`/api/admin/outreach/${ids[0]}/messages`).set(A()).send({ body: "Hi! Reply STOP to opt out." });
   expect(one.status).toBe(400);
   expect(sent).toHaveLength(0);
-  // Recording an OK by hand needs a real call first.
+  // Recording an OK by hand needs their words (v1.125.3 — see outreachConsentOverride.itest.js).
   expect((await h.request.patch(`/api/admin/outreach/${ids[0]}`).set(A()).send({ textsOk: true })).status).toBe(400);
 });
 
@@ -335,7 +335,7 @@ describe("recorded outreach calls", () => {
     const after = await db.prepare("SELECT texts_ok_at, status FROM outreach_contacts WHERE id = 'cRec2'").get();
     expect(after.texts_ok_at).toBeNull();
     expect(after.status).toBe("new");
-    // v1.124.1 — nobody can mark an OK by hand, even after a real call; their JOIN text does it.
+    // A bare "OK" with no words is still refused (v1.125.3: an admin OK needs what they said).
     expect((await h.request.patch("/api/admin/outreach/cRec2").set(A()).send({ textsOk: true })).status).toBe(400);
     expect((await db.prepare("SELECT texts_ok_at FROM outreach_contacts WHERE id = 'cRec2'").get()).texts_ok_at).toBeNull();
     const r = await inbound("+15405550162", "JOIN");

@@ -337,7 +337,7 @@ adminRouter.post("/:id/messages", async (req, res) => {
     if (!contact) return res.status(404).json({ error: "Not found" });
     if (contact.opted_out_at || contact.status === "opted_out") return res.status(400).json({ error: "This person replied STOP. InPlace can't text them again unless they text START." });
     // v1.122.0 — no OK, no text. Said here plainly rather than as a failed send.
-    if (!contact.texts_ok_at) return res.status(400).json({ error: "No OK to text yet. They have to text first: on the call, ask them to text JOIN to the outreach number. Their text opens the thread, and the link goes back automatically." });
+    if (!contact.texts_ok_at) return res.status(400).json({ error: "No OK to text yet. Either they text the outreach number (JOIN), or you record their yes from the call: Details → Record OK from the call." });
     // A first text to someone who has never written back is a cold text: same hours as the intro.
     if (!contact.last_inbound_at) {
       const win = O.introWindow();
@@ -434,8 +434,32 @@ adminRouter.patch("/:id", async (req, res) => {
     if (b.textsOk === false) {
       await db.prepare("UPDATE outreach_contacts SET texts_ok_at = NULL, texts_ok_source = NULL, texts_ok_by = NULL, texts_ok_evidence = NULL, texts_ok_message_id = NULL WHERE id = ?").run(contact.id);
     } else if (b.textsOk === true && !contact.texts_ok_at) {
-      // v1.124.1 — texting opens only when they text the number themselves (see smsWebhooks).
-      return res.status(400).json({ error: "Texting opens when they text JOIN (or anything) to the outreach number. Ask them to on the call." });
+      // v1.125.3 — Pete's override (10/28): "I have a transcript and a recorded call saying 'yes, I
+      // would like more information' and that's good enough to defend … log it as an override. …
+      // I'm not going to text anyone who doesn't say, like Doris, 'yeah, I would like more info' to
+      // the question 'is it OK if I text you some more info?'"
+      //
+      // v1.124.1 had made texting-in (JOIN) the ONLY way to open texting, because the A2P campaign
+      // filing describes that flow. This reopens the other way, as a recorded admin decision: what
+      // they said, which recorded call it was on, and who recorded it. Without words, no OK.
+      const evidence = String(b.evidence || "").trim().slice(0, 500);
+      if (evidence.length < 3) return res.status(400).json({ error: "Write what they said when you asked if you could text them." });
+      if (contact.opted_out_at || contact.status === "opted_out") return res.status(400).json({ error: "This person opted out. Only they can opt back in, by texting START." });
+      let callId = null;
+      if (b.callMessageId) {
+        const call = await db.prepare(
+          "SELECT id FROM outreach_messages WHERE id = ? AND contact_id = ? AND kind = 'call'"
+        ).get(String(b.callMessageId), contact.id);
+        if (!call) return res.status(400).json({ error: "That call isn't in this conversation." });
+        callId = call.id;
+      }
+      await db.prepare(`
+        UPDATE outreach_contacts
+           SET texts_ok_at = NOW(), texts_ok_source = ?, texts_ok_by = ?, texts_ok_evidence = ?, texts_ok_message_id = ?
+         WHERE id = ? AND texts_ok_at IS NULL
+      `).run(callId ? "recorded_call" : "admin_override", req.user.id,
+        `${callId ? "Said on the recorded call" : "Recorded by admin"}: “${evidence.replace(/^["“”]+|["“”]+$/g, "")}”`,
+        callId, contact.id);
     }
     if (b.status !== undefined) {
       if (!O.OUTREACH_STATUSES.includes(b.status)) return res.status(400).json({ error: "Unknown status" });

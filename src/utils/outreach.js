@@ -35,10 +35,13 @@ const JOIN_WORDS = ["join", "join inplace", "inplace"];
 // Must match the opt-in message registered for the outreach A2P campaign (Twilio, 10/14).
 // v1.124.3 — the registered opt-in message. Carriers' checklist (Twilio 30909): brand name,
 // confirmation of enrollment, message frequency, opt-out instructions. All four, under 320 chars.
+// v1.125.3 — Pete's wording (10/28). The last two sentences are the CTIA opt-in confirmation
+// lines the verified campaign (CMba88) was filed with; Pete chose to keep them. ≤320 characters.
 const JOIN_REPLY =
-  "InPlace Care: Thanks for texting JOIN! You're signed up for texts about caregiving work. " +
-  "Reply with your email for details and a signup link. Msg frequency varies. Msg & data rates " +
-  "may apply. Reply HELP for help, STOP to opt out.";
+  "InPlace Care: Thanks for your interest in joining InPlace! You're signed up for texts about " +
+  "caregiving work. Reply with your email and we'll get you set up in no time. Questions? Text or " +
+  "call and Pete will get back to you soonest. Msg frequency varies. Msg & data rates may apply. " +
+  "Reply HELP for help, STOP to opt out.";
 
 // v1.118.0 — {link} is her own yourinplace.com/i/… link (utils/tracking.js), so a tap is credited to
 // her. Same domain as the registered sample; the outreach A2P campaign is filed "embedded links: Yes".

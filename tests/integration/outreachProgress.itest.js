@@ -172,10 +172,11 @@ test("the thread endpoint returns the same ladder", async () => {
   expect(r.body.progress.furthest).toBe("started");
 });
 
-test("texting someone with no OK explains JOIN, not the retired call-recording OK", async () => {
+test("texting someone with no OK explains both ways to get one", async () => {
+  // v1.125.3 — the call-recording OK is back, as Pete's recorded override (outreachConsentOverride.itest.js).
   const id = await contact("5405550307");
   const r = await h.request.post(`/api/admin/outreach/${id}/messages`).set(A()).send({ body: "hi Reply STOP to opt out" });
   expect(r.status).toBe(400);
-  expect(r.body.error).toMatch(/text JOIN/);
-  expect(r.body.error).not.toMatch(/recording/);
+  expect(r.body.error).toMatch(/JOIN/);
+  expect(r.body.error).toMatch(/Record OK from the call/);
 });

@@ -2,6 +2,19 @@
 
 > **How this works:** Add bugs and features below as you find them. Don't worry about wording or order. When you're ready for a dev session, say "let's work the task list" and Claude will batch everything together into one efficient push. Nothing gets executed until you say go.
 
+## Oct 28 2026 — Pete: "add to the list: calls inside the app, and how we're going to work background checks"
+
+- [ ] **[AAB NEEDED] Calls inside the app (outreach calling survives a locked screen).**
+  - Pete, 10/28: "The calls have to be able to continue while the phone screen is locked … they have to be able to reach me on this number. When they call, if I'm not looking at my phone with the app running, it won't ring." (feedback e10558c2, 69045fe9)
+  - Cause: Admin → Outreach calls run in the web view (Twilio Voice JS). iOS suspends it when the screen locks (audio drops, gateway error 31005), and an incoming call can only ring a page that is open.
+  - Fix is native: Twilio Voice iOS/Android SDK, plus CallKit + PushKit VoIP push on iOS (UIBackgroundModes audio + voip), plus a ConnectionService on Android. The outreach number's incoming calls go to Pete's device as a real phone call.
+  - Start from `CallKit_VoIP_Plan_2026-09-01.md` (Working Folder). Recording and iPAi call notes must keep working, and so must the script on screen during a call.
+  - Needs: an Apple VoIP push certificate, an app build, and App Review notes.
+- [ ] **How background checks will work (decide, then build).**
+  - Today: Checkr is the gate. A caregiver pays for their own check. An admin vouch can stand in (bg_admin_vouches). Pete's free public-record lookups (VA courts, NSOPW) are his own sanity check, not recorded and not used to decide (10/26).
+  - To decide with Pete: who pays (InPlace, the family or the caregiver); which package; when it runs in the path (before the first job, not at signup — onboarding principle); what an admin sees and decides on "consider" results (FCRA adverse-action steps); re-checks (annual?); and what a family is shown.
+  - Lawyer agenda already has: informal public-record lookups before Checkr. Add the FCRA adverse-action flow if InPlace makes the decision.
+
 ## Oct 21 2026 — Incident kill switch + leak blast radius (Pete: "I'd like options in the future")
 
 Context: Railway's env-variable store was breached on 10/21 (see project doc `InPlace_Railway_Key_Rotation_2026-10-21.md`). Deploys were paused all day, so a leaked `JWT_SECRET` (which can forge any login, admin included) could not be rotated. An in-app button alone is not a kill switch, because the same leak can switch it back off. The real switch has to sit outside every secret that could leak.

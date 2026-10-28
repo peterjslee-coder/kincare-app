@@ -290,7 +290,7 @@ const OutVoicemailPlayer = ({ messageId, apiFetch, showToast, label = '▶ Play 
 };
 
 // v1.122.0 — a recorded call: play it, read the transcript, see what iPAi took from it.
-const OutCallDetail = ({ m, apiFetch, showToast }) => {
+const OutCallDetail = ({ m, apiFetch, showToast, onUseConsent }) => {
   const [open, setOpen] = React.useState(false);
   let notes = null;
   try { notes = m.ai_notes ? JSON.parse(m.ai_notes) : null; } catch { notes = null; }
@@ -301,6 +301,14 @@ const OutCallDetail = ({ m, apiFetch, showToast }) => {
         <div style={{ marginBottom: 4 }}>
           <b>iPAi:</b> {notes.summary}
           {notes.textsOk ? <span> · <b>OK'd texts</b> (“{notes.consentQuote}”)</span> : null}
+          {notes.textsOk && onUseConsent ? (
+            // v1.125.3 — one tap: this call, this quote, recorded as Pete's OK to text.
+            <div style={{ marginTop: 6 }}>
+              <button onClick={() => onUseConsent(m.id, notes.consentQuote)} style={{ padding: '4px 10px', borderRadius: 8, border: 'none', background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                ✓ Use this as their OK to text
+              </button>
+            </div>
+          ) : null}
         </div>
       )}
       {notes && notes.error && <div style={{ marginBottom: 4 }}>{notes.error}</div>}
@@ -349,6 +357,8 @@ const OutreachThread = ({ contactId, apiFetch, showToast, onClose, onChanged, ca
   // Now those sections fold into one "Details" row inside the same scroll as the conversation,
   // folded by default once there is a conversation to read.
   const [showDetails, setShowDetails] = React.useState(null); // null = decide from the data
+  // v1.125.3 — recording a verbal OK from a call: null = closed, string = what they said.
+  const [consentDraft, setConsentDraft] = React.useState(null);
   // v1.125.1 — fit the panel to what is actually visible. With the keyboard up, iOS scrolls the
   // page and a fixed full-height panel slides its header off the top ("the top of the screen
   // blocks the view and I have to scroll up to see who I'm talking to"). The visual viewport is
@@ -501,6 +511,19 @@ const OutreachThread = ({ contactId, apiFetch, showToast, onClose, onChanged, ca
     }
   };
 
+  // v1.125.3 — Pete, 10/28: a recorded "yes, I'd like more info" is consent he will stand behind.
+  // Logged on the contact as his override: the words, the call they were said on, and who.
+  const lastCall = data ? [...data.messages].reverse().find((m) => m.kind === 'call') : null;
+  const recordConsent = async (callMessageId, words) => {
+    const evidence = String(words || '').trim();
+    if (evidence.length < 3) { showToast('Write what they said', 'error'); return; }
+    await patch({ textsOk: true, evidence, callMessageId: callMessageId || undefined }, 'OK to text recorded — you can text them now');
+    setConsentDraft(null);
+  };
+  const lastCallQuote = (() => {
+    try { const n = lastCall && lastCall.ai_notes ? JSON.parse(lastCall.ai_notes) : null; return n && n.textsOk ? n.consentQuote : ''; } catch { return ''; }
+  })();
+
   const send = async () => {
     if (!draft.trim()) return;
     setBusy(true);
@@ -617,7 +640,24 @@ const OutreachThread = ({ contactId, apiFetch, showToast, onClose, onChanged, ca
                   {c.texts_ok_at
                     ? <>✓ OK to text · {c.texts_ok_evidence || 'recorded'}{' '}
                         <a href="#" onClick={(e) => { e.preventDefault(); if (window.confirm('Withdraw the OK to text? Texting this person will be blocked.')) patch({ textsOk: false }, 'OK withdrawn'); }} style={{ color: 'inherit', textDecoration: 'underline' }}>Withdraw</a></>
-                    : <>No OK to text yet. On the call, ask them to text JOIN to this number — their text opens texting.</>}
+                    : <>No OK to text yet. On the call, ask if you can text them. Then either they text JOIN to this number, or you record their yes here.</>}
+                </div>
+              )}
+              {!optedOut && !c.texts_ok_at && consentDraft === null && (
+                <button style={{ ...btn, justifySelf: 'start' }} onClick={() => setConsentDraft(lastCallQuote || '')}>
+                  Record OK from the call{lastCall ? '' : ' (no recorded call yet)'}
+                </button>
+              )}
+              {!optedOut && !c.texts_ok_at && consentDraft !== null && (
+                <div style={{ display: 'grid', gap: 6, padding: 10, borderRadius: 8, border: '1px solid var(--border-color)' }}>
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                    What did they say when you asked if you could text them? {lastCall ? `Saved with the ${outWhen(lastCall.created_at)} call and its recording` : 'There is no recorded call in this thread, so this is saved as your note only'}, as your OK.
+                  </div>
+                  <textarea style={{ ...field, minHeight: 44 }} placeholder="e.g. Yeah, yeah, I would like more info" value={consentDraft} onChange={(e) => setConsentDraft(e.target.value)} />
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button style={primary} disabled={consentDraft.trim().length < 3} onClick={() => recordConsent(lastCall && lastCall.id, consentDraft)}>Save OK to text</button>
+                    <button style={btn} onClick={() => setConsentDraft(null)}>Cancel</button>
+                  </div>
                 </div>
               )}
               <div style={{ display: 'flex', gap: 8 }}>
@@ -658,7 +698,8 @@ const OutreachThread = ({ contactId, apiFetch, showToast, onClose, onChanged, ca
                   }}>
                     {m.kind === 'voicemail' ? '📞 ' : m.kind === 'call' ? '📞 ' : ''}{m.body}
                     {m.kind === 'voicemail' && m.media_url && <OutVoicemailPlayer messageId={m.id} apiFetch={apiFetch} showToast={showToast} />}
-                    {m.kind === 'call' && <OutCallDetail m={m} apiFetch={apiFetch} showToast={showToast} />}
+                    {m.kind === 'call' && <OutCallDetail m={m} apiFetch={apiFetch} showToast={showToast}
+                      onUseConsent={c && !c.texts_ok_at && !optedOut ? (id, quote) => recordConsent(id, quote) : null} />}
                   </div>
                   <div style={{ fontSize: 11, color: bad ? 'var(--color-error)' : 'var(--text-muted)', marginTop: 2, textAlign: mine ? 'right' : 'left' }}>
                     {outWhen(m.created_at)}
@@ -676,7 +717,12 @@ const OutreachThread = ({ contactId, apiFetch, showToast, onClose, onChanged, ca
 
         {c && !optedOut && !c.texts_ok_at && (
           <div style={{ flexShrink: 0, padding: 12, borderTop: '1px solid var(--border-color)', fontSize: 13, color: 'var(--text-secondary)', paddingBottom: `calc(12px + ${vvBox && vvBox.height < window.innerHeight - 120 ? '0px' : 'var(--sab, 0px)'})` }}>
-            Texting opens when they text this number (JOIN or anything else).
+            Texting opens when they text this number (JOIN or anything else), or when you record their yes from the call.
+            {consentDraft === null && (
+              <div style={{ marginTop: 8 }}>
+                <button style={primary} onClick={() => { setShowDetails(true); setConsentDraft(lastCallQuote || ''); }}>Record OK from the call</button>
+              </div>
+            )}
           </div>
         )}
         {c && !optedOut && c.texts_ok_at && (
@@ -848,7 +894,7 @@ const AdminOutreachTab = window.AdminOutreachTab = ({ apiFetch, showToast, onUnr
             <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>Caregiver outreach</div>
             <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2, lineHeight: 1.5 }}>
               {data.number
-                ? <>Call first (📞 in each thread — recorded, with the script on screen) and ask them to text JOIN. Texts go out from <b>{outPhone(data.number)}</b> only to people who have texted that number. Replies land here; a reply with an email address gets a signup invite automatically.</>
+                ? <>Call first (📞 in each thread — recorded, with the script on screen) and ask if you can text them. Texts go out from <b>{outPhone(data.number)}</b> only to people who OK'd them — by texting that number, or by saying yes on a recorded call (Details → Record OK from the call). Replies land here; a reply with an email address gets a signup invite automatically.</>
                 : <span style={{ color: 'var(--color-error)' }}>The outreach number isn't set up yet, so texting is off. You can still import and organize the list.</span>}
             </div>
           </div>
