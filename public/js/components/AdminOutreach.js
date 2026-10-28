@@ -54,6 +54,12 @@ const OUT_PAGE_LABEL = {
   demo: 'Demo', dashboard: 'Home', 'find-work': 'Find Work', messages: 'Messages', account: 'Account',
 };
 const outPage = (p) => OUT_PAGE_LABEL[p] || String(p || '').replace(/-/g, ' ');
+// v1.125.1 — a pasted or picked number may carry the +1 country code; formatPhone takes the
+// first ten digits, so "+1 540 555 0123" would come out as (154) 055-5012. Drop it first.
+const outUsDigits = (v) => {
+  const d = String(v || '').replace(/\D/g, '');
+  return d.length === 11 && d[0] === '1' ? d.slice(1) : d;
+};
 const outMins = (ms) => {
   const m = Math.round((Number(ms) || 0) / 60000);
   return m < 1 ? 'under a minute' : m === 1 ? '1 minute' : m < 90 ? `${m} minutes` : `${Math.round(m / 6) / 10} hours`;
@@ -326,6 +332,75 @@ const OutreachThread = ({ contactId, apiFetch, showToast, onClose, onChanged, ca
   const [notes, setNotes] = React.useState('');
   const [busy, setBusy] = React.useState(false);
   const endRef = React.useRef(null);
+  const draftRef = React.useRef(null);
+  // v1.125.1 — Pete, 10/28, on his phone: "the texting portion is locked at the bottom of the
+  // screen. I can't see what I text. I can't edit it. I can't scroll through it". Six fixed
+  // sections (consent, email, notes, status, a 13-step ladder, the link journey) sat ABOVE a
+  // message list that was the only part allowed to shrink — on a phone it shrank to nothing.
+  // Now those sections fold into one "Details" row inside the same scroll as the conversation,
+  // folded by default once there is a conversation to read.
+  const [showDetails, setShowDetails] = React.useState(null); // null = decide from the data
+  // v1.125.1 — fit the panel to what is actually visible. With the keyboard up, iOS scrolls the
+  // page and a fixed full-height panel slides its header off the top ("the top of the screen
+  // blocks the view and I have to scroll up to see who I'm talking to"). The visual viewport is
+  // the part of the screen the keyboard leaves; the page behind is pinned while the panel is
+  // open and put back where it was on close.
+  const [vvBox, setVvBox] = React.useState(null);
+  React.useEffect(() => {
+    const body = document.body;
+    const savedY = window.scrollY || 0;
+    const prev = { position: body.style.position, top: body.style.top, width: body.style.width };
+    body.style.position = 'fixed'; body.style.top = `-${savedY}px`; body.style.width = '100%';
+    const vv = window.visualViewport;
+    const apply = () => {
+      if (!vv) return;
+      const scrolled = Math.round(window.scrollY || 0);
+      setVvBox({ top: Math.max(0, Math.round(vv.offsetTop || 0) - scrolled), height: Math.round(vv.height) });
+      if (scrolled > 0) window.scrollTo(0, 0);
+    };
+    apply();
+    if (vv) { vv.addEventListener('resize', apply); vv.addEventListener('scroll', apply); }
+    return () => {
+      if (vv) { vv.removeEventListener('resize', apply); vv.removeEventListener('scroll', apply); }
+      body.style.position = prev.position; body.style.top = prev.top; body.style.width = prev.width;
+      window.scrollTo(0, savedY);
+    };
+  }, []);
+  // v1.125.1 — Back closes the conversation, not Admin. Pete, 10/24: "I can't go back a screen
+  // without exiting Admin to move to the next person." The thread now owns one history entry;
+  // app.js's popstate handler hands Back to window.__modalBackHandler before it touches pages.
+  // One stable function for the life of the thread, so "is the handler still mine?" is an
+  // identity check that holds across renders.
+  const closedRef = React.useRef(false);
+  const onCloseRef = React.useRef(onClose);
+  onCloseRef.current = onClose;
+  const closeRef = React.useRef(null);
+  if (!closeRef.current) {
+    closeRef.current = () => {
+      if (closedRef.current) return;
+      closedRef.current = true;
+      if (window.__modalBackHandler === closeRef.current) window.__modalBackHandler = null;
+      onCloseRef.current();
+    };
+  }
+  const close = closeRef.current;
+  React.useEffect(() => {
+    window.history.pushState({ modal: 'outreach-thread' }, '', window.location.pathname);
+    window.__modalBackHandler = close;
+    return () => { if (window.__modalBackHandler === close) window.__modalBackHandler = null; };
+  }, []);
+  // × and the backdrop: close, then take back the history entry this thread pushed, so the next
+  // Back press is a real one. The popstate that history.back() fires lands on the handler, which
+  // is still this thread's (already-closed, so a no-op) — it never reaches the page router.
+  const closeByButton = () => {
+    if (window.history.state && window.history.state.modal === 'outreach-thread') {
+      window.__modalBackHandler = () => {};
+      close();
+      window.history.back();
+    } else {
+      close();
+    }
+  };
   // v1.116.0 — { state: 'connecting'|'ringing'|'live', muted, secs } while a browser call is up.
   const [call, setCall] = React.useState(null);
   const callRef = React.useRef(null);
@@ -395,6 +470,14 @@ const OutreachThread = ({ contactId, apiFetch, showToast, onClose, onChanged, ca
     return () => clearInterval(t);
   }, [contactId]);
   React.useEffect(() => { endRef.current?.scrollIntoView({ block: 'end' }); }, [data?.messages?.length]);
+  // The composer grows with what is typed (up to a cap, then scrolls inside itself), so a long
+  // text can be read and edited in full before it goes.
+  React.useEffect(() => {
+    const t = draftRef.current;
+    if (!t) return;
+    t.style.height = 'auto';
+    t.style.height = `${Math.min(t.scrollHeight, 160)}px`;
+  }, [draft]);
 
   const c = data?.contact;
   const optedOut = c && (c.status === 'opted_out' || c.opted_out_at);
@@ -439,18 +522,34 @@ const OutreachThread = ({ contactId, apiFetch, showToast, onClose, onChanged, ca
     setBusy(false);
   };
 
-  const field = { padding: 8, border: '1px solid var(--input-border)', background: 'var(--input-bg)', color: 'var(--text-primary)', borderRadius: 8, fontSize: 14, width: '100%', boxSizing: 'border-box' };
+  // 16px, not 14: iOS zooms the whole page into any text box smaller than that, which is one of
+  // the ways the header ended up off the top of the screen (v1.125.1).
+  const field = { padding: 8, border: '1px solid var(--input-border)', background: 'var(--input-bg)', color: 'var(--text-primary)', borderRadius: 8, fontSize: 16, fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' };
   const btn = { padding: '8px 14px', borderRadius: 8, border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: 13, cursor: 'pointer' };
   const primary = { ...btn, background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', fontWeight: 600 };
 
+  const detailsOpen = showDetails !== null ? showDetails : !(data && data.messages.length > 0);
+  const p = data && data.progress;
+  const detailsSummary = c ? [
+    optedOut ? 'Opted out' : c.texts_ok_at ? 'OK to text ✓' : 'No OK to text yet',
+    p && p.furthestLabel ? p.furthestLabel : null,
+    c.email || null,
+  ].filter(Boolean).join(' · ') : '';
+  const panelBox = vvBox ? { top: vvBox.top, height: vvBox.height } : { top: 0, height: '100%' };
+
   return (
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'var(--overlay-bg)', zIndex: 1000, display: 'flex', justifyContent: 'flex-end' }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 480, height: '100%', background: 'var(--bg-card)', display: 'flex', flexDirection: 'column', boxShadow: 'var(--shadow-md)' }}>
-        <div style={{ padding: '14px 16px', paddingTop: 'calc(14px + var(--sat, 0px))', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+    <div onClick={closeByButton} style={{ position: 'fixed', inset: 0, background: 'var(--overlay-bg)', zIndex: 1000 }}>
+      <div className="outreach-thread-panel" onClick={(e) => e.stopPropagation()} style={{
+        position: 'absolute', right: 0, ...panelBox, width: '100%', maxWidth: 480,
+        background: 'var(--bg-card)', display: 'flex', flexDirection: 'column', boxShadow: 'var(--shadow-md)', overflow: 'hidden',
+      }}>
+        {/* Pinned: who this is. Back arrow on the left, where a thumb on a phone expects it. */}
+        <div style={{ flexShrink: 0, padding: '10px 12px', paddingTop: `calc(10px + ${vvBox && vvBox.top > 0 ? '0px' : 'var(--sat, 0px)'})`, borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button onClick={closeByButton} aria-label="Back to everyone" style={{ background: 'none', border: 'none', padding: '4px 6px 4px 0', fontSize: 15, cursor: 'pointer', color: 'var(--role-color)', whiteSpace: 'nowrap', flexShrink: 0 }}>‹ All</button>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--text-primary)' }}>{c ? outName(c) : 'Loading…'}</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c ? outName(c) : 'Loading…'}</div>
             {c && (
-              <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 <a href={`tel:${c.phone}`} style={{ color: 'var(--role-color)' }}>{outPhone(c.phone)}</a>
                 {c.email ? ` · ${c.email}` : ''}
               </div>
@@ -458,13 +557,12 @@ const OutreachThread = ({ contactId, apiFetch, showToast, onClose, onChanged, ca
           </div>
           {c && <OutStatusPill status={c.joined_user_id && c.status !== 'opted_out' ? 'joined' : c.status} />}
           {c && !call && (
-            <button onClick={startCall} title="Call from InPlace's number" style={{ ...btn, padding: '4px 10px', fontSize: 13 }}>📞 Call</button>
+            <button onClick={startCall} title="Call from InPlace's number" style={{ ...btn, padding: '4px 10px', fontSize: 13, flexShrink: 0 }}>📞 Call</button>
           )}
-          <button onClick={onClose} aria-label="Close" style={{ background: 'none', border: 'none', fontSize: 24, lineHeight: 1, cursor: 'pointer', color: 'var(--text-secondary)' }}>×</button>
         </div>
 
         {call && (
-          <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', gap: 10, ...OUT_TONE.info }}>
+          <div style={{ flexShrink: 0, padding: '10px 16px', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', gap: 10, ...OUT_TONE.info }}>
             <span style={{ flex: 1, fontSize: 14, fontWeight: 600 }}>
               {call.state === 'live' ? `On the call · ${outClock(call.secs)}` : call.state === 'ringing' ? 'Ringing…' : 'Connecting…'}
               <span style={{ fontWeight: 400, fontSize: 12 }}> · from InPlace's number</span>
@@ -476,7 +574,7 @@ const OutreachThread = ({ contactId, apiFetch, showToast, onClose, onChanged, ca
         {call && Array.isArray(callScript) && (
           // v1.122.0 — Pete's script, on screen for the whole call. The consent line is the one
           // iPAi listens for in the recording; say it as written.
-          <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border-color)', fontSize: 13, lineHeight: 1.5, maxHeight: 240, overflowY: 'auto' }}>
+          <div style={{ flexShrink: 0, padding: '10px 16px', borderBottom: '1px solid var(--border-color)', fontSize: 13, lineHeight: 1.5, maxHeight: vvBox ? Math.round(vvBox.height * 0.3) : 240, overflowY: 'auto' }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: 4 }}>Script</div>
             {callScript.map((l, i) => (
               <div key={i} style={l.consent
@@ -490,82 +588,94 @@ const OutreachThread = ({ contactId, apiFetch, showToast, onClose, onChanged, ca
           </div>
         )}
 
-        {c && (
-          <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border-color)', display: 'grid', gap: 8 }}>
-            {!optedOut && (
-              // v1.122.0 — texts need a recorded OK.
-              <div style={{ fontSize: 12, lineHeight: 1.5, padding: '6px 10px', borderRadius: 8, ...(c.texts_ok_at ? OUT_TONE.success : OUT_TONE.muted) }}>
-                {c.texts_ok_at
-                  ? <>✓ OK to text · {c.texts_ok_evidence || 'recorded'}{' '}
-                      <a href="#" onClick={(e) => { e.preventDefault(); if (window.confirm('Withdraw the OK to text? Texting this person will be blocked.')) patch({ textsOk: false }, 'OK withdrawn'); }} style={{ color: 'inherit', textDecoration: 'underline' }}>Withdraw</a></>
-                  : <>No OK to text yet. On the call, ask them to text JOIN to this number — their text opens texting.</>}
-              </div>
-            )}
-            <div style={{ display: 'flex', gap: 8 }}>
-              <input style={field} type="email" placeholder="Email address" value={email} onChange={(e) => setEmail(e.target.value)} />
-              <button style={{ ...primary, whiteSpace: 'nowrap' }} disabled={busy || !email.trim()} onClick={invite}>{c.invite_id ? 'Resend invite' : 'Send invite'}</button>
-            </div>
-            <textarea style={{ ...field, minHeight: 44, fontSize: 13 }} placeholder="Notes (only admins see these)" value={notes}
-              onChange={(e) => setNotes(e.target.value)} onBlur={() => notes !== (c.notes || '') && patch({ notes })} />
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {optedOut
-                ? <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Replied STOP. InPlace won't text this number again unless it texts START.</span>
-                : ['interested', 'declined', 'wrong_number', 'opted_out'].filter((s) => s !== c.status).map((s) => (
-                  <button key={s} style={{ ...btn, padding: '4px 10px', fontSize: 12 }}
-                    onClick={() => (s !== 'opted_out' || window.confirm('Mark as do-not-text? This can\'t be undone from here.')) && patch({ status: s }, 'Saved')}>
-                    {s === 'opted_out' ? 'Do not text' : `Mark ${OUT_STATUS[s].label.toLowerCase()}`}
-                  </button>
-                ))}
-            </div>
-          </div>
-        )}
-
-        {data && <OutProgress p={data.progress} />}
-        {data && <OutJourney j={data.journey} />}
-
-        <div style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {data && data.messages.length === 0 && (
-            <div style={{ fontSize: 13, color: 'var(--text-secondary)', textAlign: 'center', marginTop: 24 }}>No texts yet.</div>
+        {/* ONE scroll region: details (folded) above the whole conversation. Nothing above the
+            messages is fixed any more, so nothing can squeeze them to zero. */}
+        <div className="outreach-thread-scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
+          {c && (
+            <button onClick={() => setShowDetails(!detailsOpen)} aria-expanded={detailsOpen} style={{
+              display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 16px', border: 'none', borderBottom: '1px solid var(--border-color)',
+              background: 'var(--bg-primary)', color: 'var(--text-secondary)', fontSize: 12, textAlign: 'left', cursor: 'pointer',
+            }}>
+              <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{detailsOpen ? '▾' : '▸'} Details</span>
+              <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{detailsSummary}</span>
+            </button>
           )}
-          {data && data.messages.map((m) => {
-            const mine = m.direction === 'out';
-            const bad = ['failed', 'undelivered'].includes(m.status);
-            return (
-              <div key={m.id} style={{ alignSelf: mine ? 'flex-end' : 'flex-start', maxWidth: '82%' }}>
-                <div style={{
-                  padding: '8px 12px', borderRadius: 14, fontSize: 14, lineHeight: 1.4, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-                  background: mine ? 'var(--bubble-sent-bg)' : 'var(--bubble-received-bg)',
-                  color: mine ? 'var(--bubble-sent-text)' : 'var(--bubble-received-text)',
-                  border: bad ? '2px solid var(--color-error)' : 'none',
-                }}>
-                  {m.kind === 'voicemail' ? '📞 ' : m.kind === 'call' ? '📞 ' : ''}{m.body}
-                  {m.kind === 'voicemail' && m.media_url && <OutVoicemailPlayer messageId={m.id} apiFetch={apiFetch} showToast={showToast} />}
-                  {m.kind === 'call' && <OutCallDetail m={m} apiFetch={apiFetch} showToast={showToast} />}
+          {c && detailsOpen && (
+            <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border-color)', display: 'grid', gap: 8 }}>
+              {!optedOut && (
+                // v1.122.0 — texts need a recorded OK.
+                <div style={{ fontSize: 12, lineHeight: 1.5, padding: '6px 10px', borderRadius: 8, ...(c.texts_ok_at ? OUT_TONE.success : OUT_TONE.muted) }}>
+                  {c.texts_ok_at
+                    ? <>✓ OK to text · {c.texts_ok_evidence || 'recorded'}{' '}
+                        <a href="#" onClick={(e) => { e.preventDefault(); if (window.confirm('Withdraw the OK to text? Texting this person will be blocked.')) patch({ textsOk: false }, 'OK withdrawn'); }} style={{ color: 'inherit', textDecoration: 'underline' }}>Withdraw</a></>
+                    : <>No OK to text yet. On the call, ask them to text JOIN to this number — their text opens texting.</>}
                 </div>
-                <div style={{ fontSize: 11, color: bad ? 'var(--color-error)' : 'var(--text-muted)', marginTop: 2, textAlign: mine ? 'right' : 'left' }}>
-                  {outWhen(m.created_at)}
-                  {(m.kind === 'voicemail' || m.kind === 'call') && m.duration ? ` · ${outClock(m.duration)}` : ''}
-                  {mine && (m.automated ? ' · sent automatically' : m.sender_first_name ? ` · ${m.sender_first_name}` : '')}
-                  {mine && m.kind !== 'call' && m.status && !bad && m.status !== 'sending' ? ` · ${m.status}` : ''}
-                  {bad ? ` · not delivered${m.error ? ` (${m.error})` : ''}` : ''}
-                </div>
+              )}
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input style={{ ...field, minWidth: 0 }} type="email" placeholder="Email address" value={email} onChange={(e) => setEmail(e.target.value)} />
+                <button style={{ ...primary, whiteSpace: 'nowrap', flexShrink: 0 }} disabled={busy || !email.trim()} onClick={invite}>{c.invite_id ? 'Resend invite' : 'Send invite'}</button>
               </div>
-            );
-          })}
-          <div ref={endRef} />
+              <textarea style={{ ...field, minHeight: 44 }} placeholder="Notes (only admins see these)" value={notes}
+                onChange={(e) => setNotes(e.target.value)} onBlur={() => notes !== (c.notes || '') && patch({ notes })} />
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {optedOut
+                  ? <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Replied STOP. InPlace won't text this number again unless it texts START.</span>
+                  : ['interested', 'declined', 'wrong_number', 'opted_out'].filter((s) => s !== c.status).map((s) => (
+                    <button key={s} style={{ ...btn, padding: '4px 10px', fontSize: 12 }}
+                      onClick={() => (s !== 'opted_out' || window.confirm('Mark as do-not-text? This can\'t be undone from here.')) && patch({ status: s }, 'Saved')}>
+                      {s === 'opted_out' ? 'Do not text' : `Mark ${OUT_STATUS[s].label.toLowerCase()}`}
+                    </button>
+                  ))}
+              </div>
+            </div>
+          )}
+          {data && detailsOpen && <OutProgress p={data.progress} />}
+          {data && detailsOpen && <OutJourney j={data.journey} />}
+
+          <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {data && data.messages.length === 0 && (
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)', textAlign: 'center', marginTop: 24 }}>No texts yet.</div>
+            )}
+            {data && data.messages.map((m) => {
+              const mine = m.direction === 'out';
+              const bad = ['failed', 'undelivered'].includes(m.status);
+              return (
+                <div key={m.id} style={{ alignSelf: mine ? 'flex-end' : 'flex-start', maxWidth: '82%' }}>
+                  <div style={{
+                    padding: '8px 12px', borderRadius: 14, fontSize: 14, lineHeight: 1.4, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                    background: mine ? 'var(--bubble-sent-bg)' : 'var(--bubble-received-bg)',
+                    color: mine ? 'var(--bubble-sent-text)' : 'var(--bubble-received-text)',
+                    border: bad ? '2px solid var(--color-error)' : 'none',
+                  }}>
+                    {m.kind === 'voicemail' ? '📞 ' : m.kind === 'call' ? '📞 ' : ''}{m.body}
+                    {m.kind === 'voicemail' && m.media_url && <OutVoicemailPlayer messageId={m.id} apiFetch={apiFetch} showToast={showToast} />}
+                    {m.kind === 'call' && <OutCallDetail m={m} apiFetch={apiFetch} showToast={showToast} />}
+                  </div>
+                  <div style={{ fontSize: 11, color: bad ? 'var(--color-error)' : 'var(--text-muted)', marginTop: 2, textAlign: mine ? 'right' : 'left' }}>
+                    {outWhen(m.created_at)}
+                    {(m.kind === 'voicemail' || m.kind === 'call') && m.duration ? ` · ${outClock(m.duration)}` : ''}
+                    {mine && (m.automated ? ' · sent automatically' : m.sender_first_name ? ` · ${m.sender_first_name}` : '')}
+                    {mine && m.kind !== 'call' && m.status && !bad && m.status !== 'sending' ? ` · ${m.status}` : ''}
+                    {bad ? ` · not delivered${m.error ? ` (${m.error})` : ''}` : ''}
+                  </div>
+                </div>
+              );
+            })}
+            <div ref={endRef} />
+          </div>
         </div>
 
         {c && !optedOut && !c.texts_ok_at && (
-          <div style={{ padding: 12, borderTop: '1px solid var(--border-color)', fontSize: 13, color: 'var(--text-secondary)', paddingBottom: 'calc(12px + var(--sab, 0px))' }}>
+          <div style={{ flexShrink: 0, padding: 12, borderTop: '1px solid var(--border-color)', fontSize: 13, color: 'var(--text-secondary)', paddingBottom: `calc(12px + ${vvBox && vvBox.height < window.innerHeight - 120 ? '0px' : 'var(--sab, 0px)'})` }}>
             Texting opens when they text this number (JOIN or anything else).
           </div>
         )}
         {c && !optedOut && c.texts_ok_at && (
-          <div style={{ padding: 12, borderTop: '1px solid var(--border-color)', display: 'flex', gap: 8, paddingBottom: 'calc(12px + var(--sab, 0px))' }}>
-            <textarea style={{ ...field, minHeight: 44, resize: 'vertical' }} placeholder="Text from InPlace…" value={draft}
+          <div style={{ flexShrink: 0, padding: 10, borderTop: '1px solid var(--border-color)', display: 'flex', gap: 8, alignItems: 'flex-end', paddingBottom: `calc(10px + ${vvBox && vvBox.height < window.innerHeight - 120 ? '0px' : 'var(--sab, 0px)'})` }}>
+            <textarea ref={draftRef} rows={1} style={{ ...field, minHeight: 40, maxHeight: 160, resize: 'none', overflowY: 'auto', fontSize: 16, lineHeight: 1.35 }} placeholder={`Text ${outGreeting(c)} from InPlace…`} value={draft}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) send(); }} />
-            <button style={primary} disabled={busy || !draft.trim()} onClick={send}>Send</button>
+            <button style={{ ...primary, flexShrink: 0 }} disabled={busy || !draft.trim()} onClick={send}>Send</button>
           </div>
         )}
       </div>
@@ -582,6 +692,14 @@ const AdminOutreachTab = window.AdminOutreachTab = ({ apiFetch, showToast, onUnr
   const [importText, setImportText] = React.useState('');
   const [importSource, setImportSource] = React.useState('NRV Agency on Aging private-pay sitter list');
   const [composer, setComposer] = React.useState(false);
+  // v1.125.1 — add one person by hand (Pete, 10/28: "a way that I can enter a phone number in or
+  // pick from Contacts as well. You can't just be a pre-populated list based on an import.")
+  const [showAdd, setShowAdd] = React.useState(false);
+  const [add, setAdd] = React.useState({ firstName: '', lastName: '', phone: '', notes: '' });
+  // The browser's own contact picker. Chrome on Android has it; iPhone browsers and the iPhone
+  // app's web view do not (that needs a native plugin and a new app build), so the button only
+  // appears where it works.
+  const canPickContact = typeof navigator !== 'undefined' && navigator.contacts && typeof navigator.contacts.select === 'function';
   const [template, setTemplate] = React.useState('');
   const [busy, setBusy] = React.useState(false);
 
@@ -647,6 +765,36 @@ const AdminOutreachTab = window.AdminOutreachTab = ({ apiFetch, showToast, onUnr
     setBusy(false);
   };
 
+  const pickContact = async () => {
+    try {
+      const [p] = await navigator.contacts.select(['name', 'tel'], { multiple: false });
+      if (!p) return;
+      const full = String((p.name && p.name[0]) || '').trim();
+      const parts = full.split(/\s+/).filter(Boolean);
+      const tel = (p.tel || []).find((t) => String(t).replace(/\D/g, '').length >= 10) || (p.tel || [])[0] || '';
+      setAdd((a) => ({ ...a, firstName: parts.shift() || a.firstName, lastName: parts.join(' ') || a.lastName, phone: formatPhone(outUsDigits(tel)) }));
+    } catch { /* picker closed */ }
+  };
+  const addPerson = async () => {
+    setBusy(true);
+    try {
+      const res = await apiFetch('/api/admin/outreach/contacts', { method: 'POST', body: JSON.stringify(add) });
+      if (res?.ok) {
+        const d = await res.json();
+        showToast(d.existing ? 'Already on your list — here is their conversation' : 'Added', 'success');
+        setAdd({ firstName: '', lastName: '', phone: '', notes: '' }); setShowAdd(false);
+        await load();
+        setOpenId(d.id);
+      } else {
+        showToast(await outErr(res, "Couldn't add them"), 'error');
+      }
+    } catch {
+      showToast("Couldn't add them", 'error');
+    }
+    setBusy(false);
+  };
+  const addDigits = outUsDigits(add.phone);
+
   const sendIntro = async () => {
     if (!window.confirm(`Text ${selectedList.length} ${selectedList.length === 1 ? 'person' : 'people'} from InPlace now?`)) return;
     setBusy(true);
@@ -695,7 +843,8 @@ const AdminOutreachTab = window.AdminOutreachTab = ({ apiFetch, showToast, onUnr
                 : <span style={{ color: 'var(--color-error)' }}>The outreach number isn't set up yet, so texting is off. You can still import and organize the list.</span>}
             </div>
           </div>
-          <button style={btn} onClick={() => setShowImport((v) => !v)}>{showImport ? 'Close import' : 'Import list'}</button>
+          <button style={btn} onClick={() => { setShowAdd((v) => !v); setShowImport(false); }}>{showAdd ? 'Close add' : '+ Add person'}</button>
+          <button style={btn} onClick={() => { setShowImport((v) => !v); setShowAdd(false); }}>{showImport ? 'Close import' : 'Import list'}</button>
           <button style={primary} disabled={!selectedList.length || !data.number || sending} onClick={() => setComposer(true)}>
             Text follow-up{selectedList.length ? ` to ${selectedList.length}` : ''}
           </button>
@@ -709,6 +858,28 @@ const AdminOutreachTab = window.AdminOutreachTab = ({ apiFetch, showToast, onUnr
           <div style={{ marginTop: 10, fontSize: 12, color: 'var(--text-secondary)' }}>{data.introWindow.reason} Replies to people who've written back can go any time.</div>
         )}
       </div>
+
+      {showAdd && (
+        <div className="card">
+          <div className="card-header">Add a person</div>
+          <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8, lineHeight: 1.5 }}>
+            You can call them right away. Texting opens once they text the outreach number (JOIN), same as everyone else.
+            {!canPickContact && <> On iPhone: in Contacts, press and hold their number, tap Copy, and paste it below.</>}
+          </div>
+          {canPickContact && (
+            <button style={{ ...btn, marginBottom: 8 }} onClick={pickContact}>Pick from Contacts</button>
+          )}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+            <input style={{ ...field, fontSize: 16 }} placeholder="First name" autoComplete="off" value={add.firstName} onChange={(e) => setAdd({ ...add, firstName: e.target.value })} />
+            <input style={{ ...field, fontSize: 16 }} placeholder="Last name" autoComplete="off" value={add.lastName} onChange={(e) => setAdd({ ...add, lastName: e.target.value })} />
+          </div>
+          <input style={{ ...field, fontSize: 16, marginBottom: 8 }} type="tel" inputMode="tel" placeholder="(540) 555-0123" autoComplete="off" value={add.phone}
+            onChange={(e) => setAdd({ ...add, phone: formatPhone(outUsDigits(e.target.value)) })} />
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', margin: '-4px 0 8px' }}>US numbers only — the outreach line can't call or text outside the US.</div>
+          <input style={{ ...field, fontSize: 16, marginBottom: 8 }} placeholder="Notes (optional) — e.g. CNA, Christiansburg, met at church" value={add.notes} onChange={(e) => setAdd({ ...add, notes: e.target.value })} />
+          <button style={primary} disabled={busy || addDigits.length !== 10 || !(add.firstName.trim() || add.lastName.trim())} onClick={addPerson}>Add and open</button>
+        </div>
+      )}
 
       {showImport && (
         <div className="card">
@@ -768,7 +939,7 @@ const AdminOutreachTab = window.AdminOutreachTab = ({ apiFetch, showToast, onUnr
           </label>
         )}
         {contacts.length === 0 && (
-          <div style={{ fontSize: 13, color: 'var(--text-secondary)', padding: '12px 0' }}>No one here yet. Use “Import list” to paste the sitter list.</div>
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)', padding: '12px 0' }}>No one here yet. Use “+ Add person” for one number, or “Import list” to paste a list.</div>
         )}
         {shown.map((x) => (
           <div key={x.id} onClick={() => setOpenId(x.id)} style={{

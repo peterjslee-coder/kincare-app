@@ -909,6 +909,16 @@ const App = () => {
     window.history.replaceState({ page: 'dashboard' }, '', window.location.pathname);
 
     const handlePopState = (e) => {
+      // v1.125.1 — a screen that pushed its own history entry (Admin → Outreach's conversation)
+      // gets Back first, and Back stops there. Checking `e.state.modal` below cannot do this:
+      // after Back, e.state is the entry we LANDED on — the page underneath — so the page
+      // router popped Admin too ("I can't go back a screen without exiting Admin").
+      if (typeof window.__modalBackHandler === 'function') {
+        const h = window.__modalBackHandler;
+        window.__modalBackHandler = null;
+        h();
+        return;
+      }
       // Skip if a modal is cleaning up its own history entry
       if (window.__skipPopstate) return;
       // If a modal pushed its own history state, let the modal handle it

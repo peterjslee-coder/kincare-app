@@ -220,6 +220,41 @@ adminRouter.post("/import", async (req, res) => {
   }
 });
 
+// v1.125.1 — one person by hand. Pete, 10/28: "There needs to be a way that I can enter a phone
+// number in or pick from Contacts as well. You can't just be a pre-populated list based on an
+// import." Same row as an import makes, so the consent rules are unchanged: a new contact has no
+// OK to text until she texts in (JOIN) — adding her here only lets him call her.
+// A number that is already on the list is not an error — the client opens that thread instead.
+adminRouter.post("/contacts", async (req, res) => {
+  try {
+    const first = String(req.body?.firstName || "").trim().slice(0, 80);
+    const last = String(req.body?.lastName || "").trim().slice(0, 80);
+    const notes = String(req.body?.notes || "").trim().slice(0, 1000) || null;
+    const key = O.phoneKey(req.body?.phone);
+    if (!first && !last) return res.status(400).json({ error: "Add a name, so you know who this is." });
+    if (!key) return res.status(400).json({ error: "That isn't a 10-digit US number. The outreach line only reaches US numbers." });
+    const phone = `+1${key}`;
+    const db = await getDb();
+    const existing = await db.prepare("SELECT id FROM outreach_contacts WHERE phone = ?").get(phone);
+    if (existing) return res.json({ id: existing.id, existing: true });
+    const id = uuid();
+    const r = await db.prepare(`
+      INSERT INTO outreach_contacts (id, first_name, last_name, phone, notes, source, status, created_by, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, 'Added by hand', 'new', ?, NOW(), NOW())
+      ON CONFLICT (phone) DO NOTHING
+    `).run(id, first || null, last || null, phone, notes, req.user.id);
+    if (r && r.changes === 0) {
+      // Lost a race with an inbound text from the same number — use the row that won.
+      const won = await db.prepare("SELECT id FROM outreach_contacts WHERE phone = ?").get(phone);
+      return res.json({ id: won.id, existing: true });
+    }
+    res.json({ id, existing: false });
+  } catch (err) {
+    captureException(err, { where: "outreach: add contact" });
+    res.status(500).json({ error: "Couldn't add them" });
+  }
+});
+
 adminRouter.post("/send-intro", async (req, res) => {
   try {
     if (!outreachNumber()) return res.status(400).json({ error: "The outreach number isn't set up yet (TWILIO_OUTREACH_NUMBER)." });
