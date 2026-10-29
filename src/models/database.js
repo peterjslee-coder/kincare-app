@@ -3436,6 +3436,16 @@ async function initializeDatabase() {
         `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS mileage_cap_miles REAL`,
       ],
     },
+    {
+      // v1.126.7 — Privacy Policy names Google Maps Platform (place search since v1.126.0, driving
+      // distances for mileage) before the store submission. Pete, 10/29: "go with privacy policy
+      // update for google routes." Publish first, the lawyer reviews what we publish.
+      id: "077_privacy_2026_10_29",
+      statements: legalPublishStatements("2026-10-29", [
+        { docType: "privacy", fallbackTitle: "Privacy Policy", file: "privacy_2026-10-29.txt",
+          summary: "Names Google Maps Platform: when you type an address or place name, it is sent to Google to suggest matching places, and when a care team turns on mileage, a caregiver's errand stops are sent to Google to work out the driving distance." },
+      ]),
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;
