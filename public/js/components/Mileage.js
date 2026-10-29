@@ -44,6 +44,7 @@ const PlaceSearch = window.PlaceSearch = ({ near, onPick, placeholder, autoFocus
   const [searching, setSearching] = useState(false);
   const tokenRef = useRef(mileageToken());
   const timerRef = useRef(null);
+  const listRef = useRef(null);
 
   useEffect(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
@@ -58,6 +59,8 @@ const PlaceSearch = window.PlaceSearch = ({ near, onPick, placeholder, autoFocus
           const d = await r.json();
           setProvider(d.provider || 'osm');
           setItems(d.suggestions || []);
+          // v1.126.6 — keep the list above the phone keyboard
+          setTimeout(() => { try { if (listRef.current) listRef.current.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (e) { /* ignore */ } }, 50);
         } else {
           setItems([]);
         }
@@ -88,7 +91,7 @@ const PlaceSearch = window.PlaceSearch = ({ near, onPick, placeholder, autoFocus
           fontSize: 16, fontFamily: 'inherit',
         }} />
       {(items.length > 0 || (searching && q.trim().length >= 2)) && (
-        <div style={{ border: '1px solid var(--border-color)', borderRadius: 12, marginTop: 6, overflow: 'hidden', background: 'var(--bg-card)' }}>
+        <div ref={listRef} style={{ border: '1px solid var(--border-color)', borderRadius: 12, marginTop: 6, overflow: 'hidden', background: 'var(--bg-card)' }}>
           {items.length === 0 && <div style={{ padding: '12px 14px', fontSize: 14, color: 'var(--text-secondary)' }}>Searching{'…'}</div>}
           {items.map((s, i) => (
             <button key={s.placeId || s.label + i} onClick={() => pick(s)} style={{

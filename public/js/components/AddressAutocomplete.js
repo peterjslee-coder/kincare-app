@@ -18,6 +18,7 @@ const AddressAutocomplete = window.AddressAutocomplete = ({ value, onChange, onS
     return 'a' + Date.now().toString(36) + Math.random().toString(36).slice(2);
   };
   const tokenRef = useRef(newToken());
+  const listRef = useRef(null);
 
   useEffect(() => {
     const close = (e) => { if (boxRef.current && !boxRef.current.contains(e.target)) setOpen(false); };
@@ -39,6 +40,12 @@ const AddressAutocomplete = window.AddressAutocomplete = ({ value, onChange, onS
           setProvider(d.provider || 'osm');
           setItems(d.suggestions || []);
           setOpen((d.suggestions || []).length > 0);
+          // v1.126.6 — on a phone the list sat behind the keyboard, or below the visible part of
+          // a scrolling sheet (Pete, 10/28: "typed in name of church. No suggestions offered" —
+          // the server had answered every keystroke). Bring it into view once it is drawn.
+          setTimeout(() => {
+            try { if (listRef.current) listRef.current.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (e) { /* older WebKit: no options */ }
+          }, 50);
         }
       } catch (e) { /* suggestions are best-effort */ }
     }, 300);
@@ -80,11 +87,13 @@ const AddressAutocomplete = window.AddressAutocomplete = ({ value, onChange, onS
         style={style}
       />
       {open && (
-        <div style={{
-          position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 1200,
+        // v1.126.6 — in the flow, not floating: a floating list inside a scrolling sheet is cut
+        // off by the sheet. In the flow it pushes the fields below it down and stays visible.
+        <div ref={listRef} data-testid="address-suggestions" style={{
+          position: 'relative', zIndex: 2,
           background: 'var(--bg-card)', border: '1px solid var(--border-light)',
-          borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.12)', marginTop: 2,
-          maxHeight: 220, overflowY: 'auto',
+          borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.12)', marginTop: 4,
+          maxHeight: 260, overflowY: 'auto',
         }}>
           {items.map((s, i) => (
             <div key={i}
