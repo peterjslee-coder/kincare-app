@@ -300,7 +300,7 @@ router.get("/sms/opt-in", (req, res) => {
   res.send(
     page({
       title: "How people opt in to InPlace texts",
-      meta: "Updated October 15, 2026",
+      meta: "Updated October 28, 2026",
       body: SMS_OPTIN,
       nav: '<a href="/">← InPlace</a><a href="/sms">Text Messaging Terms</a><a href="/privacy">Privacy Policy</a>',
     })
@@ -312,7 +312,7 @@ router.get("/sms", (req, res) => {
   res.send(
     page({
       title: "Text Messaging Terms",
-      meta: "Effective October 14, 2026",
+      meta: "Updated October 28, 2026",
       body: SMS_TERMS,
       nav: '<a href="/">← InPlace</a><a href="/terms">Terms of Use</a><a href="/privacy">Privacy Policy</a>',
     })
