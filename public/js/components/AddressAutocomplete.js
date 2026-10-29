@@ -3,12 +3,21 @@
 // via our /api/geocode/suggest proxy). Picking a suggestion fills the whole
 // address via onSelect({ line1, city, state, zip, lat, lng, label }).
 // Typing normally still works — it's a plain input if suggestions never come.
+// v1.126.1 — Google Places when the server has a key (Pete, 10/28). A Google suggestion has a
+// placeId and no address parts, so picking one asks /api/geocode/place/:id for them first.
+// One session token ties a run of keystrokes and its pick together (that is how Google bills).
 const AddressAutocomplete = window.AddressAutocomplete = ({ value, onChange, onSelect, placeholder, style, className }) => {
   const [items, setItems] = useState([]);
   const [open, setOpen] = useState(false);
   const timerRef = useRef(null);
   const boxRef = useRef(null);
   const skipNextSearch = useRef(false);
+  const [provider, setProvider] = useState('osm');
+  const newToken = () => {
+    try { if (window.crypto && window.crypto.randomUUID) return window.crypto.randomUUID(); } catch { /* fall through */ }
+    return 'a' + Date.now().toString(36) + Math.random().toString(36).slice(2);
+  };
+  const tokenRef = useRef(newToken());
 
   useEffect(() => {
     const close = (e) => { if (boxRef.current && !boxRef.current.contains(e.target)) setOpen(false); };
@@ -24,9 +33,10 @@ const AddressAutocomplete = window.AddressAutocomplete = ({ value, onChange, onS
     if (q.length < 4) { setItems([]); setOpen(false); return; }
     timerRef.current = setTimeout(async () => {
       try {
-        const r = await apiFetch('/api/geocode/suggest?q=' + encodeURIComponent(q));
+        const r = await apiFetch('/api/geocode/suggest?q=' + encodeURIComponent(q) + '&session=' + encodeURIComponent(tokenRef.current));
         if (r?.ok) {
           const d = await r.json();
+          setProvider(d.provider || 'osm');
           setItems(d.suggestions || []);
           setOpen((d.suggestions || []).length > 0);
         }
@@ -35,10 +45,25 @@ const AddressAutocomplete = window.AddressAutocomplete = ({ value, onChange, onS
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
   }, [value]);
 
-  const pick = (s) => {
+  const pick = async (s) => {
     skipNextSearch.current = true;
     setOpen(false);
     setItems([]);
+    if (s.placeId) {
+      const token = tokenRef.current;
+      tokenRef.current = newToken();
+      try {
+        const r = await apiFetch('/api/geocode/place/' + encodeURIComponent(s.placeId) + '?session=' + encodeURIComponent(token));
+        if (r?.ok) {
+          const d = await r.json();
+          if (d.place && onSelect) onSelect(d.place);
+          return;
+        }
+      } catch (e) { /* fall through: keep what they typed */ }
+      // Couldn't look it up: leave the text so they can finish typing it by hand.
+      if (onChange) onChange(s.label || s.main || '');
+      return;
+    }
     if (onSelect) onSelect(s);
   };
 
@@ -70,7 +95,7 @@ const AddressAutocomplete = window.AddressAutocomplete = ({ value, onChange, onS
             </div>
           ))}
           <div style={{ padding: '4px 12px 6px', fontSize: 10, color: 'var(--text-muted)' }}>
-            Suggestions from OpenStreetMap — keep typing if yours isn't listed
+            {provider === 'google' ? 'Powered by Google' : "Suggestions from OpenStreetMap — keep typing if yours isn't listed"}
           </div>
         </div>
       )}

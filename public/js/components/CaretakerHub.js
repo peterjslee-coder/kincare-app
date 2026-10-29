@@ -2099,6 +2099,10 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                       )}
                     </div>
                   </div>
+                  {/* v1.126.1 — mileage for this visit; draws nothing unless the family turned it on */}
+                  {isActive && typeof VisitMileageCard !== 'undefined' && (
+                    <VisitMileageCard sessionId={s.id} recipientId={s.careRecipientId} recipientName={(recipName || '').split(' ')[0]} />
+                  )}
                   {/* Expandable Care Profile */}
                   {expandedProfileId === s.id && (
                     <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #eee' }}>
@@ -4643,6 +4647,11 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                 </div>
               )}
             </div>
+
+            {/* v1.126.1 — the visit's mileage, so the caregiver sees it before ending the visit */}
+            {checkOutSession && typeof MileageCheckoutSummary !== 'undefined' && (
+              <MileageCheckoutSummary sessionId={checkOutSession.id} />
+            )}
 
             {/* ─── EARLY DEPARTURE WARNING ─── */}
             {(() => {

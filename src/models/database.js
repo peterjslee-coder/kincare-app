@@ -3370,6 +3370,59 @@ async function initializeDatabase() {
           summary: "Clarifies our text messages: we text about caregiving work only to people who text us first (for example by texting JOIN), a person receiving care confirms reminder texts by replying YES, and calls on our caregiver line may be recorded and transcribed for our notes." },
       ]),
     },
+    {
+      // v1.126.1 — visit mileage (Pete, 10/28: "make sure cost/gas is covered", not road trips).
+      // The family turns it on per care recipient and sets a rate and a per-visit cap. The
+      // caregiver logs errand trips during the visit; the SERVER computes every distance. At
+      // check-out the trips lock: miles up to the cap are charged to the visit's card as their
+      // own charge (caregiver gets all of it, the family covers the card fee — same as a tip);
+      // miles past the cap wait for the care team leader. utils/mileage.js.
+      // No user FKs on purpose: a completed visit's trips are the family's record and must not
+      // block (or vanish with) an admin deleting the caregiver's account.
+      id: "075_visit_mileage",
+      statements: [
+        `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS mileage_enabled INTEGER DEFAULT 0`,
+        `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS mileage_rate_cents INTEGER DEFAULT 50`,
+        `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS mileage_cap_miles REAL DEFAULT 20`,
+        `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS mileage_updated_by TEXT`,
+        `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS mileage_updated_at TIMESTAMPTZ`,
+        `CREATE TABLE IF NOT EXISTS visit_trips (
+           id TEXT PRIMARY KEY,
+           session_id TEXT NOT NULL REFERENCES care_sessions(id),
+           care_recipient_id TEXT NOT NULL REFERENCES care_recipients(id),
+           caregiver_user_id TEXT NOT NULL,
+           start_kind TEXT NOT NULL,
+           start_label TEXT,
+           stops TEXT NOT NULL,
+           round_trip INTEGER NOT NULL DEFAULT 1,
+           miles REAL NOT NULL,
+           minutes INTEGER,
+           distance_source TEXT NOT NULL,
+           note TEXT NOT NULL,
+           rate_cents INTEGER NOT NULL,
+           created_at TIMESTAMPTZ DEFAULT NOW(),
+           deleted_at TIMESTAMPTZ
+         )`,
+        `CREATE INDEX IF NOT EXISTS idx_visit_trips_session ON visit_trips (session_id) WHERE deleted_at IS NULL`,
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS mileage_locked_at TIMESTAMPTZ`,
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS mileage_total_miles REAL`,
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS mileage_paid_miles REAL`,
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS mileage_extra_miles REAL`,
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS mileage_rate_cents INTEGER`,
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS mileage_cents INTEGER`,
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS mileage_status TEXT`,
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS mileage_pi TEXT`,
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS mileage_fee_cents INTEGER`,
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS mileage_attempts INTEGER DEFAULT 0`,
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS mileage_error TEXT`,
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS mileage_extra_cents INTEGER`,
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS mileage_extra_status TEXT`,
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS mileage_extra_pi TEXT`,
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS mileage_extra_fee_cents INTEGER`,
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS mileage_extra_decided_by TEXT`,
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS mileage_extra_decided_at TIMESTAMPTZ`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

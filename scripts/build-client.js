@@ -65,6 +65,7 @@ const scripts = [
   // either way (render runs after the whole bundle), but ordering it correctly means
   // there is no guard to reason about.
   "js/components/AddressAutocomplete.js",
+  "js/components/Mileage.js", // v1.126.1 — visit mileage; CaretakerHub, VisitDetailModal and CareTeamManage draw it
   "js/components/CareEvents.js",
   "js/components/ComingUpSpine.js", // v1.126.0 — the Coming Up card on the family dashboard; uses CareEvents' careEventIcon
   "js/components/CancelSessionModal.js",

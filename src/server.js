@@ -805,6 +805,7 @@ const careTasksRouter = require("./routes/careTasks");
 const careEventsRouter = require("./routes/careEvents");
 app.use("/api/reimbursements", reimbursementsRouter);
 app.use("/api/geocode", require("./routes/geocode"));
+app.use("/api/mileage", require("./routes/mileage")); // v1.126.1 — visit mileage
 app.use("/api/waitlist", require("./routes/waitlist"));
 app.use("/api/password-reset", require("./routes/passwordReset"));
 app.use("/api/availability", require("./routes/availability"));
@@ -856,7 +857,7 @@ app.use("/api/safety", require("./routes/safety"));
 
 // ─── App version check (lightweight, no auth) ───
 const { cancelPassedPrivateOffers, releaseExpiredExclusiveOffers } = require("./utils/exclusiveOffers");
-const APP_VERSION = "1.126.0";
+const APP_VERSION = "1.126.1";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION, minAppVersion: MIN_APP_VERSION });
@@ -1828,6 +1829,23 @@ async function start() {
     setTimeout(runQuietSummaries, 60 * 1000);
     setInterval(runQuietSummaries, 5 * 60 * 1000);
     console.log("  Quiet hours summary poller started (every 5m)");
+  }
+
+  // ─── Visit mileage: charge what is owed once the visit itself is paid (v1.126.1, poller 116) ───
+  //
+  // Check-out charges mileage right after the visit's capture. This catches the rest: a visit
+  // whose capture failed and was paid later by the auto-pay sweep, an approved extra whose
+  // charge failed, a Stripe hiccup. utils/mileage.js stops after five attempts and reports.
+  {
+    const runMileageSweep = guardedPoller(116, async () => {
+      const { sweepOwed } = require("./utils/mileage");
+      const db = await getDb();
+      const n = await sweepOwed(db);
+      if (n > 0) console.log(`  [mileage] charged mileage on ${n} visit(s)`);
+    });
+    setTimeout(runMileageSweep, 90 * 1000);
+    setInterval(runMileageSweep, 5 * 60 * 1000);
+    console.log("  Mileage settlement poller started (every 5m)");
   }
 
   // v1.105.50 — bound the inbound side too. Node's defaults leave `server.timeout` at 0,

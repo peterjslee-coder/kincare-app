@@ -183,6 +183,12 @@ router.post("/sessions/:id/rewind", async (req, res) => {
 
       // Delete any payment records created during checkout
       await db.prepare("DELETE FROM payments WHERE session_id = ? AND status IN ('pending', 'waived')").run(req.params.id);
+      // v1.126.1 — check-out locked the mileage; back in progress, the trips are editable again
+      // (unless money already moved for them — then the lock stands and the charge is the record).
+      await db.prepare(`UPDATE care_sessions SET mileage_locked_at = NULL, mileage_total_miles = NULL, mileage_paid_miles = NULL,
+        mileage_extra_miles = NULL, mileage_cents = NULL, mileage_status = NULL, mileage_extra_cents = NULL,
+        mileage_extra_status = NULL, mileage_attempts = 0, mileage_error = NULL
+        WHERE id = ? AND mileage_pi IS NULL AND mileage_extra_pi IS NULL`).run(req.params.id);
 
     } else if (target === 'confirmed') {
       // Full rewind — delete visit log, reset to pre-check-in state
@@ -205,6 +211,12 @@ router.post("/sessions/:id/rewind", async (req, res) => {
 
       // Delete visit logs entirely
       await db.prepare("DELETE FROM visit_logs WHERE session_id = ?").run(req.params.id);
+      // v1.126.1 — and its mileage (trips are re-logged on the replayed visit)
+      await db.prepare("DELETE FROM visit_trips WHERE session_id = ?").run(req.params.id);
+      await db.prepare(`UPDATE care_sessions SET mileage_locked_at = NULL, mileage_total_miles = NULL, mileage_paid_miles = NULL,
+        mileage_extra_miles = NULL, mileage_cents = NULL, mileage_status = NULL, mileage_extra_cents = NULL,
+        mileage_extra_status = NULL, mileage_attempts = 0, mileage_error = NULL
+        WHERE id = ? AND mileage_pi IS NULL AND mileage_extra_pi IS NULL`).run(req.params.id);
 
       // Delete any payment records
       await db.prepare("DELETE FROM payments WHERE session_id = ? AND status IN ('pending', 'waived')").run(req.params.id);
