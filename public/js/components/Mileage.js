@@ -486,7 +486,10 @@ const MileageSettingsCard = window.MileageSettingsCard = ({ recipientId, recipie
       } catch { /* the card simply doesn't show */ }
     })();
   }, [recipientId]);
-  if (!s) return null;
+  // v1.126.5 — `s` and `draft` are set by two setState calls; under the app's legacy render root
+  // they are NOT batched inside an async callback, so one render sees `s` without `draft`.
+  // That crashed the whole Care Team page (Sentry INPLACE-1R, 10/28). Wait for both.
+  if (!s || !draft) return null;
   const who = recipientName || 'your loved one';
   const dirty = draft && (draft.enabled !== s.enabled || draft.rateCents !== s.rateCents || Number(draft.capMiles) !== s.capMiles);
   const save = async () => {
