@@ -383,7 +383,7 @@ const MileageCheckoutSummary = window.MileageCheckoutSummary = ({ sessionId }) =
         </div>
       )}
       <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', marginTop: 8 }}>
-        Mileage is paid to you in full, as its own charge to the family right after the visit is paid. InPlace takes no fee on it.
+        Mileage is added to this visit{'\u2019'}s payment as its own line, and paid to you in full. InPlace takes no fee on it.
       </div>
     </div>
   );
@@ -392,7 +392,7 @@ const MileageCheckoutSummary = window.MileageCheckoutSummary = ({ sessionId }) =
 // ─── VisitMileageReport (family, visit details) ───
 const MILEAGE_STATUS_LINE = {
   owed: 'Will be charged once the visit is paid.',
-  charged: 'Charged to your card and paid to the caregiver.',
+  charged: 'Charged with the visit and paid to the caregiver.',
   failed: "The mileage charge didn't go through. InPlace has been told and will sort it out.",
   waived: 'Not charged (test visit).',
   below_minimum: 'Too small to charge on its own, so it wasn’t charged.',
@@ -549,7 +549,7 @@ const MileageSettingsCard = window.MileageSettingsCard = ({ recipientId, recipie
             </div>
           </div>
           <div style={{ background: 'var(--bg-highlight)', borderRadius: 10, padding: 12, fontSize: 14, lineHeight: 1.45, color: 'var(--text-primary)' }}>
-            <b>Where the money goes:</b> mileage is charged to the card that paid the visit, right after the visit, and paid to the caregiver in full. InPlace keeps none of it. You pay only the card processing on it.
+            <b>Where the money goes:</b> mileage is added to the visit{'\u2019'}s charge as its own line and paid to the caregiver in full. InPlace keeps none of it. You pay only the card processing on it. The card hold before each visit includes room for your cap; anything unused is released.
           </div>
           {s.canEdit
             ? <button onClick={save} disabled={!dirty || saving} style={mileageBtn(true, !dirty || saving)}>{saving ? 'Saving…' : 'Save'}</button>

@@ -12,6 +12,7 @@ const mockCreated = [];
 const mockKeys = [];
 const mockRetrieved = [];
 let mockDeclineNext = 0;
+const mockCaptures = [];
 jest.mock("stripe", () => jest.fn(() => ({
   paymentIntents: {
     create: jest.fn(async (args, opts) => {
@@ -20,7 +21,8 @@ jest.mock("stripe", () => jest.fn(() => ({
       mockCreated.push(args); return { id: `pi_mi_${mockCreated.length}`, status: "succeeded", amount: args.amount };
     }),
     retrieve: jest.fn(async (id) => { mockRetrieved.push(id); return { id, status: "succeeded", customer: id === "pi_autopay" ? "cus_billing" : "cus_fam", payment_method: "pm_card" }; }),
-    capture: jest.fn(), cancel: jest.fn(),
+    capture: jest.fn(async (id, args) => { mockCaptures.push({ id, ...args }); return { id, status: "succeeded", amount_received: args.amount_to_capture }; }),
+    cancel: jest.fn(),
   },
 })));
 
@@ -250,6 +252,46 @@ describe("review fixes (v1.126.2)", () => {
       .send({ from: "here", here: { lat: 38.03, lng: -78.48 }, stops: [CVS] }); // ~100 mi away
     expect(r.status).toBe(400);
     expect(r.body.code).toBe("here_too_far");
+  });
+});
+
+describe("same charge as the visit (v1.126.3)", () => {
+  test("the hold makes room for a full cap; nothing when mileage is off", async () => {
+    // cap 5 mi × 50¢ = 250, + 2.9% card = 7
+    expect(await mileage.holdReserveCents(db, recipientId)).toBe(257);
+    const other = await h.createCareTeam({ familyUserId: outsider.user.id });
+    expect(await mileage.holdReserveCents(db, other.recipientId)).toBe(0);
+  });
+
+  test("check-out's capture carries the mileage: caregiver gets it all, family pays only the card %", async () => {
+    const id = uuid();
+    await db.prepare(`
+      INSERT INTO care_sessions (id, care_recipient_id, family_user_id, caregiver_id, service_type, status,
+        scheduled_date, scheduled_time, duration_hours, proposed_rate, estimated_cost, stripe_payment_intent_id,
+        authorized_amount, payment_status, created_at)
+      SELECT ?, care_recipient_id, family_user_id, caregiver_id, 'companionship', 'completed', '2026-10-31', '09:00', 4, 22, 88,
+             'pi_hold_with_room', 10817, 'authorized', NOW()
+        FROM care_sessions WHERE id = ?
+    `).run(id, sid);
+    await db.prepare(`
+      INSERT INTO visit_trips (id, session_id, care_recipient_id, caregiver_user_id, start_kind, start_label, stops, round_trip, miles, distance_source, note, rate_cents)
+      VALUES (?, ?, ?, ?, 'home', 'Home', '[]', 1, 4, 'estimate', 'Pharmacy', 50)
+    `).run(uuid(), id, recipientId, cg.user.id);
+    const before = mockCreated.length;
+    const { captureForSession } = require("../../src/utils/sessionCapture");
+    const r = await captureForSession(db, id, 8800, { where: "test" });
+    expect(r.captured).toBe(true);
+    const cap = mockCaptures[mockCaptures.length - 1];
+    // visit 8800 + 20% 1760 + mileage 200 + card 2.9% of 200 = 6
+    expect(cap.amount_to_capture).toBe(8800 + 1760 + 200 + 6);
+    expect(cap.amount_to_capture - cap.application_fee_amount).toBe(8800 + 200);
+    expect(mockCreated.length).toBe(before); // no separate mileage charge
+    const s = await db.prepare("SELECT mileage_status, mileage_pi, mileage_fee_cents FROM care_sessions WHERE id = ?").get(id);
+    expect(s).toMatchObject({ mileage_status: "charged", mileage_pi: "pi_hold_with_room", mileage_fee_cents: 6 });
+    const led = await db.prepare("SELECT caregiver_cents, platform_cents, card_fee_cents, breakdown FROM ledger_entries WHERE session_id = ? AND kind = 'capture'").get(id);
+    expect(led).toMatchObject({ caregiver_cents: 9000, platform_cents: 1760, card_fee_cents: 6 });
+    const lines = require("../../src/utils/ledger").describe({ ...led, kind: "capture", breakdown: led.breakdown }).lines;
+    expect(lines.map((l) => l.label)).toEqual(expect.arrayContaining(["Mileage — 4.0 mi at 50¢", "Card processing on mileage"]));
   });
 });
 

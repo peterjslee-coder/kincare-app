@@ -9,7 +9,7 @@ Pete, 10/28: "give care families the option to track mileage incurred in the vis
 - [x] Built: migration `075_visit_mileage`, `src/utils/maps.js`, `src/utils/mileage.js`, `/api/mileage`, poller 116, `public/js/components/Mileage.js`, Google in `/api/geocode/suggest` + `/api/geocode/place/:id` + AddressAutocomplete, What's New ×2, `tests/integration/mileage.itest.js`.
 - [ ] **[NEEDS YOUR HANDS] Google Cloud:** a project with "Places API (New)" + "Routes API", billing with a budget alert, an API key restricted to those two, then `GOOGLE_MAPS_API_KEY` on Railway staging and prod. Until then, place search is the old OSM list and distances are a labeled straight-line estimate (×1.3).
 - [ ] Try on staging with real accounts: turn mileage on (Care Team → Mileage), check in, log a trip, check out, approve the extra.
-- [ ] Decide: mileage is charged as its own card charge right after the visit is paid (so it can never disturb the visit's payment). The family pays one extra 30¢ card fee per visit with mileage. The alternative is to fold it into the visit capture.
+- [x] Decided (Pete, 10/28): mileage goes on the SAME charge as the visit, broken out as its own line (v1.126.3). The pre-visit hold includes room for a full cap; unused is released. Approved extra miles are still a separate charge (the visit is already paid by then).
 - [ ] Later: admin Financials could show mileage as customer pass-through, the way tips are (ledger kind `mileage`, platform_cents 0).
 
 ## Oct 28 2026 — Pete: "add to the list: calls inside the app, and how we're going to work background checks"

@@ -15,11 +15,11 @@
 //   1. lockForSession() at check-out/release: trips freeze; miles up to the family's per-visit
 //      cap become `mileage_cents` (status 'owed'); miles past the cap become
 //      `mileage_extra_cents` (extra status 'pending') and wait for the care team leader.
-//   2. settleSession() once the VISIT is paid: a separate charge on the card that paid the visit,
-//      destination = the caregiver, application fee = the card-fee gross-up only. Separate
-//      rather than folded into the visit capture so that nothing about mileage can ever change
-//      or fail the visit's own payment. Costs the family one extra 30¢ card fee per visit with
-//      mileage. Poller 116 retries.
+//   2. v1.126.3 (Pete: "same charge, just broken out"): the visit's capture
+//      (accountability.captureSessionPay) adds `mileage_cents` to the caregiver's share and the
+//      card percentage on it to the fee, and marks it charged. Only when the visit is paid some
+//      OTHER way (auto-pay after a failed capture) does settleSession() charge it on its own,
+//      with the card-fee gross-up. Poller 116 retries that.
 //   3. decideExtra(): the leader approves (charged the same way) or declines.
 //
 // Dev Rule 7: chargeMileage refuses demo sessions at the boundary, same as every other charge.
@@ -279,6 +279,41 @@ async function sessionSummary(db, session) {
   };
 }
 
+// ─── On the visit's own charge (v1.126.3) ───
+//
+// Pete, 10/28: "Same charge, just broken out in what their pay ledger shows on checkout."
+// So the miles up to the cap ride on the visit's capture: the caregiver's share grows by the
+// mileage, and the family pays only the card's percentage on it (inside one charge there is no
+// second 30¢). The hold carries room for a full cap's worth, so the capture rarely needs the
+// remainder charge; Stripe releases whatever is not captured.
+const CARD_PCT_ON_VISIT = 0.029;
+const mileageCardFeeCents = (cents) => Math.round(Math.max(0, Number(cents) || 0) * CARD_PCT_ON_VISIT);
+
+/** How much extra the pre-visit hold should cover for this loved one (0 when mileage is off). */
+async function holdReserveCents(db, careRecipientId) {
+  const s = await settingsFor(db, careRecipientId);
+  if (!s || !s.enabled) return 0;
+  const cents = centsFor(s.capMiles, s.rateCents);
+  return cents + mileageCardFeeCents(cents);
+}
+
+/** What the visit's capture must add for mileage: { cents, feeCents, miles, rateCents }. */
+async function owedForCapture(db, sessionId) {
+  const s = await db.prepare(`
+    SELECT mileage_status, mileage_cents, mileage_paid_miles, mileage_rate_cents FROM care_sessions WHERE id = ?
+  `).get(sessionId);
+  if (!s || s.mileage_status !== "owed" || !(s.mileage_cents > 0)) return { cents: 0, feeCents: 0 };
+  return { cents: s.mileage_cents, feeCents: mileageCardFeeCents(s.mileage_cents), miles: round1(s.mileage_paid_miles), rateCents: s.mileage_rate_cents };
+}
+
+/** The visit's capture took the mileage. */
+async function markCapturedWithVisit(db, sessionId, piId, feeCents) {
+  await db.prepare(`
+    UPDATE care_sessions SET mileage_status = 'charged', mileage_pi = ?, mileage_fee_cents = ?, mileage_error = NULL
+     WHERE id = ? AND mileage_status = 'owed'
+  `).run(piId, feeCents, sessionId);
+}
+
 // ─── Locking and charging ───
 
 /**
@@ -493,4 +528,5 @@ module.exports = {
   settingsFor, saveSettings, isLeaderOrOwner, deciders,
   quoteTrip, addTrip, sessionSummary, tripView,
   lockForSession, chargeMileage, settleSession, sweepOwed, decideExtra,
+  holdReserveCents, owedForCapture, markCapturedWithVisit, mileageCardFeeCents,
 };
