@@ -179,9 +179,11 @@ describe("the plugins the build actually installs", () => {
     const proj = require("fs").readFileSync(
       require("path").join(__dirname, "..", "ios", "App", "App.xcodeproj", "project.pbxproj"), "utf8"
     );
-    // v1.125.6 — Build 10 / 1.2, the store release candidate (Build 9 was the last TestFlight).
-    expect(proj).not.toMatch(/CURRENT_PROJECT_VERSION = [789];/);
-    expect(proj).toMatch(/CURRENT_PROJECT_VERSION = 10;/);
+    // calls-native: 1.3 / Build 11 — the calling TestFlight track. The store build is 1.1 (9);
+    // 10 was never uploaded. Anything ≤ 10 here would collide with the store track.
+    expect(proj).not.toMatch(/CURRENT_PROJECT_VERSION = (?:[0-9]|10);/);
+    expect(proj).toMatch(/CURRENT_PROJECT_VERSION = 11;/);
+    expect(proj).toMatch(/MARKETING_VERSION = 1\.3;/);
     const gradle = require("fs").readFileSync(require("path").join(__dirname, "..", "android", "app", "build.gradle"), "utf8");
     expect(gradle).toMatch(/versionCode 22\b/);
   });

@@ -32,18 +32,25 @@ Background and the iOS rules this has to obey: `CallKit_VoIP_Plan_2026-09-01.md`
 - [x] **Tests** — `tests/callsNative.test.js`; `callRinging.test.js` updated for the "phone" outcome.
       Unit 2871 ✓, integration 1143 ✓, all lints ✓, architecture doc regenerated.
 
+- [x] **Merged main into this branch (10/29)** — main → calls-native only, never the other way.
+      Generated files (bundle, sw.js, index.html, ARCHITECTURE.md) rebuilt from the merged source.
+- [x] **iOS native — 1.3 (Build 11)**, `ios/App/App/`:
+  - `CallManager.swift`: PushKit started from AppDelegate at every launch; each VoIP push is
+    reported to CallKit at once, in Swift (stale/malformed ones reported then ended); 3 s status
+    poll while ringing ends it as answered-elsewhere / declined-elsewhere / missed / caller hung up;
+    Answer → `POST …/answer` and only joins if the server says this phone `won`; Decline →
+    `POST …/decline`; End on the system screen → web hangs up; Mute → web really mutes; talks to
+    the same server as the web view (`capacitor.config.json`). Not in Phone's Recents.
+  - `InPlaceCallsPlugin.swift`: `getDeviceToken`, `getPendingAnswer`, `endCall`; events
+    `callAnswered` (held until a listener exists), `callEnded`, `callMuted`, `tokenChanged`.
+    Registered in `InPlaceViewController.capacitorDidLoad`.
+  - Info.plist `UIBackgroundModes` = audio, voip (only). Xcode project: both files in the target;
+    **MARKETING_VERSION 1.3, CURRENT_PROJECT_VERSION 11**.
+  - Server: answer/decline return `won`. Web: End/Mute from the system screen reach the call.
+  - Tests: `tests/callsNativeIos.test.js` (wiring, mutation-checked); store-build guards updated to
+    1.3's exact facts. Unit 2887 ✓, integration 1161 ✓, lints ✓.
+
 ## Next — Claude
-- [ ] **iOS native plugin `InPlaceCalls`** (Swift, `ios/App/App/`):
-  - PushKit registry → VoIP token; `getDeviceToken()` returns `{ platform:"ios", token, pushToken }`
-    (pushToken = the ordinary APNs token, so the server can skip its banner).
-  - In `didReceiveIncomingPushWith`: **report to CallKit in Swift, immediately, every time** —
-    never wait for the web view. Caller name and video/audio from the payload, UUID = `callUuid`.
-  - While ringing: poll `GET /api/calls/:room/status` (header `X-Call-Token`) every 3 s; end with
-    the right reason on declined / missed / ended / answered elsewhere. Stop at `expiresAt`.
-  - Answer → `POST …/answer`, keep the pending answer for `getPendingAnswer()`, emit
-    `callAnswered`. Decline → `POST …/decline`.
-  - `endCall({ roomName })` from the web closes the CallKit call.
-  - AVAudioSession `.playAndRecord` / `.voiceChat`; hand audio to Twilio on `didActivate`.
 - [ ] **Android native** — FirebaseMessagingService handling `type=call_ring` without breaking
       the Capacitor push plugin's own service (one service must forward to the other);
       full-screen-intent call notification with Answer/Decline; same status poll and HTTP
@@ -57,8 +64,11 @@ Background and the iOS rules this has to obey: `CallKit_VoIP_Plan_2026-09-01.md`
 - [ ] Finish the key rotations calling depends on: APNs key and the Firebase service account.
 - [ ] Decide: ring **every** device at once (recommended; first to answer stops the others — built
       that way) or only the most recent.
-- [ ] Xcode, on the 1.3 branch only: Signing & Capabilities → Background Modes → **Voice over IP**
-      and **Audio, AirPlay, and Picture in Picture**. Push Notifications stays on.
+- [ ] Build 1.3 from its OWN folder (`kincare-1.3`, a separate clone on this branch — never the
+      everyday `kincare-repo`). Background Modes are already in Info.plist; in Xcode just confirm
+      Signing & Capabilities shows them. First goal: it compiles. Report any red errors verbatim.
+- [ ] Watch for (the open questions only a phone answers): does Twilio audio flow when a call
+      is answered on the LOCKED screen without opening the app? Does the caller's name show?
 - [ ] Play Console, only after vc22 is approved: the full-screen intent declaration (Claude drafts).
 
 ## Release (after 1.2 is live)

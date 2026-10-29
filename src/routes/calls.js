@@ -77,7 +77,9 @@ function settle(state) {
       registry.emitToUser(call.targetUserId, state === "answered" ? "call_answered_elsewhere" : "call_ended",
         { roomName: call.roomName });
     }
-    res.json(registry.publicStatus(registry.getCall(pass.roomName)));
+    // `won` tells the native side whether THIS request moved the call. Two of one person's
+    // phones can both tap Answer; both get state "answered", but only the first joins.
+    res.json({ ...registry.publicStatus(registry.getCall(pass.roomName)), won: !!(result && result.changed) });
   };
 }
 

@@ -165,8 +165,19 @@ describe("/api/calls: the callToken is the only way in", () => {
   test("answering tells the caller and stops the callee's other apps ringing", async () => {
     startRing();
     const t = reg.signCallToken("inplace-q-1", "callee");
-    await request(app).post("/api/calls/inplace-q-1/answer").set("X-Call-Token", t).expect(200);
+    const r = await request(app).post("/api/calls/inplace-q-1/answer").set("X-Call-Token", t).expect(200);
+    expect(r.body).toMatchObject({ state: "answered", won: true });
     expect(emitted.map((e) => `${e.uid}:${e.event}`)).toEqual(["caller:call_accepted", "callee:call_answered_elsewhere"]);
+  });
+
+  test("a second phone answering the same call is told it lost, and tells nobody", async () => {
+    startRing();
+    const t = reg.signCallToken("inplace-q-1", "callee");
+    await request(app).post("/api/calls/inplace-q-1/answer").set("X-Call-Token", t).expect(200);
+    emitted.length = 0;
+    const r = await request(app).post("/api/calls/inplace-q-1/answer").set("X-Call-Token", t).expect(200);
+    expect(r.body).toMatchObject({ state: "answered", won: false });
+    expect(emitted).toEqual([]);
   });
 
   test("registering a device during impersonation is skipped", async () => {

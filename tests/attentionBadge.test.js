@@ -308,7 +308,10 @@ describe("opening the app corrects the icon, without waiting for a native build"
     // be the thing that makes them reconsider rather than a silent regression.
     const plist = require("fs").readFileSync(
       require("path").join(__dirname, "..", "ios/App/App/Info.plist"), "utf8");
-    expect(plist).not.toMatch(/UIBackgroundModes/);
+    // calls-native (1.3) adds UIBackgroundModes for calling (audio, voip). Neither of those
+    // lets a background push through; `remote-notification` is the one that would, and it
+    // must still be absent — the badge push stays an alert push.
+    expect(plist).not.toMatch(/<string>remote-notification<\/string>/);
   });
 
   test("badges recorded by v1.105.42 are forgotten, or the first real push is suppressed", () => {

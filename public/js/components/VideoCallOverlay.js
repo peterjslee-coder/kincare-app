@@ -67,6 +67,23 @@ const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, curr
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [callState?.active]);
 
+  // calls-native (1.3) — the phone's own call screen (CallKit) has an End and a Mute button.
+  // They have to work on THIS call: End leaves the room and tells the other person (the same
+  // path as the red button here), Mute really mutes. nativeCalls.js turns the plugin's events
+  // into these window events; on a build without the plugin they never fire.
+  useEffect(() => {
+    if (!callState?.active || !callState?.roomName) return;
+    const mine = (e) => e && e.detail && e.detail.roomName === callState.roomName;
+    const onEnded = (e) => { if (mine(e)) handleEndCall(); };
+    const onMuted = (e) => { if (mine(e) && !!e.detail.muted !== isMuted) toggleMute(); };
+    window.addEventListener('inplace:native-call-ended', onEnded);
+    window.addEventListener('inplace:native-call-muted', onMuted);
+    return () => {
+      window.removeEventListener('inplace:native-call-ended', onEnded);
+      window.removeEventListener('inplace:native-call-muted', onMuted);
+    };
+  }, [callState?.active, callState?.roomName, isMuted]);
+
   // Connect to Twilio room on mount
   useEffect(() => {
     if (!callState?.active || !callState?.roomName) return;

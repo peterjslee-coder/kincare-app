@@ -7,7 +7,10 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     var window: UIWindow?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Override point for customization after application launch.
+        // calls-native (1.3): PushKit must be listening from the very first moment of every
+        // launch — a VoIP ring can be what launched the app, and it must reach CallKit before
+        // anything else happens. See CallManager.swift.
+        CallManager.shared.start()
         return true
     }
 
@@ -50,6 +53,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     // Forward APNS token to Capacitor so the PushNotifications plugin can send it to JS
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
         NotificationCenter.default.post(name: .capacitorDidRegisterForRemoteNotifications, object: deviceToken)
+        // calls-native: the server skips the ordinary call banner on a phone that rings natively.
+        CallManager.shared.setApnsToken(deviceToken)
     }
 
     func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {

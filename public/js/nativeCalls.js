@@ -58,6 +58,12 @@
     } catch (err) { console.warn('NativeCalls: could not register this device for calls', err); }
     try {
       p.addListener('callAnswered', takeAnswered);
+      // End / Mute pressed on the phone's own call screen (VideoCallOverlay acts on these).
+      const relay = (name) => (d) => {
+        try { window.dispatchEvent(new CustomEvent(name, { detail: d || {} })); } catch {}
+      };
+      p.addListener('callEnded', relay('inplace:native-call-ended'));
+      p.addListener('callMuted', relay('inplace:native-call-muted'));
       // PushKit may hand over a new VoIP token at any time.
       p.addListener('tokenChanged', (reg) => {
         if (reg && reg.token && typeof apiFetch === 'function') {
