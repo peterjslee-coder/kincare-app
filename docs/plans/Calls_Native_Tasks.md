@@ -10,8 +10,8 @@ Background and the iOS rules this has to obey: `CallKit_VoIP_Plan_2026-09-01.md`
 - [x] **Server: call registry** — `src/utils/callRegistry.js`. Each ring is recorded
       (ringing → answered / declined / missed / ended; missed after 45 s) with a CallKit UUID and a
       signed `callToken` (one room, one person, 2 min) that native code uses without a login.
-- [x] **Server: call devices** — own table `call_devices` (migration `075_call_devices`; renumber
-      on rebase if main used 075). `src/utils/callDevices.js`. Kept out of `push_subscriptions`
+- [x] **Server: call devices** — own table `call_devices` (migration `078_call_devices` — was 075,
+      renumbered 10/29 when main's 075–077 were merged in). `src/utils/callDevices.js`. Kept out of `push_subscriptions`
       so nothing the 1.2 build touches can see it. Cleared on account deletion (3 places).
 - [x] **Server: the ring** — `apns.sendApnsVoip` (topic `.voip`, push-type voip, no alert, 45 s
       expiry); Android = data-only high-priority FCM `type: call_ring`. Demo accounts never rung.

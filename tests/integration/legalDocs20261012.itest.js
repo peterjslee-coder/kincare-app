@@ -16,7 +16,8 @@ afterAll(async () => { await stopHarness(h); });
 // v1.114.6 — migration 061 supersedes the privacy policy with 2026-10-14 (7B Text Messages).
 // v1.118.0 — migration 067 supersedes it again with 2026-10-14b (first-party analytics, no Plausible).
 // v1.124.3 — migration 074 supersedes it with 2026-10-19 (7B matches the A2P registrations).
-const EXPECTED = { privacy: "2026-10-19", terms: "2026-10-12" };
+// v1.126.7 — migration 077 supersedes it with 2026-10-29 (Google Maps Platform named).
+const EXPECTED = { privacy: "2026-10-29", terms: "2026-10-12" };
 
 test("exactly one active privacy and terms, at their current versions, with the new sections", async () => {
   for (const t of ["privacy", "terms"]) {
@@ -36,6 +37,9 @@ test("exactly one active privacy and terms, at their current versions, with the 
   expect(pp.content).toContain("sent only to people who have texted that number first");
   expect(pp.content).toContain("replies YES to our one confirmation text");
   expect(pp.content).not.toContain("referral list");
+  // v1.126.7 — place search and mileage distances go to Google; the policy says so.
+  expect(pp.content).toContain("Google Maps Platform");
+  expect(pp.content).toContain("https://policies.google.com/privacy");
   expect(pp.content.match(/^6\. How We Share Your Information$/gm)).toHaveLength(1);
   expect(pp.content.match(/^7\. Health Information$/gm)).toHaveLength(1);
   expect(pp.content.match(/^Artificial Intelligence Services$/gm)).toHaveLength(1);

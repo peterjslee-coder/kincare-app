@@ -17,6 +17,7 @@ const { code, raw } = require("./helpers/source");
 const dash = code("public/js/components/Dashboard.js");
 const events = code("public/js/components/CareEvents.js");
 const css = raw("public/css/styles.css");
+const spine = code("public/js/components/ComingUpSpine.js");
 
 describe("I1 — the event hero exists and wears the same shimmer", () => {
   test("CareEventHeroRow is defined and exported to the bundle", () => {
@@ -29,7 +30,9 @@ describe("I1 — the event hero exists and wears the same shimmer", () => {
     const i = events.indexOf("const CareEventHeroRow");
     const fn = events.slice(i, i + 3000);
     expect(fn).toMatch(/className="next-up-hero-shimmer"/);
-    expect(dash).toMatch(/className=\{shouldShimmer \? 'next-up-hero-shimmer' : ''\}/);
+    // v1.126.0 — the session hero and the event heroes are now one card, the Coming Up spine,
+    // and it wears the same class.
+    expect(spine).toMatch(/className="next-up-hero-shimmer"/);
   });
 
   test("and that class is the orange one", () => {
@@ -119,32 +122,50 @@ describe("I3 — promoted means moved, not copied", () => {
     expect(dash).toMatch(/s\.id !== imminentId/);
   });
 
-  test("the hero renders every imminent event, capped", () => {
-    // Pete's case has BOTH a session and an appointment inside 24h, so this cannot be a
-    // single soonest-thing slot.
-    // Anchor on CODE: helpers/source.code() strips line-owning comments, so a JSX-comment
-    // anchor like "Imminent Care Event Hero" matches nothing and the test passes vacuously.
-    const i = dash.indexOf("if (!imminentEventIds.size) return null;");
+  test("the spine renders every imminent event, uncapped", () => {
+    // Pete's case has BOTH a session and appointments inside 24h, so this cannot be a single
+    // soonest-thing slot. And no cap: Next Up drops every imminent event, so anything sliced
+    // off here would vanish from Home (the old three-hero slice did exactly that).
+    const i = dash.indexOf(".filter(ev => imminentEventIds.has(ev.id))");
     expect(i).toBeGreaterThan(-1);
-    const block = dash.slice(i, i + 1600);
-    expect(block).toMatch(/\.sort\(\(a, b\) => a\.msUntil - b\.msUntil\)/);
-    expect(block).toMatch(/\.slice\(0, 3\)/);
-    expect(block).toMatch(/CareEventHeroRow/);
+    const block = dash.slice(i, i + 1200);
+    expect(block).toMatch(/\.sort\(\(a, b\) => a\.startMs - b\.startMs\)/);
+    expect(block).not.toMatch(/\.slice\(0,/);
+    expect(block).toMatch(/<ComingUpSpine hero=\{heroInfo\} events=\{eventRows\}/);
   });
 
-  test("it sits above Next Up and below the session hero", () => {
-    const sessionHero = dash.indexOf("const shouldShimmer = !isActive && msUntil <= 24 * 3600000;");
-    const eventHero = dash.indexOf("if (!imminentEventIds.size) return null;");
+  test("it sits above Next Up, one card for the visit and the appointments", () => {
+    const spineAt = dash.indexOf("<ComingUpSpine");
     const nextUp = dash.indexOf("const careEventItems = (careEventsUpcoming?.events || [])");
-    for (const at of [sessionHero, eventHero, nextUp]) expect(at).toBeGreaterThan(-1);
-    expect(eventHero).toBeGreaterThan(sessionHero);
-    expect(nextUp).toBeGreaterThan(eventHero);
+    for (const at of [spineAt, nextUp]) expect(at).toBeGreaterThan(-1);
+    expect(nextUp).toBeGreaterThan(spineAt);
+    // The old separate heroes are gone — two cards for one day is what Pete asked to end.
+    expect(dash).not.toMatch(/<CareEventHeroRow/);
+    expect(dash.match(/<ComingUpSpine/g)).toHaveLength(1);
   });
 
-  test("tapping it opens the event, not a session", () => {
-    const at = dash.indexOf("if (!imminentEventIds.size) return null;");
-    expect(at).toBeGreaterThan(-1);
-    const block = dash.slice(at, at + 1600);
-    expect(block).toMatch(/onOpenSheet=\{\(\) => setEventSheet\(ev\)\}/);
+  test("tapping a row opens the event or the visit, each its own", () => {
+    const at = dash.indexOf("<ComingUpSpine");
+    const block = dash.slice(at, at + 400);
+    expect(block).toMatch(/onOpenEvent=\{\(ev\) => setEventSheet\(ev\)\}/);
+    expect(block).toMatch(/onOpenVisit=\{\(id\) => id && setVisitDetailSessionId\(id\)\}/);
+    expect(spine).toMatch(/onClick=\{\(\) => onOpenEvent && onOpenEvent\(ev\)\}/);
+    expect(spine).toMatch(/onClick=\{\(\) => onOpenVisit && onOpenVisit\(hero\.id\)\}/);
+  });
+
+  test("the line is solid only inside the visit window", () => {
+    // The whole point of the design: solid = while the caregiver is there, dashed = not.
+    expect(spine).toMatch(/const segIn = \(a, b\) => !!hero && a\.ms >= hero\.startMs && b\.ms <= hero\.endMs;/);
+    expect(spine).toMatch(/2px dashed var\(--border-color\)/);
+  });
+
+  test("the spine is in the bundle, after CareEvents (it uses careEventIcon)", () => {
+    const build = raw("scripts/build-client.js");
+    const ce = build.indexOf('"js/components/CareEvents.js"');
+    const sp = build.indexOf('"js/components/ComingUpSpine.js"');
+    const db = build.indexOf('"js/components/Dashboard.js"');
+    expect(ce).toBeGreaterThan(-1);
+    expect(sp).toBeGreaterThan(ce);
+    expect(db).toBeGreaterThan(sp);
   });
 });

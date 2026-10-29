@@ -1501,161 +1501,99 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
         );
       })()}
 
-      {/* Imminent Session Hero — within 24h, countdown + shimmer, right under proposals */}
+      {/* Coming Up spine (v1.126.0) — the visit inside 24h and every appointment inside 24h on
+          one line. Replaces the separate session hero and care-event heroes; see ComingUpSpine.js. */}
       {(() => {
-        const tz = upcoming[0]?.timezone || TimezoneHelper.DEFAULT_TZ;
-        const nowDisplay = TimezoneHelper.getNow(tz); // for display only (getHours etc.)
-        const nowMs = TimezoneHelper.realNowMs(); // for countdown comparisons
-        // Find soonest confirmed/in_progress session with a caregiver
-        const confirmed = upcoming.filter(s => s.caregiverName && ['confirmed', 'in_progress'].includes(s.status));
-        const sorted = [...confirmed].sort((a, b) => {
-          const ak = ((a.date || '').split('T')[0]) + (a.time || '');
-          const bk = ((b.date || '').split('T')[0]) + (b.time || '');
-          return ak.localeCompare(bk);
-        });
-        const hero = sorted[0];
-        if (!hero) { if (imminentId) setImminentId(null); return null; }
-        const sDate = (hero.date || '').split('T')[0];
-        const sessionDT = TimezoneHelper.buildDateTime(sDate, hero.time || '00:00', tz);
-        const msUntil = sessionDT.getTime() - nowMs;
-        const isActive = hero.status === 'in_progress';
-        // Show hero if within 24h OR currently in progress
-        if (!isActive && msUntil > 24 * 3600000) { if (imminentId) setImminentId(null); return null; }
-        if (imminentId !== hero.id) setTimeout(() => setImminentId(hero.id), 0);
+        const computeHero = () => {
+          const tz = upcoming[0]?.timezone || TimezoneHelper.DEFAULT_TZ;
+          const nowDisplay = TimezoneHelper.getNow(tz); // for display only (getHours etc.)
+          const nowMs = TimezoneHelper.realNowMs(); // for countdown comparisons
+          // Find soonest confirmed/in_progress session with a caregiver
+          const confirmed = upcoming.filter(s => s.caregiverName && ['confirmed', 'in_progress'].includes(s.status));
+          const sorted = [...confirmed].sort((a, b) => {
+            const ak = ((a.date || '').split('T')[0]) + (a.time || '');
+            const bk = ((b.date || '').split('T')[0]) + (b.time || '');
+            return ak.localeCompare(bk);
+          });
+          const hero = sorted[0];
+          if (!hero) { if (imminentId) setImminentId(null); return null; }
+          const sDate = (hero.date || '').split('T')[0];
+          const sessionDT = TimezoneHelper.buildDateTime(sDate, hero.time || '00:00', tz);
+          const msUntil = sessionDT.getTime() - nowMs;
+          const isActive = hero.status === 'in_progress';
+          // Show hero if within 24h OR currently in progress
+          if (!isActive && msUntil > 24 * 3600000) { if (imminentId) setImminentId(null); return null; }
+          if (imminentId !== hero.id) setTimeout(() => setImminentId(hero.id), 0);
 
-        // Build countdown string
-        let countdownStr = '';
-        let countdownColor = 'var(--role-color)';
-        if (isActive) {
-          // Show remaining time for in-progress.
-          // v1.105.33 — counts down to the SCHEDULED end, not check-in + booked hours.
-          // The old anchor made a late arrival silently move the finish line: check in 45
-          // minutes late on a 10–12 visit and at 11:45 this read "1h 15m remaining", past
-          // the noon the family was told. Pay is still computed server-side from the real
-          // check-in and check-out — this number answers "when was this supposed to end",
-          // which is the only question anyone is asking it.
-          const endMs = sessionDT.getTime() + ((hero.durationHours || 2) * 3600000);
-          const leftMs = endMs - Date.now();
-          if (leftMs > 0) {
-            const totalSec = Math.floor(leftMs / 1000);
+          // Build countdown string
+          let countdownStr = '';
+          let countdownColor = 'var(--role-color)';
+          if (isActive) {
+            // Show remaining time for in-progress.
+            // v1.105.33 — counts down to the SCHEDULED end, not check-in + booked hours.
+            // The old anchor made a late arrival silently move the finish line: check in 45
+            // minutes late on a 10–12 visit and at 11:45 this read "1h 15m remaining", past
+            // the noon the family was told. Pay is still computed server-side from the real
+            // check-in and check-out — this number answers "when was this supposed to end",
+            // which is the only question anyone is asking it.
+            const endMs = sessionDT.getTime() + ((hero.durationHours || 2) * 3600000);
+            const leftMs = endMs - Date.now();
+            if (leftMs > 0) {
+              const totalSec = Math.floor(leftMs / 1000);
+              const hrs = Math.floor(totalSec / 3600);
+              const mins = Math.floor((totalSec % 3600) / 60);
+              countdownStr = hrs > 0 ? `${hrs}h ${mins}m remaining` : `${mins}m remaining`;
+            } else {
+              countdownStr = 'Expected end time passed';
+              countdownColor = 'var(--color-error)';
+            }
+          } else if (msUntil <= 0) {
+            countdownStr = 'Starting now — awaiting check-in';
+            countdownColor = 'var(--accent-color)';
+          } else {
+            const totalSec = Math.floor(msUntil / 1000);
             const hrs = Math.floor(totalSec / 3600);
             const mins = Math.floor((totalSec % 3600) / 60);
-            countdownStr = hrs > 0 ? `${hrs}h ${mins}m remaining` : `${mins}m remaining`;
-          } else {
-            countdownStr = 'Expected end time passed';
-            countdownColor = 'var(--color-error)';
+            if (hrs > 0) {
+              countdownStr = `${hrs}h ${mins}m`;
+            } else {
+              countdownStr = `${mins}m`;
+            }
+            countdownColor = hrs < 1 ? 'var(--accent-color)' : hrs < 3 ? 'var(--accent-color)' : 'var(--role-color)';
           }
-        } else if (msUntil <= 0) {
-          countdownStr = 'Starting now — awaiting check-in';
-          countdownColor = 'var(--accent-color)';
-        } else {
-          const totalSec = Math.floor(msUntil / 1000);
-          const hrs = Math.floor(totalSec / 3600);
-          const mins = Math.floor((totalSec % 3600) / 60);
-          if (hrs > 0) {
-            countdownStr = `${hrs}h ${mins}m`;
-          } else {
-            countdownStr = `${mins}m`;
-          }
-          countdownColor = hrs < 1 ? 'var(--accent-color)' : hrs < 3 ? 'var(--accent-color)' : 'var(--role-color)';
-        }
 
-        const dayLabel = TimezoneHelper.getDateLabel(sDate, tz);
-        const timeLabel = TimezoneHelper.formatTime(hero.time);
-        const hasPendingTC = !!hero.pendingTimeChangeId;
-        const bgGradient = hasPendingTC
-          ? 'linear-gradient(135deg, var(--color-purple-bg) 0%, var(--bg-card) 100%)'
-          : isActive
-          ? 'linear-gradient(135deg, var(--color-warning-bg) 0%, var(--bg-card) 100%)'
-          : msUntil <= 3600000
-            ? 'linear-gradient(135deg, var(--bg-accent-light) 0%, var(--bg-card) 100%)'
-            : 'linear-gradient(135deg, var(--bg-highlight) 0%, var(--bg-card) 100%)';
-        const borderColor = hasPendingTC ? 'var(--color-purple)' : isActive ? 'var(--color-warning)' : msUntil <= 3600000 ? 'var(--accent-color)' : 'var(--role-color)';
-        const shouldShimmer = !isActive && msUntil <= 24 * 3600000;
-
-        return (
-          <div className={shouldShimmer ? 'next-up-hero-shimmer' : ''} onClick={() => hero.id && setVisitDetailSessionId(hero.id)} style={{
-            marginBottom: 16, padding: '18px 20px', cursor: 'pointer', borderRadius: 14,
-            border: `3px solid ${borderColor}`,
-            background: bgGradient,
-            boxShadow: `0 4px 16px ${isActive ? 'rgba(245, 127, 23, 0.15)' : msUntil <= 3600000 ? 'rgba(232, 114, 74, 0.18)' : 'rgba(27, 107, 90, 0.1)'}`,
-            position: 'relative', overflow: 'hidden',
-          }}>
-            {/* Top row: label + countdown */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: hasPendingTC ? 'var(--color-purple)' : isActive ? 'var(--color-warning)' : 'var(--accent-color)' }}>
-                {hasPendingTC ? '⏰ Time Change Proposed' : isActive ? 'In Progress Now' : 'Coming Up'}
-              </div>
-              <div style={{
-                fontSize: 14, fontWeight: 700, color: countdownColor,
-                background: isActive ? 'var(--color-warning-bg)' : countdownColor === 'var(--accent-color)' ? 'var(--color-warning-bg)' : 'var(--color-success-bg)',
-                padding: '4px 12px', borderRadius: 20,
-                fontVariantNumeric: 'tabular-nums',
-              }}>
-                {isActive ? countdownStr : msUntil <= 0 ? countdownStr : `in ${countdownStr}`}
-              </div>
-            </div>
-            {/* Session info */}
-            <div style={{ fontWeight: 700, fontSize: 17, color: 'var(--text-primary)', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              {hero.recipientName || 'Care Visit'} with {hero.caregiverName}
-              {hero.on_my_way_at && !isActive && (
-                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-success)', background: 'var(--color-success-bg)', padding: '2px 8px', borderRadius: 10, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polygon points="3 11 22 2 13 21 11 13 3 11"></polygon></svg>
-                  En Route
-                </span>
-              )}
-            </div>
-            {hasPendingTC && hero.tcProposedTime ? (
-              <div style={{ fontSize: 14, color: 'var(--text-secondary)' }}>
-                {dayLabel} at{' '}
-                <span style={{ textDecoration: 'line-through', opacity: 0.5 }}>{timeLabel}</span>
-                {' '}
-                <span style={{ color: 'var(--color-purple)', fontWeight: 700 }}>
-                  {TimezoneHelper.formatTime(hero.tcProposedTime)}
-                </span>
-                {hero.tcProposedDuration && hero.tcProposedDuration !== hero.durationHours ? (
-                  <>
-                    {' \u2022 '}
-                    <span style={{ textDecoration: 'line-through', opacity: 0.5 }}>{hero.durationHours}hr</span>
-                    {' '}
-                    <span style={{ color: 'var(--color-purple)', fontWeight: 700 }}>{hero.tcProposedDuration}hr</span>
-                  </>
-                ) : hero.durationHours ? ` \u2022 ${hero.durationHours}hr` : ''}
-                {hero.serviceType ? ` \u2022 ${formatServiceType(hero.serviceType)}` : ''}
-              </div>
-            ) : (
-              <div style={{ fontSize: 14, color: 'var(--text-secondary)' }}>
-                {dayLabel}{timeLabel ? ` at ${timeLabel}` : ''}
-                {hero.durationHours ? ` \u2022 ${hero.durationHours}hr` : ''}
-                {hero.serviceType ? ` \u2022 ${formatServiceType(hero.serviceType)}` : ''}
-              </div>
-            )}
-            {/* Tap hint */}
-            <div style={{ position: 'absolute', right: 16, top: '50%', transform: 'translateY(-50%)', color: borderColor, opacity: 0.3, fontSize: 20 }}>→</div>
-          </div>
-        );
-      })()}
-
-      {/* Imminent Care Event Hero(es) — an appointment within 24h, same treatment as a session */}
-      {(() => {
-        if (!imminentEventIds.size) return null;
-        const nowMs = TimezoneHelper.realNowMs();
-        const rows = (careEventsUpcoming?.events || [])
+          const endTime = (() => { const [hh, mm] = String(hero.time || '00:00').split(':').map(Number); const t = (hh || 0) * 60 + (mm || 0) + Math.round((hero.durationHours || 2) * 60); return { time: `${String(Math.floor(t / 60) % 24).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`, dayOffset: Math.floor(t / 1440) }; })();
+          const endDate = (() => { if (!endTime.dayOffset) return sDate; const [y, m, d] = sDate.split('-').map(Number); const dt = new Date(Date.UTC(y, m - 1, d + endTime.dayOffset)); return dt.toISOString().slice(0, 10); })();
+          return {
+            id: hero.id, date: sDate, time: hero.time, endTime: endTime.time, endDate, tz,
+            startMs: sessionDT.getTime(), endMs: sessionDT.getTime() + ((hero.durationHours || 2) * 3600000),
+            msUntil, isActive, countdownStr, countdownColor,
+            caregiverName: hero.caregiverName, recipientName: hero.recipientName,
+            durationHours: hero.durationHours, serviceType: hero.serviceType ? formatServiceType(hero.serviceType) : '',
+            onMyWay: !!hero.on_my_way_at, hasPendingTC: !!hero.pendingTimeChangeId,
+            tcProposedTime: hero.tcProposedTime, tcProposedDuration: hero.tcProposedDuration,
+          };
+        };
+        const heroInfo = computeHero();
+        const nowMsEv = TimezoneHelper.realNowMs();
+        const eventRows = (careEventsUpcoming?.events || [])
           .filter(ev => imminentEventIds.has(ev.id))
           .map(ev => {
-            const tz = ev.timezone || TimezoneHelper.DEFAULT_TZ;
+            const etz = ev.timezone || TimezoneHelper.DEFAULT_TZ;
             const startMs = TimezoneHelper.buildDateTime(
-              (ev.event_date || '').split('T')[0], ev.event_time || '00:00', tz,
+              (ev.event_date || '').split('T')[0], ev.event_time || '00:00', etz,
             ).getTime();
-            return { ev, msUntil: startMs - nowMs };
+            return { ev, startMs, msUntil: startMs - nowMsEv };
           })
-          .sort((a, b) => a.msUntil - b.msUntil)
-          // Three is a hero section; ten is a list with a shimmer on it. The rest stay in Next Up.
-          .slice(0, 3);
-        return rows.map(({ ev, msUntil }) => (
-          <CareEventHeroRow key={`ce-hero-${ev.id}`} ev={ev} msUntil={msUntil}
-            onOpenSheet={() => setEventSheet(ev)} />
-        ));
+          // No cap: Next Up drops every imminent event (imminentEventIds), so anything cut here
+          // would vanish from the dashboard altogether — which the old three-hero slice did.
+          .sort((a, b) => a.startMs - b.startMs);
+        if (!heroInfo && !eventRows.length) return null;
+        return (
+          <ComingUpSpine hero={heroInfo} events={eventRows}
+            onOpenVisit={(id) => id && setVisitDetailSessionId(id)}
+            onOpenEvent={(ev) => setEventSheet(ev)} />
+        );
       })()}
 
       {/* Open Requests — unclaimed jobs the family posted */}

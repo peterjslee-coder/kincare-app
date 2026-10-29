@@ -15,7 +15,7 @@
 // already happened, and a retried charge (same PaymentIntent) must not produce two rows.
 const { v4: uuid } = require("uuid");
 
-const KINDS = ["authorization", "capture", "remainder", "cancel_fee", "tip", "checkout", "autopay", "refund"];
+const KINDS = ["authorization", "capture", "remainder", "cancel_fee", "tip", "checkout", "autopay", "refund", "mileage"]; // mileage: v1.126.1
 
 /**
  * @param {object} db    a db or tx handle
@@ -84,6 +84,7 @@ function describe(row) {
     checkout: "Visit",
     autopay: "Visit",
     refund: "Refund",
+    mileage: "Mileage",
   };
   const lines = [];
   if (b) {
@@ -102,7 +103,15 @@ function describe(row) {
         lines.push({ label: `— of which to the caregiver (80%)`, amount: money(b.surchargeToCaregiverCents), sub: true });
       }
     }
+    // v1.126.3 — mileage on the visit's own charge, broken out (Pete: "same charge, just broken out")
+    if (b.mileageCents) {
+      lines.push({
+        label: b.mileageMiles != null && b.mileageRateCents ? `Mileage — ${Number(b.mileageMiles).toFixed(1)} mi at ${b.mileageRateCents}¢` : "Mileage",
+        amount: money(b.mileageCents),
+      });
+    }
     if (b.platformFeeCents) lines.push({ label: `InPlace fee${b.feePercent ? ` (${b.feePercent}%)` : ""}`, amount: money(b.platformFeeCents) });
+    if (b.mileageFeeCents) lines.push({ label: "Card processing on mileage", amount: money(b.mileageFeeCents) });
     if (b.cardFeeCents) lines.push({ label: "Card processing fee", amount: money(b.cardFeeCents) });
     if (b.tipCents) lines.push({ label: "Tip", amount: money(b.tipCents) });
   }

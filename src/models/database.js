@@ -3371,11 +3371,87 @@ async function initializeDatabase() {
       ]),
     },
     {
+      // v1.126.1 — visit mileage (Pete, 10/28: "make sure cost/gas is covered", not road trips).
+      // The family turns it on per care recipient and sets a rate and a per-visit cap. The
+      // caregiver logs errand trips during the visit; the SERVER computes every distance. At
+      // check-out the trips lock: miles up to the cap are charged to the visit's card as their
+      // own charge (caregiver gets all of it, the family covers the card fee — same as a tip);
+      // miles past the cap wait for the care team leader. utils/mileage.js.
+      // No user FKs on purpose: a completed visit's trips are the family's record and must not
+      // block (or vanish with) an admin deleting the caregiver's account.
+      id: "075_visit_mileage",
+      statements: [
+        `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS mileage_enabled INTEGER DEFAULT 0`,
+        `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS mileage_rate_cents INTEGER DEFAULT 50`,
+        `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS mileage_cap_miles REAL DEFAULT 20`,
+        `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS mileage_updated_by TEXT`,
+        `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS mileage_updated_at TIMESTAMPTZ`,
+        `CREATE TABLE IF NOT EXISTS visit_trips (
+           id TEXT PRIMARY KEY,
+           session_id TEXT NOT NULL REFERENCES care_sessions(id),
+           care_recipient_id TEXT NOT NULL REFERENCES care_recipients(id),
+           caregiver_user_id TEXT NOT NULL,
+           start_kind TEXT NOT NULL,
+           start_label TEXT,
+           stops TEXT NOT NULL,
+           round_trip INTEGER NOT NULL DEFAULT 1,
+           miles REAL NOT NULL,
+           minutes INTEGER,
+           distance_source TEXT NOT NULL,
+           note TEXT NOT NULL,
+           rate_cents INTEGER NOT NULL,
+           created_at TIMESTAMPTZ DEFAULT NOW(),
+           deleted_at TIMESTAMPTZ
+         )`,
+        `CREATE INDEX IF NOT EXISTS idx_visit_trips_session ON visit_trips (session_id) WHERE deleted_at IS NULL`,
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS mileage_locked_at TIMESTAMPTZ`,
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS mileage_total_miles REAL`,
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS mileage_paid_miles REAL`,
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS mileage_extra_miles REAL`,
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS mileage_rate_cents INTEGER`,
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS mileage_cents INTEGER`,
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS mileage_status TEXT`,
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS mileage_pi TEXT`,
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS mileage_fee_cents INTEGER`,
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS mileage_attempts INTEGER DEFAULT 0`,
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS mileage_error TEXT`,
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS mileage_extra_cents INTEGER`,
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS mileage_extra_status TEXT`,
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS mileage_extra_pi TEXT`,
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS mileage_extra_fee_cents INTEGER`,
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS mileage_extra_decided_by TEXT`,
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS mileage_extra_decided_at TIMESTAMPTZ`,
+      ],
+    },
+    {
+      // v1.126.2 — review fixes: each mileage charge keeps its own retry state (a decline waits
+      // and moves to a new idempotency key), and the per-visit cap is frozen at check-out.
+      id: "076_visit_mileage_retry",
+      statements: [
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS mileage_extra_attempts INTEGER DEFAULT 0`,
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS mileage_declines INTEGER DEFAULT 0`,
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS mileage_extra_declines INTEGER DEFAULT 0`,
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS mileage_next_try_at TIMESTAMPTZ`,
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS mileage_extra_next_try_at TIMESTAMPTZ`,
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS mileage_cap_miles REAL`,
+      ],
+    },
+    {
+      // v1.126.7 — Privacy Policy names Google Maps Platform (place search since v1.126.0, driving
+      // distances for mileage) before the store submission. Pete, 10/29: "go with privacy policy
+      // update for google routes." Publish first, the lawyer reviews what we publish.
+      id: "077_privacy_2026_10_29",
+      statements: legalPublishStatements("2026-10-29", [
+        { docType: "privacy", fallbackTitle: "Privacy Policy", file: "privacy_2026-10-29.txt",
+          summary: "Names Google Maps Platform: when you type an address or place name, it is sent to Google to suggest matching places, and when a care team turns on mileage, a caregiver's errand stops are sent to Google to work out the driving distance." },
+      ]),
+    },
+    {
       // calls-native (1.3) — devices that can ring like a phone: the PushKit VoIP token on iOS,
       // the FCM token of a 1.3 Android app. Its own table so nothing that reads
-      // push_subscriptions can see it (utils/callDevices.js). Renumber on rebase if main has
-      // used this number meanwhile — the id is what matters, not the digits.
-      id: "075_call_devices",
+      // push_subscriptions can see it (utils/callDevices.js). Was 075 on this branch; renumbered
+      // 078 when main's mileage (075/076) and privacy (077) migrations were merged in.
+      id: "078_call_devices",
       statements: [
         `CREATE TABLE IF NOT EXISTS call_devices (
            id TEXT PRIMARY KEY,

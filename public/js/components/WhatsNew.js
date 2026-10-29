@@ -25,6 +25,31 @@ const wnHead = { fontSize: 10.5, fontWeight: 700, color: 'var(--text-muted)', te
 const wnPill = (bg, fg) => ({ padding: '4px 10px', borderRadius: 8, background: bg, color: fg, fontSize: 11, fontWeight: 700 });
 
 const WN_PREVIEWS = {
+  comingUpSpine: () => {
+    const row = (dot, time, title, sub, visit) => (
+      <div style={{ display: 'flex', alignItems: 'stretch' }}>
+        <div style={{ width: 22, position: 'relative' }}>
+          <span style={{ position: 'absolute', left: 9, top: 0, bottom: 0, width: 3, background: 'var(--role-color)' }} />
+          <span style={{ position: 'absolute', left: 4, top: 11, width: 13, height: 13, borderRadius: 7, background: dot, boxShadow: '0 0 0 3px var(--bg-card)' }} />
+        </div>
+        <div style={{ flex: 1, margin: '0 0 6px 4px', padding: '6px 9px', borderRadius: 8, border: visit ? '1px solid var(--role-color)' : '1px solid var(--border-color)', background: visit ? 'var(--bg-highlight)' : 'var(--bg-card)' }}>
+          <div style={{ fontSize: 10.5, fontWeight: 700, color: visit ? 'var(--role-color)' : 'var(--accent-color)' }}>{time}</div>
+          <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)' }}>{title}</div>
+          <div style={{ fontSize: 10.5, color: 'var(--text-secondary)' }}>{sub}</div>
+        </div>
+      </div>
+    );
+    return (
+      <div style={{ padding: '10px 10px 6px', borderRadius: 12, border: '2px solid var(--role-color)', background: 'var(--bg-card)' }}>
+        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase', color: 'var(--accent-color)' }}>Coming up</div>
+        <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>Tomorrow {'·'} Thu, Nov 5</div>
+        <div style={{ fontSize: 10.5, color: 'var(--text-secondary)', marginBottom: 8 }}>3 things for Mom {'·'} all during Jane's visit</div>
+        {row('var(--role-color)', '9:00 AM – 5:00 PM', 'Jane', 'with Mom · Companionship · 8 hr', true)}
+        {row('var(--accent-color)', '9:30 AM', 'Haircut', 'for Mom')}
+        {row('var(--accent-color)', '11:30 AM', 'Lunch at church', 'for Mom')}
+      </div>
+    );
+  },
   todos: () => (
     <div>
       <div style={wnHead}>
@@ -221,6 +246,56 @@ const WN_PREVIEWS = {
       <div style={{ marginTop: 6, padding: '6px 8px', borderRadius: 8, border: '2px dashed var(--accent-color)', fontSize: 10.5, fontWeight: 600, color: 'var(--text-secondary)' }}>
         Jane cancelled this day only {'—'} the rest of the series is still with Jane.
       </div>
+    </div>
+  ),
+  // v1.126.4 — Google place search in every address box
+  placeSearch: () => (
+    <div style={{ padding: '12px 12px 10px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>
+      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.4, color: 'var(--text-tertiary)', marginBottom: 6 }}>LOCATION</div>
+      <div style={{ padding: '7px 10px', borderRadius: 8, border: '2px solid var(--role-color)', fontSize: 12.5, color: 'var(--text-primary)', marginBottom: 6 }}>first baptist</div>
+      {[['First Baptist Church', '100 Main St, Springfield'], ['First Baptist Church Annex', '12 Elm St, Springfield']].map(([n, a], i) => (
+        <div key={n} style={{ padding: '6px 8px', borderTop: i ? '1px solid var(--border-light)' : 'none', background: i ? 'transparent' : 'var(--bg-highlight)', borderRadius: 6 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>{n}</div>
+          <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{a}</div>
+        </div>
+      ))}
+      <div style={{ fontSize: 10, color: 'var(--text-tertiary)', textAlign: 'right', marginTop: 4 }}>Powered by Google</div>
+    </div>
+  ),
+  // v1.126.1 — visit mileage (Pete, 10/28: "make sure cost/gas is covered")
+  mileageCaregiver: () => (
+    <div style={{ padding: '12px 12px 10px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13.5, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>
+        <span>Mileage today</span><span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-tertiary)' }}>50{'¢'} a mile</span>
+      </div>
+      {[['Home → CVS Pharmacy → Home', 'Picked up a prescription', '4.8 mi', '$2.40'], ['Home → Library → Home', 'Book drop', '3.2 mi', '$1.60']].map(([r, n, mi, c]) => (
+        <div key={r} style={{ display: 'flex', gap: 8, padding: '6px 0', borderTop: '1px solid var(--border-light)' }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>{r}</div>
+            <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{'“'}{n}{'”'}</div>
+          </div>
+          <div style={{ textAlign: 'right', fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>{mi}<div style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-tertiary)' }}>{c}</div></div>
+        </div>
+      ))}
+      <div style={{ height: 6, borderRadius: 3, background: 'var(--border-color)', margin: '6px 0 8px', overflow: 'hidden' }}><div style={{ width: '40%', height: 6, background: 'var(--role-color)' }} /></div>
+      <span style={{ display: 'block', textAlign: 'center', padding: '7px 10px', borderRadius: 16, border: '2px solid var(--role-color)', color: 'var(--role-color)', fontSize: 12, fontWeight: 700 }}>+ Log a trip</span>
+    </div>
+  ),
+  mileageFamily: () => (
+    <div style={{ padding: '12px 12px 10px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>
+      <div style={{ padding: '8px 10px', borderRadius: 10, background: 'var(--color-warning-bg)', marginBottom: 8 }}>
+        <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)' }}>3.4 mi past your 20-mile cap</div>
+        <div style={{ fontSize: 11, color: 'var(--text-secondary)', margin: '2px 0 6px' }}>Library book drop {'·'} {'“'}Mom asked to return the library books{'”'}</div>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <span style={{ ...wnPill('var(--role-color)', 'var(--text-on-primary)'), flex: 1, textAlign: 'center' }}>Approve $1.70</span>
+          <span style={{ ...wnPill('var(--bg-neutral)', 'var(--text-secondary)'), flex: 1, textAlign: 'center' }}>{'Don’t pay'}</span>
+        </div>
+      </div>
+      {[['CVS Pharmacy', '4.8 mi', '$2.40'], ['Dr. Patel → Kroger', '11.2 mi', '$5.60']].map(([n, mi, c]) => (
+        <div key={n} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '4px 2px', borderTop: '1px solid var(--border-light)', color: 'var(--text-primary)' }}>
+          <span>{n}</span><span>{mi} {'·'} {c}</span>
+        </div>
+      ))}
     </div>
   ),
   changeVisitDay: () => (

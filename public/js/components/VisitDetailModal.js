@@ -461,6 +461,9 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, 
                     <VisitReportCard report={data.visitReport} summaryText={data.visitSummaryText} />
                   )}
 
+                  {/* v1.126.1 — mileage, and the leader's OK on miles past the cap */}
+                  {typeof VisitMileageReport !== 'undefined' && <VisitMileageReport sessionId={sessionId} />}
+
                   {/* Check-in/out times */}
                   <div style={{ display: 'flex', gap: 16, marginBottom: 10, flexWrap: 'wrap' }}>
                     {v.check_in_time && (

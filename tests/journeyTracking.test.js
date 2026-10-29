@@ -80,7 +80,7 @@ describe("no third-party analytics", () => {
     const db = raw("src/models/database.js");
     const files = [...db.matchAll(/file: "(privacy_[^"]+\.txt)"/g)].map((m) => m[1]);
     const latest = files[files.length - 1];
-    expect(latest).toBe("privacy_2026-10-19.txt");
+    expect(latest).toBe("privacy_2026-10-29.txt");
     const text = fs.readFileSync(path.join(__dirname, "../src/legal", latest), "utf8");
     expect(text).not.toMatch(/plausible/i);
     expect(text).toMatch(/We do not use third-party analytics/);

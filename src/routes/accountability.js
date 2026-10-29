@@ -187,6 +187,12 @@ async function authorizeSessionPayment(sessionId, opts = {}) {
     });
     const platformFeeCents = price.platformFeeCents;
     totalCents = price.familyTotalCents;
+    // v1.126.3 — room on the same hold for a full cap of mileage, when the family pays mileage.
+    // Captured only as far as it is used; Stripe releases the rest.
+    let mileageReserveCents = 0;
+    try { mileageReserveCents = await require("../utils/mileage").holdReserveCents(db, session.care_recipient_id); }
+    catch (e) { captureException(e, { where: "accountability: mileage hold reserve", sessionId }); }
+    totalCents += mileageReserveCents;
 
     // ─── v1.106.11 — actually name the payment method ───
     //
@@ -283,6 +289,7 @@ async function authorizeSessionPayment(sessionId, opts = {}) {
         surchargeToCaregiverCents: price.surchargeToCaregiverCents,
         surchargeToPlatformCents: price.surchargeToPlatformCents,
         platformFeeCents, feePercent: price.feePercent, authorizedCents: totalCents,
+        ...(mileageReserveCents ? { mileageReserveCents } : {}),
       },
     });
 
@@ -365,9 +372,15 @@ async function captureSessionPay(sessionId, billedCents, settlement = {}) {
       // v1.111.0 — the percent locked when the hold was placed (special rate or default).
       feePercent: await getPlatformFeePercent(db, { sessionId }),
     });
+    // v1.126.3 — the visit's mileage rides on this capture (Pete: "same charge, just broken
+    // out"): all of it to the caregiver, the card percentage on it to cover Stripe.
+    const mileageMod = require("../utils/mileage");
+    let mil = { cents: 0, feeCents: 0 };
+    try { mil = await mileageMod.owedForCapture(db, sessionId); }
+    catch (e) { captureException(e, { where: "accountability: mileage for capture", sessionId }); }
     const plan = planCapture({
-      caregiverCents: price.caregiverCents,
-      platformFeeCents: price.platformFeeCents,
+      caregiverCents: price.caregiverCents + mil.cents,
+      platformFeeCents: price.platformFeeCents + mil.feeCents,
       authorizedCents: session.authorized_amount,
     });
     if (plan.captureCents <= 0) return { error: "Nothing to capture" };
@@ -399,7 +412,12 @@ async function captureSessionPay(sessionId, billedCents, settlement = {}) {
       WHERE id = ?
     `).run(sessionId);
 
-    console.log(`[accountability] Captured $${(plan.captureCents / 100).toFixed(2)} (fee $${(plan.captureFeeCents / 100).toFixed(2)}) for session ${sessionId.slice(0, 8)}; caregiver owed $${(price.caregiverCents / 100).toFixed(2)}`);
+    if (mil.cents > 0) {
+      try { await mileageMod.markCapturedWithVisit(db, sessionId, session.stripe_payment_intent_id, mil.feeCents); }
+      catch (e) { captureException(e, { where: "accountability: mark mileage captured", sessionId }); }
+    }
+
+    console.log(`[accountability] Captured $${(plan.captureCents / 100).toFixed(2)} (fee $${(plan.captureFeeCents / 100).toFixed(2)}) for session ${sessionId.slice(0, 8)}; caregiver owed $${(price.caregiverCents / 100).toFixed(2)}${mil.cents ? ` + $${(mil.cents / 100).toFixed(2)} mileage` : ""}`);
 
     const parties = await require("../utils/ledger").partiesFor(db, sessionId);
     const breakdown = {
@@ -409,14 +427,18 @@ async function captureSessionPay(sessionId, billedCents, settlement = {}) {
       surchargeToCaregiverCents: price.surchargeToCaregiverCents,
       surchargeToPlatformCents: price.surchargeToPlatformCents,
       platformFeeCents: price.platformFeeCents, feePercent: price.feePercent,
-      caregiverCents: price.caregiverCents, familyTotalCents: price.familyTotalCents,
+      caregiverCents: price.caregiverCents, familyTotalCents: price.familyTotalCents + mil.cents + mil.feeCents,
+      ...(mil.cents ? { mileageCents: mil.cents, mileageFeeCents: mil.feeCents, mileageMiles: mil.miles, mileageRateCents: mil.rateCents } : {}),
       authorizedCents: Math.round(session.authorized_amount || 0),
       capturedCents: plan.captureCents, remainderCents: plan.remainderCents,
     };
     await require("../utils/ledger").record(db, {
       sessionId, ...parties, kind: "capture",
-      familyCents: plan.captureCents, caregiverCents: Math.min(price.caregiverCents, plan.captureCents),
-      platformCents: plan.captureFeeCents, stripePaymentIntent: session.stripe_payment_intent_id,
+      familyCents: plan.captureCents, caregiverCents: Math.min(price.caregiverCents + mil.cents, plan.captureCents),
+      // The card percentage on mileage is pass-through to Stripe, not InPlace income.
+      platformCents: Math.max(0, plan.captureFeeCents - Math.min(mil.feeCents, plan.captureFeeCents)),
+      cardFeeCents: Math.min(mil.feeCents, plan.captureFeeCents),
+      stripePaymentIntent: session.stripe_payment_intent_id,
       breakdown,
     });
 
