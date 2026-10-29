@@ -125,8 +125,10 @@ const ComingUpSpine = window.ComingUpSpine = ({ hero, events, onOpenVisit, onOpe
       position: 'relative', overflow: 'hidden',
     }}>
       {/* Header: the day, how many things, and the visit countdown */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, marginBottom: 14 }}>
-        <div style={{ minWidth: 0 }}>
+      {/* Wraps: a long countdown ("Starting now — awaiting check-in") would otherwise squeeze the
+          heading into a one-word-per-line column on a phone. */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, marginBottom: 14 }}>
+        <div style={{ minWidth: 0, flex: '1 1 180px' }}>
           <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: labelColor }}>{label}</div>
           <div style={{ fontSize: 19, fontWeight: 700, color: 'var(--text-primary)', marginTop: 3 }}>{heading}</div>
           <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>{subtitle}</div>
@@ -215,7 +217,9 @@ const ComingUpSpine = window.ComingUpSpine = ({ hero, events, onOpenVisit, onOpe
                 <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 1 }}>
                   {[ev.recipientFirstName ? `for ${ev.recipientFirstName}` : '', ev.location || ''].filter(Boolean).join(' · ')}
                 </div>
-                {hero && !inside && (
+                {/* Only on the visit's own day: "not during Maria's visit" about tomorrow's
+                    dentist, when Maria's visit was this morning, is true and useless. */}
+                {hero && !inside && p.date === hero.date && (
                   <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginTop: 3 }}>Not during {cgFirst}'s visit</div>
                 )}
               </div>
