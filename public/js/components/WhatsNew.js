@@ -223,6 +223,42 @@ const WN_PREVIEWS = {
       </div>
     </div>
   ),
+  // v1.126.0 — visit mileage (Pete, 10/28: "make sure cost/gas is covered")
+  mileageCaregiver: () => (
+    <div style={{ padding: '12px 12px 10px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13.5, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>
+        <span>Mileage today</span><span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-tertiary)' }}>50{'¢'} a mile</span>
+      </div>
+      {[['Home → CVS Pharmacy → Home', 'Picked up a prescription', '4.8 mi', '$2.40'], ['Home → Library → Home', 'Book drop', '3.2 mi', '$1.60']].map(([r, n, mi, c]) => (
+        <div key={r} style={{ display: 'flex', gap: 8, padding: '6px 0', borderTop: '1px solid var(--border-light)' }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>{r}</div>
+            <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{'“'}{n}{'”'}</div>
+          </div>
+          <div style={{ textAlign: 'right', fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>{mi}<div style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-tertiary)' }}>{c}</div></div>
+        </div>
+      ))}
+      <div style={{ height: 6, borderRadius: 3, background: 'var(--border-color)', margin: '6px 0 8px', overflow: 'hidden' }}><div style={{ width: '40%', height: 6, background: 'var(--role-color)' }} /></div>
+      <span style={{ display: 'block', textAlign: 'center', padding: '7px 10px', borderRadius: 16, border: '2px solid var(--role-color)', color: 'var(--role-color)', fontSize: 12, fontWeight: 700 }}>+ Log a trip</span>
+    </div>
+  ),
+  mileageFamily: () => (
+    <div style={{ padding: '12px 12px 10px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>
+      <div style={{ padding: '8px 10px', borderRadius: 10, background: 'var(--color-warning-bg)', marginBottom: 8 }}>
+        <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)' }}>3.4 mi past your 20-mile cap</div>
+        <div style={{ fontSize: 11, color: 'var(--text-secondary)', margin: '2px 0 6px' }}>Library book drop {'·'} {'“'}Mom asked to return the library books{'”'}</div>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <span style={{ ...wnPill('var(--role-color)', 'var(--text-on-primary)'), flex: 1, textAlign: 'center' }}>Approve $1.70</span>
+          <span style={{ ...wnPill('var(--bg-neutral)', 'var(--text-secondary)'), flex: 1, textAlign: 'center' }}>{'Don’t pay'}</span>
+        </div>
+      </div>
+      {[['CVS Pharmacy', '4.8 mi', '$2.40'], ['Dr. Patel → Kroger', '11.2 mi', '$5.60']].map(([n, mi, c]) => (
+        <div key={n} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '4px 2px', borderTop: '1px solid var(--border-light)', color: 'var(--text-primary)' }}>
+          <span>{n}</span><span>{mi} {'·'} {c}</span>
+        </div>
+      ))}
+    </div>
+  ),
   changeVisitDay: () => (
     <div style={{ padding: '12px 12px 10px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>
       <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--color-purple)', marginBottom: 8 }}>{'⏰'} Change this visit</div>

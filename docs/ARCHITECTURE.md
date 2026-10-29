@@ -7,9 +7,9 @@ build red.
 
 Hand-written sections (§3 "Where is…") are preserved across regeneration; edit those freely.
 
-Structure at last generation: 593 HTTP routes across 63 mounts ·
-114 `CREATE TABLE` statements · 15 background jobs · 39 socket events
-(17 with no client listener) · 70 push event types · 63 `window.__*` globals.
+Structure at last generation: 601 HTTP routes across 64 mounts ·
+115 `CREATE TABLE` statements · 16 background jobs · 39 socket events
+(17 with no client listener) · 71 push event types · 63 `window.__*` globals.
 
 ---
 
@@ -67,7 +67,7 @@ JSX is *not* compiled in the browser; Babel-standalone is not loaded. Editing an
 | `/api/documents` | `src/routes/documents.js` | 12 |  |
 | `/api/family-visits` | `src/routes/familyVisits.js` | 5 |  |
 | `/api/feedback` | `src/routes/feedback.js` | 6 |  |
-| `/api/geocode` | `src/routes/geocode.js` | 1 |  |
+| `/api/geocode` | `src/routes/geocode.js` | 2 |  |
 | `/api/help` | `src/routes/help.js` | 5 |  |
 | `/api/interviews` | `src/routes/interviews.js` | 10 |  |
 | `/api/ipai` | `src/routes/ipaiChat.js` | 2 |  |
@@ -79,6 +79,7 @@ JSX is *not* compiled in the browser; Babel-standalone is not loaded. Editing an
 | `/api/media` | `src/routes/media.js` | 2 |  |
 | `/api/medical-records` | `src/routes/medicalRecords.js` | 11 |  |
 | `/api/messages` | `src/routes/messages.js` | 14 |  |
+| `/api/mileage` | `src/routes/mileage.js` | 7 |  |
 | `/api/notes` | `src/routes/notes.js` | 6 |  |
 | `/api/oauth` | `src/routes/oauth.js` | 8 |  |
 | `/api/onboarding-events` | `src/routes/onboardingEvents.js` | 2 |  |
@@ -202,21 +203,22 @@ Every job runs through `guardedPoller` → `withPollerLock` (`src/models/databas
 
 | Lock | Job | Interval | Declared |
 |---:|---|---|---|
-| 101 | Daily demo data refresh | 24 h | `src/server.js:1075` |
-| 102 | Session notification poller (every 60s) | 1 min | `src/server.js:1169` |
-| 103 | Session Accountability Poller | 1 min | `src/server.js:1445` |
-| 104 | Reimbursement push digest sweeper (v1.98.15) | 30 s | `src/server.js:1462` |
-| 105 | Auto-pay cron: charge overdue sessions | 5 min | `src/server.js:1554` |
-| 106 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1660` |
-| 107 | Care Tasks poller (v1.99.0) | 1 min | `src/server.js:1685` |
-| 108 | Care Events poller (v1.100.0) | 1 min | `src/server.js:1701` |
-| 109 | Kindred Reminder Delivery Poller | 1 min | `src/server.js:1476` |
-| 110 | Retention (v1.106.9, poller 110) | 24 h | `src/server.js:1738` |
-| 111 | (see src/server.js:1636) | 1 h | `src/server.js:1636` |
-| 112 | v1.106.13 — poller 112: proposals that nobody answered | 10 min | `src/server.js:1767` |
-| 113 | (see src/server.js:1810) | 1 min | `src/server.js:1810` |
-| 114 | Quiet hours summary (v1.107.3, poller 114) | 5 min | `src/server.js:1829` |
-| 115 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1673` |
+| 101 | Daily demo data refresh | 24 h | `src/server.js:1076` |
+| 102 | Session notification poller (every 60s) | 1 min | `src/server.js:1170` |
+| 103 | Session Accountability Poller | 1 min | `src/server.js:1446` |
+| 104 | Reimbursement push digest sweeper (v1.98.15) | 30 s | `src/server.js:1463` |
+| 105 | Auto-pay cron: charge overdue sessions | 5 min | `src/server.js:1555` |
+| 106 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1661` |
+| 107 | Care Tasks poller (v1.99.0) | 1 min | `src/server.js:1686` |
+| 108 | Care Events poller (v1.100.0) | 1 min | `src/server.js:1702` |
+| 109 | Kindred Reminder Delivery Poller | 1 min | `src/server.js:1477` |
+| 110 | Retention (v1.106.9, poller 110) | 24 h | `src/server.js:1739` |
+| 111 | (see src/server.js:1637) | 1 h | `src/server.js:1637` |
+| 112 | v1.106.13 — poller 112: proposals that nobody answered | 10 min | `src/server.js:1768` |
+| 113 | (see src/server.js:1811) | 1 min | `src/server.js:1811` |
+| 114 | Quiet hours summary (v1.107.3, poller 114) | 5 min | `src/server.js:1830` |
+| 115 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1674` |
+| 116 | Visit mileage: charge what is owed once the visit itself is paid (v1.126.0, poller 116) | 5 min | `src/server.js:1847` |
 
 ---
 
@@ -295,23 +297,23 @@ Opt-out key is `notification_prefs["push_" + eventType]`. Capability gating live
 
 `interview_cancelled` · `interview_declined` · `interview_request` · `invite_accepted`
 
-`kindred_relay` · `managed_mode_activated` · `missing_address` · `new_job`
+`kindred_relay` · `managed_mode_activated` · `mileage_extra` · `missing_address`
 
-`new_registration` · `new_signup_intent` · `no_show_cancelled` · `on_my_way`
+`new_job` · `new_registration` · `new_signup_intent` · `no_show_cancelled`
 
-`on_my_way_recipient` · `outreach_reply` · `outreach_response` · `outreach_sent`
+`on_my_way` · `on_my_way_recipient` · `outreach_reply` · `outreach_response`
 
-`overdue_check_in` · `overdue_check_in_family` · `overdue_check_out` · `overdue_check_out_family`
+`outreach_sent` · `overdue_check_in` · `overdue_check_in_family` · `overdue_check_out`
 
-`payment_authorization_failed` · `payment_hold` · `payment_method_needed` · `phone_verified`
+`overdue_check_out_family` · `payment_authorization_failed` · `payment_hold` · `payment_method_needed`
 
-`proposal_accepted` · `proposal_declined` · `request_declined` · `review`
+`phone_verified` · `proposal_accepted` · `proposal_declined` · `request_declined`
 
-`safety_flag` · `session_cancelled` · `session_complete` · `session_in_progress`
+`review` · `safety_flag` · `session_cancelled` · `session_complete`
 
-`team_join` · `time_proposal` · `unblocked` · `upload_authority_confirmed`
+`session_in_progress` · `team_join` · `time_proposal` · `unblocked`
 
-`uploaded` · `waitlist_signup`
+`upload_authority_confirmed` · `uploaded` · `waitlist_signup`
 
 ---
 
@@ -368,7 +370,7 @@ State travels through `window`, not props. This table is the registry.
 | `window.__refetchAdminAlerts` | app.js, AdminPanel.js | 5 |
 | `window.__requestCareCaregiver` | app.js | 4 |
 | `window.__requestCareDate` | app.js | 4 |
-| `window.__safeAreaBottom` | app.js | 11 |
+| `window.__safeAreaBottom` | app.js | 12 |
 | `window.__safeAreaTop` | app.js | 8 |
 | `window.__sandboxMode` | app.js | 2 |
 | `window.__sessionIsPersistent` | app.js | 2 |

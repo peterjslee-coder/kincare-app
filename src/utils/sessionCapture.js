@@ -19,6 +19,20 @@
 // So a failure hands the session to the retry path AND raises an alert, and never blocks the
 // caller. Dev Rule #7: test mode captures nothing and waives instead, because Stripe is live.
 const { captureException } = require("./sentry");
+const mileage = require("./mileage"); // v1.126.0
+
+// v1.126.0 — the visit's mileage locks at the same moment the visit's pay settles, through the
+// same one door (check-out and release both come here). Mileage is its own charge AFTER the
+// visit is paid; nothing about it may change or fail the visit's payment, so every step is
+// caught and reported here and retried by poller 116.
+async function lockMileage(db, sessionId, testMode) {
+  try { return await mileage.lockForSession(db, sessionId, { testMode }); }
+  catch (e) { captureException(e, { where: "mileage: lock at settle", sessionId }); return null; }
+}
+async function settleMileage(db, sessionId) {
+  try { return await mileage.settleSession(db, sessionId); }
+  catch (e) { captureException(e, { where: "mileage: settle after capture", sessionId }); return null; }
+}
 
 /**
  * @param {string} where     tag for the log and for Sentry — "checkout" or "release"
@@ -26,6 +40,7 @@ const { captureException } = require("./sentry");
  * @returns {Promise<{captured: boolean, waived?: boolean, error?: string}>}
  */
 async function captureForSession(db, sessionId, amountCents, { where, testMode, settlement }) {
+  await lockMileage(db, sessionId, !!testMode);
   if (testMode) {
     console.log(`[${where}] TEST MODE — skipping payment capture for session ${sessionId.slice(0, 8)}`);
     // Waive payment and review for test sessions so they don't trigger lockout banners.
@@ -66,6 +81,7 @@ async function captureForSession(db, sessionId, amountCents, { where, testMode, 
       await failCapture(result.error);
       return { captured: false, error: result.error };
     }
+    await settleMileage(db, sessionId);
     return { captured: true };
   } catch (err) {
     // Still non-blocking for the caller — but no longer invisible.

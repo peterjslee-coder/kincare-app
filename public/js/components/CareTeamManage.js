@@ -992,6 +992,11 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack, onNavigate
         </div>
       )}
 
+      {/* v1.126.0 — mileage: on/off, rate, per-visit cap (leader edits; the card says so to others) */}
+      {isLeader && (team.careRecipientId || careRecipientId) && typeof MileageSettingsCard !== 'undefined' && (
+        <MileageSettingsCard recipientId={team.careRecipientId || careRecipientId} recipientName={team.recipient_first_name} />
+      )}
+
       {/* Accessibility Options — collapsible at bottom */}
       {isLeader && (
         <div style={{ marginTop: 24 }}>

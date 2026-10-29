@@ -31,6 +31,38 @@ const WINDOW_DAYS = 45;
 
 const ENTRIES = [
   {
+    id: "mileage-family",
+    version: "1.126.0",
+    date: "2026-10-29",
+    audience: ["family"],
+    title: "Cover the gas for errands",
+    body: "Turn on mileage and caregivers can log the trips they drive for your loved one during a visit. The app works out the miles from where they went, pays your rate up to a cap you set, and asks you before paying anything past it.",
+    howTo: [
+      "Open Care Team and tap Mileage (care team leader)",
+      "Turn it on, pick a rate (50¢ a mile is a good start) and the most miles per visit",
+      "After a visit, open it to see each trip and its note",
+      "Miles past your cap wait for you: tap Approve or Don't pay",
+    ],
+    examples: ["Picked up Mom's prescription", "Drove Dad to his checkup, then groceries"],
+    preview: "mileageFamily",
+  },
+  {
+    id: "mileage-caregiver",
+    version: "1.126.0",
+    date: "2026-10-29",
+    audience: ["caregiver"],
+    title: "Get paid for errand miles",
+    body: "When a family turns mileage on, you can log the trips you drive for them during a visit. Search for where you went and the app works out the miles. It's paid to you in full, and InPlace takes no fee on it.",
+    howTo: [
+      "During the visit, tap + Log a trip on the visit card",
+      "Search for where you went (CVS, Kroger, a doctor's office)",
+      "Pick round trip or one way, and add a few words about what it was for",
+      "Check out as usual — your mileage shows before you finish",
+    ],
+    examples: ["CVS and back for a prescription", "Library book drop"],
+    preview: "mileageCaregiver",
+  },
+  {
     id: "cancel-one-or-series",
     version: "1.125.2",
     date: "2026-10-28",

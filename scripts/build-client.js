@@ -65,6 +65,7 @@ const scripts = [
   // either way (render runs after the whole bundle), but ordering it correctly means
   // there is no guard to reason about.
   "js/components/AddressAutocomplete.js",
+  "js/components/Mileage.js", // v1.126.0 — visit mileage; CaretakerHub, VisitDetailModal and CareTeamManage draw it
   "js/components/CareEvents.js",
   "js/components/CancelSessionModal.js",
   "js/components/ChangeVisitSheet.js", // v1.124.0 — change a booked visit (day, start, length); Dashboard, CaretakerHub and VisitDetailModal open it

@@ -8,6 +8,9 @@ const express = require("express");
 const { authenticate } = require("../middleware/auth");
 const { captureException } = require("../utils/sentry");
 const { consumeDaily } = require("../utils/usageLimits");
+const maps = require("../utils/maps"); // v1.126.0
+const { recipientAccess } = require("../utils/access");
+const { getDb } = require("../models/database");
 
 const router = express.Router();
 router.use(authenticate);
@@ -40,12 +43,39 @@ function cacheSet(k, v) {
   cache.set(k, { t: Date.now(), v });
 }
 
+// v1.126.0 — Google Places when GOOGLE_MAPS_API_KEY is set (Pete, 10/28: "let's plan on google
+// maps"). A Google suggestion carries a placeId and no address parts; the client asks
+// /place/:placeId for those when one is picked. Without the key, everything below the Google
+// block is exactly what it was. `near=<careRecipientId>` biases results toward that home —
+// checked against the caller's access, so it cannot be used to locate a stranger's home.
+async function nearPoint(req) {
+  const id = String(req.query.near || "").trim();
+  if (!id) return null;
+  try {
+    const db = await getDb();
+    if (!(await recipientAccess(db, id, req.user.id))) return null;
+    const cr = await db.prepare("SELECT latitude, longitude FROM care_recipients WHERE id = ?").get(id);
+    return cr && cr.latitude != null ? { lat: cr.latitude, lng: cr.longitude } : null;
+  } catch (e) { return null; }
+}
+
 router.get("/suggest", async (req, res) => {
   const q = (req.query.q || "").trim();
+  if (maps.provider() === "google" && q.length >= 2) {
+    const quota = await consumeDaily(req.user.id, "places_suggest", 400);
+    if (quota.allowed) {
+      try {
+        const near = await nearPoint(req);
+        const g = await maps.googleAutocomplete(q, { sessionToken: req.query.session, near });
+        if (g) return res.json({ provider: "google", suggestions: g });
+      } catch (err) { captureException(err, { where: "geocode: google suggest" }); }
+    }
+    // Google over quota or down: fall through to Photon below.
+  }
   if (q.length < 4) return res.json({ suggestions: [] });
   const key = q.toLowerCase();
   const hit = cacheGet(key);
-  if (hit) return res.json({ suggestions: hit });
+  if (hit) return res.json({ provider: "osm", suggestions: hit });
   // v1.106.5 — every keystroke past the cache is an outbound call to a free third-party API on
   // our User-Agent. Cached hits above are free; this caps the uncached ones per account per day.
   // Degrades to an empty suggestion list, which the fields already handle — they stay editable.
@@ -79,10 +109,24 @@ router.get("/suggest", async (req, res) => {
       .filter((s, i, arr) => arr.findIndex((x) => x.label === s.label) === i)
       .slice(0, 6);
     cacheSet(key, suggestions);
-    res.json({ suggestions });
+    res.json({ provider: "osm", suggestions });
   } catch (err) {
     captureException(err, { where: "geocode: suggest" });
     res.json({ suggestions: [] });
+  }
+});
+
+// v1.126.0 — the address and point for a Google suggestion the user picked.
+router.get("/place/:placeId", async (req, res) => {
+  try {
+    const quota = await consumeDaily(req.user.id, "places_details", 200);
+    if (!quota.allowed) return res.status(429).json({ error: "Too many look-ups today. Type the address instead." });
+    const d = await maps.googlePlaceDetails(req.params.placeId, { sessionToken: req.query.session });
+    if (!d) return res.status(404).json({ error: "We couldn't look that place up. Try again or type the address." });
+    res.json({ place: d });
+  } catch (err) {
+    captureException(err, { where: "geocode: place details" });
+    res.status(500).json({ error: "We couldn't look that place up. Try again or type the address." });
   }
 });
 

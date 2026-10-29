@@ -15,7 +15,7 @@
 // already happened, and a retried charge (same PaymentIntent) must not produce two rows.
 const { v4: uuid } = require("uuid");
 
-const KINDS = ["authorization", "capture", "remainder", "cancel_fee", "tip", "checkout", "autopay", "refund"];
+const KINDS = ["authorization", "capture", "remainder", "cancel_fee", "tip", "checkout", "autopay", "refund", "mileage"]; // mileage: v1.126.0
 
 /**
  * @param {object} db    a db or tx handle
@@ -84,6 +84,7 @@ function describe(row) {
     checkout: "Visit",
     autopay: "Visit",
     refund: "Refund",
+    mileage: "Mileage",
   };
   const lines = [];
   if (b) {

@@ -495,6 +495,7 @@ router.delete("/users/:id/nuke", async (req, res) => {
         for (const cs of cgSessions) {
           await tx.prepare("DELETE FROM session_offers WHERE session_id = ?").run(cs.id);
         }
+        await safeRun("DELETE FROM visit_trips WHERE session_id IN (SELECT id FROM care_sessions WHERE caregiver_id = ? AND status NOT IN ('completed'))", [cgId], 'visit_trips(cg)'); // v1.126.0
         await tx.prepare("DELETE FROM care_sessions WHERE caregiver_id = ? AND status NOT IN ('completed')").run(cgId);
         // Completed sessions: clear caregiver reference but keep for audit
         await tx.prepare("UPDATE care_sessions SET caregiver_id = NULL WHERE caregiver_id = ? AND status = 'completed'").run(cgId);
@@ -524,6 +525,7 @@ router.delete("/users/:id/nuke", async (req, res) => {
           for (const vl of slogs) {
             await tx.prepare("DELETE FROM visit_photos WHERE visit_log_id = ?").run(vl.id);
           }
+          await safeRun("DELETE FROM visit_trips WHERE session_id = ?", [cs.id], 'visit_trips(session)'); // v1.126.0
           await tx.prepare("DELETE FROM visit_logs WHERE session_id = ?").run(cs.id);
           await safeRun("DELETE FROM reviews WHERE session_id = ?", [cs.id], 'reviews(session)');
           await safeRun("DELETE FROM payments WHERE session_id = ?", [cs.id], 'payments(session)');
@@ -583,7 +585,8 @@ router.delete("/users/:id/nuke", async (req, res) => {
         for (const vl of slogs) {
           await tx.prepare("DELETE FROM visit_photos WHERE visit_log_id = ?").run(vl.id);
         }
-        await tx.prepare("DELETE FROM visit_logs WHERE session_id = ?").run(cs.id);
+        await safeRun("DELETE FROM visit_trips WHERE session_id = ?", [cs.id], 'visit_trips(session)'); // v1.126.0
+          await tx.prepare("DELETE FROM visit_logs WHERE session_id = ?").run(cs.id);
       }
       await tx.prepare("DELETE FROM care_sessions WHERE family_user_id = ?").run(id);
 
