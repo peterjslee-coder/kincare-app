@@ -27,6 +27,16 @@ const JOIN_ASK =
   "Message and data rates may apply, and you can reply STOP any time.";
 
 /**
+ * v1.125.8 — Pete, 10/28: "update the privacy policy and clearly state that if the transcript shows
+ * they agree to a text, we will reach out to them that way, only after a recorded call." So the call
+ * asks the question he actually asks, and a clear yes on the RECORDED call is an opt-in (recorded as
+ * his OK against that call — routes/outreach.js PATCH textsOk). Texting JOIN still works too.
+ */
+const TEXT_ASK =
+  "Is it OK if I text you some more information from this number, 540-835-5987? " +
+  "Message and data rates may apply, and you can reply STOP any time.";
+
+/**
  * The voicemail, in Pete's own live voice (never a pre-recorded drop — automated voice to a cell
  * phone needs prior consent under the TCPA). It asks them to text first: their text is their
  * opt-in, and most people never pick up. Pete, 10/15: "They may actually respond to a text if I
@@ -44,8 +54,8 @@ const CALL_SCRIPT = [
   { say: "Hi {first}, this is Pete with InPlace Care. I'm calling about your interest in caregiving work — the Agency on Aging has you listed as looking for private-pay clients. Is that still something you're looking for?" },
   { note: "“No thank you”: “No problem, thanks for your time.” End the call. (iPAi marks them Declined; they're never texted.)" },
   { say: "InPlace connects local families with independent caregivers. You set your own rate and keep all of it; the family pays through the app and you're paid after each visit." },
-  { say: JOIN_ASK, consent: true },
-  { note: "Texting opens only when their JOIN text arrives. Don't want texts? “No problem — can I email you instead?”" },
+  { say: TEXT_ASK, consent: true },
+  { note: "A clear yes → after the call, Record OK from the call (it's saved with this recording). Not sure? “You can also text JOIN to this number any time.” Don't want texts? “No problem — can I email you instead?”" },
   { say: "Thanks for your time, {first}." },
 ];
 
@@ -120,4 +130,4 @@ function statusFor(outcome, current) {
   return current;
 }
 
-module.exports = { JOIN_ASK, CALL_SCRIPT, VOICEMAIL_SCRIPT, OUTCOMES, analyzeCall, quoteInTranscript, statusFor };
+module.exports = { JOIN_ASK, TEXT_ASK, CALL_SCRIPT, VOICEMAIL_SCRIPT, OUTCOMES, analyzeCall, quoteInTranscript, statusFor };

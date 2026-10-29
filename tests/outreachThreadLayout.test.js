@@ -91,7 +91,10 @@ describe("recording a verbal OK from a call (v1.125.3)", () => {
     expect(src).toMatch(/onUseConsent\(m\.id, notes\.consentQuote\)/);
   });
   test("nothing is saved without their words", () => {
-    expect(thread).toMatch(/disabled=\{consentDraft\.trim\(\)\.length < 3\}/);
+    expect(thread).toMatch(/disabled=\{!lastCall \|\| consentDraft\.trim\(\)\.length < 3\}/);
+  });
+  test("v1.125.8 — and nothing without a RECORDED call to pin it to", () => {
+    expect(thread).toMatch(/m\.kind === 'call' && \(m\.media_url \|\| m\.transcript\)/);
   });
 });
 

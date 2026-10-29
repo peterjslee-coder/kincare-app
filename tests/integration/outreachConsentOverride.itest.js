@@ -4,8 +4,8 @@
  * … log it as an override … I'm not going to text anyone who doesn't say, like Doris, 'yeah, yeah
  * I would like more info' to the question 'is it ok if I text you some more info?'"
  *
- * What must hold: the OK needs their words; it is logged as an admin override with who and which
- * call; a call from another thread is refused; an opt-out is never overridden; after it, texting works.
+ * What must hold: the OK needs their words AND a recorded call in this thread (v1.125.8); it is
+ * logged with who and which call; a call from another thread is refused; an opt-out is never overridden; after it, texting works.
  */
 process.env.TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || "itest-twilio-token";
 const sent = [];
@@ -35,11 +35,12 @@ beforeAll(async () => {
 afterAll(async () => { await stopHarness(h); });
 const A = () => h.auth(admin.token);
 
-async function personWithCall(phone) {
+async function personWithCall(phone, { recorded = true } = {}) {
   const id = uuid();
   await db.prepare("INSERT INTO outreach_contacts (id, phone, first_name, status) VALUES (?, ?, 'Doris', 'new')").run(id, phone);
   const callId = uuid();
-  await db.prepare("INSERT INTO outreach_messages (id, contact_id, direction, body, status, kind, created_at) VALUES (?, ?, 'out', 'Call', 'completed', 'call', NOW())").run(callId, id);
+  await db.prepare("INSERT INTO outreach_messages (id, contact_id, direction, body, status, kind, media_url, transcript, created_at) VALUES (?, ?, 'out', 'Call', 'completed', 'call', ?, ?, NOW())")
+    .run(callId, id, recorded ? "https://api.twilio.com/rec/RE1" : null, recorded ? "Pete: Is it OK if I text you? Doris: Yeah, yeah, I would like more info" : null);
   return { id, callId };
 }
 const ok = (id, body) => h.request.patch(`/api/admin/outreach/${id}`).set(A()).send({ textsOk: true, ...body });
@@ -71,12 +72,17 @@ test("a call from someone else's thread is refused", async () => {
   expect((await db.prepare("SELECT texts_ok_at FROM outreach_contacts WHERE id = ?").get(a.id)).texts_ok_at).toBeNull();
 });
 
-test("without a call it is still allowed, and says so", async () => {
+test("v1.125.8 — without a call, no OK (Privacy Policy 7B: only after a recorded call)", async () => {
   const id = uuid();
   await db.prepare("INSERT INTO outreach_contacts (id, phone, first_name, status) VALUES (?, '+15405550405', 'Al', 'new')").run(id);
-  expect((await ok(id, { evidence: "yes please" })).status).toBe(200);
-  const c = await db.prepare("SELECT texts_ok_source, texts_ok_evidence FROM outreach_contacts WHERE id = ?").get(id);
-  expect(c).toMatchObject({ texts_ok_source: "admin_override", texts_ok_evidence: "Recorded by admin: “yes please”" });
+  expect((await ok(id, { evidence: "yes please" })).status).toBe(400);
+  expect((await db.prepare("SELECT texts_ok_at FROM outreach_contacts WHERE id = ?").get(id)).texts_ok_at).toBeNull();
+});
+
+test("v1.125.8 — a call with no recording or transcript cannot carry an OK", async () => {
+  const p = await personWithCall("+15405550407", { recorded: false });
+  expect((await ok(p.id, { evidence: "sure", callMessageId: p.callId })).status).toBe(400);
+  expect((await db.prepare("SELECT texts_ok_at FROM outreach_contacts WHERE id = ?").get(p.id)).texts_ok_at).toBeNull();
 });
 
 test("an opt-out is never overridden", async () => {

@@ -203,7 +203,7 @@ const SMS_TERMS = `
 <p><strong>How often:</strong> varies with the visits on your schedule — typically one to four messages per visit.</p>
 <h2>2. Caregiver opportunities — from (540) 835-5987</h2>
 <p>One-to-one conversations with independent caregivers about paid caregiving work through InPlace.</p>
-<p><strong>How you opt in:</strong> you text <strong>JOIN</strong> (or anything else) to (540) 835-5987. We don't text anyone who hasn't texted us first. If we call you about caregiving work &mdash; a live call from InPlace's founder, one person at a time, never a robocall or prerecorded message &mdash; we invite you to text JOIN; nothing is texted unless you do. <a href="/sms/opt-in">See how.</a></p>
+<p><strong>How you opt in:</strong> one of two ways. (1) You text <strong>JOIN</strong> (or anything else) to (540) 835-5987. (2) On a recorded phone call with us about caregiving work &mdash; a live call from InPlace's founder, one person at a time, never a robocall or prerecorded message &mdash; we ask whether we may text you more information, and you say yes. We text you after a call only when the call was recorded and the recording or its transcript shows your yes. Otherwise we don't text you unless you text us first. <a href="/sms/opt-in">See how.</a></p>
 <p><strong>How often:</strong> a few messages per conversation. If you don't reply, we don't keep texting.</p>
 <h2>For both</h2>
 <p>Message and data rates may apply.</p>
@@ -241,10 +241,10 @@ const SMS_OPTIN = `
 <blockquote>${escapeHtml(SC.RECIPIENT_CONFIRMED_TEXT)}</blockquote>
 <p>If the number changes, both steps start again. STOP from that number turns reminders off in the app as well as with the carrier.</p>
 
-<h2>3. Caregivers looking for work: text JOIN to (540) 835-5987</h2>
-<p>Caregivers start the conversation by texting <strong>JOIN</strong> to (540) 835-5987. Nobody is texted from this number until they text it first. The app enforces this: texting a person is blocked until a text from them is on record.</p>
+<h2>3. Caregivers looking for work: (540) 835-5987</h2>
+<p>A caregiver opts in one of two ways: by texting <strong>JOIN</strong> to (540) 835-5987 (any text to it counts), or by saying yes, on a recorded call, when asked whether we may text them more information. The app enforces this: texting a person is blocked until either a text from them is on record, or an OK has been recorded against a specific recorded call in their thread, with their words, the call it was given on, and who recorded it. An OK cannot be recorded without a recorded call.</p>
 <p>The keyword and number are published on the InPlace home page (<a href="/">yourinplace.com</a>) and at <a href="/work">yourinplace.com/work</a>, with the disclosure &ldquo;By texting JOIN you agree to receive texts from InPlace Care about caregiving work. Msg &amp; data rates may apply. Msg frequency varies. Reply STOP to opt out, HELP for help.&rdquo;</p>
-<p>InPlace's founder also calls caregivers who have publicly listed themselves as seeking private-pay work, one person at a time, dialed individually &mdash; live conversations, never robocalls or prerecorded messages. On those calls, and in any voicemail, he invites them to text JOIN; the call itself never opens texting. The call script:</p>
+<p>InPlace's founder also calls caregivers who have publicly listed themselves as seeking private-pay work, one person at a time, dialed individually &mdash; live conversations, never robocalls or prerecorded messages. On those calls he asks whether he may text them more information; only a clear yes on the recorded call opens texting, and they can also text JOIN at any time. A voicemail never opens texting. The call script:</p>
 <ol>${CN.CALL_SCRIPT.map((l) => `<li>${l.consent ? "<strong>" : ""}${escapeHtml(String(l.say || l.note).replace(/\{first\}/g, "[name]"))}${l.consent ? "</strong>" : ""}</li>`).join("")}</ol>
 <p>When someone texts JOIN, InPlace replies:</p>
 <blockquote>${escapeHtml(require("../utils/outreach").JOIN_REPLY)}</blockquote>

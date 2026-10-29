@@ -195,14 +195,17 @@ describe("v1.122.0 — the call opt-in is published from the same code that runs
   const { SMS_OPTIN, SMS_TERMS, escapeHtml } = _internals;
   const CN = require("../src/utils/outreachCallNotes");
   test("the consent question, the recording announcement and the script are on /sms/opt-in", () => {
-    expect(SMS_OPTIN).toContain(`<strong>${escapeHtml(CN.JOIN_ASK)}</strong>`);
+    expect(SMS_OPTIN).toContain(`<strong>${escapeHtml(CN.TEXT_ASK)}</strong>`);
     expect(SMS_OPTIN).not.toMatch(/they first hear/);
-    expect(SMS_OPTIN).toMatch(/Nobody is texted from this number until they text it first/);
-    expect(SMS_OPTIN).toMatch(/the call itself never opens texting/);
+    // v1.125.8 — two ways in, and the call one only with a recording.
+    expect(SMS_OPTIN).toMatch(/An OK cannot be recorded without a recorded call/);
+    expect(SMS_OPTIN).toMatch(/only a clear yes on the recorded call opens texting/);
+    expect(SMS_OPTIN).toMatch(/A voicemail never opens texting/);
   });
   test("/sms describes both ways in for the outreach number", () => {
     expect(SMS_TERMS).toMatch(/text <strong>JOIN<\/strong>/);
-    expect(SMS_TERMS).toMatch(/We don't text anyone who hasn't texted us first/);
+    expect(SMS_TERMS).toMatch(/recording or its transcript shows your yes/);
+    expect(SMS_TERMS).toMatch(/Otherwise we don't text you unless you text us first/);
     expect(SMS_TERMS).toMatch(/one person at a time, never a robocall or prerecorded message/);
   });
 });

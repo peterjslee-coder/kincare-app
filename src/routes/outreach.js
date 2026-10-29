@@ -338,7 +338,7 @@ adminRouter.post("/:id/messages", async (req, res) => {
     if (!contact) return res.status(404).json({ error: "Not found" });
     if (contact.opted_out_at || contact.status === "opted_out") return res.status(400).json({ error: "This person replied STOP. InPlace can't text them again unless they text START." });
     // v1.122.0 — no OK, no text. Said here plainly rather than as a failed send.
-    if (!contact.texts_ok_at) return res.status(400).json({ error: "No OK to text yet. Either they text the outreach number (JOIN), or you record their yes from the call: Details → Record OK from the call." });
+    if (!contact.texts_ok_at) return res.status(400).json({ error: "No OK to text yet. Either they text the outreach number (JOIN), or you record their yes from a recorded call: Details → Record OK from the call." });
     // A first text to someone who has never written back is a cold text: same hours as the intro.
     if (!contact.last_inbound_at) {
       const win = O.introWindow();
@@ -505,20 +505,21 @@ adminRouter.patch("/:id", async (req, res) => {
       const evidence = String(b.evidence || "").trim().slice(0, 500);
       if (evidence.length < 3) return res.status(400).json({ error: "Write what they said when you asked if you could text them." });
       if (contact.opted_out_at || contact.status === "opted_out") return res.status(400).json({ error: "This person opted out. Only they can opt back in, by texting START." });
-      let callId = null;
-      if (b.callMessageId) {
-        const call = await db.prepare(
-          "SELECT id FROM outreach_messages WHERE id = ? AND contact_id = ? AND kind = 'call'"
-        ).get(String(b.callMessageId), contact.id);
-        if (!call) return res.status(400).json({ error: "That call isn't in this conversation." });
-        callId = call.id;
-      }
+      // v1.125.8 — only after a RECORDED call (Privacy Policy 7B, 2026-10-28): the OK must point at
+      // a call in this thread that has a recording or a transcript, so the yes can be checked.
+      if (!b.callMessageId) return res.status(400).json({ error: "An OK to text has to come from a recorded call. Call them first (📞), ask, then record their yes." });
+      const call = await db.prepare(
+        "SELECT id, media_url, transcript FROM outreach_messages WHERE id = ? AND contact_id = ? AND kind = 'call'"
+      ).get(String(b.callMessageId), contact.id);
+      if (!call) return res.status(400).json({ error: "That call isn't in this conversation." });
+      if (!call.media_url && !call.transcript) return res.status(400).json({ error: "That call has no recording yet. Wait for it to finish processing, then try again." });
+      const callId = call.id;
       await db.prepare(`
         UPDATE outreach_contacts
            SET texts_ok_at = NOW(), texts_ok_source = ?, texts_ok_by = ?, texts_ok_evidence = ?, texts_ok_message_id = ?
          WHERE id = ? AND texts_ok_at IS NULL
-      `).run(callId ? "recorded_call" : "admin_override", req.user.id,
-        `${callId ? "Said on the recorded call" : "Recorded by admin"}: “${evidence.replace(/^["“”]+|["“”]+$/g, "")}”`,
+      `).run("recorded_call", req.user.id,
+        `Said on the recorded call: “${evidence.replace(/^["“”]+|["“”]+$/g, "")}”`,
         callId, contact.id);
     }
     if (b.status !== undefined) {

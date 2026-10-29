@@ -528,7 +528,8 @@ const OutreachThread = ({ contactId, apiFetch, showToast, onClose, onChanged, ca
 
   // v1.125.3 — Pete, 10/28: a recorded "yes, I'd like more info" is consent he will stand behind.
   // Logged on the contact as his override: the words, the call they were said on, and who.
-  const lastCall = data ? [...data.messages].reverse().find((m) => m.kind === 'call') : null;
+  // v1.125.8 — the OK can only be recorded against a RECORDED call (Privacy Policy 7B).
+  const lastCall = data ? [...data.messages].reverse().find((m) => m.kind === 'call' && (m.media_url || m.transcript)) : null;
   const recordConsent = async (callMessageId, words) => {
     const evidence = String(words || '').trim();
     if (evidence.length < 3) { showToast('Write what they said', 'error'); return; }
@@ -667,18 +668,18 @@ const OutreachThread = ({ contactId, apiFetch, showToast, onClose, onChanged, ca
                 </div>
               )}
               {!optedOut && !c.texts_ok_at && consentDraft === null && (
-                <button style={{ ...btn, justifySelf: 'start' }} onClick={() => setConsentDraft(lastCallQuote || '')}>
-                  Record OK from the call{lastCall ? '' : ' (no recorded call yet)'}
+                <button style={{ ...btn, justifySelf: 'start' }} disabled={!lastCall} onClick={() => setConsentDraft(lastCallQuote || '')}>
+                  Record OK from the call{lastCall ? '' : ' (needs a recorded call first)'}
                 </button>
               )}
               {!optedOut && !c.texts_ok_at && consentDraft !== null && (
                 <div style={{ display: 'grid', gap: 6, padding: 10, borderRadius: 8, border: '1px solid var(--border-color)' }}>
                   <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                    What did they say when you asked if you could text them? {lastCall ? `Saved with the ${outWhen(lastCall.created_at)} call and its recording` : 'There is no recorded call in this thread, so this is saved as your note only'}, as your OK.
+                    What did they say when you asked if you could text them? Saved with the {lastCall ? outWhen(lastCall.created_at) : ''} call and its recording, as your OK.
                   </div>
                   <textarea style={{ ...field, minHeight: 44 }} placeholder="e.g. Yeah, yeah, I would like more info" value={consentDraft} onChange={(e) => setConsentDraft(e.target.value)} />
                   <div style={{ display: 'flex', gap: 8 }}>
-                    <button style={primary} disabled={consentDraft.trim().length < 3} onClick={() => recordConsent(lastCall && lastCall.id, consentDraft)}>Save OK to text</button>
+                    <button style={primary} disabled={!lastCall || consentDraft.trim().length < 3} onClick={() => recordConsent(lastCall && lastCall.id, consentDraft)}>Save OK to text</button>
                     <button style={btn} onClick={() => setConsentDraft(null)}>Cancel</button>
                   </div>
                 </div>
@@ -746,8 +747,8 @@ const OutreachThread = ({ contactId, apiFetch, showToast, onClose, onChanged, ca
 
         {c && !optedOut && !c.texts_ok_at && (
           <div style={{ flexShrink: 0, padding: 12, borderTop: '1px solid var(--border-color)', fontSize: 13, color: 'var(--text-secondary)', paddingBottom: `calc(12px + ${vvBox && vvBox.height < window.innerHeight - 120 ? '0px' : 'var(--sab, 0px)'})` }}>
-            Texting opens when they text this number (JOIN or anything else), or when you record their yes from the call.
-            {consentDraft === null && (
+            Texting opens when they text this number (JOIN or anything else), or when you record their yes from a recorded call.
+            {consentDraft === null && lastCall && (
               <div style={{ marginTop: 8 }}>
                 <button style={primary} onClick={() => { setShowDetails(true); setConsentDraft(lastCallQuote || ''); }}>Record OK from the call</button>
               </div>

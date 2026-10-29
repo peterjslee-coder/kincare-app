@@ -521,8 +521,8 @@ async function processCallRecording(db, messageId) {
   await db.prepare(`
     UPDATE outreach_contacts SET notes = ?, status = ?, email = COALESCE(email, ?), unread = unread + 1, updated_at = NOW() WHERE id = ?
   `).run(newNotes, CN.statusFor(notes.outcome, m.contact_status), notes.email, m.contact_id);
-  // v1.124.1 — a call never opens texting. Only their own text to the number does (JOIN or anything
-  // else, outreach-inbound): the one opt-in a carrier reviewer can verify.
+  // v1.124.1 — the AI never opens texting from a call. v1.125.8: a person does — Pete records the
+  // yes against this recorded call (routes/outreach.js PATCH textsOk); or they text the number.
   const who = [m.first_name, m.last_name].filter(Boolean).join(" ") || O.prettyPhone(m.phone);
   push.sendPushToAdmins("outreach_reply", {
     title: "Call notes ready",
