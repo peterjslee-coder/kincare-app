@@ -695,7 +695,7 @@ const CareEventFormModal = window.CareEventFormModal = ({ recipientId, recipient
             value={location}
             onChange={setLocation}
             onSelect={(sel) => setLocation(sel.label || [sel.line1, sel.city, sel.state].filter(Boolean).join(', '))}
-            placeholder="Start typing an address…"
+            placeholder="Search a place or address (church, clinic, store…)"
             style={input} />
         ) : (
           <input style={input} value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Carilion Clinic, Radford" />

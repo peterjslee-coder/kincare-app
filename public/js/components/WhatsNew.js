@@ -248,6 +248,20 @@ const WN_PREVIEWS = {
       </div>
     </div>
   ),
+  // v1.126.4 — Google place search in every address box
+  placeSearch: () => (
+    <div style={{ padding: '12px 12px 10px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>
+      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.4, color: 'var(--text-tertiary)', marginBottom: 6 }}>LOCATION</div>
+      <div style={{ padding: '7px 10px', borderRadius: 8, border: '2px solid var(--role-color)', fontSize: 12.5, color: 'var(--text-primary)', marginBottom: 6 }}>first baptist</div>
+      {[['First Baptist Church', '100 Main St, Springfield'], ['First Baptist Church Annex', '12 Elm St, Springfield']].map(([n, a], i) => (
+        <div key={n} style={{ padding: '6px 8px', borderTop: i ? '1px solid var(--border-light)' : 'none', background: i ? 'transparent' : 'var(--bg-highlight)', borderRadius: 6 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>{n}</div>
+          <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{a}</div>
+        </div>
+      ))}
+      <div style={{ fontSize: 10, color: 'var(--text-tertiary)', textAlign: 'right', marginTop: 4 }}>Powered by Google</div>
+    </div>
+  ),
   // v1.126.1 — visit mileage (Pete, 10/28: "make sure cost/gas is covered")
   mileageCaregiver: () => (
     <div style={{ padding: '12px 12px 10px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>

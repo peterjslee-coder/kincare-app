@@ -123,10 +123,15 @@ async function googlePlaceDetails(placeId, { sessionToken } = {}) {
   const state = component(ac, "administrative_area_level_1");
   const zip = component(ac, "postal_code");
   const name = d.displayName?.text || "";
+  const formatted = d.formattedAddress || "";
+  // v1.126.4 — a business or church keeps its name ("Blacksburg Baptist Church, 100 Main St…");
+  // a plain street address is already its own name, so it isn't repeated.
+  const named = name && formatted && !formatted.toLowerCase().startsWith(name.toLowerCase());
   return {
     placeId: d.id || id,
     name,
-    label: d.formattedAddress || name,
+    label: named ? `${name}, ${formatted}` : (formatted || name),
+    address: formatted || name,
     line1: line1 || name,
     city, state, zip,
     lat: d.location.latitude,

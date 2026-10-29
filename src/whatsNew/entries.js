@@ -31,6 +31,21 @@ const WINDOW_DAYS = 45;
 
 const ENTRIES = [
   {
+    id: "place-search-google",
+    version: "1.126.4",
+    date: "2026-10-29",
+    audience: ["family", "caregiver"],
+    title: "Find places by name",
+    body: "Address boxes now search Google Maps, so you can type a place's name instead of its street address. Pick it from the list and the full address fills in — on appointments, the place's name is kept too.",
+    howTo: [
+      "Start typing in any address or location box",
+      "Type the name of the place, or the street",
+      "Tap the right one in the list",
+    ],
+    examples: ["Mom's church", "CVS on Main Street", "Dr. Patel's office"],
+    preview: "placeSearch",
+  },
+  {
     id: "mileage-family",
     version: "1.126.1",
     date: "2026-10-29",

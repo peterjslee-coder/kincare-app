@@ -131,7 +131,7 @@ async function resolveStop(stop) {
   const label = cleanText(stop.label || stop.name, 120);
   if (stop.placeId && maps.provider() === "google") {
     const d = await maps.googlePlaceDetails(stop.placeId, { sessionToken: stop.session });
-    if (d) return { label: label || d.name || d.label, address: cleanText(d.label, 200), placeId: d.placeId, lat: d.lat, lng: d.lng };
+    if (d) return { label: label || d.name || d.label, address: cleanText(d.address || d.label, 200), placeId: d.placeId, lat: d.lat, lng: d.lng };
     return null;
   }
   // Review (10/28): with Google on, a stop typed with bare coordinates could be labelled "CVS"
