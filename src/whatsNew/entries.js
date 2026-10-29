@@ -31,6 +31,22 @@ const WINDOW_DAYS = 45;
 
 const ENTRIES = [
   {
+    id: "coming-up-spine",
+    version: "1.126.0",
+    date: "2026-10-28",
+    audience: ["family"],
+    title: "Tomorrow, on one line",
+    body: "Everything in the next 24 hours now sits on one card on Home, in time order, joined by a line. The green line is the caregiver's visit, so you can see at a glance which appointments happen while she's there and which don't.",
+    howTo: [
+      "Open Home — the Coming up card is at the top",
+      "Read down the line: the visit, then each appointment at its time",
+      "Anything after the visit ends hangs off a dashed line, marked “Not during Jane's visit”",
+      "Tap any row to open that visit or appointment",
+    ],
+    examples: ["Haircut at 9:30 while Jane is there", "Lunch at church at 11:30", "Dentist at 6 after Jane leaves"],
+    preview: "comingUpSpine",
+  },
+  {
     id: "cancel-one-or-series",
     version: "1.125.2",
     date: "2026-10-28",

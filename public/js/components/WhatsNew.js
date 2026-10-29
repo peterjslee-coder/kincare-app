@@ -25,6 +25,31 @@ const wnHead = { fontSize: 10.5, fontWeight: 700, color: 'var(--text-muted)', te
 const wnPill = (bg, fg) => ({ padding: '4px 10px', borderRadius: 8, background: bg, color: fg, fontSize: 11, fontWeight: 700 });
 
 const WN_PREVIEWS = {
+  comingUpSpine: () => {
+    const row = (dot, time, title, sub, visit) => (
+      <div style={{ display: 'flex', alignItems: 'stretch' }}>
+        <div style={{ width: 22, position: 'relative' }}>
+          <span style={{ position: 'absolute', left: 9, top: 0, bottom: 0, width: 3, background: 'var(--role-color)' }} />
+          <span style={{ position: 'absolute', left: 4, top: 11, width: 13, height: 13, borderRadius: 7, background: dot, boxShadow: '0 0 0 3px var(--bg-card)' }} />
+        </div>
+        <div style={{ flex: 1, margin: '0 0 6px 4px', padding: '6px 9px', borderRadius: 8, border: visit ? '1px solid var(--role-color)' : '1px solid var(--border-color)', background: visit ? 'var(--bg-highlight)' : 'var(--bg-card)' }}>
+          <div style={{ fontSize: 10.5, fontWeight: 700, color: visit ? 'var(--role-color)' : 'var(--accent-color)' }}>{time}</div>
+          <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)' }}>{title}</div>
+          <div style={{ fontSize: 10.5, color: 'var(--text-secondary)' }}>{sub}</div>
+        </div>
+      </div>
+    );
+    return (
+      <div style={{ padding: '10px 10px 6px', borderRadius: 12, border: '2px solid var(--role-color)', background: 'var(--bg-card)' }}>
+        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase', color: 'var(--accent-color)' }}>Coming up</div>
+        <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>Tomorrow {'·'} Thu, Nov 5</div>
+        <div style={{ fontSize: 10.5, color: 'var(--text-secondary)', marginBottom: 8 }}>3 things for Mom {'·'} all during Jane's visit</div>
+        {row('var(--role-color)', '9:00 AM – 5:00 PM', 'Jane', 'with Mom · Companionship · 8 hr', true)}
+        {row('var(--accent-color)', '9:30 AM', 'Haircut', 'for Mom')}
+        {row('var(--accent-color)', '11:30 AM', 'Lunch at church', 'for Mom')}
+      </div>
+    );
+  },
   todos: () => (
     <div>
       <div style={wnHead}>
