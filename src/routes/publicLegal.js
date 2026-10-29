@@ -253,6 +253,48 @@ const SMS_OPTIN = `
 <p>Reply STOP to opt out and HELP for help. Msg &amp; data rates may apply. No mobile information is shared with third parties or affiliates for marketing or promotional purposes.</p>
 `;
 
+// ─── v1.125.7 — /delete-account ───
+//
+// Google Play requires every app with accounts to give, in the store listing, a WEB link where
+// someone can ask for their account and its data to be deleted, naming the app, the way to ask,
+// and what is deleted and what is kept. "Delete My Account" in the app (My Account, bottom) does
+// the work — DELETE /api/auth/me in routes/auth.js — and this page describes exactly that
+// handler: what it removes, and what it keeps and why. Change one, change the other.
+const DELETE_ACCOUNT = `
+<p><strong>InPlace Care</strong> (Cedar Rock Holdings, LLC). This page explains how to delete your InPlace account and what happens to your information when you do.</p>
+<h2>How to delete your account</h2>
+<p><strong>In the app:</strong> open <strong>Account</strong>, scroll to the bottom, tap <strong>Delete My Account</strong>, and confirm. It takes effect immediately.</p>
+<p><strong>By email:</strong> if you can't sign in, email <a href="mailto:admin@yourinplace.com?subject=Delete%20my%20InPlace%20account">admin@yourinplace.com</a> from the address on your account and ask us to delete it. We complete requests within 30 days and confirm by email.</p>
+<p>If you are a caregiver with visits booked, deleting your account releases those visits back to the family so they can find someone else. There is nothing to cancel or pay first.</p>
+<h2>What is deleted</h2>
+<ul>
+<li>Your name, email address, phone number, photo and profile details.</li>
+<li>Your password, sign-in methods (Google, Apple, passkeys), two-factor settings, trusted devices and notification settings.</li>
+<li>Your place on care teams, your conversations list and your connections.</li>
+<li>For caregivers: your bio, address, service area, location, availability and payout account link.</li>
+</ul>
+<h2>What is kept, and why</h2>
+<ul>
+<li><strong>Visit, payment and review records</strong>, linked to an anonymous account rather than your name, because families and caregivers rely on them and we must keep financial records for tax and legal purposes.</li>
+<li><strong>Messages you sent</strong> stay in the other person's conversation, shown as from a deleted user.</li>
+<li><strong>Identity and authorization documents you uploaded</strong> (for example a photo ID or a power of attorney), and a private record of the email address the account used, kept to prevent fraud and to answer legal requests.</li>
+<li>Copies in our encrypted backups are overwritten on their normal schedule.</li>
+</ul>
+<p>If you want any of the kept information removed too, email <a href="mailto:admin@yourinplace.com">admin@yourinplace.com</a> and we will remove what the law lets us remove. More detail is in our <a href="/privacy">Privacy Policy</a> (sections 9 and 13).</p>
+`;
+
+router.get("/delete-account", (req, res) => {
+  res.set("Cache-Control", "public, max-age=300");
+  res.send(
+    page({
+      title: "Delete your InPlace account",
+      meta: "Updated October 28, 2026",
+      body: DELETE_ACCOUNT,
+      nav: '<a href="/">← InPlace</a><a href="/privacy">Privacy Policy</a><a href="/terms">Terms of Use</a>',
+    })
+  );
+});
+
 router.get("/sms/opt-in", (req, res) => {
   res.set("Cache-Control", "public, max-age=300");
   res.send(
@@ -278,4 +320,4 @@ router.get("/sms", (req, res) => {
 });
 
 module.exports = router;
-module.exports._internals = { renderBody, escapeHtml, SLUGS, SMS_TERMS, SMS_OPTIN };
+module.exports._internals = { renderBody, escapeHtml, SLUGS, SMS_TERMS, SMS_OPTIN, DELETE_ACCOUNT };

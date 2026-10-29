@@ -19,6 +19,7 @@ jest.mock("../../src/utils/sms", () => {
 });
 jest.mock("../../src/routes/push", () => ({ notifyAdmins: jest.fn(async () => {}), sendPushToAdmins: jest.fn(async () => {}) }));
 const { v4: uuid } = require("uuid");
+const O = require("../../src/utils/outreach");
 const { startHarness, stopHarness } = require("./harness");
 jest.setTimeout(180000);
 
@@ -28,6 +29,8 @@ beforeAll(async () => {
   db = h.db;
   admin = await h.createUser({ firstName: "Pete", isAdmin: true });
   await db.prepare("UPDATE users SET is_admin = 1 WHERE id = ?").run(admin.user.id);
+  // First texts only go out 9am–8pm ET Mon–Sat; this suite is about consent, not the clock.
+  jest.spyOn(O, "introWindow").mockReturnValue({ open: true, reason: null });
 });
 afterAll(async () => { await stopHarness(h); });
 const A = () => h.auth(admin.token);

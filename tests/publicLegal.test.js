@@ -219,3 +219,33 @@ test("v1.124.1 — the home page footer carries the JOIN keyword with its disclo
   expect(splash).toMatch(/Looking for caregiving work\? Text <strong>JOIN<\/strong>/);
   expect(splash).toMatch(/By texting JOIN you agree to receive texts from InPlace Care about caregiving work\. Msg &amp; data rates may apply\. Msg frequency varies\. Reply STOP to opt out, HELP for help\./);
 });
+
+// v1.125.7 — Google Play's account-deletion link. It must name the app, give a way to ask,
+// and say what is deleted and kept — and what it says must match DELETE /api/auth/me.
+describe("/delete-account", () => {
+  const express = require("express");
+  const request = require("supertest");
+  const app = express();
+  app.use(require("../src/routes/publicLegal"));
+  test("loads with no login and has every part Google asks for", async () => {
+    const res = await request(app).get("/delete-account");
+    expect(res.status).toBe(200);
+    expect(res.text).toContain("InPlace Care");
+    expect(res.text).toContain("Delete My Account");
+    expect(res.text).toMatch(/mailto:admin@yourinplace\.com/);
+    expect(res.text).toMatch(/What is deleted/);
+    expect(res.text).toMatch(/What is kept, and why/);
+  });
+  test("the page and the handler agree", () => {
+    const auth = require("fs").readFileSync(require("path").join(__dirname, "..", "src", "routes", "auth.js"), "utf8");
+    const handler = auth.slice(auth.indexOf('router.delete("/me"'));
+    // the page says identity documents are kept → the handler retains them
+    expect(handler).toMatch(/UPDATE verified_documents SET retained_from_deleted = 1/);
+    // the page says sign-in methods and devices are removed → the handler deletes them
+    for (const t of ["oauth_accounts", "user_passkeys", "user_2fa", "trusted_devices", "push_subscriptions"]) {
+      expect(handler).toContain(`DELETE FROM ${t} WHERE user_id = ?`);
+    }
+    // the page says a caregiver's booked visits go back to the family
+    expect(handler).toMatch(/SET caregiver_id = NULL, status = 'requested'/);
+  });
+});
