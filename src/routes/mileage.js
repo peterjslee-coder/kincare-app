@@ -75,7 +75,7 @@ router.get("/sessions/:sessionId", async (req, res) => {
     if (!acc) return res.status(404).json({ error: "Not found" });
     const summary = await mileage.sessionSummary(db, acc.session);
     const canDecide = acc.session.mileage_extra_status === "pending"
-      && (acc.isAdmin || (await mileage.isLeaderOrOwner(db, acc.session.care_recipient_id, req.user.id)));
+      && (await mileage.isLeaderOrOwner(db, acc.session.care_recipient_id, req.user.id));
     res.json({
       mileage: {
         ...summary,

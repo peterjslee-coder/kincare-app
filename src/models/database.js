@@ -3423,6 +3423,19 @@ async function initializeDatabase() {
         `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS mileage_extra_decided_at TIMESTAMPTZ`,
       ],
     },
+    {
+      // v1.126.2 — review fixes: each mileage charge keeps its own retry state (a decline waits
+      // and moves to a new idempotency key), and the per-visit cap is frozen at check-out.
+      id: "076_visit_mileage_retry",
+      statements: [
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS mileage_extra_attempts INTEGER DEFAULT 0`,
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS mileage_declines INTEGER DEFAULT 0`,
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS mileage_extra_declines INTEGER DEFAULT 0`,
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS mileage_next_try_at TIMESTAMPTZ`,
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS mileage_extra_next_try_at TIMESTAMPTZ`,
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS mileage_cap_miles REAL`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

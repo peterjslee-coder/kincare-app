@@ -39,6 +39,8 @@ const MAX_TRIP_MILES = 150;     // one errand trip past this is a road trip, not
 const MAX_TRIPS_PER_VISIT = 12;
 const NOTE_MAX = 200;
 const MAX_ATTEMPTS = 5;
+const MAX_HERE_FROM_HOME_MILES = 30; // road-factored; "Use my location" must be near the home
+const RETRY_HOURS = 6;               // a declined card is retried after 6h, 12h, 18h, 24h
 
 function clampRate(cents) {
   const n = Math.round(Number(cents));
@@ -132,6 +134,9 @@ async function resolveStop(stop) {
     if (d) return { label: label || d.name || d.label, address: cleanText(d.label, 200), placeId: d.placeId, lat: d.lat, lng: d.lng };
     return null;
   }
+  // Review (10/28): with Google on, a stop typed with bare coordinates could be labelled "CVS"
+  // and measured to anywhere. Every stop must then be a place Google looked up.
+  if (maps.provider() === "google") return null;
   if (maps.validLatLng(stop.lat, stop.lng)) {
     return { label: label || "Stop", address: cleanText(stop.address || stop.label, 200), placeId: null, lat: Number(stop.lat), lng: Number(stop.lng) };
   }
@@ -157,6 +162,11 @@ async function quoteTrip(db, session, body) {
   } else {
     const h = body.here || {};
     if (!maps.validLatLng(h.lat, h.lng)) return { error: "We couldn't get your location. Try again, or start from the home.", code: "no_location" };
+    // An errand starts near the home. A "here" far from it is a commute or a wrong fix.
+    if (maps.validLatLng(cr.latitude, cr.longitude)
+        && maps.estimateMiles([{ lat: Number(h.lat), lng: Number(h.lng) }, { lat: Number(cr.latitude), lng: Number(cr.longitude) }]) > MAX_HERE_FROM_HOME_MILES) {
+      return { error: "Your location is a long way from the home. Start the trip from the home instead.", code: "here_too_far" };
+    }
     start = { lat: Number(h.lat), lng: Number(h.lng), label: "Your location" };
   }
 
@@ -249,7 +259,7 @@ async function sessionSummary(db, session) {
   const locked = !!session.mileage_locked_at;
   // Before check-out the rate and cap are the family's current ones; after, the frozen ones.
   const rateCents = locked ? (session.mileage_rate_cents || settings?.rateCents) : (settings?.rateCents || DEFAULT_RATE_CENTS);
-  const capMiles = settings?.capMiles || DEFAULT_CAP_MILES;
+  const capMiles = locked && session.mileage_cap_miles ? Number(session.mileage_cap_miles) : (settings?.capMiles || DEFAULT_CAP_MILES);
   const live = splitAtCap(trips.reduce((a, t) => a + t.miles, 0), capMiles, rateCents);
   const split = locked ? {
     totalMiles: round1(session.mileage_total_miles), paidMiles: round1(session.mileage_paid_miles),
@@ -293,10 +303,10 @@ async function lockForSession(db, sessionId, { testMode = false } = {}) {
   const res = await db.prepare(`
     UPDATE care_sessions SET mileage_locked_at = NOW(), mileage_total_miles = ?, mileage_paid_miles = ?,
            mileage_extra_miles = ?, mileage_rate_cents = ?, mileage_cents = ?, mileage_status = ?,
-           mileage_extra_cents = ?, mileage_extra_status = ?
+           mileage_extra_cents = ?, mileage_extra_status = ?, mileage_cap_miles = ?
      WHERE id = ? AND mileage_locked_at IS NULL
   `).run(split.totalMiles, split.paidMiles, split.extraMiles, rateCents, split.cents, status,
-    split.extraCents || null, extraStatus, sessionId);
+    split.extraCents || null, extraStatus, capMiles, sessionId);
   if (res && res.changes === 0) return null;
   if (extraStatus === "pending") await notifyExtraPending(db, session, split).catch((e) =>
     captureException(e, { where: "mileage: notify extra pending", sessionId }));
@@ -344,21 +354,41 @@ async function chargeMileage(db, sessionId, which) {
     await db.prepare(`UPDATE care_sessions SET ${statusCol} = 'below_minimum' WHERE id = ?`).run(sessionId);
     return { skipped: "below_minimum" };
   }
-  const fail = async (msg) => {
-    const attempts = (s.mileage_attempts || 0) + 1;
+  // Review (10/28): each charge keeps its own retry state. A card DECLINE is a final answer
+  // for that idempotency key (Stripe replays it for 24h), so a decline moves the key on and
+  // waits RETRY_HOURS; anything else (timeout, 5xx) retries on the SAME key, which is what
+  // makes a retry after "Stripe charged but we never heard" safe.
+  const attemptsCol = isExtra ? "mileage_extra_attempts" : "mileage_attempts";
+  const declinesCol = isExtra ? "mileage_extra_declines" : "mileage_declines";
+  const nextCol = isExtra ? "mileage_extra_next_try_at" : "mileage_next_try_at";
+  const declines = Number(s[declinesCol] || 0);
+  const fail = async (msg, { declined = false } = {}) => {
+    const attempts = Number(s[attemptsCol] || 0) + 1;
     await db.prepare(`
-      UPDATE care_sessions SET mileage_attempts = ?, mileage_error = ?
+      UPDATE care_sessions SET ${attemptsCol} = ?, ${declinesCol} = ?, mileage_error = ?,
+             ${nextCol} = ?
              ${attempts >= MAX_ATTEMPTS ? `, ${statusCol} = 'failed'` : ""}
        WHERE id = ?
-    `).run(attempts, String(msg).slice(0, 300), sessionId);
+    `).run(attempts, declines + (declined ? 1 : 0), String(msg).slice(0, 300),
+      new Date(Date.now() + (declined ? RETRY_HOURS * attempts * 3600e3 : 4 * 60e3)).toISOString(), sessionId);
     captureException(new Error(`Mileage charge failed: ${msg}`), { where: `mileage: charge ${which}`, sessionId, attempts });
     return { error: msg };
   };
-  if (!s.stripe_payment_intent_id) return fail("No card on file for this visit");
   if (!s.stripe_account_id) return fail("The caregiver can't receive payments yet");
+  // Review (10/28): the card that PAID the visit. A visit paid by auto-pay after its hold
+  // lapsed has a new PaymentIntent that care_sessions.stripe_payment_intent_id never learns
+  // about; the ledger records the one that took the money.
+  const paidRow = await db.prepare(`
+    SELECT stripe_payment_intent FROM ledger_entries
+     WHERE session_id = ? AND kind IN ('capture', 'autopay', 'checkout') AND status = 'succeeded'
+       AND stripe_payment_intent IS NOT NULL
+     ORDER BY created_at DESC LIMIT 1
+  `).get(sessionId);
+  const paidPi = (paidRow && paidRow.stripe_payment_intent) || s.stripe_payment_intent_id;
+  if (!paidPi) return fail("No card on file for this visit");
   try {
     const stripe = getStripe();
-    const paid = await stripe.paymentIntents.retrieve(s.stripe_payment_intent_id);
+    const paid = await stripe.paymentIntents.retrieve(paidPi);
     if (!paid || !paid.customer || !paid.payment_method) return fail("No card on file for this visit");
     const intent = await stripe.paymentIntents.create({
       amount: q.totalCents,
@@ -374,8 +404,8 @@ async function chargeMileage(db, sessionId, which) {
         mileage_cents: String(q.tipCents),
       },
       description: `Mileage for care session (${String(sessionId).slice(0, 8)})${isExtra ? " — approved extra" : ""}`,
-    }, { idempotencyKey: `inplace_mileage_${which}_${sessionId}_${q.tipCents}` });
-    if (intent.status !== "succeeded") return fail(`charge status ${intent.status}`);
+    }, { idempotencyKey: `inplace_mileage_${which}_${sessionId}_${q.tipCents}_d${declines}` });
+    if (intent.status !== "succeeded") return fail(`charge status ${intent.status}`, { declined: true });
     await db.prepare(`
       UPDATE care_sessions SET ${statusCol} = 'charged', ${piCol} = ?, ${feeCol} = ?, mileage_error = NULL WHERE id = ?
     `).run(intent.id, q.feeCents, sessionId);
@@ -393,7 +423,8 @@ async function chargeMileage(db, sessionId, which) {
     console.log(`[mileage] Charged $${(q.totalCents / 100).toFixed(2)} (${which}) for session ${String(sessionId).slice(0, 8)} (PI: ${intent.id})`);
     return { charged: true, id: intent.id, totalCents: q.totalCents, feeCents: q.feeCents };
   } catch (err) {
-    return fail(err && err.message ? err.message : String(err));
+    const declined = !!(err && (err.type === "StripeCardError" || err.code === "card_declined" || err.code === "authentication_required"));
+    return fail(err && err.message ? err.message : String(err), { declined });
   }
 }
 
@@ -407,12 +438,22 @@ async function settleSession(db, sessionId) {
 
 /** Poller 116: visits whose mileage is owed and whose own payment has gone through. */
 async function sweepOwed(db) {
+  // Review (10/28): two admin/legacy paths complete a visit without check-out. Lock their trips
+  // here so the family sees frozen numbers and the charge can follow the visit's own payment.
+  const unlocked = await db.prepare(`
+    SELECT DISTINCT cs.id FROM care_sessions cs JOIN visit_trips vt ON vt.session_id = cs.id AND vt.deleted_at IS NULL
+     WHERE cs.status = 'completed' AND cs.mileage_locked_at IS NULL LIMIT 25
+  `).all();
+  for (const u of unlocked) {
+    try { await lockForSession(db, u.id); } catch (e) { captureException(e, { where: "mileage: sweep lock", sessionId: u.id }); }
+  }
   const rows = await db.prepare(`
     SELECT id FROM care_sessions
-     WHERE payment_status = 'paid' AND COALESCE(mileage_attempts, 0) < ?
-       AND (mileage_status = 'owed' OR mileage_extra_status = 'approved')
+     WHERE payment_status = 'paid'
+       AND ((mileage_status = 'owed' AND (mileage_next_try_at IS NULL OR mileage_next_try_at <= NOW()))
+         OR (mileage_extra_status = 'approved' AND (mileage_extra_next_try_at IS NULL OR mileage_extra_next_try_at <= NOW())))
      ORDER BY mileage_locked_at LIMIT 25
-  `).all(MAX_ATTEMPTS);
+  `).all();
   let n = 0;
   for (const r of rows) {
     const res = await settleSession(db, r.id);

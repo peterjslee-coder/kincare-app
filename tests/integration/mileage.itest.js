@@ -9,10 +9,17 @@ process.env.STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || "sk_test_integr
 delete process.env.GOOGLE_MAPS_API_KEY;
 
 const mockCreated = [];
+const mockKeys = [];
+const mockRetrieved = [];
+let mockDeclineNext = 0;
 jest.mock("stripe", () => jest.fn(() => ({
   paymentIntents: {
-    create: jest.fn(async (args) => { mockCreated.push(args); return { id: `pi_mi_${mockCreated.length}`, status: "succeeded", amount: args.amount }; }),
-    retrieve: jest.fn(async (id) => ({ id, status: "succeeded", customer: "cus_fam", payment_method: "pm_card" })),
+    create: jest.fn(async (args, opts) => {
+      mockKeys.push(opts && opts.idempotencyKey);
+      if (mockDeclineNext > 0) { mockDeclineNext--; const e = new Error("Your card was declined."); e.type = "StripeCardError"; e.code = "card_declined"; throw e; }
+      mockCreated.push(args); return { id: `pi_mi_${mockCreated.length}`, status: "succeeded", amount: args.amount };
+    }),
+    retrieve: jest.fn(async (id) => { mockRetrieved.push(id); return { id, status: "succeeded", customer: id === "pi_autopay" ? "cus_billing" : "cus_fam", payment_method: "pm_card" }; }),
     capture: jest.fn(), cancel: jest.fn(),
   },
 })));
@@ -171,6 +178,78 @@ describe("check-out, charging, and the extra", () => {
     expect(mockCreated[1].metadata.type).toBe("session_mileage_extra");
     expect(pushes.some((p) => p.userId === cg.user.id && p.type === "mileage_extra_decided")).toBe(true);
     expect((await h.request.post(`/api/mileage/sessions/${sid}/extra`).set(as(leader)).send({ approve: true })).status).toBe(400);
+  });
+});
+
+describe("review fixes (v1.126.2)", () => {
+  async function lockedVisit() {
+    const id = uuid();
+    await db.prepare(`
+      INSERT INTO care_sessions (id, care_recipient_id, family_user_id, caregiver_id, service_type, status,
+        scheduled_date, scheduled_time, duration_hours, proposed_rate, estimated_cost, stripe_payment_intent_id, payment_status, created_at)
+      SELECT ?, care_recipient_id, family_user_id, caregiver_id, 'companionship', 'completed', '2026-10-29', '09:00', 4, 22, 88, 'pi_old_hold', 'paid', NOW()
+        FROM care_sessions WHERE id = ?
+    `).run(id, sid);
+    await db.prepare(`
+      INSERT INTO visit_trips (id, session_id, care_recipient_id, caregiver_user_id, start_kind, start_label, stops, round_trip, miles, distance_source, note, rate_cents)
+      VALUES (?, ?, ?, ?, 'home', 'Home', '[]', 1, 3, 'estimate', 'Errand', 50)
+    `).run(uuid(), id, recipientId, cg.user.id);
+    return id;
+  }
+
+  test("the charge goes on the card that actually paid the visit (auto-pay after a lapsed hold)", async () => {
+    const id = await lockedVisit();
+    await mileage.lockForSession(db, id);
+    await db.prepare(`INSERT INTO ledger_entries (id, session_id, kind, status, family_cents, stripe_payment_intent) VALUES (?, ?, 'autopay', 'succeeded', 10560, 'pi_autopay')`).run(uuid(), id);
+    mockRetrieved.length = 0;
+    const r = await mileage.chargeMileage(db, id, "paid");
+    expect(r.charged).toBe(true);
+    expect(mockRetrieved).toEqual(["pi_autopay"]);
+    expect(mockCreated[mockCreated.length - 1].customer).toBe("cus_billing");
+  });
+
+  test("a decline waits, then retries on a NEW idempotency key; the extra has its own counter", async () => {
+    const id = await lockedVisit();
+    await mileage.lockForSession(db, id);
+    mockDeclineNext = 1; mockKeys.length = 0;
+    const first = await mileage.chargeMileage(db, id, "paid");
+    expect(first.error).toMatch(/declined/);
+    let s = await db.prepare("SELECT mileage_status, mileage_attempts, mileage_declines, mileage_extra_attempts, mileage_next_try_at FROM care_sessions WHERE id = ?").get(id);
+    expect(s).toMatchObject({ mileage_status: "owed", mileage_attempts: 1, mileage_declines: 1, mileage_extra_attempts: 0 });
+    expect(new Date(s.mileage_next_try_at).getTime()).toBeGreaterThan(Date.now() + 5 * 3600e3);
+    // The sweep leaves it alone until then.
+    const before = mockKeys.length;
+    await mileage.sweepOwed(db);
+    expect(mockKeys.length).toBe(before);
+    // Time passes.
+    await db.prepare("UPDATE care_sessions SET mileage_next_try_at = NOW() - INTERVAL '1 minute' WHERE id = ?").run(id);
+    await mileage.sweepOwed(db);
+    s = await db.prepare("SELECT mileage_status FROM care_sessions WHERE id = ?").get(id);
+    expect(s.mileage_status).toBe("charged");
+    expect(mockKeys[0]).toMatch(/_d0$/);
+    expect(mockKeys[mockKeys.length - 1]).toMatch(/_d1$/);
+  });
+
+  test("a completed visit that skipped check-out still gets its trips locked by the sweep", async () => {
+    const id = await lockedVisit();
+    await mileage.sweepOwed(db);
+    const s = await db.prepare("SELECT mileage_locked_at, mileage_cap_miles FROM care_sessions WHERE id = ?").get(id);
+    expect(s.mileage_locked_at).toBeTruthy();
+    expect(Number(s.mileage_cap_miles)).toBe(5);
+  });
+
+  test("'Use my location' far from the home is refused", async () => {
+    const v = uuid();
+    await db.prepare(`
+      INSERT INTO care_sessions (id, care_recipient_id, family_user_id, caregiver_id, service_type, status,
+        scheduled_date, scheduled_time, duration_hours, proposed_rate, estimated_cost, created_at)
+      SELECT ?, care_recipient_id, family_user_id, caregiver_id, 'companionship', 'in_progress', '2026-10-30', '09:00', 4, 22, 88, NOW()
+        FROM care_sessions WHERE id = ?
+    `).run(v, sid);
+    const r = await h.request.post(`/api/mileage/sessions/${v}/quote`).set(as(cg))
+      .send({ from: "here", here: { lat: 38.03, lng: -78.48 }, stops: [CVS] }); // ~100 mi away
+    expect(r.status).toBe(400);
+    expect(r.body.code).toBe("here_too_far");
   });
 });
 
