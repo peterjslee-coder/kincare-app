@@ -552,6 +552,7 @@ const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, curr
   // up, how it rang stops mattering.
   const who = callState.remoteParticipantName || 'They';
   const ringLine = (status === 'connected' || callState.callDirection !== 'outgoing') ? null
+    : ringStatus === 'phone' ? `It's ringing on ${who}'s phone.`
     : ringStatus === 'app' ? `${who} has InPlace open — it's ringing on their screen.`
     : ringStatus === 'push' ? `${who} isn't in the app. We've sent a notification to their phone.`
     : ringStatus === 'nowhere' ? `${who} has no device set up for notifications. They'll see a missed call in InPlace.`

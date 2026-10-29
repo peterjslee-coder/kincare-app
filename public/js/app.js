@@ -1102,6 +1102,8 @@ const App = () => {
     const cleanup = onSocketEvent('call_incoming', (data) => {
       // Start pulling the 624 KB video SDK now, while the phone is still ringing (v1.106.6).
       if (typeof warmVideoSdk === 'function') warmVideoSdk();
+      // calls-native (1.3): the phone itself is ringing full-screen; no banner, no page jump.
+      if (data && data.ringingNatively && window.NativeCalls && window.NativeCalls.available()) return;
       // If on Messages page, the Messages component handles the banner UI
       // But always fire browser notification if tab is hidden/unfocused
       // v1.105.49 — navigate FIRST. This used to come after `new Notification(...)`, which
@@ -1132,6 +1134,15 @@ const App = () => {
     }
     return cleanup;
   }, [currentPage]);
+
+  // ─── calls-native (1.3): answered on the phone's own call screen → go to the call ───
+  // nativeCalls.js parks the call on window.__pendingCall; Messages picks it up and joins.
+  useEffect(() => {
+    const go = () => setCurrentPage('messages');
+    window.addEventListener('inplace:native-call-answered', go);
+    if (window.__pendingCall && window.__pendingCall.answeredNatively) go();
+    return () => window.removeEventListener('inplace:native-call-answered', go);
+  }, []);
 
   // ─── Role-color CSS custom properties ───
   // Must be here (before any early returns) to satisfy Rules of Hooks
@@ -1612,6 +1623,8 @@ const App = () => {
           }).catch(() => {});
         }
         if (typeof initNativeTokenRefresh === 'function') initNativeTokenRefresh();
+        // calls-native (1.3): does nothing without the native call plugin (the 1.2 store build).
+        if (window.NativeCalls) window.NativeCalls.start().catch(() => {});
       } else if (typeof subscribeToPush === 'function' && 'Notification' in window
                  && Notification.permission === 'granted') {
         subscribeToPush().catch(() => {});

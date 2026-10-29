@@ -1260,6 +1260,7 @@ router.delete("/me", authenticate, blockWhileImpersonating("delete this account"
       await tx.prepare("DELETE FROM password_reset_tokens WHERE user_id = ?").run(userId);
       await tx.prepare("DELETE FROM email_verification_tokens WHERE user_id = ?").run(userId);
       await tx.prepare("DELETE FROM push_subscriptions WHERE user_id = ?").run(userId);
+      await tx.prepare("DELETE FROM call_devices WHERE user_id = ?").run(userId); // calls-native: a phone that rings for them
       await tx.prepare("DELETE FROM oauth_accounts WHERE user_id = ?").run(userId);
       await tx.prepare("DELETE FROM user_2fa WHERE user_id = ?").run(userId);
       await tx.prepare("DELETE FROM trusted_devices WHERE user_id = ?").run(userId);

@@ -560,7 +560,10 @@ router.post("/attention/snooze", authenticate, async (req, res) => {
 });
 
 // Optional eventType param — if provided, checks user's notification_prefs before sending
-async function sendPushToUser(userId, payload, eventType) {
+// opts.skipEndpoints (calls-native, 1.3): push_subscriptions endpoints NOT to send this one to —
+// used by call_invite for a device that is already being rung natively (CallKit / Android
+// full-screen), so the same phone does not also show the old "Call from…" banner.
+async function sendPushToUser(userId, payload, eventType, opts = {}) {
   // NEVER send push notifications to demo users — prevents demo data from
   // leaking notifications to real devices that tested with demo accounts
   try {
@@ -677,9 +680,11 @@ async function sendPushToUser(userId, payload, eventType) {
     let sent = 0;
     let removed = 0;
     let failed = 0;
+    const skip = opts && opts.skipEndpoints;
     for (const sub of subs) {
       try {
         const subObj = JSON.parse(sub.subscription_json);
+        if (skip && skip.has(subObj.endpoint)) continue;
 
         // Native delivery not configured yet (no APNs key / Firebase credential) —
         // skip silently WITHOUT counting a failure, so tokens survive until setup.
@@ -1124,3 +1129,4 @@ module.exports.initializeVapidKeys = initializeVapidKeys;
 module.exports.setVapidKeys = setVapidKeys;
 module.exports.sendSessionReminders = sendSessionReminders;
 module.exports.sendArrivalSms = sendArrivalSms;
+module.exports._getFirebaseMessaging = _getFirebaseMessaging; // calls-native: callDevices.js rings Android with it

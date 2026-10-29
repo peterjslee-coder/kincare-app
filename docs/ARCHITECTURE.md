@@ -7,8 +7,8 @@ build red.
 
 Hand-written sections (§3 "Where is…") are preserved across regeneration; edit those freely.
 
-Structure at last generation: 593 HTTP routes across 63 mounts ·
-114 `CREATE TABLE` statements · 15 background jobs · 39 socket events
+Structure at last generation: 598 HTTP routes across 64 mounts ·
+115 `CREATE TABLE` statements · 15 background jobs · 40 socket events
 (17 with no client listener) · 70 push event types · 63 `window.__*` globals.
 
 ---
@@ -50,6 +50,7 @@ JSX is *not* compiled in the browser; Babel-standalone is not loaded. Editing an
 | `/api/auth` | `src/routes/auth.js` | 20 |  |
 | `/api/auth/2fa` | `src/routes/twoFactor.js` | 8 |  |
 | `/api/availability` | `src/routes/availability.js` | 5 |  |
+| `/api/calls` | `src/routes/calls.js` | 5 |  |
 | `/api/care-events` | `src/routes/careEvents.js` | 10 |  |
 | `/api/care-intelligence` | `src/routes/careIntelligence.js` | 8 |  |
 | `/api/care-recipients` | `src/routes/careRecipients.js` | 14 |  |
@@ -202,21 +203,21 @@ Every job runs through `guardedPoller` → `withPollerLock` (`src/models/databas
 
 | Lock | Job | Interval | Declared |
 |---:|---|---|---|
-| 101 | Daily demo data refresh | 24 h | `src/server.js:1075` |
-| 102 | Session notification poller (every 60s) | 1 min | `src/server.js:1169` |
-| 103 | Session Accountability Poller | 1 min | `src/server.js:1445` |
-| 104 | Reimbursement push digest sweeper (v1.98.15) | 30 s | `src/server.js:1462` |
-| 105 | Auto-pay cron: charge overdue sessions | 5 min | `src/server.js:1554` |
-| 106 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1660` |
-| 107 | Care Tasks poller (v1.99.0) | 1 min | `src/server.js:1685` |
-| 108 | Care Events poller (v1.100.0) | 1 min | `src/server.js:1701` |
-| 109 | Kindred Reminder Delivery Poller | 1 min | `src/server.js:1476` |
-| 110 | Retention (v1.106.9, poller 110) | 24 h | `src/server.js:1738` |
-| 111 | (see src/server.js:1636) | 1 h | `src/server.js:1636` |
-| 112 | v1.106.13 — poller 112: proposals that nobody answered | 10 min | `src/server.js:1767` |
-| 113 | (see src/server.js:1810) | 1 min | `src/server.js:1810` |
-| 114 | Quiet hours summary (v1.107.3, poller 114) | 5 min | `src/server.js:1829` |
-| 115 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1673` |
+| 101 | Daily demo data refresh | 24 h | `src/server.js:1140` |
+| 102 | Session notification poller (every 60s) | 1 min | `src/server.js:1234` |
+| 103 | Session Accountability Poller | 1 min | `src/server.js:1510` |
+| 104 | Reimbursement push digest sweeper (v1.98.15) | 30 s | `src/server.js:1527` |
+| 105 | Auto-pay cron: charge overdue sessions | 5 min | `src/server.js:1619` |
+| 106 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1725` |
+| 107 | Care Tasks poller (v1.99.0) | 1 min | `src/server.js:1750` |
+| 108 | Care Events poller (v1.100.0) | 1 min | `src/server.js:1766` |
+| 109 | Kindred Reminder Delivery Poller | 1 min | `src/server.js:1541` |
+| 110 | Retention (v1.106.9, poller 110) | 24 h | `src/server.js:1803` |
+| 111 | (see src/server.js:1701) | 1 h | `src/server.js:1701` |
+| 112 | v1.106.13 — poller 112: proposals that nobody answered | 10 min | `src/server.js:1832` |
+| 113 | (see src/server.js:1875) | 1 min | `src/server.js:1875` |
+| 114 | Quiet hours summary (v1.107.3, poller 114) | 5 min | `src/server.js:1894` |
+| 115 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1738` |
 
 ---
 
@@ -230,6 +231,7 @@ why this app runs on exactly one Railway replica.
 | `account_approved` | `routes/admin/verification.js` | yes |
 | `activity_update` | `routes/activity.js`, `routes/admin/verification.js` | yes |
 | `call_accepted` | `server.js` | 🔶 **none** |
+| `call_answered_elsewhere` | `server.js` | yes |
 | `call_declined` | `server.js` | yes |
 | `call_ended` | `server.js` | yes |
 | `call_incoming` | `server.js` | yes |
@@ -352,7 +354,7 @@ State travels through `window`, not props. This table is the registry.
 | `window.__openRequestCareModal` | app.js, CareToolsSheet.js | 21 |
 | `window.__openTaskCreate` | — | 1 |
 | `window.__originalSearch` | app.js | 4 |
-| `window.__pendingCall` | app.js, Messages.js | 5 |
+| `window.__pendingCall` | app.js, Messages.js, nativeCalls.js | 16 |
 | `window.__pendingConversation` | app.js | 5 |
 | `window.__pendingFocus` | app.js, AttentionCard.js, CancelFeeSheet.js | 51 |
 | `window.__pendingLogVisit` | TeamNotes.js | 2 |

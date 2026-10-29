@@ -3370,6 +3370,26 @@ async function initializeDatabase() {
           summary: "Clarifies our text messages: we text about caregiving work only to people who text us first (for example by texting JOIN), a person receiving care confirms reminder texts by replying YES, and calls on our caregiver line may be recorded and transcribed for our notes." },
       ]),
     },
+    {
+      // calls-native (1.3) — devices that can ring like a phone: the PushKit VoIP token on iOS,
+      // the FCM token of a 1.3 Android app. Its own table so nothing that reads
+      // push_subscriptions can see it (utils/callDevices.js). Renumber on rebase if main has
+      // used this number meanwhile — the id is what matters, not the digits.
+      id: "075_call_devices",
+      statements: [
+        `CREATE TABLE IF NOT EXISTS call_devices (
+           id TEXT PRIMARY KEY,
+           user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+           platform TEXT NOT NULL,
+           token TEXT NOT NULL,
+           push_token TEXT,
+           created_at TIMESTAMPTZ DEFAULT NOW(),
+           updated_at TIMESTAMPTZ DEFAULT NOW()
+         )`,
+        `CREATE UNIQUE INDEX IF NOT EXISTS idx_call_devices_platform_token ON call_devices (platform, token)`,
+        `CREATE INDEX IF NOT EXISTS idx_call_devices_user ON call_devices (user_id)`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

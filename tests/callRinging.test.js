@@ -495,8 +495,9 @@ describe("the caller is told what happened to the invite", () => {
 
   test("every branch of call_invite answers the caller", () => {
     expect(server).toMatch(/socket\.emit\("call_ring_status", \{ roomName: data\.roomName, via, devices/);
-    expect(server).toMatch(/ack\("app", targetSockets\.size\)/);
-    expect(server).toMatch(/ack\(sent > 0 \? "push" : "nowhere", sent\)/);
+    // calls-native (1.3): a phone rung natively answers "phone", ahead of app/push.
+    expect(server).toMatch(/ack\(nativeRang > 0 \? "phone" : "app", targetSockets\.size \+ nativeRang\)/);
+    expect(server).toMatch(/ack\(nativeRang > 0 \? "phone" : sent > 0 \? "push" : "nowhere", sent \+ nativeRang\)/);
     expect(server).toMatch(/ack\("nowhere", 0\)/); // the push threw
   });
 
@@ -523,10 +524,11 @@ describe("the caller is told what happened to the invite", () => {
     expect(msgs).toMatch(/onSocketEvent\('call_ring_status'/);
     expect(msgs).toMatch(/setRingStatus\(null\); \/\/ this call's answer, not the last one's/);
     expect(msgs).toMatch(/ringStatus: ringStatus,/);
-    expect(msgs).toMatch(/return \(\) => \{ cleanupRing\(\); cleanup\(\); cleanup2\(\); cleanup3\(\); \};/);
+    expect(msgs).toMatch(/cleanupRing\(\); cleanup\(\); cleanup2\(\); cleanup3\(\); cleanup4\(\);/);
   });
 
   test("each outcome gets a sentence, not a status word", () => {
+    expect(overlay).toMatch(/It's ringing on \$\{who\}'s phone\./);
     expect(overlay).toMatch(/has InPlace open — it's ringing on their screen/);
     expect(overlay).toMatch(/isn't in the app\. We've sent a notification to their phone/);
     expect(overlay).toMatch(/has no device set up for notifications\. They'll see a missed call/);
