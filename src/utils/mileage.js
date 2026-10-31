@@ -41,6 +41,7 @@ const NOTE_MAX = 200;
 const MAX_ATTEMPTS = 5;
 const MAX_HERE_FROM_HOME_MILES = 30; // road-factored; "Use my location" must be near the home
 const RETRY_HOURS = 6;               // a declined card is retried after 6h, 12h, 18h, 24h
+const AT_HOME_MILES = 0.15;          // a leg that ends within this of the home ended at the home
 
 function clampRate(cents) {
   const n = Math.round(Number(cents));
@@ -126,8 +127,11 @@ const r4 = (n) => Math.round(Number(n) * 10000) / 10000;
  * ignored, so a stop cannot be moved by editing the request. An OSM/typed stop (no key yet, or
  * Google down) arrives with coordinates, which is the best that path can do.
  */
-async function resolveStop(stop) {
+async function resolveStop(stop, homePoint) {
   if (!stop || typeof stop !== "object") return null;
+  // v1.127.0 — "Back to the home" is a stop the server already knows. The client sends only
+  // the flag; the coordinates are the care recipient's own.
+  if (stop.home === true) return homePoint ? { ...homePoint, address: "", placeId: null, home: true } : null;
   const label = cleanText(stop.label || stop.name, 120);
   if (stop.placeId && maps.provider() === "google") {
     const d = await maps.googlePlaceDetails(stop.placeId, { sessionToken: stop.session });
@@ -143,6 +147,55 @@ async function resolveStop(stop) {
   return null;
 }
 
+// ─── Legs (v1.127.0) ───
+//
+// Pete, 10/30, after Tina's first mileage visit: "It tracks from Betty's home to lunch, and then
+// Betty's home to the doctor appointment. We have to figure out how to log legs from where the
+// trip initiates to where it ends." Every trip used to start at the home (or "my location") and
+// default to a round trip, so home → lunch → doctor → home was paid as two full loops. Now a
+// trip is a LEG: it starts where the last one ended, it is one way unless the caregiver says
+// otherwise, and getting back is its own leg ("Back to the home").
+
+function homePointFor(cr) {
+  if (!cr || !maps.validLatLng(cr.latitude, cr.longitude)) return null;
+  return { lat: Number(cr.latitude), lng: Number(cr.longitude), label: `${cr.first_name || "Their"}'s home` };
+}
+
+const nearHome = (pt, home) => !!(pt && home && maps.validLatLng(pt.lat, pt.lng)
+  && maps.estimateMiles([pt, home]) / maps.ROAD_FACTOR <= AT_HOME_MILES);
+
+/** Where a stored trip started: its own point, else the home (rows before v1.127.0). */
+function tripStart(row, home) {
+  if (maps.validLatLng(row.start_lat, row.start_lng)) {
+    return { lat: Number(row.start_lat), lng: Number(row.start_lng), label: row.start_label || "Start" };
+  }
+  return row.start_kind === "home" ? home : null;
+}
+
+/** Where a stored trip ended: back at its start for a round trip, else its last stop. */
+function tripEnd(row, home) {
+  if (Number(row.round_trip)) return tripStart(row, home);
+  let stops = [];
+  try { stops = JSON.parse(row.stops || "[]"); } catch { stops = []; }
+  const last = stops[stops.length - 1];
+  if (!last || !maps.validLatLng(last.lat, last.lng)) return null;
+  return { lat: Number(last.lat), lng: Number(last.lng), label: last.label || "Last stop" };
+}
+
+/** Where the next leg of this visit starts by default: { label, atHome, known }. */
+async function lastEndFor(db, sessionId, cr) {
+  const home = homePointFor(cr);
+  const row = await db.prepare(`
+    SELECT start_kind, start_label, start_lat, start_lng, stops, round_trip FROM visit_trips
+     WHERE session_id = ? AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 1
+  `).get(sessionId);
+  if (!row) return { point: home, label: home ? home.label : null, atHome: true, first: true };
+  const end = tripEnd(row, home);
+  if (!end) return { point: null, label: null, atHome: false, first: false };
+  const atHome = !home || nearHome(end, home);
+  return { point: atHome && home ? home : end, label: atHome && home ? home.label : end.label, atHome, first: false };
+}
+
 /**
  * Work out a trip without saving it. `body`: { from: "home" | "here", here?: {lat,lng},
  * stops: [...], roundTrip }. Returns { trip } or { error }.
@@ -152,9 +205,20 @@ async function quoteTrip(db, session, body) {
   if (!settings || !settings.enabled) return { error: "Mileage isn't turned on for this visit." };
   const cr = settings._row;
 
-  const fromKind = body.from === "here" ? "here" : "home";
+  const home = homePointFor(cr);
+  const fromKind = body.from === "here" ? "here" : body.from === "last" ? "last" : "home";
+  const prev = await lastEndFor(db, session.id, cr);
   let start;
-  if (fromKind === "home") {
+  if (fromKind === "last") {
+    if (!prev.point) return { error: "We couldn't tell where your last trip ended. Start from the home or your location.", code: "no_last" };
+    start = { ...prev.point, label: prev.label };
+  } else if (fromKind === "home") {
+    // A leg can't jump back to the home when the last one ended somewhere else: that drive
+    // home is a leg of its own ("Back to the home"), and skipping it is how a day of errands
+    // got paid as separate loops from the house.
+    if (!prev.first && !prev.atHome) {
+      return { error: `Your last trip ended at ${prev.label || "another place"}. Start this one from there, or log the drive back to the home first.`, code: "chain_break" };
+    }
     if (!maps.validLatLng(cr.latitude, cr.longitude)) {
       return { error: `We don't have ${cr.first_name || "the"} home on the map yet. Tap "Use my location" instead.`, code: "home_unmapped" };
     }
@@ -175,11 +239,14 @@ async function quoteTrip(db, session, body) {
   if (rawStops.length > MAX_STOPS) return { error: `A trip can have up to ${MAX_STOPS} stops. Log the rest as another trip.` };
   const stops = [];
   for (const s of rawStops) {
-    const r = await resolveStop(s);
+    const r = await resolveStop(s, home);
     if (!r) return { error: "We couldn't find one of those places on the map. Pick it again from the list." };
     stops.push(r);
   }
-  const roundTrip = body.roundTrip !== false;
+  // v1.127.0 — one way unless the caregiver picks round trip. A round trip that already ends
+  // at its own start is the same thing said twice.
+  const roundTrip = body.roundTrip === true && !nearHome(stops[stops.length - 1], start);
+  if (stops.length === 1 && nearHome(stops[0], start)) return { error: "That trip starts and ends in the same place." };
   const points = [start, ...stops];
   if (roundTrip) points.push(start);
 
@@ -192,7 +259,9 @@ async function quoteTrip(db, session, body) {
     trip: {
       startKind: fromKind,
       startLabel: start.label,
-      stops: stops.map((s) => ({ label: s.label, address: s.address, placeId: s.placeId, lat: r4(s.lat), lng: r4(s.lng) })),
+      startLat: r4(start.lat),
+      startLng: r4(start.lng),
+      stops: stops.map((s) => ({ label: s.label, address: s.address, placeId: s.placeId, lat: r4(s.lat), lng: r4(s.lng), ...(s.home ? { home: true } : {}) })),
       roundTrip,
       miles: route.miles,
       minutes: route.minutes || null,
@@ -214,11 +283,13 @@ async function addTrip(db, session, caregiverUserId, body) {
   const id = uuid();
   await db.prepare(`
     INSERT INTO visit_trips (id, session_id, care_recipient_id, caregiver_user_id, start_kind, start_label,
-                             stops, round_trip, miles, minutes, distance_source, note, rate_cents)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                             stops, round_trip, miles, minutes, distance_source, note, rate_cents, start_lat, start_lng)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(id, session.id, session.care_recipient_id, caregiverUserId, t.startKind, t.startLabel,
-    JSON.stringify(t.stops), t.roundTrip ? 1 : 0, t.miles, t.minutes, t.source, note, t.rateCents);
-  return { trip: { id, ...t, note } };
+    JSON.stringify(t.stops), t.roundTrip ? 1 : 0, t.miles, t.minutes, t.source, note, t.rateCents, t.startLat, t.startLng);
+  const { startLat, startLng, ...pub } = t;
+  pub.stops = pub.stops.map(({ label, address, home }) => ({ label, address, ...(home ? { home: true } : {}) }));
+  return { trip: { id, ...pub, note } };
 }
 
 function tripView(row) {
@@ -229,7 +300,7 @@ function tripView(row) {
     startKind: row.start_kind,
     startLabel: row.start_label,
     // Stop coordinates stay on the server. The family's "open in Google Maps" link uses names.
-    stops: stops.map((s) => ({ label: s.label, address: s.address })),
+    stops: stops.map((s) => ({ label: s.label, address: s.address, ...(s.home ? { home: true } : {}) })),
     roundTrip: !!Number(row.round_trip),
     miles: round1(row.miles),
     minutes: row.minutes,
@@ -266,7 +337,12 @@ async function sessionSummary(db, session) {
     extraMiles: round1(session.mileage_extra_miles), cents: session.mileage_cents || 0,
     extraCents: session.mileage_extra_cents || 0,
   } : live;
+  const cr = settings ? settings._row : null;
+  const next = cr ? await lastEndFor(db, session.id, cr) : { label: null, atHome: true, first: true };
   return {
+    // v1.127.0 — where the next leg starts by default, and the home's name for "Back to …".
+    nextFrom: { label: next.label, atHome: !!next.atHome, first: !!next.first, known: !!next.point },
+    homeLabel: cr ? `${cr.first_name || "Their"}'s home` : "Their home",
     enabled: !!(settings && settings.enabled) || trips.length > 0,
     rateCents, capMiles, irsRateCents: IRS_RATE_CENTS,
     provider: maps.provider(),

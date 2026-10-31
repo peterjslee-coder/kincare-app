@@ -31,7 +31,7 @@ const {
   validateEventInput, reminderStage, buildIcs,
 } = require("../utils/careEventUtils");
 const { MODEL_HAIKU, getAnthropic } = require("../utils/aiModels");
-const { transcribeAudio, extractAppointmentNotes, TranscriptionError, MAX_AUDIO_BYTES } = require("../utils/transcription");
+const { transcribeAudio, extractAppointmentNotes, TranscriptionError, MAX_AUDIO_BYTES, MAX_AUDIO_PARTS } = require("../utils/transcription");
 
 const router = express.Router();
 
@@ -364,7 +364,9 @@ router.get("/taggable/:recipientId", async (req, res) => {
 // because the extraction can be wrong and the words actually said are the record.
 const uploadAudio = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: MAX_AUDIO_BYTES, files: 1 },
+  // v1.127.0 — up to MAX_AUDIO_PARTS parts: a phone that locks mid-visit cuts the microphone,
+  // and the caregiver/family can keep going as another part. Each part has the per-file cap.
+  limits: { fileSize: MAX_AUDIO_BYTES, files: MAX_AUDIO_PARTS },
 });
 
 // v1.107.2 — a recording becomes a care NOTE, so it needs write_notes; and the check runs
@@ -383,7 +385,16 @@ async function mayRecordNote(req, res, next) {
   }
 }
 
-router.post("/:id/transcribe", mayRecordNote, uploadAudio.single("audio"), async (req, res) => {
+router.post("/:id/transcribe", mayRecordNote, (req, res, next) => {
+  uploadAudio.array("audio", MAX_AUDIO_PARTS)(req, res, (err) => {
+    if (!err) return next();
+    // multer's own errors (too big, too many parts) are ours to word; never echo anything else.
+    if (err.code === "LIMIT_FILE_SIZE") return res.status(413).json({ error: "That recording is too long \u2014 each part has to be under about 25 MB (about an hour)." });
+    if (err.code === "LIMIT_FILE_COUNT" || err.code === "LIMIT_UNEXPECTED_FILE") return res.status(400).json({ error: `A recording can have up to ${MAX_AUDIO_PARTS} parts.` });
+    captureException(err, { where: "careEvents: transcribe upload" });
+    return res.status(400).json({ error: "The recording didn\u2019t upload. Try again." });
+  });
+}, async (req, res) => {
   try {
     const db = await getDb();
     const ev = await db.prepare("SELECT * FROM care_events WHERE id = ?").get(req.params.id);
@@ -398,7 +409,8 @@ router.post("/:id/transcribe", mayRecordNote, uploadAudio.single("audio"), async
     if (String(req.body.consent_confirmed) !== "true") {
       return res.status(400).json({ error: "Recording needs the consent step first." });
     }
-    if (!req.file || !req.file.buffer) {
+    const files = (req.files || []).filter((f) => f && f.buffer && f.buffer.length);
+    if (!files.length) {
       return res.status(400).json({ error: "No audio received." });
     }
 
@@ -407,7 +419,18 @@ router.post("/:id/transcribe", mayRecordNote, uploadAudio.single("audio"), async
 
     let transcript;
     try {
-      transcript = await transcribeAudio(req.file.buffer, req.file.mimetype, req.file.originalname || "appointment.webm");
+      // Parts in parallel: each is its own file to the transcriber. A part where nothing was
+      // said (the silence after a lock) is dropped rather than failing the whole recording.
+      const results = await Promise.all(files.map((f, i) =>
+        transcribeAudio(f.buffer, f.mimetype, f.originalname || `appointment-${i + 1}.webm`)
+          .catch((e) => (e instanceof TranscriptionError && e.status === 422 ? null : Promise.reject(e)))));
+      const heard = results.filter(Boolean);
+      if (!heard.length) throw new TranscriptionError("Nothing was said in that recording. If the phone locked, the microphone stopped \u2014 keep the screen open next time.", 422);
+      transcript = {
+        text: heard.map((r) => r.text).join("\n\n[recording paused]\n\n"),
+        speakers: Math.max(...heard.map((r) => r.speakers || 0)),
+        parts: files.length,
+      };
     } catch (e) {
       // Only OUR error type is safe to show. `e.status || 502` with `e.message` would echo
       // any internal failure straight to the user — and a transcription path is exactly

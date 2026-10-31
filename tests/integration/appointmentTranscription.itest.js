@@ -233,3 +233,52 @@ describe("when the transcriber fails", () => {
     expect(await notesFor(eventId)).toHaveLength(0);
   });
 });
+
+// v1.127.0 — Pete at Betty's orthopaedic visit: the phone locked and the microphone stopped.
+// The recording can now come in parts (keep going after a lock); each part is transcribed and
+// they become ONE note. A silent part (the dead air after a lock) doesn't sink the rest.
+describe("a recording in parts (v1.127.0)", () => {
+  const postParts = (token, n) => {
+    const req = h.request.post(`/api/care-events/${eventId}/transcribe`).set(h.auth(token)).field("consent_confirmed", "true");
+    for (let i = 0; i < n; i++) req.attach("audio", Buffer.from(`part ${i + 1} bytes`), { filename: `appointment-${i + 1}.mp4`, contentType: "audio/mp4" });
+    return req;
+  };
+
+  test("two parts → two transcriptions, one note, joined in order", async () => {
+    mockTranscribe
+      .mockResolvedValueOnce({ text: "First half: the shoulder X-ray looks fine.", speakers: 2 })
+      .mockResolvedValueOnce({ text: "Second half: physical therapy twice a week.", speakers: 2 });
+    const res = await postParts(pete.token, 2).expect(200);
+    expect(mockTranscribe).toHaveBeenCalledTimes(2);
+    const notes = await notesFor(eventId);
+    expect(notes).toHaveLength(1);
+    expect(notes[0].content.indexOf("First half")).toBeLessThan(notes[0].content.indexOf("Second half"));
+    expect(notes[0].content).toContain("[recording paused]");
+    expect(res.body.transcript).toContain("Second half");
+  });
+
+  test("a silent part is dropped, not fatal", async () => {
+    const { TranscriptionError } = jest.requireActual("../../src/utils/transcription");
+    mockTranscribe
+      .mockResolvedValueOnce({ text: "What the doctor said.", speakers: 2 })
+      .mockRejectedValueOnce(new TranscriptionError("Nothing was said in that recording.", 422));
+    await postParts(pete.token, 2).expect(200);
+    const notes = await notesFor(eventId);
+    expect(notes[0].content).toContain("What the doctor said.");
+    expect(notes[0].content).not.toContain("[recording paused]");
+  });
+
+  test("all silent → a 422 that says why, and no note", async () => {
+    const { TranscriptionError } = jest.requireActual("../../src/utils/transcription");
+    mockTranscribe.mockRejectedValue(new TranscriptionError("Nothing was said in that recording.", 422));
+    const res = await postParts(pete.token, 2).expect(422);
+    expect(res.body.error).toMatch(/locked/);
+    expect(await notesFor(eventId)).toHaveLength(0);
+  });
+
+  test("more than four parts is refused before anything is transcribed", async () => {
+    const res = await postParts(pete.token, 5);
+    expect(res.status).toBe(400);
+    expect(mockTranscribe).not.toHaveBeenCalled();
+  });
+});

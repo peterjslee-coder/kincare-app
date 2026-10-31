@@ -31,6 +31,38 @@ const WINDOW_DAYS = 45;
 
 const ENTRIES = [
   {
+    id: "mileage-legs",
+    version: "1.127.0",
+    date: "2026-10-31",
+    audience: ["caregiver", "family"],
+    title: "Mileage is logged leg by leg",
+    body: "Each trip now starts where the last one ended, so a day of errands is paid for the drive actually made. Trips are one way unless you pick round trip, and the drive back is its own leg.",
+    howTo: [
+      "Tap + Log a trip after each drive",
+      "From is already where your last trip ended",
+      "Search for where you went next",
+      "Heading back? Tap Back to the home",
+    ],
+    examples: ["Home → Spicy Thai for lunch", "Spicy Thai → the shoulder appointment", "Doctor's office → back home"],
+    preview: "mileageLegs",
+  },
+  {
+    id: "recording-pause",
+    version: "1.127.0",
+    date: "2026-10-31",
+    audience: ["family", "caregiver"],
+    title: "Pause an appointment recording",
+    body: "Recording a doctor's visit now has Pause and Resume, a clock that stays right, and keeps the screen on so the phone doesn't lock and cut the microphone. If it does lock, nothing said before it is lost.",
+    howTo: [
+      "Open the appointment and tap Record the appointment",
+      "Tap Pause while you wait, Resume when the doctor comes back",
+      "Keep InPlace open on that screen while it records",
+      "Tap Stop & file it — the notes land on the appointment",
+    ],
+    examples: ["Pause in the waiting room", "Pause while she's in X-ray", "Keep going after a call interrupts"],
+    preview: "recordPause",
+  },
+  {
     id: "place-search-google",
     version: "1.126.4",
     date: "2026-10-29",

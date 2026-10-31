@@ -32,7 +32,8 @@ const mileageBtn = (primary, disabled) => ({
 
 const tripRouteLabel = (t) => {
   const names = (t.stops || []).map((s) => s.label).filter(Boolean);
-  const start = t.startKind === 'here' ? 'Your location' : 'Home';
+  // v1.127.0 — a leg can start where the last one ended, so show the stored start.
+  const start = t.startLabel || (t.startKind === 'here' ? 'Your location' : 'Home');
   return [start, ...names, ...(t.roundTrip ? [start] : [])].join(' → ');
 };
 
@@ -118,20 +119,27 @@ const PlaceSearch = window.PlaceSearch = ({ near, onPick, placeholder, autoFocus
 };
 
 // ─── LogTripSheet ───
-const LogTripSheet = window.LogTripSheet = ({ sessionId, recipientId, recipientName, rateCents, onClose, onSaved }) => {
+// v1.127.0 — Pete, 10/30: "We have to figure out how to log legs from where the trip initiates
+// to where it ends." Each trip is a LEG: it starts where the last one ended (the server knows
+// where that was), it is one way unless the caregiver picks round trip, and the drive back is
+// its own leg ("Back to Betty's home"). Restarting at the home mid-errand is refused server-side.
+const LogTripSheet = window.LogTripSheet = ({ sessionId, recipientId, recipientName, rateCents, nextFrom, homeLabel, onClose, onSaved }) => {
   const { showToast } = useToast();
-  const [from, setFrom] = useState('home');
+  const awayFromHome = !!(nextFrom && !nextFrom.atHome && nextFrom.known);
+  const [from, setFrom] = useState(awayFromHome ? 'last' : 'home');
   const [here, setHere] = useState(null);
   const [locating, setLocating] = useState(false);
   const [stops, setStops] = useState([]);
-  const [roundTrip, setRoundTrip] = useState(true);
+  const [roundTrip, setRoundTrip] = useState(false);
   const [note, setNote] = useState('');
   const [quote, setQuote] = useState(null);
   const [quoteError, setQuoteError] = useState(null);
   const [quoting, setQuoting] = useState(false);
   const [saving, setSaving] = useState(false);
   const [adding, setAdding] = useState(true);
-  const home = recipientName ? `${recipientName}'s home` : 'Their home';
+  const home = homeLabel || (recipientName ? `${recipientName}'s home` : 'Their home');
+  const startsAtHome = from === 'home';
+  const hasHomeStop = stops.some((s) => s.home);
 
   const body = () => ({ from, here: from === 'here' ? here : undefined, stops, roundTrip });
 
@@ -151,6 +159,7 @@ const LogTripSheet = window.LogTripSheet = ({ sessionId, recipientId, recipientN
         else {
           setQuoteError(d?.error || "We couldn't work out the distance.");
           if (d?.code === 'home_unmapped') setFrom('here');
+          if (d?.code === 'chain_break') setFrom('last');
         }
       } catch { if (!cancelled) setQuoteError("We couldn't work out the distance. Check your connection."); }
       if (!cancelled) setQuoting(false);
@@ -207,11 +216,18 @@ const LogTripSheet = window.LogTripSheet = ({ sessionId, recipientId, recipientN
         <div>
           <div style={label}>FROM</div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={() => setFrom('home')} style={pill(from === 'home')}>{home}</button>
+            {awayFromHome
+              ? <button onClick={() => setFrom('last')} style={pill(from === 'last')}>{nextFrom.label || 'Where you left off'}</button>
+              : <button onClick={() => setFrom('home')} style={pill(from === 'home')}>{home}</button>}
             <button onClick={() => (here ? setFrom('here') : useMyLocation())} disabled={locating} style={pill(from === 'here')}>
               {locating ? 'Finding you…' : 'Use my location'}
             </button>
           </div>
+          {awayFromHome && from === 'last' && (
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 6 }}>
+              Your last trip ended here. Log each leg from where it started, and the drive back as its own leg.
+            </div>
+          )}
         </div>
 
         <div>
@@ -226,7 +242,13 @@ const LogTripSheet = window.LogTripSheet = ({ sessionId, recipientId, recipientN
                 style={{ minWidth: 44, minHeight: 44, background: 'none', border: 'none', fontSize: 20, color: 'var(--text-tertiary)', cursor: 'pointer' }}>{'×'}</button>
             </div>
           ))}
-          {(adding || stops.length === 0) && stops.length < 5 && (
+          {!startsAtHome && !hasHomeStop && (adding || stops.length === 0) && stops.length < 5 && (
+            <button onClick={() => { setStops([...stops, { home: true, label: home }]); setAdding(false); }}
+              style={{ ...pill(false), width: '100%', marginBottom: 8, flex: 'none' }}>
+              {'↩'} Back to {home}
+            </button>
+          )}
+          {(adding || stops.length === 0) && stops.length < 5 && !hasHomeStop && (
             <PlaceSearch near={recipientId} autoFocus={stops.length > 0}
               placeholder={stops.length ? 'Add another stop' : 'Search: CVS, Kroger, a doctor, an address'}
               onPick={(s) => { setStops([...stops, s]); setAdding(false); }} />
@@ -235,9 +257,9 @@ const LogTripSheet = window.LogTripSheet = ({ sessionId, recipientId, recipientN
 
         {stops.length > 0 && (
           <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={() => setRoundTrip(true)} style={pill(roundTrip)}>Round trip</button>
             <button onClick={() => setRoundTrip(false)} style={pill(!roundTrip)}>One way</button>
-            {!adding && stops.length < 5 && <button onClick={() => setAdding(true)} style={pill(false)}>+ Add stop</button>}
+            {!hasHomeStop && <button onClick={() => setRoundTrip(true)} style={pill(roundTrip)}>Round trip</button>}
+            {!adding && stops.length < 5 && !hasHomeStop && <button onClick={() => setAdding(true)} style={pill(false)}>+ Add stop</button>}
           </div>
         )}
 
@@ -360,6 +382,7 @@ const VisitMileageCard = window.VisitMileageCard = ({ sessionId, recipientId, re
         <button onClick={() => setOpen(true)} style={{ ...mileageBtn(false, false), width: '100%', marginTop: 10, border: '2px solid var(--role-color)', color: 'var(--role-color)' }}>+ Log a trip</button>
       )}
       {open && <LogTripSheet sessionId={sessionId} recipientId={recipientId} recipientName={recipientName} rateCents={m.rateCents}
+        nextFrom={m.nextFrom} homeLabel={m.homeLabel}
         onClose={() => setOpen(false)} onSaved={(next) => (next ? setM({ ...m, ...next }) : load())} />}
     </div>
   );
@@ -443,9 +466,13 @@ const VisitMileageReport = window.VisitMileageReport = ({ sessionId }) => {
         <div key={t.id} style={{ padding: '10px 0', borderTop: '1px solid var(--border-light)', display: 'flex', gap: 12 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>
+              {t.startLabel ? <span>{t.startLabel} {'→'} </span> : null}
               {(t.stops || []).map((s, i) => (
-                <span key={i}>{i ? ' → ' : ''}<a href={mapLink(s)} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--role-color)' }}>{s.label}</a></span>
+                <span key={i}>{i ? ' → ' : ''}{s.home
+                  ? s.label
+                  : <a href={mapLink(s)} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--role-color)' }}>{s.label}</a>}</span>
               ))}
+              {t.roundTrip ? <span> {'→'} {t.startLabel || 'back'}</span> : null}
             </div>
             <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
               {t.roundTrip ? 'Round trip' : 'One way'} from {t.startKind === 'here' ? "the caregiver's location" : 'home'}{t.source === 'estimate' ? ' · estimated' : ''}

@@ -262,6 +262,41 @@ const WN_PREVIEWS = {
       <div style={{ fontSize: 10, color: 'var(--text-tertiary)', textAlign: 'right', marginTop: 4 }}>Powered by Google</div>
     </div>
   ),
+  // v1.127.0 — legs chain from where the last trip ended (Pete, 10/30)
+  mileageLegs: () => (
+    <div style={{ padding: '12px 12px 10px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>
+      <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>Mileage today</div>
+      {[['Home → Diner', 'Lunch out', '2.1 mi'], ['Diner → Clinic', 'Shoulder appointment', '3.0 mi'], ['Clinic → Home', 'Back home', '2.6 mi']].map(([r, n, mi]) => (
+        <div key={r} style={{ display: 'flex', gap: 8, padding: '6px 0', borderTop: '1px solid var(--border-light)' }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>{r}</div>
+            <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{'“'}{n}{'”'}</div>
+          </div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>{mi}</div>
+        </div>
+      ))}
+      <div style={{ fontSize: 9.5, fontWeight: 700, color: 'var(--text-muted)', margin: '6px 0 4px' }}>FROM</div>
+      <div style={{ display: 'flex', gap: 6 }}>
+        <span style={{ ...wnPill('var(--role-color-light)', 'var(--role-color-dark)'), flex: 1, textAlign: 'center', border: '2px solid var(--role-color)' }}>Clinic</span>
+        <span style={{ ...wnPill('var(--bg-neutral)', 'var(--text-secondary)'), flex: 1, textAlign: 'center' }}>Use my location</span>
+      </div>
+      <span style={{ display: 'block', textAlign: 'center', marginTop: 6, padding: '6px 10px', borderRadius: 16, border: '1px solid var(--border-color)', color: 'var(--text-primary)', fontSize: 12 }}>{'↩'} Back to Mom{'’'}s home</span>
+    </div>
+  ),
+  // v1.127.0 — appointment recording: pause, honest clock, screen kept on
+  recordPause: () => (
+    <div style={{ padding: '12px 12px 10px', borderRadius: 12, border: '1px solid var(--color-error)', background: 'var(--bg-card)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ width: 9, height: 9, borderRadius: '50%', background: 'var(--color-error)' }} />
+        <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text-primary)' }}>Recording 14:32</span>
+      </div>
+      <div style={{ fontSize: 11, color: 'var(--text-secondary)', margin: '4px 0 8px' }}>The screen will stay on while recording.</div>
+      <div style={{ display: 'flex', gap: 6 }}>
+        <span style={{ ...wnPill('var(--bg-neutral)', 'var(--text-primary)'), flex: 1, textAlign: 'center' }}>{'❚❚'} Pause</span>
+        <span style={{ ...wnPill('var(--color-error)', 'var(--text-on-primary)'), flex: 1, textAlign: 'center' }}>Stop &amp; file it</span>
+      </div>
+    </div>
+  ),
   // v1.126.1 — visit mileage (Pete, 10/28: "make sure cost/gas is covered")
   mileageCaregiver: () => (
     <div style={{ padding: '12px 12px 10px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>

@@ -26,6 +26,8 @@ const STT_MODEL = process.env.ELEVENLABS_STT_MODEL || "scribe_v2";
 // A doctor's visit is twenty minutes, not two hours. The cap is here so a runaway recording
 // cannot turn into an unbounded upload and an unbounded bill.
 const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
+// v1.127.0 — a recording can come in parts (the phone locked; the user kept going).
+const MAX_AUDIO_PARTS = 4;
 
 class TranscriptionError extends Error {
   constructor(message, status = 502) {
@@ -59,9 +61,9 @@ async function transcribeAudio(buffer, mimeType = "audio/webm", filename = "appo
       method: "POST",
       headers: { "xi-api-key": key },
       body: form,
-      // Long enough for a 20-minute recording, short enough that a hung request does not
-      // hold an Express handler indefinitely — the v1.106.10 lesson, from the other side.
-      signal: AbortSignal.timeout(120000),
+      // Long enough for an hour's recording (v1.127.0: was 120s, sized for 20 minutes), short
+      // enough that a hung request does not hold an Express handler indefinitely.
+      signal: AbortSignal.timeout(300000),
     });
   } catch (e) {
     throw new TranscriptionError(
@@ -139,4 +141,4 @@ ${transcript.slice(0, 40000)}`;
   }
 }
 
-module.exports = { transcribeAudio, extractAppointmentNotes, TranscriptionError, MAX_AUDIO_BYTES };
+module.exports = { transcribeAudio, extractAppointmentNotes, TranscriptionError, MAX_AUDIO_BYTES, MAX_AUDIO_PARTS };

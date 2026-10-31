@@ -3446,6 +3446,18 @@ async function initializeDatabase() {
           summary: "Names Google Maps Platform: when you type an address or place name, it is sent to Google to suggest matching places, and when a care team turns on mileage, a caregiver's errand stops are sent to Google to work out the driving distance." },
       ]),
     },
+    {
+      // v1.127.0 — mileage legs chain. Pete, 10/30: "It tracks from Betty's home to lunch, and
+      // then Betty's home to the doctor appointment. We have to figure out how to log legs from
+      // where the trip initiates to where it ends." A leg can now start where the last one
+      // ended, so the start point itself has to be kept (a "Use my location" start was never
+      // stored, only its label).
+      id: "078_visit_trip_start_point",
+      statements: [
+        `ALTER TABLE visit_trips ADD COLUMN IF NOT EXISTS start_lat REAL`,
+        `ALTER TABLE visit_trips ADD COLUMN IF NOT EXISTS start_lng REAL`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

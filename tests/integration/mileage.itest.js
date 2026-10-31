@@ -306,3 +306,70 @@ describe("pure arithmetic", () => {
     expect(mileage.clampRate(76)).toBe(76);
   });
 });
+
+// v1.127.0 — Tina's day, 10/30. She drove Betty home → lunch → the doctor → home and the app
+// paid it as two loops from the house (home → lunch → home, home → doctor → home). Legs now
+// chain from where the last one ended, are one way unless asked, and the drive home is a leg.
+describe("legs chain (v1.127.0)", () => {
+  const LUNCH = { label: "Spicy Thai", address: "1 Main St", lat: 37.2400, lng: -80.4200 };
+  const DOC = { label: "Orthopaedic Surgery", address: "215 Gilbert St", lat: 37.2500, lng: -80.4000 };
+  let sid2;
+  beforeAll(async () => {
+    await db.prepare("UPDATE care_recipients SET mileage_cap_miles = 50 WHERE id = ?").run(recipientId);
+    const prof = await db.prepare("SELECT id FROM caregiver_profiles WHERE user_id = ?").get(cg.user.id);
+    sid2 = uuid();
+    await db.prepare(`
+      INSERT INTO care_sessions (id, care_recipient_id, family_user_id, caregiver_id, service_type, status,
+        scheduled_date, scheduled_time, duration_hours, proposed_rate, estimated_cost, stripe_payment_intent_id, created_at)
+      VALUES (?, ?, ?, ?, 'companionship', 'in_progress', '2026-10-30', '11:00', 4, 22, 88, 'pi_visit2', NOW())
+    `).run(sid2, recipientId, leader.user.id, prof.id);
+  });
+  const post = (body) => h.request.post(`/api/mileage/sessions/${sid2}/trips`).set(as(cg)).send(body);
+  const legMiles = (a, b) => require("../../src/utils/maps").estimateMiles([a, b]);
+
+  test("the first leg is one way from the home unless round trip is asked for", async () => {
+    const s = await h.request.get(`/api/mileage/sessions/${sid2}`).set(as(cg));
+    expect(s.body.mileage.nextFrom).toMatchObject({ atHome: true, first: true });
+    const r = await post({ from: "home", stops: [LUNCH], note: "Lunch out" });
+    expect(r.status).toBe(201);
+    expect(r.body.trip.roundTrip).toBe(false);
+    expect(r.body.trip.miles).toBeCloseTo(legMiles(HOME, LUNCH), 1);
+    expect(r.body.mileage.nextFrom).toMatchObject({ label: "Spicy Thai", atHome: false });
+  });
+
+  test("the next leg can't restart at the home; it starts where lunch ended", async () => {
+    const bad = await post({ from: "home", stops: [DOC], note: "Shoulder appointment" });
+    expect(bad.status).toBe(400);
+    expect(bad.body.code).toBe("chain_break");
+    const r = await post({ from: "last", stops: [DOC], note: "Shoulder appointment" });
+    expect(r.status).toBe(201);
+    expect(r.body.trip.startLabel).toBe("Spicy Thai");
+    expect(r.body.trip.miles).toBeCloseTo(legMiles(LUNCH, DOC), 1);
+  });
+
+  test("getting back is its own leg, to the home's own point", async () => {
+    const r = await post({ from: "last", stops: [{ home: true, lat: 0, lng: 0 }], note: "Back home" });
+    expect(r.status).toBe(201);
+    expect(r.body.trip.stops[0]).toMatchObject({ home: true });
+    expect(r.body.trip.miles).toBeCloseTo(legMiles(DOC, HOME), 1);
+    expect(r.body.mileage.nextFrom).toMatchObject({ atHome: true, first: false });
+    // The day totals the real loop, not two loops from the house.
+    const loop = legMiles(HOME, LUNCH) + legMiles(LUNCH, DOC) + legMiles(DOC, HOME);
+    const twoLoops = 2 * legMiles(HOME, LUNCH) + 2 * legMiles(HOME, DOC);
+    expect(r.body.mileage.totalMiles).toBeCloseTo(loop, 0);
+    expect(r.body.mileage.totalMiles).toBeLessThan(twoLoops);
+  });
+
+  test("a stop that is the starting point is refused", async () => {
+    const r = await post({ from: "home", stops: [{ home: true }], note: "Nowhere" });
+    expect(r.status).toBe(400);
+  });
+
+  test("removing the last leg moves the start back", async () => {
+    const s = await h.request.get(`/api/mileage/sessions/${sid2}`).set(as(cg));
+    const last = s.body.mileage.trips[s.body.mileage.trips.length - 1];
+    expect((await h.request.delete(`/api/mileage/trips/${last.id}`).set(as(cg))).status).toBe(200);
+    const after = await h.request.get(`/api/mileage/sessions/${sid2}`).set(as(cg));
+    expect(after.body.mileage.nextFrom).toMatchObject({ label: "Orthopaedic Surgery", atHome: false });
+  });
+});
