@@ -64,9 +64,11 @@ Background and the iOS rules this has to obey: `CallKit_VoIP_Plan_2026-09-01.md`
 - [ ] Finish the key rotations calling depends on: APNs key and the Firebase service account.
 - [ ] Decide: ring **every** device at once (recommended; first to answer stops the others — built
       that way) or only the most recent.
-- [ ] Build 1.3 from its OWN folder (`kincare-1.3`, a separate clone on this branch — never the
-      everyday `kincare-repo`). Background Modes are already in Info.plist; in Xcode just confirm
-      Signing & Capabilities shows them. First goal: it compiles. Report any red errors verbatim.
+- [x] Build 1.3 from its OWN folder (`kincare-1.3`, a separate clone on this branch). **Compiles
+      clean (11/1, Pete's Mac, ed18ef5)** — checked with
+      `xcodebuild -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO build`. A signed
+      device build (⌘B on "Any iOS Device") fails only on provisioning (no registered devices on
+      the team); TestFlight uploads use Product → Archive, which signs like Build 9 did.
 - [ ] Watch for (the open questions only a phone answers): does Twilio audio flow when a call
       is answered on the LOCKED screen without opening the app? Does the caller's name show?
 - [ ] Play Console, only after vc22 is approved: the full-screen intent declaration (Claude drafts).
