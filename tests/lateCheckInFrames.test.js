@@ -69,9 +69,18 @@ describe("the two builders return different things, and that is the point", () =
   test("buildDateTimeInZone and getNowInZone are shifted alike, so the PAIR is safe", () => {
     // Compared in whole minutes: getNowInZone truncates to the second, so the raw
     // millisecond difference carries sub-second noise that means nothing.
-    const shiftMin = Math.round((getNowInZone(TZ).getTime() - Date.now()) / 60000);
-    const built = buildDateTimeInZone(DATE, TIME, TZ).getTime();
     const trueInstant = zonedDateTimeToInstant(DATE, TIME, TZ).getTime();
+    // v1.127.1 — "now" is pinned to the visit's own day. Measured against the real clock, the
+    // shift was today's offset (EST after Nov 1) compared with August's (EDT): an hour apart on
+    // a UTC server for half of every year, and green on any machine set to Eastern time.
+    jest.useFakeTimers({ now: trueInstant });
+    let shiftMin, built;
+    try {
+      shiftMin = Math.round((getNowInZone(TZ).getTime() - Date.now()) / 60000);
+      built = buildDateTimeInZone(DATE, TIME, TZ).getTime();
+    } finally {
+      jest.useRealTimers();
+    }
     // toBeCloseTo, not toBe: Math.round can hand back -0, and Object.is(-0, 0) is false.
     expect(Math.round((built - trueInstant) / 60000)).toBeCloseTo(shiftMin, 5);
   });
