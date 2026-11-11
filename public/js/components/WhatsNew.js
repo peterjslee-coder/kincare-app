@@ -25,6 +25,17 @@ const wnHead = { fontSize: 10.5, fontWeight: 700, color: 'var(--text-muted)', te
 const wnPill = (bg, fg) => ({ padding: '4px 10px', borderRadius: 8, background: bg, color: fg, fontSize: 11, fontWeight: 700 });
 
 const WN_PREVIEWS = {
+  // v1.127.1 — anyone who can schedule can leave the caregiver instructions
+  teamInstructions: () => (
+    <div style={{ padding: '12px 12px 10px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+        <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--role-color)' }}>Caregiver Instructions</span>
+        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--role-color)' }}>Edit</span>
+      </div>
+      <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>Lunch at noon, please. The mail key is on the hook by the door.</div>
+      <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 6 }}>Left by Sam {'·'} Read by the caregiver at 9:02</div>
+    </div>
+  ),
   comingUpSpine: () => {
     const row = (dot, time, title, sub, visit) => (
       <div style={{ display: 'flex', alignItems: 'stretch' }}>

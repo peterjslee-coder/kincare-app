@@ -362,9 +362,10 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, 
                 </div>
               )}
 
-              {/* Caregiver Instructions — editable by family/care_for, read-only for caregiver */}
+              {/* Caregiver Instructions — editable by whoever the server allows, read-only for everyone else */}
               {(() => {
-                const canEdit = (role === 'family' || role === 'care_for' || role === 'admin') && !['completed', 'cancelled'].includes(s.status);
+                // v1.127.1 — the server says who may edit (owner, booker, anyone who can schedule).
+                const canEdit = !!data.canEditInstructions && !['completed', 'cancelled'].includes(s.status);
                 const hasInstructions = !!s.special_instructions;
                 const saveInstructions = async () => {
                   setSavingInstructions(true);

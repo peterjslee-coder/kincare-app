@@ -3450,6 +3450,28 @@ router.get("/:id/time-change", async (req, res) => {
 // read better with it; the implementation is now utils/timezone's single owner.
 const formatTime12h = formatTimeForDisplay;
 
+// ─── v1.127.1 — who may write a visit's caregiver instructions ───
+//
+// The owner of the care recipient and whoever booked the visit, always. The care recipient
+// themselves, for their own visits (v1.106.2). An admin. And — Pete, 11/11 — anyone the team
+// has given SCHEDULE_EVENTS, the same people who put appointments on her calendar.
+//
+// The assigned caregiver never does, whatever her share says: these are the family's words TO
+// her, and the caregiver reads them at check-in. That is the Julia shape again ("Julia IS on
+// Betty's care team AND she's a caregiver") — an edit share must not let her rewrite her own
+// orders. v1.106.2's reason still holds for everyone else: the text is acted on in Betty's
+// house, so it is asked of the row and the capability, never of a self-assignable role string.
+async function mayEditInstructions(db, session, userId, activeRole) {
+  if (!session || !userId) return false;
+  if (userId === session.owner_id || userId === session.family_user_id) return true;
+  if (session.caregiver_user_id && session.caregiver_user_id === userId) return false;
+  if (activeRole === "care_for" && session.recipient_user_id && session.recipient_user_id === userId) return true;
+  const { recipientCapabilities } = require("../utils/access");
+  const { can, CAP } = require("../utils/capabilities");
+  const caps = await recipientCapabilities(db, session.care_recipient_id, userId);
+  return can(caps, CAP.SCHEDULE_EVENTS);
+}
+
 // ─── PUT /api/sessions/:id/instructions ───
 // Update special_instructions on a session (family/care_for only, before completion)
 router.put("/:id/instructions", async (req, res) => {
@@ -3482,19 +3504,21 @@ router.put("/:id/instructions", async (req, res) => {
 
     if (!session) return res.status(404).json({ error: "Session not found" });
 
-    // v1.106.2 — `activeRole === "care_for"` meant ANY account holding the (self-assignable)
-    // care_for role could append to ANY session's instructions. The caregiver reads this text at
-    // check-in, so that is a physical-safety hole, not a data one: "give her the second dose too"
-    // arriving on a stranger's visit.
-    //
-    // The care recipient may of course edit their own instructions — but only their own, which is
-    // what care_recipients.linked_user_id records.
-    const isOwner = userId === session.owner_id || userId === session.family_user_id;
-    const isCareFor = activeRole === "care_for" && session.recipient_user_id === userId;
-    const isAdmin = activeRole === "admin" && !!(await db.prepare(
-      "SELECT is_admin FROM users WHERE id = ?"
-    ).get(userId))?.is_admin;
-    if (!isOwner && !isCareFor && !isAdmin) {
+    // v1.127.1 — who may write the caregiver's instructions. Pete, 11/11: "Anyone who can
+    // schedule appointments should be able to leave care instructions." Until now only the
+    // recipient's owner and the visit's booker got through, so Daniel — on Betty's team, able
+    // to schedule — was shown the Edit box and then told "Session not found" on Save.
+    if (!(await mayEditInstructions(db, session, userId, activeRole))) {
+      // Someone who can see this visit is told why; anyone else still learns nothing about it.
+      const seen = await sessionAccess(db, req.params.id, userId);
+      if (seen && seen.isCaregiver) {
+        return res.status(403).json({ error: "These are the family's instructions to you, so only the family can change them. Message them if something needs to change." });
+      }
+      if (seen && seen.canView) {
+        return res.status(403).json({
+          error: "Leaving caregiver instructions needs permission to schedule appointments. Ask the care team leader to give you that access.",
+        });
+      }
       return res.status(404).json({ error: "Session not found" });
     }
 
@@ -4850,7 +4874,25 @@ router.get("/:id", async (req, res) => {
     }
   } catch (e) { captureException(e, { where: "sessions: receipt" }); }
 
-  res.json({ session, visitLog, photos, costBreakdown, visitReport, visitSummaryText, receipt });
+  // v1.127.1 — the visit sheet showed Edit on the instructions to anyone in the family role,
+  // and the server then refused most of them. Ask the server's own rule instead.
+  let canEditInstructions = false;
+  try {
+    if (!["completed", "cancelled"].includes(session.status)) {
+      const who = await db.prepare(`
+        SELECT cr.family_user_id AS owner_id, ${trustedLinkedIdSql("cr")} AS recipient_user_id,
+               cp.user_id AS caregiver_user_id
+          FROM care_sessions cs
+          LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+          LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+         WHERE cs.id = ?
+      `).get(req.params.id);
+      canEditInstructions = await mayEditInstructions(db, { ...session, ...who }, req.user.id,
+        req.user.activeRole || req.user.role);
+    }
+  } catch (e) { captureException(e, { where: "sessions: canEditInstructions" }); }
+
+  res.json({ session, visitLog, photos, costBreakdown, visitReport, visitSummaryText, receipt, canEditInstructions });
 });
 
 // ═══════════════════════════════════════════════════════════════════════

@@ -37,6 +37,10 @@ const { v4: uuid } = require("uuid");
 
 jest.setTimeout(180000);
 
+// v1.127.1 — this was a fixed "2026-11-10". The day it passed, every quote became a short-notice
+// rush (+20%) and the fee assertions failed for reasons that had nothing to do with fee rates.
+const VISIT_DATE = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+
 let h, db, acct, admin;
 
 async function trustThisNetwork(as) {
@@ -76,7 +80,7 @@ async function visit({ recipientId, bookedBy, profileId, status = "confirmed", c
     INSERT INTO care_sessions
       (id, care_recipient_id, family_user_id, caregiver_id, service_type, status,
        scheduled_date, scheduled_time, duration_hours, proposed_rate, estimated_cost, completed_at, created_at)
-    VALUES (?, ?, ?, ?, 'companionship', ?, '2026-11-10', '10:00', 8, 22, ?, ${completed ? "NOW()" : "NULL"}, NOW())
+    VALUES (?, ?, ?, ?, 'companionship', ?, '${VISIT_DATE}', '10:00', 8, 22, ?, ${completed ? "NOW()" : "NULL"}, NOW())
   `).run(id, recipientId, bookedBy, profileId, status, cost);
   return id;
 }
@@ -185,7 +189,7 @@ describe("what the card is charged", () => {
     const f = await familyWithCaregiver("Quote");
     await setSpecialFee(f.family.user.id, { percent: 7 });
     const res = await h.request
-      .get(`/api/sessions/cost-preview?scheduledDate=2026-11-10&scheduledTime=10:00&durationHours=8&proposedRate=22&careRecipientId=${f.recipientId}`)
+      .get(`/api/sessions/cost-preview?scheduledDate=${VISIT_DATE}&scheduledTime=10:00&durationHours=8&proposedRate=22&careRecipientId=${f.recipientId}`)
       .set(h.auth(f.family.token));
     expect(res.status).toBe(200);
     expect(res.body.platformFeePercent).toBe(7);
@@ -211,7 +215,7 @@ describe("nothing else moves — Pete: the tech adds must not mess up the rest o
     const sid = await visit({ recipientId: f.recipientId, bookedBy: f.family.user.id, profileId: f.profileId });
 
     const prev = await h.request
-      .get(`/api/sessions/cost-preview?scheduledDate=2026-11-10&scheduledTime=10:00&durationHours=8&proposedRate=22&careRecipientId=${f.recipientId}`)
+      .get(`/api/sessions/cost-preview?scheduledDate=${VISIT_DATE}&scheduledTime=10:00&durationHours=8&proposedRate=22&careRecipientId=${f.recipientId}`)
       .set(h.auth(f.family.token));
     expect(prev.body.platformFeePercent).toBe(20);
     expect(prev.body.platformFee).toBeCloseTo(35.2, 2);

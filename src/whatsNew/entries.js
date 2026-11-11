@@ -31,6 +31,22 @@ const WINDOW_DAYS = 45;
 
 const ENTRIES = [
   {
+    id: "team-instructions",
+    version: "1.127.1",
+    date: "2026-11-11",
+    audience: ["family"],
+    title: "More of the team can leave caregiver instructions",
+    body: "Anyone on the care team who can schedule appointments can now leave instructions for a caregiver's visit, not just the person who booked it. The caregiver is asked to read them at check-in.",
+    howTo: [
+      "Open the visit from Home or the calendar",
+      "Under Caregiver Instructions, tap Edit",
+      "Write what the caregiver should know and tap Save",
+      "No Edit button? Ask the care team leader for scheduling access",
+    ],
+    examples: ["Lunch at noon, please", "She has a hair appointment at 2", "The mail key is on the hook by the door"],
+    preview: "teamInstructions",
+  },
+  {
     id: "mileage-legs",
     version: "1.127.0",
     date: "2026-10-31",
