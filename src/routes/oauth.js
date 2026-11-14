@@ -635,10 +635,21 @@ router.post("/complete-signup", async (req, res) => {
   try {
     const db = await getDb();
     const bcrypt = require("bcryptjs");
-    const passwordHash = await bcrypt.hash(password, 10);
+    // App Review, Guideline 4 (Nov 2026): an Apple/Google sign-up is never asked for a
+    // password. It gets an unguessable one nobody knows; "Forgot password" can set a real one
+    // later. A password the client still sends (an older cached page) is honoured.
+    const passwordHash = await bcrypt.hash(
+      (typeof password === "string" && password.length >= 8) ? password : crypto.randomBytes(32).toString("hex"),
+      10,
+    );
     const userId = uuid();
-    const finalFirst = firstName || data.firstName;
-    const finalLast = lastName || data.lastName;
+    // Name: what the person typed, else what the provider sent, else a neutral placeholder
+    // they can change in My Account. Apple only sends a name on the very first authorization
+    // and the person may decline to share it — we may not require it again.
+    const clean = (v) => (typeof v === "string" ? v.trim().slice(0, 80) : "");
+    let finalFirst = clean(firstName) || clean(data.firstName);
+    let finalLast = clean(lastName) || clean(data.lastName);
+    if (!finalFirst && !finalLast) { finalFirst = "InPlace"; finalLast = "Member"; }
     const roles = JSON.stringify([role]);
 
     // Email is already verified by Google/Apple — no confirmation email needed.
@@ -736,3 +747,5 @@ router.get("/config", (req, res) => {
 });
 
 module.exports = router;
+// Tests only: seed a pending OAuth sign-up without a live Apple/Google round trip.
+module.exports._pendingSignups = oauthSignups;

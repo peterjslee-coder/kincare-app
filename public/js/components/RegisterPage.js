@@ -1,8 +1,17 @@
-const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmail, prefilledRole, signupToken, pendingInviteToken, sandboxMode, oauthSignupCode, prefilledFirstName, prefilledLastName }) => {
+const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmail, prefilledRole, signupToken, pendingInviteToken, sandboxMode, oauthSignupCode, prefilledFirstName, prefilledLastName, oauthProvider }) => {
   // ─── State ───
   const [track, setTrack] = useState(prefilledRole === 'caregiver' ? 'caregiver' : prefilledRole === 'family' ? 'family' : prefilledRole === 'care_for' ? 'care_for' : null);
   const [step, setStep] = useState(prefilledRole ? 2 : 1); // Step 1 = role picker, Step 2 = basic info
   const isOAuthSignup = !!oauthSignupCode;
+  // App Review, Guideline 4 (Nov 2026 rejection): after Sign in with Apple, we may not ask again
+  // for anything Apple already gave us. So on an Apple/Google sign-up:
+  //   - email: never shown as a field (the provider verified it) — a "Signed in with …" line instead
+  //   - password: never asked (they sign in with Apple/Google; "Forgot password" sets one later)
+  //   - name: hidden when the provider sent one; when it didn't (Apple only sends it on the very
+  //     first authorization, and the person may decline), shown but OPTIONAL
+  // Date of birth and phone are InPlace's own questions — the provider supplies neither.
+  const providerName = oauthProvider === 'google' ? 'Google' : 'Apple';
+  const providerGaveName = isOAuthSignup && !!((prefilledFirstName || '').trim() || (prefilledLastName || '').trim());
   const [formData, setFormData] = useState({
     firstName: prefilledFirstName || '', lastName: prefilledLastName || '', email: prefilledEmail || '', password: '', dateOfBirth: '',
     confirmPassword: '',
@@ -55,6 +64,11 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
 
   const getBasicInfoErrors = () => {
     const errs = [];
+    if (isOAuthSignup) {
+      if (!formData.dateOfBirth) errs.push('Date of birth');
+      if (!formData.phone.trim()) errs.push('Phone number');
+      return errs;
+    }
     if (!formData.firstName.trim()) errs.push('First name');
     if (!formData.lastName.trim()) errs.push('Last name');
     if (!formData.dateOfBirth) errs.push('Date of birth');
@@ -67,6 +81,7 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
   };
 
   const isBasicInfoValid = () => {
+    if (isOAuthSignup) return !!(formData.dateOfBirth && formData.phone.trim());
     return formData.firstName.trim() && formData.lastName.trim() && formData.dateOfBirth &&
            isValidEmail(formData.email) && formData.phone.trim() &&
            formData.password.length >= 8 && /[A-Z]/.test(formData.password) && /[0-9]/.test(formData.password) && /[^A-Za-z0-9]/.test(formData.password) &&
@@ -126,7 +141,7 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
     try {
       const endpoint = isOAuthSignup ? '/api/oauth/complete-signup' : '/api/auth/register';
       const payload = isOAuthSignup
-        ? { code: oauthSignupCode, role, firstName: formData.firstName, lastName: formData.lastName, phone: normalizePhone(formData.phone), password: formData.password, dateOfBirth: formData.dateOfBirth }
+        ? { code: oauthSignupCode, role, firstName: formData.firstName.trim(), lastName: formData.lastName.trim(), phone: normalizePhone(formData.phone), dateOfBirth: formData.dateOfBirth }
         : { email: formData.email, password: formData.password, firstName: formData.firstName, lastName: formData.lastName, phone: normalizePhone(formData.phone), dateOfBirth: formData.dateOfBirth, role, ...(authHint ? { authHint } : {}), ...(signupToken ? { signupToken } : {}) };
       const response = await apiFetch(endpoint, {
         method: 'POST',
@@ -612,6 +627,26 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
                 </div>
               </div>
             )}
+            {isOAuthSignup && (
+              <div style={{ padding: '12px 16px', borderRadius: 10, marginBottom: 16, background: 'var(--bg-highlight)', border: '1px solid var(--border-color, #d0e8e0)', fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.5 }}>
+                Signed in with {providerName}{formData.email ? <> as <strong style={{ wordBreak: 'break-all' }}>{formData.email}</strong></> : null}.
+                {providerGaveName && <> Welcome, {(formData.firstName || '').trim() || (formData.lastName || '').trim()}.</>}
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>Two more things and you're in.</div>
+              </div>
+            )}
+            {isOAuthSignup && !providerGaveName && (
+              <>
+                <div className="form-group">
+                  <label>First Name <span style={{ color: 'var(--text-tertiary)', fontWeight: 400, fontSize: 12 }}>(optional)</span></label>
+                  <input type="text" value={formData.firstName} onChange={(e) => setFormData(p => ({ ...p, firstName: e.target.value }))} placeholder="How should we greet you?" />
+                </div>
+                <div className="form-group">
+                  <label>Last Name <span style={{ color: 'var(--text-tertiary)', fontWeight: 400, fontSize: 12 }}>(optional)</span></label>
+                  <input type="text" value={formData.lastName} onChange={(e) => setFormData(p => ({ ...p, lastName: e.target.value }))} placeholder="You can add this later in My Account" />
+                </div>
+              </>
+            )}
+            {!isOAuthSignup && (<>
             <div className="form-group">
               <label>First Name {showFieldErrors && !formData.firstName.trim() && <span style={{ color: 'var(--color-error)', fontSize: 12 }}>*required</span>}</label>
               <input type="text" value={formData.firstName} onChange={(e) => { setFormData(p => ({ ...p, firstName: e.target.value })); setShowFieldErrors(false); }} placeholder="Your first name" autoFocus style={showFieldErrors && !formData.firstName.trim() ? { borderColor: 'var(--color-error)', background: 'var(--bg-accent-light)' } : {}} />
@@ -620,6 +655,7 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
               <label>Last Name {showFieldErrors && !formData.lastName.trim() && <span style={{ color: 'var(--color-error)', fontSize: 12 }}>*required</span>}</label>
               <input type="text" value={formData.lastName} onChange={(e) => { setFormData(p => ({ ...p, lastName: e.target.value })); setShowFieldErrors(false); }} placeholder="Your last name" style={showFieldErrors && !formData.lastName.trim() ? { borderColor: 'var(--color-error)', background: 'var(--bg-accent-light)' } : {}} />
             </div>
+            </>)}
             {/* v1.105.8 — age gate. The app collected no date of birth anywhere and enforced no
                 minimum age, while claiming under-13s weren't intended users. Both app stores make
                 you declare an age rating, so it has to be true. Server enforces; this is the form. */}
@@ -630,11 +666,13 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
                 You must be at least 13 to have an InPlace account. A parent or guardian can add a younger family member to a care team without an account.
               </div>
             </div>
+            {!isOAuthSignup && (
             <div className="form-group">
               <label>Email {showFieldErrors && (!formData.email.trim() || !isValidEmail(formData.email)) && <span style={{ color: 'var(--color-error)', fontSize: 12 }}>*required</span>}</label>
               <input type="email" value={formData.email} onChange={(e) => { setFormData(p => ({ ...p, email: e.target.value })); setShowFieldErrors(false); }} placeholder="you@example.com" disabled={!!prefilledEmail} style={prefilledEmail ? { background: 'var(--badge-muted-bg)', color: 'var(--text-secondary)' } : showFieldErrors && (!formData.email.trim() || !isValidEmail(formData.email)) ? { borderColor: 'var(--color-error)', background: 'var(--bg-accent-light)' } : {}} />
               {formData.email && !isValidEmail(formData.email) ? <div style={{ fontSize: '12px', color: 'var(--color-error)', marginTop: '4px' }}>Please enter a valid email address</div> : <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginTop: '4px' }}>Used to verify your account and for future payments</div>}
             </div>
+            )}
             <div className="form-group">
               <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span>Phone Number {showFieldErrors && !formData.phone.trim() && <span style={{ color: 'var(--color-error)', fontSize: 12 }}>*required</span>}</span>
@@ -646,6 +684,7 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
               {intlPhone && <div style={{ fontSize: 11, color: 'var(--accent-color)', marginTop: 4, lineHeight: 1.4 }}>{INTL_PHONE_DISCLAIMER}</div>}
               {!intlPhone && <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginTop: '4px' }}>For care coordination and emergencies</div>}
             </div>
+            {!isOAuthSignup && (<>
             <div className="form-group">
               <label>Password {showFieldErrors && (formData.password.length < 8 || !/[A-Z]/.test(formData.password) || !/[0-9]/.test(formData.password) || !/[^A-Za-z0-9]/.test(formData.password)) && <span style={{ color: 'var(--color-error)', fontSize: 12 }}>*see requirements below</span>}</label>
               <input type="password" value={formData.password} onChange={(e) => { setFormData(p => ({ ...p, password: e.target.value })); setShowFieldErrors(false); }} placeholder="Create a strong password" style={showFieldErrors && (formData.password.length < 8 || !/[A-Z]/.test(formData.password) || !/[0-9]/.test(formData.password) || !/[^A-Za-z0-9]/.test(formData.password)) ? { borderColor: 'var(--color-error)', background: 'var(--bg-accent-light)' } : formData.password.length >= 8 && /[A-Z]/.test(formData.password) && /[0-9]/.test(formData.password) && /[^A-Za-z0-9]/.test(formData.password) ? { borderColor: 'var(--role-color)', background: 'var(--bg-highlight)' } : {}} />
@@ -666,6 +705,7 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
               {formData.confirmPassword && formData.password === formData.confirmPassword && <div style={{ fontSize: '12px', color: 'var(--role-color)', marginTop: '4px' }}>Passwords match</div>}
               {formData.confirmPassword && formData.password !== formData.confirmPassword && <div style={{ fontSize: '12px', color: 'var(--color-error)', marginTop: '4px' }}>Passwords don't match</div>}
             </div>
+            </>)}
           </>
         )}
 

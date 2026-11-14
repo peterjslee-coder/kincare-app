@@ -1505,7 +1505,7 @@ const App = () => {
         .then(r => r.json().then(data => ({ ok: r.ok, data })))
         .then(({ ok, data }) => {
           if (ok && data.email) {
-            setSignupPrefill({ email: data.email, firstName: data.firstName, lastName: data.lastName, oauthSignupCode: oauthSignupCode });
+            setSignupPrefill({ email: data.email, firstName: data.firstName, lastName: data.lastName, oauthSignupCode: oauthSignupCode, oauthProvider: data.provider });
             setAppState('register');
           } else {
             setVerifyMessage({ type: 'error', text: 'Sign-up link expired. Please try again.' });
@@ -1925,7 +1925,7 @@ const App = () => {
       </div>
     </div>,
     login: <LoginPage onLogin={handleLogin} onNavigate={handleNavigate} banner={verifyMessage} onDismissBanner={() => setVerifyMessage(null)} inviteInfo={inviteInfo} />,
-    register: <RegisterPage onLogin={handleLogin} onNavigate={handleNavigate} prefilledEmail={signupPrefill?.email || inviteInfo?.email} prefilledRole={signupPrefill?.role || (inviteInfo?.role === 'helper' ? 'helper' : null) || new URLSearchParams(window.location.search).get('role')} signupToken={signupPrefill?.signupToken} pendingInviteToken={pendingInviteToken} sandboxMode={!!window.__sandboxMode} oauthSignupCode={signupPrefill?.oauthSignupCode} prefilledFirstName={signupPrefill?.firstName} prefilledLastName={signupPrefill?.lastName} />,
+    register: <RegisterPage onLogin={handleLogin} onNavigate={handleNavigate} prefilledEmail={signupPrefill?.email || inviteInfo?.email} prefilledRole={signupPrefill?.role || (inviteInfo?.role === 'helper' ? 'helper' : null) || new URLSearchParams(window.location.search).get('role')} signupToken={signupPrefill?.signupToken} pendingInviteToken={pendingInviteToken} sandboxMode={!!window.__sandboxMode} oauthSignupCode={signupPrefill?.oauthSignupCode} prefilledFirstName={signupPrefill?.firstName} prefilledLastName={signupPrefill?.lastName} oauthProvider={signupPrefill?.oauthProvider} />,
     'forgot-password': <ForgotPasswordPage onNavigate={handleNavigate} />,
     'reset-password': <ResetPasswordPage token={resetToken} onNavigate={handleNavigate} />,
     'consent-response': <ConsentResponsePage token={consentResponseToken} />,

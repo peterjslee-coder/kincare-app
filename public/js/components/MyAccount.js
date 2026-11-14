@@ -1,6 +1,12 @@
 // ─── Delete Account Section ───
-const DeleteAccountSection = ({ onDeleted }) => {
-  const [step, setStep] = useState('idle'); // idle → reason → confirm → goodbye
+// App Review, Guideline 5.1.1(v) (Nov 2026 rejection): "does not include an option to initiate
+// account deletion". It did — but it was hidden on demo accounts, and reviewers sign in with
+// demo accounts, so they never saw it. A demo account now walks the same flow end to end; only
+// the last step differs: the shared demo account itself is not deleted (other people are using
+// it), and the screen says plainly what would happen on a real account. Server still refuses
+// DELETE /api/auth/me for is_demo users (auth.js).
+const DeleteAccountSection = ({ onDeleted, isDemo }) => {
+  const [step, setStep] = useState('idle'); // idle → reason → confirm → goodbye | demo_done
   const [reason, setReason] = useState('');
   const [reasonDetail, setReasonDetail] = useState('');
   const [confirmText, setConfirmText] = useState('');
@@ -19,6 +25,7 @@ const DeleteAccountSection = ({ onDeleted }) => {
 
   const handleDelete = async () => {
     if (confirmText !== 'DELETE') return;
+    if (isDemo) { setStep('demo_done'); return; }
     setDeleting(true);
     setError(null);
     try {
@@ -41,6 +48,23 @@ const DeleteAccountSection = ({ onDeleted }) => {
   };
 
   const reset = () => { setStep('idle'); setReason(''); setReasonDetail(''); setConfirmText(''); setError(null); };
+
+  if (step === 'demo_done') {
+    return (
+      <div style={{ marginTop: 20, paddingTop: 20, borderTop: '1px solid #e0e0e0' }}>
+        <div style={{ padding: '20px', background: 'var(--bg-highlight)', borderRadius: '12px', border: '1px solid #d0e8e0' }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>This is a shared demo account</div>
+          <p style={{ fontSize: 14, color: 'var(--text-secondary)', margin: '0 0 8px', lineHeight: 1.6 }}>
+            Other people are exploring it right now, so it was not deleted.
+          </p>
+          <p style={{ fontSize: 14, color: 'var(--text-secondary)', margin: '0 0 14px', lineHeight: 1.6 }}>
+            On your own account, this button permanently deletes your account and signs you out. Some records may be kept where the law or safety requires.
+          </p>
+          <button onClick={reset} style={{ padding: '10px 16px', background: 'var(--badge-muted-bg)', color: 'var(--text-secondary)', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Done</button>
+        </div>
+      </div>
+    );
+  }
 
   if (step === 'goodbye') {
     return (
@@ -2749,10 +2773,9 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
         <span style={{ marginLeft: 'auto', color: '#aab', fontSize: 18 }}>›</span>
       </button>
 
-      {/* Delete Account — not for demo accounts */}
-      {!isDemo && (
-        <DeleteAccountSection onDeleted={handleLogoutFromAccount} />
-      )}
+      {/* Delete Account — on EVERY account, demo included (App Review 5.1.1(v), Nov 2026).
+          A demo account walks the whole flow; the last step explains instead of deleting. */}
+      <DeleteAccountSection onDeleted={handleLogoutFromAccount} isDemo={!!isDemo} />
 
       <div style={{ textAlign: 'center', marginTop: 10, marginBottom: 20, fontSize: 11, color: 'var(--text-muted)' }}>
         v{window.APP_VERSION || '?'}
