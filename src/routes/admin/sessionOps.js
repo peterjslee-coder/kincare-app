@@ -82,6 +82,22 @@ router.post("/sessions/:id/restore", async (req, res) => {
       WHERE id = ?
     `).run(restoreStatus, req.params.id);
 
+    // v1.127.4 — the cancellation voided the card hold. A restored visit needs a live one
+    // before the caregiver can check in (sessions.js, "no card hold, no check-in"), so place it
+    // now rather than at the door. authorizeSessionPayment clears the voided hold first.
+    // Failure is reported, not fatal: check-in retries, and the family is told if it fails.
+    let hold = null;
+    if (session.payment_status === "voided" && !session.payment_captured_at) {
+      try {
+        const acct = require("../accountability");
+        const r = await acct.authorizeSessionPayment(req.params.id, { manual: true });
+        hold = r && r.error ? { placed: false, error: r.error } : { placed: true };
+      } catch (e) {
+        hold = { placed: false, error: e.message };
+        captureException(e, { where: "admin restore: re-hold", sessionId: req.params.id });
+      }
+    }
+
     // If check-in time provided, create or update the visit_log
     if (checkInTime && session.caregiver_profile_id) {
       const existingLog = await db.prepare("SELECT id FROM visit_logs WHERE session_id = ?").get(req.params.id);
@@ -109,7 +125,12 @@ router.post("/sessions/:id/restore", async (req, res) => {
     });
 
     console.log(`[admin] Restored session ${req.params.id.slice(0, 8)} → ${restoreStatus} (was: cancelled by ${session.cancelled_by || 'unknown'})${checkInTime ? ` (check-in: ${checkInTime})` : ''} by ${req.user.email}`);
-    res.json({ success: true, message: `Session restored to ${restoreStatus}${checkInTime ? ` with check-in at ${checkInTime}` : ''}` });
+    res.json({
+      success: true,
+      message: `Session restored to ${restoreStatus}${checkInTime ? ` with check-in at ${checkInTime}` : ''}`
+        + (hold ? (hold.placed ? " — new card hold placed" : ` — card hold NOT placed (${hold.error}); the family will be asked at check-in`) : ""),
+      hold,
+    });
   } catch (err) {
     console.error("Restore session error:", err);
     res.status(500).json({ error: "Failed to restore session" });

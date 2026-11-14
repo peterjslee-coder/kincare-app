@@ -106,7 +106,7 @@ describe("an idempotency key must change when the request changes", () => {
     // hours, and every corrected retry came back "Keys for idempotent requests can only be
     // used with the same parameters they were first used with."
     // v1.117.0 — and the attempt number, which only a decline advances (utils/holdDecline.js).
-    expect(a).toMatch(/idempotencyKey: `inplace_authhold_\$\{sessionId\}_\$\{totalCents\}_\$\{pm\.id\}_a\$\{holdAttempt\}`/);
+    expect(a).toMatch(/idempotencyKey: `inplace_authhold_\$\{sessionId\}_\$\{totalCents\}_\$\{pm\.id\}_a\$\{holdAttempt\}\$\{reholdAfterVoid\}`/);
   });
 
   test("it still keys on session AND amount, so a duplicate hold is still impossible", () => {

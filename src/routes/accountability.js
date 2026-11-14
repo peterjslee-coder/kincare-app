@@ -100,6 +100,29 @@ async function authorizeSessionPayment(sessionId, opts = {}) {
     `).get(sessionId);
 
     if (!session) return { error: "Session not found" };
+
+    // ─── v1.127.4 — a VOIDED hold is not a hold ───
+    //
+    // Nov 14, Tina's visit with Betty. She arrived late; the no-show sweep cancelled the visit
+    // and voided the card hold (payment_status 'voided') but left stripe_payment_intent_id
+    // pointing at the dead PaymentIntent. Pete restored the visit from Admin. At the door,
+    // check-in found no live hold and asked for one, and this function answered "Already
+    // authorized" because the id was still there — so check-in refused, and the family was
+    // told their card was the problem. The card was fine; the hold had been cancelled by us.
+    //
+    // A voided, never-captured hold is cleared here and a fresh one placed. The idempotency
+    // key for that new hold carries the void's timestamp: within Stripe's 24-hour key memory,
+    // the same session + amount + card + attempt would otherwise replay the CANCELLED intent.
+    let reholdAfterVoid = "";
+    if (session.stripe_payment_intent_id && session.payment_status === "voided" && !session.payment_captured_at) {
+      reholdAfterVoid = `_rv${session.payment_voided_at ? new Date(session.payment_voided_at).getTime() : Date.now()}`;
+      await db.prepare(`
+        UPDATE care_sessions SET stripe_payment_intent_id = NULL, payment_status = NULL,
+          payment_voided_at = NULL, authorized_amount = NULL
+         WHERE id = ? AND payment_status = 'voided' AND payment_captured_at IS NULL
+      `).run(sessionId);
+      session.stripe_payment_intent_id = null;
+    }
     if (session.stripe_payment_intent_id) return { error: "Already authorized" };
 
     // v1.105.124 — charge whoever actually pays. `processOverduePayments` has always
@@ -261,7 +284,7 @@ async function authorizeSessionPayment(sessionId, opts = {}) {
       // below). Stripe replays a cached decline for 24 hours, so without it no retry — not the
       // poller's, not a person's after moving money in — could reach the bank until the next
       // day. A timeout leaves the number alone, so an attempt that did land is replayed.
-      idempotencyKey: `inplace_authhold_${sessionId}_${totalCents}_${pm.id}_a${holdAttempt}`,
+      idempotencyKey: `inplace_authhold_${sessionId}_${totalCents}_${pm.id}_a${holdAttempt}${reholdAfterVoid}`,
     });
 
     // Store authorization on session
