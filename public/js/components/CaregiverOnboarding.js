@@ -1231,8 +1231,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
                 later step arrives pre-filled rather than asking twice. */}
             <div style={fieldGroup}>
               <label style={labelStyle}>Date of Birth *</label>
-              <input type="date" style={errors.dateOfBirth ? inputErrorStyle : inputStyle}
-                value={form.dateOfBirth} onChange={(e) => updateForm('dateOfBirth', e.target.value)} />
+              <DateOfBirthInput value={form.dateOfBirth} onChange={(v) => updateForm('dateOfBirth', v)} invalid={!!errors.dateOfBirth} />
               {errors.dateOfBirth && <div style={errorStyle}>{errors.dateOfBirth}</div>}
               <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>
                 You must be at least 13 to have an InPlace account.
@@ -1512,8 +1511,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
             <div style={rowStyle}>
               <div style={fieldGroup}>
                 <label style={labelStyle}>Date of Birth *</label>
-                <input type="date" style={errors.dateOfBirth ? inputErrorStyle : inputStyle} value={form.dateOfBirth}
-                  onChange={(e) => updateForm('dateOfBirth', e.target.value)} />
+                <DateOfBirthInput value={form.dateOfBirth} onChange={(v) => updateForm('dateOfBirth', v)} invalid={!!errors.dateOfBirth} />
                 {errors.dateOfBirth && <div style={errorStyle}>{errors.dateOfBirth}</div>}
               </div>
               <div style={fieldGroup}>

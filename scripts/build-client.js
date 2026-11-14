@@ -46,6 +46,7 @@ const scripts = [
   "js/components/SplashPage.js",
   "js/components/InviteLandingPage.js",
   "js/components/LoginPage.js",
+  "js/components/DateOfBirthInput.js", // v1.127.3 — Month/Day/Year; RegisterPage + CaregiverOnboarding
   "js/components/RegisterPage.js",
   "js/components/ForgotPasswordPage.js",
   "js/components/ResetPasswordPage.js",

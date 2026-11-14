@@ -1083,6 +1083,28 @@ const App = () => {
     return cleanup;
   }, []);
 
+  // ─── v1.127.3 — waiting for approval: check, don't only listen ───
+  // The socket event below is the fast path, but it only lands if the app is open and connected
+  // at the moment an admin approves. On a phone it usually isn't: the person taps the
+  // "approved" push, the app comes back, and the screen still says Pending until they log out
+  // and in. So while pending, re-check every 20 s and whenever the app comes to the front.
+  const pendingApproval = !!(currentUser && !currentUser.account_approved && !currentUser.isDemo && !currentUser.is_admin);
+  useEffect(() => {
+    if (!pendingApproval) return;
+    let stopped = false;
+    const check = () => {
+      if (stopped || document.visibilityState === 'hidden') return;
+      fetchMe({ force: true }).then((data) => {
+        if (!stopped && data?.user?.account_approved) setCurrentUser(prev => ({ ...prev, ...data.user, account_approved: true }));
+      }).catch(() => {});
+    };
+    const timer = setInterval(check, 20000);
+    const onVisible = () => { if (document.visibilityState === 'visible') check(); };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+    return () => { stopped = true; clearInterval(timer); document.removeEventListener('visibilitychange', onVisible); window.removeEventListener('focus', onVisible); };
+  }, [pendingApproval]);
+
   // ─── Account approved — refresh user data to unlock the app ───
   useEffect(() => {
     if (typeof onSocketEvent !== 'function') return;
@@ -2505,8 +2527,13 @@ const App = () => {
         {currentUser && currentUser.emailVerified === false && !currentUser.isDemo && !verifyMessage && currentUser.account_approved && (
           <EmailVerificationBanner userId={currentUser.id} />
         )}
-        {/* Account approval gate — show pending message for unapproved non-demo users */}
-        {currentUser && !currentUser.account_approved && !currentUser.isDemo && !currentUser.is_admin ? (
+        {/* Account approval gate — show pending message for unapproved non-demo users.
+            v1.127.3 — Pete, Nov 13: "it just sits on the screen where it shows 'home' and
+            'account' at the bottom, neither of which work." The bottom bar drew under this
+            screen and changed the page BEHIND it. Account and Help now open for real while
+            waiting — Account is also where Delete My Account lives, which App Review requires
+            to be reachable by every account (Guideline 5.1.1(v)). Home stays this screen. */}
+        {currentUser && !currentUser.account_approved && !currentUser.isDemo && !currentUser.is_admin && !['account', 'help'].includes(currentPage) ? (
           <div style={{ maxWidth: 500, margin: '60px auto', textAlign: 'center', padding: 32 }}>
             <div style={{ fontSize: 48, marginBottom: 16 }}>{'\u23F3'}</div>
             <h2 style={{ margin: '0 0 12px', fontSize: 24, fontWeight: 700, color: 'var(--text-primary)' }}>Account Pending Approval</h2>

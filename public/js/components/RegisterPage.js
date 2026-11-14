@@ -661,7 +661,7 @@ const RegisterPage = window.RegisterPage = ({ onLogin, onNavigate, prefilledEmai
                 you declare an age rating, so it has to be true. Server enforces; this is the form. */}
             <div className="form-group">
               <label>Date of Birth {showFieldErrors && !formData.dateOfBirth && <span style={{ color: 'var(--color-error)', fontSize: 12 }}>*required</span>}</label>
-              <input type="date" value={formData.dateOfBirth} onChange={(e) => { setFormData(p => ({ ...p, dateOfBirth: e.target.value })); setShowFieldErrors(false); }} style={showFieldErrors && !formData.dateOfBirth ? { borderColor: 'var(--color-error)', background: 'var(--bg-accent-light)' } : {}} />
+              <DateOfBirthInput value={formData.dateOfBirth} onChange={(v) => { setFormData(p => ({ ...p, dateOfBirth: v })); setShowFieldErrors(false); }} invalid={showFieldErrors && !formData.dateOfBirth} />
               <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>
                 You must be at least 13 to have an InPlace account. A parent or guardian can add a younger family member to a care team without an account.
               </div>

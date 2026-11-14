@@ -49,3 +49,41 @@ describe("Guideline 5.1.1(v) — deletion is visible on every account, demo incl
     expect(apiAt).toBeGreaterThan(demoAt);
   });
 });
+
+// v1.127.3 — two bugs Pete hit while recording the deletion video for App Review.
+describe("waiting for approval is not a dead end", () => {
+  const appRaw = require("./helpers/source").code("public/js/app.js");
+
+  test("Account and Help open for real while pending (Delete My Account lives in Account)", () => {
+    expect(appRaw).toMatch(/!currentUser\.account_approved && !currentUser\.isDemo && !currentUser\.is_admin && !\['account', 'help'\]\.includes\(currentPage\) \? \(/);
+  });
+
+  test("approval is noticed without the socket: polled while pending, and on return to the app", () => {
+    const block = appRaw.slice(appRaw.indexOf("const pendingApproval ="), appRaw.indexOf("// ─── Account approved — refresh user data"));
+    expect(block).toMatch(/setInterval\(check, 20000\)/);
+    expect(block).toMatch(/addEventListener\('visibilitychange', onVisible\)/);
+    expect(block).toMatch(/fetchMe\(\{ force: true \}\)/);
+    expect(block).toMatch(/data\?\.user\?\.account_approved/);
+  });
+});
+
+describe("date of birth is three dropdowns, not the native date picker", () => {
+  const { code: c } = require("./helpers/source");
+  test("signup and caregiver onboarding use DateOfBirthInput", () => {
+    expect(c("public/js/components/RegisterPage.js")).toMatch(/<DateOfBirthInput value=\{formData\.dateOfBirth\}/);
+    const onboarding = c("public/js/components/CaregiverOnboarding.js");
+    expect((onboarding.match(/<DateOfBirthInput value=\{form\.dateOfBirth\}/g) || []).length).toBe(2);
+    expect(onboarding).not.toMatch(/<input type="date"[^>]*\n?[^>]*dateOfBirth/);
+  });
+
+  test("it emits the same YYYY-MM-DD string, and nothing until all three are chosen", () => {
+    const dob = c("public/js/components/DateOfBirthInput.js");
+    expect(dob).toMatch(/next\.y && next\.m && next\.d\s*\?\s*`\$\{next\.y\}-\$\{String\(next\.m\)\.padStart\(2, '0'\)\}-\$\{String\(next\.d\)\.padStart\(2, '0'\)\}`\s*:\s*''/);
+  });
+
+  test("it is in the bundle, before its first user", () => {
+    const build = require("./helpers/source").raw("scripts/build-client.js");
+    expect(build.indexOf('"js/components/DateOfBirthInput.js"')).toBeGreaterThan(-1);
+    expect(build.indexOf('"js/components/DateOfBirthInput.js"')).toBeLessThan(build.indexOf('"js/components/RegisterPage.js"'));
+  });
+});
