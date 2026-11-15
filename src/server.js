@@ -857,7 +857,7 @@ app.use("/api/safety", require("./routes/safety"));
 
 // ─── App version check (lightweight, no auth) ───
 const { cancelPassedPrivateOffers, releaseExpiredExclusiveOffers } = require("./utils/exclusiveOffers");
-const APP_VERSION = "1.127.4";
+const APP_VERSION = "1.128.0";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION, minAppVersion: MIN_APP_VERSION });
@@ -1164,7 +1164,6 @@ async function start() {
   const { sendSessionReminders } = require("./routes/push");
   const NOTIFICATION_POLL_INTERVAL = 60 * 1000; // 1 minute
   const REMINDER_WINDOW_MINUTES = 15;
-  const OVERDUE_GRACE_MINUTES = 5; // how long after session start before "you're late" fires
   const MAX_OVERDUE_WINDOW = 60;   // stop sending overdue alerts after 60 min
 
   setInterval(guardedPoller(102, async () => {
@@ -1313,6 +1312,7 @@ async function start() {
       // Confirmed sessions where start time + grace period has passed but caregiver hasn't checked in
       const overdueCandidates = await pollDb.prepare(`
         SELECT cs.id, cs.scheduled_date, cs.scheduled_time, cs.notifications_sent,
+          cs.duration_hours, cs.flex_timing, cs.checkin_window_minutes,
           cr.timezone AS care_timezone
         FROM care_sessions cs
         LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
@@ -1320,6 +1320,7 @@ async function start() {
         LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
         LEFT JOIN users cu ON cp.user_id = cu.id
         WHERE cs.status = 'confirmed'
+          AND cs.pending_time_change_id IS NULL
           AND cs.scheduled_date BETWEEN ? AND ?
           AND (cs.notifications_sent IS NULL OR cs.notifications_sent NOT LIKE '%overdue_check_in%')
           AND (u.is_demo IS NULL OR u.is_demo = 0)
@@ -1331,8 +1332,13 @@ async function start() {
         const tz = s.care_timezone || 'America/New_York';
         const careNow = getNowInZone(tz);
         const sessionStart = buildDateTimeInZone(s.scheduled_date, s.scheduled_time, tz);
-        const overdueTime = new Date(sessionStart.getTime() + OVERDUE_GRACE_MINUTES * 60000);
-        const maxWindow = new Date(sessionStart.getTime() + MAX_OVERDUE_WINDOW * 60000);
+        // v1.128.0 — "overdue" is the visit's own check-in deadline: its arrival window
+        // (strict 10, flexible/open 30) or later if the family gave more time. A flexible 9:00
+        // visit no longer tells anyone "late" at 9:05. Giving more time clears the marker, so
+        // the alert comes again at the new deadline.
+        const { checkInDeadlineMinutes } = require("./utils/checkinWindow");
+        const overdueTime = new Date(sessionStart.getTime() + checkInDeadlineMinutes(s) * 60000);
+        const maxWindow = new Date(overdueTime.getTime() + MAX_OVERDUE_WINDOW * 60000);
         // Send if we're past grace period but within the overdue window
         if (careNow >= overdueTime && careNow <= maxWindow) {
           await sendSessionReminders(s.id, "overdue_check_in");

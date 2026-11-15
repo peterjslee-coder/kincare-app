@@ -31,6 +31,22 @@ const WINDOW_DAYS = 45;
 
 const ENTRIES = [
   {
+    id: "late-checkin-choice",
+    version: "1.128.0",
+    date: "2026-11-15",
+    audience: ["family"],
+    title: "A late check-in now asks you before anything is cancelled",
+    body: "A flexible visit now gives the caregiver 30 minutes either side of the start time to check in. If she still hasn't checked in after that, you choose what happens: give the caregiver more time, send a message, or cancel with no charge.",
+    howTo: [
+      "When you get \"hasn't checked in\", tap it (or Choose on Home)",
+      "Tap +15, +30 or +60 min to give more time",
+      "Or tap Message to ask where they are",
+      "Do nothing and the visit stays open until its scheduled end",
+    ],
+    examples: ["Running ten minutes behind, on my way", "Stuck behind a school bus"],
+    preview: "checkinChoice",
+  },
+  {
     id: "team-instructions",
     version: "1.127.1",
     date: "2026-11-11",

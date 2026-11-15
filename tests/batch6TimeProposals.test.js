@@ -74,8 +74,10 @@ describe("D2 — a time change now has an end", () => {
     expect(i).toBeGreaterThan(-1);
     const line = sess.slice(i, i + 200);
     expect(line).toMatch(/24 \* 60 \* 60 \* 1000/);          // 24h ceiling
-    expect(line).toMatch(/msToEarliestStart/);                // …or the visit's start, whichever first
-    expect(sess).toMatch(/const msToEarliestStart = Math\.min\(sessionDateTime - nowZ, newStart - nowZ\);/);
+    expect(line).toMatch(/msToDeadline/);                     // …or the visit's start, whichever first
+    expect(sess).toMatch(/let msToDeadline = Math\.min\(sessionDateTime - nowZ, newStart - nowZ\);/);
+    // v1.128.0 — asked after the original start: open until the NEW start (min 30 min), not born expired.
+    expect(sess).toMatch(/if \(msToDeadline <= 0\) msToDeadline = Math\.max\(newStart - nowZ, 30 \* 60 \* 1000\);/);
   });
 
   test("the sweeper expires them AND clears the pointer, in one transaction", () => {

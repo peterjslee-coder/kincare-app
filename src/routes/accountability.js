@@ -36,7 +36,8 @@ router.use(authenticate);
 // Latent while the setting says 20, which is the default. Not a reason to leave it.
 const { getPlatformFeePercent, lockSessionFeePercent } = require("../utils/platformFee");
 const { familyChargeFor, planCapture } = require("../utils/pricing"); // v1.107.0
-const LATE_GRACE_MINUTES = 10;
+// v1.128.0 — "late" now comes from the visit's flex terms; see utils/checkinWindow.js.
+const { arrivalWindowMinutes, checkInDeadlineMinutes, noShowCancelMinutes } = require("../utils/checkinWindow");
 const FAMILY_NO_SHOW_WAIT_MINUTES = 30;
 
 // ─── Stripe initialization (shared with payments.js) ───
@@ -1305,7 +1306,7 @@ async function pollLateCheckIns() {
     // Include care recipient timezone for accurate timing
     const sessions = await db.prepare(`
       SELECT cs.id, cs.scheduled_date, cs.scheduled_time, cs.family_user_id,
-        cs.caregiver_id, cs.late_check_in,
+        cs.caregiver_id, cs.late_check_in, cs.flex_timing,
         vl.check_in_time,
         cp.user_id AS caregiver_user_id,
         u.first_name AS cg_first,
@@ -1339,7 +1340,8 @@ async function pollLateCheckIns() {
         const checkInTime = new Date(s.check_in_time);
         const lateMinutes = Math.floor((checkInTime - scheduledStart) / 60000);
 
-        if (lateMinutes >= LATE_GRACE_MINUTES) {
+        // v1.128.0 — the visit's own arrival window (strict 10, flexible/open 30).
+        if (lateMinutes >= arrivalWindowMinutes(s.flex_timing)) {
           await db.prepare(`
             UPDATE care_sessions SET late_check_in = 1, late_minutes = ? WHERE id = ?
           `).run(lateMinutes, s.id);
@@ -1359,18 +1361,139 @@ async function pollLateCheckIns() {
 }
 
 /**
- * Detect caregiver no-shows (session start + grace period passed, no check-in).
- * Called every poll cycle from server.js.
+ * Cancel a visit the caregiver never checked in for: no charge, both sides told, caregiver
+ * paused for review, a ticket for the admin. One place, so the poller's cancel at the
+ * scheduled end and the family's "Cancel the visit" do exactly the same thing. (v1.128.0)
+ *
+ * `s` needs: id, scheduled_date, scheduled_time, family_user_id, caregiver_user_id,
+ * recipient_name, caregiver_first_name. `by` is 'system' or 'family'.
+ * Returns false if the visit was no longer waiting on a check-in (someone got there first).
+ */
+async function markCaregiverNoShow(db, s, { by = "system" } = {}) {
+  // Guarded on the state we expect, so a check-in that lands in the same moment wins.
+  const r = await db.prepare(`
+    UPDATE care_sessions SET
+      caregiver_no_show = 1,
+      caregiver_no_show_at = NOW(),
+      status = 'cancelled',
+      cancelled_at = NOW(),
+      cancelled_by = ?,
+      notifications_sent = COALESCE(notifications_sent, '') || ',no_show_flagged',
+      review_required = 1
+    WHERE id = ? AND status = 'confirmed' AND COALESCE(caregiver_no_show, 0) = 0
+  `).run(by, s.id);
+  if (!r || !r.changes) return false;
+
+  // Void the payment authorization if it exists.
+  // v1.105.48 — the result used to be dropped, and the family push below promises
+  // "no payment will be charged". If the void failed that promise was false and the
+  // hold stayed on the card, with only a console line recording it.
+  const voidedNoShow = await voidSessionPayment(s.id);
+  if (voidedNoShow?.error) {
+    captureException(new Error(`Void failed on no-show cancel: ${voidedNoShow.error}`), {
+      where: "accountability: no-show void", sessionId: s.id,
+    });
+  }
+
+  const recipientName = s.recipient_name || 'your client';
+  const familyCancelled = by === "family";
+
+  // ─── Notify caregiver that session was marked no-show ───
+  if (s.caregiver_user_id) {
+    sendPushToUser(s.caregiver_user_id, {
+      title: "Session Cancelled — No Check-In",
+      body: familyCancelled
+        ? `Your session for ${recipientName} on ${s.scheduled_date} was cancelled by the family because no check-in was recorded.`
+        : `Your session for ${recipientName} on ${s.scheduled_date} was cancelled because no check-in was recorded before its scheduled end.`,
+      data: { type: "no_show_cancelled", sessionId: s.id },
+    }, "no_show_cancelled").catch(() => {});
+    if (_emitToUser) {
+      _emitToUser(s.caregiver_user_id, "session_update", {
+        sessionId: s.id, status: "cancelled", reason: "no_show",
+        message: `Session for ${recipientName} cancelled — no check-in recorded.`,
+      });
+    }
+  }
+
+  // ─── Notify family that caregiver didn't show ───
+  // A family that cancelled it themselves already knows; they get the socket update only.
+  if (s.family_user_id) {
+    const caregiverName = s.caregiver_first_name || 'Your caregiver';
+    if (!familyCancelled) {
+      sendPushToUser(s.family_user_id, {
+        title: "Caregiver No-Show",
+        body: `${caregiverName} did not check in for ${recipientName}'s session. The session has been cancelled and no payment will be charged.`,
+        data: { type: "caregiver_no_show", sessionId: s.id },
+      }, "caregiver_no_show").catch(() => {});
+    }
+    if (_emitToUser) {
+      _emitToUser(s.family_user_id, "session_update", {
+        sessionId: s.id, status: "cancelled", reason: "caregiver_no_show",
+        message: `${caregiverName} did not check in. Session cancelled — no charge.`,
+      });
+    }
+  }
+
+  // ─── Pause caregiver's account pending admin review (only if not already paused) ───
+  try {
+    const cgProfile = await db.prepare("SELECT id, account_paused FROM caregiver_profiles WHERE user_id = ?").get(s.caregiver_user_id);
+    if (cgProfile && !cgProfile.account_paused) {
+      await db.prepare(`
+        UPDATE caregiver_profiles SET
+          is_available = 0,
+          account_paused = 1,
+          account_paused_reason = 'No-show: missed session on ' || ?,
+          account_paused_at = NOW()
+        WHERE id = ?
+      `).run(s.scheduled_date, cgProfile.id);
+      console.log(`[accountability] Paused caregiver ${s.caregiver_user_id} for no-show`);
+    } else if (cgProfile?.account_paused) {
+      console.log(`[accountability] Caregiver ${s.caregiver_user_id} already paused — skipping`);
+    }
+  } catch (pauseErr) {
+    console.error(`[accountability] Failed to pause caregiver account:`, pauseErr.message);
+  }
+
+  console.log(`[accountability] Caregiver no-show (${by}): session ${s.id.slice(0, 8)} — notified, account paused`);
+
+  // Auto-create system ticket for no-show
+  try {
+    if (ticketRouter.createSystemTicket) {
+      await ticketRouter.createSystemTicket({
+        subject: `No-show: ${s.caregiver_first_name || 'Caregiver'} missed session ${s.id.slice(0, 8)}`,
+        description: `Caregiver did not check in for scheduled session on ${s.scheduled_date} at ${s.scheduled_time}. `
+          + (familyCancelled ? "The family cancelled the visit. " : "Cancelled at the visit's scheduled end. ")
+          + "Account has been paused.",
+        category: 'visit_issue',
+        priority: 'high',
+        relatedUserId: s.caregiver_user_id,
+        relatedSessionId: s.id,
+      });
+    }
+  } catch (ticketErr) { console.error('[accountability] Failed to create no-show ticket:', ticketErr.message); }
+
+  return true;
+}
+
+/**
+ * Caregiver no-shows. Called every poll cycle from server.js.
+ *
+ * v1.128.0 — this used to CANCEL every visit 30 minutes after its start if nobody had checked
+ * in. Nov 14: Tina was on her way for a 9:00 visit the record still said was 8:00, and it was
+ * cancelled at 8:30 with her card hold voided. Now the family is ASKED when the arrival
+ * window runs out (server.js overdue alert + the Needs-you "hasn't checked in" item), and this
+ * poller only cancels once the visit's scheduled END has passed with no check-in (Pete:
+ * "Keep waiting, cancel at end"). A visit with a time change waiting on an answer is left
+ * alone entirely: its start is about to move.
  */
 async function pollCaregiverNoShows() {
   try {
     const db = await getDb();
 
-    // Find confirmed sessions past start + grace with no check-in
-    // Include care recipient timezone for accurate timing
     const sessions = await db.prepare(`
       SELECT cs.id, cs.scheduled_date, cs.scheduled_time, cs.family_user_id,
-        cs.caregiver_id, cs.caregiver_no_show,
+        cs.caregiver_id, cs.caregiver_no_show, cs.notifications_sent,
+        cs.duration_hours, cs.flex_timing, cs.checkin_window_minutes,
         cp.user_id AS caregiver_user_id,
         cr.first_name || ' ' || cr.last_name AS recipient_name,
         cr.timezone AS care_timezone,
@@ -1383,22 +1506,15 @@ async function pollCaregiverNoShows() {
       WHERE cs.status = 'confirmed'
         AND cs.caregiver_no_show = 0
         AND cs.caregiver_id IS NOT NULL
+        AND cs.pending_time_change_id IS NULL
         AND (u.is_demo IS NULL OR u.is_demo = 0)
         AND (cu.is_demo IS NULL OR cu.is_demo = 0)
         AND cs.scheduled_date IS NOT NULL
         AND cs.scheduled_time IS NOT NULL
         -- v1.105.77 — notifications_sent is a bare nullable TEXT with no default, and in SQL
-        -- NULL NOT LIKE '...' evaluates to NULL, not TRUE. So this line did not filter out
-        -- sessions already flagged; it EXCLUDED every session that had never been notified.
-        --
-        -- Which is exactly the population this poller exists for: a visit confirmed inside the
-        -- 15-minute reminder window, or confirmed after its start time, or confirmed while the
-        -- poller was down, has notifications_sent = NULL. The no-show poller has never fired
-        -- for any of them. A caregiver not turning up is the failure the whole safety
-        -- proposition is about.
-        --
-        -- The four sibling queries in server.js (pre_check_in, pre_check_out, overdue_check_in)
-        -- all guard this correctly. This one was written without the guard.
+        -- NULL NOT LIKE '...' evaluates to NULL, not TRUE. Without the IS NULL arm this
+        -- excluded every session that had never been notified — exactly the population this
+        -- poller exists for.
         AND (cs.notifications_sent IS NULL OR cs.notifications_sent NOT LIKE '%no_show_flagged%')
         AND NOT EXISTS (
           SELECT 1 FROM admin_audit_log
@@ -1415,128 +1531,34 @@ async function pollCaregiverNoShows() {
         const dateStr = s.scheduled_date.split('T')[0];
         const scheduledStart = buildDateTimeInZone(dateStr, s.scheduled_time, tz);
         const minutesPastStart = (now - scheduledStart) / 60000;
+        const deadline = checkInDeadlineMinutes(s);
+        const cancelAt = noShowCancelMinutes(s);
 
-        // After the session's FULL duration has passed (not just 10 min) — caregiver never showed
-        // We use 10 min grace after SCHEDULED END as the no-show window
-        // Actually per Pete: "the time passes, then there's no payment" — so after scheduled end + grace
-        // But for immediate flagging, we can flag as potential no-show earlier and let admin/family act
-        // ── 20-min warning: push nudge to caregiver to finish check-in ──
-        if (minutesPastStart >= 20 && minutesPastStart < 30
+        // ── A nudge to the caregiver ten minutes before the check-in deadline ──
+        if (minutesPastStart >= Math.max(0, deadline - 10) && minutesPastStart < cancelAt
             && !(s.notifications_sent || '').includes('checkin_nudge')
             && s.caregiver_user_id) {
           const nudgeRecipName = s.recipient_name || 'your client';
           sendPushToUser(s.caregiver_user_id, {
-            title: "Finish Checking In",
-            body: `You started checking in for ${nudgeRecipName} but didn't finish. Tap to complete — you'll be marked as a no-show in 10 minutes.`,
+            title: "Check In for Your Visit",
+            body: `Your visit with ${nudgeRecipName} has started. Tap to check in when you arrive.`,
             data: { type: "checkin_nudge", sessionId: s.id },
           }, "checkin_nudge").catch(() => {});
           if (_emitToUser) {
             _emitToUser(s.caregiver_user_id, "checkin_nudge", {
               sessionId: s.id,
-              message: `Complete your check-in for ${nudgeRecipName} — no-show in 10 minutes.`,
+              message: `Check in for your visit with ${nudgeRecipName} when you arrive.`,
             });
           }
           await db.prepare(`
             UPDATE care_sessions SET notifications_sent = COALESCE(notifications_sent, '') || ',checkin_nudge'
             WHERE id = ?
           `).run(s.id);
-          console.log(`[accountability] Check-in nudge sent to caregiver for session ${s.id.slice(0, 8)}`);
         }
 
-        // Flag after session start + 30 min if still not checked in
-        if (minutesPastStart >= 30) {
-          await db.prepare(`
-            UPDATE care_sessions SET
-              caregiver_no_show = 1,
-              caregiver_no_show_at = NOW(),
-              status = 'cancelled',
-              cancelled_at = NOW(),
-              cancelled_by = 'system',
-              notifications_sent = COALESCE(notifications_sent, '') || ',no_show_flagged',
-              review_required = 1
-            WHERE id = ?
-          `).run(s.id);
-
-          // Void the payment authorization if it exists.
-          // v1.105.48 — the result used to be dropped, and the family push below promises
-          // "no payment will be charged". If the void failed that promise was false and the
-          // hold stayed on the card, with only a console line recording it.
-          const voidedNoShow = await voidSessionPayment(s.id);
-          if (voidedNoShow?.error) {
-            captureException(new Error(`Void failed on no-show cancel: ${voidedNoShow.error}`), {
-              where: "accountability: no-show void", sessionId: s.id,
-            });
-          }
-
-          // ─── Notify caregiver that session was marked no-show ───
-          const recipientName = s.recipient_name || 'your client';
-          if (s.caregiver_user_id) {
-            // Push notification
-            sendPushToUser(s.caregiver_user_id, {
-              title: "Session Cancelled — No Check-In",
-              body: `Your session for ${recipientName} on ${s.scheduled_date} was cancelled because no check-in was recorded within 30 minutes of the start time.`,
-              data: { type: "no_show_cancelled", sessionId: s.id },
-            }, "no_show_cancelled").catch(() => {});
-            // WebSocket
-            if (_emitToUser) {
-              _emitToUser(s.caregiver_user_id, "session_update", {
-                sessionId: s.id, status: "cancelled", reason: "no_show",
-                message: `Session for ${recipientName} cancelled — no check-in recorded.`,
-              });
-            }
-          }
-
-          // ─── Notify family that caregiver didn't show ───
-          if (s.family_user_id) {
-            const caregiverName = s.caregiver_first_name || 'Your caregiver';
-            sendPushToUser(s.family_user_id, {
-              title: "Caregiver No-Show",
-              body: `${caregiverName} did not check in for ${recipientName}'s session. The session has been cancelled and no payment will be charged.`,
-              data: { type: "caregiver_no_show", sessionId: s.id },
-            }, "caregiver_no_show").catch(() => {});
-            if (_emitToUser) {
-              _emitToUser(s.family_user_id, "session_update", {
-                sessionId: s.id, status: "cancelled", reason: "caregiver_no_show",
-                message: `${caregiverName} did not check in. Session cancelled — no charge.`,
-              });
-            }
-          }
-
-          // ─── Pause caregiver's account pending admin review (only if not already paused) ───
-          try {
-            const cgProfile = await db.prepare("SELECT id, account_paused FROM caregiver_profiles WHERE user_id = ?").get(s.caregiver_user_id);
-            if (cgProfile && !cgProfile.account_paused) {
-              await db.prepare(`
-                UPDATE caregiver_profiles SET
-                  is_available = 0,
-                  account_paused = 1,
-                  account_paused_reason = 'No-show: missed session on ' || ?,
-                  account_paused_at = NOW()
-                WHERE id = ?
-              `).run(s.scheduled_date, cgProfile.id);
-              console.log(`[accountability] Paused caregiver ${s.caregiver_user_id} for no-show`);
-            } else if (cgProfile?.account_paused) {
-              console.log(`[accountability] Caregiver ${s.caregiver_user_id} already paused — skipping`);
-            }
-          } catch (pauseErr) {
-            console.error(`[accountability] Failed to pause caregiver account:`, pauseErr.message);
-          }
-
-          console.log(`[accountability] Caregiver no-show: session ${s.id.slice(0, 8)} — notified caregiver + family, account paused`);
-
-          // Auto-create system ticket for no-show
-          try {
-            if (ticketRouter.createSystemTicket) {
-              await ticketRouter.createSystemTicket({
-                subject: `No-show: ${s.caregiver_first || 'Caregiver'} missed session ${s.id.slice(0, 8)}`,
-                description: `Caregiver did not check in for scheduled session on ${s.scheduled_date} at ${s.scheduled_time}. Account has been paused.`,
-                category: 'visit_issue',
-                priority: 'high',
-                relatedUserId: s.caregiver_user_id,
-                relatedSessionId: s.id,
-              });
-            }
-          } catch (ticketErr) { console.error('[accountability] Failed to create no-show ticket:', ticketErr.message); }
+        // ── The visit's scheduled end came and went with no check-in ──
+        if (minutesPastStart >= cancelAt) {
+          await markCaregiverNoShow(db, s, { by: "system" });
         }
       } catch (err) {
         console.error(`[accountability] No-show poll error for ${s.id.slice(0, 8)}:`, err.message);
@@ -1821,5 +1843,6 @@ module.exports.pollCancellationFees = pollCancellationFees;
 
 module.exports.pollLateCheckIns = pollLateCheckIns;
 module.exports.pollCaregiverNoShows = pollCaregiverNoShows;
+module.exports.markCaregiverNoShow = markCaregiverNoShow; // v1.128.0 — the family's "Cancel the visit"
 module.exports.pollLateResolutionDefaults = pollLateResolutionDefaults;
 module.exports.setEmitToUser = setEmitToUser;

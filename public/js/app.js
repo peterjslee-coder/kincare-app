@@ -823,6 +823,11 @@ const App = () => {
         if (d.sessionId) window.__pendingFocus = `cancelFee:${d.sessionId}`;
         setTimeout(() => window.dispatchEvent(new Event('inplace:focus')), 0);
         target = 'dashboard';
+      } else if (t === 'overdue_check_in_family') {
+        // v1.128.0 — "hasn't checked in" opens the choice: more time, a message, or cancel.
+        if (d.sessionId) window.__pendingFocus = d.focus || `checkinOverdue:${d.sessionId}`;
+        setTimeout(() => window.dispatchEvent(new Event('inplace:focus')), 0);
+        target = 'dashboard';
       } else if (t === 'hold_declined' || t === 'payment_hold') {
         // v1.117.0 — a declined card hold opens the sheet with "Try the card again".
         if (d.sessionId) window.__pendingFocus = d.focus || `holdDeclined:${d.sessionId}`;
@@ -2611,6 +2616,7 @@ const App = () => {
       {typeof CareToolsSheet !== 'undefined' && <CareToolsSheet />}
       {/* v1.117.0 — a declined card hold: try the same card again, or use another */}
       {typeof HoldDeclinedSheet !== 'undefined' && <HoldDeclinedSheet onNavigate={setCurrentPage} />}
+      {typeof CheckinOverdueSheet !== 'undefined' && <CheckinOverdueSheet onNavigate={setCurrentPage} />}
       {(currentUser?.is_tester || currentUser?.isAdmin) && <FeedbackButton currentPage={currentPage} userRole={activeRole || currentUser?.role} currentUser={currentUser} onNavigate={setCurrentPage} />}
       {/* v1.105.194 — the caregiver's first-visit tour, above everything, across pages */}
       {tourOpen && role === 'caregiver' && typeof CaregiverTour !== 'undefined' && (

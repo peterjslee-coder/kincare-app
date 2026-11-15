@@ -79,7 +79,7 @@ const name = (first, last) => [first, last].filter(Boolean).join(" ").trim() || 
 
 const EMPTY = {
   total: 0, reimbursements: 0, timeChanges: 0, timeChangeSessionId: null,
-  careTasks: 0, approvals: 0, safetyFlags: 0, messages: 0, emptyWeeks: 0, cancelFees: 0, financialConcerns: 0, identity: 0, holdDeclined: 0, items: [],
+  careTasks: 0, approvals: 0, safetyFlags: 0, messages: 0, emptyWeeks: 0, cancelFees: 0, financialConcerns: 0, identity: 0, holdDeclined: 0, checkinOverdue: 0, items: [],
 };
 
 /**
@@ -353,6 +353,40 @@ async function attentionItemsFor(db, userId) {
                         WHERE ct.care_recipient_id = cs.care_recipient_id AND ctm.user_id = ? AND ctm.role = 'leader'))
      ORDER BY cs.scheduled_date, cs.scheduled_time
   `).all(userId, userId, userId));
+
+  // v1.128.0 — "Tina hasn't checked in". The visit's arrival window (strict 10 min, flexible/
+  // open 30, or later if the family gave more time) has passed with no check-in. Nothing is
+  // cancelled until the visit's scheduled end, so this is the family's decision to make:
+  // give more time, message her, or cancel. Same people as the declined card.
+  const overdueCandidates = await safeRows("checkinOverdue", () => db.prepare(`
+    SELECT cs.id, cs.scheduled_date, cs.scheduled_time, cs.duration_hours, cs.flex_timing,
+           cs.checkin_window_minutes, cs.service_type,
+           cr.first_name AS recipient_first, cr.timezone AS tz,
+           cu.first_name AS caregiver_first
+      FROM care_sessions cs
+      LEFT JOIN care_recipients cr ON cr.id = cs.care_recipient_id
+      JOIN caregiver_profiles cp ON cp.id = cs.caregiver_id
+      LEFT JOIN users cu ON cu.id = cp.user_id
+     WHERE cs.status = 'confirmed'
+       AND cs.pending_time_change_id IS NULL
+       AND cs.scheduled_time IS NOT NULL
+       AND cs.scheduled_date >= TO_CHAR((NOW() - INTERVAL '1 day') AT TIME ZONE 'America/New_York', 'YYYY-MM-DD')
+       AND cs.scheduled_date <= TO_CHAR((NOW() + INTERVAL '1 day') AT TIME ZONE 'America/New_York', 'YYYY-MM-DD')
+       AND (cs.family_user_id = ?
+            OR EXISTS (SELECT 1 FROM care_teams ct WHERE ct.care_recipient_id = cs.care_recipient_id AND ct.billing_user_id = ?)
+            OR EXISTS (SELECT 1 FROM care_team_members ctm JOIN care_teams ct ON ct.id = ctm.care_team_id
+                        WHERE ct.care_recipient_id = cs.care_recipient_id AND ctm.user_id = ? AND ctm.role = 'leader'))
+     ORDER BY cs.scheduled_date, cs.scheduled_time
+  `).all(userId, userId, userId));
+  const checkinOverdueRows = overdueCandidates.filter((r) => {
+    try {
+      const { checkInDeadlineMinutes, noShowCancelMinutes } = require("./checkinWindow");
+      const { getNowInZone, buildDateTimeInZone } = require("./timezone");
+      const tz = r.tz || DEFAULT_TIMEZONE;
+      const past = (getNowInZone(tz) - buildDateTimeInZone(String(r.scheduled_date).split("T")[0], r.scheduled_time, tz)) / 60000;
+      return past >= checkInDeadlineMinutes(r) && past < noShowCancelMinutes(r);
+    } catch { return false; }
+  });
 
   const owedFeeRows = await safeRows("owedCancelFees", () => db.prepare(`
     SELECT cs.id, cs.cancel_fee_cents, cs.cancel_fee_deadline, cs.scheduled_date,
@@ -734,6 +768,22 @@ async function attentionItemsFor(db, userId) {
         note: `${card.charAt(0).toUpperCase() + card.slice(1)} was declined — ${declineReason(h.hold_failure_code)}. The visit can't start until it goes through.`,
       };
     }),
+    ...checkinOverdueRows.map((r) => ({
+      kind: "checkinOverdue",
+      id: `checkinOverdue:${r.id}`,
+      sessionId: r.id,
+      title: `${r.caregiver_first || "Your caregiver"} hasn't checked in`,
+      detail: null,
+      forWhom: r.recipient_first || null,
+      serviceType: r.service_type || null,
+      tz: r.tz || null,
+      date: r.scheduled_date || null,
+      verb: "Choose",
+      action: null,
+      page: "dashboard",
+      focus: `checkinOverdue:${r.id}`,
+      note: "Give more time, send a message, or cancel. Nothing is cancelled unless you choose to, until the visit's scheduled end.",
+    })),
     ...owedFeeRows.map((f) => ({
       kind: "cancelFee",
       soft: true,
@@ -905,9 +955,11 @@ async function attentionItemsFor(db, userId) {
     // the note against the query).
     total: reimbursementRows.length + timeChanges + taskRows.length + approvalRows.length
       // v1.120.1 — unpaidRows: an approved reimbursement still to pay; the payer is the blocker.
-      + unpaidRows.length + cancelFeeRows.length + financialConcernRows.length + safetyRows.length + holdDeclinedRows.length,
+      + unpaidRows.length + cancelFeeRows.length + financialConcernRows.length + safetyRows.length + holdDeclinedRows.length
+      + checkinOverdueRows.length, // v1.128.0
     cancelFees: cancelFeeRows.length,
     holdDeclined: holdDeclinedRows.length, // v1.117.0
+    checkinOverdue: checkinOverdueRows.length, // v1.128.0
     financialConcerns: financialConcernRows.length,
     emptyWeeks: emptyWeekRows.length,
     paymentChecks: paymentArrivedRows.length, // v1.120.0, soft

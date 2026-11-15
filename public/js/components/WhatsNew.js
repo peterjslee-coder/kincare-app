@@ -25,6 +25,23 @@ const wnHead = { fontSize: 10.5, fontWeight: 700, color: 'var(--text-muted)', te
 const wnPill = (bg, fg) => ({ padding: '4px 10px', borderRadius: 8, background: bg, color: fg, fontSize: 11, fontWeight: 700 });
 
 const WN_PREVIEWS = {
+  // v1.128.0 — a late check-in asks the family instead of cancelling
+  checkinChoice: () => (
+    <div style={{ padding: '12px 12px 10px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>
+      <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>Jane hasn{'’'}t checked in</div>
+      <div style={{ fontSize: 11.5, color: 'var(--text-secondary)', margin: '2px 0 8px' }}>Mom{'’'}s visit at 9:00 AM {'·'} flexible ({'±'}30 min)</div>
+      <div style={{ ...wnHead, margin: '0 0 6px' }}><span>Give Jane more time</span></div>
+      <div style={{ display: 'flex', gap: 6 }}>
+        {['+15 min', '+30 min', '+60 min'].map((t) => (
+          <span key={t} style={{ ...wnPill('var(--accent-color-dark)', 'var(--text-on-primary)'), flex: 1, textAlign: 'center' }}>{t}</span>
+        ))}
+      </div>
+      <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+        <span style={{ ...wnPill('var(--bg-surface)', 'var(--text-primary)'), flex: 1, textAlign: 'center', border: '1px solid var(--border-color)' }}>Message Jane</span>
+        <span style={{ ...wnPill('var(--bg-surface)', 'var(--color-error)'), flex: 1, textAlign: 'center', border: '1px solid var(--border-color)' }}>Cancel the visit</span>
+      </div>
+    </div>
+  ),
   // v1.127.1 — anyone who can schedule can leave the caregiver instructions
   teamInstructions: () => (
     <div style={{ padding: '12px 12px 10px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>

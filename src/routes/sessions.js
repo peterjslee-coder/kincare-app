@@ -1799,7 +1799,10 @@ router.post("/:id/check-in", async (req, res) => {
         const checkInMoment = isOfflineSync ? effectiveCheckInTime : new Date();
         const scheduledStart = zonedDateTimeToInstant(session.scheduled_date.split('T')[0], session.scheduled_time, careTz);
         lateMinutes = Math.floor((checkInMoment - scheduledStart) / 60000);
-        if (lateMinutes >= 10) {
+        // v1.128.0 — late is past the visit's own arrival window: 10 min for a strict visit,
+        // 30 for a flexible one ("plus or minus 30 minutes" — Pete, 11/15).
+        const { arrivalWindowMinutes } = require("../utils/checkinWindow");
+        if (lateMinutes >= arrivalWindowMinutes(session.flex_timing)) {
           lateCheckIn = true;
           console.log(`[check-in] Late by ${lateMinutes} min (tz: ${careTz}) — session ${req.params.id.slice(0, 8)}`);
         }
@@ -3036,8 +3039,15 @@ router.post("/:id/propose-time-change", async (req, res) => {
     // off by the server's UTC offset. And a move to an EARLIER day ends the window at the
     // earlier of the two starts.
     const nowZ = getNowInZone(careTz);
-    const msToEarliestStart = Math.min(sessionDateTime - nowZ, newStart - nowZ);
-    const expiresAtMs = Date.now() + Math.max(0, Math.min(24 * 60 * 60 * 1000, msToEarliestStart));
+    let msToDeadline = Math.min(sessionDateTime - nowZ, newStart - nowZ);
+    // v1.128.0 — a change asked for AFTER the visit was due to start. Nov 14: Tina had
+    // accepted 8:00 by mistake; at ~8:15 Pete asked to move it to 9:00. The deadline above was
+    // "the original start", already 15 minutes gone, so the request was born expired — the
+    // sweeper (every 10 min, and on any dashboard load) cleared it, the visit stayed at 8:00,
+    // and the no-show poller cancelled it at 8:30 while she was on her way for 9:00. Once the
+    // original start has passed, the request stays open until the NEW start (at least 30 min).
+    if (msToDeadline <= 0) msToDeadline = Math.max(newStart - nowZ, 30 * 60 * 1000);
+    const expiresAtMs = Date.now() + Math.max(0, Math.min(24 * 60 * 60 * 1000, msToDeadline));
     const expiresAt = new Date(expiresAtMs).toISOString();
 
     // v1.106.13 — one transaction. The INSERT and the pointer that makes it findable are one
@@ -3980,6 +3990,165 @@ router.post("/:id/retry-hold", blockWhileImpersonating("retry a family's card"),
   } catch (err) {
     captureException(err, { where: "sessions: retry-hold" });
     res.status(500).json({ error: "We couldn't retry the card just now." });
+  }
+});
+
+// ─── "Hasn't checked in" — give more time, message, or cancel (v1.128.0) ───
+//
+// Pete, 11/15: "I want an 'extend the check in?' and 'text Tina?' after the terms of the
+// appointment are up." The family is asked once the visit's arrival window has passed
+// (utils/checkinWindow.js); nothing is cancelled for a missed check-in until the visit's
+// scheduled end unless they choose to. Same people as the card hold: the person who booked,
+// the payer, the care team leader (holdViewer).
+
+async function overdueView(db, sessionId, userId) {
+  const v = await holdViewer(db, sessionId, userId);
+  if (v.status) return v;
+  const s = await db.prepare(`
+    SELECT cs.id, cs.status, cs.scheduled_date, cs.scheduled_time, cs.duration_hours, cs.flex_timing,
+           cs.checkin_window_minutes, cs.pending_time_change_id, cs.notifications_sent, cs.family_user_id,
+           cp.user_id AS caregiver_user_id, cu.first_name AS caregiver_first_name,
+           cr.first_name AS recipient_first, cr.first_name || ' ' || cr.last_name AS recipient_name,
+           cr.timezone AS care_timezone
+      FROM care_sessions cs
+      LEFT JOIN caregiver_profiles cp ON cp.id = cs.caregiver_id
+      LEFT JOIN users cu ON cu.id = cp.user_id
+      LEFT JOIN care_recipients cr ON cr.id = cs.care_recipient_id
+     WHERE cs.id = ?
+  `).get(sessionId);
+  if (!s) return { status: 404 };
+  return { s };
+}
+
+function overdueState(s) {
+  const { checkInDeadlineMinutes, scheduledMinutes, arrivalWindowMinutes, EXTEND_CHOICES } = require("../utils/checkinWindow");
+  const tz = s.care_timezone || "America/New_York";
+  const dateStr = String(s.scheduled_date || "").split("T")[0];
+  const start = buildDateTimeInZone(dateStr, s.scheduled_time || "00:00", tz);
+  const minutesPastStart = Math.floor((getNowInZone(tz) - start) / 60000);
+  const deadline = checkInDeadlineMinutes(s);
+  const end = scheduledMinutes(s);
+  const clock = (offset) => {
+    const m = ((parseTimeToMinutes(s.scheduled_time) + offset) % 1440 + 1440) % 1440;
+    return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+  };
+  let state;
+  if (s.status === "in_progress" || s.status === "completed") state = "checked_in";
+  else if (s.status !== "confirmed") state = "closed";
+  else if (s.pending_time_change_id) state = "time_change_pending";
+  else if (minutesPastStart < deadline) state = "within_window";
+  else state = "waiting";
+  // Room left before the visit ends — the choices are offered only where they fit.
+  const roomLeft = end > 0 ? end - Math.max(deadline, minutesPastStart) : Infinity;
+  return {
+    state,
+    sessionId: s.id,
+    caregiverFirstName: s.caregiver_first_name || null,
+    caregiverUserId: s.caregiver_user_id || null,
+    recipientFirstName: s.recipient_first || null,
+    scheduledDate: dateStr || null,
+    scheduledTime: s.scheduled_time || null,
+    timezone: tz,
+    flexTiming: s.flex_timing || "strict",
+    arrivalWindowMinutes: arrivalWindowMinutes(s.flex_timing),
+    minutesPastStart,
+    deadlineTime: clock(deadline),
+    endTime: end > 0 ? clock(end) : null,
+    extendChoices: EXTEND_CHOICES.filter((m) => m <= roomLeft),
+  };
+}
+
+// GET — what the sheet shows.
+router.get("/:id/checkin-overdue", async (req, res) => {
+  try {
+    const db = await getDb();
+    const v = await overdueView(db, req.params.id, req.user.id);
+    if (v.status === 404) return res.status(404).json({ error: "Visit not found" });
+    if (v.status === 403) return res.status(403).json({ error: "Not your visit" });
+    res.json(overdueState(v.s));
+  } catch (err) {
+    captureException(err, { where: "sessions: GET checkin-overdue" });
+    res.status(500).json({ error: "Couldn't load this visit" });
+  }
+});
+
+// POST { minutes: 15 | 30 | 60 } — give her more time.
+router.post("/:id/extend-checkin", async (req, res) => {
+  try {
+    const db = await getDb();
+    const { EXTEND_CHOICES, checkInDeadlineMinutes, scheduledMinutes } = require("../utils/checkinWindow");
+    const minutes = parseInt(req.body && req.body.minutes, 10);
+    if (!EXTEND_CHOICES.includes(minutes)) {
+      return res.status(400).json({ error: `minutes must be one of ${EXTEND_CHOICES.join(", ")}` });
+    }
+    const v = await overdueView(db, req.params.id, req.user.id);
+    if (v.status === 404) return res.status(404).json({ error: "Visit not found" });
+    if (v.status === 403) return res.status(403).json({ error: "Not your visit" });
+    const s = v.s;
+    const st = overdueState(s);
+    if (st.state === "checked_in") {
+      return res.status(409).json({ ok: true, ...st, message: `${st.caregiverFirstName || "Your caregiver"} has checked in.` });
+    }
+    if (s.status !== "confirmed") return res.status(400).json({ error: "This visit isn't waiting on a check-in." });
+    if (st.minutesPastStart < 0) return res.status(400).json({ error: "The visit hasn't started yet." });
+
+    const end = scheduledMinutes(s);
+    let next = Math.max(checkInDeadlineMinutes(s), st.minutesPastStart) + minutes;
+    if (end > 0) next = Math.min(next, end);
+    if (next <= checkInDeadlineMinutes(s) && next <= st.minutesPastStart) {
+      return res.status(400).json({ error: "There's no time left in this visit to give." });
+    }
+
+    // Clearing the markers is what makes the reminder and the alert come again at the new time.
+    const { parseSent } = require("../utils/notificationsSent");
+    const kept = parseSent(s.notifications_sent).filter((t) => t !== "overdue_check_in" && t !== "checkin_nudge");
+    await db.prepare(`
+      UPDATE care_sessions SET checkin_window_minutes = ?, notifications_sent = ?, updated_at = NOW()
+       WHERE id = ? AND status = 'confirmed'
+    `).run(next, kept.length ? "," + kept.join(",") : null, s.id);
+
+    const after = overdueState({ ...s, checkin_window_minutes: next });
+    const untilLabel = formatTimeForDisplay(after.deadlineTime);
+    if (s.caregiver_user_id) {
+      const me = await db.prepare("SELECT first_name FROM users WHERE id = ?").get(req.user.id);
+      sendPushToUser(s.caregiver_user_id, {
+        title: "More time to check in",
+        body: `${(me && me.first_name) || "The family"} gave you until ${untilLabel} to check in for ${s.recipient_first || "your client"}'s visit.`,
+        data: { type: "checkin_extended", sessionId: s.id, page: "schedule" },
+      }, "checkin_extended").catch(() => {});
+      const emitToUser = req.app.get("emitToUser");
+      if (emitToUser) emitToUser(s.caregiver_user_id, "session_update", { sessionId: s.id, checkinWindowMinutes: next });
+    }
+    res.json({ ok: true, ...after, message: `${after.caregiverFirstName || "Your caregiver"} has until ${untilLabel} to check in. We told ${after.caregiverFirstName || "them"}.` });
+  } catch (err) {
+    captureException(err, { where: "sessions: extend-checkin" });
+    res.status(500).json({ error: "Couldn't give more time just now." });
+  }
+});
+
+// POST — cancel the visit: no charge, the same path as the scheduled-end no-show.
+router.post("/:id/cancel-no-show", blockWhileImpersonating("cancel a real visit as a no-show"), async (req, res) => {
+  try {
+    const db = await getDb();
+    const v = await overdueView(db, req.params.id, req.user.id);
+    if (v.status === 404) return res.status(404).json({ error: "Visit not found" });
+    if (v.status === 403) return res.status(403).json({ error: "Not your visit" });
+    const s = v.s;
+    const st = overdueState(s);
+    if (st.state === "checked_in") {
+      return res.status(400).json({ error: `${st.caregiverFirstName || "Your caregiver"} has already checked in.`, ...st });
+    }
+    if (st.state === "closed") return res.status(409).json({ ok: true, ...st, message: "This visit is already cancelled." });
+    if (st.state !== "waiting") {
+      return res.status(400).json({ error: "The check-in window hasn't run out yet. To cancel early, use Cancel visit on the visit itself." });
+    }
+    const { markCaregiverNoShow } = require("./accountability"); // lazy: circular, same as the cancel path
+    const done = await markCaregiverNoShow(db, s, { by: "family" });
+    if (!done) return res.status(409).json({ ok: true, message: "This visit was already updated." });
+    res.json({ ok: true, state: "closed", message: "Visit cancelled. Nothing will be charged." });
+  } catch (err) {
+    captureException(err, { where: "sessions: cancel-no-show" });
+    res.status(500).json({ error: "Couldn't cancel the visit just now." });
   }
 });
 

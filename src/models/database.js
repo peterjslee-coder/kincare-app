@@ -3458,6 +3458,15 @@ async function initializeDatabase() {
         `ALTER TABLE visit_trips ADD COLUMN IF NOT EXISTS start_lng REAL`,
       ],
     },
+    {
+      // v1.128.0 — the family's "give her more time". Minutes past the scheduled start by which
+      // the caregiver should have checked in; NULL means the visit's own arrival window
+      // (strict 10, flexible/open 30 — utils/checkinWindow.js).
+      id: "079_checkin_window",
+      statements: [
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS checkin_window_minutes INTEGER`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

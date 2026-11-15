@@ -21,7 +21,7 @@ const EXEMPT = new Set([
   "caregiver_no_show", "no_show_cancelled",
   "overdue_check_in", "overdue_check_in_family",
   "overdue_check_out", "overdue_check_out_family",
-  "checkin_nudge",
+  "checkin_nudge", "checkin_extended", // v1.128.0 — "you have until 9:45" is a visit in motion
   // payment action needed
   "payment_authorization_failed", "payment_method_needed", "payment_hold",
   "payment_auth_required", "payment_failed", "payment_needed",

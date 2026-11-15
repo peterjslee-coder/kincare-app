@@ -84,6 +84,7 @@ const ATTENTION_KINDS = {
   cancelFee:     { icon: '💵', chip: 'CANCELLATION FEE' },
   // v1.117.0 — the bank declined the card hold; the visit can't start until it goes through.
   holdDeclined:  { icon: '💳', chip: 'CARD DECLINED' },
+  checkinOverdue: { icon: '⏰', chip: 'NOT CHECKED IN' }, // v1.128.0
   // v1.119.1 — a check or cash reimbursement nobody has marked paid (bfbb79bd). Soft: asked,
   // never counted.
   paymentArrived: { icon: '💵', chip: 'DID IT ARRIVE?' },

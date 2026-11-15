@@ -972,10 +972,12 @@ async function sendSessionReminders(sessionId, reminderType) {
       for (const userId of teamUserIds) {
         if (userId === session.caregiver_user_id) continue;
         await sendPushToUser(userId, {
-          title: "Caregiver Late",
-          body: `${caregiverName} hasn't checked in yet for ${recipientName}'s session`,
+          // v1.128.0 — a question, not just news: the tap opens "give her more time /
+          // message her / cancel". Nothing is cancelled until the visit's scheduled end.
+          title: `${caregiverName} hasn't checked in`,
+          body: `${caregiverName} hasn't checked in for ${recipientName}'s visit yet. Tap to give more time, send a message, or cancel.`,
           tag: famTag,
-          data: { type: "overdue_check_in_family", sessionId, page: "dashboard" },
+          data: { type: "overdue_check_in_family", sessionId, page: "dashboard", focus: `checkinOverdue:${sessionId}` },
         }, "overdue_check_in_family");
       }
 
@@ -984,7 +986,7 @@ async function sendSessionReminders(sessionId, reminderType) {
         const familyUser = { phone: await accountSmsPhone(db, session.family_user_id) }; // v1.115.0 — opt-in only
         if (familyUser.phone) {
           const { sendSms } = require("../utils/sms");
-          await sendSms(familyUser.phone, `InPlace: ${caregiverName} hasn't checked in yet for ${recipientName}'s session. You may want to follow up.`);
+          await sendSms(familyUser.phone, `InPlace: ${caregiverName} hasn't checked in yet for ${recipientName}'s visit. Open InPlace to give more time, message ${caregiverName}, or cancel.`);
         }
       }
 

@@ -73,6 +73,9 @@ const EXPECTED = [
   "GET /:id/cancel-preview",
   "GET /:id/hold", // v1.117.0 — a declined card hold
   "POST /:id/retry-hold", // v1.117.0 — "Try the card again"
+  "GET /:id/checkin-overdue", // v1.128.0 — "hasn't checked in": more time / message / cancel
+  "POST /:id/extend-checkin",
+  "POST /:id/cancel-no-show",
   "GET /:id/cancel-fee",
   "POST /:id/cancel-fee/waive",
   "POST /:id/cancel-fee/dispute",

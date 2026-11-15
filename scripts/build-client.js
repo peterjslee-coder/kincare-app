@@ -58,6 +58,7 @@ const scripts = [
   "js/components/LovedOneGuide.js", // v1.121.0 — Betty's page sections + the guide bar; CareProfile uses it
   "js/components/QuietSummary.js", // v1.119.1 — the held list inside a "While you were away" Activity row; Dashboard and CaretakerHub use it
   "js/components/CancelFeeSheet.js", // v1.109.9 — mounted once in app.js; push taps and Needs-you open it
+  "js/components/CheckinOverdueSheet.js", // v1.128.0 — mounted once in app.js; "hasn't checked in": more time / message / cancel
   "js/components/HoldDeclinedSheet.js", // v1.117.0 — mounted once in app.js; a declined card hold, with "Try the card again"
   "js/components/CareToolsSheet.js", // v1.114.0 — mounted once in app.js; opens on a 403 CARE_TOOLS_LOCKED
   "js/components/CareTodos.js", // v1.109.9 — one-time to-dos; CareTasks, Dashboard and CaretakerHub draw it
