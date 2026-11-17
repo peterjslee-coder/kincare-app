@@ -235,8 +235,9 @@ function validateSession(req, res, next) {
 
   if (recurrenceWeeks !== undefined) {
     const weeks = parseInt(recurrenceWeeks);
-    if (isNaN(weeks) || weeks < 2 || weeks > 12) {
-      return res.status(400).json({ error: "Recurrence weeks must be between 2 and 12" });
+    const minWeeks = recurrenceRule === "days" ? 1 : 2; // v1.128.1 — one week of certain days
+    if (isNaN(weeks) || weeks < minWeeks || weeks > 12) {
+      return res.status(400).json({ error: `Recurrence weeks must be between ${minWeeks} and 12` });
     }
   }
 

@@ -31,6 +31,22 @@ const WINDOW_DAYS = 45;
 
 const ENTRIES = [
   {
+    id: "days-this-week-only",
+    version: "1.128.1",
+    date: "2026-11-17",
+    audience: ["family", "care_for"],
+    title: "Book certain days for just one week",
+    body: "\"Certain days\" no longer has to repeat. Pick the days you need, choose \"This week only\", and they go out as one request.",
+    howTo: [
+      "Tap Request care and set the first day and the time",
+      "Under Repeat, tap Certain days and pick the days (say M, T, W)",
+      "In the weeks list, choose This week only",
+      "Send — the caregiver gets one request for all of those days",
+    ],
+    examples: ["Monday to Wednesday of Thanksgiving week", "Just Tuesday and Thursday while Sam is away"],
+    preview: "daysThisWeek",
+  },
+  {
     id: "late-checkin-choice",
     version: "1.128.0",
     date: "2026-11-15",

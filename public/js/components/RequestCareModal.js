@@ -343,7 +343,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
     }
 
     const recurrenceLabel = recurrence === 'days'
-      ? ` (${recurrenceDays.length} days a week, ${recurrenceWeeks} weeks)`
+      ? (recurrenceWeeks === '1' ? ` (${recurrenceDays.length} days, this week only)` : ` (${recurrenceDays.length} days a week, ${recurrenceWeeks} weeks)`)
       : recurrence !== 'none' ? ` (${recurrence}, ${recurrenceWeeks} sessions)` : '';
     const recipientId = selectedRecipientId || (careRecipients.length > 0 ? careRecipients[0].id : '');
     if (!recipientId) { setSubmitError('No care recipient found. Please add a care recipient first.'); return; }
@@ -374,7 +374,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
         details.push(`${date} at ${formatTime12(time)}`);
         details.push(`${duration} hour(s) of ${formatServiceType(resolvedServiceType)}`);
         if (proposedRate) details.push(`Offered rate: $${proposedRate}/hr`);
-        if (recurrence === 'days') details.push(`${recurrenceDays.length} days a week, ${recurrenceWeeks} weeks`);
+        if (recurrence === 'days') details.push(recurrenceWeeks === '1' ? `${recurrenceDays.length} days, this week only` : `${recurrenceDays.length} days a week, ${recurrenceWeeks} weeks`);
         else if (recurrence !== 'none') details.push(`${recurrence}, ${recurrenceWeeks} sessions`);
         setConfirmationData({
           title: isOpenRequest ? 'Care request posted!' : 'Care request sent!',
@@ -772,7 +772,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
                 <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>Repeat</div>
                 <div style={{ display: 'flex', gap: 6 }}>
                   {[{ value: 'none', label: 'One-time' }, { value: 'weekly', label: 'Weekly' }, { value: 'biweekly', label: 'Biweekly' }, { value: 'days', label: 'Certain days' }].map(opt => (
-                    <button key={opt.value} type="button" onClick={() => setRecurrence(opt.value)} style={pill(recurrence === opt.value)}>
+                    <button key={opt.value} type="button" onClick={() => { setRecurrence(opt.value); if (opt.value !== 'days' && recurrenceWeeks === '1') setRecurrenceWeeks('2'); }} style={pill(recurrence === opt.value)}>
                       {opt.label}
                     </button>
                   ))}
@@ -796,13 +796,16 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
                     <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
                       {recurrenceDays.length === 0
                         ? 'Pick at least one day.'
-                        : `${recurrenceDays.length} day${recurrenceDays.length === 1 ? '' : 's'} a week \u00D7 ${recurrenceWeeks} weeks = ${recurrenceDays.length * parseInt(recurrenceWeeks, 10)} visits, offered as one request.`}
+                        : recurrenceWeeks === '1'
+                          ? `Just the ${recurrenceDays.length} day${recurrenceDays.length === 1 ? '' : 's'} you picked, starting on the date above \u2014 offered as one request, nothing repeats.`
+                          : `${recurrenceDays.length} day${recurrenceDays.length === 1 ? '' : 's'} a week \u00D7 ${recurrenceWeeks} weeks = ${recurrenceDays.length * parseInt(recurrenceWeeks, 10)} visits, offered as one request.`}
                     </div>
                   </div>
                 )}
                 {recurrence !== 'none' && (
                   <div style={{ marginTop: 8 }}>
                     <select className="modal-select" value={recurrenceWeeks} onChange={(e) => setRecurrenceWeeks(e.target.value)} style={{ fontSize: 13 }}>
+                      {recurrence === 'days' && <option value="1">This week only</option>}
                       <option value="2">2 weeks</option>
                       <option value="4">4 weeks</option>
                       <option value="6">6 weeks</option>

@@ -1016,7 +1016,12 @@ router.post("/", requireRole("family", "care_for"), validateSession, async (req,
   // five recurrence groups and five cards for the caregiver. It is now one of each.
   const validRules = ["weekly", "biweekly", "days"];
   const isRecurring = recurrenceRule && validRules.includes(recurrenceRule);
-  const weeks = Math.min(Math.max(parseInt(recurrenceWeeks) || 4, 2), 12);
+  // v1.128.1 — "Certain days" may run for ONE week. Pete, 11/3 and 11/16: "I want to set care
+  // for the week of Thanksgiving … Monday Tuesday Wednesday", and the floor of 2 forced a second
+  // week he did not want. Weekly/biweekly keep their floor of 2: one week of those is a
+  // one-time visit, which the form already offers.
+  const minWeeks = recurrenceRule === "days" ? 1 : 2;
+  const weeks = Math.min(Math.max(parseInt(recurrenceWeeks) || 4, minWeeks), 12);
   let dates = isRecurring
     ? generateRecurringDates(scheduledDate, recurrenceRule, weeks, req.body.recurrenceDays)
     : [scheduledDate];

@@ -25,6 +25,24 @@ const wnHead = { fontSize: 10.5, fontWeight: 700, color: 'var(--text-muted)', te
 const wnPill = (bg, fg) => ({ padding: '4px 10px', borderRadius: 8, background: bg, color: fg, fontSize: 11, fontWeight: 700 });
 
 const WN_PREVIEWS = {
+  // v1.128.1 — certain days, for one week only
+  daysThisWeek: () => (
+    <div style={{ padding: '12px 12px 10px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>
+      <div style={{ ...wnHead, margin: '0 0 6px' }}><span>Repeat</span></div>
+      <div style={{ display: 'flex', gap: 5, marginBottom: 8 }}>
+        {[['One-time', false], ['Weekly', false], ['Certain days', true]].map(([t, on]) => (
+          <span key={t} style={on ? wnPill('var(--role-color)', 'var(--text-on-primary)') : { ...wnPill('var(--bg-surface)', 'var(--text-secondary)'), border: '1px solid var(--border-color)' }}>{t}</span>
+        ))}
+      </div>
+      <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
+        {[['M', true], ['T', true], ['W', true], ['Th', false], ['F', false], ['Sa', false], ['Su', false]].map(([d, on]) => (
+          <span key={d} style={{ ...(on ? wnPill('var(--role-color)', 'var(--text-on-primary)') : { ...wnPill('var(--bg-surface)', 'var(--text-tertiary)'), border: '1px solid var(--border-color)' }), minWidth: 22, textAlign: 'center', padding: '4px 4px' }}>{d}</span>
+        ))}
+      </div>
+      <div style={{ ...wnCard, marginBottom: 4, fontSize: 12.5, fontWeight: 600, color: 'var(--text-primary)' }}>This week only {'▾'}</div>
+      <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Mon, Tue, Wed at 9:00 AM for Mom {'·'} nothing repeats</div>
+    </div>
+  ),
   // v1.128.0 — a late check-in asks the family instead of cancelling
   checkinChoice: () => (
     <div style={{ padding: '12px 12px 10px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>
