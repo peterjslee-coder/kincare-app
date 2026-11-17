@@ -641,6 +641,12 @@ router.get("/me", authenticate, async (req, res) => {
   // Check 2FA status
   const twoFa = await db.prepare("SELECT is_enabled FROM user_2fa WHERE user_id = ?").get(req.user.id);
 
+  // v1.128.4 — does this account have a passkey? "Lock down your account" on the caregiver path
+  // read a localStorage flag, so it was ticked on any browser that had ever seen the screen —
+  // including an admin's, viewing as her. It is a fact about the account now.
+  const passkeyRow = await db.prepare("SELECT COUNT(*) AS n FROM user_passkeys WHERE user_id = ?").get(req.user.id)
+    .catch(() => ({ n: 0 }));
+
   // Check linked OAuth accounts
   const oauthAccounts = await db.prepare("SELECT provider, provider_email FROM oauth_accounts WHERE user_id = ?").all(req.user.id);
 
@@ -798,6 +804,7 @@ router.get("/me", authenticate, async (req, res) => {
       account_approved: !!user.account_approved,
       companion_access: !!user.companion_access,
       twoFactorEnabled: !!(twoFa?.is_enabled),
+      hasPasskey: Number(passkeyRow && passkeyRow.n) > 0,
       linkedAccounts: oauthAccounts || [],
       onboarding_complete: onboardingComplete,
       selfOnboardingComplete,

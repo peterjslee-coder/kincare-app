@@ -583,7 +583,8 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
       window.__pendingFocus = null;
       setActiveTab('profile');
       const status = user?.identityStatus || familyIdentityStatus;
-      if (status !== 'verified' && status !== 'pending') {
+      // Unknown (still loading) is not "not started": never open the verify flow on a guess.
+      if (status && status !== 'verified' && status !== 'pending') {
         setIdVerOpen(true); setIdVerStep(1); setIdVerSelfie(null); setIdVerIdPhoto(null); setIdVerError(null);
       }
       setTimeout(() => {
@@ -612,10 +613,17 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
       if (r?.ok) { const d = await r.json(); setFamilyStripeStatus(d.status || 'not_started'); }
       else setFamilyStripeStatus('not_started');
     }).catch(() => setFamilyStripeStatus('not_started'));
-    // Identity verification status — from /api/auth/me user object
-    if (user?.identityStatus) setFamilyIdentityStatus(user.identityStatus);
-    else setFamilyIdentityStatus('not_started');
   }, [activeTab]);
+
+  // v1.128.4 — identity status follows the server's answer whenever it arrives or changes.
+  // It used to be copied inside the tab effect above, which runs on mount BEFORE fetchUser()
+  // returns: `user` was still null, the card was set to 'not_started', and nothing set it again
+  // until you switched tabs. Every verified person opening Account read "Not Verified" (Ryan,
+  // 11/16; "we've had this issue before"). Until /me answers the status stays null = unknown.
+  useEffect(() => {
+    if (!user) return;
+    setFamilyIdentityStatus(user.identityStatus || 'not_started');
+  }, [user, user?.identityStatus]);
 
   // Fetch caregiver financial data
   useEffect(() => {
@@ -1430,7 +1438,9 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                   </svg>
                 )}
               </span>
-              {familyIdentityStatus === 'verified'
+              {familyIdentityStatus === null
+                ? React.createElement('span', { style: { fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', padding: '2px 10px' } }, 'Checking…')
+                : familyIdentityStatus === 'verified'
                 ? React.createElement('span', { style: { fontSize: 11, fontWeight: 600, color: '#3b82f6', background: '#eff6ff', padding: '2px 10px', borderRadius: 12 } }, 'Verified')
                 : familyIdentityStatus === 'pending'
                   ? React.createElement('span', { style: { fontSize: 11, fontWeight: 600, color: 'var(--color-warning)', background: 'var(--color-warning-bg)', padding: '2px 10px', borderRadius: 12 } }, 'Pending Review')
@@ -1440,7 +1450,9 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
               }
             </div>
             <div style={{ padding: '8px 0', color: 'var(--text-secondary)', fontSize: 14, lineHeight: 1.6 }}>
-              {familyIdentityStatus === 'verified' ? (
+              {familyIdentityStatus === null ? (
+                <p style={{ margin: 0 }}>Checking your verification…</p>
+              ) : familyIdentityStatus === 'verified' ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
                     <circle cx="12" cy="12" r="11" fill="#3b82f6"/>
@@ -2478,7 +2490,14 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
           {['drivers_license', 'certifications', 'background_check'].map(docType => {
             const docLabel = { drivers_license: 'Photo ID', certifications: 'Certifications', background_check: 'Background Check' }[docType] || docType;
             const docIcon = { drivers_license: '🪪', certifications: '📜', background_check: '🔒' }[docType] || '📄';
-            const uploaded = documents.filter(d => (d.document_type || d.type) === docType);
+            // v1.128.4 — onboarding files a photo ID as dl_front/dl_back or id_front/id_back (state
+            // ID, passport, EAD… since v1.109.5); only 'drivers_license' was matched here, so Ryan's
+            // ID was on file and this card said nothing was.
+            const ID_TYPES = ['drivers_license', 'dl_front', 'dl_back', 'id_front', 'id_back'];
+            const uploaded = documents.filter(d => {
+              const t = d.document_type || d.type;
+              return docType === 'drivers_license' ? ID_TYPES.includes(t) : t === docType;
+            });
             const isUploaded = uploaded.length > 0;
 
             return (

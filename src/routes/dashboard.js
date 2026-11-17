@@ -748,6 +748,11 @@ async function caregiverDashboard(db, userId, res) {
       zip: profile.zip,
       workLocationAddress: profile.work_location_address,
       onboardingComplete: !!profile.onboarding_complete,
+      // v1.128.4 — "Lock down your account" is done when the ACCOUNT has 2FA or a passkey. It read
+      // a localStorage flag set by sitting on Settings for 3 s, so it ticked on any browser that
+      // had seen that screen — an admin's included, viewing as her (Ryan, 11/16).
+      accountSecured: !!((await db.prepare("SELECT 1 FROM user_2fa WHERE user_id = ? AND is_enabled = 1").get(userId).catch(() => null))
+        || (await db.prepare("SELECT 1 FROM user_passkeys WHERE user_id = ? LIMIT 1").get(userId).catch(() => null))),
       earlyCheckInAllowed: !!profile.early_check_in_allowed,
       background_check_paid: !!profile.background_check_paid,
       // v1.105.63 — whether the caregiver actually paid or an admin waived it for them.

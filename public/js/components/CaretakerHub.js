@@ -1480,7 +1480,8 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const hasPhoto = !!profile.hasPhoto;
   const hasAvailability = availRules.length > 0;
   const hasRates = !!(profile.rateDaytime || profile.hourlyRate);
-  const securityReviewed = !!localStorage.getItem('inplace_security_reviewed');
+  // v1.128.4 — from the account (2FA or a passkey), not from this browser's localStorage.
+  const securityReviewed = !!profile.accountSecured;
   const stripeConnected = stripeStatus?.status === 'active';
   const bgPaid = !!profile.background_check_paid || !!profile.isBackgroundChecked;
   const bgCheckSubmitted = !!profile.isBackgroundChecked || (profile.checkrStatus && profile.checkrStatus !== 'pending' && profile.checkrStatus !== 'not_initiated');
