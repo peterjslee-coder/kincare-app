@@ -3487,6 +3487,133 @@ async function mayEditInstructions(db, session, userId, activeRole) {
   return can(caps, CAP.SCHEDULE_EVENTS);
 }
 
+// ─── PUT /api/sessions/:id/recipient (v1.129.1) ───
+//
+// Pete, 11/16 (feedback ddd923a7): "I want the ability to be able to edit requests that I've sent
+// to caretakers. In case I have sent it to everyone, but I wanted it to be for Tina only… the only
+// options I have [are] to cancel the visit or close the request."
+//
+// Re-points a request nobody has taken yet: to everyone, to one caregiver first for an hour, or to
+// one caregiver only. Same three shapes the booking form offers (POST /, directOffer/privateOnly).
+// Body: { caregiverId: <caregiver_profiles.id> | null, privateOnly, scope: 'this' | 'series' }.
+// Pete's call: when it narrows to one person, other caregivers' pending offers are withdrawn and
+// each is told, briefly, that the family arranged the visit with someone else.
+router.put("/:id/recipient", async (req, res) => {
+  try {
+    const db = await getDb();
+    const userId = req.user.id;
+    const activeRole = req.user.activeRole || req.user.role;
+    const caregiverId = req.body && req.body.caregiverId ? String(req.body.caregiverId) : null;
+    const privateOnly = !!(req.body && req.body.privateOnly) && !!caregiverId;
+    const scope = req.body && req.body.scope === "series" ? "series" : "this";
+
+    const session = await db.prepare(`
+      SELECT cs.*, cr.family_user_id AS owner_id, ${trustedLinkedIdSql("cr")} AS recipient_user_id,
+        cp.user_id AS caregiver_user_id, cr.first_name AS recipient_first_name
+      FROM care_sessions cs
+      LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      WHERE cs.id = ?
+    `).get(req.params.id);
+    if (!session) return res.status(404).json({ error: "Session not found" });
+    if (!(await mayEditInstructions(db, session, userId, activeRole))) {
+      return res.status(403).json({ error: "Only someone who can schedule for this person can change who a request goes to" });
+    }
+    if (session.caregiver_id || !["requested", "open", "pending"].includes(session.status)) {
+      return res.status(409).json({ error: "A caregiver already has this visit. Use Change visit or Cancel instead." });
+    }
+
+    // The new caregiver must be someone who could actually take it (utils/claimGates' rule):
+    // not paused, and background-checked or vouched for by this family.
+    let target = null;
+    if (caregiverId) {
+      target = await db.prepare(`
+        SELECT cp.id, cp.user_id, cp.is_background_checked, cp.account_paused, u.first_name
+        FROM caregiver_profiles cp JOIN users u ON u.id = cp.user_id WHERE cp.id = ?
+      `).get(caregiverId);
+      if (!target) return res.status(404).json({ error: "Caregiver not found" });
+      const cleared = !target.account_paused && (!!target.is_background_checked
+        || await hasActiveVouch(db, target.user_id, session.family_user_id));
+      if (!cleared) return res.status(409).json({ error: `${target.first_name || "This caregiver"} can't take visits for you yet.` });
+    }
+
+    // Which visits: this one, or this and the later unclaimed ones in the same series.
+    const rows = scope === "series" && session.recurrence_group_id
+      ? await db.prepare(`
+          SELECT id FROM care_sessions
+          WHERE recurrence_group_id = ? AND caregiver_id IS NULL AND status IN ('requested', 'open', 'pending')
+            AND scheduled_date >= ?
+        `).all(session.recurrence_group_id, session.scheduled_date)
+      : [{ id: session.id }];
+    const ids = rows.map((r) => r.id);
+    if (!ids.includes(session.id)) ids.push(session.id);
+
+    const exclusiveUntil = caregiverId && !privateOnly ? new Date(Date.now() + 60 * 60 * 1000) : null;
+    const previousTargets = new Set();
+    let withdrawn = [];
+    await db.transaction(async (tx) => {
+      const ph = ids.map(() => "?").join(",");
+      const before = await tx.prepare(`
+        SELECT DISTINCT cp.user_id FROM care_sessions cs JOIN caregiver_profiles cp ON cp.id = cs.offered_to_caregiver_id
+        WHERE cs.id IN (${ph})
+      `).all(...ids);
+      for (const b of before) if (b.user_id) previousTargets.add(b.user_id);
+      await tx.prepare(`
+        UPDATE care_sessions SET offered_to_caregiver_id = ?, exclusive_until = ?, private_only = ?, updated_at = NOW()
+        WHERE id IN (${ph}) AND caregiver_id IS NULL
+      `).run(caregiverId, exclusiveUntil, privateOnly ? 1 : 0, ...ids);
+      if (target) {
+        withdrawn = await tx.prepare(`
+          SELECT DISTINCT from_user_id FROM session_offers
+          WHERE session_id IN (${ph}) AND status = 'pending' AND from_user_id <> ? AND from_user_id <> ?
+        `).all(...ids, target.user_id, session.family_user_id);
+        await tx.prepare(`
+          UPDATE session_offers SET status = 'withdrawn'
+          WHERE session_id IN (${ph}) AND status = 'pending' AND from_user_id <> ? AND from_user_id <> ?
+        `).run(...ids, target.user_id, session.family_user_id);
+      }
+    });
+
+    // Tell people — after the write, and never so that a failed push undoes it.
+    const emitToUser = req.app.get("emitToUser");
+    const who = session.recipient_first_name || "a client";
+    const timeLabel = formatTimeForDisplay(session.scheduled_time);
+    const count = ids.length;
+    const sorry = { title: "Visit arranged with someone else", body: `The family has arranged the visit for ${who} on ${session.scheduled_date} with someone else.`, data: { type: "job_withdrawn", page: "find-work" } };
+    const toldSorry = new Set();
+    for (const w of withdrawn) {
+      if (!w.from_user_id || toldSorry.has(w.from_user_id)) continue;
+      toldSorry.add(w.from_user_id);
+      sendPushToUser(w.from_user_id, sorry, "job_withdrawn").catch(() => {});
+    }
+    for (const prev of previousTargets) {
+      if (target && prev === target.user_id) continue;
+      if (toldSorry.has(prev)) continue;
+      toldSorry.add(prev);
+      sendPushToUser(prev, { ...sorry, title: "Visit no longer offered to you", body: `The family changed who the visit for ${who} on ${session.scheduled_date} is offered to.` }, "job_withdrawn").catch(() => {});
+    }
+    if (target && !previousTargets.has(target.user_id)) {
+      if (emitToUser) emitToUser(target.user_id, "new_job", { sessionId: session.id, offeredToYou: true, count });
+      sendPushToUser(target.user_id, {
+        title: "Work offered to you",
+        body: count > 1
+          ? `${count} visits for ${who}, starting ${session.scheduled_date} at ${timeLabel}. Tap to accept.`
+          : `${who} on ${session.scheduled_date} at ${timeLabel} (${session.duration_hours}hr). Tap to accept.`,
+        data: { url: "/#caretaker", type: "new_job", page: "find-work" },
+      }, "new_job").catch(() => {});
+    }
+
+    res.json({
+      ok: true, count,
+      offeredTo: target ? { caregiverId: target.id, name: target.first_name, privateOnly } : null,
+      withdrawnOffers: withdrawn.length,
+    });
+  } catch (err) {
+    console.error("PUT /sessions/:id/recipient error:", err);
+    res.status(500).json({ error: "Failed to change who this request goes to" });
+  }
+});
+
 // ─── PUT /api/sessions/:id/instructions ───
 // Update special_instructions on a session (family/care_for only, before completion)
 router.put("/:id/instructions", async (req, res) => {

@@ -331,6 +331,7 @@ async function familyDashboard(db, userId, res) {
         const fee = Math.round(familyPrice * (feePercent / 100) * 100) / 100;
         return {
           id: s.id,
+          careRecipientId: s.care_recipient_id || null, // v1.129.1 — the Change-who sheet lists this person's caregivers
           date: s.scheduled_date,
           time: s.scheduled_time,
           serviceType: s.service_type,

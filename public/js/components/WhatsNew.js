@@ -25,6 +25,19 @@ const wnHead = { fontSize: 10.5, fontWeight: 700, color: 'var(--text-muted)', te
 const wnPill = (bg, fg) => ({ padding: '4px 10px', borderRadius: 8, background: bg, color: fg, fontSize: 11, fontWeight: 700 });
 
 const WN_PREVIEWS = {
+  // v1.129.1 — change who an open request goes to
+  changeWho: () => (
+    <div style={{ padding: '12px 12px 10px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>
+      <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>Who should this go to?</div>
+      {[['All caregivers', false], ['Jane', true], ['Sam', false]].map(([n, on]) => (
+        <div key={n} style={{ ...wnCard, display: 'flex', alignItems: 'center', gap: 8, border: on ? '2px solid var(--role-color)' : wnCard.border }}>
+          <span style={{ width: 12, height: 12, borderRadius: 6, boxSizing: 'border-box', border: on ? '4px solid var(--role-color)' : '2px solid var(--border-color)' }} />
+          <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-primary)' }}>{n}</span>
+        </div>
+      ))}
+      <div style={{ fontSize: 11.5, color: 'var(--text-secondary)', marginTop: 4 }}>{'\u2713'} Only Jane {'\u00B7'} it stays with Jane</div>
+    </div>
+  ),
   // v1.129.0 — the caregiver Get Ready card
   getReady: () => (
     <div style={{ padding: '12px 12px 10px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>

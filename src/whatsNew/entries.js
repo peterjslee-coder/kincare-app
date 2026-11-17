@@ -31,6 +31,22 @@ const WINDOW_DAYS = 45;
 
 const ENTRIES = [
   {
+    id: "change-who-request",
+    version: "1.129.1",
+    date: "2026-11-17",
+    audience: ["family", "care_for"],
+    title: "Change who a request goes to",
+    body: "Sent a visit to everyone but meant it for one caregiver, or the other way round? Change it without cancelling. Anyone else who offered to take it is told it's been arranged.",
+    howTo: [
+      "On Home, find the request nobody has accepted yet",
+      "Tap Change who",
+      "Pick All caregivers or one person, and whether it's only for them",
+      "For a series, choose just this visit or the later ones too",
+    ],
+    examples: ["Meant it for Jane only", "Open it up to everyone after all"],
+    preview: "changeWho",
+  },
+  {
     id: "caregiver-get-ready",
     version: "1.129.0",
     date: "2026-11-17",

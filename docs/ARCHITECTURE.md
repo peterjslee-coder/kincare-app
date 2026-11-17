@@ -7,9 +7,9 @@ build red.
 
 Hand-written sections (§3 "Where is…") are preserved across regeneration; edit those freely.
 
-Structure at last generation: 606 HTTP routes across 64 mounts ·
+Structure at last generation: 607 HTTP routes across 64 mounts ·
 116 `CREATE TABLE` statements · 16 background jobs · 39 socket events
-(17 with no client listener) · 72 push event types · 63 `window.__*` globals.
+(17 with no client listener) · 73 push event types · 63 `window.__*` globals.
 
 ---
 
@@ -97,7 +97,7 @@ JSX is *not* compiled in the browser; Babel-standalone is not loaded. Editing an
 | `/api/safety` | `src/routes/safety.js` | 6 |  |
 | `/api/scheduling` | `src/routes/nlScheduling.js` | 1 |  |
 | `/api/self-onboarding` | `src/routes/selfOnboarding.js` | 3 |  |
-| `/api/sessions` | `src/routes/sessions.js` **+** `src/routes/offers.js` | 48 | ⚠️ **multi-file mount — routes for this prefix live in more than one file** |
+| `/api/sessions` | `src/routes/sessions.js` **+** `src/routes/offers.js` | 49 | ⚠️ **multi-file mount — routes for this prefix live in more than one file** |
 | `/api/sms` | `src/routes/smsWebhooks.js` | 13 |  |
 | `/api/video` | `src/routes/videoCall.js` | 1 |  |
 | `/api/waitlist` | `src/routes/waitlist.js` | 3 |  |
@@ -297,23 +297,25 @@ Opt-out key is `notification_prefs["push_" + eventType]`. Capability gating live
 
 `interview_accepted` · `interview_cancelled` · `interview_declined` · `interview_request`
 
-`invite_accepted` · `kindred_relay` · `managed_mode_activated` · `mileage_extra`
+`invite_accepted` · `job_withdrawn` · `kindred_relay` · `managed_mode_activated`
 
-`missing_address` · `new_job` · `new_registration` · `new_signup_intent`
+`mileage_extra` · `missing_address` · `new_job` · `new_registration`
 
-`no_show_cancelled` · `on_my_way` · `on_my_way_recipient` · `outreach_reply`
+`new_signup_intent` · `no_show_cancelled` · `on_my_way` · `on_my_way_recipient`
 
-`outreach_response` · `outreach_sent` · `overdue_check_in` · `overdue_check_in_family`
+`outreach_reply` · `outreach_response` · `outreach_sent` · `overdue_check_in`
 
-`overdue_check_out` · `overdue_check_out_family` · `payment_authorization_failed` · `payment_hold`
+`overdue_check_in_family` · `overdue_check_out` · `overdue_check_out_family` · `payment_authorization_failed`
 
-`payment_method_needed` · `phone_verified` · `proposal_accepted` · `proposal_declined`
+`payment_hold` · `payment_method_needed` · `phone_verified` · `proposal_accepted`
 
-`request_declined` · `review` · `safety_flag` · `session_cancelled`
+`proposal_declined` · `request_declined` · `review` · `safety_flag`
 
-`session_complete` · `session_in_progress` · `team_join` · `time_proposal`
+`session_cancelled` · `session_complete` · `session_in_progress` · `team_join`
 
-`unblocked` · `upload_authority_confirmed` · `uploaded` · `waitlist_signup`
+`time_proposal` · `unblocked` · `upload_authority_confirmed` · `uploaded`
+
+`waitlist_signup`
 
 ---
 
