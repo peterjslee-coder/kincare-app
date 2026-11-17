@@ -777,6 +777,17 @@ router.post("/", requireRole("family", "care_for"), validateSession, async (req,
     });
   }
 
+  // v1.129.2 — Edit request (Pete, 11/17): the edited form is sent as a new request that REPLACES
+  // the original (or the original's later open visits). Checked before anything is created: the
+  // original must still be nobody's, and the person must be allowed to schedule for it.
+  let replacing = null;
+  if (req.body.replaces && req.body.replaces.sessionId) {
+    const dbr = await getDb();
+    const r = await replacementTargets(dbr, req.body.replaces, req.user.id, req.user.activeRole || req.user.role);
+    if (r.error) return res.status(r.status).json({ error: r.error, code: r.code });
+    replacing = r;
+  }
+
   // Reject sessions scheduled less than 1 hour from now (timezone-aware)
   // Times are in the care location's timezone (default: America/New_York)
   const sessionStartDt = buildDateTimeInZone(scheduledDate, scheduledTime);
@@ -1230,6 +1241,16 @@ router.post("/", requireRole("family", "care_for"), validateSession, async (req,
       }
     } catch (err) {
       console.error("Job notification error (non-blocking):", err);
+    }
+  }
+
+  // v1.129.2 — Edit request: the new request exists; retire the one it replaces.
+  if (replacing) {
+    try {
+      const dbr = await getDb();
+      await retireReplacedRequests(dbr, replacing, createdSessions, req.user.id);
+    } catch (err) {
+      console.error("Edit request: retiring the original failed (the new request stands):", err);
     }
   }
 
@@ -3486,6 +3507,152 @@ async function mayEditInstructions(db, session, userId, activeRole) {
   const caps = await recipientCapabilities(db, session.care_recipient_id, userId);
   return can(caps, CAP.SCHEDULE_EVENTS);
 }
+
+// ─── Edit request (v1.129.2) ───
+//
+// Pete, 11/17: "I want to be able to edit the details of the appointment after I've sent it. Say
+// i want to change it from companionship to personal care. Or adjust the time request. Or make it
+// repeating. Or offer it only to Tina. Or anyone. Or request an interview. whatever."
+//
+// The booking form opens filled in from GET /:id/edit-draft and submits to POST / with
+// `replaces: { sessionId, scope: 'this' | 'series' }`. The new request goes through every check
+// a booking does (price, card, recurrence, interview, notifications); then the original — only
+// the visits nobody has taken — is cancelled as "replaced", other caregivers' pending offers on
+// it are withdrawn, and whoever it was offered to is told it changed.
+
+const OPEN_STATUSES = ["requested", "open", "pending"];
+const WEEKDAYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+
+async function loadEditable(db, sessionId) {
+  return db.prepare(`
+    SELECT cs.*, cr.family_user_id AS owner_id, ${trustedLinkedIdSql("cr")} AS recipient_user_id,
+      cp.user_id AS caregiver_user_id
+    FROM care_sessions cs
+    LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+    LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+    WHERE cs.id = ?
+  `).get(sessionId);
+}
+
+/** The visits an edit would replace, or why it can't. */
+async function replacementTargets(db, replaces, userId, activeRole) {
+  const session = await loadEditable(db, String(replaces.sessionId));
+  if (!session) return { status: 404, error: "The request you are editing no longer exists" };
+  if (!(await mayEditInstructions(db, session, userId, activeRole))) {
+    return { status: 403, error: "Only someone who can schedule for this person can edit this request" };
+  }
+  if (session.caregiver_id || !OPEN_STATUSES.includes(session.status)) {
+    return { status: 409, code: "ALREADY_TAKEN", error: "A caregiver has already taken this visit. Use Change visit instead." };
+  }
+  const scope = replaces.scope === "series" && session.recurrence_group_id ? "series" : "this";
+  const rows = scope === "series"
+    ? await db.prepare(`
+        SELECT id, offered_to_caregiver_id FROM care_sessions
+        WHERE recurrence_group_id = ? AND caregiver_id IS NULL AND status IN ('requested', 'open', 'pending')
+          AND scheduled_date >= ?
+      `).all(session.recurrence_group_id, session.scheduled_date)
+    : [{ id: session.id, offered_to_caregiver_id: session.offered_to_caregiver_id }];
+  return { session, scope, ids: rows.map((r) => r.id) };
+}
+
+async function retireReplacedRequests(db, replacing, newIds, userId) {
+  const ids = replacing.ids.filter((id) => !(newIds || []).includes(id));
+  if (!ids.length) return { cancelled: 0 };
+  const ph = ids.map(() => "?").join(",");
+  let told = [];
+  let cancelled = 0;
+  await db.transaction(async (tx) => {
+    const offeredTo = await tx.prepare(`
+      SELECT DISTINCT cp.user_id FROM care_sessions cs JOIN caregiver_profiles cp ON cp.id = cs.offered_to_caregiver_id
+      WHERE cs.id IN (${ph}) AND cs.caregiver_id IS NULL
+    `).all(...ids);
+    const bidders = await tx.prepare(`
+      SELECT DISTINCT from_user_id AS user_id FROM session_offers
+      WHERE session_id IN (${ph}) AND status = 'pending' AND from_user_id <> ?
+    `).all(...ids, userId);
+    const r = await tx.prepare(`
+      UPDATE care_sessions SET status = 'cancelled', cancellation_reason = 'Replaced by an edited request',
+        cancelled_by = 'family', cancelled_at = NOW(), updated_at = NOW()
+      WHERE id IN (${ph}) AND caregiver_id IS NULL AND status IN ('requested', 'open', 'pending')
+    `).run(...ids);
+    cancelled = (r && (r.changes ?? r.rowCount)) || 0;
+    await tx.prepare(`
+      UPDATE session_offers SET status = 'withdrawn' WHERE session_id IN (${ph}) AND status = 'pending'
+    `).run(...ids);
+    told = [...new Set([...offeredTo, ...bidders].map((x) => x.user_id).filter(Boolean))];
+  });
+  const s = replacing.session;
+  for (const uid of told) {
+    sendPushToUser(uid, {
+      title: "A visit request changed",
+      body: `The family updated their request for ${s.scheduled_date}. If it's still for you, you'll see the new one.`,
+      data: { type: "job_withdrawn", page: "find-work" },
+    }, "job_withdrawn").catch(() => {});
+  }
+  return { cancelled };
+}
+
+// ─── GET /api/sessions/:id/edit-draft (v1.129.2) — what the booking form opens with ───
+router.get("/:id/edit-draft", async (req, res) => {
+  try {
+    const db = await getDb();
+    const session = await loadEditable(db, req.params.id);
+    if (!session) return res.status(404).json({ error: "Session not found" });
+    if (!(await mayEditInstructions(db, session, req.user.id, req.user.activeRole || req.user.role))) {
+      return res.status(404).json({ error: "Session not found" });
+    }
+    if (session.caregiver_id || !OPEN_STATUSES.includes(session.status)) {
+      return res.status(409).json({ error: "A caregiver has already taken this visit. Use Change visit instead.", code: "ALREADY_TAKEN" });
+    }
+    // A series: describe it from this visit on, the way the form would have made it.
+    let recurrence = null;
+    let seriesIds = [session.id];
+    if (session.recurrence_group_id) {
+      const later = await db.prepare(`
+        SELECT id, scheduled_date FROM care_sessions
+        WHERE recurrence_group_id = ? AND caregiver_id IS NULL AND status IN ('requested', 'open', 'pending')
+          AND scheduled_date >= ? ORDER BY scheduled_date
+      `).all(session.recurrence_group_id, session.scheduled_date);
+      seriesIds = later.map((r) => r.id);
+      const dates = later.map((r) => String(r.scheduled_date).slice(0, 10));
+      const dayIdx = (d) => { const [y, m, dd] = d.split("-").map(Number); return new Date(Date.UTC(y, m - 1, dd)).getUTCDay(); };
+      const days = [...new Set(dates.map(dayIdx))].sort().map((i) => WEEKDAYS[i]);
+      const first = dates[0];
+      const last = dates[dates.length - 1];
+      const spanDays = first && last ? Math.round((Date.parse(last) - Date.parse(first)) / 86400000) : 0;
+      const rule = session.recurrence_rule || (days.length > 1 ? "days" : "weekly");
+      const weeks = rule === "days" ? Math.max(1, Math.floor(spanDays / 7) + 1) : dates.length;
+      recurrence = { rule, days, weeks, count: dates.length };
+    }
+    let offeredTo = null;
+    if (session.offered_to_caregiver_id) {
+      const cg = await db.prepare(`
+        SELECT cp.id, u.first_name, u.last_name FROM caregiver_profiles cp JOIN users u ON u.id = cp.user_id WHERE cp.id = ?
+      `).get(session.offered_to_caregiver_id);
+      if (cg) offeredTo = { caregiverId: cg.id, name: [cg.first_name, cg.last_name].filter(Boolean).join(" ") };
+    }
+    res.json({
+      sessionId: session.id,
+      careRecipientId: session.care_recipient_id,
+      serviceType: session.service_type,
+      date: String(session.scheduled_date).slice(0, 10),
+      time: session.scheduled_time,
+      durationHours: session.duration_hours,
+      specialInstructions: session.special_instructions || "",
+      recurrence,
+      seriesIds,
+      offeredTo,
+      privateOnly: !!Number(session.private_only),
+      proposedRate: session.proposed_rate != null ? Number(session.proposed_rate) : null,
+      interviewRequired: !!Number(session.interview_required),
+      interviewType: session.interview_type || null,
+      flexTiming: session.flex_timing || "flexible",
+    });
+  } catch (err) {
+    console.error("GET /sessions/:id/edit-draft error:", err);
+    res.status(500).json({ error: "Failed to load this request" });
+  }
+});
 
 // ─── PUT /api/sessions/:id/recipient (v1.129.1) ───
 //

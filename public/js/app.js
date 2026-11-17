@@ -907,6 +907,12 @@ const App = () => {
       if (prefillCaregiver) window.__requestCareCaregiver = prefillCaregiver;
       setShowRequestCareModal(true);
     };
+    // v1.129.2 — open the booking form on a sent request, filled in, to edit it.
+    window.__openEditRequest = (sessionId) => {
+      if (!sessionId) return;
+      window.__requestCareEdit = { sessionId };
+      setShowRequestCareModal(true);
+    };
     window.__navigateTo = (page) => setCurrentPage(page);
     window.__navHistory = navHistoryRef.current; // expose for feedback context
 

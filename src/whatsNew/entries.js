@@ -31,20 +31,20 @@ const WINDOW_DAYS = 45;
 
 const ENTRIES = [
   {
-    id: "change-who-request",
-    version: "1.129.1",
+    id: "edit-request",
+    version: "1.129.2",
     date: "2026-11-17",
     audience: ["family", "care_for"],
-    title: "Change who a request goes to",
-    body: "Sent a visit to everyone but meant it for one caregiver, or the other way round? Change it without cancelling. Anyone else who offered to take it is told it's been arranged.",
+    title: "Edit a request after you've sent it",
+    body: "Change the care type, the time, how long, whether it repeats, who it goes to, or ask for an interview, without cancelling and starting over. Anyone it was already offered to is told it changed.",
     howTo: [
-      "On Home, find the request nobody has accepted yet",
-      "Tap Change who",
-      "Pick All caregivers or one person, and whether it's only for them",
+      "On Home or Schedule, find the request nobody has accepted yet",
+      "Tap Edit request",
+      "Change whatever you need and tap Save changes",
       "For a series, choose just this visit or the later ones too",
     ],
-    examples: ["Meant it for Jane only", "Open it up to everyone after all"],
-    preview: "changeWho",
+    examples: ["Make it personal care instead of companionship", "Offer it to Jane only", "Make it every Tuesday"],
+    preview: "editRequest",
   },
   {
     id: "caregiver-get-ready",

@@ -71,7 +71,6 @@ const scripts = [
   "js/components/CareEvents.js",
   "js/components/ComingUpSpine.js", // v1.126.0 — the Coming Up card on the family dashboard; uses CareEvents' careEventIcon
   "js/components/CancelSessionModal.js",
-  "js/components/ChangeRecipientSheet.js", // v1.129.1 — change who an open request goes to; Dashboard opens it
   "js/components/ChangeVisitSheet.js", // v1.124.0 — change a booked visit (day, start, length); Dashboard, CaretakerHub and VisitDetailModal open it
   "js/components/TimeChangeSummary.js", // v1.123.0 — the time-change review sheet's top half; Dashboard and CaretakerHub use it
   "js/components/Dashboard.js",

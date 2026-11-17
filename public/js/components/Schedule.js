@@ -407,6 +407,13 @@ const Schedule = window.Schedule = () => {
                             so anyone who found the session on the calendar had to go somewhere
                             else to call it off. Same statuses the server accepts, and never on a
                             session that has already started or already happened. */}
+                        {/* v1.129.2 — Edit request: the booking form, filled in, while nobody has taken it. */}
+                        {!isPast(selectedDate) && ['pending', 'open', 'requested'].includes(s.status) && !s.caregiver_id && !s.caregiver_name && (
+                          <button onClick={(e) => { e.stopPropagation(); window.__openEditRequest && window.__openEditRequest(s.id); }}
+                            style={{ padding: '6px 14px', background: 'var(--bg-surface)', color: 'var(--role-color)', border: '1px solid var(--role-color)', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', marginRight: 8 }}>
+                            Edit request
+                          </button>
+                        )}
                         {!isPast(selectedDate) && ['confirmed', 'pending', 'open', 'requested'].includes(s.status) && (
                           <button onClick={(e) => { e.stopPropagation(); setCancellingSession(s); }}
                             style={{ padding: '6px 14px', background: 'var(--bg-surface)', color: 'var(--color-error)', border: '1px solid var(--color-error)', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>

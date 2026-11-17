@@ -49,6 +49,65 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
   const [privateOnly, setPrivateOnly] = useState(false); // don't open to others if caregiver declines
   const [flexTiming, setFlexTiming] = useState('flexible'); // 'strict' | 'flexible' | 'open'
 
+  // ─── v1.129.2 — Edit request (Pete, 11/17) ───
+  // "I want to be able to edit the details of the appointment after I've sent it… change it from
+  // companionship to personal care. Or adjust the time request. Or make it repeating. Or offer it
+  // only to Tina. Or anyone. Or request an interview." The form opens filled in from
+  // GET /api/sessions/:id/edit-draft and submits a new request that REPLACES the original
+  // (POST /api/sessions with `replaces`); the server retires the original only after the new one
+  // exists, and only the visits nobody has taken.
+  const [editing] = useState(() => {
+    const e = window.__requestCareEdit;
+    if (e) delete window.__requestCareEdit;
+    return e || null; // { sessionId }
+  });
+  const [editDraft, setEditDraft] = useState(null);
+  const [editScope, setEditScope] = useState('this'); // 'this' | 'series'
+  const applyRecurrenceFromDraft = (draft, scope) => {
+    if (draft && draft.recurrence && scope === 'series') {
+      setRecurrence(draft.recurrence.rule || 'weekly');
+      if (draft.recurrence.days && draft.recurrence.days.length) setRecurrenceDays(draft.recurrence.days);
+      setRecurrenceWeeks(String(Math.min(12, Math.max(draft.recurrence.rule === 'days' ? 1 : 2, draft.recurrence.weeks || 2))));
+    } else {
+      setRecurrence('none');
+    }
+  };
+  useEffect(() => {
+    if (!editing) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await apiFetch(`/api/sessions/${editing.sessionId}/edit-draft`);
+        const d = await res.json().catch(() => ({}));
+        if (cancelled) return;
+        if (!res.ok) { setSubmitError(d.error || 'Could not load this request to edit.'); return; }
+        setEditDraft(d);
+        const st = String(d.serviceType || '');
+        if (st.startsWith('other:')) { setServiceType('other'); setOtherCareText(st.slice(6)); }
+        else setServiceType(st);
+        if (d.careRecipientId) setSelectedRecipientId(d.careRecipientId);
+        setDate(d.date || '');
+        setTime(d.time || '08:00');
+        setDuration(d.durationHours != null ? String(d.durationHours) : '');
+        setInstructions(d.specialInstructions || '');
+        const scope = d.recurrence ? 'series' : 'this';
+        setEditScope(scope);
+        applyRecurrenceFromDraft(d, scope);
+        setSelectedCaregiver(d.offeredTo ? { caregiverId: d.offeredTo.caregiverId, name: d.offeredTo.name } : null);
+        setPrivateOnly(!!d.privateOnly);
+        setProposedRate(d.proposedRate != null ? String(d.proposedRate) : '');
+        setInterviewRequired(!!d.interviewRequired);
+        if (d.interviewType) setInterviewType(d.interviewType);
+        if (d.flexTiming) setFlexTiming(d.flexTiming);
+      } catch (e) {
+        if (!cancelled) setSubmitError('Could not load this request to edit.');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+  // The request being edited must not warn about overlapping with itself.
+  const replacedIds = editDraft ? (editScope === 'series' ? (editDraft.seriesIds || [editDraft.sessionId]) : [editDraft.sessionId]) : [];
+
   // Short-notice detection
   const shortNotice = (() => {
     if (!date || !time) return false;
@@ -179,7 +238,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
 
   // Build sessions-by-date map for calendar indicators
   const sessionsByDate = {};
-  existingSessions.forEach(s => {
+  existingSessions.filter(s => !replacedIds.includes(s.id)).forEach(s => {
     const d = s.scheduled_date;
     if (!sessionsByDate[d]) sessionsByDate[d] = [];
     sessionsByDate[d].push(s);
@@ -357,6 +416,8 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
       caregiverId: selectedCaregiver?.caregiverId || undefined,
       directOffer: selectedCaregiver ? true : undefined,
       privateOnly: selectedCaregiver && privateOnly ? true : undefined,
+      // v1.129.2 — this replaces the request being edited (or its later open visits).
+      replaces: editDraft ? { sessionId: editDraft.sessionId, scope: editScope } : undefined,
     };
     if (proposedRate && parseFloat(proposedRate) > 0) body.proposedRate = parseFloat(proposedRate);
     if (flexTiming && flexTiming !== 'flexible') body.flexTiming = flexTiming; // default is flexible, only send if different
@@ -377,7 +438,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
         if (recurrence === 'days') details.push(recurrenceWeeks === '1' ? `${recurrenceDays.length} days, this week only` : `${recurrenceDays.length} days a week, ${recurrenceWeeks} weeks`);
         else if (recurrence !== 'none') details.push(`${recurrence}, ${recurrenceWeeks} sessions`);
         setConfirmationData({
-          title: isOpenRequest ? 'Care request posted!' : 'Care request sent!',
+          title: editDraft ? 'Request updated' : (isOpenRequest ? 'Care request posted!' : 'Care request sent!'),
           details,
         });
       } else if (response?.status === 402) {
@@ -561,7 +622,19 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 540, maxHeight: '92vh', overflow: 'auto' }}>
         <button className="modal-close" onClick={onClose}>{'\u2715'}</button>
-        <div className="modal-header">{date ? 'Book Care' : 'Request Care'}</div>
+        <div className="modal-header">{editing ? 'Edit request' : (date ? 'Book Care' : 'Request Care')}</div>
+        {/* v1.129.2 — a series asks which visits the edit is for, like Cancel does. */}
+        {editDraft && editDraft.recurrence && editDraft.recurrence.count > 1 && (
+          <div role="radiogroup" aria-label="Which visits to edit" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+            {[['this', 'Just this visit'], ['series', `This and the later open visits (${editDraft.recurrence.count})`]].map(([v, l]) => (
+              <button key={v} type="button" role="radio" aria-checked={editScope === v}
+                onClick={() => { setEditScope(v); applyRecurrenceFromDraft(editDraft, v); }}
+                style={{ flex: '1 1 180px', minHeight: 44, padding: '8px 12px', borderRadius: 10, cursor: 'pointer', fontSize: 13, fontWeight: 600,
+                  border: editScope === v ? '2px solid var(--role-color)' : '1px solid var(--border-color)',
+                  background: editScope === v ? 'var(--bg-highlight)' : 'var(--bg-card)', color: 'var(--text-primary)' }}>{l}</button>
+            ))}
+          </div>
+        )}
 
         {/* Step indicator — just 2 dots */}
         <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginBottom: 16 }}>
@@ -1156,7 +1229,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
           )}
           {step === 2 && (
             <button className="btn btn-primary" onClick={handleSubmit}>
-              {selectedCaregiver ? (selectedCaregiver.available ? 'Confirm Booking' : 'Send Offer') : 'Post Care Request'}
+              {editDraft ? 'Save changes' : (selectedCaregiver ? (selectedCaregiver.available ? 'Confirm Booking' : 'Send Offer') : 'Post Care Request')}
             </button>
           )}
         </div>

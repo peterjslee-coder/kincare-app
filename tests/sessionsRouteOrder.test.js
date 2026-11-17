@@ -67,6 +67,7 @@ const EXPECTED = [
   "POST /:id/propose-time-change",
   "PUT /:id/time-change/:proposalId/respond",
   "GET /:id/time-change",
+  "GET /:id/edit-draft",
   "PUT /:id/recipient",
   "PUT /:id/instructions",
   "POST /:id/instructions/acknowledge",

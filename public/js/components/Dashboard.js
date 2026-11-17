@@ -25,7 +25,6 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
   const [showPwaGuide, setShowPwaGuide] = useState(false);
   // Cancel + review state
   const [cancellingId, setCancellingId] = useState(null);
-  const [recipientSheetId, setRecipientSheetId] = useState(null); // v1.129.1 — change who a request goes to
   // v1.105.15 — what this cancellation actually costs, computed server-side by the SAME
   // rule the cancel endpoint applies. Never derived client-side: a second implementation
   // is a second answer, and the failure mode is showing $0 and charging $120.
@@ -1681,10 +1680,10 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                             visit, or this and the later ones" for a series. The old "Cancel series"
                             called DELETE /recurring/:groupId, which skipped open visits (the very
                             ones on this card) and gave no choice. */}
-                        {/* v1.129.1 — change who it goes to, while nobody has taken it (ddd923a7). */}
-                        <button onClick={(e) => { e.stopPropagation(); setRecipientSheetId(s.id); }}
+                        {/* v1.129.2 — Edit request: the booking form, filled in (ddd923a7; Pete 11/17). */}
+                        <button onClick={(e) => { e.stopPropagation(); window.__openEditRequest && window.__openEditRequest(s.id); }}
                           style={{ padding: '3px 8px', borderRadius: 6, border: '1px solid var(--role-color)', background: 'var(--bg-surface)', color: 'var(--role-color)', fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>
-                          Change who
+                          Edit request
                         </button>
                         <button onClick={(e) => { e.stopPropagation(); setCancellingId(s.id); }}
                           style={{ padding: '3px 8px', borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--bg-surface)', color: 'var(--color-error)', fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>
@@ -2102,9 +2101,9 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                         </button>
                       )}
                       {['pending', 'open', 'requested'].includes(s.status) && !s.caregiverName && (
-                        <button onClick={(e) => { e.stopPropagation(); setRecipientSheetId(s.id); }}
+                        <button onClick={(e) => { e.stopPropagation(); window.__openEditRequest && window.__openEditRequest(s.id); }}
                           style={{ padding: '3px 8px', borderRadius: 6, border: '1px solid var(--role-color)', background: 'var(--bg-surface)', color: 'var(--role-color)', fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>
-                          Change who
+                          Edit request
                         </button>
                       )}
                       {['confirmed', 'pending', 'open', 'requested'].includes(s.status) && (
@@ -2544,18 +2543,6 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
               </div>
             )}
           </div>
-        );
-      })()}
-      {/* v1.129.1 — Change who a request goes to */}
-      {recipientSheetId && (() => {
-        const s = upcoming.find(x => x.id === recipientSheetId);
-        if (!s) return null;
-        return (
-          <ChangeRecipientSheet
-            session={s}
-            onClose={() => setRecipientSheetId(null)}
-            onChanged={() => { setRecipientSheetId(null); fetchDashboard(); }}
-          />
         );
       })()}
       {/* Cancel Confirmation Modal — shared with Schedule via CancelSessionModal (v1.105.117) */}

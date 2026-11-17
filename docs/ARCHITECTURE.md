@@ -7,9 +7,9 @@ build red.
 
 Hand-written sections (§3 "Where is…") are preserved across regeneration; edit those freely.
 
-Structure at last generation: 607 HTTP routes across 64 mounts ·
+Structure at last generation: 608 HTTP routes across 64 mounts ·
 116 `CREATE TABLE` statements · 16 background jobs · 39 socket events
-(17 with no client listener) · 73 push event types · 63 `window.__*` globals.
+(17 with no client listener) · 73 push event types · 65 `window.__*` globals.
 
 ---
 
@@ -97,7 +97,7 @@ JSX is *not* compiled in the browser; Babel-standalone is not loaded. Editing an
 | `/api/safety` | `src/routes/safety.js` | 6 |  |
 | `/api/scheduling` | `src/routes/nlScheduling.js` | 1 |  |
 | `/api/self-onboarding` | `src/routes/selfOnboarding.js` | 3 |  |
-| `/api/sessions` | `src/routes/sessions.js` **+** `src/routes/offers.js` | 49 | ⚠️ **multi-file mount — routes for this prefix live in more than one file** |
+| `/api/sessions` | `src/routes/sessions.js` **+** `src/routes/offers.js` | 50 | ⚠️ **multi-file mount — routes for this prefix live in more than one file** |
 | `/api/sms` | `src/routes/smsWebhooks.js` | 13 |  |
 | `/api/video` | `src/routes/videoCall.js` | 1 |  |
 | `/api/waitlist` | `src/routes/waitlist.js` | 3 |  |
@@ -353,6 +353,7 @@ State travels through `window`, not props. This table is the registry.
 | `window.__navHistory` | app.js | 3 |
 | `window.__navigateTo` | app.js, Caregivers.js | 59 |
 | `window.__openConversationId` | Messages.js, utils.js | 5 |
+| `window.__openEditRequest` | app.js | 7 |
 | `window.__openRequestCareModal` | app.js, CareToolsSheet.js | 21 |
 | `window.__openTaskCreate` | — | 1 |
 | `window.__originalSearch` | app.js | 4 |
@@ -372,6 +373,7 @@ State travels through `window`, not props. This table is the registry.
 | `window.__refetchAdminAlerts` | app.js, AdminPanel.js | 5 |
 | `window.__requestCareCaregiver` | app.js | 4 |
 | `window.__requestCareDate` | app.js | 4 |
+| `window.__requestCareEdit` | app.js | 3 |
 | `window.__safeAreaBottom` | app.js | 13 |
 | `window.__safeAreaTop` | app.js | 8 |
 | `window.__sandboxMode` | app.js | 2 |

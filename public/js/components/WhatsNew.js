@@ -25,17 +25,17 @@ const wnHead = { fontSize: 10.5, fontWeight: 700, color: 'var(--text-muted)', te
 const wnPill = (bg, fg) => ({ padding: '4px 10px', borderRadius: 8, background: bg, color: fg, fontSize: 11, fontWeight: 700 });
 
 const WN_PREVIEWS = {
-  // v1.129.1 — change who an open request goes to
-  changeWho: () => (
+  // v1.129.2 — Edit request
+  editRequest: () => (
     <div style={{ padding: '12px 12px 10px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>
-      <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>Who should this go to?</div>
-      {[['All caregivers', false], ['Jane', true], ['Sam', false]].map(([n, on]) => (
-        <div key={n} style={{ ...wnCard, display: 'flex', alignItems: 'center', gap: 8, border: on ? '2px solid var(--role-color)' : wnCard.border }}>
-          <span style={{ width: 12, height: 12, borderRadius: 6, boxSizing: 'border-box', border: on ? '4px solid var(--role-color)' : '2px solid var(--border-color)' }} />
-          <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-primary)' }}>{n}</span>
-        </div>
-      ))}
-      <div style={{ fontSize: 11.5, color: 'var(--text-secondary)', marginTop: 4 }}>{'\u2713'} Only Jane {'\u00B7'} it stays with Jane</div>
+      <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>Edit request</div>
+      <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 8 }}>
+        {[['Companionship', false], ['Personal care', true], ['Meal prep', false]].map(([t, on]) => (
+          <span key={t} style={on ? wnPill('var(--role-color)', 'var(--text-on-primary)') : { ...wnPill('var(--bg-surface)', 'var(--text-secondary)'), border: '1px solid var(--border-color)' }}>{t}</span>
+        ))}
+      </div>
+      <div style={{ ...wnCard, fontSize: 12, color: 'var(--text-primary)' }}>Tue 9:00 AM {'\u00B7'} 3h {'\u00B7'} every week {'\u00B7'} Jane only</div>
+      <div style={{ ...wnPill('var(--role-color)', 'var(--text-on-primary)'), display: 'inline-block', marginTop: 4 }}>Save changes</div>
     </div>
   ),
   // v1.129.0 — the caregiver Get Ready card
