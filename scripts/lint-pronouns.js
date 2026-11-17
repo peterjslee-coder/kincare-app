@@ -62,6 +62,9 @@ function targets() {
   const files = [...walk(path.join(ROOT, "public/js"))];
   files.push(...[...walk(path.join(ROOT, "src/routes"))]);
   files.push(path.join(ROOT, "src/server.js"));
+  // v1.128.1 — What's New cards are copy every family reads; the 11/15 late check-in card said
+  // "If she still hasn't checked in" and passed, because this directory was never scanned.
+  files.push(...[...walk(path.join(ROOT, "src/whatsNew"))]);
   return files;
 }
 

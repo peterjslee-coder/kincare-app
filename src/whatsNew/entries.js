@@ -52,7 +52,7 @@ const ENTRIES = [
     date: "2026-11-15",
     audience: ["family"],
     title: "A late check-in now asks you before anything is cancelled",
-    body: "A flexible visit now gives the caregiver 30 minutes either side of the start time to check in. If she still hasn't checked in after that, you choose what happens: give the caregiver more time, send a message, or cancel with no charge.",
+    body: "A flexible visit now gives the caregiver 30 minutes either side of the start time to check in. If the caregiver still hasn't checked in after that, you choose what happens: give the caregiver more time, send a message, or cancel with no charge.",
     howTo: [
       "When you get \"hasn't checked in\", tap it (or Choose on Home)",
       "Tap +15, +30 or +60 min to give more time",
@@ -75,7 +75,7 @@ const ENTRIES = [
       "Write what the caregiver should know and tap Save",
       "No Edit button? Ask the care team leader for scheduling access",
     ],
-    examples: ["Lunch at noon, please", "She has a hair appointment at 2", "The mail key is on the hook by the door"],
+    examples: ["Lunch at noon, please", "Mom has a hair appointment at 2", "The mail key is on the hook by the door"],
     preview: "teamInstructions",
   },
   {
@@ -107,7 +107,7 @@ const ENTRIES = [
       "Keep InPlace open on that screen while it records",
       "Tap Stop & file it — the notes land on the appointment",
     ],
-    examples: ["Pause in the waiting room", "Pause while she's in X-ray", "Keep going after a call interrupts"],
+    examples: ["Pause in the waiting room", "Pause during the X-ray", "Keep going after a call interrupts"],
     preview: "recordPause",
   },
   {
@@ -163,7 +163,7 @@ const ENTRIES = [
     date: "2026-10-28",
     audience: ["family"],
     title: "Tomorrow, on one line",
-    body: "Everything in the next 24 hours now sits on one card on Home, in time order, joined by a line. The green line is the caregiver's visit, so you can see at a glance which appointments happen while she's there and which don't.",
+    body: "Everything in the next 24 hours now sits on one card on Home, in time order, joined by a line. The green line is the caregiver's visit, so you can see at a glance which appointments happen during the visit and which don't.",
     howTo: [
       "Open Home — the Coming up card is at the top",
       "Read down the line: the visit, then each appointment at its time",
