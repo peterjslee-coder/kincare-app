@@ -33,7 +33,7 @@ const ENTRIES = [
   {
     id: "days-this-week-only",
     version: "1.128.1",
-    date: "2026-11-17",
+    date: "2026-11-16",
     audience: ["family", "care_for"],
     title: "Book certain days for just one week",
     body: "\"Certain days\" no longer has to repeat. Pick the days you need, choose \"This week only\", and they go out as one request.",
