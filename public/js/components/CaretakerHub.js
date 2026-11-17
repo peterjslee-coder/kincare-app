@@ -2348,12 +2348,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         </div>
       ))}
 
-      {/* Welcome subtitle — shown during onboarding */}
-      {showFirstSteps && (
-        <div style={{ color: 'var(--color-info)', fontWeight: 500, background: 'var(--color-info-bg)', padding: '10px 14px', borderRadius: '10px', fontSize: '13px', lineHeight: 1.5, marginBottom: '20px' }}>
-          This is your home hub. When you finish onboarding you'll see available jobs and your calendar!
-        </div>
-      )}
+      {/* v1.129.0 — the "home hub" banner is gone; the Get Ready card says what is next. */}
 
       {/* Milestone Celebration Banner */}
       {unackedMilestones.length > 0 && (() => {
@@ -2541,118 +2536,194 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
 
       {/* v1.107.2 — "Add a note" / "Log a visit" for the people whose care team she is on. */}
       {typeof CareTeamQuickActions !== 'undefined' && <CareTeamQuickActions />}
-      {/* ─── First steps, quietly (v1.105.118) ───
-          Pete, on the version that listed all seven as rows: "the finished stuff...small, greyed
-          out, lined through... We don't want this to be a catalogue in your face of how hard it
-          is to sign up."
+      {/* ─── Getting ready (v1.129.0) ───
+          Pete, 11/16, on Ryan's dashboard: "this landing page is a mess. I'm not even sure where
+          he's supposed to go other than go to stripe. But his schedule availability, his profile
+          fill-out, 2FA and passkey options...I thought we were walking them through this?"
+          Approved mockup: claude.ai/artifact/9Y5vtgqQFuSAGUTdMXjgo3
 
-          So the information is unchanged and the weight is not: everything done collapses onto
-          one small struck-through line, ONE step is open and has any size to it, and what is
-          left is a single quiet line of names. Seven rows of orange-bordered work became about
-          four lines. */}
+          The v1.105.118 card showed ONE open step and folded the rest into a grey line of names,
+          so everything after "Where your pay lands" read as decoration. Now: lead with what the
+          steps UNLOCK ("2 steps until you can work for the Ellis family"), give every remaining
+          step its own row and button, group the rest by what it is for, and collapse what is
+          finished to a line of ticks. Same route (onboardingRoute.js), same four states: an
+          unknown step is never drawn as done or as to-do, and work sitting with us is its own
+          note, never counted as hers. */}
       {showFirstSteps && (() => {
-        const doneNames = hubRoute.items.filter((i) => i.state === 'done').map((i) => i.label);
-        const waitingItems = hubRoute.items.filter((i) => i.state === 'waiting');
         const open = hubRoute.current;
-        const openStep = open ? firstStepFor(open.id) : null;
-        // Never prefixed, per Pete — just the names.
-        const ahead = hubRoute.items
-          .filter((i) => i.state === 'todo' && (!open || i.id !== open.id))
-          .map((i) => i.label);
+        const byId = (id) => hubRoute.items.find((i) => i.id === id) || hubRoute.optional.find((i) => i.id === id) || null;
+        const isTodo = (id) => { const it = byId(id); return !!it && it.state === 'todo'; };
+        const doneItems = hubRoute.items.filter((i) => i.state === 'done');
+        const waitingItems = hubRoute.items.filter((i) => i.state === 'waiting');
+        const vouchNames = adminVouches.map((v) => v.familyName).filter(Boolean);
+        const vouchedOnly = !profile.isBackgroundChecked && vouchNames.length > 0;
+        const workFor = vouchedOnly
+          ? (vouchNames.length === 1 ? 'the ' + vouchNames[0] + ' family' : vouchNames.join(' and '))
+          : null;
+
+        // What each step is for, in her words. Copy lives here; state lives in the route.
+        const COPY = {
+          identity: { title: 'A photo of your ID', why: 'Families are inviting you into their home. A selfie and your ID tell them who you are.', time: 'About 2 minutes', cta: 'Start' },
+          preferences: { title: 'What care you’re happy to do', why: 'Needed before you can accept a job. Pick what you’ll take on and what you’d rather not.', time: 'About 2 minutes', cta: 'Start' },
+          stripe: { title: 'Where your pay lands', why: 'Needed before your first visit. The day before, we hold the family’s card, and that needs somewhere to pay you. Stripe keeps your bank details; InPlace never sees them.', time: 'About 2 minutes', cta: 'Connect bank' },
+          'background-check': { title: 'Background check', why: profile.backgroundCheckFeeWaived ? 'Lets any family book you. Your fee is covered.' : 'Lets any family book you. $30, takes 2–5 days.', time: null, cta: 'Start' },
+          'avail-rates': { title: 'When you’re free, and your rate', why: 'Fills your calendar so families know when to ask.', time: 'About 3 minutes', cta: 'Set' },
+          photo: { title: 'A photo and a few words about you', why: 'Families want to see who’s coming to their home.', time: 'About 2 minutes', cta: 'Add' },
+        };
+
+        // ── Up next: what stands between her and work ──
+        // Vouched (or family-brought): her vouching family's jobs need preferences (the claim
+        // gate, utils/claimGates.js) and Stripe (the card hold, accountability.js) — not the
+        // background check. Otherwise the background check is part of getting booked at all.
+        const nextIds = (vouchedOnly ? ['identity', 'preferences', 'stripe'] : ['identity', 'preferences', 'stripe', 'background-check'])
+          .filter((id) => isTodo(id));
+        const listedIds = ['avail-rates', 'photo'].filter((id) => isTodo(id));
+        // Vouched: the real check is still worth doing — it is what opens everyone else's jobs.
+        const showBgListed = vouchedOnly && !profile.isBackgroundChecked;
+        const securityTodo = isTodo('security');
+        // The highlighted step is the route's open one when it is in this group (exactly one open
+        // step, property 3), else the first startable step here.
+        const firstOpenId = (open && nextIds.includes(open.id)) ? open.id
+          : (nextIds.find((id) => { const it = byId(id); return it && !it.blocked; }) || null);
+        const doneCount = doneItems.length;
+
+        const rowBtn = (primary) => ({
+          minHeight: 44, padding: '0 20px', borderRadius: 10, fontSize: 15, fontWeight: primary ? 700 : 600, cursor: 'pointer',
+          border: primary ? 'none' : '1px solid var(--border-color)',
+          background: primary ? 'var(--role-color)' : 'transparent',
+          color: primary ? 'var(--text-on-primary)' : 'var(--text-primary)', flexShrink: 0,
+        });
+        const smallRow = (id, title, sub, cta, onClick, disabledLabel) => (
+          <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 0', borderTop: '1px solid var(--border-color)' }}>
+            <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)' }}>{title}</span>
+              <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{sub}</span>
+            </div>
+            {disabledLabel
+              ? <span style={{ fontSize: 13, color: 'var(--text-muted)', padding: '0 4px' }}>{disabledLabel}</span>
+              : <button type="button" onClick={onClick} style={{ ...rowBtn(false), minHeight: 40, padding: '0 16px', fontSize: 14 }}>{cta}</button>}
+          </div>
+        );
+        const bgWaiting = bgCheckSubmitted && !profile.isBackgroundChecked;
 
         return (
-        <div style={{ background: 'var(--bg-surface)', borderRadius: '14px', border: '1px solid var(--border-color)', padding: '18px 20px', marginBottom: '20px' }}>
+        <div className="ip-get-ready" style={{ display: 'flex', flexDirection: 'column', gap: 16, marginBottom: 20 }}>
           <input type="file" ref={avatarInputRef} accept="image/*" style={{ display: 'none' }} onChange={handleAvatarUpload} />
 
-          {/* Done. Keyed on the count so finishing one replays the fade. */}
-          {doneNames.length > 0 && (
-            // v1.105.119 — green behind you, teal now, grey ahead. Opacity rather than a
-            // lighter green, so it survives dark mode where --color-success is a different hue.
-            <div className="ip-path-done" key={doneNames.length} style={{
-              fontSize: '11px', lineHeight: '1.6', color: 'var(--color-success)',
-              textDecoration: 'line-through', textDecorationColor: 'var(--color-success)',
-              marginBottom: '14px', opacity: 0.62,
-            }}>{doneNames.join('  \u00B7  ')}</div>
-          )}
-
-          {/* Open — the only thing here with any weight. */}
-          {open && openStep && (
-            <div className="ip-path-step" key={open.id}>
-              <div style={{
-                fontSize: '17px', fontWeight: 600, color: 'var(--role-color)', marginBottom: '5px',
-                display: 'flex', alignItems: 'center', gap: '8px',
-              }}>
-                {/* The one live dot. Exactly one exists on the screen, which is why it can
-                    afford to be the only warm colour on it. */}
-                <span style={{
-                  width: '7px', height: '7px', borderRadius: '50%',
-                  background: 'var(--accent-color)', flexShrink: 0,
-                }} />
-                {open.label}
+          {/* Up next */}
+          {(nextIds.length > 0 || waitingItems.length > 0) && (
+            <section aria-label="Up next" style={{ background: 'var(--bg-surface)', borderRadius: 14, border: '1px solid var(--border-color)', padding: '20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 12, flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0, flex: '1 1 300px' }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.6, textTransform: 'uppercase', color: 'var(--accent-color)' }}>Up next</span>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.25 }}>
+                    {nextIds.length === 0
+                      ? 'Nothing else for you to do here — it’s with us'
+                      : (nextIds.length === 1 ? '1 step' : nextIds.length + ' steps') + ' until ' + (workFor ? 'you can work for ' + workFor : 'families can book you')}
+                  </div>
+                  {workFor && (
+                    <div style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                      {vouchNames.length === 1 ? 'The ' + vouchNames[0] + ' family' : vouchNames.join(' and ')} vouched for you, so you don{'’'}t need a background check to work for them.
+                    </div>
+                  )}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5 }}>
+                  <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                    {doneCount} of {hubRoute.total} done{waitingItems.length > 0 ? '  ·  ' + waitingItems.length + ' with us' : ''}
+                  </span>
+                  <div style={{ width: 160, height: 6, borderRadius: 3, background: 'var(--border-color)', overflow: 'hidden' }}>
+                    <div style={{ width: Math.round(100 * doneCount / Math.max(1, hubRoute.total)) + '%', height: '100%', background: 'var(--color-success)' }} />
+                  </div>
+                </div>
               </div>
-              {openStep.desc && (
-                <div style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.45', marginBottom: '12px' }}>
-                  {openStep.desc}
-                </div>
-              )}
-              {/* v1.105.63 — the waived/not-waived branch lives in `desc` above and must keep
-                  its own sentence. This is the separate "and here is what is missing" line. */}
-              {openStep.missing && (
-                <div style={{ fontSize: '12px', color: 'var(--color-warning)', marginBottom: '10px' }}>
-                  {openStep.missing}
-                </div>
-              )}
-              <button onClick={() => openFirstStep(openStep.id)} style={{
-                width: '100%', padding: '11px', background: 'var(--role-color)', color: 'var(--text-on-primary)',
-                border: 'none', borderRadius: '8px', fontSize: '15px', fontWeight: 600, cursor: 'pointer',
-              }}>Start</button>
-            </div>
+
+              {nextIds.map((id, n) => {
+                const c = COPY[id];
+                const it = byId(id);
+                const step = firstStepFor(id);
+                const isFirst = id === firstOpenId;
+                const blocked = it && it.blocked;
+                return (
+                  <div key={id} className="ip-path-step" style={{
+                    display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px', borderRadius: 12, flexWrap: 'wrap',
+                    background: 'var(--bg-secondary)', border: '1px solid ' + (isFirst ? 'var(--role-color)' : 'var(--border-color)'),
+                  }}>
+                    <span style={{ width: 32, height: 32, borderRadius: 16, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700,
+                      background: isFirst ? 'var(--role-color)' : 'var(--border-color)', color: isFirst ? 'var(--text-on-primary)' : 'var(--text-primary)' }}>{n + 1}</span>
+                    <div style={{ flex: '1 1 260px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                      <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>{c.title}</span>
+                      <span style={{ fontSize: 13.5, color: 'var(--text-secondary)', lineHeight: 1.45 }}>{c.why}{c.time ? ' ' + c.time + '.' : ''}</span>
+                      {step && step.warning && <span style={{ fontSize: 12.5, color: 'var(--color-warning)', lineHeight: 1.45 }}>{step.warning}</span>}
+                    </div>
+                    {blocked
+                      ? <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>After {(it.blockedBy || []).map((d) => (COPY[d] ? COPY[d].title.toLowerCase() : d)).join(', ')}</span>
+                      : <button type="button" onClick={() => openFirstStep(id)} style={rowBtn(isFirst)}>{c.cta}</button>}
+                  </div>
+                );
+              })}
+
+              {/* Waiting on US — not hers, never counted (v1.105.112). */}
+              {waitingItems.map((item) => {
+                const step = firstStepFor(item.id);
+                return (
+                  <div key={item.id} style={{ padding: '11px 14px', background: 'var(--bg-highlight)', border: '1px solid var(--border-color)', borderRadius: 10 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--role-color)', marginBottom: 2 }}>{item.label}</div>
+                    <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.45 }}>
+                      {(step && step.warning) || 'Sent — we’ll review it and reach out if we have any questions. Nothing else for you to do.'}
+                    </div>
+                  </div>
+                );
+              })}
+            </section>
           )}
 
-          {ahead.length > 0 && (
-            <div style={{ fontSize: '11px', lineHeight: '1.55', color: 'var(--text-muted)', marginTop: '14px' }}>
-              {ahead.join('  \u00B7  ')}
-            </div>
-          )}
-
-          <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '8px', opacity: 0.8 }}>
-            {hubRoute.remaining} {hubRoute.remaining === 1 ? 'thing' : 'things'} left
-            {waitingItems.length > 0 && (
-              <span style={{ color: 'var(--role-color)', fontWeight: 600 }}>
-                {'  \u00B7  ' + waitingItems.length + ' with us'}
-              </span>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 16 }}>
+            {(listedIds.length > 0 || showBgListed) && (
+              <section aria-label="Get listed for other families" style={{ background: 'var(--bg-surface)', borderRadius: 14, border: '1px solid var(--border-color)', padding: '18px 20px 8px' }}>
+                <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>Get listed for other families</div>
+                <div style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '2px 0 8px' }}>So families nearby can find and book you.</div>
+                {listedIds.map((id) => smallRow(id, COPY[id].title, COPY[id].why + (COPY[id].time ? ' ' + COPY[id].time + '.' : ''), COPY[id].cta, () => openFirstStep(id)))}
+                {showBgListed && smallRow('background-check', COPY['background-check'].title,
+                  bgWaiting ? ((firstStepFor('background-check') || {}).warning || 'Sent — it usually takes 2–5 business days.') : COPY['background-check'].why,
+                  'Start', () => openFirstStep('background-check'),
+                  bgWaiting ? 'With us' : (!(stripeConnected || stripeOverride) ? 'After your bank' : null))}
+              </section>
+            )}
+            {securityTodo && (
+              <section aria-label="Keep your account safe" style={{ background: 'var(--bg-surface)', borderRadius: 14, border: '1px solid var(--border-color)', padding: '18px 20px 8px' }}>
+                <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>Keep your account safe</div>
+                <div style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '2px 0 8px' }}>Your account holds families{'’'} addresses and your pay. One of these is enough.</div>
+                {smallRow('passkey', 'Sign in with Face ID or your fingerprint', 'A passkey · about 1 minute · recommended', 'Turn on', () => openFirstStep('security'))}
+                {smallRow('2fa', 'Or a code from an authenticator app', 'Two-step sign-in · about 2 minutes', 'Set up', () => openFirstStep('security'))}
+              </section>
             )}
           </div>
 
-          {/* v1.105.186 — the short path. What is NOT on it is said once, quietly, as hers to
-              take whenever she likes. Not counted, not a to-do, and the safety check is named
-              for what it does: opens other families' jobs. */}
-          {familyOnly && hubRoute.optional.length > 0 && (
-            <div style={{ fontSize: '11px', lineHeight: '1.55', color: 'var(--text-muted)', marginTop: '10px', paddingTop: '10px', borderTop: '1px dashed var(--border-color)' }}>
-              Whenever you like: {hubRoute.optional.filter((i) => i.state !== 'done').map((i) => i.id === 'background-check' ? 'the safety check (to work with other families)' : i.label.toLowerCase()).join('  \u00B7  ')}
-            </div>
+          {/* Done — a line of ticks, not strikethrough (v1.129.0). Built from 'done' and nothing else. */}
+          {doneItems.length > 0 && (
+            <section aria-label="Already done" className="ip-path-done" style={{ background: 'var(--bg-surface)', borderRadius: 14, border: '1px solid var(--border-color)', padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-success)' }}>Done: {doneItems.length}</span>
+                <button type="button" onClick={() => { window.__accountTab = 'documents'; window.__navigateTo && window.__navigateTo('account'); }}
+                  style={{ background: 'none', border: 'none', padding: 0, color: 'var(--role-color)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                  Add certifications or training anytime
+                </button>
+              </div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {doneItems.map((i) => (
+                  <span key={i.id} style={{ padding: '5px 11px', borderRadius: 14, background: 'var(--color-success-bg)', color: 'var(--color-success)', fontSize: 12.5, fontWeight: 600 }}>
+                    {'✓ '}{i.id === 'background-check' && vouchedOnly ? 'Vouched by ' + (workFor || 'a family') : (i.id === 'identity' ? 'ID approved' : i.label)}
+                  </span>
+                ))}
+              </div>
+            </section>
           )}
 
-          {/* Waiting on US. Its own note, outside the queue of things to do, because it is not
-              her work — and since v1.105.112 it is what every caregiver's dashboard looks like
-              on day one. */}
-          {waitingItems.map((item) => {
-            const step = firstStepFor(item.id);
-            return (
-              <div key={item.id} onClick={() => step && openFirstStep(step.id)} style={{
-                marginTop: '12px', padding: '11px 12px', background: 'var(--bg-highlight)',
-                border: '1px solid #d4ede8', borderRadius: '8px', cursor: 'pointer',
-              }}>
-                <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--role-color)', marginBottom: '2px' }}>
-                  {item.label}
-                </div>
-                <div style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.45' }}>
-                  {(step && step.warning)
-                    || 'Sent \u2014 we\u2019ll review it and reach out if we have any questions. Nothing else for you to do.'}
-                </div>
-              </div>
-            );
-          })}
+          {familyOnly && hubRoute.optional.length > 0 && (
+            <div style={{ fontSize: 12, lineHeight: 1.55, color: 'var(--text-muted)' }}>
+              Whenever you like: {hubRoute.optional.filter((i) => i.state !== 'done').map((i) => i.id === 'background-check' ? 'the safety check (to work with other families)' : i.label.toLowerCase()).join('  ·  ')}
+            </div>
+          )}
         </div>
         );
       })()}
@@ -2667,9 +2738,11 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       {/* Calendar Placeholder — shown when no availability set yet */}
       {showFirstSteps && !hasAvailability && (
         <div style={{ background: 'var(--bg-surface)', borderRadius: '14px', border: '1px solid var(--border-color)', padding: '28px 22px', textAlign: 'center', marginBottom: '20px' }}>
-          <div style={{ fontSize: '40px', marginBottom: '8px', opacity: 0.5 }}>📅</div>
-          <div style={{ fontSize: '14px', color: 'var(--text-muted)' }}>Your availability and booked sessions will show here later</div>
-          <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>Complete step 2 to set your availability and see your calendar</div>
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 10h18M8 3v4M16 3v4" /></svg>
+          <div style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)', marginTop: '6px' }}>Your calendar</div>
+          {/* v1.129.0 — was "Complete step 2 to set your availability": there is no step 2 (Pete, 11/16). */}
+          <div style={{ fontSize: '14px', color: 'var(--text-secondary)', marginTop: '4px' }}>It fills in once you say when you{'\u2019'}re free. Jobs you accept show up here too.</div>
+          <button type="button" onClick={() => openFirstStep('avail-rates')} style={{ marginTop: '12px', minHeight: 44, padding: '0 18px', borderRadius: 10, border: '1px solid var(--border-color)', background: 'transparent', color: 'var(--text-primary)', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>Set when you{'\u2019'}re free</button>
         </div>
       )}
 

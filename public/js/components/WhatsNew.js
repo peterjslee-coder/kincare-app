@@ -25,6 +25,21 @@ const wnHead = { fontSize: 10.5, fontWeight: 700, color: 'var(--text-muted)', te
 const wnPill = (bg, fg) => ({ padding: '4px 10px', borderRadius: 8, background: bg, color: fg, fontSize: 11, fontWeight: 700 });
 
 const WN_PREVIEWS = {
+  // v1.129.0 — the caregiver Get Ready card
+  getReady: () => (
+    <div style={{ padding: '12px 12px 10px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>
+      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase', color: 'var(--accent-color)' }}>Up next</div>
+      <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', margin: '2px 0 8px' }}>2 steps until you can work for the Ellis family</div>
+      {[['1', 'What care you\u2019re happy to do', 'Start', true], ['2', 'Where your pay lands', 'Connect bank', false]].map(([n, t, cta, on]) => (
+        <div key={n} style={{ ...wnCard, display: 'flex', alignItems: 'center', gap: 8, border: on ? '1px solid var(--role-color)' : wnCard.border }}>
+          <span style={{ width: 20, height: 20, borderRadius: 10, background: on ? 'var(--role-color)' : 'var(--border-color)', color: on ? 'var(--text-on-primary)' : 'var(--text-primary)', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{n}</span>
+          <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>{t}</span>
+          <span style={on ? wnPill('var(--role-color)', 'var(--text-on-primary)') : { ...wnPill('var(--bg-surface)', 'var(--text-primary)'), border: '1px solid var(--border-color)' }}>{cta}</span>
+        </div>
+      ))}
+      <div style={{ fontSize: 11, color: 'var(--color-success)', fontWeight: 600, marginTop: 4 }}>{'\u2713'} Account {'\u00B7'} {'\u2713'} ID approved {'\u00B7'} {'\u2713'} Documents</div>
+    </div>
+  ),
   // v1.128.1 — certain days, for one week only
   daysThisWeek: () => (
     <div style={{ padding: '12px 12px 10px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>

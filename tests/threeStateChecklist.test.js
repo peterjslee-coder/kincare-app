@@ -41,7 +41,9 @@ describe("the third state exists", () => {
 
   test("an unknown step is never listed among the things left", () => {
     // Prompting for a photo she already sent is the complaint itself.
-    expect(code).toMatch(/\.filter\(\(i\) => i\.state === 'todo' && \(!open \|\| i\.id !== open\.id\)\)/);
+    // v1.129.0 — the Get Ready card lists a step only when its state is exactly 'todo'.
+    expect(code).toMatch(/const isTodo = \(id\) => \{ const it = byId\(id\); return !!it && it\.state === 'todo'; \};/);
+    expect(code).toMatch(/\.filter\(\(id\) => isTodo\(id\)\)/);
   });
 
   test("it does not draw as done either", () => {
@@ -64,8 +66,9 @@ describe("the sentence that answers 'when does this ever end?'", () => {
   test("and what is left never counts it", () => {
     // "How much is left?" has to mean "left for you", or the answer is wrong in the direction
     // that makes it feel endless.
-    expect(code).toMatch(/\{hubRoute\.remaining\}/);
-    expect(code).toMatch(/' with us'/);
+    // v1.129.0 — the headline counts only 'todo' steps (nextIds); waiting is shown as "N with us".
+    expect(code).toMatch(/nextIds\.length === 1 \? '1 step' : nextIds\.length \+ ' steps'/);
+    expect(code).toMatch(/waitingItems\.length \+ ' with us'/);
   });
 
   test("and it reads like a person wrote it", () => {

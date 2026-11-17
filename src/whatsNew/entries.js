@@ -31,6 +31,21 @@ const WINDOW_DAYS = 45;
 
 const ENTRIES = [
   {
+    id: "caregiver-get-ready",
+    version: "1.129.0",
+    date: "2026-11-17",
+    audience: ["caregiver"],
+    title: "Your home page now says exactly what's left",
+    body: "Every step you still have has its own button, and the top says what it unlocks, like the first family who can book you. Finished steps fold into a short line of ticks.",
+    howTo: [
+      "Open Home",
+      "Start with the step marked 1 under Up next",
+      "Then fill in your availability, photo and account safety, whenever suits you",
+    ],
+    examples: ["Two steps until you can work for the Ellis family", "Connect your bank before your first visit"],
+    preview: "getReady",
+  },
+  {
     id: "days-this-week-only",
     version: "1.128.1",
     date: "2026-11-16",

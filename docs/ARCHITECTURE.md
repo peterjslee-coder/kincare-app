@@ -325,7 +325,7 @@ State travels through `window`, not props. This table is the registry.
 |---|---|---:|
 | `window.__ADMIN_API_KEY` | — | 2 |
 | `window.__ADMIN_BUNDLE_URL` | — | 1 |
-| `window.__accountTab` | app.js, CaretakerHub.js, Dashboard.js | 17 |
+| `window.__accountTab` | app.js, CaretakerHub.js, Dashboard.js | 18 |
 | `window.__activeConversationId` | app.js, Messages.js, utils.js | 5 |
 | `window.__applyUserTheme` | app.js | 4 |
 | `window.__attachmentBlobCache` | AttachmentViewer.js | 1 |
@@ -349,7 +349,7 @@ State travels through `window`, not props. This table is the registry.
 | `window.__modalBackHandler` | app.js, AdminOutreach.js | 10 |
 | `window.__nativePush` | utils.js | 2 |
 | `window.__navHistory` | app.js | 3 |
-| `window.__navigateTo` | app.js, Caregivers.js | 57 |
+| `window.__navigateTo` | app.js, Caregivers.js | 59 |
 | `window.__openConversationId` | Messages.js, utils.js | 5 |
 | `window.__openRequestCareModal` | app.js, CareToolsSheet.js | 21 |
 | `window.__openTaskCreate` | — | 1 |
