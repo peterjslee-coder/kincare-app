@@ -251,7 +251,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
     if (daySess.length === 0) return [];
     const parseTime = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + (m || 0); };
     const newStart = parseTime(time);
-    const newEnd = newStart + parseInt(duration) * 60;
+    const newEnd = newStart + Number(duration) * 60;
     return daySess.filter(s => {
       if (!s.scheduled_time) return false;
       if (s.status === 'cancelled') return false;
@@ -289,7 +289,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
     setLoadingCaregivers(true);
     const parseTime24 = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
     const requestStart = parseTime24(time);
-    const requestEnd = requestStart + parseInt(duration) * 60;
+    const requestEnd = requestStart + Number(duration) * 60;
 
     // Helper: check a caregiver's availability slots for the requested window
     const checkAvailability = async (profileId) => {
@@ -408,7 +408,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
     if (!recipientId) { setSubmitError('No care recipient found. Please add a care recipient first.'); return; }
     const body = {
       careRecipientId: recipientId, serviceType: resolvedServiceType, scheduledDate: date, scheduledTime: time,
-      durationHours: parseInt(duration), specialInstructions: instructions || undefined,
+      durationHours: Number(duration), specialInstructions: instructions || undefined,
       status: isOpenRequest ? 'open' : undefined,
       recurrenceRule: recurrence !== 'none' ? recurrence : undefined,
       recurrenceWeeks: recurrence !== 'none' ? parseInt(recurrenceWeeks) : undefined,
@@ -529,6 +529,13 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
     { value: 'transportation', label: 'Transport' },
     { value: 'other', label: 'Other' },
   ];
+  // Editing a request whose care type predates today's list (seeded "rides",
+  // "meals"…) — show that type as its own selected pill so the form never looks
+  // blank and saving never silently changes it.
+  if (serviceType && serviceType !== 'other' && !serviceOptions.some(o => o.value === serviceType)) {
+    const legacyLabel = serviceType.replace(/_/g, ' ').replace(/^./, c => c.toUpperCase());
+    serviceOptions.splice(serviceOptions.length - 1, 0, { value: serviceType, label: legacyLabel });
+  }
 
   // Resolve actual service type for submission (handles "other:text" format)
   const resolvedServiceType = serviceType === 'other' && otherCareText.trim()
@@ -538,6 +545,11 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
     { value: '1', label: '1h' }, { value: '2', label: '2h' }, { value: '3', label: '3h' },
     { value: '4', label: '4h' }, { value: '6', label: '6h' }, { value: '8', label: '8h' },
   ];
+  // Same for a duration not on the list (1.5h): keep it visible and selected.
+  if (duration && !durationOptions.some(o => o.value === duration)) {
+    durationOptions.push({ value: duration, label: `${duration}h` });
+    durationOptions.sort((a, b) => Number(a.value) - Number(b.value));
+  }
 
   // Loading state
   if (assignedCaregivers === null) {
@@ -822,7 +834,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
                   <div>
                     <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-warning)', marginBottom: 4 }}>Time overlap detected</div>
                     <div style={{ fontSize: 12, color: 'var(--text-brown)', lineHeight: 1.4 }}>
-                      This session ({formatTime12(time)} – {formatTime12((() => { const [h,m] = time.split(':').map(Number); const endMin = h*60+(m||0)+parseInt(duration)*60; return `${String(Math.floor(endMin/60)).padStart(2,'0')}:${String(endMin%60).padStart(2,'0')}`; })())}) overlaps with:
+                      This session ({formatTime12(time)} – {formatTime12((() => { const [h,m] = time.split(':').map(Number); const endMin = h*60+(m||0)+Number(duration)*60; return `${String(Math.floor(endMin/60)).padStart(2,'0')}:${String(endMin%60).padStart(2,'0')}`; })())}) overlaps with:
                     </div>
                     {overlappingSessions.map((s, si) => {
                       const sTime = s.scheduled_time ? formatTime12(s.scheduled_time) : '?';
@@ -1158,7 +1170,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
                   style={{ width: 72, padding: '6px 8px', borderRadius: 8, border: '2px solid #1b6b5a', fontSize: 16, fontWeight: 600, textAlign: 'center' }} />
                 <span style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>/hr</span>
                 {proposedRate && duration && (
-                  <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--role-color)' }}>= ${(parseFloat(proposedRate) * parseInt(duration)).toFixed(0)} total</span>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--role-color)' }}>= ${(parseFloat(proposedRate) * Number(duration)).toFixed(0)} total</span>
                 )}
               </div>
               {localAvgRate && <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 4 }}>Avg local rate: ${localAvgRate}/hr</div>}
