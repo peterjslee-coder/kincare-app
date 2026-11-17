@@ -67,7 +67,7 @@ const ConsentVerification = window.ConsentVerification = ({ recipientId, recipie
     setError('');
     try {
       const formData = new FormData();
-      formData.append('document', file);
+      formData.append('document', await uploadSafeFile(file));
       formData.append('document_type', selectedDocType);
       const token = window.AUTH_TOKEN;
       const _csrf = typeof getCsrfToken === 'function' ? getCsrfToken() : (window.getCsrfToken ? window.getCsrfToken() : null);

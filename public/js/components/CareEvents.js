@@ -391,10 +391,12 @@ const CareEventSheet = window.CareEventSheet = ({ ev, canManage, onClose, onEdit
     if (!parts.length) { setRecState('idle'); showToast('That recording was empty.', 'error'); return; }
 
     const form = new FormData();
-    parts.forEach((pt, i) => {
+    for (let i = 0; i < parts.length; i++) {
+      const pt = parts[i];
       const ext = pt.mimeType.includes('mp4') ? 'mp4' : pt.mimeType.includes('ogg') ? 'ogg' : 'webm';
-      form.append('audio', pt.blob, `appointment-${i + 1}.${ext}`);
-    });
+      const name = `appointment-${i + 1}.${ext}`;
+      form.append('audio', await uploadSafeFile(pt.blob, name), name);
+    }
     form.append('consent_confirmed', 'true');
     try {
       // apiFetch already leaves FormData alone so the browser sets its own boundary.

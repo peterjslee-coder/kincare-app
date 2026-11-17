@@ -1412,7 +1412,7 @@ const Messages = window.Messages = () => {
     setUploadingPhoto(true);
     try {
       const formData = new FormData();
-      formData.append('photo', file);
+      formData.append('photo', await uploadSafeFile(file));
       // Use inputText as caption if user typed something
       if (inputText.trim()) {
         formData.append('caption', inputText.trim());

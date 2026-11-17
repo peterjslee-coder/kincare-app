@@ -76,7 +76,7 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, 
     setUploadingPhotos(true);
     try {
       const formData = new FormData();
-      files.slice(0, 5).forEach(f => formData.append('photos', f));
+      for (const f of files.slice(0, 5)) formData.append('photos', await uploadSafeFile(f));
       const csrf = typeof getCsrfToken === 'function' ? getCsrfToken() : (window.getCsrfToken ? window.getCsrfToken() : null);
       const headers = {};
       if (csrf) headers['X-CSRF-Token'] = csrf;

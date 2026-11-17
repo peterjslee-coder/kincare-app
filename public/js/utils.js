@@ -344,6 +344,26 @@ const setActiveRole = window.setActiveRole = (role) => {
 };
 const getActiveRole = window.getActiveRole = () => ACTIVE_ROLE;
 
+// v1.127.5 — copy a picked file's bytes into memory before it goes into a FormData.
+//
+// Safari 26.5+ (WebKit bug 319985) sends a disk-backed File — anything straight from
+// <input type="file"> — as an EMPTY request body. The page can still read the file's size and
+// preview it, so nothing looks wrong until the server gets a multipart header with no parts
+// behind it. multer/busboy then throws "Unexpected end of form" and the user sees a bare 500.
+// Ryan hit this on 11/16 uploading his driver's licence from an iPhone, four times in a row.
+// A File rebuilt from its own arrayBuffer() is memory-backed and uploads normally (the
+// workaround confirmed on the WebKit thread). Uploads here are ≤10 MB, so the copy is cheap.
+// Every multipart upload must go through this — tests/unit/uploadSafeFile.test.js enforces it.
+const uploadSafeFile = window.uploadSafeFile = async (file, name) => {
+  if (!file || typeof file.arrayBuffer !== 'function') return file;
+  try {
+    const bytes = await file.arrayBuffer();
+    return new File([bytes], name || file.name || 'upload', { type: file.type || 'application/octet-stream' });
+  } catch (_) {
+    return file; // unreadable here means unreadable anyway — let the server's 400 explain it
+  }
+};
+
 // Read CSRF token from cookie (set by server, JS-readable)
 const getCsrfToken = window.getCsrfToken = () => {
   const match = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]+)/);

@@ -930,7 +930,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
       // v1.104.0 — auto-downscale images (non-images pass through untouched)
       file = await window.downscaleImageFile(file);
       const formData = new FormData();
-      formData.append('documents', file);
+      formData.append('documents', await uploadSafeFile(file));
       formData.append('types', JSON.stringify([docType]));
       formData.append('metadata', JSON.stringify([{}]));
       const token = window.AUTH_TOKEN;

@@ -335,7 +335,7 @@ const Documents = window.Documents = ({ onNavigate }) => {
 
     try {
       const formData = new FormData();
-      formData.append('document', uploadFile);
+      formData.append('document', await uploadSafeFile(uploadFile));
       formData.append('category', uploadCategory);
       formData.append('document_type', uploadDocType);
       formData.append('owner_type', 'care_recipient');

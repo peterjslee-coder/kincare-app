@@ -187,7 +187,7 @@ const LegalReadinessCard = window.LegalReadinessCard = ({ careRecipientId }) => 
     setUploadingKey(item.key);
     try {
       const fd = new FormData();
-      fd.append('document', file);
+      fd.append('document', await uploadSafeFile(file));
       fd.append('category', 'legal');
       fd.append('document_type', item.key === 'healthcare_directive' ? healthType : item.uploadType);
       fd.append('owner_type', 'care_recipient');

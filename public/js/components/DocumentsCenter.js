@@ -239,7 +239,7 @@ const DocumentsCenter = window.DocumentsCenter = ({ onNavigate }) => {
     setBusy(true);
     try {
       const fd = new FormData();
-      fd.append('document', upload.file);
+      fd.append('document', await uploadSafeFile(upload.file));
       fd.append('category', upload.section === 'medical' ? 'medical' : 'legal');
       fd.append('document_type', upload.type);
       fd.append('owner_type', 'care_recipient');

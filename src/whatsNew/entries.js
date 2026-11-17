@@ -47,6 +47,22 @@ const ENTRIES = [
     preview: "daysThisWeek",
   },
   {
+    id: "iphone-uploads",
+    version: "1.127.5",
+    date: "2026-11-16",
+    audience: ["family", "caregiver"],
+    title: "Photo and document uploads work again on iPhone",
+    body: "A recent Safari update made some iPhones send uploaded photos and PDFs empty, which showed up as a server error. Uploads now go through on every iPhone, and if a file ever arrives empty you'll be told to choose it again instead of seeing an error.",
+    howTo: [
+      "Tap Take Photo or Choose File as before",
+      "Pick the photo or PDF",
+      "Tap Upload — it goes through the first time",
+      "Saw an error earlier? Try that upload once more now",
+    ],
+    examples: ["A photo of my driver's licence", "Mom's power of attorney PDF", "A picture of today's lunch for the visit log"],
+    preview: "iphoneUploads",
+  },
+  {
     id: "late-checkin-choice",
     version: "1.128.0",
     date: "2026-11-15",

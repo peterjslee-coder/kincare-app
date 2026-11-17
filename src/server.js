@@ -857,7 +857,7 @@ app.use("/api/safety", require("./routes/safety"));
 
 // ─── App version check (lightweight, no auth) ───
 const { cancelPassedPrivateOffers, releaseExpiredExclusiveOffers } = require("./utils/exclusiveOffers");
-const APP_VERSION = "1.128.1";
+const APP_VERSION = "1.128.2";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION, minAppVersion: MIN_APP_VERSION });
@@ -997,6 +997,27 @@ app.get("*", (req, res) => {
 // ─── Error handling ───
 setupSentryErrorHandler(app);
 app.use((err, req, res, next) => {
+  // v1.127.5 — an upload that arrives empty or cut off is the PHONE's failure, not ours, and
+  // the person needs to be told what to do. Ryan's iPhone (Safari 27, WebKit bug 319985) sent
+  // his driver's licence as a zero-byte multipart body four times on 11/16; busboy threw
+  // "Unexpected end of form", this handler said "Internal server error", and onboarding
+  // stalled with nothing he could act on. Multer's own limits (size, field count, a type the
+  // fileFilter refused) are the same kind of thing: the request was wrong, so it is a 400 with
+  // words. Still logged and still sent to Sentry, so a spike stays visible.
+  const msg = String(err?.message || "");
+  const isTruncatedUpload = /Unexpected end of form|Part terminated early|Malformed part header|Multipart: Boundary not found/i.test(msg);
+  const isMulter = err?.name === "MulterError";
+  const isFilterReject = /Only image and PDF files are allowed/i.test(msg);
+  if (isTruncatedUpload || isMulter || isFilterReject) {
+    console.error("Upload rejected:", req.method, req.originalUrl, msg, "content-length=" + (req.headers["content-length"] || "?"));
+    captureException(err);
+    if (res.headersSent) return next(err);
+    let error = "Your file didn't come through — your phone sent it empty. Please choose the photo again and retry. If it keeps happening, update your phone or try a different browser.";
+    if (isMulter && err.code === "LIMIT_FILE_SIZE") error = "That file is too large. Please use a file under 10 MB.";
+    else if (isFilterReject) error = "Only photos and PDF files can be uploaded.";
+    else if (isMulter) error = "That upload wasn't accepted. Please try again with one photo or PDF at a time.";
+    return res.status(400).json({ error, uploadRejected: true });
+  }
   console.error("Unhandled error:", err);
   captureException(err);
   res.status(500).json({ error: "Internal server error" });

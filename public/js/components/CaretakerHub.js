@@ -1023,7 +1023,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         // Upload photos if any
         if (logPhotos.length > 0 && logData.visitLog?.id) {
           const formData = new FormData();
-          logPhotos.forEach(f => formData.append('photos', f));
+          for (const f of logPhotos) formData.append('photos', await uploadSafeFile(f));
           const _csrf = typeof getCsrfToken === 'function' ? getCsrfToken() : (window.getCsrfToken ? window.getCsrfToken() : null);
           const _photoHeaders = {};
           if (_csrf) _photoHeaders['X-CSRF-Token'] = _csrf;
@@ -4775,7 +4775,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                     if (checkOutPhotos.length > 0 && checkOutData.visitLog?.id) {
                       try {
                         const formData = new FormData();
-                        checkOutPhotos.forEach(f => formData.append('photos', f));
+                        for (const f of checkOutPhotos) formData.append('photos', await uploadSafeFile(f));
                         const __csrf = typeof getCsrfToken === 'function' ? getCsrfToken() : (window.getCsrfToken ? window.getCsrfToken() : null);
                         const photoHeaders = {};
                         if (__csrf) photoHeaders['X-CSRF-Token'] = __csrf;

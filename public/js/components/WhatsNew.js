@@ -61,6 +61,16 @@ const WN_PREVIEWS = {
     </div>
   ),
   // v1.127.1 — anyone who can schedule can leave the caregiver instructions
+  iphoneUploads: () => (
+    <div style={{ padding: '12px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>
+      <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>Driver's License (front)</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 8, borderRadius: 8, background: 'var(--bg-primary)' }}>
+        <div style={{ width: 64, height: 40, borderRadius: 6, background: 'var(--border-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: 'var(--text-tertiary)' }}>ID</div>
+        <span style={{ flex: 1, fontSize: 12, color: 'var(--text-secondary)' }}>IMG_2041.jpg</span>
+        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--role-color)' }}>{'\u2713'} Uploaded</span>
+      </div>
+    </div>
+  ),
   teamInstructions: () => (
     <div style={{ padding: '12px 12px 10px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>

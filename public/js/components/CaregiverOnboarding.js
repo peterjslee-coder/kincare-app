@@ -715,11 +715,11 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
       const types = [];
       const metadata = [];
 
-      form.documents.forEach(doc => {
-        formData.append('documents', doc.file);
+      for (const doc of form.documents) {
+        formData.append('documents', await uploadSafeFile(doc.file, doc.fileName));
         types.push(doc.type);
         metadata.push(doc.metadata || {});
-      });
+      }
 
       formData.append('types', JSON.stringify(types));
       formData.append('metadata', JSON.stringify(metadata));
