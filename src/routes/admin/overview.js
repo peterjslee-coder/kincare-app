@@ -71,8 +71,10 @@ router.get("/alerts", async (req, res) => {
       // complete without an APPROVED identity document, so this is a hard stop on someone
       // starting work.
       db.prepare(`
-        SELECT COUNT(*) as count FROM verified_documents
-        WHERE category = 'identity' AND document_type != 'selfie' AND status = 'pending'
+        -- v1.128.3 — PEOPLE waiting, not photos: one caregiver's front, back and ID used to read
+        -- as "4 IDs waiting on you" (Pete, 11/16).
+        SELECT COUNT(DISTINCT owner_type || ':' || owner_id::text) as count FROM verified_documents
+        WHERE category = 'identity' AND status IN ('ai_review', 'pending', 'ai_flagged')
         -- identity-read-ok: a COUNT for the admin queue, not a verdict about a person
       `).get().catch(() => ({ count: 0 })),
       // v1.105.70 — identity documents the AI approved on its own, that no person has since

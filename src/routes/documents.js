@@ -13,6 +13,7 @@ const { recipientDocRole, canViewRecipientDoc, shareableCaregivers } = require("
 const { blockWhileImpersonating } = require("../middleware/noImpersonation");
 const { isTrustedLinkedUser } = require("../utils/linkedAccount"); // stale-link sweep
 const { onIdentityApproved, personForIdentityDoc } = require("../utils/careAccess"); // v1.112.0
+const identityReview = require("../utils/identityReview"); // v1.128.3 — one identity card per person
 
 const router = express.Router();
 
@@ -431,12 +432,17 @@ router.get("/admin/pending", authenticate, checkDocAdmin, requireAdmin, async (r
              vd.ai_reviewed_at, vd.admin_reviewed_by, vd.admin_reviewed_at, vd.admin_notes,
              vd.expires_at, vd.created_at, vd.updated_at,
              u.first_name AS uploader_first, u.last_name AS uploader_last,
-             cr.first_name AS recipient_first, cr.last_name AS recipient_last, cr.called_by AS recipient_called_by
+             cr.first_name AS recipient_first, cr.last_name AS recipient_last, cr.called_by AS recipient_called_by,
+             ou.first_name AS owner_first, ou.last_name AS owner_last
       FROM verified_documents vd
       LEFT JOIN users u ON u.id = vd.uploaded_by
       LEFT JOIN care_recipients cr ON cr.id = vd.owner_id AND vd.owner_type = 'care_recipient'
+      -- v1.128.3 — name every owner, not only care recipients ("Unknown recipient … uploaded by Ryan").
+      LEFT JOIN caregiver_profiles ocp ON vd.owner_type = 'caregiver' AND ocp.id = vd.owner_id
+      LEFT JOIN users ou ON ou.id = CASE WHEN vd.owner_type = 'caregiver' THEN ocp.user_id WHEN vd.owner_type = 'user' THEN vd.owner_id END
       WHERE vd.status IN ('ai_review', 'pending', 'ai_flagged')
         AND vd.category <> 'medical' -- medical records are stored, not verified: never queued
+        AND vd.category <> 'identity' -- v1.128.3: identity photos come back grouped, one card per person
       ORDER BY
         CASE vd.status WHEN 'ai_flagged' THEN 1 WHEN 'pending' THEN 2 WHEN 'ai_review' THEN 3 END,
         vd.created_at DESC
@@ -465,13 +471,76 @@ router.get("/admin/pending", authenticate, checkDocAdmin, requireAdmin, async (r
       ai_concerns: d.ai_concerns ? JSON.parse(d.ai_concerns) : null,
       uploaderName: [d.uploader_first, d.uploader_last].filter(Boolean).join(' ') || 'Unknown',
       recipientName: d.recipient_called_by || [d.recipient_first, d.recipient_last].filter(Boolean).join(' ') || null,
+      ownerName: [d.owner_first, d.owner_last].filter(Boolean).join(' ')
+        || d.recipient_called_by || [d.recipient_first, d.recipient_last].filter(Boolean).join(' ') || null,
       linkedSelfieId: selfieMap[d.id] || null,
     }));
 
-    res.json({ documents: parsed, count: parsed.length });
+    // v1.128.3 — Pete: "It should be one card with the selfie, the front and back of the ID and
+    // an AI analysis." Identity photos come back grouped by person (utils/identityReview.js).
+    const identityChecks = await identityReview.groupPendingIdentity(db);
+
+    res.json({ documents: parsed, identityChecks, count: parsed.length + identityChecks.length });
   } catch (err) {
     console.error("Admin pending docs error:", err);
     res.status(500).json({ error: "Failed to load pending documents" });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════
+// POST /api/documents/admin/identity/review — ONE decision for a person's identity photos
+// Body: { key, docIds, action: 'approve' | 'reject' | 'request_new', notes }
+// v1.128.3 (Pete, 11/16): "I don't want to approve the back of somebody's ID." docIds are the
+// photos the admin was shown; if another arrived since, nothing is written (409) — a photo is
+// never approved unseen.
+// ═══════════════════════════════════════════════════════════
+router.post("/admin/identity/review", authenticate, checkDocAdmin, requireAdmin,
+  blockWhileImpersonating("decide on someone's ID"), async (req, res) => {
+  try {
+    const db = await getDb();
+    const { key, docIds, action, notes } = req.body || {};
+    if (!Array.isArray(docIds) || docIds.length === 0) return res.status(400).json({ error: "docIds is required" });
+    const r = await identityReview.reviewIdentityGroup(db, { key, docIds, action, notes, adminId: req.user.id });
+    if (r.error === "bad_key") return res.status(400).json({ error: "Unknown identity check" });
+    if (r.error === "bad_action") return res.status(400).json({ error: "Action must be approve, reject or request_new" });
+    if (r.error === "nothing_pending") return res.status(404).json({ error: "Nothing is waiting for this person any more" });
+    if (r.error === "stale") return res.status(409).json({ error: "A new photo arrived since you opened this. Reload and look again.", code: "STALE" });
+
+    const personId = await personForIdentityDoc(db, r.sample);
+    if (action === "approve") {
+      await onIdentityApproved(db, personId);
+    } else if (action === "request_new" && personId) {
+      try {
+        const { sendPushToUser } = require("./push");
+        sendPushToUser(personId, {
+          title: "Please send a new photo of your ID",
+          body: "We couldn't verify the photos you sent. Open InPlace to take new ones.",
+          data: { type: "identity_retake", page: "account" },
+        }, "identity_retake").catch(() => {});
+      } catch { /* a courtesy push is never load-bearing */ }
+    }
+    res.json({ ok: true, status: r.status, count: r.count });
+  } catch (err) {
+    console.error("Admin identity review error:", err);
+    res.status(500).json({ error: "Failed to record the decision" });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════
+// POST /api/documents/admin/identity/analyze — run the one AI analysis now
+// Body: { key }. Normally it runs ~15 s after the last photo arrives; this is for a card whose
+// analysis is missing or older than its photos.
+// ═══════════════════════════════════════════════════════════
+router.post("/admin/identity/analyze", authenticate, checkDocAdmin, requireAdmin, async (req, res) => {
+  try {
+    const key = req.body && req.body.key;
+    if (!identityReview.parseKey(key)) return res.status(400).json({ error: "Unknown identity check" });
+    const analysis = await identityReview.analyzeIdentitySet(key);
+    if (!analysis) return res.status(404).json({ error: "Nothing is waiting for this person any more" });
+    res.json({ analysis });
+  } catch (err) {
+    console.error("Admin identity analyze error:", err);
+    res.status(500).json({ error: "Failed to analyze" });
   }
 });
 
@@ -489,6 +558,10 @@ router.post("/admin/:docId/review", authenticate, checkDocAdmin, requireAdmin, a
     const doc = await db.prepare("SELECT * FROM verified_documents WHERE id = ?").get(req.params.docId);
     // Medical records are never reviewed by an admin — answered as not found.
     if (!doc || doc.category === "medical") return res.status(404).json({ error: "Document not found" });
+    // v1.128.3 — an ID is decided as one set (selfie + front + back), never photo by photo.
+    if (doc.category === "identity") {
+      return res.status(409).json({ error: "Identity photos are decided together — use the person's Identity card.", code: "USE_IDENTITY_CARD" });
+    }
 
     const newStatus = action === 'approve' ? 'approved' : 'rejected';
 
@@ -535,9 +608,11 @@ router.get("/admin/count", authenticate, checkDocAdmin, requireAdmin, async (req
     const db = await getDb();
     const row = await db.prepare(`
       SELECT COUNT(*) AS cnt FROM verified_documents WHERE status IN ('ai_review', 'pending', 'ai_flagged')
-        AND category <> 'medical'
+        AND category <> 'medical' AND category <> 'identity'
     `).get();
-    res.json({ count: parseInt(row.cnt) || 0 });
+    // v1.128.3 — an ID is one item however many photos it has.
+    const people = await identityReview.countPendingPeople(db);
+    res.json({ count: (parseInt(row.cnt) || 0) + people });
   } catch (err) {
     res.status(500).json({ error: "Failed to count pending documents" });
   }

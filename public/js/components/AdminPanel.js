@@ -582,6 +582,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
   // Document Review tab
   const [pendingDocs, setPendingDocs] = useState([]);
   const [pendingDocsCount, setPendingDocsCount] = useState(0);
+  const [identityChecks, setIdentityChecks] = useState([]); // v1.128.3 — one card per person
   // v1.105.113 — identity documents waiting on a person, split by how they got there.
   const [identityAlerts, setIdentityAlerts] = useState({ pending: 0, aiApproved: 0 });
   const [pendingDocsLoading, setPendingDocsLoading] = useState(false);
@@ -596,6 +597,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
       if (res?.ok) {
         const data = await res.json();
         setPendingDocs(data.documents || []);
+        setIdentityChecks(data.identityChecks || []);
         setPendingDocsCount(Number(data.count) || 0);
       }
     } catch (err) { console.error('Pending docs load error:', err); }
@@ -5103,12 +5105,20 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
             <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Document Review</h3>
             <button onClick={loadPendingDocs} style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid var(--border-color)', background: 'var(--bg-card)', fontSize: 12, cursor: 'pointer', color: 'var(--text-secondary)' }}>Refresh</button>
           </div>
-          {pendingDocsLoading ? <LoadingSpinner text="Loading documents..." /> : pendingDocs.length === 0 ? (
+          {/* v1.128.3 — identity photos: one card per person (AdminIdentityCheck.js) */}
+          {!pendingDocsLoading && identityChecks.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 12 }}>
+              {identityChecks.map((c) => (
+                <AdminIdentityCheck key={c.key} check={c} onDecided={() => { loadPendingDocs(); loadPendingDocsCount(); }} />
+              ))}
+            </div>
+          )}
+          {pendingDocsLoading ? <LoadingSpinner text="Loading documents..." /> : pendingDocs.length === 0 ? (identityChecks.length > 0 ? null : (
             <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-secondary)', fontSize: 14 }}>
               <div style={{ fontSize: 40, marginBottom: 12 }}>✅</div>
               No documents waiting for review
             </div>
-          ) : (
+          )) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {pendingDocs.map(doc => {
                 const ai = doc.ai_classification;
@@ -5122,7 +5132,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                       <div style={{ width: 10, height: 10, borderRadius: '50%', background: statusColors[doc.status] || '#999', flexShrink: 0 }} />
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>
-                          {doc.document_type?.replace(/_/g, ' ').toUpperCase()} — {doc.recipientName || 'Unknown recipient'}
+                          {doc.document_type?.replace(/_/g, ' ').toUpperCase()} — {doc.ownerName || doc.recipientName || doc.uploaderName || 'No name on file'}
                         </div>
                         <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
                           Uploaded by {doc.uploaderName} · {formatDateTime(doc.created_at)} · {(doc.file_size / 1024).toFixed(0)} KB

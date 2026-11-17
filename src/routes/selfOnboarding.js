@@ -10,6 +10,7 @@ const { getDb } = require("../models/database");
 const { authenticate } = require("../middleware/auth");
 const { classifyDocument } = require("../utils/documentAI");
 const { identityDecision, verdictLabel, VERDICT } = require("../utils/identityDecision");
+const { sameBirthDate, formatUS } = require("../utils/dateMatch");
 const { MODEL_SONNET, getAnthropic } = require("../utils/aiModels");
 const storage = require("../utils/storage"); // v1.91.0 — env-gated R2 offload for document blobs
 const { geocodeAddress, buildAddressString } = require("../utils/geocode");
@@ -146,11 +147,15 @@ router.post("/verify-id", authenticate, async (req, res) => {
         "SELECT date_of_birth FROM care_recipients WHERE id = ?"
       ).get(careRecipient.id);
       if (extractedDOB && careRecipientFull?.date_of_birth) {
-        const registeredDOB = new Date(careRecipientFull.date_of_birth).toLocaleDateString('en-US');
-        dobMatched = extractedDOB.includes(registeredDOB) || registeredDOB.includes(extractedDOB) ||
-                     careRecipientFull.date_of_birth === extractedDOB;
-        if (!dobMatched) {
-          allConcerns.unshift(`Date of birth mismatch: registered "${registeredDOB}" but ID shows "${extractedDOB}"`);
+        // v1.128.3 — compared as dates, not text (leading zeros are not a mismatch).
+        const same = sameBirthDate(careRecipientFull.date_of_birth, extractedDOB);
+        const registeredDOB = formatUS(careRecipientFull.date_of_birth);
+        if (same === false) {
+          dobMatched = false;
+          allConcerns.unshift(`Date of birth mismatch: entered at signup as ${registeredDOB} but the ID shows ${formatUS(extractedDOB)}`);
+        } else if (same === null) {
+          dobMatched = false;
+          allConcerns.unshift(`Couldn't compare date of birth: signup has ${registeredDOB}, the ID reads "${extractedDOB}"`);
         }
       }
     }
@@ -259,6 +264,9 @@ router.post("/verify-id", authenticate, async (req, res) => {
         new Date().toISOString()
       );
     }
+
+    // v1.128.3 — one AI analysis over the whole set for the admin's single Identity card.
+    try { require("../utils/identityReview").scheduleIdentityAnalysis(ownerType, ownerId); } catch (e) { /* non-blocking */ }
 
     // Return verification result
     // v1.105.68 — tell someone. This is the door most people find (My Account → "Verify your

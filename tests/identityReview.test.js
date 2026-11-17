@@ -64,8 +64,10 @@ describe("submitting an ID tells someone", () => {
 });
 
 describe("there is a count of what is waiting", () => {
-  test("pending identity documents are counted in the admin alerts", () => {
-    expect(overview).toMatch(/category = 'identity' AND document_type != 'selfie' AND status = 'pending'/);
+  test("pending identity documents are counted in the admin alerts — as PEOPLE, not photos", () => {
+    // v1.128.3 — Pete, 11/16: one caregiver's front, back and ID read as "4 IDs waiting".
+    expect(overview).toMatch(/COUNT\(DISTINCT owner_type \|\| ':' \|\| owner_id::text\) as count FROM verified_documents\s+WHERE category = 'identity' AND status IN \('ai_review', 'pending', 'ai_flagged'\)/);
+    expect(overview).not.toMatch(/category = 'identity' AND document_type != 'selfie' AND status = 'pending'/);
     expect(overview).toMatch(/pendingIdentity: parseInt\(pendingIdentity\.count\) \|\| 0/);
   });
 

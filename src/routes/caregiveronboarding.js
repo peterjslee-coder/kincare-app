@@ -1,5 +1,6 @@
 const express = require("express");
 const multer = require("multer");
+const { sameBirthDate, formatUS } = require("../utils/dateMatch");
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { uploadQuota } = require("../utils/usageLimits");
@@ -92,6 +93,15 @@ router.post("/documents", upload.array("documents", 10), async (req, res) => {
         fileName: file.originalname,
         metadata: metadata[i] || null,
       });
+    }
+
+    // v1.128.3 — ID photos from this step join the person's one Identity card; the AI looks at
+    // the whole set once the uploads settle (utils/identityReview.js).
+    if (types.some((t) => ["dl_front", "dl_back", "drivers_license", "id_front", "id_back"].includes(t))) {
+      try {
+        const cp = await db.prepare("SELECT id FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
+        if (cp) require("../utils/identityReview").scheduleIdentityAnalysis("caregiver", cp.id);
+      } catch (e) { /* the admin can run it from the card */ }
     }
 
     res.status(201).json({ documents: savedDocs, message: `${savedDocs.length} document(s) uploaded` });
@@ -244,12 +254,19 @@ router.post("/verify-id", async (req, res) => {
     }
 
     // DOB match (use form-provided DOB from step 4 if available)
+    // v1.128.3 — compared as dates, not text: "03/05/1990" on the card IS "3/5/1990" (Pete, 11/16).
     let dobMatched = true;
     const profileFull = await db.prepare("SELECT date_of_birth FROM caregiver_profiles WHERE id = ?").get(profile.id);
     if (extractedDOB && profileFull?.date_of_birth) {
-      const registeredDOB = new Date(profileFull.date_of_birth).toLocaleDateString('en-US');
-      dobMatched = extractedDOB.includes(registeredDOB) || registeredDOB.includes(extractedDOB) || profileFull.date_of_birth === extractedDOB;
-      if (!dobMatched) allConcerns.unshift(`DOB mismatch: registered "${registeredDOB}" but ID shows "${extractedDOB}"`);
+      const same = sameBirthDate(profileFull.date_of_birth, extractedDOB);
+      const registeredDOB = formatUS(profileFull.date_of_birth);
+      if (same === false) {
+        dobMatched = false;
+        allConcerns.unshift(`Date of birth mismatch: entered at signup as ${registeredDOB} but the ID shows ${formatUS(extractedDOB)}`);
+      } else if (same === null) {
+        dobMatched = false; // not known is not a pass — no AI suggestion, but not called a mismatch
+        allConcerns.unshift(`Couldn't compare date of birth: signup has ${registeredDOB}, the ID reads "${extractedDOB}"`);
+      }
     }
 
     // Face comparison
@@ -330,6 +347,9 @@ router.post("/verify-id", async (req, res) => {
       new Date().toISOString()
     );
 
+
+    // v1.128.3 — one AI analysis over selfie + front + back for the admin's single card.
+    try { require("../utils/identityReview").scheduleIdentityAnalysis("caregiver", profile.id); } catch (e) { /* non-blocking */ }
 
     // v1.105.188 — the ID photo may be the last of a family-brought caregiver's four.
     try { require("../utils/knownCaregivers").notifyIfReadyToBook(db, req.user.id).catch(() => {}); } catch (e) { /* non-blocking */ }

@@ -3467,6 +3467,20 @@ async function initializeDatabase() {
         `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS checkin_window_minutes INTEGER`,
       ],
     },
+    {
+      // v1.128.3 — one identity check per person (utils/identityReview.js). The AI's analysis of
+      // a person's selfie + front + back, keyed by the documents' owner, and the exact set of
+      // document ids it looked at — a newer upload makes it stale rather than silently wrong.
+      id: "080_identity_reviews",
+      statements: [
+        `CREATE TABLE IF NOT EXISTS identity_reviews (
+          owner_key TEXT PRIMARY KEY,
+          doc_ids TEXT NOT NULL,
+          analysis TEXT NOT NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

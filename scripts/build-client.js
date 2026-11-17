@@ -138,6 +138,7 @@ const ADMIN_SCRIPTS = [
   "js/components/AdminOutreach.js", // v1.113.0 — caregiver outreach by text; AdminPanel renders it
   "js/components/SafetyFlagsTab.js",
   "js/components/ContentReportsTab.js",
+  "js/components/AdminIdentityCheck.js", // v1.128.3 — one Identity card per person; AdminPanel renders it
   "js/components/AdminPanel.js",
 ];
 

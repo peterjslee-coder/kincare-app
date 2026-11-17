@@ -7,9 +7,9 @@ build red.
 
 Hand-written sections (§3 "Where is…") are preserved across regeneration; edit those freely.
 
-Structure at last generation: 604 HTTP routes across 64 mounts ·
-115 `CREATE TABLE` statements · 16 background jobs · 39 socket events
-(17 with no client listener) · 71 push event types · 63 `window.__*` globals.
+Structure at last generation: 606 HTTP routes across 64 mounts ·
+116 `CREATE TABLE` statements · 16 background jobs · 39 socket events
+(17 with no client listener) · 72 push event types · 63 `window.__*` globals.
 
 ---
 
@@ -64,7 +64,7 @@ JSX is *not* compiled in the browser; Babel-standalone is not loaded. Editing an
 | `/api/consent` | `src/routes/consent.js` | 13 |  |
 | `/api/costs` | `src/routes/costs.js` | 8 |  |
 | `/api/dashboard` | `src/routes/dashboard.js` | 1 |  |
-| `/api/documents` | `src/routes/documents.js` | 12 |  |
+| `/api/documents` | `src/routes/documents.js` | 14 |  |
 | `/api/family-visits` | `src/routes/familyVisits.js` | 5 |  |
 | `/api/feedback` | `src/routes/feedback.js` | 6 |  |
 | `/api/geocode` | `src/routes/geocode.js` | 2 |  |
@@ -293,27 +293,27 @@ Opt-out key is `notification_prefs["push_" + eventType]`. Capability gating live
 
 `dispute_filed` · `document_classified` · `document_deleted` · `document_uploaded`
 
-`financial_concern_reported` · `identity_approved` · `identity_submitted` · `interview_accepted`
+`financial_concern_reported` · `identity_approved` · `identity_retake` · `identity_submitted`
 
-`interview_cancelled` · `interview_declined` · `interview_request` · `invite_accepted`
+`interview_accepted` · `interview_cancelled` · `interview_declined` · `interview_request`
 
-`kindred_relay` · `managed_mode_activated` · `mileage_extra` · `missing_address`
+`invite_accepted` · `kindred_relay` · `managed_mode_activated` · `mileage_extra`
 
-`new_job` · `new_registration` · `new_signup_intent` · `no_show_cancelled`
+`missing_address` · `new_job` · `new_registration` · `new_signup_intent`
 
-`on_my_way` · `on_my_way_recipient` · `outreach_reply` · `outreach_response`
+`no_show_cancelled` · `on_my_way` · `on_my_way_recipient` · `outreach_reply`
 
-`outreach_sent` · `overdue_check_in` · `overdue_check_in_family` · `overdue_check_out`
+`outreach_response` · `outreach_sent` · `overdue_check_in` · `overdue_check_in_family`
 
-`overdue_check_out_family` · `payment_authorization_failed` · `payment_hold` · `payment_method_needed`
+`overdue_check_out` · `overdue_check_out_family` · `payment_authorization_failed` · `payment_hold`
 
-`phone_verified` · `proposal_accepted` · `proposal_declined` · `request_declined`
+`payment_method_needed` · `phone_verified` · `proposal_accepted` · `proposal_declined`
 
-`review` · `safety_flag` · `session_cancelled` · `session_complete`
+`request_declined` · `review` · `safety_flag` · `session_cancelled`
 
-`session_in_progress` · `team_join` · `time_proposal` · `unblocked`
+`session_complete` · `session_in_progress` · `team_join` · `time_proposal`
 
-`upload_authority_confirmed` · `uploaded` · `waitlist_signup`
+`unblocked` · `upload_authority_confirmed` · `uploaded` · `waitlist_signup`
 
 ---
 

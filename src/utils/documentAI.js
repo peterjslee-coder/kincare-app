@@ -11,6 +11,12 @@
 
 const { MODEL_SONNET, getAnthropic } = require("./aiModels");
 
+/** A concern that is only about REAL ID compliance (star, "federal limits apply"). */
+function isRealIdNoise(concern) {
+  const t = String(concern || "");
+  return /real[\s-]?id|federal limits apply|not for federal (identification|purposes)/i.test(t);
+}
+
 const SYSTEM_PROMPT = `You are a document verification specialist for a care coordination platform called InPlace. Your job is to examine uploaded documents and classify them accurately.
 
 You will receive:
@@ -22,6 +28,8 @@ Your task:
 - Assess whether it matches the claimed type
 - Extract key fields (names, dates, expiration, issuing authority)
 - Flag any concerns (blurry, expired, wrong document type, not a real document)
+
+NOT concerns (never list these): whether an ID is REAL ID compliant, has a REAL ID star, or is marked "Federal limits apply" — InPlace does not need REAL ID. Do not compare dates against anything; just read them off the document as printed, written MM/DD/YYYY.
 
 IMPORTANT: Be vigilant for fraud. People may upload random images (food wrappers, screenshots, blank pages) and claim they are legal documents. If the image is clearly not the claimed document type, say so clearly.
 
@@ -137,7 +145,9 @@ async function classifyDocument(base64Data, mimeType, expectedType) {
       isValid: !!result.isValid,
       matchesClaimed: !!result.matchesClaimed,
       extractedFields: result.extractedFields || {},
-      concerns: Array.isArray(result.concerns) ? result.concerns : [],
+      // v1.128.3 — Pete, 11/16: "I'm not concerned about real ID or not." The prompt says so too;
+      // this keeps a model that mentions it anyway off the admin's screen.
+      concerns: (Array.isArray(result.concerns) ? result.concerns : []).filter((c) => !isRealIdNoise(c)),
       summary: result.summary || "No summary provided",
     };
   } catch (err) {
@@ -155,4 +165,5 @@ async function classifyDocument(base64Data, mimeType, expectedType) {
   }
 }
 
-module.exports = { classifyDocument };
+module.exports = {
+  isRealIdNoise, classifyDocument };

@@ -8,6 +8,15 @@
  * their ID) actually opening.
  */
 const { startHarness, stopHarness } = require("./harness");
+
+// v1.128.3 — the admin decides on the person's whole identity card, which holds this document.
+async function approveIdentityCard(adminToken, docId) {
+  const pending = await h.request.get("/api/documents/admin/pending").set(h.auth(adminToken));
+  const card = (pending.body.identityChecks || []).find((c) => c.docIds.includes(docId));
+  if (!card) throw new Error(`no identity card holds ${docId}`);
+  return h.request.post("/api/documents/admin/identity/review").set(h.auth(adminToken))
+    .send({ key: card.key, docIds: card.docIds, action: "approve" });
+}
 const { v4: uuid } = require("uuid");
 
 jest.setTimeout(180000);
@@ -133,8 +142,8 @@ describe("an admin approving the ID is the only step", () => {
     expect((await h.request.get(`/api/care-recipients/${recipientId}`).set(h.auth(token))).status).toBe(403);
 
     const { token: adminToken } = await h.createUser({ isAdmin: true, idVerified: false });
-    const review = await h.request.post(`/api/documents/admin/${docId}/review`)
-      .set(h.auth(adminToken)).send({ action: "approve" });
+    // v1.128.3 — an ID is approved as one card (selfie + front + back), never photo by photo.
+    const review = await approveIdentityCard(adminToken, docId);
     expect(review.status).toBe(200);
 
     expect((await h.request.get(`/api/care-recipients/${recipientId}`).set(h.auth(token))).status).toBe(200);
@@ -203,7 +212,7 @@ describe("care_for self-signup", () => {
     // A human approves her ID; the printed name differs from what was typed at signup.
     const docId = await addIdDoc(userId, "pending", { extractedName: "KATHERINE A CONN" });
     const { token: adminToken } = await h.createUser({ isAdmin: true });
-    const review = await h.request.post(`/api/documents/admin/${docId}/review`).set(h.auth(adminToken)).send({ action: "approve" });
+    const review = await approveIdentityCard(adminToken, docId);
     expect(review.status).toBe(200);
 
     const cr = await db.prepare("SELECT id, first_name, last_name, family_user_id, preferred_name, self_onboarding_complete FROM care_recipients WHERE linked_user_id = ?").get(userId);
