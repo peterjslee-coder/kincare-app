@@ -125,6 +125,26 @@ describe("ask → approve → Checkr", () => {
   });
 });
 
+// v1.132.1 — Pete: "vouching pushes the 'start background check' to their account if they work
+// for more people than vouched."
+test("a vouched caregiver's onboarding agreement is not a request — tapping I'm ready is", async () => {
+  const cg = await caregiverWithProfile();
+  const fam = await h.createUser({ firstName: "Fam", lastName: "Ily" });
+  await db.prepare("INSERT INTO bg_admin_vouches (id, caregiver_user_id, family_user_id, vouched_by, created_at) VALUES (?, ?, ?, 'admin-fixture', NOW())")
+    .run(uuid(), cg.user.id, fam.user.id);
+  await req.post("/api/caregivers/profile").set(h.auth(cg.token)).send({ hourlyRate: 22, backgroundCheckConsent: true });
+  let row = await db.prepare("SELECT bg_check_requested_at FROM caregiver_profiles WHERE user_id = ?").get(cg.user.id);
+  expect(row.bg_check_requested_at).toBeNull();
+  const admin = await h.createUser({ isAdmin: true });
+  expect((await needsYou(admin.user.id)).find((i) => i.id === `bgCheckRequest:${cg.user.id}`)).toBeUndefined();
+
+  const r = await req.post("/api/checkr/initiate").set(h.auth(cg.token)).send({});
+  expect(r.body.status).toBe("requested");
+  row = await db.prepare("SELECT bg_check_requested_at FROM caregiver_profiles WHERE user_id = ?").get(cg.user.id);
+  expect(row.bg_check_requested_at).toBeTruthy();
+  expect((await needsYou(admin.user.id)).find((i) => i.id === `bgCheckRequest:${cg.user.id}`)).toBeTruthy();
+});
+
 test("missing what Checkr needs → the card says what, and has no one-tap approve", async () => {
   const cg = await caregiverWithProfile({ dob: null });
   await db.prepare("UPDATE caregiver_profiles SET background_check_consent = 1 WHERE user_id = ?").run(cg.user.id);

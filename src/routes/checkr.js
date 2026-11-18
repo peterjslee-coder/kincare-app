@@ -449,7 +449,7 @@ router.post("/initiate", authenticate, requireRole("caregiver"), async (req, res
     if (!pre.background_check_consent) {
       await db.prepare("UPDATE caregiver_profiles SET background_check_consent = 1, background_check_consent_at = NOW(), updated_at = NOW() WHERE user_id = ?").run(req.user.id);
     }
-    await requestBgCheckIfReady(db, req.user.id);
+    await requestBgCheckIfReady(db, req.user.id, { explicit: true }); // she tapped "I'm ready"
     const row = await db.prepare("SELECT bg_check_requested_at FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
     return res.json({ status: "requested", requestedAt: row?.bg_check_requested_at || null,
       message: "InPlace has your request. You'll get a notification when it's approved." });

@@ -42,8 +42,17 @@ function readiness(profile, user) {
  * running, finished, or if they are cleared. Tells admins the first time. Never throws.
  * @returns {Promise<boolean>} true when a new request was recorded
  */
-async function requestIfReady(db, userId) {
+async function requestIfReady(db, userId, { explicit = false } = {}) {
   try {
+    // Pete, 11/18: "vouching pushes the 'start background check' to their account if they work
+    // for more people than vouched." A vouched caregiver's onboarding agreement is NOT a request
+    // — they ask from Account when they want other families' work (explicit).
+    if (!explicit) {
+      const vouched = await db.prepare(
+        "SELECT 1 FROM bg_admin_vouches WHERE caregiver_user_id = ? AND revoked_at IS NULL LIMIT 1"
+      ).get(userId);
+      if (vouched) return false;
+    }
     const res = await db.prepare(`
       UPDATE caregiver_profiles
          SET bg_check_requested_at = NOW(), updated_at = NOW()
