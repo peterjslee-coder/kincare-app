@@ -20,14 +20,34 @@ const ckrDate = (t, withTime) => {
 };
 
 // Not asked yet.
-const CheckrEmailStart = window.CheckrEmailStart = ({ onSent, staging }) => {
+const CheckrEmailStart = window.CheckrEmailStart = ({ onSent, staging, details }) => {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
   const [testEmail, setTestEmail] = useState('');
+  // v1.132.2 — Pete, 11/18: "where is my DOB supposed to be? I don't see where I'm supposed to
+  // have already put it." Legal name and date of birth were only ever asked in the sign-up
+  // wizard, so anyone who skipped it had nowhere to give Checkr what it requires. Ask for
+  // whatever is missing right here, above the button.
+  const f = (details && details.fields) || {};
+  const needName = !!details && !f.legalName;
+  const needDob = !!details && !f.dateOfBirth;
+  const needZip = !!details && !f.zip;
+  const [legal, setLegal] = useState({ first: '', middle: '', last: '', dob: '', zip: '' });
+  const setL = (k) => (e) => setLegal((x) => ({ ...x, [k]: e && e.target ? e.target.value : e }));
 
   const send = async () => {
     setBusy(true); setErr(null);
     try {
+      if (needName || needDob || needZip) {
+        if (needName && (!legal.first.trim() || !legal.last.trim())) { setErr('Checkr needs your legal first and last name.'); return; }
+        if (needDob && !legal.dob) { setErr('Checkr needs your date of birth.'); return; }
+        const patch = {};
+        if (needName) { patch.legalFirstName = legal.first.trim(); patch.legalLastName = legal.last.trim(); if (legal.middle.trim()) patch.legalMiddleName = legal.middle.trim(); }
+        if (needDob) patch.dateOfBirth = legal.dob;
+        if (needZip && legal.zip.trim()) patch.zip = legal.zip.trim();
+        const pr = await apiFetch('/api/caregivers/profile', { method: 'POST', body: JSON.stringify(patch) });
+        if (!pr.ok) { const d = await pr.json().catch(() => ({})); setErr(d.error || 'Couldn’t save your details. Please try again.'); return; }
+      }
       const body = {};
       if (staging && testEmail.trim()) body.checkrEmail = testEmail.trim();
       const res = await apiFetch('/api/checkr/initiate', { method: 'POST', body: JSON.stringify(body) });
@@ -64,6 +84,38 @@ const CheckrEmailStart = window.CheckrEmailStart = ({ onSent, staging }) => {
         By tapping, you authorize InPlace to obtain a background check about you through Checkr.
         Checkr shows you its full disclosure and asks for your agreement before anything is run.
       </p>
+      {(needName || needDob || needZip) && (
+        <div style={{ margin: '0 0 12px', padding: 12, background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 8, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>Checkr needs these first</div>
+          {needName && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 8 }}>
+              {[['first', 'Legal first name'], ['middle', 'Middle (optional)'], ['last', 'Legal last name']].map(([k, label]) => (
+                <label key={k} style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: 'var(--text-tertiary)' }}>
+                  {label}
+                  <input value={legal[k]} onChange={setL(k)} autoComplete={k === 'first' ? 'given-name' : k === 'last' ? 'family-name' : 'additional-name'}
+                    style={{ padding: '8px 10px', border: '1px solid var(--border-color)', borderRadius: 6, fontSize: 14, minWidth: 0, boxSizing: 'border-box' }} />
+                </label>
+              ))}
+            </div>
+          )}
+          {needDob && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: 'var(--text-tertiary)' }}>
+              Date of birth
+              {typeof DateOfBirthInput !== 'undefined'
+                ? <DateOfBirthInput value={legal.dob} onChange={(v) => setLegal((x) => ({ ...x, dob: v }))} />
+                : <input type="date" value={legal.dob} onChange={setL('dob')} style={{ padding: '8px 10px', border: '1px solid var(--border-color)', borderRadius: 6, fontSize: 14 }} />}
+            </div>
+          )}
+          {needZip && (
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: 'var(--text-tertiary)', maxWidth: 160 }}>
+              Home ZIP (optional)
+              <input value={legal.zip} onChange={setL('zip')} inputMode="numeric" autoComplete="postal-code"
+                style={{ padding: '8px 10px', border: '1px solid var(--border-color)', borderRadius: 6, fontSize: 14 }} />
+            </label>
+          )}
+          <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>Saved to your InPlace profile and sent only to Checkr.</div>
+        </div>
+      )}
       {staging && (
         <div style={{ marginBottom: 12 }}>
           <label style={{ fontSize: 12, color: 'var(--text-tertiary)', display: 'block', marginBottom: 4 }}>
