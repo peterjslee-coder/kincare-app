@@ -140,45 +140,198 @@ const simpleAgo = (iso) => {
   return new Date(iso).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 };
 
+// v1.130.1 — the quick things the person can tell the family with one tap. `attention` ones
+// arrive as "needs attention" (they are the ones someone should act on soon).
+const TELL_FAMILY_QUICK = [
+  { text: "I'm hungry", icon: '🍽️', attention: false },
+  { text: 'I have pain', icon: '🩹', attention: true },
+  { text: "I don't feel well", icon: '🤒', attention: true },
+  { text: 'I need help', icon: '🆘', attention: true },
+  { text: "I'm fine", icon: '😊', attention: false },
+];
+
+// v1.130.1 — Pete: "Faces and names reminders are important." The person's own profile photo,
+// round, with their first initial when there is none (or it fails to load).
+const SimpleFace = ({ photo, name, size = 56, ring }) => {
+  const [broken, setBroken] = useState(false);
+  const base = { width: size, height: size, borderRadius: size / 2, flexShrink: 0, border: `3px solid ${ring || 'var(--bg-card)'}`, boxSizing: 'border-box' };
+  if (photo && !broken) {
+    return <img src={photo} alt="" onError={() => setBroken(true)} style={{ ...base, objectFit: 'cover', background: 'var(--bg-surface)' }} />;
+  }
+  return (
+    <div aria-hidden="true" style={{ ...base, background: 'var(--role-color-light, #f3e5f5)', color: 'var(--role-color)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: Math.round(size * 0.45), fontWeight: 800 }}>
+      {(name || '?').charAt(0).toUpperCase()}
+    </div>
+  );
+};
+
 const SimpleView = window.SimpleView = ({ initial }) => {
   const [data, setData] = useState(initial || null);
   const [loading, setLoading] = useState(!initial);
   const [failed, setFailed] = useState(false);
   const [now, setNow] = useState(new Date());
+  const [panel, setPanel] = useState(null); // null | 'messages' | 'tell'
+  const [unread, setUnread] = useState(0);
+  const [tellText, setTellText] = useState('');
+  const [sending, setSending] = useState(false);
+  const [sentMsg, setSentMsg] = useState('');
 
-  const load = React.useCallback(async () => {
+  // v1.130.1 — tell the family the screen was looked at (and that the note on it was seen).
+  // Only on an open or a return to the front, never on the minute refresh: a phone lying on
+  // the counter with the app up is not someone looking at it.
+  const markOpened = React.useCallback((d) => {
+    try {
+      if (!d?.careRecipientId || document.visibilityState !== 'visible') return;
+      apiFetch(`/api/care-recipients/${d.careRecipientId}/simple-screen/opened`, {
+        method: 'POST', body: JSON.stringify({ noteId: d.simpleScreen?.noteForYou?.id || null }),
+      }).catch(() => {});
+    } catch { /* a record of a look must never break the look */ }
+  }, []);
+
+  const load = React.useCallback(async (opened) => {
     try {
       const res = await apiFetch('/api/dashboard');
-      if (res?.ok) { setData(await res.json()); setFailed(false); }
-      else setFailed(true);
+      if (res?.ok) {
+        const d = await res.json();
+        setData(d); setFailed(false);
+        if (opened) markOpened(d);
+      } else setFailed(true);
     } catch { setFailed(true); }
     setLoading(false);
   }, []);
 
+  const [reading, setReading] = useState(false);
+  const [readFlash, setReadFlash] = useState('');
+  const markRead = async (noteId) => {
+    if (!data?.careRecipientId || reading) return;
+    setReading(true);
+    try {
+      const res = await apiFetch(`/api/care-recipients/${data.careRecipientId}/notes-for-me/${noteId}/read`, { method: 'POST' });
+      if (res?.ok) {
+        // Reading it takes it away; a short thank-you says the family will know.
+        const from = data.simpleScreen?.noteForYou?.from;
+        setData((prev) => prev && prev.simpleScreen ? ({ ...prev, simpleScreen: { ...prev.simpleScreen, noteForYou: null } }) : prev);
+        setReadFlash(from ? `Thank you! ${from} will see that you read it.` : 'Thank you!');
+        setTimeout(() => setReadFlash(''), 8000);
+      }
+    } catch { /* the button stays; they can tap again */ }
+    setReading(false);
+  };
+
+  const loadUnread = React.useCallback(async () => {
+    try {
+      const res = await apiFetch('/api/messages/conversations');
+      if (res?.ok) {
+        const d = await res.json();
+        setUnread((d.conversations || []).reduce((sum, c) => sum + (c.unreadCount || 0), 0));
+      }
+    } catch { /* the badge is a courtesy */ }
+  }, []);
+
+  const showMessages = !!data?.simpleScreen?.show?.messages;
+
   useEffect(() => {
-    if (!initial) load();
+    if (!initial) load(true); else markOpened(initial);
     // A phone left on the kitchen counter: refresh every minute, and the moment it is picked up.
     const iv = setInterval(() => { setNow(new Date()); load(); }, 60000);
-    const onVis = () => { if (document.visibilityState === 'visible') { setNow(new Date()); load(); } };
+    const onVis = () => { if (document.visibilityState === 'visible') { setNow(new Date()); load(true); } };
     document.addEventListener('visibilitychange', onVis);
-    let off = null;
-    if (typeof onSocketEvent === 'function') off = onSocketEvent('activity_update', () => load());
-    return () => { clearInterval(iv); document.removeEventListener('visibilitychange', onVis); if (off) off(); };
+    const offs = [];
+    if (typeof onSocketEvent === 'function') {
+      offs.push(onSocketEvent('activity_update', () => load()));
+      offs.push(onSocketEvent('simple_screen_refresh', () => load()));
+      offs.push(onSocketEvent('simple_mode_changed', () => load()));
+    }
+    return () => { clearInterval(iv); document.removeEventListener('visibilitychange', onVis); offs.forEach((o) => o && o()); };
   }, []);
+
+  useEffect(() => {
+    if (!showMessages) return undefined;
+    loadUnread();
+    const iv = setInterval(loadUnread, 30000);
+    const off = typeof onSocketEvent === 'function' ? onSocketEvent('new_message', () => loadUnread()) : null;
+    return () => { clearInterval(iv); if (off) off(); };
+  }, [showMessages]);
 
   const page = { minHeight: '100vh', background: 'var(--bg-surface)', padding: '20px 16px 32px', boxSizing: 'border-box', maxWidth: 560, margin: '0 auto' };
   const card = { background: 'var(--bg-card)', borderRadius: 20, padding: '20px', marginBottom: 18, border: '2px solid var(--border-color)' };
   const label = { fontSize: 20, fontWeight: 700, color: 'var(--text-secondary)', margin: '0 0 10px' };
+  const bigBtn = (bg, fg) => ({
+    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14, width: '100%',
+    minHeight: 88, marginBottom: 14, borderRadius: 22, textDecoration: 'none', border: 'none', cursor: 'pointer',
+    background: bg, color: fg, fontSize: 30, fontWeight: 800, fontFamily: 'inherit', boxSizing: 'border-box',
+  });
+  const backBar = (
+    <button onClick={() => { setPanel(null); setSentMsg(''); load(); }} style={{ ...bigBtn('var(--bg-card)', 'var(--text-primary)'), border: '2px solid var(--border-color)', minHeight: 72, fontSize: 26 }}>
+      {'←'} Back to home
+    </button>
+  );
 
   if (loading) return <div style={{ ...page, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, color: 'var(--text-secondary)' }}>One moment…</div>;
 
   const s = data?.simpleScreen || {};
+  const show = s.show || { calls: true, comingUp: true, notesFromFamily: true };
+
+  // ── Messages: the ordinary Messages screen, under a big way home ──
+  if (panel === 'messages' && show.messages && typeof Messages !== 'undefined') {
+    return (
+      <div style={{ ...page, padding: '12px 12px 0', maxWidth: 720 }}>
+        {backBar}
+        <div style={{ height: 'calc(100vh - 110px)', overflow: 'hidden', borderRadius: 16, background: 'var(--bg-card)' }}>
+          <Messages />
+        </div>
+      </div>
+    );
+  }
+
+  // ── Tell the family ──
+  if (panel === 'tell' && show.tellFamily) {
+    const send = async (text, attention) => {
+      const t = String(text || '').trim();
+      if (!t || sending) return;
+      setSending(true);
+      try {
+        const res = await apiFetch(`/api/care-recipients/${data.careRecipientId}/from-me`, {
+          method: 'POST', body: JSON.stringify({ content: t, needsAttention: !!attention }),
+        });
+        if (res?.ok) { setSentMsg(`Sent: "${t}"`); setTellText(''); }
+        else setSentMsg("That didn't send. Please try again.");
+      } catch { setSentMsg("That didn't send. Please try again."); }
+      setSending(false);
+    };
+    return (
+      <div style={page} className="simple-view">
+        {backBar}
+        <div style={{ fontSize: 30, fontWeight: 800, color: 'var(--text-primary)', margin: '6px 0 16px' }}>Tell the family</div>
+        {sentMsg && (
+          <div style={{ ...card, borderColor: 'var(--role-color)', borderWidth: 3, fontSize: 24, fontWeight: 700, color: 'var(--text-primary)' }}>
+            {sentMsg.startsWith('Sent') ? '✅ ' : ''}{sentMsg}
+          </div>
+        )}
+        {TELL_FAMILY_QUICK.map((q) => (
+          <button key={q.text} disabled={sending} onClick={() => send(q.text, q.attention)}
+            style={{ ...bigBtn('var(--bg-card)', 'var(--text-primary)'), border: '2px solid var(--border-color)', justifyContent: 'flex-start', paddingLeft: 24, fontSize: 28 }}>
+            <span aria-hidden="true">{q.icon}</span> {q.text}
+          </button>
+        ))}
+        <div style={{ ...card, marginTop: 8 }}>
+          <div style={label}>Or write it</div>
+          <textarea value={tellText} maxLength={500} rows={3} onChange={(e) => setTellText(e.target.value)}
+            placeholder="My shoulder hurts"
+            style={{ width: '100%', fontSize: 24, padding: 14, borderRadius: 14, border: '2px solid var(--border-color)', boxSizing: 'border-box', fontFamily: 'inherit', resize: 'vertical' }} />
+          <button disabled={sending || !tellText.trim()} onClick={() => send(tellText, false)}
+            style={{ ...bigBtn('var(--role-color)', 'var(--text-on-primary)'), marginTop: 12, marginBottom: 0, opacity: (sending || !tellText.trim()) ? 0.6 : 1 }}>
+            {sending ? 'Sending…' : 'Send'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const first = (data?.userName || '').split(' ')[0];
-  const hour = now.getHours();
-  const greet = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
-  const calls = s.callContacts || [];
+  const calls = show.calls ? (s.callContacts || []) : [];
   const coming = s.comingUp || [];
-  const note = s.noteForYou;
+  const note = show.notesFromFamily ? s.noteForYou : null;
 
   const comingLine = (c) => {
     const when = `${simpleFmtDay(c.date)}${c.time ? ` at ${simpleFmtTime(c.time)}` : ''}`;
@@ -191,57 +344,124 @@ const SimpleView = window.SimpleView = ({ initial }) => {
 
   return (
     <div style={page} className="simple-view">
-      <div style={{ fontSize: 34, fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1.15 }}>{greet}{first ? `, ${first}` : ''}</div>
-      <div style={{ fontSize: 24, color: 'var(--text-secondary)', margin: '6px 0 22px', lineHeight: 1.3 }}>
-        {now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-        <br />{now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+      {/* v1.130.1 — Pete: "'good evening betty' takes up too much space. something like 'Hi
+          Betty!'" One line for the greeting, one for the day and time. */}
+      <div style={{ fontSize: 32, fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1.15 }}>Hi{first ? ` ${first}` : ''}!</div>
+      <div style={{ fontSize: 22, color: 'var(--text-secondary)', margin: '4px 0 16px', lineHeight: 1.3 }}>
+        {now.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })} {'·'} {now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
       </div>
 
       {failed && (
         <div style={{ ...card, fontSize: 22, color: 'var(--text-primary)' }}>Can't reach InPlace right now. It will try again by itself.</div>
       )}
 
-      {note && (
-        <div style={{ ...card, borderColor: 'var(--role-color)', borderWidth: 3 }}>
-          <div style={label}>From {note.from}</div>
-          <div style={{ fontSize: 30, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.3, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{note.content}</div>
-          <div style={{ fontSize: 18, color: 'var(--text-secondary)', marginTop: 10 }}>{simpleAgo(note.createdAt)}</div>
+      {readFlash && (
+        <div style={{ ...card, borderColor: 'var(--color-success, #1b7a3d)', borderWidth: 3, fontSize: 24, fontWeight: 700, color: 'var(--text-primary)' }}>
+          {'✓'} {readFlash}
         </div>
       )}
 
+      {/* v1.130.1 — the whole note is the button. Pete: "just have her click on the message to
+          clear it." Reading it takes it away; the family sees when. */}
+      {note && (
+        <button onClick={() => markRead(note.id)} disabled={reading} aria-label={`Note from ${note.from}. Tap when you have read it.`}
+          style={{ ...card, display: 'block', width: '100%', textAlign: 'left', cursor: 'pointer', borderColor: 'var(--role-color)', borderWidth: 3, fontFamily: 'inherit' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
+            <SimpleFace photo={note.fromPhoto} name={note.from} size={56} />
+            <div style={{ ...label, margin: 0 }}>From {note.from}</div>
+          </div>
+          <div style={{ fontSize: 30, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.3, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{note.content}</div>
+          <div style={{ fontSize: 18, color: 'var(--text-secondary)', marginTop: 10 }}>{simpleAgo(note.createdAt)}</div>
+          <div style={{ ...bigBtn('var(--role-color)', 'var(--text-on-primary)'), marginTop: 14, marginBottom: 0, minHeight: 76, fontSize: 28 }}>
+            {'👍'} I read it!
+          </div>
+        </button>
+      )}
+
       {calls.map((c) => (
-        <a key={c.userId} href={`tel:${c.phone}`} style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14,
-          minHeight: 88, marginBottom: 14, borderRadius: 22, textDecoration: 'none',
-          background: 'var(--color-success, #1b7a3d)', color: '#fff', fontSize: 32, fontWeight: 800,
-        }} aria-label={`Call ${c.firstName}`}>
-          <span aria-hidden="true" style={{ fontSize: 34 }}>{'📞'}</span> Call {c.firstName}
+        <a key={c.userId} href={`tel:${c.phone}`} style={{ ...bigBtn('var(--color-success, #1b7a3d)', '#fff'), justifyContent: 'flex-start', padding: '10px 18px' }} aria-label={`Call ${c.firstName}`}>
+          <SimpleFace photo={c.photo} name={c.firstName} size={68} ring="#fff" />
+          <span style={{ flex: 1, textAlign: 'center' }}><span aria-hidden="true" style={{ fontSize: 30 }}>{'📞'}</span> Call {c.firstName}</span>
         </a>
       ))}
 
-      <div style={{ ...card, marginTop: calls.length ? 8 : 0 }}>
-        <div style={label}>Coming up</div>
-        {coming.length === 0 ? (
-          <div style={{ fontSize: 24, color: 'var(--text-primary)' }}>Nothing scheduled in the next few days.</div>
-        ) : coming.map((c, i) => {
-          const l = comingLine(c);
-          return (
-            <div key={c.kind + c.id} style={{ padding: '12px 0', borderTop: i ? '2px solid var(--border-color)' : 'none' }}>
-              <div style={{ fontSize: 26, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.25 }}>{l.big}</div>
-              {l.small && <div style={{ fontSize: 22, color: 'var(--text-secondary)', marginTop: 4, lineHeight: 1.3 }}>{l.small}</div>}
-            </div>
-          );
-        })}
-      </div>
+      {show.messages && (
+        <button onClick={() => setPanel('messages')} style={bigBtn('var(--role-color)', 'var(--text-on-primary)')}>
+          <span aria-hidden="true" style={{ fontSize: 32 }}>{'💬'}</span> Messages
+          {unread > 0 && <span style={{ background: '#fff', color: 'var(--role-color)', borderRadius: 20, padding: '2px 14px', fontSize: 24 }}>{unread}</span>}
+        </button>
+      )}
+
+      {show.tellFamily && (
+        <button onClick={() => setPanel('tell')} style={{ ...bigBtn('var(--bg-card)', 'var(--text-primary)'), border: '3px solid var(--role-color)' }}>
+          <span aria-hidden="true" style={{ fontSize: 32 }}>{'✍️'}</span> Tell the family
+        </button>
+      )}
+
+      {show.comingUp && (
+        <div style={{ ...card, marginTop: 8 }}>
+          <div style={label}>Coming up</div>
+          {coming.length === 0 ? (
+            <div style={{ fontSize: 24, color: 'var(--text-primary)' }}>Nothing scheduled in the next few days.</div>
+          ) : coming.map((c, i) => {
+            const l = comingLine(c);
+            return (
+              <div key={c.kind + c.id} style={{ padding: '12px 0', borderTop: i ? '2px solid var(--border-color)' : 'none', display: 'flex', alignItems: 'center', gap: 14 }}>
+                {c.kind === 'visit'
+                  ? <SimpleFace photo={c.whoPhoto} name={c.who} size={64} />
+                  : <div aria-hidden="true" style={{ width: 64, height: 64, borderRadius: 32, background: 'var(--bg-surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 30, flexShrink: 0 }}>{'📅'}</div>}
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 26, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.25 }}>{l.big}</div>
+                  {l.small && <div style={{ fontSize: 22, color: 'var(--text-secondary)', marginTop: 4, lineHeight: 1.3 }}>{l.small}</div>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 };
+
+// v1.130.1 — "Mon 8:05 PM" style, and the read/seen line under a note.
+const simpleClock = (iso) => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const sameDay = d.toDateString() === new Date().toDateString();
+  const t = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  return sameDay ? `today ${t}` : `${d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} ${t}`;
+};
+const simpleGap = (fromIso, toIso) => {
+  const mins = Math.max(0, Math.round((new Date(toIso) - new Date(fromIso)) / 60000));
+  if (mins < 60) return `${mins} min`;
+  const h = Math.floor(mins / 60), m = mins % 60;
+  return m ? `${h} h ${m} min` : `${h} h`;
+};
+const noteStatusLine = (n, name) => {
+  if (!n || !n.createdAt) return '';
+  const parts = [`Sent ${simpleClock(n.createdAt)}`];
+  if (n.seenAt) parts.push(`on screen ${simpleClock(n.seenAt)}`);
+  if (n.readAt) parts.push(`✓ read ${simpleClock(n.readAt)} (${simpleGap(n.createdAt, n.readAt)})`);
+  else if (!n.seenAt) parts.push(`${name} hasn't opened the app since`);
+  else parts.push('not marked read yet');
+  return parts.join(' · ');
+};
+
+// What the leader can tick, in the order it appears on the phone.
+const SIMPLE_SECTIONS = [
+  ['notesFromFamily', 'Notes from the family', 'The latest note you leave shows big at the top.'],
+  ['calls', 'Call buttons', 'Big buttons that ring the people you pick below. They don\u2019t work inside iPhone Assistive Access yet; use the Calls app there.'],
+  ['messages', 'Messages', 'Read and send messages with the care team.'],
+  ['tellFamily', 'Tell the family', 'One-tap notes like "I’m hungry" or "I have pain", or typed. You get a "tap to read" notice; pain and "I need help" come as needs attention.'],
+  ['comingUp', 'Coming up', 'Upcoming visits and appointments.'],
+];
 
 const SimpleModeSettings = window.SimpleModeSettings = ({ recipientId, firstName }) => {
   const { showToast } = useToast();
   const [cfg, setCfg] = useState(null);
   const [on, setOn] = useState(false);
   const [picked, setPicked] = useState([]);
+  const [show, setShow] = useState({});
   const [saving, setSaving] = useState(false);
   const [noteText, setNoteText] = useState('');
   const [sending, setSending] = useState(false);
@@ -251,20 +471,30 @@ const SimpleModeSettings = window.SimpleModeSettings = ({ recipientId, firstName
   const load = async () => {
     try {
       const res = await apiFetch(`/api/care-recipients/${recipientId}/simple-mode`);
-      if (res?.ok) { const d = await res.json(); setCfg(d); setOn(d.on); setPicked(d.callUserIds || []); setLastNote(d.lastNote || null); }
+      if (res?.ok) {
+        const d = await res.json();
+        setCfg(d); setOn(d.on); setPicked(d.callUserIds || []); setShow(d.show || {}); setLastNote(d.lastNote || null);
+      }
     } catch { /* the card stays in its loading state */ }
   };
-  useEffect(() => { load(); }, [recipientId]);
+  useEffect(() => {
+    load();
+    // v1.130.1 — "Betty read your note" lands while this page is open: show it.
+    const off = typeof onSocketEvent === 'function' ? onSocketEvent('activity_update', (p) => { if (p && p.type === 'note_read') load(); }) : null;
+    return () => { if (off) off(); };
+  }, [recipientId]);
 
-  const save = async (nextOn, nextPicked) => {
+  const save = async (patch, okText = 'Saved') => {
     setSaving(true);
+    const body = { on, callUserIds: picked, show, ...patch };
     try {
-      const res = await apiFetch(`/api/care-recipients/${recipientId}/simple-mode`, {
-        method: 'PUT', body: JSON.stringify({ on: nextOn, callUserIds: nextPicked }),
-      });
+      const res = await apiFetch(`/api/care-recipients/${recipientId}/simple-mode`, { method: 'PUT', body: JSON.stringify(body) });
       const d = await res?.json().catch(() => ({}));
-      if (res?.ok) { setOn(d.on); setPicked(d.callUserIds); showToast('Saved', 'success'); }
-      else { showToast(d?.error || 'Could not save', 'error'); setOn(cfg?.on || false); }
+      if (res?.ok) {
+        setOn(d.on); setPicked(d.callUserIds); setShow(d.show || show);
+        if (patch.clearNote) setLastNote(null);
+        showToast(okText, 'success');
+      } else showToast(d?.error || 'Could not save', 'error');
     } catch { showToast('Could not save', 'error'); }
     setSaving(false);
   };
@@ -272,8 +502,7 @@ const SimpleModeSettings = window.SimpleModeSettings = ({ recipientId, firstName
   const togglePerson = (id) => {
     const next = picked.includes(id) ? picked.filter((x) => x !== id) : [...picked, id];
     if (next.length > (cfg?.maxCalls || 3)) { showToast(`Pick up to ${cfg?.maxCalls || 3} people`, 'error'); return; }
-    setPicked(next);
-    save(on, next);
+    save({ callUserIds: next });
   };
 
   const sendNote = async () => {
@@ -285,7 +514,11 @@ const SimpleModeSettings = window.SimpleModeSettings = ({ recipientId, firstName
         method: 'POST', body: JSON.stringify({ careRecipientId: recipientId, content: text, noteType: 'for_recipient' }),
       });
       const d = await res?.json().catch(() => ({}));
-      if (res?.ok) { setNoteText(''); setLastNote(d.note || null); showToast(`Sent to ${name}'s phone`, 'success'); }
+      if (res?.ok) {
+        setNoteText('');
+        setLastNote({ id: d.note?.id, content: text, createdAt: d.note?.created_at || new Date().toISOString(), seenAt: null, readAt: null });
+        showToast(`Sent to ${name}'s phone`, 'success');
+      }
       else showToast(d?.error || 'Could not send the note', 'error');
     } catch { showToast('Could not send the note', 'error'); }
     setSending(false);
@@ -295,43 +528,79 @@ const SimpleModeSettings = window.SimpleModeSettings = ({ recipientId, firstName
   if (!cfg.hasOwnLogin) return null;
 
   const box = { marginBottom: 20, paddingBottom: 20, borderBottom: '1px solid var(--border-light, #f0f0f0)' };
+  const sub = { fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', margin: '4px 0 6px' };
   return (
     <div style={box}>
       <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--role-color)', marginBottom: 6 }}>{name}'s phone</div>
       <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, color: 'var(--text-primary)', cursor: 'pointer', marginBottom: 6 }}>
-        <input type="checkbox" checked={on} disabled={saving} onChange={(e) => save(e.target.checked, picked)} style={{ width: 20, height: 20, accentColor: 'var(--role-color)' }} />
-        <span><strong>Simple screen</strong> — very large text, call buttons, what's coming up, and your latest note. Nothing else.</span>
+        <input type="checkbox" checked={on} disabled={saving} onChange={(e) => save({ on: e.target.checked })} style={{ width: 20, height: 20, accentColor: 'var(--role-color)' }} />
+        <span><strong>Simple screen</strong>: one screen, very large text. {name} sees only what you tick below. No menus, no money.</span>
       </label>
       <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 12px 30px', lineHeight: 1.5 }}>
-        Only the team leader can turn this off. Works inside iPhone Assistive Access.
+        Only the team leader can change this. Works inside iPhone Assistive Access.
       </p>
 
       {on && (
         <>
-          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', margin: '4px 0 6px' }}>Call buttons (up to {cfg.maxCalls})</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
-            {cfg.candidates.map((c) => (
-              <label key={c.userId} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: c.hasPhone ? 'var(--text-primary)' : 'var(--text-muted)', cursor: c.hasPhone ? 'pointer' : 'default' }}>
-                <input type="checkbox" disabled={!c.hasPhone || saving} checked={picked.includes(c.userId)} onChange={() => togglePerson(c.userId)} style={{ width: 16, height: 16, accentColor: 'var(--role-color)' }} />
-                {c.firstName} {c.lastName}{!c.hasPhone && ' — no phone number on their account'}
+          <div style={sub}>What {name} can see</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
+            {SIMPLE_SECTIONS.map(([key, title, desc]) => (
+              <label key={key} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, color: 'var(--text-primary)', cursor: 'pointer' }}>
+                <input type="checkbox" disabled={saving} checked={!!show[key]} onChange={(e) => save({ show: { ...show, [key]: e.target.checked } })}
+                  style={{ width: 16, height: 16, marginTop: 2, accentColor: 'var(--role-color)' }} />
+                <span><strong>{title}</strong> <span style={{ color: 'var(--text-secondary)' }}>— {desc}</span></span>
               </label>
             ))}
           </div>
 
-          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 6 }}>Leave {name} a note</div>
-          <textarea value={noteText} maxLength={500} rows={3} onChange={(e) => setNoteText(e.target.value)}
-            placeholder="I'll be there at 10. Stay in the house."
-            style={{ width: '100%', padding: '10px 12px', border: '1px solid #d0d0d0', borderRadius: 8, fontSize: 15, fontFamily: 'inherit', boxSizing: 'border-box', resize: 'vertical' }} />
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 6 }}>
-            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Shows big on {name}'s screen, and the phone gets a "tap to read" notice.</span>
-            <button onClick={sendNote} disabled={sending || !noteText.trim()} style={{ padding: '8px 16px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer', opacity: (sending || !noteText.trim()) ? 0.6 : 1, whiteSpace: 'nowrap' }}>
-              {sending ? 'Sending…' : 'Send'}
-            </button>
+          <div style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '0 0 12px', padding: '8px 10px', borderRadius: 8, background: 'var(--bg-surface)' }}>
+            {cfg.lastOpenedAt
+              ? <>Last opened the app: <strong>{simpleClock(cfg.lastOpenedAt)}</strong> {'·'} {cfg.opens7d} time{cfg.opens7d === 1 ? '' : 's'} in the last 7 days</>
+              : <>{name} hasn't opened the simple screen yet.</>}
           </div>
-          {lastNote && (
-            <div style={{ marginTop: 10, padding: '8px 10px', borderRadius: 8, background: 'var(--bg-surface)', fontSize: 13, color: 'var(--text-secondary)' }}>
-              On {name}'s screen now: <span style={{ color: 'var(--text-primary)' }}>"{lastNote.content}"</span>
-            </div>
+
+          {show.calls && (
+            <>
+              <div style={sub}>Who the call buttons ring (up to {cfg.maxCalls})</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
+                {cfg.candidates.map((c) => (
+                  <label key={c.userId} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: c.hasPhone ? 'var(--text-primary)' : 'var(--text-muted)', cursor: c.hasPhone ? 'pointer' : 'default' }}>
+                    <input type="checkbox" disabled={!c.hasPhone || saving} checked={picked.includes(c.userId)} onChange={() => togglePerson(c.userId)} style={{ width: 16, height: 16, accentColor: 'var(--role-color)' }} />
+                    {c.firstName} {c.lastName}{!c.hasPhone && ' — no phone number on their account'}
+                  </label>
+                ))}
+              </div>
+            </>
+          )}
+
+          {show.notesFromFamily && (
+            <>
+              <div style={sub}>Leave {name} a note</div>
+              <textarea value={noteText} maxLength={500} rows={3} onChange={(e) => setNoteText(e.target.value)}
+                placeholder="I'll be there at 10. Stay in the house."
+                style={{ width: '100%', padding: '10px 12px', border: '1px solid #d0d0d0', borderRadius: 8, fontSize: 15, fontFamily: 'inherit', boxSizing: 'border-box', resize: 'vertical' }} />
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 6 }}>
+                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Shows big on {name}'s screen, and the phone gets a "tap to read" notice.</span>
+                <button onClick={sendNote} disabled={sending || !noteText.trim()} style={{ padding: '8px 16px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer', opacity: (sending || !noteText.trim()) ? 0.6 : 1, whiteSpace: 'nowrap' }}>
+                  {sending ? 'Sending…' : 'Send'}
+                </button>
+              </div>
+              {lastNote && (
+                <div style={{ marginTop: 10, padding: '8px 10px', borderRadius: 8, background: 'var(--bg-surface)', fontSize: 13, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
+                  <span>
+                    {lastNote.readAt ? `${name} read: ` : `On ${name}'s screen now: `}<span style={{ color: 'var(--text-primary)' }}>"{lastNote.content}"</span>
+                    <br /><span style={{ fontSize: 12 }}>{noteStatusLine(lastNote, name)}</span>
+                    {!lastNote.readAt && <><br /><span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Sending a new note replaces this one.</span></>}
+                  </span>
+                  {!lastNote.readAt && (
+                    <button onClick={() => save({ clearNote: true }, `Cleared from ${name}'s screen`)} disabled={saving}
+                      style={{ padding: '6px 12px', background: 'var(--bg-card)', color: 'var(--text-primary)', border: '1px solid #d0d0d0', borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                      Clear
+                    </button>
+                  )}
+                </div>
+              )}
+            </>
           )}
         </>
       )}

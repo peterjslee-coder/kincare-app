@@ -564,12 +564,25 @@ router.get("/:id/simple-mode", requireRole("family"), async (req, res) => {
     const mode = sm.parseSimpleMode(cr.simple_mode);
     const candidates = await sm.callCandidates(db, cr.id, linkedUserId);
     const lastNote = await db.prepare(
-      "SELECT id, content, created_at FROM recipient_notes WHERE care_recipient_id = ? AND note_type = 'for_recipient' ORDER BY created_at DESC LIMIT 1"
+      "SELECT id, content, created_at, seen_at, read_at FROM recipient_notes WHERE care_recipient_id = ? AND note_type = 'for_recipient' ORDER BY created_at DESC LIMIT 1"
     ).get(cr.id);
+    // v1.130.1 — did they open the app, and when.
+    const opens = linkedUserId ? await db.prepare(`
+      SELECT MAX(created_at) AS last_open,
+             COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days')::int AS opens_7d
+      FROM simple_screen_log WHERE care_recipient_id = ? AND user_id = ? AND event = 'open'
+    `).get(cr.id, linkedUserId) : null;
     res.json({
-      lastNote: lastNote ? { id: lastNote.id, content: lastNote.content, createdAt: lastNote.created_at } : null,
+      // Only while it is still on their screen (v1.130.1 — clearable).
+      lastNote: lastNote && lastNote.id !== mode.clearedNoteId ? {
+        id: lastNote.id, content: lastNote.content, createdAt: lastNote.created_at,
+        seenAt: lastNote.seen_at || null, readAt: lastNote.read_at || null,
+      } : null,
+      lastOpenedAt: (opens && opens.last_open) || null,
+      opens7d: (opens && opens.opens_7d) || 0,
       hasOwnLogin: !!linkedUserId,
       on: mode.on,
+      show: mode.show,
       callUserIds: mode.callUserIds,
       maxCalls: sm.MAX_CALLS,
       candidates: candidates.map((c) => ({ userId: c.userId, firstName: c.firstName, lastName: c.lastName, hasPhone: !!c.phone })),
@@ -596,16 +609,191 @@ router.put("/:id/simple-mode", requireRole("family"), async (req, res) => {
     if (bad.length) return res.status(400).json({ error: "Call buttons can only ring people on the care team" });
     const noPhone = ids.filter((id) => !candidates.get(id).phone).map((id) => candidates.get(id).firstName);
     if (noPhone.length) return res.status(400).json({ error: `${noPhone.join(", ")} has no phone number on their account yet` });
+    // v1.130.1 — what's on the screen. A partial `show` keeps the other ticks as they were.
+    const prev = sm.parseSimpleMode(cr.simple_mode);
+    const show = sm.cleanShow({ ...prev.show, ...(req.body.show && typeof req.body.show === "object" ? req.body.show : {}) });
+    // Clear the note on their screen: remember the newest note id; a newer one shows again.
+    let clearedNoteId = prev.clearedNoteId;
+    if (req.body.clearNote === true) {
+      const latest = await db.prepare(
+        "SELECT id FROM recipient_notes WHERE care_recipient_id = ? AND note_type = 'for_recipient' ORDER BY created_at DESC LIMIT 1"
+      ).get(cr.id);
+      clearedNoteId = latest ? latest.id : null;
+    }
     await db.prepare("UPDATE care_recipients SET simple_mode = ?, updated_at = NOW() WHERE id = ?")
-      .run(JSON.stringify({ on, callUserIds: ids }), cr.id);
+      .run(JSON.stringify({ on, callUserIds: ids, show, clearedNoteId }), cr.id);
+
+    // Messages ticked on: the person can only message someone they are connected to, and an
+    // account the leader set up (v1.129.4) was never connected to anyone. Connect them to the
+    // care team — the same people accepting a team invite connects you to. Never removed when
+    // ticked off: the screen just stops offering Messages.
+    if (show.messages && linkedUserId) {
+      for (const c of candidates.values()) {
+        const exists = await db.prepare(
+          "SELECT id FROM connections WHERE (requester_id = ? AND recipient_id = ?) OR (requester_id = ? AND recipient_id = ?)"
+        ).get(linkedUserId, c.userId, c.userId, linkedUserId);
+        if (!exists) {
+          await db.prepare("INSERT INTO connections (id, requester_id, recipient_id, status) VALUES (?, ?, ?, 'accepted')")
+            .run(uuid(), c.userId, linkedUserId);
+        }
+      }
+    }
+
     if (linkedUserId) {
       const emitToUser = req.app.get("emitToUser");
-      if (emitToUser) emitToUser(linkedUserId, "simple_mode_changed", { on });
+      if (emitToUser) {
+        emitToUser(linkedUserId, "simple_mode_changed", { on });
+        emitToUser(linkedUserId, "simple_screen_refresh", { reason: "settings" });
+      }
     }
-    res.json({ on, callUserIds: ids });
+    res.json({ on, callUserIds: ids, show, noteCleared: !!clearedNoteId && req.body.clearNote === true });
   } catch (err) {
     captureException(err, { where: "careRecipients: put simple-mode" });
     res.status(500).json({ error: "Couldn't save the phone settings" });
+  }
+});
+
+// ─── v1.130.1 — "Tell my family": a note FROM the person, on the simple screen ───
+//
+// Pete: "allow her to leave notes about things like feeling shoulder pain, or being hungry."
+// Only the person themselves (trusted link), only while the leader has ticked Tell-the-family
+// on. It lands in Care Notes as theirs, and the team is told WHO, never WHAT — "my shoulder
+// hurts" is health information and a push renders on a locked screen.
+router.post("/:id/from-me", async (req, res) => {
+  try {
+    const db = await getDb();
+    const cr = await db.prepare("SELECT id, first_name, family_user_id, linked_user_id, simple_mode FROM care_recipients WHERE id = ?").get(req.params.id);
+    if (!cr) return res.status(404).json({ error: "Not found" });
+    const linkedUserId = await trustedLinkedUserId(db, cr);
+    if (!linkedUserId || linkedUserId !== req.user.id) return res.status(403).json({ error: "Not allowed" });
+    const sm = require("../utils/simpleMode");
+    const mode = sm.parseSimpleMode(cr.simple_mode);
+    if (!mode.on || !mode.show.tellFamily) return res.status(403).json({ error: "This isn't turned on" });
+
+    const content = String(req.body.content || "").trim();
+    if (!content) return res.status(400).json({ error: "Say what's going on" });
+    if (content.length > 500) return res.status(400).json({ error: "Keep it short — 500 characters max" });
+    const needsAttention = req.body.needsAttention === true;
+
+    // A double tap on a big button should not send twice.
+    const dup = await db.prepare(`
+      SELECT id FROM recipient_notes WHERE care_recipient_id = ? AND author_id = ? AND note_type = 'from_recipient'
+        AND content = ? AND created_at > NOW() - INTERVAL '2 minutes'
+    `).get(cr.id, req.user.id, content);
+    if (dup) return res.status(200).json({ id: dup.id, duplicate: true });
+
+    const id = uuid();
+    await db.prepare(`
+      INSERT INTO recipient_notes (id, care_recipient_id, author_id, content, note_type, needs_attention, created_at)
+      VALUES (?, ?, ?, ?, 'from_recipient', ?, NOW())
+    `).run(id, cr.id, req.user.id, content, needsAttention ? 1 : 0);
+
+    try {
+      await db.prepare(
+        "INSERT INTO activity_feed (id, family_user_id, care_recipient_id, event_type, title, message, metadata) VALUES (?, ?, ?, ?, ?, ?, ?)"
+      ).run(uuid(), cr.family_user_id, cr.id, needsAttention ? "observation_attention" : "team_note",
+        needsAttention ? `⚠️ ${cr.first_name} asked for attention` : `${cr.first_name} left a note`,
+        null, JSON.stringify({ type: "team_note", careRecipientId: cr.id, noteId: id, page: "care-profile" }));
+      const { usersWithCapability } = require("../utils/access");
+      const { CAP } = require("../utils/capabilities");
+      const notify = new Set(await usersWithCapability(db, cr.id, CAP.READ_NOTES));
+      notify.add(cr.family_user_id);
+      notify.delete(req.user.id);
+      const { sendPushToUser } = require("./push");
+      const eventType = needsAttention ? "observation_attention" : "team_note";
+      for (const uid of notify) {
+        sendPushToUser(uid, {
+          title: needsAttention ? `⚠️ ${cr.first_name} needs attention` : `${cr.first_name} left a note`,
+          body: "Tap to read",
+          tag: `note-${id.slice(0, 8)}`,
+          data: { type: eventType, careRecipientId: cr.id, noteId: id, page: "care-profile" },
+        }, eventType).catch(() => {});
+      }
+    } catch (e) { captureException(e, { where: "careRecipients: from-me notify" }); }
+
+    res.status(201).json({ id });
+  } catch (err) {
+    captureException(err, { where: "careRecipients: from-me" });
+    res.status(500).json({ error: "Couldn't send that" });
+  }
+});
+
+// ─── v1.130.1 — what the family learns from the simple screen ───
+//
+// Pete: "i want her to be able to click 'I read it!' We're collecting on her...it can record
+// how long it took her to get it, or if she ever opened the app." Only the person's OWN taps
+// count — an admin viewing as them records nothing, or the record would say she read a note
+// she never saw.
+async function asTheLinkedPerson(db, req) {
+  const cr = await db.prepare("SELECT id, first_name, family_user_id, linked_user_id, simple_mode FROM care_recipients WHERE id = ?").get(req.params.id);
+  if (!cr) return { cr: null, ok: false };
+  const linkedUserId = await trustedLinkedUserId(db, cr);
+  return { cr, ok: !!linkedUserId && linkedUserId === req.user.id };
+}
+
+// The screen was opened (or brought back to the front). Marks the note on it as seen.
+router.post("/:id/simple-screen/opened", async (req, res) => {
+  try {
+    const db = await getDb();
+    const { cr, ok } = await asTheLinkedPerson(db, req);
+    if (!cr) return res.status(404).json({ error: "Not found" });
+    if (!ok) return res.status(403).json({ error: "Not allowed" });
+    if (req.user.impersonatedBy) return res.json({ recorded: false });
+    // One "open" per 5 minutes: bringing the app forward twice in a minute is one look.
+    const recent = await db.prepare(
+      "SELECT id FROM simple_screen_log WHERE care_recipient_id = ? AND user_id = ? AND event = 'open' AND created_at > NOW() - INTERVAL '5 minutes'"
+    ).get(cr.id, req.user.id);
+    if (!recent) {
+      await db.prepare("INSERT INTO simple_screen_log (id, care_recipient_id, user_id, event) VALUES (?, ?, ?, 'open')")
+        .run(uuid(), cr.id, req.user.id);
+    }
+    const noteId = typeof req.body.noteId === "string" ? req.body.noteId : null;
+    if (noteId) {
+      await db.prepare(
+        "UPDATE recipient_notes SET seen_at = NOW() WHERE id = ? AND care_recipient_id = ? AND note_type = 'for_recipient' AND seen_at IS NULL"
+      ).run(noteId, cr.id);
+    }
+    res.json({ recorded: true });
+  } catch (err) {
+    captureException(err, { where: "careRecipients: simple-screen opened" });
+    res.status(500).json({ error: "Couldn't record that" });
+  }
+});
+
+// "I read it!"
+router.post("/:id/notes-for-me/:noteId/read", async (req, res) => {
+  try {
+    const db = await getDb();
+    const { cr, ok } = await asTheLinkedPerson(db, req);
+    if (!cr) return res.status(404).json({ error: "Not found" });
+    if (!ok) return res.status(403).json({ error: "Not allowed" });
+    if (req.user.impersonatedBy) return res.json({ recorded: false });
+    const note = await db.prepare(
+      "SELECT id, author_id, read_at FROM recipient_notes WHERE id = ? AND care_recipient_id = ? AND note_type = 'for_recipient'"
+    ).get(req.params.noteId, cr.id);
+    if (!note) return res.status(404).json({ error: "Not found" });
+    if (note.read_at) return res.json({ readAt: note.read_at, already: true });
+    await db.prepare(
+      "UPDATE recipient_notes SET read_at = NOW(), seen_at = COALESCE(seen_at, NOW()) WHERE id = ? AND read_at IS NULL"
+    ).run(note.id);
+    const r = await db.prepare("SELECT read_at FROM recipient_notes WHERE id = ?").get(note.id);
+    await db.prepare("INSERT INTO simple_screen_log (id, care_recipient_id, user_id, event, note_id) VALUES (?, ?, ?, 'read', ?)")
+      .run(uuid(), cr.id, req.user.id, note.id);
+    try {
+      const { sendPushToUser } = require("./push");
+      sendPushToUser(note.author_id, {
+        title: `${cr.first_name} read your note`,
+        body: "Tap to see",
+        tag: `note-read-${String(req.params.noteId).slice(0, 8)}`,
+        data: { type: "note_read", careRecipientId: cr.id, noteId: req.params.noteId, page: "care-team" },
+      }, "note_read").catch(() => {});
+      const emitToUser = req.app.get("emitToUser");
+      if (emitToUser) emitToUser(note.author_id, "activity_update", { type: "note_read" });
+    } catch (e) { captureException(e, { where: "careRecipients: note read push" }); }
+    res.json({ readAt: r && r.read_at });
+  } catch (err) {
+    captureException(err, { where: "careRecipients: note read" });
+    res.status(500).json({ error: "Couldn't record that" });
   }
 });
 

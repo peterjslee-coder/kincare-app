@@ -594,6 +594,7 @@ router.delete("/users/:id/nuke", async (req, res) => {
       await safeRun("DELETE FROM recipient_notes WHERE author_id = ?", [id], 'recipient_notes(author)');
       // Care recipient shares
       await safeRun("DELETE FROM care_recipient_shares WHERE shared_with_user_id = ? OR shared_by_user_id = ?", [id, id], 'care_recipient_shares');
+      await safeRun("DELETE FROM simple_screen_log WHERE user_id = ?", [id], 'simple_screen_log'); // v1.130.1
 
       // Consent audit log entries by this user
       await safeRun("DELETE FROM consent_audit_log WHERE actor_id = ?", [id], 'consent_audit_log(actor)');

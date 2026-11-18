@@ -1250,6 +1250,18 @@ async function careForDashboard(db, userId, res) {
       db, recipient, userId, getTodayStringInZone(recipient.timezone || DEFAULT_TIMEZONE));
   } catch (e) { require("../utils/sentry").captureException(e, { where: "dashboard: simpleScreen" }); }
 
+  // v1.130.1 — on the simple screen the payload IS the screen. Pete: "she can't see how much
+  // people are paid etc." The full payload carries caregiver rates, the month's spend and her
+  // health profile; none of it is drawn, so none of it is sent.
+  if (simpleScreen.on) {
+    return res.json({
+      role: "care_for",
+      userName: `${user.first_name} ${user.last_name}`,
+      careRecipientId: recipient.id,
+      simpleScreen,
+    });
+  }
+
   res.json({
     role: "care_for",
     userName: `${user.first_name} ${user.last_name}`,
