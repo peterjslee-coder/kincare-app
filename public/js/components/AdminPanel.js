@@ -6458,7 +6458,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
           s === 'consider_approved' ? 'APPROVED (FLAGGED)' : s === 'rejected' ? 'REJECTED' :
           s === 'did_not_pass' ? 'DID NOT PASS' : s === 'invitation_canceled' ? 'CANCELED' :
           // v1.131.0 — "nothing has been sent to Checkr" says so; it used to read PENDING.
-          s === 'not_sent' ? 'NOT SENT TO CHECKR' : s === 'invitation_sent' ? 'FORM EMAILED \u2014 WAITING ON THE CAREGIVER' :
+          s === 'requested' ? 'ASKED \u2014 WAITING FOR YOUR APPROVAL' : s === 'not_sent' ? 'NOT SENT TO CHECKR' : s === 'invitation_sent' ? 'FORM EMAILED \u2014 WAITING ON THE CAREGIVER' :
           s === 'processing' ? 'CHECKR HAS THE FORM' :
           (s || 'not_sent').replace(/_/g, ' ').toUpperCase();
         const isHighlight = (s) => s === 'consider' || s === 'adverse_action' || s === 'suspended' || s === 'disputed' || s === 'did_not_pass';
@@ -6495,6 +6495,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
           const effectiveStatus = c.manually_set_no_report ? 'manual_no_report'
             : (notSent && c.is_background_checked) ? 'clear'
             : (notSent && hasVouches) ? 'vouched'
+            : (notSent && c.bg_check_requested_at) ? 'requested' // v1.132.0 — asked, waiting on an admin's approval
             : notSent ? 'not_sent'
             : c.checkr_status;
           const statusColor = getStatusColor(effectiveStatus);
@@ -6580,7 +6581,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                   {/* v1.131.0 — Pete: "allows me to send them an email on file to complete their
                       background check". Billed to InPlace's Checkr account. Re-sends a form that is
                       out and unanswered; never re-runs a check that has a result. */}
-                  {(effectiveStatus === 'not_sent' || effectiveStatus === 'vouched' || effectiveStatus === 'invitation_sent'
+                  {(effectiveStatus === 'not_sent' || effectiveStatus === 'requested' || effectiveStatus === 'vouched' || effectiveStatus === 'invitation_sent'
                     || effectiveStatus === 'invitation_expired' || effectiveStatus === 'invitation_canceled' || effectiveStatus === 'canceled') && !c.is_background_checked && (
                     <button onClick={async () => {
                       const again = effectiveStatus === 'invitation_sent';
@@ -6594,7 +6595,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                         loadBgChecks();
                       } catch { showToast('Could not reach the server', 'error'); }
                     }} style={{ padding: '5px 12px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
-                      {'\u2709\uFE0F'} {effectiveStatus === 'invitation_sent' ? 'Re-send Checkr form' : 'Send Checkr form'}
+                      {'\u2709\uFE0F'} {effectiveStatus === 'invitation_sent' ? 'Re-send Checkr form' : effectiveStatus === 'requested' ? 'Approve & send Checkr form' : 'Send Checkr form'}
                     </button>
                   )}
                   {c.checkr_candidate_id && (

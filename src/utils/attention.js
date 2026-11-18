@@ -39,6 +39,7 @@ const { getTodayStringInZone, DEFAULT_TIMEZONE } = require("./timezone");
 const TimeChange = require("../../public/js/timeChange"); // v1.123.0
 const { FEE_CAREGIVER_PROFILE_SQL } = require("./cancellationFee");
 const { careAccessFor } = require("./careAccess"); // v1.112.0
+const { readiness: bgReadiness } = require("./bgCheckRequest"); // v1.132.0
 
 // A naive 'YYYY-MM-DD' plus n days, done in UTC on purpose: scheduled_date is a wall-clock
 // date with no zone, so arithmetic in the server's zone would shift it across a boundary.
@@ -295,6 +296,33 @@ async function attentionItemsFor(db, userId) {
       WHERE sf.status IN ('pending', 'escalated')
       ORDER BY sf.created_at
     `).all();
+  });
+
+  // ── A caregiver waiting for an admin to approve a background check (v1.132.0) ──
+  //
+  // Pete, 11/18: "I want this roadblock to instead be a needs you card for Admin where I approve
+  // them to go get a background check." Agreeing to the check in onboarding is the request
+  // (utils/bgCheckRequest). One tap approves and sends Checkr's form, billed to InPlace.
+  // Admins only, by is_admin. "Not now" snoozes it for a week.
+  const bgRequestRows = await safeRows("bgCheckRequests", async () => {
+    const me = await db.prepare("SELECT is_admin FROM users WHERE id = ?").get(userId);
+    if (!me || !me.is_admin) return [];
+    return db.prepare(`
+      SELECT cp.user_id, cp.bg_check_requested_at, cp.legal_first_name, cp.legal_middle_name, cp.legal_last_name,
+             cp.date_of_birth, cp.zip, u.first_name, u.last_name, u.email, u.phone
+        FROM caregiver_profiles cp
+        JOIN users u ON u.id = cp.user_id
+       WHERE cp.bg_check_requested_at IS NOT NULL
+         AND cp.bg_check_approved_at IS NULL
+         AND cp.checkr_invitation_id IS NULL
+         AND COALESCE(cp.is_background_checked, 0) = 0
+         AND COALESCE(u.is_demo, 0) = 0
+         AND COALESCE(u.is_active, 1) = 1
+         AND NOT EXISTS (
+           SELECT 1 FROM nudge_snoozes ns
+            WHERE ns.user_id = ? AND ns.kind = 'bgCheckRequest' AND ns.ref = cp.user_id AND ns.snoozed_until > NOW())
+       ORDER BY cp.bg_check_requested_at
+    `).all(userId);
   });
 
   // ── A late-cancellation fee with a 24-hour clock on it (v1.109.9) ──
@@ -704,6 +732,30 @@ async function attentionItemsFor(db, userId) {
       focus: `approval:${u.id}`,
       note: "They can't use InPlace until you do.",
     })),
+    ...bgRequestRows.map((r) => {
+      const { missing } = bgReadiness(r, r);
+      const who = name(r.first_name, r.last_name) || r.email;
+      return {
+        kind: "bgCheckRequest",
+        id: `bgCheckRequest:${r.user_id}`,
+        title: missing.length
+          ? `${who} is ready for a background check — missing ${missing.join(", ")}`
+          : `${who} is ready for a background check`,
+        detail: null,
+        forWhom: null,
+        when: r.bg_check_requested_at || null,
+        verb: "Approve",
+        // Checkr refuses an invitation without these, so a card that is missing one has no
+        // one-tap answer: Open goes to the caregiver's record instead.
+        action: missing.length ? null : { method: "POST", path: `/api/checkr/admin/requests/${r.user_id}/approve` },
+        page: "admin",
+        focus: null, // the admin page has no per-caregiver anchor yet
+        note: missing.length
+          ? "Checkr needs these before it can send the form."
+          : "Approve sends their details to Checkr, which emails the form. inPlace Starter, billed to InPlace.",
+        dismiss: { method: "POST", path: "/api/push/attention/snooze", body: { kind: "bgCheckRequest", ref: r.user_id, days: 7 }, label: "Not now" },
+      };
+    }),
     ...safetyRows.map((f) => ({
       kind: "safetyFlag",
       id: f.id,
@@ -967,6 +1019,7 @@ async function attentionItemsFor(db, userId) {
     reimbursements: reimbursementRows.length,
     approvals: approvalRows.length,
     safetyFlags: safetyRows.length,
+    bgCheckRequests: bgRequestRows.length, // v1.132.0
     timeChanges,
     // v1.105.105 — a count with no destination is why "1 schedule change waiting on your
     // answer" was a dead end: the card sent you to a page and the page said nothing. Kept
@@ -978,6 +1031,7 @@ async function attentionItemsFor(db, userId) {
     items,
   };
   payload.total += idCount;
+  payload.total += bgRequestRows.length; // v1.132.0 — a caregiver waiting on an admin's approval
   payload.identity = idCount;
   return payload;
 }

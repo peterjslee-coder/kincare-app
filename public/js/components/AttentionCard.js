@@ -78,6 +78,8 @@ const ATTENTION_KINDS = {
   timeChangeSent: { icon: '🕑', chip: 'WAITING ON THEM' },
   careTask:      { icon: '✅', chip: 'CARE TASK' },
   approval:      { icon: '🔑', chip: 'ACCESS' },
+  // v1.132.0 — a caregiver waiting for an admin to approve their background check.
+  bgCheckRequest: { icon: '🔍', chip: 'BACKGROUND CHECK' },
   // v1.109.4 — the first SOFT kind. Nobody is blocked by an empty calendar, so it says
   // "a nudge" rather than "needs you" and it is not in the number above it.
   emptyWeek:     { icon: '📅', chip: 'A NUDGE' },

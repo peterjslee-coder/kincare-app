@@ -774,6 +774,9 @@ async function caregiverDashboard(db, userId, res) {
       // v1.131.0 — what Checkr itself confirmed, with dates (utils/checkrEvidence). The hub claims
       // "Checkr has your form" only from this.
       checkrEvidence: await checkrEvidenceFor(db, userId).catch(() => null),
+      // v1.132.0 — the check waits for an admin's approval, not a $30 payment.
+      bgCheckRequestedAt: profile.bg_check_requested_at || null,
+      bgCheckApprovedAt: profile.bg_check_approved_at || null,
       adminVouches: (await activeVouchesFor(db, userId)).map((v) => ({ familyName: v.family_name, familyBrought: v.note === 'family-brought' /* v1.105.186 */ })),
       stripeConnected: !!profile.stripe_onboard_complete,
       stripeOnboardComplete: !!profile.stripe_onboard_complete,

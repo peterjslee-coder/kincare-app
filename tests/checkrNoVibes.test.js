@@ -60,7 +60,7 @@ describe("the screens", () => {
     expect(src).toMatch(/<CheckrFormWaiting/);
   });
   test("the email form says plainly it is a separate form she has to fill in", () => {
-    expect(raw("public/js/components/CheckrEmailStart.js")).toMatch(/does not start until you fill that form in/);
+    expect(raw("public/js/components/CheckrEmailStart.js")).toMatch(/start until you finish that form/);
   });
   test("nothing defaults a missing status to 'pending' any more", () => {
     expect(code("src/routes/checkr.js")).not.toMatch(/checkr_status \|\| "pending"/);
@@ -77,7 +77,8 @@ describe("sending the form", () => {
   test("admins can send it, through the same function", () => {
     const src = code("src/routes/checkr.js");
     expect(src).toMatch(/router\.post\("\/admin\/send-invitation\/:userId"/);
-    expect(src).toMatch(/sendInvitation\(db, target\.id, \{ actor: "admin" \}\)/);
+    expect(src).toMatch(/approveAndSend\(db, target\.id, req\.user\.id\)/);
+    expect(src).toMatch(/sendInvitation\(db, targetUserId, \{ actor: "admin" \}\)/);
   });
   test("the package is pinned — never 'the first one on the account'", () => {
     const src = code("src/routes/checkr.js");

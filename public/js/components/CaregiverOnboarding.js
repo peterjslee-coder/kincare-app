@@ -1260,10 +1260,10 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
                 and the box is still required. ⚠️ Counsel-adjacent: flag any further rewording. */}
             {familyOnly ? disclosureCheck('acceptBackgroundCheck',
               'Background Check \u2014 for other families',
-              'You were added by a family you already know, and that family can book you without a background check. Before you take work from any other family on InPlace, a background check through Checkr is required. You are responsible for the one-time cost ($30). This includes criminal history and identity verification, plus your driving record if you gave us a driver\u2019s license.'
+              'You were added by a family you already know, and that family can book you without a background check. Before you take work from any other family on InPlace, a background check through Checkr is required. InPlace pays for it. This includes criminal history and identity verification, plus your driving record if you gave us a driver\u2019s license.'
             ) : disclosureCheck('acceptBackgroundCheck',
               'Background Check Required',
-              'InPlace requires a background check through Checkr for all caregivers. You are responsible for the one-time cost ($30). This includes criminal history and identity verification, plus your driving record if you gave us a driver\u2019s license.'
+              'InPlace requires a background check through Checkr for all caregivers. InPlace pays for it. This includes criminal history and identity verification, plus your driving record if you gave us a driver\u2019s license.'
             )}
 
             {disclosureCheck('acceptStripePayments',
@@ -1283,7 +1283,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
 
             {disclosureCheck('acceptRefundPolicy',
               'Refund & Cancellation Policy',
-              'After completing 10 sessions, your background check fee will be refunded. If a family cancels within 24 hours of a session, you are paid in full for that visit — it is your time they blocked out. You always have the option to waive that fee if you would rather let it go.'
+              'If a family cancels within 24 hours of a session, you are paid in full for that visit — it is your time they blocked out. You always have the option to waive that fee if you would rather let it go.'
             )}
 
             {disclosureCheck('acceptTransportation',
@@ -1568,7 +1568,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
                 <span style={{ fontSize: '13px', color: 'var(--text-primary)', lineHeight: '1.5' }}>
                   I authorize InPlace to conduct a background check, including criminal history{form.idDocType === 'drivers_license' ? ', driving record,' : ''}
                   and identity verification through Checkr. I understand this is required
-                  to provide care through InPlace and the $30 fee will be refunded after 10 completed sessions.
+                  to provide care through InPlace, and that InPlace pays for it.
                 </span>
               </label>
               {errors.backgroundCheckConsent && <div style={errorStyle}>{errors.backgroundCheckConsent}</div>}

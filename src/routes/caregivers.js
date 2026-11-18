@@ -8,6 +8,7 @@ const { authenticate, requireRole } = require("../middleware/auth");
 const { geocodeAddress, buildAddressString, haversineDistance, coarsenCoordinate } = require("../utils/geocode");
 const { consumeDaily } = require("../utils/usageLimits");
 const { clampLimit, clampOffset } = require("../utils/queryLimits");
+const { requestIfReady: requestBgCheckIfReady } = require("../utils/bgCheckRequest"); // v1.132.0
 
 const router = express.Router();
 router.use(authenticate);
@@ -619,6 +620,8 @@ router.post("/profile", requireRole("caregiver"), async (req, res) => {
 
       const updated = await db.prepare("SELECT * FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
       console.log(`  [caregiver-profile] Updated profile for user=${req.user.id} (${req.user.email})`);
+      // v1.132.0 — consenting in onboarding is the request for a check (utils/bgCheckRequest).
+      await requestBgCheckIfReady(db, req.user.id);
       return res.json({ profile: updated });
     }
 
@@ -669,6 +672,7 @@ router.post("/profile", requireRole("caregiver"), async (req, res) => {
     } catch (e) {
       console.error("  [caregiver-profile] known-caregiver fulfil (non-blocking):", e.message);
     }
+    await requestBgCheckIfReady(db, req.user.id); // v1.132.0
     res.status(201).json({ profile });
   } catch (err) {
     console.error(`  [caregiver-profile] ❌ Error for user=${req.user?.id} (${req.user?.email}):`, err.message);

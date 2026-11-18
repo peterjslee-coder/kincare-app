@@ -262,8 +262,7 @@ describe("the dashboard descriptions stop reading like system text", () => {
   test("the safety check copy is untouched", () => {
     // v1.105.63 — the waived / not-waived branch is a legal-adjacent distinction, not a tone
     // choice. Someone whose fee was waived once read "one-time $30 fee" above a warning to act.
-    expect(hub).toMatch(/The \$30 fee has been waived for you/);
-    expect(hub).toMatch(/one-time \$30 fee that is refunded after 10 completed sessions/);
+    expect(hub).toMatch(/and InPlace pays for it/); // v1.132.0 — no $30 fee; InPlace pays
   });
 });
 
