@@ -453,6 +453,92 @@ router.delete("/:id/photo", requireRole("family"), async (req, res) => {
 
 // ─── PUT /api/care-recipients/:id/permissions ───
 // Update permission tier and visibility settings for a care recipient
+// ─── v1.129.4 — the team leader sets up the care recipient's own sign-in ───
+//
+// Pete, 11/17, with Betty's phone in his hand for one night: he wants InPlace on HER phone.
+// The server could already link a recipient's own account (a care_recipient invite, v1.71.0),
+// but no screen sent that invite, and the path behind it — email link, registration form,
+// self-onboarding wizard — is built for a capable adult signing herself up, not for a son
+// setting up his mother's phone at the kitchen table.
+//
+// So the leader does it directly: an email and a password he chooses, typed into her phone.
+// What she gets is deliberately narrow — she is linked to her own record (so her screen is
+// HER screen), sits on the team as a member so the link is trusted (utils/linkedAccount), and
+// her share carries read-only-ish capabilities. Nothing here books care or spends money.
+//
+// The ID gate still applies: a new account sees no care until an admin approves an ID or
+// marks it "Verified in person" (Admin → People). Not bypassed here on purpose.
+const OWN_LOGIN_CAPS = ["read_profile", "read_notes", "write_notes", "read_visits"];
+
+router.post("/:id/own-login", requireRole("family"), async (req, res) => {
+  try {
+    const { isValidEmail, isValidPassword } = require("../middleware/validate");
+    const db = await getDb();
+    const cr = await db.prepare(
+      "SELECT id, first_name, last_name, family_user_id, linked_user_id FROM care_recipients WHERE id = ?"
+    ).get(req.params.id);
+    if (!cr) return res.status(404).json({ error: "Care recipient not found" });
+
+    const team = await db.prepare("SELECT id FROM care_teams WHERE care_recipient_id = ? ORDER BY created_at ASC LIMIT 1").get(cr.id);
+    const isLeader = team ? !!(await db.prepare(
+      "SELECT 1 FROM care_team_members WHERE care_team_id = ? AND user_id = ? AND role = 'leader'"
+    ).get(team.id, req.user.id)) : false;
+    if (cr.family_user_id !== req.user.id && !isLeader) {
+      return res.status(403).json({ error: "Only the care team leader can set this up" });
+    }
+    if (!team) return res.status(400).json({ error: "This person has no care team yet" });
+    if (cr.linked_user_id) {
+      return res.status(409).json({ error: `${cr.first_name} already has a sign-in linked to this profile` });
+    }
+
+    const email = String(req.body.email || "").trim().toLowerCase();
+    const password = String(req.body.password || "");
+    if (!isValidEmail(email)) return res.status(400).json({ error: "Enter a valid email address" });
+    if (!isValidPassword(password)) {
+      return res.status(400).json({ error: "Password needs 8+ characters with an uppercase letter, a number and a symbol" });
+    }
+    const existing = await db.prepare("SELECT id FROM users WHERE LOWER(email) = LOWER(?) AND is_active = 1").get(email);
+    if (existing) return res.status(409).json({ error: "That email already has an InPlace account — use a different one" });
+    const blocked = await db.prepare("SELECT id FROM blocked_emails WHERE LOWER(email) = LOWER(?)").get(email);
+    if (blocked) return res.status(403).json({ error: "That email address can't be used" });
+
+    const bcrypt = require("bcryptjs");
+    const userId = uuid();
+    const passwordHash = await bcrypt.hash(password, 10);
+    let linked = false;
+    await db.transaction(async (tx) => {
+      await tx.prepare("DELETE FROM users WHERE LOWER(email) = LOWER(?) AND is_active = 0").run(email);
+      await tx.prepare(`
+        INSERT INTO users (id, email, password_hash, role, roles, first_name, last_name, email_verified)
+        VALUES (?, ?, ?, 'care_for', ?, ?, ?, 1)
+      `).run(userId, email, passwordHash, JSON.stringify(["care_for"]), cr.first_name, cr.last_name || "");
+      // Compare-and-set: only while nobody else is linked. The family already set her profile
+      // up, so the self-onboarding wizard is not hers to sit through.
+      const r = await tx.prepare(
+        "UPDATE care_recipients SET linked_user_id = ?, self_onboarding_complete = 1, updated_at = NOW() WHERE id = ? AND linked_user_id IS NULL"
+      ).run(userId, cr.id);
+      if (!r.changes) throw Object.assign(new Error("already linked"), { status: 409 });
+      linked = true;
+      await tx.prepare(
+        "INSERT INTO care_team_members (id, care_team_id, user_id, role, invited_by) VALUES (?, ?, ?, 'member', ?)"
+      ).run(uuid(), team.id, userId, req.user.id);
+      await tx.prepare(
+        "INSERT INTO care_recipient_shares (id, care_recipient_id, shared_with_user_id, permission, capabilities, shared_by_user_id) VALUES (?, ?, ?, 'view', ?, ?)"
+      ).run(uuid(), cr.id, userId, JSON.stringify(OWN_LOGIN_CAPS), req.user.id);
+      await tx.prepare(
+        "INSERT INTO consent_audit_log (id, care_recipient_id, actor_id, actor_role, event_type, description) VALUES (?, ?, ?, 'family', 'own_login_created', ?)"
+      ).run(uuid(), cr.id, req.user.id, `Care team leader set up ${cr.first_name}'s own sign-in`);
+    });
+
+    res.status(201).json({ linked, userId, email });
+  } catch (err) {
+    if (err && err.status === 409) return res.status(409).json({ error: "This profile was linked to a sign-in a moment ago" });
+    console.error("Own login setup error:", err);
+    captureException(err, { where: "careRecipients: own-login" });
+    res.status(500).json({ error: "Couldn't set up the sign-in" });
+  }
+});
+
 router.put("/:id/permissions", requireRole("family"), async (req, res) => {
   const db = await getDb();
 

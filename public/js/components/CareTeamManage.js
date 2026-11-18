@@ -1014,6 +1014,12 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack, onNavigate
           {a11yExpanded && (
             <div style={{ background: 'var(--bg-surface)', border: '1px solid #e0e0e0', borderTop: 'none', borderRadius: '0 0 12px 12px', padding: '16px 20px' }}>
 
+              {/* v1.129.4 — the leader sets up the recipient's own sign-in for her phone */}
+              {!team.recipient_linked_user_id && typeof OwnLoginSetup !== 'undefined' && (
+                <OwnLoginSetup recipientId={team.care_recipient_id} firstName={team.recipient_first_name}
+                  onDone={fetchTeam} />
+              )}
+
               {/* Display Settings for Care Recipient */}
               {team.recipient_linked_user_id && (() => {
                 const recipPrefs = (() => { try { return team.recipient_accessibility_prefs ? JSON.parse(team.recipient_accessibility_prefs) : {}; } catch { return {}; } })();

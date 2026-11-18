@@ -31,6 +31,22 @@ const WINDOW_DAYS = 45;
 
 const ENTRIES = [
   {
+    id: "own-login",
+    version: "1.129.4",
+    date: "2026-11-18",
+    audience: ["family"],
+    title: "Put InPlace on your loved one's phone",
+    body: "The care team leader can now set up a sign-in for the person you care for, linked to the profile you already built. You choose the email and password, and the sign-in can't book care or spend money.",
+    howTo: [
+      "Open Care Team",
+      "Open Accessibility Options at the bottom",
+      "Tap the Set up sign-in button and choose an email and password",
+      "Sign in with it on their phone and allow notifications",
+    ],
+    examples: ["Set up Mom's iPhone", "Let Dad see the week's visits"],
+    preview: "ownLogin",
+  },
+  {
     id: "edit-request",
     version: "1.129.2",
     date: "2026-11-17",

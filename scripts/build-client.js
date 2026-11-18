@@ -98,6 +98,7 @@ const scripts = [
   "js/components/MyAccount.js",
   "js/components/Reimbursements.js",
   "js/components/MoneyView.js",
+  "js/components/RecipientPhone.js", // v1.129.4 — a care recipient's own sign-in + simple phone screen; CareTeamManage and CaredForView render it
   "js/components/CareTeamManage.js",
   "js/components/CareTeamPage.js",
   "js/components/CaredForView.js",

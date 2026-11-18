@@ -26,6 +26,15 @@ const wnPill = (bg, fg) => ({ padding: '4px 10px', borderRadius: 8, background: 
 
 const WN_PREVIEWS = {
   // v1.129.2 — Edit request
+  // v1.129.4 — the leader sets up a care recipient's own sign-in
+  ownLogin: () => (
+    <div style={{ padding: '12px 12px 10px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>
+      <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--role-color)', marginBottom: 6 }}>Mom's own sign-in</div>
+      <div style={{ ...wnCard, fontSize: 12, color: 'var(--text-secondary)' }}>mom.phone@example.com</div>
+      <div style={{ ...wnCard, fontSize: 12, color: 'var(--text-secondary)' }}>{'•••••••••'}</div>
+      <div style={{ ...wnPill('var(--role-color)', 'var(--text-on-primary)'), display: 'inline-block', marginTop: 4 }}>Create sign-in</div>
+    </div>
+  ),
   editRequest: () => (
     <div style={{ padding: '12px 12px 10px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>
       <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>Edit request</div>
