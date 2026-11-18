@@ -2330,10 +2330,19 @@ const App = () => {
   // no banners — one screen, built to be read inside Apple's Assistive Access frame. Not while
   // an admin is viewing as them: that keeps the normal shell (and its exit), and CaredForView
   // draws the same SimpleView inside it as the preview.
-  if (role === 'care_for' && currentUser?.simpleMode && !impersonating && !careBlocked
+  // v1.130.1 — and the same when an admin views as them, so "view as Betty" is exactly Betty's
+  // screen (Pete saw Kindred and caregiver rates in the old preview). The only addition is the
+  // Exit bar, without which the admin would be stuck in it.
+  if (role === 'care_for' && currentUser?.simpleMode && !careBlocked
       && typeof SimpleView !== 'undefined') {
     return (
       <div className="simple-mode-root">
+        {impersonating && (
+          <div style={{ background: '#ff6f00', color: '#fff', padding: '8px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 13, fontWeight: 600 }}>
+            <span>Viewing as {impersonating.firstName} {impersonating.lastName}</span>
+            <button onClick={stopImpersonation} style={{ background: 'rgba(255,255,255,0.25)', border: 'none', color: '#fff', padding: '4px 12px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>Exit</button>
+          </div>
+        )}
         <SimpleView />
         <OfflineIndicator />
       </div>

@@ -26,10 +26,22 @@ const wnPill = (bg, fg) => ({ padding: '4px 10px', borderRadius: 8, background: 
 
 const WN_PREVIEWS = {
   // v1.129.2 — Edit request
+  // v1.130.1 — what's on the simple screen, I read it, Tell the family
+  simpleChoices: () => (
+    <div style={{ padding: '12px 12px 10px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>
+      <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>What Mom can see</div>
+      {[['Notes from the family', true], ['Call buttons', true], ['Messages', false], ['Tell the family', true], ['Coming up', true]].map(([t, on]) => (
+        <div key={t} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-primary)', marginBottom: 3 }}>
+          <span style={{ width: 14, height: 14, borderRadius: 3, border: '1.5px solid var(--role-color)', background: on ? 'var(--role-color)' : 'transparent', color: 'var(--text-on-primary)', fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{on ? '✓' : ''}</span>{t}
+        </div>
+      ))}
+      <div style={{ fontSize: 11, color: 'var(--color-success)', fontWeight: 600, marginTop: 6 }}>{'✓'} Read today 8:13 PM (8 min)</div>
+    </div>
+  ),
   // v1.130.0 — the simple phone screen
   simpleScreen: () => (
     <div style={{ padding: '12px 12px 10px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>
-      <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 6 }}>Good morning, Mom</div>
+      <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 6 }}>Hi Mom!</div>
       <div style={{ ...wnCard, border: '2px solid var(--role-color)' }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)' }}>From Sam</div>
         <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>I'll be there at 10. Stay in the house.</div>

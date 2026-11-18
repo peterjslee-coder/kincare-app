@@ -67,7 +67,7 @@ test("call buttons ring only team members with a phone number", async () => {
   expect((await put({ on: true, callUserIds: [sister.user.id] })).status).toBe(400); // no phone
   const ok = await put({ on: true, callUserIds: [leader.user.id] });
   expect(ok.status).toBe(200);
-  expect(ok.body).toEqual({ on: true, callUserIds: [leader.user.id] });
+  expect(ok.body).toMatchObject({ on: true, callUserIds: [leader.user.id] });
 });
 
 test("a note FOR her goes only to her phone, says who and never what", async () => {
@@ -102,6 +102,8 @@ test("her dashboard carries the simple screen: call Pete, coming up, the note", 
   const cgUser = await h.createUser({ roles: ["caregiver"], firstName: "Tina", lastName: "ITest" });
   const cgProfile = uuid();
   await db.prepare("INSERT INTO caregiver_profiles (id, user_id, hourly_rate, created_at) VALUES (?, ?, 25, NOW())").run(cgProfile, cgUser.user.id);
+  // Faces: Tina has a profile photo, Pete has none (initial instead).
+  await db.prepare("UPDATE users SET profile_photo = 'data:image/png;base64,iVBORw0KGgo=' WHERE id = ?").run(cgUser.user.id);
   await db.prepare(`INSERT INTO care_sessions (id, care_recipient_id, family_user_id, caregiver_id, scheduled_date, scheduled_time, duration_hours, service_type, status, created_at)
     VALUES (?, ?, ?, ?, ?, '10:00', 2, 'companionship', 'confirmed', NOW())`).run(uuid(), recipientId, leader.user.id, cgProfile, soon(2));
   await db.prepare(`INSERT INTO care_events (id, care_recipient_id, created_by, title, event_date, event_time, starts_at)
@@ -111,10 +113,10 @@ test("her dashboard carries the simple screen: call Pete, coming up, the note", 
   expect(d.status).toBe(200);
   const s = d.body.simpleScreen;
   expect(s.on).toBe(true);
-  expect(s.callContacts).toEqual([{ userId: leader.user.id, firstName: "Pete", phone: "5405551234" }]);
+  expect(s.callContacts).toEqual([{ userId: leader.user.id, firstName: "Pete", phone: "5405551234", photo: null }]);
   expect(s.noteForYou).toMatchObject({ content: "I'll be there at 10. Stay in the house.", from: "Pete" });
   expect(s.comingUp.map((c) => c.kind)).toEqual(["appointment", "visit"]);
-  expect(s.comingUp[1]).toMatchObject({ who: "Tina", time: "10:00" });
+  expect(s.comingUp[1]).toMatchObject({ who: "Tina", time: "10:00", whoPhoto: `/api/media/user/${cgUser.user.id}/photo` });
   // Her own notes view still hides the observation written about her.
   expect(JSON.stringify(d.body.notes || [])).not.toContain("Seemed tired");
 });
@@ -123,4 +125,106 @@ test("turning it off is reflected on her dashboard", async () => {
   await h.request.put(`/api/care-recipients/${recipientId}/simple-mode`).set(h.auth(leader.token)).send({ on: false, callUserIds: [] });
   const d = await h.request.get("/api/dashboard").set(h.auth(mom.token));
   expect(d.body.simpleScreen).toEqual({ on: false });
+});
+
+// ─── v1.130.1 — the leader ticks what is on the screen; clear; I read it; tell the family ───
+
+describe("v1.130.1", () => {
+  const put = (body) => h.request.put(`/api/care-recipients/${recipientId}/simple-mode`).set(h.auth(leader.token)).send(body);
+  const dash = () => h.request.get("/api/dashboard").set(h.auth(mom.token));
+
+  test("on the simple screen the dashboard sends only the screen — no rates, no spend", async () => {
+    await put({ on: true, callUserIds: [leader.user.id] });
+    const d = await dash();
+    expect(Object.keys(d.body).sort()).toEqual(["careRecipientId", "role", "simpleScreen", "userName"]);
+    expect(d.body.simpleScreen.show).toEqual({ calls: true, comingUp: true, notesFromFamily: true, messages: false, tellFamily: false });
+  });
+
+  test("a ticked-off section's data never leaves the server", async () => {
+    const r = await put({ on: true, callUserIds: [leader.user.id], show: { calls: false, comingUp: false } });
+    expect(r.body.show).toMatchObject({ calls: false, comingUp: false, notesFromFamily: true });
+    const s = (await dash()).body.simpleScreen;
+    expect(s.callContacts).toEqual([]);
+    expect(s.comingUp).toEqual([]);
+    expect(s.noteForYou).toBeTruthy();
+    // A partial show keeps the rest.
+    const r2 = await put({ on: true, callUserIds: [leader.user.id], show: { calls: true } });
+    expect(r2.body.show).toMatchObject({ calls: true, comingUp: false });
+  });
+
+  test("opening the screen marks the note seen; I read it records the time and tells the author", async () => {
+    const before = (await dash()).body.simpleScreen.noteForYou;
+    expect(before).toBeTruthy();
+    const o = await h.request.post(`/api/care-recipients/${recipientId}/simple-screen/opened`).set(h.auth(mom.token)).send({ noteId: before.id });
+    expect(o.body.recorded).toBe(true);
+    // Someone else can't record a look for her.
+    expect((await h.request.post(`/api/care-recipients/${recipientId}/simple-screen/opened`).set(h.auth(leader.token)).send({})).status).toBe(403);
+
+    mockPush.mockClear();
+    const rd = await h.request.post(`/api/care-recipients/${recipientId}/notes-for-me/${before.id}/read`).set(h.auth(mom.token));
+    expect(rd.status).toBe(200);
+    expect(rd.body.readAt).toBeTruthy();
+    expect(mockPush).toHaveBeenCalledTimes(1);
+    expect(mockPush.mock.calls[0][0]).toBe(leader.user.id);
+    expect(mockPush.mock.calls[0][1].title).toBe("Betty read your note");
+
+    const g = await h.request.get(`/api/care-recipients/${recipientId}/simple-mode`).set(h.auth(leader.token));
+    expect(g.body.lastNote.seenAt).toBeTruthy();
+    expect(g.body.lastNote.readAt).toBeTruthy();
+    expect(g.body.lastOpenedAt).toBeTruthy();
+    expect(g.body.opens7d).toBe(1);
+    // "just have her click on the message to clear it" — reading it takes it off her screen.
+    expect((await dash()).body.simpleScreen.noteForYou).toBeNull();
+  });
+
+  test("clearing takes the note off her screen; a newer note shows again (and replaces an unread one)", async () => {
+    await h.request.post("/api/notes").set(h.auth(leader.token))
+      .send({ careRecipientId: recipientId, content: "Old unread", noteType: "for_recipient" });
+    await h.request.post("/api/notes").set(h.auth(leader.token))
+      .send({ careRecipientId: recipientId, content: "Newer one", noteType: "for_recipient" });
+    expect((await dash()).body.simpleScreen.noteForYou.content).toBe("Newer one");
+    await put({ on: true, callUserIds: [leader.user.id], clearNote: true });
+    expect((await dash()).body.simpleScreen.noteForYou).toBeNull();
+    const g = await h.request.get(`/api/care-recipients/${recipientId}/simple-mode`).set(h.auth(leader.token));
+    expect(g.body.lastNote).toBeNull();
+    await h.request.post("/api/notes").set(h.auth(leader.token))
+      .send({ careRecipientId: recipientId, content: "Lunch at noon", noteType: "for_recipient" });
+    expect((await dash()).body.simpleScreen.noteForYou.content).toBe("Lunch at noon");
+  });
+
+  test("Tell the family: refused until ticked, then lands as hers and pushes who, never what", async () => {
+    const send = (body) => h.request.post(`/api/care-recipients/${recipientId}/from-me`).set(h.auth(mom.token)).send(body);
+    expect((await send({ content: "I'm hungry" })).status).toBe(403);
+    await put({ on: true, callUserIds: [leader.user.id], show: { tellFamily: true } });
+
+    mockPush.mockClear();
+    const r = await send({ content: "My shoulder hurts", needsAttention: true });
+    expect(r.status).toBe(201);
+    const row = await db.prepare("SELECT author_id, note_type, needs_attention FROM recipient_notes WHERE id = ?").get(r.body.id);
+    expect(row).toMatchObject({ author_id: mom.user.id, note_type: "from_recipient" });
+    expect(Number(row.needs_attention)).toBe(1);
+    const to = mockPush.mock.calls.map((c) => c[0]);
+    expect(to).toEqual(expect.arrayContaining([leader.user.id, sister.user.id]));
+    expect(to).not.toContain(mom.user.id);
+    for (const c of mockPush.mock.calls) expect(JSON.stringify(c[1])).not.toContain("shoulder");
+    expect(mockPush.mock.calls[0][1].title).toBe("⚠️ Betty needs attention");
+
+    // A double tap doesn't send twice.
+    const again = await send({ content: "My shoulder hurts", needsAttention: true });
+    expect(again.body.duplicate).toBe(true);
+    // Only she can send as her.
+    expect((await h.request.post(`/api/care-recipients/${recipientId}/from-me`).set(h.auth(leader.token)).send({ content: "x" })).status).toBe(403);
+    // The team reads it in Care Notes.
+    const notes = await h.request.get(`/api/notes/${recipientId}`).set(h.auth(leader.token));
+    expect(notes.body.notes.some((n) => n.content === "My shoulder hurts")).toBe(true);
+    expect((await dash()).body.simpleScreen.lastSent.content).toBe("My shoulder hurts");
+  });
+
+  test("ticking Messages connects her to the care team", async () => {
+    await put({ on: true, callUserIds: [leader.user.id], show: { messages: true } });
+    const c = await db.prepare(
+      "SELECT COUNT(*)::int AS n FROM connections WHERE (requester_id = ? OR recipient_id = ?) AND status = 'accepted'"
+    ).get(mom.user.id, mom.user.id);
+    expect(c.n).toBeGreaterThanOrEqual(2);
+  });
 });

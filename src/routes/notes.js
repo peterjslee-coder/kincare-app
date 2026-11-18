@@ -205,6 +205,9 @@ router.post("/", async (req, res) => {
         tag: `note-${id.slice(0, 8)}`,
         data: { type: "note_for_you", careRecipientId, noteId: id, page: "dashboard" },
       }, "note_for_you").catch(() => {});
+      // v1.130.1 — and the open screen redraws now, not at its next minute tick.
+      const emitToUser = req.app.get("emitToUser");
+      if (emitToUser) emitToUser(linkedUserId, "simple_screen_refresh", { reason: "note" });
       await db.prepare(
         "INSERT INTO activity_feed (id, family_user_id, care_recipient_id, event_type, title, message, metadata) VALUES (?, ?, ?, ?, ?, ?, ?)"
       ).run(uuid(), linkedRow.family_user_id, careRecipientId, "team_note",

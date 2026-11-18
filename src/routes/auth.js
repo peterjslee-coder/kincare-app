@@ -1292,6 +1292,7 @@ router.delete("/me", authenticate, blockWhileImpersonating("delete this account"
       await tx.prepare("DELETE FROM connections WHERE requester_id = ? OR recipient_id = ?").run(userId, userId);
       await tx.prepare("DELETE FROM conversation_members WHERE user_id = ?").run(userId);
       await tx.prepare("DELETE FROM care_recipient_shares WHERE shared_with_user_id = ? OR shared_by_user_id = ?").run(userId, userId);
+      await tx.prepare("DELETE FROM simple_screen_log WHERE user_id = ?").run(userId); // v1.130.1
       await tx.prepare("UPDATE care_recipients SET linked_user_id = NULL WHERE linked_user_id = ?").run(userId);
 
       // 5. RETAIN for audit: messages, activity_feed, feedback, reviews, payments,

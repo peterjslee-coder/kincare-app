@@ -31,6 +31,21 @@ const WINDOW_DAYS = 45;
 
 const ENTRIES = [
   {
+    id: "simple-screen-choices",
+    version: "1.130.1",
+    date: "2026-11-18",
+    audience: ["family"],
+    title: "Choose what's on their simple screen",
+    body: "Tick what your loved one sees: call buttons, coming up, your notes, messages, or a Tell the family button for things like \"I'm hungry\" or \"I have pain\". They can tap I read it! on your note, and you see when they opened the app and read it.",
+    howTo: [
+      "Open Care Team, then Accessibility Options",
+      "Tick what they can see on their phone",
+      "Leave a note, then watch for read and clear it when it's done",
+    ],
+    examples: ["Let Mom message the family", "Turn on Tell the family", "Clear yesterday's note"],
+    preview: "simpleChoices",
+  },
+  {
     id: "simple-phone-screen",
     version: "1.130.0",
     date: "2026-11-18",

@@ -3489,6 +3489,26 @@ async function initializeDatabase() {
         `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS simple_mode TEXT`,
       ],
     },
+    {
+      // v1.130.1 — Pete: "i want her to be able to click 'I read it!' ... it can record how long
+      // it took her to get it, or if she ever opened the app." When a note written TO the person
+      // first reached their screen, when they tapped I read it, and each time they opened the
+      // simple screen (never while an admin is viewing as them).
+      id: "082_simple_screen_log",
+      statements: [
+        `ALTER TABLE recipient_notes ADD COLUMN IF NOT EXISTS seen_at TIMESTAMPTZ`,
+        `ALTER TABLE recipient_notes ADD COLUMN IF NOT EXISTS read_at TIMESTAMPTZ`,
+        `CREATE TABLE IF NOT EXISTS simple_screen_log (
+          id TEXT PRIMARY KEY,
+          care_recipient_id TEXT NOT NULL,
+          user_id TEXT NOT NULL,
+          event TEXT NOT NULL,
+          note_id TEXT,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )`,
+        `CREATE INDEX IF NOT EXISTS idx_simple_screen_log_recipient ON simple_screen_log(care_recipient_id, created_at)`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;
