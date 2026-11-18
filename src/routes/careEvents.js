@@ -8,8 +8,9 @@
  * one tap (.ics / Google Calendar link).
  *
  * Deliberate non-goals (see Care_Events_Plan_2026-07-22.md):
- *  - NOT a calendar: no month grid, no recurrence (recurring = care_tasks),
- *    no Google/Apple sync. Next Up is the surface; export is the bridge.
+ *  - NOT a calendar: no month grid, no Google/Apple sync. Next Up is the surface; export is
+ *    the bridge. (v1.130.2 added weekly repeat — "church every Sunday" — as materialized rows;
+ *    see extendSeries below. Anything fancier than weekly stays out.)
  *  - NOT a task: no escalation, no "missed", no check-off. Awareness only.
  *
  * Phase 2 (email-forward-to-iPAi via Resend Inbound) writes into this same
@@ -613,6 +614,12 @@ router.post("/", async (req, res) => {
         JSON.stringify({ eventId: id }));
     } catch (feedErr) { /* non-critical */ }
 
+    // v1.130.2 — every week: this row starts the series.
+    const weekly = req.body.repeat === "weekly";
+    if (weekly) {
+      await db.prepare("UPDATE care_events SET series_id = ?, repeat_rule = 'weekly' WHERE id = ?").run(id, id);
+    }
+
     const ev = await db.prepare("SELECT * FROM care_events WHERE id = ?").get(id);
 
     // v1.106.30 — who else is going.
@@ -623,6 +630,9 @@ router.post("/", async (req, res) => {
       attendees = await attendeesFor(db, ev.id);
     }
 
+    // The following weeks copy this one, attendees included (told once, above).
+    if (weekly) await extendSeries(db, id, getTodayStringInZone(tz));
+
     return res.status(201).json({ event: serializeEvent(ev, { attendees }) });
   } catch (err) {
     captureException(err);
@@ -630,6 +640,62 @@ router.post("/", async (req, res) => {
     return res.status(500).json({ error: "Failed to add event" });
   }
 });
+
+// ─── v1.130.2 — repeating events (weekly) ───
+//
+// Pete, 11/17: "I'd like to be able to make events repeating...like church being every
+// sunday" — so "Church pickup — 9:30 AM" is on Betty's simple screen every Saturday night and
+// Sunday without anyone re-entering it.
+//
+// A series is materialized: each week is an ordinary care_events row with the same series_id.
+// That keeps reminders, Next Up, the .ics export and the simple screen on one code path.
+// The poller keeps each live series SERIES_AHEAD_DAYS ahead. Stopping a series deactivates
+// the future rows and clears repeat_rule, which is what the extender looks for.
+const SERIES_AHEAD_DAYS = 84; // 12 weeks
+
+async function extendSeries(db, seriesId, todayStr) {
+  const last = await db.prepare(`
+    SELECT * FROM care_events WHERE series_id = ? AND repeat_rule = 'weekly' AND is_active = 1
+    ORDER BY event_date DESC LIMIT 1
+  `).get(seriesId);
+  if (!last) return 0;
+  const horizon = addDaysToDateString(todayStr, SERIES_AHEAD_DAYS);
+  const attendees = await db.prepare("SELECT user_id, added_by FROM care_event_attendees WHERE care_event_id = ?").all(last.id);
+  let date = addDaysToDateString(last.event_date, 7);
+  let added = 0;
+  while (date <= horizon && added < 60) {
+    const exists = await db.prepare("SELECT id FROM care_events WHERE series_id = ? AND event_date = ?").get(seriesId, date);
+    if (!exists) {
+      const id = uuid();
+      const startsAt = eventStartInstant({ event_date: date, event_time: last.event_time, tz: last.tz || DEFAULT_TZ });
+      await db.prepare(`
+        INSERT INTO care_events (id, care_recipient_id, created_by, title, category,
+          event_date, event_time, end_time, tz, starts_at, location, details, source, source_meta, series_id, repeat_rule)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'weekly')
+      `).run(id, last.care_recipient_id, last.created_by, last.title, last.category, date, last.event_time,
+        last.end_time, last.tz, startsAt.toISOString(), last.location, last.details, last.source || "manual", null, seriesId);
+      for (const a of attendees) {
+        await db.prepare(`
+          INSERT INTO care_event_attendees (id, care_event_id, user_id, added_by) VALUES (?, ?, ?, ?)
+          ON CONFLICT (care_event_id, user_id) DO NOTHING
+        `).run(uuid(), id, a.user_id, a.added_by);
+      }
+      added++;
+    }
+    date = addDaysToDateString(date, 7);
+  }
+  return added;
+}
+
+async function extendAllSeries(db) {
+  const series = await db.prepare(
+    "SELECT DISTINCT e.series_id, cr.timezone FROM care_events e JOIN care_recipients cr ON cr.id = e.care_recipient_id WHERE e.repeat_rule = 'weekly' AND e.is_active = 1 AND e.series_id IS NOT NULL"
+  ).all();
+  for (const s of series) {
+    try { await extendSeries(db, s.series_id, getTodayStringInZone(s.timezone || DEFAULT_TZ)); }
+    catch (e) { captureException(e, { where: "careEvents: extendSeries", seriesId: s.series_id }); }
+  }
+}
 
 // ─── PUT /api/care-events/:id ─── edit
 router.put("/:id", async (req, res) => {
@@ -664,6 +730,31 @@ router.put("/:id", async (req, res) => {
       dateChanged ? "" : ev.reminders_sent,
       ev.id
     );
+    // v1.130.2 — scope "following": the same change to every later week of the series. A new
+    // date moves them all by the same number of days (Sunday → Saturday moves every week).
+    if (req.body.scope === "following" && ev.series_id) {
+      const shift = Math.round((Date.parse(`${merged.event_date}T00:00:00Z`) - Date.parse(`${ev.event_date}T00:00:00Z`)) / 86400000);
+      const later = await db.prepare(
+        "SELECT id, event_date FROM care_events WHERE series_id = ? AND is_active = 1 AND event_date > ? AND id != ?"
+      ).all(ev.series_id, ev.event_date, ev.id);
+      for (const o of later) {
+        const d = shift ? addDaysToDateString(o.event_date, shift) : o.event_date;
+        const st = eventStartInstant({ event_date: d, event_time: merged.event_time || null, tz });
+        await db.prepare(`
+          UPDATE care_events SET title = ?, category = ?, event_date = ?, event_time = ?, end_time = ?,
+            starts_at = ?, location = ?, details = ?, reminders_sent = '', updated_at = NOW()
+          WHERE id = ?
+        `).run(String(merged.title).trim(), category, d, merged.event_time || null, merged.end_time || null,
+          st.toISOString(),
+          merged.location ? String(merged.location).trim().slice(0, 200) : null,
+          merged.details ? String(merged.details).trim().slice(0, 1000) : null, o.id);
+      }
+    }
+    // Turning repeat ON for a one-off makes it the start of a series.
+    if (req.body.repeat === "weekly" && !ev.series_id) {
+      await db.prepare("UPDATE care_events SET series_id = ?, repeat_rule = 'weekly' WHERE id = ?").run(ev.id, ev.id);
+      await extendSeries(db, ev.id, getTodayStringInZone(tz));
+    }
     const updated = await db.prepare("SELECT * FROM care_events WHERE id = ?").get(ev.id);
 
     // v1.106.30 — only the NEWLY tagged hear about it. Re-saving an appointment to fix a
@@ -691,6 +782,15 @@ router.delete("/:id", async (req, res) => {
     if (!ev) return res.status(404).json({ error: "Event not found" });
     const access = await hasAccess(db, ev.care_recipient_id, req.user.id);
     if (!canScheduleEvents(access)) return res.status(403).json({ error: "You don't have permission to remove appointments for this person" });
+    // v1.130.2 — ?scope=following stops a weekly series from this week on. Earlier weeks
+    // stay as the record of what happened; repeat_rule is cleared so the poller stops adding.
+    if (req.query.scope === "following" && ev.series_id) {
+      await db.prepare(
+        "UPDATE care_events SET is_active = 0, updated_at = NOW() WHERE series_id = ? AND event_date >= ?"
+      ).run(ev.series_id, ev.event_date);
+      await db.prepare("UPDATE care_events SET repeat_rule = NULL WHERE series_id = ?").run(ev.series_id);
+      return res.json({ success: true, scope: "following" });
+    }
     await db.prepare("UPDATE care_events SET is_active = 0, updated_at = NOW() WHERE id = ?").run(ev.id);
     return res.json({ success: true });
   } catch (err) {
@@ -705,6 +805,8 @@ router.delete("/:id", async (req, res) => {
 // escalates and nothing goes missed — events are awareness, not obligations.
 async function pollCareEvents(sendPushToUser) {
   const db = await getDb();
+  // v1.130.2 — keep every weekly series ~12 weeks ahead.
+  try { await extendAllSeries(db); } catch (e) { captureException(e, { where: "careEvents: extendAllSeries" }); }
   const nowMs = Date.now();
   // Only rows that could possibly need a notice: active, not long past.
   const events = await db.prepare(`
@@ -781,3 +883,4 @@ async function pollCareEvents(sendPushToUser) {
 module.exports = router;
 module.exports.pollCareEvents = pollCareEvents;
 module.exports._icsSig = icsSig; // for tests
+module.exports._extendAllSeries = extendAllSeries; // for tests

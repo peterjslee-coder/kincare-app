@@ -458,12 +458,16 @@ const CareEventSheet = window.CareEventSheet = ({ ev, canManage, onClose, onEdit
     addingRef.current = false;
   };
 
-  const remove = async () => {
+  // v1.130.2 — a weekly series asks which: this week, or this and every later week.
+  const [askRemove, setAskRemove] = useState(false);
+  const isSeries = !!(ev.series_id && ev.repeat_rule === 'weekly');
+  const remove = async (scope) => {
     if (deleting) return;
-    if (!window.confirm(`Remove "${ev.title}"?`)) return;
+    if (isSeries && !scope) { setAskRemove(true); return; }
+    if (!isSeries && !window.confirm(`Remove "${ev.title}"?`)) return;
     setDeleting(true);
     try {
-      const res = await apiFetch(`/api/care-events/${ev.id}`, { method: 'DELETE' });
+      const res = await apiFetch(`/api/care-events/${ev.id}${scope === 'following' ? '?scope=following' : ''}`, { method: 'DELETE' });
       if (res?.ok) { showToast('Event removed', 'success'); onChanged(); onClose(); }
       else showToast('Could not remove event', 'error');
     } catch { showToast('Could not remove event', 'error'); }
@@ -483,6 +487,7 @@ const CareEventSheet = window.CareEventSheet = ({ ev, canManage, onClose, onEdit
         </div>
         <div style={{ fontSize: 14, color: 'var(--text-secondary)', marginTop: 4 }}>
           {careEventWhen(ev)}{ev.recipientFirstName ? ` · for ${ev.recipientFirstName}` : ''}
+          {ev.series_id && ev.repeat_rule === 'weekly' ? ' · 🔁 every week' : ''}
         </div>
         {/* v1.106.30 — the address opens the map. openExternalUrl, not <a target="_blank">:
             WKWebView drops window.open after an await and Capacitor installs no download
@@ -716,7 +721,13 @@ const CareEventSheet = window.CareEventSheet = ({ ev, canManage, onClose, onEdit
           {canManage && (
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={() => { onClose(); onEdit(); }} style={{ ...btn, flex: 1 }}>Edit</button>
-              <button disabled={deleting} onClick={remove} style={{ ...btn, flex: 1, color: 'var(--color-error)' }}>Remove</button>
+              <button disabled={deleting} onClick={() => remove()} style={{ ...btn, flex: 1, color: 'var(--color-error)' }}>Remove</button>
+            </div>
+          )}
+          {canManage && askRemove && (
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button disabled={deleting} onClick={() => remove('one')} style={{ ...btn, flex: 1 }}>Just this week</button>
+              <button disabled={deleting} onClick={() => remove('following')} style={{ ...btn, flex: 1, color: 'var(--color-error)' }}>This and later weeks</button>
             </div>
           )}
         </div>
@@ -751,6 +762,10 @@ const CareEventFormModal = window.CareEventFormModal = ({ recipientId, recipient
   const [location, setLocation] = useState(ex.location || '');
   const [details, setDetails] = useState(ex.details || '');
   const [saving, setSaving] = useState(false);
+  // v1.130.2 — Pete: "make events repeating...like church being every sunday."
+  const inSeries = !!(existing && ex.series_id && ex.repeat_rule === 'weekly');
+  const [repeat, setRepeat] = useState(inSeries ? 'weekly' : 'once');
+  const [askScope, setAskScope] = useState(false);
   // v1.106.30 — who else is going. Pete: "today I am going to the Dr. Lambert appointment,
   // but Tina is also going. So I would like to be able to tag her so that she gets updates
   // about that appointment as well."
@@ -799,15 +814,19 @@ const CareEventFormModal = window.CareEventFormModal = ({ recipientId, recipient
     setParsing(false);
   };
 
-  const save = async () => {
+  const save = async (scope) => {
     if (saving) return;
     if (!title.trim()) { showToast("What's the event? Add a title.", 'error'); return; }
     if (!date) { showToast('Pick a date.', 'error'); return; }
+    // An edit to one week of a series asks: just this week, or this and the later weeks?
+    if (inSeries && !scope) { setAskScope(true); return; }
     const body = {
       care_recipient_id: recipientId, title: title.trim(), category,
       event_date: date, event_time: allDay ? null : time, end_time: allDay ? null : (endTime || null),
       location: location.trim() || null, details: details.trim() || null,
       attendee_user_ids: [...tagged],
+      ...(repeat === 'weekly' && !inSeries ? { repeat: 'weekly' } : {}),
+      ...(scope === 'following' ? { scope: 'following' } : {}),
     };
     setSaving(true);
     try {
@@ -877,6 +896,18 @@ const CareEventFormModal = window.CareEventFormModal = ({ recipientId, recipient
           )}
         </div>
 
+        <div style={label}>Repeats</div>
+        {inSeries ? (
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>🔁 Every week. When you save, you choose this week only or this and later weeks.</div>
+        ) : (
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button style={chip(repeat === 'once')} onClick={() => setRepeat('once')}>Just once</button>
+            <button style={chip(repeat === 'weekly')} onClick={() => setRepeat('weekly')}>
+              🔁 Every week{date ? ` on ${new Date(date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long' })}` : ''}
+            </button>
+          </div>
+        )}
+
         <div style={label}>Where <span style={{ fontWeight: 400, textTransform: 'none' }}>(optional)</span></div>
         {/* ─── v1.106.31 — a real address, not free text ───
             Pete: "The address should not be Freeform. I would like to see something that has
@@ -932,8 +963,18 @@ const CareEventFormModal = window.CareEventFormModal = ({ recipientId, recipient
         <textarea style={{ ...input, resize: 'vertical' }} rows={2} value={details} onChange={(e) => setDetails(e.target.value)}
           placeholder="Bring the medication list." />
 
+        {askScope && (
+          <div style={{ marginTop: 16, padding: 12, borderRadius: 12, background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>This repeats every week. Change…</div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button disabled={saving} onClick={() => save('one')} style={chip(false)}>Just this week</button>
+              <button disabled={saving} onClick={() => save('following')} style={chip(true)}>This and later weeks</button>
+            </div>
+          </div>
+        )}
+
         <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
-          <button disabled={saving} onClick={save} style={{
+          <button disabled={saving} onClick={() => save()} style={{
             flex: 1, padding: '12px 0', borderRadius: 12, border: 'none', background: 'var(--accent-color)',
             color: 'var(--text-on-primary)', fontSize: 15, fontWeight: 700, cursor: 'pointer', opacity: saving ? 0.6 : 1,
           }}>{existing ? 'Save changes' : 'Add event'}</button>

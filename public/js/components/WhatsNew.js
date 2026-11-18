@@ -26,6 +26,19 @@ const wnPill = (bg, fg) => ({ padding: '4px 10px', borderRadius: 8, background: 
 
 const WN_PREVIEWS = {
   // v1.129.2 — Edit request
+  // v1.130.2 — weekly events
+  weeklyEvents: () => (
+    <div style={{ padding: '12px 12px 10px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>
+      <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>Church pickup {'·'} 9:30 AM</div>
+      <div style={{ display: 'flex', gap: 5, marginBottom: 8 }}>
+        <span style={{ ...wnPill('var(--bg-surface)', 'var(--text-secondary)'), border: '1px solid var(--border-color)' }}>Just once</span>
+        <span style={wnPill('var(--role-color)', 'var(--text-on-primary)')}>🔁 Every week on Sunday</span>
+      </div>
+      {['Sun, Nov 22', 'Sun, Nov 29', 'Sun, Dec 6'].map((d) => (
+        <div key={d} style={{ ...wnCard, fontSize: 12, color: 'var(--text-primary)' }}>{d} {'·'} 9:30 AM</div>
+      ))}
+    </div>
+  ),
   // v1.130.1 — what's on the simple screen, I read it, Tell the family
   simpleChoices: () => (
     <div style={{ padding: '12px 12px 10px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>

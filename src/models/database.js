@@ -3509,6 +3509,18 @@ async function initializeDatabase() {
         `CREATE INDEX IF NOT EXISTS idx_simple_screen_log_recipient ON simple_screen_log(care_recipient_id, created_at)`,
       ],
     },
+    {
+      // v1.130.2 — Pete: "I'd like to be able to make events repeating...like church being every
+      // sunday." A weekly series is real rows (one per week, kept ~12 weeks ahead by the care
+      // events poller) sharing series_id, so reminders, Next Up and the simple screen need no
+      // second code path. repeat_rule is cleared on a series that was stopped.
+      id: "083_care_event_series",
+      statements: [
+        `ALTER TABLE care_events ADD COLUMN IF NOT EXISTS series_id TEXT`,
+        `ALTER TABLE care_events ADD COLUMN IF NOT EXISTS repeat_rule TEXT`,
+        `CREATE INDEX IF NOT EXISTS idx_care_events_series ON care_events(series_id, event_date)`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

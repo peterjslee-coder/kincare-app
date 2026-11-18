@@ -31,6 +31,21 @@ const WINDOW_DAYS = 45;
 
 const ENTRIES = [
   {
+    id: "weekly-events",
+    version: "1.130.2",
+    date: "2026-11-18",
+    audience: ["family"],
+    title: "Events can repeat every week",
+    body: "Add an appointment once and choose Every week, and it stays on the schedule, with the same reminders, week after week. Change or remove one week, or that week and every week after.",
+    howTo: [
+      "Add an event the usual way",
+      "Under Repeats, tap Every week",
+      "To change it later, open it, edit, and choose Just this week or This and later weeks",
+    ],
+    examples: ["Church pickup, every Sunday at 9:30", "Bridge club on Tuesdays", "Physical therapy every Friday"],
+    preview: "weeklyEvents",
+  },
+  {
     id: "simple-screen-choices",
     version: "1.130.2",
     date: "2026-11-18",
