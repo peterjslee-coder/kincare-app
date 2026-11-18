@@ -29,7 +29,9 @@ const photoUrl = (u) => require("../routes/media").userPhotoUrl(u);
 // Defaults are what v1.130.0 showed, so turning this on changes nothing for anyone already on
 // it. Messages and Tell-the-family are opt-in: each lets the person reach other people.
 const SECTIONS = Object.freeze({
-  calls: true,          // the big Call buttons
+  // Off by default (Pete, 11/17): inside iPhone Assistive Access an app cannot hand a number to
+  // the Phone app, so the buttons do nothing there. Back on once the native build can call.
+  calls: false,         // the big Call buttons
   comingUp: true,       // visits and appointments
   notesFromFamily: true, // the latest note written TO them
   messages: false,      // their message threads

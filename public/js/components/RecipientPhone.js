@@ -450,7 +450,7 @@ const noteStatusLine = (n, name) => {
 // What the leader can tick, in the order it appears on the phone.
 const SIMPLE_SECTIONS = [
   ['notesFromFamily', 'Notes from the family', 'The latest note you leave shows big at the top.'],
-  ['calls', 'Call buttons', 'Big buttons that ring the people you pick below.'],
+  ['calls', 'Call buttons', 'Big buttons that ring the people you pick below. They don\u2019t work inside iPhone Assistive Access yet; use the Calls app there.'],
   ['messages', 'Messages', 'Read and send messages with the care team.'],
   ['tellFamily', 'Tell the family', 'One-tap notes like "I’m hungry" or "I have pain", or typed. You get a "tap to read" notice; pain and "I need help" come as needs attention.'],
   ['comingUp', 'Coming up', 'Upcoming visits and appointments.'],

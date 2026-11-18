@@ -65,7 +65,7 @@ test("call buttons ring only team members with a phone number", async () => {
   const put = (body) => h.request.put(`/api/care-recipients/${recipientId}/simple-mode`).set(h.auth(leader.token)).send(body);
   expect((await put({ on: true, callUserIds: [stranger.user.id] })).status).toBe(400);
   expect((await put({ on: true, callUserIds: [sister.user.id] })).status).toBe(400); // no phone
-  const ok = await put({ on: true, callUserIds: [leader.user.id] });
+  const ok = await put({ on: true, callUserIds: [leader.user.id], show: { calls: true } });
   expect(ok.status).toBe(200);
   expect(ok.body).toMatchObject({ on: true, callUserIds: [leader.user.id] });
 });
@@ -137,7 +137,9 @@ describe("v1.130.1", () => {
     await put({ on: true, callUserIds: [leader.user.id] });
     const d = await dash();
     expect(Object.keys(d.body).sort()).toEqual(["careRecipientId", "role", "simpleScreen", "userName"]);
-    expect(d.body.simpleScreen.show).toEqual({ calls: true, comingUp: true, notesFromFamily: true, messages: false, tellFamily: false });
+    expect(d.body.simpleScreen.show).toMatchObject({ comingUp: true, notesFromFamily: true, messages: false, tellFamily: false });
+    // Call buttons start OFF: inside Assistive Access an app can't hand a number to the Phone app.
+    expect(require("../../src/utils/simpleMode").parseSimpleMode('{"on":true}').show.calls).toBe(false);
   });
 
   test("a ticked-off section's data never leaves the server", async () => {

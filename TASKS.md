@@ -2,6 +2,16 @@
 
 > **How this works:** Add bugs and features below as you find them. Don't worry about wording or order. When you're ready for a dev session, say "let's work the task list" and Claude will batch everything together into one efficient push. Nothing gets executed until you say go.
 
+## Nov 17 2026 — Betty's phone: the simple screen (v1.129.4 → v1.130.1)
+
+Pete set up Betty's iPhone in Assistive Access with InPlace on it. Handoff: project doc `InPlace_Handoff_2026-11-17_Simple_Screen.md`.
+
+- [ ] **[AAB NEEDED] Call buttons that work inside Assistive Access.** Pete, 11/17: "I will want them to work in the next build tho once the app is approved on the ios store." Inside Assistive Access an app cannot hand a `tel:` number to the Phone app, so v1.130.1 defaults Call buttons OFF (leader can still tick them; they work outside Assistive Access). Options: (a) detect Assistive Access natively (`AccessibilitySettings.isAssistiveAccessEnabled`, small Capacitor plugin) and show "use the Calls button on your home screen" instead; (b) in-app voice call to the family member's InPlace app (stays inside our app — rides on the CallKit/PushKit work in the item below). Test on Betty's phone before shipping.
+- [ ] **[AAB NEEDED] `UISupportsFullScreenInAssistiveAccess = YES`** in `ios/App/App/Info.plist` — InPlace fills the screen above the Back button and is listed as "Optimized for Assistive Access". Our UI already uses safe areas.
+- [ ] Later: the SwiftUI `AssistiveAccess` scene (Companion Mode Phase 3).
+- [ ] Next (Pete's call needed): iPAi check-in questions on the simple screen — one question, three big answers ("How's your shoulder?" Hurts! / Fine / Great!), answer lands in Care Notes. Open: the not-medical-care acknowledgment rule, and whether the leader approves each question first.
+- [ ] Later, other families: the same checklist offers more (schedule, documents). Betty stays simple.
+
 ## Oct 28 2026 — Visit mileage + Google Maps (v1.126.1, built on staging)
 
 Pete, 10/28: "give care families the option to track mileage incurred in the visit and offer a rate to pay the caretaker… the intent isn't to encourage road trips but to make sure cost/gas is covered." Then: "let's plan on google maps." Mockup approved ("looks great").
