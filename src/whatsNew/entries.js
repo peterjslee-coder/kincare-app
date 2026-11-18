@@ -31,6 +31,38 @@ const WINDOW_DAYS = 45;
 
 const ENTRIES = [
   {
+    id: "quick-add-plus",
+    version: "1.133.0",
+    date: "2026-11-18",
+    audience: ["family"],
+    title: "Add things from anywhere with the +",
+    body: "The + in the middle of the bottom bar logs a visit, adds an event, messages your loved one or requests care, from any screen. Caregivers moved to a card on the Loved One screen, map and all.",
+    howTo: [
+      "Tap the + in the middle of the bottom bar (on a computer, Add in the menu)",
+      "Pick Log visit, Add event, Message, or Request care",
+      "For an event, type it in one line and tap Fill in",
+      "Caregivers: Loved One, then the Caregivers card",
+    ],
+    examples: ["Dentist Friday at 9", "Church pickup Sunday 9:30", "Stopped by after work"],
+    preview: "quickAdd",
+  },
+  {
+    id: "message-got-it",
+    version: "1.133.0",
+    date: "2026-11-18",
+    audience: ["family"],
+    title: "Know when Mom got your message",
+    body: "A message to your loved one's Text group stays big on their screen until they tap Got it, and everyone in the group sees that they saw it. Their one-tap notes like I have pain show up in that conversation too.",
+    howTo: [
+      "Tap the +, then Message and your loved one's name",
+      "Write it the usual way; the others in the group are told it's a message to them",
+      "Look for the small \"saw it\" under your message",
+    ],
+    examples: ["Dentist is Friday at 9, Mom", "Sam is coming at 2"],
+    preview: "messageGotIt",
+    action: { label: "Show me", page: "messages" },
+  },
+  {
     id: "checkr-inplace-pays",
     version: "1.132.0",
     date: "2026-11-18",

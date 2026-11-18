@@ -711,11 +711,15 @@ router.get("/conversations/:id", async (req, res) => {
       regexp_replace(m.metadata, '"photoUrl"\s*:\s*"(data:|r2:)[^"]*"', '"hasPhoto":true') AS metadata,
       su.first_name AS sender_first_name, su.last_name AS sender_last_name,
       rm.content AS reply_content, rm.sender_id AS reply_sender_id,
-      ru.first_name AS reply_sender_first, ru.last_name AS reply_sender_last
+      ru.first_name AS reply_sender_first, ru.last_name AS reply_sender_last,
+      -- v1.133.0 — Betty's "Got it" on her simple screen. acknowledged_by is set only by her
+      -- tap (or her reply); migration 087's backfill leaves it NULL, so no label on old rows.
+      m.acknowledged_at, au.first_name AS acknowledged_by_first
     FROM messages m
     JOIN users su ON m.sender_id = su.id
     LEFT JOIN messages rm ON m.reply_to_id = rm.id
     LEFT JOIN users ru ON rm.sender_id = ru.id
+    LEFT JOIN users au ON m.acknowledged_by = au.id
     WHERE m.conversation_id = ?
       AND m.created_at >= ?
       -- v1.106.10 — the cursor is (created_at, id), not created_at alone. With a bare
@@ -770,6 +774,7 @@ router.get("/conversations/:id", async (req, res) => {
       senderName: m.reply_sender_first ? `${m.reply_sender_first} ${m.reply_sender_last}` : null,
     } : null,
     reactions: reactionsMap[m.id] || [],
+    seenBy: m.acknowledged_by_first || null,
   }));
 
   // v1.105.92 — tell the client where the person's view of this thread begins, and whether
@@ -1057,6 +1062,25 @@ router.post("/conversations/:id", sendLimiter, async (req, res) => {
   const sender = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(userId);
   const senderName = sender ? `${sender.first_name} ${sender.last_name}` : "Someone";
 
+  // v1.133.0 — someone's simple-screen Text group. The others are told it is a message TO her
+  // ("Peter sent Betty a message"), and when she writes back herself, that is her "Got it" for
+  // everything that was waiting on her screen. Best-effort: a lookup failure must not stop a send.
+  let pushBody = `${senderName} sent a message`;
+  try {
+    const tg = require("../utils/textGroup");
+    const group = conv?.type === "group" ? await tg.textGroupForConversation(db, convId) : null;
+    if (group) {
+      pushBody = tg.textGroupPushBody(group, userId, sender?.first_name);
+      if (group.linkedUserId === userId && !req.user.impersonatedBy) {
+        const acked = await tg.acknowledgeTextGroup(db, convId, userId);
+        const emitAck = req.app.get("emitToUser");
+        if (acked.length && emitAck) {
+          for (const member of members) emitAck(member.user_id, "message_acknowledged", { conversationId: convId, messageIds: acked, byName: sender?.first_name || null });
+        }
+      }
+    }
+  } catch (e) { console.error("text group lookup:", e.message); }
+
   // Notify all other members
   const emitToUser = req.app.get("emitToUser");
   const shouldPush = makeShouldPush(req);
@@ -1064,7 +1088,7 @@ router.post("/conversations/:id", sendLimiter, async (req, res) => {
     // v1.105.39 — no preview (group threads carry the same PHI risk as one-to-one).
     if (shouldPush(member.user_id, convId)) sendPushToUser(member.user_id, {
       title: "InPlace",
-      body: `${senderName} sent a message`,
+      body: pushBody,
       data: { type: "message", senderId: userId, conversationId: convId },
     }).catch(() => {});
 

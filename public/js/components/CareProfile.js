@@ -2757,6 +2757,24 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
         )
       )}
 
+      {/* ── v1.133.0 — Caregivers ──
+          The phone's bottom bar gave its Caregivers slot to the + (Pete, 11/18: "don't mind
+          losing caregivers... I just don't wanna lose the functionality of being able to find
+          people on the map"). The page is unchanged — Assigned, Browse All, Find Nearby — and
+          this is the phone's way in, the same move Documents made in v1.121. */}
+      {!editing && onNavigate && (
+        <div className="card" data-testid="open-caregivers" onClick={() => onNavigate('caregivers')}
+          role="button" tabIndex={0}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onNavigate('caregivers'); } }}
+          style={{ marginTop: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', cursor: 'pointer' }}>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--role-color)' }}>🤝 Caregivers</div>
+            <div style={{ fontSize: 13, color: 'var(--text-tertiary)', marginTop: 2 }}>Your caregivers, browse everyone, find nearby on the map</div>
+          </div>
+          <span style={{ fontSize: 20, color: 'var(--text-muted)' }}>›</span>
+        </div>
+      )}
+
       {/* ── Care Team shortcut card ── */}
       {!editing && onNavigate && (
         <div className="card" style={{ marginTop: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', cursor: 'pointer' }} onClick={() => onNavigate('care-team')}>

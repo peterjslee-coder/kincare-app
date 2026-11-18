@@ -2,6 +2,18 @@
 
 > **How this works:** Add bugs and features below as you find them. Don't worry about wording or order. When you're ready for a dev session, say "let's work the task list" and Claude will batch everything together into one efficient push. Nothing gets executed until you say go.
 
+## Nov 18 2026 — the + (quick add) and messages to Betty (v1.133.0)
+
+Pete, 11/18 (feedback 7e187fb2): "I need it to be easier to put Events on Betty's calendar... I would love a expanding plus log visit/event thing. It has to work on mobile primarily." Mockups: Design canvas "InPlace — Quick add (+) mockups". Pete chose C: "I want to be able to add wherever I am, and don't mind losing caregivers."
+
+- [x] Phone bar: Home · Loved One · (+) · Messages · Account. The + fans out Log visit · Add event · Message <name> (her photo) · Request care (`QuickAdd.js`, `GET /api/care-recipients/quick-add`). Desktop sidebar's orange action ("Add") opens the same menu. Each choice opens what already exists (LogVisitSheet, CareEventFormModal with the iPAi fill-in, Messages, Schedule). No mic (Pete: "people can use transcribe on their own keyboard").
+- [x] Caregivers: a card on the Loved One screen (Assigned / Browse All / Find Nearby map, unchanged). Desktop sidebar unchanged.
+- [x] Dashboard "+ Request Care" / "+ Log Visit" pills removed (the + replaces them).
+- [x] Message <name> = her simple-screen Text group, offered only when the Text button is on and you are in it. Push to the others: "Peter sent Betty a message" (no content). The sender never gets an unread dot from their own message (already true; now tested).
+- [x] Her screen: a waiting message stays until she taps **Got it** (or writes back); "Message from Peter" vs "Peter wrote back". The group sees "✓ Betty saw it" under it, live (`message_acknowledged` socket). Migration 087 (`messages.acknowledged_at/_by`; old rows backfilled as seen, unlabelled).
+- [x] Her Tell-the-family alerts also post into the Text group as her message (⚠️ for needs-attention), with no second push.
+- [ ] Try it on Betty's real phone: send from the +, watch her Got it, check "Betty saw it" on Sara's and Dan's phones.
+
 ## Nov 17 2026 — Betty's phone: the simple screen (v1.129.4 → v1.130.1)
 
 Pete set up Betty's iPhone in Assistive Access with InPlace on it. Handoff: project doc `InPlace_Handoff_2026-11-17_Simple_Screen.md`.

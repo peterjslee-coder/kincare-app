@@ -25,6 +25,40 @@ const wnHead = { fontSize: 10.5, fontWeight: 700, color: 'var(--text-muted)', te
 const wnPill = (bg, fg) => ({ padding: '4px 10px', borderRadius: 8, background: bg, color: fg, fontSize: 11, fontWeight: 700 });
 
 const WN_PREVIEWS = {
+  // v1.133.0 — the + in the bottom bar and its four choices
+  quickAdd: () => (
+    <div style={{ padding: '12px 10px 10px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 4, marginBottom: 10 }}>
+        {[['Log visit', '🏡'], ['Add event', '📅'], ['Message Mom', 'M'], ['Request care', '🤝']].map(([t, ic]) => (
+          <div key={t} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+            <span style={{ width: 34, height: 34, borderRadius: 17, background: ic === 'M' ? 'var(--role-color-light)' : 'var(--bg-surface)', border: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: ic === 'M' ? 14 : 16, fontWeight: 700, color: 'var(--role-color)' }}>{ic}</span>
+            <span style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--text-primary)', textAlign: 'center' }}>{t}</span>
+          </div>
+        ))}
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'flex-end', borderTop: '1px solid var(--border-color)', paddingTop: 6, fontSize: 10, color: 'var(--text-secondary)' }}>
+        <span>Home</span><span>Loved One</span>
+        <span style={{ width: 30, height: 30, borderRadius: 15, background: 'var(--role-color)', color: 'var(--text-on-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 700, marginTop: -12 }}>+</span>
+        <span>Messages</span><span>Account</span>
+      </div>
+    </div>
+  ),
+  // v1.133.0 — Got it on Mom's screen, "Mom saw it" in the group
+  messageGotIt: () => (
+    <div style={{ padding: '12px 12px 10px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>
+      <div style={{ ...wnCard, border: '2px solid var(--role-color)' }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)' }}>Message from Sam</div>
+        <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>Dentist is Friday at 9, Mom</div>
+        <div style={{ ...wnPill('var(--role-color)', 'var(--text-on-primary)'), display: 'block', textAlign: 'center', padding: '6px 0' }}>Got it</div>
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
+        <div style={{ textAlign: 'right' }}>
+          <span style={{ ...wnPill('var(--role-color)', 'var(--text-on-primary)'), display: 'inline-block', padding: '6px 10px', fontSize: 12 }}>Dentist is Friday at 9, Mom</span>
+          <div style={{ fontSize: 10.5, color: 'var(--text-secondary)', marginTop: 3 }}>{'✓'} Mom saw it</div>
+        </div>
+      </div>
+    </div>
+  ),
   // v1.131.0 — the background check by email
   checkrEmail: () => (
     <div style={{ padding: '12px 12px 10px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>

@@ -137,6 +137,12 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
   // a care task announces it once; every screen showing one re-reads. No screen is
   // authoritative over another — they are all views of the same occurrence row.
   useEffect(() => CareTaskSync.onChange(() => fetchCareTasks()), []);
+  // v1.133.0 — something was added from the + (a visit, an event): Next Up re-reads.
+  useEffect(() => {
+    const onAdded = () => { try { fetchDashboard(); } catch { /* the next poll catches up */ } };
+    window.addEventListener('inplace:quick-added', onAdded);
+    return () => window.removeEventListener('inplace:quick-added', onAdded);
+  }, []);
   const [taskSheet, setTaskSheet] = useState(null); // { occ, group } → CareTaskCheckSheet
   const [showTaskCreate, setShowTaskCreate] = useState(false); // kept: CareTeamManage opens this via window.__openTaskCreate
   const [showLogVisit, setShowLogVisit] = useState(null); // v1.105.38 — { recipientId, position }
@@ -1892,20 +1898,10 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
           </div>
         ) : null;
 
-        // v1.99.3 — a second pill in complementary teal, next to the orange "+ Request Care".
-        // v1.105.38 — that slot is now "+ Log Visit". Pete: "I'm FAR more likely to log a
-        // visit than I am to add a task." The dashboard has one slot's worth of attention
-        // and it should go to the thing done most; "+ Task" moved to the care team page,
-        // where task management already lives. This is a ranking decision, not a demotion —
-        // nothing was removed from the app.
-        const showTaskPill = (data?.careRecipients?.length || 0) > 0;
-        const taskPillBtn = (pad) => (
-          <button onClick={() => setShowLogVisit({ recipientId: null, position: null })} style={{
-            padding: pad, background: 'var(--role-color)', color: 'var(--text-on-primary)',
-            border: 'none', borderRadius: pad === '8px 20px' ? 8 : 6, fontSize: pad === '8px 20px' ? 13 : 11,
-            fontWeight: 700, cursor: 'pointer',
-          }}>+ Log Visit</button>
-        );
+        // v1.133.0 — the "+ Request Care" and "+ Log Visit" pills that lived here are now the +
+        // in the middle of the phone's bottom bar (and the sidebar's Add on a computer), which
+        // also carries Add event and Message <name> and works from every screen (QuickAdd.js).
+        // Pete chose that over a bigger button here ("I want to be able to add wherever I am").
 
         if (nextUp.length === 0) return (
           <div style={{ marginBottom: 16 }}>
@@ -1917,12 +1913,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                 marginTop: 10, padding: '8px 20px', background: 'var(--border-light)', color: 'var(--text-tertiary)', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer',
               }}>⚠️ Complete consent verification to book</button>
             ) : (
-              <div style={{ marginTop: 10, display: 'flex', gap: 8, justifyContent: 'center' }}>
-                <button onClick={() => { if (window.__navigateTo) window.__navigateTo('schedule'); }} style={{
-                  padding: '8px 20px', background: 'var(--accent-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer',
-                }}>+ Request Care</button>
-                {showTaskPill && taskPillBtn('8px 20px')}
-              </div>
+              <div style={{ marginTop: 8, fontSize: 13, color: 'var(--text-secondary)' }}>Use the + to log a visit, add an event or request care.</div>
             )}
           </div>
           {doneStrip}
@@ -1939,14 +1930,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                 <button onClick={() => { if (onNavigate) { window.__accountTab = 'documents'; window.__documentsTab = 'consent'; onNavigate('account'); } }} style={{
                   padding: '4px 12px', background: 'var(--border-light)', color: 'var(--text-tertiary)', border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer',
                 }}>⚠️ Verify consent first</button>
-              ) : (
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <button onClick={() => { if (window.__navigateTo) window.__navigateTo('schedule'); }} style={{
-                    padding: '4px 12px', background: 'var(--accent-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer',
-                  }}>+ Request Care</button>
-                  {showTaskPill && taskPillBtn('4px 12px')}
-                </div>
-              )}
+              ) : null}
             </div>
             <div style={{ position: 'relative' }}>
             {visible.map((s, idx) => {
