@@ -62,6 +62,13 @@ describe("the screens", () => {
   test("the email form says plainly it is a separate form she has to fill in", () => {
     expect(raw("public/js/components/CheckrEmailStart.js")).toMatch(/start until you finish that form/);
   });
+  // v1.132.2 — Pete: "where is my DOB supposed to be?" It was only ever asked in the wizard.
+  test("the ask form collects a missing legal name and date of birth before asking", () => {
+    const src = code("public/js/components/CheckrEmailStart.js");
+    expect(src).toMatch(/needDob && !legal\.dob/);
+    expect(src).toMatch(/apiFetch\('\/api\/caregivers\/profile', \{ method: 'POST'/);
+    expect(code("public/js/components/MyAccount.js")).toMatch(/<CheckrEmailStart[^>]*details=\{checkrReq\.details\}/);
+  });
   test("nothing defaults a missing status to 'pending' any more", () => {
     expect(code("src/routes/checkr.js")).not.toMatch(/checkr_status \|\| "pending"/);
     expect(code("src/routes/dashboard.js")).not.toMatch(/checkr_status \|\| 'pending'/);

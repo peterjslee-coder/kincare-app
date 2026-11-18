@@ -2290,7 +2290,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
               <CheckrAwaitingApproval requestedAt={checkrReq.requestedAt} />
             ) : (
               <div style={{ padding: 16, background: 'var(--bg-neutral)', borderRadius: 8, border: '1px solid var(--border-color)' }}>
-                <CheckrEmailStart staging={checkrStaging} onSent={() => loadCheckrStatus()} />
+                <CheckrEmailStart staging={checkrStaging} details={checkrReq.details} onSent={() => loadCheckrStatus()} />
               </div>
             )}
           </div>
