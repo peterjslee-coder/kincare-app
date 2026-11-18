@@ -737,9 +737,12 @@ async function attentionItemsFor(db, userId) {
       const who = name(r.first_name, r.last_name) || r.email;
       return {
         kind: "bgCheckRequest",
+        // v1.132.3 — missing details means the caregiver is the one with something to do, so
+        // the admin sees it quietly (soft) and it is not in the badge.
+        soft: missing.length > 0,
         id: `bgCheckRequest:${r.user_id}`,
         title: missing.length
-          ? `${who} is ready for a background check — missing ${missing.join(", ")}`
+          ? `${who} asked for a background check — waiting on them for ${missing.join(", ")}`
           : `${who} is ready for a background check`,
         detail: null,
         forWhom: null,
@@ -751,7 +754,7 @@ async function attentionItemsFor(db, userId) {
         page: "admin",
         focus: null, // the admin page has no per-caregiver anchor yet
         note: missing.length
-          ? "Checkr needs these before it can send the form."
+          ? "Checkr needs these before you can approve it. They've been asked for them in Account \u2192 Background Check."
           : "Approve sends their details to Checkr, which emails the form. inPlace Starter, billed to InPlace.",
         dismiss: { method: "POST", path: "/api/push/attention/snooze", body: { kind: "bgCheckRequest", ref: r.user_id, days: 7 }, label: "Not now" },
       };
@@ -1031,7 +1034,7 @@ async function attentionItemsFor(db, userId) {
     items,
   };
   payload.total += idCount;
-  payload.total += bgRequestRows.length; // v1.132.0 — a caregiver waiting on an admin's approval
+  payload.total += bgRequestRows.filter((r) => bgReadiness(r, r).missing.length === 0).length; // v1.132.0/.3 — only ones an admin can approve now
   payload.identity = idCount;
   return payload;
 }
