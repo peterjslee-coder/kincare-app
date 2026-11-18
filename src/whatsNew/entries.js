@@ -31,6 +31,22 @@ const WINDOW_DAYS = 45;
 
 const ENTRIES = [
   {
+    id: "checkr-by-email",
+    version: "1.131.0",
+    date: "2026-11-18",
+    audience: ["caregiver"],
+    title: "Your background check now comes by email from Checkr",
+    body: "Tap one button and Checkr, the company we use for background checks, emails you a secure form. Your check starts once you fill that form in, and the app shows each step only after Checkr confirms it.",
+    howTo: [
+      "Open Account, then Background Check",
+      "Tap Email me the Checkr form",
+      "Open the email from Checkr (check spam too) and fill in the form",
+    ],
+    examples: ["Checkr's form is waiting for you", "Checkr confirmed it received your form on Nov 18"],
+    preview: "checkrEmail",
+    action: { label: "Show me", page: "account" },
+  },
+  {
     id: "weekly-events",
     version: "1.130.2",
     date: "2026-11-18",

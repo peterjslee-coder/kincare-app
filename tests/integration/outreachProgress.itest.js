@@ -113,9 +113,16 @@ test("after sign-up: ID, background check, payouts and first paid visit", async 
   `).run(uuid(), uid, uid, ago(12), ago(14));
   const cpId = uuid();
   await db.prepare(`
-    INSERT INTO caregiver_profiles (id, user_id, hourly_rate, checkr_status, is_background_checked, background_check_consent_at, stripe_onboard_complete)
-    VALUES (?, ?, 25, 'clear', 1, ?, 1)
+    INSERT INTO caregiver_profiles (id, user_id, hourly_rate, checkr_status, is_background_checked, background_check_consent_at, stripe_onboard_complete,
+                                    checkr_candidate_id, checkr_invitation_id, checkr_report_id)
+    VALUES (?, ?, 25, 'clear', 1, ?, 1, 'cand_full', 'inv_full', 'rep_full')
   `).run(cpId, uid, ago(11));
+  // v1.131.0 — what Checkr told us, in the order it would: form sent, form filled in, report clear.
+  const sentAt = ago(11), clearAt = ago(8);
+  for (const [type, at, result] of [["invitation.created", sentAt, null], ["invitation.completed", ago(10), null], ["report.completed", clearAt, "clear"]]) {
+    await db.prepare(`INSERT INTO checkr_events (id, source, event_type, user_id, candidate_id, result, received_at)
+                      VALUES (?, 'webhook', ?, ?, 'cand_full', ?, ?)`).run(uuid(), type, uid, result, at);
+  }
   const fam = await h.createUser({ firstName: "Fam", lastName: "Ily" });
   const { recipientId } = await h.createCareTeam({ familyUserId: fam.user.id });
   const sid = uuid();
@@ -125,7 +132,10 @@ test("after sign-up: ID, background check, payouts and first paid visit", async 
                     VALUES (?, ?, ?, ?, 120, 20, 100, 'completed', ?)`).run(uuid(), sid, fam.user.id, cpId, ago(2));
 
   const p = (await P.progressFor(db, [{ id, texts_ok_at: ago(20), joined_user_id: uid }])).get(id);
-  for (const k of ["account", "id_sent", "id_ok", "bg_started", "bg_clear", "payouts", "first_visit"]) expect(step(p, k).done).toBe(true);
+  for (const k of ["account", "id_sent", "id_ok", "bg_started", "bg_submitted", "bg_clear", "payouts", "first_visit"]) expect(step(p, k).done).toBe(true);
+  // Each background-check step is dated by what Checkr said, not by our own consent checkbox.
+  expect(new Date(step(p, "bg_started").at).toISOString()).toBe(new Date(sentAt).toISOString());
+  expect(new Date(step(p, "bg_clear").at).toISOString()).toBe(new Date(clearAt).toISOString());
   expect(step(p, "payouts").at).toBeNull(); // no timestamp exists for this fact
   expect(p.furthest).toBe("first_visit");
   expect(p.next).toBeNull();
@@ -136,8 +146,8 @@ test("a background check that needs Pete is flagged; ID seen in person counts as
   const id = await contact("5405550305");
   const u = await h.createUser({ firstName: "Flag", lastName: "Ladder", roles: ["caregiver"], idVerified: false });
   await db.prepare("UPDATE users SET phone = '5405550305', id_verified_in_person_at = NOW() WHERE id = ?").run(u.user.id);
-  await db.prepare(`INSERT INTO caregiver_profiles (id, user_id, hourly_rate, checkr_status, is_background_checked)
-                    VALUES (?, ?, 25, 'consider', 0)`).run(uuid(), u.user.id);
+  await db.prepare(`INSERT INTO caregiver_profiles (id, user_id, hourly_rate, checkr_status, is_background_checked, checkr_invitation_id, checkr_report_id)
+                    VALUES (?, ?, 25, 'consider', 0, 'inv_flag', 'rep_flag')`).run(uuid(), u.user.id);
   const p = (await P.progressFor(db, [{ id, joined_user_id: u.user.id }])).get(id);
   expect(step(p, "id_ok").done).toBe(true);
   expect(step(p, "id_ok").inPerson).toBe(true);
@@ -179,4 +189,28 @@ test("texting someone with no OK explains both ways to get one", async () => {
   expect(r.status).toBe(400);
   expect(r.body.error).toMatch(/JOIN/);
   expect(r.body.error).toMatch(/Record OK from the call/);
+});
+
+// v1.131.0 — Pete, 11/18, looking at Faith: "what evidence do we have that that was ever happening".
+test("consent and the old 'pending' default are NOT a background check started", async () => {
+  const id = await contact("5405550316");
+  const u = await h.createUser({ firstName: "Faith", lastName: "Ladder", roles: ["caregiver"], idVerified: false });
+  await db.prepare("UPDATE users SET phone = '5405550316' WHERE id = ?").run(u.user.id);
+  await db.prepare(`INSERT INTO caregiver_profiles (id, user_id, hourly_rate, checkr_status, is_background_checked, background_check_consent, background_check_consent_at, background_check_paid)
+                    VALUES (?, ?, 25, 'pending', 0, 1, NOW(), 1)`).run(uuid(), u.user.id);
+  const p = (await P.progressFor(db, [{ id, joined_user_id: u.user.id }])).get(id);
+  expect(step(p, "bg_started").done).toBe(false);
+  expect(step(p, "bg_submitted").done).toBe(false);
+  expect(step(p, "bg_clear").done).toBe(false);
+});
+
+test("a 'cleared' flag with no Checkr report is not shown as clear — it is flagged", async () => {
+  const id = await contact("5405550317");
+  const u = await h.createUser({ firstName: "Hand", lastName: "Set", roles: ["caregiver"], idVerified: false });
+  await db.prepare("UPDATE users SET phone = '5405550317' WHERE id = ?").run(u.user.id);
+  await db.prepare(`INSERT INTO caregiver_profiles (id, user_id, hourly_rate, checkr_status, is_background_checked)
+                    VALUES (?, ?, 25, 'clear', 1)`).run(uuid(), u.user.id);
+  const p = (await P.progressFor(db, [{ id, joined_user_id: u.user.id }])).get(id);
+  expect(step(p, "bg_clear").done).toBe(false);
+  expect(p.flag).toBe("bg_clear_no_report");
 });

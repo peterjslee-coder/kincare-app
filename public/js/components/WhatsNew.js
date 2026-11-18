@@ -25,6 +25,17 @@ const wnHead = { fontSize: 10.5, fontWeight: 700, color: 'var(--text-muted)', te
 const wnPill = (bg, fg) => ({ padding: '4px 10px', borderRadius: 8, background: bg, color: fg, fontSize: 11, fontWeight: 700 });
 
 const WN_PREVIEWS = {
+  // v1.131.0 — the background check by email
+  checkrEmail: () => (
+    <div style={{ padding: '12px 12px 10px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>{'✉️'} Your background check is a form Checkr emails you</div>
+      <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 8 }}>Your check does not start until you fill that form in.</div>
+      <span style={{ ...wnPill('var(--role-color)', 'var(--text-on-primary)'), display: 'inline-block', marginBottom: 8 }}>Email me the Checkr form</span>
+      <div style={{ ...wnCard, marginBottom: 0 }}>
+        <div style={{ fontSize: 11.5, color: 'var(--color-success)', fontWeight: 600 }}>{'✓'} Checkr confirmed it received your form on Nov 18</div>
+      </div>
+    </div>
+  ),
   // v1.129.2 — Edit request
   // v1.130.2 — weekly events
   weeklyEvents: () => (

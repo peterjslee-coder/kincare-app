@@ -230,7 +230,7 @@ router.put("/users/:id/onboarding", async (req, res) => {
         return res.status(400).json({ error: "Background checks can no longer be set by hand. Use a per-family vouch (Admin \u2192 Background Checks \u2192 Vouch for family) instead." });
       }
       colMap.set("is_background_checked", { sql: "is_background_checked = ?", param: 0 });
-      colMap.set("checkr_status", { sql: "checkr_status = 'pending'" });
+      colMap.set("checkr_status", { sql: "checkr_status = NULL" }); // v1.131.0 — not 'pending', which read as "running"
     }
     if (backgroundCheckPaid !== undefined) {
       colMap.set("background_check_paid", { sql: "background_check_paid = ?", param: backgroundCheckPaid ? 1 : 0 });

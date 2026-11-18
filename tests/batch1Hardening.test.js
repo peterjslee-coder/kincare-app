@@ -71,7 +71,8 @@ describe("M1 — the admin IP gate reads the column admin-ness actually lives in
 describe("M5 — the Checkr webhook fails closed", () => {
   const src = code("src/routes/checkr.js");
   test("an unset secret refuses the request instead of skipping verification", () => {
-    expect(src).toMatch(/if \(!webhookSecret\)[\s\S]{0,200}503/);
+    // v1.131.0 — Checkr signs with the API key, so either key may verify; neither set → 503.
+    expect(src).toMatch(/if \(!secrets\.length\)[\s\S]{0,200}503/);
   });
   test("the signature compare is constant time", () => {
     expect(src).toMatch(/timingSafeEqual/);

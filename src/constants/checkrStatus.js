@@ -22,8 +22,20 @@
 // Cleared to work.
 const CLEARED = ["clear", "consider_approved"];
 
-// Running. Nothing for the caregiver to do but wait.
-const IN_PROGRESS = ["initiated", "pending", "processing"];
+// Nothing has reached Checkr yet. (v1.131.0)
+//
+// 'pending' is the column's old DEFAULT — every caregiver profile ever created carried it before
+// a single call to Checkr was made — and 'initiated' is written the moment we create the Checkr
+// candidate, BEFORE the invitation exists. Both used to sit in IN_PROGRESS, so a caregiver who
+// had never been sent anything was shown "Your background check is in progress. You'll be
+// notified once it clears", and the outreach ladder marked her check as started. Pete, 11/18:
+// "what evidence do we have that that was ever happening ... not just vibes." None. A status we
+// wrote ourselves is not evidence that Checkr is doing anything, so neither one is "running".
+const NOT_SENT = ["pending", "initiated"];
+
+// Running — Checkr told us so. 'processing' is written only by Checkr's own webhooks
+// (invitation.completed, report.resumed) or by reading the report back from Checkr's API.
+const IN_PROGRESS = ["processing"];
 
 // Running, but stalled on the caregiver — the invitation is out and unanswered.
 const AWAITING_CAREGIVER = ["invitation_sent"];
@@ -62,11 +74,12 @@ const PHASE = {
 };
 
 const ALL_STATUSES = [
-  ...CLEARED, ...IN_PROGRESS, ...AWAITING_CAREGIVER,
+  ...NOT_SENT, ...CLEARED, ...IN_PROGRESS, ...AWAITING_CAREGIVER,
   ...UNDER_REVIEW, ...BLOCKED_PENDING_REVIEW, ...RESTARTABLE,
 ];
 
 const _byStatus = new Map();
+for (const s of NOT_SENT) _byStatus.set(s, PHASE.NOT_STARTED);
 for (const s of CLEARED) _byStatus.set(s, PHASE.CLEARED);
 for (const s of IN_PROGRESS) _byStatus.set(s, PHASE.IN_PROGRESS);
 for (const s of AWAITING_CAREGIVER) _byStatus.set(s, PHASE.AWAITING_CAREGIVER);
@@ -92,5 +105,5 @@ function mayStart(phase) {
 
 module.exports = {
   PHASE, ALL_STATUSES, phaseFor, mayStart,
-  CLEARED, IN_PROGRESS, AWAITING_CAREGIVER, UNDER_REVIEW, BLOCKED_PENDING_REVIEW, RESTARTABLE,
+  NOT_SENT, CLEARED, IN_PROGRESS, AWAITING_CAREGIVER, UNDER_REVIEW, BLOCKED_PENDING_REVIEW, RESTARTABLE,
 };

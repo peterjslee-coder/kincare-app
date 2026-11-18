@@ -93,6 +93,8 @@ const OUT_FLAG = {
   bg_needs_review: { label: 'Background check needs your review', tone: 'error' },
   bg_under_review: { label: 'Background check under review', tone: 'warning' },
   id_rejected: { label: 'ID rejected — needs a new one', tone: 'warning' },
+  // v1.131.0 — marked cleared, but no Checkr report exists to back it.
+  bg_clear_no_report: { label: 'Marked cleared, but there is no Checkr report behind it', tone: 'warning' },
 };
 const outStall = (p) => (p && p.stalledDays != null && p.stalledDays >= 2 ? `${p.stalledDays} days` : null);
 const outStepNote = (s) => {

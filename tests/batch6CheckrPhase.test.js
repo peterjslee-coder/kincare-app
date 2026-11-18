@@ -92,7 +92,7 @@ describe("F1 — every status the server can store is classified", () => {
   });
 
   test("no status is classified into two groups", () => {
-    const all = [...C.CLEARED, ...C.IN_PROGRESS, ...C.AWAITING_CAREGIVER,
+    const all = [...C.NOT_SENT, ...C.CLEARED, ...C.IN_PROGRESS, ...C.AWAITING_CAREGIVER,
                  ...C.UNDER_REVIEW, ...C.BLOCKED_PENDING_REVIEW, ...C.RESTARTABLE];
     expect(all.length).toBe(new Set(all).size);
   });
@@ -123,7 +123,8 @@ describe("F3 — the states that rendered wrongly now render", () => {
 
   test("MyAccount handles the blocked phase BEFORE it can reach the submission form", () => {
     const branch = myAccount.indexOf("checkrPhase === 'blocked_pending_review'");
-    const embed = myAccount.indexOf("CheckrEmbed");
+    // v1.131.0 — the start-a-check form is now the emailed one (CheckrEmailStart).
+    const embed = myAccount.indexOf("<CheckrEmailStart");
     expect(branch).toBeGreaterThan(-1);
     expect(embed).toBeGreaterThan(-1);
     // Order is the whole fix: the chain is a ternary cascade, so a branch after the form

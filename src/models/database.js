@@ -3521,6 +3521,43 @@ async function initializeDatabase() {
         `CREATE INDEX IF NOT EXISTS idx_care_events_series ON care_events(series_id, event_date)`,
       ],
     },
+    {
+      // v1.131.0 — Pete, 11/18: "I want webhooks that fire that confirm things to be true before
+      // we claim reports are submitted or have come back clear ... not just vibes."
+      //
+      // checkr_events is the evidence: one row per thing CHECKR told us — a signature-verified
+      // webhook, or an answer from Checkr's own API (the invitation it created, the report we
+      // read back). Nothing InPlace decides on its own goes in here. Screens that say "sent",
+      // "Checkr has your form" or "clear" read their date from this table.
+      //
+      // checkr_status also loses its DEFAULT 'pending'. Every caregiver profile ever created
+      // carried that value before a single call to Checkr, and 'pending' was read as "running" —
+      // which is how a caregiver Checkr had never heard of was told her check was in progress.
+      id: "084_checkr_evidence",
+      statements: [
+        `CREATE TABLE IF NOT EXISTS checkr_events (
+          id TEXT PRIMARY KEY,
+          source TEXT NOT NULL,
+          event_type TEXT NOT NULL,
+          checkr_event_id TEXT,
+          user_id TEXT,
+          candidate_id TEXT,
+          invitation_id TEXT,
+          report_id TEXT,
+          object_status TEXT,
+          result TEXT,
+          received_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )`,
+        `CREATE UNIQUE INDEX IF NOT EXISTS idx_checkr_events_event_id ON checkr_events(checkr_event_id) WHERE checkr_event_id IS NOT NULL`,
+        `CREATE INDEX IF NOT EXISTS idx_checkr_events_user ON checkr_events(user_id, received_at)`,
+        `CREATE INDEX IF NOT EXISTS idx_checkr_events_candidate ON checkr_events(candidate_id)`,
+        `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS checkr_invitation_url TEXT`,
+        `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS checkr_invitation_sent_to TEXT`,
+        `ALTER TABLE caregiver_profiles ALTER COLUMN checkr_status DROP DEFAULT`,
+        `UPDATE caregiver_profiles SET checkr_status = NULL
+           WHERE checkr_status = 'pending' AND checkr_invitation_id IS NULL AND checkr_report_id IS NULL`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;
