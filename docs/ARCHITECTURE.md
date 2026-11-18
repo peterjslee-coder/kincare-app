@@ -387,7 +387,7 @@ State travels through `window`, not props. This table is the registry.
 | `window.__skipPopstate` | VisitDetailModal.js | 3 |
 | `window.__startCaregiverTour` | app.js | 11 |
 | `window.__startImpersonation` | app.js | 3 |
-| `window.__swApplyPendingUpdate` | — | 2 |
+| `window.__swApplyPendingUpdate` | — | 5 |
 | `window.__uiPrefs` | uiPrefs.js | 11 |
 | `window.__viewCaregiverId` | app.js, Caregivers.js | 3 |
 | `window.__visitGeoAllowed` | FamilyVisitLog.js | 1 |
