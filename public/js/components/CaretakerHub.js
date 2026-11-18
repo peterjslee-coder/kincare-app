@@ -1491,7 +1491,9 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
     || ['in_progress', 'under_review', 'cleared', 'blocked_pending_review'].includes(profile.checkrPhase);
   const bgFormOut = profile.checkrPhase === 'awaiting_caregiver';
   // v1.132.0 — asked, and waiting on an admin's approval (no Checkr form yet).
-  const bgRequested = !!profile.bgCheckRequestedAt && !profile.bgCheckApprovedAt && !bgFormOut && !bgCheckSubmitted;
+  // v1.132.3 — asked, but Checkr still needs her legal name or date of birth: her move, not a wait.
+  const bgNeedsDetails = !!profile.bgCheckRequestedAt && !profile.bgCheckApprovedAt && !bgFormOut && !bgCheckSubmitted && (profile.bgCheckMissing || []).length > 0;
+  const bgRequested = !!profile.bgCheckRequestedAt && !profile.bgCheckApprovedAt && !bgFormOut && !bgCheckSubmitted && !bgNeedsDetails;
   // v1.105.63 — an admin granted the fee rather than the caregiver paying it. Same flag on the
   // profile; only the payments table knows which. See routes/dashboard.js.
   const feeWaived = !!profile.backgroundCheckFeeWaived;
@@ -1535,6 +1537,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       done: bgCheckSubmitted || bgOverride,
       missing: !(bgCheckSubmitted || bgOverride)
         ? (bgFormOut ? 'Finish the form Checkr sent you'
+          : bgNeedsDetails ? ('Add your ' + profile.bgCheckMissing.join(' and ') + ' for Checkr (Account \u2192 Background Check)')
           : (bgRequested ? 'Waiting for InPlace to approve it \u2014 nothing to do yet'
             : 'Tell InPlace you\u2019re ready (Account \u2192 Background Check)'))
         : null,

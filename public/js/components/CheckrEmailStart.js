@@ -20,7 +20,7 @@ const ckrDate = (t, withTime) => {
 };
 
 // Not asked yet.
-const CheckrEmailStart = window.CheckrEmailStart = ({ onSent, staging, details }) => {
+const CheckrEmailStart = window.CheckrEmailStart = ({ onSent, staging, details, alreadyAsked }) => {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
   const [testEmail, setTestEmail] = useState('');
@@ -69,8 +69,13 @@ const CheckrEmailStart = window.CheckrEmailStart = ({ onSent, staging, details }
   return (
     <div>
       <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)', marginBottom: 6 }}>
-        Ready for your background check?
+        {alreadyAsked ? 'Almost there — Checkr needs a few details' : 'Ready for your background check?'}
       </div>
+      {alreadyAsked && (
+        <p style={{ margin: '0 0 8px', fontSize: 13, color: 'var(--color-warning)', fontWeight: 600, lineHeight: 1.5 }}>
+          InPlace has your request, but it can{'’'}t be approved until the details below are filled in.
+        </p>
+      )}
       <p style={{ margin: '0 0 8px', fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
         InPlace pays for it. There{'’'}s nothing to pay, today or later.
       </p>
@@ -127,7 +132,7 @@ const CheckrEmailStart = window.CheckrEmailStart = ({ onSent, staging, details }
       )}
       <button onClick={send} disabled={busy}
         style={{ padding: '10px 20px', minHeight: 44, background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.7 : 1 }}>
-        {busy ? 'Sending…' : (staging ? 'Send me the Checkr form (staging)' : 'I’m ready — ask InPlace to start it')}
+        {busy ? 'Sending…' : (staging ? 'Send me the Checkr form (staging)' : (alreadyAsked ? 'Save my details' : 'I’m ready — ask InPlace to start it'))}
       </button>
       {err && (
         <div style={{ marginTop: 10, fontSize: 13, color: 'var(--color-error)' }}>{err}</div>

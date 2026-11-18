@@ -2284,13 +2284,13 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                   </button>
                 </div>
               </div>
-            ) : (checkrReq.requestedAt && !checkrReq.approvedAt) ? (
+            ) : (checkrReq.requestedAt && !checkrReq.approvedAt && !((checkrReq.details && checkrReq.details.missing) || []).length) ? (
               // v1.132.0 — Pete: no $30 up front; an admin approves the check instead. Agreeing in
               // onboarding (or tapping the button below) is the request.
               <CheckrAwaitingApproval requestedAt={checkrReq.requestedAt} />
             ) : (
               <div style={{ padding: 16, background: 'var(--bg-neutral)', borderRadius: 8, border: '1px solid var(--border-color)' }}>
-                <CheckrEmailStart staging={checkrStaging} details={checkrReq.details} onSent={() => loadCheckrStatus()} />
+                <CheckrEmailStart staging={checkrStaging} details={checkrReq.details} alreadyAsked={!!checkrReq.requestedAt} onSent={() => loadCheckrStatus()} />
               </div>
             )}
           </div>

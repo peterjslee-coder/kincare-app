@@ -153,6 +153,7 @@ test("missing what Checkr needs → the card says what, and has no one-tap appro
   expect(await requestIfReady(db, cg.user.id)).toBe(false); // once
   const admin = await h.createUser({ isAdmin: true });
   const item = (await needsYou(admin.user.id)).find((i) => i.id === `bgCheckRequest:${cg.user.id}`);
-  expect(item.title).toMatch(/missing date of birth/);
+  expect(item.title).toMatch(/waiting on them for date of birth/);
+  expect(item.soft).toBe(true); // their move, not the admin's: not in the badge
   expect(item.action).toBeNull();
 });
