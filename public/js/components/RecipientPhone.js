@@ -256,8 +256,13 @@ const SimpleView = window.SimpleView = ({ initial }) => {
   useEffect(() => {
     if (!initial) load(true); else markOpened(initial);
     // A phone left on the kitchen counter: refresh every minute, and the moment it is picked up.
-    const iv = setInterval(() => { setNow(new Date()); load(); }, 60000);
-    const onVis = () => { if (document.visibilityState === 'visible') { setNow(new Date()); load(true); } };
+    // v1.130.3 — this screen never changes pages, and a page change is when the app applies a
+    // waiting update (index.html → window.__swApplyPendingUpdate). Betty's phone sat on the
+    // old screen after v1.130.2 shipped. So ask on every tick and every return to the front;
+    // it only applies when nothing is being typed, behind the "App updated" card.
+    const tryUpdate = () => { try { window.__swApplyPendingUpdate && window.__swApplyPendingUpdate(); } catch { /* never block the screen */ } };
+    const iv = setInterval(() => { setNow(new Date()); load(); tryUpdate(); }, 60000);
+    const onVis = () => { if (document.visibilityState === 'visible') { setNow(new Date()); load(true); tryUpdate(); } };
     document.addEventListener('visibilitychange', onVis);
     const offs = [];
     if (typeof onSocketEvent === 'function') {
