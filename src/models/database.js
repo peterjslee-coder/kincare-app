@@ -3558,6 +3558,23 @@ async function initializeDatabase() {
            WHERE checkr_status = 'pending' AND checkr_invitation_id IS NULL AND checkr_report_id IS NULL`,
       ],
     },
+    {
+      // v1.132.0 — Pete, 11/18: no $30 up front; a caregiver's check waits for his approval, and
+      // agreeing to the check in onboarding is the request (utils/bgCheckRequest). Everyone who
+      // has already agreed and has not been sent to Checkr is waiting on him as of now.
+      id: "085_bg_check_requests",
+      statements: [
+        `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS bg_check_requested_at TIMESTAMPTZ`,
+        `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS bg_check_approved_at TIMESTAMPTZ`,
+        `ALTER TABLE caregiver_profiles ADD COLUMN IF NOT EXISTS bg_check_approved_by TEXT`,
+        `UPDATE caregiver_profiles
+            SET bg_check_requested_at = COALESCE(background_check_consent_at, updated_at, NOW())
+          WHERE bg_check_requested_at IS NULL
+            AND COALESCE(background_check_consent, 0) = 1
+            AND COALESCE(is_background_checked, 0) = 0
+            AND checkr_invitation_id IS NULL`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

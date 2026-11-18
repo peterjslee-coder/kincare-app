@@ -161,14 +161,17 @@ describe("waiting on us is not work left for her", () => {
 });
 
 describe("the path has an order", () => {
-  test("the safety check is blocked until pay is set up, not merely undone", () => {
-    // Today this surfaces as "Complete Stripe setup first" printed on an item she is being
-    // told to do. On a path it is just the next bend, not a contradiction.
+  // v1.132.0 — the check used to wait on Stripe because she had to pay $30 for it. InPlace pays
+  // now (Pete, 11/18), so nothing stands in front of it.
+  test("the safety check is NOT blocked by pay setup any more", () => {
     const r = resolveRoute(onDashboard());
     const bg = r.items.find((i) => i.id === "background-check");
-    expect(bg.blocked).toBe(true);
-    expect(bg.blockedBy).toEqual(["stripe"]);
-    expect(r.current.id).toBe("stripe");
+    expect(bg.blocked).toBeFalsy();
+  });
+
+  test("asked for and waiting on InPlace is 'waiting', not a to-do", () => {
+    const r = resolveRoute(onDashboard({ backgroundCheck: { requested: true } }));
+    expect(r.items.find((i) => i.id === "background-check").state).toBe("waiting");
   });
 
   test("connecting Stripe unblocks it and moves the open step along", () => {

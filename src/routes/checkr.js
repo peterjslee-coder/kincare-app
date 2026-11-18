@@ -8,6 +8,7 @@ const { captureException } = require("../utils/sentry");
 const { phaseFor, PHASE } = require("../constants/checkrStatus");
 const { blockPendingAdminReview } = require("../utils/caregiverBlock");
 const { recordCheckrEvent, evidenceFor, evidenceForMany, notifyAdmins } = require("../utils/checkrEvidence");
+const { requestIfReady: requestBgCheckIfReady, readiness: bgReadiness } = require("../utils/bgCheckRequest"); // v1.132.0
 
 const router = express.Router();
 
@@ -212,6 +213,15 @@ async function sendInvitation(db, userId, opts = {}) {
         profile.background_check_paid = 1;
       }
       if (byAdmin && !profile.background_check_consent) profile.background_check_consent = 1;
+      // v1.132.0 — Pete: "I don't want them to pay the $30 upfront." The gate a caregiver meets
+      // is now an admin's APPROVAL, not a payment. An approved request counts as paid by InPlace.
+      if (!byAdmin && profile.bg_check_approved_at && !profile.background_check_paid) {
+        await db.prepare("UPDATE caregiver_profiles SET background_check_paid = 1, updated_at = NOW() WHERE user_id = ?").run(userId);
+        profile.background_check_paid = 1;
+      }
+      if (!byAdmin && !profile.bg_check_approved_at && !isStaging) {
+        return reply(403, { error: "Your background check is waiting for InPlace to approve it.", code: "AWAITING_APPROVAL" });
+      }
       if (!profile.background_check_paid && !isStaging) {
         return reply(400, { error: "Background check payment required first" });
       }
@@ -432,6 +442,19 @@ router.post("/initiate", authenticate, requireRole("caregiver"), async (req, res
     return res.status(503).json({ error: "Background check service is not configured yet." });
   }
 
+  // v1.132.0 — not approved yet: this button ASKS (Pete approves in Needs you). Tapping it is
+  // agreeing to the check, the same agreement the onboarding checkbox records.
+  const pre = await db.prepare("SELECT bg_check_approved_at, background_check_consent FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
+  if (pre && !pre.bg_check_approved_at && process.env.CHECKR_STAGING !== "true") {
+    if (!pre.background_check_consent) {
+      await db.prepare("UPDATE caregiver_profiles SET background_check_consent = 1, background_check_consent_at = NOW(), updated_at = NOW() WHERE user_id = ?").run(req.user.id);
+    }
+    await requestBgCheckIfReady(db, req.user.id);
+    const row = await db.prepare("SELECT bg_check_requested_at FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
+    return res.json({ status: "requested", requestedAt: row?.bg_check_requested_at || null,
+      message: "InPlace has your request. You'll get a notification when it's approved." });
+  }
+
   const out = await sendInvitation(db, req.user.id, { checkrEmail: req.body && req.body.checkrEmail, actor: "caregiver" });
   if (out.code >= 500) delete out.body.detail; // the caregiver gets the plain sentence; Sentry has the rest
   return res.status(out.code).json(out.body);
@@ -528,6 +551,13 @@ router.get("/status", authenticate, requireRole("caregiver"), async (req, res) =
     ).get(req.user.id);
     response.invitationUrl = inv?.checkr_invitation_url || null;
     response.sentTo = inv?.checkr_invitation_sent_to || null;
+    // v1.132.0 — the request and Pete's approval, and what Checkr is (or will be) given.
+    const full = await db.prepare("SELECT * FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
+    const me = await db.prepare("SELECT email, phone FROM users WHERE id = ?").get(req.user.id);
+    response.requestedAt = full?.bg_check_requested_at || null;
+    response.approvedAt = full?.bg_check_approved_at || null;
+    response.consented = !!full?.background_check_consent;
+    response.details = bgReadiness(full || {}, me || {});
 
     res.json(response);
   } catch (err) {
@@ -1341,6 +1371,7 @@ router.get("/admin/candidates", authenticate, async (req, res) => {
         cp.checkr_status, cp.checkr_candidate_id, cp.checkr_invitation_id, cp.checkr_report_id,
         cp.is_background_checked, cp.background_check_paid, cp.background_check_consent,
         cp.onboarding_complete, cp.checkr_eta,
+        cp.bg_check_requested_at, cp.bg_check_approved_at,
         COALESCE(cp.bg_check_admin_approved, 0) AS bg_check_admin_approved,
         u.email, u.first_name, u.last_name
       FROM caregiver_profiles cp
@@ -1407,6 +1438,56 @@ router.get("/admin/candidates", authenticate, async (req, res) => {
   }
 });
 
+// ─── approveAndSend (v1.132.0) — Pete's approval, then Checkr's form ───
+// The approval is recorded only if Checkr actually accepts the invitation: an "approved" that
+// never reached Checkr is exactly the kind of claim v1.131.0 removed. The caregiver is told.
+async function approveAndSend(db, targetUserId, adminUserId) {
+  const out = await sendInvitation(db, targetUserId, { actor: "admin" });
+  if (out.code === 200 && out.body.status === "invitation_sent") {
+    await db.prepare(`
+      UPDATE caregiver_profiles
+         SET bg_check_approved_at = NOW(), bg_check_approved_by = ?,
+             bg_check_requested_at = COALESCE(bg_check_requested_at, NOW()), updated_at = NOW()
+       WHERE user_id = ?
+    `).run(adminUserId, targetUserId);
+    try {
+      const { sendPushToUser } = require("../utils/push");
+      await sendPushToUser(db, targetUserId,
+        "Background check approved",
+        "Checkr's form is ready. Open InPlace to finish it.",
+        { type: "bg_check_approved", page: "account", tab: "payments" }
+      ).catch(() => {});
+    } catch (e) { /* the screen says it either way */ }
+  }
+  return out;
+}
+
+// ─── POST /api/checkr/admin/requests/:userId/approve — the Needs-you card's one tap ───
+router.post("/admin/requests/:userId/approve", authenticate, async (req, res) => {
+  const db = await getDb();
+  const admin = await db.prepare("SELECT is_admin, email FROM users WHERE id = ?").get(req.user.id);
+  if (!admin?.is_admin) return res.status(403).json({ error: "Admin only" });
+  if (!(await bgChecksEnabled())) {
+    return res.status(503).json({ error: "Background checks are switched off (Admin → BG Checks)." });
+  }
+  try { getCheckrKey(); } catch {
+    return res.status(503).json({ error: "CHECKR_API_KEY is not configured." });
+  }
+  const target = await db.prepare("SELECT id, COALESCE(is_demo, 0) AS is_demo FROM users WHERE id = ?").get(req.params.userId);
+  if (!target) return res.status(404).json({ error: "User not found" });
+  if (target.is_demo) return res.status(400).json({ error: "Demo accounts can't be sent to Checkr." });
+  const out = await approveAndSend(db, target.id, req.user.id);
+  writeAuditLog({
+    userId: req.user.id, userEmail: admin.email, userRole: "admin",
+    action: "bg_check_request_approved", endpoint: "/api/checkr/admin/requests/:userId/approve", method: "POST",
+    details: { targetUserId: target.id, code: out.code, invitationId: out.body.invitationId || null },
+    severity: out.code === 200 ? "info" : "warning",
+  });
+  // The card reads `error` on a failure; say what Checkr said.
+  if (out.code !== 200 && out.body.detail) out.body.error = `${out.body.error} (${out.body.detail})`;
+  return res.status(out.code).json(out.body);
+});
+
 // ─── POST /api/checkr/admin/send-invitation/:userId — Admin: email her the Checkr form ───
 //
 // Pete, 11/18: "do something that allows me to send them an email on file to complete their
@@ -1429,7 +1510,7 @@ router.post("/admin/send-invitation/:userId", authenticate, async (req, res) => 
   // Dev Rule 7's cousin: a demo person must never become a billed Checkr order.
   if (target.is_demo) return res.status(400).json({ error: "Demo accounts can't be sent to Checkr." });
 
-  const out = await sendInvitation(db, target.id, { actor: "admin" });
+  const out = await approveAndSend(db, target.id, req.user.id);
   writeAuditLog({
     userId: req.user.id, userEmail: admin.email, userRole: "admin",
     action: "checkr_invitation_sent_by_admin", endpoint: "/api/checkr/admin/send-invitation", method: "POST",

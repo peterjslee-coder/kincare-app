@@ -1490,6 +1490,8 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const bgCheckSubmitted = !!profile.isBackgroundChecked
     || ['in_progress', 'under_review', 'cleared', 'blocked_pending_review'].includes(profile.checkrPhase);
   const bgFormOut = profile.checkrPhase === 'awaiting_caregiver';
+  // v1.132.0 — asked, and waiting on an admin's approval (no Checkr form yet).
+  const bgRequested = !!profile.bgCheckRequestedAt && !profile.bgCheckApprovedAt && !bgFormOut && !bgCheckSubmitted;
   // v1.105.63 — an admin granted the fee rather than the caregiver paying it. Same flag on the
   // profile; only the payments table knows which. See routes/dashboard.js.
   const feeWaived = !!profile.backgroundCheckFeeWaived;
@@ -1526,16 +1528,15 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       // whether or not the caregiver owed anything. Someone whose fee an admin had waived read
       // "one-time $30 fee" directly above a warning telling them to act, and reasonably
       // concluded they were being asked for money. Say which of the two is true.
-      desc: 'A background check is required to participate on InPlace. '
-        + (feeWaived
-            ? 'The $30 fee has been waived for you — you don\'t owe anything. '
-            : 'This is a one-time $30 fee that is refunded after 10 completed sessions. ')
+      // v1.132.0 — Pete: "For now I intend to pay for the background checks ... I don't want them
+      // to pay the $30 upfront." No fee sentence, and no Stripe-first step in front of it.
+      desc: 'A background check is required to participate on InPlace, and InPlace pays for it. '
         + 'Your report is reviewed fairly — you\'ll be given a chance to provide context on anything that comes up, and a real person is always in the loop.',
       done: bgCheckSubmitted || bgOverride,
       missing: !(bgCheckSubmitted || bgOverride)
-        ? (bgFormOut ? 'Fill in the form Checkr emailed you'
-          : (bgPaid ? 'Get your Checkr form \u2014 it comes by email (Account \u2192 Background Check)'
-            : ((stripeConnected || stripeOverride) ? 'Pay for background check ($30)' : 'Complete Stripe setup first')))
+        ? (bgFormOut ? 'Finish the form Checkr sent you'
+          : (bgRequested ? 'Waiting for InPlace to approve it \u2014 nothing to do yet'
+            : 'Tell InPlace you\u2019re ready (Account \u2192 Background Check)'))
         : null,
       warning: (!profile.isBackgroundChecked && adminVouches.length > 0 && !bgCheckSubmitted)
         ? (familyOnly
@@ -1627,6 +1628,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
     backgroundCheck: {
       override: bgOverride, passed: !!profile.isBackgroundChecked,
       submitted: bgCheckSubmitted, checkrStatus: profile.checkrStatus,
+      requested: bgRequested, // v1.132.0 — asked; the wait is InPlace's
     },
     hasPreferences, hasAvailability, hasRates, hasPhoto, securityReviewed,
   });
@@ -2583,7 +2585,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
           identity: { title: 'A photo of your ID', why: 'Families are inviting you into their home. A selfie and your ID tell them who you are.', time: 'About 2 minutes', cta: 'Start' },
           preferences: { title: 'What care you’re happy to do', why: 'Needed before you can accept a job. Pick what you’ll take on and what you’d rather not.', time: 'About 2 minutes', cta: 'Start' },
           stripe: { title: 'Where your pay lands', why: 'Needed before your first visit. The day before, we hold the family’s card, and that needs somewhere to pay you. Stripe keeps your bank details; InPlace never sees them.', time: 'About 2 minutes', cta: 'Connect bank' },
-          'background-check': { title: 'Background check', why: profile.backgroundCheckFeeWaived ? 'Lets any family book you. Your fee is covered.' : 'Lets any family book you. $30, takes 2–5 days.', time: null, cta: 'Start' },
+          'background-check': { title: 'Background check', why: 'Lets any family book you. InPlace pays; it takes 2–5 days once you finish Checkr’s form.', time: null, cta: 'Start' }, // v1.132.0
           'avail-rates': { title: 'When you’re free, and your rate', why: 'Fills your calendar so families know when to ask.', time: 'About 3 minutes', cta: 'Set' },
           photo: { title: 'A photo and a few words about you', why: 'Families want to see who’s coming to their home.', time: 'About 2 minutes', cta: 'Add' },
         };
@@ -2701,9 +2703,11 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                 <div style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '2px 0 8px' }}>So families nearby can find and book you.</div>
                 {listedIds.map((id) => smallRow(id, COPY[id].title, COPY[id].why + (COPY[id].time ? ' ' + COPY[id].time + '.' : ''), COPY[id].cta, () => openFirstStep(id)))}
                 {showBgListed && smallRow('background-check', COPY['background-check'].title,
-                  bgWaiting ? ((firstStepFor('background-check') || {}).warning || 'Sent — it usually takes 2–5 business days.') : COPY['background-check'].why,
-                  'Start', () => openFirstStep('background-check'),
-                  bgWaiting ? 'With us' : (!(stripeConnected || stripeOverride) ? 'After your bank' : null))}
+                  bgWaiting ? ((firstStepFor('background-check') || {}).warning || 'Checkr has your form — it usually takes 2–5 business days.')
+                    : (bgRequested ? 'You asked for it. InPlace will approve it and you’ll get a notification.' : COPY['background-check'].why),
+                  bgFormOut ? 'Finish' : 'Start', () => openFirstStep('background-check'),
+                  // v1.132.0 — no longer waits on the bank: InPlace pays, so Stripe is not in front of it.
+                  bgWaiting ? 'With us' : (bgRequested ? 'Waiting on InPlace' : null))}
               </section>
             )}
             {securityTodo && (

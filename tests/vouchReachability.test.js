@@ -98,10 +98,10 @@ describe("a waived fee is not a paid fee", () => {
     expect(flagRow).toMatch(/does not waive the background check|waive the check itself/i);
   });
 
-  test("the caregiver is told the fee was waived rather than billed for it", () => {
+  test("the caregiver is never billed for the check — InPlace pays (v1.132.0)", () => {
     const step = region(hub, "label: 'Start your background check'", "done: bgCheckSubmitted || bgOverride", "bg step");
-    expect(step).toMatch(/feeWaived/);
-    expect(step).toMatch(/has been waived for you/);
+    expect(step).toMatch(/InPlace pays for it/);
+    expect(step).not.toMatch(/\$30/);
     // The $30 sentence must be conditional now, not unconditional prose.
     expect(step).not.toMatch(/desc: 'A background check is required to participate on InPlace\. This is a one-time \$30 fee/);
   });

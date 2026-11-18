@@ -83,8 +83,10 @@ const ONBOARDING_ROUTE = window.ONBOARDING_ROUTE = [
   { id: 'stripe', leg: 'work', wizardStep: null, label: 'Where your pay lands' },
   // Wizard step 4 collects the legal name / SSN-4 / DOB this needs. That screen belongs to
   // THIS item — it is not a second entry, which is how the old list counted it twice.
+  // v1.132.0 — no longer `needs: ['stripe']`: that existed so a caregiver could pay the $30 fee.
+  // InPlace pays now (Pete, 11/18), so nothing stands in front of the check but an admin's OK.
   { id: 'background-check', leg: 'work', wizardStep: null, label: 'The safety check',
-    needs: ['stripe'], canWait: true },
+    canWait: true },
   { id: 'preferences', leg: 'work', wizardStep: null, label: "What you're happy doing" },
   { id: 'avail-rates', leg: 'work', wizardStep: null, label: "When you're free, and your rate" },
   { id: 'photo', leg: 'work', wizardStep: null, label: 'Add a photo so families can see you' },
@@ -200,6 +202,8 @@ const routeItemState = window.routeItemState = (id, facts = {}) => {
       if (b.submitted) {
         return (b.checkrStatus === 'consider' || b.checkrStatus === 'disputed') ? 'todo' : 'waiting';
       }
+      // v1.132.0 — asked for, waiting on an admin's approval: nothing for her to do.
+      if (b.requested) return 'waiting';
       return 'todo';
     }
 

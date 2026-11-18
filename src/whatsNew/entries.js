@@ -31,18 +31,18 @@ const WINDOW_DAYS = 45;
 
 const ENTRIES = [
   {
-    id: "checkr-by-email",
-    version: "1.131.0",
+    id: "checkr-inplace-pays",
+    version: "1.132.0",
     date: "2026-11-18",
     audience: ["caregiver"],
-    title: "Your background check now comes by email from Checkr",
-    body: "Tap one button and Checkr, the company we use for background checks, emails you a secure form. Your check starts once you fill that form in, and the app shows each step only after Checkr confirms it.",
+    title: "InPlace pays for your background check",
+    body: "There's no $30 fee any more. Agree to the check when you sign up, InPlace approves it, and Checkr sends you a form with your name and details already filled in.",
     howTo: [
-      "Open Account, then Background Check",
-      "Tap Email me the Checkr form",
-      "Open the email from Checkr (check spam too) and fill in the form",
+      "Agree to the background check during sign-up (or tap I'm ready in Account, then Background Check)",
+      "Wait for the notification that InPlace approved it",
+      "Tap Continue to Checkr's form and add the rest",
     ],
-    examples: ["Checkr's form is waiting for you", "Checkr confirmed it received your form on Nov 18"],
+    examples: ["Waiting for InPlace to approve", "Approved by InPlace", "Checkr confirmed it received your form"],
     preview: "checkrEmail",
     action: { label: "Show me", page: "account" },
   },

@@ -539,7 +539,7 @@ router.post("/attention/snooze", authenticate, async (req, res) => {
     // v1.109.9 — cancelFee: "Looks right" on a pending cancellation fee. The fee itself is
     // untouched; this only puts the row away until the charge has gone through.
     // v1.120.0 — paymentArrived: "Not yet" on a check or cash reimbursement the payee is owed.
-    const SNOOZABLE = ["emptyWeek", "cancelFee", "paymentArrived"];
+    const SNOOZABLE = ["emptyWeek", "cancelFee", "paymentArrived", "bgCheckRequest"]; // v1.132.0 bgCheckRequest: an admin's "Not now"
     const kind = String(req.body?.kind || "");
     if (!SNOOZABLE.includes(kind)) return res.status(400).json({ error: "Not a snoozable nudge" });
     const ref = String(req.body?.ref || "").slice(0, 64);

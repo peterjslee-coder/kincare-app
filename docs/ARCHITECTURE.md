@@ -7,9 +7,9 @@ build red.
 
 Hand-written sections (§3 "Where is…") are preserved across regeneration; edit those freely.
 
-Structure at last generation: 615 HTTP routes across 64 mounts ·
+Structure at last generation: 616 HTTP routes across 64 mounts ·
 118 `CREATE TABLE` statements · 16 background jobs · 41 socket events
-(17 with no client listener) · 74 push event types · 65 `window.__*` globals.
+(17 with no client listener) · 75 push event types · 65 `window.__*` globals.
 
 ---
 
@@ -59,7 +59,7 @@ JSX is *not* compiled in the browser; Babel-standalone is not loaded. Editing an
 | `/api/care-tools` | `src/routes/careTools.js` | 1 |  |
 | `/api/caregiver-onboarding` | `src/routes/caregiveronboarding.js` | 6 |  |
 | `/api/caregivers` | `src/routes/caregivers.js` | 11 |  |
-| `/api/checkr` | `src/routes/checkr.js` | 12 |  |
+| `/api/checkr` | `src/routes/checkr.js` | 13 |  |
 | `/api/connections` | `src/routes/connections.js` | 4 |  |
 | `/api/consent` | `src/routes/consent.js` | 13 |  |
 | `/api/costs` | `src/routes/costs.js` | 8 |  |
@@ -281,43 +281,43 @@ why this app runs on exactly one Railway replica.
 Opt-out key is `notification_prefs["push_" + eventType]`. Capability gating lives in
 `src/utils/pushPermission.js`; tap routing in `window.__handlePushNavigate` (`public/js/app.js`).
 
-`admin_update` · `ai_read` · `attestation_submitted` · `block_request`
+`admin_update` · `ai_read` · `attestation_submitted` · `bg_check_requested`
 
-`blocked` · `cancel_fee_disputed` · `cancel_fee_notice` · `cancel_fee_waived`
+`block_request` · `blocked` · `cancel_fee_disputed` · `cancel_fee_notice`
 
-`care_event` · `care_event_tagged` · `care_request` · `care_request_accepted`
+`cancel_fee_waived` · `care_event` · `care_event_tagged` · `care_request`
 
-`care_request_created` · `care_task` · `care_team_invite` · `caregiver_arriving`
+`care_request_accepted` · `care_request_created` · `care_task` · `care_team_invite`
 
-`caregiver_arriving_recipient` · `caregiver_leaving_recipient` · `caregiver_no_show` · `check_out_imminent`
+`caregiver_arriving` · `caregiver_arriving_recipient` · `caregiver_leaving_recipient` · `caregiver_no_show`
 
-`check_out_reminder` · `checkin_nudge` · `checkr_invitation_sent` · `content_report`
+`check_out_imminent` · `check_out_reminder` · `checkin_nudge` · `checkr_invitation_sent`
 
-`deleted` · `dispute_filed` · `document_classified` · `document_deleted`
+`content_report` · `deleted` · `dispute_filed` · `document_classified`
 
-`document_uploaded` · `financial_concern_reported` · `identity_approved` · `identity_retake`
+`document_deleted` · `document_uploaded` · `financial_concern_reported` · `identity_approved`
 
-`identity_submitted` · `interview_accepted` · `interview_cancelled` · `interview_declined`
+`identity_retake` · `identity_submitted` · `interview_accepted` · `interview_cancelled`
 
-`interview_request` · `invite_accepted` · `job_withdrawn` · `kindred_relay`
+`interview_declined` · `interview_request` · `invite_accepted` · `job_withdrawn`
 
-`managed_mode_activated` · `mileage_extra` · `missing_address` · `new_job`
+`kindred_relay` · `managed_mode_activated` · `mileage_extra` · `missing_address`
 
-`new_registration` · `new_signup_intent` · `no_show_cancelled` · `on_my_way`
+`new_job` · `new_registration` · `new_signup_intent` · `no_show_cancelled`
 
-`on_my_way_recipient` · `outreach_reply` · `outreach_response` · `outreach_sent`
+`on_my_way` · `on_my_way_recipient` · `outreach_reply` · `outreach_response`
 
-`overdue_check_in` · `overdue_check_in_family` · `overdue_check_out` · `overdue_check_out_family`
+`outreach_sent` · `overdue_check_in` · `overdue_check_in_family` · `overdue_check_out`
 
-`payment_authorization_failed` · `payment_hold` · `payment_method_needed` · `phone_verified`
+`overdue_check_out_family` · `payment_authorization_failed` · `payment_hold` · `payment_method_needed`
 
-`proposal_accepted` · `proposal_declined` · `request_declined` · `review`
+`phone_verified` · `proposal_accepted` · `proposal_declined` · `request_declined`
 
-`safety_flag` · `session_cancelled` · `session_complete` · `session_in_progress`
+`review` · `safety_flag` · `session_cancelled` · `session_complete`
 
-`team_join` · `time_proposal` · `unblocked` · `upload_authority_confirmed`
+`session_in_progress` · `team_join` · `time_proposal` · `unblocked`
 
-`uploaded` · `waitlist_signup`
+`upload_authority_confirmed` · `uploaded` · `waitlist_signup`
 
 ---
 

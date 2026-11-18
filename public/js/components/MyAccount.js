@@ -263,12 +263,14 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
   // v1.131.0 — what Checkr confirmed (dates), and where its emailed form went. From the server only.
   const [checkrEvidence, setCheckrEvidence] = useState(null);
   const [checkrInvite, setCheckrInvite] = useState({ sentTo: null, url: null });
+  const [checkrReq, setCheckrReq] = useState({ requestedAt: null, approvedAt: null, details: null }); // v1.132.0
   const loadCheckrStatus = () => apiFetch('/api/checkr/status').then(async r => {
     if (r?.ok) {
       const d = await r.json();
       setCheckrStatus(d.status || 'not_initiated'); setCheckrPhase(d.phase || null); setCheckrStaging(!!d.staging);
       if (d.paid) setBgCheckPaid(true); setMyVouches(d.vouches || []);
       setCheckrEvidence(d.evidence || null); setCheckrInvite({ sentTo: d.sentTo || null, url: d.invitationUrl || null });
+      setCheckrReq({ requestedAt: d.requestedAt || null, approvedAt: d.approvedAt || null, details: d.details || null });
     }
   }).catch(() => { setCheckrStatus('not_initiated'); });
   const [checkrStaging, setCheckrStaging] = useState(false);
@@ -2245,7 +2247,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                 </p>
               </div>
             ) : checkrPhase === 'awaiting_caregiver' ? (
-              <CheckrFormWaiting sentTo={checkrInvite.sentTo} sentAt={checkrEvidence && checkrEvidence.sentAt} invitationUrl={checkrInvite.url} />
+              <CheckrFormWaiting sentTo={checkrInvite.sentTo} sentAt={checkrEvidence && checkrEvidence.sentAt} invitationUrl={checkrInvite.url} approvedAt={checkrReq.approvedAt} details={checkrReq.details} />
             ) : checkrPhase === 'unknown' ? (
               // A status src/constants/checkrStatus.js has not been taught. Say nothing about the
               // outcome — the old behaviour of guessing "start a new check" is what caused this.
@@ -2282,45 +2284,11 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                   </button>
                 </div>
               </div>
-            ) : !bgCheckPaid ? (
-              <div>
-                <p style={{ fontSize: 14, color: 'var(--text-secondary)', margin: '0 0 4px' }}>
-                  <span style={{ fontSize: 18, fontWeight: 800, color: 'var(--role-color)' }}>$30</span> one-time fee. Refunded after 10 completed sessions.
-                </p>
-                <p style={{ fontSize: 13, color: 'var(--text-tertiary)', margin: '0 0 16px' }}>
-                  A background check is required to participate on InPlace. Your report is reviewed fairly — you'll be given a chance to provide context on anything that comes up.
-                </p>
-                {checkrStaging ? (
-                  // Staging skips the $30 (initiate marks it paid there) and goes straight to email.
-                  <CheckrEmailStart staging onSent={() => loadCheckrStatus()} />
-                ) : (
-                  <div style={{ padding: 16, background: 'var(--bg-neutral)', borderRadius: 8, border: '1px solid #e0e0e0' }}>
-                    {typeof StripePaymentForm !== 'undefined' ? React.createElement(StripePaymentForm, {
-                      amount: 30,
-                      description: 'Background check fee — one-time, refunded after 10 sessions.',
-                      buttonText: 'Pay $30.00 — Start Background Check',
-                      onSuccess: (intent) => {
-                        console.log('BG check payment success:', intent);
-                        setBgCheckPaid(true);
-                        if (typeof showToast === 'function') showToast('Payment received. Checkr is emailing your form.', 'success');
-                        setTimeout(() => loadCheckrStatus(), 1500); // v1.131.0 — the server sends it; show what it says
-                      },
-                      onError: (msg) => {
-                        console.error('BG check payment error:', msg);
-                        setCheckrError(msg || 'Payment failed');
-                      },
-                    }) : (
-                      <div style={{ padding: 12, color: 'var(--text-tertiary)', fontSize: 13, textAlign: 'center' }}>
-                        Loading payment form...
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
+            ) : (checkrReq.requestedAt && !checkrReq.approvedAt) ? (
+              // v1.132.0 — Pete: no $30 up front; an admin approves the check instead. Agreeing in
+              // onboarding (or tapping the button below) is the request.
+              <CheckrAwaitingApproval requestedAt={checkrReq.requestedAt} />
             ) : (
-              // v1.131.0 — the in-app Checkr embed is gone from here: the site's security policy
-              // never allowed Checkr's script, so on production it rendered an empty box titled
-              // "unavailable in staging" and nobody was ever sent to Checkr.
               <div style={{ padding: 16, background: 'var(--bg-neutral)', borderRadius: 8, border: '1px solid var(--border-color)' }}>
                 <CheckrEmailStart staging={checkrStaging} onSent={() => loadCheckrStatus()} />
               </div>
