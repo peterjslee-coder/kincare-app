@@ -3575,6 +3575,21 @@ async function initializeDatabase() {
             AND checkr_invitation_id IS NULL`,
       ],
     },
+    {
+      // v1.132.1 — Pete, 11/18: "i vouched for ryan ... vouching pushes the 'start background
+      // check' to their account if they work for more people than vouched." 085's backfill
+      // turned every onboarding agreement into a request, vouched caregivers included. A vouched
+      // caregiver asks from Account when they want other families; until then, no request.
+      id: "086_bg_requests_not_for_vouched",
+      statements: [
+        `UPDATE caregiver_profiles cp
+            SET bg_check_requested_at = NULL
+          WHERE cp.bg_check_requested_at IS NOT NULL
+            AND cp.bg_check_approved_at IS NULL
+            AND cp.checkr_invitation_id IS NULL
+            AND EXISTS (SELECT 1 FROM bg_admin_vouches v WHERE v.caregiver_user_id = cp.user_id AND v.revoked_at IS NULL)`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;
