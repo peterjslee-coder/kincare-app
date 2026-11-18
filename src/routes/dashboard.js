@@ -1243,10 +1243,18 @@ async function careForDashboard(db, userId, res) {
 
   const parseJson = (str) => { try { return JSON.parse(str); } catch { return []; } };
 
+  // v1.130.0 — the simple phone screen, when the care team leader has turned it on.
+  let simpleScreen = { on: false };
+  try {
+    simpleScreen = await require("../utils/simpleMode").simpleScreenFor(
+      db, recipient, userId, getTodayStringInZone(recipient.timezone || DEFAULT_TIMEZONE));
+  } catch (e) { require("../utils/sentry").captureException(e, { where: "dashboard: simpleScreen" }); }
+
   res.json({
     role: "care_for",
     userName: `${user.first_name} ${user.last_name}`,
     careRecipientId: recipient.id,
+    simpleScreen,
     permissionTier: recipient.permission_tier || "full",
     managedByName,
     managedReason: recipient.managed_reason || null,

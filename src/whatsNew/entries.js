@@ -31,6 +31,21 @@ const WINDOW_DAYS = 45;
 
 const ENTRIES = [
   {
+    id: "simple-phone-screen",
+    version: "1.130.0",
+    date: "2026-11-18",
+    audience: ["family"],
+    title: "A simple screen for your loved one's phone",
+    body: "Once they have their own sign-in, turn on the simple screen: very large text, a button to call you, what's coming up, and the latest note you left them. It works inside iPhone Assistive Access, and only the team leader can turn it off.",
+    howTo: [
+      "Open Care Team, then Accessibility Options at the bottom",
+      "Tick Simple screen and choose who the call buttons ring",
+      "Write a note and tap Send. It shows big on their screen",
+    ],
+    examples: ["I'll be there at 10. Stay in the house.", "Jane is bringing lunch today", "Call me after the doctor"],
+    preview: "simpleScreen",
+  },
+  {
     id: "own-login",
     version: "1.129.4",
     date: "2026-11-18",

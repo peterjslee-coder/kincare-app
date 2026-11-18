@@ -749,10 +749,23 @@ async function pollCareEvents(sendPushToUser) {
         ? `${stage === "day_before" ? "Tomorrow" : "Today"} at ${timeLabel} for ${ev.recipient_first_name}. Tap for details.`
         : `${stage === "day_before" ? "Tomorrow" : "Today"} for ${ev.recipient_first_name}. Tap for details.`;
 
+      // v1.130.0 — the person themselves, on their own phone, reads "Tomorrow at 10:00 AM",
+      // not "…for Betty".
+      let selfId = null;
+      try {
+        const { trustedLinkedUserId } = require("../utils/linkedAccount");
+        selfId = await trustedLinkedUserId(db, await db.prepare(
+          "SELECT id, family_user_id, linked_user_id FROM care_recipients WHERE id = ?"
+        ).get(ev.care_recipient_id));
+      } catch { selfId = null; }
+      const selfBody = ev.event_time
+        ? `${stage === "day_before" ? "Tomorrow" : "Today"} at ${timeLabel}. Tap for details.`
+        : `${stage === "day_before" ? "Tomorrow" : "Today"}. Tap for details.`;
+
       for (const m of notifiable) {
         sendPushToUser(m.id, {
           title,
-          body,
+          body: m.id === selfId ? selfBody : body,
           data: { type: "care_event", page: "dashboard", eventId: ev.id, careRecipientId: ev.care_recipient_id },
         }, "care_event").catch(() => {});
       }

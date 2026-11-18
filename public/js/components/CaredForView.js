@@ -183,6 +183,9 @@ const CaredForView = window.CaredForView = () => {
 
   if (loading) return <LoadingSpinner text="Loading your dashboard..." />;
   if (!data) return <EmptyState icon="\u26A0\uFE0F" title="Couldn't load your dashboard" text="Please try refreshing." />;
+  // v1.130.0 \u2014 the care team leader turned on the simple phone screen. Normally app.js draws it
+  // with no shell at all; this is the path an admin "viewing as" sees, inside the shell.
+  if (data.simpleScreen?.on && typeof SimpleView !== 'undefined') return <SimpleView initial={data} />;
 
   const notes = data.notes || [];
   const userName = (data.userName || 'Guest').split(' ')[0]; // First name only

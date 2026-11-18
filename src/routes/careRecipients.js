@@ -539,6 +539,76 @@ router.post("/:id/own-login", requireRole("family"), async (req, res) => {
   }
 });
 
+// ─── v1.130.0 — the simple phone screen: on/off and who the call buttons ring ───
+// Leader or owner only. Stored on the record, not the person's account, so it can't be undone
+// from their own phone (utils/simpleMode.js).
+async function leaderOrOwner(db, recipientId, userId) {
+  const cr = await db.prepare("SELECT id, first_name, family_user_id, linked_user_id, simple_mode FROM care_recipients WHERE id = ?").get(recipientId);
+  if (!cr) return { cr: null, ok: false };
+  if (cr.family_user_id === userId) return { cr, ok: true };
+  const lead = await db.prepare(`
+    SELECT 1 FROM care_team_members ctm JOIN care_teams ct ON ctm.care_team_id = ct.id
+    WHERE ct.care_recipient_id = ? AND ctm.user_id = ? AND ctm.role = 'leader'
+  `).get(recipientId, userId);
+  return { cr, ok: !!lead };
+}
+
+router.get("/:id/simple-mode", requireRole("family"), async (req, res) => {
+  try {
+    const db = await getDb();
+    const { cr, ok } = await leaderOrOwner(db, req.params.id, req.user.id);
+    if (!cr) return res.status(404).json({ error: "Care recipient not found" });
+    if (!ok) return res.status(403).json({ error: "Only the care team leader can change this" });
+    const sm = require("../utils/simpleMode");
+    const linkedUserId = await trustedLinkedUserId(db, cr);
+    const mode = sm.parseSimpleMode(cr.simple_mode);
+    const candidates = await sm.callCandidates(db, cr.id, linkedUserId);
+    const lastNote = await db.prepare(
+      "SELECT id, content, created_at FROM recipient_notes WHERE care_recipient_id = ? AND note_type = 'for_recipient' ORDER BY created_at DESC LIMIT 1"
+    ).get(cr.id);
+    res.json({
+      lastNote: lastNote ? { id: lastNote.id, content: lastNote.content, createdAt: lastNote.created_at } : null,
+      hasOwnLogin: !!linkedUserId,
+      on: mode.on,
+      callUserIds: mode.callUserIds,
+      maxCalls: sm.MAX_CALLS,
+      candidates: candidates.map((c) => ({ userId: c.userId, firstName: c.firstName, lastName: c.lastName, hasPhone: !!c.phone })),
+    });
+  } catch (err) {
+    captureException(err, { where: "careRecipients: get simple-mode" });
+    res.status(500).json({ error: "Couldn't load the phone settings" });
+  }
+});
+
+router.put("/:id/simple-mode", requireRole("family"), async (req, res) => {
+  try {
+    const db = await getDb();
+    const { cr, ok } = await leaderOrOwner(db, req.params.id, req.user.id);
+    if (!cr) return res.status(404).json({ error: "Care recipient not found" });
+    if (!ok) return res.status(403).json({ error: "Only the care team leader can change this" });
+    const sm = require("../utils/simpleMode");
+    const linkedUserId = await trustedLinkedUserId(db, cr);
+    const on = req.body.on === true;
+    const ids = Array.isArray(req.body.callUserIds) ? [...new Set(req.body.callUserIds.filter((x) => typeof x === "string"))] : [];
+    if (ids.length > sm.MAX_CALLS) return res.status(400).json({ error: `Pick up to ${sm.MAX_CALLS} people` });
+    const candidates = new Map((await sm.callCandidates(db, cr.id, linkedUserId)).map((c) => [c.userId, c]));
+    const bad = ids.filter((id) => !candidates.has(id));
+    if (bad.length) return res.status(400).json({ error: "Call buttons can only ring people on the care team" });
+    const noPhone = ids.filter((id) => !candidates.get(id).phone).map((id) => candidates.get(id).firstName);
+    if (noPhone.length) return res.status(400).json({ error: `${noPhone.join(", ")} has no phone number on their account yet` });
+    await db.prepare("UPDATE care_recipients SET simple_mode = ?, updated_at = NOW() WHERE id = ?")
+      .run(JSON.stringify({ on, callUserIds: ids }), cr.id);
+    if (linkedUserId) {
+      const emitToUser = req.app.get("emitToUser");
+      if (emitToUser) emitToUser(linkedUserId, "simple_mode_changed", { on });
+    }
+    res.json({ on, callUserIds: ids });
+  } catch (err) {
+    captureException(err, { where: "careRecipients: put simple-mode" });
+    res.status(500).json({ error: "Couldn't save the phone settings" });
+  }
+});
+
 router.put("/:id/permissions", requireRole("family"), async (req, res) => {
   const db = await getDb();
 

@@ -26,6 +26,18 @@ const wnPill = (bg, fg) => ({ padding: '4px 10px', borderRadius: 8, background: 
 
 const WN_PREVIEWS = {
   // v1.129.2 — Edit request
+  // v1.130.0 — the simple phone screen
+  simpleScreen: () => (
+    <div style={{ padding: '12px 12px 10px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>
+      <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 6 }}>Good morning, Mom</div>
+      <div style={{ ...wnCard, border: '2px solid var(--role-color)' }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)' }}>From Sam</div>
+        <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>I'll be there at 10. Stay in the house.</div>
+      </div>
+      <div style={{ ...wnPill('var(--color-success, #1b7a3d)', '#fff'), display: 'block', textAlign: 'center', fontSize: 14, padding: '8px 0', margin: '4px 0 6px' }}>{'📞'} Call Sam</div>
+      <div style={{ ...wnCard, fontSize: 12, color: 'var(--text-primary)' }}>Jane comes Thursday at 10:00 AM</div>
+    </div>
+  ),
   // v1.129.4 — the leader sets up a care recipient's own sign-in
   ownLogin: () => (
     <div style={{ padding: '12px 12px 10px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>

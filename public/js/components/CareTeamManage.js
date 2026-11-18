@@ -1019,6 +1019,10 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack, onNavigate
                 <OwnLoginSetup recipientId={team.care_recipient_id} firstName={team.recipient_first_name}
                   onDone={fetchTeam} />
               )}
+              {/* v1.130.0 — their phone: the simple screen, its call buttons, a note for them */}
+              {team.recipient_linked_user_id && typeof SimpleModeSettings !== 'undefined' && (
+                <SimpleModeSettings recipientId={team.care_recipient_id} firstName={team.recipient_first_name} />
+              )}
 
               {/* Display Settings for Care Recipient */}
               {team.recipient_linked_user_id && (() => {

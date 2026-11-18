@@ -667,11 +667,14 @@ router.get("/me", authenticate, async (req, res) => {
   // Check care_for (self-onboarding) status
   let selfOnboardingComplete = null;
   let careRecipientId = null;
+  let simpleMode = false;
   if (userRoles.includes('care_for')) {
-    const cr = await recipientForLinkedUser(db, req.user.id, "cr.id, cr.self_onboarding_complete");
+    const cr = await recipientForLinkedUser(db, req.user.id, "cr.id, cr.self_onboarding_complete, cr.simple_mode");
     if (cr) {
       selfOnboardingComplete = !!cr.self_onboarding_complete;
       careRecipientId = cr.id;
+      // v1.130.0 — the leader turned on the simple phone screen for this person.
+      simpleMode = require("../utils/simpleMode").parseSimpleMode(cr.simple_mode).on;
     } else {
       // v1.112.0 — no profile yet because the ID is still waiting on a person. The wizard is
       // "done" once its answers are saved against the pending intent; the profile follows.
@@ -809,6 +812,7 @@ router.get("/me", authenticate, async (req, res) => {
       onboarding_complete: onboardingComplete,
       selfOnboardingComplete,
       careRecipientId,
+      simpleMode,
       identityVerified,
       identityStatus,
       careAccess,

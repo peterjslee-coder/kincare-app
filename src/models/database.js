@@ -3481,6 +3481,14 @@ async function initializeDatabase() {
         )`,
       ],
     },
+    {
+      // v1.130.0 — the care recipient's simple phone screen, set by the care team leader.
+      // JSON: { on: boolean, callUserIds: [user id, …] } (routes/careRecipients.js).
+      id: "081_simple_mode",
+      statements: [
+        `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS simple_mode TEXT`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

@@ -120,8 +120,14 @@ router.post("/", async (req, res) => {
   if (String(content).length > 5000) {
     return res.status(400).json({ error: "Note is too long (5,000 characters max)" });
   }
-  if (!["general", "observation", "visit_summary"].includes(noteType)) {
+  // v1.130.0 — 'for_recipient': a note written TO the person cared for ("I'll be there at 10.
+  // Stay in the house."), shown big on their simple phone screen. Their own account can't
+  // write one to itself; observations stay hidden from them as before (noteVisibility).
+  if (!["general", "observation", "visit_summary", "for_recipient"].includes(noteType)) {
     return res.status(400).json({ error: "Invalid note type" });
+  }
+  if (noteType === "for_recipient" && String(content).length > 500) {
+    return res.status(400).json({ error: "Keep a note for them short — 500 characters max" });
   }
   // v1.76.0 — optional photo (e.g. the toe that might be broken)
   let photoData = null;
@@ -145,6 +151,13 @@ router.post("/", async (req, res) => {
   const na = await noteAccess(db, careRecipientId, req.user.id);
   if (!na.write) {
     return res.status(403).json({ error: "Not authorized to add notes for this care recipient" });
+  }
+  // The person's own linked account (a trusted link) — used twice below.
+  const { trustedLinkedUserId } = require("../utils/linkedAccount");
+  const linkedRow = await db.prepare("SELECT id, family_user_id, linked_user_id FROM care_recipients WHERE id = ?").get(careRecipientId);
+  const linkedUserId = await trustedLinkedUserId(db, linkedRow);
+  if (noteType === "for_recipient" && (!linkedUserId || linkedUserId === req.user.id)) {
+    return res.status(400).json({ error: linkedUserId ? "This kind of note is written by the care team" : "They don't have their own sign-in yet" });
   }
 
   // Use offline timestamp if provided (caregiver was offline and recorded locally)
@@ -179,6 +192,29 @@ router.post("/", async (req, res) => {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ${createdAtSQL})
   `).run(id, careRecipientId, req.user.id, content, noteType, needsAttention ? 1 : 0, photoData, linkedEventId);
 
+  // v1.130.0 — a note FOR the person goes to their phone, and only there. The team still sees
+  // it in Care Notes and Activity, but nobody else is pushed: "I'll be there at 10" is not news
+  // to a sibling. Same lock-screen rule as every push — who, never what.
+  if (noteType === "for_recipient") {
+    try {
+      const author = await db.prepare("SELECT first_name FROM users WHERE id = ?").get(req.user.id);
+      const { sendPushToUser } = require("./push");
+      sendPushToUser(linkedUserId, {
+        title: `${(author && author.first_name) || "Your family"} left you a note`,
+        body: "Tap to read",
+        tag: `note-${id.slice(0, 8)}`,
+        data: { type: "note_for_you", careRecipientId, noteId: id, page: "dashboard" },
+      }, "note_for_you").catch(() => {});
+      await db.prepare(
+        "INSERT INTO activity_feed (id, family_user_id, care_recipient_id, event_type, title, message, metadata) VALUES (?, ?, ?, ?, ?, ?, ?)"
+      ).run(uuid(), linkedRow.family_user_id, careRecipientId, "team_note",
+        `${(author && author.first_name) || "Someone"} left a note for ${(await db.prepare("SELECT first_name FROM care_recipients WHERE id = ?").get(careRecipientId)).first_name}`,
+        null, JSON.stringify({ type: "team_note", careRecipientId, noteId: id, page: "care-profile" }));
+    } catch (e) { captureException(e, { where: "notes: for_recipient push" }); }
+    const note = await readNoteForResponse(db, id);
+    return res.status(201).json({ note });
+  }
+
   // v1.76.0 — harvest structure from observations (non-blocking; chips appear when done)
   if (noteType === "observation" || noteType === "general") {
     try {
@@ -205,6 +241,9 @@ router.post("/", async (req, res) => {
       const { CAP } = require("../utils/capabilities");
       const notifyIds = new Set(await usersWithCapability(db, careRecipientId, CAP.READ_NOTES));
       notifyIds.delete(req.user.id); // never notify the author
+      // v1.130.0 — nor the person the note is about, on their own account. Observations are
+      // hidden from them (noteVisibility), and their phone gets only notes written TO them.
+      if (linkedUserId) notifyIds.delete(linkedUserId);
 
       // ─── v1.105.182 — Activity is the PAST, and a note left no trace in it ───
       //

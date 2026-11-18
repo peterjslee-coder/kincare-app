@@ -518,6 +518,8 @@ const toClientUser = window.toClientUser = (u, overrides = {}) => {
     onboardingComplete: u.onboarding_complete,
     selfOnboardingComplete: u.selfOnboardingComplete,
     careRecipientId: u.careRecipientId,
+    // v1.130.0 — the care team leader turned on this person's simple phone screen.
+    simpleMode: !!u.simpleMode,
     // The two that started this. Anything the server computes about who this person IS belongs
     // here, not in one caller.
     identityVerified: !!u.identityVerified,
@@ -1125,6 +1127,15 @@ const App = () => {
       fetchMe({ force: true }).then((data) => {
         if (data?.user) setCurrentUser(prev => ({ ...prev, ...data.user, account_approved: true }));
       }).catch(() => {});
+    });
+    return cleanup;
+  }, []);
+
+  // ─── v1.130.0 — the leader switched this person's simple phone screen on or off ───
+  useEffect(() => {
+    if (typeof onSocketEvent !== 'function') return;
+    const cleanup = onSocketEvent('simple_mode_changed', (payload) => {
+      setCurrentUser(prev => prev ? ({ ...prev, simpleMode: !!(payload && payload.on) }) : prev);
     });
     return cleanup;
   }, []);
@@ -2313,6 +2324,21 @@ const App = () => {
   };
 
   const isDemo = currentUser?.isDemo;
+
+  // ─── v1.130.0 — the simple phone screen ───
+  // The care team leader turned it on for this person. No sidebar, no tab bar, no What's New,
+  // no banners — one screen, built to be read inside Apple's Assistive Access frame. Not while
+  // an admin is viewing as them: that keeps the normal shell (and its exit), and CaredForView
+  // draws the same SimpleView inside it as the preview.
+  if (role === 'care_for' && currentUser?.simpleMode && !impersonating && !careBlocked
+      && typeof SimpleView !== 'undefined') {
+    return (
+      <div className="simple-mode-root">
+        <SimpleView />
+        <OfflineIndicator />
+      </div>
+    );
+  }
 
   const appContent = (
     <React.Fragment>
