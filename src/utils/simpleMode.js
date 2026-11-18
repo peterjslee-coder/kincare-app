@@ -13,6 +13,14 @@
 // silently drops off the call buttons; a stale id is never dialled.
 
 const MAX_CALLS = 3;
+const MAX_TEXT = 6;
+// v1.130.2 — Pete: "there's only three big buttons for now...if you pick two call buttons, you
+// only get one text button." Each call button counts one; Text, Tell the family and Messages
+// each count one when ticked.
+const MAX_BUTTONS = 3;
+function bigButtonCount({ show, callUserIds }) {
+  return (show.calls ? callUserIds.length : 0) + (show.text ? 1 : 0) + (show.tellFamily ? 1 : 0) + (show.messages ? 1 : 0);
+}
 
 // v1.130.1 — Pete: "put the thumbnails from the care team next to Sara and Daniel and
 // Peter...Same with Tina etc. Faces and names reminders are important." Lazy require: media.js
@@ -35,6 +43,10 @@ const SECTIONS = Object.freeze({
   comingUp: true,       // visits and appointments
   notesFromFamily: true, // the latest note written TO them
   messages: false,      // their message threads
+  // v1.130.2 — Pete: "I'd like to have a 'Text Button'... add me, sara, and daniel in a group.
+  // In my app, I would see her messages in the group. she would only see what she sent, and
+  // what the reply was. we would have the whole history."
+  text: false,          // the big Text button: a group thread with the people picked
   tellFamily: false,    // "I'm hungry", "My shoulder hurts" — a note FROM them to the team
 });
 
@@ -46,7 +58,12 @@ function parseSimpleMode(text) {
   // v1.130.1 — Pete: "The note that I leave betty...there's no way to clear it. it just stays
   // there." Clearing records the newest note id it cleared; a NEWER note shows again.
   const clearedNoteId = v && typeof v.clearedNoteId === "string" ? v.clearedNoteId : null;
-  return { on, callUserIds: [...new Set(ids)].slice(0, MAX_CALLS), show: cleanShow(v && v.show), clearedNoteId };
+  const tIds = v && Array.isArray(v.textUserIds) ? v.textUserIds.filter((x) => typeof x === "string") : [];
+  const textConversationId = v && typeof v.textConversationId === "string" ? v.textConversationId : null;
+  return {
+    on, callUserIds: [...new Set(ids)].slice(0, MAX_CALLS), show: cleanShow(v && v.show), clearedNoteId,
+    textUserIds: [...new Set(tIds)].slice(0, MAX_TEXT), textConversationId,
+  };
 }
 
 /** Known section keys only, booleans only; anything missing takes its default. */
@@ -143,37 +160,96 @@ async function simpleScreenFor(db, recipient, linkedUserId, todayStr) {
     if (mine) lastSent = { id: mine.id, content: mine.content, createdAt: mine.created_at };
   }
 
-  return { on: true, show, callContacts, comingUp, noteForYou, lastSent };
+  let text = null;
+  if (show.text && mode.textConversationId) text = await textScreenFor(db, mode, linkedUserId);
+
+  return { on: true, show, callContacts, comingUp, noteForYou, lastSent, text };
 }
 
-// Coming up — the next few visits and appointments, soonest first. Care-location dates and
-// times are naive strings (CLAUDE.md timezone principle), so they sort as strings.
+// ─── v1.130.2 — the Text button ───
+//
+// The family sees the whole thread in their Messages. The person sees only their own last
+// message and the replies to it — or, if someone in the group wrote first, the newest of that.
+// It is one ordinary group conversation, so nothing here is a second copy of a message.
+async function textScreenFor(db, mode, linkedUserId) {
+  const convId = mode.textConversationId;
+  const member = await db.prepare(
+    "SELECT last_read_at FROM conversation_members WHERE conversation_id = ? AND user_id = ?"
+  ).get(convId, linkedUserId);
+  if (!member) return null;
+  const people = await db.prepare(`
+    SELECT u.id, u.first_name, ${photoSql()}
+    FROM conversation_members cm JOIN users u ON u.id = cm.user_id
+    WHERE cm.conversation_id = ? AND cm.user_id != ?
+    ORDER BY u.first_name
+  `).all(convId, linkedUserId);
+  const to = people.map((u) => ({ userId: u.id, firstName: u.first_name, photo: photoUrl(u) }));
+  const byId = new Map(to.map((t) => [t.userId, t]));
+
+  const mine = await db.prepare(`
+    SELECT id, content, created_at FROM messages
+    WHERE conversation_id = ? AND sender_id = ? AND COALESCE(is_deleted, 0) = 0
+    ORDER BY created_at DESC LIMIT 1
+  `).get(convId, linkedUserId);
+  const replies = await db.prepare(`
+    SELECT id, sender_id, content, created_at FROM messages
+    WHERE conversation_id = ? AND sender_id != ? AND COALESCE(is_deleted, 0) = 0
+      AND created_at > ?
+    ORDER BY created_at ASC LIMIT 6
+  `).all(convId, linkedUserId, mine ? mine.created_at : new Date(0).toISOString());
+  const shown = mine ? replies : replies.slice(-2);
+  const lastRead = member.last_read_at ? new Date(member.last_read_at).getTime() : 0;
+  const unread = shown.filter((r) => new Date(r.created_at).getTime() > lastRead).length;
+
+  return {
+    conversationId: convId,
+    to,
+    mine: mine ? { id: mine.id, content: mine.content, createdAt: mine.created_at } : null,
+    replies: shown.map((r) => {
+      const who = byId.get(r.sender_id);
+      return { id: r.id, content: r.content, createdAt: r.created_at, from: who ? who.firstName : "Family", fromPhoto: who ? who.photo : null };
+    }),
+    unread,
+  };
+}
+
+// Coming up — today and tomorrow only, soonest first. Pete, 11/17: "we don't need more than the
+// next day's events... if she had an appointment, it would show like 'Haircut at Angies - 1PM'
+// ... That way I can put Church pickup on there and she'll be reminded." Care-location dates and
+// times are naive strings (CLAUDE.md timezone principle), so they compare as strings.
+function nextDayStr(dateStr) {
+  const d = new Date(`${dateStr}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
 async function comingUpFor(db, recipientId, todayStr) {
   const recipient = { id: recipientId };
+  const tomorrowStr = nextDayStr(todayStr);
   const sessions = await db.prepare(`
     SELECT cs.id, cs.scheduled_date AS date, cs.scheduled_time AS time, cs.status,
            u.id AS who_id, u.first_name AS who, ${photoSql()}
     FROM care_sessions cs
     LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
     LEFT JOIN users u ON cp.user_id = u.id
-    WHERE cs.care_recipient_id = ? AND cs.scheduled_date >= ?
+    WHERE cs.care_recipient_id = ? AND cs.scheduled_date >= ? AND cs.scheduled_date <= ?
       AND cs.status IN ('confirmed', 'in_progress')
     ORDER BY cs.scheduled_date ASC, cs.scheduled_time ASC
-    LIMIT 4
-  `).all(recipient.id, todayStr);
+    LIMIT 8
+  `).all(recipient.id, todayStr, tomorrowStr);
   const events = await db.prepare(`
     SELECT id, title, event_date AS date, event_time AS time, location
     FROM care_events
-    WHERE care_recipient_id = ? AND is_active = 1 AND event_date >= ?
+    WHERE care_recipient_id = ? AND is_active = 1 AND event_date >= ? AND event_date <= ?
     ORDER BY event_date ASC, event_time ASC NULLS LAST
-    LIMIT 4
-  `).all(recipient.id, todayStr);
+    LIMIT 8
+  `).all(recipient.id, todayStr, tomorrowStr);
   return [
     ...sessions.map((s) => ({ kind: "visit", id: s.id, date: s.date, time: s.time || null, who: s.who || null, whoPhoto: s.who_id ? photoUrl({ id: s.who_id, has_photo: s.has_photo }) : null, inProgress: s.status === "in_progress" })),
     ...events.map((e) => ({ kind: "appointment", id: e.id, date: e.date, time: e.time || null, title: e.title, location: e.location || null })),
   ]
     .sort((a, b) => (a.date + (a.time || "99:99")).localeCompare(b.date + (b.time || "99:99")))
-    .slice(0, 3);
+    .slice(0, 8);
 }
 
-module.exports = { MAX_CALLS, SECTIONS, parseSimpleMode, cleanShow, callCandidates, simpleScreenFor, telDigits };
+module.exports = { MAX_CALLS, MAX_TEXT, MAX_BUTTONS, bigButtonCount, SECTIONS, parseSimpleMode, cleanShow, callCandidates, simpleScreenFor, telDigits };

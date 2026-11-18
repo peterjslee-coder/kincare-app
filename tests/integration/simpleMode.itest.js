@@ -19,13 +19,19 @@ jest.setTimeout(180000);
 
 let h, db, leader, sister, stranger, mom, recipientId, teamId;
 
-const soon = (d) => { const x = new Date(); x.setDate(x.getDate() + d); return x.toISOString().slice(0, 10); };
+// Care-location days (the recipient's zone defaults to Eastern), not UTC: at 9 PM in Virginia
+// the UTC date is already tomorrow.
+const soon = (d) => {
+  const today = require("../../src/utils/timezone").getTodayStringInZone("America/New_York");
+  const x = new Date(`${today}T12:00:00Z`); x.setUTCDate(x.getUTCDate() + d); return x.toISOString().slice(0, 10);
+};
 
 beforeAll(async () => {
   h = await startHarness({ routers: {
     "/api/care-recipients": "../../src/routes/careRecipients",
     "/api/notes": "../../src/routes/notes",
     "/api/dashboard": "../../src/routes/dashboard",
+    "/api/messages": "../../src/routes/messages",
   } });
   db = h.db;
   leader = await h.createUser({ firstName: "Pete", lastName: "ITest" });
@@ -105,9 +111,12 @@ test("her dashboard carries the simple screen: call Pete, coming up, the note", 
   // Faces: Tina has a profile photo, Pete has none (initial instead).
   await db.prepare("UPDATE users SET profile_photo = 'data:image/png;base64,iVBORw0KGgo=' WHERE id = ?").run(cgUser.user.id);
   await db.prepare(`INSERT INTO care_sessions (id, care_recipient_id, family_user_id, caregiver_id, scheduled_date, scheduled_time, duration_hours, service_type, status, created_at)
-    VALUES (?, ?, ?, ?, ?, '10:00', 2, 'companionship', 'confirmed', NOW())`).run(uuid(), recipientId, leader.user.id, cgProfile, soon(2));
+    VALUES (?, ?, ?, ?, ?, '10:00', 2, 'companionship', 'confirmed', NOW())`).run(uuid(), recipientId, leader.user.id, cgProfile, soon(1));
+  // Two days out: not on her screen (today and tomorrow only).
   await db.prepare(`INSERT INTO care_events (id, care_recipient_id, created_by, title, event_date, event_time, starts_at)
-    VALUES (?, ?, ?, 'Eye doctor', ?, '14:00', NOW() + INTERVAL '1 day')`).run(uuid(), recipientId, leader.user.id, soon(1));
+    VALUES (?, ?, ?, 'Dentist', ?, '09:00', NOW() + INTERVAL '2 days')`).run(uuid(), recipientId, leader.user.id, soon(2));
+  await db.prepare(`INSERT INTO care_events (id, care_recipient_id, created_by, title, event_date, event_time, starts_at)
+    VALUES (?, ?, ?, 'Eye doctor', ?, '14:00', NOW() + INTERVAL '1 day')`).run(uuid(), recipientId, leader.user.id, soon(0));
 
   const d = await h.request.get("/api/dashboard").set(h.auth(mom.token));
   expect(d.status).toBe(200);
@@ -116,6 +125,7 @@ test("her dashboard carries the simple screen: call Pete, coming up, the note", 
   expect(s.callContacts).toEqual([{ userId: leader.user.id, firstName: "Pete", phone: "5405551234", photo: null }]);
   expect(s.noteForYou).toMatchObject({ content: "I'll be there at 10. Stay in the house.", from: "Pete" });
   expect(s.comingUp.map((c) => c.kind)).toEqual(["appointment", "visit"]);
+  expect(JSON.stringify(s.comingUp)).not.toContain("Dentist");
   expect(s.comingUp[1]).toMatchObject({ who: "Tina", time: "10:00", whoPhoto: `/api/media/user/${cgUser.user.id}/photo` });
   // Her own notes view still hides the observation written about her.
   expect(JSON.stringify(d.body.notes || [])).not.toContain("Seemed tired");
@@ -229,4 +239,85 @@ describe("v1.130.1", () => {
     ).get(mom.user.id, mom.user.id);
     expect(c.n).toBeGreaterThanOrEqual(2);
   });
+});
+
+
+// ─── v1.130.2 — the Text button ───
+describe("v1.130.2 Text button", () => {
+  const put = (body) => h.request.put(`/api/care-recipients/${recipientId}/simple-mode`).set(h.auth(leader.token)).send(body);
+  const dash = () => h.request.get("/api/dashboard").set(h.auth(mom.token));
+  let convId;
+
+  test("ticking Text and picking people makes ONE group: her + the people picked", async () => {
+    const r = await put({ on: true, callUserIds: [], show: { text: true }, textUserIds: [leader.user.id, sister.user.id] });
+    expect(r.status).toBe(200);
+    convId = r.body.textConversationId;
+    expect(convId).toBeTruthy();
+    const members = (await db.prepare("SELECT user_id FROM conversation_members WHERE conversation_id = ?").all(convId)).map((m) => m.user_id).sort();
+    expect(members).toEqual([leader.user.id, sister.user.id, mom.user.id].sort());
+    const conv = await db.prepare("SELECT type, name FROM conversations WHERE id = ?").get(convId);
+    expect(conv).toMatchObject({ type: "group", name: "Betty's texts" });
+    // Saving again reuses the same thread.
+    const again = await put({ on: true, callUserIds: [], textUserIds: [leader.user.id, sister.user.id] });
+    expect(again.body.textConversationId).toBe(convId);
+    // Only team members.
+    expect((await put({ on: true, callUserIds: [], textUserIds: [stranger.user.id] })).status).toBe(400);
+  });
+
+  test("she texts the group; they're told who, never what", async () => {
+    const s0 = (await dash()).body.simpleScreen.text;
+    expect(s0.to.map((t) => t.firstName).sort()).toEqual(["Pete", "Sara"]);
+    expect(s0.mine).toBeNull();
+    mockPush.mockClear();
+    const r = await h.request.post(`/api/messages/conversations/${convId}`).set(h.auth(mom.token)).send({ content: "Call me when you can" });
+    expect(r.status).toBe(201);
+    const to = mockPush.mock.calls.map((c) => c[0]).sort();
+    expect(to).toEqual([leader.user.id, sister.user.id].sort());
+    for (const c of mockPush.mock.calls) expect(JSON.stringify(c[1])).not.toContain("Call me");
+  });
+
+  test("she sees her last text and the replies to it; the family sees the whole thread", async () => {
+    await new Promise((r) => setTimeout(r, 20));
+    await h.request.post(`/api/messages/conversations/${convId}`).set(h.auth(leader.token)).send({ content: "Calling at 3" });
+    const t = (await dash()).body.simpleScreen.text;
+    expect(t.mine.content).toBe("Call me when you can");
+    expect(t.replies.map((x) => [x.from, x.content])).toEqual([["Pete", "Calling at 3"]]);
+    expect(t.unread).toBe(1);
+    // Opening the thread reads it.
+    await h.request.get(`/api/messages/conversations/${convId}`).set(h.auth(mom.token));
+    expect((await dash()).body.simpleScreen.text.unread).toBe(0);
+    // A new text from her hides the older exchange on her screen.
+    await new Promise((r) => setTimeout(r, 20));
+    await h.request.post(`/api/messages/conversations/${convId}`).set(h.auth(mom.token)).send({ content: "I'm OK" });
+    const t2 = (await dash()).body.simpleScreen.text;
+    expect(t2.mine.content).toBe("I'm OK");
+    expect(t2.replies).toEqual([]);
+    // Pete's Messages has all three.
+    const full = await h.request.get(`/api/messages/conversations/${convId}`).set(h.auth(leader.token));
+    const contents = JSON.stringify(full.body);
+    for (const c of ["Call me when you can", "Calling at 3", "I'm OK"]) expect(contents).toContain(c);
+  });
+
+  test("taking someone off the list takes them out of the group", async () => {
+    await put({ on: true, callUserIds: [], textUserIds: [leader.user.id] });
+    const members = (await db.prepare("SELECT user_id FROM conversation_members WHERE conversation_id = ?").all(convId)).map((m) => m.user_id);
+    expect(members).not.toContain(sister.user.id);
+    expect(members).toEqual(expect.arrayContaining([leader.user.id, mom.user.id]));
+  });
+
+  test("Text ticked off: nothing about the thread is sent to her phone", async () => {
+    await put({ on: true, callUserIds: [], show: { text: false } });
+    expect((await dash()).body.simpleScreen.text).toBeNull();
+  });
+});
+
+
+test("three big buttons at most: two call buttons leave room for one more", async () => {
+  const put = (body) => h.request.put(`/api/care-recipients/${recipientId}/simple-mode`).set(h.auth(leader.token)).send(body);
+  await db.prepare("UPDATE users SET phone = '5405559999' WHERE id = ?").run(sister.user.id);
+  const two = await put({ on: true, callUserIds: [leader.user.id, sister.user.id], show: { calls: true, text: true, tellFamily: false, messages: false }, textUserIds: [leader.user.id] });
+  expect(two.status).toBe(200);
+  const four = await put({ on: true, callUserIds: [leader.user.id, sister.user.id], show: { calls: true, text: true, tellFamily: true } });
+  expect(four.status).toBe(400);
+  expect(four.body.error).toMatch(/Up to 3 big buttons/);
 });

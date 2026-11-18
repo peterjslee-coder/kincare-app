@@ -142,6 +142,29 @@ const simpleAgo = (iso) => {
 
 // v1.130.1 — the quick things the person can tell the family with one tap. `attention` ones
 // arrive as "needs attention" (they are the ones someone should act on soon).
+// v1.130.2 — the Text button's one-tap messages. Plain things a person says to family.
+const TEXT_QUICK = ['Call me when you can', "I'm OK", 'Thank you', 'I love you'];
+
+// "Peter", "Peter & Sara", "Peter, Sara & Daniel", "Peter, Sara & 2 more"
+const simpleNames = (people) => {
+  const n = (people || []).map((p) => p.firstName).filter(Boolean);
+  if (n.length <= 1) return n[0] || 'the family';
+  if (n.length === 2) return `${n[0]} & ${n[1]}`;
+  if (n.length === 3) return `${n[0]}, ${n[1]} & ${n[2]}`;
+  return `${n[0]}, ${n[1]} & ${n.length - 2} more`;
+};
+
+// A small row of overlapping faces.
+const SimpleFaces = ({ people, size = 48, ring }) => (
+  <div style={{ display: 'flex', flexShrink: 0 }}>
+    {(people || []).slice(0, 3).map((p, i) => (
+      <div key={p.userId} style={{ marginLeft: i ? -size * 0.3 : 0 }}>
+        <SimpleFace photo={p.photo} name={p.firstName} size={size} ring={ring} />
+      </div>
+    ))}
+  </div>
+);
+
 const TELL_FAMILY_QUICK = [
   { text: "I'm hungry", icon: '🍽️', attention: false },
   { text: 'I have pain', icon: '🩹', attention: true },
@@ -241,6 +264,7 @@ const SimpleView = window.SimpleView = ({ initial }) => {
       offs.push(onSocketEvent('activity_update', () => load()));
       offs.push(onSocketEvent('simple_screen_refresh', () => load()));
       offs.push(onSocketEvent('simple_mode_changed', () => load()));
+      offs.push(onSocketEvent('new_message', () => load())); // v1.130.2 — a reply to her text
     }
     return () => { clearInterval(iv); document.removeEventListener('visibilitychange', onVis); offs.forEach((o) => o && o()); };
   }, []);
@@ -272,6 +296,13 @@ const SimpleView = window.SimpleView = ({ initial }) => {
   const s = data?.simpleScreen || {};
   const show = s.show || { calls: true, comingUp: true, notesFromFamily: true };
 
+  // Opening the thread is reading it: the ordinary conversation read marks it read for her
+  // (and skips it while an admin is viewing as her).
+  const openText = () => {
+    setSentMsg(''); setTellText(''); setPanel('text');
+    if (s.text?.conversationId) apiFetch(`/api/messages/conversations/${s.text.conversationId}`).catch(() => {});
+  };
+
   // ── Messages: the ordinary Messages screen, under a big way home ──
   if (panel === 'messages' && show.messages && typeof Messages !== 'undefined') {
     return (
@@ -279,6 +310,84 @@ const SimpleView = window.SimpleView = ({ initial }) => {
         {backBar}
         <div style={{ height: 'calc(100vh - 110px)', overflow: 'hidden', borderRadius: 16, background: 'var(--bg-card)' }}>
           <Messages />
+        </div>
+      </div>
+    );
+  }
+
+  // ── v1.130.2 — the Text button: her last message and the replies to it, big ──
+  if (panel === 'text' && show.text && s.text) {
+    const t = s.text;
+    const names = simpleNames(t.to);
+    const sendText = async (body) => {
+      const c = String(body || '').trim();
+      if (!c || sending) return;
+      setSending(true);
+      try {
+        const res = await apiFetch(`/api/messages/conversations/${t.conversationId}`, { method: 'POST', body: JSON.stringify({ content: c }) });
+        if (res?.ok) { setTellText(''); setSentMsg(`Sent to ${names}`); await load(); }
+        else setSentMsg("That didn't send. Please try again.");
+      } catch { setSentMsg("That didn't send. Please try again."); }
+      setSending(false);
+    };
+    const bubble = (fromMe) => ({
+      maxWidth: '88%', alignSelf: fromMe ? 'flex-end' : 'flex-start', padding: '14px 18px', borderRadius: 22,
+      background: fromMe ? 'var(--role-color)' : 'var(--bg-card)', color: fromMe ? 'var(--text-on-primary)' : 'var(--text-primary)',
+      border: fromMe ? 'none' : '2px solid var(--border-color)', fontSize: 26, fontWeight: 600, lineHeight: 1.3,
+      whiteSpace: 'pre-wrap', overflowWrap: 'anywhere',
+    });
+    return (
+      <div style={page} className="simple-view">
+        {backBar}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '6px 0 14px' }}>
+          <SimpleFaces people={t.to} size={52} />
+          <div style={{ fontSize: 26, fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1.2 }}>Text {names}</div>
+        </div>
+
+        {(t.mine || t.replies.length > 0) && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 18 }}>
+            {t.mine && (
+              <>
+                <div style={{ fontSize: 18, color: 'var(--text-secondary)', alignSelf: 'flex-end' }}>You, {simpleAgo(t.mine.createdAt)}</div>
+                <div style={bubble(true)}>{t.mine.content}</div>
+              </>
+            )}
+            {t.replies.map((r) => (
+              <div key={r.id} style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
+                <SimpleFace photo={r.fromPhoto} name={r.from} size={48} />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
+                  <div style={{ fontSize: 18, color: 'var(--text-secondary)' }}>{r.from}, {simpleAgo(r.createdAt)}</div>
+                  <div style={bubble(false)}>{r.content}</div>
+                </div>
+              </div>
+            ))}
+            {t.mine && t.replies.length === 0 && (
+              <div style={{ fontSize: 20, color: 'var(--text-secondary)' }}>No answer yet. They'll write back here.</div>
+            )}
+          </div>
+        )}
+
+        {sentMsg && (
+          <div style={{ ...card, borderColor: 'var(--role-color)', borderWidth: 3, fontSize: 22, fontWeight: 700, color: 'var(--text-primary)' }}>
+            {sentMsg.startsWith('Sent') ? '✅ ' : ''}{sentMsg}
+          </div>
+        )}
+
+        {TEXT_QUICK.map((q) => (
+          <button key={q} disabled={sending} onClick={() => sendText(q)}
+            style={{ ...bigBtn('var(--bg-card)', 'var(--text-primary)'), border: '2px solid var(--border-color)', minHeight: 76, fontSize: 26 }}>
+            {q}
+          </button>
+        ))}
+        <div style={{ ...card, marginTop: 8 }}>
+          <div style={label}>Or write your own</div>
+          <textarea value={tellText} maxLength={1000} rows={3} onChange={(e) => setTellText(e.target.value)}
+            placeholder="Type here, or tap the microphone on the keyboard to talk"
+            style={{ width: '100%', fontSize: 24, padding: 14, borderRadius: 14, border: '2px solid var(--border-color)', boxSizing: 'border-box', fontFamily: 'inherit', resize: 'vertical' }} />
+          <button disabled={sending || !tellText.trim()} onClick={() => sendText(tellText)}
+            style={{ ...bigBtn('var(--role-color)', 'var(--text-on-primary)'), marginTop: 12, marginBottom: 0, opacity: (sending || !tellText.trim()) ? 0.6 : 1 }}>
+            {sending ? 'Sending…' : 'Send'}
+          </button>
         </div>
       </div>
     );
@@ -333,14 +442,22 @@ const SimpleView = window.SimpleView = ({ initial }) => {
   const coming = s.comingUp || [];
   const note = show.notesFromFamily ? s.noteForYou : null;
 
+  // v1.130.2 — one line each, under a Today / Tomorrow heading: "Tina comes at 10:00 AM",
+  // "Haircut at Angie's — 1:00 PM", "Church pickup — 9:30 AM".
   const comingLine = (c) => {
-    const when = `${simpleFmtDay(c.date)}${c.time ? ` at ${simpleFmtTime(c.time)}` : ''}`;
+    const at = c.time ? simpleFmtTime(c.time) : '';
     if (c.kind === 'visit') {
-      if (c.inProgress) return { big: `${c.who || 'Your caregiver'} is here now`, small: null };
-      return { big: `${c.who || 'A caregiver'} comes ${when}`, small: null };
+      if (c.inProgress) return `${c.who || 'Your caregiver'} is here now`;
+      return `${c.who || 'A caregiver'} comes${at ? ` at ${at}` : ''}`;
     }
-    return { big: c.title, small: `${when}${c.location ? ` · ${c.location}` : ''}` };
+    return `${c.title}${c.location ? ` at ${c.location}` : ''}${at ? ` — ${at}` : ''}`;
   };
+  const comingDays = [];
+  for (const c of coming) {
+    const day = simpleFmtDay(c.date);
+    const last = comingDays[comingDays.length - 1];
+    if (last && last.day === day) last.items.push(c); else comingDays.push({ day, items: [c] });
+  }
 
   return (
     <div style={page} className="simple-view">
@@ -385,6 +502,28 @@ const SimpleView = window.SimpleView = ({ initial }) => {
         </a>
       ))}
 
+      {/* v1.130.2 — a reply waiting: show it on the home screen, big, so it is not missed */}
+      {show.text && s.text && s.text.unread > 0 && s.text.replies.length > 0 && (() => {
+        const r = s.text.replies[s.text.replies.length - 1];
+        return (
+          <button onClick={openText} style={{ ...card, display: 'block', width: '100%', textAlign: 'left', cursor: 'pointer', borderColor: 'var(--role-color)', borderWidth: 3, fontFamily: 'inherit' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+              <SimpleFace photo={r.fromPhoto} name={r.from} size={56} />
+              <div style={{ ...label, margin: 0 }}>{r.from} wrote back</div>
+            </div>
+            <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.3, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{r.content}</div>
+            <div style={{ fontSize: 20, color: 'var(--role-color)', fontWeight: 700, marginTop: 10 }}>Tap to answer</div>
+          </button>
+        );
+      })()}
+
+      {show.text && s.text && (
+        <button onClick={openText} style={{ ...bigBtn('var(--role-color)', 'var(--text-on-primary)'), justifyContent: 'flex-start', padding: '10px 18px' }} aria-label={`Text ${simpleNames(s.text.to)}`}>
+          <SimpleFaces people={s.text.to} size={60} ring="#fff" />
+          <span style={{ flex: 1, textAlign: 'center', fontSize: 28 }}><span aria-hidden="true">{'💬'}</span> Text {s.text.to.length > 2 ? 'my family' : simpleNames(s.text.to)}</span>
+        </button>
+      )}
+
       {show.messages && (
         <button onClick={() => setPanel('messages')} style={bigBtn('var(--role-color)', 'var(--text-on-primary)')}>
           <span aria-hidden="true" style={{ fontSize: 32 }}>{'💬'}</span> Messages
@@ -401,22 +540,21 @@ const SimpleView = window.SimpleView = ({ initial }) => {
       {show.comingUp && (
         <div style={{ ...card, marginTop: 8 }}>
           <div style={label}>Coming up</div>
-          {coming.length === 0 ? (
-            <div style={{ fontSize: 24, color: 'var(--text-primary)' }}>Nothing scheduled in the next few days.</div>
-          ) : coming.map((c, i) => {
-            const l = comingLine(c);
-            return (
-              <div key={c.kind + c.id} style={{ padding: '12px 0', borderTop: i ? '2px solid var(--border-color)' : 'none', display: 'flex', alignItems: 'center', gap: 14 }}>
-                {c.kind === 'visit'
-                  ? <SimpleFace photo={c.whoPhoto} name={c.who} size={64} />
-                  : <div aria-hidden="true" style={{ width: 64, height: 64, borderRadius: 32, background: 'var(--bg-surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 30, flexShrink: 0 }}>{'📅'}</div>}
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 26, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.25 }}>{l.big}</div>
-                  {l.small && <div style={{ fontSize: 22, color: 'var(--text-secondary)', marginTop: 4, lineHeight: 1.3 }}>{l.small}</div>}
+          {comingDays.length === 0 ? (
+            <div style={{ fontSize: 24, color: 'var(--text-primary)' }}>Nothing today or tomorrow.</div>
+          ) : comingDays.map((g) => (
+            <div key={g.day} style={{ marginTop: 6 }}>
+              <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--role-color)', margin: '6px 0 2px' }}>{g.day}</div>
+              {g.items.map((c, i) => (
+                <div key={c.kind + c.id} style={{ padding: '10px 0', borderTop: i ? '2px solid var(--border-color)' : 'none', display: 'flex', alignItems: 'center', gap: 14 }}>
+                  {c.kind === 'visit'
+                    ? <SimpleFace photo={c.whoPhoto} name={c.who} size={64} />
+                    : <div aria-hidden="true" style={{ width: 64, height: 64, borderRadius: 32, background: 'var(--bg-surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 30, flexShrink: 0 }}>{'📅'}</div>}
+                  <div style={{ minWidth: 0, fontSize: 26, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.25 }}>{comingLine(c)}</div>
                 </div>
-              </div>
-            );
-          })}
+              ))}
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -450,10 +588,11 @@ const noteStatusLine = (n, name) => {
 // What the leader can tick, in the order it appears on the phone.
 const SIMPLE_SECTIONS = [
   ['notesFromFamily', 'Notes from the family', 'The latest note you leave shows big at the top.'],
+  ['text', 'Text button', 'A big button that texts the people you pick below, as one group. You all see the whole thread in Messages; NAME sees only their last text and your replies.'],
   ['calls', 'Call buttons', 'Big buttons that ring the people you pick below. They don\u2019t work inside iPhone Assistive Access yet; use the Calls app there.'],
   ['messages', 'Messages', 'Read and send messages with the care team.'],
   ['tellFamily', 'Tell the family', 'One-tap notes like "I’m hungry" or "I have pain", or typed. You get a "tap to read" notice; pain and "I need help" come as needs attention.'],
-  ['comingUp', 'Coming up', 'Upcoming visits and appointments.'],
+  ['comingUp', 'Coming up', 'Today\u2019s and tomorrow\u2019s visits and appointments, like "Haircut at Angie\u2019s — 1:00 PM".'],
 ];
 
 const SimpleModeSettings = window.SimpleModeSettings = ({ recipientId, firstName }) => {
@@ -461,6 +600,7 @@ const SimpleModeSettings = window.SimpleModeSettings = ({ recipientId, firstName
   const [cfg, setCfg] = useState(null);
   const [on, setOn] = useState(false);
   const [picked, setPicked] = useState([]);
+  const [textPicked, setTextPicked] = useState([]);
   const [show, setShow] = useState({});
   const [saving, setSaving] = useState(false);
   const [noteText, setNoteText] = useState('');
@@ -473,7 +613,7 @@ const SimpleModeSettings = window.SimpleModeSettings = ({ recipientId, firstName
       const res = await apiFetch(`/api/care-recipients/${recipientId}/simple-mode`);
       if (res?.ok) {
         const d = await res.json();
-        setCfg(d); setOn(d.on); setPicked(d.callUserIds || []); setShow(d.show || {}); setLastNote(d.lastNote || null);
+        setCfg(d); setOn(d.on); setPicked(d.callUserIds || []); setTextPicked(d.textUserIds || []); setShow(d.show || {}); setLastNote(d.lastNote || null);
       }
     } catch { /* the card stays in its loading state */ }
   };
@@ -486,12 +626,12 @@ const SimpleModeSettings = window.SimpleModeSettings = ({ recipientId, firstName
 
   const save = async (patch, okText = 'Saved') => {
     setSaving(true);
-    const body = { on, callUserIds: picked, show, ...patch };
+    const body = { on, callUserIds: picked, textUserIds: textPicked, show, ...patch };
     try {
       const res = await apiFetch(`/api/care-recipients/${recipientId}/simple-mode`, { method: 'PUT', body: JSON.stringify(body) });
       const d = await res?.json().catch(() => ({}));
       if (res?.ok) {
-        setOn(d.on); setPicked(d.callUserIds); setShow(d.show || show);
+        setOn(d.on); setPicked(d.callUserIds); setTextPicked(d.textUserIds || []); setShow(d.show || show);
         if (patch.clearNote) setLastNote(null);
         showToast(okText, 'success');
       } else showToast(d?.error || 'Could not save', 'error');
@@ -526,6 +666,8 @@ const SimpleModeSettings = window.SimpleModeSettings = ({ recipientId, firstName
 
   if (!cfg) return null;
   if (!cfg.hasOwnLogin) return null;
+  // v1.130.2 — three big buttons at most; the server enforces it too.
+  const buttonsUsed = (show.calls ? picked.length : 0) + (show.text ? 1 : 0) + (show.tellFamily ? 1 : 0) + (show.messages ? 1 : 0);
 
   const box = { marginBottom: 20, paddingBottom: 20, borderBottom: '1px solid var(--border-light, #f0f0f0)' };
   const sub = { fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', margin: '4px 0 6px' };
@@ -542,13 +684,13 @@ const SimpleModeSettings = window.SimpleModeSettings = ({ recipientId, firstName
 
       {on && (
         <>
-          <div style={sub}>What {name} can see</div>
+          <div style={sub}>What {name} can see <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>· up to {cfg.maxButtons || 3} big buttons (each call button, Text, Tell the family, Messages): {buttonsUsed} used</span></div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
             {SIMPLE_SECTIONS.map(([key, title, desc]) => (
               <label key={key} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, color: 'var(--text-primary)', cursor: 'pointer' }}>
                 <input type="checkbox" disabled={saving} checked={!!show[key]} onChange={(e) => save({ show: { ...show, [key]: e.target.checked } })}
                   style={{ width: 16, height: 16, marginTop: 2, accentColor: 'var(--role-color)' }} />
-                <span><strong>{title}</strong> <span style={{ color: 'var(--text-secondary)' }}>— {desc}</span></span>
+                <span><strong>{title}</strong> <span style={{ color: 'var(--text-secondary)' }}>— {desc.replace('NAME', name)}</span></span>
               </label>
             ))}
           </div>
@@ -558,6 +700,32 @@ const SimpleModeSettings = window.SimpleModeSettings = ({ recipientId, firstName
               ? <>Last opened the app: <strong>{simpleClock(cfg.lastOpenedAt)}</strong> {'·'} {cfg.opens7d} time{cfg.opens7d === 1 ? '' : 's'} in the last 7 days</>
               : <>{name} hasn't opened the simple screen yet.</>}
           </div>
+
+          {show.text && (
+            <>
+              <div style={sub}>Who the Text button goes to (one group)</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 6 }}>
+                {cfg.candidates.map((c) => (
+                  <label key={c.userId} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-primary)', cursor: 'pointer' }}>
+                    <input type="checkbox" disabled={saving} checked={textPicked.includes(c.userId)}
+                      onChange={() => {
+                        const next = textPicked.includes(c.userId) ? textPicked.filter((x) => x !== c.userId) : [...textPicked, c.userId];
+                        if (next.length > (cfg.maxText || 6)) { showToast(`Pick up to ${cfg.maxText || 6} people`, 'error'); return; }
+                        setTextPicked(next);
+                        save({ textUserIds: next });
+                      }}
+                      style={{ width: 16, height: 16, accentColor: 'var(--role-color)' }} />
+                    {c.firstName} {c.lastName}
+                  </label>
+                ))}
+              </div>
+              <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 14px', lineHeight: 1.5 }}>
+                {textPicked.length
+                  ? `The group "${name}'s texts" is in Messages for everyone picked.`
+                  : `Pick at least one person, and the Text button appears on ${name}'s screen.`}
+              </p>
+            </>
+          )}
 
           {show.calls && (
             <>

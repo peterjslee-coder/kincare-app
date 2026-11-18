@@ -30,7 +30,7 @@ const WN_PREVIEWS = {
   simpleChoices: () => (
     <div style={{ padding: '12px 12px 10px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>
       <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>What Mom can see</div>
-      {[['Notes from the family', true], ['Call buttons', true], ['Messages', false], ['Tell the family', true], ['Coming up', true]].map(([t, on]) => (
+      {[['Notes from the family', true], ['Text button', true], ['Call buttons', false], ['Tell the family', false], ['Coming up', true]].map(([t, on]) => (
         <div key={t} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-primary)', marginBottom: 3 }}>
           <span style={{ width: 14, height: 14, borderRadius: 3, border: '1.5px solid var(--role-color)', background: on ? 'var(--role-color)' : 'transparent', color: 'var(--text-on-primary)', fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{on ? '✓' : ''}</span>{t}
         </div>

@@ -553,6 +553,33 @@ async function leaderOrOwner(db, recipientId, userId) {
   return { cr, ok: !!lead };
 }
 
+// v1.130.2 — one group conversation for the Text button. Reuses the row it was given when it
+// still exists; otherwise creates it. Members = the person + exactly the people picked (the
+// leader who set it up is the group's admin, and stays in only if picked).
+async function syncTextGroup(db, { convId, leaderId, linkedUserId, memberIds, name }) {
+  let id = convId;
+  if (id) {
+    const exists = await db.prepare("SELECT id FROM conversations WHERE id = ?").get(id);
+    if (!exists) id = null;
+  }
+  if (!id) {
+    id = uuid();
+    await db.prepare("INSERT INTO conversations (id, type, name, created_by) VALUES (?, 'group', ?, ?)").run(id, name, leaderId);
+  }
+  const want = new Set([linkedUserId, ...memberIds]);
+  const have = new Set((await db.prepare("SELECT user_id FROM conversation_members WHERE conversation_id = ?").all(id)).map((r) => r.user_id));
+  for (const uid of want) {
+    if (!have.has(uid)) {
+      await db.prepare("INSERT INTO conversation_members (id, conversation_id, user_id, role) VALUES (?, ?, ?, ?)")
+        .run(uuid(), id, uid, uid === leaderId ? "admin" : "member");
+    }
+  }
+  for (const uid of have) {
+    if (!want.has(uid)) await db.prepare("DELETE FROM conversation_members WHERE conversation_id = ? AND user_id = ?").run(id, uid);
+  }
+  return id;
+}
+
 router.get("/:id/simple-mode", requireRole("family"), async (req, res) => {
   try {
     const db = await getDb();
@@ -584,6 +611,9 @@ router.get("/:id/simple-mode", requireRole("family"), async (req, res) => {
       on: mode.on,
       show: mode.show,
       callUserIds: mode.callUserIds,
+      textUserIds: mode.textUserIds,
+      maxText: sm.MAX_TEXT,
+      maxButtons: sm.MAX_BUTTONS,
       maxCalls: sm.MAX_CALLS,
       candidates: candidates.map((c) => ({ userId: c.userId, firstName: c.firstName, lastName: c.lastName, hasPhone: !!c.phone })),
     });
@@ -620,8 +650,28 @@ router.put("/:id/simple-mode", requireRole("family"), async (req, res) => {
       ).get(cr.id);
       clearedNoteId = latest ? latest.id : null;
     }
+    // v1.130.2 — the Text button's group: the person plus the people picked. Created once and
+    // kept in step after that, so the family's history in it is never split across threads.
+    let textUserIds = prev.textUserIds;
+    if (Array.isArray(req.body.textUserIds)) {
+      textUserIds = [...new Set(req.body.textUserIds.filter((x) => typeof x === "string"))];
+      if (textUserIds.length > sm.MAX_TEXT) return res.status(400).json({ error: `Pick up to ${sm.MAX_TEXT} people` });
+      if (textUserIds.some((id) => !candidates.has(id))) return res.status(400).json({ error: "Texts can only go to people on the care team" });
+    }
+    // Three big buttons at most on the screen (calls + Text + Tell the family + Messages).
+    if (on && sm.bigButtonCount({ show, callUserIds: ids }) > sm.MAX_BUTTONS) {
+      return res.status(400).json({ error: `Up to ${sm.MAX_BUTTONS} big buttons. Untick one first.` });
+    }
+    let textConversationId = prev.textConversationId;
+    if (show.text && linkedUserId && textUserIds.length) {
+      textConversationId = await syncTextGroup(db, {
+        convId: textConversationId, leaderId: req.user.id, linkedUserId, memberIds: textUserIds,
+        name: `${cr.first_name}'s texts`,
+      });
+    }
+
     await db.prepare("UPDATE care_recipients SET simple_mode = ?, updated_at = NOW() WHERE id = ?")
-      .run(JSON.stringify({ on, callUserIds: ids, show, clearedNoteId }), cr.id);
+      .run(JSON.stringify({ on, callUserIds: ids, show, clearedNoteId, textUserIds, textConversationId }), cr.id);
 
     // Messages ticked on: the person can only message someone they are connected to, and an
     // account the leader set up (v1.129.4) was never connected to anyone. Connect them to the
@@ -646,7 +696,7 @@ router.put("/:id/simple-mode", requireRole("family"), async (req, res) => {
         emitToUser(linkedUserId, "simple_screen_refresh", { reason: "settings" });
       }
     }
-    res.json({ on, callUserIds: ids, show, noteCleared: !!clearedNoteId && req.body.clearNote === true });
+    res.json({ on, callUserIds: ids, show, textUserIds, textConversationId, noteCleared: !!clearedNoteId && req.body.clearNote === true });
   } catch (err) {
     captureException(err, { where: "careRecipients: put simple-mode" });
     res.status(500).json({ error: "Couldn't save the phone settings" });
