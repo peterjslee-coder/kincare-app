@@ -44,7 +44,7 @@ describe("P1 — images travel as URLs, not as JSON", () => {
 
   test("every care-recipient list does the same", () => {
     const c = code("src/routes/careRecipients.js");
-    expect((c.match(/photo: recipientPhotoUrl\(/g) || []).length).toBe(3); // self, list, single
+    expect((c.match(/photo: recipientPhotoUrl\(/g) || []).length).toBe(4); // self, list, single, quick-add (v1.133.0)
   });
 
   test("and there is still exactly ONE route that serves a care recipient's own photo", () => {

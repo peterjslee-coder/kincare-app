@@ -111,6 +111,60 @@ router.get("/", requireRole("family", "admin", "care_for"), async (req, res) => 
   res.json({ careRecipients: parsed });
 });
 
+// ─── GET /api/care-recipients/quick-add ─── (v1.133.0)
+//
+// Pete, 11/18: "I need it to be easier to put Events on Betty's calendar." The + in the middle
+// of the phone's bottom bar (and the sidebar's Add) fans out Log visit · Add event · Message
+// <name> · Request care. This answers, per person this user cares for, which of those they may
+// do, so the menu never offers something the server would refuse.
+//
+// Message <name> is the person's simple-screen Text group (Pete, 11/18: "Anyone that I've added
+// to the simple screen messaging for betty gets that message... it should populate in a group
+// message in the messages section"). Offered only when the leader has the Text button on AND
+// this user is in that group; otherwise the conversation id is null.
+// Registered before "/:id" so "quick-add" is never read as a recipient id. The photo column is
+// still base64 in Postgres, so it is tested for presence here, never selected.
+router.get("/quick-add", requireRole("family", "admin"), async (req, res) => {
+  try {
+    const db = await getDb();
+    const { hasAccess, canScheduleEvents, accessibleRecipients } = require("./careTasks")._shared;
+    const { parseSimpleMode } = require("../utils/simpleMode");
+    const rows = (await accessibleRecipients(db, req.user.id)).filter((r) => !r.viaVisit);
+    const out = [];
+    for (const r of rows) {
+      const cr = await db.prepare(`
+        SELECT id, first_name, last_name, called_by, timezone, simple_mode,
+               (photo IS NOT NULL AND photo <> '') AS has_photo
+        FROM care_recipients WHERE id = ?
+      `).get(r.id);
+      if (!cr) continue;
+      const access = await hasAccess(db, cr.id, req.user.id);
+      if (!access) continue;
+      let messageConversationId = null;
+      const mode = parseSimpleMode(cr.simple_mode);
+      if (mode.on && mode.show.text && mode.textConversationId) {
+        const member = await db.prepare(
+          "SELECT 1 FROM conversation_members WHERE conversation_id = ? AND user_id = ?"
+        ).get(mode.textConversationId, req.user.id);
+        if (member) messageConversationId = mode.textConversationId;
+      }
+      out.push({
+        id: cr.id,
+        firstName: cr.called_by || cr.first_name || "",
+        lastName: cr.last_name || "",
+        timezone: cr.timezone || null,
+        photo: recipientPhotoUrl({ id: cr.id, photo: cr.has_photo }),
+        canAddEvent: !!canScheduleEvents(access),
+        messageConversationId,
+      });
+    }
+    res.json({ recipients: out });
+  } catch (err) {
+    captureException(err, { where: "careRecipients: quick-add" });
+    res.status(500).json({ error: "Could not load" });
+  }
+});
+
 // ─── POST /api/care-recipients ───
 // Add a new care recipient (parent)
 router.post("/", requireRole("family"), async (req, res) => {
@@ -761,6 +815,21 @@ router.post("/:id/from-me", async (req, res) => {
       }
     } catch (e) { captureException(e, { where: "careRecipients: from-me notify" }); }
 
+    // v1.133.0 — Pete, 11/18: "Any reply or alert 'I have pain' etc shows up there" (her Text
+    // group). It also posts there as her message, live, with NO message push: the push above
+    // already told the team, and one alert is one notification. Only while the Text button is on.
+    if (mode.show.text && mode.textConversationId) {
+      try {
+        const me = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(req.user.id);
+        await require("../utils/textGroup").postIntoTextGroup(db, req.app, {
+          convId: mode.textConversationId,
+          senderId: req.user.id,
+          senderName: me ? `${me.first_name} ${me.last_name || ""}`.trim() : cr.first_name,
+          content: needsAttention ? `⚠️ ${content}` : content,
+        });
+      } catch (e) { captureException(e, { where: "careRecipients: from-me into text group" }); }
+    }
+
     res.status(201).json({ id });
   } catch (err) {
     captureException(err, { where: "careRecipients: from-me" });
@@ -843,6 +912,38 @@ router.post("/:id/notes-for-me/:noteId/read", async (req, res) => {
     res.json({ readAt: r && r.read_at });
   } catch (err) {
     captureException(err, { where: "careRecipients: note read" });
+    res.status(500).json({ error: "Couldn't record that" });
+  }
+});
+
+// ─── v1.133.0 — "Got it" on a message waiting on the simple screen ───
+//
+// Pete, 11/18: a message to Betty "sits on betty's screen until she acknowledges it", and the
+// group sees "Betty saw it". Opening the thread no longer clears it; this tap (or her reply)
+// does. Only her own tap counts — an admin viewing as her records nothing, same as I read it.
+// No push: the group sees "Betty saw it" under the message, live, and nobody's phone buzzes.
+router.post("/:id/simple-screen/text-ack", async (req, res) => {
+  try {
+    const db = await getDb();
+    const { cr, ok } = await asTheLinkedPerson(db, req);
+    if (!cr) return res.status(404).json({ error: "Not found" });
+    if (!ok) return res.status(403).json({ error: "Not allowed" });
+    const mode = require("../utils/simpleMode").parseSimpleMode(cr.simple_mode);
+    if (!mode.on || !mode.show.text || !mode.textConversationId) return res.status(403).json({ error: "This isn't turned on" });
+    if (req.user.impersonatedBy) return res.json({ recorded: false, acknowledged: [] });
+    const convId = mode.textConversationId;
+    const acked = await require("../utils/textGroup").acknowledgeTextGroup(db, convId, req.user.id);
+    const emitToUser = req.app.get("emitToUser");
+    if (acked.length && emitToUser) {
+      const me = await db.prepare("SELECT first_name FROM users WHERE id = ?").get(req.user.id);
+      const others = await db.prepare(
+        "SELECT user_id FROM conversation_members WHERE conversation_id = ? AND user_id != ?"
+      ).all(convId, req.user.id);
+      for (const m of others) emitToUser(m.user_id, "message_acknowledged", { conversationId: convId, messageIds: acked, byName: (me && me.first_name) || cr.first_name });
+    }
+    res.json({ acknowledged: acked });
+  } catch (err) {
+    captureException(err, { where: "careRecipients: text ack" });
     res.status(500).json({ error: "Couldn't record that" });
   }
 });

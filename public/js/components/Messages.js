@@ -1113,6 +1113,32 @@ const Messages = window.Messages = () => {
     return cleanup;
   }, [activeConvId]);
 
+  // v1.133.0 — the + menu's "Message Betty" while Messages is already open: the page does not
+  // remount, so the pending-conversation read above never runs again. Open it directly.
+  useEffect(() => {
+    const onOpen = (e) => {
+      const id = e && e.detail && e.detail.conversationId;
+      if (!id) return;
+      delete window.__pendingConversation;
+      setActiveConvId(id);
+      fetchMessages(id);
+    };
+    window.addEventListener('inplace:open-conversation', onOpen);
+    return () => window.removeEventListener('inplace:open-conversation', onOpen);
+  }, []);
+
+  // v1.133.0 — Betty tapped "Got it" on her simple screen (or wrote back): "Betty saw it"
+  useEffect(() => {
+    if (typeof onSocketEvent !== 'function') return;
+    const cleanup = onSocketEvent('message_acknowledged', (data) => {
+      if (data && data.conversationId === activeConvId && Array.isArray(data.messageIds)) {
+        const ids = new Set(data.messageIds);
+        setMessages(prev => prev.map(m => ids.has(m.id) ? { ...m, seenBy: data.byName || 'They' } : m));
+      }
+    });
+    return cleanup;
+  }, [activeConvId]);
+
   // Listen for real-time message deletions
   useEffect(() => {
     if (typeof onSocketEvent !== 'function') return;
@@ -2918,6 +2944,12 @@ const Messages = window.Messages = () => {
                           <ReactionBar reactions={reactions} currentUserId={currentUser?.id}
                             align={isSent ? 'right' : 'left'}
                             onReact={(emoji) => handleReaction(m.id, emoji)} />
+                        )}
+                        {/* v1.133.0 — her "Got it" from the simple screen */}
+                        {m.seenBy && (
+                          <div data-testid="msg-seen-by" style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 3, textAlign: isSent ? 'right' : 'left' }}>
+                            {'✓'} {m.seenBy} saw it
+                          </div>
                         )}
                         {/* ─── v1.105.159 — desktop only, and it means it now ───
                             Pete, with a screen recording: "the reply/emoji is stuck up high and

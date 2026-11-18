@@ -201,6 +201,25 @@ async function textScreenFor(db, mode, linkedUserId) {
   const lastRead = member.last_read_at ? new Date(member.last_read_at).getTime() : 0;
   const unread = shown.filter((r) => new Date(r.created_at).getTime() > lastRead).length;
 
+  // v1.133.0 — Pete, 11/18: a message to her "sits on betty's screen until she acknowledges
+  // it". Waiting = from someone else and not yet "Got it" (her tap, or her reply). Opening the
+  // thread no longer clears it. Newest three, oldest first, so the card reads in order.
+  const waitingRows = await db.prepare(`
+    SELECT id, sender_id, content, created_at FROM messages
+    WHERE conversation_id = ? AND sender_id != ? AND acknowledged_at IS NULL AND COALESCE(is_deleted, 0) = 0
+    ORDER BY created_at DESC LIMIT 3
+  `).all(convId, linkedUserId);
+  const mineAt = mine ? new Date(mine.created_at).getTime() : 0;
+  const waiting = waitingRows.reverse().map((r) => {
+    const who = byId.get(r.sender_id);
+    return {
+      id: r.id, content: r.content, createdAt: r.created_at,
+      from: who ? who.firstName : "Family", fromPhoto: who ? who.photo : null,
+      // "Peter wrote back" only when it answers something she sent; otherwise "Message from Peter"
+      isReply: !!mine && new Date(r.created_at).getTime() > mineAt,
+    };
+  });
+
   return {
     conversationId: convId,
     to,
@@ -210,6 +229,7 @@ async function textScreenFor(db, mode, linkedUserId) {
       return { id: r.id, content: r.content, createdAt: r.created_at, from: who ? who.firstName : "Family", fromPhoto: who ? who.photo : null };
     }),
     unread,
+    waiting,
   };
 }
 

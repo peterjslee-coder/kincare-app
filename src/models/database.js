@@ -3590,6 +3590,18 @@ async function initializeDatabase() {
             AND EXISTS (SELECT 1 FROM bg_admin_vouches v WHERE v.caregiver_user_id = cp.user_id AND v.revoked_at IS NULL)`,
       ],
     },
+    {
+      // v1.133.0 — Pete, 11/18: a message to Betty "sits on betty's screen until she
+      // acknowledges it", and the group sees "Betty saw it". Everything sent before today counts
+      // as already seen (acknowledged_at set, acknowledged_by left NULL so no label is drawn) —
+      // otherwise yesterday's whole thread would reappear on her screen as waiting.
+      id: "087_message_acknowledged",
+      statements: [
+        `ALTER TABLE messages ADD COLUMN IF NOT EXISTS acknowledged_at TIMESTAMPTZ`,
+        `ALTER TABLE messages ADD COLUMN IF NOT EXISTS acknowledged_by TEXT`,
+        `UPDATE messages SET acknowledged_at = COALESCE(created_at, NOW()) WHERE acknowledged_at IS NULL`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

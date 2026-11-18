@@ -2147,7 +2147,7 @@ const App = () => {
     // family (default)
     const familyNav = [
       { id: 'dashboard', icon: '🏠', label: 'Home' },
-      { id: '_request_care', icon: '➕', label: 'Request Care', isAction: true },
+      { id: '_request_care', icon: '➕', label: 'Add', isAction: true },
       { id: 'care-profile', icon: '🌷', label: 'My Loved One', children: [
         { id: 'care-team', icon: '👪', label: 'Care Team' },
         { id: 'caregivers', icon: '🤝', label: 'Caregivers' },
@@ -2308,10 +2308,14 @@ const App = () => {
         { id: 'account', icon: '👤', label: 'Account' },
       ];
     }
+    // v1.133.0 — Pete, 11/18: "I want to be able to add wherever I am, and don't mind losing
+    // caregivers." The middle slot is the + (QuickAdd.js): Log visit · Add event · Message
+    // <name> · Request care. Caregivers moved to a card on the Loved One screen (CareProfile.js),
+    // the same way Documents did; desktop keeps it under My Loved One.
     const familyBottom = [
       { id: 'dashboard', icon: '🏠', label: 'Home' },
       { id: 'care-profile', icon: '🌷', label: 'Loved One' },
-      { id: 'caregivers', icon: '🤝', label: 'Caregivers' },
+      { id: '_quick_add', isQuickAdd: true },
       { id: 'messages', icon: '💬', label: 'Messages' },
     ];
     familyBottom.push({ id: 'account', icon: '👤', label: 'Account' });
@@ -2436,7 +2440,8 @@ const App = () => {
               // Action button (orange highlight) — Request Care for family, Find Work for caregiver
               if (item.isAction) {
                 const actionClick = item.disabled ? (item.id === 'find-work' ? explainLockedFindWork : () => {}) : item.id === '_request_care'
-                  ? () => { handlePageChange('schedule'); setSidebarOpen(false); }
+                  // v1.133.0 — the same + menu as the phone's bar (Request care is one of its four)
+                  ? () => { setSidebarOpen(false); if (window.__openQuickAdd) window.__openQuickAdd(null); else handlePageChange('schedule'); }
                   : item.id === '_launch_kindred'
                   ? () => { window.open(`/kindred?token=${encodeURIComponent(AUTH_TOKEN)}`, '_blank'); setSidebarOpen(false); }
                   : () => { handlePageChange(item.id); setSidebarOpen(false); };
@@ -2617,7 +2622,9 @@ const App = () => {
       </main>
       {/* Bottom navigation bar — visible on mobile only (CSS hides on desktop) */}
       <nav className="bottom-nav" style={window.__safeAreaBottom ? { paddingBottom: window.__safeAreaBottom } : undefined}>
-        {getBottomNavItems().map(item => (
+        {getBottomNavItems().map(item => item.isQuickAdd ? (
+          typeof QuickAddButton !== 'undefined' ? <QuickAddButton key={item.id} /> : null
+        ) : (
           <button key={item.id} data-tour={`nav-${item.id}`} className={`bottom-nav-item ${currentPage === item.id ? 'active' : ''}`} onClick={item.disabled ? (item.id === 'find-work' ? explainLockedFindWork : undefined) : item.isKindred ? () => window.open(`/kindred?token=${encodeURIComponent(AUTH_TOKEN)}`, '_blank') : () => handlePageChange(item.id)} style={{ position: 'relative', ...(item.disabled ? { opacity: 0.35, cursor: 'not-allowed' } : {}), ...(item.isAccent && currentPage !== item.id && !item.disabled ? { color: 'var(--accent-color)' } : {}), ...(item.isKindred ? { color: 'var(--color-info)' } : {}) }}>
             <span className="bottom-nav-icon" style={item.isAccent && currentPage !== item.id ? { background: 'var(--bg-accent-light)', borderRadius: '50%', padding: '2px' } : undefined}>{item.icon}</span>
             {item.id === 'messages' && unreadMsgCount > 0 && (
@@ -2655,6 +2662,8 @@ const App = () => {
       {/* v1.109.9 — one fee sheet for every page; a push tap or Needs-you row opens it */}
       {typeof CancelFeeSheet !== 'undefined' && <CancelFeeSheet />}
       {typeof CareToolsSheet !== 'undefined' && <CareToolsSheet />}
+      {/* v1.133.0 — the + menu; family only (the phone bar's middle slot and the sidebar's Add) */}
+      {role === 'family' && typeof QuickAdd !== 'undefined' && <QuickAdd />}
       {/* v1.117.0 — a declined card hold: try the same card again, or use another */}
       {typeof HoldDeclinedSheet !== 'undefined' && <HoldDeclinedSheet onNavigate={setCurrentPage} />}
       {typeof CheckinOverdueSheet !== 'undefined' && <CheckinOverdueSheet onNavigate={setCurrentPage} />}

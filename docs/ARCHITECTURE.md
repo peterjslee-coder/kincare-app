@@ -7,9 +7,9 @@ build red.
 
 Hand-written sections (§3 "Where is…") are preserved across regeneration; edit those freely.
 
-Structure at last generation: 616 HTTP routes across 64 mounts ·
-118 `CREATE TABLE` statements · 16 background jobs · 41 socket events
-(17 with no client listener) · 75 push event types · 65 `window.__*` globals.
+Structure at last generation: 618 HTTP routes across 64 mounts ·
+118 `CREATE TABLE` statements · 16 background jobs · 42 socket events
+(17 with no client listener) · 75 push event types · 66 `window.__*` globals.
 
 ---
 
@@ -52,7 +52,7 @@ JSX is *not* compiled in the browser; Babel-standalone is not loaded. Editing an
 | `/api/availability` | `src/routes/availability.js` | 5 |  |
 | `/api/care-events` | `src/routes/careEvents.js` | 10 |  |
 | `/api/care-intelligence` | `src/routes/careIntelligence.js` | 8 |  |
-| `/api/care-recipients` | `src/routes/careRecipients.js` | 20 |  |
+| `/api/care-recipients` | `src/routes/careRecipients.js` | 22 |  |
 | `/api/care-tasks` | `src/routes/careTasks.js` | 10 |  |
 | `/api/care-teams` | `src/routes/careTeams.js` | 21 |  |
 | `/api/care-todos` | `src/routes/careTodos.js` | 5 |  |
@@ -251,6 +251,7 @@ why this app runs on exactly one Railway replica.
 | `ipai_session_summary` | `routes/sessions.js` | 🔶 **none** |
 | `late_check_in` | `routes/sessions.js` | yes |
 | `late_resolution` | `routes/accountability.js` | 🔶 **none** |
+| `message_acknowledged` | `routes/careRecipients.js` | yes |
 | `message_deleted` | `routes/messages.js` | yes |
 | `message_reaction` | `routes/messages.js` | yes |
 | `messages_read` | `server.js` | yes |
@@ -356,11 +357,12 @@ State travels through `window`, not props. This table is the registry.
 | `window.__navigateTo` | app.js, Caregivers.js | 59 |
 | `window.__openConversationId` | Messages.js, utils.js | 5 |
 | `window.__openEditRequest` | app.js | 7 |
+| `window.__openQuickAdd` | QuickAdd.js | 7 |
 | `window.__openRequestCareModal` | app.js, CareToolsSheet.js | 21 |
 | `window.__openTaskCreate` | — | 1 |
 | `window.__originalSearch` | app.js | 4 |
 | `window.__pendingCall` | app.js, Messages.js | 5 |
-| `window.__pendingConversation` | app.js, CheckinOverdueSheet.js | 6 |
+| `window.__pendingConversation` | app.js, CheckinOverdueSheet.js, QuickAdd.js | 8 |
 | `window.__pendingFocus` | app.js, AttentionCard.js, CancelFeeSheet.js | 54 |
 | `window.__pendingLogVisit` | TeamNotes.js | 2 |
 | `window.__pendingLovedOneTeamId` | CareTeamManage.js, LovedOneGuide.js | 6 |

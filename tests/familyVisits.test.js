@@ -276,9 +276,13 @@ describe("the push nudges you back to the app without spilling the note", () => 
 });
 
 describe("the pill swap Pete asked for", () => {
-  test("the dashboard slot says '+ Log Visit'", () => {
-    // "I'm FAR more likely to log a visit than I am to add a task."
-    expect(dash).toMatch(/\+ Log Visit<\/button>/);
+  test("Log visit is the first choice on the + (v1.133.0 — it left the dashboard pill)", () => {
+    // "I'm FAR more likely to log a visit than I am to add a task." v1.133.0 moved it from the
+    // dashboard pill to the bottom bar's +, first in the fan, opening the same LogVisitSheet.
+    const quick = code("public/js/components/QuickAdd.js");
+    expect(quick).toMatch(/key: 'visit', label: 'Log visit'/);
+    expect(quick).toMatch(/<LogVisitSheet /);
+    expect(dash).not.toMatch(/\+ Log Visit<\/button>/);
   });
 
   test("'+ Task' is gone from the dashboard and present on the care team page", () => {

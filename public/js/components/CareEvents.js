@@ -747,7 +747,7 @@ const CareEventSheet = window.CareEventSheet = ({ ev, canManage, onClose, onEdit
 };
 
 // ─── Add/edit modal — one-line quick add on top, structured fields below ───
-const CareEventFormModal = window.CareEventFormModal = ({ recipientId, recipientFirstName, timezone, existing, onClose, onSaved }) => {
+const CareEventFormModal = window.CareEventFormModal = ({ recipientId, recipientFirstName, timezone, existing, onClose, onSaved, savedMessage }) => {
   const { showToast } = useToast();
   const ex = existing || {};
   const tz = timezone || ex.timezone || TimezoneHelper.DEFAULT_TZ;
@@ -833,7 +833,7 @@ const CareEventFormModal = window.CareEventFormModal = ({ recipientId, recipient
       const res = await apiFetch(existing ? `/api/care-events/${existing.id}` : '/api/care-events', {
         method: existing ? 'PUT' : 'POST', body: JSON.stringify(body),
       });
-      if (res?.ok) { showToast(existing ? 'Event updated' : 'Event added', 'success'); onSaved(); onClose(); }
+      if (res?.ok) { showToast(existing ? 'Event updated' : (savedMessage || 'Event added'), 'success'); onSaved(); onClose(); }
       else { const d = await res.json().catch(() => ({})); showToast(d.error || 'Could not save event', 'error'); }
     } catch { showToast('Could not save event', 'error'); }
     setSaving(false);

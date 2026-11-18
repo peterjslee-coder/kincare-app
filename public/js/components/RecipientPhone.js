@@ -241,6 +241,25 @@ const SimpleView = window.SimpleView = ({ initial }) => {
     setReading(false);
   };
 
+  // v1.133.0 — "Got it" on a waiting message. Takes it off her screen; the family sees
+  // "Betty saw it" under it in Messages.
+  const [acking, setAcking] = useState(false);
+  const ackText = async () => {
+    if (!data?.careRecipientId || acking) return;
+    setAcking(true);
+    try {
+      const res = await apiFetch(`/api/care-recipients/${data.careRecipientId}/simple-screen/text-ack`, { method: 'POST' });
+      if (res?.ok) {
+        const from = data.simpleScreen?.text?.waiting?.[0]?.from;
+        setData((prev) => prev && prev.simpleScreen && prev.simpleScreen.text
+          ? ({ ...prev, simpleScreen: { ...prev.simpleScreen, text: { ...prev.simpleScreen.text, waiting: [] } } }) : prev);
+        setReadFlash(from ? `Thank you! ${from} will see that you got it.` : 'Thank you!');
+        setTimeout(() => setReadFlash(''), 8000);
+      }
+    } catch { /* the button stays; they can tap again */ }
+    setAcking(false);
+  };
+
   const loadUnread = React.useCallback(async () => {
     try {
       const res = await apiFetch('/api/messages/conversations');
@@ -507,20 +526,31 @@ const SimpleView = window.SimpleView = ({ initial }) => {
         </a>
       ))}
 
-      {/* v1.130.2 — a reply waiting: show it on the home screen, big, so it is not missed */}
-      {show.text && s.text && s.text.unread > 0 && s.text.replies.length > 0 && (() => {
-        const r = s.text.replies[s.text.replies.length - 1];
-        return (
-          <button onClick={openText} style={{ ...card, display: 'block', width: '100%', textAlign: 'left', cursor: 'pointer', borderColor: 'var(--role-color)', borderWidth: 3, fontFamily: 'inherit' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
-              <SimpleFace photo={r.fromPhoto} name={r.from} size={56} />
-              <div style={{ ...label, margin: 0 }}>{r.from} wrote back</div>
+      {/* v1.130.2 — a message waiting: show it on the home screen, big, so it is not missed.
+          v1.133.0 — Pete, 11/18: it "sits on betty's screen until she acknowledges it". It
+          stays until she taps Got it (or writes back); "Message from Peter" when the family
+          started it, "Peter wrote back" when it answers something she sent. */}
+      {show.text && s.text && Array.isArray(s.text.waiting) && s.text.waiting.length > 0 && (
+        <div style={{ ...card, borderColor: 'var(--role-color)', borderWidth: 3 }}>
+          {s.text.waiting.map((w, i) => (
+            <div key={w.id} style={{ marginTop: i ? 16 : 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+                <SimpleFace photo={w.fromPhoto} name={w.from} size={56} />
+                <div style={{ ...label, margin: 0 }}>{w.isReply ? `${w.from} wrote back` : `Message from ${w.from}`}</div>
+              </div>
+              <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.3, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{w.content}</div>
             </div>
-            <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.3, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{r.content}</div>
-            <div style={{ fontSize: 20, color: 'var(--role-color)', fontWeight: 700, marginTop: 10 }}>Tap to answer</div>
+          ))}
+          <button onClick={ackText} disabled={acking} data-testid="simple-text-got-it"
+            style={{ ...bigBtn('var(--role-color)', 'var(--text-on-primary)'), marginTop: 18, marginBottom: 10, opacity: acking ? 0.6 : 1 }}>
+            {acking ? 'One moment…' : 'Got it'}
           </button>
-        );
-      })()}
+          <button onClick={openText}
+            style={{ ...bigBtn('var(--bg-card)', 'var(--text-primary)'), border: '2px solid var(--border-color)', minHeight: 72, fontSize: 26, marginBottom: 0 }}>
+            Write back
+          </button>
+        </div>
+      )}
 
       {show.text && s.text && (
         <button onClick={openText} style={{ ...bigBtn('var(--role-color)', 'var(--text-on-primary)'), justifyContent: 'flex-start', padding: '10px 18px' }} aria-label={`Text ${simpleNames(s.text.to)}`}>
