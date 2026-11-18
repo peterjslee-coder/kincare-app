@@ -260,6 +260,17 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
   const [checkrStatus, setCheckrStatus] = useState(null); // null | 'not_initiated' | 'in_progress' | 'complete' | 'error'
   const [myVouches, setMyVouches] = useState([]); // v1.64.0: active admin vouches (per-family, not a bg check)
   const [checkrError, setCheckrError] = useState(null);
+  // v1.131.0 — what Checkr confirmed (dates), and where its emailed form went. From the server only.
+  const [checkrEvidence, setCheckrEvidence] = useState(null);
+  const [checkrInvite, setCheckrInvite] = useState({ sentTo: null, url: null });
+  const loadCheckrStatus = () => apiFetch('/api/checkr/status').then(async r => {
+    if (r?.ok) {
+      const d = await r.json();
+      setCheckrStatus(d.status || 'not_initiated'); setCheckrPhase(d.phase || null); setCheckrStaging(!!d.staging);
+      if (d.paid) setBgCheckPaid(true); setMyVouches(d.vouches || []);
+      setCheckrEvidence(d.evidence || null); setCheckrInvite({ sentTo: d.sentTo || null, url: d.invitationUrl || null });
+    }
+  }).catch(() => { setCheckrStatus('not_initiated'); });
   const [checkrStaging, setCheckrStaging] = useState(false);
   const [checkrStagingEmail, setCheckrStagingEmail] = useState('');
 
@@ -636,9 +647,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
         if (r?.ok) { const d = await r.json(); setBgCheckPaid(!!d.backgroundCheckPaid); }
       }).catch(() => {});
       // Fetch Checkr status
-      apiFetch('/api/checkr/status').then(async r => {
-        if (r?.ok) { const d = await r.json(); setCheckrStatus(d.status || 'not_initiated'); setCheckrPhase(d.phase || null); setCheckrStaging(!!d.staging); if (d.paid) setBgCheckPaid(true); setMyVouches(d.vouches || []); }
-      }).catch(() => { setCheckrStatus('not_initiated'); });
+      loadCheckrStatus();
       apiFetch('/api/caregivers/me').then(async r => {
         if (r?.ok) { const d = await r.json(); setCgProfile(d.profile || null); }
       }).catch(() => {});
@@ -2198,7 +2207,9 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
             {checkrStatus === 'complete' ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ fontSize: 18 }}>✓</span>
-                <span style={{ fontSize: 14, color: 'var(--role-color)', fontWeight: 600 }}>Background check complete</span>
+                <span style={{ fontSize: 14, color: 'var(--role-color)', fontWeight: 600 }}>
+                  Background check complete{checkrEvidence && checkrEvidence.resultAt ? ` \u2014 Checkr reported it ${new Date(checkrEvidence.resultAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : ''}
+                </span>
               </div>
             ) : checkrPhase === 'blocked_pending_review' ? (
               // v1.106.14 — Pete: "they don't get jobs, they don't get an invitation to do
@@ -2234,15 +2245,7 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                 </p>
               </div>
             ) : checkrPhase === 'awaiting_caregiver' ? (
-              <div style={{ padding: 14, background: 'var(--color-warning-bg, #fff8e1)', borderRadius: 8, border: '1px solid var(--color-warning)' }}>
-                <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)', marginBottom: 6 }}>
-                  Check your email
-                </div>
-                <p style={{ margin: 0, fontSize: 13, color: 'var(--text-secondary)' }}>
-                  Checkr has emailed you a link to finish your background check. It can't move forward
-                  until you complete it.
-                </p>
-              </div>
+              <CheckrFormWaiting sentTo={checkrInvite.sentTo} sentAt={checkrEvidence && checkrEvidence.sentAt} invitationUrl={checkrInvite.url} />
             ) : checkrPhase === 'unknown' ? (
               // A status src/constants/checkrStatus.js has not been taught. Say nothing about the
               // outcome — the old behaviour of guessing "start a new check" is what caused this.
@@ -2255,16 +2258,18 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                   <a href="mailto:support@yourinplace.com" style={{ color: 'var(--role-color)' }}>support@yourinplace.com</a> and we'll sort it out.
                 </p>
               </div>
-            ) : checkrStatus === 'in_progress' || checkrStatus === 'processing' || checkrStatus === 'invitation_created' || checkrPhase === 'in_progress' ? (
+            ) : checkrPhase === 'in_progress' ? (
+              // v1.131.0 — 'in_progress' is now only ever Checkr's word (its webhook, or its API
+              // showing a report). The old branch also fired on statuses this screen set by itself.
               <div style={{ color: 'var(--text-secondary)', fontSize: 14 }}>
-                <div style={{ marginBottom: 12 }}>
-                  <strong style={{ color: 'var(--role-color)' }}>Processing your background check...</strong>
+                <div style={{ marginBottom: 8 }}>
+                  <strong style={{ color: 'var(--role-color)' }}>Checkr has your form</strong>
                 </div>
-                <p style={{ margin: '0 0 8px', fontSize: 13 }}>
-                  We're reviewing your information. You'll receive an email when the process is complete.
-                </p>
-                <p style={{ margin: 0, fontSize: 13, color: 'var(--text-tertiary)' }}>
-                  Status: <strong>{checkrStatus === 'invitation_created' ? 'Check your email to complete' : 'In Progress'}</strong>
+                <p style={{ margin: 0, fontSize: 13 }}>
+                  {checkrEvidence && checkrEvidence.submittedAt
+                    ? `Checkr confirmed it received your form on ${new Date(checkrEvidence.submittedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}. `
+                    : 'Checkr is running your check. '}
+                  Checks usually take 2\u20135 business days. There's nothing you need to do.
                 </p>
               </div>
             ) : checkrError ? (
@@ -2286,46 +2291,8 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                   A background check is required to participate on InPlace. Your report is reviewed fairly — you'll be given a chance to provide context on anything that comes up.
                 </p>
                 {checkrStaging ? (
-                  <div style={{ padding: 16, background: 'var(--bg-warm)', border: '1px solid #ffcc80', borderRadius: 10 }}>
-                    <div style={{ color: 'var(--color-warning)', fontWeight: 600, fontSize: 13, marginBottom: 8 }}>Staging Mode</div>
-                    <div style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 12 }}>In production, caregivers pay $30 here via Stripe. For staging testing, skip payment and go straight to the Checkr flow.</div>
-                    <div style={{ marginBottom: 12 }}>
-                      <label style={{ fontSize: 12, color: 'var(--text-tertiary)', display: 'block', marginBottom: 4 }}>Checkr invitation email (auto-strips plus-address if blank):</label>
-                      <input type="email" value={checkrStagingEmail} onChange={e => setCheckrStagingEmail(e.target.value)}
-                        placeholder="Leave blank to auto-strip plus-address"
-                        style={{ width: '100%', padding: '8px 12px', border: '1px solid #ddd', borderRadius: 6, fontSize: 13, boxSizing: 'border-box' }} />
-                    </div>
-                    <button onClick={async () => {
-                      try {
-                        const body = {};
-                        if (checkrStagingEmail.trim()) body.checkrEmail = checkrStagingEmail.trim();
-                        const res = await apiFetch('/api/checkr/initiate', { method: 'POST', body: JSON.stringify(body) });
-                        const data = await res.json();
-                        if (!res.ok) {
-                          if (typeof showToast === 'function') showToast(data.error || 'Failed to initiate', 'error');
-                          setCheckrError(data.error || 'Initiation failed');
-                          return;
-                        }
-                        if (data.invitationUrl) {
-                          openExternalUrl(data.invitationUrl); // v1.105.49
-                          setBgCheckPaid(true);
-                          setCheckrStatus('invitation_created');
-                        } else if (data.status === 'already_initiated') {
-                          setBgCheckPaid(true);
-                          setCheckrStatus('in_progress');
-                          if (typeof showToast === 'function') showToast('Background check already in progress', 'info');
-                        } else {
-                          setBgCheckPaid(true);
-                          if (typeof showToast === 'function') showToast(data.message || 'Check your email for the Checkr invitation', 'info');
-                          setCheckrStatus('invitation_created');
-                        }
-                      } catch (err) {
-                        if (typeof showToast === 'function') showToast('Failed to initiate. Contact support.', 'error');
-                      }
-                    }} style={{ padding: '10px 20px', background: 'var(--color-warning)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
-                      Skip Payment & Start Checkr (Staging)
-                    </button>
-                  </div>
+                  // Staging skips the $30 (initiate marks it paid there) and goes straight to email.
+                  <CheckrEmailStart staging onSent={() => loadCheckrStatus()} />
                 ) : (
                   <div style={{ padding: 16, background: 'var(--bg-neutral)', borderRadius: 8, border: '1px solid #e0e0e0' }}>
                     {typeof StripePaymentForm !== 'undefined' ? React.createElement(StripePaymentForm, {
@@ -2335,7 +2302,8 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                       onSuccess: (intent) => {
                         console.log('BG check payment success:', intent);
                         setBgCheckPaid(true);
-                        if (typeof showToast === 'function') showToast('Payment received! Starting background check...', 'success');
+                        if (typeof showToast === 'function') showToast('Payment received. Checkr is emailing your form.', 'success');
+                        setTimeout(() => loadCheckrStatus(), 1500); // v1.131.0 — the server sends it; show what it says
                       },
                       onError: (msg) => {
                         console.error('BG check payment error:', msg);
@@ -2349,73 +2317,12 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
                   </div>
                 )}
               </div>
-            ) : checkrStaging ? (
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                  <span style={{ fontSize: 16, color: 'var(--role-color)' }}>✓</span>
-                  <span style={{ fontSize: 13, color: 'var(--role-color)', fontWeight: 600 }}>Payment received</span>
-                </div>
-                <div style={{ padding: 16, background: 'var(--bg-warm)', border: '1px solid #ffcc80', borderRadius: 10 }}>
-                  <div style={{ color: 'var(--color-warning)', fontWeight: 600, fontSize: 13, marginBottom: 8 }}>Staging Mode — Start Checkr via Email</div>
-                  <div style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 12 }}>The in-app Checkr form doesn't work in staging. Click below to send the Checkr invitation via email instead.</div>
-                  <div style={{ marginBottom: 12 }}>
-                    <label style={{ fontSize: 12, color: 'var(--text-tertiary)', display: 'block', marginBottom: 4 }}>Checkr invitation email (auto-strips plus-address if blank):</label>
-                    <input type="email" value={checkrStagingEmail} onChange={e => setCheckrStagingEmail(e.target.value)}
-                      placeholder="Leave blank to auto-strip plus-address"
-                      style={{ width: '100%', padding: '8px 12px', border: '1px solid #ddd', borderRadius: 6, fontSize: 13, boxSizing: 'border-box' }} />
-                  </div>
-                  <button onClick={async () => {
-                    try {
-                      const body = {};
-                      if (checkrStagingEmail.trim()) body.checkrEmail = checkrStagingEmail.trim();
-                      const res = await apiFetch('/api/checkr/initiate', { method: 'POST', body: JSON.stringify(body) });
-                      const data = await res.json();
-                      if (!res.ok) {
-                        if (typeof showToast === 'function') showToast(data.error || 'Failed to initiate', 'error');
-                        setCheckrError(data.error || 'Initiation failed');
-                        return;
-                      }
-                      if (data.invitationUrl) {
-                        openExternalUrl(data.invitationUrl); // v1.105.49
-                        setCheckrStatus('invitation_created');
-                      } else if (data.status === 'already_initiated') {
-                        setCheckrStatus('in_progress');
-                        if (typeof showToast === 'function') showToast('Background check already in progress', 'info');
-                      } else {
-                        if (typeof showToast === 'function') showToast(data.message || 'Check your email for the Checkr invitation', 'info');
-                        setCheckrStatus('invitation_created');
-                      }
-                    } catch (err) {
-                      if (typeof showToast === 'function') showToast('Failed to initiate. Contact support.', 'error');
-                    }
-                  }} style={{ padding: '10px 20px', background: 'var(--color-warning)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
-                    Start Checkr via Email (Staging)
-                  </button>
-                </div>
-              </div>
             ) : (
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                  <span style={{ fontSize: 16, color: 'var(--role-color)' }}>✓</span>
-                  <span style={{ fontSize: 13, color: 'var(--role-color)', fontWeight: 600 }}>Payment received</span>
-                </div>
-                <div style={{ padding: 16, background: 'var(--bg-neutral)', borderRadius: 8, border: '1px solid #e0e0e0' }}>
-                  {typeof CheckrEmbed !== 'undefined' ? React.createElement(CheckrEmbed, {
-                    onComplete: (data) => {
-                      console.log('Background check initiated:', data);
-                      setCheckrStatus('in_progress');
-                    },
-                    onError: (err) => {
-                      console.error('Background check error:', err);
-                      setCheckrError(err?.message || 'Failed to submit background check');
-                      setCheckrStatus('error');
-                    },
-                  }) : (
-                    <div style={{ padding: 12, color: 'var(--text-tertiary)', fontSize: 13, textAlign: 'center' }}>
-                      Loading background check form...
-                    </div>
-                  )}
-                </div>
+              // v1.131.0 — the in-app Checkr embed is gone from here: the site's security policy
+              // never allowed Checkr's script, so on production it rendered an empty box titled
+              // "unavailable in staging" and nobody was ever sent to Checkr.
+              <div style={{ padding: 16, background: 'var(--bg-neutral)', borderRadius: 8, border: '1px solid var(--border-color)' }}>
+                <CheckrEmailStart staging={checkrStaging} onSent={() => loadCheckrStatus()} />
               </div>
             )}
           </div>

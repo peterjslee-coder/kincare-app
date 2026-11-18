@@ -95,6 +95,7 @@ const scripts = [
   "js/components/VisitReport.js", // v1.108.0 — before VisitDetailModal and CaretakerHub, which render it
   "js/components/VisitDetailModal.js",
   "js/components/TwoFactorSetup.js",
+  "js/components/CheckrEmailStart.js", // v1.131.0 — the background check by email; MyAccount and CaretakerHub use it
   "js/components/MyAccount.js",
   "js/components/Reimbursements.js",
   "js/components/MoneyView.js",

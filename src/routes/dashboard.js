@@ -13,6 +13,7 @@ const { scoreMatch } = require("../utils/aiMatching");
 const { expireStaleProposals } = require("../utils/proposals");
 const { getPlatformFeePercent, loadFeeTable } = require("../utils/platformFee");
 const { phaseFor: checkrPhaseFor } = require("../constants/checkrStatus");
+const { evidenceFor: checkrEvidenceFor } = require("../utils/checkrEvidence");
 const { noteAccess } = require("../utils/noteVisibility"); // v1.106.38, v1.107.2
 const { breakBudgetMinutes } = require("../utils/visitBreaks"); // v1.106.41
 const { conditionReadDue } = require("../utils/settledCheck"); // v1.106.48
@@ -764,11 +765,15 @@ async function caregiverDashboard(db, userId, res) {
         "SELECT id FROM background_check_payments WHERE user_id = ? AND status = 'completed' LIMIT 1"
       ).get(userId).catch(() => null)),
       isBackgroundChecked: !!profile.is_background_checked,
-      checkrStatus: profile.is_background_checked ? 'clear' : (profile.checkr_status || 'pending'),
+      // v1.131.0 — 'not_started', never 'pending', for nothing having happened: 'pending' rendered "in progress".
+      checkrStatus: profile.is_background_checked ? 'clear' : (profile.checkr_status || 'not_started'),
       // v1.106.13 — the derived situation, from the one owner. CaretakerHub's banner enumerated
       // five raw statuses and rendered nothing for the other ten, including did_not_pass and
       // suspended. See src/constants/checkrStatus.js.
       checkrPhase: checkrPhaseFor(profile.checkr_status, profile.is_background_checked),
+      // v1.131.0 — what Checkr itself confirmed, with dates (utils/checkrEvidence). The hub claims
+      // "Checkr has your form" only from this.
+      checkrEvidence: await checkrEvidenceFor(db, userId).catch(() => null),
       adminVouches: (await activeVouchesFor(db, userId)).map((v) => ({ familyName: v.family_name, familyBrought: v.note === 'family-brought' /* v1.105.186 */ })),
       stripeConnected: !!profile.stripe_onboard_complete,
       stripeOnboardComplete: !!profile.stripe_onboard_complete,

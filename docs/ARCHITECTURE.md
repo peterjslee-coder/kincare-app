@@ -7,9 +7,9 @@ build red.
 
 Hand-written sections (§3 "Where is…") are preserved across regeneration; edit those freely.
 
-Structure at last generation: 614 HTTP routes across 64 mounts ·
-117 `CREATE TABLE` statements · 16 background jobs · 41 socket events
-(17 with no client listener) · 73 push event types · 65 `window.__*` globals.
+Structure at last generation: 615 HTTP routes across 64 mounts ·
+118 `CREATE TABLE` statements · 16 background jobs · 41 socket events
+(17 with no client listener) · 74 push event types · 65 `window.__*` globals.
 
 ---
 
@@ -59,7 +59,7 @@ JSX is *not* compiled in the browser; Babel-standalone is not loaded. Editing an
 | `/api/care-tools` | `src/routes/careTools.js` | 1 |  |
 | `/api/caregiver-onboarding` | `src/routes/caregiveronboarding.js` | 6 |  |
 | `/api/caregivers` | `src/routes/caregivers.js` | 11 |  |
-| `/api/checkr` | `src/routes/checkr.js` | 11 |  |
+| `/api/checkr` | `src/routes/checkr.js` | 12 |  |
 | `/api/connections` | `src/routes/connections.js` | 4 |  |
 | `/api/consent` | `src/routes/consent.js` | 13 |  |
 | `/api/costs` | `src/routes/costs.js` | 8 |  |
@@ -291,33 +291,33 @@ Opt-out key is `notification_prefs["push_" + eventType]`. Capability gating live
 
 `caregiver_arriving_recipient` · `caregiver_leaving_recipient` · `caregiver_no_show` · `check_out_imminent`
 
-`check_out_reminder` · `checkin_nudge` · `content_report` · `deleted`
+`check_out_reminder` · `checkin_nudge` · `checkr_invitation_sent` · `content_report`
 
-`dispute_filed` · `document_classified` · `document_deleted` · `document_uploaded`
+`deleted` · `dispute_filed` · `document_classified` · `document_deleted`
 
-`financial_concern_reported` · `identity_approved` · `identity_retake` · `identity_submitted`
+`document_uploaded` · `financial_concern_reported` · `identity_approved` · `identity_retake`
 
-`interview_accepted` · `interview_cancelled` · `interview_declined` · `interview_request`
+`identity_submitted` · `interview_accepted` · `interview_cancelled` · `interview_declined`
 
-`invite_accepted` · `job_withdrawn` · `kindred_relay` · `managed_mode_activated`
+`interview_request` · `invite_accepted` · `job_withdrawn` · `kindred_relay`
 
-`mileage_extra` · `missing_address` · `new_job` · `new_registration`
+`managed_mode_activated` · `mileage_extra` · `missing_address` · `new_job`
 
-`new_signup_intent` · `no_show_cancelled` · `on_my_way` · `on_my_way_recipient`
+`new_registration` · `new_signup_intent` · `no_show_cancelled` · `on_my_way`
 
-`outreach_reply` · `outreach_response` · `outreach_sent` · `overdue_check_in`
+`on_my_way_recipient` · `outreach_reply` · `outreach_response` · `outreach_sent`
 
-`overdue_check_in_family` · `overdue_check_out` · `overdue_check_out_family` · `payment_authorization_failed`
+`overdue_check_in` · `overdue_check_in_family` · `overdue_check_out` · `overdue_check_out_family`
 
-`payment_hold` · `payment_method_needed` · `phone_verified` · `proposal_accepted`
+`payment_authorization_failed` · `payment_hold` · `payment_method_needed` · `phone_verified`
 
-`proposal_declined` · `request_declined` · `review` · `safety_flag`
+`proposal_accepted` · `proposal_declined` · `request_declined` · `review`
 
-`session_cancelled` · `session_complete` · `session_in_progress` · `team_join`
+`safety_flag` · `session_cancelled` · `session_complete` · `session_in_progress`
 
-`time_proposal` · `unblocked` · `upload_authority_confirmed` · `uploaded`
+`team_join` · `time_proposal` · `unblocked` · `upload_authority_confirmed`
 
-`waitlist_signup`
+`uploaded` · `waitlist_signup`
 
 ---
 

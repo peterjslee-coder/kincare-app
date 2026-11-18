@@ -1700,15 +1700,13 @@ router.post("/background-check/confirm", requireRole("caregiver"), requirePaymen
     let checkrInitiated = false;
     if (process.env.CHECKR_API_KEY) {
       try {
-        const checkrUrl = `${req.protocol}://${req.get("host")}/api/checkr/initiate`;
-        const token = req.headers.authorization;
-        const checkrRes = await fetch(checkrUrl, {
-          method: "POST",
-          headers: { "Authorization": token, "Content-Type": "application/json" },
-        });
-        const checkrData = await checkrRes.json();
-        checkrInitiated = checkrRes.ok;
-        console.log(`[bg-check] Auto-initiate Checkr: ${checkrRes.ok ? "success" : "failed"}`, checkrData);
+        // v1.131.0 — this used to POST to our own /api/checkr/initiate over HTTP, forwarding the
+        // Authorization header. Caregivers signed in by cookie have no such header, so the call
+        // 401'd and the paid caregiver was never sent to Checkr. Same function, called directly.
+        const { sendInvitation } = require("./checkr");
+        const out = await sendInvitation(db, req.user.id, { actor: "caregiver" });
+        checkrInitiated = out.code === 200 && out.body.status === "invitation_sent";
+        console.log(`[bg-check] Auto-send Checkr form: ${checkrInitiated ? "sent" : "not sent"}`, out.code, out.body.status || out.body.error);
       } catch (err) {
         console.error("[bg-check] Auto-initiate Checkr error (non-blocking):", err.message);
       }

@@ -16,8 +16,15 @@
  *   account       users.created_at for the account matched to this contact
  *   id_sent       their identity document was submitted          (utils/identity.js — the ONE resolver)
  *   id_ok         ... and a human approved it, or ID seen in person
- *   bg_started    background check consent / Checkr invitation
- *   bg_clear      Checkr phase CLEARED                            (constants/checkrStatus.js)
+ *   bg_started    Checkr created her invitation                   (utils/checkrEvidence — v1.131.0)
+ *   bg_submitted  she filled in Checkr's form (Checkr's webhook)  (utils/checkrEvidence)
+ *   bg_clear      a Checkr report came back clear                 (utils/checkrEvidence)
+ *
+ * v1.131.0 — the three background-check steps are EVIDENCE, not inference. Pete, 11/18, looking at
+ * Faith's ladder: "what evidence do we have that that was ever happening ... not just vibes."
+ * bg_started used to tick on InPlace's own consent checkbox, and any status but "not started" —
+ * including the column's default 'pending' — counted. Checkr had never heard of her. Now a step
+ * ticks only on something Checkr itself told us (a verified webhook or its API's answer).
  *   payouts       Stripe payouts set up (stripe_onboard_complete)
  *   first_visit   first COMPLETED payment where they were the caregiver
  *
@@ -32,6 +39,7 @@
  */
 const { personIdentityStatus } = require("./identity");
 const { phaseFor, PHASE } = require("../constants/checkrStatus");
+const { evidenceFor } = require("./checkrEvidence");
 
 const STEPS = [
   { key: "called", label: "Called" },
@@ -43,8 +51,9 @@ const STEPS = [
   { key: "account", label: "Created an account" },
   { key: "id_sent", label: "Sent photo ID" },
   { key: "id_ok", label: "ID approved" },
-  { key: "bg_started", label: "Background check started" },
-  { key: "bg_clear", label: "Background check clear" },
+  { key: "bg_started", label: "Checkr form sent" },
+  { key: "bg_submitted", label: "Filled out Checkr's form" },
+  { key: "bg_clear", label: "Checkr report clear" },
   { key: "payouts", label: "Payouts set up" },
   { key: "first_visit", label: "First paid visit" },
 ];
@@ -152,15 +161,24 @@ async function progressFor(db, contacts, now = new Date()) {
 
     const cp = await db.prepare(`
       SELECT id, checkr_status, is_background_checked, background_check_consent_at, checkr_invitation_id,
-             bg_check_admin_approved_at, stripe_onboard_complete
+             checkr_report_id, bg_check_admin_approved_at, stripe_onboard_complete
         FROM caregiver_profiles WHERE user_id = ?
     `).get(uid);
     if (cp) {
       const phase = phaseFor(cp.checkr_status, !!cp.is_background_checked);
-      if (cp.background_check_consent_at || cp.checkr_invitation_id || (phase !== PHASE.NOT_STARTED)) {
-        set(c.id, "bg_started", cp.background_check_consent_at || null);
-      }
-      if (phase === PHASE.CLEARED) set(c.id, "bg_clear", cp.bg_check_admin_approved_at || null);
+      const ev = await evidenceFor(db, uid);
+      // Sent: Checkr returned an invitation id. Older rows predate checkr_events, so an invitation
+      // id on the profile (which only Checkr's API response can have put there) counts, undated.
+      if (ev.sentAt) set(c.id, "bg_started", ev.sentAt);
+      else if (cp.checkr_invitation_id) set(c.id, "bg_started", null);
+      // Submitted: only Checkr's own word that the form was filled in.
+      if (ev.submittedAt) set(c.id, "bg_submitted", ev.submittedAt);
+      // Clear: a report Checkr finished as clear — or an admin approving a real report after
+      // review (consider_approved). A "cleared" flag with no Checkr report behind it is NOT
+      // shown as clear; it is flagged for Pete instead.
+      if (ev.result === "clear") set(c.id, "bg_clear", ev.resultAt);
+      else if (phase === PHASE.CLEARED && cp.checkr_report_id) set(c.id, "bg_clear", cp.bg_check_admin_approved_at || null);
+      else if (phase === PHASE.CLEARED) facts.get(c.id)._bgClearNoReport = true;
       facts.get(c.id)._bgPhase = phase;
       if (cp.stripe_onboard_complete) set(c.id, "payouts", null);
       const pay = await db.prepare(
@@ -196,6 +214,7 @@ async function progressFor(db, contacts, now = new Date()) {
     else if (f._bgPhase === PHASE.BLOCKED_PENDING_REVIEW) flag = "bg_needs_review";
     else if (f._bgPhase === PHASE.UNDER_REVIEW) flag = "bg_under_review";
     else if (f._idRejected) flag = "id_rejected";
+    else if (f._bgClearNoReport) flag = "bg_clear_no_report";
 
     out.set(c.id, {
       steps,

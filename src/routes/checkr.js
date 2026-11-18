@@ -7,6 +7,7 @@ const { writeAuditLog } = require("../middleware/auditLog");
 const { captureException } = require("../utils/sentry");
 const { phaseFor, PHASE } = require("../constants/checkrStatus");
 const { blockPendingAdminReview } = require("../utils/caregiverBlock");
+const { recordCheckrEvent, evidenceFor, evidenceForMany, notifyAdmins } = require("../utils/checkrEvidence");
 
 const router = express.Router();
 
@@ -103,7 +104,7 @@ router.post("/session-token", authenticate, requireRole("caregiver"), async (req
     if (!profile) return res.status(404).json({ error: "Caregiver profile not found" });
 
     // Use the configured package or default
-    const packageSlug = process.env.CHECKR_PACKAGE || "essential_criminal";
+    const { slug: packageSlug } = await resolvePackage();
 
     // Request a session token from Checkr — this is what the Embed uses
     const tokenData = await checkrRequest("POST", "/embed_sessions", {
@@ -135,6 +136,262 @@ router.get("/config", authenticate, async (req, res) => {
       : "https://embed.checkr.com",
   });
 });
+
+// ─── resolvePackage — which Checkr package InPlace orders (v1.131.0) ───
+//
+// One answer for every route. CHECKR_PACKAGE wins if it names a package on the account; otherwise
+// the package called "inPlace Starter" (Pete's — SSN trace, national criminal, sex offender, global
+// watchlist, MVR; $39.49 on the dashboard 11/18). If neither exists we REFUSE rather than order
+// whatever Checkr lists first: a wrong package is a wrong bill and a wrong screening.
+const STARTER_NAME = /^in\s*place\s*starter$/i;
+async function resolvePackage() {
+  const wanted = (process.env.CHECKR_PACKAGE || "").trim();
+  let nodeId = null;
+  let packages = [];
+  try {
+    const nodesResp = await checkrRequest("GET", "/nodes?include=packages");
+    const nodes = nodesResp?.data || [];
+    if (nodes.length > 0) {
+      nodeId = nodes[0].id; // InPlace has one business line
+      packages = nodes[0].packages || [];
+    }
+  } catch (e) {
+    // Account hierarchy is not enabled on every account — fall through to GET /packages.
+  }
+  if (!packages.length) {
+    try {
+      const pkgsResp = await checkrRequest("GET", "/packages");
+      packages = pkgsResp?.data || [];
+    } catch (e) {
+      console.warn("[checkr] GET /packages failed:", e.message);
+    }
+  }
+  if (!packages.length) {
+    // Could not list them; order by name and let Checkr refuse a bad one, rather than guess.
+    return { slug: wanted || "inplace_starter", nodeId };
+  }
+  const bySlug = (s) => packages.find((p) => p.slug === s);
+  const pick = (wanted && bySlug(wanted))
+    || packages.find((p) => STARTER_NAME.test(String(p.name || "").trim()))
+    || bySlug("inplace_starter");
+  if (!pick) {
+    throw new Error(`No "inPlace Starter" package on the Checkr account (found: ${packages.map((p) => p.slug).join(", ")}). Refusing to order a different one.`);
+  }
+  return { slug: pick.slug, nodeId };
+}
+
+// ─── sendInvitation — the one way a Checkr invitation is created (v1.131.0) ───
+//
+// Used by the caregiver's own "Email me the Checkr form" button AND by the admin's "Send Checkr
+// form" button (Pete, 11/18: "do something that allows me to send them an email on file to
+// complete their background check. Because I have to be able to test it before I tell paying
+// customers 'it works!'"). One function so the two can never drift.
+//
+// Billing: the invitation is created with InPlace's own API key against InPlace's package, so
+// Checkr invoices InPlace's account — the caregiver is never asked to pay Checkr anything.
+//
+// Returns { code, body } instead of writing to res, so both routes can answer with it.
+async function sendInvitation(db, userId, opts = {}) {
+  const reply = (code, body) => ({ code, body });
+  try {
+      const profile = await db.prepare(
+        "SELECT * FROM caregiver_profiles WHERE user_id = ?"
+      ).get(userId);
+
+      if (!profile) return reply(404, { error: "Caregiver profile not found" });
+
+      // Verify payment was made (staging can bypass).
+      // An admin sending the form is InPlace choosing to cover it: Checkr bills InPlace's account
+      // either way, and the $30 caregiver fee is InPlace's own policy, which an admin may waive.
+      // Consent: Checkr's own form collects the FCRA disclosure and authorization from her before
+      // anything is run, so an admin-sent invitation does not need the InPlace checkbox first.
+      const isStaging = process.env.CHECKR_STAGING === "true";
+      const byAdmin = opts.actor === "admin";
+      if (byAdmin && !profile.background_check_paid) {
+        await db.prepare("UPDATE caregiver_profiles SET background_check_paid = 1, updated_at = NOW() WHERE user_id = ?").run(userId);
+        profile.background_check_paid = 1;
+      }
+      if (byAdmin && !profile.background_check_consent) profile.background_check_consent = 1;
+      if (!profile.background_check_paid && !isStaging) {
+        return reply(400, { error: "Background check payment required first" });
+      }
+      if (!profile.background_check_paid && isStaging) {
+        // In staging, auto-mark as paid so the flow continues
+        await db.prepare("UPDATE caregiver_profiles SET background_check_paid = 1, updated_at = NOW() WHERE user_id = ?").run(userId);
+        console.log(`[checkr] Staging: auto-marked background_check_paid for user ${userId}`);
+      }
+
+      // Verify consent (staging can bypass)
+      if (!profile.background_check_consent && !isStaging) {
+        return reply(400, { error: "Background check consent required" });
+      }
+      if (!profile.background_check_consent && isStaging) {
+        await db.prepare("UPDATE caregiver_profiles SET background_check_consent = 1, background_check_consent_at = NOW(), updated_at = NOW() WHERE user_id = ?").run(userId);
+        console.log(`[checkr] Staging: auto-set background_check_consent for user ${userId}`);
+      }
+
+      // ─── v1.106.14 — a failed check is not self-service ───
+      //
+      // This used to include 'rejected' and 'did_not_pass', so a caregiver who had failed could
+      // press the button and start a fresh check with nobody told. Pete's rule is the opposite:
+      // "they don't get an invitation to do anything until I am in the loop and have reviewed
+      // their check." Re-initiating is now limited to checks that ended WITHOUT a result — an
+      // expired or cancelled invitation, where starting again is simply finishing what was begun.
+      //
+      // An adverse outcome needs an admin. RESTARTABLE in constants/checkrStatus.js is the same
+      // set for the same reason, and the test pins them equal so they cannot drift.
+      const { RESTARTABLE } = require("../constants/checkrStatus");
+      const reInitiatableStatuses = RESTARTABLE;
+      if (profile.checkr_candidate_id && profile.checkr_invitation_id) {
+        // An admin may also re-send a form that is out and unanswered ('invitation_sent') — that is
+        // "she lost the email", not a second check. Nothing with a result is re-sendable by anyone.
+        const resendable = byAdmin && profile.checkr_status === "invitation_sent";
+        if (!reInitiatableStatuses.includes(profile.checkr_status) && !resendable) {
+          return reply(200, {
+            status: "already_initiated",
+            checkrStatus: profile.checkr_status,
+            message: "Background check has already been initiated."
+          });
+        }
+        // Re-initiating: clear old invitation so a new one can be created
+        console.log(`[checkr] Re-initiating BG check for user ${userId} (previous status: ${profile.checkr_status})`);
+      }
+
+      // Verify required fields
+      const user = await db.prepare("SELECT * FROM users WHERE id = ?").get(userId);
+      const missing = [];
+      if (!profile.legal_first_name) missing.push("legal first name");
+      if (!profile.legal_last_name) missing.push("legal last name");
+      if (!profile.date_of_birth) missing.push("date of birth");
+      if (!user.email) missing.push("email");
+      if (missing.length > 0) {
+        return reply(400, {
+          error: `Missing required info: ${missing.join(", ")}`,
+          missing
+        });
+      }
+
+      // Determine email for Checkr candidate
+      // In staging: use override email from request body, or strip plus-addressing from account email
+      let checkrEmail = user.email;
+      if (isStaging) {
+        if (opts.checkrEmail) {
+          checkrEmail = opts.checkrEmail;
+        } else {
+          // Strip plus-addressing: peter+nick@yourinplace.com → peter@yourinplace.com
+          checkrEmail = user.email.replace(/\+[^@]*@/, '@');
+        }
+        console.log(`[checkr] Staging: using email ${checkrEmail} for Checkr (account email: ${user.email})`);
+      }
+
+      // Step 1: Create or reuse candidate in Checkr
+      // Certification requires: first_name, middle_name OR no_middle_name, last_name, zip, phone, email, custom_id
+      let candidate;
+      if (profile.checkr_candidate_id) {
+        // Re-initiation: reuse existing candidate
+        console.log(`[checkr] Reusing existing candidate ${profile.checkr_candidate_id} for user ${userId}`);
+        candidate = { id: profile.checkr_candidate_id };
+      } else {
+        console.log(`[checkr] Creating candidate for ${profile.legal_first_name} ${profile.legal_last_name}`);
+        const candidatePayload = {
+          first_name: profile.legal_first_name,
+          last_name: profile.legal_last_name,
+          no_middle_name: !profile.legal_middle_name,
+          email: checkrEmail,
+          phone: user.phone || undefined,
+          dob: profile.date_of_birth,
+          // SSN not sent here — candidate provides full SSN via Checkr's invitation flow
+          zipcode: profile.zip || undefined,
+          work_locations: [{ country: "US", state: profile.location_state || "VA", city: profile.location_city || "Radford" }],
+          custom_id: userId,
+          driver_license_number: profile.dl_number || undefined,
+          driver_license_state: profile.dl_state || undefined,
+        };
+        if (profile.legal_middle_name) candidatePayload.middle_name = profile.legal_middle_name;
+        candidate = await checkrRequest("POST", "/candidates", candidatePayload);
+        console.log(`[checkr] Candidate created: ${candidate.id}`);
+      }
+
+      // Save candidate ID immediately (or reset status for re-initiation)
+      await db.prepare(
+        "UPDATE caregiver_profiles SET checkr_candidate_id = ?, checkr_status = 'initiated', checkr_eta = NULL, updated_at = NOW() WHERE user_id = ?"
+      ).run(candidate.id, userId);
+
+      // Step 2: Create invitation — Checkr emails the candidate a link
+      // to provide full SSN, consent, and complete the background check
+      console.log(`[checkr] Creating invitation for candidate ${candidate.id}`);
+
+      // The package is pinned — see resolvePackage(). It used to take "the first package on
+      // the account", and the account also holds Complete Criminal ($89.99) and international
+      // packages; which one came first was up to Checkr's sort order.
+      const { slug: packageSlug, nodeId } = await resolvePackage();
+
+      const invitationPayload = {
+        candidate_id: candidate.id,
+        package: packageSlug,
+        work_locations: [{ city: profile.location_city || "Radford", state: profile.location_state || "VA", country: "US" }],
+      };
+      if (nodeId) invitationPayload.node = nodeId;
+
+      const invitation = await checkrRequest("POST", "/invitations", invitationPayload);
+
+      console.log(`[checkr] Invitation created: ${invitation.id}, status: ${invitation.status}`);
+
+      // Save invitation ID
+      await db.prepare(
+        "UPDATE caregiver_profiles SET checkr_invitation_id = ?, checkr_status = 'invitation_sent', updated_at = NOW() WHERE user_id = ?"
+      ).run(invitation.id, userId);
+
+      // Audit log
+      writeAuditLog({
+        userId: userId,
+        userEmail: user.email,
+        userRole: "caregiver",
+        action: "checkr_initiated",
+        endpoint: "/api/checkr/initiate",
+        method: "POST",
+        details: { candidateId: candidate.id, invitationId: invitation.id, package: packageSlug },
+        severity: "info",
+      });
+
+
+    // Evidence, not vibes: Checkr's API answered with a real invitation id. That is the one fact
+    // this step is allowed to claim, and it is recorded as such (utils/checkrEvidence).
+    await recordCheckrEvent(db, {
+      source: "api", type: "invitation.created", userId,
+      candidateId: candidate.id, invitationId: invitation.id, status: invitation.status || null,
+    });
+    await db.prepare(
+      "UPDATE caregiver_profiles SET checkr_invitation_url = ?, checkr_invitation_sent_to = ? WHERE user_id = ?"
+    ).run(invitation.invitation_url || null, checkrEmail, userId);
+
+    const who = `${user.first_name || ""} ${user.last_name || ""}`.trim() || user.email;
+    await notifyAdmins(db, {
+      eventType: "checkr_invitation_sent",
+      title: `✉️ Checkr form sent — ${who}`,
+      message: `Checkr created invitation ${invitation.id} for ${who} and is emailing it to ${checkrEmail}`
+        + (opts.actor === "admin" ? " (sent by an admin)." : " (the caregiver asked for it).")
+        + " InPlace's Checkr account will be billed when the report completes.",
+      pushTitle: "Background check form sent",
+      pushBody: "Checkr is emailing a caregiver their background check form. Open InPlace for details.",
+      metadata: { userId, candidateId: candidate.id, invitationId: invitation.id, package: packageSlug, actor: opts.actor || "caregiver" },
+    });
+
+    return reply(200, {
+      status: "invitation_sent",
+      message: `Checkr is emailing the background check form to ${checkrEmail}.`,
+      sentTo: checkrEmail,
+      candidateId: candidate.id,
+      invitationId: invitation.id,
+      invitationUrl: invitation.invitation_url || null,
+      package: packageSlug,
+    });
+  } catch (err) {
+    console.error("[checkr] Initiation error:", err);
+    captureException(err, { where: "checkr: sendInvitation", userId });
+    return reply(500, { error: "Failed to send the background check form. Please try again or contact support.", detail: err.message });
+  }
+}
 
 // ─── POST /api/checkr/initiate ───
 // Called after background check payment succeeds.
@@ -175,196 +432,9 @@ router.post("/initiate", authenticate, requireRole("caregiver"), async (req, res
     return res.status(503).json({ error: "Background check service is not configured yet." });
   }
 
-  try {
-    const profile = await db.prepare(
-      "SELECT * FROM caregiver_profiles WHERE user_id = ?"
-    ).get(req.user.id);
-
-    if (!profile) return res.status(404).json({ error: "Caregiver profile not found" });
-
-    // Verify payment was made (staging can bypass)
-    const isStaging = process.env.CHECKR_STAGING === "true";
-    if (!profile.background_check_paid && !isStaging) {
-      return res.status(400).json({ error: "Background check payment required first" });
-    }
-    if (!profile.background_check_paid && isStaging) {
-      // In staging, auto-mark as paid so the flow continues
-      await db.prepare("UPDATE caregiver_profiles SET background_check_paid = 1, updated_at = NOW() WHERE user_id = ?").run(req.user.id);
-      console.log(`[checkr] Staging: auto-marked background_check_paid for user ${req.user.id}`);
-    }
-
-    // Verify consent (staging can bypass)
-    if (!profile.background_check_consent && !isStaging) {
-      return res.status(400).json({ error: "Background check consent required" });
-    }
-    if (!profile.background_check_consent && isStaging) {
-      await db.prepare("UPDATE caregiver_profiles SET background_check_consent = 1, background_check_consent_at = NOW(), updated_at = NOW() WHERE user_id = ?").run(req.user.id);
-      console.log(`[checkr] Staging: auto-set background_check_consent for user ${req.user.id}`);
-    }
-
-    // ─── v1.106.14 — a failed check is not self-service ───
-    //
-    // This used to include 'rejected' and 'did_not_pass', so a caregiver who had failed could
-    // press the button and start a fresh check with nobody told. Pete's rule is the opposite:
-    // "they don't get an invitation to do anything until I am in the loop and have reviewed
-    // their check." Re-initiating is now limited to checks that ended WITHOUT a result — an
-    // expired or cancelled invitation, where starting again is simply finishing what was begun.
-    //
-    // An adverse outcome needs an admin. RESTARTABLE in constants/checkrStatus.js is the same
-    // set for the same reason, and the test pins them equal so they cannot drift.
-    const { RESTARTABLE } = require("../constants/checkrStatus");
-    const reInitiatableStatuses = RESTARTABLE;
-    if (profile.checkr_candidate_id && profile.checkr_invitation_id) {
-      if (!reInitiatableStatuses.includes(profile.checkr_status)) {
-        return res.json({
-          status: "already_initiated",
-          checkrStatus: profile.checkr_status,
-          message: "Background check has already been initiated."
-        });
-      }
-      // Re-initiating: clear old invitation so a new one can be created
-      console.log(`[checkr] Re-initiating BG check for user ${req.user.id} (previous status: ${profile.checkr_status})`);
-    }
-
-    // Verify required fields
-    const user = await db.prepare("SELECT * FROM users WHERE id = ?").get(req.user.id);
-    const missing = [];
-    if (!profile.legal_first_name) missing.push("legal first name");
-    if (!profile.legal_last_name) missing.push("legal last name");
-    if (!profile.date_of_birth) missing.push("date of birth");
-    if (!user.email) missing.push("email");
-    if (missing.length > 0) {
-      return res.status(400).json({
-        error: `Missing required info: ${missing.join(", ")}`,
-        missing
-      });
-    }
-
-    // Determine email for Checkr candidate
-    // In staging: use override email from request body, or strip plus-addressing from account email
-    let checkrEmail = user.email;
-    if (isStaging) {
-      if (req.body.checkrEmail) {
-        checkrEmail = req.body.checkrEmail;
-      } else {
-        // Strip plus-addressing: peter+nick@yourinplace.com → peter@yourinplace.com
-        checkrEmail = user.email.replace(/\+[^@]*@/, '@');
-      }
-      console.log(`[checkr] Staging: using email ${checkrEmail} for Checkr (account email: ${user.email})`);
-    }
-
-    // Step 1: Create or reuse candidate in Checkr
-    // Certification requires: first_name, middle_name OR no_middle_name, last_name, zip, phone, email, custom_id
-    let candidate;
-    if (profile.checkr_candidate_id) {
-      // Re-initiation: reuse existing candidate
-      console.log(`[checkr] Reusing existing candidate ${profile.checkr_candidate_id} for user ${req.user.id}`);
-      candidate = { id: profile.checkr_candidate_id };
-    } else {
-      console.log(`[checkr] Creating candidate for ${profile.legal_first_name} ${profile.legal_last_name}`);
-      const candidatePayload = {
-        first_name: profile.legal_first_name,
-        last_name: profile.legal_last_name,
-        no_middle_name: !profile.legal_middle_name,
-        email: checkrEmail,
-        phone: user.phone || undefined,
-        dob: profile.date_of_birth,
-        // SSN not sent here — candidate provides full SSN via Checkr's invitation flow
-        zipcode: profile.zip || undefined,
-        work_locations: [{ country: "US", state: profile.location_state || "VA", city: profile.location_city || "Radford" }],
-        custom_id: req.user.id,
-        driver_license_number: profile.dl_number || undefined,
-        driver_license_state: profile.dl_state || undefined,
-      };
-      if (profile.legal_middle_name) candidatePayload.middle_name = profile.legal_middle_name;
-      candidate = await checkrRequest("POST", "/candidates", candidatePayload);
-      console.log(`[checkr] Candidate created: ${candidate.id}`);
-    }
-
-    // Save candidate ID immediately (or reset status for re-initiation)
-    await db.prepare(
-      "UPDATE caregiver_profiles SET checkr_candidate_id = ?, checkr_status = 'initiated', checkr_eta = NULL, updated_at = NOW() WHERE user_id = ?"
-    ).run(candidate.id, req.user.id);
-
-    // Step 2: Create invitation — Checkr emails the candidate a link
-    // to provide full SSN, consent, and complete the background check
-    console.log(`[checkr] Creating invitation for candidate ${candidate.id}`);
-
-    // Certification: retrieve account hierarchy nodes and packages dynamically
-    let packageSlug = process.env.CHECKR_PACKAGE || "inplace_starter";
-    let nodeId = null;
-    try {
-      const nodesResp = await checkrRequest("GET", "/nodes?include=packages");
-      const nodes = nodesResp?.data || [];
-      if (nodes.length > 0) {
-        // Use the first node (InPlace only has one business line)
-        nodeId = nodes[0].id;
-        // If the node has assigned packages, use the first one
-        const nodePackages = nodes[0].packages || [];
-        if (nodePackages.length > 0) {
-          packageSlug = nodePackages[0].slug || nodePackages[0].name || packageSlug;
-        }
-      }
-    } catch (nodesErr) {
-      // Account hierarchy may not be enabled — fall back to GET /packages
-      console.warn("[checkr] GET /nodes failed, falling back to GET /packages:", nodesErr.message);
-    }
-
-    // Also call GET /packages as fallback / for accounts without hierarchy
-    if (!nodeId) {
-      try {
-        const pkgsResp = await checkrRequest("GET", "/packages");
-        const packages = pkgsResp?.data || [];
-        if (packages.length > 0) {
-          // Prefer configured package if it's in the list, otherwise use first available
-          const match = packages.find(p => p.slug === packageSlug);
-          if (!match && packages[0]?.slug) packageSlug = packages[0].slug;
-        }
-      } catch (pkgErr) {
-        console.warn("[checkr] GET /packages failed, using default:", pkgErr.message);
-      }
-    }
-
-    const invitationPayload = {
-      candidate_id: candidate.id,
-      package: packageSlug,
-      work_locations: [{ city: profile.location_city || "Radford", state: profile.location_state || "VA", country: "US" }],
-    };
-    if (nodeId) invitationPayload.node = nodeId;
-
-    const invitation = await checkrRequest("POST", "/invitations", invitationPayload);
-
-    console.log(`[checkr] Invitation created: ${invitation.id}, status: ${invitation.status}`);
-
-    // Save invitation ID
-    await db.prepare(
-      "UPDATE caregiver_profiles SET checkr_invitation_id = ?, checkr_status = 'invitation_sent', updated_at = NOW() WHERE user_id = ?"
-    ).run(invitation.id, req.user.id);
-
-    // Audit log
-    writeAuditLog({
-      userId: req.user.id,
-      userEmail: user.email,
-      userRole: "caregiver",
-      action: "checkr_initiated",
-      endpoint: "/api/checkr/initiate",
-      method: "POST",
-      details: { candidateId: candidate.id, invitationId: invitation.id, package: packageSlug },
-      severity: "info",
-    });
-
-    res.json({
-      status: "invitation_sent",
-      message: "Background check initiated. You'll receive an email from Checkr to complete the process.",
-      candidateId: candidate.id,
-      invitationId: invitation.id,
-      invitationUrl: invitation.invitation_url || null,
-    });
-
-  } catch (err) {
-    console.error("[checkr] Initiation error:", err);
-    res.status(500).json({ error: "Failed to initiate background check. Please try again or contact support." });
-  }
+  const out = await sendInvitation(db, req.user.id, { checkrEmail: req.body && req.body.checkrEmail, actor: "caregiver" });
+  if (out.code >= 500) delete out.body.detail; // the caregiver gets the plain sentence; Sentry has the rest
+  return res.status(out.code).json(out.body);
 });
 
 // ─── GET /api/checkr/status ───
@@ -383,7 +453,8 @@ router.get("/status", authenticate, requireRole("caregiver"), async (req, res) =
       checkrConfigured: !!process.env.CHECKR_API_KEY,
       staging: process.env.CHECKR_STAGING === "true",
       paid: !!profile.background_check_paid,
-      status: profile.is_background_checked ? "complete" : (profile.checkr_status || "pending"),
+      // v1.131.0 — never 'pending' for "nothing has happened": that word was read as "running".
+      status: profile.is_background_checked ? "complete" : (profile.checkr_status || "not_started"),
       // v1.106.13 — `status` above is a Checkr implementation detail, and the two screens that
       // consumed it each enumerated a different subset of the fifteen possible values, silently
       // funnelling the rest into a default. `phase` is the derived situation the UI actually
@@ -404,6 +475,20 @@ router.get("/status", authenticate, requireRole("caregiver"), async (req, res) =
         if (candidate.report_ids && candidate.report_ids.length > 0) {
           const reportId = candidate.report_ids[0];
           const report = await checkrRequest("GET", `/reports/${reportId}`);
+
+          // v1.131.0 — Checkr's API just showed us a report exists (and maybe its result). That is
+          // evidence; record it the same way a webhook would be, deduped on a synthetic id.
+          await recordCheckrEvent(db, {
+            source: "api", type: "report.created", eventId: `api:report.created:${reportId}`,
+            userId: req.user.id, candidateId: profile.checkr_candidate_id, reportId, status: report.status || null,
+          });
+          if (report.status === "complete" && report.result) {
+            await recordCheckrEvent(db, {
+              source: "api", type: "report.completed", eventId: `api:report.completed:${reportId}`,
+              userId: req.user.id, candidateId: profile.checkr_candidate_id, reportId,
+              status: report.status, result: report.result,
+            });
+          }
 
           // Update our records with latest status
           // Certification: use report.result (clear/consider) for findings, report.status for lifecycle (complete/pending)
@@ -426,12 +511,23 @@ router.get("/status", authenticate, requireRole("caregiver"), async (req, res) =
           response.status = newStatus;
           response.cleared = cleared;
           response.reportId = reportId;
+          response.phase = phaseFor(newStatus, cleared);
         }
       } catch (err) {
         console.error("[checkr] Status check error:", err.message);
         // Don't fail the request — return cached status
       }
     }
+
+    // v1.131.0 — the dates Checkr confirmed, so the screen can say "Checkr confirmed it has your
+    // form on Nov 18" instead of "processing". Where the invitation went and its link, for
+    // "check your email" and "open the form".
+    response.evidence = await evidenceFor(db, req.user.id);
+    const inv = await db.prepare(
+      "SELECT checkr_invitation_url, checkr_invitation_sent_to FROM caregiver_profiles WHERE user_id = ?"
+    ).get(req.user.id);
+    response.invitationUrl = inv?.checkr_invitation_url || null;
+    response.sentTo = inv?.checkr_invitation_sent_to || null;
 
     res.json(response);
   } catch (err) {
@@ -505,6 +601,47 @@ async function blockOnAdverse(db, candidateId, source, caregiverReason) {
   }
 }
 
+// ─── linkUnknownCandidate (v1.131.0) ───
+// Only acts when no caregiver profile carries this candidate id. Reads the candidate from Checkr's
+// API (so this is Checkr's word, not a guess), then matches custom_id → users.id, else the email
+// → a caregiver account with that email. Never overwrites a profile already linked to a
+// different candidate. Never throws.
+async function linkUnknownCandidate(db, candidateId, invitationId) {
+  if (!candidateId) return null;
+  try {
+    const known = await db.prepare("SELECT user_id FROM caregiver_profiles WHERE checkr_candidate_id = ?").get(candidateId);
+    if (known) return known.user_id;
+    const cand = await checkrRequest("GET", `/candidates/${candidateId}`);
+    let user = null;
+    if (cand.custom_id) {
+      user = await db.prepare("SELECT id FROM users WHERE id = ?").get(String(cand.custom_id));
+    }
+    if (!user && cand.email) {
+      user = await db.prepare(
+        "SELECT u.id FROM users u JOIN caregiver_profiles cp ON cp.user_id = u.id WHERE LOWER(u.email) = LOWER(?) AND COALESCE(u.is_demo, 0) = 0 LIMIT 1"
+      ).get(String(cand.email));
+    }
+    if (!user) {
+      console.warn(`[checkr-webhook] candidate ${candidateId} matches no InPlace caregiver`);
+      return null;
+    }
+    const res = await db.prepare(`
+      UPDATE caregiver_profiles
+         SET checkr_candidate_id = ?,
+             checkr_invitation_id = COALESCE(?, checkr_invitation_id),
+             checkr_status = CASE WHEN checkr_status IS NULL OR checkr_status IN ('pending', 'initiated') THEN 'invitation_sent' ELSE checkr_status END,
+             updated_at = NOW()
+       WHERE user_id = ? AND (checkr_candidate_id IS NULL OR checkr_candidate_id = '')
+    `).run(candidateId, invitationId, user.id);
+    if (res.changes > 0) console.log(`[checkr-webhook] linked dashboard-ordered candidate ${candidateId} to user ${user.id}`);
+    else console.warn(`[checkr-webhook] user ${user.id} is already linked to another candidate — not relinking ${candidateId}`);
+    return res.changes > 0 ? user.id : null;
+  } catch (e) {
+    console.error("[checkr-webhook] candidate lookup failed:", e.message);
+    return null;
+  }
+}
+
 router.post("/webhook", express.raw({ type: "application/json", limit: "100kb" }), async (req, res) => {
   const db = await getDb();
   const rawBody = req.body; // Buffer (raw bytes)
@@ -516,8 +653,17 @@ router.post("/webhook", express.raw({ type: "application/json", limit: "100kb" }
   // is_background_checked = 1 for any candidate. The secret IS set on Railway today, which made
   // this latent rather than live — but "we currently happen to have configured it" is not a
   // control. payments.js:85 already fails closed on its Stripe secret; same shape here.
-  if (!webhookSecret) {
-    console.error("[checkr-webhook] CHECKR_WEBHOOK_SECRET is not set — refusing to process");
+  //
+  // v1.131.0 — Checkr signs webhooks with the account's SECRET API KEY (HMAC-SHA256 of the raw
+  // body, X-Checkr-Signature). There is no separate "webhook secret" in Checkr's dashboard, so
+  // CHECKR_WEBHOOK_SECRET only works while it happens to equal the API key — and the API key was
+  // rotated on 10/21. Either key that is configured is accepted; neither configured still fails
+  // closed. Accepting the live API key adds no attacker surface: anyone holding it can already
+  // call Checkr as us.
+  const apiKey = (process.env.CHECKR_API_KEY || "").trim();
+  const secrets = [webhookSecret, apiKey].map((x) => (x || "").trim()).filter(Boolean);
+  if (!secrets.length) {
+    console.error("[checkr-webhook] neither CHECKR_WEBHOOK_SECRET nor CHECKR_API_KEY is set — refusing to process");
     return res.status(503).json({ error: "Webhook not configured" });
   }
   {
@@ -528,17 +674,20 @@ router.post("/webhook", express.raw({ type: "application/json", limit: "100kb" }
     }
     // Checkr uses HMAC-SHA256 on the raw body
     const crypto = require("crypto");
-    const expectedSig = crypto
-      .createHmac("sha256", webhookSecret)
-      .update(rawBody)
-      .digest("hex");
     // Constant-time: a plain !== leaks where the first byte differs, one request at a time.
     const timingSafeEqual = (a, b) => {
       const ab = Buffer.from(String(a)), bb = Buffer.from(String(b));
       return ab.length === bb.length && crypto.timingSafeEqual(ab, bb);
     };
-    if (!timingSafeEqual(signature, expectedSig) && !timingSafeEqual(signature, `sha256=${expectedSig}`)) {
+    const ok = secrets.some((secret) => {
+      const expectedSig = crypto.createHmac("sha256", secret).update(rawBody).digest("hex");
+      return timingSafeEqual(signature, expectedSig) || timingSafeEqual(signature, `sha256=${expectedSig}`);
+    });
+    if (!ok) {
+      // Loud: a webhook we refuse is a confirmation that never lands, and every screen then
+      // (correctly) keeps saying "not confirmed". Sentry makes the cause findable.
       console.warn("[checkr-webhook] Invalid signature");
+      captureException(new Error("Checkr webhook signature did not verify against any configured key"), { where: "checkr: webhook signature" });
       return res.status(401).json({ error: "Invalid signature" });
     }
   }
@@ -554,6 +703,26 @@ router.post("/webhook", express.raw({ type: "application/json", limit: "100kb" }
 
   const { type, data } = body;
   console.log(`[checkr-webhook] Event: ${type}`, JSON.stringify(data?.object || {}).substring(0, 200));
+
+  // v1.131.0 — the evidence row. Signature has verified, so this is Checkr speaking. Written
+  // before the handlers run; ids are read by object kind, because `object.id` is a report id on
+  // report.* events, an invitation id on invitation.* and a candidate id on candidate.*.
+  {
+    const o = (data && data.object) || {};
+    const kind = String(type || "").split(".")[0];
+    // A check ordered from Checkr's dashboard (Pete, 11/18: "there's also a form open in checkr
+    // that I can send it to her direct") carries a candidate id InPlace never saw. Ask Checkr who
+    // the candidate is and attach them to the caregiver by our user id (custom_id) or email —
+    // otherwise every handler below would match nothing and the result would land nowhere.
+    await linkUnknownCandidate(db, kind === "candidate" ? o.id : o.candidate_id, kind === "invitation" ? o.id : null);
+    await recordCheckrEvent(db, {
+      source: "webhook", type, eventId: body.id || null,
+      candidateId: kind === "candidate" ? o.id : (o.candidate_id || null),
+      invitationId: kind === "invitation" ? o.id : (o.invitation_id || null),
+      reportId: kind === "report" ? o.id : (o.report_id || null),
+      status: o.status || null, result: o.result || null,
+    });
+  }
 
   // Log every webhook event to the database for debugging/certification
   try {
@@ -1221,9 +1390,14 @@ router.get("/admin/candidates", authenticate, async (req, res) => {
       FROM bg_admin_vouches v JOIN users fu ON fu.id = v.family_user_id
       WHERE v.revoked_at IS NULL
     `).all();
+    // v1.131.0 — what Checkr has actually confirmed, per caregiver. The admin list shows these
+    // dates and nothing else as fact.
+    const evidence = await evidenceForMany(db, candidates.map((c) => c.user_id));
     for (const c of candidates) {
       c.vouches = allVouches.filter((v) => v.caregiver_user_id === c.user_id);
       c.manually_set_no_report = !!c.is_background_checked && !c.checkr_report_id;
+      c.evidence = evidence.get(c.user_id);
+      c.phase = phaseFor(c.checkr_status, !!c.is_background_checked);
     }
 
     res.json({ candidates });
@@ -1231,6 +1405,38 @@ router.get("/admin/candidates", authenticate, async (req, res) => {
     console.error("[checkr] Admin candidates error:", err);
     res.status(500).json({ error: "Failed to fetch candidates" });
   }
+});
+
+// ─── POST /api/checkr/admin/send-invitation/:userId — Admin: email her the Checkr form ───
+//
+// Pete, 11/18: "do something that allows me to send them an email on file to complete their
+// background check. Because I have to be able to test it before I tell paying customers 'it
+// works!'" Same sendInvitation() the caregiver's own button uses, to the email on her account,
+// billed to InPlace's Checkr account. Works on Pete's own caregiver profile, which is how he
+// tests it end to end.
+router.post("/admin/send-invitation/:userId", authenticate, async (req, res) => {
+  const db = await getDb();
+  const admin = await db.prepare("SELECT is_admin, email FROM users WHERE id = ?").get(req.user.id);
+  if (!admin?.is_admin) return res.status(403).json({ error: "Admin only" });
+  if (!(await bgChecksEnabled())) {
+    return res.status(503).json({ error: "Background checks are switched off (Admin → BG Checks)." });
+  }
+  try { getCheckrKey(); } catch {
+    return res.status(503).json({ error: "CHECKR_API_KEY is not configured." });
+  }
+  const target = await db.prepare("SELECT id, COALESCE(is_demo, 0) AS is_demo FROM users WHERE id = ?").get(req.params.userId);
+  if (!target) return res.status(404).json({ error: "User not found" });
+  // Dev Rule 7's cousin: a demo person must never become a billed Checkr order.
+  if (target.is_demo) return res.status(400).json({ error: "Demo accounts can't be sent to Checkr." });
+
+  const out = await sendInvitation(db, target.id, { actor: "admin" });
+  writeAuditLog({
+    userId: req.user.id, userEmail: admin.email, userRole: "admin",
+    action: "checkr_invitation_sent_by_admin", endpoint: "/api/checkr/admin/send-invitation", method: "POST",
+    details: { targetUserId: target.id, code: out.code, invitationId: out.body.invitationId || null },
+    severity: out.code === 200 ? "info" : "warning",
+  });
+  return res.status(out.code).json(out.body);
 });
 
 // ─── POST /api/checkr/test-candidate — Admin: test with mock candidate data ───
@@ -1275,7 +1481,7 @@ router.post("/test-candidate", authenticate, async (req, res) => {
     console.log(`[checkr-test] Candidate created: ${candidate.id}`);
 
     // Step 2: Create invitation WITH work_locations
-    const packageSlug = process.env.CHECKR_PACKAGE || "essential_criminal";
+    const { slug: packageSlug } = await resolvePackage();
     const invitation = await checkrRequest("POST", "/invitations", {
       candidate_id: candidate.id,
       package: packageSlug,
@@ -1352,3 +1558,6 @@ router.get("/admin/packages", authenticate, async (req, res) => {
 });
 
 module.exports = router;
+
+// v1.131.0 — payments.js sends the form straight after a paid fee, through the same function.
+module.exports.sendInvitation = sendInvitation;

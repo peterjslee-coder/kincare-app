@@ -6436,9 +6436,11 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
       {activeTab === 'bgchecks' && (() => {
         const actionStatuses = ['consider', 'suspended', 'disputed', 'adverse_action', 'processing', 'invitation_sent', 'invitation_expired', 'invitation_canceled'];
         const filedStatuses = ['clear', 'consider_approved', 'rejected', 'did_not_pass'];
-        const actionItems = bgCheckCandidates.filter(c => actionStatuses.includes(c.checkr_status) || ((!c.checkr_status || c.checkr_status === 'pending') && !c.is_background_checked && !c.bg_check_admin_approved));
+        const actionItems = bgCheckCandidates.filter(c => actionStatuses.includes(c.checkr_status) || ((!c.checkr_status || c.checkr_status === 'pending' || c.checkr_status === 'initiated') && !c.is_background_checked && !c.bg_check_admin_approved));
         const filedItems = bgCheckCandidates.filter(c => filedStatuses.includes(c.checkr_status) || c.is_background_checked || c.bg_check_admin_approved);
-        const checkrDashUrl = 'https://dashboard.checkrhq-staging.net';
+        // v1.131.0 — this was hard-coded to Checkr's STAGING dashboard, so "View on Checkr" from
+        // production opened a different Checkr account that had never heard of the candidate.
+        const checkrDashUrl = /staging/.test(window.location.hostname) ? 'https://dashboard.checkrhq-staging.net' : 'https://dashboard.checkr.com';
 
         const getStatusColor = (s) => s === 'manual_no_report' ? 'var(--color-warning)' : s === 'vouched' ? 'var(--color-info)' :
           s === 'clear' ? 'var(--color-success)' : s === 'consider' ? 'var(--color-warning)' :
@@ -6455,7 +6457,10 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
         const getStatusLabel = (s) => s === 'manual_no_report' ? 'MANUALLY SET \u2014 NO REPORT' : s === 'vouched' ? 'VOUCHED \u2014 NO BG CHECK' :
           s === 'consider_approved' ? 'APPROVED (FLAGGED)' : s === 'rejected' ? 'REJECTED' :
           s === 'did_not_pass' ? 'DID NOT PASS' : s === 'invitation_canceled' ? 'CANCELED' :
-          (s || 'pending').replace(/_/g, ' ').toUpperCase();
+          // v1.131.0 — "nothing has been sent to Checkr" says so; it used to read PENDING.
+          s === 'not_sent' ? 'NOT SENT TO CHECKR' : s === 'invitation_sent' ? 'FORM EMAILED \u2014 WAITING ON THE CAREGIVER' :
+          s === 'processing' ? 'CHECKR HAS THE FORM' :
+          (s || 'not_sent').replace(/_/g, ' ').toUpperCase();
         const isHighlight = (s) => s === 'consider' || s === 'adverse_action' || s === 'suspended' || s === 'disputed' || s === 'did_not_pass';
 
         // ── v1.64.0 honest-override: vouch actions ──
@@ -6484,9 +6489,13 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
           // v1.64.0 honesty: a hand-set "cleared" flag with no Checkr report is
           // NOT 'clear', and a vouch is its own status — never shown as a check.
           const hasVouches = (c.vouches || []).length > 0;
+          // v1.131.0 — 'pending' was the column default and 'initiated' is written before Checkr
+          // sends anything; neither means Checkr has been asked. Both read as NOT SENT.
+          const notSent = !c.checkr_status || c.checkr_status === 'pending' || c.checkr_status === 'initiated';
           const effectiveStatus = c.manually_set_no_report ? 'manual_no_report'
-            : ((!c.checkr_status || c.checkr_status === 'pending') && c.is_background_checked) ? 'clear'
-            : ((!c.checkr_status || c.checkr_status === 'pending') && hasVouches) ? 'vouched'
+            : (notSent && c.is_background_checked) ? 'clear'
+            : (notSent && hasVouches) ? 'vouched'
+            : notSent ? 'not_sent'
             : c.checkr_status;
           const statusColor = getStatusColor(effectiveStatus);
           return (
@@ -6525,9 +6534,35 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                     </div>
                   ) : null}
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-                    {c.checkr_candidate_id ? `Candidate: ${c.checkr_candidate_id.substring(0, 12)}...` : 'Not yet submitted'}
+                    {c.checkr_candidate_id ? `Candidate: ${c.checkr_candidate_id.substring(0, 12)}...` : 'Checkr has never been contacted for this person'}
                     {c.checkr_report_id ? ` \u00B7 Report: ${c.checkr_report_id.substring(0, 12)}...` : ''}
                   </div>
+                  {/* v1.131.0 — what CHECKR confirmed, and when. Nothing here is our own inference:
+                      each line is a signed webhook or Checkr's API answering us. */}
+                  {(() => {
+                    const ev = c.evidence || {};
+                    const fmt = (t) => t ? new Date(t).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : null;
+                    const rows = [
+                      ['Checkr form sent', fmt(ev.sentAt)],
+                      ['Checkr has the form', fmt(ev.submittedAt)],
+                      ['Report finished' + (ev.result ? ` (${ev.result})` : ''), fmt(ev.resultAt)],
+                    ];
+                    return (
+                      <div style={{ marginTop: 6, fontSize: 11, lineHeight: 1.6 }}>
+                        {rows.map(([label, at]) => (
+                          <div key={label} style={{ color: at ? 'var(--color-success)' : 'var(--text-muted)' }}>
+                            {at ? '\u2713' : '\u25CB'} {label}{at ? ` \u2014 confirmed by Checkr ${at}` : ' \u2014 not confirmed by Checkr'}
+                          </div>
+                        ))}
+                        {(ev.events || []).length > 0 && (
+                          <div style={{ color: 'var(--text-muted)' }}>
+                            {(ev.events || []).length} message{(ev.events || []).length === 1 ? '' : 's'} from Checkr on file
+                            {' \u00B7 last: '}{ev.events[ev.events.length - 1].type}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                   {c.checkr_eta && effectiveStatus === 'processing' && (() => {
                     const eta = new Date(c.checkr_eta);
                     const now = new Date();
@@ -6542,6 +6577,26 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                   })()}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {/* v1.131.0 — Pete: "allows me to send them an email on file to complete their
+                      background check". Billed to InPlace's Checkr account. Re-sends a form that is
+                      out and unanswered; never re-runs a check that has a result. */}
+                  {(effectiveStatus === 'not_sent' || effectiveStatus === 'vouched' || effectiveStatus === 'invitation_sent'
+                    || effectiveStatus === 'invitation_expired' || effectiveStatus === 'invitation_canceled' || effectiveStatus === 'canceled') && !c.is_background_checked && (
+                    <button onClick={async () => {
+                      const again = effectiveStatus === 'invitation_sent';
+                      if (!confirm(`${again ? 'Re-send' : 'Send'} the Checkr background check form to ${c.first_name} at ${c.email}?\n\nCheckr emails the form. InPlace's Checkr account is billed (inPlace Starter) once the report completes.`)) return;
+                      try {
+                        const r = await apiFetch(`/api/checkr/admin/send-invitation/${c.user_id}`, { method: 'POST' });
+                        const d = await r.json().catch(() => ({}));
+                        if (r.ok && d.status === 'invitation_sent') showToast(`Checkr is emailing the form to ${d.sentTo}`, 'success');
+                        else if (r.ok && d.status === 'already_initiated') showToast('Checkr already has a check running for this person', 'info');
+                        else showToast(d.detail || d.error || 'Checkr refused the request', 'error');
+                        loadBgChecks();
+                      } catch { showToast('Could not reach the server', 'error'); }
+                    }} style={{ padding: '5px 12px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+                      {'\u2709\uFE0F'} {effectiveStatus === 'invitation_sent' ? 'Re-send Checkr form' : 'Send Checkr form'}
+                    </button>
+                  )}
                   {c.checkr_candidate_id && (
                     <a href={`${checkrDashUrl}/candidates/${c.checkr_candidate_id}`} target="_blank" rel="noopener noreferrer"
                       style={{ padding: '5px 12px', background: 'var(--color-info)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer', textDecoration: 'none', textAlign: 'center' }}>

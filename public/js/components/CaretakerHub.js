@@ -1484,7 +1484,12 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const securityReviewed = !!profile.accountSecured;
   const stripeConnected = stripeStatus?.status === 'active';
   const bgPaid = !!profile.background_check_paid || !!profile.isBackgroundChecked;
-  const bgCheckSubmitted = !!profile.isBackgroundChecked || (profile.checkrStatus && profile.checkrStatus !== 'pending' && profile.checkrStatus !== 'not_initiated');
+  // v1.131.0 — "submitted" means CHECKR has her form, from the server's phase (which only Checkr's
+  // webhooks or API can move past awaiting_caregiver). It used to be "any status but 'pending'",
+  // so 'initiated' — a value we write before Checkr has sent anything — counted as submitted.
+  const bgCheckSubmitted = !!profile.isBackgroundChecked
+    || ['in_progress', 'under_review', 'cleared', 'blocked_pending_review'].includes(profile.checkrPhase);
+  const bgFormOut = profile.checkrPhase === 'awaiting_caregiver';
   // v1.105.63 — an admin granted the fee rather than the caregiver paying it. Same flag on the
   // profile; only the payments table knows which. See routes/dashboard.js.
   const feeWaived = !!profile.backgroundCheckFeeWaived;
@@ -1527,7 +1532,11 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
             : 'This is a one-time $30 fee that is refunded after 10 completed sessions. ')
         + 'Your report is reviewed fairly — you\'ll be given a chance to provide context on anything that comes up, and a real person is always in the loop.',
       done: bgCheckSubmitted || bgOverride,
-      missing: !(bgCheckSubmitted || bgOverride) ? (bgPaid ? 'Complete the background check form' : ((stripeConnected || stripeOverride) ? 'Pay for background check ($30)' : 'Complete Stripe setup first')) : null,
+      missing: !(bgCheckSubmitted || bgOverride)
+        ? (bgFormOut ? 'Fill in the form Checkr emailed you'
+          : (bgPaid ? 'Get your Checkr form \u2014 it comes by email (Account \u2192 Background Check)'
+            : ((stripeConnected || stripeOverride) ? 'Pay for background check ($30)' : 'Complete Stripe setup first')))
+        : null,
       warning: (!profile.isBackgroundChecked && adminVouches.length > 0 && !bgCheckSubmitted)
         ? (familyOnly
           // Not "approved" — nobody at InPlace checked anything. The family brought her in.
@@ -2400,12 +2409,20 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
             </div>
           </div>
         );
-        if (checkrStatus === 'pending') return (
+        // v1.131.0 — this was `checkrStatus === 'pending'`: the column's default, true of every
+        // caregiver before Checkr had ever been contacted, rendered as "in progress". Now only a
+        // phase Checkr itself moved us into, with the date Checkr confirmed it.
+        if (checkrPhase === 'in_progress') return (
           <div className="card" style={{ marginBottom: 16, borderLeft: '4px solid #f59e0b', display: 'flex', alignItems: 'center', gap: 12 }}>
             <span style={{ fontSize: 24 }}>🔄</span>
             <div>
               <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>Background Check</div>
-              <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>Your background check is in progress. You'll be notified once it clears.</div>
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>
+                {profile.checkrEvidence && profile.checkrEvidence.submittedAt
+                  ? `Checkr confirmed it received your form on ${new Date(profile.checkrEvidence.submittedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}. `
+                  : 'Checkr is running your check. '}
+                You'll be notified once it's done.
+              </div>
             </div>
           </div>
         );
