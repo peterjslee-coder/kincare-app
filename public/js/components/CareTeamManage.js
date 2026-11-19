@@ -468,8 +468,8 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack, onNavigate
         <button type="button" aria-label="Calendar" title="Calendar" data-testid="care-team-calendar"
           onClick={() => (window.__navigateTo ? window.__navigateTo('schedule') : onNavigate && onNavigate('schedule'))}
           style={{ width: 44, height: 44, minWidth: 44, padding: 0, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 10, cursor: 'pointer' }}>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--role-color)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            background: 'var(--role-color)', border: 'none', borderRadius: 10, cursor: 'pointer' }}>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--text-on-primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 10h18M8 3v4M16 3v4" />
           </svg>
         </button>

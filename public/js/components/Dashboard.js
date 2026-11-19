@@ -1790,7 +1790,19 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                   <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>{team.memberCount || 0} member{(team.memberCount || 0) !== 1 ? 's' : ''}{pendingCount > 0 ? ` · ${pendingCount} pending` : ''}</div>
                 </div>
               </div>
-              <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 14 }}>→</span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                {/* v1.135.2 — the calendar from the care team banner (Pete, 11/18: "a small icon
+                    to fit on the care team banner ... just make it selectable"). */}
+                <button type="button" aria-label="Calendar" title="Calendar" data-testid="banner-calendar"
+                  onClick={(e) => { e.stopPropagation(); window.__navigateTo ? window.__navigateTo('schedule') : onNavigate && onNavigate('schedule'); }}
+                  style={{ width: 44, height: 44, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    background: 'rgba(255,255,255,0.14)', border: '1px solid rgba(255,255,255,0.35)', borderRadius: 10, cursor: 'pointer' }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 10h18M8 3v4M16 3v4" />
+                  </svg>
+                </button>
+                <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 14 }}>→</span>
+              </span>
             </div>
             );
           })()}
