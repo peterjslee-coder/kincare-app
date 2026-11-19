@@ -2,6 +2,19 @@
 
 > **How this works:** Add bugs and features below as you find them. Don't worry about wording or order. When you're ready for a dev session, say "let's work the task list" and Claude will batch everything together into one efficient push. Nothing gets executed until you say go.
 
+## Nov 18 2026 — the next native build (1.3, native calling): Play/App Store findings to fold in
+
+Pete, 11/18 21:51, after sending Android 1.2.1 (versionCode 23) to Play review: "add the other stuff to the list to build when we go native calling." Found in Play Console's release dashboard for 23 and App Store Connect. None blocked 1.2.1.
+
+- [ ] **[AAB NEEDED] DEX obfuscation is 1%; Play wants ≥25% by Feb 2027.** Turn on R8 (`minifyEnabled true`, `shrinkResources true` in `android/app/build.gradle`), keep Capacitor/plugin classes (their consumer ProGuard rules + a `proguard-rules.pro` check), upload the deobfuscation mapping with the bundle. Test every plugin on a device before upload (push, geolocation, passkeys, camera/file upload, share, local notifications).
+- [ ] **[AAB NEEDED] Edge-to-edge (Play recommendation).** Call `EdgeToEdge.enable(this)` in `MainActivity` for Android 14 and below. The web side already reads the insets (v1.134.0 safe-area polyfill); verify on Kay's Samsung that nothing overlaps.
+- [ ] **[AAB NEEDED] Deprecated `Window.setStatusBarColor/getStatusBarColor`** — from `@capacitor/status-bar` (`setStatusBarColorDeprecated`). Drop `StatusBar.backgroundColor` on Android or move to Capacitor 8's SystemBars, then confirm Play no longer lists it.
+- [ ] **Check the "may crash on 16 KB devices" dashboard note** once 1.2.1 is live. Our project ships no native `.so`; the note may be from vc22. If it persists, find the library in App bundle explorer.
+- [ ] **Version numbers:** Android versionCode 23 is now 1.2.1 (App Links, 130% text cap). 1.3 (calling) on Android starts at **versionCode 24+** (the Version Ledger had said 23+). Bring `calls-native` up to main before building.
+- [ ] **[NEEDS YOUR HANDS] Play: declare trader status** (account level, Cedar Rock Holdings) by **Feb 2027**, or the developer profile and apps are removed.
+- [ ] **[NEEDS YOUR HANDS] App Store Connect → App Compliance:** two China-mainland items show "Missing Info" (Security Assessment; AI Generated or Synthetic Content). Either remove China mainland in Pricing and Availability or fill them in. iOS 1.1 still "Waiting for Review" as of 11/18.
+- [ ] **Order:** iOS 1.1 approval → merge `calls-native` (per the Version Ledger) → one native build carrying calling + everything above.
+
 ## Nov 18 2026 — the + (quick add) and messages to Betty (v1.133.0)
 
 Pete, 11/18 (feedback 7e187fb2): "I need it to be easier to put Events on Betty's calendar... I would love a expanding plus log visit/event thing. It has to work on mobile primarily." Mockups: Design canvas "InPlace — Quick add (+) mockups". Pete chose C: "I want to be able to add wherever I am, and don't mind losing caregivers."

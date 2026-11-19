@@ -87,3 +87,8 @@ describe("where it shows", () => {
     expect(b.indexOf("DayBar.js")).toBeLessThan(b.indexOf("Schedule.js"));
   });
 });
+
+test("the Home care-team banner has a Calendar button too (v1.135.2), and it doesn't open the team", () => {
+  const dash = read("public/js/components/Dashboard.js");
+  expect(dash).toMatch(/data-testid="banner-calendar"[\s\S]{0,120}e\.stopPropagation\(\); window\.__navigateTo/);
+});
