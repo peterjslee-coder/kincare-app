@@ -438,9 +438,11 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack, onNavigate
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+      {/* v1.135.0 — wraps: on a phone the name gets the whole first line and the buttons sit
+          under it, instead of the name squeezed to one word a line and + Task cut off. */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
         {onBack && <button onClick={onBack} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--role-color)' }}>←</button>}
-        <div style={{ flex: 1 }}>
+        <div style={{ flex: '1 1 240px', minWidth: 0 }}>
           {editingName && isLeader ? (
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <input value={newName} onChange={(e) => setNewName(e.target.value)} style={{ ...inputStyle, maxWidth: 300 }} autoFocus
