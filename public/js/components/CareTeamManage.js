@@ -460,6 +460,17 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack, onNavigate
             {team.recipient_city && ` · ${team.recipient_city}, ${team.recipient_state}`}
           </p>
         </div>
+        {/* v1.135.0 — the calendar from the team's header (Pete, 11/18: "a calendar hotlink in
+            the care team header ... it'll have to be a small icon"). Same place + → Request care
+            goes: the Schedule page, month view first. */}
+        <button type="button" aria-label="Calendar" title="Calendar" data-testid="care-team-calendar"
+          onClick={() => (window.__navigateTo ? window.__navigateTo('schedule') : onNavigate && onNavigate('schedule'))}
+          style={{ width: 44, height: 44, minWidth: 44, padding: 0, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 10, cursor: 'pointer' }}>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--role-color)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 10h18M8 3v4M16 3v4" />
+          </svg>
+        </button>
         {isLeader && (
           <button onClick={() => setShowInviteForm(true)}
             style={{ padding: '8px 20px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer', whiteSpace: 'nowrap' }}>

@@ -59,6 +59,29 @@ const WN_PREVIEWS = {
       </div>
     </div>
   ),
+  // v1.135.0 — the 24-hour calendar
+  calendar24: () => {
+    const row = (day, blocks) => (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5 }}>
+        <span style={{ width: 34, fontSize: 10.5, fontWeight: 700, color: 'var(--text-primary)' }}>{day}</span>
+        <span style={{ position: 'relative', flex: 1, height: 14, borderRadius: 4, background: 'var(--bg-surface)', boxShadow: 'inset 0 0 0 1px var(--border-color)' }}>
+          {blocks.map(([s, e, req, name], i) => (
+            <span key={i} style={{ position: 'absolute', left: (s / 24 * 100) + '%', width: ((e - s) / 24 * 100) + '%', top: 0, height: 14, borderRadius: 4,
+              background: req ? 'repeating-linear-gradient(135deg, #d9711c 0 4px, #f6c99d 4px 7px)' : 'var(--role-color)',
+              color: req ? '#5c2a05' : 'var(--text-on-primary)', fontSize: 9, fontWeight: 600, lineHeight: '14px', paddingLeft: 3, overflow: 'hidden', whiteSpace: 'nowrap' }}>{name}</span>
+          ))}
+        </span>
+      </div>
+    );
+    return (
+      <div style={{ padding: '12px 12px 8px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>
+        {row('Mon', [[8, 16, false, 'Sam']])}
+        {row('Tue', [[8, 16, false, 'Sam'], [16, 20, true, 'Open']])}
+        {row('Wed', [[22, 24, false, 'Jane']])}
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: 'var(--text-muted)', marginLeft: 40 }}><span>12a</span><span>12p</span><span>12a</span></div>
+      </div>
+    );
+  },
   // v1.134.0 — the caregiver home's optional sections close
   caregiverHomeTidy: () => (
     <div style={{ padding: '12px 12px 10px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>

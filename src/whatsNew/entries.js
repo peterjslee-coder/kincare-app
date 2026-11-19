@@ -31,6 +31,22 @@ const WINDOW_DAYS = 45;
 
 const ENTRIES = [
   {
+    id: "calendar-24-hours",
+    version: "1.135.0",
+    date: "2026-11-19",
+    audience: ["family"],
+    title: "See how much of each day is covered",
+    body: "Every day on the calendar now shows its 24 hours as a bar, midnight to midnight: green where a caregiver is booked, orange where you've asked and are waiting. Overlaps stack, and overnights carry into the next day.",
+    howTo: [
+      "On Care Team, tap the calendar icon at the top (or + then Request care)",
+      "Read each day left to right: morning, afternoon, night",
+      "Tap Week to see names on each block, or tap a day for its detail",
+    ],
+    examples: ["Who's with Mom Tuesday night?", "Is Saturday afternoon covered?"],
+    preview: "calendar24",
+    action: { label: "Show me", page: "schedule" },
+  },
+  {
     id: "caregiver-home-tidy",
     version: "1.134.0",
     date: "2026-11-19",

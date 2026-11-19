@@ -14,6 +14,9 @@ const Schedule = window.Schedule = () => {
   const [expandedSession, setExpandedSession] = useState(null);
   const [visitDetailSessionId, setVisitDetailSessionId] = useState(null);
   const [cancellingSession, setCancellingSession] = useState(null);
+  // v1.135.0 — Month opens first; Week is one tap away, remembered on the account (Pete, 11/18).
+  const [weekView, setWeekView] = useStickySection('schedule.weekView', false);
+  const [weekStart, setWeekStart] = useState(null); // 'YYYY-MM-DD' of the Sunday shown in Week
 
   // Pick up pending schedule date from activity feed deep-link
   useEffect(() => {
@@ -38,8 +41,11 @@ const Schedule = window.Schedule = () => {
   const [hasAnySessions, setHasAnySessions] = useState(null);
   const monthRange = (y, m) => {
     const pad = (n) => String(n).padStart(2, '0');
-    const last = new Date(y, m + 1, 0).getDate();
-    return { from: `${y}-${pad(m + 1)}-01`, to: `${y}-${pad(m + 1)}-${pad(last)}` };
+    // v1.135.0 — a week either side, so an overnight from the 31st reaches the 1st's bar and a
+    // week that straddles two months is whole. The month summary below still counts only this
+    // month (monthSessions filters by date).
+    const ds = (dt) => `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`;
+    return { from: ds(new Date(y, m, 1 - 7)), to: ds(new Date(y, m + 1, 7)) };
   };
   const monthRef = useRef(currentMonth);
   monthRef.current = currentMonth;
@@ -231,8 +237,8 @@ const Schedule = window.Schedule = () => {
         </div>
       )}
 
-      {/* Month navigation */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+      {/* Month navigation (Week has its own, on its card) */}
+      <div style={{ display: weekView ? 'none' : 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
         <div style={{ flex: 1 }} />
         <button onClick={prevMonth} style={{
           padding: '8px 16px', background: 'var(--bg-surface)', border: '1px solid var(--border-color)',
@@ -247,21 +253,24 @@ const Schedule = window.Schedule = () => {
         }}>Next →</button>
       </div>
 
-      {/* Legend — dot indicators */}
-      <div style={{ display: 'flex', gap: '14px', marginBottom: '12px', fontSize: '11px', color: 'var(--text-muted)', flexWrap: 'wrap' }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-          <span style={{ width: 9, height: 9, borderRadius: '50%', background: 'var(--role-color)', display: 'inline-block' }}></span> Confirmed
-        </span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-          <span style={{ width: 9, height: 9, borderRadius: '50%', background: 'transparent', border: '2px solid #e8724a', display: 'inline-block' }}></span> Awaiting caregiver
-        </span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-          <span style={{ width: 9, height: 9, borderRadius: '50%', background: 'var(--color-warning)', display: 'inline-block' }}></span> In progress
-        </span>
+      {/* v1.135.0 — Month | Week, and the 24-hour legend */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 10 }} role="group" aria-label="Calendar view">
+        {[['month', 'Month'], ['week', 'Week']].map(([id, label]) => {
+          const on = (id === 'week') === !!weekView;
+          return (
+            <button key={id} type="button" aria-pressed={on} onClick={() => setWeekView(id === 'week')} style={{
+              flex: 1, minHeight: 40, borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: 'pointer',
+              border: on ? 'none' : '1px solid var(--border-color)',
+              background: on ? 'var(--role-color)' : 'var(--bg-surface)',
+              color: on ? 'var(--text-on-primary)' : 'var(--text-secondary)',
+            }}>{label}</button>
+          );
+        })}
       </div>
+      <div style={{ marginBottom: 12 }}><DayBarLegend /></div>
 
       {/* Calendar grid — single unified grid so headers and cells always align */}
-      <div className="card" style={{ padding: 0, overflow: 'hidden', borderRadius: 12 }}>
+      {!weekView && <div className="card" style={{ padding: 0, overflow: 'hidden', borderRadius: 12 }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)' }}>
           {/* Day headers — row 1 */}
           {dayNames.map(d => (
@@ -295,33 +304,67 @@ const Schedule = window.Schedule = () => {
                 }}>
                   {day}
                 </div>
-                {/* Session dots — one per session, max 5 visible */}
-                {hasSessions && (
-                  <div style={{ display: 'flex', gap: 4, marginTop: 5, flexWrap: 'wrap', paddingLeft: 1 }}>
-                    {daySessions.sort((a, b) => (a.scheduled_time || '').localeCompare(b.scheduled_time || '')).slice(0, 4).map((s, si) => {
-                      const isPending = ['open', 'requested', 'pending'].includes(s.status);
-                      const isInProgress = s.status === 'in_progress';
-                      const dotColor = isInProgress ? 'var(--color-warning)' : isPending ? 'transparent' : past ? 'var(--border-light)' : 'var(--role-color)';
-                      const dotBorder = isPending ? '2px solid ' + (isSelected ? 'var(--text-on-primary)' : 'var(--accent-color)') : 'none';
-                      return (
-                        <span key={si} style={{
-                          width: 9, height: 9, borderRadius: '50%',
-                          background: isSelected ? (isPending ? 'transparent' : 'rgba(255,255,255,0.85)') : dotColor,
-                          border: isSelected && isPending ? '2px solid rgba(255,255,255,0.85)' : dotBorder,
-                          display: 'inline-block', flexShrink: 0,
-                        }}></span>
-                      );
-                    })}
-                    {daySessions.length > 4 && (
-                      <span style={{ fontSize: 9, color: isSelected ? 'rgba(255,255,255,0.7)' : 'var(--text-muted)', lineHeight: '9px', fontWeight: 600 }}>+{daySessions.length - 4}</span>
-                    )}
-                  </div>
-                )}
+                {/* v1.135.0 — the day's 24 hours, midnight to midnight */}
+                <div style={{ marginTop: 6 }}>
+                  <DayBar segments={dayBarSegments(sessionsByDate, dateStr, todayStr)} laneHeight={6} gap={2} radius={3} />
+                </div>
               </div>
             );
           })}
         </div>
-      </div>
+      </div>}
+
+      {weekView && (() => {
+        // v1.135.0 — Week: one full-width 24-hour row per day, names on the blocks.
+        const pad = (n) => String(n).padStart(2, '0');
+        const ds = (dt) => `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`;
+        const anchor = weekStart || selectedDate || todayStr;
+        const [ay, am, ad] = anchor.split('-').map(Number);
+        const a0 = new Date(ay, am - 1, ad);
+        const sun = new Date(ay, am - 1, ad - (weekStart ? 0 : a0.getDay()));
+        const days = Array.from({ length: 7 }, (_, i) => new Date(sun.getFullYear(), sun.getMonth(), sun.getDate() + i));
+        const shift = (n) => {
+          const nx = new Date(sun.getFullYear(), sun.getMonth(), sun.getDate() + n);
+          setWeekStart(ds(nx));
+          // Keep the fetched month on the week (its Thursday decides), so the rows have data.
+          const thu = new Date(nx.getFullYear(), nx.getMonth(), nx.getDate() + 4);
+          if (thu.getMonth() !== month || thu.getFullYear() !== year) setCurrentMonth({ year: thu.getFullYear(), month: thu.getMonth() });
+        };
+        const fmtShort = (dt) => dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        return (
+          <div className="card" style={{ padding: '12px 14px', borderRadius: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+              <button type="button" aria-label="Previous week" onClick={() => shift(-7)} style={{ minWidth: 44, minHeight: 44, background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: 'var(--text-primary)' }}>{'\u2039'}</button>
+              <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)' }}>{fmtShort(days[0])} {'\u2013'} {fmtShort(days[6])}</div>
+              <button type="button" aria-label="Next week" onClick={() => shift(7)} style={{ minWidth: 44, minHeight: 44, background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: 'var(--text-primary)' }}>{'\u203A'}</button>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ width: 56, flexShrink: 0 }} />
+              <div style={{ flex: 1, minWidth: 0 }}><DayBarAxis /></div>
+            </div>
+            {days.map((dt) => {
+              const dstr = ds(dt);
+              const segs = dayBarSegments(sessionsByDate, dstr, todayStr);
+              const sel = dstr === selectedDate;
+              const isToday = dstr === todayStr;
+              return (
+                <button key={dstr} type="button" onClick={() => setSelectedDate(dstr)} aria-pressed={sel} style={{
+                  display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 0', minHeight: 44,
+                  background: 'none', border: 'none', borderTop: '1px solid var(--border-color)', cursor: 'pointer', textAlign: 'left',
+                }}>
+                  <span style={{ width: 56, flexShrink: 0 }}>
+                    <span style={{ display: 'block', fontSize: 12, fontWeight: 700, color: sel || isToday ? 'var(--role-color)' : 'var(--text-primary)' }}>{dayNames[dt.getDay()]} {dt.getDate()}</span>
+                    <span style={{ display: 'block', fontSize: 10, color: 'var(--text-muted)' }}>{dayBarCoveredHours(segs)}h covered</span>
+                  </span>
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <DayBar segments={segs} laneHeight={22} gap={3} radius={6} labels />
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        );
+      })()}
 
       {/* Book care button — above the daily detail card so it's visible right below the calendar */}
       {selectedDate && !isPast(selectedDate) && (
@@ -351,6 +394,21 @@ const Schedule = window.Schedule = () => {
             <span style={{ fontSize: 13, color: 'var(--role-color)', fontWeight: 600 }}>{hoursMap[selectedDate] || 0} total hours</span>
           </div>
 
+          {/* v1.135.0 — the day's 24 hours, with names */}
+          {(() => {
+            const segs = dayBarSegments(sessionsByDate, selectedDate, todayStr);
+            if (segs.length === 0) return null;
+            const req = segs.filter((g) => g.kind === 'requested').reduce((n, g) => n + (g.end - g.start), 0);
+            return (
+              <div style={{ padding: '10px 0 12px', borderBottom: '1px solid var(--border-color)' }}>
+                <DayBar segments={segs} laneHeight={22} gap={3} radius={6} labels />
+                <DayBarAxis />
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 6 }}>
+                  Covered {dayBarCoveredHours(segs)} of 24 hours{req > 0 ? ` \u00b7 ${Math.round(req * 10) / 10} hours requested` : ''}
+                </div>
+              </div>
+            );
+          })()}
           {selectedSessions.length > 0 ? (
             <>
               {selectedSessions.map((s) => (
