@@ -45,9 +45,12 @@ describe("her phone can answer what her address didn't", () => {
 });
 
 describe("no location, no jobs", () => {
-  test("the job list is empty rather than nagged over", () => {
+  test("the job list is empty rather than nagged over — except jobs offered to her by name (v1.134.0)", () => {
     const openJobs = dashboard.slice(dashboard.indexOf("openJobs: await (async () =>"));
-    expect(openJobs.slice(0, 900)).toMatch(/if \(!profile \|\| !profile\.latitude \|\| !profile\.longitude\) return \[\];/);
+    const head = openJobs.slice(0, 1800);
+    expect(head).toMatch(/const pointKnown = !!\(profile\.latitude && profile\.longitude\)/);
+    expect(head).toMatch(/const pool = pointKnown \? openJobs : openJobs\.filter\(\(s\) => s\.offered_to_caregiver_id === profile\.id \|\| s\.caregiver_id === profile\.id\)/);
+    expect(head).toMatch(/for \(const s of pool\)/);
   });
 
   test("and the caregiver is told which state she is in", () => {
@@ -61,9 +64,9 @@ describe("no location, no jobs", () => {
     expect(findWork).toMatch(/setLocationKnown\(d\.locationKnown !== false\)/);
   });
 
-  test("the jobs tab really is replaced, not decorated", () => {
+  test("the jobs tab is replaced, not decorated — but a family's direct offer still shows (v1.134.0)", () => {
     expect(findWork).toMatch(/\{subTab === 'jobs' && !locationKnown && \(/);
-    expect(findWork).toMatch(/\{subTab === 'jobs' && locationKnown && <>/);
+    expect(findWork).toMatch(/\{subTab === 'jobs' && \(locationKnown \|\| openRequests\.length > 0\) && <>/);
   });
 
   test("it says the deal in both directions", () => {

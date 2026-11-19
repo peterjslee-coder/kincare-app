@@ -24,6 +24,9 @@ const InviteLandingPage = window.InviteLandingPage = ({ inviteInfo, onNavigate }
         </span>
       </div>
 
+      {/* v1.134.0 — on an Android phone: install first, then tap the invite again */}
+      {typeof GetTheAppFirst !== 'undefined' && <div style={{ maxWidth: '440px', width: '100%' }}><GetTheAppFirst /></div>}
+
       {/* Main Card */}
       <div style={{
         maxWidth: '440px', width: '100%', marginTop: '24px',

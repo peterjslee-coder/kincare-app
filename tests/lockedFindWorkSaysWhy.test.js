@@ -9,8 +9,10 @@ const hub = code("public/js/components/CaretakerHub.js");
 const utils = code("public/js/utils.js");
 
 test("the hub publishes WHAT is left, by name, not only that something is", () => {
-  expect(hub).toContain("window.__caregiverFirstStepsLeft = showFirstSteps");
-  expect(hub).toMatch(/hubRoute\.items\.filter\(\(i\) => i\.state === 'todo'\)\.map\(\(i\) => i\.label\)/);
+  // v1.134.0 — what is left means what she MUST do: the lock no longer counts a photo,
+  // availability or account security (tests/caregiverHomeNov18.test.js).
+  expect(hub).toContain("window.__caregiverFirstStepsLeft = window.__caregiverFirstStepsRemain ? requiredTodo.map((i) => i.label) : []");
+  expect(hub).toMatch(/const requiredTodo = REQUIRED_IDS\.map\(routeItem\)\.filter\(\(i\) => i && i\.state === 'todo'\)/);
 });
 
 test("all three Find Work buttons explain when locked — sidebar action, sidebar link, bottom bar", () => {

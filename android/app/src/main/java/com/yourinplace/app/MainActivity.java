@@ -37,6 +37,20 @@ public class MainActivity extends BridgeActivity {
             android.util.Log.w("InPlace", "Failed to enable WebAuthn: " + e.getMessage());
         }
 
+        // v1.134.0 — follow the phone's text size, up to 130%. The WebView applies Android's
+        // font scale to every font in the app; at the largest settings (a caregiver's Samsung,
+        // 11/18) labels ran into each other and screens broke. Larger than normal still reads
+        // larger here — it just stops at the size the layouts were built to hold.
+        try {
+            WebView webView = getBridge().getWebView();
+            float scale = getResources().getConfiguration().fontScale;
+            int zoom = Math.round(Math.min(Math.max(scale, 1.0f), 1.3f) * 100);
+            webView.getSettings().setTextZoom(zoom);
+            android.util.Log.i("InPlace", "Text zoom " + zoom + "% (system font scale " + scale + ")");
+        } catch (Exception e) {
+            android.util.Log.w("InPlace", "Failed to set text zoom: " + e.getMessage());
+        }
+
         // Microphone permission: declared in AndroidManifest.xml (RECORD_AUDIO).
         // Runtime permission is requested by the WebView automatically when
         // Kindred's SpeechRecognition.start() is called. No need to request

@@ -14,20 +14,48 @@ function isCapacitorIOS(){
     return false;
   }catch(e){ return false; }
 }
-(function(){try{
-  // Probe env() to see if it returns real values
+// v1.134.0 — true only inside the Capacitor ANDROID app. Android 15+ draws the app under the
+// status bar and the button bar (edge-to-edge), and Capacitor 8 tells the page how big they are
+// AFTER it has loaded — through env() on new WebViews and as --safe-area-inset-* variables on
+// every WebView. This polyfill used to measure once, at script start, before either arrived,
+// so it read 0 and kept it: a caregiver's Samsung (11/18) had "Welcome, Kay!" under the clock
+// and the Home/Find Work/Messages/Account bar under Android's own buttons.
+function isCapacitorAndroid(){
+  try{
+    if(!window.Capacitor) return false;
+    if(typeof window.Capacitor.isNativePlatform==='function' && !window.Capacitor.isNativePlatform()) return false;
+    return typeof window.Capacitor.getPlatform==='function' && window.Capacitor.getPlatform()==='android';
+  }catch(e){ return false; }
+}
+function probeInset(side, withCapVar){
   var d=document.createElement('div');
-  d.style.cssText='position:absolute;visibility:hidden;padding-top:env(safe-area-inset-top,0px)';
+  var v='env(safe-area-inset-'+side+',0px)';
+  if(withCapVar) v='max('+v+', var(--safe-area-inset-'+side+',0px))';
+  d.style.cssText='position:absolute;visibility:hidden;padding-'+side+':'+v;
   document.body.appendChild(d);
-  var v=parseFloat(getComputedStyle(d).paddingTop)||0;
+  var px=parseFloat(getComputedStyle(d)['padding'+side.charAt(0).toUpperCase()+side.slice(1)])||0;
   document.body.removeChild(d);
-  if(v>0){
-    window.__safeAreaTop=v;
-    var d2=document.createElement('div');
-    d2.style.cssText='position:absolute;visibility:hidden;padding-bottom:env(safe-area-inset-bottom,0px)';
-    document.body.appendChild(d2);
-    window.__safeAreaBottom=parseFloat(getComputedStyle(d2).paddingBottom)||0;
-    document.body.removeChild(d2);
+  return px;
+}
+function applyInsets(top,bottom){
+  var root=document.documentElement.style;
+  var changed = top!==window.__safeAreaTop || bottom!==window.__safeAreaBottom;
+  window.__safeAreaTop=top;
+  window.__safeAreaBottom=bottom;
+  // Write only what differs: the Android observer below watches this same style attribute,
+  // and a write that changes nothing must not wake it.
+  if(root.getPropertyValue('--sat')!==top+'px') root.setProperty('--sat',top+'px');
+  if(root.getPropertyValue('--sab')!==bottom+'px') root.setProperty('--sab',bottom+'px');
+  return changed;
+}
+(function(){try{
+  var android=isCapacitorAndroid();
+  // Probe env() to see if it returns real values
+  var v=probeInset('top', android);
+  var top=0,bottom=0;
+  if(v>0 || android){
+    top=v;
+    bottom=probeInset('bottom', android);
   }else if(isCapacitorIOS()){
     // ─── v1.105.166 — env() returned 0. Only ONE surface lies about that. ───
     //
@@ -46,12 +74,27 @@ function isCapacitorIOS(){
     // It fires on any tall phone in any browser, and (h/w > 1.7) fires on an ordinary
     // 2560x1440 desktop monitor too, for a 20px band of nothing.
     var h=Math.max(screen.height,screen.width),w=Math.min(screen.height,screen.width);
-    window.__safeAreaTop=(h/w>2.0)?(h>=852?59:47):20;
-    window.__safeAreaBottom=(h/w>2.0)?34:0;
+    top=(h/w>2.0)?(h>=852?59:47):20;
+    bottom=(h/w>2.0)?34:0;
   }
   // Also set CSS vars (for any CSS that references them)
-  document.documentElement.style.setProperty('--sat',window.__safeAreaTop+'px');
-  document.documentElement.style.setProperty('--sab',window.__safeAreaBottom+'px');
+  applyInsets(top,bottom);
+
+  // v1.134.0 — Android: keep listening. Capacitor writes --safe-area-inset-* on <html> when the
+  // insets arrive and again whenever they change (rotation, keyboard, gesture vs 3-button nav).
+  // Re-read on each; the App re-renders on 'inplace:safe-area' so inline paddings follow.
+  if(android){
+    var remeasure=function(){
+      try{
+        if(applyInsets(probeInset('top',true), probeInset('bottom',true))){
+          window.dispatchEvent(new Event('inplace:safe-area'));
+        }
+      }catch(e){}
+    };
+    try{ new MutationObserver(remeasure).observe(document.documentElement,{attributes:true,attributeFilter:['style']}); }catch(e){}
+    window.addEventListener('resize', remeasure);
+    [300,1000,2500].forEach(function(ms){ setTimeout(remeasure, ms); });
+  }
 }catch(e){console.warn('safe-area polyfill error',e)}})();
 
 // ─── Deep Link Handler (Capacitor App Links → OAuth callback) ───
@@ -83,12 +126,42 @@ function isCapacitorIOS(){
             : oauthSignup ? 'oauth_signup=' + oauthSignup
             : 'oauth_error=' + oauthError;
           window.location.href = '/?' + params;
+          return;
         }
+        openOwnLink(url);
       } catch (e) {
         console.error('[DeepLink] Error handling appUrlOpen:', e);
       }
     });
+    // v1.134.0 — a cold start from a link carries the URL here, not (always) as an event.
+    if (typeof AppPlugin.getLaunchUrl === 'function') {
+      AppPlugin.getLaunchUrl().then(function(r) {
+        if (r && r.url) { try { openOwnLink(new URL(r.url)); } catch (e) { /* not ours */ } }
+      }).catch(function() {});
+    }
   } catch (e) { console.warn('[DeepLink] init error', e); }
+
+  // ─── v1.134.0 — email links open in the app ───
+  // Pete, 11/18: "when they click an email link it should open the app not chrome." The
+  // Android build declares yourinplace.com links (AndroidManifest App Links, verified by
+  // /.well-known/assetlinks.json). Android hands the link to the app; this puts the WebView
+  // on it, so an invite's ?platformInvite=, a reset link, or /account do what they do in
+  // Chrome. Same origin only — never navigate the app to a URL someone else chose.
+  function openOwnLink(url) {
+    if (!url || url.protocol !== 'https:') return;
+    var host = url.hostname.replace(/^www\./, '');
+    if (host !== window.location.hostname.replace(/^www\./, '')) return;
+    var target = url.pathname + url.search + url.hash;
+    var here = window.location.pathname + window.location.search + window.location.hash;
+    if (!target || target === here) return;
+    // Once per link: the app strips ?platformInvite= etc. after reading it, and getLaunchUrl
+    // keeps answering with the launch link after the reload — without this, a loop.
+    try {
+      if (sessionStorage.getItem('inplace:openedLink') === url.href) return;
+      sessionStorage.setItem('inplace:openedLink', url.href);
+    } catch (e) { /* storage blocked: the event path still works, the launch path may repeat once */ }
+    window.location.href = target;
+  }
 })();
 
 // ─── PWA Install Prompt ───
@@ -532,6 +605,14 @@ const toClientUser = window.toClientUser = (u, overrides = {}) => {
 };
 
 const App = () => {
+  // v1.134.0 — the Android app learns its status/button bar sizes after load (see the
+  // safe-area polyfill above); re-render so inline paddings read the new values.
+  const [, setInsetTick] = useState(0);
+  useEffect(() => {
+    const on = () => setInsetTick((n) => n + 1);
+    window.addEventListener('inplace:safe-area', on);
+    return () => window.removeEventListener('inplace:safe-area', on);
+  }, []);
   // Detect URL params at init — BEFORE any useEffect or auto-login can race
   // Capture verify token BEFORE any replaceState can strip the URL
   const [pendingVerifyToken] = useState(() => {

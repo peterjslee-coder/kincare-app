@@ -857,7 +857,7 @@ app.use("/api/safety", require("./routes/safety"));
 
 // ─── App version check (lightweight, no auth) ───
 const { cancelPassedPrivateOffers, releaseExpiredExclusiveOffers } = require("./utils/exclusiveOffers");
-const APP_VERSION = "1.133.0";
+const APP_VERSION = "1.134.0";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION, minAppVersion: MIN_APP_VERSION });
@@ -1616,7 +1616,7 @@ async function start() {
   {
     const GEOCODE_BATCH = 25;
     const runGeocodeBackfill = guardedPoller(111, async () => {
-      const { geocodeAddress, buildAddressString } = require("./utils/geocode");
+      const { geocodeAddress, geocodeCaregiverArea, buildAddressString } = require("./utils/geocode");
       const gdb = await getDb();
       let done = 0;
 
@@ -1630,7 +1630,8 @@ async function start() {
       for (const cg of caregivers) {
         const addrStr = buildAddressString({ address: cg.address_line1, city: cg.location_city, state: cg.location_state, zip: cg.zip });
         if (!addrStr) continue;
-        const geo = await geocodeAddress(addrStr);
+        // v1.134.0 — town, then ZIP, when the street is not found (a caregiver's point is ~1 mile).
+        const geo = await geocodeCaregiverArea({ address: cg.address_line1, city: cg.location_city, state: cg.location_state, zip: cg.zip });
         if (geo) {
           await gdb.prepare("UPDATE caregiver_profiles SET latitude = ?, longitude = ? WHERE user_id = ?").run(geo.lat, geo.lng, cg.user_id);
           done++;

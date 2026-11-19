@@ -72,7 +72,8 @@ describe("an unanswered fetch is not a negative answer", () => {
   });
 
   test("no Stripe prompt is shown while stripeStatus is still null", () => {
-    expect(hub).toMatch(/stripeStatus === null\) \? null : 'Connect Stripe to continue'/);
+    // v1.134.0 — and none while Stripe is still checking details she already gave it.
+    expect(hub).toMatch(/stripeStatus === null \|\| stripeChecking\) \? null : 'Connect Stripe to continue'/);
   });
 
   test("every path that sets idVerification records that it was loaded", () => {

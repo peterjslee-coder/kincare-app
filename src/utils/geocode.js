@@ -173,6 +173,35 @@ async function geocodeAddress(address) {
   }
 }
 
+/**
+ * v1.134.0 — a CAREGIVER's point, which only ever has to be good to about a mile.
+ *
+ * A caregiver onboarded 11/18 typed a real rural street address. The free geocoder could not
+ * find the street, the profile saved with no point, and she was treated as somewhere unknown:
+ * no jobs listed, and a direct offer hidden behind "We don't know where you are". Her town and
+ * ZIP were sitting right there. A caregiver's point is coarsened to ~1 mile before anyone sees
+ * it (coarsenCoordinate), so the town or the ZIP is an honest answer when the street is not.
+ *
+ * Never use this for a CARE RECIPIENT: her point anchors the check-in geofence, and a town
+ * centre there would put the caregiver "at the house" from anywhere in town.
+ *
+ * @returns {Promise<{lat:number,lng:number,precision:'address'|'city'|'zip'}|null>}
+ */
+async function geocodeCaregiverArea({ address, city, state, zip } = {}) {
+  const tries = [];
+  if (address) tries.push(["address", buildAddressString({ address, city, state, zip })]);
+  if (city && state) tries.push(["city", buildAddressString({ city, state, zip })]);
+  if (zip) tries.push(["zip", [String(zip).trim(), "USA"].join(", ")]);
+  const seen = new Set();
+  for (const [precision, q] of tries) {
+    if (!q || seen.has(q)) continue;
+    seen.add(q);
+    const geo = await geocodeAddress(q);
+    if (geo) return { lat: geo.lat, lng: geo.lng, precision };
+  }
+  return null;
+}
+
 /** Test seam: drop the in-process cache between cases. */
 function _resetGeocodeCache() {
   _geoMem.clear();
@@ -255,4 +284,4 @@ function coarsenCoordinate(value) {
   return Math.round(n * 10 ** COARSE_DECIMALS) / 10 ** COARSE_DECIMALS;
 }
 
-module.exports = { geocodeAddress, buildAddressString, haversineDistance, geofenceEvidence, coarsenCoordinate, COARSE_DECIMALS, geocodeCacheKey, _resetGeocodeCache, NOMINATIM_MAX_QUEUE, NOMINATIM_MIN_INTERVAL_MS };
+module.exports = { geocodeAddress, geocodeCaregiverArea, buildAddressString, haversineDistance, geofenceEvidence, coarsenCoordinate, COARSE_DECIMALS, geocodeCacheKey, _resetGeocodeCache, NOMINATIM_MAX_QUEUE, NOMINATIM_MIN_INTERVAL_MS };

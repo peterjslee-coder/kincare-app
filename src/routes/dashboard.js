@@ -921,7 +921,15 @@ async function caregiverDashboard(db, userId, res) {
       // v1.105.121 — the reciprocity, enforced. Not a nag above a list she can still read: no
       // location, no jobs. It is a policy AND a reality — every distance, sort and proximity
       // score below is measured from a point we do not have.
-      if (!profile || !profile.latitude || !profile.longitude) return [];
+      if (!profile) return [];
+      // v1.134.0 — except a job a family offered to HER by name. Pete invited Kay to a visit
+      // on 11/18; she went to accept it and was told "We don't know where you are" and asked
+      // for her address again. The no-location rule is about browsing strangers' jobs: a family
+      // that picked her has already decided distance does not matter, and hiding their offer
+      // behind a location prompt only stood between the two of them.
+      const pointKnown = !!(profile.latitude && profile.longitude);
+      const pool = pointKnown ? openJobs : openJobs.filter((s) => s.offered_to_caregiver_id === profile.id || s.caregiver_id === profile.id);
+      if (pool.length === 0) return [];
 
       // v1.105.107 — TRUST decides what she may see; STRIPE decides whether she can be paid.
       // This used to require `stripe_onboard_complete` as well, so a caregiver personally
@@ -930,7 +938,7 @@ async function caregiverDashboard(db, userId, res) {
       // (Julia, 7d94657c). See src/utils/caregiverTrust.js for why that was backwards.
       const results = [];
 
-      for (const s of openJobs) {
+      for (const s of pool) {
         const bgCleared = maySeeRecipientDetails(profile, vouchedFamilyIds, s.family_user_id);
         // Conflict detection: check against caregiver's upcoming sessions
         const conflict = computeJobConflicts(s, upcoming);
