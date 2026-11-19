@@ -123,6 +123,13 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
   const [idPhoto, setIdPhoto] = useState(null);
   const [idVerifying, setIdVerifying] = useState(false);
   const [idVerifyResult, setIdVerifyResult] = useState(null);
+  // v1.134.0 — the front of the ID she uploaded on step 7, reused by step 8 so she is not asked
+  // for the same photo twice (Pete, 11/18). Cleared if she chooses to retake it.
+  const [idFrontDocId, setIdFrontDocId] = useState(null);
+  // v1.134.0 — the server already holds her SSN-4 (step 4 saved it). Coming back, the field is
+  // empty on purpose; it must not block her.
+  const [ssnOnFile, setSsnOnFile] = useState(false);
+  const [resumeLoaded, setResumeLoaded] = useState(!resumeMode);
   const [cameraStream, setCameraStream] = useState(null);
   const [cameraMode, setCameraMode] = useState(null); // 'selfie' | 'id' | null
   const idVideoRef = useRef(null);
@@ -351,6 +358,48 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
       }
     } catch (e) { /* ignore corrupt storage */ }
   }, []);
+  // ─── v1.134.0 — coming back on a different browser (or the app) ───
+  // The localStorage draft above only exists in the browser she started in. Kay signed up in
+  // Chrome, opened the app, and was asked for her address, phone, date of birth and allergies
+  // all over again (Pete, 11/18). Every step had already saved to the server, so ask the server:
+  // put her answers back and open the first step that still needs her. Fields she has typed
+  // in this session win; the SSN is never returned.
+  useEffect(() => {
+    if (!resumeMode) return;
+    let cancelled = false;
+    resilientFetch('/api/caregivers/me/onboarding-resume', { headers: authHeaders() })
+      .then((r) => (r && r.ok ? r.json() : null))
+      .then((data) => {
+        if (cancelled || !data) return;
+        const pre = data.prefill || {};
+        setForm((f) => {
+          const next = { ...f };
+          Object.keys(pre).forEach((k) => {
+            const cur = f[k];
+            const empty = cur === '' || cur === null || cur === undefined || cur === false;
+            if (empty && pre[k] !== '' && pre[k] !== null && pre[k] !== undefined) next[k] = pre[k];
+          });
+          if (data.done && data.done.terms) {
+            ['acceptNoMedical', 'acceptBackgroundCheck', 'acceptStripePayments', 'accept1099',
+              'acceptIndependentContractor', 'acceptRefundPolicy', 'acceptTransportation',
+              'acceptConfidentiality'].forEach((k) => { next[k] = true; });
+          }
+          return next;
+        });
+        if (data.done && data.done.ssnOnFile) setSsnOnFile(true);
+        if (data.idFrontDocumentId) setIdFrontDocId((cur) => cur || data.idFrontDocumentId);
+        const target = Number(data.resumeStep) || 2;
+        setStep((cur) => {
+          const next = Math.max(cur, target);
+          if (next > 2) setResumedFromDraft(true);
+          return next;
+        });
+      })
+      .catch(() => { /* she starts at step 2, as before */ })
+      .finally(() => { if (!cancelled) setResumeLoaded(true); });
+    return () => { cancelled = true; };
+  }, []);
+
   // Save progress whenever form or step changes. NOT gated on a token — see above; that gate
   // is the bug, and it failed silently for exactly the people it mattered most to.
   useEffect(() => {
@@ -497,7 +546,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
       if (!form.legalFirstName.trim()) errs.legalFirstName = 'Required';
       if (!form.legalLastName.trim()) errs.legalLastName = 'Required';
       if (!form.dateOfBirth) errs.dateOfBirth = 'Required';
-      if (!form.ssnLast4 || form.ssnLast4.length !== 4) errs.ssnLast4 = 'Enter last 4 digits';
+      if (!(ssnOnFile && !form.ssnLast4) && (!form.ssnLast4 || form.ssnLast4.length !== 4)) errs.ssnLast4 = 'Enter last 4 digits';
       if (!form.idDocType) errs.idDocType = 'Choose the ID you\u2019ll be sending us';
       // The licence number is a fact about a licence. Asked of everyone, it is a driving test
       // nobody sits — and it blocked people who had every right to be here.
@@ -519,8 +568,10 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
     if (stepNum === 7) { // Document upload validation (was step 8)
       // Named after the document she told us she has. A passport has no back.
       const spec = idDocSpec(form.idDocType) || idDocSpec('drivers_license');
-      if (!form.documents.some(d => d.type === 'id_front')) errs.id_front = `${spec.front} is required`;
-      if (spec.back && !form.documents.some(d => d.type === 'id_back')) errs.id_back = `${spec.back} is required`;
+      // v1.134.0 — already uploaded (another browser, or before a reload): not asked again.
+      const onFile = !!idFrontDocId;
+      if (!onFile && !form.documents.some(d => d.type === 'id_front')) errs.id_front = `${spec.front} is required`;
+      if (!onFile && spec.back && !form.documents.some(d => d.type === 'id_back')) errs.id_back = `${spec.back} is required`;
     }
     setErrors(errs);
     if (Object.keys(errs).length > 0) {
@@ -708,6 +759,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
   // Step 8: Upload documents
   const handleUploadDocuments = async () => {
     if (!validateStep(7)) return;
+    if (form.documents.length === 0 && idFrontDocId) { trackEvent('step_complete', 7, { reused: true }); setStep(8); return; }
     setSaving(true);
     try {
       const token = authToken || window.AUTH_TOKEN;
@@ -736,6 +788,11 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
         trackEvent('error', 7, { error: data.error, source: 'api', status: res.status });
         setErrors({ submit: data.error }); setSaving(false); return;
       }
+      try {
+        const up = await res.json();
+        const front = (up.documents || []).find((d) => ['id_front', 'dl_front', 'drivers_license'].includes(d.documentType));
+        if (front) setIdFrontDocId(front.id);
+      } catch (e) { /* step 8 will simply ask for the photo */ }
       trackEvent('step_complete', 7);
       setStep(8);
     } catch (err) {
@@ -815,7 +872,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
   };
 
   const handleVerifyIdentity = async () => {
-    if (!idSelfie || !idPhoto) { setErrors({ identity: 'Both a selfie and an ID photo are required' }); return; }
+    if (!idSelfie || (!idPhoto && !idFrontDocId)) { setErrors({ identity: 'Both a selfie and an ID photo are required' }); return; }
     setIdVerifying(true);
     setErrors({});
     try {
@@ -823,7 +880,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
       const res = await resilientFetch('/api/caregiver-onboarding/verify-id', {
         method: 'POST',
         headers: { ...authHeaders({ 'Content-Type': 'application/json' }) },
-        body: JSON.stringify({ idPhoto: idPhoto, selfie: idSelfie }),
+        body: JSON.stringify(idPhoto ? { idPhoto: idPhoto, selfie: idSelfie } : { idDocumentId: idFrontDocId, selfie: idSelfie }),
       }, 1);
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -975,12 +1032,12 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
 
   // ─── Render ───
 
-  if (loading) {
+  if (loading || !resumeLoaded) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', background: 'var(--bg-primary)' }}>
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontSize: '32px', marginBottom: '12px' }}>&#9203;</div>
-          <div style={{ color: 'var(--text-secondary)', fontSize: '16px' }}>Validating your invite...</div>
+          <div style={{ color: 'var(--text-secondary)', fontSize: '16px' }}>{resumeMode ? 'Getting your answers back\u2026' : 'Validating your invite...'}</div>
         </div>
       </div>
     );
@@ -1189,6 +1246,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
         )}
 
         {/* ─── Step 1: Create Account ─── */}
+        {step === 1 && typeof GetTheAppFirst !== 'undefined' && <GetTheAppFirst />}
         {step === 1 && (
           <div className="card" style={{ padding: '24px' }}>
             <h2 style={{ fontSize: '18px', color: 'var(--text-primary)', marginTop: 0, marginBottom: '16px' }}>Create Your Account</h2>
@@ -1519,6 +1577,7 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
                 <input type="password" maxLength={4} style={errors.ssnLast4 ? inputErrorStyle : inputStyle} value={form.ssnLast4}
                   onChange={(e) => updateForm('ssnLast4', e.target.value.replace(/\D/g, '').slice(0, 4))}
                   placeholder="----" />
+                {ssnOnFile && !form.ssnLast4 && <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>Already on file {'\u2014'} leave blank to keep it.</div>}
                 {errors.ssnLast4 && <div style={errorStyle}>{errors.ssnLast4}</div>}
               </div>
             </div>
@@ -1947,7 +2006,12 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
               <div style={{ marginBottom: 20 }}>
                 <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>Government ID Photo *</label>
                 <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 8px' }}>Driver's license, state ID, passport, EAD (work permit) or permanent resident card — make sure the photo and text are clearly readable.</p>
-                {idPhoto ? (
+                {!idPhoto && idFrontDocId ? (
+                  <div data-testid="id-reused" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 10, background: 'var(--bg-primary)', borderRadius: 8 }}>
+                    <span style={{ fontSize: 13, color: 'var(--color-success)', fontWeight: 600, flex: 1 }}>&#9989; Using the ID you already sent</span>
+                    <button onClick={() => setIdFrontDocId(null)} style={{ background: 'transparent', border: '1px solid var(--border-color)', borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: 'pointer', color: 'var(--text-secondary)' }}>Use a different photo</button>
+                  </div>
+                ) : idPhoto ? (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 10, background: 'var(--bg-primary)', borderRadius: 8 }}>
                     <img src={idPhoto} style={{ width: 100, height: 65, objectFit: 'cover', borderRadius: 6 }} />
                     <span style={{ fontSize: 13, color: 'var(--color-success)', fontWeight: 600, flex: 1 }}>&#9989; ID photo captured</span>
@@ -2000,10 +2064,10 @@ const CaregiverOnboarding = window.CaregiverOnboarding = ({ inviteToken, signupT
               <div style={{ display: 'flex', gap: 10 }}>
                 {backBtn(familyOnly ? 3 : 7)}
                 <button onClick={handleVerifyIdentity}
-                  disabled={!idSelfie || !idPhoto || idVerifying}
+                  disabled={!idSelfie || !(idPhoto || idFrontDocId) || idVerifying}
                   style={{
-                    flex: 1, padding: '14px', border: 'none', borderRadius: '8px', fontSize: '16px', fontWeight: 600, cursor: idSelfie && idPhoto && !idVerifying ? 'pointer' : 'not-allowed',
-                    background: idSelfie && idPhoto && !idVerifying ? 'var(--role-color)' : 'var(--border-light)',
+                    flex: 1, padding: '14px', border: 'none', borderRadius: '8px', fontSize: '16px', fontWeight: 600, cursor: idSelfie && (idPhoto || idFrontDocId) && !idVerifying ? 'pointer' : 'not-allowed',
+                    background: idSelfie && (idPhoto || idFrontDocId) && !idVerifying ? 'var(--role-color)' : 'var(--border-light)',
                     color: 'var(--text-on-primary)',
                   }}>
                   {idVerifying ? '&#9203; Verifying...' : 'Verify & Continue'}

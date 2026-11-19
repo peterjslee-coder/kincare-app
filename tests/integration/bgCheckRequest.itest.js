@@ -75,13 +75,24 @@ describe("ask → approve → Checkr", () => {
     other = await h.createUser({ firstName: "Not", lastName: "Admin" });
   });
 
-  test("agreeing in onboarding (the profile save) is the request — no payment involved", async () => {
+  // v1.134.0 — Pete, 11/18: "the request that she's ready for a background check doesn't show
+  // until she applies for it." Agreeing in onboarding used to be the request (v1.132.0).
+  test("agreeing in onboarding is NOT a request — nothing reaches Needs you yet", async () => {
     const r = await req.post("/api/caregivers/profile").set(h.auth(cg.token))
       .send({ hourlyRate: 22, backgroundCheckConsent: true });
     expect([200, 201]).toContain(r.status);
     const row = await db.prepare("SELECT bg_check_requested_at, background_check_paid FROM caregiver_profiles WHERE user_id = ?").get(cg.user.id);
-    expect(row.bg_check_requested_at).toBeTruthy();
+    expect(row.bg_check_requested_at).toBeNull();
     expect(row.background_check_paid === 1).toBe(false);
+    expect((await needsYou(admin.user.id)).filter((i) => i.id === `bgCheckRequest:${cg.user.id}`)).toHaveLength(0);
+  });
+
+  test("her own tap is the request — no payment involved", async () => {
+    const r = await req.post("/api/checkr/initiate").set(h.auth(cg.token)).send({});
+    expect(r.status).toBe(200);
+    expect(r.body.status).toBe("requested");
+    const row = await db.prepare("SELECT bg_check_requested_at FROM caregiver_profiles WHERE user_id = ?").get(cg.user.id);
+    expect(row.bg_check_requested_at).toBeTruthy();
   });
 
   test("it is in the admin's Needs you with a one-tap Approve, and in nobody else's", async () => {

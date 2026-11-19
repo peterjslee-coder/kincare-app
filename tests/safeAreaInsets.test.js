@@ -28,7 +28,7 @@ const polyfill = appSrc.slice(0, appSrc.indexOf(END) + END.length);
  * @param platform   null for a browser, or 'ios' / 'android' inside Capacitor
  * @param screenPx   the physical screen, [long, short]
  */
-function runPolyfill({ envInsets = { top: 0, bottom: 0 }, platform = null, screenPx = [812, 375] }) {
+function runPolyfill({ envInsets = { top: 0, bottom: 0 }, platform = null, screenPx = [812, 375], capInsets = null }) {
   const cssVars = {};
   const probes = new Map();
   const doc = {
@@ -39,6 +39,8 @@ function runPolyfill({ envInsets = { top: 0, bottom: 0 }, platform = null, scree
           // Which inset is this probe asking about?
           if (v.includes("padding-top")) probes.set(el, "top");
           if (v.includes("padding-bottom")) probes.set(el, "bottom");
+          // v1.134.0 — the Android probe also reads Capacitor's --safe-area-inset-* variables.
+          if (v.includes("var(--safe-area-inset-")) el.readsCapVar = true;
         },
         get() { return ""; },
       });
@@ -47,7 +49,7 @@ function runPolyfill({ envInsets = { top: 0, bottom: 0 }, platform = null, scree
     body: { appendChild() {}, removeChild() {} },
     documentElement: {
       appendChild() {}, removeChild() {},
-      style: { setProperty: (k, v) => { cssVars[k] = v; } },
+      style: { setProperty: (k, v) => { cssVars[k] = v; }, getPropertyValue: (k) => cssVars[k] || "" },
     },
   };
 
@@ -55,10 +57,15 @@ function runPolyfill({ envInsets = { top: 0, bottom: 0 }, platform = null, scree
     document: doc,
     screen: { height: screenPx[0], width: screenPx[1] },
     console: { warn() {} },
-    getComputedStyle: (el) => ({
-      paddingTop: probes.get(el) === "top" ? `${envInsets.top}px` : "0px",
-      paddingBottom: probes.get(el) === "bottom" ? `${envInsets.bottom}px` : "0px",
-    }),
+    getComputedStyle: (el) => {
+      const side = probes.get(el);
+      const val = (k) => Math.max(envInsets[k], el.readsCapVar && capInsets ? capInsets[k] : 0);
+      return {
+        paddingTop: side === "top" ? `${val("top")}px` : "0px",
+        paddingBottom: side === "bottom" ? `${val("bottom")}px` : "0px",
+      };
+    },
+    addEventListener() {}, setTimeout() {}, MutationObserver: function () { this.observe = () => {}; },
   };
   if (platform) {
     win.Capacitor = { isNativePlatform: () => true, getPlatform: () => platform };
@@ -134,4 +141,28 @@ describe("no component re-guesses the insets after app.js has resolved them", ()
       expect(src).not.toMatch(/isNativePlatform\(\)\s*\?\s*59/);
     });
   }
+});
+
+
+// v1.134.0 — a caregiver's Samsung, 11/18: "Welcome, Kay!" under the clock, the bottom bar under
+// Android's own buttons. Android 15+ draws edge to edge and Capacitor 8 reports the bars through
+// --safe-area-inset-* (and env() on new WebViews). Believe whichever is larger.
+describe("Capacitor Android reads Capacitor's inset variables", () => {
+  test("env() 0 but Capacitor says 32/48: 32/48", () => {
+    const r = runPolyfill({ platform: "android", envInsets: { top: 0, bottom: 0 }, capInsets: { top: 32, bottom: 48 } });
+    expect(r.top).toBe(32);
+    expect(r.bottom).toBe(48);
+    expect(r.cssVars["--sat"]).toBe("32px");
+  });
+  test("nothing reported yet: 0, and it keeps listening", () => {
+    const r = runPolyfill({ platform: "android" });
+    expect(r.top).toBe(0);
+    expect(appSrc).toContain("new MutationObserver(remeasure).observe(document.documentElement");
+    expect(appSrc).toContain("window.dispatchEvent(new Event('inplace:safe-area'))");
+    expect(appSrc).toContain("window.addEventListener('inplace:safe-area', on)");
+  });
+  test("a browser never reads them — only the Android app", () => {
+    const r = runPolyfill({ envInsets: { top: 0, bottom: 0 }, capInsets: { top: 32, bottom: 48 } });
+    expect(r.top).toBe(0);
+  });
 });

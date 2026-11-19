@@ -37,7 +37,8 @@ describe("the numbered prompt is gone", () => {
 
   test("all three entry points open the same picker", () => {
     // People tab, BG Checks "Vouch for family", BG Checks "Convert to family vouch".
-    expect((adminCode.match(/setVouchPicker\(\{/g) || []).length).toBe(3);
+    // v1.134.0 — plus a fourth: granting the fee waiver opens the same picker next.
+    expect((adminCode.match(/setVouchPicker\(\{/g) || []).length).toBe(4);
     expect(adminCode).toMatch(/mode: 'convert'/);
   });
 });

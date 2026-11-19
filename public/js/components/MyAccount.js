@@ -1026,6 +1026,10 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
     padding: '10px 20px', background: 'none', border: 'none', borderBottom: activeTab === id ? '3px solid #1b6b5a' : '3px solid transparent',
     fontWeight: activeTab === id ? 700 : 500, fontSize: 14, cursor: 'pointer',
     color: activeTab === id ? 'var(--role-color)' : 'var(--text-tertiary)', fontFamily: 'inherit', transition: 'all 0.15s',
+    // v1.134.0 — at a phone's large-text setting the tabs squeezed into each other
+    // ("Profil Settings Paymen Documen Prefe" on a caregiver's Samsung, 11/18). Keep each label
+    // whole and let the strip scroll sideways instead.
+    flexShrink: 0, whiteSpace: 'nowrap',
   });
 
   const isDemo = user?.is_demo || user?.isDemo;

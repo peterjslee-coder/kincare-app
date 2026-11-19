@@ -189,6 +189,8 @@ const routeItemState = window.routeItemState = (id, facts = {}) => {
       const s = f.stripe || {};
       if (s.override || s.connected) return 'done';
       if (s.status === null || s.status === undefined) return 'unknown';
+      // v1.134.0 — details handed over, Stripe still verifying: the wait is Stripe's, not hers.
+      if (s.detailsSubmitted) return 'waiting';
       return 'todo';
     }
 

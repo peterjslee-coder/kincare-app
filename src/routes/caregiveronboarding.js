@@ -220,7 +220,20 @@ Respond with ONLY a JSON object (no markdown): { "similar": true/false, "confide
 router.post("/verify-id", async (req, res) => {
   try {
     const db = await getDb();
-    const { idPhoto: idPhotoBase64, selfie: selfieBase64 } = req.body;
+    const { selfie: selfieBase64, idDocumentId } = req.body;
+    let idPhotoBase64 = req.body.idPhoto;
+
+    // v1.134.0 — the ID she already sent on the step before. Pete, 11/18: "It is requiring ID
+    // pictures twice." Step 7 uploads the front of her ID; step 8 used to ask for it again.
+    // Only her own front-of-ID upload is accepted here.
+    if (!idPhotoBase64 && idDocumentId) {
+      const doc = await db.prepare(
+        "SELECT file_data, document_type FROM caregiver_documents WHERE id = ? AND user_id = ?"
+      ).get(idDocumentId, req.user.id);
+      if (doc && ["id_front", "dl_front", "drivers_license"].includes(doc.document_type)) {
+        idPhotoBase64 = await storage.resolveFileData(doc.file_data);
+      }
+    }
 
     if (!idPhotoBase64) return res.status(400).json({ error: "ID photo is required" });
     if (!selfieBase64) return res.status(400).json({ error: "Selfie is required" });

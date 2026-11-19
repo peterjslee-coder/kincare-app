@@ -31,6 +31,22 @@ const WINDOW_DAYS = 45;
 
 const ENTRIES = [
   {
+    id: "caregiver-home-tidy",
+    version: "1.134.0",
+    date: "2026-11-19",
+    audience: ["caregiver"],
+    title: "A home screen that gets out of your way",
+    body: "Once you're set up, the getting-started card goes away. The optional parts (your photo, account security, getting listed) each have an \u2715 to put them away, and Find Work is never locked by them.",
+    howTo: [
+      "On Home, tap the \u2715 on any section you're done with",
+      "Do those things later from Account whenever you like",
+      "A family that invites you by name shows up in Find Work even before you share your location",
+    ],
+    examples: ["Set up account security later", "Add a photo next week"],
+    preview: "caregiverHomeTidy",
+    action: { label: "Show me", page: "dashboard" },
+  },
+  {
     id: "quick-add-plus",
     version: "1.133.0",
     date: "2026-11-18",

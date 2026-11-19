@@ -593,6 +593,10 @@ const FindWork = window.FindWork = () => {
     borderBottom: subTab === id ? '3px solid #1b6b5a' : '3px solid transparent',
     fontWeight: subTab === id ? 700 : 500, fontSize: 13, cursor: 'pointer',
     color: subTab === id ? 'var(--role-color)' : 'var(--text-tertiary)', fontFamily: 'inherit', transition: 'all 0.15s',
+    // v1.134.0 — at a phone's large-text setting the tabs squeezed into each other
+    // ("Profil Settings Paymen Documen Prefe" on a caregiver's Samsung, 11/18). Keep each label
+    // whole and let the strip scroll sideways instead.
+    flexShrink: 0, whiteSpace: 'nowrap',
   });
 
   return (
@@ -747,7 +751,7 @@ const FindWork = window.FindWork = () => {
           </div>
           <p style={{ fontSize: '14px', color: 'var(--text-secondary)', lineHeight: '1.55', margin: '0 0 12px' }}>
             Families are only offered caregivers within 25 miles of them, so right now no family
-            can find you {'\u2014'} and this list stays empty. It goes both ways: to see where the
+            can find you {'\u2014'} {openRequests.length > 0 ? 'only families who invite you by name, like the one below.' : 'and this list stays empty.'} It goes both ways: to see where the
             work is, we need to know roughly where you are.
           </p>
           {canAskLocation() && (
@@ -777,7 +781,10 @@ const FindWork = window.FindWork = () => {
         </div>
       )}
 
-      {subTab === 'jobs' && locationKnown && <>
+      {/* v1.134.0 — a job offered to her by name shows even before we know where she is: the
+          family chose her, so the 25-mile rule is not theirs to wait on. The server sends only
+          those until it has her point. */}
+      {subTab === 'jobs' && (locationKnown || openRequests.length > 0) && <>
 
       {/* Clearance banner — shown when BG check or Stripe not done */}
       {!caregiverCleared && (

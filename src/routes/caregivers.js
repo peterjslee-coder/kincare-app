@@ -5,10 +5,9 @@ const { userPhotoUrl, userHasPhoto } = require("./media");
 const { v4: uuid } = require("uuid");
 const { getDb } = require("../models/database");
 const { authenticate, requireRole } = require("../middleware/auth");
-const { geocodeAddress, buildAddressString, haversineDistance, coarsenCoordinate } = require("../utils/geocode");
+const { geocodeAddress, geocodeCaregiverArea, buildAddressString, haversineDistance, coarsenCoordinate } = require("../utils/geocode");
 const { consumeDaily } = require("../utils/usageLimits");
 const { clampLimit, clampOffset } = require("../utils/queryLimits");
-const { requestIfReady: requestBgCheckIfReady } = require("../utils/bgCheckRequest"); // v1.132.0
 
 const router = express.Router();
 router.use(authenticate);
@@ -300,6 +299,46 @@ router.get("/me", requireRole("caregiver"), async (req, res) => {
   res.json({ profile });
 });
 
+// ─── GET /api/caregivers/me/onboarding-resume ───
+// v1.134.0 — what the signup wizard should put back in front of a returning caregiver, and the
+// first step that still needs her. The wizard's own draft lives in one browser's localStorage,
+// so a caregiver who started in Chrome and finished in the app was asked for everything twice
+// (Kay, 11/18). See src/utils/onboardingResume.js. Never returns the SSN.
+router.get("/me/onboarding-resume", requireRole("caregiver"), async (req, res) => {
+  try {
+    const db = await getDb();
+    const user = await db.prepare(
+      `SELECT first_name, last_name, phone, date_of_birth, pets, pet_allergies, food_allergies,
+              medical_conditions, id_verified_in_person_at
+         FROM users WHERE id = ?`
+    ).get(req.user.id);
+    if (!user) return res.status(404).json({ error: "User not found" });
+    const profile = await db.prepare("SELECT * FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
+    let documents = [];
+    let identity = null;
+    let selfie = false;
+    if (profile) {
+      const sf = await db.prepare(
+        "SELECT 1 FROM verified_documents WHERE owner_type = 'caregiver' AND owner_id = ? AND category = 'identity' AND document_type = 'selfie' AND COALESCE(status, '') != 'rejected' LIMIT 1" // identity-read-ok: did step 8 run (a selfie exists) — not a read of the ID's status
+      ).get(profile.id).catch(() => null);
+      selfie = !!sf;
+      documents = await db.prepare(
+        "SELECT id, document_type FROM caregiver_documents WHERE user_id = ? ORDER BY created_at ASC"
+      ).all(req.user.id);
+      try {
+        const { caregiverIdentityDoc } = require("../utils/identity");
+        const idDoc = await caregiverIdentityDoc(db, req.user.id, profile.id);
+        if (idDoc) identity = { submitted: true, status: idDoc.status };
+      } catch (e) { /* treated as not submitted: she is asked, never wrongly skipped */ }
+    }
+    const { resumeOnboarding } = require("../utils/onboardingResume");
+    res.json(resumeOnboarding({ user, profile, documents, identity, selfie }));
+  } catch (err) {
+    console.error("Onboarding resume error:", err);
+    res.status(500).json({ error: "Could not load your saved answers" });
+  }
+});
+
 // ─── GET /api/caregivers/me/reviews ───
 // Get the current caregiver's own reviews
 router.get("/me/reviews", requireRole("caregiver"), async (req, res) => {
@@ -523,11 +562,12 @@ router.post("/profile", requireRole("caregiver"), async (req, res) => {
     if (city || address || zip) {
       const addrStr = buildAddressString({ address, city, state, zip });
       console.log(`  [caregiver-profile] Geocoding: "${addrStr}"`);
-      const geo = await geocodeAddress(addrStr);
+      // v1.134.0 — falls back to her town, then her ZIP, when the street is not found.
+      const geo = await geocodeCaregiverArea({ address, city, state, zip });
       if (geo) {
         lat = geo.lat;
         lng = geo.lng;
-        console.log(`  [caregiver-profile] Geocoded to: ${lat}, ${lng}`);
+        console.log(`  [caregiver-profile] Geocoded (${geo.precision}) to: ${lat}, ${lng}`);
       } else {
         // v1.105.121 — this is the silent path that produces a caregiver nobody can book. She
         // typed a real address, the free geocoder timed out, the profile saved anyway, and the
@@ -620,8 +660,10 @@ router.post("/profile", requireRole("caregiver"), async (req, res) => {
 
       const updated = await db.prepare("SELECT * FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
       console.log(`  [caregiver-profile] Updated profile for user=${req.user.id} (${req.user.email})`);
-      // v1.132.0 — consenting in onboarding is the request for a check (utils/bgCheckRequest).
-      await requestBgCheckIfReady(db, req.user.id);
+      // v1.134.0 — no longer a request. Pete, 11/18: "the request that she's ready for a
+      // background check doesn't show until she applies for it." Consenting in onboarding put
+      // every new caregiver straight into Needs you, vouched or not, before anyone had asked
+      // for anything. The request is now only ever her own tap (POST /api/checkr/request).
       return res.json({ profile: updated });
     }
 
@@ -672,7 +714,7 @@ router.post("/profile", requireRole("caregiver"), async (req, res) => {
     } catch (e) {
       console.error("  [caregiver-profile] known-caregiver fulfil (non-blocking):", e.message);
     }
-    await requestBgCheckIfReady(db, req.user.id); // v1.132.0
+    // v1.134.0 — the request is her own tap now, never a side effect of saving (see above).
     res.status(201).json({ profile });
   } catch (err) {
     console.error(`  [caregiver-profile] ❌ Error for user=${req.user?.id} (${req.user?.email}):`, err.message);

@@ -59,6 +59,21 @@ const WN_PREVIEWS = {
       </div>
     </div>
   ),
+  // v1.134.0 — the caregiver home's optional sections close
+  caregiverHomeTidy: () => (
+    <div style={{ padding: '12px 12px 10px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>
+      <div style={{ ...wnCard, display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>Keep your account safe</div>
+          <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>Face ID or fingerprint {'·'} about 1 minute</div>
+        </div>
+        <span style={{ ...wnPill('var(--role-color)', 'var(--text-on-primary)'), padding: '2px 8px' }}>{'\u2715'}</span>
+      </div>
+      <div style={{ ...wnCard, fontSize: 12.5, color: 'var(--text-primary)' }}>
+        <span style={{ fontWeight: 700 }}>Find Work</span> {'·'} Just for you: Tuesday 10 AM
+      </div>
+    </div>
+  ),
   // v1.131.0 — the background check by email
   checkrEmail: () => (
     <div style={{ padding: '12px 12px 10px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>

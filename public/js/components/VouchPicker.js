@@ -16,7 +16,7 @@
 // The warning that used to live inside the confirm() is on screen the whole time you are
 // choosing, rather than after you have chosen.
 
-const VouchPicker = window.VouchPicker = ({ caregiverName, mode = 'vouch', onCancel, onSubmit }) => {
+const VouchPicker = window.VouchPicker = ({ caregiverName, mode = 'vouch', onCancel, onSubmit, lead }) => {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [searching, setSearching] = useState(false);
@@ -79,6 +79,8 @@ const VouchPicker = window.VouchPicker = ({ caregiverName, mode = 'vouch', onCan
           <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>
             {isConvert ? 'Convert to a family vouch' : `Vouch for ${caregiverName}`}
           </div>
+          {/* v1.134.0 — why this opened, when it opened on its own (after waiving a fee). */}
+          {lead && <div data-testid="vouch-lead" style={{ fontSize: 13, color: 'var(--text-primary)', marginTop: 6, lineHeight: 1.45 }}>{lead}</div>}
           <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4, lineHeight: 1.45 }}>
             Which family? A vouch applies to that family <strong>only</strong>.
           </div>

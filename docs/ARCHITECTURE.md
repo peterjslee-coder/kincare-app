@@ -7,7 +7,7 @@ build red.
 
 Hand-written sections (§3 "Where is…") are preserved across regeneration; edit those freely.
 
-Structure at last generation: 618 HTTP routes across 64 mounts ·
+Structure at last generation: 619 HTTP routes across 64 mounts ·
 118 `CREATE TABLE` statements · 16 background jobs · 42 socket events
 (17 with no client listener) · 75 push event types · 66 `window.__*` globals.
 
@@ -58,7 +58,7 @@ JSX is *not* compiled in the browser; Babel-standalone is not loaded. Editing an
 | `/api/care-todos` | `src/routes/careTodos.js` | 5 |  |
 | `/api/care-tools` | `src/routes/careTools.js` | 1 |  |
 | `/api/caregiver-onboarding` | `src/routes/caregiveronboarding.js` | 6 |  |
-| `/api/caregivers` | `src/routes/caregivers.js` | 11 |  |
+| `/api/caregivers` | `src/routes/caregivers.js` | 12 |  |
 | `/api/checkr` | `src/routes/checkr.js` | 13 |  |
 | `/api/connections` | `src/routes/connections.js` | 4 |  |
 | `/api/consent` | `src/routes/consent.js` | 13 |  |
@@ -208,17 +208,17 @@ Every job runs through `guardedPoller` → `withPollerLock` (`src/models/databas
 | 103 | Session Accountability Poller | 1 min | `src/server.js:1473` |
 | 104 | Reimbursement push digest sweeper (v1.98.15) | 30 s | `src/server.js:1490` |
 | 105 | Auto-pay cron: charge overdue sessions | 5 min | `src/server.js:1582` |
-| 106 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1688` |
-| 107 | Care Tasks poller (v1.99.0) | 1 min | `src/server.js:1713` |
-| 108 | Care Events poller (v1.100.0) | 1 min | `src/server.js:1729` |
+| 106 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1689` |
+| 107 | Care Tasks poller (v1.99.0) | 1 min | `src/server.js:1714` |
+| 108 | Care Events poller (v1.100.0) | 1 min | `src/server.js:1730` |
 | 109 | Kindred Reminder Delivery Poller | 1 min | `src/server.js:1504` |
-| 110 | Retention (v1.106.9, poller 110) | 24 h | `src/server.js:1766` |
-| 111 | (see src/server.js:1664) | 1 h | `src/server.js:1664` |
-| 112 | v1.106.13 — poller 112: proposals that nobody answered | 10 min | `src/server.js:1795` |
-| 113 | (see src/server.js:1838) | 1 min | `src/server.js:1838` |
-| 114 | Quiet hours summary (v1.107.3, poller 114) | 5 min | `src/server.js:1857` |
-| 115 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1701` |
-| 116 | Visit mileage: charge what is owed once the visit itself is paid (v1.126.1, poller 116) | 5 min | `src/server.js:1874` |
+| 110 | Retention (v1.106.9, poller 110) | 24 h | `src/server.js:1767` |
+| 111 | (see src/server.js:1665) | 1 h | `src/server.js:1665` |
+| 112 | v1.106.13 — poller 112: proposals that nobody answered | 10 min | `src/server.js:1796` |
+| 113 | (see src/server.js:1839) | 1 min | `src/server.js:1839` |
+| 114 | Quiet hours summary (v1.107.3, poller 114) | 5 min | `src/server.js:1858` |
+| 115 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1702` |
+| 116 | Visit mileage: charge what is owed once the visit itself is paid (v1.126.1, poller 116) | 5 min | `src/server.js:1875` |
 
 ---
 
@@ -337,7 +337,7 @@ State travels through `window`, not props. This table is the registry.
 | `window.__calDayBlocks` | CaregiverCalendar.js | 2 |
 | `window.__capPlugin` | utils.js | 1 |
 | `window.__caregiverFirstStepsLeft` | CaretakerHub.js | 2 |
-| `window.__caregiverFirstStepsRemain` | CaretakerHub.js | 2 |
+| `window.__caregiverFirstStepsRemain` | CaretakerHub.js | 3 |
 | `window.__clearSessionActive` | app.js | 4 |
 | `window.__currentPage` | app.js | 2 |
 | `window.__currentRole` | app.js, HelpPage.js, MyAccount.js | 14 |
@@ -378,8 +378,8 @@ State travels through `window`, not props. This table is the registry.
 | `window.__requestCareCaregiver` | app.js | 4 |
 | `window.__requestCareDate` | app.js | 4 |
 | `window.__requestCareEdit` | app.js | 3 |
-| `window.__safeAreaBottom` | app.js | 13 |
-| `window.__safeAreaTop` | app.js | 8 |
+| `window.__safeAreaBottom` | app.js | 12 |
+| `window.__safeAreaTop` | app.js | 7 |
 | `window.__sandboxMode` | app.js | 2 |
 | `window.__sessionIsPersistent` | app.js | 2 |
 | `window.__setSessionActive` | app.js | 4 |

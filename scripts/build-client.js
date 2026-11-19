@@ -44,6 +44,7 @@ const scripts = [
   "js/components/CareStoryWalkthrough.js",
   "js/components/CaregiverTour.js", // v1.105.194 — the caregiver's first-visit tour; CaretakerHub and app.js use it
   "js/components/SplashPage.js",
+  "js/components/GetTheAppFirst.js", // v1.134.0 — Android: install the app, then tap the link again
   "js/components/InviteLandingPage.js",
   "js/components/LoginPage.js",
   "js/components/DateOfBirthInput.js", // v1.127.3 — Month/Day/Year; RegisterPage + CaregiverOnboarding

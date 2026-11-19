@@ -397,6 +397,11 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
 
   // Stripe Connect state
   const [stripeStatus, setStripeStatus] = useState(null);
+  // v1.134.0 — the Get Ready card's optional sections can be put away, and stay away (on the
+  // account, so the app and the website agree). Pete, 11/18, on Tina's home screen: "Those
+  // should not stay there. You should be able to cancel them." Shown = true until she closes it.
+  const [listedShown, setListedShown] = useStickySection('caregiverHome.getListed', true);
+  const [securityShown, setSecurityShown] = useStickySection('caregiverHome.keepSafe', true);
   const [stripeLoading, setStripeLoading] = useState(false);
   const [stripeError, setStripeError] = useState(null);
 
@@ -1483,6 +1488,8 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   // v1.128.4 — from the account (2FA or a passkey), not from this browser's localStorage.
   const securityReviewed = !!profile.accountSecured;
   const stripeConnected = stripeStatus?.status === 'active';
+  // v1.134.0 — she has handed Stripe her details; Stripe has not switched payouts on yet.
+  const stripeChecking = !stripeConnected && !!(stripeStatus && stripeStatus.detailsSubmitted);
   const bgPaid = !!profile.background_check_paid || !!profile.isBackgroundChecked;
   // v1.131.0 — "submitted" means CHECKR has her form, from the server's phase (which only Checkr's
   // webhooks or API can move past awaiting_caregiver). It used to be "any status but 'pending'",
@@ -1523,7 +1530,12 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       done: stripeConnected || stripeOverride,
       // v1.105.75 — stripeStatus starts null and only becomes real once /connect/status
       // answers; null means "not asked yet", not "not connected".
-      missing: (stripeConnected || stripeOverride || stripeStatus === null) ? null : 'Connect Stripe to continue' },
+      missing: (stripeConnected || stripeOverride || stripeStatus === null || stripeChecking) ? null : 'Connect Stripe to continue',
+      // v1.134.0 — Pete, 11/18: "I just helped [Kay] add a bank account and the landing screen says
+      // the pay has to land somewhere. It doesn't register that it's already been done." Stripe
+      // takes a while to verify a new account (payouts stay off until it has), and that window
+      // used to read exactly like never having started.
+      warning: stripeChecking ? 'Stripe has your bank details and is checking them. Nothing else for you to do \u2014 this usually clears within a day.' : undefined },
     { id: 'background-check',
       label: 'Start your background check',
       // v1.105.63 — the fee sentence is the first thing this step says, and it used to say it
@@ -1627,7 +1639,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       loaded: idVerification.loaded, loadFailed: idVerification.loadFailed,
       submitted: idSubmitted, approved: idApproved, status: idVerification.status,
     },
-    stripe: { status: stripeStatus ? stripeStatus.status : null, connected: stripeConnected, override: stripeOverride },
+    stripe: { status: stripeStatus ? stripeStatus.status : null, connected: stripeConnected, override: stripeOverride, detailsSubmitted: stripeChecking },
     backgroundCheck: {
       override: bgOverride, passed: !!profile.isBackgroundChecked,
       submitted: bgCheckSubmitted, checkrStatus: profile.checkrStatus,
@@ -1698,14 +1710,23 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
     setAckingInstructionsId(null);
   };
   const showFirstSteps = firstStepsResolved && firstStepsDone < firstSteps.length && !profile.isDemo;
+  // ─── v1.134.0 — what she MUST do, apart from what she MAY do ───
+  // Find Work used to stay greyed until every First Step was done, the optional ones included.
+  // When v1.128.4 made "Lock down your account" mean a real passkey or two-step sign-in, every
+  // working caregiver without one (Tina) was suddenly locked out of Find Work and handed a
+  // card she could not close. The lock is now the "Up next" group only: her ID, what care she
+  // will do, where her pay lands, and the background check unless a family vouched for her.
+  // A photo, availability and account security are offered, closable, and never a lock.
+  const hubVouchedOnly = !profile.isBackgroundChecked && adminVouches.some((v) => v && v.familyName);
+  const routeItem = (id) => hubRoute.items.find((i) => i.id === id) || hubRoute.optional.find((i) => i.id === id) || null;
+  const REQUIRED_IDS = hubVouchedOnly ? ['identity', 'preferences', 'stripe'] : ['identity', 'preferences', 'stripe', 'background-check'];
+  const requiredTodo = REQUIRED_IDS.map(routeItem).filter((i) => i && i.state === 'todo');
   // Expose to parent (app.js) so bottom nav can grey out Find Work
-  window.__caregiverFirstStepsRemain = showFirstSteps;
+  window.__caregiverFirstStepsRemain = showFirstSteps && requiredTodo.length > 0;
   // v1.105.193 — and WHAT is left, so a greyed-out Find Work can say why instead of doing
   // nothing. Tina (Sep 12): everything on her path done but preferences and availability;
   // the button was dead with no sentence next to it.
-  window.__caregiverFirstStepsLeft = showFirstSteps
-    ? hubRoute.items.filter((i) => i.state === 'todo').map((i) => i.label)
-    : [];
+  window.__caregiverFirstStepsLeft = window.__caregiverFirstStepsRemain ? requiredTodo.map((i) => i.label) : [];
   // NEVER gate/blur the dashboard — checklist is motivational, not a lock
   const onboardingGated = false;
   const shouldBlur = false;
@@ -2627,6 +2648,17 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
           </div>
         );
         const bgWaiting = bgCheckSubmitted && !profile.isBackgroundChecked;
+        // v1.134.0 — what is on the card. Up next is hers until it is done; the rest she may close.
+        const mustDo = nextIds.length > 0 || waitingItems.length > 0;
+        const showListed = (listedIds.length > 0 || showBgListed) && listedShown;
+        const showSecurity = securityTodo && securityShown;
+        if (!mustDo && !showListed && !showSecurity) return null;
+        const closeBtn = (label, onClose) => (
+          <button type="button" aria-label={label} title={label} onClick={onClose} style={{
+            background: 'none', border: 'none', padding: 6, margin: '-6px -6px 0 0', cursor: 'pointer',
+            color: 'var(--text-muted)', fontSize: 16, lineHeight: 1, minWidth: 32, minHeight: 32, flexShrink: 0,
+          }}>{'\u2715'}</button>
+        );
 
         return (
         <div className="ip-get-ready" style={{ display: 'flex', flexDirection: 'column', gap: 16, marginBottom: 20 }}>
@@ -2699,10 +2731,13 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
             </section>
           )}
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 16 }}>
-            {(listedIds.length > 0 || showBgListed) && (
+          {(showListed || showSecurity) && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 16 }}>
+            {showListed && (
               <section aria-label="Get listed for other families" style={{ background: 'var(--bg-surface)', borderRadius: 14, border: '1px solid var(--border-color)', padding: '18px 20px 8px' }}>
-                <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>Get listed for other families</div>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                  <div style={{ flex: 1, fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>Get listed for other families</div>
+                  {closeBtn('Hide this — you can do these anytime from Account', () => setListedShown(false))}
+                </div>
                 <div style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '2px 0 8px' }}>So families nearby can find and book you.</div>
                 {listedIds.map((id) => smallRow(id, COPY[id].title, COPY[id].why + (COPY[id].time ? ' ' + COPY[id].time + '.' : ''), COPY[id].cta, () => openFirstStep(id)))}
                 {showBgListed && smallRow('background-check', COPY['background-check'].title,
@@ -2713,18 +2748,23 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                   bgWaiting ? 'With us' : (bgRequested ? 'Waiting on InPlace' : null))}
               </section>
             )}
-            {securityTodo && (
+            {showSecurity && (
               <section aria-label="Keep your account safe" style={{ background: 'var(--bg-surface)', borderRadius: 14, border: '1px solid var(--border-color)', padding: '18px 20px 8px' }}>
-                <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>Keep your account safe</div>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                  <div style={{ flex: 1, fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>Keep your account safe</div>
+                  {closeBtn('Hide this — you can set it up anytime in Account → Settings', () => setSecurityShown(false))}
+                </div>
                 <div style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '2px 0 8px' }}>Your account holds families{'’'} addresses and your pay. One of these is enough.</div>
                 {smallRow('passkey', 'Sign in with Face ID or your fingerprint', 'A passkey · about 1 minute · recommended', 'Turn on', () => openFirstStep('security'))}
                 {smallRow('2fa', 'Or a code from an authenticator app', 'Two-step sign-in · about 2 minutes', 'Set up', () => openFirstStep('security'))}
               </section>
             )}
-          </div>
+          </div>}
 
           {/* Done — a line of ticks, not strikethrough (v1.129.0). Built from 'done' and nothing else. */}
-          {doneItems.length > 0 && (
+          {/* v1.134.0 — only while something is still Up next. Once she is set up, the ticks and
+              the certifications link are clutter (Pete, 11/18: "It's in the way"). */}
+          {mustDo && doneItems.length > 0 && (
             <section aria-label="Already done" className="ip-path-done" style={{ background: 'var(--bg-surface)', borderRadius: 14, border: '1px solid var(--border-color)', padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 8 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                 <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-success)' }}>Done: {doneItems.length}</span>

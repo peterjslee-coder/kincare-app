@@ -1756,6 +1756,21 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
       if (res?.ok) {
         // Refresh modal data
         openOnboardingModal(onboardingModal.userId);
+        // v1.134.0 — Pete, 11/18: "would love to have a little bit more of an easy transition
+        // like i waive the fee, and am prompted to vouch for her there." Waiving the fee does
+        // not waive the check, which is exactly why he forgot the vouch. So granting the waiver
+        // to someone with no vouch opens the vouch picker next, saying why. Cancel is fine.
+        if (flag === 'backgroundCheckPaid' && !currentValue && (onboardingModal.vouches || []).length === 0) {
+          const userId = onboardingModal.userId;
+          const who = onboardingModal.user?.name || onboardingModal.user?.email || 'this caregiver';
+          setVouchPicker({
+            caregiverUserId: userId,
+            caregiverName: who,
+            mode: 'vouch',
+            lead: `Fee waived. That does not waive the background check itself \u2014 if a family you know is ready to book ${who}, vouch for that family now.`,
+            onDone: () => openOnboardingModal(userId),
+          });
+        }
       } else {
         const data = await res.json().catch(() => ({}));
         alert(data?.error || 'Failed to update flag');
@@ -2054,6 +2069,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
         <VouchPicker
           caregiverName={vouchPicker.caregiverName}
           mode={vouchPicker.mode}
+          lead={vouchPicker.lead}
           onCancel={() => setVouchPicker(null)}
           onSubmit={submitVouch}
         />

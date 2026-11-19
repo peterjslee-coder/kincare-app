@@ -30,6 +30,21 @@
                 <data android:scheme="inplace" android:host="oauth" />
             </intent-filter>
 
+            <!-- v1.134.0 — App Links: links to yourinplace.com in an email or text open in the
+                 app, not Chrome (Pete, 11/18). Verified against /.well-known/assetlinks.json,
+                 which already lists handle_all_urls for both signing keys. Paths are only the
+                 ones emails use (invites, sign-up, password reset, consent all ride "/?…";
+                 /account and /dashboard are linked directly). /api/* is deliberately absent:
+                 the OAuth callbacks must stay in the browser tab that started them. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="yourinplace.com" android:path="/" />
+                <data android:scheme="https" android:host="yourinplace.com" android:path="/account" />
+                <data android:scheme="https" android:host="yourinplace.com" android:path="/dashboard" />
+            </intent-filter>
+
         </activity>
 
         <!-- Default notification icon + color for FCM -->

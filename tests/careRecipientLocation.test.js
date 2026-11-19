@@ -94,7 +94,11 @@ describe("everyone already broken gets repaired", () => {
     expect(geocode).toMatch(/NOMINATIM_MIN_INTERVAL_MS = 1100/);
     expect(geocode).toMatch(/const wait = NOMINATIM_MIN_INTERVAL_MS - \(Date\.now\(\) - _geoLastCall\)/);
     const backfill = server.slice(server.indexOf("Geocode backfill (v1.106.10"));
-    expect(backfill.slice(0, 3000)).toMatch(/await geocodeAddress\(addrStr\)/);
+    // v1.134.0 — the caregiver half goes through geocodeCaregiverArea (town/ZIP fallback), which
+    // is itself only calls to geocodeAddress; the recipient half still calls it directly.
+    expect(backfill.slice(0, 4500)).toMatch(/await geocodeCaregiverArea\(/);
+    expect(backfill.slice(0, 4500)).toMatch(/await geocodeAddress\(addrStr\)/);
+    expect(geocode).toMatch(/async function geocodeCaregiverArea[\s\S]*?const geo = await geocodeAddress\(q\)/);
   });
 
   test("it is a locked poller now, not something every boot redoes", () => {
