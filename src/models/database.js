@@ -3602,6 +3602,25 @@ async function initializeDatabase() {
         `UPDATE messages SET acknowledged_at = COALESCE(created_at, NOW()) WHERE acknowledged_at IS NULL`,
       ],
     },
+    {
+      // v1.135.3 — Pete, 11/19: block a number on the outreach line ("block option?"), and file
+      // machine-sent texts (sign-in codes, marketing) from unknown numbers as blocked instead of as
+      // a contact who "replied" and is OK to text. Existing contacts that only ever sent a
+      // verification code are moved there now, and lose the OK their code text gave them.
+      id: "088_outreach_blocked",
+      statements: [
+        `ALTER TABLE outreach_contacts ADD COLUMN IF NOT EXISTS blocked_at TIMESTAMPTZ`,
+        `ALTER TABLE outreach_contacts ADD COLUMN IF NOT EXISTS blocked_reason TEXT`,
+        `ALTER TABLE outreach_contacts ADD COLUMN IF NOT EXISTS blocked_by TEXT`,
+        `UPDATE outreach_contacts c
+            SET blocked_at = NOW(), blocked_reason = 'automated', unread = 0,
+                texts_ok_at = NULL, texts_ok_source = NULL, texts_ok_by = NULL, texts_ok_evidence = NULL, texts_ok_message_id = NULL
+          WHERE c.source = 'inbound' AND c.blocked_at IS NULL
+            AND EXISTS (SELECT 1 FROM outreach_messages m WHERE m.contact_id = c.id AND m.direction = 'in'
+                         AND m.body ~* '(verification|security|confirmation|login|sign[- ]?in|one[- ]time|access) (code|pin|passcode)|your (code|pin|passcode) is')
+            AND NOT EXISTS (SELECT 1 FROM outreach_messages m WHERE m.contact_id = c.id AND m.direction = 'out')`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

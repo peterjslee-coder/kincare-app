@@ -2,6 +2,19 @@
 
 > **How this works:** Add bugs and features below as you find them. Don't worry about wording or order. When you're ready for a dev session, say "let's work the task list" and Claude will batch everything together into one efficient push. Nothing gets executed until you say go.
 
+## Nov 19 2026 — outreach: block a number; sign-in codes aren't replies (v1.135.3)
+
+Pete, 11/19: "i just got a reply with a buffalo wild wings thing to the outreach number" … "block option?". It was "Your verification code for Buffalo Wild Wings is 6884." from a 10-digit number: someone had entered (540) 835-5987 as their phone, either a typo or the number's previous owner. Any unknown sender became a contact marked "replied" and OK to text.
+
+- [x] `O.isAutomatedText`: a narrow set of shapes (sign-in/verification codes, "your code is", "don't share this code", "Reply STOP to unsubscribe"). It applies only to a number that isn't already a contact. Such a sender is filed as blocked (`blocked_reason = 'automated'`). Short codes never got this far, since `toE164` drops them.
+- [x] Blocked numbers:
+  - Inbound texts are kept, with status `blocked`. They get no unread, no OK to text, no push, no JOIN reply, and an email inside them mints no invite. STOP is still honoured.
+  - Inbound calls get `<Reject reason="busy"/>` and nothing is logged.
+  - Texting, browser dial and call-via-cell are all refused, as is the follow-up batch.
+- [x] Admin: a **Block** button in Details. A blocked contact shows a "Blocked" banner with **Unblock**. Unblocking gives nothing back, so a new OK to text is needed. The list hides blocked contacts behind a **Blocked (n)** chip, outside every count, the funnel and select-all.
+- [x] Migration 088 adds `blocked_at` / `blocked_reason` / `blocked_by`, and moves existing inbound-only contacts whose texts were verification codes to blocked (the Buffalo Wild Wings one).
+- Tests: `outreach.test.js` (isAutomatedText), `outreachBlocked.itest.js` (6).
+
 ## Nov 18 2026 — the next native build (1.3, native calling): Play/App Store findings to fold in
 
 Pete, 11/18 21:51, after sending Android 1.2.1 (versionCode 23) to Play review: "add the other stuff to the list to build when we go native calling." Found in Play Console's release dashboard for 23 and App Store Connect. None blocked 1.2.1.

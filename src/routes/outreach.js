@@ -53,8 +53,9 @@ function statusCallbackUrl() {
 async function sendToContact(db, contact, body, { sentBy = null, automated = false, intro = false } = {}) {
   // STOP is final from our side. Checked here, at the one place a text leaves, so no path —
   // batch, reply, or an automated thank-you — can talk past it.
-  const fresh = await db.prepare("SELECT opted_out_at, status, texts_ok_at FROM outreach_contacts WHERE id = ?").get(contact.id);
+  const fresh = await db.prepare("SELECT opted_out_at, status, texts_ok_at, blocked_at FROM outreach_contacts WHERE id = ?").get(contact.id);
   if (!fresh || fresh.opted_out_at || fresh.status === "opted_out") return { ok: false, error: "Opted out" };
+  if (fresh.blocked_at) return { ok: false, error: "Blocked" }; // v1.135.3
   // v1.122.0 — and nobody is texted without a recorded OK: a yes on a recorded call, or a text
   // from them first. A public listing of people seeking work is not consent (carriers, 10/15).
   if (!fresh.texts_ok_at) return { ok: false, error: "No OK to text yet — call first, or wait for them to text in." };
@@ -90,6 +91,7 @@ async function sendToContact(db, contact, body, { sentBy = null, automated = fal
  * (so a second "here's my email" never mints a second link). Returns { ok, status, inviteId }.
  */
 async function inviteContact(db, contact, invitedBy) {
+  if (contact.blocked_at) return { ok: false, error: "This number is blocked." }; // v1.135.3
   const email = String(contact.email || "").trim().toLowerCase();
   if (!email) return { ok: false, error: "No email address on file" };
 
@@ -274,7 +276,7 @@ adminRouter.post("/send-intro", async (req, res) => {
     for (const id of ids) {
       const c = await loadContact(db, id);
       // Only people with an OK to text, never sent this follow-up, never opted out, not already on InPlace.
-      if (c && c.texts_ok_at && !c.opted_out_at && c.status !== "opted_out" && !c.intro_sent_at && !c.joined_user_id) targets.push(c);
+      if (c && c.texts_ok_at && !c.blocked_at && !c.opted_out_at && c.status !== "opted_out" && !c.intro_sent_at && !c.joined_user_id) targets.push(c);
     }
     if (!targets.length) return res.status(400).json({ error: "None of those people can get it — texts need an OK first (a yes on a recorded call, or they texted you). Already-sent, opted-out and already-joined people are skipped too." });
 
@@ -337,6 +339,7 @@ adminRouter.post("/:id/messages", async (req, res) => {
     const contact = await loadContact(db, req.params.id);
     if (!contact) return res.status(404).json({ error: "Not found" });
     if (contact.opted_out_at || contact.status === "opted_out") return res.status(400).json({ error: "This person replied STOP. InPlace can't text them again unless they text START." });
+    if (contact.blocked_at) return res.status(400).json({ error: "This number is blocked. Unblock it first." });
     // v1.122.0 — no OK, no text. Said here plainly rather than as a failed send.
     if (!contact.texts_ok_at) return res.status(400).json({ error: "No OK to text yet. Either they text the outreach number (JOIN), or you record their yes from a recorded call: Details → Record OK from the call." });
     // A first text to someone who has never written back is a cold text: same hours as the intro.
@@ -378,6 +381,7 @@ adminRouter.post("/:id/call-via-cell", async (req, res) => {
     const contact = await loadContact(db, req.params.id);
     if (!contact) return res.status(404).json({ error: "Not found" });
     if (!O.dialableUsNumber(contact.phone)) return res.status(400).json({ error: "That number can't be called from here." });
+    if (contact.blocked_at) return res.status(400).json({ error: "This number is blocked. Unblock it first." });
     if (!contact.last_inbound_at && !O.introWindow().open) {
       return res.status(400).json({ error: "First calls to someone new go out between 9am and 8pm Eastern, Monday through Saturday." });
     }
@@ -489,11 +493,23 @@ adminRouter.patch("/:id", async (req, res) => {
       email: b.email !== undefined ? String(b.email).trim().toLowerCase().slice(0, 200) || null : contact.email,
       status: contact.status,
     };
+    // v1.135.3 — block / unblock (Pete, 11/19). Blocking also withdraws any OK to text and clears
+    // the unread count; unblocking gives nothing back — an OK has to be earned again.
+    if (b.blocked === true && !contact.blocked_at) {
+      await db.prepare(`
+        UPDATE outreach_contacts SET blocked_at = NOW(), blocked_reason = 'admin', blocked_by = ?, unread = 0,
+               texts_ok_at = NULL, texts_ok_source = NULL, texts_ok_by = NULL, texts_ok_evidence = NULL, texts_ok_message_id = NULL
+         WHERE id = ?
+      `).run(req.user.id, contact.id);
+    } else if (b.blocked === false && contact.blocked_at) {
+      await db.prepare("UPDATE outreach_contacts SET blocked_at = NULL, blocked_reason = NULL, blocked_by = NULL WHERE id = ?").run(contact.id);
+    }
     // v1.122.0 — Pete can record an OK himself, but only after a real call in the last 7 days
     // (the recording is the evidence); and he can withdraw one any time.
     if (b.textsOk === false) {
       await db.prepare("UPDATE outreach_contacts SET texts_ok_at = NULL, texts_ok_source = NULL, texts_ok_by = NULL, texts_ok_evidence = NULL, texts_ok_message_id = NULL WHERE id = ?").run(contact.id);
     } else if (b.textsOk === true && !contact.texts_ok_at) {
+      if (contact.blocked_at || b.blocked === true) return res.status(400).json({ error: "This number is blocked. Unblock it first." });
       // v1.125.3 — Pete's override (10/28): "I have a transcript and a recorded call saying 'yes, I
       // would like more information' and that's good enough to defend … log it as an override. …
       // I'm not going to text anyone who doesn't say, like Doris, 'yeah, I would like more info' to
