@@ -354,7 +354,7 @@ State travels through `window`, not props. This table is the registry.
 | `window.__modalBackHandler` | app.js, AdminOutreach.js | 10 |
 | `window.__nativePush` | utils.js | 2 |
 | `window.__navHistory` | app.js | 3 |
-| `window.__navigateTo` | app.js, Caregivers.js | 59 |
+| `window.__navigateTo` | app.js, Caregivers.js | 61 |
 | `window.__openConversationId` | Messages.js, utils.js | 5 |
 | `window.__openEditRequest` | app.js | 7 |
 | `window.__openQuickAdd` | QuickAdd.js | 7 |
