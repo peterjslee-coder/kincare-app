@@ -190,6 +190,27 @@ function classifyInbound(body) {
 }
 
 /**
+ * v1.135.3 — a machine-sent text from a number we've never dealt with: a sign-in code meant for
+ * whoever had (or mistyped) this number, or a marketing blast. Pete, 11/19: a "Your verification
+ * code for Buffalo Wild Wings is 6884" became a contact marked "replied" and OK to text.
+ *
+ * Deliberately narrow — only shapes a caregiver would never write — and only ever applied to a
+ * number that isn't already a contact, so a real person's reply can't be swallowed.
+ */
+const AUTOMATED_RES = [
+  /\b(verification|security|confirmation|login|log-in|sign[- ]?in|one[- ]time|access|authentication|auth|otp)\s+(code|pin|passcode)\b/i,
+  /\byour\s+(code|pin|passcode|otp)\s+is\b/i,
+  /\bis\s+your\s+[\w'’ .-]{0,40}\b(code|pin|passcode)\b/i,
+  /\b(do not|don'?t|never)\s+share\s+(this|your|the)\s+(code|pin)\b/i,
+  /\breply\s+stop\s+to\s+(unsubscribe|opt[- ]?out|end|cancel|stop)\b/i,
+  /\btxt\s+stop\b/i,
+];
+function isAutomatedText(body) {
+  const text = String(body || "");
+  return AUTOMATED_RES.some((re) => re.test(text));
+}
+
+/**
  * Cold intro texts go out only between 9am and 8pm Eastern, Mon–Sat. Federal TCPA allows 8–9;
  * this is a deliberately narrower window. Individual replies to someone who wrote first are not
  * held to it.
@@ -226,5 +247,5 @@ function segmentCount(text) {
 module.exports = {
   OUTREACH_STATUSES, OPT_OUT_WORDS, OPT_IN_WORDS, JOIN_WORDS, JOIN_REPLY, DEFAULT_INTRO, FIRST_TEXTS,
   phoneKey, toE164, prettyPhone, parseList, greetingName, renderTemplate, hasLinkToken,
-  classifyInbound, introWindow, segmentCount, dialableUsNumber,
+  classifyInbound, introWindow, segmentCount, dialableUsNumber, isAutomatedText,
 };

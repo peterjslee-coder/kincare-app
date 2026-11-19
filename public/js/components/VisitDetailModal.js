@@ -236,6 +236,13 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, 
           const v = data.visitLog;
           const photos = data.photos || [];
           const cost = data.costBreakdown;
+          // v1.135.4 — a tip is charged on its own after the visit (accountability.chargeTip →
+          // ledger kind 'tip'), so the estimate above never knew about it. Pete, 11/19: "why
+          // doesn't the tip i left tina show up here? it was $50." Read it from the receipt.
+          const tipEntries = ((data.receipt && data.receipt.entries) || []).filter((e) => e.kind === 'tip' && e.status === 'succeeded');
+          const tipAmount = tipEntries.reduce((n, e) => n + (Number(e.toCaregiver) || 0), 0);
+          const tipCardFee = tipEntries.reduce((n, e) => n + (Number(e.cardFee) || 0), 0);
+          const cgFirst = String((data.session && data.session.caregiver_name) || '').split(' ')[0] || 'the caregiver';
           const st = statusColors[s.status] || { bg: 'var(--bg-primary)', color: 'var(--text-secondary)', label: s.status };
 
           // Parse condition tags
@@ -706,9 +713,15 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, 
                       <span>+${cost.overtimeCost.toFixed(2)}</span>
                     </div>
                   )}
+                  {tipAmount > 0 && (
+                    <div data-testid="visit-tip-line" style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--color-success)', fontWeight: 600, marginBottom: 3 }}>
+                      <span>Tip from the family</span>
+                      <span>+${tipAmount.toFixed(2)}</span>
+                    </div>
+                  )}
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, color: 'var(--role-color)', fontWeight: 700, borderTop: '1px solid #f0f0f0', paddingTop: 4, marginTop: 4 }}>
                     <span>Your total</span>
-                    <span>${(cost.caregiverPayout || cost.total).toFixed(2)}</span>
+                    <span>${((cost.caregiverPayout || cost.total) + tipAmount).toFixed(2)}</span>
                   </div>
                 </div>
               )}
@@ -716,7 +729,7 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, 
                 <div style={{ background: 'var(--bg-surface)', border: '1px solid #e0e0e0', borderRadius: 10, padding: 14, marginBottom: 14 }}>
                   <div style={{ textAlign: 'center', marginBottom: 12, paddingBottom: 10, borderBottom: '1px solid #f0f0f0' }}>
                     <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Your Cost</div>
-                    <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--role-color)', marginTop: 2 }}>${(cost.familyTotal || cost.total).toFixed(2)}</div>
+                    <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--role-color)', marginTop: 2 }}>${((cost.familyTotal || cost.total) + tipAmount + tipCardFee).toFixed(2)}</div>
                   </div>
                   <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>Breakdown</div>
                   {cost.tierBreakdown?.map((t, i) => (
@@ -751,9 +764,23 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, 
                       )}
                     </div>
                   )}
+                  {tipAmount > 0 && (
+                    <div data-testid="visit-tip-line">
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--color-success)', fontWeight: 600, marginBottom: 3 }}>
+                        <span>Tip for {cgFirst} (all of it goes to {cgFirst})</span>
+                        <span>+${tipAmount.toFixed(2)}</span>
+                      </div>
+                      {tipCardFee > 0 && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--text-secondary)', marginBottom: 3 }}>
+                          <span>Card processing on the tip</span>
+                          <span>+${tipCardFee.toFixed(2)}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 16, fontWeight: 800, color: 'var(--role-color)', borderTop: '1px solid #f0f0f0', paddingTop: 6, marginTop: 4 }}>
                     <span>Total</span>
-                    <span>${(cost.familyTotal || cost.total).toFixed(2)}</span>
+                    <span>${((cost.familyTotal || cost.total) + tipAmount + tipCardFee).toFixed(2)}</span>
                   </div>
                 </div>
               )}

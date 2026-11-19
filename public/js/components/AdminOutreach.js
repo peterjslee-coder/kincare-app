@@ -517,6 +517,10 @@ const OutreachThread = ({ contactId, apiFetch, showToast, onClose, onChanged, ca
 
   const c = data?.contact;
   const optedOut = c && (c.status === 'opted_out' || c.opted_out_at);
+  // v1.135.3 — a blocked number (Pete blocked it, or it was a machine-sent text like a sign-in
+  // code): no texting, no calling, no OK to record, until it's unblocked.
+  const blocked = !!(c && c.blocked_at);
+  const locked = optedOut || blocked;
 
   const patch = async (body, okMsg) => {
     try {
@@ -581,7 +585,7 @@ const OutreachThread = ({ contactId, apiFetch, showToast, onClose, onChanged, ca
   const detailsOpen = showDetails !== null ? showDetails : !(data && data.messages.length > 0);
   const p = data && data.progress;
   const detailsSummary = c ? [
-    optedOut ? 'Opted out' : c.texts_ok_at ? 'OK to text ✓' : 'No OK to text yet',
+    blocked ? 'Blocked' : optedOut ? 'Opted out' : c.texts_ok_at ? 'OK to text ✓' : 'No OK to text yet',
     p && p.furthestLabel ? p.furthestLabel : null,
     c.email || null,
   ].filter(Boolean).join(' · ') : '';
@@ -606,7 +610,7 @@ const OutreachThread = ({ contactId, apiFetch, showToast, onClose, onChanged, ca
             )}
           </div>
           {c && <OutStatusPill status={c.joined_user_id && c.status !== 'opted_out' ? 'joined' : c.status} />}
-          {c && !call && (
+          {c && !call && !blocked && (
             <button onClick={startCellCall} title="Rings your cell from InPlace's number, then connects you" style={{ ...btn, padding: '4px 10px', fontSize: 13, flexShrink: 0 }}>📞 Call</button>
           )}
         </div>
@@ -660,7 +664,7 @@ const OutreachThread = ({ contactId, apiFetch, showToast, onClose, onChanged, ca
           )}
           {c && detailsOpen && (
             <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border-color)', display: 'grid', gap: 8 }}>
-              {!optedOut && (
+              {!locked && (
                 // v1.122.0 — texts need a recorded OK.
                 <div style={{ fontSize: 12, lineHeight: 1.5, padding: '6px 10px', borderRadius: 8, ...(c.texts_ok_at ? OUT_TONE.success : OUT_TONE.muted) }}>
                   {c.texts_ok_at
@@ -669,12 +673,12 @@ const OutreachThread = ({ contactId, apiFetch, showToast, onClose, onChanged, ca
                     : <>No OK to text yet. On the call, ask if you can text them. Then either they text JOIN to this number, or you record their yes here.</>}
                 </div>
               )}
-              {!optedOut && !c.texts_ok_at && consentDraft === null && (
+              {!locked && !c.texts_ok_at && consentDraft === null && (
                 <button style={{ ...btn, justifySelf: 'start' }} disabled={!lastCall} onClick={() => setConsentDraft(lastCallQuote || '')}>
                   Record OK from the call{lastCall ? '' : ' (needs a recorded call first)'}
                 </button>
               )}
-              {!optedOut && !c.texts_ok_at && consentDraft !== null && (
+              {!locked && !c.texts_ok_at && consentDraft !== null && (
                 <div style={{ display: 'grid', gap: 6, padding: 10, borderRadius: 8, border: '1px solid var(--border-color)' }}>
                   <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
                     What did they say when you asked if you could text them? Saved with the {lastCall ? outWhen(lastCall.created_at) : ''} call and its recording, as your OK.
@@ -692,14 +696,28 @@ const OutreachThread = ({ contactId, apiFetch, showToast, onClose, onChanged, ca
               </div>
               <textarea style={{ ...field, minHeight: 44 }} placeholder="Notes (only admins see these)" value={notes}
                 onChange={(e) => setNotes(e.target.value)} onBlur={() => notes !== (c.notes || '') && patch({ notes })} />
-              {!call && (
+              {!call && !blocked && (
                 <button style={{ ...btn, justifySelf: 'start', fontSize: 12, padding: '4px 10px' }} onClick={startCall}
                   title="Uses this device's microphone. The call ends if the screen locks or the app closes.">
                   Call from this browser instead (screen must stay on)
                 </button>
               )}
+              {blocked && (
+                <div style={{ fontSize: 12, lineHeight: 1.5, padding: '6px 10px', borderRadius: 8, ...OUT_TONE.muted }}>
+                  <b>Blocked.</b> {c.blocked_reason === 'automated'
+                    ? 'This looked like an automated text (a sign-in code or marketing), so it was filed here instead of as a reply.'
+                    : 'You blocked this number.'} Texts from it are kept but don't notify you or count as an OK to text; calls get a busy signal.{' '}
+                  <a href="#" onClick={(e) => { e.preventDefault(); patch({ blocked: false }, 'Unblocked'); }} style={{ color: 'inherit', textDecoration: 'underline' }}>Unblock</a>
+                </div>
+              )}
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                {optedOut
+                {!blocked && (
+                  <button style={{ ...btn, padding: '4px 10px', fontSize: 12 }}
+                    onClick={() => window.confirm('Block this number? Its texts and calls will stop reaching you, and any OK to text is withdrawn.') && patch({ blocked: true }, 'Blocked')}>
+                    Block
+                  </button>
+                )}
+                {blocked ? null : optedOut
                   ? <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Replied STOP. InPlace won't text this number again unless it texts START.</span>
                   : ['interested', 'declined', 'wrong_number', 'opted_out'].filter((s) => s !== c.status).map((s) => (
                     <button key={s} style={{ ...btn, padding: '4px 10px', fontSize: 12 }}
@@ -731,7 +749,7 @@ const OutreachThread = ({ contactId, apiFetch, showToast, onClose, onChanged, ca
                     {m.kind === 'voicemail' ? '📞 ' : m.kind === 'call' ? '📞 ' : ''}{m.body}
                     {m.kind === 'voicemail' && m.media_url && <OutVoicemailPlayer messageId={m.id} apiFetch={apiFetch} showToast={showToast} />}
                     {m.kind === 'call' && <OutCallDetail m={m} apiFetch={apiFetch} showToast={showToast}
-                      onUseConsent={c && !c.texts_ok_at && !optedOut ? (id, quote) => recordConsent(id, quote) : null} />}
+                      onUseConsent={c && !c.texts_ok_at && !locked ? (id, quote) => recordConsent(id, quote) : null} />}
                   </div>
                   <div style={{ fontSize: 11, color: bad ? 'var(--color-error)' : 'var(--text-muted)', marginTop: 2, textAlign: mine ? 'right' : 'left' }}>
                     {outWhen(m.created_at)}
@@ -747,7 +765,7 @@ const OutreachThread = ({ contactId, apiFetch, showToast, onClose, onChanged, ca
           </div>
         </div>
 
-        {c && !optedOut && !c.texts_ok_at && (
+        {c && !locked && !c.texts_ok_at && (
           <div style={{ flexShrink: 0, padding: 12, borderTop: '1px solid var(--border-color)', fontSize: 13, color: 'var(--text-secondary)', paddingBottom: `calc(12px + ${vvBox && vvBox.height < window.innerHeight - 120 ? '0px' : 'var(--sab, 0px)'})` }}>
             Texting opens when they text this number (JOIN or anything else), or when you record their yes from a recorded call.
             {consentDraft === null && lastCall && (
@@ -757,7 +775,7 @@ const OutreachThread = ({ contactId, apiFetch, showToast, onClose, onChanged, ca
             )}
           </div>
         )}
-        {c && !optedOut && c.texts_ok_at && !draft && Array.isArray(firstTexts) && firstTexts.length > 0 && (
+        {c && !locked && c.texts_ok_at && !draft && Array.isArray(firstTexts) && firstTexts.length > 0 && (
           // v1.125.4 — Pete, 10/28: "I need a few options to choose from/modify on the first text."
           // A tap fills the box with their name in; edit, then Send. {link} becomes their own link.
           <div style={{ flexShrink: 0, padding: '8px 10px 0', borderTop: '1px solid var(--border-color)', display: 'flex', gap: 6, alignItems: 'center', overflowX: 'auto' }}>
@@ -768,10 +786,10 @@ const OutreachThread = ({ contactId, apiFetch, showToast, onClose, onChanged, ca
             ))}
           </div>
         )}
-        {c && !optedOut && c.texts_ok_at && /\{link\}/i.test(draft) && (
+        {c && !locked && c.texts_ok_at && /\{link\}/i.test(draft) && (
           <div style={{ flexShrink: 0, padding: '6px 12px 0', fontSize: 11, color: 'var(--text-muted)' }}>{'{link}'} becomes their own InPlace link when it sends, so you can see if they open it.</div>
         )}
-        {c && !optedOut && c.texts_ok_at && (
+        {c && !locked && c.texts_ok_at && (
           <div style={{ flexShrink: 0, padding: 10, borderTop: draft ? '1px solid var(--border-color)' : 'none', display: 'flex', gap: 8, alignItems: 'flex-end', paddingBottom: `calc(10px + ${vvBox && vvBox.height < window.innerHeight - 120 ? '0px' : 'var(--sab, 0px)'})` }}>
             <textarea ref={draftRef} rows={1} style={{ ...field, minHeight: 40, maxHeight: 160, resize: 'none', overflowY: 'auto', fontSize: 16, lineHeight: 1.35 }} placeholder={`Text ${outGreeting(c)} from InPlace…`} value={draft}
               onChange={(e) => setDraft(e.target.value)}
@@ -829,15 +847,20 @@ const AdminOutreachTab = window.AdminOutreachTab = ({ apiFetch, showToast, onUnr
     return () => clearInterval(t);
   }, [sending]);
 
-  const contacts = data?.contacts || [];
+  // v1.135.3 — blocked numbers (by Pete, or machine-sent texts like sign-in codes) live behind
+  // their own chip and stay out of every count, the funnel and "select everyone".
+  const allContacts = data?.contacts || [];
+  const blockedList = allContacts.filter((x) => x.blocked_at);
+  const contacts = allContacts.filter((x) => !x.blocked_at);
   const counts = contacts.reduce((a, x) => { a[x.status] = (a[x.status] || 0) + 1; return a; }, {});
   const unreadCount = contacts.filter((x) => x.unread).length;
-  const shown = filter === 'all' ? contacts
+  const shown = filter === 'blocked' ? blockedList
+    : filter === 'all' ? contacts
     : filter === 'unread' ? contacts.filter((x) => x.unread)
     : filter.startsWith('step:') ? contacts.filter((x) => x.progress && x.progress.furthest === filter.slice(5)) // v1.125.0
     : contacts.filter((x) => x.status === filter);
   // v1.122.0 — the follow-up text goes only to people who OK'd texts. Since v1.124.1 that means they texted in (JOIN).
-  const textable = (x) => !!x.texts_ok_at && x.status !== 'opted_out' && !x.opted_out_at && !x.intro_sent_at && x.status !== 'joined';
+  const textable = (x) => !!x.texts_ok_at && !x.blocked_at && x.status !== 'opted_out' && !x.opted_out_at && !x.intro_sent_at && x.status !== 'joined';
   const shownTextable = shown.filter(textable);
   const selectedList = contacts.filter((x) => selected.has(x.id) && textable(x));
 
@@ -1032,6 +1055,7 @@ const AdminOutreachTab = window.AdminOutreachTab = ({ apiFetch, showToast, onUnr
           {chip('all', 'All', contacts.length)}
           {unreadCount > 0 && chip('unread', 'Unread', unreadCount)}
           {Object.keys(OUT_STATUS).filter((s) => counts[s]).map((s) => chip(s, OUT_STATUS[s].label, counts[s]))}
+          {blockedList.length > 0 && chip('blocked', 'Blocked', blockedList.length)}
         </div>
         {shownTextable.length > 0 && (
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-secondary)', padding: '4px 0 8px', cursor: 'pointer' }}>

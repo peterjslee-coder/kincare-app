@@ -141,3 +141,20 @@ describe("v1.125.4 — first-text starting points (Pete, 10/28)", () => {
     expect(new Set(O.FIRST_TEXTS.map((t) => t.id)).size).toBe(O.FIRST_TEXTS.length);
   });
 });
+
+describe("isAutomatedText (v1.135.3)", () => {
+  test.each([
+    "Your verification code for Buffalo Wild Wings is 6884.",
+    "123456 is your Instagram code. Don't share it.",
+    "Your code is 4421",
+    "Do not share this code with anyone: 8812",
+    "Get 20% off today! Reply STOP to unsubscribe",
+  ])("machine-sent: %s", (t) => expect(O.isAutomatedText(t)).toBe(true));
+  test.each([
+    "Yes I'm interested, my email is jane@example.com",
+    "Hi Pete, call me after 5",
+    "STOP",
+    "JOIN",
+    "What's the pay?",
+  ])("a person: %s", (t) => expect(O.isAutomatedText(t)).toBe(false));
+});

@@ -101,20 +101,36 @@ router.post("/outreach-inbound", async (req, res) => {
     let contact = await db.prepare("SELECT * FROM outreach_contacts WHERE RIGHT(phone, 10) = ?").get(O.phoneKey(from));
     if (!contact) {
       // Someone we never imported (a forwarded number, a friend of a sitter). Keep the thread.
+      // v1.135.3 — unless it's machine-sent (a sign-in code, a marketing blast): then the thread
+      // is kept but filed as blocked, with no OK to text, no unread, no push, no auto-reply.
+      const auto = O.isAutomatedText(body);
       const id = uuid();
       await db.prepare(`
-        INSERT INTO outreach_contacts (id, phone, source, status, created_at, updated_at)
-        VALUES (?, ?, 'inbound', 'replied', NOW(), NOW())
-      `).run(id, from);
+        INSERT INTO outreach_contacts (id, phone, source, status, blocked_at, blocked_reason, created_at, updated_at)
+        VALUES (?, ?, 'inbound', 'replied', ${auto ? "NOW()" : "NULL"}, ?, NOW(), NOW())
+      `).run(id, from, auto ? "automated" : null);
       contact = await db.prepare("SELECT * FROM outreach_contacts WHERE id = ?").get(id);
     }
 
     await db.prepare(`
       INSERT INTO outreach_messages (id, contact_id, direction, body, twilio_sid, status, created_at)
-      VALUES (?, ?, 'in', ?, ?, 'received', NOW())
-    `).run(uuid(), contact.id, body, req.body.MessageSid || null);
+      VALUES (?, ?, 'in', ?, ?, ?, NOW())
+    `).run(uuid(), contact.id, body, req.body.MessageSid || null, contact.blocked_at ? "blocked" : "received");
 
     const what = O.classifyInbound(body);
+
+    // v1.135.3 — a blocked number: kept on file, nothing else. No OK to text, no unread, no push,
+    // no JOIN reply, no invite from an email in it. A STOP is still honoured, so the record agrees
+    // with the carrier's.
+    if (contact.blocked_at) {
+      await db.prepare(`
+        UPDATE outreach_contacts SET last_inbound_at = NOW(), updated_at = NOW(),
+               status = CASE WHEN ? THEN 'opted_out' ELSE status END,
+               opted_out_at = CASE WHEN ? THEN COALESCE(opted_out_at, NOW()) ELSE opted_out_at END
+         WHERE id = ?
+      `).run(what.kind === "opt_out", what.kind === "opt_out", contact.id);
+      return twiml(res);
+    }
     const who = [contact.first_name, contact.last_name].filter(Boolean).join(" ") || O.prettyPhone(contact.phone);
 
     // v1.122.0 — a text FROM them (anything but STOP) is their OK to text back. Recorded with
@@ -262,6 +278,10 @@ router.post("/outreach-voice", async (req, res) => {
   if (!verifyTwilio(req)) return res.status(403).send("Forbidden");
   try {
     const db = await getDb();
+    // v1.135.3 — a blocked number gets a busy signal: no greeting, no voicemail, nothing logged.
+    const key = O.phoneKey(req.body.From);
+    const blocked = key && await db.prepare("SELECT id FROM outreach_contacts WHERE RIGHT(phone, 10) = ? AND blocked_at IS NOT NULL").get(key);
+    if (blocked) return voiceXml(res, `<Reject reason="busy"/>`);
     const contact = await contactForPhone(db, req.body.From);
     if (contact && req.body.CallSid) {
       await db.prepare(`
@@ -352,6 +372,7 @@ router.post("/outreach-dial", async (req, res) => {
     if (!admin) return voiceXml(res, sayXml("Sorry, this call isn't allowed.") + "<Hangup/>");
     const contact = await db.prepare("SELECT * FROM outreach_contacts WHERE id = ?").get(String(req.body.contactId || ""));
     if (!contact) return voiceXml(res, sayXml("Sorry, I couldn't find that number.") + "<Hangup/>");
+    if (contact.blocked_at) return voiceXml(res, sayXml("That number is blocked. Unblock it first.") + "<Hangup/>");
     // Pete, 10/14: "it has to be impossible for me to call 911 from it." The number dialed only
     // ever comes from this table, and only a full ten-digit US number is dialed — never 911,
     // 933, 112 or any other short code, whatever ends up in a row.
