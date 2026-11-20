@@ -564,7 +564,7 @@ describe("every exit from a Needs-you task actually leaves", () => {
   test("and the card renders that exit", () => {
     expect(cardSrc).toMatch(/\{item\.dismiss && \(/);
     expect(cardSrc).toMatch(/const dismiss = React\.useCallback\(\(item\) => \{/);
-    expect(cardSrc).toMatch(/send\(\{ \.\.\.item, action: item\.dismiss, verb: item\.kind === 'medUncovered' \? 'Leave unassigned' : 'Skip' \}\)/);
+    expect(cardSrc).toMatch(/send\(\{ \.\.\.item, action: item\.dismiss, verb: item\.dismiss\.label === 'Leave unassigned' \|\| item\.dismiss\.label === 'Keep as is' \? item\.dismiss\.label : 'Skip' \}\)/);
   });
 
   test("skipping goes through the same send path — busy guard, 409, reload and all", () => {

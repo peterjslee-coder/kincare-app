@@ -83,6 +83,14 @@ const WN_PREVIEWS = {
     );
   },
   // v1.134.0 — the caregiver home's optional sections close
+  // v1.139.0 — change the series (made-up names)
+  changeSeries: () => (
+    <div style={{ padding: 12, borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)', fontSize: 12.5 }}>
+      <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 6 }}>Change the series</div>
+      <div style={{ ...wnCard, color: 'var(--text-primary)' }}>Starts 10 AM instead of 9 AM {'\u00b7'} $28/hr instead of $25/hr</div>
+      <div style={{ ...wnCard, color: 'var(--text-secondary)' }}><b style={{ color: 'var(--text-primary)' }}>Sam{'\u2019'}s 6 visits:</b> Sam will be asked. If Sam says no, they stay the same.</div>
+    </div>
+  ),
   // v1.138.0 — the thin meds line (made-up names)
   medsLine: () => (
     <div style={{ padding: 12, borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>

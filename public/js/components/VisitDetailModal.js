@@ -1,3 +1,91 @@
+// ─── v1.139.0 — Change the series (Pete, 11/18, feedback 316aeee2) ───
+// Time, length, hourly pay and instructions for this visit and every later one in the series.
+// Visits nobody has taken change now; a caregiver who accepted gets one request for hers, and if
+// she says no they stay exactly as they are (Pete: "She keeps it at the old rate").
+const SeriesChangeModal = window.SeriesChangeModal = ({ sessionId, onClose, onDone }) => {
+  const { showToast } = useToast();
+  const [p, setP] = useState(null);
+  const [time, setTime] = useState('');
+  const [hours, setHours] = useState('');
+  const [rate, setRate] = useState('');
+  const [instructions, setInstructions] = useState('');
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      try {
+        const r = await apiFetch(`/api/series-changes/preview/${sessionId}`);
+        const d = r && r.ok ? await r.json() : null;
+        if (!live) return;
+        if (!d) { showToast("Couldn't load the series", 'error'); onClose(); return; }
+        setP(d);
+        setTime(d.current.time || '');
+        setHours(d.current.durationHours != null ? String(d.current.durationHours) : '');
+        setRate(d.current.rate != null ? String(d.current.rate) : '');
+        setInstructions(d.current.instructions || '');
+      } catch { if (live) { showToast("Couldn't load the series", 'error'); onClose(); } }
+    })();
+    return () => { live = false; };
+  }, [sessionId]);
+  if (!p) return null;
+  const day = (d) => new Date(d + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  const total = p.open + p.caregivers.reduce((n, c) => n + c.count, 0);
+  const save = async () => {
+    setSaving(true);
+    try {
+      const body = { sessionId };
+      if (time && time !== p.current.time) body.time = time;
+      if (hours !== '' && Number(hours) !== Number(p.current.durationHours)) body.durationHours = Number(hours);
+      if (rate !== '' && Number(rate) !== Number(p.current.rate)) body.rate = Number(rate);
+      if (instructions !== (p.current.instructions || '')) body.instructions = instructions;
+      if (Object.keys(body).length === 1) { showToast('Nothing changed', 'info'); setSaving(false); return; }
+      const r = await apiFetch('/api/series-changes', { method: 'POST', body: JSON.stringify(body) });
+      const d = r && r.ok ? await r.json() : null;
+      if (!d) {
+        let msg = "Couldn't change the series";
+        try { const e = await r.json(); if (e && e.error) msg = e.error; } catch { /* default */ }
+        showToast(msg, 'error'); setSaving(false); return;
+      }
+      const bits = [];
+      if (d.changedNow) bits.push(`${d.changedNow} open ${d.changedNow === 1 ? 'visit' : 'visits'} changed`);
+      for (const a of d.asked) bits.push(`${a.caregiver || 'The caregiver'} was asked about ${a.count}`);
+      showToast(bits.join(' \u00b7 ') || 'Done', 'success');
+      onDone && onDone();
+      onClose();
+    } catch { showToast("Couldn't change the series", 'error'); }
+    setSaving(false);
+  };
+  const field = { display: 'block', width: '100%', boxSizing: 'border-box', marginTop: 4, padding: 10, borderRadius: 8, border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: 16 };
+  const label = { fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' };
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 3100, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+      <div data-testid="series-change" onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 480, background: 'var(--bg-surface)', borderRadius: '18px 18px 0 0',
+        padding: '16px 16px calc(24px + env(safe-area-inset-bottom, 0px))', display: 'flex', flexDirection: 'column', gap: 12, maxHeight: '90vh', overflowY: 'auto' }}>
+        <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)' }}>Change the series</div>
+        <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{total} {total === 1 ? 'visit' : 'visits'} from {day(p.fromDate)} on. Days stay the same.</div>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <label style={{ ...label, flex: 1 }}>Start time<input type="time" value={time} onChange={(e) => setTime(e.target.value)} style={field} /></label>
+          <label style={{ ...label, flex: 1 }}>Hours<input type="number" inputMode="decimal" min="0.5" max="24" step="0.25" value={hours} onChange={(e) => setHours(e.target.value)} style={field} /></label>
+        </div>
+        <label style={label}>Hourly pay ($)<input type="number" inputMode="decimal" min="10" max="200" step="0.5" value={rate} onChange={(e) => setRate(e.target.value)} style={field} /></label>
+        <label style={label}>Instructions<textarea rows={3} value={instructions} onChange={(e) => setInstructions(e.target.value)} style={{ ...field, resize: 'vertical', fontFamily: 'inherit' }} /></label>
+        <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5, background: 'var(--bg-elevated)', borderRadius: 10, padding: '10px 12px' }}>
+          {p.caregivers.map((c) => (
+            <div key={c.caregiverId}>
+              <b style={{ color: 'var(--text-primary)' }}>{c.first || 'The caregiver'}{'\u2019'}s {c.count} {c.count === 1 ? 'visit' : 'visits'}:</b> {c.first || 'they'} will be asked. If {c.first || 'they'} say{c.first ? 's' : ''} no, those visits stay exactly as they are, same pay.
+              {c.pendingRequestId ? ' This replaces the change you already sent.' : ''}
+            </div>
+          ))}
+          {p.open > 0 && <div><b style={{ color: 'var(--text-primary)' }}>{p.open} open {p.open === 1 ? 'visit' : 'visits'}:</b> changed now.</div>}
+        </div>
+        <button type="button" disabled={saving} onClick={save} style={{ minHeight: 48, borderRadius: 12, border: 'none', background: 'var(--role-color)', color: 'var(--text-on-primary)', fontSize: 16, fontWeight: 700, cursor: 'pointer' }}>
+          {saving ? 'Saving\u2026' : p.caregivers.length ? 'Send the change' : 'Change the series'}
+        </button>
+      </div>
+    </div>
+  );
+};
+
 const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, onRefresh, onTimeChange }) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -6,6 +94,7 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, 
   // v1.124.0 — hosts without their own change sheet (Betty's page, Schedule, Care Team) get
   // this one. Before, the button only appeared where the host passed onTimeChange: Home.
   const [changing, setChanging] = useState(false);
+  const [changingSeries, setChangingSeries] = useState(false); // v1.139.0
   const [showPhotos, setShowPhotos] = useState(true);
   const [lightboxIdx, setLightboxIdx] = useState(null);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
@@ -832,6 +921,14 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, 
               Change visit
             </button>
           )}
+          {/* v1.139.0 — the whole series from this visit on, pay included (316aeee2). */}
+          {data && data.session && data.session.recurrence_group_id && role === 'family'
+            && ['confirmed', 'pending', 'open', 'requested'].includes(data.session.status) && (
+            <button data-testid="change-series" onClick={() => setChangingSeries(true)}
+              style={{ padding: '8px 16px', background: 'var(--bg-surface)', color: 'var(--role-color)', border: '1px solid var(--role-color)', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+              Change the series
+            </button>
+          )}
           {/* v1.124.1 — "Review Change" moved into the change box above, with the answer buttons. */}
           {data && data.session && ['confirmed', 'pending', 'open', 'requested'].includes(data.session.status) && (
             // v1.125.2 — the shared cancel screen, so a visit in a series asks "just this one, or
@@ -847,6 +944,7 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, 
           <button className="btn btn-outline" onClick={handleClose}>Close</button>
         </div>
       </div>
+      {changingSeries && <SeriesChangeModal sessionId={sessionId} onClose={() => setChangingSeries(false)} onDone={() => onRefresh && onRefresh()} />}
       {cancelling && data && data.session && (
         <CancelSessionModal
           role={role === 'caregiver' ? 'caregiver' : 'family'}

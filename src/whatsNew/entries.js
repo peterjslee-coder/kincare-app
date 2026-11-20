@@ -31,6 +31,22 @@ const WINDOW_DAYS = 45;
 
 const ENTRIES = [
   {
+    id: "change-the-series",
+    version: "1.139.0",
+    date: "2026-11-20",
+    audience: ["family", "caregiver"],
+    title: "Change a whole series, pay included",
+    body: "Open any visit in a repeating series and tap Change the series to change the start time, length, hourly pay or instructions from that visit on. Visits nobody has taken change right away; a caregiver who already accepted is asked once, and if they say no their visits stay exactly as they were, same pay.",
+    howTo: [
+      "Open a visit that repeats and tap Change the series",
+      "Change the time, hours, pay or instructions, then Send the change",
+      "Caregivers: answer in Needs you with Accept or Keep as is",
+    ],
+    examples: ["Move every Tuesday visit to 10 AM", "Raise Sam's pay to $28 an hour from next week"],
+    preview: "changeSeries",
+    action: { label: "Show me", page: "schedule" },
+  },
+  {
     id: "meds-follow-the-shift",
     version: "1.138.0",
     date: "2026-11-20",

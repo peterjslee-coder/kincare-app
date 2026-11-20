@@ -80,7 +80,7 @@ const name = (first, last) => [first, last].filter(Boolean).join(" ").trim() || 
 
 const EMPTY = {
   total: 0, reimbursements: 0, timeChanges: 0, timeChangeSessionId: null,
-  careTasks: 0, approvals: 0, safetyFlags: 0, messages: 0, emptyWeeks: 0, medUncovered: 0, cancelFees: 0, financialConcerns: 0, identity: 0, holdDeclined: 0, checkinOverdue: 0, items: [],
+  careTasks: 0, approvals: 0, safetyFlags: 0, messages: 0, emptyWeeks: 0, medUncovered: 0, seriesChanges: 0, cancelFees: 0, financialConcerns: 0, identity: 0, holdDeclined: 0, checkinOverdue: 0, items: [],
 };
 
 /**
@@ -484,6 +484,33 @@ async function attentionItemsFor(db, userId) {
          LIMIT 1
       `).get(r.id, from, until);
       if (!booked) out.push({ id: r.id, first_name: r.first_name, tz: r.tz, from, until });
+    }
+    return out;
+  });
+
+  // ── v1.139.0 — a family asked to change a series this caregiver has accepted (316aeee2) ──
+  // Accept changes them all; "Keep as is" leaves every visit as it was, pay included.
+  const seriesChangeRows = await safeRows("seriesChange", async () => {
+    const SC = require("./seriesChange");
+    const reqs = await db.prepare(`
+      SELECT r.id, r.changes, r.session_ids, r.caregiver_id, cr.first_name AS recipient_first, u.first_name AS family_first
+        FROM series_change_requests r
+        LEFT JOIN care_recipients cr ON r.care_recipient_id = cr.id
+        LEFT JOIN users u ON r.proposed_by_user_id = u.id
+       WHERE r.caregiver_user_id = ? AND r.status = 'pending'
+       ORDER BY r.created_at
+    `).all(userId);
+    const out = [];
+    for (const r of reqs) {
+      let changes = {}; let ids = [];
+      try { changes = JSON.parse(r.changes); ids = JSON.parse(r.session_ids); } catch { continue; }
+      if (!ids.length) continue;
+      const rows = await db.prepare(`
+        SELECT * FROM care_sessions WHERE id IN (${ids.map(() => "?").join(",")}) AND caregiver_id = ?
+           AND status = 'confirmed' AND NOT EXISTS (SELECT 1 FROM visit_logs vl WHERE vl.session_id = care_sessions.id AND vl.check_in_time IS NOT NULL) ORDER BY scheduled_date
+      `).all(...ids, r.caregiver_id);
+      if (!rows.length) continue;
+      out.push({ ...r, count: rows.length, first: rows[0], lines: SC.describe(SC.effectiveChanges(changes, rows[0]), rows[0]) });
     }
     return out;
   });
@@ -1013,6 +1040,25 @@ async function attentionItemsFor(db, userId) {
             : "Approved, but not marked paid yet. Pay them, then mark it paid.",
       };
     }),
+    ...seriesChangeRows.map((r) => ({
+      kind: "seriesChange",
+      id: `seriesChange:${r.id}`,
+      title: `${r.family_first || "The family"} would like to change ${r.count} ${r.count === 1 ? "visit" : "visits"}`,
+      detail: r.lines.join(" \u00b7 ") || null,
+      forWhom: r.recipient_first || null,
+      when: null,
+      verb: "Accept",
+      action: { method: "PUT", path: `/api/series-changes/${r.id}/respond`, body: { accept: true } },
+      page: "dashboard",
+      focus: null, // the card itself answers it: Accept or Keep as is
+      note: `From ${r.first ? String(r.first.scheduled_date).slice(0, 10) : "the next visit"} on. If you keep them as they are, nothing changes \u2014 same time, length and pay.`,
+      dismiss: {
+        method: "PUT",
+        path: `/api/series-changes/${r.id}/respond`,
+        body: { accept: false },
+        label: "Keep as is",
+      },
+    })),
     ...medUncoveredRows.map((r) => {
       const [h, m] = String(r.time).split(":").map(Number);
       const clock = `${h % 12 || 12}${m ? ":" + String(m).padStart(2, "0") : ""} ${h >= 12 ? "PM" : "AM"}`;
@@ -1088,13 +1134,14 @@ async function attentionItemsFor(db, userId) {
     total: reimbursementRows.length + timeChanges + taskRows.length + approvalRows.length
       // v1.120.1 — unpaidRows: an approved reimbursement still to pay; the payer is the blocker.
       + unpaidRows.length + cancelFeeRows.length + financialConcernRows.length + safetyRows.length + holdDeclinedRows.length
-      + checkinOverdueRows.length + medUncoveredRows.length, // v1.128.0; v1.138.0 medUncovered — a dose time nobody is on shift for
+      + checkinOverdueRows.length + medUncoveredRows.length + seriesChangeRows.length, // v1.128.0; v1.138.0 medUncovered; v1.139.0 seriesChange
     cancelFees: cancelFeeRows.length,
     holdDeclined: holdDeclinedRows.length, // v1.117.0
     checkinOverdue: checkinOverdueRows.length, // v1.128.0
     financialConcerns: financialConcernRows.length,
     emptyWeeks: emptyWeekRows.length,
     medUncovered: medUncoveredRows.length, // v1.138.0
+    seriesChanges: seriesChangeRows.length, // v1.139.0
     paymentChecks: paymentArrivedRows.length, // v1.120.0, soft
     unpaidReimbursements: unpaidRows.length, // v1.120.1, counts
     reimbursements: reimbursementRows.length,
