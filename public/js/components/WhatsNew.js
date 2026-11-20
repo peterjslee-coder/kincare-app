@@ -83,6 +83,18 @@ const WN_PREVIEWS = {
     );
   },
   // v1.134.0 — the caregiver home's optional sections close
+  // v1.136.0 — the 30-day all-in spend (made-up numbers)
+  spend30: () => (
+    <div style={{ padding: '12px 12px 10px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>Last 30 days, all in</span>
+        <span style={{ fontSize: 18, fontWeight: 700, color: 'var(--role-color)' }}>$1,284.00</span>
+      </div>
+      {[['Caregiver wages', '$1,040.00'], ['InPlace & card fees', '$208.00'], ['Tips', '$36.00']].map(([l, v]) => (
+        <div key={l} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--text-secondary)' }}><span>{l}</span><span>{v}</span></div>
+      ))}
+    </div>
+  ),
   caregiverHomeTidy: () => (
     <div style={{ padding: '12px 12px 10px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>
       <div style={{ ...wnCard, display: 'flex', alignItems: 'flex-start', gap: 8 }}>
