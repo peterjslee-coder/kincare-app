@@ -98,6 +98,22 @@ async function familyDashboard(db, userId, res) {
     const sevenDaysAgo = new Date(etNow); sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
     const sevenDaysAgoStr = sevenDaysAgo.getFullYear() + '-' + String(sevenDaysAgo.getMonth() + 1).padStart(2, '0') + '-' + String(sevenDaysAgo.getDate()).padStart(2, '0');
 
+    // v1.136.0 — last 30 days, all in, from the ledger: what the card was actually charged
+    // (wages + InPlace fee + tips + mileage), for every visit for the people this user may book
+    // care for — not just the visits they booked themselves. Money is BOOK_CARE's to see.
+    const spend30Promise = (async () => {
+      const { recipientCapabilities } = require("../utils/access");
+      const { can, CAP } = require("../utils/capabilities");
+      const { spendLast30 } = require("../utils/spendLookback");
+      const payers = [];
+      for (const r of recipients) {
+        if (r.family_user_id === userId) { payers.push(r.id); continue; }
+        try { if (can(await recipientCapabilities(db, r.id, userId), CAP.BOOK_CARE)) payers.push(r.id); } catch { /* not theirs to see */ }
+      }
+      if (payers.length === 0) return null;
+      return spendLast30(db, payers);
+    })().catch((e) => { console.warn("[dashboard] spend30:", e.message); return null; });
+
     // Parallel batch 2: ALL read queries at once (none depend on each other)
     const [monthlyStats, upcoming, recentCompleted, recentActivity, unreadCount, recentPhotos, pendingProposals, avgRating, assignedCount, visitsLoggedRecently] = await Promise.all([
       // Monthly stats
@@ -326,6 +342,7 @@ async function familyDashboard(db, userId, res) {
         unreadNotifications: (unreadCount && unreadCount.count) || 0,
         assignedCaregivers: (assignedCount && assignedCount.count) || 0,
       },
+      spend30: await spend30Promise,
       platformFeePercent: feeTable.pctFor({ care_recipient_id: (recipients[0] || {}).id, family_user_id: userId }),
       upcomingSessions: upcoming.map((s) => {
         const feePercent = feeTable.pctFor(s);

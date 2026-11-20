@@ -31,6 +31,21 @@ const WINDOW_DAYS = 45;
 
 const ENTRIES = [
   {
+    id: "spend-30-days",
+    version: "1.136.0",
+    date: "2026-11-20",
+    audience: ["family"],
+    title: "What care cost in the last 30 days, all in",
+    body: "Care Analytics now opens with the last 30 days as actually charged: caregiver wages, InPlace and card fees, tips and mileage, for every visit on the team, not just the ones you booked.",
+    howTo: [
+      "On Home, scroll to Care Analytics",
+      "Read the total at the top, and what it was made of underneath",
+    ],
+    examples: ["What does a month of Mom's care really cost?"],
+    preview: "spend30",
+    action: { label: "Show me", page: "dashboard" },
+  },
+  {
     id: "calendar-24-hours",
     version: "1.135.0",
     date: "2026-11-19",

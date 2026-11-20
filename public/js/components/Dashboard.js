@@ -2,6 +2,36 @@
 // Shows stale data instantly while fresh fetch runs in background
 const _dashCache = { data: null, user: null, careTeams: null, careTasks: null, careEvents: null, ts: 0 };
 
+// v1.136.0 — what care cost in the last 30 days, all in, from actual charges (ledger).
+// Pete: "All in. Wages plus in place fees." Just our numbers — no outside comparisons.
+const Spend30 = window.Spend30 = ({ s }) => {
+  const fmt = (n) => '$' + (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const parts = [
+    { label: 'Caregiver wages', val: s.wages, always: true },
+    { label: 'InPlace & card fees', val: s.fees, always: true },
+    { label: 'Tips', val: s.tips },
+    { label: 'Mileage', val: s.mileage },
+  ].filter((p) => p.always || p.val > 0);
+  return (
+    <div data-testid="spend-30" style={{ background: 'var(--bg-elevated)', borderRadius: 10, padding: '12px 14px', marginTop: 10 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>Last 30 days, all in</span>
+        <span style={{ fontSize: 22, fontWeight: 700, color: 'var(--role-color)' }}>{fmt(s.total)}</span>
+      </div>
+      <div style={{ marginTop: 6, display: 'grid', gap: 2 }}>
+        {parts.map((p) => (
+          <div key={p.label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--text-secondary)' }}>
+            <span>{p.label}</span><span>{fmt(p.val)}</span>
+          </div>
+        ))}
+      </div>
+      <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 6 }}>
+        {s.visits} {s.visits === 1 ? 'visit' : 'visits'} · what was actually charged, for everyone on the team
+      </div>
+    </div>
+  );
+};
+
 // v1.108.1 — the card total for a tip, including the processing fee the family covers.
 // Must match src/utils/pricing.js tipWithCardFee (tests/tipAfterPayment.test.js pins them).
 const tipCardTotal = (tipCents) => {
@@ -2480,6 +2510,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
               <span><span className="card-icon">📊</span>Care Analytics</span>
               <span style={{ fontSize: 12, color: 'var(--text-muted)', transition: 'transform 0.2s', display: 'inline-block', transform: analyticsOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>▼</span>
             </div>
+            {data && data.spend30 && <Spend30 s={data.spend30} />}
             {!analyticsOpen ? (
               <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 13, color: 'var(--text-secondary)', marginTop: 8 }}>
                 <span><strong>{totals.sessions}</strong> sessions</span>
