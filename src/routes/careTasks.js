@@ -280,6 +280,7 @@ router.get("/today", async (req, res) => {
                /* v1.105.191 — tonight's person wins over the task's default person */
                COALESCE(o.assigned_user_id, t.assigned_user_id) AS assigned_user_id,
                t.assigned_user_id AS task_assigned_user_id,
+               o.assigned_user_id AS occ_assigned_user_id,
                t.grace_minutes, au.first_name AS assignee_first_name,
                cu.first_name AS completed_by_first_name, cu.last_name AS completed_by_last_name
         FROM care_task_occurrences o
@@ -297,6 +298,13 @@ router.get("/today", async (req, res) => {
         const slot = Number(o.slot_index) || 0;
         return { ...o, occ_time: times[slot] || o.due_time, slot_count: times.length };
       });
+      // v1.138.0 — a dose with no one picked for it belongs to the caregiver on shift at that
+      // time (src/utils/medShift.js). Derived here, never stored: move the visit, the dose moves.
+      let shiftAware = occurrences;
+      if (occurrences.some((o) => o.task_type === "medication")) {
+        const { applyShift, shiftSessions } = require("../utils/medShift");
+        shiftAware = applyShift(occurrences, await shiftSessions(db, cr.id, today), today);
+      }
       if (occurrences.length === 0) continue;
       groups.push({
         careRecipientId: cr.id,
@@ -304,7 +312,7 @@ router.get("/today", async (req, res) => {
         recipientFirstName: cr.first_name,
         timezone: cr.timezone || DEFAULT_TZ,
         today,
-        occurrences,
+        occurrences: shiftAware,
         teamMembers: await pickerPeople(db, cr.id, today),
         helpers: await helpersFor(db, cr.id),
       });

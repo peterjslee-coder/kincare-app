@@ -31,6 +31,22 @@ const WINDOW_DAYS = 45;
 
 const ENTRIES = [
   {
+    id: "meds-follow-the-shift",
+    version: "1.138.0",
+    date: "2026-11-20",
+    audience: ["family", "caregiver"],
+    title: "Meds go to whoever is on shift",
+    body: "A dose now belongs to the caregiver scheduled at that time, so noon on Monday is Monday's caregiver's, and a thin Meds line on Home shows whose each dose is. If nobody is on shift at a dose's time, Needs you asks whether to move the time or leave it for anyone on the team.",
+    howTo: [
+      "On Home, read the Meds today line under Coming up",
+      "Tap it to jump to the dose and check it off",
+      "If Needs you says a dose isn't covered, tap Change time, or Leave unassigned",
+    ],
+    examples: ["Noon pills on Saturday with nobody there"],
+    preview: "medsLine",
+    action: { label: "Show me", page: "dashboard" },
+  },
+  {
     id: "care-photos-from-messages",
     version: "1.137.0",
     date: "2026-11-20",

@@ -46,6 +46,67 @@ const careTaskTimesOf = (t) => {
   return t?.due_time ? [t.due_time] : [];
 };
 
+// ─── v1.138.0 — who gives this dose (Pete, 11/20: "clear delineation of who is responsible") ───
+// The server decides (src/utils/medShift.js): the person picked for this dose, else the caregiver
+// on shift at its time, else the task's default person. `on_shift === false` with nobody picked
+// means no caregiver is there at that time.
+const medOwnerLabel = window.medOwnerLabel = (occ) => {
+  if (occ.assigned_user_id && occ.assigned_user_id === window.__currentUserId) return 'yours';
+  if (occ.assignee_first_name) return `${occ.assignee_first_name}${'\u2019'}s`;
+  if (occ.on_shift === false) return 'no caregiver on shift';
+  return 'anyone on the team';
+};
+
+// One thin line: today's remaining doses and whose they are. Tapping scrolls to the dose's row,
+// where it is checked off. `onlyMine` is the caregiver's view: her doses only.
+const MedsLine = window.MedsLine = ({ groups, onlyMine, style }) => {
+  const meId = window.__currentUserId;
+  const doses = [];
+  for (const g of groups || []) {
+    for (const o of g.occurrences || []) {
+      if (o.task_type !== 'medication' || o.status === 'done' || o.status === 'skipped') continue;
+      if (onlyMine && o.assigned_user_id !== meId) continue;
+      doses.push(o);
+    }
+  }
+  if (doses.length === 0) return null;
+  doses.sort((a, b) => String(a.occ_time || a.due_time || '').localeCompare(String(b.occ_time || b.due_time || '')));
+  const fmt = (t) => {
+    const [h, m] = String(t || '').split(':').map(Number);
+    if (!Number.isFinite(h)) return '';
+    const ap = h >= 12 ? 'PM' : 'AM';
+    const hh = h % 12 || 12;
+    return m ? `${hh}:${String(m).padStart(2, '0')} ${ap}` : `${hh} ${ap}`;
+  };
+  const jump = () => {
+    const el = document.querySelector(`[data-occ-id="${doses[0].id}"]`);
+    if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+  const parts = doses.slice(0, 4).map((o) => {
+    const who = onlyMine ? '' : ` ${medOwnerLabel(o)}`;
+    return { key: o.id, text: `${fmt(o.occ_time || o.due_time)}${who}`, uncovered: !o.assigned_user_id && o.on_shift === false };
+  });
+  return (
+    <button type="button" data-testid="meds-line" onClick={jump}
+      style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', minHeight: 36, padding: '6px 12px', margin: '0 0 12px',
+        borderRadius: 10, border: '1px solid var(--border-color)', borderLeft: '3px solid var(--role-color)', background: 'var(--bg-surface)',
+        color: 'var(--text-secondary)', fontSize: 13, textAlign: 'left', cursor: 'pointer', ...(style || {}) }}>
+      <span aria-hidden="true">{'\u{1F48A}'}</span>
+      <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{onlyMine ? 'Your meds today' : 'Meds today'}</span>
+      <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {parts.map((p, i) => (
+          <React.Fragment key={p.key}>
+            {i > 0 ? ' \u00b7 ' : ''}
+            <span style={p.uncovered ? { color: 'var(--color-warning)', fontWeight: 600 } : null}>{p.text}</span>
+          </React.Fragment>
+        ))}
+        {doses.length > 4 ? ` +${doses.length - 4}` : ''}
+      </span>
+      <span aria-hidden="true">{'\u203A'}</span>
+    </button>
+  );
+};
+
 const CareTaskNextUpRow = window.CareTaskNextUpRow = ({ occ, group, onQuickCheck, onOpenSheet, onUndo, onDismiss, onClear }) => {
   const done = occ.status === 'done';
   const skipped = occ.status === 'skipped';
@@ -76,7 +137,7 @@ const CareTaskNextUpRow = window.CareTaskNextUpRow = ({ occ, group, onQuickCheck
 
   return (
     <SwipeableRow actions={swipeActions} marginBottom={8}>
-    <div onClick={() => { if (!done && !skipped) onOpenSheet(); }} style={{
+    <div data-occ-id={occ.id} onClick={() => { if (!done && !skipped) onOpenSheet(); }} style={{
       padding: '12px 14px', borderRadius: 12, cursor: done || skipped ? 'default' : 'pointer',
       border: `2px solid ${borderColor}`, background: bg, opacity: skipped ? 0.7 : 1,
       boxShadow: isDue && !done ? '0 2px 12px rgba(245, 127, 23, 0.12)' : '0 1px 4px rgba(0,0,0,0.06)',
@@ -106,7 +167,7 @@ const CareTaskNextUpRow = window.CareTaskNextUpRow = ({ occ, group, onQuickCheck
             {occ.__saving ? 'Saving\u2026'
               : done ? `${occ.task_type === 'medication' ? 'Taken' : 'Done'} · ${careTaskDoneBy(occ, true)}${occ.note ? ' · 📝' : ''}`
               : skipped ? `Skipped · ${careTaskDoneBy(occ, true)}`
-              : <>Today at {timeLabel} · for {group.recipientFirstName}{detail ? ` · ${detail}` : ''}</>}
+              : <>Today at {timeLabel} · for {group.recipientFirstName}{detail ? ` · ${detail}` : ''}{occ.task_type === 'medication' ? ` · ${medOwnerLabel(occ)}` : ''}</>}
           </div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
@@ -652,6 +713,18 @@ const CareTasksSection = window.CareTasksSection = ({ recipientId, recipientFirs
   // check a task off anywhere and this panel re-reads, rather than showing yesterday's answer
   // until someone navigates away and back.
   useEffect(() => CareTaskSync.onChange(() => { if (recipientId) load(); }), [recipientId]);
+  // v1.138.0 — "Change the time" on the Needs you card for a dose nobody is on shift for opens
+  // that task's form here, rather than leaving Pete on the page to go find it.
+  useEffect(() => {
+    const f = window.__pendingFocus;
+    if (!data || typeof f !== 'string' || !f.startsWith('careTaskEdit:')) return;
+    const t = (data.tasks || []).find((x) => x.id === f.slice('careTaskEdit:'.length));
+    if (!t || !data.canManage) return;
+    window.__pendingFocus = null;
+    setSectionOpen(true, { remember: false });
+    setEditing(t);
+    setShowForm(true);
+  }, [data]);
 
   if (!data) return null;
   const { tasks, canManage, teamMembers } = data;
@@ -886,6 +959,8 @@ const CaregiverTodayAtVisit = window.CaregiverTodayAtVisit = ({ recipientIds }) 
   return (
     <div data-testid="caregiver-today-at-visit" style={{ marginBottom: 16 }}>
       {todos}
+      {/* v1.138.0 — her doses, one thin line (Pete, 81c2b623) */}
+      <MedsLine groups={groups} onlyMine />
       <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', margin: '4px 2px 8px' }}>{title}</div>
       {hasMeds && (
         <div style={{ fontSize: 12, color: 'var(--text-tertiary)', margin: '-4px 2px 8px' }}>

@@ -342,7 +342,7 @@ State travels through `window`, not props. This table is the registry.
 | `window.__clearSessionActive` | app.js | 4 |
 | `window.__currentPage` | app.js | 2 |
 | `window.__currentRole` | app.js, HelpPage.js, MyAccount.js | 14 |
-| `window.__currentUserId` | app.js | 10 |
+| `window.__currentUserId` | app.js | 12 |
 | `window.__documentsTab` | Dashboard.js | 6 |
 | `window.__findWorkTab` | CaretakerHub.js | 4 |
 | `window.__flushUiPrefs` | uiPrefs.js | 1 |
@@ -364,7 +364,7 @@ State travels through `window`, not props. This table is the registry.
 | `window.__originalSearch` | app.js | 4 |
 | `window.__pendingCall` | app.js, Messages.js | 5 |
 | `window.__pendingConversation` | app.js, CheckinOverdueSheet.js, QuickAdd.js | 8 |
-| `window.__pendingFocus` | app.js, AttentionCard.js, CancelFeeSheet.js | 54 |
+| `window.__pendingFocus` | app.js, AttentionCard.js, CancelFeeSheet.js | 56 |
 | `window.__pendingLogVisit` | TeamNotes.js | 2 |
 | `window.__pendingLovedOneTeamId` | CareTeamManage.js, LovedOneGuide.js | 6 |
 | `window.__pendingNoteDraft` | CareProfile.js, Messages.js | 3 |
