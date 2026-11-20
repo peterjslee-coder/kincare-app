@@ -248,8 +248,32 @@ router.get("/upcoming", async (req, res) => {
           byEvent.get(a.care_event_id).push({ user_id: a.user_id, first_name: a.first_name, last_name: a.last_name });
         }
       }
+      // v1.140.0 — how many care notes each of today's appointments has, so the day card can
+      // keep a "Notes from Tina" line on an appointment after it's over (Pete, 11/20: the dental
+      // transcript was in the care record and he couldn't find it again). Counted through the
+      // notes rule — read_notes and the private-note filter — exactly as GET /:id/notes reads.
+      const noteCounts = new Map();
+      const todays = rows.filter((r) => String(r.event_date).slice(0, 10) === today);
+      if (todays.length) {
+        try {
+          const na = await noteAccess(db, cr.id, req.user.id);
+          if (na.read) {
+            const filterSql = na.filter.sql.replace(/\brn\./g, "n.");
+            const counts = await db.prepare(`
+              SELECT n.care_event_id, COUNT(*) AS c, MIN(n.created_at) AS first_at,
+                     MIN(u.first_name) AS first_author
+                FROM recipient_notes n LEFT JOIN users u ON u.id = n.author_id
+               WHERE n.care_event_id IN (${todays.map(() => "?").join(",")})${filterSql}
+               GROUP BY n.care_event_id
+            `).all(...todays.map((r) => r.id), ...na.filter.params);
+            for (const c of counts) noteCounts.set(c.care_event_id, c);
+          }
+        } catch (e) { captureException(e, { where: "careEvents: upcoming note counts" }); }
+      }
       for (const ev of rows) {
         if (cr.viaVisit && !duringShift(ev, cr.shifts, today, tz)) continue;
+        const nc = noteCounts.get(ev.id);
+        if (nc) { ev.notes_count = Number(nc.c) || 0; ev.notes_first_author = nc.first_author || null; ev.notes_first_at = nc.first_at || null; }
         events.push(serializeEvent(ev, {
           recipientFirstName: cr.first_name,
           recipientName: `${cr.first_name} ${cr.last_name}`.trim(),
@@ -279,14 +303,42 @@ router.get("/recipient/:recipientId", async (req, res) => {
     const cr = await db.prepare("SELECT timezone, first_name FROM care_recipients WHERE id = ?").get(req.params.recipientId);
     const tz = cr?.timezone || DEFAULT_TZ;
     const today = getTodayStringInZone(tz);
-    const rows = await db.prepare(`
+    const ahead = await db.prepare(`
       SELECT e.*, cu.first_name AS created_by_first_name
       FROM care_events e
       LEFT JOIN users cu ON e.created_by = cu.id
       WHERE e.care_recipient_id = ? AND e.is_active = 1 AND e.event_date >= ?
       ORDER BY e.event_date ASC, e.event_time ASC NULLS FIRST
       LIMIT 50
-    `).all(req.params.recipientId, addDaysToDateString(today, -7));
+    `).all(req.params.recipientId, today);
+    // v1.140.0 — Past: the last 90 days, newest first, so yesterday's appointment and what was
+    // said at it are one tap away (Pete, 11/20). Was a bare "N recent past events" count.
+    const behind = await db.prepare(`
+      SELECT e.*, cu.first_name AS created_by_first_name
+      FROM care_events e
+      LEFT JOIN users cu ON e.created_by = cu.id
+      WHERE e.care_recipient_id = ? AND e.is_active = 1 AND e.event_date < ? AND e.event_date >= ?
+      ORDER BY e.event_date DESC, e.event_time DESC NULLS LAST
+      LIMIT 30
+    `).all(req.params.recipientId, today, addDaysToDateString(today, -90));
+    const rows = [...ahead, ...behind];
+    // Notes per appointment, through the notes rule (read_notes + the private-note filter).
+    if (rows.length) {
+      try {
+        const na = await noteAccess(db, req.params.recipientId, req.user.id);
+        if (na.read) {
+          const filterSql = na.filter.sql.replace(/\brn\./g, "n.");
+          const counts = await db.prepare(`
+            SELECT n.care_event_id, COUNT(*) AS c, MIN(u.first_name) AS first_author
+              FROM recipient_notes n LEFT JOIN users u ON u.id = n.author_id
+             WHERE n.care_event_id IN (${rows.map(() => "?").join(",")})${filterSql}
+             GROUP BY n.care_event_id
+          `).all(...rows.map((r) => r.id), ...na.filter.params);
+          const m = new Map(counts.map((c) => [c.care_event_id, c]));
+          for (const r of rows) { const c = m.get(r.id); if (c) { r.notes_count = Number(c.c) || 0; r.notes_first_author = c.first_author || null; } }
+        }
+      } catch (e) { captureException(e, { where: "careEvents: recipient note counts" }); }
+    }
     const byEvent = new Map();
     if (rows.length) {
       const placeholders = rows.map(() => "?").join(",");
