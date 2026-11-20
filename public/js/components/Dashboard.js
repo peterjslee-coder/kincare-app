@@ -32,6 +32,77 @@ const Spend30 = window.Spend30 = ({ s }) => {
   );
 };
 
+// v1.137.0 — what you can do with a photo in the Home strip. A photo saved from Messages can
+// move to a visit (or off one); any photo can be deleted. Two taps to delete, no browser dialog
+// (dialogs block the native shell).
+const PhotoActions = window.PhotoActions = ({ photo, onChanged }) => {
+  const { showToast } = useToast();
+  const [confirmDelete, setConfirmDelete] = React.useState(false);
+  const [visits, setVisits] = React.useState(null);
+  const [busy, setBusy] = React.useState(false);
+  const stop = (e) => e.stopPropagation();
+  const isCare = photo.kind === 'care';
+  const base = isCare ? '/api/care-photos/' : '/api/photos/';
+  const del = async (e) => {
+    stop(e);
+    if (!confirmDelete) { setConfirmDelete(true); return; }
+    setBusy(true);
+    try {
+      const r = await apiFetch(base + photo.id, { method: 'DELETE' });
+      if (r && r.ok) { showToast('Photo deleted', 'success'); onChanged && onChanged(); }
+      else showToast("Couldn't delete that photo", 'error');
+    } catch { showToast("Couldn't delete that photo", 'error'); }
+    setBusy(false);
+  };
+  const openMove = async (e) => {
+    stop(e);
+    try {
+      const r = await apiFetch(`/api/care-photos/${photo.id}/visits`);
+      const d = r && r.ok ? await r.json() : null;
+      setVisits(d ? d.visits : []);
+    } catch { setVisits([]); }
+  };
+  const move = async (sessionId) => {
+    setBusy(true);
+    try {
+      const r = await apiFetch(`/api/care-photos/${photo.id}`, { method: 'PATCH', body: JSON.stringify({ sessionId: sessionId || null }) });
+      if (r && r.ok) { showToast(sessionId ? 'Moved to that visit' : 'Kept in Care photos', 'success'); onChanged && onChanged(); }
+      else showToast("Couldn't move that photo", 'error');
+    } catch { showToast("Couldn't move that photo", 'error'); }
+    setBusy(false);
+  };
+  const btn = { flex: 1, minHeight: 44, borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: 'pointer', background: 'rgba(0,0,0,0.35)' };
+  return (
+    <div onClick={stop} style={{ marginTop: 12, width: 'min(320px, 80vw)', marginLeft: 'auto', marginRight: 'auto' }}>
+      {visits ? (
+        <div data-testid="photo-move-list" style={{ background: 'var(--bg-surface)', color: 'var(--text-primary)', borderRadius: 12, padding: 8, textAlign: 'left', maxHeight: '40vh', overflowY: 'auto' }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', padding: '4px 6px' }}>PUT IT WITH</div>
+          {visits.map((v) => (
+            <button key={v.id} disabled={busy} onClick={() => move(v.id)}
+              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '10px 8px', minHeight: 44, border: 'none', borderTop: '1px solid var(--border-color)', background: 'none', color: 'var(--text-primary)', fontSize: 14, cursor: 'pointer' }}>
+              {new Date(v.date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+              {v.caregiverName ? ` · ${v.caregiverName}` : ''}
+            </button>
+          ))}
+          <button disabled={busy} onClick={() => move(null)}
+            style={{ display: 'block', width: '100%', textAlign: 'left', padding: '10px 8px', minHeight: 44, border: 'none', borderTop: '1px solid var(--border-color)', background: 'none', color: 'var(--text-primary)', fontSize: 14, cursor: 'pointer' }}>
+            Just Care photos (not tied to a visit)
+          </button>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', gap: 8 }}>
+          {isCare && (
+            <button type="button" onClick={openMove} disabled={busy}
+              style={{ ...btn, border: '1px solid rgba(255,255,255,0.4)', color: 'var(--text-on-primary)' }}>Move to a visit</button>
+          )}
+          <button type="button" data-testid="photo-delete" onClick={del} disabled={busy}
+            style={{ ...btn, border: '1px solid #ff8a8a', color: '#ff8a8a' }}>{confirmDelete ? 'Tap again to delete' : 'Delete'}</button>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // v1.108.1 — the card total for a tip, including the processing fee the family covers.
 // Must match src/utils/pricing.js tipWithCardFee (tests/tipAfterPayment.test.js pins them).
 const tipCardTotal = (tipCents) => {
@@ -1755,25 +1826,21 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
       })()}
 
       {parent && (
-        <div className="betty-card" style={{ cursor: 'pointer', position: 'relative' }}>
-          <div onClick={() => onNavigate && onNavigate('care-profile')}>
+        <div className="betty-card" data-testid="betty-card" style={{ cursor: 'pointer', position: 'relative', padding: '14px 16px', marginBottom: 20 }}>
+          {/* v1.137.0 — the smaller card (Pete picked B on the 11/20 canvas): her photo, name and
+              town on one row, the care team under a divider. Pete: "that part of the green card is
+              for betty, not me. I know who i am." So the viewer's own relationship label
+              ("Least Favorite Son") is gone from here; it still shows on Care Team. Her health
+              notes live on her profile, one tap away. */}
+          <div onClick={() => onNavigate && onNavigate('care-profile')} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             {parent.photo
-              ? <div style={{ width: 56, height: 56, borderRadius: '50%', overflow: 'hidden', flexShrink: 0 }}><img src={parent.photo} alt={parent.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /></div>
-              : <div style={{ fontSize: 40 }}>{parent.emoji || '🌷'}</div>}
-            <div className="betty-name">{parent.name}</div>
-            <div className="betty-info">
-              {(() => {
-                const myLabel = careTeams.find(t => t.my_relationship_label)?.my_relationship_label;
-                return myLabel ? `${myLabel} · ` : '';
-              })()}
-              Living in {parent.location}
+              ? <div style={{ width: 46, height: 46, borderRadius: '50%', overflow: 'hidden', flexShrink: 0 }}><img src={parent.photo} alt={parent.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /></div>
+              : <div style={{ width: 46, height: 46, fontSize: 32, lineHeight: '46px', textAlign: 'center', flexShrink: 0 }}>{parent.emoji || '🌷'}</div>}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="betty-name" style={{ fontSize: 19, fontWeight: 800, marginBottom: 0, lineHeight: 1.2 }}>{parent.name}</div>
+              {parent.location && <div className="betty-info" style={{ fontSize: 12.5, opacity: 0.85 }}>{parent.location}</div>}
             </div>
-            {parent.healthConditions && parent.healthConditions.length > 0 && (
-              <div style={{ marginTop: '8px', fontSize: '12px', color: 'rgba(255,255,255,0.75)' }}>
-                {parent.healthConditions.join(' · ')}
-              </div>
-            )}
-            <div style={{ position: 'absolute', right: 16, top: 24, color: 'rgba(255,255,255,0.5)', fontSize: 18 }}>→</div>
+            <span aria-hidden="true" style={{ color: 'rgba(255,255,255,0.55)', fontSize: 22, padding: '0 4px' }}>›</span>
           </div>
           {/* Care team nested inside Betty card */}
           {/* v1.105.96 — this said `!isDemo &&`, and that is the whole answer to "why doesn't
@@ -1796,7 +1863,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
             const colors = ['var(--accent-color)', '#4a90d9', 'var(--color-violet)', '#2ecc71'];
             return (
             <div onClick={(e) => { e.stopPropagation(); onNavigate && onNavigate('care-team'); }}
-              style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <div style={{ display: 'flex' }}>
                   {shown.map((m, i) => {
@@ -2429,7 +2496,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
       {data.recentPhotos && data.recentPhotos.length > 0 && (
         <div className="card">
           <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span><span className="card-icon">📸</span>Recent Visit Photos</span>
+            <span><span className="card-icon">📸</span>Care photos</span>
             <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{data.recentPhotos.length} photo{data.recentPhotos.length !== 1 ? 's' : ''}</span>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: 8, padding: '4px 0' }}>
@@ -2446,7 +2513,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
           </div>
           {data.recentPhotos.length > 0 && (
             <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 6, textAlign: 'center' }}>
-              Tap a photo to view full size • Photos are from recent visits
+              Tap a photo to see it, move it to a visit, or delete it
             </div>
           )}
         </div>
@@ -2478,6 +2545,9 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                 View visit details →
               </div>
             )}
+            {/* v1.137.0 — move a saved photo to a visit, or delete it, right here (Pete, 11/20). */}
+            <PhotoActions photo={lightboxPhoto}
+              onChanged={() => { setLightboxPhoto(null); fetchDashboard(); }} />
           </div>
         </div>
       )}

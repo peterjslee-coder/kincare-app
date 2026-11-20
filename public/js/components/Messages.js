@@ -1,3 +1,101 @@
+// ─── v1.137.0 — Save a message photo to the loved one's care photos ───
+// Pete, 11/20 (feedback 2012ed0b / 03cc8526): photos sent in Messages never reached Care photos.
+// Hold the photo, Save to care photos, pick a visit (or none). Family only — the server decides.
+const SaveCarePhotoSheet = window.SaveCarePhotoSheet = ({ message, onClose }) => {
+  const { showToast } = useToast();
+  const [opts, setOpts] = useState(null);
+  const [caption, setCaption] = useState('');
+  const [recipientId, setRecipientId] = useState(null);
+  const [where, setWhere] = useState('suggested'); // session id | 'none' | 'suggested'
+  const [showAll, setShowAll] = useState(false);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      try {
+        const r = await apiFetch(`/api/care-photos/options?messageId=${encodeURIComponent(message.id)}`);
+        const d = r && r.ok ? await r.json() : null;
+        if (!live) return;
+        if (!d) {
+          let msg = "Couldn't open that photo";
+          try { const e = await r.json(); if (e && e.error) msg = e.error; } catch { /* keep the default */ }
+          showToast(msg, 'error'); onClose(); return;
+        }
+        setOpts(d);
+        setCaption(d.caption || '');
+        const sug = d.visits.find((v) => v.id === d.suggestedSessionId);
+        setRecipientId(sug ? sug.careRecipientId : (d.recipients[0] || {}).id);
+        setWhere(d.suggestedSessionId || 'none');
+      } catch { if (live) { showToast("Couldn't open that photo", 'error'); onClose(); } }
+    })();
+    return () => { live = false; };
+  }, [message.id]);
+  if (!opts) return null;
+  const recipient = opts.recipients.find((r) => r.id === recipientId) || opts.recipients[0];
+  const first = (recipient && recipient.name || '').split(' ')[0] || 'their';
+  const visits = opts.visits.filter((v) => v.careRecipientId === (recipient && recipient.id));
+  const suggested = visits.find((v) => v.id === opts.suggestedSessionId);
+  const others = visits.filter((v) => !suggested || v.id !== suggested.id);
+  const fmtVisit = (v) => `${new Date(v.date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}${v.caregiverName ? ` · ${v.caregiverName}` : ''}`;
+  const save = async () => {
+    setBusy(true);
+    try {
+      const r = await apiFetch('/api/care-photos', { method: 'POST', body: JSON.stringify({
+        messageId: message.id, careRecipientId: recipient.id, sessionId: where === 'none' ? null : where, caption,
+      }) });
+      const d = r && r.ok ? await r.json() : null;
+      if (d) { showToast(d.already ? 'Already in Care photos' : 'Saved to Care photos', 'success'); onClose(); }
+      else showToast("Couldn't save that photo", 'error');
+    } catch { showToast("Couldn't save that photo", 'error'); }
+    setBusy(false);
+  };
+  const row = (id, title, sub, bold) => (
+    <label key={id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 12, minHeight: 44, borderRadius: 10, cursor: 'pointer',
+      border: where === id ? '2px solid var(--role-color)' : '1px solid var(--border-color)', background: where === id ? 'var(--bg-highlight)' : 'none' }}>
+      <input type="radio" name="care-photo-where" checked={where === id} onChange={() => setWhere(id)} />
+      <span style={{ flex: 1 }}>
+        <span style={{ display: 'block', fontSize: 14, fontWeight: bold ? 700 : 600, color: 'var(--text-primary)' }}>{title}</span>
+        {sub && <span style={{ display: 'block', fontSize: 12, color: 'var(--text-secondary)' }}>{sub}</span>}
+      </span>
+    </label>
+  );
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 3000, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+      <div data-testid="save-care-photo" onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 480, background: 'var(--bg-surface)', borderRadius: '18px 18px 0 0',
+        padding: '16px 16px calc(24px + env(safe-area-inset-bottom, 0px))', display: 'flex', flexDirection: 'column', gap: 12, maxHeight: '85vh', overflowY: 'auto' }}>
+        <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)' }}>Save to {first}{first.endsWith('s') ? '’' : '’s'} care photos</div>
+        {opts.alreadySavedId && <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>This photo is already in Care photos.</div>}
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          <img src={`/api/messages/${message.id}/photo`} alt="" style={{ width: 72, height: 72, borderRadius: 10, objectFit: 'cover', flexShrink: 0 }} />
+          <label style={{ flex: 1, fontSize: 12, color: 'var(--text-secondary)' }}>Caption
+            <input value={caption} maxLength={200} onChange={(e) => setCaption(e.target.value)} placeholder="What's this?"
+              style={{ display: 'block', width: '100%', boxSizing: 'border-box', marginTop: 4, padding: 10, borderRadius: 8, border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: 16 }} />
+          </label>
+        </div>
+        {opts.recipients.length > 1 && (
+          <select value={recipient.id} onChange={(e) => { setRecipientId(e.target.value); setWhere('none'); }}
+            style={{ padding: 10, borderRadius: 8, fontSize: 16, border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
+            {opts.recipients.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+          </select>
+        )}
+        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', letterSpacing: 0.5 }}>PUT IT WITH</div>
+        {suggested && row(suggested.id, `The visit with ${suggested.caregiverName || 'the caregiver'}`, `${fmtVisit(suggested)} · shows on the visit report`, true)}
+        {(showAll || !suggested ? others : []).map((v) => row(v.id, fmtVisit(v), null))}
+        {suggested && !showAll && others.length > 0 && (
+          <button type="button" onClick={() => setShowAll(true)} style={{ textAlign: 'left', padding: 12, minHeight: 44, borderRadius: 10, border: '1px solid var(--border-color)', background: 'none', color: 'var(--text-primary)', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+            Another visit… <span style={{ fontWeight: 400, color: 'var(--text-secondary)', fontSize: 12 }}>from the last two weeks</span>
+          </button>
+        )}
+        {row('none', 'Just Care photos', 'Not tied to a visit')}
+        <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Who sees it: family on {first}{first.endsWith('s') ? '’' : '’s'} team. A caregiver sees it only if it's on their own visit.</div>
+        <button type="button" disabled={busy} onClick={save} style={{ minHeight: 48, borderRadius: 12, border: 'none', background: 'var(--role-color)', color: 'var(--text-on-primary)', fontSize: 16, fontWeight: 700, cursor: 'pointer' }}>
+          {busy ? 'Saving…' : 'Save'}
+        </button>
+      </div>
+    </div>
+  );
+};
+
 // ─── v1.105.158 — Apple's corner rules, in one place ───
 //
 // A bubble's shape is decided by its neighbours, not by itself: 20px everywhere, except the
@@ -243,6 +341,8 @@ const Messages = window.Messages = () => {
   const photoInputRef = useRef(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [lightboxPhoto, setLightboxPhoto] = useState(null); // { src, caption }
+  const [savingCarePhoto, setSavingCarePhoto] = useState(null); // v1.137.0 — the message being saved
+  const canSaveCarePhotos = (typeof getActiveRole === 'function' ? getActiveRole() : 'family') !== 'caregiver';
 
   // ─── Read receipts ───
   const [readReceipts, setReadReceipts] = useState({}); // { conversationId: { userId: readAt } }
@@ -3032,6 +3132,17 @@ const Messages = window.Messages = () => {
                               {/* v1.109.4 — what long-press used to give you before reactions
                                   took the gesture. Copy is one tap; Notes starts a selection
                                   with this message already in it. */}
+                              {/* v1.137.0 — a photo goes to the loved one's Care photos (family only). */}
+                              {m.message_type === 'photo' && !m.is_deleted && canSaveCarePhotos && (
+                                <React.Fragment>
+                                  <span style={{ width: 1, alignSelf: 'stretch', margin: '4px 4px', background: 'var(--border-light)' }} />
+                                  <button onClick={() => { setShowEmojiFor(null); setSavingCarePhoto(m); }}
+                                    aria-label="Save to care photos" data-testid="save-to-care-photos"
+                                    style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, lineHeight: 1, padding: '5px 7px', borderRadius: 999, color: 'var(--role-color)', whiteSpace: 'nowrap' }}>
+                                    Save to care photos
+                                  </button>
+                                </React.Fragment>
+                              )}
                               {String(m.content || '').trim() && (
                                 <React.Fragment>
                                   <span style={{ width: 1, alignSelf: 'stretch', margin: '4px 4px', background: 'var(--border-light)' }} />
@@ -3397,6 +3508,7 @@ const Messages = window.Messages = () => {
         {renderIncomingCallBanner()}
         {callOverlay}
         {renderPhotoLightbox()}
+        {savingCarePhoto && toBody(<SaveCarePhotoSheet message={savingCarePhoto} onClose={() => setSavingCarePhoto(null)} />)}
         {/* ─── v1.105.18 — report dialog (guideline 1.2) ───
             Rendered at the top level, not inside the conversation list, so it survives the
             list/chat view switch on mobile. The copy states plainly that the reported person
@@ -3462,6 +3574,7 @@ const Messages = window.Messages = () => {
       {renderIncomingCallBanner()}
       {callOverlay}
       {renderPhotoLightbox()}
+      {savingCarePhoto && toBody(<SaveCarePhotoSheet message={savingCarePhoto} onClose={() => setSavingCarePhoto(null)} />)}
       {messagingLimited && (
         <div style={{ padding: '10px 16px', background: 'var(--color-warning-bg)', borderBottom: '1px solid #ffe082', display: 'flex', alignItems: 'center', gap: 8, borderRadius: '12px 12px 0 0' }}>
           <span style={{ fontSize: 16 }}>🔒</span>

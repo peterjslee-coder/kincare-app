@@ -7,8 +7,8 @@ build red.
 
 Hand-written sections (§3 "Where is…") are preserved across regeneration; edit those freely.
 
-Structure at last generation: 619 HTTP routes across 64 mounts ·
-118 `CREATE TABLE` statements · 16 background jobs · 42 socket events
+Structure at last generation: 625 HTTP routes across 65 mounts ·
+119 `CREATE TABLE` statements · 16 background jobs · 42 socket events
 (17 with no client listener) · 75 push event types · 66 `window.__*` globals.
 
 ---
@@ -52,6 +52,7 @@ JSX is *not* compiled in the browser; Babel-standalone is not loaded. Editing an
 | `/api/availability` | `src/routes/availability.js` | 5 |  |
 | `/api/care-events` | `src/routes/careEvents.js` | 10 |  |
 | `/api/care-intelligence` | `src/routes/careIntelligence.js` | 8 |  |
+| `/api/care-photos` | `src/routes/carePhotos.js` | 6 |  |
 | `/api/care-recipients` | `src/routes/careRecipients.js` | 22 |  |
 | `/api/care-tasks` | `src/routes/careTasks.js` | 10 |  |
 | `/api/care-teams` | `src/routes/careTeams.js` | 21 |  |
@@ -203,22 +204,22 @@ Every job runs through `guardedPoller` → `withPollerLock` (`src/models/databas
 
 | Lock | Job | Interval | Declared |
 |---:|---|---|---|
-| 101 | Daily demo data refresh | 24 h | `src/server.js:1097` |
-| 102 | Session notification poller (every 60s) | 1 min | `src/server.js:1190` |
-| 103 | Session Accountability Poller | 1 min | `src/server.js:1473` |
-| 104 | Reimbursement push digest sweeper (v1.98.15) | 30 s | `src/server.js:1490` |
-| 105 | Auto-pay cron: charge overdue sessions | 5 min | `src/server.js:1582` |
-| 106 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1689` |
-| 107 | Care Tasks poller (v1.99.0) | 1 min | `src/server.js:1714` |
-| 108 | Care Events poller (v1.100.0) | 1 min | `src/server.js:1730` |
-| 109 | Kindred Reminder Delivery Poller | 1 min | `src/server.js:1504` |
-| 110 | Retention (v1.106.9, poller 110) | 24 h | `src/server.js:1767` |
-| 111 | (see src/server.js:1665) | 1 h | `src/server.js:1665` |
-| 112 | v1.106.13 — poller 112: proposals that nobody answered | 10 min | `src/server.js:1796` |
-| 113 | (see src/server.js:1839) | 1 min | `src/server.js:1839` |
-| 114 | Quiet hours summary (v1.107.3, poller 114) | 5 min | `src/server.js:1858` |
-| 115 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1702` |
-| 116 | Visit mileage: charge what is owed once the visit itself is paid (v1.126.1, poller 116) | 5 min | `src/server.js:1875` |
+| 101 | Daily demo data refresh | 24 h | `src/server.js:1098` |
+| 102 | Session notification poller (every 60s) | 1 min | `src/server.js:1191` |
+| 103 | Session Accountability Poller | 1 min | `src/server.js:1474` |
+| 104 | Reimbursement push digest sweeper (v1.98.15) | 30 s | `src/server.js:1491` |
+| 105 | Auto-pay cron: charge overdue sessions | 5 min | `src/server.js:1583` |
+| 106 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1690` |
+| 107 | Care Tasks poller (v1.99.0) | 1 min | `src/server.js:1715` |
+| 108 | Care Events poller (v1.100.0) | 1 min | `src/server.js:1731` |
+| 109 | Kindred Reminder Delivery Poller | 1 min | `src/server.js:1505` |
+| 110 | Retention (v1.106.9, poller 110) | 24 h | `src/server.js:1768` |
+| 111 | (see src/server.js:1666) | 1 h | `src/server.js:1666` |
+| 112 | v1.106.13 — poller 112: proposals that nobody answered | 10 min | `src/server.js:1797` |
+| 113 | (see src/server.js:1840) | 1 min | `src/server.js:1840` |
+| 114 | Quiet hours summary (v1.107.3, poller 114) | 5 min | `src/server.js:1859` |
+| 115 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1703` |
+| 116 | Visit mileage: charge what is owed once the visit itself is paid (v1.126.1, poller 116) | 5 min | `src/server.js:1876` |
 
 ---
 

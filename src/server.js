@@ -796,6 +796,7 @@ app.use("/api/assignments", require("./routes/assignments"));
 app.use("/api/analytics", require("./routes/analytics"));
 app.use("/api/push", require("./routes/push"));
 app.use("/api/photos", require("./routes/photos"));
+app.use("/api/care-photos", require("./routes/carePhotos")); // v1.137.0
 app.use("/api/auth/2fa", require("./routes/twoFactor"));
 app.use("/api/passkeys", require("./routes/passkeys"));
 app.use("/api/oauth", require("./routes/oauth"));
@@ -857,7 +858,7 @@ app.use("/api/safety", require("./routes/safety"));
 
 // ─── App version check (lightweight, no auth) ───
 const { cancelPassedPrivateOffers, releaseExpiredExclusiveOffers } = require("./utils/exclusiveOffers");
-const APP_VERSION = "1.136.0";
+const APP_VERSION = "1.137.0";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION, minAppVersion: MIN_APP_VERSION });
